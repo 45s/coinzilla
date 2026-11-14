@@ -6128,23 +6128,32 @@ test("twelve sequential immediately-filled BUYs advance from each reconciled las
 })
 
 
-test("keeps the recovery basis open and classifies exchange-constrained residual after a profitable SELL", async () => {
-  const seeded = makeSeededRecoveryState({ quantity: "1.05" })
-  let currentPortfolio = seeded.portfolio
-  let currentRecoveryLedger = seeded.recoveryLedger
-  const events = []
-  const completionInputs = []
+
+async function runResidualRecoverySellScenario() {
+  const seeded = makeSeededRecoveryState({
+    quantity: "1.05",
+  })
+  const scenario = {
+    currentPortfolio: seeded.portfolio,
+    currentRecoveryLedger: seeded.recoveryLedger,
+    events: [],
+    completionInputs: [],
+  }
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     accountingApplied: true,
-    getPortfolio: () => currentPortfolio,
-    getRecoveryLedger: () => currentRecoveryLedger,
+    getPortfolio: () => scenario.currentPortfolio,
+    getRecoveryLedger: () => scenario.currentRecoveryLedger,
     updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = currentPortfolio.applyFill({ fill })
-      const ledgerUpdate = currentRecoveryLedger.applyFill({ fill })
-      currentPortfolio = portfolioUpdate.portfolio
-      currentRecoveryLedger = ledgerUpdate.ledger
+      const portfolioUpdate = scenario.currentPortfolio.applyFill({
+        fill,
+      })
+      const ledgerUpdate = scenario.currentRecoveryLedger.applyFill({
+        fill,
+      })
+      scenario.currentPortfolio = portfolioUpdate.portfolio
+      scenario.currentRecoveryLedger = ledgerUpdate.ledger
       return {
         ok: true,
         data: {
@@ -6154,121 +6163,159 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
       }
     },
     completeRecoveryCycle: async (input) => {
-      completionInputs.push(input)
-      const {
-        marketId,
-        inventoryDisposition
-      } = input
-      const position = currentPortfolio.getPosition({ marketId })
+      scenario.completionInputs.push(input)
+      const position = scenario.currentPortfolio.getPosition({
+        marketId: input.marketId,
+      })
       const completion = evaluateRecoveryCompletion({
         sellOrderFullyFilled: true,
         spent: position.spent.amount,
-        netSellProceeds: currentRecoveryLedger.netSellProceeds,
+        netSellProceeds: scenario.currentRecoveryLedger.netSellProceeds,
         activeQuantity: position.baseQuantity.amount,
         keepQuantity: "0.1",
         minProfit: "0.01",
-        ...(inventoryDisposition === undefined ? {} : { inventoryDisposition }),
+        ...(input.inventoryDisposition === undefined ? {} : {
+          inventoryDisposition: input.inventoryDisposition,
+        }),
       })
       if (completion.eligible) {
-        currentPortfolio = currentPortfolio.allocateFreeQuantity({
-          marketId,
+        scenario.currentPortfolio = scenario.currentPortfolio.allocateFreeQuantity({
+          marketId: input.marketId,
           quantity: completion.freeQuantity,
         })
-        currentRecoveryLedger = currentRecoveryLedger.resetCycle({
+        scenario.currentRecoveryLedger = scenario.currentRecoveryLedger.resetCycle({
           minProfit: "0.01",
-          spent: position.spent
+          spent: position.spent,
         })
       }
       return {
         ok: true,
-        data: completion
+        data: completion,
       }
     },
-    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+    eventPublisher: {
+      publish: (event) => {
+        scenario.events.push(event)
+        return {
+          ok: true,
+        }
+      },
+    },
   })
-
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
       symbol: "DOGEUSDT",
       price: "100",
-      timestamp: 2
+      timestamp: 2,
     },
   })
   const recoverySell = harness.engine.getOrders().find((order) => order.side === "SELL")
-  assert.ok(recoverySell)
   const quantity = recoverySell.originalQuantity.amount
-  const price = recoverySell.limitPrice.amount
   const fill = makeSellFill({
     order: recoverySell,
     tradeId: "post-recovery-residual-sell",
     quantity,
     quoteQuantity: multiplyDecimal({
-      left: price,
-      right: quantity
+      left: recoverySell.limitPrice.amount,
+      right: quantity,
     }),
   })
   const result = await harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
-      executedOrder: makeFilledOrder({ order: recoverySell }),
+      executedOrder: makeFilledOrder({
+        order: recoverySell,
+      }),
       fill,
     },
   })
+  return {
+    ...scenario,
+    harness,
+    recoverySell,
+    result,
+  }
+}
 
-  assert.equal(result.ok, true, result.errors?.[0]?.message)
-  assert.equal(result.data.residualSellThrough, true)
-  assert.equal(result.data.reevaluate, true)
-  assert.equal(currentRecoveryLedger.outstandingRecoveryAmount, "0")
-  assert.equal(currentRecoveryLedger.buyCost, "105")
-  assert.ok(Number(currentRecoveryLedger.netSellProceeds) > 105.01)
-  const position = currentPortfolio.getPosition({ marketId: market.id })
+function assertResidualRecoverySellAccounting({ scenario }) {
+  assert.equal(scenario.result.ok, true, scenario.result.errors?.[0]?.message)
+  assert.equal(scenario.result.data.residualSellThrough, true)
+  assert.equal(scenario.result.data.reevaluate, true)
+  assert.equal(scenario.currentRecoveryLedger.outstandingRecoveryAmount, "0")
+  assert.equal(scenario.currentRecoveryLedger.buyCost, "105")
+  assert.ok(Number(scenario.currentRecoveryLedger.netSellProceeds) > 105.01)
+  const position = scenario.currentPortfolio.getPosition({
+    marketId: market.id,
+  })
   assert.equal(position.freeBaseQuantity.amount, "0")
   assert.ok(Number(position.baseQuantity.amount) > 0.1)
-  const sellOrders = harness.engine.getOrders().filter((order) => order.side === "SELL")
+  const sellOrders = scenario.harness.engine.getOrders().filter((order) => order.side === "SELL")
   assert.equal(sellOrders.length, 1)
   assert.equal(sellOrders[0].status, "FILLED")
-  const nextEvaluation = await harness.engine.evaluateLatest({ symbol: "DOGEUSDT" })
+}
+
+async function assertResidualRecoverySellDust({ scenario }) {
+  const nextEvaluation = await scenario.harness.engine.evaluateLatest({
+    symbol: "DOGEUSDT",
+  })
   assert.equal(nextEvaluation.ok, true, nextEvaluation.errors?.[0]?.message)
-  assert.equal(nextEvaluation.data.decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST")
-  assert.equal(nextEvaluation.data.decision.inventoryDisposition.reason, "QUANTITY_INCREMENT")
   const dust = nextEvaluation.data.decision.inventoryDisposition
-  const completedPosition = currentPortfolio.getPosition({ marketId: market.id })
+  assert.equal(dust.status, "EXCHANGE_CONSTRAINED_DUST")
+  assert.equal(dust.reason, "QUANTITY_INCREMENT")
+  const completedPosition = scenario.currentPortfolio.getPosition({
+    marketId: market.id,
+  })
   assert.equal(completedPosition.baseQuantity.amount, "0")
-  assert.equal(dust.quantity, "0.05", "The quantity-step-constrained residual must be exactly 0.05 above the 0.1 keepQuantity.")
-  assert.equal(completedPosition.freeBaseQuantity.amount, "0.15", "The completed cycle must retain exactly 0.1 keepQuantity plus 0.05 exchange-constrained dust.")
-  assert.equal(currentRecoveryLedger.buyCost, "0")
-  assert.equal(currentRecoveryLedger.netSellProceeds, "0")
-  const continuedEvent = events.find((event) => event.name === "recovery.cycle_not_completed")
+  assert.equal(dust.quantity, "0.05")
+  assert.equal(completedPosition.freeBaseQuantity.amount, "0.15")
+  assert.equal(scenario.currentRecoveryLedger.buyCost, "0")
+  assert.equal(scenario.currentRecoveryLedger.netSellProceeds, "0")
+}
+
+function assertResidualRecoverySellEvents({ scenario }) {
+  const continuedEvent = scenario.events.find((event) => event.name === "recovery.cycle_not_completed")
   assert.ok(continuedEvent)
   assert.equal(continuedEvent.data.outcome, "CONTINUE_SELL_THROUGH")
-  assert.equal(continuedEvent.data.sellOrderClientId, recoverySell.clientOrderId)
-  const completedEvent = events.find((event) => event.name === "recovery.cycle_completed")
+  assert.equal(continuedEvent.data.sellOrderClientId, scenario.recoverySell.clientOrderId)
+  const completedEvent = scenario.events.find((event) => event.name === "recovery.cycle_completed")
   assert.ok(completedEvent)
-  assert.ok(events.indexOf(continuedEvent) < events.indexOf(completedEvent))
+  assert.ok(scenario.events.indexOf(continuedEvent) < scenario.events.indexOf(completedEvent))
   assert.deepEqual(completedEvent.data.dust, {
     status: "EXCHANGE_CONSTRAINED_DUST",
-    quantity: dust.quantity,
+    quantity: "0.05",
     reason: "QUANTITY_INCREMENT",
-    quantityStepSize: dust.quantityStepSize,
+    quantityStepSize: "0.01",
     evaluatedQuantity: "0",
   })
-  const dustCompletionInput = completionInputs.find(({ inventoryDisposition }) => inventoryDisposition !== undefined)
-  assert.ok(dustCompletionInput, "The exchange-constrained residual must reach the recovery completion workflow.")
-  assert.equal(
-    dustCompletionInput.sellOrder.clientOrderId,
-    recoverySell.clientOrderId,
-    "Dust completion must retain the reconciled terminal SELL client identity.",
-  )
-  assert.equal(
-    dustCompletionInput.sellOrder.brokerOrderId,
-    recoverySell.brokerOrderId,
-    "Dust completion must retain the reconciled terminal SELL broker identity.",
-  )
-  assert.equal(dustCompletionInput.sellOrder.status, "FILLED", "Dust completion must be supported by the canonical terminal FILLED SELL order.")
-  assert.deepEqual(harness.pauses, [])
-})
+}
 
+function assertResidualRecoverySellCompletionIdentity({ scenario }) {
+  const completionInput = scenario.completionInputs.find(({ inventoryDisposition }) =>
+    inventoryDisposition !== undefined)
+  assert.ok(completionInput)
+  assert.equal(completionInput.sellOrder.clientOrderId, scenario.recoverySell.clientOrderId)
+  assert.equal(completionInput.sellOrder.brokerOrderId, scenario.recoverySell.brokerOrderId)
+  assert.equal(completionInput.sellOrder.status, "FILLED")
+  assert.deepEqual(scenario.harness.pauses, [])
+}
+
+
+test("keeps the recovery basis open and classifies exchange-constrained residual after a profitable SELL", async () => {
+  const scenario = await runResidualRecoverySellScenario()
+  assertResidualRecoverySellAccounting({
+    scenario,
+  })
+  await assertResidualRecoverySellDust({
+    scenario,
+  })
+  assertResidualRecoverySellEvents({
+    scenario,
+  })
+  assertResidualRecoverySellCompletionIdentity({
+    scenario,
+  })
+})
 
 test("pauses once on an invalid MIN_NOTIONAL decision and does not reevaluate it repeatedly", async () => {
   let evaluationCount = 0
