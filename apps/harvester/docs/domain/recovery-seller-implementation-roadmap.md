@@ -105,7 +105,7 @@ Before implementing each rule, add a focused test that expresses the agreed busi
 Model only the concepts required by the approved RS contract:
 
 - Multiple independent Positions per market, each with stable identity and strategy ownership; distinct acquisition lots/tranches and strategy accounting must not be collapsed merely because the market symbol matches.
-- Explicit operator authorization is required before RS may manage pre-existing legacy inventory; wallet balances or external/manual activity never grant authorization automatically. Authorization permission, Portfolio accounting, and verified Spot availability are separate facts. The authorization model is agreed; interface, evidence, expiry/revocation, durable provenance and restart behavior remain owner decisions.
+- Explicit operator authorization is required before RS may manage pre-existing legacy inventory; wallet balances or external/manual activity never grant authorization automatically. Authorization permission, Portfolio accounting, and verified Spot availability are separate facts. The operator declares legacy quantity and original quote investment in configuration; historical exchange evidence is not required. These values establish declared historical basis, not custody or sellable balance. Configuration validation/confirmation, expiry/revocation, durable provenance and restart behavior remain owner decisions.
 - Original legacy quote investment and original base quantity; RS calculates average historical cost as invested / quantity.
 - Legacy attribution: original and remaining quantity, remaining basis, confirmed disposals.
 - Custody: Spot-available, EARN/off-Spot and unresolved quantities are distinct; transfers do not change historical cost basis.
