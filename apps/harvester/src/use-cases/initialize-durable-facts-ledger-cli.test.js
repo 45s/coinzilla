@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { DEFAULT_OPERATIONAL_STATE_DIRECTORY } from "../infrastructure/operational-state/resolve-operational-state-directory.js"
 import { runInitializeDurableFactsLedger } from "./initialize-durable-facts-ledger-cli.js"
 
 const createLogger = () => {
@@ -15,7 +16,7 @@ test("requires explicit confirmation before invoking genesis initialization", as
   const logger = createLogger()
   let initializeCalls = 0
   const exitCode = await runInitializeDurableFactsLedger({
-    env: { DURABLE_FACTS_DIRECTORY: "/tmp/recovery-facts" },
+    env: { OPERATIONAL_STATE_DIRECTORY: "/tmp/recovery-facts" },
     args: [],
     initialize: async () => { initializeCalls += 1; return { ok: true } },
     logger,
@@ -24,11 +25,11 @@ test("requires explicit confirmation before invoking genesis initialization", as
   assert.equal(initializeCalls, 0)
 })
 
-test("requires an absolute DURABLE_FACTS_DIRECTORY and rejects unknown arguments", async () => {
+test("uses the app-local default directory and rejects relative overrides or unknown arguments", async () => {
   let initializeCalls = 0
   const initialize = async () => { initializeCalls += 1; return { ok: true } }
   const relative = await runInitializeDurableFactsLedger({
-    env: { DURABLE_FACTS_DIRECTORY: "relative/recovery-facts" },
+    env: { OPERATIONAL_STATE_DIRECTORY: "relative/recovery-facts" },
     args: ["--confirm-initialize"],
     initialize,
     logger: createLogger(),
@@ -76,4 +77,19 @@ test("does not report success when genesis initialization fails", async () => {
   })
   assert.equal(exitCode, 1)
   assert.equal(logger.calls[0][0], "error")
+})
+
+test("retains the legacy directory environment variable as a compatibility alias", async () => {
+  let received
+  const exitCode = await runInitializeDurableFactsLedger({
+    env: { DURABLE_FACTS_DIRECTORY: "/tmp/legacy-recovery-facts" },
+    args: ["--confirm-initialize"],
+    initialize: async (input) => {
+      received = input
+      return { ok: true, data: { directory: input.directory, sequence: "0", durable: true } }
+    },
+    logger: createLogger(),
+  })
+  assert.equal(exitCode, 0)
+  assert.equal(received.directory, "/tmp/legacy-recovery-facts")
 })
