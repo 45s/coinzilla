@@ -21,8 +21,7 @@
     "test:targeted": "node scripts/run-targeted-tests.js",
     "config:symbol": "node scripts/config-symbol.js",
     "volatility:calibrate": "node scripts/calibrate-volatility-thresholds.js",
-    "operational-state:init": "node scripts/initialize-durable-facts-ledger.js",
-    "durable-facts:init": "node scripts/initialize-durable-facts-ledger.js"
+    "operational-state:init": "node scripts/initialize-durable-facts-ledger.js"
   },
   "engines": {
     "node": ">=24"
