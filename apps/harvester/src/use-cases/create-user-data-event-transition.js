@@ -86,7 +86,7 @@ async function handlePreFillRecoveryState({ dependencies, order, symbol, recover
   }
   if (recoveryMode && ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
       state.unrequestedTerminalOrderClientIds.has(order.clientOrderId)) {
-    const error = new Error("Recovered Harvester order reached a terminal exchange state without a durable cancellation intent: " + order.clientOrderId)
+    const error = new Error(`Recovered Harvester order reached a terminal exchange state without a durable cancellation intent: ${order.clientOrderId}`)
     await pause({ symbol, reason: "UNREQUESTED_TERMINAL_ORDER_STATE_DURING_RECOVERY", error })
     return failureResult({
       error,
