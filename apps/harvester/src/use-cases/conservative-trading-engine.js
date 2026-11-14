@@ -768,6 +768,76 @@ function createSerializedTransitionQueue() {
   }
 }
 
+function createOwnedOrderManagementHandlers({
+  state,
+  broker,
+  processExecutionFillTransition,
+  processUserDataEventTransition,
+  pause,
+  ensureCancellationEligible,
+  publishDurableIntent,
+  cancelOrderWithOperationalState,
+  markCancellationUnknown,
+  markCancellationFailure,
+  publishOrderCancelled,
+  publishOrderCancelFailed,
+  runTransition,
+} = {}) {
+  const collectOwnedOrderSnapshots = makeCollectOwnedOrderSnapshots({
+    broker,
+    journalFillsById: state.journalFillsById,
+  })
+  const applyOwnedOrderSnapshotsTransition = (options = {}) => applyOwnedOrderSnapshots({
+    context: {
+      state,
+      processExecutionFillTransition,
+      processUserDataEventTransition,
+      pause,
+      affectedSymbol: undefined,
+    },
+    ...options,
+  })
+  const cancelOwnedBuyOrders = (options = {}) => runTransition({
+    task: () => cancelOwnedBuyOrdersTransition({
+      context: {
+        state,
+        ensureCancellationEligible,
+        publishDurableIntent,
+        cancelOrderWithOperationalState,
+        markCancellationUnknown,
+        markCancellationFailure,
+        broker,
+        pause,
+        processExecutionFillTransition,
+        publishOrderCancelled,
+        publishOrderCancelFailed,
+      },
+      options,
+    }),
+  })
+  const cancelOwnedBuyOrdersForShutdown = () => cancelOwnedBuyOrders()
+  const cancelOwnedBuyOrdersForSafetyHalt = () => cancelOwnedBuyOrders({ reason: "ACCOUNT_INTEGRITY_FAILURE" })
+  const reconcileOwnedOrders = (options = {}) => reconcileOwnedOrdersTransition({
+    context: {
+      state,
+      broker,
+      runTransition,
+      pause,
+      collectOwnedOrderSnapshots,
+      applyOwnedOrderSnapshotsTransition,
+    },
+    options,
+  })
+  return {
+    collectOwnedOrderSnapshots,
+    applyOwnedOrderSnapshotsTransition,
+    cancelOwnedBuyOrders,
+    cancelOwnedBuyOrdersForShutdown,
+    cancelOwnedBuyOrdersForSafetyHalt,
+    reconcileOwnedOrders,
+  }
+}
+
 export function makeConservativeTradingEngine({
   broker,
   strategyPolicy,
@@ -1118,55 +1188,29 @@ export function makeConservativeTradingEngine({
     isStopping,
   })
 
-  const collectOwnedOrderSnapshots = makeCollectOwnedOrderSnapshots({
+  const ownedOrderManagement = createOwnedOrderManagementHandlers({
+    state,
     broker,
-    journalFillsById: state.journalFillsById,
+    processExecutionFillTransition,
+    processUserDataEventTransition,
+    pause,
+    ensureCancellationEligible,
+    publishDurableIntent,
+    cancelOrderWithOperationalState,
+    markCancellationUnknown,
+    markCancellationFailure,
+    publishOrderCancelled,
+    publishOrderCancelFailed,
+    runTransition,
   })
-
-  const applyOwnedOrderSnapshotsTransition = (options = {}) => applyOwnedOrderSnapshots({
-    context: {
-      state,
-      processExecutionFillTransition,
-      processUserDataEventTransition,
-      pause,
-      affectedSymbol: undefined,
-    },
-    ...options,
-  })
-
-  const cancelOwnedBuyOrders = (options = {}) => runTransition({
-    task: () => cancelOwnedBuyOrdersTransition({
-      context: {
-        state,
-        ensureCancellationEligible,
-        publishDurableIntent,
-        cancelOrderWithOperationalState,
-        markCancellationUnknown,
-        markCancellationFailure,
-        broker,
-        pause,
-        processExecutionFillTransition,
-        publishOrderCancelled,
-        publishOrderCancelFailed,
-      },
-      options,
-    }),
-  })
-
-  const cancelOwnedBuyOrdersForShutdown = () => cancelOwnedBuyOrders()
-  const cancelOwnedBuyOrdersForSafetyHalt = () => cancelOwnedBuyOrders({ reason: "ACCOUNT_INTEGRITY_FAILURE" })
-
-  const reconcileOwnedOrders = (options = {}) => reconcileOwnedOrdersTransition({
-    context: {
-      state,
-      broker,
-      runTransition,
-      pause,
-      collectOwnedOrderSnapshots,
-      applyOwnedOrderSnapshotsTransition,
-    },
-    options,
-  })
+  const {
+    collectOwnedOrderSnapshots,
+    applyOwnedOrderSnapshotsTransition,
+    cancelOwnedBuyOrders,
+    cancelOwnedBuyOrdersForShutdown,
+    cancelOwnedBuyOrdersForSafetyHalt,
+    reconcileOwnedOrders,
+  } = ownedOrderManagement
 
   const {
     processVolatilitySnapshot,
