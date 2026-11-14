@@ -112,7 +112,7 @@ Model only the concepts required by the approved RS contract:
 - Recovery tranche: canonical BUY-fill quantity, cost basis and actual commissions.
 - Active/pending/partial/unknown order reservations.
 - Reuse the existing pair-level `minProfit` setting for minimum net recovery-cycle profit; retain a separate legacy cost-basis gate. Recovery profit cannot subsidize a legacy loss.
-- Cycle progress and residual handling only after the remaining owner decisions are settled.
+- When authorized legacy inventory is exhausted, pause RS and require explicit operator reconfiguration/reauthorization before any new recovery BUY; never auto-switch to recovery-only cycles or auto-liquidate. Existing orders/fills/reservations remain owned and reconciled. Other lifecycle and residual handling is modeled only after the remaining owner decisions are settled.
 - Exchange-filter-constrained dust may be classified only after a fully reconciled successful cycle; retain it as bonus inventory and permanently exclude it from all later RS cycle quantity, cost, proceeds, profitability, and availability calculations. Ordinary sellable residual must not be classified as dust.
 
 Agreed illustrative config shape (proposal only, not runtime configuration):
