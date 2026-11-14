@@ -155,7 +155,7 @@ test("CLI explicitly confirms a READY offline audit against an already initializ
     const output = []
     const exitCode = await runRecoveryMarketCommand({
       args: ["--context", "evidence.json", "--confirm"],
-      env: { DURABLE_FACTS_DIRECTORY: directory },
+      env: { OPERATIONAL_STATE_DIRECTORY: directory },
       readContext: async () => JSON.stringify(readyContext),
       writeOutput: (value) => output.push(value),
       writeError: (value) => assert.fail(value),
@@ -177,7 +177,7 @@ test("CLI never initializes a missing durable-fact directory during confirmation
   const directory = path.join(tmpdir(), "coinzilla-recovery-cli-missing-" + process.pid)
   const exitCode = await runRecoveryMarketCommand({
     args: ["--context", "evidence.json", "--confirm"],
-    env: { DURABLE_FACTS_DIRECTORY: directory },
+    env: { OPERATIONAL_STATE_DIRECTORY: directory },
     readContext: async () => JSON.stringify(readyContext),
     writeOutput: () => assert.fail("A missing ledger must not produce a confirmation result."),
     writeError: () => {},
