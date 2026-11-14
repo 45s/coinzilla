@@ -811,7 +811,7 @@ test("separates manual external orders from unresolved prior-process Harvester o
 
 
 test("times the CLOSING Journal durability barrier and reports failed flushes", async () => {
-  const market = createFixture().market
+  const { market } = createFixture()
   const logEntries = []
   let tick = 0
   const fixture = createFixture({
