@@ -47,6 +47,9 @@ export function createMarketSpecification({ metadata } = {}) {
   if (!isAssetCode(baseAsset) || !isAssetCode(quoteAsset)) {
     throw new TypeError("metadata must contain normalized baseAsset and quoteAsset codes")
   }
+  if (symbol !== baseAsset + quoteAsset) {
+    throw new Error("Binance market symbol " + symbol + " does not match baseAsset + quoteAsset")
+  }
 
   return Object.freeze({
     baseAsset,
@@ -80,6 +83,9 @@ export function validateTokenSpecifications(tokenSpecifications) {
     for (const [symbol, market] of Object.entries(token.markets)) {
       if (!isMarketSymbol(symbol) || !isRecord(market) || !isAssetCode(market.quoteAsset)) {
         throw new TypeError("Token specification " + baseAsset + " contains malformed market metadata: " + symbol)
+      }
+      if (symbol !== baseAsset + market.quoteAsset) {
+        throw new Error("Token specification market " + symbol + " does not match base asset " + baseAsset + " and quote asset " + market.quoteAsset)
       }
       requirePrecision(market.pricePrecision, baseAsset + "." + symbol + ".pricePrecision")
       requirePrecision(market.quantityPrecision, baseAsset + "." + symbol + ".quantityPrecision")
