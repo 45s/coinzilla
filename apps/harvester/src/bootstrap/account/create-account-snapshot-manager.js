@@ -13,8 +13,14 @@ import {
 import { recordAccountSnapshotCaptured, recordAccountOpenOrdersCaptured } from "../../use-cases/record-account-reconciliation-facts.js"
 
 function withRecoveryFailure(error, category, stage, retryable) {
-  const normalized = error instanceof Error ? error : new Error(String(error), { cause: error })
-  normalized.recoveryFailure = normalized.recoveryFailure ?? { category, stage, retryable }
+  const normalized = error instanceof Error ? error : new Error(String(error), {
+    cause: error,
+  })
+  normalized.recoveryFailure = normalized.recoveryFailure ?? {
+    category,
+    stage,
+    retryable,
+  }
   return normalized
 }
 
@@ -22,13 +28,23 @@ function resolveAuditFlushFailure(flushed, stage) {
   const failure = flushed?.recoveryFailure
   if (failure?.category === "DURABILITY" && failure?.stage === "JOURNAL_WRITE_FAILURE" && failure?.retryable === false) { return failure }
   if (failure?.category === "DURABILITY" && failure?.stage === "JOURNAL_FLUSH_FAILURE" && failure?.retryable === true) { return failure }
-  return { category: "DURABILITY", stage: stage + "_UNCLASSIFIED", retryable: false }
+  return {
+    category: "DURABILITY",
+    stage: stage + "_UNCLASSIFIED",
+    retryable: false,
+  }
 }
 
-function createAuditFlushError({ flushed, message, stage }) {
+function createAuditFlushError({
+  flushed,
+  message,
+  stage,
+}) {
   const failure = resolveAuditFlushFailure(flushed, stage)
   const cause = flushed?.errors?.find?.((error) => error instanceof Error)
-  const error = cause ? new Error(message, { cause }) : new Error(message)
+  const error = cause ? new Error(message, {
+    cause,
+  }) : new Error(message)
   return withRecoveryFailure(error, failure.category, failure.stage, failure.retryable)
 }
 
@@ -40,7 +56,13 @@ function logSystem(logger, data) {
   logger?.info?.(data)
 }
 
-function createAccountSnapshotAuditPayload({ phase, snapshot, allowedAssetCodes, auditStatus, auditReasons }) {
+function createAccountSnapshotAuditPayload({
+  phase,
+  snapshot,
+  allowedAssetCodes,
+  auditStatus,
+  auditReasons,
+}) {
   let dataResult
   try {
     dataResult = mapAccountSnapshotCapturedData({
@@ -64,15 +86,23 @@ function createAccountSnapshotAuditPayload({ phase, snapshot, allowedAssetCodes,
   return dataResult
 }
 
-async function persistAccountSnapshotAudit({ operationalStateStore, data }) {
+async function persistAccountSnapshotAudit({
+  operationalStateStore,
+  data,
+}) {
   if (!operationalStateStore) {
     return
   }
-  const durable = await recordAccountSnapshotCaptured({ operationalStateStore, data })
+  const durable = await recordAccountSnapshotCaptured({
+    operationalStateStore,
+    data,
+  })
   if (durable?.ok !== true || durable.data?.durable !== true) {
     const cause = durable?.errors?.[0] ?? new Error("Account snapshot durable fact was not committed")
     throw withRecoveryFailure(
-      new Error("Unable to durably persist account snapshot: " + (cause.message ?? String(cause)), { cause }),
+      new Error("Unable to durably persist account snapshot: " + (cause.message ?? String(cause)), {
+        cause,
+      }),
       "DURABILITY",
       "ACCOUNT_SNAPSHOT_DURABLE_FACT",
       false,
@@ -234,7 +264,9 @@ export function createAccountSnapshotManager({
       const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
       const cause = result?.errors?.find?.((error) => error instanceof Error)
       throw withRecoveryFailure(
-        new Error("Unable to load canonical exchange account balances" + (details ? ": " + details : ""), { cause }),
+        new Error("Unable to load canonical exchange account balances" + (details ? ": " + details : ""), {
+          cause,
+        }),
         "REST_RECONCILIATION",
         "ACCOUNT_SNAPSHOT_READ",
         true,
@@ -291,7 +323,10 @@ export function createAccountSnapshotManager({
         sourceTime: result.data.sourceTime,
         ...baselineResult.data,
       })
-      assertAccountSnapshotCoversMarkets({ accountSnapshot: nextSnapshot, markets: accountAuditMarkets })
+      assertAccountSnapshotCoversMarkets({
+        accountSnapshot: nextSnapshot,
+        markets: accountAuditMarkets,
+      })
       if (accountSnapshot && nextSnapshot.sourceTime < accountSnapshot.sourceTime) {
         throw new Error("Exchange account snapshot is older than the previously accepted snapshot")
       }
@@ -329,7 +364,9 @@ export function createAccountSnapshotManager({
         const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
         const cause = result?.errors?.find?.((error) => error instanceof Error)
         throw withRecoveryFailure(
-          new Error("Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""), { cause }),
+          new Error("Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""), {
+            cause,
+          }),
           "REST_RECONCILIATION", "ACCOUNT_WIDE_OPEN_ORDERS_READ", true,
         )
       }
@@ -367,10 +404,16 @@ export function createAccountSnapshotManager({
         owned.market.symbol !== symbol ||
         owned.side !== order.side ||
         owned.type !== order.type ||
-        compareDecimal({ left: owned.originalQuantity.amount, right: actualQuantity }) !== 0 ||
+        compareDecimal({
+          left: owned.originalQuantity.amount,
+          right: actualQuantity,
+        }) !== 0 ||
         (expectedPrice === undefined
           ? actualPrice !== undefined
-          : actualPrice === undefined || compareDecimal({ left: expectedPrice, right: String(actualPrice) }) !== 0)
+          : actualPrice === undefined || compareDecimal({
+              left: expectedPrice,
+              right: String(actualPrice),
+            }) !== 0)
       ) { return true }
       matchedOwnedClientIds.add(owned.clientOrderId)
       return false
@@ -389,7 +432,13 @@ export function createAccountSnapshotManager({
     }
     let dataResult
     try {
-      dataResult = mapAccountOpenOrdersCapturedData({ phase, observedAt: now(), orders, readiness, blockReasons })
+      dataResult = mapAccountOpenOrdersCapturedData({
+        phase,
+        observedAt: now(),
+        orders,
+        readiness,
+        blockReasons,
+      })
     } catch (error) {
       throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_OPEN_ORDERS_AUDIT_PAYLOAD", false)
     }
@@ -402,13 +451,22 @@ export function createAccountSnapshotManager({
       )
     }
     if (operationalStateStore) {
-      const durable = await recordAccountOpenOrdersCaptured({ operationalStateStore, data: dataResult.data })
+      const durable = await recordAccountOpenOrdersCaptured({
+        operationalStateStore,
+        data: dataResult.data,
+      })
       if (durable?.ok !== true || durable.data?.durable !== true) {
         const cause = durable?.errors?.[0] ?? new Error("Account open-orders durable fact was not committed")
-        throw withRecoveryFailure(new Error("Unable to durably persist account open-orders snapshot: " + (cause.message ?? String(cause)), { cause }), "DURABILITY", "ACCOUNT_OPEN_ORDERS_DURABLE_FACT", false)
+        throw withRecoveryFailure(new Error("Unable to durably persist account open-orders snapshot: " + (cause.message ?? String(cause)), {
+          cause,
+        }), "DURABILITY", "ACCOUNT_OPEN_ORDERS_DURABLE_FACT", false)
       }
     }
-    const published = publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED, dataResult })
+    const published = publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
+      dataResult,
+    })
     if (!published?.ok) {
       const details = published?.errors?.map((error) => error?.message ?? String(error)).join("; ")
       throw withRecoveryFailure(
@@ -479,7 +537,10 @@ export function createAccountSnapshotManager({
       capturePreflightBaseline: phase === "PREFLIGHT",
     })
     const configuredAssetCodes = [...new Set([...marketMetadata.values()]
-      .flatMap(({ market }) => [market.baseAsset.code, market.quoteAsset.code]))]
+      .flatMap(({ market }) => [
+        market.baseAsset.code,
+        market.quoteAsset.code,
+      ]))]
     const allowedAssetCodes = suppliedAllowedAssetCodes ?? [...new Set([
       ...configuredAssetCodes,
       ...commissionBaselineAssetIds.keys(),
@@ -526,7 +587,10 @@ export function createAccountSnapshotManager({
     return snapshot
   }
 
-  const publishCommissionAssetBaseline = async ({ assetId, assetCode } = {}) => {
+  const publishCommissionAssetBaseline = async ({
+    assetId,
+    assetCode,
+  } = {}) => {
     if (typeof assetId !== "string" || !assetId.trim() ||
         typeof assetCode !== "string" || !assetCode.trim()) {
       throw withRecoveryFailure(
@@ -552,7 +616,13 @@ export function createAccountSnapshotManager({
           false,
         )
       }
-      return { ok: true, data: Object.freeze({ skipped: true, reason: "CONFIGURED_MARKET_ASSET" }) }
+      return {
+        ok: true,
+        data: Object.freeze({
+          skipped: true,
+          reason: "CONFIGURED_MARKET_ASSET",
+        }),
+      }
     }
 
     const knownAssetId = commissionBaselineAssetIds.get(assetCode)
@@ -566,7 +636,13 @@ export function createAccountSnapshotManager({
           false,
         )
       }
-      return { ok: true, data: Object.freeze({ skipped: true, reason: "BASELINE_ALREADY_CAPTURED" }) }
+      return {
+        ok: true,
+        data: Object.freeze({
+          skipped: true,
+          reason: "BASELINE_ALREADY_CAPTURED",
+        }),
+      }
     }
 
     if (preflightSourceTime === undefined) {
@@ -608,7 +684,11 @@ export function createAccountSnapshotManager({
     commissionBaselineAssetCodesById.set(assetId, assetCode)
     return {
       ok: true,
-      data: Object.freeze({ assetId, assetCode, sourceTime: preflightSourceTime }),
+      data: Object.freeze({
+        assetId,
+        assetCode,
+        sourceTime: preflightSourceTime,
+      }),
     }
   }
 
