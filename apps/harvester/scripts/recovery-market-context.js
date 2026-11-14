@@ -16,7 +16,7 @@ function requireObject({ value, field }) {
 }
 
 function requireArray({ value, field }) {
-  if (!Array.isArray(value)) throw new TypeError(field + " must be an array")
+  if (!Array.isArray(value)) { throw new TypeError(field + " must be an array") }
   return value
 }
 
@@ -47,9 +47,9 @@ export async function runOfflineMarketRecovery({
   operationalStateStore,
 } = {}) {
   try {
-    if (typeof confirm !== "boolean") throw new TypeError("confirm must be a boolean")
+    if (typeof confirm !== "boolean") { throw new TypeError("confirm must be a boolean") }
     const canonical = createCanonicalEvidence({ context })
-    if (canonical?.ok !== true) return canonical
+    if (canonical?.ok !== true) { return canonical }
     const {
       projection,
       recoveredState: initialRecoveredState,
@@ -59,7 +59,7 @@ export async function runOfflineMarketRecovery({
     } = canonical.data
     const symbol = requireString({ value: context.symbol, field: "context.symbol" })
     const targetMarket = marketsBySymbol.get(symbol)
-    if (!targetMarket) throw new Error("Canonical target market metadata is missing for " + symbol)
+    if (!targetMarket) { throw new Error("Canonical target market metadata is missing for " + symbol) }
     const coverage = requireObject({ value: context.coverage, field: "context.coverage" })
     const historyRetentionEvidence = {
       factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",

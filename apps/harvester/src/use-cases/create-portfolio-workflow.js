@@ -27,18 +27,18 @@ import {
  * @param {Map<string, RecoveryLedger>} [options.initialRecoveryLedgers] Initial market recovery ledgers.
  * @returns {object} Portfolio, accounting, recovery completion, and market-price workflow operations.
  */
-export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, initialRecoveryLedgers, onCommissionAsset, onDurableExecutionFill, onDurableRecoveryCycleCompleted, onDurableRecoveryCycleNotCompleted } = {}) => {
+export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, initialRecoveryLedgers, onCommissionAsset, onOperationalStateExecutionFill, onOperationalStateRecoveryCycleCompleted, onOperationalStateRecoveryCycleNotCompleted } = {}) => {
   if (initialPortfolio !== undefined && !(initialPortfolio instanceof Portfolio)) {
     throw new TypeError("initialPortfolio must be a Portfolio")
   }
   if (initialRecoveryLedgers !== undefined && !(initialRecoveryLedgers instanceof Map)) {
     throw new TypeError("initialRecoveryLedgers must be a Map")
   }
-  if (onDurableExecutionFill !== undefined && typeof onDurableExecutionFill !== "function") {
-    throw new TypeError("onDurableExecutionFill must be a function")
+  if (onOperationalStateExecutionFill !== undefined && typeof onOperationalStateExecutionFill !== "function") {
+    throw new TypeError("onOperationalStateExecutionFill must be a function")
   }
-  if (onDurableRecoveryCycleCompleted !== undefined && typeof onDurableRecoveryCycleCompleted !== "function") {
-    throw new TypeError("onDurableRecoveryCycleCompleted must be a function")
+  if (onOperationalStateRecoveryCycleCompleted !== undefined && typeof onOperationalStateRecoveryCycleCompleted !== "function") {
+    throw new TypeError("onOperationalStateRecoveryCycleCompleted must be a function")
   }
   let portfolio = initialPortfolio ?? new Portfolio()
   let recoveryLedgers = new Map(initialRecoveryLedgers ?? [])
@@ -162,10 +162,10 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         })
       }
     }
-    if (result.ok && result.data.applied === true && onDurableExecutionFill) {
+    if (result.ok && result.data.applied === true && onOperationalStateExecutionFill) {
       let durableResult
       try {
-        durableResult = await onDurableExecutionFill({ fill })
+        durableResult = await onOperationalStateExecutionFill({ fill })
       } catch (error) {
         return toResult({ error })
       }
@@ -326,8 +326,8 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
             nextRecoveryLedgers.set(marketId, resetLedger)
             const nextPosition = nextPortfolio.getPosition({ marketId })
 
-            if (onDurableRecoveryCycleCompleted) {
-              const durableResult = await onDurableRecoveryCycleCompleted({
+            if (onOperationalStateRecoveryCycleCompleted) {
+              const durableResult = await onOperationalStateRecoveryCycleCompleted({
                 marketId,
                 recoveryLedger: previousLedger,
                 position,
@@ -371,8 +371,8 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
               if (portfolioStats) { logger.info?.(portfolioStats) }
             }
           } else {
-            if (onDurableRecoveryCycleNotCompleted) {
-              const durableResult = await onDurableRecoveryCycleNotCompleted({
+            if (onOperationalStateRecoveryCycleNotCompleted) {
+              const durableResult = await onOperationalStateRecoveryCycleNotCompleted({
                 marketId,
                 recoveryLedger,
                 position,

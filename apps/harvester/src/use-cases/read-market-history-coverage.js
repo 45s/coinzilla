@@ -3,7 +3,7 @@ import { toResult } from "@coinzilla/utils"
 function validateCoverageSequence({ records, symbol }) {
   let previous
   for (const record of records) {
-    if (record.factType !== "MARKET_HISTORY_COVERAGE_CONFIRMED" || record.data?.symbol !== symbol) continue
+    if (record.factType !== "MARKET_HISTORY_COVERAGE_CONFIRMED" || record.data?.symbol !== symbol) { continue }
     if (previous && record.data.coveredFromTime > previous.data.coveredFromTime) {
       throw new Error("Durable market-history coverage narrows the verified history window for " + symbol)
     }

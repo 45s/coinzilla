@@ -467,7 +467,7 @@ test("persists a non-completed full-SELL outcome before returning and leaves acc
     logger: {},
     initialPortfolio,
     initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
-    onDurableRecoveryCycleNotCompleted: async (input) => {
+    onOperationalStateRecoveryCycleNotCompleted: async (input) => {
       calls.push(input)
       return { ok: true, data: { durable: true } }
     },
@@ -511,7 +511,7 @@ test("does not return a non-completed cycle when its durable outcome was not com
     logger: {},
     initialPortfolio,
     initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
-    onDurableRecoveryCycleNotCompleted: async () => ({
+    onOperationalStateRecoveryCycleNotCompleted: async () => ({
       ok: false,
       errors: [new Error("cycle outcome manifest was not committed")],
     }),
@@ -555,7 +555,7 @@ test("binds a durable completed-cycle outcome to the exact fully filled SELL ord
     logger: {},
     initialPortfolio,
     initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
-    onDurableRecoveryCycleCompleted: async (input) => {
+    onOperationalStateRecoveryCycleCompleted: async (input) => {
       durableInput = input
       assert.equal(workflow.getPortfolio(), initialPortfolio, "The durable fact must commit before either accounting projection is reset.")
       assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger, "The RecoveryLedger reset must remain unpublished until the completed-cycle fact is durable.")
@@ -657,13 +657,13 @@ test("serializes recovery completion behind an in-flight durable fill", async ()
     logger: {},
     initialPortfolio,
     initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
-    onDurableExecutionFill: async ({ fill: received }) => {
+    onOperationalStateExecutionFill: async ({ fill: received }) => {
       assert.equal(received, additionalBuyFill, "The serialization test must hold the durable barrier for the exact concurrent BUY fill.")
       markDurableFillStarted()
       await durableFillGate
       return { ok: true, data: { durable: true } }
     },
-    onDurableRecoveryCycleCompleted: async (input) => {
+    onOperationalStateRecoveryCycleCompleted: async (input) => {
       completionCalls.push(input)
       return { ok: true, data: { durable: true } }
     },

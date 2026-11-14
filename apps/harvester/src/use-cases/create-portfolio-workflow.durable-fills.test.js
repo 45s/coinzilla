@@ -24,7 +24,7 @@ test("commits the durable fill before publishing the new Portfolio and RecoveryL
   const workflow = createPortfolioWorkflow({
     evaluateStrategy: () => ({ actions: [] }),
     logger: {},
-    onDurableExecutionFill: async ({ fill: received }) => {
+    onOperationalStateExecutionFill: async ({ fill: received }) => {
       order.push("durable")
       assert.equal(received, fill)
       assert.equal(workflow.getPortfolio().positions.length, 0, "In-memory accounting must remain unchanged during the durability barrier.")
@@ -43,7 +43,7 @@ test("does not mutate Portfolio or RecoveryLedger when the durable fill append f
   const workflow = createPortfolioWorkflow({
     evaluateStrategy: () => ({ actions: [] }),
     logger: {},
-    onDurableExecutionFill: async () => ({
+    onOperationalStateExecutionFill: async () => ({
       ok: false,
       errors: [new Error("execution fact fsync failed")],
     }),
@@ -89,7 +89,7 @@ test("persists a third-asset commission baseline before its durable execution fi
       )
       return { ok: true, data: { sourceTime: 100, durable: true } }
     },
-    onDurableExecutionFill: async ({ fill: received }) => {
+    onOperationalStateExecutionFill: async ({ fill: received }) => {
       order.push("fill")
       assert.equal(received, feeFill, "The durable execution fact must receive the exact canonical Fill whose fee baseline was persisted.")
       assert.equal(

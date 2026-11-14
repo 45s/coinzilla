@@ -113,7 +113,7 @@ test("offline context adapter refuses confirmation without a Operational State S
   const result = await runOfflineMarketRecovery({ context, confirm: true })
 
   assert.equal(result.ok, false, "Coverage confirmation must require the existing Operational State Store.")
-  assert.match(result.errors[0].message, /durable.fact/i, "The missing Operational State Store record dependency must be actionable.")
+  assert.match(result.errors[0].message, /Operational State Store/i, "The missing Operational State Store record dependency must be actionable.")
 })
 
 test("offline context adapter rejects malformed evidence before reconciliation", async () => {

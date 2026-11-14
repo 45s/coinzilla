@@ -142,7 +142,7 @@ test("rejects reuse of a fact identity with changed economic or control payload"
     data: { requestId: "request-1", actorId: "telegram-actor-1", symbol: "ETHUSDT" },
   }))
   assert.equal(conflict.ok, false)
-  assert.match(conflict.errors[0].message, /factId.*different payload|identity.*payload/i)
+  assert.match(conflict.errors[0].message, /record ID.*different payload|identity.*payload/i)
 })
 
 test("serializes concurrent appends across multiple store instances in one process", async (t) => {

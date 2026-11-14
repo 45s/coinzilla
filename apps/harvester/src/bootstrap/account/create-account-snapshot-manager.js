@@ -229,16 +229,18 @@ export function createAccountSnapshotManager({
       matchedOwnedClientIds.add(owned.clientOrderId)
       return false
     })
-    const blockReasons = unownedOrders.length > 0
-      ? ["UNOWNED_OPEN_ORDERS:" + unownedOrders.length]
-      : orders.length > 0 && !ownershipReconciled
-        ? ["CANONICAL_ORDER_RECONCILIATION_REQUIRED"]
-        : []
-    const readiness = blockReasons.length > 0
-      ? "BLOCKED"
-      : orders.length > 0
-        ? "RECONCILED"
-        : "READY"
+    const blockReasons = []
+    if (unownedOrders.length > 0) {
+      blockReasons.push("UNOWNED_OPEN_ORDERS:" + unownedOrders.length)
+    } else if (orders.length > 0 && !ownershipReconciled) {
+      blockReasons.push("CANONICAL_ORDER_RECONCILIATION_REQUIRED")
+    }
+    let readiness = "READY"
+    if (blockReasons.length > 0) {
+      readiness = "BLOCKED"
+    } else if (orders.length > 0) {
+      readiness = "RECONCILED"
+    }
     let dataResult
     try {
       dataResult = mapAccountOpenOrdersCapturedData({ phase, observedAt: now(), orders, readiness, blockReasons })
@@ -303,14 +305,16 @@ export function createAccountSnapshotManager({
     unresolvedHarvesterOpenOrderSymbols = new Set(unresolvedHarvesterOrders
       .map((order) => order?.market?.symbol ?? order?.symbol)
       .filter((symbol) => typeof symbol === "string" && symbol.trim().length > 0))
+    let auditMessage = "Account-wide open-orders audit is waiting for canonical order reconciliation"
+    if (readiness === "READY") {
+      auditMessage = "Account-wide open-orders audit complete; no open orders found"
+    } else if (readiness === "RECONCILED") {
+      auditMessage = "Account-wide open-orders audit complete; all open orders match restored Harvester ownership"
+    } else if (unownedOrders.length > 0) {
+      auditMessage = "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched"
+    }
     logger.info?.({
-      message: readiness === "READY"
-        ? "Account-wide open-orders audit complete; no open orders found"
-        : readiness === "RECONCILED"
-          ? "Account-wide open-orders audit complete; all open orders match restored Harvester ownership"
-          : unownedOrders.length > 0
-          ? "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched"
-          : "Account-wide open-orders audit is waiting for canonical order reconciliation",
+      message: auditMessage,
       orderCount: orders.length,
       readiness,
       symbols: [...new Set(orders.map((order) => order.market?.symbol ?? order.symbol).filter(Boolean))],
