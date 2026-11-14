@@ -868,3 +868,6 @@ The shutdown-recovery inventory, conservative evaluation stages and operational-
 
 
 The ordinary TRADE startup regression fixture is split into market/config, broker-port, fill and assertion helpers. This is test-structure-only; the original startup, fill, accounting and shutdown assertions are retained.
+
+
+Completed SELL recovery-cycle publication receives the same injected workflow dependencies as the completion audit, preserving durable lifecycle evidence and state cleanup.

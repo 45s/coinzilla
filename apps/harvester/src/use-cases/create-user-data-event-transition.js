@@ -528,6 +528,7 @@ async function handleSellFilled({ dependencies, order, symbol, recoveryMode } = 
   })
   if (incomplete) {return incomplete}
   publishCompletedSellRecoveryCycle({
+    dependencies,
     order,
     symbol,
     completion: result.completion,
