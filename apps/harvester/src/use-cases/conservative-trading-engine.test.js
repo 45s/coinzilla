@@ -21,6 +21,7 @@ import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/re
 import { createMarketBook, isPostOnlyOrderCrossing, makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { createAccountIntegritySafetyHalt } from "./create-account-integrity-safety-halt.js"
+import { createHarnessBroker } from "./conservative-trading-engine-harness.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/strategy.js"
@@ -185,218 +186,57 @@ async function createHarness({
   isStopping: isStoppingOverride = () => false,
   initialState
 } = {}) {
-  const orders = []
-  const pauses = []
-  const accountedFills = []
-  const accountedFillIds = new Set()
-  const completedCycles = []
-  const cancellationIds = []
-  const canceledOrders = new Map()
-  const acknowledgedFillsByOrder = new Map()
-  const acknowledgedOrdersById = new Map()
-  const canonicalOrdersByClientId = new Map()
-  let remainingPlaceOrderFailures = placeOrderFailure ? Number.POSITIVE_INFINITY : placeOrderFailureCount
-  let placeOrderCallCount = 0
-  const broker = {
-    getSymbolFilters: async ({ symbol }) => getSymbolFiltersOverride
-      ? getSymbolFiltersOverride({ symbol })
-      : {
-          ok: true,
-          data: getMarketMetadataOverride ? getMarketMetadataOverride() : (suppliedMarketMetadata ?? marketMetadata),
-        },
-    placeOrder: async ({ order }) => {
-      placeOrderCallCount += 1
-      orders.push(order)
-      onPlaceOrder?.({ order })
-      onPlaceOrderStarted?.({ order })
-      if (placeOrderGate && order.side === deferOrderSide) {await placeOrderGate.promise}
-      if (placeOrderThrow) {throw new Error("socket closed")}
-      if (placeOrderFailureAfterCount !== undefined && placeOrderCallCount > placeOrderFailureAfterCount) {
-        return {
-          ok: false,
-          errors: [placeOrderFailureError ?? new Error("replacement rejected")]
-        }
-      }
-      if (placeOrderFailureAfterFirst && placeOrderCallCount > 1) {
-        return {
-          ok: false,
-          errors: [placeOrderFailureError ?? new Error("replacement rejected")]
-        }
-      }
-      if (remainingPlaceOrderFailures > 0) {
-        if (Number.isFinite(remainingPlaceOrderFailures)) {remainingPlaceOrderFailures -= 1}
-        return {
-          ok: false,
-          errors: [placeOrderFailureError ?? new Error("broker rejected order")]
-        }
-      }
-      const acknowledgedOrder = new CanonicalOrder({
-        clientOrderId: order.clientOrderId,
-        brokerOrderId: `broker-${order.clientOrderId}`,
-        market,
-        side: order.side,
-        type: order.type,
-        limitPrice: new Money({
-          amount: order.price,
-          asset: quoteAsset
-        }),
-        originalQuantity: new Quantity({
-          amount: order.quantity,
-          asset: baseAsset
-        }),
-        executedQuantity: new Quantity({
-          amount: immediateFilledAcknowledgement ? order.quantity : "0",
-          asset: baseAsset,
-        }),
-        status: immediateFilledAcknowledgement ? "FILLED" : "OPEN",
-        createdAt: 1,
-        acknowledgedAt: 1,
-        updatedAt: 1,
-        ...(immediateFilledAcknowledgement ? { completedAt: 2 } : {}),
-      })
-      if (immediateFilledAcknowledgement) {
-        acknowledgedOrdersById.set(acknowledgedOrder.brokerOrderId, acknowledgedOrder)
-        acknowledgedFillsByOrder.set(
-          acknowledgedOrder.brokerOrderId,
-          getAcknowledgedFills({ order: acknowledgedOrder }),
-        )
-      }
-      return {
-        ok: true,
-        data: acknowledgedOrder
-      }
-    },
-    cancelOrder: async ({ order }) => {
-      cancellationIds.push(order.brokerOrderId)
-      onCancelOrderStarted?.({ order })
-      if (cancelOrderGate) {await cancelOrderGate.promise}
-      if (cancelThrow) {throw new Error("cancel socket closed")}
-      if (cancelNotSent) {return {
-        ok: false,
-        cancellationOutcome: "NOT_SENT",
-        errors: [new Error("user-data stream unavailable")]
-      }}
-      if (cancelNotSentOnSuccess) {return {
-        ok: true,
-        cancellationOutcome: "NOT_SENT",
-        errors: [new Error("contradictory cancellation result")]
-      }}
-      if (cancelFailure) {return {
-        ok: false,
-        errors: [new Error("cancel denied")]
-      }}
-      canceledOrders.set(order.brokerOrderId, order)
-      const executedQuantity = typeof cancelExecutedQuantity === "function"
-        ? cancelExecutedQuantity({ order })
-        : cancelExecutedQuantity
-      const resolvedCancelOrderStatus = typeof cancelOrderStatus === "function"
-        ? cancelOrderStatus({ order })
-        : cancelOrderStatus
-      return {
-      ok: true,
-      data: new CanonicalOrder({
-        clientOrderId: order.clientOrderId,
-        brokerOrderId: order.brokerOrderId,
-        market,
-        side: order.side,
-        type: order.type,
-        limitPrice: order.limitPrice,
-        originalQuantity: order.originalQuantity,
-        executedQuantity: new Quantity({
-          amount: executedQuantity,
-          asset: baseAsset,
-        }),
-        status: resolvedCancelOrderStatus,
-        createdAt: order.createdAt,
-        acknowledgedAt: order.acknowledgedAt,
-        updatedAt: 2,
-        completedAt: 2,
-      }),
-    }
-    },
-    getFills: async ({ orderId }) => {
-      if (acknowledgedFillsByOrder.has(orderId)) {
-        if (acknowledgedFillsGate) {await acknowledgedFillsGate.promise}
-        const fills = acknowledgedFillsByOrder.get(orderId)
-        return {
-          ok: true,
-          data: typeof fills === "function" ? fills() : fills
-        }
-      }
-      const canceledOrder = canceledOrders.get(orderId)
-      const executedQuantity = canceledOrder && (typeof cancelExecutedQuantity === "function"
-        ? cancelExecutedQuantity({ order: canceledOrder })
-        : cancelExecutedQuantity)
-      const cancelFill = cancelWithFill && canceledOrder
-        ? [new Fill({
-            tradeId: `recovery-cancel-fill-${canceledOrder.side.toLowerCase()}-${orderId}`,
-            brokerOrderId: orderId,
-            clientOrderId: canceledOrder.clientOrderId,
-            market,
-            side: canceledOrder.side,
-            price: canceledOrder.limitPrice,
-            quantity: new Quantity({
-              amount: executedQuantity,
-              asset: baseAsset
-            }),
-            quoteQuantity: new Money({
-              amount: multiplyDecimal({
-                left: canceledOrder.limitPrice.amount,
-                right: executedQuantity
-              }),
-              asset: quoteAsset,
-            }),
-            commissions: [],
-            commissionStatus: "COMPLETE",
-          })]
-        : []
-      return {
-        ok: true,
-        data: [
-          ...accountedFills.filter((fill) => fill.brokerOrderId === orderId),
-          ...cancelFill,
-          ...getTerminalFills({ orderId }),
-        ],
-      }
-    },
-    getCanonicalOrder: async ({ clientOrderId }) => {
-      const order = canonicalOrdersByClientId.get(clientOrderId)
-      return order
-        ? {
-          ok: true,
-          data: order
-        }
-        : {
-          ok: false,
-          errors: [new Error("order not found by client order ID")]
-        }
-    },
-    getOpenOrders: async () => ({
-      ok: true,
-      data: []
-    }),
-    getCanonicalOrderHistory: async ({ orderId }) => ({
-      ok: true,
-      data: acknowledgedOrdersById.has(orderId) ? [acknowledgedOrdersById.get(orderId)] : [],
-    }),
-  }
-  const accountSnapshot = {
-    getFreeBalance: ({ assetId }) => assetId === quoteAsset.id
-      ? new Quantity({
-        amount: quoteFreeBalance,
-        asset: quoteAsset
-      })
-      : new Quantity({
-        amount: baseFreeBalance,
-        asset: baseAsset
-      }),
-    getQuoteCashFlowBaseline: ({ assetId }) => assetId === quoteAsset.id
-      ? quoteCashFlowBaseline
-      : "0",
-    getPortfolioBaseQuantityBaseline: ({ assetId }) => assetId === baseAsset.id ? portfolioBaseQuantityBaseline : "0",
-    getCommittedQuoteBalanceBaseline: ({ assetId }) => assetId === quoteAsset.id ? committedQuoteBalanceBaseline : "0",
-    getCommittedBaseBalanceBaseline: ({ assetId }) => assetId === baseAsset.id ? committedBaseBalanceBaseline : "0",
-  }
+  const {
+    orders,
+    pauses,
+    accountedFills,
+    accountedFillIds,
+    completedCycles,
+    cancellationIds,
+    canceledOrders,
+    acknowledgedFillsByOrder,
+    acknowledgedOrdersById,
+    canonicalOrdersByClientId,
+    broker,
+    accountSnapshot,
+  } = createHarnessBroker({
+    market,
+    baseAsset,
+    quoteAsset,
+    getSymbolFiltersOverride,
+    getMarketMetadataOverride,
+    suppliedMarketMetadata,
+    marketMetadata,
+    placeOrderFailure,
+    placeOrderFailureCount,
+    placeOrderFailureAfterCount,
+    placeOrderFailureError,
+    placeOrderFailureAfterFirst,
+    cancelWithFill,
+    cancelExecutedQuantity,
+    cancelOrderStatus,
+    cancelOrderGate,
+    onCancelOrderStarted,
+    placeOrderThrow,
+    cancelFailure,
+    cancelThrow,
+    cancelNotSent,
+    cancelNotSentOnSuccess,
+    onPlaceOrder,
+    placeOrderGate,
+    deferOrderSide,
+    onPlaceOrderStarted,
+    immediateFilledAcknowledgement,
+    getAcknowledgedFills,
+    acknowledgedFillsGate,
+    getTerminalFills,
+    baseFreeBalance,
+    quoteFreeBalance,
+    quoteCashFlowBaseline,
+    portfolioBaseQuantityBaseline,
+    committedQuoteBalanceBaseline,
+    committedBaseBalanceBaseline,
+  })
   let currentPortfolio = initialPortfolio ?? new Portfolio()
   let currentRecoveryLedger = initialRecoveryLedger ?? RecoveryLedger.empty({ market })
   const effectiveEventPublisher = eventPublisher
