@@ -17,7 +17,7 @@ created: 2026-11-14
 
 Implement RS as an independent strategy policy using verified strategy-neutral domain functions and Harvester's existing execution/accounting infrastructure. Preserve CG behavior throughout.
 
-1. Audit CG source, callers and tests; produce a function-by-function pure-function reuse map.
+1. [x] Audit CG source, callers and tests; produce a function-by-function pure-function reuse map (completed as an audit only; no source code moved).
 2. Extract only proven strategy-neutral functions into an appropriate shared domain location.
 3. TDD RS domain accounting, custody, attribution and profitability.
 4. Implement the remaining pure RS strategy policy.
