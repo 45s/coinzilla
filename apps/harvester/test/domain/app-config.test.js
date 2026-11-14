@@ -13,7 +13,10 @@ const marketPrecision = {
   ZROUSDT: { pricePrecision: 3, quantityPrecision: 1 },
   ZROFDUSD: { pricePrecision: 3, quantityPrecision: 1 },
   ADAFDUSD: { pricePrecision: 4, quantityPrecision: 1 },
-  ADAUSDT: { pricePrecision: 4, quantityPrecision: 1 },
+  ADAUSDT: {
+    pricePrecision: 4,
+    quantityPrecision: 1,
+  },
   WLDFDUSD: { pricePrecision: 4, quantityPrecision: 1 },
 };
 for (const [symbol, pair] of Object.entries(strategy(validConfig).pairs)) {
