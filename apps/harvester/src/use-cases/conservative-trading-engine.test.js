@@ -207,7 +207,7 @@ function createHarnessEngineCallbacks({
   getRecoveryLedgerOverride,
   getMarketMetadataOverride,
   suppliedMarketMetadata,
-  marketMetadata: marketMetadataFallback,
+  marketMetadataFallback,
   accountSnapshot,
   state,
   pauses,
