@@ -2753,18 +2753,9 @@ test("replaces the recovery SELL before submitting the next standing BUY after a
 
 test("reconciles multiple BUY fills racing shutdown cancellation and replaces only the owned recovery SELL", async () => {
   const seeded = makeSeededRecoveryState()
-  // The legacy ledger buyCost mirror is deliberately divergent. Shutdown
-  // coverage must use Position.spent plus confirmed net SELL proceeds.
-  const recoveryLedger = new RecoveryLedger({
-    market: seeded.recoveryLedger.market,
-    buyCost: "999",
-    netSellProceeds: seeded.recoveryLedger.netSellProceeds,
-    appliedFillIds: seeded.recoveryLedger.appliedFillIds,
-    appliedFillFingerprints: seeded.recoveryLedger.appliedFillFingerprints,
-  })
   const stopping = { value: false }
   const portfolioRef = { current: seeded.portfolio }
-  const ledgerRef = { current: recoveryLedger }
+  const ledgerRef = { current: seeded.recoveryLedger }
   const appliedFillIds = new Set()
   const appliedFills = []
   const sequence = []
@@ -2776,7 +2767,7 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
   const cancelStarted = new Promise((resolve) => { signalCancelStarted = resolve })
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
-    initialRecoveryLedger: recoveryLedger,
+    initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
     appConfig: withExternalOrdersPolicy("IGNORE"),
     hasUnownedOpenOrdersForSymbol: () => true,
@@ -2807,12 +2798,6 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
-  const initialPosition = portfolioRef.current.getPosition({ symbol: "DOGEUSDT" })
-  assert.notEqual(
-    ledgerRef.current.buyCost,
-    initialPosition.spent.amount,
-    "The compatibility buyCost mirror must not be used as the recovery cost basis.",
-  )
   const originalRecoverySell = harness.engine.getOrders().find((order) => order.side === "SELL")
   const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
   buyOrderRef.current = buyOrder
@@ -2920,6 +2905,40 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
   const expectedSell = expectedDecision.actions.find((action) => action.side === "SELL")
   assert.equal(replacementSell.originalQuantity.amount, expectedSell.quantity)
   assert.ok(compareDecimal({ left: replacementSell.limitPrice.amount, right: expectedSell.price }) >= 0)
+})
+
+test("fails shutdown recovery closed when the legacy ledger cost mirror diverges from Position.spent", async () => {
+  const seeded = makeSeededRecoveryState()
+  const divergentLedger = new RecoveryLedger({
+    market: seeded.recoveryLedger.market,
+    buyCost: "999",
+    netSellProceeds: seeded.recoveryLedger.netSellProceeds,
+    appliedFillIds: seeded.recoveryLedger.appliedFillIds,
+    appliedFillFingerprints: seeded.recoveryLedger.appliedFillFingerprints,
+  })
+  const stopping = { value: false }
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: divergentLedger,
+    baseFreeBalance: "1",
+    canTrade: () => !stopping.value,
+    isStopping: () => stopping.value,
+    getPortfolio: () => seeded.portfolio,
+    getRecoveryLedger: () => divergentLedger,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  stopping.value = true
+
+  const reconciliation = await harness.engine.reconcileRecoverySellsForShutdown()
+  assert.equal(reconciliation.ok, false)
+  const audit = await harness.engine.auditShutdownRecoverySellCoverage()
+  assert.equal(audit.ok, true)
+  assert.equal(audit.data.covered, false)
+  assert.equal(audit.data.findings[0].reason, "RECOVERY_SELL_PLAN_UNAVAILABLE")
+  assert.equal(harness.orders.length, 0, "A divergent compatibility mirror must not lead to a speculative replacement order.")
 })
 
 test("fails closed when shutdown recovery SELL cancellation or replacement submission is unresolved", async () => {
