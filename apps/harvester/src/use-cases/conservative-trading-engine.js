@@ -928,6 +928,14 @@ async function cancelTrailingBuyOrder({ context, symbol, order }) {
   })
 }
 
+function matchesTrailingBuyFillIdentity({ fill, order }) {
+  return fill instanceof Fill &&
+    fill.market.id === order.market.id &&
+    fill.side === "BUY" &&
+    fill.brokerOrderId === order.brokerOrderId &&
+    (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId)
+}
+
 async function reconcileTrailingBuyFills({ context, symbol, order, canceledOrder }) {
   const fillsResult = await context.broker.getFills({
     symbol,
@@ -947,11 +955,10 @@ async function reconcileTrailingBuyFills({ context, symbol, order, canceledOrder
   let reconciledQuantity = "0"
   const seenFillIds = new Set()
   for (const fill of fillsResult.data) {
-    const identityMatches = fill instanceof Fill &&
-      fill.market.id === order.market.id &&
-      fill.side === "BUY" &&
-      fill.brokerOrderId === order.brokerOrderId &&
-      (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId)
+    const identityMatches = matchesTrailingBuyFillIdentity({
+      fill,
+      order,
+    })
     if (!identityMatches) {
       await context.pause({
         symbol,
@@ -1620,7 +1627,7 @@ async function applyOwnedBuyCancellationToRegistry({ context, order, cancellatio
   }
 }
 
-async function readOwnedBuyExecutionHistory({ context, order, reasonPrefix }) {
+async function readOwnedBuyExecutionHistory({ context, order }) {
   try {
     return await context.broker.getFills({
       symbol: order.market.symbol,
@@ -2307,7 +2314,7 @@ export function makeConservativeTradingEngine({
   }
   const resolveRecoveryManagedCancellation = ({ order } = {}) => {
     if (!state.recoveryManagedCancellationClientOrderIds.delete(order.clientOrderId)) {return false}
-    const symbol = order.market.symbol
+    const { market: { symbol } } = order
     if (order.side === "SELL" &&
         !hasPendingRecoveryManagedCancellation({
           symbol,
@@ -2691,7 +2698,7 @@ export function makeConservativeTradingEngine({
       order,
       purpose
     } = {}) => {
-      const symbol = order.market.symbol
+      const { market: { symbol } } = order
       const defer = (reason, details = {}) => ({
         allowed: false,
         reason,
@@ -2867,7 +2874,7 @@ export function makeConservativeTradingEngine({
       state.registry = unknownResult.data.registry
       await pause({
         symbol: order.market.symbol,
-        reason: "ORDER_SUBMISSION_" + outcome,
+        reason: `ORDER_SUBMISSION_${outcome}`,
         error: submissionError
       })
     },
@@ -3196,8 +3203,7 @@ export function makeConservativeTradingEngine({
       if (!allocation.ok) {
         throw allocation.errors[0] ?? new Error("Unable to allocate strategy order commitments")
       }
-      const executableActions = allocation.data.executableActions
-      const deferredActions = allocation.data.deferredActions
+      const { executableActions, deferredActions } = allocation.data
       logger?.debug?.({
         message: "Harvester strategy order commitments allocated",
         evaluationId,
@@ -3554,7 +3560,7 @@ export function makeConservativeTradingEngine({
         requiredPrice: plannedSell.price,
       }
     }
-    const order = activeSells[0]
+    const [order] = activeSells
     if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status) ||
         typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
       return {
