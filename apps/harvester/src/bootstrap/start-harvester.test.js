@@ -1541,6 +1541,7 @@ test("does not clear the ownership gate after stream recovery acknowledgement", 
   assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
   await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
 })
+// eslint-disable-next-line max-lines-per-function -- Keep the full ordered recovery lifecycle in one end-to-end scenario.
 test("explicit TESTNET trading drains its first BUY fill once after 254 recovery reminders and completes the cycle", { timeout: 90_000 }, async () => {
   const calls = []
   const buyCancellationCount = { value: 0 }

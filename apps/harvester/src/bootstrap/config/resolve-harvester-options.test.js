@@ -98,7 +98,7 @@ test("rejects an invalid TRADING_MODE", async () => {
 
 test("selects only matching pairs and strips tradingEnvironment before runtime", async () => {
   const cfg = config({ enabledSymbols: ["BTCUSDT", "ETHUSDT", "DOGEUSDT"] })
-  const pairs = cfg.strategies.CG_coinGrabber.pairs
+  const { pairs } = cfg.strategies.CG_coinGrabber
   pairs.BTCUSDT.tradingEnvironment = TRADING_ENVIRONMENTS.TESTNET
   pairs.ETHUSDT.tradingEnvironment = TRADING_ENVIRONMENTS.LIVE
   pairs.DOGEUSDT.tradingEnvironment = TRADING_ENVIRONMENTS.BOTH

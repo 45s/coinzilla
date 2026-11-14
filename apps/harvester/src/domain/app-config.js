@@ -68,9 +68,6 @@ function validateTelegramNotificationConfig(config) {
   }
 }
 
-/** Validate Harvester's application-wide configuration, including strategy and notification settings. */
-export function validateAppConfig(config) {
-  requireRecord(config, "root")
 function validateTelegramOperatorControlConfig(appConfig) {
   if (appConfig.operatorControl === undefined) {
     return
@@ -104,14 +101,9 @@ function validateTelegramOperatorControlConfig(appConfig) {
     seenUserIds.add(userId)
   }
 }
-  validateTelegramNotificationConfig(config)
-  validateTelegramOperatorControlConfig(config)
-  if (config.runtime !== undefined) {fail("runtime", "must not be present; exchange mode is selected by TRADING_MODE")}
-  requireRecord(config.strategies, "strategies")
-  requireRecord(config.strategies.CG_coinGrabber, "strategies.CG_coinGrabber")
-  const strategy = config.strategies.CG_coinGrabber
-  requireBoolean(strategy.enabled, "strategies.CG_coinGrabber.enabled")
-  if (!strategy.enabled) {fail("strategies.CG_coinGrabber.enabled", "CG_coinGrabber must remain enabled")}
+
+/** Validate Harvester's application-wide configuration, including strategy and notification settings. */
+function validateStrategySettings(strategy) {
   requireRecord(strategy.settings, "strategies.CG_coinGrabber.settings")
   const settingsPath = "strategies.CG_coinGrabber.settings"
   if (Object.hasOwn(strategy.settings, "minProfit")) {
@@ -130,6 +122,9 @@ function validateTelegramOperatorControlConfig(appConfig) {
       fail(`${settingsPath}.recovery.enabled`, "process-restart recovery is deferred and must remain disabled")
     }
   }
+}
+
+function validateStrategyPairs(strategy) {
   requireRecord(strategy.pairs, "strategies.CG_coinGrabber.pairs")
   const pairs = Object.entries(strategy.pairs)
   if (pairs.length === 0) {fail("strategies.CG_coinGrabber.pairs", "at least one pair")}
@@ -158,6 +153,20 @@ function validateTelegramOperatorControlConfig(appConfig) {
     requireNumber(pair.makerPercent, `${pairPath}.makerPercent`, { min: 0, max: 100, exclusiveMax: true })
     requireNumber(pair.takerPercent, `${pairPath}.takerPercent`, { min: 0, max: 100, exclusiveMax: true })
   }
+}
+export function validateAppConfig(config) {
+  requireRecord(config, "root")
+
+  validateTelegramNotificationConfig(config)
+  validateTelegramOperatorControlConfig(config)
+  if (config.runtime !== undefined) {fail("runtime", "must not be present; exchange mode is selected by TRADING_MODE")}
+  requireRecord(config.strategies, "strategies")
+  requireRecord(config.strategies.CG_coinGrabber, "strategies.CG_coinGrabber")
+  const strategy = config.strategies.CG_coinGrabber
+  requireBoolean(strategy.enabled, "strategies.CG_coinGrabber.enabled")
+  if (!strategy.enabled) {fail("strategies.CG_coinGrabber.enabled", "CG_coinGrabber must remain enabled")}
+  validateStrategySettings(strategy)
+  validateStrategyPairs(strategy)
   return config
 }
 

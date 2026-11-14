@@ -29,7 +29,7 @@ export async function resolveHarvesterOptions({ configSource, appConfig: supplie
   if (Object.keys(pairs).length === 0) {
     throw new Error(`No CG_coinGrabber pairs configured for TRADING_MODE=${tradingMode}; configure a pair with tradingEnvironment="${tradingMode}" or "both"`)
   }
-  const settings = strategyConfig.settings
+  const { settings } = strategyConfig
   const appConfig = {
     ...configuredAppConfig,
     strategies: {

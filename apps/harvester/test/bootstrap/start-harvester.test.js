@@ -120,6 +120,7 @@ test('loads the default validated strategy and pair configuration', async () => 
 });
 
 
+// eslint-disable-next-line max-lines-per-function -- Keep the full ordered accounting lifecycle in one end-to-end scenario.
 test('ordinary TRADE fills update owned accounting after the startup account audit', async () => {
   const baseAsset = new Asset({ id: 'asset-zro', code: 'ZRO' });
   const quoteAsset = new Asset({ id: 'asset-usdt', code: 'USDT' });
