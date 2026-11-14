@@ -78,16 +78,23 @@ export async function loadAppConfig(source = DEFAULT_CONFIG_URL, {
     return validateAppConfig(rawConfig)
   }
 
+  let resolvedPairs
+  try {
+    resolvedPairs = resolvePairSpecifications({
+      pairs: strategy.pairs,
+      tokenSpecifications,
+    })
+  } catch (cause) {
+    throw new Error("Unable to resolve configured market precision using token specifications at " + resolve(tokenSpecificationsPath) + ": " + cause.message, { cause })
+  }
+
   const effectiveConfig = {
     ...rawConfig,
     strategies: {
       ...rawConfig.strategies,
       CG_coinGrabber: {
         ...strategy,
-        pairs: resolvePairSpecifications({
-          pairs: strategy.pairs,
-          tokenSpecifications,
-        }),
+        pairs: resolvedPairs,
       },
     },
   }
