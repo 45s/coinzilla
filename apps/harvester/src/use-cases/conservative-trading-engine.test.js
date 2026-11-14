@@ -3896,8 +3896,6 @@ test("replaces the recovery SELL before submitting the next standing BUY after a
 })
 
 
-// eslint-disable-next-line max-lines-per-function, max-statements -- deterministic race test controls each fake-broker gate.
-
 function createShutdownBuyRaceState({ seeded }) {
   return {
     stopping: {
@@ -4184,27 +4182,18 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
 })
 
 
-async function assertShutdownRecoveryFailureScenario({ scenario }) {
-  const seeded = makeSeededRecoveryState()
-  const stopping = {
-    value: false,
-  }
-  const portfolioRef = {
-    current: seeded.portfolio,
-  }
-  const ledgerRef = {
-    current: seeded.recoveryLedger,
-  }
-  const harness = await createHarness({
+
+async function createShutdownRecoveryFailureHarness({ scenario, seeded, state }) {
+  return createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
-    canTrade: () => !stopping.value,
-    isStopping: () => stopping.value,
-    getPortfolio: () => portfolioRef.current,
-    getRecoveryLedger: () => ledgerRef.current,
+    canTrade: () => !state.stopping,
+    isStopping: () => state.stopping,
+    getPortfolio: () => state.portfolio,
+    getRecoveryLedger: () => state.ledger,
     updateTradingAccounting: async ({ fill }) => {
-      if (portfolioRef.current.appliedFillIds.includes(fill.id)) {
+      if (state.portfolio.appliedFillIds.includes(fill.id)) {
         return {
           ok: true,
           data: {
@@ -4213,10 +4202,10 @@ async function assertShutdownRecoveryFailureScenario({ scenario }) {
           },
         }
       }
-      portfolioRef.current = portfolioRef.current.applyFill({
+      state.portfolio = state.portfolio.applyFill({
         fill,
       }).portfolio
-      ledgerRef.current = ledgerRef.current.applyFill({
+      state.ledger = state.ledger.applyFill({
         fill,
       }).ledger
       return {
@@ -4230,6 +4219,20 @@ async function assertShutdownRecoveryFailureScenario({ scenario }) {
     cancelFailure: scenario.cancelFailure ?? false,
     placeOrderFailureAfterCount: scenario.placeOrderFailureAfterCount,
   })
+}
+
+async function runShutdownRecoveryFailureScenario({ scenario }) {
+  const seeded = makeSeededRecoveryState()
+  const state = {
+    stopping: false,
+    portfolio: seeded.portfolio,
+    ledger: seeded.recoveryLedger,
+  }
+  const harness = await createShutdownRecoveryFailureHarness({
+    scenario,
+    seeded,
+    state,
+  })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
@@ -4242,7 +4245,7 @@ async function assertShutdownRecoveryFailureScenario({ scenario }) {
   assert.ok(buyOrder)
   const fill = makeBuyFill({
     order: buyOrder,
-    tradeId: "shutdown-unresolved-" + scenario.name,
+    tradeId: ["shutdown-unresolved", scenario.name].join("-"),
     price: buyOrder.limitPrice.amount,
     quantity: buyOrder.originalQuantity.amount,
     quoteQuantity: multiplyDecimal({
@@ -4250,7 +4253,7 @@ async function assertShutdownRecoveryFailureScenario({ scenario }) {
       right: buyOrder.originalQuantity.amount,
     }),
   })
-  stopping.value = true
+  state.stopping = true
   const fillResult = await harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
@@ -4262,7 +4265,11 @@ async function assertShutdownRecoveryFailureScenario({ scenario }) {
   })
   assert.equal(fillResult.ok, true, fillResult.errors?.[0]?.message)
   const reconciliation = await harness.engine.reconcileRecoverySellsForShutdown()
-  assert.equal(reconciliation.ok, false, "An unresolved " + scenario.name + " outcome must fail shutdown recovery.")
+  assert.equal(
+    reconciliation.ok,
+    false,
+    ["An unresolved ", scenario.name, " outcome must fail shutdown recovery."].join(""),
+  )
   const audit = await harness.engine.auditShutdownRecoverySellCoverage()
   assert.equal(audit.ok, true)
   assert.equal(audit.data.covered, false)
@@ -4281,7 +4288,7 @@ test("fails closed when shutdown recovery SELL cancellation or replacement submi
       placeOrderFailureAfterCount: 2,
     },
   ]) {
-    await assertShutdownRecoveryFailureScenario({
+    await runShutdownRecoveryFailureScenario({
       scenario,
     })
   }
