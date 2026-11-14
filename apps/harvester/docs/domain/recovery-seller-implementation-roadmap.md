@@ -111,7 +111,7 @@ Model only the concepts required by the approved RS contract:
 - Custody: Spot-available, EARN/off-Spot and unresolved quantities are distinct; transfers do not change historical cost basis.
 - Recovery tranche: canonical BUY-fill quantity, cost basis and actual commissions.
 - Active/pending/partial/unknown order reservations.
-- Independent recovery-tranche and legacy profitability gates. Recovery profit cannot subsidize a legacy loss.
+- Reuse the existing pair-level `minProfit` setting for minimum net recovery-cycle profit; retain a separate legacy cost-basis gate. Recovery profit cannot subsidize a legacy loss.
 - Cycle progress and residual handling only after the remaining owner decisions are settled.
 
 Agreed illustrative config shape (proposal only, not runtime configuration):
