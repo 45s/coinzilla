@@ -19,7 +19,7 @@ Implement RS as an independent strategy policy using Harvester's existing domain
 
 1. [x] Audit CG source, callers and tests; produce a function-by-function reuse map (completed as an audit only; no source code moved).
 2. [x] **RS-2a — Shared Portfolio foundation:** merged in [PR #1118](https://github.com/45s/coinzilla/pull/1118). One Portfolio now supports multiple independently owned Positions per market and multiple Positions per strategy; canonical fill ownership/deduplication, aggregate market inventory, centralized custody/reservation boundaries and CG ownership-scoped consumers are covered.
-3. [~] **RS-2b — RS-specific domain accounting:** TDD legacy opening-inventory representation, explicit-authorization provenance/lifecycle, historical basis, recovery tranches, custody, proceeds/fee allocation and independent recovery/legacy profitability gates. The explicit operator-authorization model is agreed; its interface/evidence/lifecycle details and the other blocking owner decisions must be resolved before policy implementation.
+3. [~] **RS-2b — RS-specific domain accounting:** TDD legacy opening-inventory representation, explicit-authorization provenance/lifecycle, historical basis, recovery tranches, custody, proceeds/fee allocation and independent recovery/legacy profitability gates. The explicit operator-authorization model and additive per-cycle `sellQuantity` semantics are agreed; authorization interface/evidence/lifecycle details and the other blocking owner decisions must be resolved before policy implementation.
 4. Implement the pure RS strategy policy.
 5. Integrate RS through the shared Trading Engine, Portfolio, broker, order, fill and reconciliation workflows.
 6. Prove the full lifecycle with deterministic offline tests and exact-head CI.
@@ -112,19 +112,21 @@ Model only the concepts required by the approved RS contract:
 - Recovery tranche: canonical BUY-fill quantity, cost basis and actual commissions.
 - Active/pending/partial/unknown order reservations.
 - Reuse the existing pair-level `minProfit` setting for minimum net recovery-cycle profit; retain a separate legacy cost-basis gate. Recovery profit cannot subsidize a legacy loss.
-- Cycle progress and residual handling only after the remaining owner decisions are settled.
+- When authorized legacy inventory is exhausted, pause RS and require explicit operator reconfiguration/reauthorization before any new recovery BUY; never auto-switch to recovery-only cycles or auto-liquidate. Existing orders/fills/reservations remain owned and reconciled. Other lifecycle and residual handling is modeled only after the remaining owner decisions are settled.
+- Exchange-filter-constrained dust may be classified only after a fully reconciled successful cycle; retain it as bonus inventory and permanently exclude it from all later RS cycle quantity, cost, proceeds, profitability, and availability calculations. Ordinary sellable residual must not be classified as dust.
 
 Agreed illustrative config shape (proposal only, not runtime configuration):
 
 ~~~js
-sellQuantity: 0.01,
+orderQuantity: 5, // illustrative recovery BUY order quantity
+sellQuantity: 0.01, // additional legacy quantity included in each cycle SELL
 legacyPosition: {
   invested: 100, // original quote amount invested
   quantity: 50, // original base quantity acquired
 },
 ~~~
 
-For 100 USDT and 50 ZRO, RS calculates 2 USDT/ZRO. A 0.01 ZRO legacy slice per cycle means 0.5 ZRO can support 50 cycles if Spot-available; 49.5 ZRO may be held in EARN. EARN inventory is not Spot-sellable until returned and authoritatively reconciled.
+For 100 USDT and 50 ZRO, RS calculates 2 USDT/ZRO. With an illustrative `orderQuantity: 5` ZRO and `sellQuantity: 0.01` ZRO, a fully netted 5 ZRO recovery tranche produces a 5.01 ZRO combined SELL target; the extra 0.01 ZRO is deducted from the authorized legacy position. A 0.01 ZRO legacy slice per cycle means 0.5 ZRO can support 50 cycles if Spot-available; 49.5 ZRO may be held in EARN. EARN inventory is not Spot-sellable until returned and authoritatively reconciled.
 
 Required test families:
 
@@ -143,14 +145,15 @@ Model only the concepts required by the approved RS contract:
 Agreed illustrative config shape (proposal only, not runtime configuration):
 
 ~~~js
-sellQuantity: 0.01,
+orderQuantity: 5, // illustrative recovery BUY order quantity
+sellQuantity: 0.01, // additional legacy quantity included in each cycle SELL
 legacyPosition: {
   invested: 100, // original quote amount invested
   quantity: 50, // original base quantity acquired
 },
 ~~~
 
-For 100 USDT and 50 ZRO, RS calculates 2 USDT/ZRO. A 0.01 ZRO legacy slice per cycle means 0.5 ZRO can support 50 cycles if Spot-available; 49.5 ZRO may be held in EARN. EARN inventory is not Spot-sellable until returned and authoritatively reconciled.
+For 100 USDT and 50 ZRO, RS calculates 2 USDT/ZRO. With an illustrative `orderQuantity: 5` ZRO and `sellQuantity: 0.01` ZRO, a fully netted 5 ZRO recovery tranche produces a 5.01 ZRO combined SELL target; the extra 0.01 ZRO is deducted from the authorized legacy position. A 0.01 ZRO legacy slice per cycle means 0.5 ZRO can support 50 cycles if Spot-available; 49.5 ZRO may be held in EARN. EARN inventory is not Spot-sellable until returned and authoritatively reconciled.
 
 Required test families:
 
@@ -161,7 +164,7 @@ Required test families:
 - Profitable recovery tranche paired with a loss-making legacy slice.
 - Mixed SELL proceeds/fee allocation after the owner-approved rule exists.
 - Reservations, partial SELLs, cancellation races, unknown outcomes and exact-once fill identity.
-- Exchange quantity-step/minimum-quantity/minimum-notional and residual boundaries.
+- Exchange quantity-step/minimum-quantity/minimum-notional and residual boundaries; constrained dust is retained only after successful full reconciliation and never re-enters later cycle accounting, while ordinary sellable residual remains actionable.
 - Invalid, contradictory, stale or incomplete evidence fails closed.
 
 Never fabricate BUY fills or seed Portfolio from unverified wallet snapshots.

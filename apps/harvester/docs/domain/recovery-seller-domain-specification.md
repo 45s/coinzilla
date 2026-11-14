@@ -23,7 +23,7 @@ Recovery Seller is an independent strategy intended to reduce an explicitly auth
 - **Recovery inventory:** net base quantity acquired by BUY fills attributed to the current RS cycle.
 - **Legacy inventory:** pre-existing base quantity explicitly authorized for RS liquidation before that cycle. It is not created by that cycle's BUY fills.
 - **Cycle SELL:** SELL execution(s) intended to dispose of recovery inventory and an additional legacy quantity, subject to the final approved quantity and profitability rules.
-- **sellQuantity:** proposed per-pair base-asset amount of legacy inventory included in addition to newly acquired recovery quantity. It is not the total SELL quantity and is not CG's retained keepQuantity.
+- **sellQuantity:** configured per-pair base-asset quantity of legacy inventory added to the recovery tranche in each cycle SELL. It is an additive legacy slice, not the total SELL quantity, not a maximum cap, and not CG's retained `keepQuantity`. The conceptual SELL target is the cycle's actual net recovery quantity plus `sellQuantity`.
 
 Illustrative examples only; these are not approved trading defaults:
 
@@ -172,15 +172,19 @@ RS must fail closed when a required risk limit is absent, invalid, exceeded, or 
 
 ## 8. sellQuantity, residuals, and exchange constraints
 
-The exact sellQuantity contract remains unresolved.
+**Agreed sellQuantity contract:** `sellQuantity` is the configured legacy base-asset quantity to add to each cycle's recovery SELL. It is the opposite kind of control from Conservative's `keepQuantity`: Conservative retains a configured quantity, while RS disposes of the configured legacy slice in addition to the newly acquired recovery tranche. `sellQuantity` is neither the total SELL quantity nor a maximum cap.
 
-**Owner decisions required:**
+For example, with `orderQuantity: 5` ZRO and `sellQuantity: 0.01` ZRO, when the BUY tranche has produced 5 ZRO of net recovery inventory, the conceptual combined SELL target is 5.01 ZRO. Actual canonical BUY fills and base-asset commissions determine the recovery quantity available; configured order quantity or an order acknowledgement must never be treated as executed inventory. The SELL price and proceeds allocation must independently satisfy the recovery-tranche investment/commission gate and the legacy slice's historical-basis/selling-cost gate. The 0.01 ZRO slice is charged against authorized, Spot-available legacy inventory and its remaining historical basis.
 
-1. Is sellQuantity an exact per-cycle target or a maximum per-cycle cap?
-2. If remaining authorized legacy inventory is smaller, may RS sell the smaller remainder, or is explicit final-liquidation authorization required?
-3. What happens to positive residuals smaller than the configured amount, below exchange minimum quantity/notional, or otherwise unsellable?
-4. May a final residual be sold in a separate cycle without a new recovery BUY? If so, what profit basis applies?
-5. Does RS stop when authorized legacy quantity is exhausted, only dust remains, or the operator disables it?
+**Agreed dust contract:** RS uses the same constrained-dust principle as Conservative. After a cycle has successfully completed and all canonical fills, terminal order state, commissions, proceeds, reservations, and both profitability gates are fully reconciled, any precisely identified residual that cannot be sold solely because of current exchange quantity/notional filters is classified as retained bonus dust. That dust remains in the account but is permanently excluded from all future RS cycle calculations: it is not recovery inventory, is not part of a later cycle's SELL target, does not contribute to later recovery or legacy profitability, and is never counted again as available RS inventory. It is not carried forward as a new cycle's starting balance.
+
+Only an exchange-filter-constrained quantity qualifies. The exact residual quantity and the specific limiting filter must be recorded. Ordinary sellable residual is not dust and cannot be discarded or hidden by cycle completion. Price-filter failures, unavailable commission valuation, incomplete fill/order reconciliation, active reservations, or other unresolved accounting/risk conditions are not dust and must block successful completion. Dust classification is permitted only after the cycle's SELL is terminal and fully reconciled; it must not be used to bypass either profitability gate.
+
+**Owner decisions still required:**
+
+1. If remaining authorized legacy inventory is smaller than `sellQuantity`, may RS sell the smaller remainder, or is explicit final-liquidation authorization required?
+2. May a final residual be sold in a separate cycle without a new recovery BUY? If so, what profit basis applies?
+3. **Agreed — pause for operator decision when authorized legacy inventory is exhausted.** RS stops initiating new recovery BUYs and enters a paused/reconfiguration-required state. It must not silently continue recovery-only BUY/SELL cycles or automatically liquidate remaining inventory. The operator must explicitly reconfigure/reauthorize RS before new BUY activity can resume. Existing orders, fills, reservations, and accounting remain owned and must continue through canonical reconciliation; pausing does not cancel or erase them.
 
 Until decided:
 
@@ -209,7 +213,7 @@ Until decided:
 
 Final RS lifecycle states/transitions are not approved. Mandatory safety behavior:
 
-- Pause, disable, or loss of readiness prevents new RS BUYs.
+- Pause, disable, loss of readiness, or exhaustion of the authorized legacy inventory prevents new RS BUYs. Exhaustion of authorized legacy inventory specifically places RS in a paused/reconfiguration-required state pending an explicit operator decision and configuration/authorization update; RS must not automatically switch to recovery-only cycles or liquidate residual inventory.
 - Disabling RS does not silently cancel, replace, abandon, or market-sell resting orders or inventory.
 - Existing orders may fill after pause/disable; fills and commissions continue through canonical accounting and reconciliation.
 - In-flight/unknown orders remain owned and reconcilable by their original identities; disable does not erase ownership or reservations.
@@ -247,7 +251,7 @@ These decisions are intentionally not guessed. They block implementation, not do
 
 | Decision | Required owner choice | Why it blocks implementation |
 |---|---|---|
-| sellQuantity | Exact per-cycle target or maximum cap | Determines legacy amount requested and smaller-remainder eligibility |
+| sellQuantity | **Agreed:** additive legacy quantity per cycle, added to the actual net recovery quantity; not a total quantity or cap. Smaller-remainder/final-residual behavior remains unresolved. | Defines the combined cycle SELL target; residual policy still prevents implementation from guessing how to handle insufficient legacy inventory |
 | Smaller/final residual | Sell smaller balance, require explicit final authorization, or retain it | Prevents unintended liquidation |
 | Legacy authorization | **Explicit operator authorization agreed**; interface, evidence source/balance baseline, expiry/revocation, durable provenance and restart behavior remain open | Prevents silent wallet adoption and loss of authorization provenance |
 | Legacy accounting | Opening-inventory representation in shared Portfolio and verification of configured invested/quantity inputs | Current Portfolio is fill-driven; configured historical basis is agreed, but Spot holdings and off-Spot custody must be represented safely |
@@ -255,8 +259,8 @@ These decisions are intentionally not guessed. They block implementation, not do
 | Cycle profit | Minimum net profit and precise cost/proceeds inclusion | Prevents omitted fees/costs |
 | BUY cadence | Tranche size, accumulation, next-BUY eligibility, concurrent-order limits | Determines exposure/order lifecycle |
 | Risk policy | Investment, exposure, drawdown, price-movement, and order-count caps | Required before committing capital |
-| Residual/dust | Final residual, below-filter, no-new-BUY liquidation behavior | Prevents guessed disposal or hidden inventory |
-| Lifecycle | Pause, disable, abandon, resume, restart semantics | Prevents loss of order ownership/accounting |
+| Residual/dust | **Agreed:** only exact exchange-filter-constrained residual after fully reconciled successful cycle is retained as bonus dust and excluded permanently from future RS calculations, matching Conservative's constrained-dust principle. Ordinary sellable residual is not dust. Final residual/no-new-BUY liquidation remains open. | Prevents guessed disposal, repeated counting, or hidden sellable inventory |
+| Lifecycle | **Agreed:** when authorized legacy inventory is exhausted, pause RS and require explicit operator reconfiguration/reauthorization before new BUYs; do not auto-switch to recovery-only trading or auto-liquidate. Active orders/fills remain owned and reconciled. Other pause/disable/abandon/resume/restart semantics remain open. | Prevents unapproved continuation after the legacy objective is exhausted while preserving in-flight accounting |
 | Concurrent strategies | Shared Portfolio, independent attribution, centralized reservations and deterministic intent allocation across CG/RS/Aggressive | Prevents double-spend, duplicate attribution and overselling without mutual exclusion |
 | Fee valuation | Third-asset valuation failure and proceeds allocation | Prevents fees being treated as zero |
 
@@ -268,7 +272,7 @@ No executable RS tests are added in this documentation-only phase. Future implem
 - configured legacy invested quote / original quantity average-cost calculation, including invalid zero/negative/missing inputs;
 - Spot-available versus EARN/off-Spot custody separation, transfer/redeem changes, and insufficient Spot reserve for the next legacy slice;
 - missing/ambiguous legacy cost basis and a profitable cycle paired with a legacy loss;
-- exact sellQuantity, smaller remainder, final residual, and exchange dust after those rules are approved;
+- the agreed additive `sellQuantity` calculation (actual net recovery quantity + configured legacy slice), smaller-remainder/final-residual behavior, and constrained-dust classification after successful reconciliation; prove retained bonus dust is permanently excluded from every later RS cycle;
 - one/multiple BUY tranches, open/partial/unknown BUYs, and each approved next-BUY boundary;
 - base, quote, and third-asset commission accounting;
 - Portfolio/RS attribution atomicity, identical duplicate fills, and conflicting fill identity;
