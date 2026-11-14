@@ -41,7 +41,7 @@ This differs from Coin Grabber:
 
 #### Proposed per-pair configuration
 
-Follow the existing CG_COIN_GRABBER_CONFIG.pairs convention: RS has independent pair settings and uses **sellQuantity** where CG uses **keepQuantity**. The value is a base-asset quantity, configured separately for each market.
+Follow the existing CG_COIN_GRABBER_CONFIG.pairs convention: RS has independent pair settings and uses **sellQuantity** where CG uses **keepQuantity**. The value is a base-asset quantity, configured separately for each market. Each pair also declares its pre-existing legacy position as aggregate original quote invested plus original base quantity; RS calculates the average historical cost itself. This legacy basis is separate from the recovery cycle's `investment` setting.
 
 The following is a documentation-only proposal, not a runtime config file or accepted schema:
 
@@ -66,6 +66,10 @@ export const RS_RECOVERY_SELLER_CONFIG = {
       investment: 100,
       orderQuantity: 10,
       sellQuantity: 0.01,
+      legacyPosition: {
+        invested: 100, // USDT originally spent to acquire the legacy position
+        quantity: 50, // ZRO originally acquired; RS calculates average cost = 2 USDT/ZRO
+      },
       minProfit: 0.01,
       priceStepPercent: 0.05,
       pricePrecision: 3,
@@ -89,7 +93,7 @@ export const RS_RECOVERY_SELLER_CONFIG = {
 };
 ```
 
-The pair values are illustrative examples aligned with existing CG pair configuration conventions; they are not approved trading defaults. Shared pair fields such as volatility protection and external-order policy can be carried over when the eventual RS config contract is specified.
+The pair values are illustrative examples aligned with existing CG pair configuration conventions; they are not approved trading defaults. Shared pair fields such as volatility protection and external-order policy can be carried over when the eventual RS config contract is specified. The ZRO `legacyPosition` example means 100 USDT total historical spend for 50 ZRO, so RS derives a 2 USDT/ZRO average; do not configure an average price separately. This is historical ownership/cost-basis information, not a claim that all 50 ZRO must remain in Spot.
 
 #### Meaning of sellQuantity and cycle example
 
@@ -103,7 +107,7 @@ For example, if a ZRO recovery tranche buys 10 ZRO and the configured sellQuanti
 | Legacy inventory released for liquidation | 0.01 ZRO |
 | Conceptual combined SELL quantity | **10.01 ZRO** |
 
-Likewise, example quantities are 400 + 1 = 401 DOGE, and 2 + 0.01 = 2.01 LINK. Actual order quantity must still be bounded by net available inventory after commissions, active reservations, exchange precision/step-size rules and other broker constraints. These examples do not define fee treatment or order rounding.
+Likewise, example quantities are 400 + 1 = 401 DOGE, and 2 + 0.01 = 2.01 LINK. Actual order quantity must still be bounded by net available inventory after commissions, active reservations, exchange precision/step-size rules and other broker constraints. These examples do not define fee treatment or order rounding. For example, the operator may keep 0.5 ZRO in Spot for 50 cycles of 0.01 ZRO legacy quantity each and hold the other 49.5 ZRO in EARN. RS retains the original 50 ZRO / 100 USDT historical basis, but only the 0.5 ZRO actually available in Spot can satisfy those Spot SELLs. EARN-held quantity is not immediately sellable; further cycles must wait until enough quantity is redeemed/transferred back to Spot. A Spot/EARN transfer changes custody, not the historical average cost.
 
 The profitability target must be calculated for the combined cycle and must include applicable BUY/SELL commissions. There is no hard-coded requirement to wait for a separate 1% market-price increase just to release the configured legacy quantity. The exit becomes eligible only when the eventual, explicitly specified profitability rule is satisfied. **SELL ONLY IN PROFIT remains mandatory.**
 
@@ -127,7 +131,7 @@ The exact ownership and attribution model for legacy inventory, recovery-cycle i
 
 - The precise meaning of **SELL ONLY IN PROFIT**: the cycle's incremental economics, combined transaction economics, historical cost basis of each liquidated legacy unit, or another explicitly defined measure.
 - Whether sellQuantity is a per-cycle target, a maximum amount, or subject to a smaller remaining legacy balance; how the final residual is handled.
-- How RS proves that legacy inventory is authorized for liquidation and distinguishes it from newly acquired inventory without breaking shared Portfolio accounting.
+- How configured legacy invested amount/original quantity and Spot versus EARN custody are represented safely in shared Portfolio accounting, and how authorization is evidenced without synthetic fills.
 - Whether orderQuantity means each tranche or the initial tranche only, and when additional BUY tranches are allowed.
 - Maximum investment, total exposure, drawdown and price-movement limits.
 - Cycle close, pause, abandon, resume and strategy-disable behavior.
