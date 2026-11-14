@@ -7466,7 +7466,7 @@ test("keeps a recovery pause until every same-market cancel/replace order is can
 
 
 
-function createJournalParityOrder({ clientOrderId, brokerOrderId, status }) {
+function createJournalParityOrder({ clientOrderId, brokerOrderId, status, executedQuantity = "0" }) {
   return new CanonicalOrder({
     clientOrderId,
     brokerOrderId,
@@ -7478,7 +7478,7 @@ function createJournalParityOrder({ clientOrderId, brokerOrderId, status }) {
       asset: quoteAsset,
     }),
     originalQuantity: new Quantity({
-      amount: "1",
+      amount: executedQuantity,
       asset: baseAsset,
     }),
     executedQuantity: new Quantity({
@@ -7580,6 +7580,7 @@ test("rejects canonical REST fill facts that contradict the durable Journal exec
     clientOrderId: ownedOrder.clientOrderId,
     brokerOrderId: ownedOrder.brokerOrderId,
     status: "FILLED",
+    executedQuantity: "1",
   })
   const exchangeFill = createJournalParityFill({
     ownedOrder,
@@ -7614,6 +7615,7 @@ test("rejects REST history that omits a durable Journal fill despite matching cu
     clientOrderId: ownedOrder.clientOrderId,
     brokerOrderId: ownedOrder.brokerOrderId,
     status: "FILLED",
+    executedQuantity: "1",
   })
   const exchangeFill = createJournalParityFill({
     ownedOrder,
