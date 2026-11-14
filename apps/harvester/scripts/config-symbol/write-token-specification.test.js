@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { writeTokenSpecificationAtomically } from "./config-symbol/write-token-specification.js"
+import { writeTokenSpecificationAtomically } from "./write-token-specification.js"
 
 const metadata = (overrides = {}) => ({
   symbol: "LINKUSDT",
