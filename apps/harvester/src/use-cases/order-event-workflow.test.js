@@ -240,7 +240,9 @@ function makeWorkflow({
 } = {}) {
   const calls = createWorkflowCalls()
   const state = createWorkflowState({ updateResult, activeOrders })
-  if (registry) state.registry = registry
+  if (registry) {
+    state.registry = registry
+  }
   const dependencies = createWorkflowDependencies({
     state,
     calls,
@@ -265,11 +267,21 @@ function createLifecycleRegistry({ currentOrder, ownership } = {}) {
     },
     applyUpdate({ order } = {}) {
       if (order.status === "CANCELED" && registeredOrder.status === "FILLED") {
-        return { stale: true, duplicate: false, registry }
+        return {
+          stale: true,
+          duplicate: false,
+          registry,
+        }
       }
       const previousOrder = registeredOrder
       registeredOrder = order
-      return { applied: true, duplicate: false, stale: false, registry, previousOrder }
+      return {
+        applied: true,
+        duplicate: false,
+        stale: false,
+        registry,
+        previousOrder,
+      }
     },
     getActiveOrders: () => [],
   }
@@ -492,8 +504,16 @@ test("reconciles recovery SELL coverage after a BUY fill received during shutdow
 })
 
 test("logs partial fills from reconciled order state with immutable strategy ownership", async () => {
-  const previousOrder = makeOrder({ status: "OPEN", quantity: "1", executedQuantity: "0" })
-  const partialOrder = makeOrder({ status: "PARTIALLY_FILLED", quantity: "1", executedQuantity: "0.5" })
+  const previousOrder = makeOrder({
+    status: "OPEN",
+    quantity: "1",
+    executedQuantity: "0",
+  })
+  const partialOrder = makeOrder({
+    status: "PARTIALLY_FILLED",
+    quantity: "1",
+    executedQuantity: "0.5",
+  })
   const ownership = {
     clientOrderId: partialOrder.clientOrderId,
     strategyId: StrategyId.COIN_GRABBER,
@@ -504,7 +524,9 @@ test("logs partial fills from reconciled order state with immutable strategy own
   const logs = []
   const { workflow, calls } = makeWorkflow({
     registry,
-    logger: { info: (entry) => logs.push(entry) },
+    logger: {
+      info: (entry) => logs.push(entry),
+    },
   })
 
   const result = await workflow.processUserDataEventTransition({
@@ -527,8 +549,16 @@ test("logs partial fills from reconciled order state with immutable strategy own
 })
 
 test("reports a stale cancellation after FILLED as an informational ignored event", async () => {
-  const filledOrder = makeOrder({ status: "FILLED", quantity: "1", executedQuantity: "1" })
-  const staleCancellation = makeOrder({ status: "CANCELED", quantity: "1", executedQuantity: "1" })
+  const filledOrder = makeOrder({
+    status: "FILLED",
+    quantity: "1",
+    executedQuantity: "1",
+  })
+  const staleCancellation = makeOrder({
+    status: "CANCELED",
+    quantity: "1",
+    executedQuantity: "1",
+  })
   const ownership = {
     clientOrderId: filledOrder.clientOrderId,
     strategyId: StrategyId.COIN_GRABBER,
