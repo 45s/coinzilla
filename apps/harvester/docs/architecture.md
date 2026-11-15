@@ -465,8 +465,9 @@ price or trigger strategy evaluation. A fresh event updates the per-market
 price/event state, then either enters the existing trailing-BUY replacement
 path or evaluates the latest strategy state. The public engine entry point
 refreshes enabled volatility protection before enqueueing this transition; the
-handler itself does not create another queue, perform broker I/O, or mutate
-Portfolio/RecoveryLedger accounting.
+handler does not create another queue or directly call broker APIs; it
+continues to delegate trailing replacement to the existing workflow and does
+not mutate Portfolio/RecoveryLedger accounting.
 
 P3 has introduced four cohesive use-case boundaries on the current branch:
 
