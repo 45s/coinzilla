@@ -319,9 +319,9 @@ label separated by one space; avoid oversized column gaps and explanatory
 client-ID labels:
 
 \`\`\`text
-TIME     STRATEGY STATUS             ORDER ID CLIENT ID                 SYMBOL   SIDE QUANTITY @ PRICE
-19:14:52 🪙 CG SUBMITTED #pending h-325e71ba16494aeb875e6e-3 ADAUSDT BUY 50.00 @ 0.15260
-19:14:52 🪙 CG ACCEPTED #1341114 ADAUSDT BUY 50.00 @ 0.15260
+TIME     STRATEGY STATUS             ORDER ID     SYMBOL   SIDE QUANTITY @ PRICE CLIENT ID
+19:14:52 🪙 CG SUBMITTED #pending     ADAUSDT BUY 50.00 @ 0.15260 h-325e71ba16494aeb875e6e-3
+19:14:52 🪙 CG ACCEPTED  #1341114     ADAUSDT BUY 50.00 @ 0.15260
 19:14:53 🔴 RS PARTIAL FILL #1341115 ADAUSDT SELL 49.90 @ 0.15410 | Executed: 20 | Remaining: 29.90
 \`\`\`
 
@@ -363,7 +363,7 @@ structured exchange evidence and diagnostic context remain in the DEBUG/TRACE
 files; the terminal is the compact operator view.
 
 When a broker order ID is not available yet (for example, a pending
-submission), display `#pending` followed immediately by the raw client order
-ID on the same line. Do not add `Client:`, `Client order ID:`, or a separate
-indented line. The logger never derives strategy identity from a client-order-ID
-prefix.
+submission), display `#pending` in the order-ID column and append the raw client
+order ID at the end of that same line. Do not add `Client:`, `Client order ID:`,
+or a separate indented line. The logger never derives strategy identity from a
+client-order-ID prefix.
