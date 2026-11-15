@@ -16,6 +16,7 @@ const createFixture = ({
   flushResults = [],
   portfolio = new Portfolio(),
   activeOrders = [],
+  additionalTrackedBaseQuantity = [],
   operationalStateStore,
   logger = {},
   monotonicNow
@@ -66,6 +67,7 @@ const createFixture = ({
     },
     marketMetadata: new Map([[market.symbol, { market }]]),
     getPortfolio: () => portfolio,
+    getAdditionalTrackedBaseQuantity: () => additionalTrackedBaseQuantity,
     getTradingEngine: () => ({ getActiveOrders: () => activeOrders }),
     getRecoveredState: () => ({ orderRegistry: { orders: [] } }),
     getHasCanonicalOwnershipReconciliation: () => false,
@@ -1047,4 +1049,18 @@ test("times the CLOSING Journal durability barrier and reports failed flushes", 
   assert.ok(completed, "The CLOSING audit must log when its Journal barrier completes.")
   assert.equal(completed.durationMs, 7, "The barrier duration must use the injected monotonic clock.")
   assert.equal(completed.phase, "CLOSING")
+})
+
+
+test("captures additional tracked Spot allocation separately from Portfolio in account snapshot baselines", async () => {
+  const market = createFixture().market
+  const fixture = createFixture({
+    accountSnapshots: [createAccountSnapshot({ market, sourceTime: 102 })],
+    additionalTrackedBaseQuantity: [{ assetId: market.baseAsset.id, amount: "0.01" }],
+  })
+
+  const snapshot = await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
+
+  assert.equal(snapshot.getAdditionalTrackedBaseQuantityBaseline({ assetId: market.baseAsset.id }), "0.01")
+  assert.equal(snapshot.getPortfolioBaseQuantityBaseline({ assetId: market.baseAsset.id }), "0")
 })

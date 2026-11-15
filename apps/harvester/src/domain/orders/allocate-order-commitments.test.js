@@ -594,3 +594,82 @@ test("rejects a SELL that exceeds shared inventory after combined CG and RS rese
   assert.equal(result.ok, false, "The shared order allocator must reject a new SELL that would overcommit inventory reserved by CG and RS together.")
   assert.match(result.errors[0].message, /active inventory after commitments/, "The rejection must be caused by combined CG/RS reservations against shared active inventory.")
 })
+
+
+test("allocates a mixed recovery and legacy SELL against Portfolio plus separately tracked Spot inventory", () => {
+  const result = allocateOrderCommitments({
+    actions: [{ side: "SELL", quantity: "5.01" }],
+    quoteFreeBalance: "100",
+    baseFreeBalance: "5.01",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "5.01",
+    portfolioBaseBalance: "5",
+    portfolioBaseBalanceBaseline: "5",
+    additionalTrackedBaseBalance: "0.01",
+    additionalTrackedBaseBalanceBaseline: "0.01",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: "0",
+    committedQuoteBalanceBaseline: "0",
+    committedBase: "0",
+    committedBaseBalance: "0",
+    committedBaseBalanceBaseline: "0",
+    investmentLimit: "100",
+  })
+
+  assert.equal(result.ok, true, "Five recovery units plus 0.01 separately tracked legacy units must be sellable as one mixed SELL.")
+  assert.deepEqual(result.data.executableActions, [{ side: "SELL", quantity: "5.01" }])
+  assert.equal(result.data.remainingBaseBalance, "0")
+  assert.equal(result.data.remainingActiveBase, "0")
+})
+
+test("applies a post-snapshot partial legacy disposal to shared free-base availability exactly once", () => {
+  const result = allocateOrderCommitments({
+    actions: [{ side: "SELL", quantity: "5.005" }],
+    quoteFreeBalance: "100",
+    baseFreeBalance: "5.01",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "5.005",
+    portfolioBaseBalance: "5",
+    portfolioBaseBalanceBaseline: "5",
+    additionalTrackedBaseBalance: "0.005",
+    additionalTrackedBaseBalanceBaseline: "0.01",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: "0",
+    committedQuoteBalanceBaseline: "0",
+    committedBase: "0",
+    committedBaseBalance: "0",
+    committedBaseBalanceBaseline: "0",
+    investmentLimit: "100",
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.remainingBaseBalance, "0", "The post-snapshot legacy debit must reduce account free base by 0.005.")
+  assert.equal(result.data.remainingActiveBase, "0")
+})
+
+test("shared SELL reservations reduce mixed recovery and legacy availability", () => {
+  const result = allocateOrderCommitments({
+    actions: [{ side: "SELL", quantity: "5.01" }],
+    quoteFreeBalance: "100",
+    baseFreeBalance: "5.01",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "5.01",
+    portfolioBaseBalance: "5",
+    portfolioBaseBalanceBaseline: "5",
+    additionalTrackedBaseBalance: "0.01",
+    additionalTrackedBaseBalanceBaseline: "0.01",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: "0",
+    committedQuoteBalanceBaseline: "0",
+    committedBase: "0.01",
+    committedBaseBalance: "0.01",
+    committedBaseBalanceBaseline: "0",
+    investmentLimit: "100",
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /available free base balance after commitments/)
+})

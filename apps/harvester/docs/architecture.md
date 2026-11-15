@@ -254,6 +254,7 @@ For that integration:
 - Keep one shared Portfolio aggregate that may contain multiple independent strategy-owned Positions per market; keep RS/CG policy state and Position attribution separate.
 - Preserve originating-strategy and Position identity in immutable Harvester-owned order-ownership metadata; resolve each canonical Fill through that registered ownership. Do not add strategy-specific fields to exchange-neutral `CanonicalOrder` or `Fill` entities.
 - Represent mixed recovery/legacy SELL allocation as separate immutable application metadata referencing the canonical Fill ID; never split one execution into synthetic broker Fills.
+- Keep any non-Portfolio tracked Spot allocation baseline separate from `portfolioBaseQuantityBaseline`; the account snapshot and shared allocator must reconcile its current-minus-snapshot delta exactly once.
 - Serialize order submission, verified shared Spot allocation, Portfolio/legacy projections and terminal reconciliation through the shared Trading Engine.
 - Aggregate quote and base reservations across both strategies before accepting any new intent.
 - Resolve competing intents deterministically; never rely on timing to avoid double-spend or oversell.

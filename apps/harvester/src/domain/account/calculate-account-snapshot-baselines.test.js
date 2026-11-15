@@ -170,3 +170,34 @@ test("aggregates same-market strategy Positions into one actual account custody 
     "The account baseline must aggregate both strategy quote cash flows without merging their independent Position cost bases.",
   )
 })
+
+
+test("aggregates separately tracked Spot inventory without adding it to Portfolio", () => {
+  const result = calculateAccountSnapshotBaselines({
+    portfolio: new Portfolio(),
+    activeOrders: [],
+    additionalTrackedBaseQuantity: [
+      { assetId: btc.id, amount: "0.01" },
+      { assetId: btc.id, amount: "0.02" },
+      { assetId: eth.id, amount: "0.5" },
+    ],
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.additionalTrackedBaseQuantityBaseline, [
+    { assetId: btc.id, amount: "0.03" },
+    { assetId: eth.id, amount: "0.5" },
+  ])
+  assert.deepEqual(result.data.portfolioBaseQuantityBaseline, [])
+})
+
+test("rejects invalid additional tracked Spot inventory baselines", () => {
+  const result = calculateAccountSnapshotBaselines({
+    portfolio: new Portfolio(),
+    activeOrders: [],
+    additionalTrackedBaseQuantity: [{ assetId: btc.id, amount: "-0.01" }],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /non-negative/)
+})
