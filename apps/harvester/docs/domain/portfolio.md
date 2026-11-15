@@ -123,7 +123,7 @@ A Fill is an execution fact, not an order intention. It carries normalized infor
 
 The application supplies the originating `positionId` and `strategyId` from the order's ownership record. When a strategy has one Position per market, `createPositionId({ marketId, strategyId })` provides its stable default identity; strategies with multiple Positions supply the explicit ID. These attribution facts are not inferred from the market symbol or the Fill's quantity. The same canonical Fill ID can belong to only one Position/strategy attribution in a Portfolio.
 
-The in-memory `OrderRegistry` ownership contract being added in [PR #1144](https://github.com/45s/coinzilla/pull/1144) stores a frozen `strategyId`/`positionId`/`purpose` record against the original Harvester `clientOrderId` and links the exchange `brokerOrderId` once acknowledged. This first slice is not yet wired to RS order submission or canonical Fill attribution; RS remains non-executable.
+The in-memory `OrderRegistry` ownership contract implemented in merged [PR #1144](https://github.com/45s/coinzilla/pull/1144) stores a frozen `strategyId`/`positionId`/`purpose` record against the original Harvester `clientOrderId` and links the exchange `brokerOrderId` once acknowledged. This foundation is not yet wired to RS order submission or canonical Fill attribution; RS remains non-executable.
 
 The broker adapter translates exchange-specific payloads into the canonical Fill shape and validates them at the boundary. Strategy ownership remains an application/domain fact, not a raw Binance message field.
 
