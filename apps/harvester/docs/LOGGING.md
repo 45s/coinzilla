@@ -190,6 +190,8 @@ its existing success criteria, and `FAILED` means its existing failure
 criteria were met. These labels describe the current lifecycle outcome; they
 do not change shutdown ordering or failure semantics.
 
+The phase formatter normalizes and validates the phase/status tokens and timestamp before producing a line; malformed records fall back to the ordinary compact-summary path. The formatter does not mutate its structured input.
+
 The instantaneous `SHUTDOWN_REQUESTED` and `STOP_STATE_ESTABLISHED` milestones
 are printed as `shutdown requested` and `shutdown state established`, not as
 work phases. All other valid phase transitions retain their actual phase

@@ -7,6 +7,7 @@ import path from "node:path"
 import { defaultLogger } from "@coinzilla/utils"
 import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 import { createHarvesterLogSessionPaths } from "./create-harvester-log-session-paths.js"
+import { createShutdownPhaseConsolePresentation } from "./create-shutdown-phase-console-presentation.js"
 
 const CONSOLE_TRANSPORT_NAME = "console"
 const DEBUG_TRANSPORT_NAME = "harvester-debug-file"
@@ -36,12 +37,6 @@ const CONSOLE_DETAIL_KEYS = Object.freeze([
   "broker",
   "reason",
 ])
-const SHUTDOWN_PHASE_STATUSES = new Set(["STARTED", "COMPLETED", "FAILED"])
-const SHUTDOWN_PHASE_PATTERN = /^[A-Z][A-Z0-9_]*$/
-const SHUTDOWN_MILESTONE_MESSAGES = Object.freeze({
-  SHUTDOWN_REQUESTED: "shutdown requested",
-  STOP_STATE_ESTABLISHED: "shutdown state established",
-})
 const MAX_CONSOLE_LINE_LENGTH = 200
 const MAX_PORTFOLIO_STATS_LINE_LENGTH = 360
 const LEVEL_COLORS = Object.freeze({
@@ -58,61 +53,6 @@ const ANSI_RESET = "\u001b[0m"
 function formatConsoleLine({ line, level, method = level, color }) {
   const code = LEVEL_COLORS[method] ?? LEVEL_COLORS[level]
   return color && code ? code + line + ANSI_RESET : line
-}
-
-function getShutdownConsolePresentation({ data } = {}) {
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
-    return null
-  }
-
-  const phase = typeof data.shutdownPhase === "string"
-    ? data.shutdownPhase.trim().toUpperCase()
-    : ""
-  const status = typeof data.phaseStatus === "string"
-    ? data.phaseStatus.trim().toUpperCase()
-    : ""
-  if (!SHUTDOWN_PHASE_PATTERN.test(phase) || !SHUTDOWN_PHASE_STATUSES.has(status)) {
-    return null
-  }
-
-  const milestoneMessage = status === "COMPLETED" && Object.hasOwn(SHUTDOWN_MILESTONE_MESSAGES, phase)
-    ? SHUTDOWN_MILESTONE_MESSAGES[phase]
-    : undefined
-  return {
-    phase,
-    status,
-    message: milestoneMessage ?? `shutdown phase ${phase} ${status}`,
-  }
-}
-
-function formatShutdownPhaseConsoleLine({ timestamp, presentation } = {}) {
-  const time = new Date(timestamp).toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  })
-  return `${time} ${presentation.message}`
-}
-
-function writeShutdownPhaseConsoleRecord({
-  output,
-  color,
-  timestamp,
-  level,
-  method,
-  presentation,
-} = {}) {
-  const line = formatShutdownPhaseConsoleLine({
-    timestamp,
-    presentation,
-  })
-  output.write(formatConsoleLine({
-    line,
-    level,
-    method,
-    color,
-  }) + "\n")
 }
 
 function summarizeConsoleData({ data } = {}) {
@@ -509,7 +449,7 @@ export function createHarvesterConsoleTransport({
     level: "info",
     write({ timestamp, level, method = level, data }) {
       const isOrderLifecycle = data?.orderLifecycle === true
-      const shutdownPresentation = getShutdownConsolePresentation({ data })
+      const shutdownPresentation = createShutdownPhaseConsolePresentation({ timestamp, data })
       let summary
       if (shutdownPresentation) {
         summary = {
@@ -545,14 +485,12 @@ export function createHarvesterConsoleTransport({
       previousTimestamp = timestamp
 
       if (shutdownPresentation) {
-        writeShutdownPhaseConsoleRecord({
-          output,
-          color,
-          timestamp,
+        output.write(formatConsoleLine({
+          line: shutdownPresentation.line,
           level,
           method,
-          presentation: shutdownPresentation,
-        })
+          color,
+        }) + "\n")
         return
       }
       if (isOrderLifecycle) {

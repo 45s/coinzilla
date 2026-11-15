@@ -814,7 +814,10 @@ test("preserves full shutdown diagnostics in DEBUG and TRACE files while keeping
       level: "info",
     })
     await logger.transports.get("harvester-debug-file").write(entry)
-    await logger.transports.get("harvester-trace-file").write({ ...entry, level: "trace" })
+    await logger.transports.get("harvester-trace-file").write({
+      ...entry,
+      level: "trace",
+    })
 
     const expectedTime = getExpectedShutdownTime()
     assert.equal(
