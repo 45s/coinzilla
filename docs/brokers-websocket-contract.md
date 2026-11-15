@@ -87,6 +87,34 @@ The package entry point currently exports exactly `BinanceWebSocketBroker`, `Bin
 
 `CoreBroker` is a live public extension point, not an unused internal base class or a formal application-owned port. `normalizeBinanceId` is used by the Harvester infrastructure adapter. Preserve all four root exports and their consumer contracts unless a separately reviewed compatibility change proves a migration safe. Do not reintroduce the removed third-party SDK.
 
+## Bitunix Spot capability contract
+
+The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The current implementation is read-only and supports:
+
+| Broker method | Bitunix operation | Constraint |
+|---|---|---|
+| `getBalances()` | `GET /api/spot/v1/user/account` | Raw JSON balance numeric tokens are preserved as decimal strings before canonical entity construction; no source update timestamp. |
+| `getExchangeMarkets()` | `GET /api/spot/v1/common/coin_pair/list` | Filters closed pairs; derives each pair symbol by concatenating base and quote because the catalog response omits symbol. |
+| `getSymbolFilters({ symbol })` | Spot coin-pair catalog | Returns Bitunix metadata, not Binance filter schema. |
+| `getOpenOrders({ symbol })` | `POST /api/spot/v1/order/pending/list` | Symbol required. |
+| `getOrderHistory({ symbol })` | `POST /api/spot/v1/order/history/page` | Symbol required; no exact order-ID filter. |
+| `getOrder({ symbol, orderId })` | `GET /api/spot/v1/order/detail` | Response identity is validated. |
+| `getPrices({ symbol })` | `GET /api/spot/v1/market/last_price` | Request/response lookup only; maps the returned price string to `{ symbol, price }`. |
+| `getFills({ symbol, orderId })` | `POST /api/spot/v1/order/deal/list` | Per-order matching result. |
+
+Mutations and lifecycle-dependent methods are deliberately unavailable:
+
+- Order placement has no exchange-side client order ID, so a lost response cannot be reliably reconciled.
+- Private Spot WebSocket documentation does not define a continuous order/execution event stream.
+- Public WebSocket market methods are request/response RPC, not continuous subscriptions.
+- The account response has no source timestamp; account-wide pending-order lookup is not documented.
+- The canonical order entity requires a client order ID not provided by the Spot API.
+- No Spot server-time or TESTNET endpoint is documented.
+
+The REST place-order page and WebSocket order page contradict each other about the units of `volume`. No placement implementation is enabled until Bitunix clarifies the REST semantics and the conversion is covered by tests.
+
+Official references: [Spot REST API](https://www.bitunix.com/api-docs/spots/en_us/), [Spot order API](https://www.bitunix.com/api-docs/spots/en_us/order/), [Spot WebSocket API](https://www.bitunix.com/api-docs/spots/en_us/ws/), [Spot WebSocket order API](https://www.bitunix.com/api-docs/spots/en_us/order-ws/).
+
 ## Candle market-data public contract
 
 PR #1017 adds two optional market-data capabilities to BinanceWebSocketBroker. They are additive methods on the concrete Binance broker; CoreBroker and the Market Simulator are not changed.
