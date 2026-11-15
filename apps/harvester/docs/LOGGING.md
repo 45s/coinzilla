@@ -265,3 +265,5 @@ fills and partially filled cancellations include an indented exact-decimal
 line showing executed and remaining/cancelled quantity. Full structured
 exchange evidence and diagnostic context remain in the DEBUG/TRACE files;
 the terminal is the compact operator view.
+
+When a broker order ID is not available yet (for example, an unresolved submission), the order ID column displays `#pending`; the client order ID is retained in the indented detail line. The logger never derives strategy identity from a client-order-ID prefix.

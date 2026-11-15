@@ -5,6 +5,7 @@ import { finished } from "node:stream/promises"
 import { mkdir } from "node:fs/promises"
 import path from "node:path"
 import { defaultLogger } from "@coinzilla/utils"
+import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 import { createHarvesterLogSessionPaths } from "./create-harvester-log-session-paths.js"
 
 const CONSOLE_TRANSPORT_NAME = "console"
@@ -78,6 +79,77 @@ function summarizeConsoleData({ data } = {}) {
       }),
   )
   return { message, details }
+}
+
+
+const STRATEGY_COLUMN_WIDTH = 5
+const STATUS_COLUMN_WIDTH = 23
+const ORDER_ID_COLUMN_WIDTH = 22
+const SYMBOL_COLUMN_WIDTH = 20
+const SIDE_COLUMN_WIDTH = 5
+const QUANTITY_COLUMN_WIDTH = 18
+const PRICE_COLUMN_WIDTH = 18
+const ORDER_DETAIL_INDENT = 15
+
+const STRATEGY_LABELS = Object.freeze({
+  [StrategyId.COIN_GRABBER]: "🟡GC",
+  [StrategyId.RECOVERY_SELLER]: "🔴RS",
+})
+
+const ORDER_STATUS_PRESENTATION = Object.freeze({
+  SUBMITTED: { indicator: "🔵", label: "SUBMITTED" },
+  ACCEPTED: { indicator: "🔵", label: "ACCEPTED" },
+  PARTIAL_FILL: { indicator: "🟠", label: "PARTIAL FILL" },
+  FILLED: { indicator: "🟢", label: "FILLED" },
+  CANCEL_REQUESTED: { indicator: "🔵", label: "CANCEL REQUESTED" },
+  CANCELLED: { indicator: "🔴", label: "CANCELLED" },
+  REJECTED: { indicator: "🔴", label: "REJECTED" },
+  EXPIRED: { indicator: "🔴", label: "EXPIRED" },
+  FAILED: { indicator: "🔴", label: "FAILED" },
+  UNKNOWN: { indicator: "🟠", label: "UNKNOWN" },
+  CANCEL_UNKNOWN: { indicator: "🟠", label: "CANCEL UNKNOWN" },
+  CANCEL_NOT_CONFIRMED: { indicator: "🟠", label: "CANCEL UNCONFIRMED" },
+  CANCEL_NOT_SENT: { indicator: "🔴", label: "CANCEL NOT SENT" },
+  CANCEL_FAILED: { indicator: "🔴", label: "CANCEL FAILED" },
+  STALE_CANCEL_IGNORED: { indicator: "⚪", label: "STALE CANCEL IGNORED" },
+})
+
+function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
+  const time = new Date(timestamp).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+  const strategy = (STRATEGY_LABELS[data.strategyId] ?? "⚪SYS").padEnd(STRATEGY_COLUMN_WIDTH)
+  const statusPresentation = ORDER_STATUS_PRESENTATION[data.lifecycleStatus] ?? {
+    indicator: "⚪",
+    label: String(data.lifecycleStatus ?? "INFO"),
+  }
+  const status = (statusPresentation.indicator + " " + statusPresentation.label)
+    .padEnd(STATUS_COLUMN_WIDTH)
+  const orderId = (data.brokerOrderId ? "#" + data.brokerOrderId : "#pending")
+    .padEnd(ORDER_ID_COLUMN_WIDTH)
+  const symbol = String(data.symbol ?? "-").padEnd(SYMBOL_COLUMN_WIDTH)
+  const side = String(data.side ?? "-").padEnd(SIDE_COLUMN_WIDTH)
+  const quantity = String(data.quantity ?? "-").padStart(QUANTITY_COLUMN_WIDTH)
+  const price = String(data.price ?? "-").padStart(PRICE_COLUMN_WIDTH)
+
+  return [
+    time,
+    strategy,
+    status,
+    orderId,
+    symbol,
+    side,
+    quantity,
+    "@",
+    price,
+  ].join(" ")
+}
+
+function formatOrderLifecycleDetailLine({ detail } = {}) {
+  return " ".repeat(ORDER_DETAIL_INDENT) + String(detail).replace(/[\r\n]+/g, " ")
 }
 
 /**
@@ -269,7 +341,10 @@ export function createHarvesterConsoleTransport({
     name: CONSOLE_TRANSPORT_NAME,
     level: "info",
     write({ timestamp, level, method = level, data }) {
-      const summary = summarizeConsoleData({ data })
+      const isOrderLifecycle = data?.orderLifecycle === true
+      const summary = isOrderLifecycle
+        ? { message: "Order lifecycle", details: data }
+        : summarizeConsoleData({ data })
       const fingerprint = JSON.stringify({ level, method, summary })
       if (fingerprint === previousFingerprint) {
         suppressedCount += 1
@@ -279,6 +354,17 @@ export function createHarvesterConsoleTransport({
       flushSuppressed()
       previousFingerprint = fingerprint
       previousTimestamp = timestamp
+
+      if (isOrderLifecycle) {
+        const lines = [formatOrderLifecycleConsoleLine({ timestamp, data })]
+        if (typeof data.detail === "string" && data.detail.length > 0) {
+          lines.push(formatOrderLifecycleDetailLine({ detail: data.detail }))
+        }
+        for (const line of lines) {
+          output.write(formatConsoleLine({ line, level, method, color }) + "\n")
+        }
+        return
+      }
 
       const time = new Date(timestamp).toLocaleTimeString()
       const normalizedMethod = String(method ?? level).toLowerCase()
