@@ -145,9 +145,10 @@ test("does not infer strategy ownership from a Harvester-looking client ID", () 
   const pendingOrder = makeOrder({
     clientOrderId: "h-RS_recoverySeller-ZROUSDT-1",
   })
-  const registry = OrderRegistry.empty().registerPending({
+  const registered = OrderRegistry.empty().registerPending({
     order: pendingOrder,
-  }).registry
+  })
+  const registry = registered.registry
 
   assert.equal(registry.getOwnership({
     clientOrderId: pendingOrder.clientOrderId,
@@ -263,25 +264,25 @@ test("rejects lookups whose client and broker identities refer to different orde
   const secondOrder = makeOrder({
     clientOrderId: "h-rs-second-owner",
   })
-  const registry = OrderRegistry.empty()
-    .registerPending({
-      order: firstOrder,
-      ownership: recoverySellerOwnership,
-    }).registry
-    .registerPending({
-      order: secondOrder,
-      ownership: {
-        ...recoverySellerOwnership,
-        positionId: "position:rs:second",
-      },
-    }).registry
-    .applyUpdate({
-      order: makeOrder({
-        clientOrderId: secondOrder.clientOrderId,
-        brokerOrderId: "broker-rs-second-owner",
-        status: "OPEN",
-      }),
-    }).registry
+  const firstRegistered = OrderRegistry.empty().registerPending({
+    order: firstOrder,
+    ownership: recoverySellerOwnership,
+  })
+  const secondRegistered = firstRegistered.registry.registerPending({
+    order: secondOrder,
+    ownership: {
+      ...recoverySellerOwnership,
+      positionId: "position:rs:second",
+    },
+  })
+  const acknowledged = secondRegistered.registry.applyUpdate({
+    order: makeOrder({
+      clientOrderId: secondOrder.clientOrderId,
+      brokerOrderId: "broker-rs-second-owner",
+      status: "OPEN",
+    }),
+  })
+  const registry = acknowledged.registry
 
   assert.throws(() => registry.getOwnership({
     clientOrderId: firstOrder.clientOrderId,
