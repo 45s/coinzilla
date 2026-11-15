@@ -572,8 +572,8 @@ function createSubmissionLifecycleCallbacks({
   return {
     onSubmissionDeferred: async ({ order, registered, reason } = {}) => {
       if (registered) {
-        await persistSubmissionDeferral({
-          publishDurableIntent,
+        publishSubmissionDeferral({
+          eventPublisher,
           order,
           reason: reason ?? "SUBMISSION_NOT_ALLOWED",
         })
@@ -3455,16 +3455,19 @@ async function reconcileOwnedOrdersTransition({ context, options }) {
 /** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
 
 
-async function persistSubmissionDeferral({ publishDurableIntent, order, reason } = {}) {
-  const persisted = await publishDurableIntent({
-    eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_DEFERRED,
-    dataResult: mapOrderSubmissionDeferredData({
-      order,
-      reason,
-    }),
-  })
-  if (persisted?.ok !== true || persisted.data?.durable !== true) {
-    throw persisted?.errors?.[0] ??
-      new Error("Local submission deferral was not durably journaled")
+function publishSubmissionDeferral({ eventPublisher, order, reason } = {}) {
+  const dataResult = mapOrderSubmissionDeferredData({ order, reason })
+  if (dataResult?.ok !== true) {
+    publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_DEFERRED,
+      dataResult,
+    })
+    throw dataResult?.errors?.[0] ?? new TypeError("Local submission deferral evidence is invalid")
   }
+  return publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_DEFERRED,
+    dataResult,
+  })
 }

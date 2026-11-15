@@ -288,9 +288,9 @@ async function persistDeferredSubmission({
       reason: reason ?? "DURABLE_SUBMISSION_INTENT_NOT_COMMITTED",
     })
     return toResult({
-      data: {
-        deferred: true,
-      },
+      errors: errors?.length
+        ? errors
+        : [new Error("Durable order-submission intent was not acknowledged")],
     })
   } catch (error) {
     return toResult({

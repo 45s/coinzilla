@@ -91,7 +91,7 @@ The trailing-BUY replacement workflow also uses the executor's separate `.valida
 
 The post-registration check is important: the book or price may become stale, a pair may be paused, or another safety condition may change while the durable intent is being written. The gate is intentionally repeated at the final broker boundary.
 
-When this final gate defers a registered request, Harvester publishes `order.submission_deferred` as best-effort Journal evidence with the original client ID, exact order facts and bounded reason. It does not add a second blocking Journal flush to market processing. The local PENDING entry is removed because the broker call was not attempted. If Journal publication fails, the publisher reports the evidence gap; the durable request remains conservatively unresolved in offline projection and must not be interpreted as proof of an exchange order or proof of no exchange order.
+When this final gate defers a registered request, Harvester publishes `order.submission_deferred` as best-effort Journal evidence with the original client ID, exact order facts and bounded reason. It does not add a second blocking Journal flush to market processing. The local PENDING entry is removed because the broker call was not attempted. If Journal publication fails, the publisher reports the evidence gap; the durable request remains conservatively unresolved in offline projection and must not be interpreted as proof of an exchange order or proof of no exchange order. Invalid deferral DTOs remain execution errors and keep the local PENDING entry; only a valid payload with a best-effort publication attempt permits local cleanup.
 
 ```mermaid
 flowchart TD
