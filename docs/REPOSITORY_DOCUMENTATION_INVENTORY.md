@@ -219,7 +219,6 @@ The original 97-file inventory table above is a frozen baseline: its recorded by
 - [x] Record evidence-based dispositions and rationale for all six initial REVIEW entries; no initial Harvester or Brokers REVIEW candidates remain.
 - [ ] Record new REVIEW findings discovered during continued content-level review and update indexes after each approved migration.
 
-
 ## Post-baseline additions — startup open-order boundary
 
 PR #1166 added two maintained Harvester documents outside the frozen 97-file baseline. They must be included in the next complete recursive tree verification.
