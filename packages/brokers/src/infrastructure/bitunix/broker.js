@@ -279,7 +279,7 @@ export class BitunixSpotBroker extends CoreBroker {
         data: requireArray({
           value: rows,
           operation: "order history",
-        }),
+        }).map(adaptOrder),
       })
     } catch (error) {
       handleErr({
