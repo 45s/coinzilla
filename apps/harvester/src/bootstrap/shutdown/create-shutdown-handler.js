@@ -149,9 +149,10 @@ const SHUTDOWN_ERROR_STACK_LIMIT = 8192
 const SHUTDOWN_ERROR_CAUSE_DEPTH_LIMIT = 3
 
 function summarizeShutdownError({ error, depth = 0 } = {}) {
+  const { message: errorMessage } = error ?? {}
   let message
-  if (typeof error?.message === "string") {
-    message = error.message
+  if (typeof errorMessage === "string") {
+    message = errorMessage
   } else if (typeof error === "string") {
     message = error
   }
@@ -161,9 +162,15 @@ function summarizeShutdownError({ error, depth = 0 } = {}) {
     failureStage: typeof error?.recoveryFailure?.stage === "string"
       ? error.recoveryFailure.stage
       : null,
-    ...(message === undefined ? {} : { message: message.slice(0, SHUTDOWN_ERROR_MESSAGE_LIMIT) }),
+    ...(message === undefined
+      ? {}
+      : {
+        message: message.slice(0, SHUTDOWN_ERROR_MESSAGE_LIMIT),
+      }),
     ...(typeof error?.stack === "string"
-      ? { stack: error.stack.slice(0, SHUTDOWN_ERROR_STACK_LIMIT) }
+      ? {
+        stack: error.stack.slice(0, SHUTDOWN_ERROR_STACK_LIMIT),
+      }
       : {}),
   }
   if (depth < SHUTDOWN_ERROR_CAUSE_DEPTH_LIMIT && error?.cause !== undefined) {
