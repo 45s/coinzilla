@@ -35,6 +35,15 @@ function requireArray({ value, operation }) {
   return value
 }
 
+function normalizeOrderRows({ value }) {
+  if (Array.isArray(value)) return value
+  if (value === null || value === undefined) return []
+  if (typeof value === "object" && !Array.isArray(value) && value.orderId !== undefined) {
+    return [value]
+  }
+  throw new TypeError("Bitunix Spot pending orders response must contain order rows")
+}
+
 function normalizeOrderSide({ side }) {
   if (String(side) === "2") return "BUY"
   if (String(side) === "1") return "SELL"
@@ -130,7 +139,7 @@ export class BitunixSpotBroker extends CoreBroker {
       const response = await this.restClient.request("POST", API.pendingOrders, {
         body: { symbol: normalizedSymbol },
       })
-      const rows = requireArray({ value: response.data, operation: "pending orders" })
+      const rows = normalizeOrderRows({ value: response.data })
       return toResult({ data: rows.map(adaptOrder) })
     } catch (error) {
       handleErr({ where: "BitunixSpotBroker.getOpenOrders()", error })
@@ -138,10 +147,13 @@ export class BitunixSpotBroker extends CoreBroker {
     }
   }
 
-  async getOrderHistory({ symbol, orderId, startTime, endTime, limit } = {}) {
+  async getOrderHistory({ symbol, orderId, startTime, endTime, limit, page = 1 } = {}) {
     try {
       const normalizedSymbol = requireSymbol({ symbol, operation: "getOrderHistory()" })
-      const body = { symbol: normalizedSymbol, page: 1 }
+      if (!Number.isInteger(page) || page < 1) {
+        throw new RangeError("Bitunix Spot order history page must be a positive integer")
+      }
+      const body = { symbol: normalizedSymbol, page }
       if (limit !== undefined) {
         if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
           throw new RangeError("Bitunix Spot order history limit must be from 1 to 100")
