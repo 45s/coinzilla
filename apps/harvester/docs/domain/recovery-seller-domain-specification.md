@@ -10,7 +10,7 @@ created: 2026-11-14
 
 **Status: DRAFT — first-implementation owner decisions are recorded; remaining work is implementation and verification.**
 
-**Authority:** Canonical RS contract only after the owner decisions below are resolved and this document is accepted. Until then it records the agreed direction, hard safety invariants, accounting boundaries, and unresolved decisions. It does not amend the [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
+**Authority:** This draft becomes the canonical RS contract after formal acceptance. Until then it records the agreed direction, hard safety invariants, accounting boundaries, and remaining implementation requirements. It does not amend the [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 **Implementation status:** The shared Portfolio/multi-Position foundation required by RS is implemented and merged in [PR #1118](https://github.com/45s/coinzilla/pull/1118): one Portfolio supports multiple independent strategy-owned Positions per market, stable Position/fill attribution, portfolio-wide duplicate detection, aggregate market inventory, and CG ownership-scoped consumers. This is accounting infrastructure only. RS itself is not implemented, registered, configurable at runtime, or executable. The remaining RS-specific domain accounting and later policy/integration phases are tracked in [issue #1127](https://github.com/45s/coinzilla/issues/1127). The owner has approved the sellQuantity plus legacyPosition.invested / legacyPosition.quantity input shape. RS calculates the legacy average once from the original values; that average remains fixed after disposals. This is a product-level input decision, not an executable runtime schema. Owner decisions for the first implementation are recorded; remaining blockers are engineering/accounting implementation and verification, not additional product-policy questions for the opening-inventory boundary. This draft authorizes no trading or exchange operations.
 
@@ -246,7 +246,7 @@ Concurrency must preserve multiple independently owned Positions per market and 
 - Every active or in-flight order reserves its remaining quote/base commitment centrally. Reservations from CG, RS and other Harvester strategies must be aggregated before another order is submitted.
 - Two strategies must never reserve or sell the same base quantity, double-spend the same quote commitment, or attribute one fill to both strategies.
 - Strategy-specific profit, recovery and legacy attribution remains separate even though actual exchange custody and account balances are shared. Each Position's accounting identity is independent; its available-to-sell quantity is still constrained by centrally verified account inventory and reservations.
-- One strategy being paused or disabled does not implicitly disable the other. Existing orders remain owned by their originating strategy and continue through canonical fill accounting/reconciliation.
+- If future strategy-specific lifecycle controls are introduced, they must not implicitly disable another strategy. Advanced pause/disable/abandon/resume/restart controls are deferred under FITDIB; existing order ownership and canonical fill reconciliation remain mandatory.
 - RS may not adopt, cancel, or modify manual/external orders. Existing external-order policy and canonical broker ownership remain in force.
 - Manual trades/external orders may change exchange free/locked balances. This does not make their inventory or executions RS-owned; authoritative available balance and all reservations must be reconciled without attributing external PnL to RS.
 - Shared account quote/base commitments remain the Trading Engine's responsibility. RS risk limits are additional constraints and must account for commitments from concurrently active strategies.
@@ -257,7 +257,7 @@ The engine must provide deterministic behavior when CG and RS both emit eligible
 
 The first-implementation product decisions below are recorded. Items marked as implementation requirements are engineering work, not questions for the owner. Advanced lifecycle behavior and separate final-residual liquidation are explicitly deferred under FITDIB; do not expand the first implementation to include them.
 
-| Decision | Required owner choice | Why it blocks implementation |
+| Decision | Settled decision / implementation requirement | Implementation consequence |
 |---|---|---|
 | sellQuantity | **Agreed:** additive legacy quantity per cycle, added to actual net recovery quantity while authorized legacy inventory remains; not a total quantity or cap. Smaller-remainder behavior is agreed. Once legacy inventory is exhausted, continue recovery-only cycles governed by `minProfit`. | Defines both mixed recovery/legacy and recovery-only cycle SELL targets |
 | Smaller/final residual | **Agreed:** sell the smaller remaining authorized legacy quantity within the current cycle if it is Spot-available/unreserved and passes both independent profitability gates and exchange filters; otherwise retain it. Separate final-residual liquidation without a new BUY remains unresolved. | Prevents unintended liquidation or forced loss-making disposal |
@@ -276,7 +276,7 @@ The first-implementation product decisions below are recorded. Items marked as i
 
 No executable RS tests are added in this documentation-only phase. Future implementation must add deterministic offline tests for:
 
-- absent, insufficient, reduced, revoked, duplicated, and stale authorization;
+- missing/invalid startup legacy configuration and insufficient verified Spot availability; runtime authorization revocation/expiry is deferred under FITDIB;
 - configured legacy invested quote / original quantity average-cost calculation, including invalid zero/negative/missing inputs;
 - Spot-available versus EARN/off-Spot custody separation, transfer/redeem changes, and insufficient Spot reserve for the next legacy slice;
 - a legacy slice that fails its fixed-original-average-cost profitability gate;
@@ -286,7 +286,7 @@ No executable RS tests are added in this documentation-only phase. Future implem
 - Portfolio/RS attribution atomicity, identical duplicate fills, and conflicting fill identity;
 - active/in-flight SELL reservation conservation, partial fills, cancellation races, unknown outcomes, and reconciliation;
 - exact decimal precision and exchange-filter boundaries;
-- risk-limit equality/exceedance and pause/disable/resume/abandon transitions;
+- investment-limit behavior: block new BUYs while an existing recovery SELL remains unchanged and reconciled; advanced pause/disable/resume/abandon transitions are deferred under FITDIB;
 - CG and RS running concurrently on different markets and the same market, with independent order attribution and investment budgets; prove one strategy cannot consume the other's unused budget, shared reservations prevent double-spend, and no fill is duplicated or inventory oversold.
 - External/manual order isolation while multiple strategies are active.
 
@@ -320,11 +320,11 @@ The prose is authoritative. The diagram does not authorize a tranche cadence, or
 
 ## 15. Implementation boundary
 
-Until this specification is accepted and every blocking owner decision is resolved:
+Until this specification is formally accepted and the RS-2b accounting boundary is implemented:
 
 - Do not add RS runtime configuration, strategy registration, operator controls, or executable policy.
 - Do not place, cancel, replace, or manage RS orders.
 - Do not seed Portfolio with synthetic fills or treat wallet balances as RS inventory.
-- Do not change CG_coinGrabber, Conservative accounting, shared Portfolio behavior, or broker safety boundaries.
+- Preserve existing CG_coinGrabber and Conservative behavior and all shared Portfolio/broker safety invariants. Any required shared Portfolio extension must be focused, test-first, and preserve canonical exact-once fill accounting.
 - Keep future deterministic RS decisions in pure domain functions and use existing execution/accounting workflows through explicit application ports.
 - No TESTNET or LIVE operation is authorized.
