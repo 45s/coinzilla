@@ -32,7 +32,7 @@ export function createShutdownPhaseConsolePresentation({ timestamp, data } = {})
   const milestoneMessage = status === "COMPLETED" && Object.hasOwn(SHUTDOWN_MILESTONE_MESSAGES, phase)
     ? SHUTDOWN_MILESTONE_MESSAGES[phase]
     : undefined
-  const message = milestoneMessage ?? \`shutdown phase \${phase} \${status}\`
+  const message = milestoneMessage ?? `shutdown phase ${phase} ${status}`
   const time = date.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
@@ -44,6 +44,6 @@ export function createShutdownPhaseConsolePresentation({ timestamp, data } = {})
     phase,
     status,
     message,
-    line: \`\${time} \${message}\`,
+    line: `${time} ${message}`,
   }
 }

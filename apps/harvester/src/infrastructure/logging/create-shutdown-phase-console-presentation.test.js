@@ -29,7 +29,7 @@ test("normalizes phase and status tokens before creating the exact 24-hour termi
       phase: "MARKET_INTAKE_STOP",
       status: "STARTED",
       message: "shutdown phase MARKET_INTAKE_STOP STARTED",
-      line: \`\${getExpectedTime()} shutdown phase MARKET_INTAKE_STOP STARTED\`,
+      line: `${getExpectedTime()} shutdown phase MARKET_INTAKE_STOP STARTED`,
     },
     "The formatter must normalize machine-readable tokens and exclude structured diagnostic details from the terminal line.",
   )
@@ -53,12 +53,12 @@ test("keeps instantaneous shutdown milestones distinct from work phase transitio
 
   assert.equal(
     shutdownRequested.line,
-    \`\${getExpectedTime()} shutdown requested\`,
+    `${getExpectedTime()} shutdown requested`,
     "The shutdown-request milestone must remain a concise instantaneous lifecycle fact.",
   )
   assert.equal(
     stopStateEstablished.line,
-    \`\${getExpectedTime()} shutdown state established\`,
+    `${getExpectedTime()} shutdown state established`,
     "The stop-state milestone must remain distinct from a completed work phase.",
   )
 })
