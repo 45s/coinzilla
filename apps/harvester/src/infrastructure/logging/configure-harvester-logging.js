@@ -406,6 +406,21 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
   }) + "\n")
 }
 
+function writeSuppressedConsoleRecord({ output, color, timestamp, count } = {}) {
+  const time = new Date(timestamp).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+  const line = `${time} Previous identical log entry repeated ${count} additional time(s)`
+  output.write(formatConsoleLine({
+    line,
+    level: "info",
+    color,
+  }) + "\n")
+}
+
 export function createHarvesterConsoleTransport({
   output = process.stdout,
   color = process.env.NO_COLOR === undefined && (
@@ -418,18 +433,12 @@ export function createHarvesterConsoleTransport({
 
   const flushSuppressed = () => {
     if (suppressedCount === 0) return
-    const time = new Date(previousTimestamp).toLocaleTimeString("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    })
-    const line = `${time} Previous identical log entry repeated ${suppressedCount} additional time(s)`
-    output.write(formatConsoleLine({
-      line,
-      level: "info",
+    writeSuppressedConsoleRecord({
+      output,
       color,
-    }) + "\n")
+      timestamp: previousTimestamp,
+      count: suppressedCount,
+    })
     suppressedCount = 0
   }
 
