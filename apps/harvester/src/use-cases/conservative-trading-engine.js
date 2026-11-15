@@ -584,6 +584,91 @@ function createOperatorMarketResumeHandler({
   })
 }
 
+function createPendingOrderLifecycleHandler({ state, publishDurableIntent, pause, logger } = {}) {
+  return async ({ order, purpose }) => {
+    if (order.side === "SELL") {
+      state.completedRecoverySellSymbols.delete(order.market.symbol)
+      state.completedRecoverySellOrdersBySymbol.delete(order.market.symbol)
+    }
+    const ownership = {
+      strategyId: StrategyId.COIN_GRABBER,
+      positionId: createPositionId({
+        marketId: order.market.id,
+        strategyId: StrategyId.COIN_GRABBER,
+      }),
+      purpose: purpose ?? (order.side === "BUY" ? "CONSERVATIVE_BUY" : "CONSERVATIVE_SELL"),
+    }
+    state.registry = state.registry.registerPending({ order, ownership }).registry
+    const persisted = await publishDurableIntent({
+      eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_REQUESTED,
+      dataResult: mapOrderSubmissionRequestedData({ order }),
+    })
+    if (!persisted.ok) {
+      const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
+      if (removal.removed) {
+        state.registry = removal.registry
+      }
+      const error = persisted.errors?.[0] ?? new Error("Order intent was not durably journaled; broker submission was not attempted")
+      await pause({ symbol: order.market.symbol, reason: "ORDER_INTENT_NOT_DURABLE", error })
+      throw error
+    }
+    logOrderLifecycle({
+      logger,
+      order,
+      ownership: state.registry.getOwnership({ clientOrderId: order.clientOrderId }),
+      status: "SUBMITTED",
+    })
+  }
+}
+
+function createAcknowledgedOrderLifecycleHandler({
+  state,
+  eventPublisher,
+  reconcileFilledAcknowledgement,
+  logger,
+} = {}) {
+  return async ({ order }) => {
+    const ownership = state.registry.getOwnership({
+      clientOrderId: order.clientOrderId,
+    })
+    if (order.status === "FILLED") {
+      const registered = state.registry.orders.some(
+        (item) => item.clientOrderId === order.clientOrderId,
+      )
+      if (!registered) {
+        throw new Error("Broker acknowledged an unregistered Harvester order")
+      }
+      state.registry = state.registry.attachAcknowledgedBrokerOrderId({ order }).registry
+    } else {
+      const update = state.registry.applyUpdate({ order })
+      if (update.unknown) {
+        throw new Error("Broker acknowledged an unregistered Harvester order")
+      }
+      state.registry = update.registry
+    }
+    publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
+      dataResult: mapOrderSubmittedData({ order }),
+    })
+    const acceptedOrder = state.registry.getOrder({
+      clientOrderId: order.clientOrderId,
+    }) ?? order
+    logOrderLifecycle({
+      logger,
+      order: acceptedOrder,
+      ownership: state.registry.getOwnership({
+        clientOrderId: order.clientOrderId,
+      }) ?? ownership,
+      status: "ACCEPTED",
+    })
+    const reconciliation = await reconcileFilledAcknowledgement({ order })
+    if (!reconciliation.ok) {
+      throw reconciliation.errors?.[0] ?? new Error("FILLED acknowledgement reconciliation failed")
+    }
+  }
+}
+
 function createSubmissionLifecycleCallbacks({
   state,
   publishDurableIntent,
@@ -608,80 +693,18 @@ function createSubmissionLifecycleCallbacks({
       }
       state.deferredEvaluations.add(order.market.symbol)
     },
-    onPendingOrder: async ({ order, purpose }) => {
-      if (order.side === "SELL") {
-        state.completedRecoverySellSymbols.delete(order.market.symbol)
-        state.completedRecoverySellOrdersBySymbol.delete(order.market.symbol)
-      }
-      const ownership = {
-        strategyId: StrategyId.COIN_GRABBER,
-        positionId: createPositionId({
-          marketId: order.market.id,
-          strategyId: StrategyId.COIN_GRABBER,
-        }),
-        purpose: purpose ?? (order.side === "BUY" ? "CONSERVATIVE_BUY" : "CONSERVATIVE_SELL"),
-      }
-      state.registry = state.registry.registerPending({ order, ownership }).registry
-      const persisted = await publishDurableIntent({
-        eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_REQUESTED,
-        dataResult: mapOrderSubmissionRequestedData({ order }),
-      })
-      if (!persisted.ok) {
-        const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
-        if (removal.removed) {
-          state.registry = removal.registry
-        }
-        const error = persisted.errors?.[0] ?? new Error("Order intent was not durably journaled; broker submission was not attempted")
-        await pause({ symbol: order.market.symbol, reason: "ORDER_INTENT_NOT_DURABLE", error })
-        throw error
-      }
-      logOrderLifecycle({
-        logger,
-        order,
-        ownership: state.registry.getOwnership({ clientOrderId: order.clientOrderId }),
-        status: "SUBMITTED",
-      })
-    },
-    onAcknowledgedOrder: async ({ order }) => {
-      const ownership = state.registry.getOwnership({
-        clientOrderId: order.clientOrderId,
-      })
-      if (order.status === "FILLED") {
-        const registered = state.registry.orders.some(
-          (item) => item.clientOrderId === order.clientOrderId,
-        )
-        if (!registered) {
-          throw new Error("Broker acknowledged an unregistered Harvester order")
-        }
-        state.registry = state.registry.attachAcknowledgedBrokerOrderId({ order }).registry
-      } else {
-        const update = state.registry.applyUpdate({ order })
-        if (update.unknown) {
-          throw new Error("Broker acknowledged an unregistered Harvester order")
-        }
-        state.registry = update.registry
-      }
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
-        dataResult: mapOrderSubmittedData({ order }),
-      })
-      const acceptedOrder = state.registry.getOrder({
-        clientOrderId: order.clientOrderId,
-      }) ?? order
-      logOrderLifecycle({
-        logger,
-        order: acceptedOrder,
-        ownership: state.registry.getOwnership({
-          clientOrderId: order.clientOrderId,
-        }) ?? ownership,
-        status: "ACCEPTED",
-      })
-      const reconciliation = await reconcileFilledAcknowledgement({ order })
-      if (!reconciliation.ok) {
-        throw reconciliation.errors?.[0] ?? new Error("FILLED acknowledgement reconciliation failed")
-      }
-    },
+    onPendingOrder: createPendingOrderLifecycleHandler({
+      state,
+      publishDurableIntent,
+      pause,
+      logger,
+    }),
+    onAcknowledgedOrder: createAcknowledgedOrderLifecycleHandler({
+      state,
+      eventPublisher,
+      reconcileFilledAcknowledgement,
+      logger,
+    }),
     onOrderValidationFailure: async ({ order, error }) => {
       await pause({
         symbol: order.market.symbol,
