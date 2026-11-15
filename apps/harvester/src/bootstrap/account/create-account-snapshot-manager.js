@@ -322,13 +322,23 @@ function resolveAdditionalTrackedBaseQuantityGetter({ getter } = {}) {
   return getter
 }
 
-function getAccountSnapshotBaselines({ context }) {
+function getAccountSnapshotBaselines({ context, balances }) {
+  const portfolio = context.getPortfolio()
   const activeOrders = context.getTradingEngine()?.getActiveOrders?.() ??
     context.getRecoveredState()?.orderRegistry?.getActiveOrders?.() ?? []
+  let additionalTrackedBaseQuantity
+  try {
+    additionalTrackedBaseQuantity = context.getAdditionalTrackedBaseQuantity({
+      balances: Object.freeze([...balances]),
+      portfolio,
+    })
+  } catch (error) {
+    throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_BASELINE", false)
+  }
   const baselineResult = calculateAccountSnapshotBaselines({
-    portfolio: context.getPortfolio(),
+    portfolio,
     activeOrders,
-    additionalTrackedBaseQuantity: context.getAdditionalTrackedBaseQuantity(),
+    additionalTrackedBaseQuantity,
   })
   if (!baselineResult.ok) {
     throw withRecoveryFailure(
@@ -380,6 +390,7 @@ async function refreshAccountSnapshot({ context, capturePreflightBaseline = fals
   }
   const baselines = getAccountSnapshotBaselines({
     context,
+    balances: result.data.balances,
   })
   if (capturePreflightBaseline && context.state.preflightSourceTime === undefined) {
     try {
