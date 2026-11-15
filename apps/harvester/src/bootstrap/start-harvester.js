@@ -184,6 +184,18 @@ function createHarvesterOperationalStateCallbacks({ operationalStateStore } = {}
   })
 }
 
+function createCoinGrabberMarketPriceErrorHandler({ logger } = {}) {
+  return ({ symbol, error, errors }) => {
+    logger.error?.({
+      message: "Market price processing failed",
+      strategyId: StrategyId.COIN_GRABBER,
+      symbol,
+      error,
+      errors,
+    })
+  }
+}
+
 async function createHarvesterStartupContext({ options } = {}) {
   const {
     configSource,
@@ -194,15 +206,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     evaluateStrategy = conservativeStrategyPolicy.evaluate,
     logger = defaultLogger,
     eventPublisher,
-    onMarketPriceError = ({ symbol, error, errors }) => {
-      logger.error?.({
-        message: "Market price processing failed",
-        strategyId: StrategyId.COIN_GRABBER,
-        symbol,
-        error,
-        errors,
-      })
-    },
+    onMarketPriceError = createCoinGrabberMarketPriceErrorHandler({ logger }),
     onUserDataEvent = async () => {},
     onUserDataStatus = () => {},
     now = Date.now,
