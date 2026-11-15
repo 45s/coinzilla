@@ -64,7 +64,7 @@ test("Bitunix WebSocket API client signs requests and unwraps successful respons
     nonce: "nonce",
     timestamp: "1700000000000",
     apiKey: "api-key",
-    sign: "EXPECTED_SIGNATURE",
+    sign: "d355761041a87afc6e1e8becaddb727a866eafce76c6d12a0763d12cfde65932",
   })
 
   transport.respond({ id: "request-1", code: "0", msg: "success", data: "10000.00" })
