@@ -173,7 +173,7 @@ Examples include:
 Do not use SYSTEM for every incoming event, market tick, strategy evaluation,
 or repeated connection-status heartbeat. Those belong at DEBUG or INFO
 according to whether they represent an operator-relevant trading event.
-SYSTEM entries are cyan without a redundant `SYSTEM` prefix, making lifecycle events easy to distinguish from blue INFO output.
+SYSTEM entries are cyan; unowned system diagnostics retain the `⚪ SYS` ownership marker.
 
 ## Shutdown phase terminal records
 
@@ -267,6 +267,33 @@ operator archives or removes them. Rotation and retention policy are deferred
 in the [Harvester roadmap](../ROADMAP.md). Do not delete session files as part
 of startup or shutdown.
 
+## Strategy log markers
+
+Every strategy-owned diagnostic carries its canonical `strategyId` in its
+structured data. The Harvester console formatter resolves that ID through the
+single immutable `strategyLogMarkers` mapping:
+
+| Strategy ID | Terminal marker |
+| --- | --- |
+| `CG_coinGrabber` | 🪙 CG |
+| `RS_recoverySeller` | 🔴 RS |
+
+The marker is printed immediately after the timestamp and before the message
+or lifecycle status. System and application diagnostics without a strategy
+owner use `⚪ SYS`. Strategy identity is never inferred from a symbol, side,
+order ID, or client-order-ID prefix.
+
+The Conservative engine and CG Portfolio/RecoveryLedger workflow receive
+strategy-scoped adapters around the shared `@coinzilla/utils` logger. They add
+the immutable CG strategy ID to every structured diagnostic emitted by those
+strategy-owned workflows, including market-price processing failures, without
+mutating caller data or changing the shared logger. Other strategy workflows
+must use the same adapter with their own canonical `StrategyId`.
+
+Strategy identity is part of the console duplicate-suppression fingerprint.
+Identical messages from different strategies therefore remain separate
+records. Structured DEBUG/TRACE files retain the strategy ID as a field.
+
 ## Order lifecycle terminal records
 
 Order lifecycle events use a dedicated fixed-width terminal formatter so the
@@ -274,21 +301,21 @@ same columns align across Coin Grabber and Recovery Seller:
 
 \`\`\`text
 TIME     STRATEGY STATUS                  ORDER ID               SYMBOL               SIDE       QUANTITY           PRICE
-19:14:52 🟡GC     SUBMITTED                #1341114               ADAUSDT              BUY              50.00 @          0.15260
-19:14:52 🟡GC     ACCEPTED                 #1341114               ADAUSDT              BUY              50.00 @          0.15260
-19:14:53 🔴RS     PARTIAL FILL             #1341115               ADAUSDT              SELL             49.90 @          0.15410
+19:14:52 🪙 CG     SUBMITTED                #1341114               ADAUSDT              BUY              50.00 @          0.15260
+19:14:52 🪙 CG     ACCEPTED                 #1341114               ADAUSDT              BUY              50.00 @          0.15260
+19:14:53 🔴 RS     PARTIAL FILL             #1341115               ADAUSDT              SELL             49.90 @          0.15410
              Executed: 20 | Remaining: 29.90
 \`\`\`
 
 Order events are reconciled against the registered broker order ID when available, with client order ID as the fallback. Strategy identity is derived only from immutable OrderRegistry ownership:
-🟡GC for CG_coinGrabber and 🔴RS for RS_recoverySeller. It never changes with
-order status. ⚪SYS is reserved for system diagnostics that are not strategy
+🪙 CG for CG_coinGrabber and 🔴 RS for RS_recoverySeller. It never changes with
+order status. ⚪ SYS is reserved for system diagnostics that are not strategy
 lifecycle transitions. Supporting the RS label does not enable RS runtime
 execution.
 
 Lifecycle status is plain text in its own column; it never changes or
-replaces the strategy identity icon. The strategy marker remains 🟡GC or 🔴RS
-for every transition, while non-strategy diagnostics use ⚪SYS. The fixed
+replaces the strategy identity icon. The strategy marker remains 🪙 CG or 🔴 RS
+for every transition, while non-strategy diagnostics use ⚪ SYS. The fixed
 columns are time, strategy, status, broker order ID, symbol,
 side, original quantity, and limit price. Text columns are left-aligned;
 quantity and price are right-aligned. The terminal uses a 24-hour local time
@@ -304,7 +331,7 @@ reconciliation. CANCEL REQUESTED is logged after the durable cancellation
 intent barrier and before the broker RPC. CANCELLED is logged only when the
 canonical cancellation transition has been applied. A fill that wins a
 cancellation race remains FILLED; a later stale cancellation report is shown
-as an informational ⚪SYS event (STALE CANCEL IGNORED), never as a cancellation.
+as an informational ⚪ SYS event (STALE CANCEL IGNORED), never as a cancellation.
 Stale and duplicate order reports are discarded before terminal fill-history
 reconciliation; a duplicate FILLED report is still allowed to complete any
 previously unprocessed canonical fill transition.

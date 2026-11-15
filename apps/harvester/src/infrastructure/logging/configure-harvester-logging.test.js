@@ -82,7 +82,9 @@ test("fails clearly when the shared logger transport API is unavailable", async 
 test("formats console entries as one compact line while retaining structured fields", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
   const transport = createHarvesterConsoleTransport({ output })
 
   transport.write({
@@ -107,7 +109,9 @@ test("formats console entries as one compact line while retaining structured fie
 test("prints complete Portfolio Stats inventory and accounting in console output", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
   const transport = createHarvesterConsoleTransport({ output })
 
   transport.write({
@@ -144,7 +148,9 @@ test("prints complete Portfolio Stats inventory and accounting in console output
 test("suppresses consecutive duplicate console entries and reports their count", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
   const transport = createHarvesterConsoleTransport({ output })
   const entry = {
     timestamp: "2026-11-05T12:00:00.000Z",
@@ -169,7 +175,9 @@ test("suppresses consecutive duplicate console entries and reports their count",
 test("keeps INFO output concise and excludes stack traces and audit internals", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
   const transport = createHarvesterConsoleTransport({ output })
 
   transport.write({
@@ -202,7 +210,9 @@ test("keeps INFO output concise and excludes stack traces and audit internals", 
 test("retains the machine-readable Journal error code in compact console output", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
   const transport = createHarvesterConsoleTransport({ output })
 
   transport.write({
@@ -223,7 +233,9 @@ test("retains the machine-readable Journal error code in compact console output"
 test("colors INFO blue and DEBUG magenta when terminal colors are enabled", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
   const transport = createHarvesterConsoleTransport({ output, color: true })
 
   transport.write({
@@ -245,7 +257,9 @@ test("colors INFO blue and DEBUG magenta when terminal colors are enabled", () =
 test("does not emit ANSI color codes when color is disabled", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
   const transport = createHarvesterConsoleTransport({
     output,
     color: false,
@@ -266,7 +280,9 @@ test("does not emit ANSI color codes when color is disabled", () => {
 test("renders semantic SUCCESS and SYSTEM methods with distinct colors without redundant labels", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
   const transport = createHarvesterConsoleTransport({ output, color: true })
   const data = { message: "Lifecycle event" }
 
@@ -302,7 +318,9 @@ test("renders semantic SUCCESS and SYSTEM methods with distinct colors without r
 test("keeps colored semantic labels within the configured console line limit", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
   const transport = createHarvesterConsoleTransport({ output, color: true })
 
   transport.write({
@@ -320,8 +338,13 @@ test("keeps colored semantic labels within the configured console line limit", (
 test("omits INFO labels while retaining DEBUG, WARN, and ERROR labels", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   for (const [level, message] of [
     ["INFO", "Informational event"],
@@ -559,7 +582,9 @@ test("closes the already-open DEBUG streams when TRACE session creation fails", 
 test("retains the market symbol and source filter types in compact fatal console summaries", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
   const transport = createHarvesterConsoleTransport({ output })
 
   transport.write({
@@ -585,8 +610,13 @@ test("retains the market symbol and source filter types in compact fatal console
 test("aligns strategy, status, order ID and order facts in fixed-width lifecycle columns", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   transport.write({
     timestamp: "2026-11-15T19:14:52",
@@ -628,8 +658,8 @@ test("aligns strategy, status, order ID and order facts in fixed-width lifecycle
 
   const lines = written.trimEnd().split("\n")
   assert.equal(lines.length, 3, "A partial fill must add one indented detail line.")
-  assert.match(lines[0], /^19:14:52 🟡GC/, "Coin Grabber must retain its yellow GC identity.")
-  assert.match(lines[1], /^19:14:53 🔴RS/, "Recovery Seller must retain its red RS identity.")
+  assert.match(lines[0], /^19:14:52 🪙 CG/, "Coin Grabber must retain its coin marker and spaced CG identity.")
+  assert.match(lines[1], /^19:14:53 🔴 RS/, "Recovery Seller must retain its red marker and spaced RS identity.")
   const firstColumns = ["SUBMITTED", "#1341114", "ADAUSDT", "BUY", "50.00", "@", "0.15260"]
     .map((value) => lines[0].indexOf(value))
   const secondColumns = ["PARTIAL FILL", "#1341115", "ADAUSDT", "SELL", "49.90", "@", "0.15410"]
@@ -640,5 +670,69 @@ test("aligns strategy, status, order ID and order facts in fixed-width lifecycle
     "Status, order ID, symbol, side, quantity and price must begin in identical terminal columns.",
   )
   assert.match(lines[2], /^\s+Executed: 20 \| Remaining: 29\.90$/, "Partial-fill details must be indented below their order.")
+  output.destroy()
+})
+
+
+test("marks strategy-specific standard console records with canonical strategy markers", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+  transport.write({
+    timestamp: "2026-11-15T19:14:52",
+    level: "info",
+    method: "info",
+    data: {
+      message: "Market price evaluated",
+      strategyId: "CG_coinGrabber",
+    },
+  })
+  transport.write({
+    timestamp: "2026-11-15T19:14:53",
+    level: "info",
+    method: "info",
+    data: {
+      message: "Recovery decision evaluated",
+      strategyId: "RS_recoverySeller",
+    },
+  })
+  assert.match(written, /🪙 CG Market price evaluated/)
+  assert.match(written, /🔴 RS Recovery decision evaluated/)
+  output.destroy()
+})
+
+test("does not suppress identical messages from different strategies", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+  for (const [timestamp, strategyId] of [
+    ["2026-11-15T19:14:52", "CG_coinGrabber"],
+    ["2026-11-15T19:14:53", "RS_recoverySeller"],
+  ]) {
+    transport.write({
+      timestamp,
+      level: "info",
+      method: "info",
+      data: {
+        message: "Strategy transition evaluated",
+        strategyId,
+      },
+    })
+  }
+  assert.equal((written.match(/Strategy transition evaluated/g) ?? []).length, 2)
+  assert.match(written, /🪙 CG Strategy transition evaluated/)
+  assert.match(written, /🔴 RS Strategy transition evaluated/)
   output.destroy()
 })

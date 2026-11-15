@@ -1,5 +1,6 @@
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { createPositionId } from "../domain/portfolio/position.js"
+import { createStrategyLogger } from "../application/logging/create-strategy-logger.js"
 import { CanonicalOrder, Fill, Quantity } from "@coinzilla/entities"
 import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { isCanonicalNonNegativeSafeInteger } from "../domain/time/is-canonical-non-negative-safe-integer.js"
@@ -1420,7 +1421,12 @@ export function makeConservativeTradingEngine({
     onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused,
     onUnownedExternalOrderObserved,
-    logger,
+    logger: logger
+      ? createStrategyLogger({
+        logger,
+        strategyId: StrategyId.COIN_GRABBER,
+      })
+      : logger,
     initialState,
   }
   validateConservativeTradingEngineOptions(dependencies)

@@ -5,7 +5,7 @@ import { finished } from "node:stream/promises"
 import { mkdir } from "node:fs/promises"
 import path from "node:path"
 import { defaultLogger } from "@coinzilla/utils"
-import { StrategyId } from "../../domain/strategies/strategy-ids.js"
+import { strategyLogMarkers, SYSTEM_LOG_MARKER } from "../../application/logging/strategy-log-markers.js"
 import { createHarvesterLogSessionPaths } from "./create-harvester-log-session-paths.js"
 import { createConsoleRecordPresentation } from "./create-console-record-presentation.js"
 
@@ -32,19 +32,14 @@ function formatConsoleLine({ line, level, method = level, color }) {
 }
 
 
-const STRATEGY_COLUMN_WIDTH = 5
+const STRATEGY_COLUMN_WIDTH = 6
 const STATUS_COLUMN_WIDTH = 23
 const ORDER_ID_COLUMN_WIDTH = 22
 const SYMBOL_COLUMN_WIDTH = 20
 const SIDE_COLUMN_WIDTH = 5
 const QUANTITY_COLUMN_WIDTH = 18
 const PRICE_COLUMN_WIDTH = 18
-const ORDER_DETAIL_INDENT = 15
-
-const STRATEGY_LABELS = Object.freeze({
-  [StrategyId.COIN_GRABBER]: "🟡GC",
-  [StrategyId.RECOVERY_SELLER]: "🔴RS",
-})
+const ORDER_DETAIL_INDENT = 16
 
 const ORDER_STATUS_PRESENTATION = Object.freeze({
   SUBMITTED: "SUBMITTED",
@@ -71,7 +66,7 @@ function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
     second: "2-digit",
     hour12: false,
   })
-  const strategy = (STRATEGY_LABELS[data.strategyId] ?? "⚪SYS").padEnd(STRATEGY_COLUMN_WIDTH)
+  const strategy = (strategyLogMarkers[data.strategyId] ?? SYSTEM_LOG_MARKER).padEnd(STRATEGY_COLUMN_WIDTH)
   const status = String(
     ORDER_STATUS_PRESENTATION[data.lifecycleStatus] ?? data.lifecycleStatus ?? "INFO",
   ).padEnd(STATUS_COLUMN_WIDTH)
@@ -338,13 +333,14 @@ function writeOrderLifecycleRecord({ output, color, timestamp, level, method, da
   }
 }
 
-function writeStandardConsoleRecord({ output, color, timestamp, level, method, summary } = {}) {
+function writeStandardConsoleRecord({ output, color, timestamp, level, method, summary, strategyId } = {}) {
   const time = new Date(timestamp).toLocaleTimeString()
   const normalizedMethod = String(method ?? level).toLowerCase()
   const levelLabel = normalizedMethod === "info" || normalizedMethod === "system"
     ? ""
     : normalizedMethod.toUpperCase() + " "
-  const plainPrefix = `${time} ${levelLabel}${summary.message}`
+  const strategyMarker = strategyLogMarkers[strategyId] ?? SYSTEM_LOG_MARKER
+  const plainPrefix = `${time} ${strategyMarker} ${levelLabel}${summary.message}`
   const serializedDetails = Object.keys(summary.details ?? {}).length > 0
     ? ` ${JSON.stringify(summary.details)}`
     : ""
@@ -378,12 +374,13 @@ export function createHarvesterConsoleTransport({
 } = {}) {
   let previousFingerprint
   let previousTimestamp
+  let previousMarker = ""
   let suppressedCount = 0
 
   const flushSuppressed = () => {
     if (suppressedCount === 0) return
     const time = new Date(previousTimestamp).toLocaleTimeString()
-    const line = `${time} Previous identical log entry repeated ${suppressedCount} additional time(s)`
+    const line = `${time} ${previousMarker}Previous identical log entry repeated ${suppressedCount} additional time(s)`
     output.write(formatConsoleLine({
       line,
       level: "info",
@@ -407,14 +404,16 @@ export function createHarvesterConsoleTransport({
         method,
         data,
       })
-      if (fingerprint === previousFingerprint) {
+      const strategyFingerprint = `${fingerprint}:${data?.strategyId ?? "SYSTEM"}`
+      if (strategyFingerprint === previousFingerprint) {
         suppressedCount += 1
         return
       }
 
       flushSuppressed()
-      previousFingerprint = fingerprint
+      previousFingerprint = strategyFingerprint
       previousTimestamp = timestamp
+      previousMarker = strategyLogMarkers[data?.strategyId] ? `${strategyLogMarkers[data.strategyId]} ` : ""
 
       if (shutdownPresentation) {
         output.write(`${formatConsoleLine({
@@ -443,6 +442,7 @@ export function createHarvesterConsoleTransport({
         level,
         method,
         summary,
+        strategyId: data?.strategyId,
       })
     },
     close: flushSuppressed,
