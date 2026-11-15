@@ -156,6 +156,27 @@ function formatOrderLifecycleDetailLine({ detail } = {}) {
  * @param {{ logger?: object, directory?: string, output?: NodeJS.WritableStream, processIdentity?: { startedAt: string, runtimeSessionId: string } }} input
  * @returns {Promise<{ directory: string, cumulativeDirectory: string, sessionPaths: object, close: () => Promise<void> }>}
  */
+async function closeHarvesterLogStreams({ streams } = {}) {
+  const results = await Promise.allSettled(streams.map(async (stream) => {
+    if (stream.closed) {
+      return
+    }
+    if (stream.destroyed) {
+      await once(stream, "close")
+      return
+    }
+    const completion = finished(stream)
+    stream.end()
+    await completion
+  }))
+  const errors = results
+    .filter((result) => result.status === "rejected")
+    .map((result) => result.reason)
+  if (errors.length > 0) {
+    throw new AggregateError(errors, "Failed to flush and close Harvester log streams")
+  }
+}
+
 async function createHarvesterFileTransport({
   cumulativeDirectory,
   name,
@@ -220,26 +241,7 @@ async function createHarvesterFileTransport({
         })
       })))
     },
-    async close() {
-      const results = await Promise.allSettled(streams.map(async (stream) => {
-        if (stream.closed) {
-          return
-        }
-        if (stream.destroyed) {
-          await once(stream, "close")
-          return
-        }
-        const completion = finished(stream)
-        stream.end()
-        await completion
-      }))
-      const errors = results
-        .filter((result) => result.status === "rejected")
-        .map((result) => result.reason)
-      if (errors.length > 0) {
-        throw new AggregateError(errors, "Failed to flush and close Harvester log streams")
-      }
-    },
+    close: () => closeHarvesterLogStreams({ streams }),
   }
 }
 
