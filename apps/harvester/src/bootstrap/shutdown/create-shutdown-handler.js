@@ -174,7 +174,10 @@ function summarizeShutdownError({ error, depth = 0 } = {}) {
       : {}),
   }
   if (depth < SHUTDOWN_ERROR_CAUSE_DEPTH_LIMIT && error?.cause !== undefined) {
-    summary.cause = summarizeShutdownError({ error: error.cause, depth: depth + 1 })
+    summary.cause = summarizeShutdownError({
+      error: error.cause,
+      depth: depth + 1,
+    })
   }
   return summary
 }
