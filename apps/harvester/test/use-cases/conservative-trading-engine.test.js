@@ -458,16 +458,15 @@ test("ignores manual external open orders by default", async () => {
 
 })
 
-test("keeps unresolved prior-process Harvester orders blocked under the default policy", async () => {
-  const fixture = createFixture({ hasUnresolvedHarvesterOpenOrdersForSymbol: () => true })
+test("allows a Harvester-prefixed startup order under the default external-order policy", async () => {
+  const fixture = createFixture({ hasUnownedOpenOrdersForSymbol: () => true })
   const result = await fixture.engine.processMarketPrice({
     symbol: "ZROUSDT",
     priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
   })
 
-  assert.equal(result.data.skipped, true, "An unresolved prior-process Harvester order must defer strategy evaluation.")
-  assert.equal(result.data.reason, "UNOWNED_OPEN_ORDER", "The unresolved Harvester order must retain the safe deferral reason.")
-  assert.equal(fixture.submittedIntents.length, 0, "A prior-process Harvester order must not be mistaken for a manual order.")
+  assert.equal(result.ok, true, "A prior-process order must not make a valid market-price event fail.")
+  assert.notEqual(result.data?.reason, "UNOWNED_OPEN_ORDER", "The default IGNORE policy must not defer the pair because an unmatched order uses the reserved Harvester prefix.")
 })
 
 test("ignores unmatched manual execution reports without mutating Harvester accounting", async () => {

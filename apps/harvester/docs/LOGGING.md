@@ -173,7 +173,50 @@ Examples include:
 Do not use SYSTEM for every incoming event, market tick, strategy evaluation,
 or repeated connection-status heartbeat. Those belong at DEBUG or INFO
 according to whether they represent an operator-relevant trading event.
-SYSTEM entries are cyan without a redundant `SYSTEM` text label; the `⚪ SYS` ownership marker remains visible so system diagnostics are distinguishable from strategy-owned records.
+SYSTEM entries are cyan; unowned system diagnostics retain the `⚪ SYS` ownership marker.
+
+## Shutdown phase terminal records
+
+Shutdown work phases use one compact, 24-hour local-time terminal line:
+
+```text
+21:25:57 shutdown phase MARKET_INTAKE_STOP STARTED
+21:25:57 shutdown phase MARKET_INTAKE_STOP COMPLETED
+21:25:57 shutdown phase BROKER_DISCONNECT FAILED
+```
+
+`STARTED` means the phase operation began, `COMPLETED` means it returned under
+its existing success criteria, and `FAILED` means its existing failure
+criteria were met. These labels describe the current lifecycle outcome; they
+do not change shutdown ordering or failure semantics.
+
+The shared console transport owns terminal rendering and deduplication; lifecycle owners continue emitting structured phase records rather than formatting terminal text themselves.
+
+The phase formatter normalizes and validates the phase/status tokens and timestamp
+before producing a line. Malformed records fall back to the ordinary compact-
+summary path. Formatting does not mutate the structured input.
+
+The instantaneous `SHUTDOWN_REQUESTED` and `STOP_STATE_ESTABLISHED` milestones
+are printed as `shutdown requested` and `shutdown state established`, not as
+work phases. All other valid phase transitions retain their actual phase
+identifier and status. The terminal phase line contains no JSON details,
+correlation IDs, duration, or failure prose.
+
+Consecutive duplicate suppression remains enabled. Its fingerprint includes
+the normalized phase/status pair alongside the existing log level and method,
+so different phases or statuses are always visible. A genuinely identical consecutive phase/status line may be
+suppressed and reported with the existing repeat-count message.
+
+The phase/status pair is part of the pure console-record fingerprint; timestamps
+and omitted diagnostic fields do not prevent genuinely identical terminal
+summaries from being deduplicated. The pure console-record presentation helper supplies the console summary and
+deduplication identity once per record, while retaining the existing order-
+lifecycle summary, standard console detail allowlist, and existing detail truncation rules.
+
+The concise terminal line is only the operator-facing summary. The original
+structured DEBUG/TRACE entry remains unchanged in both cumulative and
+per-session files, including `shutdownPhase`, `phaseStatus`,
+`shutdownCorrelationId`, elapsed/duration timing, and safe failure details.
 
 ## Runtime commands
 
@@ -240,7 +283,7 @@ or lifecycle status. System and application diagnostics without a strategy
 owner use `⚪ SYS`. Strategy identity is never inferred from a symbol, side,
 order ID, or client-order-ID prefix.
 
-The Conservative engine and the CG Portfolio/RecoveryLedger workflow receive
+The Conservative engine and CG Portfolio/RecoveryLedger workflow receive
 strategy-scoped adapters around the shared `@coinzilla/utils` logger. They add
 the immutable CG strategy ID to every structured diagnostic emitted by those
 strategy-owned workflows, including market-price processing failures, without
@@ -266,13 +309,13 @@ TIME     STRATEGY STATUS                  ORDER ID               SYMBOL         
 
 Order events are reconciled against the registered broker order ID when available, with client order ID as the fallback. Strategy identity is derived only from immutable OrderRegistry ownership:
 🪙 CG for CG_coinGrabber and 🔴 RS for RS_recoverySeller. It never changes with
-order status. ⚪SYS is reserved for system diagnostics that are not strategy
+order status. ⚪ SYS is reserved for system diagnostics that are not strategy
 lifecycle transitions. Supporting the RS label does not enable RS runtime
 execution.
 
 Lifecycle status is plain text in its own column; it never changes or
 replaces the strategy identity icon. The strategy marker remains 🪙 CG or 🔴 RS
-for every transition, while non-strategy diagnostics use ⚪SYS. The fixed
+for every transition, while non-strategy diagnostics use ⚪ SYS. The fixed
 columns are time, strategy, status, broker order ID, symbol,
 side, original quantity, and limit price. Text columns are left-aligned;
 quantity and price are right-aligned. The terminal uses a 24-hour local time
@@ -288,7 +331,7 @@ reconciliation. CANCEL REQUESTED is logged after the durable cancellation
 intent barrier and before the broker RPC. CANCELLED is logged only when the
 canonical cancellation transition has been applied. A fill that wins a
 cancellation race remains FILLED; a later stale cancellation report is shown
-as an informational ⚪SYS event (STALE CANCEL IGNORED), never as a cancellation.
+as an informational ⚪ SYS event (STALE CANCEL IGNORED), never as a cancellation.
 Stale and duplicate order reports are discarded before terminal fill-history
 reconciliation; a duplicate FILLED report is still allowed to complete any
 previously unprocessed canonical fill transition.

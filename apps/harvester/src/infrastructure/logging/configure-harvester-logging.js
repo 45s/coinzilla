@@ -7,35 +7,12 @@ import path from "node:path"
 import { defaultLogger } from "@coinzilla/utils"
 import { strategyLogMarkers, SYSTEM_LOG_MARKER } from "../../application/logging/strategy-log-markers.js"
 import { createHarvesterLogSessionPaths } from "./create-harvester-log-session-paths.js"
+import { createConsoleRecordPresentation } from "./create-console-record-presentation.js"
 
 const CONSOLE_TRANSPORT_NAME = "console"
 const DEBUG_TRANSPORT_NAME = "harvester-debug-file"
 const TRACE_TRANSPORT_NAME = "harvester-trace-file"
-const CONSOLE_DETAIL_KEYS = Object.freeze([
-  "errorCode",
-  "symbol",
-  "inventory",
-  "accounting",
-  "sourceFilterTypes",
-  "errorName",
-  "errorMessage",
-  "orderCount",
-  "readiness",
-  "symbol",
-  "symbols",
-  "enabledSymbols",
-  "action",
-  "side",
-  "price",
-  "quantity",
-  "phase",
-  "auditStatus",
-  "balanceCount",
-  "assetCount",
-  "strategyMode",
-  "broker",
-  "reason",
-])
+
 const MAX_CONSOLE_LINE_LENGTH = 200
 const MAX_PORTFOLIO_STATS_LINE_LENGTH = 360
 const LEVEL_COLORS = Object.freeze({
@@ -52,37 +29,6 @@ const ANSI_RESET = "\u001b[0m"
 function formatConsoleLine({ line, level, method = level, color }) {
   const code = LEVEL_COLORS[method] ?? LEVEL_COLORS[level]
   return color && code ? code + line + ANSI_RESET : line
-}
-
-function summarizeConsoleData({ data } = {}) {
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
-    return { message: String(data ?? ""), strategyId: undefined }
-  }
-
-  const message = String(data.message ?? "Harvester event")
-    .replace(/[\r\n]+/g, " ")
-  const details = Object.fromEntries(
-    CONSOLE_DETAIL_KEYS
-      .filter((key) => data[key] !== undefined && data[key] !== null)
-      .map((key) => {
-        const value = data[key]
-        if (typeof value === "string") {
-          const maxLength = key === "errorMessage" ? 72 : 100
-          if (value.length > maxLength) {
-            return [key, value.slice(0, maxLength - 3) + "..."]
-          }
-        }
-        if (Array.isArray(value)) {
-          return [key, value.slice(0, 3)]
-        }
-        return [key, value]
-      }),
-  )
-  return {
-    message,
-    details,
-    strategyId: data.strategyId,
-  }
 }
 
 
@@ -387,14 +333,13 @@ function writeOrderLifecycleRecord({ output, color, timestamp, level, method, da
   }
 }
 
-function writeStandardConsoleRecord({ output, color, timestamp, level, method, data } = {}) {
-  const summary = summarizeConsoleData({ data })
+function writeStandardConsoleRecord({ output, color, timestamp, level, method, summary, strategyId } = {}) {
   const time = new Date(timestamp).toLocaleTimeString()
   const normalizedMethod = String(method ?? level).toLowerCase()
   const levelLabel = normalizedMethod === "info" || normalizedMethod === "system"
     ? ""
     : normalizedMethod.toUpperCase() + " "
-  const strategyMarker = strategyLogMarkers[summary.strategyId] ?? SYSTEM_LOG_MARKER
+  const strategyMarker = strategyLogMarkers[strategyId] ?? SYSTEM_LOG_MARKER
   const plainPrefix = `${time} ${strategyMarker} ${levelLabel}${summary.message}`
   const serializedDetails = Object.keys(summary.details ?? {}).length > 0
     ? ` ${JSON.stringify(summary.details)}`
@@ -448,28 +393,37 @@ export function createHarvesterConsoleTransport({
     name: CONSOLE_TRANSPORT_NAME,
     level: "info",
     write({ timestamp, level, method = level, data }) {
-      const isOrderLifecycle = data?.orderLifecycle === true
-      const summary = isOrderLifecycle
-        ? {
-          message: "Order lifecycle",
-          details: data,
-        }
-        : summarizeConsoleData({ data })
-      const fingerprint = JSON.stringify({
+      const {
+        isOrderLifecycle,
+        shutdownPresentation,
+        summary,
+        fingerprint,
+      } = createConsoleRecordPresentation({
+        timestamp,
         level,
         method,
-        summary,
+        data,
       })
-      if (fingerprint === previousFingerprint) {
+      const strategyFingerprint = `${fingerprint}:${data?.strategyId ?? "SYSTEM"}`
+      if (strategyFingerprint === previousFingerprint) {
         suppressedCount += 1
         return
       }
 
       flushSuppressed()
-      previousFingerprint = fingerprint
+      previousFingerprint = strategyFingerprint
       previousTimestamp = timestamp
       previousMarker = strategyLogMarkers[data?.strategyId] ?? SYSTEM_LOG_MARKER
 
+      if (shutdownPresentation) {
+        output.write(`${formatConsoleLine({
+          line: `${previousMarker} ${shutdownPresentation.line}`,
+          level,
+          method,
+          color,
+        })}\n`)
+        return
+      }
       if (isOrderLifecycle) {
         writeOrderLifecycleRecord({
           output,
@@ -487,7 +441,8 @@ export function createHarvesterConsoleTransport({
         timestamp,
         level,
         method,
-        data,
+        summary,
+        strategyId: data?.strategyId,
       })
     },
     close: flushSuppressed,

@@ -181,7 +181,6 @@ export function createHarvesterTradingEngine({
     completeRecoveryCycle,
     canTrade: () => userDataState.ready,
     hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
-    hasUnresolvedHarvesterOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnresolvedHarvesterOpenOrdersForSymbol,
     onUnownedExternalOrderObserved: ({ order } = {}) => {
       const manager = accountSnapshotManagerRef.current
       if (typeof manager?.observeExternalOrder !== "function") {

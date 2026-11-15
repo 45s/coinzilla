@@ -1,5 +1,6 @@
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { createPositionId } from "../domain/portfolio/position.js"
+import { createStrategyLogger } from "../application/logging/create-strategy-logger.js"
 import { CanonicalOrder, Fill, Quantity } from "@coinzilla/entities"
 import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { isCanonicalNonNegativeSafeInteger } from "../domain/time/is-canonical-non-negative-safe-integer.js"
@@ -30,7 +31,6 @@ import {
 } from "../application/events/lifecycle-event-dtos.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import { logOrderLifecycle } from "../application/logging/order-lifecycle-log.js"
-import { createStrategyLogger } from "../application/logging/create-strategy-logger.js"
 import { validateCancellationEligibility } from "../domain/orders/validate-cancellation-eligibility.js"
 import { allocateOrderCommitments } from "../domain/orders/allocate-order-commitments.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
@@ -952,7 +952,6 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
     getMarketMetadata,
     initialState,
     getVolatilityData,
-    hasUnresolvedHarvesterOpenOrdersForSymbol,
     hasUnownedOpenOrdersForSymbol,
   } = dependencies
   const { settings, pairs } = appConfig.strategies[StrategyId.COIN_GRABBER]
@@ -960,9 +959,8 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
   const isVolatilityProtectionEnabledForSymbol = (symbol) =>
     volatilityProtectionEnabled && pairs[symbol]?.enableVolatilityProtection !== false
   const hasBlockingOpenOrdersForSymbol = ({ symbol } = {}) =>
-    hasUnresolvedHarvesterOpenOrdersForSymbol({ symbol }) ||
-    (pairs[symbol]?.externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK &&
-      hasUnownedOpenOrdersForSymbol({ symbol }))
+    pairs[symbol]?.externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK &&
+    hasUnownedOpenOrdersForSymbol({ symbol })
   const initialRegistry = validateInitialEngineState({ initialState, pairs })
   const marketMetadataCache = createMarketMetadataCache({ getMarketMetadata })
   const { refreshedMarketMetadata, getCurrentMarketMetadata } = marketMetadataCache
@@ -1387,7 +1385,6 @@ export function makeConservativeTradingEngine({
   isStopping,
   eventPublisher,
   hasUnownedOpenOrdersForSymbol = () => false,
-  hasUnresolvedHarvesterOpenOrdersForSymbol = () => false,
   isMarketPriceFresh,
   isMarketBookFresh = () => false,
   getVolatilityData,
@@ -1415,7 +1412,6 @@ export function makeConservativeTradingEngine({
     isStopping,
     eventPublisher,
     hasUnownedOpenOrdersForSymbol,
-    hasUnresolvedHarvesterOpenOrdersForSymbol,
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData,

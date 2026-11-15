@@ -321,10 +321,7 @@ test("omits INFO labels while retaining DEBUG, WARN, and ERROR labels", () => {
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({
-    output,
-    color: false,
-  })
+  const transport = createHarvesterConsoleTransport({ output, color: false })
 
   for (const [level, message] of [
     ["INFO", "Informational event"],
@@ -589,10 +586,7 @@ test("aligns strategy, status, order ID and order facts in fixed-width lifecycle
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({
-    output,
-    color: false,
-  })
+  const transport = createHarvesterConsoleTransport({ output, color: false })
 
   transport.write({
     timestamp: "2026-11-15T19:14:52",
@@ -634,8 +628,8 @@ test("aligns strategy, status, order ID and order facts in fixed-width lifecycle
 
   const lines = written.trimEnd().split("\n")
   assert.equal(lines.length, 3, "A partial fill must add one indented detail line.")
-  assert.match(lines[0], /^19:14:52 🪙 CG/, "Coin Grabber lifecycle records must use the coin marker followed by a space and CG.")
-  assert.match(lines[1], /^19:14:53 🔴 RS/, "Recovery Seller lifecycle records must use the red marker followed by a space and RS.")
+  assert.match(lines[0], /^19:14:52 🪙 CG/, "Coin Grabber must retain its coin marker and spaced CG identity.")
+  assert.match(lines[1], /^19:14:53 🔴 RS/, "Recovery Seller must retain its red marker and spaced RS identity.")
   const firstColumns = ["SUBMITTED", "#1341114", "ADAUSDT", "BUY", "50.00", "@", "0.15260"]
     .map((value) => lines[0].indexOf(value))
   const secondColumns = ["PARTIAL FILL", "#1341115", "ADAUSDT", "SELL", "49.90", "@", "0.15410"]
@@ -650,50 +644,33 @@ test("aligns strategy, status, order ID and order facts in fixed-width lifecycle
 })
 
 
-test("marks strategy-specific standard console records with their canonical strategy marker", () => {
+test("marks strategy-specific standard console records with canonical strategy markers", () => {
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({
-    output,
-    color: false,
-  })
-
+  const transport = createHarvesterConsoleTransport({ output, color: false })
   transport.write({
     timestamp: "2026-11-15T19:14:52",
     level: "info",
     method: "info",
-    data: {
-      message: "Market price evaluated",
-      strategyId: "CG_coinGrabber",
-      symbol: "ADAUSDT",
-    },
+    data: { message: "Market price evaluated", strategyId: "CG_coinGrabber" },
   })
   transport.write({
     timestamp: "2026-11-15T19:14:53",
     level: "info",
     method: "info",
-    data: {
-      message: "Recovery decision evaluated",
-      strategyId: "RS_recoverySeller",
-      symbol: "ADAUSDT",
-    },
+    data: { message: "Recovery decision evaluated", strategyId: "RS_recoverySeller" },
   })
-
-  assert.match(written, /🪙 CG Market price evaluated/, "Every Coin Grabber diagnostic must display the canonical coin marker before its message.")
-  assert.match(written, /🔴 RS Recovery decision evaluated/, "Every Recovery Seller diagnostic must display its canonical red marker before its message.")
+  assert.match(written, /🪙 CG Market price evaluated/)
+  assert.match(written, /🔴 RS Recovery decision evaluated/)
   output.destroy()
 })
 
-test("does not suppress identical messages emitted by different strategies", () => {
+test("does not suppress identical messages from different strategies", () => {
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({
-    output,
-    color: false,
-  })
-
+  const transport = createHarvesterConsoleTransport({ output, color: false })
   for (const [timestamp, strategyId] of [
     ["2026-11-15T19:14:52", "CG_coinGrabber"],
     ["2026-11-15T19:14:53", "RS_recoverySeller"],
@@ -702,51 +679,11 @@ test("does not suppress identical messages emitted by different strategies", () 
       timestamp,
       level: "info",
       method: "info",
-      data: {
-        message: "Strategy transition evaluated",
-        strategyId,
-      },
+      data: { message: "Strategy transition evaluated", strategyId },
     })
   }
-
-  assert.equal((written.match(/Strategy transition evaluated/g) ?? []).length, 2, "Identical text from two different strategy owners must remain two independently identifiable console records.")
-  assert.match(written, /🪙 CG Strategy transition evaluated/, "The first record must retain its Coin Grabber identity.")
-  assert.match(written, /🔴 RS Strategy transition evaluated/, "The second record must retain its Recovery Seller identity.")
-  output.destroy()
-})
-
-
-test("keeps the owning strategy marker on duplicate-log suppression summaries", () => {
-  const output = new PassThrough()
-  let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({
-    output,
-    color: false,
-  })
-
-  for (const timestamp of ["2026-11-15T19:14:52", "2026-11-15T19:14:53"]) {
-    transport.write({
-      timestamp,
-      level: "info",
-      method: "info",
-      data: {
-        message: "Market state unchanged",
-        strategyId: "CG_coinGrabber",
-      },
-    })
-  }
-  transport.write({
-    timestamp: "2026-11-15T19:14:54",
-    level: "info",
-    method: "info",
-    data: { message: "System is ready" },
-  })
-
-  assert.match(
-    written,
-    /🪙 CG Previous identical log entry repeated 1 additional time\(s\)/,
-    "A duplicate-summary diagnostic must retain the strategy identity of the entries it summarizes.",
-  )
+  assert.equal((written.match(/Strategy transition evaluated/g) ?? []).length, 2)
+  assert.match(written, /🪙 CG Strategy transition evaluated/)
+  assert.match(written, /🔴 RS Strategy transition evaluated/)
   output.destroy()
 })

@@ -708,12 +708,7 @@ export async function startHarvester(options = {}) {
   resources.userDataState.startupComplete = true
   startPendingUserDataRecovery({ userDataState: resources.userDataState, startUserDataRecovery: recoveryRuntime.startUserDataRecovery })
   const stop = createHarvesterRuntimeStop({ startup, resources, accountSnapshots })
-  return createHarvesterRuntimeResult({
-    startup,
-    portfolio,
-    resources,
-    stop,
-  })
+  return createHarvesterRuntimeResult({ startup, portfolio, resources, stop })
 }
 
 function resolveStrategyMarketDataPairs({
