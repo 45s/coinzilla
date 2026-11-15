@@ -28,8 +28,12 @@ test("rejects malformed Bitunix market metadata rather than inventing assets", (
   for (const symbolInfo of [
     null,
     {},
-    { symbol: "BTCUSDT", base: "BTC" },
-    { symbol: "BTCUSDT", base: "BTC", quote: "USDT", isOpen: "0" },
+    { symbol: "BTCUSDT",
+      base: "BTC" },
+    { symbol: "BTCUSDT",
+      base: "BTC",
+      quote: "USDT",
+      isOpen: "0" },
   ]) {
     assert.throws(() => createCanonicalMarket({ symbolInfo }))
   }
