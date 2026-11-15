@@ -93,7 +93,7 @@ The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The curren
 
 | Broker method | Bitunix operation | Constraint |
 |---|---|---|
-| `getBalances()` | `GET /api/spot/v1/user/account` | No source update timestamp. |
+| `getBalances()` | `GET /api/spot/v1/user/account` | Raw JSON balance numeric tokens are preserved as decimal strings before canonical entity construction; no source update timestamp. |
 | `getExchangeMarkets()` | `GET /api/spot/v1/common/coin_pair/list` | Canonical Spot market catalog. |
 | `getSymbolFilters({ symbol })` | Spot coin-pair catalog | Returns Bitunix metadata, not Binance filter schema. |
 | `getOpenOrders({ symbol })` | `POST /api/spot/v1/order/pending/list` | Symbol required. |
