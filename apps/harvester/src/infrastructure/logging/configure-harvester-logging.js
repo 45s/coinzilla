@@ -61,7 +61,7 @@ function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
   const status = String(
     ORDER_STATUS_PRESENTATION[data.lifecycleStatus] ?? data.lifecycleStatus ?? "INFO",
   )
-  const orderId = String(data.brokerOrderId ? "#" + data.brokerOrderId : "#pending")
+  const orderId = data.brokerOrderId ? `#${data.brokerOrderId}` : "#pending"
   const symbol = String(data.symbol ?? "-")
   const side = String(data.side ?? "-")
   const quantity = String(data.quantity ?? "-")
@@ -323,6 +323,36 @@ function writeOrderLifecycleRecord({ output, color, timestamp, level, method, da
   }) + "\n")
 }
 
+function createPortfolioStatsConsoleLine({ time, strategyPrefix, details } = {}) {
+  const portfolioLine = [
+    time,
+    `${strategyPrefix}PORTFOLIO ${String(details.symbol ?? "-")}`,
+    "| Inventory:",
+    String(details.inventory?.totalBaseQuantity ?? "-"),
+    "| Spent:",
+    String(details.accounting?.spent ?? "-"),
+    "| Net:",
+    String(details.accounting?.quoteNetCashFlow ?? "-"),
+  ].join(" ")
+  return portfolioLine.length > MAX_CONSOLE_LINE_LENGTH
+    ? `${portfolioLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3)}...`
+    : portfolioLine
+}
+
+function formatStartupConsoleMessage(message) {
+  const subscriptionMatch = /^Connected; subscribed to (\\d+) enabled market\\(s\\)\\. (.+)$/.exec(message)
+  if (subscriptionMatch) {
+    return `Binance market-data stream connected; active market subscriptions: ${subscriptionMatch[1]}. ${subscriptionMatch[2]}`
+  }
+
+  const modeMatch = /^Connected; Binance trading mode is (.+)\\.$/.exec(message)
+  if (modeMatch) {
+    return `Binance connection established; Binance trading mode is ${modeMatch[1]}.`
+  }
+
+  return message
+}
+
 function writeStandardConsoleRecord({ output, color, timestamp, level, method, summary, strategyId } = {}) {
   const time = new Date(timestamp).toLocaleTimeString("en-GB", {
     hour: "2-digit",
@@ -333,27 +363,19 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
   const normalizedMethod = String(method ?? level).toLowerCase()
   const levelLabel = normalizedMethod === "info" || normalizedMethod === "system"
     ? ""
-    : normalizedMethod.toUpperCase() + " "
+    : `${normalizedMethod.toUpperCase()} `
   const strategyMarker = strategyLogMarkers[strategyId]
-  const strategyPrefix = strategyMarker ? strategyMarker + " " : ""
+  const strategyPrefix = strategyMarker ? `${strategyMarker} ` : ""
+  const summaryMessage = formatStartupConsoleMessage(summary.message)
 
-  if (summary.message === "Portfolio Stats") {
-    const details = summary.details ?? {}
-    const portfolioLine = [
+  if (summaryMessage === "Portfolio Stats") {
+    const line = createPortfolioStatsConsoleLine({
       time,
-      strategyPrefix + "PORTFOLIO " + String(details.symbol ?? "-"),
-      "| Inventory:",
-      String(details.inventory?.totalBaseQuantity ?? "-"),
-      "| Spent:",
-      String(details.accounting?.spent ?? "-"),
-      "| Net:",
-      String(details.accounting?.quoteNetCashFlow ?? "-"),
-    ].join(" ")
-    const boundedPortfolioLine = portfolioLine.length > MAX_CONSOLE_LINE_LENGTH
-      ? portfolioLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3) + "..."
-      : portfolioLine
+      strategyPrefix,
+      details: summary.details ?? {},
+    })
     output.write(formatConsoleLine({
-      line: boundedPortfolioLine,
+      line,
       level,
       method,
       color,
@@ -361,7 +383,7 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
     return
   }
 
-  const plainPrefix = `${time} ${strategyPrefix}${levelLabel}${summary.message}`
+  const plainPrefix = `${time} ${strategyPrefix}${levelLabel}${summaryMessage}`
   const serializedDetails = Object.keys(summary.details ?? {}).length > 0
     ? ` ${JSON.stringify(summary.details)}`
     : ""
@@ -372,7 +394,7 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
       ? `${serializedDetails.slice(0, availableDetailsLength - 3)}...`
       : ""
   }
-  const plainLine = plainPrefix + suffix
+  const plainLine = `${plainPrefix}${suffix}`
   const boundedLine = plainLine.length > MAX_CONSOLE_LINE_LENGTH
     ? `${plainLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3)}...`
     : plainLine
@@ -435,7 +457,6 @@ export function createHarvesterConsoleTransport({
       flushSuppressed()
       previousFingerprint = strategyFingerprint
       previousTimestamp = timestamp
-
       if (shutdownPresentation) {
         output.write(`${formatConsoleLine({
           line: shutdownPresentation.line,
