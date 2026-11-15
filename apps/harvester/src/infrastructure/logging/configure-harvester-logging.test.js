@@ -699,3 +699,36 @@ test("does not suppress identical messages emitted by different strategies", () 
   assert.match(written, /🔴 RS Strategy transition evaluated/, "The second record must retain its Recovery Seller identity.")
   output.destroy()
 })
+
+
+test("keeps the owning strategy marker on duplicate-log suppression summaries", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({ output, color: false })
+
+  for (const timestamp of ["2026-11-15T19:14:52", "2026-11-15T19:14:53"]) {
+    transport.write({
+      timestamp,
+      level: "info",
+      method: "info",
+      data: {
+        message: "Market state unchanged",
+        strategyId: "CG_coinGrabber",
+      },
+    })
+  }
+  transport.write({
+    timestamp: "2026-11-15T19:14:54",
+    level: "info",
+    method: "info",
+    data: { message: "System is ready" },
+  })
+
+  assert.match(
+    written,
+    /🪙 CG Previous identical log entry repeated 1 additional time\(s\)/,
+    "A duplicate-summary diagnostic must retain the strategy identity of the entries it summarizes.",
+  )
+  output.destroy()
+})
