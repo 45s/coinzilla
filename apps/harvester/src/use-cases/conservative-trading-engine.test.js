@@ -1090,8 +1090,8 @@ test("publishes actionable decisions and order submission facts around broker I/
   assert.deepEqual(timeline, [
     "event:strategy.decision",
     "event:order.submission_requested",
-    "broker.placeOrder",
     "log:SUBMITTED",
+    "broker.placeOrder",
     "event:order.submitted",
     "log:ACCEPTED",
   ])
@@ -1121,8 +1121,9 @@ test("publishes actionable decisions and order submission facts around broker I/
   assert.equal(events[2].data.brokerOrderId, `broker-${clientOrderId}`)
   assert.deepEqual(lifecycleLogs.map(({ lifecycleStatus }) => lifecycleStatus), ["SUBMITTED", "ACCEPTED"])
   assert.equal(lifecycleLogs[0].strategyId, StrategyId.COIN_GRABBER)
-  assert.equal(lifecycleLogs[0].brokerOrderId, `broker-${clientOrderId}`)
-  assert.equal(lifecycleLogs[1].brokerOrderId, `broker-${clientOrderId}`)
+  assert.equal(lifecycleLogs[0].brokerOrderId, undefined, "SUBMITTED must describe the durable intent before broker acknowledgement assigns an exchange order ID.")
+  assert.equal(lifecycleLogs[0].clientOrderId, clientOrderId, "The pending lifecycle record must retain the client order identity.")
+  assert.equal(lifecycleLogs[1].brokerOrderId, `broker-${clientOrderId}`, "ACCEPTED must carry the exchange-assigned broker order identity.")
 })
 
 test("order intent publication failure prevents a broker order", async () => {
