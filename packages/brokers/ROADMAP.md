@@ -928,4 +928,3 @@ This work is in an open task PR targeting `develop`; do not mark it complete unt
 - See the [Bitunix capability contract](../../docs/brokers-websocket-contract.md#bitunix-spot-capability-contract) and [package README](./README.md#bitunix-spot-integration).
 
 **Remaining work before any trading use:** verify all response envelopes against actual Spot API examples, clarify the order quantity discrepancy with Bitunix, obtain a stable exchange-supported client order identity or an equivalent authoritative reconciliation mechanism, establish private order/execution event coverage or a safe polling/recovery contract, and add the missing canonical order/account lifecycle contract only when the exchange supplies the required facts.
-
