@@ -2,7 +2,6 @@ import { Fill } from "@coinzilla/entities"
 import { compareDecimal, maxDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
-import { createStrategyLogger } from "../application/logging/create-strategy-logger.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { assertTerminalRecoverySellOrder } from "../domain/orders/assert-terminal-recovery-sell-order.js"
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
@@ -30,9 +29,6 @@ import {
  * @returns {object} Portfolio, accounting, recovery completion, and market-price workflow operations.
  */
 export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, initialRecoveryLedgers, onCommissionAsset, onOperationalStateExecutionFill, onOperationalStateRecoveryCycleCompleted, onOperationalStateRecoveryCycleNotCompleted } = {}) => {
-  const strategyLogger = logger
-    ? createStrategyLogger({ logger, strategyId: StrategyId.COIN_GRABBER })
-    : logger
   if (initialPortfolio !== undefined && !(initialPortfolio instanceof Portfolio)) {
     throw new TypeError("initialPortfolio must be a Portfolio")
   }
@@ -57,7 +53,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
   const tracedEvaluateStrategy = (input = {}) => {
     const marketId = input.marketMetadata?.market?.id
     const recoveryLedger = marketId ? recoveryLedgers.get(marketId) : undefined
-    strategyLogger.debug?.({
+    logger.debug?.({
       message: "Strategy evaluation input",
       symbol: input.marketPrice?.symbol,
       marketPrice: input.marketPrice,
@@ -69,7 +65,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
       recoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
     })
     const decision = evaluateStrategy(input)
-    strategyLogger.debug?.({
+    logger.debug?.({
       message: "Strategy evaluation result",
       symbol: input.marketPrice?.symbol,
       action: decision?.action,
@@ -84,7 +80,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
 
   const updateTradingAccounting = ({ fill } = {}) => enqueueAccountingTransition(async () => {
     if (!(fill instanceof Fill)) {
-      strategyLogger.error?.({
+      logger.error?.({
         message: "accounting rejected non-canonical fill",
         fillType: fill?.constructor?.name ?? typeof fill,
       })
@@ -115,7 +111,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
       assetId: amount?.asset?.id,
     }))
 
-    strategyLogger.debug?.({
+    logger.debug?.({
       message: "Execution received",
       executionId: fill.id,
       tradeId: fill.tradeId,
@@ -158,7 +154,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
           }
         }
       } catch (error) {
-        strategyLogger.warning?.({
+        logger.warning?.({
           message: "third-asset commission baseline was not persisted; account reconciliation will fail closed",
           executionId: fill.id,
           tradeId: fill.tradeId,
@@ -199,9 +195,9 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
       }) !== 0)
       if (result.data.applied === true && portfolioStatsChanged) {
         const portfolioStats = createPortfolioStatsLogSummary({ position: nextPosition })
-        if (portfolioStats) { strategyLogger.info?.(portfolioStats) }
+        if (portfolioStats) { logger.info?.(portfolioStats) }
       }
-      strategyLogger.debug?.({
+      logger.debug?.({
         message: "Execution accounted",
         executionId: fill.id,
         tradeId: fill.tradeId,
@@ -260,7 +256,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         },
       })
     } else {
-      strategyLogger.error?.({
+      logger.error?.({
         message: "accounting execution rejected",
         executionId: fill.id,
         tradeId: fill.tradeId,
@@ -301,7 +297,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
             minProfit,
             ...(inventoryDisposition === undefined ? {} : { inventoryDisposition }),
           }
-          strategyLogger.debug?.({
+          logger.debug?.({
             message: "recovery completion evaluation input",
             marketId,
             symbol: recoveryLedger.market.symbol,
@@ -350,7 +346,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
               }
             }
 
-            strategyLogger.debug?.({
+            logger.debug?.({
               message: "Recovery cycle completed",
               marketId,
               symbol: recoveryLedger.market.symbol,
@@ -373,7 +369,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
             ].some(([previous, next]) => compareDecimal({ left: previous, right: next }) !== 0)
             if (portfolioStatsChanged) {
               const portfolioStats = createPortfolioStatsLogSummary({ position: nextPosition })
-              if (portfolioStats) { strategyLogger.info?.(portfolioStats) }
+              if (portfolioStats) { logger.info?.(portfolioStats) }
             }
           } else {
             if (onOperationalStateRecoveryCycleNotCompleted) {
@@ -393,7 +389,7 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
                 })
               }
             }
-            strategyLogger.debug?.({
+            logger.debug?.({
               message: "recovery cycle not completed",
               marketId,
               symbol: recoveryLedger.market.symbol,
@@ -404,16 +400,13 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
           }
           return toResult({ data: completion })
         } catch (error) {
-          strategyLogger.error?.({
+          logger.error?.({
             message: "recovery completion evaluation failed",
             marketId,
             errorName: error?.name,
             errorMessage: error?.message ?? String(error),
             errorStack: error?.stack,
-            unchangedPortfolio: createPortfolioLogSummary({
-              portfolio,
-              marketId,
-            }),
+            unchangedPortfolio: createPortfolioLogSummary({ portfolio, marketId }),
             unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
           })
           return toResult({ error })
