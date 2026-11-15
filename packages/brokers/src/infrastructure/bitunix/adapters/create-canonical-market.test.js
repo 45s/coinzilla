@@ -50,3 +50,16 @@ test("derives Bitunix Spot market symbols from the documented base and quote pai
 
   assert.equal(market.symbol, "BTCUSDT")
 })
+
+test("allows closed Bitunix markets when adapting historical fills", () => {
+  const market = createCanonicalMarket({
+    symbolInfo: {
+      base: "BTC",
+      quote: "USDT",
+      isOpen: "0",
+    },
+    allowClosed: true,
+  })
+
+  assert.equal(market.symbol, "BTCUSDT")
+})
