@@ -3,6 +3,7 @@ import test from "node:test"
 
 import {
   MAX_DECIMAL_SCALE,
+  DEFAULT_DECIMAL_DIVISION_SCALE,
   absoluteDecimal,
   addDecimal,
   assertDecimalString,
@@ -43,6 +44,7 @@ test("rejects values that could silently lose precision or violate parser limits
 
 test("enforces decimal scale and coefficient bounds", () => {
   assert.equal(MAX_DECIMAL_SCALE, 100)
+  assert.equal(DEFAULT_DECIMAL_DIVISION_SCALE, 36)
   assert.equal(parseDecimal({ value: "1e-100" }).scale, 100)
   assert.equal(parseDecimal({ value: "1e100" }).coefficient, 10n ** 100n)
   assert.equal(addDecimal({ left: "1e-100", right: "0" }), "0." + "0".repeat(99) + "1")

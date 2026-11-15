@@ -1,5 +1,8 @@
 const MAX_DECIMAL_DIGITS = 256
 export const MAX_DECIMAL_SCALE = 100
+
+// Shared default precision for derived decimal ratios; callers may override it.
+export const DEFAULT_DECIMAL_DIVISION_SCALE = 36
 const MAX_DECIMAL_EXPONENT = 100
 
 const ROUNDING_MODES = new Set(["toward-zero", "away-from-zero", "half-up"])

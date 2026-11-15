@@ -19,7 +19,7 @@ Implement RS as an independent strategy policy using Harvester's existing domain
 
 1. [x] Audit CG source, callers and tests; produce a function-by-function reuse map (completed as an audit only; no source code moved).
 2. [x] **RS-2a — Shared Portfolio foundation:** merged in [PR #1118](https://github.com/45s/coinzilla/pull/1118). One Portfolio now supports multiple independently owned Positions per market and multiple Positions per strategy; canonical fill ownership/deduplication, aggregate market inventory, centralized custody/reservation boundaries and CG ownership-scoped consumers are covered.
-3. [~] **RS-2b — RS-specific domain accounting:** TDD legacy opening-inventory representation, explicit-authorization provenance/lifecycle, historical basis, recovery tranches, custody, proceeds/fee allocation and independent recovery/legacy profitability gates. The explicit operator-authorization model is agreed; its interface/evidence/lifecycle details and the other blocking owner decisions must be resolved before policy implementation.
+3. [~] **RS-2b — RS-specific domain accounting:** TDD legacy opening-inventory representation, one fixed original average cost, decreasing remaining legacy quantity, recovery tranches, custody and independent recovery/legacy profitability gates. The operator-config-before-start authorization model, additive per-cycle `sellQuantity`, smaller-legacy-remainder behavior, recovery-only continuation after legacy exhaustion, Conservative-aligned BUY cadence/investment limit/third-asset fee valuation, and FITDIB deferral of advanced lifecycle features are agreed. Remaining accounting and shared-resource implementation requirements must be completed before policy integration.
 4. Implement the pure RS strategy policy.
 5. Integrate RS through the shared Trading Engine, Portfolio, broker, order, fill and reconciliation workflows.
 6. Prove the full lifecycle with deterministic offline tests and exact-head CI.
@@ -35,11 +35,12 @@ Concurrent operation is a product requirement, not an optional future optimizati
 - Each Position and order retains stable strategy ownership through canonical order/fill processing; fills are attributed to exactly one Position and its owning strategy.
 - The shared Trading Engine serializes order submission and accounting transitions.
 - Actual quote/base availability and reservations are aggregated centrally across all Positions, CG, RS and other active strategies before any new order is accepted. Multiple Positions do not multiply the underlying exchange balance.
-- When both strategies emit intents for the same scarce resource, deterministic allocation/fairness rules decide which intent can proceed. Deferred intents retain strategy identity and an actionable reason.
+- Each strategy has its own configured per-pair investment budget and used/committed investment. An intent is checked against its originating strategy/pair's remaining budget; unused budget cannot be borrowed by another strategy. No cross-strategy investment-budget priority or fairness policy is required.
+- The shared allocator serializes order submission and checks actual account-wide quote/base availability and reservations. If physical balance or reservations are insufficient, defer/reject the intent with its strategy identity and an actionable reason.
 - A pause/disable for one strategy does not implicitly pause/disable the other; existing orders remain owned and reconcilable by their originating strategy.
 - Same-market concurrent tests must prove multiple independent Positions can coexist, no shared quote is double-spent, no base quantity is reserved/sold twice, and no fill is attributed to multiple Positions or strategies.
 
-The shared Portfolio is actual-accounting truth. Strategy-owned Positions are independent accounting allocations inside that one Portfolio, not separate wallets or duplicated exchange custody. Their aggregate remains bounded by authoritative exchange balances and centrally aggregated reservations. RS-2 now implements stable Position identity, strategy ownership, portfolio-wide fill attribution/deduplication, aggregate market inventory and CG ownership-scoped Portfolio consumers; RS-specific legacy/cycle accounting remains in progress and exact priority/fairness remain RS-4 decisions.
+The shared Portfolio is actual-accounting truth. Strategy-owned Positions are independent accounting allocations inside that one Portfolio, not separate wallets or duplicated exchange custody. Their aggregate remains bounded by authoritative exchange balances and centrally aggregated reservations. Each strategy's investment budget is independent; the shared allocator protects the common physical balances. RS-2 now implements stable Position identity, strategy ownership, portfolio-wide fill attribution/deduplication, aggregate market inventory and CG ownership-scoped Portfolio consumers; RS-specific legacy/cycle accounting remains in progress.
 
 ## RS-1 — Conservative source audit and reuse map
 
@@ -98,33 +99,45 @@ Relevant tests located include `strategy.test.js`, `recovery-sell-plan.test.js`,
 
 ## RS-2 — TDD the RS domain
 
+**Current implementation blocker — safe opening inventory:** the existing Portfolio quantity buckets are included in aggregate tracked Spot inventory and are used by account snapshot reconciliation and shared balance/reservation calculations. Initializing them from configured legacy basis would invent Spot custody; keeping legacy outside them leaves the current SELL fill accounting unable to debit that inventory. A separate verified Spot allocation and explicit legacy/recovery SELL attribution boundary are required. Do not fabricate fills or seed quantities from unverified wallet snapshots. See the detailed blocker in the [RS Domain Specification](./recovery-seller-domain-specification.md#43-portfolio-integration-blocker). RS-2b remains in progress; this boundary is the next implementation task.
+
 **Deliverable:** independent deterministic RS domain model and pure calculations, tests first.
+
+**First RS-2b slice implemented in this PR:** `src/domain/strategies/recovery-seller/legacy-position.js` now creates the operator-declared logical legacy position, calculates its original average cost once (36 decimal places, rounded away from zero), caps each cycle's configured legacy slice at the remaining quantity, and records the actual legacy quantity sold while preserving the original invested amount and average cost. Focused tests cover the initial basis, fixed basis after disposal, smaller final remainder, exhausted legacy quantity, and invalid inputs.
+
+This is pure logical accounting only. It does not establish Spot custody, seed/debit Portfolio inventory, allocate canonical SELL fills between recovery and legacy, submit orders, register runtime configuration, or provide exact-once lifecycle orchestration. The application integration must call the disposal transition only after a fully reconciled successful cycle and must supply the canonical exact-once allocation boundary described in the domain specification. RS remains non-executable.
 
 Before implementing each rule, add a focused test that expresses the agreed business invariant and observe it fail. Reuse existing domain capabilities directly where their contracts fit. If a required CG function is a genuine strategy-neutral capability, characterize it, extract it in the same focused change, add direct shared tests, and prove CG behavior is unchanged. Do not perform a separate speculative extraction pass.
 
 Model only the concepts required by the approved RS contract:
 
 - Multiple independent Positions per market, each with stable identity and strategy ownership; distinct acquisition lots/tranches and strategy accounting must not be collapsed merely because the market symbol matches.
-- Explicit operator authorization is required before RS may manage pre-existing legacy inventory; wallet balances or external/manual activity never grant authorization automatically. Authorization permission, Portfolio accounting, and verified Spot availability are separate facts. The operator declares legacy quantity and original quote investment in configuration; historical exchange evidence is not required. These values establish declared historical basis, not custody or sellable balance. Configuration validation/confirmation, expiry/revocation, durable provenance and restart behavior remain owner decisions.
-- Original legacy quote investment and original base quantity; RS calculates average historical cost as invested / quantity.
-- Legacy attribution: original and remaining quantity, remaining basis, confirmed disposals.
+- Explicit operator authorization is required before RS may manage pre-existing legacy inventory; wallet balances or external/manual activity never grant authorization automatically. Authorization permission, Portfolio accounting, and verified Spot availability are separate facts. The operator manually enters original quote investment and original base quantity in configuration before application startup; this is the explicit authorization and declared historical basis. Historical exchange evidence and a runtime authorization UI are not required. Advanced runtime editing, expiry/revocation and authorization lifecycle are deferred under FITDIB.
+- Original legacy quote investment and original base quantity; RS calculates average historical cost once as invested / quantity and keeps it fixed.
+- Legacy attribution: original and remaining legacy quantity, confirmed disposals; original average cost remains fixed.
 - Custody: Spot-available, EARN/off-Spot and unresolved quantities are distinct; transfers do not change historical cost basis.
 - Recovery tranche: canonical BUY-fill quantity, cost basis and actual commissions.
 - Active/pending/partial/unknown order reservations.
 - Reuse the existing pair-level `minProfit` setting for minimum net recovery-cycle profit; retain a separate legacy cost-basis gate. Recovery profit cannot subsidize a legacy loss.
-- Cycle progress and residual handling only after the remaining owner decisions are settled.
+- Reuse Conservative's configured investment-limit logic. At the limit, stop submitting new BUYs but leave an already-open recovery SELL live and unchanged until it is filled/terminal; continue reconciliation.
+- Follow Conservative's third-asset commission rule: require a reliable quote-currency valuation; missing, stale, ambiguous or unavailable valuation is not zero and fails closed before either accounting projection commits.
+- Reuse Conservative BUY cadence, tranche sizing/configuration and pending-order safeguards where applicable, rather than introducing parallel RS-only behavior.
+- When authorized legacy inventory is exhausted, continue normal recovery-only BUY/SELL cycles until the operator stops RS. Each recovery-only SELL must meet the existing pair-level `minProfit` after applicable commissions; the legacy historical-basis gate applies only when a legacy slice is included. Exhaustion alone does not pause RS or require reauthorization. Existing orders/fills/reservations remain owned and reconciled.
+- Exchange-filter-constrained dust may be classified only after a fully reconciled successful cycle; retain it as bonus inventory and permanently exclude it from all later RS cycle quantity, cost, proceeds, profitability, and availability calculations. Ordinary sellable residual must not be classified as dust.
+- If remaining authorized legacy inventory is smaller than `sellQuantity`, use the smaller available/unreserved quantity in the current cycle SELL only when exchange filters and both independent profitability gates pass; otherwise retain it. No extra final-liquidation authorization is needed solely because the remainder is smaller.
 
 Agreed illustrative config shape (proposal only, not runtime configuration):
 
 ~~~js
-sellQuantity: 0.01,
+orderQuantity: 5, // illustrative recovery BUY order quantity
+sellQuantity: 0.01, // additional legacy quantity included in each cycle SELL
 legacyPosition: {
   invested: 100, // original quote amount invested
   quantity: 50, // original base quantity acquired
 },
 ~~~
 
-For 100 USDT and 50 ZRO, RS calculates 2 USDT/ZRO. A 0.01 ZRO legacy slice per cycle means 0.5 ZRO can support 50 cycles if Spot-available; 49.5 ZRO may be held in EARN. EARN inventory is not Spot-sellable until returned and authoritatively reconciled.
+For 100 USDT and 50 ZRO, RS calculates 2 USDT/ZRO. With an illustrative `orderQuantity: 5` ZRO and `sellQuantity: 0.01` ZRO, a fully netted 5 ZRO recovery tranche produces a 5.01 ZRO combined SELL target; the extra 0.01 ZRO is deducted from the authorized legacy position. A 0.01 ZRO legacy slice per cycle means 0.5 ZRO can support 50 cycles if Spot-available; 49.5 ZRO may be held in EARN. EARN inventory is not Spot-sellable until returned and authoritatively reconciled.
 
 Required test families:
 
@@ -132,36 +145,37 @@ Required test families:
 
 Model only the concepts required by the approved RS contract:
 
-- Original legacy quote investment and original base quantity; RS calculates average historical cost as invested / quantity.
-- Legacy attribution: original and remaining quantity, remaining basis, confirmed disposals.
+- Original legacy quote investment and original base quantity; RS calculates average historical cost once as invested / quantity and keeps it fixed.
+- Legacy attribution: original and remaining legacy quantity, confirmed disposals; original average cost remains fixed.
 - Custody: Spot-available, EARN/off-Spot and unresolved quantities are distinct; transfers do not change historical cost basis.
 - Recovery tranche: canonical BUY-fill quantity, cost basis and actual commissions.
 - Active/pending/partial/unknown order reservations.
 - Independent recovery-tranche and legacy profitability gates. Recovery profit cannot subsidize a legacy loss.
-- Cycle progress and residual handling only after the remaining owner decisions are settled.
+- Apply the smaller-remainder rule: legacy SELL quantity is capped downward to the remaining authorized, Spot-available, unreserved quantity; sell that smaller amount only when exchange filters and both independent profitability gates pass, otherwise retain it. After legacy inventory is exhausted, continue recovery-only cycles (e.g. BUY 5 ZRO → SELL 5 ZRO) subject to the recovery `minProfit` gate; no legacy gate applies when no legacy quantity is sold.
 
 Agreed illustrative config shape (proposal only, not runtime configuration):
 
 ~~~js
-sellQuantity: 0.01,
+orderQuantity: 5, // illustrative recovery BUY order quantity
+sellQuantity: 0.01, // additional legacy quantity included in each cycle SELL
 legacyPosition: {
   invested: 100, // original quote amount invested
   quantity: 50, // original base quantity acquired
 },
 ~~~
 
-For 100 USDT and 50 ZRO, RS calculates 2 USDT/ZRO. A 0.01 ZRO legacy slice per cycle means 0.5 ZRO can support 50 cycles if Spot-available; 49.5 ZRO may be held in EARN. EARN inventory is not Spot-sellable until returned and authoritatively reconciled.
+For 100 USDT and 50 ZRO, RS calculates 2 USDT/ZRO. With an illustrative `orderQuantity: 5` ZRO and `sellQuantity: 0.01` ZRO, a fully netted 5 ZRO recovery tranche produces a 5.01 ZRO combined SELL target; the extra 0.01 ZRO is deducted from the authorized legacy position. A 0.01 ZRO legacy slice per cycle means 0.5 ZRO can support 50 cycles if Spot-available; 49.5 ZRO may be held in EARN. EARN inventory is not Spot-sellable until returned and authoritatively reconciled.
 
 Required test families:
 
 - Valid/invalid average-cost inputs, exact decimal precision and division behavior.
-- Partial legacy disposal and remaining-basis calculation.
+- Successful-cycle legacy quantity decrement by the actual legacy quantity sold; original average cost is never recalculated.
 - Spot/EARN custody separation, transfers and insufficient Spot quantity.
 - Recovery BUY fills, partial fills, actual commissions and cost basis.
 - Profitable recovery tranche paired with a loss-making legacy slice.
-- Mixed SELL proceeds/fee allocation after the owner-approved rule exists.
+- After each successful cycle, deduct the actual legacy quantity sold from the remaining legacy quantity exactly once; never recalculate the original average cost.
 - Reservations, partial SELLs, cancellation races, unknown outcomes and exact-once fill identity.
-- Exchange quantity-step/minimum-quantity/minimum-notional and residual boundaries.
+- Exchange quantity-step/minimum-quantity/minimum-notional and residual boundaries, including remaining legacy quantity below `sellQuantity`; verify smaller remainder is sold only when both profitability gates and exchange filters pass, otherwise retained. Constrained dust is retained only after successful full reconciliation and never re-enters later cycle accounting, while ordinary sellable residual remains actionable.
 - Invalid, contradictory, stale or incomplete evidence fails closed.
 
 Never fabricate BUY fills or seed Portfolio from unverified wallet snapshots.
@@ -191,19 +205,21 @@ Reuse the existing Trading Engine, broker port/adapter, canonical order/fill ide
 - Do not introduce a global or per-market exclusive strategy lock or require a handoff before RS can run.
 - Each strategy owns its own policy state, cycle attribution and submitted order identities.
 - The shared Portfolio is the only actual Portfolio aggregate, not one Position per market. It may contain multiple independent Positions for the same market; each canonical fill updates exactly one correctly identified Position and the aggregate Portfolio exactly once and is attributed to the originating strategy.
-- The Trading Engine serializes intent allocation, broker submission and fill/accounting commits. Aggregate quote and base reservations across all active strategies before accepting another intent.
-- Competing intents must have deterministic allocation/priority behavior. Insufficient shared inventory or quote commitment defers/rejects the relevant intent with its strategy identity preserved.
-- One strategy's pause/disable does not implicitly pause/disable the other. Existing orders remain owned by their originating strategy and are reconciled normally.
+- Each strategy has an independent configured per-pair investment budget and used/committed investment accounting. CG spend is charged only to CG's budget for that pair; RS spend only to RS's budget for that pair. Unused budget is never transferable between strategies. For example, with CG budget 500 / used 300 and RS budget 1,000 / used 700, a 250 USDT CG BUY is blocked (only 200 remains) while a 250 USDT RS BUY is within RS's 300 remaining.
+- Reaching a strategy's own investment limit blocks only that strategy's new BUYs; it does not cancel or alter that strategy's already-open recovery SELL, which remains alive through fill/terminal reconciliation.
+- The Trading Engine serializes intent allocation, broker submission and fill/accounting commits. Aggregate actual exchange quote/base availability and active reservations across all strategies before accepting another intent; these physical resources are shared even though investment budgets are separate.
+- Competing intents that exceed a strategy's own budget are deferred/rejected against that strategy's budget. Intents that exceed shared account availability/reservations are deferred/rejected by the shared allocator. Preserve originating strategy identity. No cross-strategy budget priority or fairness policy is required.
+- Advanced pause/disable/abandon/resume/restart lifecycle functionality is deferred under FITDIB. Existing orders remain owned by their originating strategy and are reconciled normally; no strategy may adopt or mutate another strategy's orders.
 
 Preserve manual/external order ownership. EARN/off-Spot quantity is never available for Spot SELL planning. Unknown outcomes retain original order ownership and reservations and require reconciliation; never blindly retry. Add runtime config/registration only after contracts and validation are specified.
 
-**Acceptance:** application tests prove CG and RS run concurrently on different and same markets; fills are applied once to the shared Portfolio and attributed to the correct strategy; shared reservations prevent double-spend/oversell; order lifecycle, pause/disable isolation and broker safety remain correct. No parallel execution engine or strategy-specific broker.
+**Acceptance:** application tests prove CG and RS run concurrently on different and same markets; fills are applied once to the shared Portfolio and attributed to the correct strategy; shared reservations prevent double-spend/oversell; order lifecycle and broker safety remain correct. Advanced pause/disable/abandon/resume/restart lifecycle functionality is deferred under FITDIB. No parallel execution engine or strategy-specific broker.
 
 ## RS-5 — Offline lifecycle verification and delivery
 
 **Deliverable:** deterministic end-to-end RS lifecycle proof and current documentation.
 
-Cover: 50 ZRO / 100 USDT average-cost calculation; 0.5 Spot / 49.5 EARN custody; 0.01 legacy slice; independent profitability gates; partial/terminal fills and commissions; exact-once reservations/accounting; cycle completion after terminal reconciliation; remaining basis/custody across cycles; EARN redemption and authoritative Spot reconciliation; unknown outcomes, restart, external orders, concurrent CG/RS operation on the same and different markets, shared reservations, strategy-specific attribution and exchange constraints.
+Cover: 50 ZRO / 100 USDT average-cost calculation; 0.5 Spot / 49.5 EARN custody; 0.01 legacy slice; independent profitability gates; partial/terminal fills and commissions; exact-once reservations/accounting; cycle completion after terminal reconciliation; fixed original average cost and decreasing remaining legacy quantity/custody across cycles; EARN redemption and authoritative Spot reconciliation; unknown outcomes, external orders, concurrent CG/RS operation on the same and different markets, shared reservations, strategy-specific attribution and exchange constraints.
 
 Update the canonical RS specification, architecture, runtime config docs only when config is approved, tests index, docs index, Harvester roadmap and PR descriptions.
 
@@ -277,4 +293,4 @@ flowchart TD
   K -->|"Yes"| L["Shared Trading Engine safety and order gates"]
 ~~~
 
-The diagrams do not override the [RS Domain Specification](./recovery-seller-domain-specification.md) or resolve its outstanding authorization, accounting, profit allocation, risk, lifecycle and concurrent-resource-allocation decisions.
+The diagrams do not override the [RS Domain Specification](./recovery-seller-domain-specification.md). The first implementation reuses Conservative's investment-limit, BUY cadence and fee-valuation behavior where agreed; advanced lifecycle functionality is deferred under FITDIB. Remaining accounting, profit-allocation and concurrent-resource-allocation implementation requirements still apply.
