@@ -18,7 +18,10 @@ function assertPositiveDecimal({ value, field }) {
     value,
     field,
   })
-  if (compareDecimal({ left: value, right: "0" }) <= 0) {
+  if (compareDecimal({
+    left: value,
+    right: "0",
+  }) <= 0) {
     throw new RangeError(`${field} must be greater than zero`)
   }
 }
@@ -28,7 +31,10 @@ function assertNonNegativeDecimal({ value, field }) {
     value,
     field,
   })
-  if (compareDecimal({ left: value, right: "0" }) < 0) {
+  if (compareDecimal({
+    left: value,
+    right: "0",
+  }) < 0) {
     throw new RangeError(`${field} must be non-negative`)
   }
 }
