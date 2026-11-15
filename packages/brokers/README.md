@@ -22,7 +22,7 @@ Keep exchange-specific operations behind the Binance adapter. Consumers should d
 
 ## Bitunix Spot integration
 
-The Bitunix implementation is currently **read-only**. It supports market catalog/metadata, balances, latest-price lookup, per-symbol pending orders and order history, order detail, and per-order canonical fill lookup. The REST account response documents balances as JSON numbers; the transport preserves the raw numeric tokens as decimal strings before entity construction to avoid JavaScript number rounding.
+The Bitunix implementation is currently **read-only**. It supports market catalog/metadata, balances, latest-price lookup, per-symbol pending orders and order history, order detail, and per-order canonical fill lookup. Bitunix's Spot pair catalog does not include a symbol field, so the adapter derives the exchange symbol by concatenating the documented base and quote codes (for example, BTC + USDT → BTCUSDT); order/price APIs use that pair form. The last-price endpoint returns a decimal string, which the adapter normalizes to the Binance-compatible `{ symbol, price }` response shape. The REST account response documents balances as JSON numbers; the transport preserves the raw numeric tokens as decimal strings before entity construction to avoid JavaScript number rounding.
 
 It intentionally does not support order placement or cancellation, canonical order lookup/history, account snapshots, server time, or continuous price subscriptions. The documented Spot API has no exchange-side client order ID, no private order/execution push stream, no account source timestamp, and no account-wide pending-order query. The REST and WebSocket order docs also disagree on the units of `volume`. No Spot TESTNET endpoint is documented.
 
