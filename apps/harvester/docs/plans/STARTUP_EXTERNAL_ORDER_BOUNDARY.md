@@ -8,8 +8,10 @@ created: 2026-11-15
 
 # Startup open-order boundary
 
-**Tracking issue:** [#1157](https://github.com/45s/coinzilla/issues/1157)  
-**Decision:** [ADR-0004 — Startup open orders are external to the current process](../architecture/decisions/0004-startup-open-orders-are-external.md)  
+**Tracking issue:** [#1157](https://github.com/45s/coinzilla/issues/1157)
+
+**Decision:** [ADR-0004 — Startup open orders are external to the current process](../architecture/decisions/0004-startup-open-orders-are-external.md)
+
 **Target:** a focused implementation PR into `develop`.
 
 ## Goal
@@ -169,10 +171,14 @@ Use the following prompt in a new AI coding session to finish issue #1157. The i
 
 ### Prompt: Implement startup open-order externalization (#1157)
 
-Repository: `https://github.com/45s/coinzilla`  
-Tracking issue: `https://github.com/45s/coinzilla/issues/1157`  
-Canonical design: [ADR-0004](../architecture/decisions/0004-startup-open-orders-are-external.md)  
-Implementation plan: this document  
+Repository: `https://github.com/45s/coinzilla`
+
+Tracking issue: `https://github.com/45s/coinzilla/issues/1157`
+
+Canonical design: [ADR-0004](../architecture/decisions/0004-startup-open-orders-are-external.md)
+
+Implementation plan: this document
+
 Target branch: `develop`
 
 **Mission:** Implement the accepted startup order contract in ADR-0004 and issue #1157. At startup, snapshot and durably record every account-wide open order, then treat every order in that snapshot as external to the current process. Do not recover, adopt, cancel, replace, reprice, or manage old orders. Apply the existing per-pair `EXTERNAL_ORDERS_POLICIES.IGNORE/BLOCK` uniformly, regardless of client-order-ID prefix. Current-process orders continue to use the existing ownership registry and lifecycle.
