@@ -340,12 +340,12 @@ function createPortfolioStatsConsoleLine({ time, strategyPrefix, details } = {})
 }
 
 function formatStartupConsoleMessage(message) {
-  const subscriptionMatch = /^Connected; subscribed to (\\d+) enabled market\\(s\\)\\. (.+)$/.exec(message)
+  const subscriptionMatch = /^Connected; subscribed to (\d+) enabled market\(s\)\. (.+)$/.exec(message)
   if (subscriptionMatch) {
     return `Binance market-data stream connected; active market subscriptions: ${subscriptionMatch[1]}. ${subscriptionMatch[2]}`
   }
 
-  const modeMatch = /^Connected; Binance trading mode is (.+)\\.$/.exec(message)
+  const modeMatch = /^Connected; Binance trading mode is (.+)\.$/.exec(message)
   if (modeMatch) {
     return `Binance connection established; Binance trading mode is ${modeMatch[1]}.`
   }
