@@ -326,11 +326,19 @@ function createPauseHandler({
 
 function createOrderCancellationEventPublishers({ eventPublisher, logger, state } = {}) {
   return {
-    publishOrderCancelled: ({ order }) => publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLED,
-      dataResult: mapOrderCancelledData({ order }),
-    }),
+    publishOrderCancelled: ({ order }) => {
+      logOrderLifecycle({
+        logger,
+        order,
+        ownership: state?.registry?.getOwnership?.({ clientOrderId: order.clientOrderId }),
+        status: "CANCELLED",
+      })
+      return publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLED,
+        dataResult: mapOrderCancelledData({ order }),
+      })
+    },
     publishOrderCancelFailed: ({ order, outcome, error }) => {
       const lifecycleStatus = outcome === "NOT_SENT"
         ? "CANCEL_NOT_SENT"
