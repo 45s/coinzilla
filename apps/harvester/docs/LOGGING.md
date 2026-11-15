@@ -319,9 +319,9 @@ label separated by one space; avoid oversized column gaps and explanatory
 client-ID labels:
 
 \`\`\`text
-TIME     STRATEGY STATUS             ORDER ID     SYMBOL   SIDE QUANTITY @ PRICE CLIENT ID
-19:14:52 🪙 CG SUBMITTED #pending     ADAUSDT BUY 50.00 @ 0.15260 h-325e71ba16494aeb875e6e-3
-19:14:52 🪙 CG ACCEPTED  #1341114     ADAUSDT BUY 50.00 @ 0.15260
+TIME STRATEGY STATUS ORDER SYMBOL SIDE QUANTITY @ PRICE CLIENT ID
+19:14:52 🪙 CG SUBMITTED #pending ADAUSDT BUY 50.00 @ 0.15260 h-325e71ba16494aeb875e6e-3
+19:14:52 🪙 CG ACCEPTED #1341114 ADAUSDT BUY 50.00 @ 0.15260
 19:14:53 🔴 RS PARTIAL FILL #1341115 ADAUSDT SELL 49.90 @ 0.15410 | Executed: 20 | Remaining: 29.90
 \`\`\`
 
@@ -332,10 +332,11 @@ label does not enable RS runtime execution.
 
 Lifecycle status is plain text and never replaces the strategy identity.
 Only strategy-owned records carry 🪙 CG or 🔴 RS; unowned system/application
-records have no icon. Keep the fixed field order compact: time, strategy,
-status, broker order ID (or `#pending`), pending client ID when needed, symbol,
-side, quantity, and price. Use one separator between the strategy marker and
-label. Keep quantities/prices exact and do not truncate order or client IDs.
+records have no icon. Keep the field order compact and separate every field
+with a single space: time, strategy, status, broker order ID (or `#pending`),
+symbol, side, quantity, price, and pending client ID when needed. Do not pad
+columns with large fixed-width gaps. Keep quantities/prices exact and do not
+truncate order or client IDs.
 
 SUBMITTED is emitted after the durable submission-intent barrier and immediately
 before broker I/O; because the exchange order ID does not exist yet, the order
