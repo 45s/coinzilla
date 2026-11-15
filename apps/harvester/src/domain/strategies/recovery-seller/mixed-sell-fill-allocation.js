@@ -14,16 +14,22 @@ import { createFillFingerprint } from "../../fills/fill-fingerprint.js"
 import { validateFillCommissions } from "../../fills/validate-fill-commissions.js"
 
 function assertPositiveDecimal({ value, field }) {
-  assertDecimalString({ value, field })
+  assertDecimalString({
+    value,
+    field,
+  })
   if (compareDecimal({ left: value, right: "0" }) <= 0) {
-    throw new RangeError(field + " must be greater than zero")
+    throw new RangeError(`${field} must be greater than zero`)
   }
 }
 
 function assertNonNegativeDecimal({ value, field }) {
-  assertDecimalString({ value, field })
+  assertDecimalString({
+    value,
+    field,
+  })
   if (compareDecimal({ left: value, right: "0" }) < 0) {
-    throw new RangeError(field + " must be non-negative")
+    throw new RangeError(`${field} must be non-negative`)
   }
 }
 
