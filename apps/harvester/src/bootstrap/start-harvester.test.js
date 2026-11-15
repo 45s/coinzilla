@@ -3874,30 +3874,35 @@ test("fails startup before market subscriptions when PREFLIGHT account snapshot 
 })
 
 
-test("journals pre-existing account-wide orders and allows trading startup without adopting or changing them", async () => {
-  const calls = []
-  const broker = createBroker(calls)
-  let cancelCalls = 0
-  let placeCalls = 0
-  broker.getOpenOrders = async (input = {}) => {
-    calls.push("open-orders:account-wide:" + String(input.symbol))
-    return {
-      ok: true,
-      data: [{
-        clientOrderId: "manual-zro-sell",
-        id: "699694",
-        symbol: "ZROUSDT",
-        side: "SELL",
-        type: "LIMIT",
-        originalPrice: "1.82800000",
-        originalQuantity: "4.98000000",
-        executedQuantity: "0.00000000",
-        status: "NEW",
-      }],
-    }
+function createPriorProcessOrderBroker({ calls, canceledClientOrderIds } = {}) {
+  const startupClientOrderId = "h-0123456789abcdef012345-7"
+  const startupOrder = {
+    clientOrderId: startupClientOrderId,
+    id: "699694",
+    symbol: "BTCUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    originalPrice: "64900.00",
+    originalQuantity: "0.01",
+    executedQuantity: "0",
+    status: "NEW",
   }
-  broker.cancelOrder = async () => { cancelCalls += 1; return { ok: true } }
-  broker.placeOrder = async () => { placeCalls += 1; return { ok: true } }
+  const broker = createBroker(calls, { externalOpenOrders: [startupOrder] })
+  const cancelOrder = broker.cancelOrder
+  broker.cancelOrder = async (input = {}) => {
+    canceledClientOrderIds.push(input.order?.clientOrderId)
+    return cancelOrder(input)
+  }
+  return { broker, startupClientOrderId }
+}
+
+test("treats a prior-process Harvester order as external under IGNORE and evaluates a real market-price event", async () => {
+  const calls = []
+  const canceledClientOrderIds = []
+  const { broker, startupClientOrderId } = createPriorProcessOrderBroker({
+    calls,
+    canceledClientOrderIds,
+  })
   const events = []
   const eventPublisher = {
     publish: (event) => { events.push(event); return { ok: true } },
@@ -3917,7 +3922,10 @@ test("journals pre-existing account-wide orders and allows trading startup witho
             ...appConfig.strategies.CG_coinGrabber.pairs,
             BTCUSDT: {
               ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
-              enabled: true
+              enabled: true,
+              enableVolatilityProtection: false,
+              makerPercent: 0.1,
+              takerPercent: 0.1,
             },
           },
         },
@@ -3936,20 +3944,31 @@ test("journals pre-existing account-wide orders and allows trading startup witho
     },
   })
 
-  const openingBalances = events.find((event) => event.name === "account.snapshot_captured")
   const openOrders = events.find((event) => event.name === "account.open_orders_captured")
-  assert.equal(openingBalances.data.phase, "PREFLIGHT", "trading startup must retain the durable account PREFLIGHT snapshot")
-  assert.equal(openOrders.data.readiness, "BLOCKED", "the audit must explicitly classify the unmatched exchange order as unowned")
-  assert.deepEqual(openOrders.data.blockReasons, ["UNOWNED_OPEN_ORDERS:1"], "the Journal must preserve why the existing order is not considered Harvester-owned")
+  assert.equal(openOrders.data.readiness, "BLOCKED", "the audit must preserve its unowned-order classification independently of trading readiness")
+  assert.deepEqual(openOrders.data.blockReasons, ["UNOWNED_OPEN_ORDERS:1"], "the Journal must preserve why the startup order is not owned by this process")
   assert.equal(openOrders.data.orderCount, 1, "the account-wide audit must record the pre-existing order")
   assert.equal(openOrders.data.orders[0].brokerOrderId, "699694", "the audit must preserve the exact external broker order ID")
-  assert.ok(calls.includes("open-orders:account-wide:undefined"), "startup must inspect open orders account-wide without a symbol filter")
-  assert.equal(calls.some((call) => call.startsWith("subscribe:book:")), true, "an unowned open order must not prevent market-book subscriptions")
-  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), true, "an unowned open order must not prevent market-price subscriptions")
-  assert.equal(cancelCalls, 0, "startup must never cancel a pre-existing unowned exchange order")
-  assert.equal(placeCalls, 0, "startup must not submit an order merely because an external order was observed")
-  assert.equal(runtime.connected, true, "the trading runtime must start while leaving the external order unadopted")
+  assert.equal(openOrders.data.orders[0].clientOrderId, startupClientOrderId, "the audit must preserve the prior-process client-order identity")
+  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), true, "an unowned startup order must not prevent market-price subscriptions")
+  assert.equal(runtime.recoveredState.orderRegistry.getActiveOrders().length, 0, "the startup order must remain absent from the current-process OrderRegistry")
+
+  const evaluation = await runtime.processMarketPrice({
+    symbol: "BTCUSDT",
+    priceEvent: {
+      symbol: "BTCUSDT",
+      price: "65000",
+      timestamp: Date.now(),
+    },
+  })
+  assert.equal(evaluation.ok, true, "A valid market-price event must reach the strategy engine.")
+  assert.notEqual(evaluation.data?.reason, "UNOWNED_OPEN_ORDER", "The default IGNORE policy must not defer evaluation because a startup order uses the reserved Harvester prefix.")
+  assert.notEqual(evaluation.data?.skipped, true, "The startup order must not create an unconditional strategy deferral.")
+  assert.equal(runtime.recoveredState.orderRegistry.getActiveOrders().length, 0, "The prior-process order must remain outside the current-process registry.")
+  assert.equal(canceledClientOrderIds.includes(startupClientOrderId), false, "The current process must never cancel the startup-snapshot order.")
+
   await runtime.stop()
+  assert.equal(canceledClientOrderIds.includes(startupClientOrderId), false, "shutdown must not cancel the prior-process order")
   assert.ok(calls.includes("disconnect"), "the test must close the broker connection after verifying startup")
 })
 
@@ -5662,10 +5681,8 @@ test("retains an explicitly injected application event publisher in TESTNET runt
   await result.stop()
 })
 
-test("stops broker intake before draining queued user-data and disconnects afterward", async () => {
-  const calls = []
+function createShutdownDrainBroker({ calls } = {}) {
   const broker = createBroker(calls)
-  const originalSubscribeForPrices = broker.subscribeForPrices.bind(broker)
   let resolveBookUnsubscribe
   const bookUnsubscribed = new Promise((resolve) => { resolveBookUnsubscribe = resolve })
   const originalSubscribeForBookTicker = broker.subscribeForBookTicker.bind(broker)
@@ -5685,6 +5702,7 @@ test("stops broker intake before draining queued user-data and disconnects after
   }
   let resolveMarketUnsubscribe
   const marketUnsubscribed = new Promise((resolve) => { resolveMarketUnsubscribe = resolve })
+  const originalSubscribeForPrices = broker.subscribeForPrices.bind(broker)
   broker.subscribeForPrices = async (input) => {
     const result = await originalSubscribeForPrices(input)
     return {
@@ -5713,7 +5731,16 @@ test("stops broker intake before draining queued user-data and disconnects after
       },
     }
   }
+  return {
+    broker,
+    bookUnsubscribed,
+    marketUnsubscribed,
+  }
+}
 
+test("stops broker intake before draining queued user-data and disconnects afterward", async () => {
+  const calls = []
+  const { broker, bookUnsubscribed, marketUnsubscribed } = createShutdownDrainBroker({ calls })
   let resolveQueue
   const queueGate = new Promise((resolve) => { resolveQueue = resolve })
   let signalQueueStarted
@@ -5721,7 +5748,10 @@ test("stops broker intake before draining queued user-data and disconnects after
   let queuedEvents = 0
   const runtime = await startHarvesterForTest({
     loadConfig: async () => appConfig,
-    env: { ...binanceEnv, NODE_ENV: "development" },
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development",
+    },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     onUserDataEvent: async () => {
@@ -5755,7 +5785,6 @@ test("stops broker intake before draining queued user-data and disconnects after
   assert.ok(calls.indexOf("queue:done") < calls.indexOf("unsubscribe:user-data"), "user-data intake may stop only after accepted callbacks have drained")
   assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"), "the user-data subscription must be disconnected before the broker itself")
 })
-
 test("logs safe correlation details for an external execution without closing global readiness", async () => {
   const broker = createBroker()
   const errors = []
@@ -5841,7 +5870,7 @@ test("reconciles the in-memory order registry before reopening trading after str
   let acknowledgementCount = 0
   let resolveAcknowledgement
   const acknowledged = new Promise((resolve) => { resolveAcknowledgement = resolve })
-  const subscribeForUserData = broker.subscribeForUserData
+  const { subscribeForUserData } = broker
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
     return {
