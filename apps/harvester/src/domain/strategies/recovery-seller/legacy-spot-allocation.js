@@ -45,8 +45,14 @@ export class LegacySpotAllocationError extends Error {
  * @param {string} options.field Diagnostic field name.
  */
 function assertNonNegativeQuantity({ value, field }) {
-  assertDecimalString({ value, field })
-  if (compareDecimal({ left: value, right: "0" }) < 0) {
+  assertDecimalString({
+    value,
+    field,
+  })
+  if (compareDecimal({
+    left: value,
+    right: "0",
+  }) < 0) {
     throw new RangeError(`${field} must be non-negative`)
   }
 }
