@@ -246,7 +246,10 @@ test("does not emit ANSI color codes when color is disabled", () => {
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   transport.write({
     timestamp: "2026-11-05T12:00:00.000Z",
