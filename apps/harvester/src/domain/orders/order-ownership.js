@@ -13,7 +13,7 @@ export function createOrderOwnership({ ownership, clientOrderId, brokerOrderId }
   }
   for (const field of ["strategyId", "positionId"]) {
     if (typeof ownership[field] !== "string" || !ownership[field].trim()) {
-      throw new TypeError("Order ownership requires a non-empty " + field)
+      throw new TypeError(`Order ownership requires a non-empty ${field}`)
     }
   }
   if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
@@ -28,7 +28,7 @@ export function createOrderOwnership({ ownership, clientOrderId, brokerOrderId }
   for (const field of ["purpose", "cycleId"]) {
     if (ownership[field] !== undefined && ownership[field] !== null &&
         (typeof ownership[field] !== "string" || !ownership[field].trim())) {
-      throw new TypeError("Order ownership " + field + " must be a non-empty string when provided")
+      throw new TypeError(`Order ownership ${field} must be a non-empty string when provided`)
     }
   }
 
