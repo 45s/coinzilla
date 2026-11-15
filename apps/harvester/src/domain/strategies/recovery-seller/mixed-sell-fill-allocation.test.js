@@ -107,13 +107,16 @@ function makeOrder(overrides = {}) {
 }
 
 function makeOwnership(overrides = {}) {
+  const ownership = {
+    strategyId: overrides.strategyId ?? StrategyId.RECOVERY_SELLER,
+    positionId: overrides.positionId ?? "rs-position-1",
+    purpose: overrides.purpose ?? "RECOVERY_SELL",
+  }
+  if (overrides.cycleId !== null) {
+    ownership.cycleId = overrides.cycleId ?? "rs-cycle-1"
+  }
   return createOrderOwnership({
-    ownership: {
-      strategyId: overrides.strategyId ?? StrategyId.RECOVERY_SELLER,
-      positionId: overrides.positionId ?? "rs-position-1",
-      purpose: overrides.purpose ?? "RECOVERY_SELL",
-      cycleId: "rs-cycle-1",
-    },
+    ownership,
     clientOrderId: overrides.clientOrderId ?? "harvester-rs-sell",
     brokerOrderId: overrides.brokerOrderId ?? "broker-1",
   })
@@ -437,5 +440,30 @@ test("rejects an order registry that is not the canonical OrderRegistry", () => 
     () => createMixedSellFillAllocation(input),
     /OrderRegistry/i,
     "Mixed SELL allocation must resolve attribution only through the immutable application OrderRegistry.",
+  )
+})
+
+
+test("requires Recovery Seller SELL ownership to identify its cycle and purpose", () => {
+  const missingCycle = makeInput({
+    ownership: makeOwnership({
+      cycleId: null,
+    }),
+  })
+  const wrongPurpose = makeInput({
+    ownership: makeOwnership({
+      purpose: "INITIAL_BUY",
+    }),
+  })
+
+  assert.throws(
+    () => createMixedSellFillAllocation(missingCycle),
+    /cycleId/i,
+    "A mixed SELL allocation must retain the registered Recovery Seller cycle identity.",
+  )
+  assert.throws(
+    () => createMixedSellFillAllocation(wrongPurpose),
+    /RECOVERY_SELL/i,
+    "A mixed SELL allocation must come from a registered Recovery Seller recovery-SELL order.",
   )
 })
