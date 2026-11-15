@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto"
 import { createRestSignature } from "../auth/create-rest-signature.js"
 
 const DEFAULT_BASE_URL = "https://openapi.bitunix.com"
+const DEFAULT_REQUEST_TIMEOUT = 10_000
 
 /** Error returned by the Bitunix Spot REST API or transport boundary. */
 export class BitunixRestError extends Error {
@@ -25,12 +26,13 @@ export class BitunixRestError extends Error {
  */
 export class BitunixRestClient {
   /**
-   * @param {{apiKey: string, apiSecret: string, baseUrl?: string, fetchFn?: typeof fetch, now?: () => number, nonceFactory?: () => string}} options
+   * @param {{apiKey: string, apiSecret: string, baseUrl?: string, requestTimeout?: number, fetchFn?: typeof fetch, now?: () => number, nonceFactory?: () => string}} options
    */
   constructor({
     apiKey,
     apiSecret,
     baseUrl = DEFAULT_BASE_URL,
+    requestTimeout = DEFAULT_REQUEST_TIMEOUT,
     fetchFn = fetch,
     now = Date.now,
     nonceFactory = () => randomBytes(16).toString("hex"),
@@ -42,6 +44,9 @@ export class BitunixRestClient {
     if (typeof baseUrl !== "string" || !baseUrl.startsWith("https://")) {
       throw new TypeError("Bitunix REST base URL must use https://")
     }
+    if (!Number.isInteger(requestTimeout) || requestTimeout < 1) {
+      throw new RangeError("Bitunix REST requestTimeout must be a positive integer")
+    }
     if (typeof fetchFn !== "function" || typeof now !== "function" ||
         typeof nonceFactory !== "function") {
       throw new TypeError("Bitunix REST fetch, clock, and nonce dependencies must be functions")
@@ -50,6 +55,7 @@ export class BitunixRestClient {
     this.apiKey = apiKey
     this.apiSecret = apiSecret
     this.baseUrl = baseUrl.replace(/\/$/, "")
+    this.requestTimeout = requestTimeout
     this.fetch = fetchFn
     this.now = now
     this.nonceFactory = nonceFactory
@@ -122,6 +128,7 @@ export class BitunixRestClient {
           sign: signature,
           "Content-Type": "application/json",
         },
+        signal: AbortSignal.timeout(this.requestTimeout),
         ...(bodyText === undefined ? {} : { body: bodyText }),
       })
     } catch (error) {
@@ -176,4 +183,4 @@ export class BitunixRestClient {
   }
 }
 
-export { DEFAULT_BASE_URL }
+export { DEFAULT_BASE_URL, DEFAULT_REQUEST_TIMEOUT }
