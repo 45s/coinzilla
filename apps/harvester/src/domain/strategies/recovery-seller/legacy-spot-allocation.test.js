@@ -142,6 +142,41 @@ test("tracks only Spot base quantity left after every Portfolio Position for the
   )
 })
 
+test("returns immutable allocation arrays and records", () => {
+  const allocations = calculateVerifiedLegacySpotAllocation({
+    balances: [
+      createBalance({
+        asset: btcAsset,
+        free: "0.5",
+      }),
+    ],
+    portfolio: new Portfolio(),
+    legacyPositions: [{
+      market: btcUsdtMarket,
+      originalQuantity: "1",
+      remainingQuantity: "0.5",
+    }],
+  })
+
+  assert.equal(
+    Object.isFrozen(allocations),
+    true,
+    "The account snapshot source must not expose a mutable allocation collection.",
+  )
+  assert.equal(
+    Object.isFrozen(allocations[0]),
+    true,
+    "Each verified asset allocation must be immutable after it is calculated.",
+  )
+  assert.throws(
+    () => {
+      allocations[0].amount = "99"
+    },
+    TypeError,
+    "A caller must not be able to mutate verified legacy Spot custody after the calculation.",
+  )
+})
+
 test("caps verified Spot allocation at the remaining authorized legacy quantity", () => {
   const portfolio = createPortfolio({
     acquisitions: [{
