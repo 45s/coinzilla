@@ -231,7 +231,7 @@ Update the canonical RS specification, architecture, runtime config docs only wh
 |---|---|---|
 | RS-1 | CG source audit and reuse map | Evidence-backed inventory and reuse decisions |
 | RS-2a | Shared Portfolio/multi-Position accounting foundation | **COMPLETE** — merged in [PR #1118](https://github.com/45s/coinzilla/pull/1118); exact-head required CI passed |
-| RS-2b | RS-specific domain accounting, custody and profitability | In progress: legacy accounting and snapshot plumbing merged (#1131, #1137); order ownership in PR #1144; verified legacy Spot source and canonical mixed SELL accounting still required |
+| RS-2b | RS-specific domain accounting, custody and profitability | In progress: legacy accounting, snapshot plumbing and order ownership merged (#1131, #1137, #1144); verified Spot calculation in PR #1149 (injectable only); canonical mixed SELL accounting and exact-once reconciliation remain |
 | RS-3 | RS pure policy | Deterministic decisions proven |
 | RS-4 | Concurrent Trading Engine integration | Existing execution and safety infrastructure reused |
 | RS-5 | Offline lifecycle and docs | Full lifecycle and exact-head CI green |
