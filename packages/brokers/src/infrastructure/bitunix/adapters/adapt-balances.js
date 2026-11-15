@@ -9,19 +9,16 @@ function createAsset({ coin }) {
 }
 
 function normalizeAmount({ value, field }) {
-  if (typeof value !== "string" && typeof value !== "number") {
-    throw new TypeError(`Bitunix Spot account balance ${field} must be a decimal string or number`)
+  if (typeof value !== "string") {
+    throw new TypeError(`Bitunix Spot account balance ${field} must be a precision-preserving decimal string`)
   }
-  if (typeof value === "number" && (!Number.isFinite(value) || value < 0)) {
-    throw new TypeError(`Bitunix Spot account balance ${field} must be non-negative`)
-  }
-  return String(value)
+  return value
 }
 
 /**
  * Adapt Bitunix Spot user.account rows into canonical Balance entities.
  *
- * @param {Array<{coin: string, balance: string|number, balanceLocked: string|number}>} input
+ * @param {Array<{coin: string, balance: string, balanceLocked: string}>} input
  * @returns {import("@coinzilla/entities").Balance[]}
  */
 export function adaptBalances(input) {
