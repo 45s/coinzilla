@@ -118,20 +118,8 @@ export function makeExecuteStrategyDecision({
     }
   }
 
-  const deferRegisteredSubmission = async ({ order, purpose, errors, reason }) => {
-    try {
-      await onSubmissionDeferred(Object.assign(
-        {},
-        { order },
-        { purpose },
-        { registered: true },
-        { reason: reason ?? "DURABLE_SUBMISSION_INTENT_NOT_COMMITTED" },
-      ))
-      return toResult({ errors })
-    } catch (error) {
-      return toResult({ errors: [...errors, error] })
-    }
-  }
+  const deferRegisteredSubmission = (input) =>
+    persistDeferredSubmission(Object.assign({}, input, { onSubmissionDeferred }))
 
   const executeStrategyDecision = async ({ decision, marketMetadata } = {}) => {
     try {
@@ -282,4 +270,31 @@ export function makeExecuteStrategyDecision({
   }
   executeStrategyDecision.validate = validateDecision
   return executeStrategyDecision
+}
+
+
+async function persistDeferredSubmission({
+  onSubmissionDeferred,
+  order,
+  purpose,
+  errors,
+  reason,
+} = {}) {
+  try {
+    await onSubmissionDeferred({
+      order,
+      purpose,
+      registered: true,
+      reason: reason ?? "DURABLE_SUBMISSION_INTENT_NOT_COMMITTED",
+    })
+    return toResult({
+      data: {
+        deferred: true,
+      },
+    })
+  } catch (error) {
+    return toResult({
+      errors: [...(errors ?? []), error],
+    })
+  }
 }
