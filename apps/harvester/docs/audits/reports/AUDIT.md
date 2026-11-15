@@ -9,6 +9,15 @@
 **Status:** IMPLEMENTATION AUDIT CLOSED (2026-11-07) — in-scope Conservative source behavior, regression coverage inventory, and supporting documentation have been reconciled against the canonical specification. Test execution and exact-head CI are a separate pending verification phase; no test-pass claim is made. Historical exchange-filter inputs not captured in the original logs remain UNVERIFIED and non-blocking. TESTNET acceptance is NOT CLAIMED.  
 **Safety:** No TESTNET orders, bot restarts, credential requests, or exchange writes were performed.
 
+## Subsequent independent session evidence — 2026-11-14/15
+
+This report's 2026-11-06 session, evidence boundary and closure decision above remain historical and unchanged. A separate Harvester Binance TESTNET session on 2026-11-14/15 has since been fully audited; it is **not** a continuation of the 2026-11-06 session and does not revise its findings.
+
+- [2026-11-14/15 TESTNET session audit](../sessions/AUDIT_SESSION_2026-11-14_23-41-12Z.md) — complete artifact hashes/parse counts, 42-record Journal index, exchange filter metadata, ZRO fill/account reconciliation, full structured order-transition error and shutdown failure diagnostics.
+- [F-054/F-055 findings](AUDIT_FINDINGS.md#2026-11-14-15-testnet-session-findings-addendum) and [tracking issue #1132](https://github.com/45s/coinzilla/issues/1132).
+- F-054 confirms a FILLED → zero-cumulative NEW/OPEN order-event staleness defect; F-055 records a separate shutdown recovery SELL replacement failure whose root cause remains UNKNOWN.
+- The report is evidence-only. No source fix, test pass, TESTNET acceptance or exchange operation is claimed.
+
 ## Executive result
 
 The accessible Journal and the two verbatim 100-row order-history comments establish 23 Harvester order submissions in the 07:00 session: six DOGEUSDT orders and seventeen ZROUSDT orders. The Journal records 12 applied fills, 13 duplicate-fill events, nine cancellation requests and nine confirmed cancellations, and one ZRO recovery-cycle completion.
