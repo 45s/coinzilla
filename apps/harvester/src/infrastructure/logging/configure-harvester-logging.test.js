@@ -621,7 +621,7 @@ test("retains the market symbol and source filter types in compact fatal console
   output.destroy()
 })
 
-test("keeps strategy-owned order facts and pending client identity on compact lifecycle lines", () => {
+test("keeps strategy-owned order facts on compact single-space lifecycle lines", () => {
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => {
