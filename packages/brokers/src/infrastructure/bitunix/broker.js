@@ -47,11 +47,6 @@ export class BitunixSpotBroker extends CoreBroker {
     this.canonicalMarkets = new Map()
   }
 
-  /** Construct the REST transport from validated configuration. */
-  static createRestClient(config) {
-    return createRestClient(config)
-  }
-
   /** Mark the stateless REST adapter ready. */
   async connect() {
     this.connected = true
@@ -138,7 +133,7 @@ export class BitunixSpotBroker extends CoreBroker {
   async getOrderHistory({ symbol, orderId, startTime, endTime, limit } = {}) {
     try {
       const normalizedSymbol = requireSymbol({ symbol, operation: "getOrderHistory()" })
-      const body = { symbol: normalizedSymbol }
+      const body = { symbol: normalizedSymbol, page: 1 }
       if (limit !== undefined) {
         if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
           throw new RangeError("Bitunix Spot order history limit must be from 1 to 100")
@@ -169,7 +164,7 @@ export class BitunixSpotBroker extends CoreBroker {
 
   async getOrder({ symbol, orderId } = {}) {
     try {
-      requireSymbol({ symbol, operation: "getOrder()" })
+      const normalizedSymbol = requireSymbol({ symbol, operation: "getOrder()" })
       if ((typeof orderId !== "string" && typeof orderId !== "number") || !String(orderId).trim()) {
         throw new TypeError("Bitunix Spot getOrder() requires a broker orderId")
       }
@@ -179,8 +174,9 @@ export class BitunixSpotBroker extends CoreBroker {
       if (!response.data || typeof response.data !== "object" || Array.isArray(response.data)) {
         throw new TypeError("Bitunix Spot order detail response must be an object")
       }
-      if (String(response.data.orderId) !== String(orderId)) {
-        throw new TypeError("Bitunix Spot order detail returned a different orderId")
+      if (String(response.data.orderId) !== String(orderId) ||
+          String(response.data.symbol).toUpperCase() !== normalizedSymbol) {
+        throw new TypeError("Bitunix Spot order detail does not match the requested order identity")
       }
       return toResult({ data: adaptOrder(response.data) })
     } catch (error) {
@@ -258,5 +254,6 @@ function createRestClient(config) {
     apiKey: config.apiKey,
     apiSecret: config.apiSecret,
     baseUrl: config.baseUrl,
+    requestTimeout: config.requestTimeout,
   })
 }
