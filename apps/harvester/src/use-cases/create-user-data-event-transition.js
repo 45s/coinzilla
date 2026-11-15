@@ -92,7 +92,9 @@ function getRegisteredOrder({ registry, order } = {}) {
   const byClientOrderId = registry.getOrder?.({
     clientOrderId: order.clientOrderId,
   })
-  if (byClientOrderId) return byClientOrderId
+  if (byClientOrderId) {
+    return byClientOrderId
+  }
   if (order.brokerOrderId && typeof registry.getOrderByBrokerOrderId === "function") {
     return registry.getOrderByBrokerOrderId({
       brokerOrderId: order.brokerOrderId,
