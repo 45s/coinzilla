@@ -147,7 +147,10 @@ async function readResponsePayload({ response, path, stateChanging }) {
     if (typeof responseText !== "string") {
       throw new TypeError("Bitunix REST response text must be a string")
     }
-    return parseResponseText({ text: responseText, path })
+    return parseResponseText({
+      text: responseText,
+      path,
+    })
   } catch (error) {
     throw new BitunixRestError({
       message: `Bitunix REST response JSON is invalid: ${error.message}`,
