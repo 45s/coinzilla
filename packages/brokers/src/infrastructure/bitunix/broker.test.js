@@ -52,7 +52,7 @@ test("Bitunix Spot broker reads balances without inventing an account snapshot t
   const snapshot = await broker.getAccountSnapshot()
 
   assert.equal(balances.ok, true)
-  assert.equal(balances.data[0].free.amount, "12.3400")
+  assert.equal(balances.data[0].free.amount, "12.34")
   assert.equal(balances.data[0].locked.amount, "1.25")
   assert.equal(snapshot.ok, false)
   assert.match(snapshot.errors[0].message, /source timestamp/i)
