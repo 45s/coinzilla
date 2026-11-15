@@ -4914,7 +4914,7 @@ function assertRecoverySellCancellationFillAppliedOnce({ harness, buyResult, lat
   assert.equal(lateResult.ok, true)
   assert.equal(lateResult.data.ignored, true)
   assert.deepEqual(harness.cancellationIds, [sellOrder.brokerOrderId])
-  const canceledSellTradeId = "recovery-cancel-fill-sell-" + sellOrder.brokerOrderId
+  const canceledSellTradeId = `recovery-cancel-fill-sell-${sellOrder.brokerOrderId}`
   assert.equal(harness.accountedFills.filter((fill) => fill.tradeId === canceledSellTradeId).length, 1)
   assert.deepEqual(harness.accountedFills.map((fill) => fill.tradeId), [
     "buy-triggering-recovery-sell-cancel",
