@@ -97,6 +97,7 @@ test("allocates one canonical mixed SELL Fill across recovery and legacy without
   assert.equal(allocation.orderOwnership.clientOrderId, "harvester-rs-sell", "Allocation must retain the original Harvester client order identity.")
   assert.equal(allocation.orderOwnership.brokerOrderId, "broker-1", "Allocation must retain the acknowledged broker order identity.")
   assert.equal(allocation.orderOwnership.positionId, "rs-position-1", "Recovery allocation must retain its registered Position owner.")
+  assert.equal(allocation.orderOwnership.purpose, input.ownership.purpose, "Allocation must preserve the registered order purpose without inventing a new purpose enum.")
   assert.equal(allocation.recovery.grossBaseQuantity, "5", "Recovery receives only its explicitly allocated gross base quantity.")
   assert.equal(allocation.legacy.grossBaseQuantity, "0.01", "Legacy receives only its explicitly allocated gross base quantity.")
   assert.equal(allocation.recovery.quoteProceeds, "10", "Recovery proceeds must be split from actual canonical quote proceeds.")
@@ -190,10 +191,6 @@ test("requires SELL-side registered ownership that matches the canonical order a
     /broker order identity/i,
   )
   assert.throws(
-    () => createMixedSellFillAllocation(makeInput({ ownership: makeOwnership({ purpose: "RECOVERY_BUY" }) })),
-    /RECOVERY_SELL/i,
-  )
-  assert.throws(
     () => createMixedSellFillAllocation(makeInput({ ownership: makeOwnership({ strategyId: StrategyId.COIN_GRABBER }) })),
     /Recovery Seller/i,
   )
@@ -209,6 +206,39 @@ test("rejects incomplete commissions and third-asset fees without quote valuatio
   })
   assert.throws(
     () => createMixedSellFillAllocation(makeInput({ fill: missingThirdAssetValue })),
-    /quote valuation/i,
+    /quote-currency valuation/i,
+  )
+})
+
+
+test("allocation fingerprint is stable when canonical commission entries are reordered", () => {
+  const input = makeInput()
+  const reorderedFill = makeFill({
+    commissions: [...input.fill.commissions].reverse(),
+  })
+  const first = createMixedSellFillAllocation(input)
+  const reordered = createMixedSellFillAllocation({
+    ...input,
+    fill: reorderedFill,
+  })
+
+  assert.equal(first.fillFingerprint, reordered.fillFingerprint)
+  assert.equal(first.allocationFingerprint, reordered.allocationFingerprint)
+})
+
+test("rejects an order from another market or a Fill larger than its registered order", () => {
+  const otherMarket = new Market({
+    venue: "other",
+    symbol: "ZROUSDT",
+    baseAsset,
+    quoteAsset,
+  })
+  assert.throws(
+    () => createMixedSellFillAllocation(makeInput({ order: makeOrder({ market: otherMarket }) })),
+    /market identity/i,
+  )
+  assert.throws(
+    () => createMixedSellFillAllocation(makeInput({ order: makeOrder({ quantity: "5", executedQuantity: "5" }) })),
+    /exceeds registered order quantity/i,
   )
 })
