@@ -99,6 +99,8 @@ Relevant tests located include `strategy.test.js`, `recovery-sell-plan.test.js`,
 
 ## RS-2 — TDD the RS domain
 
+**Current implementation blocker — safe opening inventory:** the existing Portfolio quantity buckets are included in aggregate tracked Spot inventory and are used by account snapshot reconciliation and shared balance/reservation calculations. Initializing them from configured legacy basis would invent Spot custody; keeping legacy outside them leaves the current SELL fill accounting unable to debit that inventory. A separate verified Spot allocation and explicit legacy/recovery SELL attribution boundary are required. Do not fabricate fills or seed quantities from unverified wallet snapshots. See the detailed blocker in the [RS Domain Specification](./recovery-seller-domain-specification.md#43-portfolio-integration-blocker). RS-2b remains in progress; this boundary is the next implementation task.
+
 **Deliverable:** independent deterministic RS domain model and pure calculations, tests first.
 
 Before implementing each rule, add a focused test that expresses the agreed business invariant and observe it fail. Reuse existing domain capabilities directly where their contracts fit. If a required CG function is a genuine strategy-neutral capability, characterize it, extract it in the same focused change, add direct shared tests, and prove CG behavior is unchanged. Do not perform a separate speculative extraction pass.
