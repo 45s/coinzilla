@@ -1158,6 +1158,7 @@ function createConservativeEngineEvaluationContext({ context } = {}) {
     pairs: context.pairs,
     strategyPolicy: dependencies.strategyPolicy,
     settings: context.settings,
+    isMarketPriceFresh: dependencies.isMarketPriceFresh,
     cancelAndReconcileRecoverySells: context.cancelAndReconcileRecoverySells,
     hasBlockingOpenOrdersForSymbol: context.hasBlockingOpenOrdersForSymbol,
     evaluateLatestTransition: context.evaluateLatestTransition,

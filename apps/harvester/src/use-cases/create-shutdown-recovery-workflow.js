@@ -168,6 +168,10 @@ function getShutdownRecoverySellPlan({ dependencies, symbol, inventory } = {}) {
   const { state, strategyPolicy, pairs, settings } = dependencies
   const marketPrice = state.prices.get(symbol)
   if (!marketPrice) {return { reason: "MARKET_PRICE_UNAVAILABLE" }}
+  if (typeof dependencies.isMarketPriceFresh !== "function" ||
+      !dependencies.isMarketPriceFresh(marketPrice)) {
+    return { reason: "STALE_MARKET_PRICE" }
+  }
   try {
     const decision = strategyPolicy.evaluate({
       marketPrice,
@@ -310,7 +314,7 @@ function assessShutdownRecoverySellCoverage({ dependencies, symbol } = {}) {
 }
 
 function isShutdownRecoveryInputUnavailable({ assessment } = {}) {
-  return ["MARKET_PRICE_UNAVAILABLE", "MARKET_METADATA_UNAVAILABLE", "KEEP_QUANTITY_UNAVAILABLE", "RECOVERY_SELL_PLAN_UNAVAILABLE"].includes(assessment.reason)
+  return ["MARKET_PRICE_UNAVAILABLE", "STALE_MARKET_PRICE", "MARKET_METADATA_UNAVAILABLE", "KEEP_QUANTITY_UNAVAILABLE", "RECOVERY_SELL_PLAN_UNAVAILABLE"].includes(assessment.reason)
 }
 
 async function cancelStaleShutdownRecoverySells({ dependencies, symbol, assessment } = {}) {
@@ -354,25 +358,80 @@ function getShutdownRecoveryReplacementBlocker({ dependencies, symbol } = {}) {
   })
 }
 
+function getShutdownRecoveryReplacementDeferredFailure({ replacement, symbol } = {}) {
+  if (replacement.data?.deferred !== true) {return null}
+  const reason = replacement.data.reason ?? "UNKNOWN"
+  return shutdownRecoveryError({
+    code: "SHUTDOWN_RECOVERY_REPLACEMENT_DEFERRED",
+    message: `Shutdown recovery SELL replacement was deferred for ${symbol}: ${reason}`,
+  })
+}
+
+function getShutdownRecoveryReplacementSkippedFailure({ replacement, symbol } = {}) {
+  if (replacement.data?.skipped !== true) {return null}
+  const reason = replacement.data.reason ?? "UNKNOWN"
+  return shutdownRecoveryError({
+    code: "SHUTDOWN_RECOVERY_REPLACEMENT_SKIPPED",
+    message: `Shutdown recovery SELL replacement was skipped for ${symbol}: ${reason}`,
+  })
+}
+
+function getShutdownRecoveryReplacementNotSubmittedFailure({ replacement, symbol } = {}) {
+  const submittedSell = replacement.data?.submittedOrders?.some((order) => order.side === "SELL") === true
+  if (submittedSell) {return null}
+  const deferredReasons = replacement.data?.deferredActions
+    ?.map((action) => action.reason)
+    .filter(Boolean)
+    .join(", ")
+  const reason = replacement.data?.decision?.reason || deferredReasons || "NO_SELL_SUBMITTED"
+  return shutdownRecoveryError({
+    code: "SHUTDOWN_RECOVERY_REPLACEMENT_NOT_SUBMITTED",
+    message: `Shutdown recovery SELL replacement was not submitted for ${symbol}: ${reason}`,
+  })
+}
+
+function getShutdownRecoveryReplacementFailure({ replacement, symbol } = {}) {
+  if (!replacement?.ok) {
+    return replacement?.errors?.[0] ?? shutdownRecoveryError({
+      code: "SHUTDOWN_RECOVERY_REPLACEMENT_FAILED",
+      message: `Shutdown recovery SELL replacement failed for ${symbol}`,
+    })
+  }
+  return getShutdownRecoveryReplacementDeferredFailure({
+    replacement,
+    symbol,
+  }) ?? getShutdownRecoveryReplacementSkippedFailure({
+    replacement,
+    symbol,
+  }) ?? getShutdownRecoveryReplacementNotSubmittedFailure({
+    replacement,
+    symbol,
+  })
+}
+
 async function submitShutdownRecoveryReplacement({ dependencies, symbol } = {}) {
-  const blocker = getShutdownRecoveryReplacementBlocker({ dependencies,
-    symbol })
-  if (blocker) {return { ok: false,
-    error: blocker }}
+  const blocker = getShutdownRecoveryReplacementBlocker({
+    dependencies,
+    symbol,
+  })
+  if (blocker) {
+    return {
+      ok: false,
+      error: blocker,
+    }
+  }
   const replacement = await dependencies.evaluateLatestTransition({
     symbol,
     shutdownRecoveryOnly: true,
   })
-  const submittedSell = replacement?.data?.submittedOrders?.some((order) => order.side === "SELL") === true
-  if (!replacement?.ok || replacement.data?.deferred === true ||
-      replacement.data?.skipped === true || !submittedSell) {
+  const error = getShutdownRecoveryReplacementFailure({
+    replacement,
+    symbol,
+  })
+  if (error) {
     return {
       ok: false,
-      error: replacement?.errors?.[0] ??
-        shutdownRecoveryError({
-          code: "SHUTDOWN_RECOVERY_REPLACEMENT_UNCONFIRMED",
-          message: `Shutdown recovery SELL replacement was not confirmed for ${symbol}`,
-        }),
+      error,
     }
   }
   return { ok: true }
