@@ -6,25 +6,36 @@ function createBroker({ responses = {} } = {}) {
   const calls = []
   const restClient = {
     async request(method, path, options = {}) {
-      calls.push({ method, path, options })
+      calls.push({ method,
+        path,
+        options })
       const key = path
       if (responses[key] instanceof Error) throw responses[key]
       return { data: responses[key] }
     },
   }
   const broker = new BitunixSpotBroker(
-    { apiKey: "key", apiSecret: "secret", tradingMode: "live" },
+    { apiKey: "key",
+      apiSecret: "secret",
+      tradingMode: "live" },
     { restClientFactory: () => restClient },
   )
-  return { broker, calls }
+  return { broker,
+    calls }
 }
 
 test("Bitunix Spot broker loads canonical Spot markets", async () => {
   const { broker, calls } = createBroker({
     responses: {
       "/api/spot/v1/common/coin_pair/list": [
-        { symbol: "BTCUSDT", base: "BTC", quote: "USDT", isOpen: "1" },
-        { symbol: "ETHUSDT", base: "ETH", quote: "USDT", isOpen: "1" },
+        { symbol: "BTCUSDT",
+          base: "BTC",
+          quote: "USDT",
+          isOpen: "1" },
+        { symbol: "ETHUSDT",
+          base: "ETH",
+          quote: "USDT",
+          isOpen: "1" },
       ],
     },
   })
@@ -43,7 +54,9 @@ test("Bitunix Spot broker reads balances without inventing an account snapshot t
   const { broker, calls } = createBroker({
     responses: {
       "/api/spot/v1/user/account": [
-        { coin: "USDT", balance: "12.3400", balanceLocked: "1.25" },
+        { coin: "USDT",
+          balance: "12.3400",
+          balanceLocked: "1.25" },
       ],
     },
   })
@@ -102,7 +115,10 @@ test("Bitunix Spot broker fetches canonical fills for a specific order", async (
         utime: "2026-11-15T12:00:01Z",
       },
       "/api/spot/v1/common/coin_pair/list": [
-        { symbol: "BTCUSDT", base: "BTC", quote: "USDT", isOpen: "1" },
+        { symbol: "BTCUSDT",
+          base: "BTC",
+          quote: "USDT",
+          isOpen: "1" },
       ],
       "/api/spot/v1/order/deal/list": {
         id: "trade-1",
@@ -116,7 +132,8 @@ test("Bitunix Spot broker fetches canonical fills for a specific order", async (
     },
   })
 
-  const result = await broker.getFills({ symbol: "BTCUSDT", orderId: "123" })
+  const result = await broker.getFills({ symbol: "BTCUSDT",
+    orderId: "123" })
 
   assert.equal(result.ok, true)
   assert.equal(result.data.length, 1)
@@ -132,12 +149,14 @@ test("Bitunix Spot broker fetches canonical fills for a specific order", async (
 test("Bitunix Spot broker never submits or cancels orders without safe identity and stream guarantees", async () => {
   const { broker, calls } = createBroker()
 
-  const created = await broker.createOrder({ symbol: "BTCUSDT", side: "BUY" })
+  const created = await broker.createOrder({ symbol: "BTCUSDT",
+    side: "BUY" })
   const canonicalCreated = await broker.createCanonicalOrder({
     symbol: "BTCUSDT",
     clientOrderId: "caller-order-1",
   })
-  const cancelled = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: "123" })
+  const cancelled = await broker.cancelOrder({ symbol: "BTCUSDT",
+    orderId: "123" })
   const cancelledAll = await broker.cancelAllOpenOrders({ symbol: "BTCUSDT" })
 
   assert.equal(created.ok, false)
@@ -167,33 +186,45 @@ test("Bitunix Spot broker exposes symbol metadata, price, order detail and histo
   const { broker, calls } = createBroker({
     responses: {
       "/api/spot/v1/common/coin_pair/list": [
-        { symbol: "BTCUSDT", base: "BTC", quote: "USDT", basePrecision: 8, isOpen: "1" },
+        { symbol: "BTCUSDT",
+          base: "BTC",
+          quote: "USDT",
+          basePrecision: 8,
+          isOpen: "1" },
       ],
-      "/api/spot/v1/market/last_price": { symbol: "BTCUSDT", price: "10.25" },
+      "/api/spot/v1/market/last_price": { symbol: "BTCUSDT",
+        price: "10.25" },
       "/api/spot/v1/order/detail": order,
-      "/api/spot/v1/order/history/page": { data: [order], total: 1 },
+      "/api/spot/v1/order/history/page": { data: [order],
+        total: 1 },
     },
   })
 
   const metadata = await broker.getSymbolFilters({ symbol: "btcusdt" })
   const price = await broker.getPrice({ symbol: "btcusdt" })
-  const detail = await broker.getOrder({ symbol: "BTCUSDT", orderId: "123" })
-  const history = await broker.getOrderHistory({ symbol: "BTCUSDT", limit: 25 })
+  const detail = await broker.getOrder({ symbol: "BTCUSDT",
+    orderId: "123" })
+  const history = await broker.getOrderHistory({ symbol: "BTCUSDT",
+    limit: 25 })
 
   assert.equal(metadata.data.basePrecision, 8)
   assert.equal(price.data.price, "10.25")
   assert.equal(detail.data.id, "123")
   assert.equal(history.data.length, 1)
   assert.equal(history.data[0].orderId, "123")
-  assert.deepEqual(calls[3].options.body, { symbol: "BTCUSDT", page: 1, pageSize: 25 })
+  assert.deepEqual(calls[3].options.body, { symbol: "BTCUSDT",
+    page: 1,
+    pageSize: 25 })
 })
 
 test("Bitunix Spot broker validates order history query boundaries", async () => {
   const { broker, calls } = createBroker()
 
   const missingSymbol = await broker.getOrderHistory()
-  const exactOrderId = await broker.getOrderHistory({ symbol: "BTCUSDT", orderId: "123" })
-  const invalidLimit = await broker.getOrderHistory({ symbol: "BTCUSDT", limit: 0 })
+  const exactOrderId = await broker.getOrderHistory({ symbol: "BTCUSDT",
+    orderId: "123" })
+  const invalidLimit = await broker.getOrderHistory({ symbol: "BTCUSDT",
+    limit: 0 })
   const invalidRange = await broker.getOrderHistory({
     symbol: "BTCUSDT",
     startTime: 20,
@@ -248,7 +279,8 @@ test("Bitunix Spot broker rejects order detail identity mismatches", async () =>
     },
   })
 
-  const result = await broker.getOrder({ symbol: "BTCUSDT", orderId: "123" })
+  const result = await broker.getOrder({ symbol: "BTCUSDT",
+    orderId: "123" })
 
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /identity/i)
@@ -281,12 +313,17 @@ test("Bitunix Spot broker normalizes a single pending-order response row", async
 test("Bitunix Spot broker supports explicit history page selection", async () => {
   const { broker, calls } = createBroker({
     responses: {
-      "/api/spot/v1/order/history/page": { data: [], total: 0 },
+      "/api/spot/v1/order/history/page": { data: [],
+        total: 0 },
     },
   })
 
-  const result = await broker.getOrderHistory({ symbol: "BTCUSDT", page: 3, limit: 20 })
+  const result = await broker.getOrderHistory({ symbol: "BTCUSDT",
+    page: 3,
+    limit: 20 })
 
   assert.equal(result.ok, true)
-  assert.deepEqual(calls[0].options.body, { symbol: "BTCUSDT", page: 3, pageSize: 20 })
+  assert.deepEqual(calls[0].options.body, { symbol: "BTCUSDT",
+    page: 3,
+    pageSize: 20 })
 })
