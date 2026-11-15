@@ -229,7 +229,10 @@ test("reopens a NOT_COMPLETED recovery SELL with exact cycle evidence and sticky
     .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const recoveryLedger = RecoveryLedger.empty({ market })
     .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
-    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({
+      fill: sellFill,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).ledger
   const position = portfolio.getPosition({ marketId: market.id })
   const evaluated = evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,

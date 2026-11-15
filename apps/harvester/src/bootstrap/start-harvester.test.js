@@ -5782,9 +5782,18 @@ test("logs safe correlation details when an execution report is not owned", asyn
     market: metadata.market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "65000", asset: metadata.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "0.01", asset: metadata.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: metadata.market.baseAsset }),
+    limitPrice: new Money({
+      amount: "65000",
+      asset: metadata.market.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "0.01",
+      asset: metadata.market.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: metadata.market.baseAsset,
+    }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -5860,7 +5869,10 @@ test("reconciles the in-memory order registry before reopening trading after str
       NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {},
+    },
   })
 
   assert.equal(result.userDataReady, true)
