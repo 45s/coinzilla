@@ -13,7 +13,7 @@ const LOG_METHODS = Object.freeze([
   "system",
 ])
 
-test("adds canonical strategy ownership to every shared logger method", () => {
+test("adds the configured strategy identity when structured data has no supported owner", () => {
   const calls = []
   const logger = Object.fromEntries(LOG_METHODS.map((method) => [
     method,
@@ -40,7 +40,7 @@ test("adds canonical strategy ownership to every shared logger method", () => {
   )
   assert.ok(
     calls.every(({ data }) => data.strategyId === StrategyId.COIN_GRABBER),
-    "A strategy logger must stamp every emitted record with its owning strategy, overriding conflicting caller metadata.",
+    "A strategy logger must stamp every emitted record with its owning strategy when no supported canonical owner is present.",
   )
   assert.equal(
     originalData.strategyId,
