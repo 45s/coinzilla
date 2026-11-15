@@ -144,8 +144,8 @@ test("renders Portfolio Stats as a concise readable summary instead of JSON", ()
   )
   assert.match(
     line,
-    /🪙 CG PORTFOLIO ZROFDUSD \| Inventory: 25\.15 ZRO \| Spent: 13\.835 FDUSD \| Net: -13\.835 FDUSD/,
-    "The operator console must show the market, total inventory, spent quote and net quote flow in a readable compact Portfolio summary.",
+    /🪙 CG PORTFOLIO ZROFDUSD \| Amount: 25\.15 ZRO \| Earned: 0\.15 ZRO \| Spent: 13\.835 FDUSD \| Net: -13\.835 FDUSD/,
+    "The operator console must show total coins, retained coins earned from completed cycles, current-cycle spent quote, and cumulative net quote cash flow.",
   )
   assert.doesNotMatch(
     line,
@@ -156,6 +156,31 @@ test("renders Portfolio Stats as a concise readable summary instead of JSON", ()
     line.length <= 200,
     "The concise Portfolio summary must fit the ordinary terminal line budget.",
   )
+  output.destroy()
+})
+
+
+test("prints every enabled market symbol in the subscriptions-ready summary", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+
+  transport.write({
+    timestamp: "2026-11-16T01:17:01.000Z",
+    level: "info",
+    data: {
+      message: "Market data subscriptions ready",
+      enabledSymbols: ["LINKUSDT", "ZROUSDT", "DOGEUSDT", "ADAUSDT"],
+    },
+  })
+
+  assert.match(written, /"enabledSymbols":\["LINKUSDT","ZROUSDT","DOGEUSDT","ADAUSDT"\]/)
   output.destroy()
 })
 
@@ -646,6 +671,7 @@ test("keeps strategy-owned order facts on compact single-space lifecycle lines",
       side: "SELL",
       quantity: "4.98",
       price: "1.393",
+      detail: "Client order ID: h-325e71ba16494aeb875e6e-3",
     },
   })
   transport.write({
