@@ -97,66 +97,21 @@ const STRATEGY_LABELS = Object.freeze({
 })
 
 const ORDER_STATUS_PRESENTATION = Object.freeze({
-  SUBMITTED: {
-    indicator: "🔵",
-    label: "SUBMITTED",
-  },
-  ACCEPTED: {
-    indicator: "🔵",
-    label: "ACCEPTED",
-  },
-  PARTIAL_FILL: {
-    indicator: "🟠",
-    label: "PARTIAL FILL",
-  },
-  FILLED: {
-    indicator: "🟢",
-    label: "FILLED",
-  },
-  CANCEL_REQUESTED: {
-    indicator: "🔵",
-    label: "CANCEL REQUESTED",
-  },
-  CANCELLED: {
-    indicator: "🔴",
-    label: "CANCELLED",
-  },
-  REJECTED: {
-    indicator: "🔴",
-    label: "REJECTED",
-  },
-  EXPIRED: {
-    indicator: "🔴",
-    label: "EXPIRED",
-  },
-  FAILED: {
-    indicator: "🔴",
-    label: "FAILED",
-  },
-  UNKNOWN: {
-    indicator: "🟠",
-    label: "UNKNOWN",
-  },
-  CANCEL_UNKNOWN: {
-    indicator: "🟠",
-    label: "CANCEL UNKNOWN",
-  },
-  CANCEL_NOT_CONFIRMED: {
-    indicator: "🟠",
-    label: "CANCEL UNCONFIRMED",
-  },
-  CANCEL_NOT_SENT: {
-    indicator: "🔴",
-    label: "CANCEL NOT SENT",
-  },
-  CANCEL_FAILED: {
-    indicator: "🔴",
-    label: "CANCEL FAILED",
-  },
-  STALE_CANCEL_IGNORED: {
-    indicator: "⚪",
-    label: "STALE CANCEL IGNORED",
-  },
+  SUBMITTED: "SUBMITTED",
+  ACCEPTED: "ACCEPTED",
+  PARTIAL_FILL: "PARTIAL FILL",
+  FILLED: "FILLED",
+  CANCEL_REQUESTED: "CANCEL REQUESTED",
+  CANCELLED: "CANCELLED",
+  REJECTED: "REJECTED",
+  EXPIRED: "EXPIRED",
+  FAILED: "FAILED",
+  UNKNOWN: "UNKNOWN",
+  CANCEL_UNKNOWN: "CANCEL UNKNOWN",
+  CANCEL_NOT_CONFIRMED: "CANCEL UNCONFIRMED",
+  CANCEL_NOT_SENT: "CANCEL NOT SENT",
+  CANCEL_FAILED: "CANCEL FAILED",
+  STALE_CANCEL_IGNORED: "STALE CANCEL IGNORED",
 })
 
 function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
@@ -167,12 +122,9 @@ function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
     hour12: false,
   })
   const strategy = (STRATEGY_LABELS[data.strategyId] ?? "⚪SYS").padEnd(STRATEGY_COLUMN_WIDTH)
-  const statusPresentation = ORDER_STATUS_PRESENTATION[data.lifecycleStatus] ?? {
-    indicator: "⚪",
-    label: String(data.lifecycleStatus ?? "INFO"),
-  }
-  const status = (statusPresentation.indicator + " " + statusPresentation.label)
-    .padEnd(STATUS_COLUMN_WIDTH)
+  const status = String(
+    ORDER_STATUS_PRESENTATION[data.lifecycleStatus] ?? data.lifecycleStatus ?? "INFO",
+  ).padEnd(STATUS_COLUMN_WIDTH)
   const orderId = (data.brokerOrderId ? "#" + data.brokerOrderId : "#pending")
     .padEnd(ORDER_ID_COLUMN_WIDTH)
   const symbol = String(data.symbol ?? "-").padEnd(SYMBOL_COLUMN_WIDTH)
