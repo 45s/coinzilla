@@ -190,6 +190,8 @@ its existing success criteria, and `FAILED` means its existing failure
 criteria were met. These labels describe the current lifecycle outcome; they
 do not change shutdown ordering or failure semantics.
 
+The shared console transport owns terminal rendering and deduplication; lifecycle owners continue emitting structured phase records rather than formatting terminal text themselves.
+
 The phase formatter normalizes and validates the phase/status tokens and timestamp
 before producing a line. Malformed records fall back to the ordinary compact-
 summary path. Formatting does not mutate the structured input.
