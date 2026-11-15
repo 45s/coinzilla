@@ -1,4 +1,5 @@
 import { Fill } from "@coinzilla/entities"
+import { isHarvesterClientOrderId } from "../../application/orders/is-harvester-client-order-id.js"
 
 const retryableFailureCategories = new Set(["ORDER_TRANSITION", "REST_RECONCILIATION", "DURABILITY"])
 const terminalFailureCategories = new Set(["OWNERSHIP_INTEGRITY", "ACCOUNTING_INTEGRITY"])
@@ -55,12 +56,12 @@ function getUserDataEventSymbol({ event, identity }) {
   return identity.rejectedOrder?.market?.symbol ?? event.fill?.market?.symbol
 }
 
-function requiresStickySafetyBlocker({ failure, event, onSafetyBlockerRaised }) {
+function requiresStickySafetyBlocker({ failure, event, onSafetyBlockerRaised, externalOrderPolicyBlock }) {
   const isUnownedExecution = event.executionType === "TRADE" || event.fill instanceof Fill
   const terminalAccountingFailure = failure.category === "ACCOUNTING_INTEGRITY"
   const unownedExecutionFailure = failure.category === "OWNERSHIP_INTEGRITY" && isUnownedExecution
   return typeof onSafetyBlockerRaised === "function" &&
-    (terminalAccountingFailure || unownedExecutionFailure)
+    (terminalAccountingFailure || unownedExecutionFailure || externalOrderPolicyBlock)
 }
 
 function createStickySafetyBlockerRequest({ failure, event, identity, eventSymbol }) {
@@ -103,18 +104,23 @@ function logStickySafetyBlockerException({ logger, error, eventSymbol, failure }
   })
 }
 
-async function persistStickySafetyBlocker({ failure, event, identity, onSafetyBlockerRaised, logger }) {
+async function persistStickySafetyBlocker({
+  failure,
+  event,
+  identity,
+  onSafetyBlockerRaised,
+  logger,
+  externalOrderPolicyBlock = false,
+}) {
+  const eventSymbol = getUserDataEventSymbol({ event, identity })
   if (!requiresStickySafetyBlocker({
     failure,
     event,
     onSafetyBlockerRaised,
+    externalOrderPolicyBlock,
   })) {
     return
   }
-  const eventSymbol = getUserDataEventSymbol({
-    event,
-    identity,
-  })
   const request = createStickySafetyBlockerRequest({
     failure,
     event,
@@ -177,9 +183,51 @@ function logRejectedOrderEvent({ processed, failure, retryable, event, identity,
   })
 }
 
+function isExternalOrderPolicyBlock({ failure, event, identity, eventSymbol } = {}) {
+  const hasHarvesterIdentity = [
+    identity.clientOrderId,
+    event.clientOrderId,
+    event.originalClientOrderId,
+  ].some(isHarvesterClientOrderId)
+  return failure.category === "OWNERSHIP_INTEGRITY" &&
+    failure.stage === "ORDER_REGISTRY_MATCH" &&
+    failure.retryable === false &&
+    event.eventType === "executionReport" &&
+    typeof eventSymbol === "string" &&
+    !hasHarvesterIdentity
+}
+
 async function handleFailedOrderEvent({ processed, event, tradingEngine, state, onSafetyBlockerRaised, logger }) {
   const failure = resolveUserDataFailure(processed.failure)
   const retryable = failure.retryable === true && retryableFailureCategories.has(failure.category)
+  const identity = getOrderIdentityDiagnostics({ event, tradingEngine })
+  const eventSymbol = getUserDataEventSymbol({ event, identity })
+  const externalOrderPolicyBlock = isExternalOrderPolicyBlock({
+    failure,
+    event,
+    identity,
+    eventSymbol,
+  })
+  if (externalOrderPolicyBlock) {
+    await persistStickySafetyBlocker({
+      failure,
+      event,
+      identity,
+      onSafetyBlockerRaised,
+      logger,
+      externalOrderPolicyBlock: true,
+    })
+    logRejectedOrderEvent({
+      processed,
+      failure,
+      retryable,
+      event,
+      identity,
+      logger,
+    })
+    return
+  }
+
   state.ready = false
   state.requiresReconciliation = true
   if (retryable) {
@@ -198,10 +246,6 @@ async function handleFailedOrderEvent({ processed, event, tradingEngine, state, 
     ? "EXECUTION_ACCOUNTING_FAILED"
     : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
 
-  const identity = getOrderIdentityDiagnostics({
-    event,
-    tradingEngine,
-  })
   await persistStickySafetyBlocker({
     failure,
     event,
