@@ -770,3 +770,38 @@ test("does not suppress identical messages from different strategies", () => {
   assert.match(written, /🔴 RS Strategy transition evaluated/)
   output.destroy()
 })
+
+test("identifies the Binance market-data stream when trading is not enabled", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+
+  transport.write({
+    timestamp: "2026-11-15T19:14:54.000Z",
+    level: "info",
+    method: "system",
+    data: {
+      message: "Connected; Binance trading mode is TESTNET.",
+    },
+  })
+
+  assert.match(
+    written,
+    /Binance market-data stream connected; Binance trading mode is TESTNET\./,
+    "A connected read-only runtime must identify its market-data stream instead of reporting an unspecified Binance connection.",
+  )
+  assert.doesNotMatch(
+    written,
+    /user-data readiness|user-data stream ready/i,
+    "A market-data connection summary must not imply that user-data readiness has been established.",
+  )
+  transport.close()
+  output.destroy()
+})
+
