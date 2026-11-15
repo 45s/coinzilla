@@ -82,7 +82,8 @@ export class BitunixSpotBroker extends CoreBroker {
         operation: "account",
       })) })
     } catch (error) {
-      handleErr({ where: "BitunixSpotBroker.getBalances()", error })
+      handleErr({ where: "BitunixSpotBroker.getBalances()",
+        error })
       return toResult({ errors: [error] })
     }
   }
@@ -98,7 +99,8 @@ export class BitunixSpotBroker extends CoreBroker {
   async getExchangeMarkets() {
     try {
       const response = await this.restClient.request("GET", API.markets)
-      const rows = requireArray({ value: response.data, operation: "market catalog" })
+      const rows = requireArray({ value: response.data,
+        operation: "market catalog" })
       const markets = rows.map((symbolInfo) => createCanonicalMarket({ symbolInfo }))
       const seen = new Set()
       for (const market of markets) {
@@ -110,16 +112,19 @@ export class BitunixSpotBroker extends CoreBroker {
       }
       return toResult({ data: Object.freeze(markets) })
     } catch (error) {
-      handleErr({ where: "BitunixSpotBroker.getExchangeMarkets()", error })
+      handleErr({ where: "BitunixSpotBroker.getExchangeMarkets()",
+        error })
       return toResult({ errors: [error] })
     }
   }
 
   async getSymbolFilters({ symbol } = {}) {
     try {
-      const normalizedSymbol = requireSymbol({ symbol, operation: "getSymbolFilters()" })
+      const normalizedSymbol = requireSymbol({ symbol,
+        operation: "getSymbolFilters()" })
       const response = await this.restClient.request("GET", API.markets)
-      const rows = requireArray({ value: response.data, operation: "market catalog" })
+      const rows = requireArray({ value: response.data,
+        operation: "market catalog" })
       const symbolInfo = rows.find((row) =>
         typeof row?.symbol === "string" && row.symbol.toUpperCase() === normalizedSymbol,
       )
@@ -128,32 +133,37 @@ export class BitunixSpotBroker extends CoreBroker {
       }
       return toResult({ data: symbolInfo })
     } catch (error) {
-      handleErr({ where: "BitunixSpotBroker.getSymbolFilters()", error })
+      handleErr({ where: "BitunixSpotBroker.getSymbolFilters()",
+        error })
       return toResult({ errors: [error] })
     }
   }
 
   async getOpenOrders({ symbol } = {}) {
     try {
-      const normalizedSymbol = requireSymbol({ symbol, operation: "getOpenOrders()" })
+      const normalizedSymbol = requireSymbol({ symbol,
+        operation: "getOpenOrders()" })
       const response = await this.restClient.request("POST", API.pendingOrders, {
         body: { symbol: normalizedSymbol },
       })
       const rows = normalizeOrderRows({ value: response.data })
       return toResult({ data: rows.map(adaptOrder) })
     } catch (error) {
-      handleErr({ where: "BitunixSpotBroker.getOpenOrders()", error })
+      handleErr({ where: "BitunixSpotBroker.getOpenOrders()",
+        error })
       return toResult({ errors: [error] })
     }
   }
 
   async getOrderHistory({ symbol, orderId, startTime, endTime, limit, page = 1 } = {}) {
     try {
-      const normalizedSymbol = requireSymbol({ symbol, operation: "getOrderHistory()" })
+      const normalizedSymbol = requireSymbol({ symbol,
+        operation: "getOrderHistory()" })
       if (!Number.isInteger(page) || page < 1) {
         throw new RangeError("Bitunix Spot order history page must be a positive integer")
       }
-      const body = { symbol: normalizedSymbol, page }
+      const body = { symbol: normalizedSymbol,
+        page }
       if (limit !== undefined) {
         if (!Number.isInteger(limit) || limit < 1) {
           throw new RangeError("Bitunix Spot order history limit must be a positive integer")
@@ -175,16 +185,19 @@ export class BitunixSpotBroker extends CoreBroker {
       }
       const response = await this.restClient.request("POST", API.orderHistory, { body })
       const rows = response.data?.data
-      return toResult({ data: requireArray({ value: rows, operation: "order history" }) })
+      return toResult({ data: requireArray({ value: rows,
+          operation: "order history" }) })
     } catch (error) {
-      handleErr({ where: "BitunixSpotBroker.getOrderHistory()", error })
+      handleErr({ where: "BitunixSpotBroker.getOrderHistory()",
+        error })
       return toResult({ errors: [error] })
     }
   }
 
   async getOrder({ symbol, orderId } = {}) {
     try {
-      const normalizedSymbol = requireSymbol({ symbol, operation: "getOrder()" })
+      const normalizedSymbol = requireSymbol({ symbol,
+        operation: "getOrder()" })
       if ((typeof orderId !== "string" && typeof orderId !== "number") || !String(orderId).trim()) {
         throw new TypeError("Bitunix Spot getOrder() requires a broker orderId")
       }
@@ -200,20 +213,23 @@ export class BitunixSpotBroker extends CoreBroker {
       }
       return toResult({ data: adaptOrder(response.data) })
     } catch (error) {
-      handleErr({ where: "BitunixSpotBroker.getOrder()", error })
+      handleErr({ where: "BitunixSpotBroker.getOrder()",
+        error })
       return toResult({ errors: [error] })
     }
   }
 
   async getPrices({ symbol } = {}) {
     try {
-      const normalizedSymbol = requireSymbol({ symbol, operation: "getPrices()" })
+      const normalizedSymbol = requireSymbol({ symbol,
+        operation: "getPrices()" })
       const response = await this.restClient.request("GET", API.lastPrice, {
         queryParams: { symbol: normalizedSymbol },
       })
       return toResult({ data: response.data })
     } catch (error) {
-      handleErr({ where: "BitunixSpotBroker.getPrices()", error })
+      handleErr({ where: "BitunixSpotBroker.getPrices()",
+        error })
       return toResult({ errors: [error] })
     }
   }
@@ -221,7 +237,8 @@ export class BitunixSpotBroker extends CoreBroker {
 
   async getFills({ symbol, orderId } = {}) {
     try {
-      const normalizedSymbol = requireSymbol({ symbol, operation: "getFills()" })
+      const normalizedSymbol = requireSymbol({ symbol,
+        operation: "getFills()" })
       if ((typeof orderId !== "string" && typeof orderId !== "number") || !String(orderId).trim()) {
         throw new TypeError("Bitunix Spot getFills() requires a broker orderId")
       }
@@ -236,7 +253,8 @@ export class BitunixSpotBroker extends CoreBroker {
         throw new TypeError("Bitunix Spot fill lookup order identity does not match the request")
       }
       const marketResponse = await this.restClient.request("GET", API.markets)
-      const marketRows = requireArray({ value: marketResponse.data, operation: "market catalog" })
+      const marketRows = requireArray({ value: marketResponse.data,
+        operation: "market catalog" })
       const symbolInfo = marketRows.find((row) =>
         typeof row?.symbol === "string" && row.symbol.toUpperCase() === normalizedSymbol,
       )
@@ -248,20 +266,23 @@ export class BitunixSpotBroker extends CoreBroker {
       this.canonicalMarkets.set(normalizedSymbol, market)
 
       const dealsResponse = await this.restClient.request("POST", API.orderDeals, {
-        body: { orderId: String(orderId), symbol: normalizedSymbol },
+        body: { orderId: String(orderId),
+          symbol: normalizedSymbol },
       })
       const deals = dealsResponse.data === null || dealsResponse.data === undefined
         ? []
         : Array.isArray(dealsResponse.data) ? dealsResponse.data : [dealsResponse.data]
       return toResult({
         data: deals.map((trade) => adaptCanonicalFill({
-          trade: { ...trade, orderId: String(orderId) },
+          trade: { ...trade,
+            orderId: String(orderId) },
           side: normalizeOrderSide({ side: order.side }),
           market,
         })),
       })
     } catch (error) {
-      handleErr({ where: "BitunixSpotBroker.getFills()", error })
+      handleErr({ where: "BitunixSpotBroker.getFills()",
+        error })
       return toResult({ errors: [error] })
     }
   }
