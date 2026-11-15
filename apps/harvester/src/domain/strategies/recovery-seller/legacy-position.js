@@ -1,11 +1,11 @@
 import {
   assertDecimalString,
+  DEFAULT_DECIMAL_DIVISION_SCALE,
   compareDecimal,
   divideDecimal,
   subtractDecimal,
 } from "@coinzilla/utils"
 
-const averageCostScale = 36
 
 function assertPositiveAmount({ value, field }) {
   assertDecimalString({
@@ -71,7 +71,7 @@ export function createLegacyPosition({ invested, quantity } = {}) {
   const averageCost = divideDecimal({
     left: invested,
     right: quantity,
-    scale: averageCostScale,
+    scale: DEFAULT_DECIMAL_DIVISION_SCALE,
     rounding: "away-from-zero",
   })
 
