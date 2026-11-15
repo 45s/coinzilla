@@ -504,6 +504,72 @@ test("records unowned open orders as blocked without adopting them", async () =>
 })
 
 
+test("keeps a newly observed external-order symbol guarded until its authoritative audit is durable", async () => {
+  const externalOrder = {
+    id: "external-order-2",
+    symbol: "BTCUSDT",
+    side: "SELL",
+    type: "LIMIT",
+    originalPrice: "65000",
+    originalQuantity: "0.01",
+    executedQuantity: "0",
+    status: "NEW",
+    clientOrderId: "manual-order-2",
+  }
+  const fixture = createFixture({ openOrders: [externalOrder] })
+
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "BTCUSDT" }), false,
+    "A symbol with no accepted account-wide audit must not start with a stale external-order blocker.")
+  const reconciliation = fixture.manager.observeExternalOrder({ symbol: "BTCUSDT" })
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "BTCUSDT" }), true,
+    "The event observation must install a provisional symbol blocker before asynchronous broker I/O.")
+  const result = await reconciliation
+
+  assert.equal(result.ok, true, "A successful authoritative account-wide audit must complete external-order reconciliation.")
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "BTCUSDT" }), true,
+    "The durable snapshot must retain the blocker when the manual order is still open.")
+  assert.equal(fixture.publishedEvents.length, 1, "One authoritative recovery audit must be published.")
+  assert.equal(fixture.publishedEvents[0].data.phase, "RECOVERY",
+    "The new-order reconciliation must be distinguishable from the startup PREFLIGHT audit.")
+  assert.equal(fixture.publishedEvents[0].data.readiness, "BLOCKED",
+    "The audit must durably classify the external order as unowned.")
+  assert.equal(fixture.getFlushCount(), 1,
+    "The account-wide snapshot must cross its Journal durability barrier before reconciliation resolves.")
+})
+
+test("clears a provisional external-order blocker only after an empty authoritative snapshot is durably flushed", async () => {
+  const fixture = createFixture({ openOrders: [] })
+
+  const reconciliation = fixture.manager.observeExternalOrder({ symbol: "BTCUSDT" })
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "BTCUSDT" }), true,
+    "A newly observed manual order must be blocked while its authoritative status is unknown.")
+  const result = await reconciliation
+
+  assert.equal(result.ok, true, "The empty authoritative snapshot must reconcile successfully.")
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "BTCUSDT" }), false,
+    "A durable snapshot with no open external order must release only the provisional blocker.")
+  assert.equal(fixture.publishedEvents[0].data.phase, "RECOVERY")
+  assert.equal(fixture.publishedEvents[0].data.readiness, "READY")
+  assert.equal(fixture.getFlushCount(), 1,
+    "The provisional blocker must not be released before the account-wide audit is durable.")
+})
+
+test("retains the provisional external-order blocker when authoritative audit durability fails", async () => {
+  const fixture = createFixture({
+    openOrders: [],
+    flushResults: [{ ok: false, durable: false, errors: [new Error("audit flush failed")] }],
+  })
+
+  const result = await fixture.manager.observeExternalOrder({ symbol: "BTCUSDT" })
+
+  assert.equal(result.ok, false, "A failed Journal barrier must be reported to the caller.")
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "BTCUSDT" }), true,
+    "A failed or uncommitted snapshot must never release the provisional market blocker.")
+  assert.equal(fixture.publishedEvents.length, 1,
+    "The failed durability attempt must retain the observed account-wide audit evidence in memory.")
+  assert.equal(fixture.getFlushCount(), 1)
+})
+
 test("records unowned open orders as blocked and scopes the strategy gate to their symbol", async () => {
   const externalOrder = {
     id: "external-order-1",
