@@ -73,6 +73,12 @@ function resolveRegisteredOrderOwnership({ fill, orderRegistry }) {
   if (orderOwnership.strategyId !== StrategyId.RECOVERY_SELLER) {
     throw new TypeError("Mixed SELL allocation requires Recovery Seller order ownership")
   }
+  if (orderOwnership.purpose !== "RECOVERY_SELL") {
+    throw new TypeError("Mixed SELL allocation requires RECOVERY_SELL order purpose")
+  }
+  if (typeof orderOwnership.cycleId !== "string" || !orderOwnership.cycleId.trim()) {
+    throw new TypeError("Mixed SELL allocation requires a registered Recovery Seller cycleId")
+  }
 
   return Object.freeze({
     order,
