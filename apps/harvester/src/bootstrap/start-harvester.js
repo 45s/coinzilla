@@ -2,6 +2,7 @@ import { isMarketDataFresh } from "../domain/market/is-market-data-fresh.js"
 import { defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import { createStrategyLogger } from "../application/logging/create-strategy-logger.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeConservativeTradingEngine } from "../use-cases/conservative-trading-engine.js"
 import { createCandleHistoryService } from "../use-cases/create-candle-history-service.js"
@@ -266,7 +267,10 @@ function createHarvesterPortfolioContext({ startup } = {}) {
   const context = {
     portfolioWorkflow: createPortfolioWorkflow({
       evaluateStrategy: startup.evaluateStrategy,
-      logger: startup.logger,
+      logger: createStrategyLogger({
+        logger: startup.logger,
+        strategyId: StrategyId.COIN_GRABBER,
+      }),
       onCommissionAsset: startup.onCommissionAsset,
       onOperationalStateExecutionFill: startup.onOperationalStateExecutionFill,
       onOperationalStateRecoveryCycleCompleted: startup.onOperationalStateRecoveryCycleCompleted,
@@ -514,7 +518,10 @@ async function startHarvesterPreflightServices({ startup, portfolio, resources, 
   })
   portfolio.portfolioWorkflow = createPortfolioWorkflow({
     evaluateStrategy: startup.evaluateStrategy,
-    logger: startup.logger,
+    logger: createStrategyLogger({
+      logger: startup.logger,
+      strategyId: StrategyId.COIN_GRABBER,
+    }),
     onCommissionAsset: startup.onCommissionAsset,
     onOperationalStateExecutionFill: startup.onOperationalStateExecutionFill,
     onOperationalStateRecoveryCycleCompleted: startup.onOperationalStateRecoveryCycleCompleted,
