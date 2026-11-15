@@ -88,6 +88,19 @@ async function handleUnownedOrderEvent({ dependencies, event, order, symbol } = 
   }
 }
 
+function getRegisteredOrder({ registry, order } = {}) {
+  const byClientOrderId = registry.getOrder?.({
+    clientOrderId: order.clientOrderId,
+  })
+  if (byClientOrderId) return byClientOrderId
+  if (order.brokerOrderId && typeof registry.getOrderByBrokerOrderId === "function") {
+    return registry.getOrderByBrokerOrderId({
+      brokerOrderId: order.brokerOrderId,
+    })
+  }
+  return undefined
+}
+
 async function prepareOrderEvent({ dependencies, event } = {}) {
   const { state, eventPublisher } = dependencies
   if (event?.eventType === "executionReport" && event?.brokerEvidence) {
@@ -112,9 +125,10 @@ async function prepareOrderEvent({ dependencies, event } = {}) {
     return { result: toResult({ data: { ignored: true } }) }
   }
   const { market: { symbol } } = order
-  const previousOrder = typeof state.registry.getOrder === "function"
-    ? state.registry.getOrder({ clientOrderId: order.clientOrderId })
-    : undefined
+  const previousOrder = getRegisteredOrder({
+    registry: state.registry,
+    order,
+  })
   const update = state.registry.applyUpdate({ order })
   if (update.unknown) {
     return handleUnownedOrderEvent({
@@ -193,10 +207,10 @@ async function reconcileEventFills({ dependencies, order, event, terminalFillsRe
 async function handleDuplicateOrStaleUpdate({ dependencies, order, symbol, update, recoveryMode } = {}) {
   const { state, cancelAndReconcileRecoverySells, evaluateLatestTransition } = dependencies
    if (update.duplicate || update.stale) {
-        if (update.stale && order.status === "CANCELED" &&
-            typeof state.registry.getOrder === "function") {
-          const reconciledOrder = state.registry.getOrder({
-            clientOrderId: order.clientOrderId,
+        if (update.stale && order.status === "CANCELED") {
+          const reconciledOrder = getRegisteredOrder({
+            registry: state.registry,
+            order,
           })
           if (reconciledOrder?.status === "FILLED") {
             logOrderLifecycle({
@@ -675,9 +689,10 @@ async function processUserDataEventTransition({
       recoveryMode })
     if (duplicateResult) {return duplicateResult}
     if (update.applied === true) {
-      const reconciledOrder = typeof state.registry.getOrder === "function"
-        ? state.registry.getOrder({ clientOrderId: order.clientOrderId }) ?? order
-        : order
+      const reconciledOrder = getRegisteredOrder({
+        registry: state.registry,
+        order,
+      }) ?? order
       const lifecycleStatus = getOrderLifecycleStatus({
         order: reconciledOrder,
         previousOrder,
@@ -685,6 +700,7 @@ async function processUserDataEventTransition({
       if (lifecycleStatus) {
         const ownership = state.registry.getOwnership?.({
           clientOrderId: reconciledOrder.clientOrderId,
+          brokerOrderId: reconciledOrder.brokerOrderId,
         })
         logOrderLifecycle({
           logger: dependencies.logger,

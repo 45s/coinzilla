@@ -237,7 +237,7 @@ TIME     STRATEGY  STATUS                  ORDER ID               SYMBOL        
              Executed: 20 | Remaining: 29.90
 \`\`\`
 
-The strategy identity is derived only from immutable OrderRegistry ownership:
+Order events are reconciled against the registered broker order ID when available, with client order ID as the fallback. Strategy identity is derived only from immutable OrderRegistry ownership:
 🟡GC for CG_coinGrabber and 🔴RS for RS_recoverySeller. It never changes with
 order status. ⚪SYS is reserved for system diagnostics that are not strategy
 lifecycle transitions. Supporting the RS label does not enable RS runtime

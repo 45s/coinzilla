@@ -1,6 +1,6 @@
 import { compareDecimal, subtractDecimal } from "@coinzilla/utils"
 
-function getLifecycleDetail({ order, status, quantity, executedQuantity, remainingQuantity } = {}) {
+function getLifecycleDetail({ order, status, executedQuantity, remainingQuantity } = {}) {
   if (status === "PARTIAL_FILL") {
     return "Executed: " + executedQuantity + " | Remaining: " + remainingQuantity
   }
@@ -50,7 +50,6 @@ export function createOrderLifecycleLogData({
   const automaticDetail = getLifecycleDetail({
     order,
     status,
-    quantity,
     executedQuantity,
     remainingQuantity,
   })

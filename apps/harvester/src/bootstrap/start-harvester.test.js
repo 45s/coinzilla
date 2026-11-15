@@ -2655,14 +2655,16 @@ class TestnetTradingRecoveryScenario {
   
     await new Promise((resolve) => setImmediate(resolve))
   
-    this.processedOrderLog = this.runtimeInfo.find(({ message }) =>
-      message === "Order update processed" && message !== undefined)
+    this.acceptedOrderLog = this.runtimeInfo.find(({ orderLifecycle, lifecycleStatus, clientOrderId }) =>
+      orderLifecycle === true &&
+      lifecycleStatus === "ACCEPTED" &&
+      clientOrderId === acknowledgedBuy.clientOrderId)
   
-    assert.ok(this.processedOrderLog)
+    assert.ok(this.acceptedOrderLog)
   
-    assert.equal(this.processedOrderLog.price, this.submittedOrders[0].price)
+    assert.equal(this.acceptedOrderLog.price, this.submittedOrders[0].price)
   
-    assert.equal(this.processedOrderLog.quantity, this.submittedOrders[0].quantity)
+    assert.equal(this.acceptedOrderLog.quantity, this.submittedOrders[0].quantity)
   
   
     this.submitted = this.calls.find((call) => typeof call === "object")
