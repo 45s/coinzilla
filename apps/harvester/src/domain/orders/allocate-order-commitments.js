@@ -28,14 +28,21 @@ function assertAllocationInventoryConsistency({
   committedQuote,
   accountCommittedQuote,
 } = {}) {
-  assertAllocationInventoryConsistency({
-    activeBaseQuantity,
-    accountTrackedBaseBalance,
-    accountCommittedBase,
-    committedBase,
-    committedQuote,
-    accountCommittedQuote,
-  })
+  if (compareDecimal({ left: activeBaseQuantity, right: accountTrackedBaseBalance }) > 0) {
+    throw new RangeError("activeBaseQuantity cannot exceed total tracked base balance")
+  }
+  if (compareDecimal({ left: accountCommittedBase, right: accountTrackedBaseBalance }) > 0) {
+    throw new RangeError("committedBaseBalance cannot exceed total tracked base balance")
+  }
+  if (compareDecimal({ left: committedBase, right: activeBaseQuantity }) > 0) {
+    throw new RangeError("committedBase cannot exceed activeBaseQuantity")
+  }
+  if (compareDecimal({ left: committedQuote, right: accountCommittedQuote }) > 0) {
+    throw new RangeError("committedQuote cannot exceed committedQuoteBalance")
+  }
+  if (compareDecimal({ left: committedBase, right: accountCommittedBase }) > 0) {
+    throw new RangeError("committedBase cannot exceed committedBaseBalance")
+  }
 }
 
 function createAllocationContext({
@@ -88,21 +95,14 @@ function createAllocationContext({
     left: portfolioBaseBalance,
     right: additionalTrackedBaseBalance,
   })
-  if (compareDecimal({ left: activeBaseQuantity, right: accountTrackedBaseBalance }) > 0) {
-    throw new RangeError("activeBaseQuantity cannot exceed total tracked base balance")
-  }
-  if (compareDecimal({ left: accountCommittedBase, right: accountTrackedBaseBalance }) > 0) {
-    throw new RangeError("committedBaseBalance cannot exceed total tracked base balance")
-  }
-  if (compareDecimal({ left: committedBase, right: activeBaseQuantity }) > 0) {
-    throw new RangeError("committedBase cannot exceed activeBaseQuantity")
-  }
-  if (compareDecimal({ left: committedQuote, right: accountCommittedQuote }) > 0) {
-    throw new RangeError("committedQuote cannot exceed committedQuoteBalance")
-  }
-  if (compareDecimal({ left: committedBase, right: accountCommittedBase }) > 0) {
-    throw new RangeError("committedBase cannot exceed committedBaseBalance")
-  }
+  assertAllocationInventoryConsistency({
+    activeBaseQuantity,
+    accountTrackedBaseBalance,
+    accountCommittedBase,
+    committedBase,
+    committedQuote,
+    accountCommittedQuote,
+  })
 
   return {
     actions,
