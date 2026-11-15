@@ -125,6 +125,39 @@ The opposite shortcut is also unsafe: keeping the operator-declared legacy quant
 
 The first safe boundary therefore needs two distinct facts: (1) operator-declared legacy authorization and fixed historical basis, which do not establish custody; and (2) an independently verified, account-wide Spot custody allocation, which must respect other strategy Positions and all active reservations. A canonical SELL must debit the actual shared Spot allocation. Its RS accounting transition must also receive explicit, validated legacy/recovery allocation metadata tied to the canonical Fill ID and originating order ownership, so the legacy quantity is decremented exactly once. Keep the canonical Fill as exchange-neutral execution facts; do not add strategy-specific allocation to broker Fill data or fabricate a BUY Fill. The existing Portfolio has no operation or contract for this split today, so implementation must first add and test that explicit boundary rather than populate existing quantity buckets from configuration or an unverified wallet snapshot. This is an implementation blocker within RS-2b, not a new owner-policy question.
 
+### 4.4 Proposed accounting boundary — separate facts, one execution
+
+The next implementation slice must introduce an application-owned allocation boundary without changing the exchange-neutral `Fill` contract or pretending that the configured legacy quantity is already in Spot.
+
+1. **Order ownership:** retain immutable Harvester-owned metadata beside the canonical order, keyed by its registered `clientOrderId` and attached `brokerOrderId`. It identifies the originating `strategyId`, `positionId`, and RS cycle/purpose. Do not add these fields to `CanonicalOrder` or `Fill`; do not infer ownership from symbol, side, or a reserved client-ID prefix alone.
+2. **Verified Spot allocation:** derive the amount available to RS legacy from the authoritative account snapshot for the canonical base asset, after accounting for every existing Portfolio Position and all account-wide active/in-flight SELL reservations. Cap this by the operator-authorized remaining legacy quantity. A configured legacy quantity, an EARN balance, an unrelated wallet balance, or a stale/unavailable snapshot is never evidence of Spot availability.
+3. **Separate SELL allocation:** create immutable Harvester application metadata referencing the original canonical `fill.id` and the resolved order-ownership record. It carries the exact recovery and legacy gross quantities and the allocation of actual base, quote, and third-asset commission/proceeds facts. Its allocations must sum exactly to the canonical Fill facts; it must not construct or persist two synthetic broker Fills.
+4. **Single shared custody debit:** the account-level Spot allocation records the full actual base debit (executed base plus actual base commission) once. The Portfolio recovery Position receives only its explicitly allocated recovery share; the RS legacy projection receives only its explicitly allocated legacy share. The shared tracked-base snapshot delta must include both projections without adding legacy quantity to Portfolio or counting either share twice.
+5. **Exact-once reconciliation:** key allocation identity and duplicate detection by canonical Fill ID plus immutable allocation fingerprint. Stage each partial fill against its originating order/cycle. Do not commit the cycle's legacy decrement until complete terminal order/fill reconciliation proves the aggregate execution quantity and all allocation facts. Replays are no-ops only when both canonical facts and allocation metadata are identical; conflicting or missing attribution fails closed.
+6. **Independent economics:** calculate recovery-tranche net proceeds/profit and legacy net proceeds against the fixed original legacy average cost from their own allocated quantities and actual fees. A profitable recovery share cannot subsidize a legacy loss. Missing/incomplete commission facts or third-asset quote valuation reject the whole accounting transition before any projection commits.
+7. **Central reservation gate:** reserve the full mixed SELL quantity against shared exchange Spot availability before broker submission, while separately preventing the same recovery or legacy slice from being reserved by another order. Release only the unfilled reservation after authoritative terminal reconciliation.
+
+The intended application flow is:
+
+```mermaid
+flowchart TD
+  A[Canonical SELL Fill + registered order] --> B[Resolve immutable order ownership]
+  B --> C[Verify account-wide Spot allocation and reservations]
+  C --> D[Validate one Fill allocation by canonical Fill ID]
+  D --> E{All quantities, fees and ownership reconcile?}
+  E -->|No| X[Fail closed; pause affected market]
+  E -->|Yes| F[Stage full shared custody debit]
+  F --> G[Stage recovery Position share]
+  F --> H[Stage legacy accounting share]
+  G --> I[Terminal order/fill reconciliation]
+  H --> I
+  I --> J{Cycle complete and both profit gates pass?}
+  J -->|No| X
+  J -->|Yes| K[Commit projections and decrement legacy once]
+```
+
+The diagram describes the proposed RS boundary, not current runtime behavior. The current engine has no complete order-ownership record or mixed allocation commit. The first code slice may implement and test these pure/application contracts, but RS must remain non-executable until the shared Spot snapshot baseline, reservation, Portfolio and terminal-reconciliation workflows consume the same allocation consistently.
+
 ## 5. Profitability — SELL ONLY IN PROFIT
 
 **SELL ONLY IN PROFIT** is a hard safety requirement, not merely a cycle-level target. Two different economic questions must be evaluated independently.
