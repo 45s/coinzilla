@@ -22,8 +22,10 @@ test("adaptOrder preserves exact original, executed and remaining quantities", (
 })
 
 test("adaptOrder rejects negative and overfilled quantities", () => {
-  assert.throws(() => adaptOrder({ ...validOrder, volume: "-1" }), /non-negative|range|decimal/i)
-  assert.throws(() => adaptOrder({ ...validOrder, dealVolume: "0.4" }), /range/i)
+  assert.throws(() => adaptOrder({ ...validOrder,
+    volume: "-1" }), /non-negative|range|decimal/i)
+  assert.throws(() => adaptOrder({ ...validOrder,
+    dealVolume: "0.4" }), /range/i)
 })
 
 test("adaptOrder maps Bitunix side, type and status", () => {
