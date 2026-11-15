@@ -382,6 +382,7 @@ function createHarnessMutableState({ options } = {}) {
 function createHarnessEngine({ options, brokerState, state } = {}) {
   const {
     strategyPolicy,
+    logger,
     hasUnownedOpenOrdersForSymbol,
     hasUnresolvedHarvesterOpenOrdersForSymbol,
     appConfig: suppliedAppConfig,
@@ -409,6 +410,7 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
   const defaultStrategyPolicy = createHarnessStrategyPolicy({ initialPortfolio: options.initialPortfolio })
   return makeConservativeTradingEngine({
     broker: brokerState.broker,
+    logger,
     strategyPolicy: strategyPolicy ?? defaultStrategyPolicy,
     hasUnownedOpenOrdersForSymbol,
     hasUnresolvedHarvesterOpenOrdersForSymbol,
@@ -1051,7 +1053,16 @@ test("reconciles and pauses when a BUY fills during trailing cancellation", asyn
 test("publishes actionable decisions and order submission facts around broker I/O", async () => {
   const events = []
   const timeline = []
+  const lifecycleLogs = []
   const harness = await createHarness({
+    logger: {
+      info: (entry) => {
+        if (entry.orderLifecycle === true) {
+          lifecycleLogs.push(entry)
+          timeline.push("log:" + entry.lifecycleStatus)
+        }
+      },
+    },
     onPlaceOrder: () => timeline.push("broker.placeOrder"),
     eventPublisher: { publish: (event) => {
       events.push(event)
@@ -1080,7 +1091,9 @@ test("publishes actionable decisions and order submission facts around broker I/
     "event:strategy.decision",
     "event:order.submission_requested",
     "broker.placeOrder",
+    "log:SUBMITTED",
     "event:order.submitted",
+    "log:ACCEPTED",
   ])
   assert.deepEqual(events.map(({ name }) => name), [
     "strategy.decision",
@@ -1106,6 +1119,10 @@ test("publishes actionable decisions and order submission facts around broker I/
   assert.match(clientOrderId, /^h-[0-9a-f]{22}-1$/)
   assert.equal(events[2].data.status, "OPEN")
   assert.equal(events[2].data.brokerOrderId, `broker-${clientOrderId}`)
+  assert.deepEqual(lifecycleLogs.map(({ lifecycleStatus }) => lifecycleStatus), ["SUBMITTED", "ACCEPTED"])
+  assert.equal(lifecycleLogs[0].strategyId, StrategyId.COIN_GRABBER)
+  assert.equal(lifecycleLogs[0].brokerOrderId, `broker-${clientOrderId}`)
+  assert.equal(lifecycleLogs[1].brokerOrderId, `broker-${clientOrderId}`)
 })
 
 test("order intent publication failure prevents a broker order", async () => {
@@ -1818,8 +1835,17 @@ function makeBuyFill({
 test("durably journals recovery SELL cancellation intent before broker cancellation", async () => {
   const events = []
   const sequence = []
+  const lifecycleStatuses = []
   const seeded = makeSeededRecoveryState()
   const harness = await createHarness({
+    logger: {
+      info: (entry) => {
+        if (entry.orderLifecycle === true) {
+          lifecycleStatuses.push(entry.lifecycleStatus)
+          sequence.push("log:" + entry.lifecycleStatus)
+        }
+      },
+    },
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -1878,9 +1904,12 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
   const cancelIntentIndex = sequence.lastIndexOf("publish:cancel_requested")
   const cancelFlushIndex = sequence.lastIndexOf("flush")
   const brokerCancelIndex = sequence.indexOf("broker:cancel")
+  const cancelLogIndex = sequence.lastIndexOf("log:CANCEL_REQUESTED")
   assert.ok(cancelIntentIndex >= 0)
   assert.ok(cancelFlushIndex > cancelIntentIndex)
-  assert.ok(brokerCancelIndex > cancelFlushIndex)
+  assert.ok(cancelLogIndex > cancelFlushIndex, "The terminal must log cancellation only after the durable intent barrier.")
+  assert.ok(brokerCancelIndex > cancelLogIndex, "CANCEL REQUESTED must appear before the broker cancellation call.")
+  assert.ok(lifecycleStatuses.includes("CANCELLED"), "A confirmed cancellation must produce its own terminal lifecycle record.")
 })
 
 test("does not cancel a recovery SELL when its durable cancellation intent flush fails", async () => {

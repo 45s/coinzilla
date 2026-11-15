@@ -368,3 +368,40 @@ test("does not raise an account-wide sticky blocker for an unowned NEW order rep
   assert.equal(state.accountingFailed, true, "The existing ownership failure must still close readiness.")
   assert.equal(blockerCount, 0, "A passive external NEW order observation is not an actual unowned execution blocker.")
 })
+
+test("does not duplicate raw trade receipt and generic processed logs at the user-data boundary", async () => {
+  const logs = []
+  const engine = {
+    processUserDataEvent: async () => ({ ok: true, data: { reevaluate: false } }),
+    getOrders: () => [],
+  }
+  const { handler, state } = createHandler({
+    engine,
+    logger: { info: (entry) => logs.push(entry) },
+  })
+
+  handler({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: {
+        market: { symbol: "DOGEUSDT" },
+        brokerOrderId: "broker-1",
+        clientOrderId: "client-1",
+        side: "BUY",
+      },
+      fill: {
+        id: "fill-1",
+        market: { symbol: "DOGEUSDT" },
+        side: "BUY",
+      },
+    },
+  })
+  await state.eventQueue
+
+  assert.deepEqual(
+    logs,
+    [],
+    "The user-data boundary must not print raw receipt or generic processed messages; canonical lifecycle transitions own those logs.",
+  )
+})
