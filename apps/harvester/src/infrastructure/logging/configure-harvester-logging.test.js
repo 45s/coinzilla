@@ -139,6 +139,11 @@ test("renders Portfolio Stats as a concise readable summary instead of JSON", ()
   const line = written.trim()
   assert.match(
     line,
+    /^12:00:00 🪙 CG PORTFOLIO/,
+    "Console timestamps must use the same compact 24-hour local-time format as order lifecycle records.",
+  )
+  assert.match(
+    line,
     /🪙 CG PORTFOLIO ZROFDUSD \| Inventory: 25\.15 ZRO \| Spent: 13\.835 FDUSD \| Net: -13\.835 FDUSD/,
     "The operator console must show the market, total inventory, spent quote and net quote flow in a readable compact Portfolio summary.",
   )
