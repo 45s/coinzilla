@@ -1,3 +1,33 @@
+function validateOwnershipShape({ ownership } = {}) {
+  if (!ownership || typeof ownership !== "object" || Array.isArray(ownership)) {
+    throw new TypeError("Order ownership must be an object")
+  }
+  for (const field of ["strategyId", "positionId"]) {
+    if (typeof ownership[field] !== "string" || !ownership[field].trim()) {
+      throw new TypeError(`Order ownership requires a non-empty ${field}`)
+    }
+  }
+  if (typeof ownership.purpose !== "string" || !ownership.purpose.trim()) {
+    throw new TypeError("Order ownership requires a non-empty purpose")
+  }
+  if (ownership.cycleId !== undefined &&
+      (typeof ownership.cycleId !== "string" || !ownership.cycleId.trim())) {
+    throw new TypeError("Order ownership cycleId must be a non-empty string when provided")
+  }
+}
+
+function validateOwnershipIdentity({ ownership, clientOrderId, brokerOrderId } = {}) {
+  if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
+    throw new TypeError("Order ownership requires a non-empty clientOrderId")
+  }
+  if (ownership.clientOrderId !== undefined && ownership.clientOrderId !== clientOrderId) {
+    throw new Error("Order ownership clientOrderId does not match its canonical order")
+  }
+  if (ownership.brokerOrderId !== undefined && ownership.brokerOrderId !== brokerOrderId) {
+    throw new Error("Order ownership brokerOrderId does not match its canonical order")
+  }
+}
+
 /**
  * Normalize and freeze application-owned attribution for one canonical order.
  *
@@ -8,30 +38,12 @@
  * @returns {object} Immutable order ownership record.
  */
 export function createOrderOwnership({ ownership, clientOrderId, brokerOrderId } = {}) {
-  if (!ownership || typeof ownership !== "object" || Array.isArray(ownership)) {
-    throw new TypeError("Order ownership must be an object")
-  }
-  for (const field of ["strategyId", "positionId"]) {
-    if (typeof ownership[field] !== "string" || !ownership[field].trim()) {
-      throw new TypeError(`Order ownership requires a non-empty ${field}`)
-    }
-  }
-  if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
-    throw new TypeError("Order ownership requires a non-empty clientOrderId")
-  }
-  if (ownership.clientOrderId !== undefined && ownership.clientOrderId !== clientOrderId) {
-    throw new Error("Order ownership clientOrderId does not match its canonical order")
-  }
-  if (ownership.brokerOrderId !== undefined && ownership.brokerOrderId !== brokerOrderId) {
-    throw new Error("Order ownership brokerOrderId does not match its canonical order")
-  }
-  if (typeof ownership.purpose !== "string" || !ownership.purpose.trim()) {
-    throw new TypeError("Order ownership requires a non-empty purpose")
-  }
-  if (ownership.cycleId !== undefined &&
-      (typeof ownership.cycleId !== "string" || !ownership.cycleId.trim())) {
-    throw new TypeError("Order ownership cycleId must be a non-empty string when provided")
-  }
+  validateOwnershipShape({ ownership })
+  validateOwnershipIdentity({
+    ownership,
+    clientOrderId,
+    brokerOrderId,
+  })
 
   const normalized = {
     clientOrderId,
