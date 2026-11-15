@@ -53,7 +53,12 @@ function validateRequest({ method, path, queryParams, body }) {
   if (normalizedMethod === "GET" && body !== undefined) {
     throw new TypeError("Bitunix REST GET requests cannot include a body")
   }
-  return { method: normalizedMethod, path, queryParams, body }
+  return {
+    method: normalizedMethod,
+    path,
+    queryParams,
+    body,
+  }
 }
 
 function createSignedRequest({ client, method, path, queryParams, body }) {
