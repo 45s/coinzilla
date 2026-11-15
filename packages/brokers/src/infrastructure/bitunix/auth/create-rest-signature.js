@@ -50,10 +50,14 @@ export function createRestSignature(options = {}) {
   }
 
   const { nonce, timestamp, apiKey, secretKey } = options
-  assertNonEmptyString({ value: nonce, name: "nonce" })
-  assertNonEmptyString({ value: timestamp, name: "timestamp" })
-  assertNonEmptyString({ value: apiKey, name: "apiKey" })
-  assertNonEmptyString({ value: secretKey, name: "secretKey" })
+  assertNonEmptyString({ value: nonce,
+    name: "nonce" })
+  assertNonEmptyString({ value: timestamp,
+    name: "timestamp" })
+  assertNonEmptyString({ value: apiKey,
+    name: "apiKey" })
+  assertNonEmptyString({ value: secretKey,
+    name: "secretKey" })
 
   const query = serializeQueryParams({ queryParams: options.queryParams })
   const body = serializeBody({ body: options.body })
