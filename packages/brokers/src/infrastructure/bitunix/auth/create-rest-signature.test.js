@@ -27,7 +27,7 @@ test("createRestSignature treats absent query parameters and body as empty strin
 })
 
 test("createRestSignature rejects missing credentials and invalid input", () => {
-  assert.throws(() => createRestSignature(), /options/i)
+  assert.throws(() => createRestSignature(), /nonce/i)
   assert.throws(() => createRestSignature({
     nonce: "",
     timestamp: "1700000000000",
