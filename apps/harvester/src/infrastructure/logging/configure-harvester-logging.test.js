@@ -321,7 +321,10 @@ test("omits INFO labels while retaining DEBUG, WARN, and ERROR labels", () => {
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   for (const [level, message] of [
     ["INFO", "Informational event"],
@@ -586,7 +589,10 @@ test("aligns strategy, status, order ID and order facts in fixed-width lifecycle
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   transport.write({
     timestamp: "2026-11-15T19:14:52",
@@ -648,7 +654,10 @@ test("marks strategy-specific standard console records with their canonical stra
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   transport.write({
     timestamp: "2026-11-15T19:14:52",
@@ -680,7 +689,10 @@ test("does not suppress identical messages emitted by different strategies", () 
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   for (const [timestamp, strategyId] of [
     ["2026-11-15T19:14:52", "CG_coinGrabber"],
@@ -690,7 +702,10 @@ test("does not suppress identical messages emitted by different strategies", () 
       timestamp,
       level: "info",
       method: "info",
-      data: { message: "Strategy transition evaluated", strategyId },
+      data: {
+        message: "Strategy transition evaluated",
+        strategyId,
+      },
     })
   }
 
@@ -705,7 +720,10 @@ test("keeps the owning strategy marker on duplicate-log suppression summaries", 
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   for (const timestamp of ["2026-11-15T19:14:52", "2026-11-15T19:14:53"]) {
     transport.write({
