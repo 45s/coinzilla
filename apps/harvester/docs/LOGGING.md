@@ -91,7 +91,7 @@ Prefer short, specific, past-tense descriptions:
 | --- | --- |
 | `Harvester order event processed` | `Order update processed` |
 | `Harvester subscribed to market prices` | `Market data subscribed` |
-| `Harvester connected and subscribed to 2 enabled markets` | `Binance market-data stream connected; 2 market subscriptions active` |
+| `Harvester connected and subscribed to 2 enabled markets` | `Binance market-data stream connected; active market subscriptions: 2.` |
 | `Harvester market price error handler failed` | `Market price error handler failed` |
 
 Keep variable context in structured fields rather than embedding it in the
