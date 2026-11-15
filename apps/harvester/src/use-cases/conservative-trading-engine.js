@@ -626,12 +626,17 @@ function createSubmissionLifecycleCallbacks({
         await pause({ symbol: order.market.symbol, reason: "ORDER_INTENT_NOT_DURABLE", error })
         throw error
       }
+      logOrderLifecycle({
+        logger,
+        order,
+        ownership: state.registry.getOwnership({ clientOrderId: order.clientOrderId }),
+        status: "SUBMITTED",
+      })
     },
     onAcknowledgedOrder: async ({ order }) => {
       const ownership = state.registry.getOwnership({
         clientOrderId: order.clientOrderId,
       })
-      logOrderLifecycle({ logger, order, ownership, status: "SUBMITTED" })
       if (order.status === "FILLED") {
         const registered = state.registry.orders.some(
           (item) => item.clientOrderId === order.clientOrderId,
