@@ -70,7 +70,10 @@ test("configures independent DEBUG and TRACE JSONL files and INFO console thresh
     )
     assert.deepEqual([...logger.transports.keys()], ["console"])
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -324,7 +327,10 @@ test("omits INFO labels while retaining DEBUG, WARN, and ERROR labels", () => {
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   for (const [level, message] of [
     ["INFO", "Informational event"],
@@ -589,7 +595,10 @@ test("aligns strategy, status, order ID and order facts in fixed-width lifecycle
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   transport.write({
     timestamp: "2026-11-15T19:14:52",
@@ -679,7 +688,10 @@ test("renders STARTED, COMPLETED, and FAILED shutdown phases in the exact concis
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
   const phaseStatuses = ["STARTED", "COMPLETED", "FAILED"]
 
   for (const phaseStatus of phaseStatuses) {
@@ -708,7 +720,10 @@ test("keeps consecutive transitions for different phases and statuses visible", 
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
   const phaseTransitions = [
     {
       phase: "MARKET_INTAKE_STOP",
@@ -751,7 +766,10 @@ test("suppresses only a genuinely identical consecutive shutdown phase transitio
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
   const repeatedTransition = createShutdownPhaseEntry({
     phase: "MARKET_INTAKE_STOP",
     status: "STARTED",

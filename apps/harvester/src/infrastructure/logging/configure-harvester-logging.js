@@ -55,7 +55,13 @@ function formatConsoleLine({ line, level, method = level, color }) {
   return color && code ? code + line + ANSI_RESET : line
 }
 
-function summarizeConsoleData({ data } = {}) {
+function summarizeConsoleData({ data, shutdownPresentation } = {}) {
+  if (shutdownPresentation) {
+    return {
+      message: shutdownPresentation.message,
+      details: {},
+    }
+  }
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     return { message: String(data ?? "") }
   }
@@ -389,6 +395,36 @@ function writeOrderLifecycleRecord({ output, color, timestamp, level, method, da
   }
 }
 
+function createConsoleRecordFingerprint({ timestamp, level, method, data } = {}) {
+  const isOrderLifecycle = data?.orderLifecycle === true
+  const shutdownPresentation = createShutdownPhaseConsolePresentation({
+    timestamp,
+    data,
+  })
+  const summary = isOrderLifecycle
+    ? {
+      message: "Order lifecycle",
+      details: data,
+    }
+    : summarizeConsoleData({
+      data,
+      shutdownPresentation,
+    })
+  const fingerprint = JSON.stringify({
+    level,
+    method,
+    summary,
+    shutdownPhase: shutdownPresentation?.phase,
+    phaseStatus: shutdownPresentation?.status,
+  })
+
+  return {
+    isOrderLifecycle,
+    shutdownPresentation,
+    fingerprint,
+  }
+}
+
 function writeStandardConsoleRecord({ output, color, timestamp, level, method, data } = {}) {
   const summary = summarizeConsoleData({ data })
   const time = new Date(timestamp).toLocaleTimeString()
@@ -448,32 +484,15 @@ export function createHarvesterConsoleTransport({
     name: CONSOLE_TRANSPORT_NAME,
     level: "info",
     write({ timestamp, level, method = level, data }) {
-      const isOrderLifecycle = data?.orderLifecycle === true
-      const shutdownPresentation = createShutdownPhaseConsolePresentation({ timestamp, data })
-      let summary
-      if (shutdownPresentation) {
-        summary = {
-          message: shutdownPresentation.message,
-          details: {},
-        }
-      } else if (isOrderLifecycle) {
-        summary = {
-          message: "Order lifecycle",
-          details: data,
-        }
-      } else {
-        summary = summarizeConsoleData({ data })
-      }
-      const fingerprint = JSON.stringify({
+      const {
+        isOrderLifecycle,
+        shutdownPresentation,
+        fingerprint,
+      } = createConsoleRecordFingerprint({
+        timestamp,
         level,
         method,
-        summary,
-        ...(shutdownPresentation
-          ? {
-            shutdownPhase: shutdownPresentation.phase,
-            phaseStatus: shutdownPresentation.status,
-          }
-          : {}),
+        data,
       })
       if (fingerprint === previousFingerprint) {
         suppressedCount += 1
@@ -485,12 +504,12 @@ export function createHarvesterConsoleTransport({
       previousTimestamp = timestamp
 
       if (shutdownPresentation) {
-        output.write(formatConsoleLine({
+        output.write(`${formatConsoleLine({
           line: shutdownPresentation.line,
           level,
           method,
           color,
-        }) + "\n")
+        })}\n`)
         return
       }
       if (isOrderLifecycle) {

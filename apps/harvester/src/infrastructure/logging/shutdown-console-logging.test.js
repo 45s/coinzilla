@@ -21,7 +21,10 @@ function createTerminalLogger() {
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
   const records = []
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
   const write = (data) => {
     records.push(data)
     transport.write({

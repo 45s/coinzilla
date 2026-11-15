@@ -200,9 +200,9 @@ work phases. All other valid phase transitions retain their actual phase
 identifier and status. The terminal phase line contains no JSON details,
 correlation IDs, duration, or failure prose.
 
-Consecutive duplicate suppression remains enabled. Its identity includes the
-shutdown phase and status, so different phases or different statuses are
-always visible. A genuinely identical consecutive phase/status line may be
+Consecutive duplicate suppression remains enabled. Its fingerprint includes
+the normalized phase/status pair alongside the existing log level and method,
+so different phases or statuses are always visible. A genuinely identical consecutive phase/status line may be
 suppressed and reported with the existing repeat-count message.
 
 The concise terminal line is only the operator-facing summary. The original
