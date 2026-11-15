@@ -78,7 +78,11 @@ function summarizeConsoleData({ data } = {}) {
         return [key, value]
       }),
   )
-  return { message, details, strategyId: data.strategyId }
+  return {
+    message,
+    details,
+    strategyId: data.strategyId,
+  }
 }
 
 
