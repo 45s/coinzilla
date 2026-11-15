@@ -17,7 +17,7 @@ const API = Object.freeze({
   lastPrice: "/api/spot/v1/market/last_price",
 })
 
-function unsupported(operation, reason) {
+function unsupported({ operation, reason }) {
   return new Error(`Bitunix Spot ${operation} is not supported safely: ${reason}`)
 }
 
@@ -36,8 +36,12 @@ function requireArray({ value, operation }) {
 }
 
 function normalizeOrderRows({ value }) {
-  if (Array.isArray(value)) return value
-  if (value === null || value === undefined) return []
+  if (Array.isArray(value)) {
+    return value
+  }
+  if (value === null || value === undefined) {
+    return []
+  }
   if (typeof value === "object" && !Array.isArray(value) && value.orderId !== undefined) {
     return [value]
   }
@@ -45,20 +49,85 @@ function normalizeOrderRows({ value }) {
 }
 
 function normalizeOrderSide({ side }) {
-  if (String(side) === "2") return "BUY"
-  if (String(side) === "1") return "SELL"
+  if (String(side) === "2") {
+    return "BUY"
+  }
+  if (String(side) === "1") {
+    return "SELL"
+  }
   throw new TypeError("Bitunix Spot order side is unsupported")
+}
+
+function normalizeDeals({ value }) {
+  if (value === null || value === undefined) {
+    return []
+  }
+  if (Array.isArray(value)) {
+    return value
+  }
+  return [value]
+}
+
+function createHistoryRequest({ input }) {
+  const {
+    symbol,
+    orderId,
+    startTime,
+    endTime,
+    limit,
+    page = 1,
+  } = input
+  const normalizedSymbol = requireSymbol({
+    symbol,
+    operation: "getOrderHistory()",
+  })
+  if (!Number.isInteger(page) || page < 1) {
+    throw new RangeError("Bitunix Spot order history page must be a positive integer")
+  }
+  if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
+    throw new RangeError("Bitunix Spot order history limit must be a positive integer")
+  }
+  if (orderId !== undefined && orderId !== null) {
+    throw new TypeError("Bitunix Spot order history does not support exact orderId filtering")
+  }
+  for (const [field, value] of [["startTime", startTime], ["endTime", endTime]]) {
+    if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
+      throw new RangeError(`Bitunix Spot ${field} must be a non-negative safe integer`)
+    }
+  }
+  if (startTime !== undefined && endTime !== undefined && startTime > endTime) {
+    throw new RangeError("Bitunix Spot startTime must not be after endTime")
+  }
+
+  const body = {
+    symbol: normalizedSymbol,
+    page,
+  }
+  if (limit !== undefined) {
+    body.pageSize = limit
+  }
+  if (startTime !== undefined) {
+    body.startTime = new Date(startTime).toISOString()
+  }
+  if (endTime !== undefined) {
+    body.endTime = new Date(endTime).toISOString()
+  }
+  return { body }
 }
 
 /** Bitunix Spot adapter. Capabilities are intentionally read-only until its order lifecycle can be reconciled safely. */
 export class BitunixSpotBroker extends CoreBroker {
   /**
-   * @param {{apiKey: string, apiSecret: string, tradingMode: "live", baseUrl?: string, requestTimeout?: number, logger?: object}} input
-   * @param {{restClientFactory?: (config: BitunixSpotConfig) => BitunixRestClient}} dependencies
+   * @param {{apiKey: string, apiSecret: string, tradingMode: "live", baseUrl?: string, requestTimeout?: number, logger?: object, dependencies?: {restClientFactory?: (config: BitunixSpotConfig) => BitunixRestClient}}} input
    */
-  constructor(input = {}, { restClientFactory = createRestClient } = {}) {
-    super(input)
-    this.config = new BitunixSpotConfig(input)
+  constructor(input = {}) {
+    const {
+      dependencies = {},
+      ...configInput
+    } = input
+    const { restClientFactory = createRestClient } = dependencies
+    super(configInput)
+    this.config = new BitunixSpotConfig(configInput)
     this.restClient = restClientFactory(this.config)
     this.connected = false
     this.canonicalMarkets = new Map()
@@ -76,31 +145,43 @@ export class BitunixSpotBroker extends CoreBroker {
 
   async getBalances() {
     try {
-      const response = await this.restClient.request("GET", API.balances)
-      return toResult({ data: adaptBalances(requireArray({
-        value: response.data,
-        operation: "account",
-      })) })
+      const response = await this.restClient.request({
+        method: "GET",
+        path: API.balances,
+      })
+      return toResult({
+        data: adaptBalances(requireArray({
+          value: response.data,
+          operation: "account",
+        })),
+      })
     } catch (error) {
-      handleErr({ where: "BitunixSpotBroker.getBalances()",
-        error })
+      handleErr({
+        where: "BitunixSpotBroker.getBalances()",
+        error,
+      })
       return toResult({ errors: [error] })
     }
   }
 
   async getAccountSnapshot() {
-    const error = unsupported(
-      "getAccountSnapshot()",
-      "the Spot account endpoint does not provide a source timestamp",
-    )
+    const error = unsupported({
+      operation: "getAccountSnapshot()",
+      reason: "the Spot account endpoint does not provide a source timestamp",
+    })
     return toResult({ errors: [error] })
   }
 
   async getExchangeMarkets() {
     try {
-      const response = await this.restClient.request("GET", API.markets)
-      const rows = requireArray({ value: response.data,
-        operation: "market catalog" })
+      const response = await this.restClient.request({
+        method: "GET",
+        path: API.markets,
+      })
+      const rows = requireArray({
+        value: response.data,
+        operation: "market catalog",
+      })
       const markets = rows.map((symbolInfo) => createCanonicalMarket({ symbolInfo }))
       const seen = new Set()
       for (const market of markets) {
@@ -112,19 +193,28 @@ export class BitunixSpotBroker extends CoreBroker {
       }
       return toResult({ data: Object.freeze(markets) })
     } catch (error) {
-      handleErr({ where: "BitunixSpotBroker.getExchangeMarkets()",
-        error })
+      handleErr({
+        where: "BitunixSpotBroker.getExchangeMarkets()",
+        error,
+      })
       return toResult({ errors: [error] })
     }
   }
 
   async getSymbolFilters({ symbol } = {}) {
     try {
-      const normalizedSymbol = requireSymbol({ symbol,
-        operation: "getSymbolFilters()" })
-      const response = await this.restClient.request("GET", API.markets)
-      const rows = requireArray({ value: response.data,
-        operation: "market catalog" })
+      const normalizedSymbol = requireSymbol({
+        symbol,
+        operation: "getSymbolFilters()",
+      })
+      const response = await this.restClient.request({
+        method: "GET",
+        path: API.markets,
+      })
+      const rows = requireArray({
+        value: response.data,
+        operation: "market catalog",
+      })
       const symbolInfo = rows.find((row) =>
         typeof row?.symbol === "string" && row.symbol.toUpperCase() === normalizedSymbol,
       )
@@ -133,75 +223,72 @@ export class BitunixSpotBroker extends CoreBroker {
       }
       return toResult({ data: symbolInfo })
     } catch (error) {
-      handleErr({ where: "BitunixSpotBroker.getSymbolFilters()",
-        error })
+      handleErr({
+        where: "BitunixSpotBroker.getSymbolFilters()",
+        error,
+      })
       return toResult({ errors: [error] })
     }
   }
 
   async getOpenOrders({ symbol } = {}) {
     try {
-      const normalizedSymbol = requireSymbol({ symbol,
-        operation: "getOpenOrders()" })
-      const response = await this.restClient.request("POST", API.pendingOrders, {
+      const normalizedSymbol = requireSymbol({
+        symbol,
+        operation: "getOpenOrders()",
+      })
+      const response = await this.restClient.request({
+        method: "POST",
+        path: API.pendingOrders,
         body: { symbol: normalizedSymbol },
       })
       const rows = normalizeOrderRows({ value: response.data })
       return toResult({ data: rows.map(adaptOrder) })
     } catch (error) {
-      handleErr({ where: "BitunixSpotBroker.getOpenOrders()",
-        error })
+      handleErr({
+        where: "BitunixSpotBroker.getOpenOrders()",
+        error,
+      })
       return toResult({ errors: [error] })
     }
   }
 
-  async getOrderHistory({ symbol, orderId, startTime, endTime, limit, page = 1 } = {}) {
+  async getOrderHistory(input = {}) {
     try {
-      const normalizedSymbol = requireSymbol({ symbol,
-        operation: "getOrderHistory()" })
-      if (!Number.isInteger(page) || page < 1) {
-        throw new RangeError("Bitunix Spot order history page must be a positive integer")
-      }
-      const body = { symbol: normalizedSymbol,
-        page }
-      if (limit !== undefined) {
-        if (!Number.isInteger(limit) || limit < 1) {
-          throw new RangeError("Bitunix Spot order history limit must be a positive integer")
-        }
-        body.pageSize = limit
-      }
-      if (orderId !== undefined && orderId !== null) {
-        throw new TypeError("Bitunix Spot order history does not support exact orderId filtering")
-      }
-      for (const [field, value] of [["startTime", startTime], ["endTime", endTime]]) {
-        if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
-          throw new RangeError(`Bitunix Spot ${field} must be a non-negative safe integer`)
-        }
-      }
-      if (startTime !== undefined) body.startTime = new Date(startTime).toISOString()
-      if (endTime !== undefined) body.endTime = new Date(endTime).toISOString()
-      if (startTime !== undefined && endTime !== undefined && startTime > endTime) {
-        throw new RangeError("Bitunix Spot startTime must not be after endTime")
-      }
-      const response = await this.restClient.request("POST", API.orderHistory, { body })
+      const { body } = createHistoryRequest({ input })
+      const response = await this.restClient.request({
+        method: "POST",
+        path: API.orderHistory,
+        body,
+      })
       const rows = response.data?.data
-      return toResult({ data: requireArray({ value: rows,
-          operation: "order history" }) })
+      return toResult({
+        data: requireArray({
+          value: rows,
+          operation: "order history",
+        }),
+      })
     } catch (error) {
-      handleErr({ where: "BitunixSpotBroker.getOrderHistory()",
-        error })
+      handleErr({
+        where: "BitunixSpotBroker.getOrderHistory()",
+        error,
+      })
       return toResult({ errors: [error] })
     }
   }
 
   async getOrder({ symbol, orderId } = {}) {
     try {
-      const normalizedSymbol = requireSymbol({ symbol,
-        operation: "getOrder()" })
+      const normalizedSymbol = requireSymbol({
+        symbol,
+        operation: "getOrder()",
+      })
       if ((typeof orderId !== "string" && typeof orderId !== "number") || !String(orderId).trim()) {
         throw new TypeError("Bitunix Spot getOrder() requires a broker orderId")
       }
-      const response = await this.restClient.request("GET", API.orderDetail, {
+      const response = await this.restClient.request({
+        method: "GET",
+        path: API.orderDetail,
         queryParams: { orderId: String(orderId) },
       })
       if (!response.data || typeof response.data !== "object" || Array.isArray(response.data)) {
@@ -213,37 +300,48 @@ export class BitunixSpotBroker extends CoreBroker {
       }
       return toResult({ data: adaptOrder(response.data) })
     } catch (error) {
-      handleErr({ where: "BitunixSpotBroker.getOrder()",
-        error })
+      handleErr({
+        where: "BitunixSpotBroker.getOrder()",
+        error,
+      })
       return toResult({ errors: [error] })
     }
   }
 
   async getPrices({ symbol } = {}) {
     try {
-      const normalizedSymbol = requireSymbol({ symbol,
-        operation: "getPrices()" })
-      const response = await this.restClient.request("GET", API.lastPrice, {
+      const normalizedSymbol = requireSymbol({
+        symbol,
+        operation: "getPrices()",
+      })
+      const response = await this.restClient.request({
+        method: "GET",
+        path: API.lastPrice,
         queryParams: { symbol: normalizedSymbol },
       })
       return toResult({ data: response.data })
     } catch (error) {
-      handleErr({ where: "BitunixSpotBroker.getPrices()",
-        error })
+      handleErr({
+        where: "BitunixSpotBroker.getPrices()",
+        error,
+      })
       return toResult({ errors: [error] })
     }
   }
 
-
   async getFills({ symbol, orderId } = {}) {
     try {
-      const normalizedSymbol = requireSymbol({ symbol,
-        operation: "getFills()" })
+      const normalizedSymbol = requireSymbol({
+        symbol,
+        operation: "getFills()",
+      })
       if ((typeof orderId !== "string" && typeof orderId !== "number") || !String(orderId).trim()) {
         throw new TypeError("Bitunix Spot getFills() requires a broker orderId")
       }
 
-      const orderResponse = await this.restClient.request("GET", API.orderDetail, {
+      const orderResponse = await this.restClient.request({
+        method: "GET",
+        path: API.orderDetail,
         queryParams: { orderId: String(orderId) },
       })
       const order = orderResponse.data
@@ -252,9 +350,14 @@ export class BitunixSpotBroker extends CoreBroker {
           String(order.symbol).toUpperCase() !== normalizedSymbol) {
         throw new TypeError("Bitunix Spot fill lookup order identity does not match the request")
       }
-      const marketResponse = await this.restClient.request("GET", API.markets)
-      const marketRows = requireArray({ value: marketResponse.data,
-        operation: "market catalog" })
+      const marketResponse = await this.restClient.request({
+        method: "GET",
+        path: API.markets,
+      })
+      const marketRows = requireArray({
+        value: marketResponse.data,
+        operation: "market catalog",
+      })
       const symbolInfo = marketRows.find((row) =>
         typeof row?.symbol === "string" && row.symbol.toUpperCase() === normalizedSymbol,
       )
@@ -265,24 +368,30 @@ export class BitunixSpotBroker extends CoreBroker {
         createCanonicalMarket({ symbolInfo })
       this.canonicalMarkets.set(normalizedSymbol, market)
 
-      const dealsResponse = await this.restClient.request("POST", API.orderDeals, {
-        body: { orderId: String(orderId),
-          symbol: normalizedSymbol },
+      const dealsResponse = await this.restClient.request({
+        method: "POST",
+        path: API.orderDeals,
+        body: {
+          orderId: String(orderId),
+          symbol: normalizedSymbol,
+        },
       })
-      const deals = dealsResponse.data === null || dealsResponse.data === undefined
-        ? []
-        : Array.isArray(dealsResponse.data) ? dealsResponse.data : [dealsResponse.data]
+      const deals = normalizeDeals({ value: dealsResponse.data })
       return toResult({
         data: deals.map((trade) => adaptCanonicalFill({
-          trade: { ...trade,
-            orderId: String(orderId) },
+          trade: {
+            ...trade,
+            orderId: String(orderId),
+          },
           side: normalizeOrderSide({ side: order.side }),
           market,
         })),
       })
     } catch (error) {
-      handleErr({ where: "BitunixSpotBroker.getFills()",
-        error })
+      handleErr({
+        where: "BitunixSpotBroker.getFills()",
+        error,
+      })
       return toResult({ errors: [error] })
     }
   }
@@ -292,42 +401,42 @@ export class BitunixSpotBroker extends CoreBroker {
   }
 
   async getAssets() {
-    const error = unsupported(
-      "getAssets()",
-      "the legacy Coin representation is not defined by the Bitunix adapter; use canonical getBalances()",
-    )
+    const error = unsupported({
+      operation: "getAssets()",
+      reason: "the legacy Coin representation is not defined by the Bitunix adapter; use canonical getBalances()",
+    })
     return toResult({ errors: [error] })
   }
 
   async getMyTrades() {
-    const error = unsupported(
-      "getMyTrades()",
-      "the Spot API exposes matching-order lookup by orderId, not an account-wide trade-history endpoint",
-    )
+    const error = unsupported({
+      operation: "getMyTrades()",
+      reason: "the Spot API exposes matching-order lookup by orderId, not an account-wide trade-history endpoint",
+    })
     return toResult({ errors: [error] })
   }
 
   async createOrder() {
-    const error = unsupported(
-      "createOrder()",
-      "Bitunix Spot lacks exchange-side client order identity, so a lost placement response cannot be reconciled idempotently",
-    )
+    const error = unsupported({
+      operation: "createOrder()",
+      reason: "Bitunix Spot lacks exchange-side client order identity, so a lost placement response cannot be reconciled idempotently",
+    })
     return toResult({ errors: [error] })
   }
 
   async createCanonicalOrder() {
-    const error = unsupported(
-      "createCanonicalOrder()",
-      "Bitunix Spot does not expose clientOrderId and placement is disabled until order reconciliation is reliable",
-    )
+    const error = unsupported({
+      operation: "createCanonicalOrder()",
+      reason: "Bitunix Spot does not expose clientOrderId and placement is disabled until order reconciliation is reliable",
+    })
     return toResult({ errors: [error] })
   }
 
   async cancelOrder() {
-    const error = unsupported(
-      "cancelOrder()",
-      "the adapter has no private order/execution push stream or verified cancellation-outcome reconciliation",
-    )
+    const error = unsupported({
+      operation: "cancelOrder()",
+      reason: "the adapter has no private order/execution push stream or verified cancellation-outcome reconciliation",
+    })
     return {
       ...toResult({ errors: [error] }),
       cancellationOutcome: "NOT_SENT",
@@ -335,63 +444,63 @@ export class BitunixSpotBroker extends CoreBroker {
   }
 
   async cancelAllOpenOrders() {
-    const error = unsupported(
-      "cancelAllOpenOrders()",
-      "no safe order-mutation reconciliation contract is available",
-    )
+    const error = unsupported({
+      operation: "cancelAllOpenOrders()",
+      reason: "no safe order-mutation reconciliation contract is available",
+    })
     return toResult({ errors: [error] })
   }
 
   async subscribeForUserData() {
-    throw unsupported(
-      "subscribeForUserData()",
-      "the documented private Spot WebSocket API does not define a continuous order/execution event stream",
-    )
+    throw unsupported({
+      operation: "subscribeForUserData()",
+      reason: "the documented private Spot WebSocket API does not define a continuous order/execution event stream",
+    })
   }
 
   async subscribeForBookTicker() {
-    throw unsupported(
-      "subscribeForBookTicker()",
-      "the documented Spot WebSocket API does not define a continuous order-book subscription",
-    )
+    throw unsupported({
+      operation: "subscribeForBookTicker()",
+      reason: "the documented Spot WebSocket API does not define a continuous order-book subscription",
+    })
   }
 
   async getCandles() {
-    const error = unsupported(
-      "getCandles()",
-      "historical Spot candle support has not yet been mapped to the canonical candle contract",
-    )
+    const error = unsupported({
+      operation: "getCandles()",
+      reason: "historical Spot candle support has not yet been mapped to the canonical candle contract",
+    })
     return toResult({ errors: [error] })
   }
 
   async subscribeForPrices() {
-    throw unsupported(
-      "subscribeForPrices()",
-      "the documented Spot WebSocket API exposes request/response market calls, not a continuous price subscription",
-    )
+    throw unsupported({
+      operation: "subscribeForPrices()",
+      reason: "the documented Spot WebSocket API exposes request/response market calls, not a continuous price subscription",
+    })
   }
 
   async getCanonicalOrder() {
-    const error = unsupported(
-      "getCanonicalOrder()",
-      "Bitunix Spot orders do not expose a clientOrderId required by the canonical order contract",
-    )
+    const error = unsupported({
+      operation: "getCanonicalOrder()",
+      reason: "Bitunix Spot orders do not expose a clientOrderId required by the canonical order contract",
+    })
     return toResult({ errors: [error] })
   }
 
   async getCanonicalOrderHistory() {
-    const error = unsupported(
-      "getCanonicalOrderHistory()",
-      "the canonical order contract requires a clientOrderId that Bitunix Spot does not expose",
-    )
+    const error = unsupported({
+      operation: "getCanonicalOrderHistory()",
+      reason: "the canonical order contract requires a clientOrderId that Bitunix Spot does not expose",
+    })
     return toResult({ errors: [error] })
   }
 
   async getServerTime() {
-    const error = unsupported(
-      "getServerTime()",
-      "no documented Spot server-time endpoint is available",
-    )
+    const error = unsupported({
+      operation: "getServerTime()",
+      reason: "no documented Spot server-time endpoint is available",
+    })
     return toResult({ errors: [error] })
   }
 }
