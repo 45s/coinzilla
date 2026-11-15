@@ -253,3 +253,40 @@ test("Bitunix Spot broker rejects order detail identity mismatches", async () =>
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /identity/i)
 })
+
+
+test("Bitunix Spot broker normalizes a single pending-order response row", async () => {
+  const { broker } = createBroker({
+    responses: {
+      "/api/spot/v1/order/pending/list": {
+        orderId: "123",
+        symbol: "BTCUSDT",
+        side: "2",
+        type: "1",
+        status: "1",
+        volume: "1",
+        dealVolume: "0",
+        price: "10",
+      },
+    },
+  })
+
+  const result = await broker.getOpenOrders({ symbol: "BTCUSDT" })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.length, 1)
+  assert.equal(result.data[0].id, "123")
+})
+
+test("Bitunix Spot broker supports explicit history page selection", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      "/api/spot/v1/order/history/page": { data: [], total: 0 },
+    },
+  })
+
+  const result = await broker.getOrderHistory({ symbol: "BTCUSDT", page: 3, limit: 20 })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(calls[0].options.body, { symbol: "BTCUSDT", page: 3, pageSize: 20 })
+})
