@@ -17,9 +17,12 @@ test("adapts Bitunix Spot account rows to exact canonical balances", () => {
   assert.equal(balances[1].free.amount, "125.5")
 })
 
-test("rejects malformed and duplicate Bitunix Spot balance rows", () => {
+test("rejects malformed, imprecise and duplicate Bitunix Spot balance rows", () => {
   assert.throws(() => adaptBalances({}))
   assert.throws(() => adaptBalances([{ coin: "BTC", balance: "1" }]))
+  assert.throws(() => adaptBalances([
+    { coin: "BTC", balance: 0.1, balanceLocked: "0" },
+  ]), /precision-preserving/i)
   assert.throws(() => adaptBalances([
     { coin: "BTC", balance: "1", balanceLocked: "0" },
     { coin: "btc", balance: "2", balanceLocked: "0" },
