@@ -5681,10 +5681,8 @@ test("retains an explicitly injected application event publisher in TESTNET runt
   await result.stop()
 })
 
-test("stops broker intake before draining queued user-data and disconnects afterward", async () => {
-  const calls = []
+function createShutdownDrainBroker({ calls } = {}) {
   const broker = createBroker(calls)
-  const originalSubscribeForPrices = broker.subscribeForPrices.bind(broker)
   let resolveBookUnsubscribe
   const bookUnsubscribed = new Promise((resolve) => { resolveBookUnsubscribe = resolve })
   const originalSubscribeForBookTicker = broker.subscribeForBookTicker.bind(broker)
@@ -5704,6 +5702,7 @@ test("stops broker intake before draining queued user-data and disconnects after
   }
   let resolveMarketUnsubscribe
   const marketUnsubscribed = new Promise((resolve) => { resolveMarketUnsubscribe = resolve })
+  const originalSubscribeForPrices = broker.subscribeForPrices.bind(broker)
   broker.subscribeForPrices = async (input) => {
     const result = await originalSubscribeForPrices(input)
     return {
@@ -5732,7 +5731,16 @@ test("stops broker intake before draining queued user-data and disconnects after
       },
     }
   }
+  return {
+    broker,
+    bookUnsubscribed,
+    marketUnsubscribed,
+  }
+}
 
+test("stops broker intake before draining queued user-data and disconnects afterward", async () => {
+  const calls = []
+  const { broker, bookUnsubscribed, marketUnsubscribed } = createShutdownDrainBroker({ calls })
   let resolveQueue
   const queueGate = new Promise((resolve) => { resolveQueue = resolve })
   let signalQueueStarted
@@ -5777,7 +5785,6 @@ test("stops broker intake before draining queued user-data and disconnects after
   assert.ok(calls.indexOf("queue:done") < calls.indexOf("unsubscribe:user-data"), "user-data intake may stop only after accepted callbacks have drained")
   assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"), "the user-data subscription must be disconnected before the broker itself")
 })
-
 test("logs safe correlation details for an external execution without closing global readiness", async () => {
   const broker = createBroker()
   const errors = []
