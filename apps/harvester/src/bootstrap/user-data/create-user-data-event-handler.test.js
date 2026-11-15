@@ -44,7 +44,10 @@ const createHandler = ({ state = createState(), engine, onUserDataEvent = async 
 
 test("serializes a valid order event, notifies the observer, and restores readiness", async () => {
   const engine = {
-    processUserDataEvent: async () => ({ ok: true, data: { reevaluate: false } }),
+    processUserDataEvent: async () => ({
+      ok: true,
+      data: { reevaluate: false },
+    }),
     getOrders: () => [],
   }
   const { handler, state, actions } = createHandler({ engine })
