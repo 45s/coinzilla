@@ -26,7 +26,7 @@ test('reports successful Binance TESTNET startup without claiming a workflow ran
 
   assert.deepEqual(messages, [[
     'system',
-    'Binance market-data stream connected; active market subscriptions: 0. Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness.',
+    'Connected; subscribed to 0 enabled market(s). Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness.',
   ]]);
 });
 
