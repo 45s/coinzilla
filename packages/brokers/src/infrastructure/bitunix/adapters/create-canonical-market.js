@@ -5,7 +5,8 @@ function createAsset({ code, field }) {
     throw new TypeError(`Bitunix market metadata is missing ${field}`)
   }
   const normalizedCode = code.trim().toUpperCase()
-  return new Asset({ id: normalizedCode.toLowerCase(), code: normalizedCode })
+  return new Asset({ id: normalizedCode.toLowerCase(),
+    code: normalizedCode })
 }
 
 /**
@@ -28,7 +29,9 @@ export function createCanonicalMarket({ symbolInfo } = {}) {
   return new Market({
     venue: "bitunix",
     symbol: symbolInfo.symbol.trim().toUpperCase(),
-    baseAsset: createAsset({ code: symbolInfo.base, field: "base asset code" }),
-    quoteAsset: createAsset({ code: symbolInfo.quote, field: "quote asset code" }),
+    baseAsset: createAsset({ code: symbolInfo.base,
+      field: "base asset code" }),
+    quoteAsset: createAsset({ code: symbolInfo.quote,
+      field: "quote asset code" }),
   })
 }
