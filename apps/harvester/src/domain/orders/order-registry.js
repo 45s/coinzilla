@@ -95,7 +95,7 @@ function validateOrderUpdate({ current, next }) {
   }
   if (!ALLOWED_TRANSITIONS[current.status]?.has(next.status)) {
     throw new Error(
-      "Invalid canonical order status transition: " + current.status + " -> " + next.status,
+      `Invalid canonical order status transition: ${current.status} -> ${next.status}`,
     )
   }
   if (
@@ -221,7 +221,7 @@ export class OrderRegistry {
         })
     if (existing) {
       if (!sameOrderState({ current: existing, next: order })) {
-        throw new Error("Conflicting pending order reused clientOrderId " + order.clientOrderId)
+        throw new Error(`Conflicting pending order reused clientOrderId ${order.clientOrderId}`)
       }
       const existingOwnership = this.getOwnership({ clientOrderId: order.clientOrderId })
       if (nextOwnership !== undefined &&
