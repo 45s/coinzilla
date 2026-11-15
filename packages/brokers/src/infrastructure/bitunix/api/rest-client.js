@@ -161,7 +161,7 @@ export class BitunixRestClient {
         if (typeof responseText !== "string") {
           throw new TypeError("Bitunix REST response text must be a string")
         }
-        payload = parseResponseText({ text: responseText })
+        payload = parseResponseText({ text: responseText, path })
       } else {
         payload = await response.json()
       }
