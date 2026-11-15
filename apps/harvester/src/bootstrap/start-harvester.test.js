@@ -5206,6 +5206,7 @@ test("records configuration and process boundaries before broker startup and aft
   assert.ok(configuration, "The sanitized strategy configuration fingerprint must be durable before broker startup.")
   assert.ok(processStart, "The current process boundary must be durable before broker startup.")
   assert.equal(configuration.runtimeSessionId, "start-harvester-process-boundary-test")
+  assert.deepEqual(configuration.data.markets, ["BTCUSDT"], "The effective configuration baseline must list enabled markets only, not disabled pair definitions.")
   assert.equal(processStart.runtimeSessionId, "start-harvester-process-boundary-test")
   assert.equal(processStart.data.configurationFingerprint, configuration.data.fingerprint)
   assert.equal(processStart.data.tradingEnabled, true, "The durable process boundary must preserve whether this session could submit orders.")
