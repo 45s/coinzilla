@@ -21,7 +21,9 @@ function createStrategyLogData({ data, strategyId } = {}) {
   if (data && typeof data === "object" && !Array.isArray(data)) {
     return {
       ...data,
-      strategyId,
+      strategyId: Object.hasOwn(strategyLogMarkers, data.strategyId)
+        ? data.strategyId
+        : strategyId,
     }
   }
   return {
