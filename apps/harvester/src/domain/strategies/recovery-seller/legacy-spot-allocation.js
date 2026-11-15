@@ -47,7 +47,7 @@ export class LegacySpotAllocationError extends Error {
 function assertNonNegativeQuantity({ value, field }) {
   assertDecimalString({ value, field })
   if (compareDecimal({ left: value, right: "0" }) < 0) {
-    throw new RangeError(field + " must be non-negative")
+    throw new RangeError(`${field} must be non-negative`)
   }
 }
 
