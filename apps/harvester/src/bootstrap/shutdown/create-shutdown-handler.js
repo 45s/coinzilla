@@ -148,10 +148,13 @@ const SHUTDOWN_ERROR_MESSAGE_LIMIT = 2048
 const SHUTDOWN_ERROR_STACK_LIMIT = 8192
 const SHUTDOWN_ERROR_CAUSE_DEPTH_LIMIT = 3
 
-function summarizeShutdownError(error, depth = 0) {
-  const message = typeof error?.message === "string"
-    ? error.message
-    : typeof error === "string" ? error : undefined
+function summarizeShutdownError({ error, depth = 0 } = {}) {
+  let message
+  if (typeof error?.message === "string") {
+    message = error.message
+  } else if (typeof error === "string") {
+    message = error
+  }
   const summary = {
     name: typeof error?.name === "string" ? error.name : "Error",
     code: typeof error?.code === "string" ? error.code : null,
@@ -164,7 +167,7 @@ function summarizeShutdownError(error, depth = 0) {
       : {}),
   }
   if (depth < SHUTDOWN_ERROR_CAUSE_DEPTH_LIMIT && error?.cause !== undefined) {
-    summary.cause = summarizeShutdownError(error.cause, depth + 1)
+    summary.cause = summarizeShutdownError({ error: error.cause, depth: depth + 1 })
   }
   return summary
 }
@@ -189,7 +192,7 @@ function createFailureRecorder({ context, phaseRunner }) {
         retryable: typeof failure.retryable === "boolean" ? failure.retryable : null,
       }
       : null
-    const errorDetails = errors.map((entry) => summarizeShutdownError(entry))
+    const errorDetails = errors.map((entry) => summarizeShutdownError({ error: entry }))
     context.stageFailures.push({
       stage: stage ?? "UNKNOWN",
       failure: failureMetadata,
