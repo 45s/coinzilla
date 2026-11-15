@@ -5,21 +5,28 @@ import { BitunixSpotBroker } from "./broker.js"
 function createBroker({ responses = {} } = {}) {
   const calls = []
   const restClient = {
-    async request(method, path, options = {}) {
-      calls.push({ method,
+    async request(input = {}) {
+      const { method, path, ...options } = input
+      calls.push({
+        method,
         path,
-        options })
+        options,
+      })
       const key = path
-      if (responses[key] instanceof Error) throw responses[key]
+      if (responses[key] instanceof Error) {
+        throw responses[key]
+      }
       return { data: responses[key] }
     },
   }
-  const broker = new BitunixSpotBroker(
-    { apiKey: "key",
-      apiSecret: "secret",
-      tradingMode: "live" },
-    { restClientFactory: () => restClient },
-  )
+  const broker = new BitunixSpotBroker({
+    apiKey: "key",
+    apiSecret: "secret",
+    tradingMode: "live",
+    dependencies: {
+      restClientFactory: () => restClient,
+    },
+  })
   return { broker,
     calls }
 }
