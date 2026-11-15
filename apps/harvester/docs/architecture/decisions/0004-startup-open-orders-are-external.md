@@ -12,7 +12,7 @@ created: 2026-11-15
 
 **Accepted — implementation tracked by [#1157](https://github.com/45s/coinzilla/issues/1157).** This decision defines the ownership boundary for orders observed in the account-wide startup snapshot. The runtime implementation and regression coverage are pending.
 
-**Related:** [ADR-0001](0001-application-owned-recovery-facts.md), [Journal Operations](../JOURNAL_OPERATIONS.md), [#654](https://github.com/45s/coinzilla/issues/654), [#1157](https://github.com/45s/coinzilla/issues/1157).
+**Related:** [ADR-0001](0001-application-owned-recovery-facts.md), [Journal Operations](../../JOURNAL_OPERATIONS.md), [#654](https://github.com/45s/coinzilla/issues/654), [#1157](https://github.com/45s/coinzilla/issues/1157).
 
 ## Context
 
