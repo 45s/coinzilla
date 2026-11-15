@@ -111,7 +111,7 @@ Mutations and lifecycle-dependent methods are deliberately unavailable:
 - The canonical order entity requires a client order ID not provided by the Spot API.
 - No Spot server-time or TESTNET endpoint is documented.
 
-The REST place-order page and WebSocket order page contradict each other about the units of `volume`. No placement implementation is enabled until Bitunix clarifies the REST semantics and the conversion is covered by tests.
+The single-order REST endpoint says limit `volume` is quote quantity and market `volume` is base quantity; the REST batch-order endpoint and WebSocket order API document the inverse. The inconsistency exists within the REST docs as well as across transports. No placement implementation is enabled until Bitunix clarifies the REST semantics and the conversion is covered by tests.
 
 Official references: [Spot REST API](https://www.bitunix.com/api-docs/spots/en_us/), [Spot order API](https://www.bitunix.com/api-docs/spots/en_us/order/), [Spot WebSocket API](https://www.bitunix.com/api-docs/spots/en_us/ws/), [Spot WebSocket order API](https://www.bitunix.com/api-docs/spots/en_us/order-ws/).
 
