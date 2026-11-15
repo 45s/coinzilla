@@ -342,29 +342,99 @@ test("persists a sticky market blocker for an actual unowned execution", async (
   assert.equal(blockers[0].evidence.executionType, "TRADE", "The evidence must distinguish a trade from a passive order update.")
 })
 
-test("does not raise an account-wide sticky blocker for an unowned NEW order report", async () => {
-  let blockerCount = 0
+test("scopes a blocked external NEW order report to its market", async () => {
+  const blockerRequests = []
   const engine = {
     processUserDataEvent: async () => ({
       ok: false,
-      failure: { category: "OWNERSHIP_INTEGRITY", stage: "ORDER_REGISTRY_MATCH", retryable: false },
+      failure: {
+        category: "OWNERSHIP_INTEGRITY",
+        stage: "ORDER_REGISTRY_MATCH",
+        retryable: false,
+      },
       errors: [new Error("unowned order update")],
     }),
     getOrders: () => [],
   }
-  const { handler, state } = createHandler({
+  const { handler, state, actions } = createHandler({
     engine,
-    onSafetyBlockerRaised: async () => { blockerCount += 1; return { ok: true, data: { durable: true } } },
+    onSafetyBlockerRaised: async (request) => {
+      blockerRequests.push(request)
+      return { ok: true, data: { durable: true } }
+    },
   })
   handler({
     event: {
       eventType: "executionReport",
       executionType: "NEW",
-      executedOrder: { market: { symbol: "BTCUSDT" }, brokerOrderId: "external-order", clientOrderId: "manual-order", side: "BUY" },
+      executedOrder: {
+        market: { symbol: "BTCUSDT" },
+        brokerOrderId: "external-order",
+        clientOrderId: "manual-order",
+        side: "BUY",
+        status: "NEW",
+      },
     },
   })
   await state.eventQueue
 
-  assert.equal(state.accountingFailed, true, "The existing ownership failure must still close readiness.")
-  assert.equal(blockerCount, 0, "A passive external NEW order observation is not an actual unowned execution blocker.")
+  assert.equal(state.accountingFailed, false, "A blocked manual order must not poison account-wide accounting readiness.")
+  assert.equal(state.requiresReconciliation, false, "A symbol-scoped external-order policy block is not an account-wide reconciliation failure.")
+  assert.equal(state.ready, true, "Unaffected markets must retain user-data readiness.")
+  assert.equal(state.status, "READY")
+  assert.equal(actions.cancellations, 0, "The handler must not trigger the account-wide owned-BUY safety halt.")
+  assert.equal(actions.resumptions, 1)
+  assert.equal(blockerRequests.length, 1, "The blocked external order must be durably recorded as a sticky market blocker.")
+  assert.deepEqual(blockerRequests[0], {
+    scope: "MARKET",
+    symbol: "BTCUSDT",
+    reason: "ORDER_REGISTRY_MATCH",
+    evidence: {
+      failureCategory: "OWNERSHIP_INTEGRITY",
+      failureStage: "ORDER_REGISTRY_MATCH",
+      eventType: "executionReport",
+      executionType: "NEW",
+      symbol: "BTCUSDT",
+      brokerOrderId: "external-order",
+      clientOrderId: "manual-order",
+      executionId: null,
+      orderStatus: "NEW",
+    },
+  })
 })
+
+test("keeps an unmatched prior-process Harvester h- order fail-closed account-wide", async () => {
+  const engine = {
+    processUserDataEvent: async () => ({
+      ok: false,
+      failure: {
+        category: "OWNERSHIP_INTEGRITY",
+        stage: "ORDER_REGISTRY_MATCH",
+        retryable: false,
+      },
+      errors: [new Error("unresolved prior-process Harvester order")],
+    }),
+    getOrders: () => [],
+  }
+  const { handler, state, actions } = createHandler({ engine })
+  handler({
+    event: {
+      eventType: "executionReport",
+      executionType: "NEW",
+      executedOrder: {
+        market: { symbol: "BTCUSDT" },
+        brokerOrderId: "prior-process-order",
+        clientOrderId: "h-prior-process-order",
+        side: "BUY",
+        status: "NEW",
+      },
+    },
+  })
+  await state.eventQueue
+
+  assert.equal(state.accountingFailed, true)
+  assert.equal(state.requiresReconciliation, true)
+  assert.equal(state.ready, false)
+  assert.equal(actions.cancellations, 1)
+})
+
