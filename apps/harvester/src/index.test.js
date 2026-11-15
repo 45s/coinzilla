@@ -139,7 +139,7 @@ test("uses the injected logger after Binance TESTNET startup", async () => {
 
     assert.deepEqual(calls, [{
       level: "system",
-      message: "Binance market-data stream connected; 1 subscriptions active. Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness.",
+      message: "Binance market-data stream connected; active market subscriptions: 1. Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness.",
     }])
     assert.equal(process.exitCode, 0)
   } finally {
@@ -226,7 +226,7 @@ test("reports the actual Conservative TESTNET trading mode at startup", async ()
     logger: { info() {}, system: (message) => messages.push(message), error() {} },
   })
   assert.deepEqual(messages, [
-    "Binance market-data stream connected; 1 subscriptions active. Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness.",
+    "Binance market-data stream connected; active market subscriptions: 1. Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness.",
   ])
 })
 
@@ -244,7 +244,7 @@ test("reports LIVE trading mode independently of NODE_ENV", async () => {
     logger: { info: (message) => messages.push(message), error() {} },
   })
   assert.deepEqual(messages, [
-    "Binance market-data stream connected; 1 subscriptions active. Conservative LIVE trading is enabled; waiting for validated market prices and user-data readiness.",
+    "Binance market-data stream connected; active market subscriptions: 1. Conservative LIVE trading is enabled; waiting for validated market prices and user-data readiness.",
   ])
 })
 
