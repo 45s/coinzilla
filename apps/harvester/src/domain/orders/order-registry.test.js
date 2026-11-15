@@ -404,8 +404,8 @@ test("ignores a stale OPEN acknowledgement that arrives after a newer fill event
 
 test("ignores FILLED-to-OPEN regressions regardless of event timestamp", () => {
   for (const updatedAt of [101, 102, 103]) {
-    const clientOrderId = "h-filled-stale-" + updatedAt
-    const brokerOrderId = "broker-filled-stale-" + updatedAt
+    const clientOrderId = `h-filled-stale-${updatedAt}`
+    const brokerOrderId = `broker-filled-stale-${updatedAt}`
     const pending = makeOrder({ clientOrderId })
     const filledOrder = makeOrder({
       clientOrderId,
@@ -434,7 +434,7 @@ test("ignores FILLED-to-OPEN regressions regardless of event timestamp", () => {
     const result = registry.applyUpdate({ order: staleOpen })
     const tracked = result.registry.getOrder({ clientOrderId })
 
-    assert.equal(result.stale, true, "FILLED -> OPEN must be stale for timestamp " + updatedAt + ".")
+    assert.equal(result.stale, true, `FILLED -> OPEN must be stale for timestamp ${updatedAt}.`)
     assert.equal(result.applied, false, "A stale NEW/OPEN report must never be applied.")
     assert.equal(result.unknown, false, "The matching broker/client IDs identify an owned order.")
     assert.equal(result.registry, registry, "A stale report must return the exact prior immutable registry.")
@@ -741,9 +741,10 @@ test("marks a partially filled order UNKNOWN and preserves cumulative execution"
 test("does not downgrade an already acknowledged order when submission failure arrives late", () => {
   const clientOrderId = "h-ack-race"
   const pending = makeOrder({ clientOrderId })
-  const registry = OrderRegistry.empty().registerPending({ order: pending }).registry.applyUpdate({
+  const { registry: pendingRegistry } = OrderRegistry.empty().registerPending({ order: pending })
+  const { registry } = pendingRegistry.applyUpdate({
     order: makeOrder({ clientOrderId, brokerOrderId: "broker-ack-race", status: "OPEN", updatedAt: 102 }),
-  }).registry
+  })
 
   const result = registry.markUnknown({ clientOrderId })
 
