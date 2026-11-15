@@ -87,6 +87,43 @@ test("selects LIVE and enables trading even when NODE_ENV is development", async
   assert.equal(result.tradingEnabled, true, "Selecting LIVE must enable real order execution.")
 })
 
+test("fingerprints effective per-market settings and publishes the matching enabled-market set", async () => {
+  const cfg = config({ enabledSymbols: ["BTCUSDT", "ETHUSDT"] })
+  cfg.strategies.CG_coinGrabber.pairs.BTCUSDT.investment = 100
+  cfg.strategies.CG_coinGrabber.pairs.ETHUSDT.enabled = false
+  const fixture = createFixture({ cfg, env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } })
+  const result = await resolveHarvesterOptions(fixture.input)
+
+  assert.match(result.configurationFingerprint, /^[a-f0-9]{64}$/,
+    "Effective strategy configuration must produce a deterministic SHA-256 fingerprint.")
+  assert.equal(fixture.events[0].data.configurationFingerprint, result.configurationFingerprint,
+    "The validated Journal event must carry the exact effective configuration fingerprint.")
+  assert.deepEqual(fixture.events[0].data.enabledMarkets, result.enabledSymbols,
+    "The recorded enabled-market set must match the runtime-selected markets.")
+
+  const changedConfig = config({ enabledSymbols: ["BTCUSDT", "ETHUSDT"] })
+  changedConfig.strategies.CG_coinGrabber.pairs.BTCUSDT.investment = 101
+  changedConfig.strategies.CG_coinGrabber.pairs.ETHUSDT.enabled = false
+  const changed = await resolveHarvesterOptions(createFixture({
+    cfg: changedConfig,
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  }).input)
+  assert.notEqual(changed.configurationFingerprint, result.configurationFingerprint,
+    "Changing an effective per-market strategy setting must change the fingerprint.")
+})
+
+test("fails closed rather than fingerprinting secret-bearing strategy settings", async () => {
+  const cfg = config()
+  cfg.strategies.CG_coinGrabber.pairs.BTCUSDT.apiKey = "must-not-be-recorded"
+  const fixture = createFixture({ cfg, env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } })
+  await assert.rejects(
+    resolveHarvesterOptions(fixture.input),
+    (error) => error.code === "HARVESTER_EFFECTIVE_CONFIGURATION_INVALID",
+    "A strategy configuration containing credentials must not be fingerprinted or reported as validated.",
+  )
+  assert.equal(fixture.events.length, 0, "Invalid evidence must fail before config.validated is published.")
+})
+
 test("rejects an invalid TRADING_MODE", async () => {
   const fixture = createFixture({ env: { TRADING_MODE: "production" } })
   await assert.rejects(
@@ -114,6 +151,8 @@ test("selects only matching pairs and strips tradingEnvironment before runtime",
   const live = await resolveHarvesterOptions(createFixture({ cfg, env: { TRADING_MODE: TRADING_ENVIRONMENTS.LIVE } }).input)
   assert.deepEqual(Object.keys(live.pairs), ["ETHUSDT", "DOGEUSDT"], "LIVE must include live-only and both pairs, but exclude testnet-only pairs.")
   assert.deepEqual(live.enabledSymbols, ["ETHUSDT"], "Disabled both-environment pairs must remain configured but not become enabled.")
+  assert.notEqual(testnet.configurationFingerprint, live.configurationFingerprint,
+    "The fingerprint must reflect the effective trading-mode-filtered strategy configuration.")
   assert.equal(Object.hasOwn(live.pairs.ETHUSDT, "tradingEnvironment"), false, "LIVE runtime pair settings must also omit the selector.")
 })
 
@@ -138,17 +177,29 @@ test("rejects a pair without an explicit tradingEnvironment before startup", asy
 })
 
 test("rejects configurations without an enabled pair", async () => {
-  const fixture = createFixture({ cfg: config({ enabledSymbols: [] }), env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } })
+  const cfg = config({ enabledSymbols: ["BTCUSDT"] })
+  cfg.strategies.CG_coinGrabber.pairs.BTCUSDT.enabled = false
+  const fixture = createFixture({
+    cfg,
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  })
   await assert.rejects(
     resolveHarvesterOptions(fixture.input),
-    /requires at least one enabled pair/,
+    (error) => error.code === "HARVESTER_EFFECTIVE_CONFIGURATION_INVALID" &&
+      error.expected === "at least one enabled market",
     "Trading must not start when the strategy has no enabled market.",
   )
 })
 
 test("rejects invalid strategy flags", async () => {
-  const aggressive = createFixture({ cfg: config({ aggressive: true }), env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } })
+  const aggressive = createFixture({
+    cfg: config({ aggressive: true }),
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  })
   await assert.rejects(resolveHarvesterOptions(aggressive.input), /Aggressive strategy is disabled and deferred/)
-  const conservative = createFixture({ cfg: config({ conservative: false }), env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } })
+  const conservative = createFixture({
+    cfg: config({ conservative: false }),
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  })
   await assert.rejects(resolveHarvesterOptions(conservative.input), /Conservative strategy must remain enabled/)
 })
