@@ -9,6 +9,7 @@ import {
   Quantity,
 } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { makeOrderEventWorkflow } from "./order-event-workflow.js"
 
 const baseAsset = new Asset({
@@ -234,9 +235,14 @@ function makeWorkflow({
   externalOrdersPolicy = "ignore",
   isStopping = () => false,
   activeOrders = [],
+  logger,
+  registry,
 } = {}) {
   const calls = createWorkflowCalls()
   const state = createWorkflowState({ updateResult, activeOrders })
+  if (registry) {
+    state.registry = registry
+  }
   const dependencies = createWorkflowDependencies({
     state,
     calls,
@@ -246,8 +252,43 @@ function makeWorkflow({
     isStopping,
     accountingResult,
   })
-  const workflow = makeOrderEventWorkflow(dependencies)
+  const workflow = makeOrderEventWorkflow({
+    ...dependencies,
+    logger,
+  })
   return { workflow, state, calls }
+}
+
+function createLifecycleRegistry({ currentOrder, ownership } = {}) {
+  let registeredOrder = currentOrder
+  const registry = {
+    getOrder({ clientOrderId } = {}) {
+      return clientOrderId === registeredOrder.clientOrderId ? registeredOrder : undefined
+    },
+    getOwnership() {
+      return ownership
+    },
+    applyUpdate({ order } = {}) {
+      if (order.status === "CANCELED" && registeredOrder.status === "FILLED") {
+        return {
+          stale: true,
+          duplicate: false,
+          registry,
+        }
+      }
+      const previousOrder = registeredOrder
+      registeredOrder = order
+      return {
+        applied: true,
+        duplicate: false,
+        stale: false,
+        registry,
+        previousOrder,
+      }
+    },
+    getActiveOrders: () => [],
+  }
+  return registry
 }
 
 test("ignores unmatched manual orders under the default external-order policy", async () => {
@@ -463,4 +504,99 @@ test("reconciles recovery SELL coverage after a BUY fill received during shutdow
   assert.equal(duplicate.ok, true, "A duplicate shutdown fill notification must be harmless.")
   assert.equal(calls.appliedAccounting.length, 1, "A duplicate fill must not be applied twice.")
   assert.equal(state.shutdownRecoveryReplanSymbols.size, 1, "A duplicate fill must not schedule another recovery replan.")
+})
+
+test("logs partial fills from reconciled order state with immutable strategy ownership", async () => {
+  const previousOrder = makeOrder({
+    status: "OPEN",
+    quantity: "1",
+    executedQuantity: "0",
+  })
+  const partialOrder = makeOrder({
+    status: "PARTIALLY_FILLED",
+    quantity: "1",
+    executedQuantity: "0.5",
+  })
+  const ownership = {
+    clientOrderId: partialOrder.clientOrderId,
+    strategyId: StrategyId.COIN_GRABBER,
+    positionId: "doge-coin-grabber",
+    purpose: "CONSERVATIVE_BUY",
+  }
+  const registry = createLifecycleRegistry({
+    currentOrder: previousOrder,
+    ownership,
+  })
+  const logs = []
+  const { workflow, calls } = makeWorkflow({
+    registry,
+    logger: {
+      info: (entry) => logs.push(entry),
+    },
+  })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: partialOrder,
+      fill: makeFill(),
+    },
+  })
+
+  assert.equal(result.ok, true, "A reconciled partial fill must complete its order transition.")
+  assert.equal(calls.accounting.length, 1, "The lifecycle log must follow canonical fill accounting.")
+  assert.equal(logs.length, 1, "One meaningful partial-fill transition must produce one operator record.")
+  assert.equal(logs[0].lifecycleStatus, "PARTIAL_FILL")
+  assert.equal(logs[0].strategyId, StrategyId.COIN_GRABBER, "Strategy identity must come from registered immutable ownership.")
+  assert.equal(logs[0].executedQuantity, "0.5")
+  assert.equal(logs[0].remainingQuantity, "0.5")
+  assert.equal(logs[0].detail, "Executed: 0.5 | Remaining: 0.5")
+})
+
+test("reports a stale cancellation after FILLED as an informational ignored event", async () => {
+  const filledOrder = makeOrder({
+    status: "FILLED",
+    quantity: "1",
+    executedQuantity: "1",
+  })
+  const staleCancellation = makeOrder({
+    status: "CANCELED",
+    quantity: "1",
+    executedQuantity: "1",
+  })
+  const ownership = {
+    clientOrderId: filledOrder.clientOrderId,
+    strategyId: StrategyId.COIN_GRABBER,
+    positionId: "doge-coin-grabber",
+    purpose: "CONSERVATIVE_BUY",
+  }
+  const registry = createLifecycleRegistry({
+    currentOrder: filledOrder,
+    ownership,
+  })
+  const infoLogs = []
+  const systemLogs = []
+  const { workflow } = makeWorkflow({
+    registry,
+    logger: {
+      info: (entry) => infoLogs.push(entry),
+      system: (entry) => systemLogs.push(entry),
+    },
+  })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executionType: "CANCELED",
+      executedOrder: staleCancellation,
+    },
+  })
+
+  assert.equal(result.ok, true, "A stale cancellation must not overturn the already reconciled terminal order state.")
+  assert.deepEqual(infoLogs, [], "A stale cancellation must never be presented as a strategy cancellation.")
+  assert.equal(systemLogs.length, 1, "The contradictory exchange observation must remain visible as one system diagnostic.")
+  assert.equal(systemLogs[0].lifecycleStatus, "STALE_CANCEL_IGNORED")
+  assert.equal(systemLogs[0].orderStatus, "FILLED", "The diagnostic must name the current reconciled state.")
+  assert.equal(systemLogs[0].strategyId, undefined, "A system diagnostic must not impersonate a strategy event.")
 })

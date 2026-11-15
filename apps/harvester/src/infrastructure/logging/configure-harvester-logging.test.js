@@ -246,7 +246,10 @@ test("does not emit ANSI color codes when color is disabled", () => {
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   transport.write({
     timestamp: "2026-11-05T12:00:00.000Z",
@@ -576,5 +579,66 @@ test("retains the market symbol and source filter types in compact fatal console
   assert.match(written, /LINKFDUSD/, "The compact fatal console line must identify the blocked market.")
   assert.match(written, /PERCENT_PRICE_BY_SIDE/, "The compact fatal console line must retain the leading source filter that caused the block.")
   assert.ok(written.trim().length <= 200, "The compact fatal console line must remain within its documented output bound.")
+  output.destroy()
+})
+
+test("aligns strategy, status, order ID and order facts in fixed-width lifecycle columns", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({ output, color: false })
+
+  transport.write({
+    timestamp: "2026-11-15T19:14:52",
+    level: "info",
+    method: "info",
+    data: {
+      message: "Order lifecycle",
+      orderLifecycle: true,
+      strategyId: "CG_coinGrabber",
+      lifecycleStatus: "SUBMITTED",
+      brokerOrderId: "1341114",
+      clientOrderId: "h-client-1",
+      symbol: "ADAUSDT",
+      side: "BUY",
+      quantity: "50.00",
+      price: "0.15260",
+    },
+  })
+  transport.write({
+    timestamp: "2026-11-15T19:14:53",
+    level: "info",
+    method: "info",
+    data: {
+      message: "Order lifecycle",
+      orderLifecycle: true,
+      strategyId: "RS_recoverySeller",
+      lifecycleStatus: "PARTIAL_FILL",
+      brokerOrderId: "1341115",
+      clientOrderId: "h-client-2",
+      symbol: "ADAUSDT",
+      side: "SELL",
+      quantity: "49.90",
+      price: "0.15410",
+      executedQuantity: "20",
+      remainingQuantity: "29.90",
+      detail: "Executed: 20 | Remaining: 29.90",
+    },
+  })
+
+  const lines = written.trimEnd().split("\n")
+  assert.equal(lines.length, 3, "A partial fill must add one indented detail line.")
+  assert.match(lines[0], /^19:14:52 🟡GC/, "Coin Grabber must retain its yellow GC identity.")
+  assert.match(lines[1], /^19:14:53 🔴RS/, "Recovery Seller must retain its red RS identity.")
+  const firstColumns = ["SUBMITTED", "#1341114", "ADAUSDT", "BUY", "50.00", "@", "0.15260"]
+    .map((value) => lines[0].indexOf(value))
+  const secondColumns = ["PARTIAL FILL", "#1341115", "ADAUSDT", "SELL", "49.90", "@", "0.15410"]
+    .map((value) => lines[1].indexOf(value))
+  assert.deepEqual(
+    firstColumns,
+    secondColumns,
+    "Status, order ID, symbol, side, quantity and price must begin in identical terminal columns.",
+  )
+  assert.match(lines[2], /^\s+Executed: 20 \| Remaining: 29\.90$/, "Partial-fill details must be indented below their order.")
   output.destroy()
 })

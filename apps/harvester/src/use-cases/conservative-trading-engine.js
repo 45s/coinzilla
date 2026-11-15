@@ -1,4 +1,5 @@
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import { createPositionId } from "../domain/portfolio/position.js"
 import { CanonicalOrder, Fill, Quantity } from "@coinzilla/entities"
 import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { isCanonicalNonNegativeSafeInteger } from "../domain/time/is-canonical-non-negative-safe-integer.js"
@@ -28,6 +29,7 @@ import {
   mapStrategyPausedData,
 } from "../application/events/lifecycle-event-dtos.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
+import { logOrderLifecycle } from "../application/logging/order-lifecycle-log.js"
 import { validateCancellationEligibility } from "../domain/orders/validate-cancellation-eligibility.js"
 import { allocateOrderCommitments } from "../domain/orders/allocate-order-commitments.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
@@ -322,18 +324,38 @@ function createPauseHandler({
   }
 }
 
-function createOrderCancellationEventPublishers({ eventPublisher } = {}) {
+function createOrderCancellationEventPublishers({ eventPublisher, logger, state } = {}) {
   return {
-    publishOrderCancelled: ({ order }) => publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLED,
-      dataResult: mapOrderCancelledData({ order }),
-    }),
-    publishOrderCancelFailed: ({ order, outcome, error }) => publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED,
-      dataResult: mapOrderCancelFailedData({ order, outcome, error }),
-    }),
+    publishOrderCancelled: ({ order }) => {
+      logOrderLifecycle({
+        logger,
+        order,
+        ownership: state?.registry?.getOwnership?.({ clientOrderId: order.clientOrderId }),
+        status: "CANCELLED",
+      })
+      return publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLED,
+        dataResult: mapOrderCancelledData({ order }),
+      })
+    },
+    publishOrderCancelFailed: ({ order, outcome, error }) => {
+      let lifecycleStatus = "CANCEL_FAILED"
+      if (outcome === "NOT_SENT") {
+        lifecycleStatus = "CANCEL_NOT_SENT"
+      } else if (["UNCONFIRMED", "OUTCOME_UNKNOWN", "UNKNOWN"].includes(outcome)) {
+        lifecycleStatus = "CANCEL_UNKNOWN"
+      }
+      const ownership = state?.registry?.getOwnership?.({
+        clientOrderId: order.clientOrderId,
+      })
+      logOrderLifecycle({ logger, order, ownership, status: lifecycleStatus })
+      return publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED,
+        dataResult: mapOrderCancelFailedData({ order, outcome, error }),
+      })
+    },
   }
 }
 
@@ -496,12 +518,98 @@ function createOperatorMarketResumeHandler({
   })
 }
 
+function createPendingOrderLifecycleHandler({ state, publishDurableIntent, pause, logger } = {}) {
+  return async ({ order, purpose }) => {
+    if (order.side === "SELL") {
+      state.completedRecoverySellSymbols.delete(order.market.symbol)
+      state.completedRecoverySellOrdersBySymbol.delete(order.market.symbol)
+    }
+    const ownership = {
+      strategyId: StrategyId.COIN_GRABBER,
+      positionId: createPositionId({
+        marketId: order.market.id,
+        strategyId: StrategyId.COIN_GRABBER,
+      }),
+      purpose: purpose ?? (order.side === "BUY" ? "CONSERVATIVE_BUY" : "CONSERVATIVE_SELL"),
+    }
+    state.registry = state.registry.registerPending({ order, ownership }).registry
+    const persisted = await publishDurableIntent({
+      eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_REQUESTED,
+      dataResult: mapOrderSubmissionRequestedData({ order }),
+    })
+    if (!persisted.ok) {
+      const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
+      if (removal.removed) {
+        state.registry = removal.registry
+      }
+      const error = persisted.errors?.[0] ?? new Error("Order intent was not durably journaled; broker submission was not attempted")
+      await pause({ symbol: order.market.symbol, reason: "ORDER_INTENT_NOT_DURABLE", error })
+      throw error
+    }
+    logOrderLifecycle({
+      logger,
+      order,
+      ownership: state.registry.getOwnership({ clientOrderId: order.clientOrderId }),
+      status: "SUBMITTED",
+    })
+  }
+}
+
+function createAcknowledgedOrderLifecycleHandler({
+  state,
+  eventPublisher,
+  reconcileFilledAcknowledgement,
+  logger,
+} = {}) {
+  return async ({ order }) => {
+    const ownership = state.registry.getOwnership({
+      clientOrderId: order.clientOrderId,
+    })
+    if (order.status === "FILLED") {
+      const registered = state.registry.orders.some(
+        (item) => item.clientOrderId === order.clientOrderId,
+      )
+      if (!registered) {
+        throw new Error("Broker acknowledged an unregistered Harvester order")
+      }
+      state.registry = state.registry.attachAcknowledgedBrokerOrderId({ order }).registry
+    } else {
+      const update = state.registry.applyUpdate({ order })
+      if (update.unknown) {
+        throw new Error("Broker acknowledged an unregistered Harvester order")
+      }
+      state.registry = update.registry
+    }
+    publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
+      dataResult: mapOrderSubmittedData({ order }),
+    })
+    const acceptedOrder = state.registry.getOrder({
+      clientOrderId: order.clientOrderId,
+    }) ?? order
+    logOrderLifecycle({
+      logger,
+      order: acceptedOrder,
+      ownership: state.registry.getOwnership({
+        clientOrderId: order.clientOrderId,
+      }) ?? ownership,
+      status: "ACCEPTED",
+    })
+    const reconciliation = await reconcileFilledAcknowledgement({ order })
+    if (!reconciliation.ok) {
+      throw reconciliation.errors?.[0] ?? new Error("FILLED acknowledgement reconciliation failed")
+    }
+  }
+}
+
 function createSubmissionLifecycleCallbacks({
   state,
   publishDurableIntent,
   pause,
   eventPublisher,
   reconcileFilledAcknowledgement,
+  logger,
 } = {}) {
   return {
     onSubmissionDeferred: async ({ order, registered, reason } = {}) => {
@@ -519,52 +627,18 @@ function createSubmissionLifecycleCallbacks({
       }
       state.deferredEvaluations.add(order.market.symbol)
     },
-    onPendingOrder: async ({ order }) => {
-      if (order.side === "SELL") {
-        state.completedRecoverySellSymbols.delete(order.market.symbol)
-        state.completedRecoverySellOrdersBySymbol.delete(order.market.symbol)
-      }
-      state.registry = state.registry.registerPending({ order }).registry
-      const persisted = await publishDurableIntent({
-        eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_REQUESTED,
-        dataResult: mapOrderSubmissionRequestedData({ order }),
-      })
-      if (!persisted.ok) {
-        const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
-        if (removal.removed) {
-          state.registry = removal.registry
-        }
-        const error = persisted.errors?.[0] ?? new Error("Order intent was not durably journaled; broker submission was not attempted")
-        await pause({ symbol: order.market.symbol, reason: "ORDER_INTENT_NOT_DURABLE", error })
-        throw error
-      }
-    },
-    onAcknowledgedOrder: async ({ order }) => {
-      if (order.status === "FILLED") {
-        const registered = state.registry.orders.some(
-          (item) => item.clientOrderId === order.clientOrderId,
-        )
-        if (!registered) {
-          throw new Error("Broker acknowledged an unregistered Harvester order")
-        }
-        state.registry = state.registry.attachAcknowledgedBrokerOrderId({ order }).registry
-      } else {
-        const update = state.registry.applyUpdate({ order })
-        if (update.unknown) {
-          throw new Error("Broker acknowledged an unregistered Harvester order")
-        }
-        state.registry = update.registry
-      }
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
-        dataResult: mapOrderSubmittedData({ order }),
-      })
-      const reconciliation = await reconcileFilledAcknowledgement({ order })
-      if (!reconciliation.ok) {
-        throw reconciliation.errors?.[0] ?? new Error("FILLED acknowledgement reconciliation failed")
-      }
-    },
+    onPendingOrder: createPendingOrderLifecycleHandler({
+      state,
+      publishDurableIntent,
+      pause,
+      logger,
+    }),
+    onAcknowledgedOrder: createAcknowledgedOrderLifecycleHandler({
+      state,
+      eventPublisher,
+      reconcileFilledAcknowledgement,
+      logger,
+    }),
     onOrderValidationFailure: async ({ order, error }) => {
       await pause({
         symbol: order.market.symbol,
@@ -575,7 +649,7 @@ function createSubmissionLifecycleCallbacks({
   }
 }
 
-function createSubmissionFailureCallbacks({ state, pause, eventPublisher } = {}) {
+function createSubmissionFailureCallbacks({ state, pause, eventPublisher, logger } = {}) {
   return {
     onSubmissionFailure: async ({ order, error, errors, outcome }) => {
       const submissionError = error ?? errors?.[0]
@@ -584,6 +658,7 @@ function createSubmissionFailureCallbacks({ state, pause, eventPublisher } = {})
       const definiteFilterRejection = submissionError?.code === "DEFINITE_EXCHANGE_FILTER_REJECTED" &&
         submissionError?.outcomeUnknown !== true
       const definiteRejection = definitePostOnlyRejection || definiteFilterRejection
+      const ownership = state.registry.getOwnership({ clientOrderId: order.clientOrderId })
       const failureOutcome = definiteRejection ? "REJECTED" : outcome
       publishLifecycleEvent({
         eventPublisher,
@@ -600,6 +675,7 @@ function createSubmissionFailureCallbacks({ state, pause, eventPublisher } = {})
           throw new Error("Cannot remove a definitively rejected pending order")
         }
         state.registry = removal.registry
+        logOrderLifecycle({ logger, order, ownership, status: "REJECTED" })
         if (definitePostOnlyRejection) {
           state.books.delete(order.market.symbol)
         }
@@ -611,6 +687,14 @@ function createSubmissionFailureCallbacks({ state, pause, eventPublisher } = {})
         throw unknownResult.errors[0] ?? new Error("Unable to retain an uncertain submission as UNKNOWN")
       }
       state.registry = unknownResult.data.registry
+      const unknownOrder = state.registry.getOrder({ clientOrderId: order.clientOrderId }) ??
+        unknownResult.data.order ?? order
+      logOrderLifecycle({
+        logger,
+        order: unknownOrder,
+        ownership: state.registry.getOwnership({ clientOrderId: order.clientOrderId }) ?? ownership,
+        status: "UNKNOWN",
+      })
       await pause({
         symbol: order.market.symbol,
         reason: `ORDER_SUBMISSION_${outcome}`,
@@ -928,14 +1012,18 @@ function createConservativeEnginePublishingContext({ context } = {}) {
 
 function createConservativeEngineCancellationContext({ context } = {}) {
   const { broker, eventPublisher, onOperationalStateCancellationIntent,
-    onOperationalStateCancellationOutcome } = context.dependencies
+    onOperationalStateCancellationOutcome, logger } = context.dependencies
   context.reconcileFilledAcknowledgement = (options = {}) => reconcileFilledAcknowledgementTransition({
     ...options,
     broker,
     pause: context.pause,
     processUserDataEventTransition: context.processUserDataEventTransition,
   })
-  const cancellationEventPublishers = createOrderCancellationEventPublishers({ eventPublisher })
+  const cancellationEventPublishers = createOrderCancellationEventPublishers({
+    eventPublisher,
+    logger,
+    state: context.state,
+  })
   context.publishOrderCancelled = cancellationEventPublishers.publishOrderCancelled
   context.publishOrderCancelFailed = cancellationEventPublishers.publishOrderCancelFailed
   const cancellationFailureHandlers = createCancellationFailureHandlers({
@@ -954,12 +1042,22 @@ function createConservativeEngineCancellationContext({ context } = {}) {
     const result = validateCancellationEligibility({ order })
     if (result.ok) {return result}
     const error = result.errors[0]
-    context.publishOrderCancelFailed({ order, outcome: "INVALID_CANCELLATION_REQUEST", error })
+    context.publishOrderCancelFailed({
+      order,
+      outcome: "INVALID_CANCELLATION_REQUEST",
+      error,
+    })
     if (pauseOnFailure) {await context.pause({ symbol, reason, error })}
     return result
   }
   context.cancelOrderWithOperationalState = (options = {}) => cancelOrderWithOperationalStateTransition({
-    dependencies: { broker, onOperationalStateCancellationIntent, onOperationalStateCancellationOutcome },
+    dependencies: {
+      broker,
+      onOperationalStateCancellationIntent,
+      onOperationalStateCancellationOutcome,
+      logger,
+      state: context.state,
+    },
     ...options,
   })
 }
@@ -990,11 +1088,13 @@ function createConservativeEngineSubmissionContext({ context } = {}) {
       pause: context.pause,
       eventPublisher: dependencies.eventPublisher,
       reconcileFilledAcknowledgement: context.reconcileFilledAcknowledgement,
+      logger: dependencies.logger,
     }),
     ...createSubmissionFailureCallbacks({
       state: context.state,
       pause: context.pause,
       eventPublisher: dependencies.eventPublisher,
+      logger: dependencies.logger,
     }),
   })
 }
@@ -1130,6 +1230,7 @@ function createConservativeEngineOrderEventContext({ context } = {}) {
     state: context.state,
     broker: dependencies.broker,
     eventPublisher: dependencies.eventPublisher,
+    logger: dependencies.logger,
     pairs: context.pairs,
     updateTradingAccounting: dependencies.updateTradingAccounting,
     recordBuyExecutionFill: context.recordBuyExecutionFill,
@@ -1197,15 +1298,24 @@ function createConservativeEngineRuntimeOperations({ context } = {}) {
   context.processMarketPrice = async ({ symbol, priceEvent } = {}) => {
     const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
     if (!protection?.ok) {return protection}
-    return context.runTransition({ task: () => context.processMarketPriceTransition({ symbol, priceEvent }) })
+    return context.runTransition({ task: () => context.processMarketPriceTransition({
+      symbol,
+      priceEvent,
+    }) })
   }
   context.processBookTicker = async ({ symbol, bookTicker } = {}) => {
     const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
     if (!protection?.ok) {return protection}
-    return context.runTransition({ task: () => context.processMarketBookTransition({ symbol, bookTicker }) })
+    return context.runTransition({ task: () => context.processMarketBookTransition({
+      symbol,
+      bookTicker,
+    }) })
   }
   context.processUserDataEvent = ({ event, recoveryMode = false } = {}) =>
-    context.runTransition({ task: () => context.processUserDataEventTransition({ event, recoveryMode }) })
+    context.runTransition({ task: () => context.processUserDataEventTransition({
+      event,
+      recoveryMode,
+    }) })
   context.evaluateLatest = ({ symbol } = {}) =>
     context.runTransition({ task: () => context.evaluateLatestTransition({ symbol }) })
   context.resumeDeferredEvaluations = () => context.runTransition({
@@ -1614,6 +1724,8 @@ async function cancelOrderWithOperationalStateTransition({ dependencies, order, 
     broker,
     onOperationalStateCancellationIntent,
     onOperationalStateCancellationOutcome,
+    logger,
+    state,
   } = dependencies
   const intentFailure = await persistCancellationIntent({
     callback: onOperationalStateCancellationIntent,
@@ -1623,6 +1735,13 @@ async function cancelOrderWithOperationalStateTransition({ dependencies, order, 
   if (intentFailure) {
     return intentFailure
   }
+
+  logOrderLifecycle({
+    logger,
+    order,
+    ownership: state?.registry?.getOwnership?.({ clientOrderId: order.clientOrderId }),
+    status: "CANCEL_REQUESTED",
+  })
 
   let cancelResult
   try {
