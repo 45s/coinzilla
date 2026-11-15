@@ -225,6 +225,14 @@ test("rejects malformed and orphaned order ownership metadata", () => {
     },
   }), /strategyId/, "Order ownership without a strategy identity must be rejected before registration.")
 
+  assert.throws(() => OrderRegistry.empty().registerPending({
+    order: pendingOrder,
+    ownership: {
+      strategyId: "RS_recoverySeller",
+      positionId: "position:rs:zrousdt",
+    },
+  }), /purpose/, "An order without an explicit business purpose must not receive inferred ownership metadata.")
+
   assert.throws(() => new OrderRegistry({
     orders: [pendingOrder],
     ownerships: [{
