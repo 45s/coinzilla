@@ -561,7 +561,7 @@ test("emits deterministic monotonic timings for shutdown phases and failures", a
 })
 
 
-test("preserves nested shutdown replacement error messages, stacks, and causes", async () => {
+function createShutdownReplacementFailureScenario() {
   const cause = new Error("broker rejected the replacement order")
   cause.code = "BROKER_ORDER_REJECTED"
   const replacementError = new Error("shutdown recovery replacement failed", { cause })
@@ -593,10 +593,21 @@ test("preserves nested shutdown replacement error messages, stacks, and causes",
       getOrders: () => [],
     },
   })
+  return { cause, fixture, logEntries, replacementError }
+}
 
+function assertShutdownReplacementErrorSummary({ summary, cause, replacementError }) {
+  assert.equal(summary.message, replacementError.message)
+  assert.equal(summary.stack, replacementError.stack)
+  assert.equal(summary.cause.message, cause.message)
+  assert.equal(summary.cause.code, cause.code)
+}
+
+test("preserves nested shutdown replacement error messages, stacks, and causes", async () => {
+  const scenario = createShutdownReplacementFailureScenario()
   let shutdownError
   await assert.rejects(
-    fixture.stop(),
+    scenario.fixture.stop(),
     (error) => {
       shutdownError = error
       return error instanceof AggregateError
@@ -608,43 +619,24 @@ test("preserves nested shutdown replacement error messages, stacks, and causes",
     (entry) => entry.stage === "SHUTDOWN_RECOVERY_SELL_RECONCILIATION",
   )
   assert.ok(failure, "Shutdown diagnostics must retain the failed recovery SELL reconciliation stage.")
-  assert.equal(
-    failure.errors[0].message,
-    replacementError.message,
-    "The shutdown failure summary must retain the original replacement error message.",
-  )
-  assert.equal(
-    failure.errors[0].stack,
-    replacementError.stack,
-    "The shutdown failure summary must retain the original replacement error stack.",
-  )
-  assert.equal(
-    failure.errors[0].cause.message,
-    cause.message,
-    "The shutdown failure summary must retain the nested broker cause message.",
-  )
-  assert.equal(
-    failure.errors[0].cause.code,
-    cause.code,
-    "The shutdown failure summary must retain the nested broker cause code.",
-  )
+  assertShutdownReplacementErrorSummary({
+    summary: failure.errors[0],
+    cause: scenario.cause,
+    replacementError: scenario.replacementError,
+  })
 
-  const loggedFailure = logEntries.find(
+  const loggedFailure = scenario.logEntries.find(
     (entry) => entry.stage === "SHUTDOWN_RECOVERY_SELL_RECONCILIATION",
   )
   assert.ok(loggedFailure, "The shutdown logger must emit the failed recovery SELL stage.")
+  assertShutdownReplacementErrorSummary({
+    summary: loggedFailure.errors[0],
+    cause: scenario.cause,
+    replacementError: scenario.replacementError,
+  })
+  assert.equal(loggedFailure.originalErrors[0], scenario.replacementError)
   assert.equal(
-    loggedFailure.errors[0].message,
-    replacementError.message,
-    "The structured shutdown log must include the original replacement error message.",
-  )
-  assert.equal(
-    loggedFailure.errors[0].cause.message,
-    cause.message,
-    "The structured shutdown log must include the nested broker cause message.",
-  )
-  assert.equal(
-    fixture.state.status,
+    scenario.fixture.state.status,
     "SHUTDOWN_INCOMPLETE",
     "Preserving diagnostics must not weaken the incomplete-shutdown safety boundary.",
   )
