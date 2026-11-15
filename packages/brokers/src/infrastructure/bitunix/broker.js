@@ -90,7 +90,7 @@ export class BitunixSpotBroker extends CoreBroker {
   async getAccountSnapshot() {
     const error = unsupported(
       "getAccountSnapshot()",
-      "the Spot account endpoint does not provide a source update timestamp",
+      "the Spot account endpoint does not provide a source timestamp",
     )
     return toResult({ errors: [error] })
   }
@@ -155,8 +155,8 @@ export class BitunixSpotBroker extends CoreBroker {
       }
       const body = { symbol: normalizedSymbol, page }
       if (limit !== undefined) {
-        if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
-          throw new RangeError("Bitunix Spot order history limit must be from 1 to 100")
+        if (!Number.isInteger(limit) || limit < 1) {
+          throw new RangeError("Bitunix Spot order history limit must be a positive integer")
         }
         body.pageSize = limit
       }
