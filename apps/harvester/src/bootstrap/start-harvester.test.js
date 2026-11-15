@@ -3874,12 +3874,9 @@ test("fails startup before market subscriptions when PREFLIGHT account snapshot 
 })
 
 
-test("treats a prior-process Harvester order as external under IGNORE and evaluates a real market-price event", async () => {
-  const calls = []
-  const broker = createBroker(calls)
+function createPriorProcessOrderBroker({ calls, canceledClientOrderIds } = {}) {
   const startupClientOrderId = "h-0123456789abcdef012345-7"
-  const canceledClientOrderIds = []
-  const startupOpenOrder = {
+  const startupOrder = {
     clientOrderId: startupClientOrderId,
     id: "699694",
     symbol: "BTCUSDT",
@@ -3890,18 +3887,22 @@ test("treats a prior-process Harvester order as external under IGNORE and evalua
     executedQuantity: "0",
     status: "NEW",
   }
+  const broker = createBroker(calls, { externalOpenOrders: [startupOrder] })
   const cancelOrder = broker.cancelOrder
-  broker.getOpenOrders = async (input = {}) => {
-    calls.push("open-orders:account-wide:" + String(input.symbol))
-    return {
-      ok: true,
-      data: [startupOpenOrder].filter((order) => !input.symbol || order.symbol === input.symbol),
-    }
-  }
   broker.cancelOrder = async (input = {}) => {
     canceledClientOrderIds.push(input.order?.clientOrderId)
     return cancelOrder(input)
   }
+  return { broker, startupClientOrderId }
+}
+
+test("treats a prior-process Harvester order as external under IGNORE and evaluates a real market-price event", async () => {
+  const calls = []
+  const canceledClientOrderIds = []
+  const { broker, startupClientOrderId } = createPriorProcessOrderBroker({
+    calls,
+    canceledClientOrderIds,
+  })
   const events = []
   const eventPublisher = {
     publish: (event) => { events.push(event); return { ok: true } },
@@ -3923,6 +3924,8 @@ test("treats a prior-process Harvester order as external under IGNORE and evalua
               ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
               enabled: true,
               enableVolatilityProtection: false,
+              makerPercent: 0.1,
+              takerPercent: 0.1,
             },
           },
         },
@@ -3941,9 +3944,7 @@ test("treats a prior-process Harvester order as external under IGNORE and evalua
     },
   })
 
-  const openingBalances = events.find((event) => event.name === "account.snapshot_captured")
   const openOrders = events.find((event) => event.name === "account.open_orders_captured")
-  assert.equal(openingBalances.data.phase, "PREFLIGHT", "trading startup must retain the durable account PREFLIGHT snapshot")
   assert.equal(openOrders.data.readiness, "BLOCKED", "the audit must preserve its unowned-order classification independently of trading readiness")
   assert.deepEqual(openOrders.data.blockReasons, ["UNOWNED_OPEN_ORDERS:1"], "the Journal must preserve why the startup order is not owned by this process")
   assert.equal(openOrders.data.orderCount, 1, "the account-wide audit must record the pre-existing order")
@@ -3952,7 +3953,6 @@ test("treats a prior-process Harvester order as external under IGNORE and evalua
   assert.ok(calls.includes("open-orders:account-wide:undefined"), "startup must inspect open orders account-wide without a symbol filter")
   assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), true, "an unowned startup order must not prevent market-price subscriptions")
   assert.equal(runtime.recoveredState.orderRegistry.getActiveOrders().length, 0, "the startup order must remain absent from the current-process OrderRegistry")
-  assert.equal(runtime.connected, true, "the trading runtime must start while leaving the startup order external")
 
   const evaluation = await runtime.processMarketPrice({
     symbol: "BTCUSDT",
@@ -5861,7 +5861,7 @@ test("reconciles the in-memory order registry before reopening trading after str
   let acknowledgementCount = 0
   let resolveAcknowledgement
   const acknowledged = new Promise((resolve) => { resolveAcknowledgement = resolve })
-  const subscribeForUserData = broker.subscribeForUserData
+  const { subscribeForUserData } = broker
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
     return {

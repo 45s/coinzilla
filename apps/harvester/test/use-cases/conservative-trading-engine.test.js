@@ -38,6 +38,7 @@ const createFixture = ({
   isMarketPriceFresh = () => true,
   isMarketBookFresh = () => true,
   hasUnownedOpenOrdersForSymbol = () => false,
+  // All unmatched startup orders use this same external-order policy.
   externalOrdersPolicy,
   getVolatilityData,
   pausedMarkets = [],
