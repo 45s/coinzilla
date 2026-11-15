@@ -8,9 +8,15 @@ import {
 const averageCostScale = 36
 
 function assertPositiveAmount({ value, field }) {
-  assertDecimalString({ value, field })
-  if (compareDecimal({ left: value, right: "0" }) <= 0) {
-    throw new RangeError(field + " must be greater than zero")
+  assertDecimalString({
+    value,
+    field,
+  })
+  if (compareDecimal({
+    left: value,
+    right: "0",
+  }) <= 0) {
+    throw new RangeError(`${field} must be greater than zero`)
   }
 }
 
@@ -18,11 +24,26 @@ function assertLegacyPosition({ position } = {}) {
   if (!position || typeof position !== "object" || Array.isArray(position)) {
     throw new TypeError("Legacy position is required")
   }
-  assertPositiveAmount({ value: position.invested, field: "position.invested" })
-  assertPositiveAmount({ value: position.originalQuantity, field: "position.originalQuantity" })
-  assertPositiveAmount({ value: position.averageCost, field: "position.averageCost" })
-  assertDecimalString({ value: position.remainingQuantity, field: "position.remainingQuantity" })
-  if (compareDecimal({ left: position.remainingQuantity, right: "0" }) < 0) {
+  assertPositiveAmount({
+    value: position.invested,
+    field: "position.invested",
+  })
+  assertPositiveAmount({
+    value: position.originalQuantity,
+    field: "position.originalQuantity",
+  })
+  assertPositiveAmount({
+    value: position.averageCost,
+    field: "position.averageCost",
+  })
+  assertDecimalString({
+    value: position.remainingQuantity,
+    field: "position.remainingQuantity",
+  })
+  if (compareDecimal({
+    left: position.remainingQuantity,
+    right: "0",
+  }) < 0) {
     throw new RangeError("position.remainingQuantity must be non-negative")
   }
   if (compareDecimal({
@@ -38,8 +59,14 @@ function assertLegacyPosition({ position } = {}) {
  * This records authorization/basis only; it does not establish Spot custody.
  */
 export function createLegacyPosition({ invested, quantity } = {}) {
-  assertPositiveAmount({ value: invested, field: "invested" })
-  assertPositiveAmount({ value: quantity, field: "quantity" })
+  assertPositiveAmount({
+    value: invested,
+    field: "invested",
+  })
+  assertPositiveAmount({
+    value: quantity,
+    field: "quantity",
+  })
 
   const averageCost = divideDecimal({
     left: invested,
@@ -61,15 +88,30 @@ export function createLegacyPosition({ invested, quantity } = {}) {
  * Spot availability and shared reservations must be checked separately.
  */
 export function calculateLegacySellQuantity({ remainingQuantity, sellQuantity } = {}) {
-  assertDecimalString({ value: remainingQuantity, field: "remainingQuantity" })
-  assertDecimalString({ value: sellQuantity, field: "sellQuantity" })
-  if (compareDecimal({ left: remainingQuantity, right: "0" }) < 0) {
+  assertDecimalString({
+    value: remainingQuantity,
+    field: "remainingQuantity",
+  })
+  assertDecimalString({
+    value: sellQuantity,
+    field: "sellQuantity",
+  })
+  if (compareDecimal({
+    left: remainingQuantity,
+    right: "0",
+  }) < 0) {
     throw new RangeError("remainingQuantity must be non-negative")
   }
-  if (compareDecimal({ left: sellQuantity, right: "0" }) <= 0) {
+  if (compareDecimal({
+    left: sellQuantity,
+    right: "0",
+  }) <= 0) {
     throw new RangeError("sellQuantity must be greater than zero")
   }
-  if (compareDecimal({ left: remainingQuantity, right: sellQuantity }) <= 0) {
+  if (compareDecimal({
+    left: remainingQuantity,
+    right: sellQuantity,
+  }) <= 0) {
     return remainingQuantity
   }
   return sellQuantity
@@ -81,7 +123,10 @@ export function calculateLegacySellQuantity({ remainingQuantity, sellQuantity } 
  */
 export function recordLegacySale({ position, quantitySold } = {}) {
   assertLegacyPosition({ position })
-  assertPositiveAmount({ value: quantitySold, field: "quantitySold" })
+  assertPositiveAmount({
+    value: quantitySold,
+    field: "quantitySold",
+  })
   if (compareDecimal({
     left: quantitySold,
     right: position.remainingQuantity,
