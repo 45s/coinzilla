@@ -36,7 +36,13 @@ function parseResponseText({ text, path }) {
   return JSON.parse(losslessText)
 }
 
-function validateRequest({ method, path, queryParams, body }) {
+function validateRequest(input = {}) {
+  const {
+    method,
+    path,
+    queryParams = {},
+    body,
+  } = input
   const normalizedMethod = typeof method === "string" ? method.toUpperCase() : ""
   if (normalizedMethod !== "GET" && normalizedMethod !== "POST") {
     throw new TypeError("Bitunix REST method must be GET or POST")
