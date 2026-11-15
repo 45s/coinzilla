@@ -161,11 +161,16 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
     HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
   ])
-  assert.deepEqual(eventPublisher.events[0].data, {
+  const configValidatedData = eventPublisher.events[0].data
+  assert.deepEqual(configValidatedData, {
     enabledMarkets: ["BTCUSDT"],
     strategyMode: "conservative",
+    tradingMode: "testnet",
+    configurationFingerprint: configValidatedData.configurationFingerprint,
     tradingEnabled: true,
   })
+  assert.match(configValidatedData.configurationFingerprint, /^[a-f0-9]{64}$/,
+    "The startup lifecycle must publish a non-secret digest of the effective strategy configuration.")
   assert.deepEqual(eventPublisher.events[3].data, {
     broker: "binance",
     stream: "user-data",
