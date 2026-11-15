@@ -424,7 +424,10 @@ async function submitShutdownRecoveryReplacement({ dependencies, symbol } = {}) 
     symbol,
     shutdownRecoveryOnly: true,
   })
-  const error = getShutdownRecoveryReplacementFailure({ replacement, symbol })
+  const error = getShutdownRecoveryReplacementFailure({
+    replacement,
+    symbol,
+  })
   if (error) {
     return {
       ok: false,
