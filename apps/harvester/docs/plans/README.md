@@ -2,5 +2,6 @@
 
 - [Documentation inventory and migration plan](DOCUMENTATION_MIGRATION.md) — phased documentation governance adoption and evidence-preserving consolidation.
 - [Harvester documentation inventory](HARVESTER_DOCUMENTATION_INVENTORY.md) — recursive file inventory and initial content-based dispositions.
+- [Application workflow and pipeline migration](WORKFLOW_PIPELINE_MIGRATION.md) — proposed incremental extraction plan, DDD boundaries, safety invariants and autonomous implementation prompt.
 
 A plan describes intended work; GitHub Issues/PRs remain the operational source of task status.
