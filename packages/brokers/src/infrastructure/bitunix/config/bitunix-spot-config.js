@@ -1,19 +1,18 @@
-const DEFAULT_WEBSOCKET_API_URL = "wss://openapi.bitunix.com:443/ws-api/v1"
+const DEFAULT_BASE_URL = "https://openapi.bitunix.com"
 
 /**
- * Validated Bitunix Spot WebSocket API configuration.
- * Bitunix's published Spot API documentation currently lists only the primary
- * production endpoint; no Spot TESTNET endpoint is assumed or synthesized.
+ * Validated Bitunix Spot REST configuration.
+ * The published Spot API documents the production REST endpoint only.
  */
 export class BitunixSpotConfig {
   /**
-   * @param {{apiKey: string, apiSecret: string, tradingMode: "live", websocketApiUrl?: string, requestTimeout?: number}} input
+   * @param {{apiKey: string, apiSecret: string, tradingMode: "live", baseUrl?: string, requestTimeout?: number}} input
    */
   constructor({
     apiKey,
     apiSecret,
     tradingMode,
-    websocketApiUrl = DEFAULT_WEBSOCKET_API_URL,
+    baseUrl = DEFAULT_BASE_URL,
     requestTimeout = 10_000,
   } = {}) {
     if (typeof apiKey !== "string" || !apiKey.trim() ||
@@ -23,8 +22,8 @@ export class BitunixSpotConfig {
     if (tradingMode !== "live") {
       throw new TypeError('Bitunix Spot tradingMode must be explicitly set to "live"; no Spot TESTNET endpoint is documented')
     }
-    if (typeof websocketApiUrl !== "string" || !websocketApiUrl.startsWith("wss://")) {
-      throw new TypeError("Bitunix Spot WebSocket API URL must use wss://")
+    if (typeof baseUrl !== "string" || !baseUrl.startsWith("https://")) {
+      throw new TypeError("Bitunix Spot REST base URL must use https://")
     }
     if (!Number.isInteger(requestTimeout) || requestTimeout < 1) {
       throw new RangeError("Bitunix Spot requestTimeout must be a positive integer")
@@ -33,10 +32,10 @@ export class BitunixSpotConfig {
     this.apiKey = apiKey
     this.apiSecret = apiSecret
     this.tradingMode = tradingMode
-    this.websocketApiUrl = websocketApiUrl
+    this.baseUrl = baseUrl.replace(/\/$/, "")
     this.requestTimeout = requestTimeout
     Object.freeze(this)
   }
 }
 
-export { DEFAULT_WEBSOCKET_API_URL }
+export { DEFAULT_BASE_URL }
