@@ -172,10 +172,26 @@ test("tracks Portfolio quote cash flow already reflected in the snapshot", () =>
 
 test("keeps additional tracked Spot inventory baselines separate from Portfolio baselines", () => {
   const snapshot = new AccountSnapshot({
-    balances: [balance({ asset: btc, free: "5.01" }), balance({ asset: usdt })],
+    balances: [
+      balance({
+        asset: btc,
+        free: "5.01",
+      }),
+      balance({ asset: usdt }),
+    ],
     sourceTime: 301,
-    portfolioBaseQuantityBaseline: [{ assetId: btc.id, amount: "5" }],
-    additionalTrackedBaseQuantityBaseline: [{ assetId: btc.id, amount: "0.01" }],
+    portfolioBaseQuantityBaseline: [
+      {
+        assetId: btc.id,
+        amount: "5",
+      },
+    ],
+    additionalTrackedBaseQuantityBaseline: [
+      {
+        assetId: btc.id,
+        amount: "0.01",
+      },
+    ],
   })
 
   assert.equal(snapshot.getAdditionalTrackedBaseQuantityBaseline({ assetId: btc.id }), "0.01")
@@ -185,13 +201,37 @@ test("keeps additional tracked Spot inventory baselines separate from Portfolio 
     balances: [],
     sourceTime: 1,
     additionalTrackedBaseQuantityBaseline: [
-      { assetId: btc.id, amount: "0.01" },
-      { assetId: btc.id, amount: "0.02" },
+      {
+        assetId: btc.id,
+        amount: "0.01",
+      },
+      {
+        assetId: btc.id,
+        amount: "0.02",
+      },
     ],
   }), /duplicate asset/)
   assert.throws(() => new AccountSnapshot({
     balances: [],
     sourceTime: 1,
-    additionalTrackedBaseQuantityBaseline: [{ assetId: btc.id, amount: "-0.01" }],
+    additionalTrackedBaseQuantityBaseline: [
+      {
+        assetId: btc.id,
+        amount: "-0.01",
+      },
+    ],
   }), /non-negative/)
+})
+
+test("rejects an additional tracked Spot baseline without an authoritative balance for its asset", () => {
+  assert.throws(() => new AccountSnapshot({
+    balances: [balance({ asset: btc })],
+    sourceTime: 302,
+    additionalTrackedBaseQuantityBaseline: [
+      {
+        assetId: eth.id,
+        amount: "0.01",
+      },
+    ],
+  }), /additionalTrackedBaseQuantityBaseline references asset missing from balances/)
 })

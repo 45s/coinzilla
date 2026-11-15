@@ -1053,10 +1053,20 @@ test("times the CLOSING Journal durability barrier and reports failed flushes", 
 
 
 test("captures additional tracked Spot allocation separately from Portfolio in account snapshot baselines", async () => {
-  const market = createFixture().market
+  const { market } = createFixture()
   const fixture = createFixture({
-    accountSnapshots: [createAccountSnapshot({ market, sourceTime: 102 })],
-    additionalTrackedBaseQuantity: [{ assetId: market.baseAsset.id, amount: "0.01" }],
+    accountSnapshots: [
+      createAccountSnapshot({
+        market,
+        sourceTime: 102,
+      }),
+    ],
+    additionalTrackedBaseQuantity: [
+      {
+        assetId: market.baseAsset.id,
+        amount: "0.01",
+      },
+    ],
   })
 
   const snapshot = await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })

@@ -555,8 +555,14 @@ test("rejects malformed commitment inputs without throwing", () => {
     { actions: [{ side: "BUY", price: "10", quantity: "1" }], quoteCashFlow: "not-a-decimal" },
     { actions: [], portfolioBaseBalance: "-1" },
     { actions: [], portfolioBaseBalance: undefined },
-    { actions: [], additionalTrackedBaseBalance: "-0.01" },
-    { actions: [], additionalTrackedBaseBalanceBaseline: "-0.01" },
+    {
+      actions: [],
+      additionalTrackedBaseBalance: "-0.01",
+    },
+    {
+      actions: [],
+      additionalTrackedBaseBalanceBaseline: "-0.01",
+    },
     { actions: [], committedQuoteBalance: "-1" },
     { actions: [], committedBaseBalance: "-1" },
   ]
@@ -574,13 +580,21 @@ test("rejects a SELL that exceeds shared inventory after combined CG and RS rese
   const recoverySellerReservedBase = "5"
   const sharedReservedBase = "9"
   assert.equal(
-    addDecimal({ left: coinGrabberReservedBase, right: recoverySellerReservedBase }),
+    addDecimal({
+      left: coinGrabberReservedBase,
+      right: recoverySellerReservedBase,
+    }),
     sharedReservedBase,
     "The account-level commitment must be the sum of both strategy-owned SELL reservations.",
   )
 
   const result = allocateOrderCommitments({
-    actions: [{ side: "SELL", quantity: "2" }],
+    actions: [
+      {
+        side: "SELL",
+        quantity: "2",
+      },
+    ],
     quoteFreeBalance: "100",
     baseFreeBalance: "10",
     quoteCashFlow: "0",
@@ -600,7 +614,12 @@ test("rejects a SELL that exceeds shared inventory after combined CG and RS rese
 
 test("allocates a mixed recovery and legacy SELL against Portfolio plus separately tracked Spot inventory", () => {
   const result = allocateOrderCommitments({
-    actions: [{ side: "SELL", quantity: "5.01" }],
+    actions: [
+      {
+        side: "SELL",
+        quantity: "5.01",
+      },
+    ],
     quoteFreeBalance: "100",
     baseFreeBalance: "5.01",
     quoteCashFlow: "0",
@@ -620,14 +639,24 @@ test("allocates a mixed recovery and legacy SELL against Portfolio plus separate
   })
 
   assert.equal(result.ok, true, "Five recovery units plus 0.01 separately tracked legacy units must be sellable as one mixed SELL.")
-  assert.deepEqual(result.data.executableActions, [{ side: "SELL", quantity: "5.01" }])
+  assert.deepEqual(result.data.executableActions, [
+    {
+      side: "SELL",
+      quantity: "5.01",
+    },
+  ])
   assert.equal(result.data.remainingBaseBalance, "0")
   assert.equal(result.data.remainingActiveBase, "0")
 })
 
 test("applies a post-snapshot partial legacy disposal to shared free-base availability exactly once", () => {
   const result = allocateOrderCommitments({
-    actions: [{ side: "SELL", quantity: "5.005" }],
+    actions: [
+      {
+        side: "SELL",
+        quantity: "5.005",
+      },
+    ],
     quoteFreeBalance: "100",
     baseFreeBalance: "5.01",
     quoteCashFlow: "0",
@@ -653,7 +682,12 @@ test("applies a post-snapshot partial legacy disposal to shared free-base availa
 
 test("shared SELL reservations reduce mixed recovery and legacy availability", () => {
   const result = allocateOrderCommitments({
-    actions: [{ side: "SELL", quantity: "5.01" }],
+    actions: [
+      {
+        side: "SELL",
+        quantity: "5.01",
+      },
+    ],
     quoteFreeBalance: "100",
     baseFreeBalance: "5.01",
     quoteCashFlow: "0",
@@ -679,7 +713,12 @@ test("shared SELL reservations reduce mixed recovery and legacy availability", (
 
 test("rejects a mixed SELL when verified free Spot custody is smaller than tracked recovery plus legacy inventory", () => {
   const result = allocateOrderCommitments({
-    actions: [{ side: "SELL", quantity: "5.01" }],
+    actions: [
+      {
+        side: "SELL",
+        quantity: "5.01",
+      },
+    ],
     quoteFreeBalance: "100",
     baseFreeBalance: "5",
     quoteCashFlow: "0",
