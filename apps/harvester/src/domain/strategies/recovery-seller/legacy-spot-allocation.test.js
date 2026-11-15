@@ -263,6 +263,7 @@ test("fails closed when account Spot custody cannot cover aggregate Portfolio ba
       portfolio,
       legacyPositions: [{
         market: btcUsdtMarket,
+        originalQuantity: "0.01",
         remainingQuantity: "0.01",
       }],
     }),
