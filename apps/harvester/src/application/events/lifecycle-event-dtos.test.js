@@ -139,19 +139,6 @@ test("rejects missing or malformed effective-configuration evidence", () => {
   }).ok, false, "Configuration fingerprints must be canonical SHA-256 hex digests.")
 })
 
-test("preserves dirty working-tree provenance without inferring a configuration cause", () => {
-  const result = mapHarvesterProcessStartedData({
-    ...validProcessIdentity,
-    source: {
-      ...validProcessIdentity.source,
-      workingTree: "dirty",
-    },
-  })
-  assert.equal(result.ok, true)
-  assert.equal(result.data.source.workingTree, "dirty",
-    "A dirty worktree is provenance evidence, not proof that the effective configuration was overridden.")
-})
-
 test("maps broker connection success and sanitizes sensitive error values", () => {
   assert.deepEqual(mapBrokerConnectedData({ broker: "binance" }), {
     ok: true,
@@ -994,6 +981,19 @@ const validProcessIdentity = {
     metadataSource: "git",
   },
 }
+
+test("preserves dirty working-tree provenance without inferring a configuration cause", () => {
+  const result = mapHarvesterProcessStartedData({
+    ...validProcessIdentity,
+    source: {
+      ...validProcessIdentity.source,
+      workingTree: "dirty",
+    },
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.data.source.workingTree, "dirty",
+    "A dirty worktree is provenance evidence, not proof that the effective configuration was overridden.")
+})
 
 test("maps process-start identity to a sanitized allowlisted Journal DTO", () => {
   const result = mapHarvesterProcessStartedData({

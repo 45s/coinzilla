@@ -180,14 +180,21 @@ test("rejects configurations without an enabled pair", async () => {
   const fixture = createFixture({ cfg: config({ enabledSymbols: [] }), env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } })
   await assert.rejects(
     resolveHarvesterOptions(fixture.input),
-    /requires at least one enabled pair/,
+    (error) => error.code === "HARVESTER_EFFECTIVE_CONFIGURATION_INVALID" &&
+      error.expected === "at least one enabled market",
     "Trading must not start when the strategy has no enabled market.",
   )
 })
 
 test("rejects invalid strategy flags", async () => {
-  const aggressive = createFixture({ cfg: config({ aggressive: true }), env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } })
+  const aggressive = createFixture({
+    cfg: config({ aggressive: true }),
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  })
   await assert.rejects(resolveHarvesterOptions(aggressive.input), /Aggressive strategy is disabled and deferred/)
-  const conservative = createFixture({ cfg: config({ conservative: false }), env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } })
+  const conservative = createFixture({
+    cfg: config({ conservative: false }),
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  })
   await assert.rejects(resolveHarvesterOptions(conservative.input), /Conservative strategy must remain enabled/)
 })

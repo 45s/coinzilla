@@ -93,6 +93,18 @@ async function verifyOperationalStateStore({ operationalStateStore } = {}) {
   assertOperationalStateCanStart({ projection })
 }
 
+function assertConfigurationBaselineMatchesRuntime({ baseline, configurationFingerprint, enabledMarkets } = {}) {
+  if (
+    baseline.data.fingerprint !== configurationFingerprint ||
+    JSON.stringify(baseline.data.markets) !== JSON.stringify(enabledMarkets)
+  ) {
+    throw new EffectiveConfigurationError({
+      path: "strategies.CG_coinGrabber.pairs",
+      expected: "the durable baseline fingerprint and enabled markets to match the resolved runtime configuration",
+    })
+  }
+}
+
 async function persistHarvesterProcessStart({
   operationalStateStore,
   appConfig,
@@ -108,15 +120,7 @@ async function persistHarvesterProcessStart({
     throw new Error("Harvester cannot connect to the broker without a durable configuration baseline: " +
       (baseline?.errors?.[0]?.message ?? "durable acknowledgement missing"))
   }
-  if (
-    baseline.data.fingerprint !== configurationFingerprint ||
-    JSON.stringify(baseline.data.markets) !== JSON.stringify(enabledMarkets)
-  ) {
-    throw new EffectiveConfigurationError(
-      "strategies.CG_coinGrabber.pairs",
-      "the durable baseline fingerprint and enabled markets to match the resolved runtime configuration",
-    )
-  }
+  assertConfigurationBaselineMatchesRuntime({ baseline, configurationFingerprint, enabledMarkets })
   const started = await recordProcessStarted({
     operationalStateStore,
     configurationFingerprint: baseline.data.fingerprint,

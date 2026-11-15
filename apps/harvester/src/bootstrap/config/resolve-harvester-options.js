@@ -54,7 +54,10 @@ export async function resolveHarvesterOptions({ configSource, appConfig: supplie
     tradingEnabled,
   })
   if (validatedConfigurationData?.ok !== true) {
-    throw new EffectiveConfigurationError("config.validated", "a complete effective-configuration evidence DTO")
+    throw new EffectiveConfigurationError({
+      path: "config.validated",
+      expected: "a complete effective-configuration evidence DTO",
+    })
   }
   publishLifecycleEvent({
     eventPublisher,
