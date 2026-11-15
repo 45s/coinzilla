@@ -32,8 +32,17 @@ export async function recordConfigurationBaseline({ operationalStateStore, appCo
     if (strategyNames.length !== 1) { throw new TypeError("Configuration baseline requires exactly one configured strategy") }
     const strategyName = strategyNames[0]
     const strategy = canonicalize(strategies[strategyName])
-    const markets = Object.keys(strategies[strategyName]?.pairs ?? {}).sort()
-    if (markets.length === 0) { throw new TypeError("Configuration baseline requires at least one configured market") }
+    const pairs = strategies[strategyName]?.pairs
+    if (!pairs || typeof pairs !== "object" || Array.isArray(pairs)) {
+      throw new TypeError("Configuration baseline requires validated strategy pairs")
+    }
+    const markets = Object.entries(pairs).filter(([symbol, pair]) => {
+      if (!pair || typeof pair !== "object" || Array.isArray(pair) || typeof pair.enabled !== "boolean") {
+        throw new TypeError("Configuration baseline requires an explicit enabled flag for every configured market: " + symbol)
+      }
+      return pair.enabled
+    }).map(([symbol]) => symbol).sort()
+    if (markets.length === 0) { throw new TypeError("Configuration baseline requires at least one enabled market") }
     const fingerprint = createHash("sha256").update(JSON.stringify({ schemaVersion: 1, strategyName, strategy })).digest("hex")
     const result = await operationalStateStore.append({
       factId: "configuration-baseline:" + fingerprint,
