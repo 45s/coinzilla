@@ -5844,7 +5844,7 @@ test("uses the injected trailing repricing policy", async () => {
 })
 
 
-test("does not evaluate or submit from a stale market price", async () => {
+test("does not cache or evaluate a stale market price", async () => {
   const {
     engine,
     orders
@@ -5857,10 +5857,15 @@ test("does not evaluate or submit from a stale market price", async () => {
       timestamp: 1
     },
   })
-  assert.equal(result.ok, true)
-  assert.equal(result.data.skipped, true)
-  assert.equal(result.data.reason, "STALE_MARKET_PRICE")
-  assert.equal(orders.length, 0)
+  assert.equal(result.ok, true, "A stale market-price event is a safe skip, not a failed engine transition.")
+  assert.equal(result.data.skipped, true, "A stale market-price event must be rejected before strategy evaluation.")
+  assert.equal(result.data.reason, "STALE_MARKET_PRICE", "The skip must retain the stable stale-price reason.")
+  assert.equal(orders.length, 0, "A stale market-price event must never submit an order.")
+  const snapshotResult = await engine.getOperatorMarketSnapshots()
+  assert.equal(snapshotResult.ok, true, "Reading the serialized operator snapshot after a stale event must succeed.")
+  const dogeMarket = snapshotResult.data.markets.find(({ symbol }) => symbol === "DOGEUSDT")
+  assert.equal(dogeMarket.latestPrice, null, "A stale event must not replace the last usable cached market price.")
+  assert.equal(dogeMarket.priceFresh, false, "A market without an accepted price must remain unavailable to strategy evaluation.")
 })
 
 

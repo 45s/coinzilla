@@ -459,6 +459,16 @@ The central final order-submission gate and serialized state application remain
 engine-owned; the engine is not a domain policy and does not parse raw Binance
 messages.
 
+Market-price events are validated and handled inside that same serialized
+transition. A stale event is skipped before it can replace the latest accepted
+price or trigger strategy evaluation. A fresh event updates the per-market
+price/event state, then either enters the existing trailing-BUY replacement
+path or evaluates the latest strategy state. The public engine entry point
+refreshes enabled volatility protection before enqueueing this transition; the
+handler does not create another queue or directly call broker APIs; it
+continues to delegate trailing replacement to the existing workflow and does
+not mutate Portfolio/RecoveryLedger accounting.
+
 P3 has introduced four cohesive use-case boundaries on the current branch:
 
 - `makeCollectOwnedOrderSnapshots` in
@@ -490,6 +500,16 @@ P3 has introduced four cohesive use-case boundaries on the current branch:
   terminal-status parity, then delegates each fill to the order-event
   workflow's existing accounting transition. It owns no Portfolio/RecoveryLedger
   state and does not bypass the engine's durable fill barriers.
+
+- `createMarketPriceTransitionHandler` in
+  `src/use-cases/create-market-price-transition-handler.js` validates normalized
+  price events, rejects stale data before updating the latest-price cache, logs
+  accepted market context, and routes fresh events to the existing trailing-BUY
+  replacement or latest-strategy evaluation callbacks. The engine composes it
+  with its own state and callbacks and invokes it only through the existing
+  serialized transition queue; volatility refresh and the public engine API
+  remain in the engine. The handler does not own a queue or Portfolio/
+  RecoveryLedger accounting.
 
 The engine was reduced from 3,335 lines at the verified pre-P3 `develop`
 baseline to 2,266 lines by the incremental extraction merged in [PR #1075](https://github.com/45s/coinzilla/pull/1075). This is not a completed
