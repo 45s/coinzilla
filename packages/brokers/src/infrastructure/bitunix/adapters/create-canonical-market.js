@@ -5,33 +5,57 @@ function createAsset({ code, field }) {
     throw new TypeError(`Bitunix market metadata is missing ${field}`)
   }
   const normalizedCode = code.trim().toUpperCase()
-  return new Asset({ id: normalizedCode.toLowerCase(),
-    code: normalizedCode })
+  return new Asset({
+    id: normalizedCode.toLowerCase(),
+    code: normalizedCode,
+  })
+}
+
+/**
+ * Bitunix Spot pair metadata omits a symbol field. The documented pair
+ * response provides base/quote, while order endpoints use concatenated names
+ * such as BTCUSDT. Prefer a symbol if a response includes one.
+ *
+ * @param {{symbolInfo: {symbol?: string, base: string, quote: string}}} input
+ * @returns {string}
+ */
+export function getBitunixSymbol({ symbolInfo } = {}) {
+  if (!symbolInfo || typeof symbolInfo !== "object" || Array.isArray(symbolInfo)) {
+    throw new TypeError("Bitunix market metadata must be an object")
+  }
+  if (typeof symbolInfo.symbol === "string" && symbolInfo.symbol.trim()) {
+    return symbolInfo.symbol.trim().toUpperCase()
+  }
+  if (typeof symbolInfo.base !== "string" || !symbolInfo.base.trim() ||
+      typeof symbolInfo.quote !== "string" || !symbolInfo.quote.trim()) {
+    throw new TypeError("Bitunix market metadata is missing base or quote asset code")
+  }
+  return `${symbolInfo.base.trim()}${symbolInfo.quote.trim()}`.toUpperCase()
 }
 
 /**
  * Convert Bitunix Spot coin-pair metadata into the canonical Market entity.
  *
- * @param {{symbolInfo: {symbol: string, base: string, quote: string, isOpen?: string}}} options
+ * @param {{symbolInfo: {symbol?: string, base: string, quote: string, isOpen?: string|number|boolean}, allowClosed?: boolean}} options
  * @returns {import("@coinzilla/entities").Market}
  */
-export function createCanonicalMarket({ symbolInfo } = {}) {
-  if (!symbolInfo || typeof symbolInfo !== "object" || Array.isArray(symbolInfo)) {
-    throw new TypeError("Bitunix market metadata must be an object")
-  }
-  if (typeof symbolInfo.symbol !== "string" || !symbolInfo.symbol.trim()) {
-    throw new TypeError("Bitunix market metadata is missing symbol")
-  }
-  if (symbolInfo.isOpen === "0" || symbolInfo.isOpen === 0 || symbolInfo.isOpen === false) {
-    throw new Error(`Bitunix Spot market ${symbolInfo.symbol} is not open for trading`)
+export function createCanonicalMarket({ symbolInfo, allowClosed = false } = {}) {
+  const symbol = getBitunixSymbol({ symbolInfo })
+  if (!allowClosed &&
+      (symbolInfo.isOpen === "0" || symbolInfo.isOpen === 0 || symbolInfo.isOpen === false)) {
+    throw new Error(`Bitunix Spot market ${symbol} is not open for trading`)
   }
 
   return new Market({
     venue: "bitunix",
-    symbol: symbolInfo.symbol.trim().toUpperCase(),
-    baseAsset: createAsset({ code: symbolInfo.base,
-      field: "base asset code" }),
-    quoteAsset: createAsset({ code: symbolInfo.quote,
-      field: "quote asset code" }),
+    symbol,
+    baseAsset: createAsset({
+      code: symbolInfo.base,
+      field: "base asset code",
+    }),
+    quoteAsset: createAsset({
+      code: symbolInfo.quote,
+      field: "quote asset code",
+    }),
   })
 }
