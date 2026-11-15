@@ -673,6 +673,10 @@ test("keeps strategy-owned order facts and pending client identity on compact li
     2,
     "A cancellation result and its exact executed/cancelled quantities must share one terminal line.",
   )
+  assert.ok(
+    lines.every((line) => line.length < 130),
+    "Order lifecycle records must stay compact rather than reserving large fixed-width terminal columns.",
+  )
   assert.equal(
     lines[0],
     "19:14:52 🪙 CG SUBMITTED #pending ZROUSDT SELL 4.98 @ 1.393 h-325e71ba16494aeb875e6e-3",
