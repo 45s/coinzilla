@@ -77,7 +77,7 @@ function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
     ? data.clientOrderId
     : ""
   const detail = typeof data.detail === "string" && data.detail.length > 0
-    ? data.detail.replace(/[\\r\\n]+/g, " ")
+    ? data.detail.replace(/[\r\n]+/g, " ")
     : ""
 
   return [
