@@ -97,7 +97,7 @@ The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The curren
 | `getExchangeMarkets()` | `GET /api/spot/v1/common/coin_pair/list` | Filters closed pairs; derives each pair symbol by concatenating base and quote because the catalog response omits symbol. |
 | `getSymbolFilters({ symbol })` | Spot coin-pair catalog | Returns Bitunix metadata, not Binance filter schema. |
 | `getOpenOrders({ symbol })` | `POST /api/spot/v1/order/pending/list` | Symbol required. |
-| `getOrderHistory({ symbol })` | `POST /api/spot/v1/order/history/page` | Symbol required; no exact order-ID filter. |
+| `getOrderHistory({ symbol, status?, side?, type?, startTime?, endTime?, page?, limit? })` | `POST /api/spot/v1/order/history/page` | Symbol required; no exact order-ID filter. Canonical statuses (`OPEN`, `FILLED`, `PARTIALLY_FILLED`, `CANCELED`, `PARTIALLY_FILLED_CANCELED`), sides (`BUY`, `SELL`) and types (`LIMIT`, `MARKET`) are translated to Bitunix numeric codes inside the adapter. |
 | `getOrder({ symbol, orderId })` | `GET /api/spot/v1/order/detail` | Response identity is validated. |
 | `getPrices({ symbol })` | `GET /api/spot/v1/market/last_price` | Request/response lookup only; maps the returned price string to `{ symbol, price }`. |
 | `getFills({ symbol, orderId })` | `POST /api/spot/v1/order/deal/list` | Per-order matching result. |
