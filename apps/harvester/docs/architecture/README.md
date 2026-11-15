@@ -1,6 +1,7 @@
 # Harvester architecture documentation
 
 - [Application architecture](../architecture.md) — current application boundaries, dependency direction, use cases and composition.
+- [Workflow decomposition and pipeline migration plan](../plans/WORKFLOW_PIPELINE_MIGRATION.md) — proposed application-layer composition guidance and a narrow first implementation slice; not a runtime contract.
 - [Operator control](../operator-control/README.md) — transport-independent operator pause contract, Telegram Command Center and current implementation status.
 - [Telegram Command Center runbook](../operations/telegram-command-center.md) — menu, inline navigation, confirmations, authorization and troubleshooting.
 - [ADR-0002 — Transport-independent operator control](decisions/0002-transport-independent-operator-control.md) — accepted application, engine and Telegram-adapter ownership/safety contract.
