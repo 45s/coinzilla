@@ -5,4 +5,3 @@ export const strategyLogMarkers = Object.freeze({
   [StrategyId.RECOVERY_SELLER]: "🔴 RS",
 })
 
-export const SYSTEM_LOG_MARKER = "⚪ SYS"
