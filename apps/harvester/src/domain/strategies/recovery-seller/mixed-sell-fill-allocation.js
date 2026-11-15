@@ -7,7 +7,7 @@ import {
   multiplyDecimal,
   subtractDecimal,
 } from "@coinzilla/utils"
-import { CanonicalOrder, Fill } from "@coinzilla/entities"
+import { Fill } from "@coinzilla/entities"
 import { StrategyId } from "../strategy-ids.js"
 import { OrderRegistry } from "../../orders/order-registry.js"
 import { createFillFingerprint } from "../../fills/fill-fingerprint.js"
@@ -282,7 +282,7 @@ function createAllocationSide({ grossBaseQuantity, quoteProceeds, commissions, b
  * @param {string} input.recoveryQuantity Gross base quantity attributed to the RS recovery Position.
  * @param {string} input.legacyQuantity Gross base quantity attributed to the separate RS legacy projection.
  * @returns {object} Immutable allocation facts bound to the original Fill and order owner.
- * @throws {TypeError|RangeError|Error} If execution identity, ownership, commissions or split is invalid.
+ * @throws {TypeError|RangeError} If execution identity, ownership, commissions or split is invalid.
  */
 export function createMixedSellFillAllocation({
   fill,
