@@ -1,3 +1,4 @@
+import { toResult } from "@coinzilla/utils"
 import {
   projectHarvesterJournalRecovery as projectHarvesterJournalRecoveryCore,
 } from "./project-harvester-journal-recovery.js"
@@ -106,27 +107,31 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
   if (!Array.isArray(records)) {
     return projectHarvesterJournalRecoveryCore({ records })
   }
-  const hasDeferrals = records.some((record) => record?.payload?.name === DEFERRED_EVENT)
-  if (!hasDeferrals) {
-    return projectHarvesterJournalRecoveryCore({ records })
-  }
-  validateLocalDeferralTransitions({ records })
-  const deferredSubmissions = projectDeferredSubmissions({ records })
-  const deferredClientOrderIds = new Set(deferredSubmissions.map(({ clientOrderId }) => clientOrderId))
-  const projection = projectHarvesterJournalRecoveryCore({
-    records: normalizeSubmissionDeferralRecords({ records }),
-  })
-  if (projection?.ok !== true) {
-    return projection
-  }
-  return {
-    ...projection,
-    data: {
-      ...projection.data,
-      orders: Object.freeze(projection.data.orders.filter(
-        (order) => !deferredClientOrderIds.has(order.clientOrderId),
-      )),
-      deferredSubmissions,
-    },
+  try {
+    const hasDeferrals = records.some((record) => record?.payload?.name === DEFERRED_EVENT)
+    if (!hasDeferrals) {
+      return projectHarvesterJournalRecoveryCore({ records })
+    }
+    validateLocalDeferralTransitions({ records })
+    const deferredSubmissions = projectDeferredSubmissions({ records })
+    const deferredClientOrderIds = new Set(deferredSubmissions.map(({ clientOrderId }) => clientOrderId))
+    const projection = projectHarvesterJournalRecoveryCore({
+      records: normalizeSubmissionDeferralRecords({ records }),
+    })
+    if (projection?.ok !== true) {
+      return projection
+    }
+    return {
+      ...projection,
+      data: {
+        ...projection.data,
+        orders: Object.freeze(projection.data.orders.filter(
+          (order) => !deferredClientOrderIds.has(order.clientOrderId),
+        )),
+        deferredSubmissions,
+      },
+    }
+  } catch (error) {
+    return toResult({ error })
   }
 }
