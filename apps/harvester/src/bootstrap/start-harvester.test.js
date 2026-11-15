@@ -4746,26 +4746,7 @@ async function startOwnedBuySafetyCancellationRuntime({ broker, gates, journalEv
   })
 }
 
-async function assertOwnedBuySafetyCancellation({ broker, cancelledBrokerOrderIds, result, journalEvents }) {
-  assert.deepEqual(cancelledBrokerOrderIds, ["owned-buy-1"])
-  assert.equal(result.userDataReady, false)
-  assert.equal(result.userDataStatus, "EXECUTION_ACCOUNTING_FAILED")
-  assert.equal((await broker.getOpenOrders({})).data.length, 0)
-  assert.ok(journalEvents.some((event) => event.name === "order.cancel_requested"))
-  await assert.rejects(
-    result.stop(),
-    (error) => {
-      assert.ok(error instanceof AggregateError)
-      assert.ok(error.errors.some((entry) =>
-        entry.message.includes("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")))
-      return true
-    },
-    "the runtime must remain fail-closed at shutdown even after all owned BUY exposure has been canceled",
-  )
-}
-
-
-test("cancels acknowledged Harvester BUY orders across markets after an unowned external execution closes the global accounting gate", async () => {
+test("keeps shared user-data readiness open when an external execution is isolated by its market policy", async () => {
   const calls = []
   const cancelledBrokerOrderIds = []
   const gates = createOwnedBuySafetyCancellationGates()
@@ -4788,7 +4769,7 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
   })
   await waitForTestSignal(
     gates.acknowledged,
-    "acknowledged Harvester BUY before the ownership failure",
+    "acknowledged Harvester BUY before the external execution",
     () => ({
       calls,
       userDataStatus: result.userDataStatus,
@@ -4800,6 +4781,7 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
     ["owned-buy-1"],
     "the regression scenario must have one acknowledged Harvester-owned BUY resting before the external execution arrives",
   )
+
   const external = createExternalExecutionFixture()
   broker.emitUserDataEvent({
     eventType: "executionReport",
@@ -4808,22 +4790,35 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
     executedOrder: external.order,
     fill: external.fill,
   })
-  await waitForTestSignal(
-    gates.canceled,
-    "safety cancellation of the acknowledged Harvester BUY",
-    () => ({
-      cancelledBrokerOrderIds,
-      userDataStatus: result.userDataStatus,
-      userDataReady: result.userDataReady,
-    }),
-    2_000,
+  for (let attempt = 0; attempt < 100 &&
+      !journalEvents.some((event) => event.name === "account.open_orders_captured" &&
+        event.data.phase === "RECOVERY"); attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve))
+  }
+
+  assert.ok(journalEvents.some((event) => event.name === "execution.unowned_order"),
+    "the manual execution must remain visible as unowned diagnostic evidence.")
+  assert.ok(journalEvents.some((event) => event.name === "account.open_orders_captured" &&
+    event.data.phase === "RECOVERY"),
+    "the newly observed manual execution must trigger an authoritative account-wide open-order audit.")
+  assert.equal(journalEvents.some((event) => event.name === "execution.fill_applied" &&
+    event.data.tradeId === "external-trade-1"), false,
+    "the external SELL fill must never be applied to Harvester accounting.")
+  assert.deepEqual(cancelledBrokerOrderIds, [],
+    "an external execution on ETH must not trigger safety cancellation of an unrelated owned BTC BUY.")
+  assert.equal(result.userDataReady, true,
+    "a known manual external order must not close global user-data readiness.")
+  assert.equal(result.userDataStatus, "READY",
+    "the shared user-data stream must remain ready after symbol-scoped external-order reconciliation.")
+  assert.deepEqual(
+    (await broker.getOpenOrders({})).data.map((order) => order.id),
+    ["owned-buy-1"],
+    "the unrelated owned BUY must remain open until the ordinary shutdown sequence.",
   )
-  await assertOwnedBuySafetyCancellation({
-    broker,
-    cancelledBrokerOrderIds,
-    result,
-    journalEvents,
-  })
+
+  await result.stop()
+  assert.deepEqual(cancelledBrokerOrderIds, ["owned-buy-1"],
+    "the ordinary shutdown sequence must still cancel the Harvester-owned BUY.")
 })
 
 
@@ -5759,9 +5754,10 @@ test("stops broker intake before draining queued user-data and disconnects after
   assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"), "the user-data subscription must be disconnected before the broker itself")
 })
 
-test("logs safe correlation details when an execution report is not owned", async () => {
+test("logs safe correlation details for an external execution without closing global readiness", async () => {
   const broker = createBroker()
   const errors = []
+  const journalEvents = []
   const result = await startHarvesterForTest({
     loadConfig: async () => withExternalOrdersPolicy("BTCUSDT", "block"),
     env: {
@@ -5769,6 +5765,13 @@ test("logs safe correlation details when an execution report is not owned", asyn
       NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
+    eventPublisher: {
+      publish: (event) => {
+        journalEvents.push(event)
+        return { ok: true }
+      },
+      flush: async () => ({ ok: true, durable: true }),
+    },
     logger: {
       info() {},
       debug() {},
@@ -5806,35 +5809,24 @@ test("logs safe correlation details when an execution report is not owned", asyn
     executionId: 123456,
     executedOrder: externalOrder,
   })
-  await new Promise((resolve) => setImmediate(resolve))
+  for (let attempt = 0; attempt < 100 &&
+      !journalEvents.some((event) => event.name === "account.open_orders_captured" &&
+        event.data.phase === "RECOVERY"); attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve))
+  }
 
-  const diagnostic = errors.find((entry) =>
-    entry.message === "rejected an unowned or invalid order event")
-  assert.ok(diagnostic)
-  assert.equal(diagnostic.symbol, "BTCUSDT")
-  assert.equal(diagnostic.brokerOrderId, "987654")
-  assert.equal(diagnostic.clientOrderId, "external-client-id")
-  assert.equal(diagnostic.side, "BUY")
-  assert.equal(diagnostic.executionType, "NEW")
-  assert.equal(diagnostic.orderStatus, "OPEN")
-  assert.equal(diagnostic.executionId, 123456)
-  assert.equal(diagnostic.registryMatchedByClientOrderId, false)
-  assert.equal(diagnostic.registryMatchedByBrokerOrderId, false)
-  assert.equal(diagnostic.clientIdMatchStatus, undefined)
-  assert.ok(Array.isArray(diagnostic.errors))
-
-  await assert.rejects(
-    result.stop(),
-    (error) => {
-      assert.ok(error instanceof AggregateError, "shutdown must aggregate cleanup and audit failures instead of reporting success")
-      assert.ok(
-        error.errors.some((entry) => entry.message.includes("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")),
-        "the shutdown AggregateError must retain the incomplete user-data/accounting reconciliation reason",
-      )
-      return true
-    },
-    "shutdown must report an incomplete CLOSING audit after rejecting an unowned execution report and retaining the accounting-safety gate",
-  )
+  assert.ok(journalEvents.some((event) => event.name === "execution.unowned_order"),
+    "the unknown execution report must be retained as unowned diagnostic evidence.")
+  assert.ok(journalEvents.some((event) => event.name === "account.open_orders_captured" &&
+    event.data.phase === "RECOVERY"),
+    "the BLOCK policy must request a fresh authoritative account-wide open-order snapshot.")
+  assert.deepEqual(errors, [],
+    "a known external order under BLOCK must not be logged as an accounting/ownership failure.")
+  assert.equal(result.userDataReady, true,
+    "the external order's symbol guard must not close global user-data readiness.")
+  assert.equal(result.userDataStatus, "READY",
+    "the shared user-data stream must remain ready.")
+  await result.stop()
 })
 
 test("reconciles the in-memory order registry before reopening trading after stream recovery", async () => {
