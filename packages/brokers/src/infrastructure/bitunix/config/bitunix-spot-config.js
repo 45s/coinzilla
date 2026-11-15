@@ -20,7 +20,7 @@ export class BitunixSpotConfig {
       throw new TypeError("Bitunix Spot API credentials are required")
     }
     if (tradingMode !== "live") {
-      throw new TypeError('Bitunix Spot tradingMode must be explicitly set to "live"; no Spot TESTNET endpoint is documented')
+      throw new TypeError('Bitunix Spot tradingMode is unsupported unless explicitly set to "live"; no Spot TESTNET endpoint is documented')
     }
     if (typeof baseUrl !== "string" || !baseUrl.startsWith("https://")) {
       throw new TypeError("Bitunix Spot REST base URL must use https://")
