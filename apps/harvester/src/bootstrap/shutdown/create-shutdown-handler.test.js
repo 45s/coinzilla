@@ -593,7 +593,12 @@ function createShutdownReplacementFailureScenario() {
       getOrders: () => [],
     },
   })
-  return { cause, fixture, logEntries, replacementError }
+  return {
+    cause,
+    fixture,
+    logEntries,
+    replacementError,
+  }
 }
 
 function assertShutdownReplacementErrorSummary({ summary, cause, replacementError }) {
