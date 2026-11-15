@@ -254,10 +254,38 @@ export class BitunixSpotBroker extends CoreBroker {
     }
   }
 
+  async getPrice(input = {}) {
+    return this.getPrices(input)
+  }
+
+  async getAssets() {
+    const error = unsupported(
+      "getAssets()",
+      "the legacy Coin representation is not defined by the Bitunix adapter; use canonical getBalances()",
+    )
+    return toResult({ errors: [error] })
+  }
+
+  async getMyTrades() {
+    const error = unsupported(
+      "getMyTrades()",
+      "the Spot API exposes matching-order lookup by orderId, not an account-wide trade-history endpoint",
+    )
+    return toResult({ errors: [error] })
+  }
+
   async createOrder() {
     const error = unsupported(
       "createOrder()",
       "Bitunix Spot has no exchange-side client order ID, so a lost placement response cannot be reconciled idempotently",
+    )
+    return toResult({ errors: [error] })
+  }
+
+  async createCanonicalOrder() {
+    const error = unsupported(
+      "createCanonicalOrder()",
+      "Bitunix Spot does not expose clientOrderId and placement is disabled until order reconciliation is reliable",
     )
     return toResult({ errors: [error] })
   }
@@ -271,6 +299,36 @@ export class BitunixSpotBroker extends CoreBroker {
       ...toResult({ errors: [error] }),
       cancellationOutcome: "NOT_SENT",
     }
+  }
+
+  async cancelAllOpenOrders() {
+    const error = unsupported(
+      "cancelAllOpenOrders()",
+      "no safe order-mutation reconciliation contract is available",
+    )
+    return toResult({ errors: [error] })
+  }
+
+  async subscribeForUserData() {
+    throw unsupported(
+      "subscribeForUserData()",
+      "the documented private Spot WebSocket API does not define a continuous order/execution event stream",
+    )
+  }
+
+  async subscribeForBookTicker() {
+    throw unsupported(
+      "subscribeForBookTicker()",
+      "the documented Spot WebSocket API does not define a continuous order-book subscription",
+    )
+  }
+
+  async getCandles() {
+    const error = unsupported(
+      "getCandles()",
+      "historical Spot candle support has not yet been mapped to the canonical candle contract",
+    )
+    return toResult({ errors: [error] })
   }
 
   async subscribeForPrices() {
