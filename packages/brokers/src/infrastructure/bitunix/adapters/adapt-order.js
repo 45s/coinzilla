@@ -44,7 +44,6 @@ export function adaptOrder(bitunixOrder) {
   if (typeof symbol !== "string" || !symbol.trim()) {
     throw new TypeError("Bitunix Spot order is missing symbol")
   }
-
   const normalizedSide = SIDE_MAP[String(side)]
   if (!normalizedSide) {
     throw new TypeError("Bitunix Spot order side is unsupported")
