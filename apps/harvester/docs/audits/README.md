@@ -21,6 +21,7 @@ This index is for Harvester-specific historical evidence. The [Harvester documen
 
 ## Session and supporting evidence
 
+- [2026-11-14/15 TESTNET session audit](sessions/AUDIT_SESSION_2026-11-14_23-41-12Z.md) — confirmed stale order-event failure and incomplete shutdown recovery evidence.
 - [Session audits index](sessions/README.md) — distinct dated session records and their evidence boundaries.
 - [Supporting evidence index](evidence/README.md) — read-only exchange exports and log-integrity evidence.
 - [Conservative session audit checklist](../CONSERVATIVE_SESSION_AUDIT.md) — reusable procedure, not an evidence snapshot.
