@@ -327,7 +327,7 @@ function writeOrderLifecycleRecord({ output, color, timestamp, level, method, da
     level,
     method,
     color,
-  }) + "\\n")
+  }) + "\n")
 }
 
 function writeStandardConsoleRecord({ output, color, timestamp, level, method, summary, strategyId } = {}) {
@@ -364,7 +364,7 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
       level,
       method,
       color,
-    }) + "\\n")
+    }) + "\n")
     return
   }
 
@@ -388,7 +388,7 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
     level,
     method,
     color,
-  }) + "\\n")
+  }) + "\n")
 }
 
 export function createHarvesterConsoleTransport({
