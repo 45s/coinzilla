@@ -5222,6 +5222,37 @@ test("records configuration and process boundaries before broker startup and aft
 })
 
 
+test("fails closed when the effective configuration has no enabled markets", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-empty-effective-markets-"))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const operationalStateStore = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "empty-effective-markets-test",
+  })
+  await operationalStateStore.initialize()
+  const disabledConfig = {
+    ...appConfig,
+    strategies: {
+      ...appConfig.strategies,
+      CG_coinGrabber: {
+        ...appConfig.strategies.CG_coinGrabber,
+        pairs: Object.fromEntries(Object.entries(appConfig.strategies.CG_coinGrabber.pairs).map(([symbol, pair]) => [
+          symbol,
+          { ...pair, enabled: false },
+        ])),
+      },
+    },
+  }
+  const baseline = await recordConfigurationBaseline({ operationalStateStore, appConfig: disabledConfig })
+  assert.equal(baseline.ok, false, "A runtime baseline must not accept a configuration with no enabled markets.")
+  assert.match(baseline.errors[0].message, /at least one enabled market/)
+  const records = await operationalStateStore.readAll()
+  assert.equal(records.ok, true, records.errors?.[0]?.message)
+  assert.equal(records.data.records.some(({ factType }) => factType === "CONFIGURATION_BASELINE"), false,
+    "A failed effective-market check must not persist a misleading configuration baseline.")
+})
+
+
 test("blocks even a clean second process start until the restart-recovery gate is accepted", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-restart-gate-"))
   t.after(() => rm(directory, {
