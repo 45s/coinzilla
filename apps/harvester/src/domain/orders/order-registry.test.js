@@ -401,6 +401,52 @@ test("ignores a stale OPEN acknowledgement that arrives after a newer fill event
 })
 
 
+
+test("ignores FILLED-to-OPEN regressions regardless of event timestamp", () => {
+  for (const updatedAt of [101, 102, 103]) {
+    const clientOrderId = `h-filled-stale-${updatedAt}`
+    const brokerOrderId = `broker-filled-stale-${updatedAt}`
+    const pending = makeOrder({ clientOrderId })
+    const filledOrder = makeOrder({
+      clientOrderId,
+      brokerOrderId,
+      status: "FILLED",
+      executedQuantity: "100",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt: 102,
+      completedAt: 102,
+    })
+    const registry = OrderRegistry.empty()
+      .registerPending({ order: pending }).registry
+      .applyUpdate({ order: filledOrder }).registry
+    const before = registry.value
+    const staleOpen = makeOrder({
+      clientOrderId,
+      brokerOrderId,
+      status: "OPEN",
+      executedQuantity: "0",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt,
+    })
+
+    const result = registry.applyUpdate({ order: staleOpen })
+    const tracked = result.registry.getOrder({ clientOrderId })
+
+    assert.equal(result.stale, true, `FILLED -> OPEN must be stale for timestamp ${updatedAt}.`)
+    assert.equal(result.applied, false, "A stale NEW/OPEN report must never be applied.")
+    assert.equal(result.unknown, false, "The matching broker/client IDs identify an owned order.")
+    assert.equal(result.registry, registry, "A stale report must return the exact prior immutable registry.")
+    assert.deepEqual(result.registry.value, before, "The complete canonical order snapshot must remain unchanged.")
+    assert.equal(tracked.status, "FILLED", "A terminal FILLED order must never be reopened.")
+    assert.equal(tracked.executedQuantity.amount, "100", "Cumulative executed quantity must remain monotonic.")
+    assert.equal(tracked.remainingQuantity.amount, "0", "A stale OPEN report must not restore order commitment.")
+    assert.equal(result.registry.getActiveOrders().length, 0, "A stale OPEN report must not make the filled order active.")
+    assert.equal(result.registry.getTerminalOrders().length, 1, "The order must remain terminal.")
+  }
+})
+
 test("allows a late FILLED update after an EXPIRED order report", () => {
   const registry = OrderRegistry.empty().registerPending({
     order: makeOrder(),
@@ -695,9 +741,10 @@ test("marks a partially filled order UNKNOWN and preserves cumulative execution"
 test("does not downgrade an already acknowledged order when submission failure arrives late", () => {
   const clientOrderId = "h-ack-race"
   const pending = makeOrder({ clientOrderId })
-  const registry = OrderRegistry.empty().registerPending({ order: pending }).registry.applyUpdate({
+  const { registry: pendingRegistry } = OrderRegistry.empty().registerPending({ order: pending })
+  const { registry } = pendingRegistry.applyUpdate({
     order: makeOrder({ clientOrderId, brokerOrderId: "broker-ack-race", status: "OPEN", updatedAt: 102 }),
-  }).registry
+  })
 
   const result = registry.markUnknown({ clientOrderId })
 

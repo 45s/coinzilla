@@ -1579,3 +1579,12 @@ See [AUDIT.md](reports/AUDIT.md), [AUDIT_FINDINGS.md](reports/AUDIT_FINDINGS.md)
 ## 2026-11-13 LIVE session audit record
 
 A separate Binance production LIVE session (runtime session `85046a77-d7de-4afe-9ff1-a9386535f8e7`, commit `a2254162d8c6ca40da65ef243484428548fdc304`) was audited in [the dated session report](./sessions/AUDIT_SESSION_2026-11-13_15-50-59Z.md) and [order/fill ledger](./sessions/AUDIT_SESSION_2026-11-13_15-50-59Z_ORDER_FILL_LEDGER.md). The 60 applied fills, 21 recovery cycles, 0.30015 FDUSD net profit and retained inventory reconcile to the supplied opening/closing balances. The session did not reproduce the separate #1097 shutdown race. Follow-up issues #1101–#1105 track configuration evidence, same-symbol external-order isolation, Telegram delivery, local submission-deferral evidence and shutdown timing. No implementation or strategy-economics change is implied by this historical record.
+
+
+## 2026-11-15 — F-054 stale FILLED-to-NEW order report fix — merged
+
+- [x] Implemented the terminal stale-event classification in `OrderRegistry.isStaleOrderUpdate()`: after a canonical order is FILLED, an OPEN/PARTIALLY_FILLED report with no greater cumulative executed quantity is ignored independently of event timestamp.
+- [x] Added regression coverage for older, equal and newer timestamps. Assertions preserve the exact immutable FILLED snapshot, executed quantity, remaining quantity, terminal membership and absence from active orders.
+- [x] Preserved the monotonic executed-quantity invariant and existing transition validation; no registry invariant was relaxed.
+- [x] Merged [PR #1146](https://github.com/45s/coinzilla/pull/1146) into `develop` as `3438ed703e8997c872f65fa357faa6993e604dc4`. Exact PR head `448aadd3dda3e98cc33e2c99ffabb456a67959fd`: Harvester tests 1,585/1,585; configured Harvester targeted tests, workspace package tests, workspace coverage, JavaScript syntax/changed-file lint/actionlint, external documentation links and dependency audit all passed.
+- TESTNET integration was skipped. No Binance TESTNET/LIVE operation was performed; exchange-side event history remains required to determine the delivery cause/order. F-055 shutdown replacement uncertainty remains separate and open.
