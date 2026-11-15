@@ -7,6 +7,8 @@ test("package entry point exposes only the supported public contracts", () => {
   assert.deepEqual(Object.keys(brokers).sort(), [
     "BinanceWebSocketBroker",
     "BinanceWebSocketConfig",
+    "BitunixSpotBroker",
+    "BitunixSpotConfig",
     "CoreBroker",
     "normalizeBinanceId",
   ])
