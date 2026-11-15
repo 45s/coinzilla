@@ -463,8 +463,14 @@ export class OrderRegistry {
         unknown: false,
       })
     }
-    validateOrderUpdate({ current, next: nextOrder })
-    if (sameOrderState({ current, next: nextOrder })) {
+    validateOrderUpdate({
+      current,
+      next: nextOrder,
+    })
+    if (sameOrderState({
+      current,
+      next: nextOrder,
+    })) {
       return Object.freeze({
         registry: this,
         applied: false,
