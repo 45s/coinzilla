@@ -377,7 +377,9 @@ test("does not duplicate raw trade receipt and generic processed logs at the use
   }
   const { handler, state } = createHandler({
     engine,
-    logger: { info: (entry) => logs.push(entry) },
+    logger: {
+      info: (entry) => logs.push(entry),
+    },
   })
 
   handler({
