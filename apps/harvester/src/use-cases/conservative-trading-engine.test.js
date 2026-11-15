@@ -4045,7 +4045,7 @@ async function assertShutdownRecoverySellReplaced({ scenario }) {
   const reconciliation = await scenario.harness.engine.reconcileRecoverySellsForShutdown()
   assert.equal(reconciliation.ok, true, reconciliation.errors?.[0]?.message)
   const coverage = await scenario.harness.engine.auditShutdownRecoverySellCoverage()
-  assert.equal(coverage.ok, true, "The coverage audit must return a structured result when the cached price is stale.")
+  assert.equal(coverage.ok, true, "The coverage audit must return a structured result after successful recovery SELL replacement.")
   assert.equal(coverage.data.covered, true)
   const sells = scenario.harness.engine.getOrders().filter((order) => order.side === "SELL")
   const replacementSell = sells.at(-1)
