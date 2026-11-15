@@ -9,7 +9,7 @@ import {
 } from "@coinzilla/utils"
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
 import { StrategyId } from "../strategy-ids.js"
-import { createOrderOwnership } from "../../orders/order-ownership.js"
+import { OrderRegistry } from "../../orders/order-registry.js"
 import { createFillFingerprint } from "../../fills/fill-fingerprint.js"
 import { validateFillCommissions } from "../../fills/validate-fill-commissions.js"
 
@@ -39,44 +39,64 @@ function assertNonNegativeDecimal({ value, field }) {
   }
 }
 
-function resolveRegisteredOwnership({ order, ownership }) {
-  if (!(order instanceof CanonicalOrder)) {
-    throw new TypeError("Mixed SELL allocation requires a canonical registered order")
+function resolveRegisteredOrderOwnership({ fill, orderRegistry }) {
+  if (!(orderRegistry instanceof OrderRegistry)) {
+    throw new TypeError("Mixed SELL allocation requires the canonical OrderRegistry")
+  }
+  if (typeof fill.brokerOrderId !== "string" || !fill.brokerOrderId.trim()) {
+    throw new TypeError("Mixed SELL allocation requires a broker order identity")
+  }
+
+  const order = orderRegistry.getOrderByBrokerOrderId({
+    brokerOrderId: fill.brokerOrderId,
+  })
+  if (!order) {
+    throw new TypeError("Mixed SELL Fill broker order identity does not match a registered canonical order")
+  }
+  if (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId) {
+    throw new TypeError("Mixed SELL Fill clientOrderId does not match registered order clientOrderId")
   }
   if (order.side !== "SELL") {
-    throw new TypeError("Mixed SELL allocation requires a SELL canonical order")
-  }
-  if (typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
-    throw new TypeError("Mixed SELL allocation requires an acknowledged broker order identity")
-  }
-
-  const normalized = createOrderOwnership({
-    ownership,
-    clientOrderId: order.clientOrderId,
-    brokerOrderId: order.brokerOrderId,
-  })
-  if (normalized.strategyId !== StrategyId.RECOVERY_SELLER) {
-    throw new TypeError("Mixed SELL allocation requires Recovery Seller order ownership")
-  }
-  return normalized
-}
-
-function validateAllocationInput({ fill, order, ownership, recoveryQuantity, legacyQuantity }) {
-  if (!(fill instanceof Fill)) {
-    throw new TypeError("Mixed SELL allocation requires a canonical Fill")
-  }
-  if (!(order instanceof CanonicalOrder)) {
-    throw new TypeError("Mixed SELL allocation requires a canonical registered order")
-  }
-  if (fill.side !== "SELL") {
-    throw new TypeError("Mixed SELL allocation requires a SELL canonical Fill")
+    throw new TypeError("Mixed SELL allocation requires a registered SELL order")
   }
   if (order.market.id !== fill.market.id) {
     throw new TypeError("Mixed SELL order market identity does not match canonical Fill market identity")
   }
-  if (fill.brokerOrderId !== order.brokerOrderId) {
-    throw new Error("Mixed SELL Fill broker order identity does not match registered order")
+
+  const orderOwnership = orderRegistry.getOwnership({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+  })
+  if (!orderOwnership) {
+    throw new TypeError("Mixed SELL allocation requires registered order ownership")
   }
+  if (orderOwnership.strategyId !== StrategyId.RECOVERY_SELLER) {
+    throw new TypeError("Mixed SELL allocation requires Recovery Seller order ownership")
+  }
+
+  return Object.freeze({
+    order,
+    orderOwnership,
+  })
+}
+
+function validateAllocationInput({
+  fill,
+  orderRegistry,
+  recoveryQuantity,
+  legacyQuantity,
+}) {
+  if (!(fill instanceof Fill)) {
+    throw new TypeError("Mixed SELL allocation requires a canonical Fill")
+  }
+  if (fill.side !== "SELL") {
+    throw new TypeError("Mixed SELL allocation requires a SELL canonical Fill")
+  }
+
+  const { order, orderOwnership } = resolveRegisteredOrderOwnership({
+    fill,
+    orderRegistry,
+  })
 
   assertPositiveDecimal({
     value: fill.quantity.amount,
@@ -120,9 +140,9 @@ function validateAllocationInput({ fill, order, ownership, recoveryQuantity, leg
     market: fill.market,
     fill,
   })
-  return resolveRegisteredOwnership({
+  return Object.freeze({
     order,
-    ownership,
+    orderOwnership,
   })
 }
 
@@ -258,8 +278,7 @@ function createAllocationSide({ grossBaseQuantity, quoteProceeds, commissions, b
  *
  * @param {object} input
  * @param {Fill} input.fill Canonical exchange execution.
- * @param {CanonicalOrder} input.order Registered canonical order.
- * @param {object} input.ownership Immutable ownership resolved from OrderRegistry.
+ * @param {OrderRegistry} input.orderRegistry Immutable registry of acknowledged Harvester orders and ownership.
  * @param {string} input.recoveryQuantity Gross base quantity attributed to the RS recovery Position.
  * @param {string} input.legacyQuantity Gross base quantity attributed to the separate RS legacy projection.
  * @returns {object} Immutable allocation facts bound to the original Fill and order owner.
@@ -267,15 +286,13 @@ function createAllocationSide({ grossBaseQuantity, quoteProceeds, commissions, b
  */
 export function createMixedSellFillAllocation({
   fill,
-  order,
-  ownership,
+  orderRegistry,
   recoveryQuantity,
   legacyQuantity,
 } = {}) {
-  const orderOwnership = validateAllocationInput({
+  const { orderOwnership } = validateAllocationInput({
     fill,
-    order,
-    ownership,
+    orderRegistry,
     recoveryQuantity,
     legacyQuantity,
   })
