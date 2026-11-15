@@ -30,6 +30,7 @@ import {
 } from "../application/events/lifecycle-event-dtos.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import { logOrderLifecycle } from "../application/logging/order-lifecycle-log.js"
+import { createStrategyLogger } from "../application/logging/create-strategy-logger.js"
 import { validateCancellationEligibility } from "../domain/orders/validate-cancellation-eligibility.js"
 import { allocateOrderCommitments } from "../domain/orders/allocate-order-commitments.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
@@ -1424,7 +1425,9 @@ export function makeConservativeTradingEngine({
     onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused,
     onUnownedExternalOrderObserved,
-    logger,
+    logger: logger
+      ? createStrategyLogger({ logger, strategyId: StrategyId.COIN_GRABBER })
+      : logger,
     initialState,
   }
   validateConservativeTradingEngineOptions(dependencies)
