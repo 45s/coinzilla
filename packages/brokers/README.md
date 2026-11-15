@@ -20,6 +20,35 @@ The `@coinzilla/brokers` entry point exports:
 
 Keep exchange-specific operations behind the Binance adapter. Consumers should depend on their own narrow application port rather than treating `CoreBroker` as a complete cross-exchange contract.
 
+## Bitunix Spot integration
+
+The Bitunix implementation is currently **read-only**. It supports market catalog/metadata, balances, latest-price lookup, per-symbol pending orders and order history, order detail, and per-order canonical fill lookup. Bitunix's Spot pair catalog does not include a symbol field, so the adapter derives the exchange symbol by concatenating the documented base and quote codes (for example, BTC + USDT → BTCUSDT); order/price APIs use that pair form. The last-price endpoint returns a decimal string, which the adapter normalizes to the Binance-compatible `{ symbol, price }` response shape. The REST account response documents balances as JSON numbers; the transport preserves the raw numeric tokens as decimal strings before entity construction to avoid JavaScript number rounding.
+
+It intentionally does not support order placement or cancellation, canonical order lookup/history, account snapshots, server time, or continuous price subscriptions. The documented Spot API has no exchange-side client order ID, no private order/execution push stream, no account source timestamp, and no account-wide pending-order query. The REST and WebSocket order docs also disagree on the units of `volume`. No Spot TESTNET endpoint is documented.
+
+These are hard lifecycle constraints, not missing convenience methods. Unsupported mutations do not send requests. Do not enable Bitunix for Harvester trading until stable order identity, private lifecycle/reconciliation, and order quantity semantics are confirmed. See [Bitunix capability contract](../../docs/brokers-websocket-contract.md#bitunix-spot-capability-contract) and [Bitunix Spot API docs](https://www.bitunix.com/api-docs/spots/en_us/).
+
+Example:
+
+```js
+import { BitunixSpotBroker } from "@coinzilla/brokers"
+
+const broker = new BitunixSpotBroker({
+  apiKey: process.env.BITUNIX_API_KEY,
+  apiSecret: process.env.BITUNIX_API_SECRET,
+  tradingMode: "live",
+})
+
+await broker.connect()
+try {
+  const result = await broker.getBalances()
+  if (!result.ok) throw result.errors[0]
+  // Use result.data.
+} finally {
+  await broker.disconnect()
+}
+```
+
 ## Canonical order placement response
 
 The canonical `createCanonicalOrder()` contract requires the complete exchange order facts (exchange order ID, client order ID, type, side, original/executed quantities, price and status) to construct a `CanonicalOrder`. Binance Spot defaults `LIMIT` and `MARKET` to `FULL`, but defaults other order types such as `LIMIT_MAKER` to the minimal `ACK` response. ACK contains identifiers and transaction time only; it is not sufficient for canonical ownership tracking.
