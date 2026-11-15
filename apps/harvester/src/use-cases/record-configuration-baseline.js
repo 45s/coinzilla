@@ -38,7 +38,7 @@ export async function recordConfigurationBaseline({ operationalStateStore, appCo
     }
     const markets = Object.entries(pairs).filter(([symbol, pair]) => {
       if (!pair || typeof pair !== "object" || Array.isArray(pair) || typeof pair.enabled !== "boolean") {
-        throw new TypeError("Configuration baseline requires an explicit enabled flag for every configured market: " + symbol)
+        throw new TypeError(`Configuration baseline requires an explicit enabled flag for every configured market: ${symbol}`)
       }
       return pair.enabled
     }).map(([symbol]) => symbol).sort()

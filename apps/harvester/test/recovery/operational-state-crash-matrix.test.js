@@ -26,7 +26,7 @@ const appConfig = {
   strategies: {
     conservative: {
       pairs: {
-        BTCUSDT: { keepQuantity: 0.01, minProfit: 0.01 },
+        BTCUSDT: { enabled: true, keepQuantity: 0.01, minProfit: 0.01 },
       },
     },
   },

@@ -40,7 +40,7 @@ test("records a deterministic non-secret configuration fingerprint and market se
   assert.equal(first.ok, true, first.errors?.[0]?.message)
   assert.equal(first.data.durable, true)
   assert.match(first.data.fingerprint, /^[0-9a-f]{64}$/)
-  assert.deepEqual(first.data.markets, ["BTCUSDT", "ETHUSDT"])
+  assert.deepEqual(first.data.markets, ["BTCUSDT"], "The durable baseline must list enabled markets only; disabled ETHUSDT remains part of the fingerprint but not the active market set.")
   assert.equal(duplicate.ok, true)
   assert.equal(duplicate.data.duplicate, true, "The same canonical configuration baseline must be idempotent.")
 
