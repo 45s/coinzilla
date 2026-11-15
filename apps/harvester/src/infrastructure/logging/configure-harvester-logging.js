@@ -31,12 +31,6 @@ function formatConsoleLine({ line, level, method = level, color }) {
 }
 
 
-const STATUS_COLUMN_WIDTH = 20
-const ORDER_ID_COLUMN_WIDTH = 12
-const SYMBOL_COLUMN_WIDTH = 12
-const SIDE_COLUMN_WIDTH = 4
-const QUANTITY_COLUMN_WIDTH = 12
-const PRICE_COLUMN_WIDTH = 12
 
 const ORDER_STATUS_PRESENTATION = Object.freeze({
   SUBMITTED: "SUBMITTED",
@@ -66,13 +60,12 @@ function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
   const strategy = strategyLogMarkers[data.strategyId]
   const status = String(
     ORDER_STATUS_PRESENTATION[data.lifecycleStatus] ?? data.lifecycleStatus ?? "INFO",
-  ).padEnd(STATUS_COLUMN_WIDTH)
+  )
   const orderId = String(data.brokerOrderId ? "#" + data.brokerOrderId : "#pending")
-    .padEnd(ORDER_ID_COLUMN_WIDTH)
-  const symbol = String(data.symbol ?? "-").padEnd(SYMBOL_COLUMN_WIDTH)
-  const side = String(data.side ?? "-").padEnd(SIDE_COLUMN_WIDTH)
-  const quantity = String(data.quantity ?? "-").padStart(QUANTITY_COLUMN_WIDTH)
-  const price = String(data.price ?? "-").padStart(PRICE_COLUMN_WIDTH)
+  const symbol = String(data.symbol ?? "-")
+  const side = String(data.side ?? "-")
+  const quantity = String(data.quantity ?? "-")
+  const price = String(data.price ?? "-")
   const clientOrderId = !data.brokerOrderId && typeof data.clientOrderId === "string"
     ? data.clientOrderId
     : ""
