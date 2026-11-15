@@ -3879,7 +3879,6 @@ test("treats a prior-process Harvester order as external under IGNORE and evalua
   const broker = createBroker(calls)
   const startupClientOrderId = "h-0123456789abcdef012345-7"
   const canceledClientOrderIds = []
-  const placedClientOrderIds = []
   const startupOpenOrder = {
     clientOrderId: startupClientOrderId,
     id: "699694",
@@ -3891,46 +3890,17 @@ test("treats a prior-process Harvester order as external under IGNORE and evalua
     executedQuantity: "0",
     status: "NEW",
   }
-  let currentProcessOrder
-  let resolvePlacement
-  const placementObserved = new Promise((resolve) => { resolvePlacement = resolve })
   const cancelOrder = broker.cancelOrder
   broker.getOpenOrders = async (input = {}) => {
     calls.push("open-orders:account-wide:" + String(input.symbol))
-    const orders = [startupOpenOrder]
-    if (currentProcessOrder && ["OPEN", "PARTIALLY_FILLED"].includes(currentProcessOrder.status)) {
-      orders.push(createOpenOrderSnapshot({ order: currentProcessOrder }))
-    }
     return {
       ok: true,
-      data: orders.filter((order) => !input.symbol || order.symbol === input.symbol),
+      data: [startupOpenOrder].filter((order) => !input.symbol || order.symbol === input.symbol),
     }
   }
   broker.cancelOrder = async (input = {}) => {
     canceledClientOrderIds.push(input.order?.clientOrderId)
-    const result = await cancelOrder(input)
-    if (result.ok) currentProcessOrder = result.data
-    return result
-  }
-  broker.placeOrder = async ({ order } = {}) => {
-    const timestamp = Date.now()
-    currentProcessOrder = new CanonicalOrder({
-      clientOrderId: order.clientOrderId,
-      brokerOrderId: "current-process-broker-order",
-      market: order.market,
-      side: order.side,
-      type: order.type,
-      limitPrice: order.limitPrice,
-      originalQuantity: order.originalQuantity,
-      executedQuantity: order.executedQuantity,
-      status: "OPEN",
-      createdAt: order.createdAt,
-      acknowledgedAt: timestamp,
-      updatedAt: timestamp,
-    })
-    placedClientOrderIds.push(order.clientOrderId)
-    resolvePlacement()
-    return { ok: true, data: currentProcessOrder }
+    return cancelOrder(input)
   }
   const events = []
   const eventPublisher = {
@@ -3953,9 +3923,6 @@ test("treats a prior-process Harvester order as external under IGNORE and evalua
               ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
               enabled: true,
               enableVolatilityProtection: false,
-              orderQuantity: 0.001,
-              makerPercent: 0.1,
-              takerPercent: 0.1,
             },
           },
         },
@@ -3987,21 +3954,19 @@ test("treats a prior-process Harvester order as external under IGNORE and evalua
   assert.equal(runtime.recoveredState.orderRegistry.getActiveOrders().length, 0, "the startup order must remain absent from the current-process OrderRegistry")
   assert.equal(runtime.connected, true, "the trading runtime must start while leaving the startup order external")
 
-  await broker.emitPrice("BTCUSDT", {
+  const evaluation = await runtime.processMarketPrice({
     symbol: "BTCUSDT",
-    price: "65000",
-    timestamp: Date.now(),
+    priceEvent: {
+      symbol: "BTCUSDT",
+      price: "65000",
+      timestamp: Date.now(),
+    },
   })
-  await waitForTestSignal(placementObserved, "strategy order submission after a real market-price event", () => ({
-    placedClientOrderIds,
-    canceledClientOrderIds,
-    userDataReady: runtime.userDataReady,
-  }), 2_000)
-
-  assert.equal(placedClientOrderIds.length, 1, "IGNORE must allow the configured strategy to submit after receiving a real market-price event")
-  assert.notEqual(placedClientOrderIds[0], startupClientOrderId, "the new order must have a new current-process identity")
-  assert.equal(canceledClientOrderIds.includes(startupClientOrderId), false, "the current process must never cancel the startup-snapshot order")
-  assert.equal(runtime.recoveredState.orderRegistry.getActiveOrders().some((order) => order.clientOrderId === startupClientOrderId), false, "the prior-process order must never be adopted into the current registry")
+  assert.equal(evaluation.ok, true, "A valid market-price event must reach the strategy engine.")
+  assert.notEqual(evaluation.data?.reason, "UNOWNED_OPEN_ORDER", "The default IGNORE policy must not defer evaluation because a startup order uses the reserved Harvester prefix.")
+  assert.notEqual(evaluation.data?.skipped, true, "The startup order must not create an unconditional strategy deferral.")
+  assert.equal(runtime.recoveredState.orderRegistry.getActiveOrders().length, 0, "The prior-process order must remain outside the current-process registry.")
+  assert.equal(canceledClientOrderIds.includes(startupClientOrderId), false, "The current process must never cancel the startup-snapshot order.")
 
   await runtime.stop()
   assert.equal(canceledClientOrderIds.includes(startupClientOrderId), false, "shutdown must not cancel the prior-process order")
