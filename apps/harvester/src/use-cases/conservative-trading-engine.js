@@ -1,4 +1,5 @@
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import { createPositionId } from "../domain/portfolio/position.js"
 import { CanonicalOrder, Fill, Quantity } from "@coinzilla/entities"
 import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
@@ -28,6 +29,7 @@ import {
   mapStrategyPausedData,
 } from "../application/events/lifecycle-event-dtos.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
+import { logOrderLifecycle } from "../application/logging/order-lifecycle-log.js"
 import { validateCancellationEligibility } from "../domain/orders/validate-cancellation-eligibility.js"
 import { allocateOrderCommitments } from "../domain/orders/allocate-order-commitments.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
@@ -322,18 +324,29 @@ function createPauseHandler({
   }
 }
 
-function createOrderCancellationEventPublishers({ eventPublisher } = {}) {
+function createOrderCancellationEventPublishers({ eventPublisher, logger, state } = {}) {
   return {
     publishOrderCancelled: ({ order }) => publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLED,
       dataResult: mapOrderCancelledData({ order }),
     }),
-    publishOrderCancelFailed: ({ order, outcome, error }) => publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED,
-      dataResult: mapOrderCancelFailedData({ order, outcome, error }),
-    }),
+    publishOrderCancelFailed: ({ order, outcome, error }) => {
+      const lifecycleStatus = outcome === "NOT_SENT"
+        ? "CANCEL_NOT_SENT"
+        : ["UNCONFIRMED", "OUTCOME_UNKNOWN", "UNKNOWN"].includes(outcome)
+          ? "CANCEL_UNKNOWN"
+          : "CANCEL_FAILED"
+      const ownership = state?.registry?.getOwnership?.({
+        clientOrderId: order.clientOrderId,
+      })
+      logOrderLifecycle({ logger, order, ownership, status: lifecycleStatus })
+      return publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED,
+        dataResult: mapOrderCancelFailedData({ order, outcome, error }),
+      })
+    },
   }
 }
 
@@ -568,6 +581,7 @@ function createSubmissionLifecycleCallbacks({
   pause,
   eventPublisher,
   reconcileFilledAcknowledgement,
+  logger,
 } = {}) {
   return {
     onSubmissionDeferred: async ({ order, registered, reason } = {}) => {
@@ -585,12 +599,20 @@ function createSubmissionLifecycleCallbacks({
       }
       state.deferredEvaluations.add(order.market.symbol)
     },
-    onPendingOrder: async ({ order }) => {
+    onPendingOrder: async ({ order, purpose }) => {
       if (order.side === "SELL") {
         state.completedRecoverySellSymbols.delete(order.market.symbol)
         state.completedRecoverySellOrdersBySymbol.delete(order.market.symbol)
       }
-      state.registry = state.registry.registerPending({ order }).registry
+      const ownership = {
+        strategyId: StrategyId.COIN_GRABBER,
+        positionId: createPositionId({
+          marketId: order.market.id,
+          strategyId: StrategyId.COIN_GRABBER,
+        }),
+        purpose: purpose ?? (order.side === "BUY" ? "CONSERVATIVE_BUY" : "CONSERVATIVE_SELL"),
+      }
+      state.registry = state.registry.registerPending({ order, ownership }).registry
       const persisted = await publishDurableIntent({
         eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_REQUESTED,
         dataResult: mapOrderSubmissionRequestedData({ order }),
@@ -606,6 +628,10 @@ function createSubmissionLifecycleCallbacks({
       }
     },
     onAcknowledgedOrder: async ({ order }) => {
+      const ownership = state.registry.getOwnership({
+        clientOrderId: order.clientOrderId,
+      })
+      logOrderLifecycle({ logger, order, ownership, status: "SUBMITTED" })
       if (order.status === "FILLED") {
         const registered = state.registry.orders.some(
           (item) => item.clientOrderId === order.clientOrderId,
@@ -626,6 +652,17 @@ function createSubmissionLifecycleCallbacks({
         eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
         dataResult: mapOrderSubmittedData({ order }),
       })
+      const acceptedOrder = state.registry.getOrder({
+        clientOrderId: order.clientOrderId,
+      }) ?? order
+      logOrderLifecycle({
+        logger,
+        order: acceptedOrder,
+        ownership: state.registry.getOwnership({
+          clientOrderId: order.clientOrderId,
+        }) ?? ownership,
+        status: "ACCEPTED",
+      })
       const reconciliation = await reconcileFilledAcknowledgement({ order })
       if (!reconciliation.ok) {
         throw reconciliation.errors?.[0] ?? new Error("FILLED acknowledgement reconciliation failed")
@@ -641,7 +678,7 @@ function createSubmissionLifecycleCallbacks({
   }
 }
 
-function createSubmissionFailureCallbacks({ state, pause, eventPublisher } = {}) {
+function createSubmissionFailureCallbacks({ state, pause, eventPublisher, logger } = {}) {
   return {
     onSubmissionFailure: async ({ order, error, errors, outcome }) => {
       const submissionError = error ?? errors?.[0]
@@ -650,6 +687,7 @@ function createSubmissionFailureCallbacks({ state, pause, eventPublisher } = {})
       const definiteFilterRejection = submissionError?.code === "DEFINITE_EXCHANGE_FILTER_REJECTED" &&
         submissionError?.outcomeUnknown !== true
       const definiteRejection = definitePostOnlyRejection || definiteFilterRejection
+      const ownership = state.registry.getOwnership({ clientOrderId: order.clientOrderId })
       const failureOutcome = definiteRejection ? "REJECTED" : outcome
       publishLifecycleEvent({
         eventPublisher,
@@ -666,6 +704,7 @@ function createSubmissionFailureCallbacks({ state, pause, eventPublisher } = {})
           throw new Error("Cannot remove a definitively rejected pending order")
         }
         state.registry = removal.registry
+        logOrderLifecycle({ logger, order, ownership, status: "REJECTED" })
         if (definitePostOnlyRejection) {
           state.books.delete(order.market.symbol)
         }
@@ -677,6 +716,14 @@ function createSubmissionFailureCallbacks({ state, pause, eventPublisher } = {})
         throw unknownResult.errors[0] ?? new Error("Unable to retain an uncertain submission as UNKNOWN")
       }
       state.registry = unknownResult.data.registry
+      const unknownOrder = state.registry.getOrder({ clientOrderId: order.clientOrderId }) ??
+        unknownResult.data.order ?? order
+      logOrderLifecycle({
+        logger,
+        order: unknownOrder,
+        ownership: state.registry.getOwnership({ clientOrderId: order.clientOrderId }) ?? ownership,
+        status: "UNKNOWN",
+      })
       await pause({
         symbol: order.market.symbol,
         reason: `ORDER_SUBMISSION_${outcome}`,
@@ -994,14 +1041,18 @@ function createConservativeEnginePublishingContext({ context } = {}) {
 
 function createConservativeEngineCancellationContext({ context } = {}) {
   const { broker, eventPublisher, onOperationalStateCancellationIntent,
-    onOperationalStateCancellationOutcome } = context.dependencies
+    onOperationalStateCancellationOutcome, logger } = context.dependencies
   context.reconcileFilledAcknowledgement = (options = {}) => reconcileFilledAcknowledgementTransition({
     ...options,
     broker,
     pause: context.pause,
     processUserDataEventTransition: context.processUserDataEventTransition,
   })
-  const cancellationEventPublishers = createOrderCancellationEventPublishers({ eventPublisher })
+  const cancellationEventPublishers = createOrderCancellationEventPublishers({
+    eventPublisher,
+    logger,
+    state: context.state,
+  })
   context.publishOrderCancelled = cancellationEventPublishers.publishOrderCancelled
   context.publishOrderCancelFailed = cancellationEventPublishers.publishOrderCancelFailed
   const cancellationFailureHandlers = createCancellationFailureHandlers({
@@ -1025,7 +1076,13 @@ function createConservativeEngineCancellationContext({ context } = {}) {
     return result
   }
   context.cancelOrderWithOperationalState = (options = {}) => cancelOrderWithOperationalStateTransition({
-    dependencies: { broker, onOperationalStateCancellationIntent, onOperationalStateCancellationOutcome },
+    dependencies: {
+      broker,
+      onOperationalStateCancellationIntent,
+      onOperationalStateCancellationOutcome,
+      logger,
+      state: context.state,
+    },
     ...options,
   })
 }
@@ -1056,11 +1113,13 @@ function createConservativeEngineSubmissionContext({ context } = {}) {
       pause: context.pause,
       eventPublisher: dependencies.eventPublisher,
       reconcileFilledAcknowledgement: context.reconcileFilledAcknowledgement,
+      logger: dependencies.logger,
     }),
     ...createSubmissionFailureCallbacks({
       state: context.state,
       pause: context.pause,
       eventPublisher: dependencies.eventPublisher,
+      logger: dependencies.logger,
     }),
   })
 }
@@ -1196,6 +1255,7 @@ function createConservativeEngineOrderEventContext({ context } = {}) {
     state: context.state,
     broker: dependencies.broker,
     eventPublisher: dependencies.eventPublisher,
+    logger: dependencies.logger,
     pairs: context.pairs,
     updateTradingAccounting: dependencies.updateTradingAccounting,
     recordBuyExecutionFill: context.recordBuyExecutionFill,
@@ -1680,6 +1740,8 @@ async function cancelOrderWithOperationalStateTransition({ dependencies, order, 
     broker,
     onOperationalStateCancellationIntent,
     onOperationalStateCancellationOutcome,
+    logger,
+    state,
   } = dependencies
   const intentFailure = await persistCancellationIntent({
     callback: onOperationalStateCancellationIntent,
@@ -1689,6 +1751,13 @@ async function cancelOrderWithOperationalStateTransition({ dependencies, order, 
   if (intentFailure) {
     return intentFailure
   }
+
+  logOrderLifecycle({
+    logger,
+    order,
+    ownership: state?.registry?.getOwnership?.({ clientOrderId: order.clientOrderId }),
+    status: "CANCEL_REQUESTED",
+  })
 
   let cancelResult
   try {
