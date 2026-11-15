@@ -277,7 +277,7 @@ export class BitunixSpotBroker extends CoreBroker {
   async createOrder() {
     const error = unsupported(
       "createOrder()",
-      "Bitunix Spot has no exchange-side client order ID, so a lost placement response cannot be reconciled idempotently",
+      "Bitunix Spot lacks exchange-side client order identity, so a lost placement response cannot be reconciled idempotently",
     )
     return toResult({ errors: [error] })
   }
