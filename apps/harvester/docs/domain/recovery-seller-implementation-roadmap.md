@@ -205,17 +205,17 @@ Reuse the existing Trading Engine, broker port/adapter, canonical order/fill ide
 - Reaching a strategy's own investment limit blocks only that strategy's new BUYs; it does not cancel or alter that strategy's already-open recovery SELL, which remains alive through fill/terminal reconciliation.
 - The Trading Engine serializes intent allocation, broker submission and fill/accounting commits. Aggregate actual exchange quote/base availability and active reservations across all strategies before accepting another intent; these physical resources are shared even though investment budgets are separate.
 - Competing intents that exceed a strategy's own budget are deferred/rejected against that strategy's budget. Intents that exceed shared account availability/reservations are deferred/rejected by the shared allocator. Preserve originating strategy identity. No cross-strategy budget priority or fairness policy is required.
-- One strategy's pause/disable does not implicitly pause/disable the other. Existing orders remain owned by their originating strategy and are reconciled normally.
+- Advanced pause/disable/abandon/resume/restart lifecycle functionality is deferred under FITDIB. Existing orders remain owned by their originating strategy and are reconciled normally; no strategy may adopt or mutate another strategy's orders.
 
 Preserve manual/external order ownership. EARN/off-Spot quantity is never available for Spot SELL planning. Unknown outcomes retain original order ownership and reservations and require reconciliation; never blindly retry. Add runtime config/registration only after contracts and validation are specified.
 
-**Acceptance:** application tests prove CG and RS run concurrently on different and same markets; fills are applied once to the shared Portfolio and attributed to the correct strategy; shared reservations prevent double-spend/oversell; order lifecycle, pause/disable isolation and broker safety remain correct. No parallel execution engine or strategy-specific broker.
+**Acceptance:** application tests prove CG and RS run concurrently on different and same markets; fills are applied once to the shared Portfolio and attributed to the correct strategy; shared reservations prevent double-spend/oversell; order lifecycle and broker safety remain correct. Advanced pause/disable/abandon/resume/restart lifecycle functionality is deferred under FITDIB. No parallel execution engine or strategy-specific broker.
 
 ## RS-5 — Offline lifecycle verification and delivery
 
 **Deliverable:** deterministic end-to-end RS lifecycle proof and current documentation.
 
-Cover: 50 ZRO / 100 USDT average-cost calculation; 0.5 Spot / 49.5 EARN custody; 0.01 legacy slice; independent profitability gates; partial/terminal fills and commissions; exact-once reservations/accounting; cycle completion after terminal reconciliation; fixed original average cost and decreasing remaining legacy quantity/custody across cycles; EARN redemption and authoritative Spot reconciliation; unknown outcomes, restart, external orders, concurrent CG/RS operation on the same and different markets, shared reservations, strategy-specific attribution and exchange constraints.
+Cover: 50 ZRO / 100 USDT average-cost calculation; 0.5 Spot / 49.5 EARN custody; 0.01 legacy slice; independent profitability gates; partial/terminal fills and commissions; exact-once reservations/accounting; cycle completion after terminal reconciliation; fixed original average cost and decreasing remaining legacy quantity/custody across cycles; EARN redemption and authoritative Spot reconciliation; unknown outcomes, external orders, concurrent CG/RS operation on the same and different markets, shared reservations, strategy-specific attribution and exchange constraints.
 
 Update the canonical RS specification, architecture, runtime config docs only when config is approved, tests index, docs index, Harvester roadmap and PR descriptions.
 
