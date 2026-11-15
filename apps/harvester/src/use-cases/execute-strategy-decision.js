@@ -118,14 +118,15 @@ export function makeExecuteStrategyDecision({
     }
   }
 
-  const deferRegisteredSubmission = async ({
-    order,
-    purpose,
-    errors,
-    reason = "DURABLE_SUBMISSION_INTENT_NOT_COMMITTED",
-  }) => {
+  const deferRegisteredSubmission = async ({ order, purpose, errors, reason }) => {
     try {
-      await onSubmissionDeferred(Object.assign({}, { order }, { purpose }, { registered: true }, { reason }))
+      await onSubmissionDeferred(Object.assign(
+        {},
+        { order },
+        { purpose },
+        { registered: true },
+        { reason: reason ?? "DURABLE_SUBMISSION_INTENT_NOT_COMMITTED" },
+      ))
       return toResult({ errors })
     } catch (error) {
       return toResult({ errors: [...errors, error] })
