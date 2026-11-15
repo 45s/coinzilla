@@ -10558,7 +10558,11 @@ test("processes stream fills received during REST reads before applying the REST
   const { engine, broker, accountedFills, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const recoveredFill = makeBuyFill({

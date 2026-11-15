@@ -358,6 +358,38 @@ function getShutdownRecoveryReplacementBlocker({ dependencies, symbol } = {}) {
   })
 }
 
+function getShutdownRecoveryReplacementDeferredFailure({ replacement, symbol } = {}) {
+  if (replacement.data?.deferred !== true) {return null}
+  const reason = replacement.data.reason ?? "UNKNOWN"
+  return shutdownRecoveryError({
+    code: "SHUTDOWN_RECOVERY_REPLACEMENT_DEFERRED",
+    message: `Shutdown recovery SELL replacement was deferred for ${symbol}: ${reason}`,
+  })
+}
+
+function getShutdownRecoveryReplacementSkippedFailure({ replacement, symbol } = {}) {
+  if (replacement.data?.skipped !== true) {return null}
+  const reason = replacement.data.reason ?? "UNKNOWN"
+  return shutdownRecoveryError({
+    code: "SHUTDOWN_RECOVERY_REPLACEMENT_SKIPPED",
+    message: `Shutdown recovery SELL replacement was skipped for ${symbol}: ${reason}`,
+  })
+}
+
+function getShutdownRecoveryReplacementNotSubmittedFailure({ replacement, symbol } = {}) {
+  const submittedSell = replacement.data?.submittedOrders?.some((order) => order.side === "SELL") === true
+  if (submittedSell) {return null}
+  const deferredReasons = replacement.data?.deferredActions
+    ?.map((action) => action.reason)
+    .filter(Boolean)
+    .join(", ")
+  const reason = replacement.data?.decision?.reason || deferredReasons || "NO_SELL_SUBMITTED"
+  return shutdownRecoveryError({
+    code: "SHUTDOWN_RECOVERY_REPLACEMENT_NOT_SUBMITTED",
+    message: `Shutdown recovery SELL replacement was not submitted for ${symbol}: ${reason}`,
+  })
+}
+
 function getShutdownRecoveryReplacementFailure({ replacement, symbol } = {}) {
   if (!replacement?.ok) {
     return replacement?.errors?.[0] ?? shutdownRecoveryError({
@@ -365,46 +397,31 @@ function getShutdownRecoveryReplacementFailure({ replacement, symbol } = {}) {
       message: `Shutdown recovery SELL replacement failed for ${symbol}`,
     })
   }
-  if (replacement.data?.deferred === true) {
-    const reason = replacement.data.reason ?? "UNKNOWN"
-    return shutdownRecoveryError({
-      code: "SHUTDOWN_RECOVERY_REPLACEMENT_DEFERRED",
-      message: `Shutdown recovery SELL replacement was deferred for ${symbol}: ${reason}`,
-    })
-  }
-  if (replacement.data?.skipped === true) {
-    const reason = replacement.data.reason ?? "UNKNOWN"
-    return shutdownRecoveryError({
-      code: "SHUTDOWN_RECOVERY_REPLACEMENT_SKIPPED",
-      message: `Shutdown recovery SELL replacement was skipped for ${symbol}: ${reason}`,
-    })
-  }
-  const submittedSell = replacement.data?.submittedOrders?.some((order) => order.side === "SELL") === true
-  if (!submittedSell) {
-    const deferredReasons = replacement.data?.deferredActions
-      ?.map((action) => action.reason)
-      .filter(Boolean)
-      .join(", ")
-    const reason = replacement.data?.decision?.reason ?? deferredReasons ?? "NO_SELL_SUBMITTED"
-    return shutdownRecoveryError({
-      code: "SHUTDOWN_RECOVERY_REPLACEMENT_NOT_SUBMITTED",
-      message: `Shutdown recovery SELL replacement was not submitted for ${symbol}: ${reason}`,
-    })
-  }
-  return null
+  return getShutdownRecoveryReplacementDeferredFailure({ replacement, symbol }) ??
+    getShutdownRecoveryReplacementSkippedFailure({ replacement, symbol }) ??
+    getShutdownRecoveryReplacementNotSubmittedFailure({ replacement, symbol })
 }
 
 async function submitShutdownRecoveryReplacement({ dependencies, symbol } = {}) {
-  const blocker = getShutdownRecoveryReplacementBlocker({ dependencies,
-    symbol })
-  if (blocker) {return { ok: false,
-    error: blocker }}
+  const blocker = getShutdownRecoveryReplacementBlocker({ dependencies, symbol })
+  if (blocker) {
+    return {
+      ok: false,
+      error: blocker,
+    }
+  }
   const replacement = await dependencies.evaluateLatestTransition({
     symbol,
     shutdownRecoveryOnly: true,
   })
   const error = getShutdownRecoveryReplacementFailure({ replacement, symbol })
-  return error ? { ok: false, error } : { ok: true }
+  if (error) {
+    return {
+      ok: false,
+      error,
+    }
+  }
+  return { ok: true }
 }
 
 async function reconcileRecoverySellForShutdownSymbol({ dependencies, symbol } = {}) {
