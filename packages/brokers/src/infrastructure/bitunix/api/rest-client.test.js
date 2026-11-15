@@ -9,9 +9,12 @@ test("Bitunix REST client signs authenticated requests and unwraps successful da
     apiSecret: "secret",
     now: () => 1700000000000,
     nonceFactory: () => "nonce",
-    fetchFn: async (url, options) => {
-      captured = { url,
-        options }
+    fetchFn: async (...args) => {
+      const [url, options] = args
+      captured = {
+        url,
+        options,
+      }
       return {
         ok: true,
         status: 200,
@@ -24,7 +27,9 @@ test("Bitunix REST client signs authenticated requests and unwraps successful da
     },
   })
 
-  const result = await client.request("GET", "/api/spot/v1/market/last_price", {
+  const result = await client.request({
+    method: "GET",
+    path: "/api/spot/v1/market/last_price",
     queryParams: { symbol: "BTCUSDT" },
   })
 
@@ -49,7 +54,10 @@ test("Bitunix REST client preserves balance precision from JSON number tokens", 
     }),
   })
 
-  const result = await client.request("GET", "/api/spot/v1/user/account")
+  const result = await client.request({
+    method: "GET",
+    path: "/api/spot/v1/user/account",
+  })
 
   assert.equal(result.data[0].balance, "0.123456789012345678")
   assert.equal(result.data[0].balanceLocked, "0.000000000000000001")
@@ -62,16 +70,21 @@ test("Bitunix REST client signs compact POST bodies and does not retry state-cha
     apiSecret: "secret",
     now: () => 1700000000000,
     nonceFactory: () => "nonce",
-    fetchFn: async (_url, options) => {
+    fetchFn: async (...args) => {
+      const [, options] = args
       callCount += 1
       assert.equal(options.body, '{"symbol":"BTCUSDT","side":2}')
       throw new Error("socket closed")
     },
   })
 
-  await assert.rejects(client.request("POST", "/api/spot/v1/order/place_order", {
-    body: { symbol: "BTCUSDT",
-      side: 2 },
+  await assert.rejects(client.request({
+    method: "POST",
+    path: "/api/spot/v1/order/place_order",
+    body: {
+      symbol: "BTCUSDT",
+      side: 2,
+    },
     stateChanging: true,
   }), (error) => error.outcomeUnknown === true)
   assert.equal(callCount, 1)
@@ -92,7 +105,9 @@ test("Bitunix REST client rejects exchange errors and malformed responses", asyn
     }),
   })
 
-  await assert.rejects(client.request("GET", "/api/spot/v1/market/last_price", {
+  await assert.rejects(client.request({
+    method: "GET",
+    path: "/api/spot/v1/market/last_price",
     queryParams: { symbol: "INVALID" },
   }), /invalid symbol/i)
 })
