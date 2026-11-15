@@ -331,7 +331,12 @@ function writeOrderLifecycleRecord({ output, color, timestamp, level, method, da
 }
 
 function writeStandardConsoleRecord({ output, color, timestamp, level, method, summary, strategyId } = {}) {
-  const time = new Date(timestamp).toLocaleTimeString()
+  const time = new Date(timestamp).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
   const normalizedMethod = String(method ?? level).toLowerCase()
   const levelLabel = normalizedMethod === "info" || normalizedMethod === "system"
     ? ""
@@ -398,7 +403,12 @@ export function createHarvesterConsoleTransport({
 
   const flushSuppressed = () => {
     if (suppressedCount === 0) return
-    const time = new Date(previousTimestamp).toLocaleTimeString()
+    const time = new Date(previousTimestamp).toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    })
     const line = `${time} Previous identical log entry repeated ${suppressedCount} additional time(s)`
     output.write(formatConsoleLine({
       line,
