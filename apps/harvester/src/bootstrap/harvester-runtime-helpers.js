@@ -182,13 +182,6 @@ export function createHarvesterTradingEngine({
     canTrade: () => userDataState.ready,
     hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
     hasUnresolvedHarvesterOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnresolvedHarvesterOpenOrdersForSymbol,
-    onUnownedExternalOrderObserved: ({ order } = {}) => {
-      const manager = accountSnapshotManagerRef.current
-      if (typeof manager?.observeExternalOrder !== "function") {
-        throw new Error("Account snapshot manager cannot reconcile a newly observed external order")
-      }
-      return manager.observeExternalOrder({ symbol: order.market.symbol })
-    },
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData: ({ symbol } = {}) => candleHistoryService.getSnapshot({ symbol }),

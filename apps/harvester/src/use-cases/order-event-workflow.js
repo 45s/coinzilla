@@ -30,7 +30,6 @@ export function makeOrderEventWorkflow({
   completeRecoveryCycle,
   publishRecoveryCycleNotCompleted,
   isStopping,
-  onUnownedExternalOrderObserved,
 } = {}) {
   const processExecutionFillTransition = (options = {}) => processExecutionFill({
     dependencies: {
@@ -64,7 +63,6 @@ export function makeOrderEventWorkflow({
     completeRecoveryCycle,
     publishRecoveryCycleNotCompleted,
     isStopping,
-    onUnownedExternalOrderObserved,
     processExecutionFillTransition,
     reconcileTerminalOrderFills,
   })

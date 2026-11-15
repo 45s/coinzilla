@@ -13,8 +13,82 @@ import { publishLifecycleEvent } from "../application/events/publish-lifecycle-e
 import { failureResult, withFailure } from "./recovery-failure.js"
 
 
+async function handleUnownedOrderEvent({ dependencies, event, order, symbol } = {}) {
+  const {
+    eventPublisher,
+    pairs,
+    pause,
+    onUnownedExternalOrderObserved,
+  } = dependencies
+  publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.EXECUTION_UNOWNED_ORDER,
+    dataResult: mapExecutionUnownedOrderData({ order }),
+  })
+  const hasHarvesterIdentity = [
+    order.clientOrderId,
+    event.clientOrderId,
+    event.originalClientOrderId,
+  ].some(isHarvesterClientOrderId)
+  const externalOrdersPolicy = pairs[symbol]?.externalOrdersPolicy ?? EXTERNAL_ORDERS_POLICIES.IGNORE
+  if (!hasHarvesterIdentity && externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.IGNORE) {
+    return {
+      result: toResult({
+        data: {
+          ignored: true,
+          externalOrder: true,
+        },
+      }),
+    }
+  }
+  if (!hasHarvesterIdentity &&
+      externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK &&
+      typeof onUnownedExternalOrderObserved === "function") {
+    try {
+      // The callback installs a provisional same-symbol guard synchronously,
+      // then owns the asynchronous authoritative snapshot and durability barrier.
+      onUnownedExternalOrderObserved({ order })
+      return {
+        result: toResult({
+          data: {
+            ignored: true,
+            externalOrder: true,
+            externalOrderReconciliationPending: true,
+          },
+        }),
+      }
+    } catch (error) {
+      await pause({
+        symbol,
+        reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+        error,
+      })
+      return {
+        result: failureResult({
+          error,
+          category: "OWNERSHIP_INTEGRITY",
+          stage: "EXTERNAL_ORDER_RECONCILIATION_REQUEST",
+          retryable: false,
+        }),
+      }
+    }
+  }
+  await pause({
+    symbol,
+    reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+  })
+  return {
+    result: failureResult({
+      error: new Error("Order update does not belong to a Harvester order"),
+      category: "OWNERSHIP_INTEGRITY",
+      stage: "ORDER_REGISTRY_MATCH",
+      retryable: false,
+    }),
+  }
+}
+
 async function prepareOrderEvent({ dependencies, event } = {}) {
-  const { state, eventPublisher, pairs, pause, onUnownedExternalOrderObserved } = dependencies
+  const { state, eventPublisher } = dependencies
   if (event?.eventType === "executionReport" && event?.brokerEvidence) {
     publishLifecycleEvent({
       eventPublisher,
@@ -39,59 +113,12 @@ async function prepareOrderEvent({ dependencies, event } = {}) {
   const { market: { symbol } } = order
   const update = state.registry.applyUpdate({ order })
   if (update.unknown) {
-    publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.EXECUTION_UNOWNED_ORDER,
-      dataResult: mapExecutionUnownedOrderData({ order }),
+    return handleUnownedOrderEvent({
+      dependencies,
+      event,
+      order,
+      symbol,
     })
-    const hasHarvesterIdentity = [
-      order.clientOrderId,
-      event.clientOrderId,
-      event.originalClientOrderId,
-    ].some(isHarvesterClientOrderId)
-    const externalOrdersPolicy = pairs[symbol]?.externalOrdersPolicy ?? EXTERNAL_ORDERS_POLICIES.IGNORE
-    if (!hasHarvesterIdentity && externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.IGNORE) {
-      return { result: toResult({ data: { ignored: true,
-        externalOrder: true } }) }
-    }
-    if (!hasHarvesterIdentity &&
-        externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK &&
-        typeof onUnownedExternalOrderObserved === "function") {
-      try {
-        // The callback installs a provisional same-symbol guard synchronously,
-        // then owns the asynchronous authoritative snapshot and durability barrier.
-        onUnownedExternalOrderObserved({ order })
-        return {
-          result: toResult({ data: {
-            ignored: true,
-            externalOrder: true,
-            externalOrderReconciliationPending: true,
-          } }),
-        }
-      } catch (error) {
-        await pause({ symbol,
-          reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
-          error })
-        return {
-          result: failureResult({
-            error,
-            category: "OWNERSHIP_INTEGRITY",
-            stage: "EXTERNAL_ORDER_RECONCILIATION_REQUEST",
-            retryable: false,
-          }),
-        }
-      }
-    }
-    await pause({ symbol,
-      reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT" })
-    return {
-      result: failureResult({
-        error: new Error("Order update does not belong to a Harvester order"),
-        category: "OWNERSHIP_INTEGRITY",
-        stage: "ORDER_REGISTRY_MATCH",
-        retryable: false,
-      }),
-    }
   }
   state.registry = update.registry
   if (update.applied === true) {
@@ -109,7 +136,6 @@ async function prepareOrderEvent({ dependencies, event } = {}) {
     symbol,
     update }
 }
-
 
 async function handlePreFillRecoveryState({ dependencies, order, symbol, recoveryMode } = {}) {
   const { state, pause, resolveRecoveryManagedCancellation } = dependencies

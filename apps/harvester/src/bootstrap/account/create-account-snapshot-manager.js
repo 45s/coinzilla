@@ -941,6 +941,72 @@ async function publishCommissionAssetBaseline({ context, options }) {
   }
 }
 
+function createExternalOrderReconciliation({
+  state,
+  context,
+  getHasCanonicalOwnershipReconciliation,
+  logger,
+} = {}) {
+  let openOrdersSnapshotTask = Promise.resolve()
+  const publishOrders = (options = {}) => {
+    const task = openOrdersSnapshotTask.then(async () => {
+      const pendingVersions = new Map(state.pendingExternalOrderVersions)
+      const orders = await publishOpenOrdersSnapshot({
+        context,
+        options: {
+          phase: options.phase === undefined ? "PREFLIGHT" : options.phase,
+          ownershipReconciled: options.ownershipReconciled === undefined
+            ? getHasCanonicalOwnershipReconciliation()
+            : options.ownershipReconciled,
+          orders: options.orders,
+        },
+      })
+      for (const [symbol, version] of pendingVersions) {
+        if (state.pendingExternalOrderVersions.get(symbol) === version) {
+          state.pendingExternalOrderVersions.delete(symbol)
+        }
+      }
+      return orders
+    })
+    openOrdersSnapshotTask = task.catch(() => undefined)
+    return task
+  }
+  const observeExternalOrder = ({ symbol } = {}) => {
+    if (typeof symbol !== "string" || !symbol.trim()) {
+      return Promise.resolve(toResult({
+        error: new TypeError("External-order observation requires a non-empty market symbol"),
+      }))
+    }
+    const version = ++state.externalOrderObservationSequence
+    state.pendingExternalOrderVersions.set(symbol, version)
+    return publishOrders({ phase: "RECOVERY" }).then(
+      () => toResult({
+        data: {
+          symbol,
+          reconciled: true,
+        },
+      }),
+      (error) => {
+        try {
+          logger.error?.({
+            message: "authoritative open-orders reconciliation failed after an external order was observed",
+            symbol,
+            error,
+            recoveryFailure: error?.recoveryFailure,
+          })
+        } catch {
+          // A diagnostic logger failure must not release the provisional market blocker.
+        }
+        return toResult({ error })
+      },
+    )
+  }
+  return {
+    publishOrders,
+    observeExternalOrder,
+  }
+}
+
 /**
  * Coordinate account-wide balance/open-order snapshots and their required durable audit events.
  *
@@ -1004,55 +1070,12 @@ export function createAccountSnapshotManager({
     context,
     ...options,
   })
-  let openOrdersSnapshotTask = Promise.resolve()
-  const publishOrders = (options = {}) => {
-    const task = openOrdersSnapshotTask.then(async () => {
-      const pendingVersions = new Map(state.pendingExternalOrderVersions)
-      const orders = await publishOpenOrdersSnapshot({
-        context,
-        options: {
-          phase: options.phase === undefined ? "PREFLIGHT" : options.phase,
-          ownershipReconciled: options.ownershipReconciled === undefined
-            ? getHasCanonicalOwnershipReconciliation()
-            : options.ownershipReconciled,
-          orders: options.orders,
-        },
-      })
-      for (const [symbol, version] of pendingVersions) {
-        if (state.pendingExternalOrderVersions.get(symbol) === version) {
-          state.pendingExternalOrderVersions.delete(symbol)
-        }
-      }
-      return orders
-    })
-    openOrdersSnapshotTask = task.catch(() => undefined)
-    return task
-  }
-  const observeExternalOrder = ({ symbol } = {}) => {
-    if (typeof symbol !== "string" || !symbol.trim()) {
-      return Promise.resolve(toResult({
-        error: new TypeError("External-order observation requires a non-empty market symbol"),
-      }))
-    }
-    const version = ++state.externalOrderObservationSequence
-    state.pendingExternalOrderVersions.set(symbol, version)
-    return publishOrders({ phase: "RECOVERY" }).then(
-      () => toResult({ data: { symbol, reconciled: true } }),
-      (error) => {
-        try {
-          logger.error?.({
-            message: "authoritative open-orders reconciliation failed after an external order was observed",
-            symbol,
-            error,
-            recoveryFailure: error?.recoveryFailure,
-          })
-        } catch {
-          // A diagnostic logger failure must not release the provisional market blocker.
-        }
-        return toResult({ error })
-      },
-    )
-  }
+  const { publishOrders, observeExternalOrder } = createExternalOrderReconciliation({
+    state,
+    context,
+    getHasCanonicalOwnershipReconciliation,
+    logger,
+  })
   const publishSnapshot = (options = {}) => publishAccountSnapshot({
     context,
     options: {

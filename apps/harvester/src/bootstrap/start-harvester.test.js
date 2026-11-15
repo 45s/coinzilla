@@ -5768,9 +5768,14 @@ test("logs safe correlation details for an external execution without closing gl
     eventPublisher: {
       publish: (event) => {
         journalEvents.push(event)
-        return { ok: true }
+        return {
+          ok: true,
+        }
       },
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
     logger: {
       info() {},

@@ -557,7 +557,11 @@ test("clears a provisional external-order blocker only after an empty authoritat
 test("retains the provisional external-order blocker when authoritative audit durability fails", async () => {
   const fixture = createFixture({
     openOrders: [],
-    flushResults: [{ ok: false, durable: false, errors: [new Error("audit flush failed")] }],
+    flushResults: [{
+      ok: false,
+      durable: false,
+      errors: [new Error("audit flush failed")],
+    }],
   })
 
   const result = await fixture.manager.observeExternalOrder({ symbol: "BTCUSDT" })
