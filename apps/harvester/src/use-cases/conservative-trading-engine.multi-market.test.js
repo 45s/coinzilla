@@ -49,7 +49,7 @@ function makeMarketMetadata(market) {
   }
 }
 
-async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio, initialState, strategyPolicy = conservativeStrategyPolicy, recoveryLedgersByMarket = new Map(), volatilityProtectionEnabled = false, externalOrdersPolicyBySymbol = {} } = {}) {
+async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio, initialState, strategyPolicy = conservativeStrategyPolicy, recoveryLedgersByMarket = new Map(), volatilityProtectionEnabled = false, externalOrdersPolicyBySymbol = {}, onUnownedExternalOrderObserved } = {}) {
   const orders = []
   const pauses = []
   const accountedFillIds = new Set()
@@ -153,6 +153,7 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
     canTrade: () => true,
     isMarketPriceFresh: () => true,
     isMarketBookFresh: () => true,
+    onUnownedExternalOrderObserved,
     isStopping: () => false,
     onPause: async ({ symbol, reason }) => pauses.push({ symbol, reason }),
     getVolatilityData: volatilityProtectionEnabled
@@ -271,9 +272,16 @@ test("shared quote cash flow from another market reduces the account-wide BUY bu
   assert.equal(orders.length, 0)
 })
 
-test("an unowned order in one market pauses only that market and cannot block another market fill", async () => {
+test("a newly observed external order triggers symbol-scoped reconciliation without halting other markets", async () => {
+  const externalOrderObservations = []
   const { engine, pauses, accountedFills } = await createHarness({
     externalOrdersPolicyBySymbol: { SOLUSDT: "block" },
+    onUnownedExternalOrderObserved: ({ order }) => {
+      externalOrderObservations.push({
+        symbol: order.market.symbol,
+        clientOrderId: order.clientOrderId,
+      })
+    },
   })
   await startBothMarkets(engine)
   const dogeOrder = engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT")
@@ -296,12 +304,20 @@ test("an unowned order in one market pauses only that market and cannot block an
   const unowned = await engine.processUserDataEvent({
     event: { eventType: "executionReport", executedOrder: unownedSolOrder },
   })
-  assert.equal(unowned.ok, false)
-  assert.deepEqual(pauses, [{
+  assert.equal(unowned.ok, true,
+    "A manual external order under BLOCK policy must be isolated to its symbol instead of failing the shared user-data stream.")
+  assert.equal(unowned.data.ignored, true,
+    "An unowned external order must remain outside Harvester order ownership and accounting.")
+  assert.equal(unowned.data.externalOrderReconciliationPending, true,
+    "The affected symbol must remain guarded while an authoritative account-wide open-order snapshot is pending.")
+  assert.deepEqual(externalOrderObservations, [{
     symbol: "SOLUSDT",
-    reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
-  }])
-  assert.deepEqual(accountedFills, [])
+    clientOrderId: "manual-sol-client",
+  }], "The engine must request authoritative reconciliation for the exact symbol and client identity observed.")
+  assert.deepEqual(pauses, [],
+    "A manual external order must not create a terminal accounting pause or halt unrelated user-data processing.")
+  assert.deepEqual(accountedFills, [],
+    "An unowned external order report must never be applied to Harvester Portfolio or RecoveryLedger.")
 
   const dogeFillEvent = makePartialFillEvent({
     order: dogeOrder,
@@ -311,10 +327,14 @@ test("an unowned order in one market pauses only that market and cannot block an
   })
   const accepted = await engine.processUserDataEvent({ event: dogeFillEvent })
 
-  assert.equal(accepted.ok, true)
-  assert.equal(accepted.data.waitingForFullFill, true)
-  assert.deepEqual(accountedFills.map((fill) => fill.tradeId), ["doge-execution-1"])
-  assert.deepEqual(engine.getPausedMarkets(), ["SOLUSDT"])
+  assert.equal(accepted.ok, true,
+    "A DOGE execution on an unaffected market must continue through the same user-data stream.")
+  assert.equal(accepted.data.waitingForFullFill, true,
+    "The unaffected DOGE BUY must retain its ordinary partial-fill lifecycle.")
+  assert.deepEqual(accountedFills.map((fill) => fill.tradeId), ["doge-execution-1"],
+    "Only the owned DOGE fill may reach Harvester accounting in this scenario.")
+  assert.deepEqual(engine.getPausedMarkets(), [],
+    "External-order isolation must not turn a manual SOL order into a sticky strategy pause.")
 })
 
 test("accounts the same broker trade ID independently for different markets", async () => {
