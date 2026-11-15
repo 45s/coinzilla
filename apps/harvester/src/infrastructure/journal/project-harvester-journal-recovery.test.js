@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { Asset, CanonicalOrder, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
-import { projectHarvesterJournalRecovery } from "./project-harvester-journal-recovery.js"
+import { projectHarvesterJournalRecovery } from "./project-harvester-journal-recovery-with-deferrals.js"
 import { restoreHarvesterJournalState } from "../../use-cases/restore-harvester-journal-state.js"
 import {
   mapExecutionAccountingFailedData,

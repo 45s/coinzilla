@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { projectHarvesterJournalRecovery } from "../../src/infrastructure/journal/project-harvester-journal-recovery.js"
+import { projectHarvesterJournalRecovery } from "../../src/infrastructure/journal/project-harvester-journal-recovery-with-deferrals.js"
 import { restoreHarvesterJournalState } from "../../src/use-cases/restore-harvester-journal-state.js"
 import { createRecoveryCrashFixture } from "../../test-support/recovery/recovery-crash-fixtures.js"
 
