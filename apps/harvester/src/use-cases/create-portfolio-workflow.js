@@ -410,7 +410,10 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
             errorName: error?.name,
             errorMessage: error?.message ?? String(error),
             errorStack: error?.stack,
-            unchangedPortfolio: createPortfolioLogSummary({ portfolio, marketId }),
+            unchangedPortfolio: createPortfolioLogSummary({
+              portfolio,
+              marketId,
+            }),
             unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
           })
           return toResult({ error })
