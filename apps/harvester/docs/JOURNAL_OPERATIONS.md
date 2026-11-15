@@ -386,6 +386,14 @@ These recovery audit/confirmation primitives are offline-only. They are not wire
 
 Current `index.js`, `prepareOptionalJournal()` and `startHarvester()` do not call this pipeline. Historical PR #606 did wire it, but passed `marketUniverseComplete: false` while `auditRecoveredTradeHistory()` requires true; that trading-enabled path therefore failed closed after prior trading activity. The current runtime bypasses that fail-closed gate rather than solving historical market-universe completeness. See F-031 and #654.
 
+## Startup open-order ownership boundary — ADR-0004
+
+[ADR-0004](./architecture/decisions/0004-startup-open-orders-are-external.md) defines the accepted ownership rule for orders observed in the account-wide PREFLIGHT snapshot: every such order is external to the current process, including orders whose client-order IDs use Harvester's prefix. The snapshot remains an audit fact; it does not transfer order ownership to the new process.
+
+The current implementation still has a prefix-specific unresolved-order path that blocks the affected market regardless of the configured external-order policy. Removing that path and routing all unmatched startup orders through the existing per-pair `EXTERNAL_ORDERS_POLICIES.IGNORE/BLOCK` behavior is tracked by [#1157](https://github.com/45s/coinzilla/issues/1157). Until that implementation lands, this ADR describes the accepted target, not a claim that the runtime change is already delivered.
+
+The required PREFLIGHT account snapshot and open-order Journal durability barrier remain mandatory. A missing, malformed, incomplete, or non-durable account-wide snapshot still fails startup closed. The audit event's `readiness` / `blockReasons` fields describe snapshot/ownership evidence; they must not be confused with user-data readiness. `IGNORE` permits the configured strategy to continue; `BLOCK` retains only the existing same-market external-order protection. Existing orders are never adopted, cancelled, replaced, or repriced by the new process.
+
 ## Process-restart recovery status — 2026-11-09
 
 **Process-restart state restoration is not implemented in the current Harvester startup composition.** Do not interpret the PREFLIGHT audit or the Journal's standalone read/replay API as proof that prior trading state has been restored.
