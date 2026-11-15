@@ -111,7 +111,11 @@ function parseExecutionTime({ ctime }) {
  * @returns {import("@coinzilla/entities").Fill}
  */
 export function adaptCanonicalFill({ trade, side, market } = {}) {
-  const identity = validateFillIdentity({ trade, side, market })
+  const identity = validateFillIdentity({
+    trade,
+    side,
+    market,
+  })
   const price = new Money({
     amount: trade.price,
     asset: market.quoteAsset,
@@ -127,7 +131,10 @@ export function adaptCanonicalFill({ trade, side, market } = {}) {
     }),
     asset: market.quoteAsset,
   })
-  const { commissions, commissionStatus } = createCommissions({ trade, market })
+  const { commissions, commissionStatus } = createCommissions({
+    trade,
+    market,
+  })
   const executedAt = parseExecutionTime({ ctime: trade.ctime })
 
   return new Fill({
