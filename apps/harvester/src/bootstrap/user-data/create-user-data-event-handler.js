@@ -432,8 +432,6 @@ export function createUserDataEventHandler({
     if (state.intakeStopped) {
       return
     }
-    const isExecution = event?.eventType === "executionReport" &&
-      event?.executionType === "TRADE"
     if (!event || typeof event !== "object" || Array.isArray(event)) {
       state.ready = false
       state.accountingFailed = true
