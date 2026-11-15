@@ -169,7 +169,7 @@ test("supports a recovery-only SELL after legacy quantity is exhausted", () => {
 test("rejects legacy-only SELL allocation and quantity splits that do not conserve the Fill", () => {
   assert.throws(
     () => createMixedSellFillAllocation(makeInput({ recoveryQuantity: "0", legacyQuantity: "5.01" })),
-    /recovery allocation must be positive/i,
+    /recoveryQuantity must be greater than zero/i,
   )
   assert.throws(
     () => createMixedSellFillAllocation(makeInput({ recoveryQuantity: "4", legacyQuantity: "0.01" })),
