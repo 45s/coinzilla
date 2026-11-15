@@ -670,7 +670,7 @@ test("keeps strategy-owned order facts and pending client identity on compact li
   )
   assert.match(
     lines[0],
-    /^19:14:52 🪙 CG .*#pending h-325e71ba16494aeb875e6e-3 .*ZROUSDT .*SELL .*4\.98 .*@ .*1\.393$/,
+    /^19:14:52 🪙 CG .*#pending h-325e71ba16494aeb875e6e-3 .*ZROUSDT .*SELL .*4\.98 .*@ .*1\.393 h-325e71ba16494aeb875e6e-3$/,
     "A pending submission must keep its client order ID on the same line without a verbose label.",
   )
   assert.doesNotMatch(
