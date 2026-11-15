@@ -376,6 +376,57 @@ export async function configureHarvesterLogging({
   })
 }
 
+function writeOrderLifecycleRecord({ output, color, timestamp, level, method, data } = {}) {
+  const lines = [formatOrderLifecycleConsoleLine({
+    timestamp,
+    data,
+  })]
+  if (typeof data.detail === "string" && data.detail.length > 0) {
+    lines.push(formatOrderLifecycleDetailLine({ detail: data.detail }))
+  }
+  for (const line of lines) {
+    output.write(formatConsoleLine({
+      line,
+      level,
+      method,
+      color,
+    }) + "\n")
+  }
+}
+
+function writeStandardConsoleRecord({ output, color, timestamp, level, method, data } = {}) {
+  const summary = summarizeConsoleData({ data })
+  const time = new Date(timestamp).toLocaleTimeString()
+  const normalizedMethod = String(method ?? level).toLowerCase()
+  const levelLabel = normalizedMethod === "info" || normalizedMethod === "system"
+    ? ""
+    : normalizedMethod.toUpperCase() + " "
+  const plainPrefix = `${time} ${levelLabel}${summary.message}`
+  const serializedDetails = Object.keys(summary.details ?? {}).length > 0
+    ? ` ${JSON.stringify(summary.details)}`
+    : ""
+  const maxLineLength = summary.message === "Portfolio Stats"
+    ? MAX_PORTFOLIO_STATS_LINE_LENGTH
+    : MAX_CONSOLE_LINE_LENGTH
+  const availableDetailsLength = Math.max(0, maxLineLength - plainPrefix.length - 1)
+  let suffix = serializedDetails
+  if (serializedDetails.length > availableDetailsLength) {
+    suffix = availableDetailsLength > 3
+      ? `${serializedDetails.slice(0, availableDetailsLength - 3)}...`
+      : ""
+  }
+  const plainLine = plainPrefix + suffix
+  const boundedLine = plainLine.length > maxLineLength
+    ? `${plainLine.slice(0, maxLineLength - 3)}...`
+    : plainLine
+  output.write(formatConsoleLine({
+    line: boundedLine,
+    level,
+    method,
+    color,
+  }) + "\n")
+}
+
 export function createHarvesterConsoleTransport({
   output = process.stdout,
   color = process.env.NO_COLOR === undefined && (
@@ -424,52 +475,24 @@ export function createHarvesterConsoleTransport({
       previousTimestamp = timestamp
 
       if (isOrderLifecycle) {
-        const lines = [formatOrderLifecycleConsoleLine({
+        writeOrderLifecycleRecord({
+          output,
+          color,
           timestamp,
+          level,
+          method,
           data,
-        })]
-        if (typeof data.detail === "string" && data.detail.length > 0) {
-          lines.push(formatOrderLifecycleDetailLine({ detail: data.detail }))
-        }
-        for (const line of lines) {
-          output.write(formatConsoleLine({
-            line,
-            level,
-            method,
-            color,
-          }) + "\n")
-        }
+        })
         return
       }
-
-      const time = new Date(timestamp).toLocaleTimeString()
-      const normalizedMethod = String(method ?? level).toLowerCase()
-      const levelLabel = normalizedMethod === "info" || normalizedMethod === "system"
-        ? ""
-        : normalizedMethod.toUpperCase() + " "
-      const plainPrefix = `${time} ${levelLabel}${summary.message}`
-      const serializedDetails = Object.keys(summary.details ?? {}).length > 0
-        ? ` ${JSON.stringify(summary.details)}`
-        : ""
-      const maxLineLength = summary.message === "Portfolio Stats"
-        ? MAX_PORTFOLIO_STATS_LINE_LENGTH
-        : MAX_CONSOLE_LINE_LENGTH
-      const availableDetailsLength = Math.max(0, maxLineLength - plainPrefix.length - 1)
-      const suffix = serializedDetails.length > availableDetailsLength
-        ? (availableDetailsLength > 3
-          ? `${serializedDetails.slice(0, availableDetailsLength - 3)}...`
-          : "")
-        : serializedDetails
-      const plainLine = plainPrefix + suffix
-      const boundedLine = plainLine.length > maxLineLength
-        ? `${plainLine.slice(0, maxLineLength - 3)}...`
-        : plainLine
-      output.write(formatConsoleLine({
-        line: boundedLine,
+      writeStandardConsoleRecord({
+        output,
+        color,
+        timestamp,
         level,
         method,
-        color,
-      }) + "\n")
+        data,
+      })
     },
     close: flushSuppressed,
   }
