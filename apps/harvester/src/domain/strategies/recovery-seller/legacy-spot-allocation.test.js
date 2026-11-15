@@ -120,10 +120,12 @@ test("tracks only Spot base quantity left after every Portfolio Position for the
     legacyPositions: [
       {
         market: btcUsdtMarket,
+        originalQuantity: "40",
         remainingQuantity: "40",
       },
       {
         market: btcFdusdMarket,
+        originalQuantity: "10",
         remainingQuantity: "10",
       },
     ],
@@ -160,6 +162,7 @@ test("caps verified Spot allocation at the remaining authorized legacy quantity"
     portfolio,
     legacyPositions: [{
       market: btcUsdtMarket,
+      originalQuantity: "0.25",
       remainingQuantity: "0.25",
     }],
   })
@@ -184,10 +187,12 @@ test("aggregates authorized legacy quantities sharing one base asset without dou
     legacyPositions: [
       {
         market: btcUsdtMarket,
+        originalQuantity: "0.3",
         remainingQuantity: "0.3",
       },
       {
         market: btcFdusdMarket,
+        originalQuantity: "0.4",
         remainingQuantity: "0.4",
       },
     ],
@@ -212,6 +217,7 @@ test("fails closed when the authoritative account snapshot omits an authorized l
       portfolio: new Portfolio(),
       legacyPositions: [{
         market: btcUsdtMarket,
+        originalQuantity: "0.01",
         remainingQuantity: "0.01",
       }],
     }),
@@ -258,6 +264,28 @@ test("fails closed when account Spot custody cannot cover aggregate Portfolio ba
   )
 })
 
+
+test("rejects remaining legacy quantity above the original operator authorization", () => {
+  assert.throws(
+    () => calculateVerifiedLegacySpotAllocation({
+      balances: [
+        createBalance({
+          asset: btcAsset,
+          free: "10",
+        }),
+      ],
+      portfolio: new Portfolio(),
+      legacyPositions: [{
+        market: btcUsdtMarket,
+        originalQuantity: "1",
+        remainingQuantity: "1.01",
+      }],
+    }),
+    RangeError,
+    "A stale or corrupted remaining quantity must never increase the operator's original legacy authorization.",
+  )
+})
+
 test("does not infer a legacy allocation from wallet balances without an authorized remaining position", () => {
   const allocations = calculateVerifiedLegacySpotAllocation({
     balances: [
@@ -283,6 +311,7 @@ test("does not require a Spot balance after the authorized legacy quantity reach
     portfolio: new Portfolio(),
     legacyPositions: [{
       market: btcUsdtMarket,
+      originalQuantity: "50",
       remainingQuantity: "0",
     }],
   })
