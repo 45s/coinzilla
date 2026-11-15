@@ -25,7 +25,7 @@ test("adds canonical strategy ownership to every shared logger method", () => {
   })
   const originalData = {
     message: "Market price evaluated",
-    strategyId: StrategyId.RECOVERY_SELLER,
+    strategyId: "UNKNOWN_STRATEGY",
     symbol: "ADAUSDT",
   }
 
@@ -44,7 +44,7 @@ test("adds canonical strategy ownership to every shared logger method", () => {
   )
   assert.equal(
     originalData.strategyId,
-    StrategyId.RECOVERY_SELLER,
+    "UNKNOWN_STRATEGY",
     "Adding strategy ownership must not mutate the caller's structured log object.",
   )
 })
@@ -84,5 +84,30 @@ test("rejects unsupported strategy identities instead of emitting ambiguous owne
     }),
     /supported strategy ID/,
     "A strategy logger must reject unknown identities rather than silently labeling them as system diagnostics.",
+  )
+})
+
+
+test("preserves a valid canonical strategy owner already present on an order diagnostic", () => {
+  const calls = []
+  const logger = {
+    info(data) {
+      calls.push(data)
+    },
+  }
+  const strategyLogger = createStrategyLogger({
+    logger,
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+
+  strategyLogger.info({
+    message: "Recovery Seller order accepted",
+    strategyId: StrategyId.RECOVERY_SELLER,
+  })
+
+  assert.equal(
+    calls[0].strategyId,
+    StrategyId.RECOVERY_SELLER,
+    "A valid OrderRegistry strategy owner must take precedence over the enclosing workflow's default strategy marker.",
   )
 })
