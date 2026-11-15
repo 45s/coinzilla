@@ -653,13 +653,19 @@ test("marks strategy-specific standard console records with canonical strategy m
     timestamp: "2026-11-15T19:14:52",
     level: "info",
     method: "info",
-    data: { message: "Market price evaluated", strategyId: "CG_coinGrabber" },
+    data: {
+      message: "Market price evaluated",
+      strategyId: "CG_coinGrabber",
+    },
   })
   transport.write({
     timestamp: "2026-11-15T19:14:53",
     level: "info",
     method: "info",
-    data: { message: "Recovery decision evaluated", strategyId: "RS_recoverySeller" },
+    data: {
+      message: "Recovery decision evaluated",
+      strategyId: "RS_recoverySeller",
+    },
   })
   assert.match(written, /🪙 CG Market price evaluated/)
   assert.match(written, /🔴 RS Recovery decision evaluated/)
@@ -679,7 +685,10 @@ test("does not suppress identical messages from different strategies", () => {
       timestamp,
       level: "info",
       method: "info",
-      data: { message: "Strategy transition evaluated", strategyId },
+      data: {
+        message: "Strategy transition evaluated",
+        strategyId,
+      },
     })
   }
   assert.equal((written.match(/Strategy transition evaluated/g) ?? []).length, 2)
