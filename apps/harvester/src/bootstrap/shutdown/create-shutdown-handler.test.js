@@ -559,3 +559,93 @@ test("emits deterministic monotonic timings for shutdown phases and failures", a
     assert.equal(entry.shutdownCorrelationId, "runtime-session-test")
   }
 })
+
+
+test("preserves nested shutdown replacement error messages, stacks, and causes", async () => {
+  const cause = new Error("broker rejected the replacement order")
+  cause.code = "BROKER_ORDER_REJECTED"
+  const replacementError = new Error("shutdown recovery replacement failed", { cause })
+  replacementError.code = "SHUTDOWN_RECOVERY_REPLACEMENT_UNCONFIRMED"
+  replacementError.recoveryFailure = {
+    category: "ORDER_TRANSITION",
+    stage: "SHUTDOWN_RECOVERY_REPLACEMENT",
+    retryable: true,
+  }
+  const logEntries = []
+  const fixture = createShutdown({
+    tradingEnabled: true,
+    logger: {
+      error: (entry) => logEntries.push(entry),
+      system: (entry) => logEntries.push(entry),
+    },
+    engine: {
+      reconcileOwnedOrders: async () => ({ ok: true }),
+      cancelOwnedBuyOrdersForShutdown: async () => ({ ok: true }),
+      reconcileRecoverySellsForShutdown: async () => ({
+        ok: false,
+        errors: [replacementError],
+        failure: {
+          category: "ORDER_TRANSITION",
+          stage: "SHUTDOWN_RECOVERY_SELL_RECONCILIATION",
+          retryable: true,
+        },
+      }),
+      getOrders: () => [],
+    },
+  })
+
+  let shutdownError
+  await assert.rejects(
+    fixture.stop(),
+    (error) => {
+      shutdownError = error
+      return error instanceof AggregateError
+    },
+    "A failed recovery SELL replacement must keep shutdown incomplete while retaining actionable error diagnostics.",
+  )
+
+  const failure = shutdownError.shutdownDiagnostics.stageFailures.find(
+    (entry) => entry.stage === "SHUTDOWN_RECOVERY_SELL_RECONCILIATION",
+  )
+  assert.ok(failure, "Shutdown diagnostics must retain the failed recovery SELL reconciliation stage.")
+  assert.equal(
+    failure.errors[0].message,
+    replacementError.message,
+    "The shutdown failure summary must retain the original replacement error message.",
+  )
+  assert.equal(
+    failure.errors[0].stack,
+    replacementError.stack,
+    "The shutdown failure summary must retain the original replacement error stack.",
+  )
+  assert.equal(
+    failure.errors[0].cause.message,
+    cause.message,
+    "The shutdown failure summary must retain the nested broker cause message.",
+  )
+  assert.equal(
+    failure.errors[0].cause.code,
+    cause.code,
+    "The shutdown failure summary must retain the nested broker cause code.",
+  )
+
+  const loggedFailure = logEntries.find(
+    (entry) => entry.stage === "SHUTDOWN_RECOVERY_SELL_RECONCILIATION",
+  )
+  assert.ok(loggedFailure, "The shutdown logger must emit the failed recovery SELL stage.")
+  assert.equal(
+    loggedFailure.errors[0].message,
+    replacementError.message,
+    "The structured shutdown log must include the original replacement error message.",
+  )
+  assert.equal(
+    loggedFailure.errors[0].cause.message,
+    cause.message,
+    "The structured shutdown log must include the nested broker cause message.",
+  )
+  assert.equal(
+    fixture.state.status,
+    "SHUTDOWN_INCOMPLETE",
+    "Preserving diagnostics must not weaken the incomplete-shutdown safety boundary.",
+  )
+})
