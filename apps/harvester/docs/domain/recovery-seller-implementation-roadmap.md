@@ -103,6 +103,10 @@ Relevant tests located include `strategy.test.js`, `recovery-sell-plan.test.js`,
 
 **Deliverable:** independent deterministic RS domain model and pure calculations, tests first.
 
+**First RS-2b slice implemented in this PR:** `src/domain/strategies/recovery-seller/legacy-position.js` now creates the operator-declared logical legacy position, calculates its original average cost once (36 decimal places, rounded away from zero), caps each cycle's configured legacy slice at the remaining quantity, and records the actual legacy quantity sold while preserving the original invested amount and average cost. Focused tests cover the initial basis, fixed basis after disposal, smaller final remainder, exhausted legacy quantity, and invalid inputs.
+
+This is pure logical accounting only. It does not establish Spot custody, seed/debit Portfolio inventory, allocate canonical SELL fills between recovery and legacy, submit orders, register runtime configuration, or provide exact-once lifecycle orchestration. The application integration must call the disposal transition only after a fully reconciled successful cycle and must supply the canonical exact-once allocation boundary described in the domain specification. RS remains non-executable.
+
 Before implementing each rule, add a focused test that expresses the agreed business invariant and observe it fail. Reuse existing domain capabilities directly where their contracts fit. If a required CG function is a genuine strategy-neutral capability, characterize it, extract it in the same focused change, add direct shared tests, and prove CG behavior is unchanged. Do not perform a separate speculative extraction pass.
 
 Model only the concepts required by the approved RS contract:
