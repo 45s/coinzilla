@@ -218,3 +218,11 @@ The original 97-file inventory table above is a frozen baseline: its recorded by
 - [x] Verify the required policy/link/heading-anchor baseline remains in CI; heading-anchor validation is report-only, not an enforcement gate.
 - [x] Record evidence-based dispositions and rationale for all six initial REVIEW entries; no initial Harvester or Brokers REVIEW candidates remain.
 - [ ] Record new REVIEW findings discovered during continued content-level review and update indexes after each approved migration.
+## Pending additions on the startup open-order boundary PR
+
+The documentation task branch adds two maintained Harvester documents. They are not part of the frozen 97-file baseline or the historical 124-file checkpoint above; after merge, include them in the next complete recursive tree verification.
+
+| Added path | Purpose |
+| --- | --- |
+| `apps/harvester/docs/architecture/decisions/0004-startup-open-orders-are-external.md` | Accepted ownership decision: all orders in a process-start snapshot remain external to that process and use the configured per-pair policy. |
+| `apps/harvester/docs/plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md` | Implementation plan, source evidence, acceptance criteria, TDD sequence and autonomous handoff prompt for issue #1157. |
