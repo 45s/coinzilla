@@ -5,7 +5,7 @@ import { finished } from "node:stream/promises"
 import { mkdir } from "node:fs/promises"
 import path from "node:path"
 import { defaultLogger } from "@coinzilla/utils"
-import { strategyLogMarkers, SYSTEM_LOG_MARKER } from "../../application/logging/strategy-log-markers.js"
+import { strategyLogMarkers } from "../../application/logging/strategy-log-markers.js"
 import { createHarvesterLogSessionPaths } from "./create-harvester-log-session-paths.js"
 import { createConsoleRecordPresentation } from "./create-console-record-presentation.js"
 
@@ -14,7 +14,6 @@ const DEBUG_TRANSPORT_NAME = "harvester-debug-file"
 const TRACE_TRANSPORT_NAME = "harvester-trace-file"
 
 const MAX_CONSOLE_LINE_LENGTH = 200
-const MAX_PORTFOLIO_STATS_LINE_LENGTH = 360
 const LEVEL_COLORS = Object.freeze({
   trace: "\u001b[95m",
   debug: "\u001b[35m",
@@ -32,14 +31,12 @@ function formatConsoleLine({ line, level, method = level, color }) {
 }
 
 
-const STRATEGY_COLUMN_WIDTH = 6
-const STATUS_COLUMN_WIDTH = 23
-const ORDER_ID_COLUMN_WIDTH = 22
-const SYMBOL_COLUMN_WIDTH = 20
-const SIDE_COLUMN_WIDTH = 5
-const QUANTITY_COLUMN_WIDTH = 18
-const PRICE_COLUMN_WIDTH = 18
-const ORDER_DETAIL_INDENT = 16
+const STATUS_COLUMN_WIDTH = 20
+const ORDER_ID_COLUMN_WIDTH = 12
+const SYMBOL_COLUMN_WIDTH = 12
+const SIDE_COLUMN_WIDTH = 4
+const QUANTITY_COLUMN_WIDTH = 12
+const PRICE_COLUMN_WIDTH = 12
 
 const ORDER_STATUS_PRESENTATION = Object.freeze({
   SUBMITTED: "SUBMITTED",
@@ -66,20 +63,26 @@ function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
     second: "2-digit",
     hour12: false,
   })
-  const strategy = (strategyLogMarkers[data.strategyId] ?? SYSTEM_LOG_MARKER).padEnd(STRATEGY_COLUMN_WIDTH)
+  const strategy = strategyLogMarkers[data.strategyId]
   const status = String(
     ORDER_STATUS_PRESENTATION[data.lifecycleStatus] ?? data.lifecycleStatus ?? "INFO",
   ).padEnd(STATUS_COLUMN_WIDTH)
-  const orderId = (data.brokerOrderId ? "#" + data.brokerOrderId : "#pending")
+  const orderId = String(data.brokerOrderId ? "#" + data.brokerOrderId : "#pending")
     .padEnd(ORDER_ID_COLUMN_WIDTH)
   const symbol = String(data.symbol ?? "-").padEnd(SYMBOL_COLUMN_WIDTH)
   const side = String(data.side ?? "-").padEnd(SIDE_COLUMN_WIDTH)
   const quantity = String(data.quantity ?? "-").padStart(QUANTITY_COLUMN_WIDTH)
   const price = String(data.price ?? "-").padStart(PRICE_COLUMN_WIDTH)
+  const clientOrderId = !data.brokerOrderId && typeof data.clientOrderId === "string"
+    ? data.clientOrderId
+    : ""
+  const detail = typeof data.detail === "string" && data.detail.length > 0
+    ? data.detail.replace(/[\\r\\n]+/g, " ")
+    : ""
 
   return [
     time,
-    strategy,
+    ...(strategy ? [strategy] : []),
     status,
     orderId,
     symbol,
@@ -87,11 +90,10 @@ function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
     quantity,
     "@",
     price,
-  ].join(" ")
-}
-
-function formatOrderLifecycleDetailLine({ detail } = {}) {
-  return " ".repeat(ORDER_DETAIL_INDENT) + String(detail).replace(/[\r\n]+/g, " ")
+    clientOrderId,
+    detail ? "|" : "",
+    detail,
+  ].filter(Boolean).join(" ")
 }
 
 /**
@@ -316,21 +318,16 @@ export async function configureHarvesterLogging({
 }
 
 function writeOrderLifecycleRecord({ output, color, timestamp, level, method, data } = {}) {
-  const lines = [formatOrderLifecycleConsoleLine({
+  const line = formatOrderLifecycleConsoleLine({
     timestamp,
     data,
-  })]
-  if (typeof data.detail === "string" && data.detail.length > 0) {
-    lines.push(formatOrderLifecycleDetailLine({ detail: data.detail }))
-  }
-  for (const line of lines) {
-    output.write(formatConsoleLine({
-      line,
-      level,
-      method,
-      color,
-    }) + "\n")
-  }
+  })
+  output.write(formatConsoleLine({
+    line,
+    level,
+    method,
+    color,
+  }) + "\\n")
 }
 
 function writeStandardConsoleRecord({ output, color, timestamp, level, method, summary, strategyId } = {}) {
@@ -339,15 +336,38 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
   const levelLabel = normalizedMethod === "info" || normalizedMethod === "system"
     ? ""
     : normalizedMethod.toUpperCase() + " "
-  const strategyMarker = strategyLogMarkers[strategyId] ?? SYSTEM_LOG_MARKER
-  const plainPrefix = `${time} ${strategyMarker} ${levelLabel}${summary.message}`
+  const strategyMarker = strategyLogMarkers[strategyId]
+  const strategyPrefix = strategyMarker ? strategyMarker + " " : ""
+
+  if (summary.message === "Portfolio Stats") {
+    const details = summary.details ?? {}
+    const portfolioLine = [
+      time,
+      strategyPrefix + "PORTFOLIO " + String(details.symbol ?? "-"),
+      "| Inventory:",
+      String(details.inventory?.totalBaseQuantity ?? "-"),
+      "| Spent:",
+      String(details.accounting?.spent ?? "-"),
+      "| Net:",
+      String(details.accounting?.quoteNetCashFlow ?? "-"),
+    ].join(" ")
+    const boundedPortfolioLine = portfolioLine.length > MAX_CONSOLE_LINE_LENGTH
+      ? portfolioLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3) + "..."
+      : portfolioLine
+    output.write(formatConsoleLine({
+      line: boundedPortfolioLine,
+      level,
+      method,
+      color,
+    }) + "\\n")
+    return
+  }
+
+  const plainPrefix = `${time} ${strategyPrefix}${levelLabel}${summary.message}`
   const serializedDetails = Object.keys(summary.details ?? {}).length > 0
     ? ` ${JSON.stringify(summary.details)}`
     : ""
-  const maxLineLength = summary.message === "Portfolio Stats"
-    ? MAX_PORTFOLIO_STATS_LINE_LENGTH
-    : MAX_CONSOLE_LINE_LENGTH
-  const availableDetailsLength = Math.max(0, maxLineLength - plainPrefix.length - 1)
+  const availableDetailsLength = Math.max(0, MAX_CONSOLE_LINE_LENGTH - plainPrefix.length - 1)
   let suffix = serializedDetails
   if (serializedDetails.length > availableDetailsLength) {
     suffix = availableDetailsLength > 3
@@ -355,15 +375,15 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
       : ""
   }
   const plainLine = plainPrefix + suffix
-  const boundedLine = plainLine.length > maxLineLength
-    ? `${plainLine.slice(0, maxLineLength - 3)}...`
+  const boundedLine = plainLine.length > MAX_CONSOLE_LINE_LENGTH
+    ? `${plainLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3)}...`
     : plainLine
   output.write(formatConsoleLine({
     line: boundedLine,
     level,
     method,
     color,
-  }) + "\n")
+  }) + "\\n")
 }
 
 export function createHarvesterConsoleTransport({
@@ -374,13 +394,12 @@ export function createHarvesterConsoleTransport({
 } = {}) {
   let previousFingerprint
   let previousTimestamp
-  let previousMarker = ""
   let suppressedCount = 0
 
   const flushSuppressed = () => {
     if (suppressedCount === 0) return
     const time = new Date(previousTimestamp).toLocaleTimeString()
-    const line = `${time} ${previousMarker}Previous identical log entry repeated ${suppressedCount} additional time(s)`
+    const line = `${time} Previous identical log entry repeated ${suppressedCount} additional time(s)`
     output.write(formatConsoleLine({
       line,
       level: "info",
@@ -413,7 +432,6 @@ export function createHarvesterConsoleTransport({
       flushSuppressed()
       previousFingerprint = strategyFingerprint
       previousTimestamp = timestamp
-      previousMarker = strategyLogMarkers[data?.strategyId] ? `${strategyLogMarkers[data.strategyId]} ` : ""
 
       if (shutdownPresentation) {
         output.write(`${formatConsoleLine({
