@@ -175,6 +175,49 @@ or repeated connection-status heartbeat. Those belong at DEBUG or INFO
 according to whether they represent an operator-relevant trading event.
 SYSTEM entries are cyan without a redundant `SYSTEM` prefix, making lifecycle events easy to distinguish from blue INFO output.
 
+## Shutdown phase terminal records
+
+Shutdown work phases use one compact, 24-hour local-time terminal line:
+
+```text
+21:25:57 shutdown phase MARKET_INTAKE_STOP STARTED
+21:25:57 shutdown phase MARKET_INTAKE_STOP COMPLETED
+21:25:57 shutdown phase BROKER_DISCONNECT FAILED
+```
+
+`STARTED` means the phase operation began, `COMPLETED` means it returned under
+its existing success criteria, and `FAILED` means its existing failure
+criteria were met. These labels describe the current lifecycle outcome; they
+do not change shutdown ordering or failure semantics.
+
+The shared console transport owns terminal rendering and deduplication; lifecycle owners continue emitting structured phase records rather than formatting terminal text themselves.
+
+The phase formatter normalizes and validates the phase/status tokens and timestamp
+before producing a line. Malformed records fall back to the ordinary compact-
+summary path. Formatting does not mutate the structured input.
+
+The instantaneous `SHUTDOWN_REQUESTED` and `STOP_STATE_ESTABLISHED` milestones
+are printed as `shutdown requested` and `shutdown state established`, not as
+work phases. All other valid phase transitions retain their actual phase
+identifier and status. The terminal phase line contains no JSON details,
+correlation IDs, duration, or failure prose.
+
+Consecutive duplicate suppression remains enabled. Its fingerprint includes
+the normalized phase/status pair alongside the existing log level and method,
+so different phases or statuses are always visible. A genuinely identical consecutive phase/status line may be
+suppressed and reported with the existing repeat-count message.
+
+The phase/status pair is part of the pure console-record fingerprint; timestamps
+and omitted diagnostic fields do not prevent genuinely identical terminal
+summaries from being deduplicated. The pure console-record presentation helper supplies the console summary and
+deduplication identity once per record, while retaining the existing order-
+lifecycle summary, standard console detail allowlist, and existing detail truncation rules.
+
+The concise terminal line is only the operator-facing summary. The original
+structured DEBUG/TRACE entry remains unchanged in both cumulative and
+per-session files, including `shutdownPhase`, `phaseStatus`,
+`shutdownCorrelationId`, elapsed/duration timing, and safe failure details.
+
 ## Runtime commands
 
 In an interactive development terminal:
