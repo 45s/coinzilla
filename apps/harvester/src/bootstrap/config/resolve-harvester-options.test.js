@@ -87,6 +87,31 @@ test("selects LIVE and enables trading even when NODE_ENV is development", async
   assert.equal(result.tradingEnabled, true, "Selecting LIVE must enable real order execution.")
 })
 
+test("fingerprints effective per-market settings and publishes the matching enabled-market set", async () => {
+  const cfg = config({ enabledSymbols: ["BTCUSDT", "ETHUSDT"] })
+  cfg.strategies.CG_coinGrabber.pairs.BTCUSDT.investment = 100
+  cfg.strategies.CG_coinGrabber.pairs.ETHUSDT.enabled = false
+  const fixture = createFixture({ cfg, env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } })
+  const result = await resolveHarvesterOptions(fixture.input)
+
+  assert.match(result.configurationFingerprint, /^[a-f0-9]{64}$/,
+    "Effective strategy configuration must produce a deterministic SHA-256 fingerprint.")
+  assert.equal(fixture.events[0].data.configurationFingerprint, result.configurationFingerprint,
+    "The validated Journal event must carry the exact effective configuration fingerprint.")
+  assert.deepEqual(fixture.events[0].data.enabledMarkets, result.enabledSymbols,
+    "The recorded enabled-market set must match the runtime-selected markets.")
+
+  const changedConfig = config({ enabledSymbols: ["BTCUSDT", "ETHUSDT"] })
+  changedConfig.strategies.CG_coinGrabber.pairs.BTCUSDT.investment = 101
+  changedConfig.strategies.CG_coinGrabber.pairs.ETHUSDT.enabled = false
+  const changed = await resolveHarvesterOptions(createFixture({
+    cfg: changedConfig,
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  }).input)
+  assert.notEqual(changed.configurationFingerprint, result.configurationFingerprint,
+    "Changing an effective per-market strategy setting must change the fingerprint.")
+})
+
 test("rejects an invalid TRADING_MODE", async () => {
   const fixture = createFixture({ env: { TRADING_MODE: "production" } })
   await assert.rejects(

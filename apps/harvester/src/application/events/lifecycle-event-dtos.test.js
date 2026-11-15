@@ -106,6 +106,8 @@ test("maps validated configuration without copying full configuration or credent
   const result = mapConfigValidatedData({
     enabledMarkets: ["ZROUSDT"],
     strategyMode: "conservative",
+    tradingMode: "testnet",
+    configurationFingerprint: "a".repeat(64),
     tradingEnabled: true,
     config: { apiKey: "private", pairs: { ZROUSDT: { investment: 100 } } },
   })
@@ -115,9 +117,39 @@ test("maps validated configuration without copying full configuration or credent
     data: {
       enabledMarkets: ["ZROUSDT"],
       strategyMode: "conservative",
+      tradingMode: "testnet",
+      configurationFingerprint: "a".repeat(64),
       tradingEnabled: true,
     },
   })
+})
+
+test("rejects missing or malformed effective-configuration evidence", () => {
+  const base = {
+    enabledMarkets: ["ZROUSDT"],
+    strategyMode: "conservative",
+    tradingMode: "testnet",
+    tradingEnabled: true,
+  }
+  assert.equal(mapConfigValidatedData(base).ok, false,
+    "Configuration validation must not publish an effective market set without its deterministic fingerprint.")
+  assert.equal(mapConfigValidatedData({
+    ...base,
+    configurationFingerprint: "not-a-sha256-digest",
+  }).ok, false, "Configuration fingerprints must be canonical SHA-256 hex digests.")
+})
+
+test("preserves dirty working-tree provenance without inferring a configuration cause", () => {
+  const result = mapHarvesterProcessStartedData({
+    ...validProcessIdentity,
+    source: {
+      ...validProcessIdentity.source,
+      workingTree: "dirty",
+    },
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.data.source.workingTree, "dirty",
+    "A dirty worktree is provenance evidence, not proof that the effective configuration was overridden.")
 })
 
 test("maps broker connection success and sanitizes sensitive error values", () => {
