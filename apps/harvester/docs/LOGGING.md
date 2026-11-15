@@ -168,10 +168,12 @@ console budget. Example: `🪙 CG PORTFOLIO ZROUSDT | Inventory: 9.99 ZRO | Spen
 ### Startup connection summary
 
 Name the connected resource explicitly. Prefer
-`Binance market-data stream connected; 4 market subscriptions active.` over
+`Binance market-data stream connected; active market subscriptions: 4.` over
 `Connected; subscribed to 4 markets`, which leaves the connection target
-ambiguous. Keep the separate user-data readiness state explicit when it is
-still pending; a market-data connection does not imply trading readiness.
+ambiguous. When trading is not enabled, retain the same connection identity:
+`Binance market-data stream connected; Binance trading mode is TESTNET.`
+This summary identifies the market-data stream only; it does not imply that
+user-data readiness has been established.
 
 ### SYSTEM lifecycle events
 
