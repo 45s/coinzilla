@@ -1426,7 +1426,10 @@ export function makeConservativeTradingEngine({
     onOperationalStateStrategyMarketPaused,
     onUnownedExternalOrderObserved,
     logger: logger
-      ? createStrategyLogger({ logger, strategyId: StrategyId.COIN_GRABBER })
+      ? createStrategyLogger({
+        logger,
+        strategyId: StrategyId.COIN_GRABBER,
+      })
       : logger,
     initialState,
   }
