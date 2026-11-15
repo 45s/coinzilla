@@ -97,21 +97,66 @@ const STRATEGY_LABELS = Object.freeze({
 })
 
 const ORDER_STATUS_PRESENTATION = Object.freeze({
-  SUBMITTED: { indicator: "🔵", label: "SUBMITTED" },
-  ACCEPTED: { indicator: "🔵", label: "ACCEPTED" },
-  PARTIAL_FILL: { indicator: "🟠", label: "PARTIAL FILL" },
-  FILLED: { indicator: "🟢", label: "FILLED" },
-  CANCEL_REQUESTED: { indicator: "🔵", label: "CANCEL REQUESTED" },
-  CANCELLED: { indicator: "🔴", label: "CANCELLED" },
-  REJECTED: { indicator: "🔴", label: "REJECTED" },
-  EXPIRED: { indicator: "🔴", label: "EXPIRED" },
-  FAILED: { indicator: "🔴", label: "FAILED" },
-  UNKNOWN: { indicator: "🟠", label: "UNKNOWN" },
-  CANCEL_UNKNOWN: { indicator: "🟠", label: "CANCEL UNKNOWN" },
-  CANCEL_NOT_CONFIRMED: { indicator: "🟠", label: "CANCEL UNCONFIRMED" },
-  CANCEL_NOT_SENT: { indicator: "🔴", label: "CANCEL NOT SENT" },
-  CANCEL_FAILED: { indicator: "🔴", label: "CANCEL FAILED" },
-  STALE_CANCEL_IGNORED: { indicator: "⚪", label: "STALE CANCEL IGNORED" },
+  SUBMITTED: {
+    indicator: "🔵",
+    label: "SUBMITTED",
+  },
+  ACCEPTED: {
+    indicator: "🔵",
+    label: "ACCEPTED",
+  },
+  PARTIAL_FILL: {
+    indicator: "🟠",
+    label: "PARTIAL FILL",
+  },
+  FILLED: {
+    indicator: "🟢",
+    label: "FILLED",
+  },
+  CANCEL_REQUESTED: {
+    indicator: "🔵",
+    label: "CANCEL REQUESTED",
+  },
+  CANCELLED: {
+    indicator: "🔴",
+    label: "CANCELLED",
+  },
+  REJECTED: {
+    indicator: "🔴",
+    label: "REJECTED",
+  },
+  EXPIRED: {
+    indicator: "🔴",
+    label: "EXPIRED",
+  },
+  FAILED: {
+    indicator: "🔴",
+    label: "FAILED",
+  },
+  UNKNOWN: {
+    indicator: "🟠",
+    label: "UNKNOWN",
+  },
+  CANCEL_UNKNOWN: {
+    indicator: "🟠",
+    label: "CANCEL UNKNOWN",
+  },
+  CANCEL_NOT_CONFIRMED: {
+    indicator: "🟠",
+    label: "CANCEL UNCONFIRMED",
+  },
+  CANCEL_NOT_SENT: {
+    indicator: "🔴",
+    label: "CANCEL NOT SENT",
+  },
+  CANCEL_FAILED: {
+    indicator: "🔴",
+    label: "CANCEL FAILED",
+  },
+  STALE_CANCEL_IGNORED: {
+    indicator: "⚪",
+    label: "STALE CANCEL IGNORED",
+  },
 })
 
 function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
@@ -163,7 +208,10 @@ export async function configureHarvesterLogging({
   logger = defaultLogger,
   directory = path.resolve(process.cwd(), "logs"),
   output = process.stdout,
-  processIdentity = { startedAt: new Date().toISOString(), runtimeSessionId: randomUUID() },
+  processIdentity = {
+    startedAt: new Date().toISOString(),
+    runtimeSessionId: randomUUID(),
+  },
 } = {}) {
   if (
     typeof logger?.addTransport !== "function"
@@ -188,8 +236,14 @@ export async function configureHarvesterLogging({
 
   const createFileTransport = async ({ name, level, filename, sessionFilename }) => {
     const streams = [
-      createWriteStream(path.join(cumulativeDirectory, filename), { flags: "a", encoding: "utf8" }),
-      createWriteStream(sessionFilename, { flags: "wx", encoding: "utf8" }),
+      createWriteStream(path.join(cumulativeDirectory, filename), {
+        flags: "a",
+        encoding: "utf8",
+      }),
+      createWriteStream(sessionFilename, {
+        flags: "wx",
+        encoding: "utf8",
+      }),
     ]
     const streamErrors = new Map()
     streams.forEach((stream, index) => stream.on("error", (error) => streamErrors.set(index, error)))
@@ -280,7 +334,10 @@ export async function configureHarvesterLogging({
     debugTransportRegistered = true
     logger.addTransport(traceTransport)
     traceTransportRegistered = true
-    logger.setLevel({ transport: CONSOLE_TRANSPORT_NAME, level: "info" })
+    logger.setLevel({
+      transport: CONSOLE_TRANSPORT_NAME,
+      level: "info",
+    })
   } catch (error) {
     const cleanup = []
     if (debugTransportRegistered) {
@@ -332,8 +389,12 @@ export function createHarvesterConsoleTransport({
   const flushSuppressed = () => {
     if (suppressedCount === 0) return
     const time = new Date(previousTimestamp).toLocaleTimeString()
-    const line = time + " Previous identical log entry repeated " + suppressedCount + " additional time(s)"
-    output.write(formatConsoleLine({ line, level: "info", color }) + "\n")
+    const line = `${time} Previous identical log entry repeated ${suppressedCount} additional time(s)`
+    output.write(formatConsoleLine({
+      line,
+      level: "info",
+      color,
+    }) + "\n")
     suppressedCount = 0
   }
 
@@ -343,9 +404,16 @@ export function createHarvesterConsoleTransport({
     write({ timestamp, level, method = level, data }) {
       const isOrderLifecycle = data?.orderLifecycle === true
       const summary = isOrderLifecycle
-        ? { message: "Order lifecycle", details: data }
+        ? {
+          message: "Order lifecycle",
+          details: data,
+        }
         : summarizeConsoleData({ data })
-      const fingerprint = JSON.stringify({ level, method, summary })
+      const fingerprint = JSON.stringify({
+        level,
+        method,
+        summary,
+      })
       if (fingerprint === previousFingerprint) {
         suppressedCount += 1
         return
@@ -356,12 +424,20 @@ export function createHarvesterConsoleTransport({
       previousTimestamp = timestamp
 
       if (isOrderLifecycle) {
-        const lines = [formatOrderLifecycleConsoleLine({ timestamp, data })]
+        const lines = [formatOrderLifecycleConsoleLine({
+          timestamp,
+          data,
+        })]
         if (typeof data.detail === "string" && data.detail.length > 0) {
           lines.push(formatOrderLifecycleDetailLine({ detail: data.detail }))
         }
         for (const line of lines) {
-          output.write(formatConsoleLine({ line, level, method, color }) + "\n")
+          output.write(formatConsoleLine({
+            line,
+            level,
+            method,
+            color,
+          }) + "\n")
         }
         return
       }
@@ -371,9 +447,9 @@ export function createHarvesterConsoleTransport({
       const levelLabel = normalizedMethod === "info" || normalizedMethod === "system"
         ? ""
         : normalizedMethod.toUpperCase() + " "
-      const plainPrefix = time + " " + levelLabel + summary.message
+      const plainPrefix = `${time} ${levelLabel}${summary.message}`
       const serializedDetails = Object.keys(summary.details ?? {}).length > 0
-        ? " " + JSON.stringify(summary.details)
+        ? ` ${JSON.stringify(summary.details)}`
         : ""
       const maxLineLength = summary.message === "Portfolio Stats"
         ? MAX_PORTFOLIO_STATS_LINE_LENGTH
@@ -381,12 +457,12 @@ export function createHarvesterConsoleTransport({
       const availableDetailsLength = Math.max(0, maxLineLength - plainPrefix.length - 1)
       const suffix = serializedDetails.length > availableDetailsLength
         ? (availableDetailsLength > 3
-          ? serializedDetails.slice(0, availableDetailsLength - 3) + "..."
+          ? `${serializedDetails.slice(0, availableDetailsLength - 3)}...`
           : "")
         : serializedDetails
       const plainLine = plainPrefix + suffix
       const boundedLine = plainLine.length > maxLineLength
-        ? plainLine.slice(0, maxLineLength - 3) + "..."
+        ? `${plainLine.slice(0, maxLineLength - 3)}...`
         : plainLine
       output.write(formatConsoleLine({
         line: boundedLine,
