@@ -85,6 +85,7 @@ export function createConsoleRecordPresentation({ timestamp, level, method, data
   return {
     isOrderLifecycle,
     shutdownPresentation,
+    summary,
     fingerprint,
   }
 }

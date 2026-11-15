@@ -338,8 +338,7 @@ function writeOrderLifecycleRecord({ output, color, timestamp, level, method, da
   }
 }
 
-function writeStandardConsoleRecord({ output, color, timestamp, level, method, data } = {}) {
-  const summary = summarizeConsoleData({ data })
+function writeStandardConsoleRecord({ output, color, timestamp, level, method, summary } = {}) {
   const time = new Date(timestamp).toLocaleTimeString()
   const normalizedMethod = String(method ?? level).toLowerCase()
   const levelLabel = normalizedMethod === "info" || normalizedMethod === "system"
@@ -400,6 +399,7 @@ export function createHarvesterConsoleTransport({
       const {
         isOrderLifecycle,
         shutdownPresentation,
+        summary,
         fingerprint,
       } = createConsoleRecordPresentation({
         timestamp,
