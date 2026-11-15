@@ -347,7 +347,7 @@ function formatStartupConsoleMessage(message) {
 
   const modeMatch = /^Connected; Binance trading mode is (.+)\.$/.exec(message)
   if (modeMatch) {
-    return `Binance connection established; Binance trading mode is ${modeMatch[1]}.`
+    return `Binance market-data stream connected; Binance trading mode is ${modeMatch[1]}.`
   }
 
   return message
