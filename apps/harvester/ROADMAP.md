@@ -35,7 +35,8 @@ The 2026-11-12/13 and 2026-11-13 LIVE session evidence is preserved in the [2026
 
 Remaining safety and observability follow-ups #1103 and #1105 remain open; #1104, #1101, #1102 and P0 #1097 are complete. A merged offline fix or clean audit does not establish runtime safety or authorize another unrestricted LIVE session.
 
-- [~] **Simplify Harvester terminal log presentation** — active implementation in [PR #1169](https://github.com/45s/coinzilla/pull/1169) on `fix/harvester/compact-terminal-log-presentation`. Restore compact strategy markers without `⚪ SYS`, identify Binance market-data connection state explicitly, render Portfolio Stats as a concise summary, keep pending client IDs and cancellation outcomes on the order line, and tighten lifecycle columns. Presentation-only; preserve structured DEBUG/TRACE evidence and all trading/order behavior. No exchange operations are part of this task.
+- [x] **Simplify Harvester terminal log presentation** — merged in [PR #1169](https://github.com/45s/coinzilla/pull/1169), merge commit `c66d83a8dcf1bdb19d4e5b571401aa854311b8f9`. Restored compact strategy markers without `⚪ SYS`, explicit Binance market-data connection wording, concise Portfolio Stats, pending client IDs and cancellation outcomes on their order lines, and compact lifecycle columns.
+- [~] **Complete the operator-facing portfolio summary** — follow-up in [PR #1184](https://github.com/45s/coinzilla/pull/1184). Render `Amount` (total coins), `Earned` (retained coins from completed cycles), `Spent` (current-cycle BUY cost), and `Net` (cumulative quote cash flow); retain every enabled symbol in the subscriptions-ready summary and remove a duplicate pending client-order-ID detail. Presentation-only; preserve structured DEBUG/TRACE evidence and all trading/order/accounting behavior. No exchange operations.
 
 ## P2 — External trading-pair configuration
 

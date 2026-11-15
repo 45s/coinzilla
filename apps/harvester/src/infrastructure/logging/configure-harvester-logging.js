@@ -69,9 +69,14 @@ function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
   const clientOrderId = !data.brokerOrderId && typeof data.clientOrderId === "string"
     ? data.clientOrderId
     : ""
-  const detail = typeof data.detail === "string" && data.detail.length > 0
+  const rawDetail = typeof data.detail === "string" && data.detail.length > 0
     ? data.detail.replace(/[\r\n]+/g, " ")
     : ""
+  const detail = rawDetail
+    .split(/\s*\|\s*/)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0 && segment !== `Client order ID: ${clientOrderId}`)
+    .join(" | ")
 
   return [
     time,
@@ -327,8 +332,10 @@ function createPortfolioStatsConsoleLine({ time, strategyPrefix, details } = {})
   const portfolioLine = [
     time,
     `${strategyPrefix}PORTFOLIO ${String(details.symbol ?? "-")}`,
-    "| Inventory:",
+    "| Amount:",
     String(details.inventory?.totalBaseQuantity ?? "-"),
+    "| Earned:",
+    String(details.inventory?.freeBaseQuantity ?? "-"),
     "| Spent:",
     String(details.accounting?.spent ?? "-"),
     "| Net:",

@@ -160,10 +160,18 @@ keep the console allowlist in sync with any new fields intended for INFO.
 ### Portfolio Stats
 
 Portfolio Stats remains a structured event in DEBUG/TRACE. The operator
-console renders only a compact summary: market symbol, total base inventory,
-quote spent, and quote net cash flow. It must not print nested inventory or
-accounting JSON, and the line must remain within the ordinary 200-character
-console budget. Example: `🪙 CG PORTFOLIO ZROUSDT | Inventory: 9.99 ZRO | Spent: 13.835 USDT | Net: -13.835 USDT`.
+console renders one compact summary with four values:
+
+- `Amount` — total base quantity: active trading inventory plus retained coins.
+- `Earned` — retained/free base quantity accumulated from completed recovery cycles.
+- `Spent` — BUY cost for the current recovery cycle. It resets to zero when that
+  cycle completes; it is not lifetime spend.
+- `Net` — cumulative quote net cash flow from confirmed BUY/SELL fills, including
+  applicable commissions. It is cash flow, not unrealized PnL.
+
+The line must not print nested inventory/accounting JSON and must remain within
+the ordinary 200-character console budget. Example:
+`🪙 CG PORTFOLIO DOGEUSDT | Amount: 3.4 DOGE | Earned: 3.4 DOGE | Spent: 0 USDT | Net: 0.02045485 USDT`.
 
 ### Startup connection summary
 
