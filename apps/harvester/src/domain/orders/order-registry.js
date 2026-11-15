@@ -1,6 +1,13 @@
 import { CanonicalOrder } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
 import { compareDecimal } from "@coinzilla/utils"
+import {
+  attachBrokerOrderIdToOwnership,
+  createOrderOwnership,
+  findOrderOwnership,
+  hasSameOrderOwnership,
+  validateOrderOwnerships,
+} from "./order-ownership.js"
 
 const ACTIVE_STATUSES = new Set(["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"])
 const TERMINAL_STATUSES = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED"])
@@ -25,48 +32,6 @@ function sameOrderIntent({ current, next }) {
 
 function sameOrderState({ current, next }) {
   return JSON.stringify(current.value) === JSON.stringify(next.value)
-}
-
-function normalizeOrderOwnership({ ownership, clientOrderId, brokerOrderId } = {}) {
-  if (!ownership || typeof ownership !== "object" || Array.isArray(ownership)) {
-    throw new TypeError("Order ownership must be an object")
-  }
-  for (const field of ["strategyId", "positionId"]) {
-    if (typeof ownership[field] !== "string" || !ownership[field].trim()) {
-      throw new TypeError("Order ownership requires a non-empty " + field)
-    }
-  }
-  if (ownership.clientOrderId !== undefined && ownership.clientOrderId !== clientOrderId) {
-    throw new Error("Order ownership clientOrderId does not match its canonical order")
-  }
-  if (ownership.brokerOrderId !== undefined && ownership.brokerOrderId !== brokerOrderId) {
-    throw new Error("Order ownership brokerOrderId does not match its canonical order")
-  }
-  for (const field of ["purpose", "cycleId"]) {
-    if (ownership[field] !== undefined && ownership[field] !== null &&
-        (typeof ownership[field] !== "string" || !ownership[field].trim())) {
-      throw new TypeError("Order ownership " + field + " must be a non-empty string when provided")
-    }
-  }
-
-  return Object.freeze({
-    clientOrderId,
-    ...(brokerOrderId === undefined ? {} : { brokerOrderId }),
-    strategyId: ownership.strategyId.trim(),
-    positionId: ownership.positionId.trim(),
-    ...(typeof ownership.purpose === "string" ? { purpose: ownership.purpose.trim() } : {}),
-    ...(typeof ownership.cycleId === "string" ? { cycleId: ownership.cycleId.trim() } : {}),
-  })
-}
-
-function sameOrderOwnership({ current, next } = {}) {
-  return JSON.stringify(current) === JSON.stringify(next)
-}
-
-function attachBrokerOrderIdToOwnership({ ownerships, clientOrderId, brokerOrderId } = {}) {
-  return ownerships.map((ownership) => ownership.clientOrderId === clientOrderId
-    ? Object.freeze({ ...ownership, brokerOrderId })
-    : ownership)
 }
 
 function isStaleOrderUpdate({ current, next }) {
@@ -141,6 +106,38 @@ function validateOrderUpdate({ current, next }) {
   }
 }
 
+function findOrderUpdateIndex({ orders, order } = {}) {
+  const brokerIdIndex = order.brokerOrderId === undefined
+    ? -1
+    : orders.findIndex((item) => item.brokerOrderId === order.brokerOrderId)
+  const clientIdIndex = orders.findIndex((item) => item.clientOrderId === order.clientOrderId)
+  if (brokerIdIndex >= 0 && clientIdIndex >= 0 && brokerIdIndex !== clientIdIndex) {
+    throw new Error("Order update brokerOrderId and clientOrderId identify different registered orders")
+  }
+  return brokerIdIndex >= 0 ? brokerIdIndex : clientIdIndex
+}
+
+function createNextCanonicalOrder({ current, order } = {}) {
+  if (current.clientOrderId === order.clientOrderId) {
+    return order
+  }
+  return new CanonicalOrder({
+    clientOrderId: current.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    market: order.market,
+    side: order.side,
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: order.executedQuantity,
+    status: order.status,
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
+    updatedAt: order.updatedAt,
+    completedAt: order.completedAt,
+  })
+}
+
 /**
  * Immutable registry of Harvester-owned canonical orders and their application-owned attribution.
  *
@@ -155,9 +152,6 @@ export class OrderRegistry {
     if (!Array.isArray(orders) || orders.some((order) => !(order instanceof CanonicalOrder))) {
       throw new TypeError("OrderRegistry.orders must contain CanonicalOrder values")
     }
-    if (!Array.isArray(ownerships)) {
-      throw new TypeError("OrderRegistry.ownerships must be an array")
-    }
     const clientOrderIds = orders.map((order) => order.clientOrderId)
     const brokerOrderIds = orders
       .map((order) => order.brokerOrderId)
@@ -169,31 +163,8 @@ export class OrderRegistry {
       throw new TypeError("OrderRegistry cannot contain duplicate brokerOrderIds")
     }
 
-    const normalizedOwnerships = ownerships.map((ownership) => {
-      const order = orders.find((item) => item.clientOrderId === ownership?.clientOrderId)
-      if (!order) {
-        throw new Error("Order ownership must reference a registered canonical order")
-      }
-      const normalized = normalizeOrderOwnership({
-        ownership,
-        clientOrderId: order.clientOrderId,
-        brokerOrderId: order.brokerOrderId,
-      })
-      return normalized
-    })
-    const ownershipClientOrderIds = normalizedOwnerships.map((ownership) => ownership.clientOrderId)
-    const ownershipBrokerOrderIds = normalizedOwnerships
-      .map((ownership) => ownership.brokerOrderId)
-      .filter((id) => id !== undefined)
-    if (new Set(ownershipClientOrderIds).size !== ownershipClientOrderIds.length) {
-      throw new TypeError("OrderRegistry cannot contain duplicate ownership clientOrderIds")
-    }
-    if (new Set(ownershipBrokerOrderIds).size !== ownershipBrokerOrderIds.length) {
-      throw new TypeError("OrderRegistry cannot contain duplicate ownership brokerOrderIds")
-    }
-
     this.#orders = Object.freeze([...orders])
-    this.#ownerships = Object.freeze(normalizedOwnerships)
+    this.#ownerships = validateOrderOwnerships({ orders, ownerships })
     Object.freeze(this)
   }
 
@@ -215,27 +186,11 @@ export class OrderRegistry {
   }
 
   getOwnership({ clientOrderId, brokerOrderId } = {}) {
-    if (clientOrderId === undefined && brokerOrderId === undefined) {
-      throw new TypeError("OrderRegistry.getOwnership requires clientOrderId or brokerOrderId")
-    }
-    if (clientOrderId !== undefined && (typeof clientOrderId !== "string" || !clientOrderId.trim())) {
-      throw new TypeError("OrderRegistry.getOwnership clientOrderId must be a non-empty string")
-    }
-    if (brokerOrderId !== undefined && (typeof brokerOrderId !== "string" || !brokerOrderId.trim())) {
-      throw new TypeError("OrderRegistry.getOwnership brokerOrderId must be a non-empty string")
-    }
-
-    const byClientOrderId = clientOrderId === undefined
-      ? undefined
-      : this.#ownerships.find((ownership) => ownership.clientOrderId === clientOrderId)
-    const byBrokerOrderId = brokerOrderId === undefined
-      ? undefined
-      : this.#ownerships.find((ownership) => ownership.brokerOrderId === brokerOrderId)
-    if (clientOrderId !== undefined && brokerOrderId !== undefined &&
-        byClientOrderId !== byBrokerOrderId) {
-      throw new Error("Order ownership clientOrderId and brokerOrderId identify different registered orders")
-    }
-    return byClientOrderId ?? byBrokerOrderId
+    return findOrderOwnership({
+      ownerships: this.#ownerships,
+      clientOrderId,
+      brokerOrderId,
+    })
   }
 
   getActiveOrders({ marketId } = {}) {
@@ -259,7 +214,7 @@ export class OrderRegistry {
     const existing = this.getOrder({ clientOrderId: order.clientOrderId })
     const nextOwnership = ownership === undefined
       ? undefined
-      : normalizeOrderOwnership({
+      : createOrderOwnership({
           ownership,
           clientOrderId: order.clientOrderId,
           brokerOrderId: order.brokerOrderId,
@@ -270,11 +225,11 @@ export class OrderRegistry {
       }
       const existingOwnership = this.getOwnership({ clientOrderId: order.clientOrderId })
       if (nextOwnership !== undefined &&
-          (!existingOwnership || !sameOrderOwnership({
+          (!existingOwnership || !hasSameOrderOwnership({
             current: existingOwnership,
             next: nextOwnership,
           }))) {
-        throw new Error("Conflicting order ownership reused clientOrderId " + order.clientOrderId)
+        throw new Error(`Conflicting order ownership reused clientOrderId ${order.clientOrderId}`)
       }
       return Object.freeze({ registry: this, applied: false, duplicate: true })
     }
@@ -348,7 +303,10 @@ export class OrderRegistry {
       )
       return toResult({
         data: {
-          registry: new OrderRegistry({ orders, ownerships: this.#ownerships }),
+          registry: new OrderRegistry({
+            orders,
+            ownerships: this.#ownerships,
+          }),
           order: unknownOrder,
           applied: true,
           duplicate: false,
@@ -394,7 +352,10 @@ export class OrderRegistry {
       )
       return toResult({
         data: {
-          registry: new OrderRegistry({ orders, ownerships: this.#ownerships }),
+          registry: new OrderRegistry({
+            orders,
+            ownerships: this.#ownerships,
+          }),
           order: unknownOrder,
           applied: true,
           duplicate: false,
@@ -454,7 +415,10 @@ export class OrderRegistry {
       brokerOrderId: order.brokerOrderId,
     })
     return Object.freeze({
-      registry: new OrderRegistry({ orders, ownerships }),
+      registry: new OrderRegistry({
+        orders,
+        ownerships,
+      }),
       applied: true,
       duplicate: false,
     })
@@ -464,25 +428,11 @@ export class OrderRegistry {
     if (!(order instanceof CanonicalOrder) || order.status === "PENDING") {
       throw new TypeError("OrderRegistry.applyUpdate requires a broker-acknowledged CanonicalOrder")
     }
-    // Match acknowledged exchange events by Binance's exchange-assigned order ID,
-    // exactly like Free-Roll's trackedOrderIds. Client order IDs are metadata and
-    // may differ in Binance cancel/replace execution reports (c versus C).
-    // UNKNOWN submissions can legitimately have no broker ID after a lost
-    // acknowledgement. Undefined is not an identity shared by all such orders:
-    // resolve those updates only by clientOrderId and compare broker IDs only
-    // when the incoming exchange report actually supplies one.
-    const brokerIdIndex = order.brokerOrderId === undefined
-      ? -1
-      : this.#orders.findIndex(
-          (item) => item.brokerOrderId === order.brokerOrderId,
-        )
-    const clientIdIndex = this.#orders.findIndex(
-      (item) => item.clientOrderId === order.clientOrderId,
-    )
-    if (brokerIdIndex >= 0 && clientIdIndex >= 0 && brokerIdIndex !== clientIdIndex) {
-      throw new Error("Order update brokerOrderId and clientOrderId identify different registered orders")
-    }
-    const index = brokerIdIndex >= 0 ? brokerIdIndex : clientIdIndex
+    // Match exchange events by broker identity, while retaining Harvester's original client ID.
+    const index = findOrderUpdateIndex({
+      orders: this.#orders,
+      order,
+    })
     if (index < 0) {
       return Object.freeze({
         registry: this,
@@ -499,27 +449,7 @@ export class OrderRegistry {
     ) {
       throw new Error("Canonical order update changed brokerOrderId")
     }
-
-    // Keep the locally submitted clientOrderId as the canonical identity.
-    // The raw Binance c/C values remain available on the event for diagnostics.
-    const nextOrder = current.clientOrderId === order.clientOrderId
-      ? order
-      : new CanonicalOrder({
-          clientOrderId: current.clientOrderId,
-          brokerOrderId: order.brokerOrderId,
-          market: order.market,
-          side: order.side,
-          type: order.type,
-          limitPrice: order.limitPrice,
-          originalQuantity: order.originalQuantity,
-          executedQuantity: order.executedQuantity,
-          status: order.status,
-          createdAt: order.createdAt,
-          acknowledgedAt: order.acknowledgedAt,
-          updatedAt: order.updatedAt,
-          completedAt: order.completedAt,
-        })
-
+    const nextOrder = createNextCanonicalOrder({ current, order })
     if (
       sameOrderIntent({ current, next: nextOrder }) &&
       (current.brokerOrderId === undefined || current.brokerOrderId === nextOrder.brokerOrderId) &&
@@ -555,7 +485,10 @@ export class OrderRegistry {
           brokerOrderId: nextOrder.brokerOrderId,
         })
     return Object.freeze({
-      registry: new OrderRegistry({ orders, ownerships }),
+      registry: new OrderRegistry({
+        orders,
+        ownerships,
+      }),
       applied: true,
       duplicate: false,
       stale: false,
