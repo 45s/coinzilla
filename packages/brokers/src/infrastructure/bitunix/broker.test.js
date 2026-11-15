@@ -86,6 +86,49 @@ test("Bitunix Spot broker fetches pending orders for one symbol", async () => {
   assert.deepEqual(calls[0].options.body, { symbol: "BTCUSDT" })
 })
 
+test("Bitunix Spot broker fetches canonical fills for a specific order", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      "/api/spot/v1/order/detail": {
+        orderId: "123",
+        symbol: "BTCUSDT",
+        side: "2",
+        type: "1",
+        status: "2",
+        volume: "0.5",
+        dealVolume: "0.5",
+        price: "10",
+        ctime: "2026-11-15T12:00:00Z",
+        utime: "2026-11-15T12:00:01Z",
+      },
+      "/api/spot/v1/common/coin_pair/list": [
+        { symbol: "BTCUSDT", base: "BTC", quote: "USDT", isOpen: "1" },
+      ],
+      "/api/spot/v1/order/deal/list": {
+        id: "trade-1",
+        volume: "0.5",
+        price: "10",
+        fee: "0.001",
+        feeCoin: "BTC",
+        role: "1",
+        ctime: "2026-11-15T12:00:01Z",
+      },
+    },
+  })
+
+  const result = await broker.getFills({ symbol: "BTCUSDT", orderId: "123" })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.length, 1)
+  assert.equal(result.data[0].tradeId, "trade-1")
+  assert.equal(result.data[0].brokerOrderId, "123")
+  assert.deepEqual(calls.map(({ path }) => path), [
+    "/api/spot/v1/order/detail",
+    "/api/spot/v1/common/coin_pair/list",
+    "/api/spot/v1/order/deal/list",
+  ])
+})
+
 test("Bitunix Spot broker never submits or cancels orders without safe identity and stream guarantees", async () => {
   const { broker, calls } = createBroker()
 
