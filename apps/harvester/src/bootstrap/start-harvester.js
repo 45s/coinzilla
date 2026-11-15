@@ -195,7 +195,13 @@ async function createHarvesterStartupContext({ options } = {}) {
     logger = defaultLogger,
     eventPublisher,
     onMarketPriceError = ({ symbol, error, errors }) => {
-      logger.error?.({ message: "Market price processing failed", strategyId: StrategyId.COIN_GRABBER, symbol, error, errors })
+      logger.error?.({
+        message: "Market price processing failed",
+        strategyId: StrategyId.COIN_GRABBER,
+        symbol,
+        error,
+        errors,
+      })
     },
     onUserDataEvent = async () => {},
     onUserDataStatus = () => {},
