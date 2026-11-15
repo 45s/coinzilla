@@ -29,6 +29,7 @@ test("Bitunix REST client signs authenticated requests and unwraps successful da
   assert.equal(captured.options.headers["api-key"], "api-key")
   assert.equal(captured.options.headers.timestamp, "1700000000000")
   assert.equal(captured.options.headers.sign, "20fbd51d82ca634dfd00238d8e56ed67c355290378c465629cdf8c08530c9700")
+  assert.ok(captured.options.signal instanceof AbortSignal)
   assert.equal(result.data, "10000.00")
 })
 
@@ -69,4 +70,12 @@ test("Bitunix REST client rejects exchange errors and malformed responses", asyn
   await assert.rejects(client.request("GET", "/api/spot/v1/market/last_price", {
     queryParams: { symbol: "INVALID" },
   }), /invalid symbol/i)
+})
+
+test("Bitunix REST client validates request timeout", () => {
+  assert.throws(() => new BitunixRestClient({
+    apiKey: "key",
+    apiSecret: "secret",
+    requestTimeout: 0,
+  }), /requestTimeout/i)
 })
