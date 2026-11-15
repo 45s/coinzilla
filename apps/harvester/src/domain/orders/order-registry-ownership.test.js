@@ -141,6 +141,19 @@ test("preserves order ownership when Binance reports a different client ID for a
   assert.equal(updated.registry.getOrder({ clientOrderId: pendingOrder.clientOrderId }).executedQuantity.amount, "4", "The partial execution must update only the matched canonical order.")
 })
 
+test("does not infer strategy ownership from a Harvester-looking client ID", () => {
+  const pendingOrder = makeOrder({
+    clientOrderId: "h-RS_recoverySeller-ZROUSDT-1",
+  })
+  const registry = OrderRegistry.empty().registerPending({
+    order: pendingOrder,
+  }).registry
+
+  assert.equal(registry.getOwnership({
+    clientOrderId: pendingOrder.clientOrderId,
+  }), undefined, "A reserved client-ID prefix is only a correlation identity and must never imply strategy or Position ownership.")
+})
+
 test("rejects conflicting ownership when a client order identity is reused", () => {
   const pendingOrder = makeOrder({
     clientOrderId: "h-rs-owner-conflict",
