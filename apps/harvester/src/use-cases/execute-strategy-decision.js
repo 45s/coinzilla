@@ -222,7 +222,12 @@ async function preparePendingSubmission({ context, candidate } = {}) {
       registered: false,
       ...initialDeferral,
     })
-    return toResult({ data: { deferred: true, ...initialDeferral } })
+    return toResult({
+      data: {
+        deferred: true,
+        ...initialDeferral,
+      },
+    })
   }
   const pendingResult = context.onPendingOrder({
     order: pendingOrder,
@@ -254,7 +259,12 @@ async function preparePendingSubmission({ context, candidate } = {}) {
       registered: true,
       ...dispatchDeferral,
     })
-    return toResult({ data: { deferred: true, ...dispatchDeferral } })
+    return toResult({
+      data: {
+        deferred: true,
+        ...dispatchDeferral,
+      },
+    })
   }
   if (context.onDurableSubmissionIntent) {
     let durableIntent
@@ -292,10 +302,16 @@ function classifyBrokerSubmissionFailure({ pendingOrder, brokerResult } = {}) {
     submissionError?.code === "POST_ONLY_WOULD_TAKE"
   const definiteFilterRejection = submissionError?.code === "DEFINITE_EXCHANGE_FILTER_REJECTED" &&
     submissionError?.outcomeUnknown !== true
-  const outcome = definitePostOnlyRejection || definiteFilterRejection
-    ? "REJECTED"
-    : brokerResult?.ok ? "UNKNOWN" : "REJECTED_OR_UNKNOWN"
-  return { errors, outcome }
+  let outcome = "REJECTED_OR_UNKNOWN"
+  if (definitePostOnlyRejection || definiteFilterRejection) {
+    outcome = "REJECTED"
+  } else if (brokerResult?.ok) {
+    outcome = "UNKNOWN"
+  }
+  return {
+    errors,
+    outcome,
+  }
 }
 
 async function handleBrokerPlacementException({ context, pendingOrder, purpose, error } = {}) {
@@ -463,7 +479,7 @@ async function executeStrategyDecision({ context, decision, marketMetadata } = {
       decision,
       marketMetadata,
     })
-    return executePendingOrders({ context, pendingOrders })
+    return await executePendingOrders({ context, pendingOrders })
   } catch (error) {
     return toResult({ error })
   }
