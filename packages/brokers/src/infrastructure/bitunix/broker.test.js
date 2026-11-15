@@ -41,6 +41,9 @@ test("Bitunix Spot broker loads canonical Spot markets", async () => {
         { base: "ETH",
           quote: "USDT",
           isOpen: "1" },
+        { base: "OLD",
+          quote: "USDT",
+          isOpen: "0" },
       ],
     },
   })
@@ -210,6 +213,7 @@ test("Bitunix Spot broker exposes symbol metadata, price, order detail and histo
     limit: 25 })
 
   assert.equal(metadata.data.basePrecision, 8)
+  assert.equal(metadata.data.symbol, "BTCUSDT")
   assert.equal(price.data.symbol, "BTCUSDT")
   assert.equal(price.data.price, "10.25")
   assert.equal(detail.data.id, "123")
