@@ -5,8 +5,12 @@ import { adaptBalances } from "./adapt-balances.js"
 
 test("adapts Bitunix Spot account rows to exact canonical balances", () => {
   const balances = adaptBalances([
-    { coin: "BTC", balance: "0.01000000", balanceLocked: "0.00200000" },
-    { coin: "USDT", balance: "125.50", balanceLocked: "0" },
+    { coin: "BTC",
+      balance: "0.01000000",
+      balanceLocked: "0.00200000" },
+    { coin: "USDT",
+      balance: "125.50",
+      balanceLocked: "0" },
   ])
 
   assert.equal(balances.length, 2)
@@ -19,15 +23,24 @@ test("adapts Bitunix Spot account rows to exact canonical balances", () => {
 
 test("rejects malformed, imprecise, negative and duplicate Bitunix balance rows", () => {
   assert.throws(() => adaptBalances({}))
-  assert.throws(() => adaptBalances([{ coin: "BTC", balance: "1" }]))
+  assert.throws(() => adaptBalances([{ coin: "BTC",
+    balance: "1" }]))
   assert.throws(() => adaptBalances([
-    { coin: "BTC", balance: 0.1, balanceLocked: "0" },
+    { coin: "BTC",
+      balance: 0.1,
+      balanceLocked: "0" },
   ]), /precision-preserving/i)
   assert.throws(() => adaptBalances([
-    { coin: "BTC", balance: "-1", balanceLocked: "0" },
+    { coin: "BTC",
+      balance: "-1",
+      balanceLocked: "0" },
   ]), /non-negative/i)
   assert.throws(() => adaptBalances([
-    { coin: "BTC", balance: "1", balanceLocked: "0" },
-    { coin: "btc", balance: "2", balanceLocked: "0" },
+    { coin: "BTC",
+      balance: "1",
+      balanceLocked: "0" },
+    { coin: "btc",
+      balance: "2",
+      balanceLocked: "0" },
   ]))
 })
