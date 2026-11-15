@@ -115,7 +115,7 @@ It must reference canonical Fill IDs and retain fill-facts fingerprints. A singl
 
 The current Portfolio is fill-driven and has no general opening-balance/manual-inventory seeding operation. A SELL containing legacy units not represented in an appropriately owned Position could make that Position's base quantity inconsistent or negative if applied through the existing accounting path unchanged. Multiple Positions do not remove this opening-inventory accounting blocker.
 
-Therefore, **RS must not submit a SELL consuming legacy inventory until an owner-approved accounting design represents that authorized opening inventory consistently within the shared multi-Position Portfolio and exact-once fill accounting.** An RS attribution ledger alone does not create a sellable Portfolio balance or authorize an oversell.
+Therefore, **RS must not submit a SELL consuming legacy inventory until a safe accounting design represents that authorized opening inventory consistently within the shared multi-Position Portfolio and exact-once fill accounting.** An RS attribution ledger alone does not create a sellable Portfolio balance or authorize an oversell.
 
 **Implementation requirement (not an owner question):** represent the manually configured legacy opening inventory and its historical basis within the appropriate RS-owned accounting model and shared Portfolio without synthetic fills, unverified wallet seeding, duplicate custody, or bypassing Portfolio. The operator fills `legacyPosition.invested` and `legacyPosition.quantity` manually before application startup; RS calculates average cost. Actual Spot holdings and off-Spot custody remain separately verified facts. The implementation must define a safe opening-inventory accounting boundary while preserving exact-once canonical fill accounting.
 
@@ -225,8 +225,8 @@ Advanced RS lifecycle functionality is deliberately deferred under FITDIB (first
 
 - The operator's stop of RS and any normal readiness, investment-limit, order-safety, or reconciliation block prevent new BUYs. Exhaustion of authorized legacy inventory alone does not pause RS: subsequent cycles continue as recovery-only BUY/SELL cycles, subject to the recovery `minProfit` gate and all normal risk, order, and reconciliation controls. Reaching the configured investment limit blocks new BUYs but does not cancel, replace, or reprice an already-open recovery SELL; keep it alive and reconcile until filled/terminal.
 - The first implementation must not cancel, replace, abandon, or market-sell resting orders or inventory as a side effect of the operator stopping RS or a safety block.
-- Existing orders may fill after pause/disable; fills and commissions continue through canonical accounting and reconciliation.
-- In-flight/unknown orders remain owned and reconcilable by their original identities; disable does not erase ownership or reservations.
+- Existing orders may fill after the operator stops RS or a safety block prevents new BUYs; fills and commissions continue through canonical accounting and reconciliation.
+- In-flight/unknown orders remain owned and reconcilable by their original identities; stopping RS does not erase ownership or reservations.
 - Advanced resume/restart lifecycle semantics are deferred; no new order may be created while existing orders, fills, reservations, authorization, accounting, or risk state are unresolved.
 - No abandon operation or automatic final liquidation is part of the first implementation.
 - No automatic loss-making liquidation is permitted as a disable, pause, abandon, or strategy-switch side effect.
@@ -274,7 +274,7 @@ The first-implementation product decisions below are recorded. Items marked as i
 
 ## 13. Required test contract before implementation
 
-No executable RS tests are added in this documentation-only phase. Future implementation must add deterministic offline tests for:
+No executable RS tests are added in this RS contract update; RS remains non-executable. Future implementation must add deterministic offline tests for:
 
 - missing/invalid startup legacy configuration and insufficient verified Spot availability; runtime authorization revocation/expiry is deferred under FITDIB;
 - configured legacy invested quote / original quantity average-cost calculation, including invalid zero/negative/missing inputs;
@@ -283,6 +283,7 @@ No executable RS tests are added in this documentation-only phase. Future implem
 - the agreed additive `sellQuantity` calculation (actual net recovery quantity + configured legacy slice), smaller-remainder/final-residual behavior, and constrained-dust classification after successful reconciliation; prove retained bonus dust is permanently excluded from every later RS cycle;
 - one/multiple BUY tranches, open/partial/unknown BUYs, and each approved next-BUY boundary;
 - base, quote, and third-asset commission accounting;
+- Opening-inventory declaration preserves operator-provided historical basis and provenance without changing verified Spot custody or canonical fill identities; SELL consumes only separately verified/allocated Spot quantity and explicitly attributed legacy quantity; missing or unverified custody fails closed;
 - Portfolio/RS attribution atomicity, identical duplicate fills, and conflicting fill identity;
 - active/in-flight SELL reservation conservation, partial fills, cancellation races, unknown outcomes, and reconciliation;
 - exact decimal precision and exchange-filter boundaries;
