@@ -3456,7 +3456,10 @@ async function reconcileOwnedOrdersTransition({ context, options }) {
 
 
 function publishSubmissionDeferral({ eventPublisher, order, reason } = {}) {
-  const dataResult = mapOrderSubmissionDeferredData({ order, reason })
+  const dataResult = mapOrderSubmissionDeferredData({
+    order,
+    reason,
+  })
   if (dataResult?.ok !== true) {
     publishLifecycleEvent({
       eventPublisher,

@@ -10633,13 +10633,19 @@ test("keeps local deferral processing non-blocking when best-effort Journal publ
   const reportedFailures = []
   const eventPublisher = {
     reportFailure: ({ event, error }) => {
-      reportedFailures.push({ eventName: event?.name, error })
+      reportedFailures.push({
+        eventName: event?.name,
+        error,
+      })
     },
     publish: (event) => {
       if (event.name === "order.submission_deferred") {
         const error = new Error("deferral evidence publication failed")
         eventPublisher.reportFailure({ event, error })
-        return { ok: false, errors: [error] }
+        return {
+          ok: false,
+          errors: [error],
+        }
       }
       journalEvents.push(event)
       return { ok: true }
