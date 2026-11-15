@@ -340,11 +340,12 @@ function createOrderCancellationEventPublishers({ eventPublisher, logger, state 
       })
     },
     publishOrderCancelFailed: ({ order, outcome, error }) => {
-      const lifecycleStatus = outcome === "NOT_SENT"
-        ? "CANCEL_NOT_SENT"
-        : ["UNCONFIRMED", "OUTCOME_UNKNOWN", "UNKNOWN"].includes(outcome)
-          ? "CANCEL_UNKNOWN"
-          : "CANCEL_FAILED"
+      let lifecycleStatus = "CANCEL_FAILED"
+      if (outcome === "NOT_SENT") {
+        lifecycleStatus = "CANCEL_NOT_SENT"
+      } else if (["UNCONFIRMED", "OUTCOME_UNKNOWN", "UNKNOWN"].includes(outcome)) {
+        lifecycleStatus = "CANCEL_UNKNOWN"
+      }
       const ownership = state?.registry?.getOwnership?.({
         clientOrderId: order.clientOrderId,
       })
@@ -1084,7 +1085,11 @@ function createConservativeEngineCancellationContext({ context } = {}) {
     const result = validateCancellationEligibility({ order })
     if (result.ok) {return result}
     const error = result.errors[0]
-    context.publishOrderCancelFailed({ order, outcome: "INVALID_CANCELLATION_REQUEST", error })
+    context.publishOrderCancelFailed({
+      order,
+      outcome: "INVALID_CANCELLATION_REQUEST",
+      error,
+    })
     if (pauseOnFailure) {await context.pause({ symbol, reason, error })}
     return result
   }
