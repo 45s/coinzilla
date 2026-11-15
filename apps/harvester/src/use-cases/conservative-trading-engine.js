@@ -20,6 +20,7 @@ import {
   mapOrderCancelledData,
   mapOrderCancellationRequestedData,
   mapOrderSubmissionFailedData,
+  mapOrderSubmissionDeferredData,
   mapOrderSubmissionRequestedData,
   mapOrderSubmittedData,
   mapRecoveryCycleCompletedData,
@@ -569,8 +570,13 @@ function createSubmissionLifecycleCallbacks({
   reconcileFilledAcknowledgement,
 } = {}) {
   return {
-    onSubmissionDeferred: ({ order, registered } = {}) => {
+    onSubmissionDeferred: async ({ order, registered, reason } = {}) => {
       if (registered) {
+        publishSubmissionDeferral({
+          eventPublisher,
+          order,
+          reason: reason ?? "SUBMISSION_NOT_ALLOWED",
+        })
         const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
         if (!removal.removed) {
           throw new Error("Cannot remove a pending order deferred before broker submission")
@@ -3447,3 +3453,24 @@ async function reconcileOwnedOrdersTransition({ context, options }) {
 }
 
 /** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
+
+
+function publishSubmissionDeferral({ eventPublisher, order, reason } = {}) {
+  const dataResult = mapOrderSubmissionDeferredData({
+    order,
+    reason,
+  })
+  if (dataResult?.ok !== true) {
+    publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_DEFERRED,
+      dataResult,
+    })
+    throw dataResult?.errors?.[0] ?? new TypeError("Local submission deferral evidence is invalid")
+  }
+  return publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_DEFERRED,
+    dataResult,
+  })
+}

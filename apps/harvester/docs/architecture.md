@@ -603,20 +603,36 @@ are omitted. The decision DTO contains the strategy, market symbol, reference
 price, and allowlisted order intents.
 
 The order-request event is published after the local PENDING canonical order
-has been registered and immediately before broker I/O. The submitted event is
-published only after the broker returns a canonical acknowledgement with the
-matching client order ID and the local order registry accepts it. Rejected or
-unknown outcomes include only safe identifiers plus a sanitized error
-name/message. The current broker result contract reports failed results as
-`REJECTED_OR_UNKNOWN`; transport exceptions and acknowledgement-registration
-failures are `UNKNOWN`. Do not claim a definitive exchange rejection unless the
-broker port later exposes that distinction. Price and quantity remain exact decimal strings.
+has been registered and durably flushed immediately before broker I/O. If a
+local submission gate closes after that request is durable but before the
+broker call, Harvester publishes `order.submission_deferred` best-effort with
+the original client order ID, exact order facts and a bounded uppercase
+reason such as `MARKET_BOOK_STALE`. This is a terminal investigation marker,
+not another Journal durability barrier: the mandatory request flush remains
+the only blocking Journal operation in the submission path. Journal
+publication failure is reported as an evidence gap and does not block market
+processing or change the known local fact that broker I/O was not attempted.
+When present, Journal recovery retains the event in `deferredSubmissions`
+and does not restore it as an exchange order or reservation. If the event is
+missing, the durable request remains conservatively unresolved in offline
+projection and still requires reconciliation. The deferral is distinct from
+`order.submission_failed`: REJECTED/UNKNOWN continue to describe broker
+outcomes.
 
-These events are emitted through the existing best-effort publisher. The engine
-does not await subscriber delivery or Journal persistence, and publication
-failure cannot prevent broker submission. Pair pause and trailing BUY
-cancellation events are Step 5b; recovery SELL cancellation is Step 5c.
-Execution and accounting facts remain Step 6.
+The submitted event is published only after the broker returns a canonical
+acknowledgement with the matching client order ID and the local order registry
+accepts it. Rejected or unknown outcomes include only safe identifiers plus a
+sanitized error name/message. The current broker result contract reports failed
+results as `REJECTED_OR_UNKNOWN`; transport exceptions and
+acknowledgement-registration failures are `UNKNOWN`. Do not claim a
+definitive exchange rejection unless the broker port later exposes that
+distinction. Price and quantity remain exact decimal strings.
+
+Strategy-decision, acknowledgement/failure diagnostics, pause and trailing BUY
+cancellation telemetry remain best-effort; they do not replace the durable
+request/deferral barriers. Pair pause and trailing BUY cancellation events are
+Step 5b; recovery SELL cancellation is Step 5c. Execution and accounting facts
+remain Step 6.
 
 ### Strategy pause and order cancellation events
 

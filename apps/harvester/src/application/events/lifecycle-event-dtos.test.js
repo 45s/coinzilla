@@ -19,6 +19,7 @@ import {
   mapHarvesterStartupFailedData,
   mapHarvesterStoppedData,
   mapOrderSubmissionFailedData,
+  mapOrderSubmissionDeferredData,
   mapOrderCancelFailedData,
   mapOrderCancelledData,
   mapOrderCancellationRequestedData,
@@ -63,6 +64,7 @@ test("exports stable names and source for the initial operational lifecycle cont
     BROKER_EXECUTION_REPORT: "broker.execution_report",
     ORDER_UPDATED: "order.updated",
     ORDER_SUBMISSION_REQUESTED: "order.submission_requested",
+    ORDER_SUBMISSION_DEFERRED: "order.submission_deferred",
     ORDER_SUBMITTED: "order.submitted",
     ORDER_CANCELLATION_REQUESTED: "order.cancel_requested",
     ORDER_SUBMISSION_FAILED: "order.submission_failed",
@@ -387,6 +389,31 @@ test("maps order request and acknowledgement without leaking extra order propert
       status: "OPEN",
     },
   })
+})
+
+test("maps local submission deferrals with a bounded reason and exact client-order identity", () => {
+  const result = mapOrderSubmissionDeferredData({
+    order: canonicalOrderFacts,
+    reason: "MARKET_BOOK_STALE",
+    details: { apiKey: "must-not-be-copied" },
+  })
+
+  assert.deepEqual(result, {
+    ok: true,
+    data: {
+      clientOrderId: "h-DOGEUSDT-1",
+      symbol: "DOGEUSDT",
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "99.9500",
+      quantity: "1.00",
+      reason: "MARKET_BOOK_STALE",
+    },
+  })
+  assert.equal(mapOrderSubmissionDeferredData({
+    order: canonicalOrderFacts,
+    reason: "raw broker error with unbounded diagnostics",
+  }).ok, false)
 })
 
 test("maps rejected and unknown order outcomes with sanitized errors only", () => {

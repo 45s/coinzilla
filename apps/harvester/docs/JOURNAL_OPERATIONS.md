@@ -102,6 +102,7 @@ Every mapper must follow the temporary payload constraint in [Journal Evidence C
 | `broker.subscription_failed` | `broker`, `stream`, optional `market`, sanitized `error` |
 | `strategy.decision` | `strategy`, `symbol`, `referencePrice`, actionable `actions` (side/type/price/quantity/optional reason) |
 | `order.submission_requested` | client order ID, symbol, side, type, exact price/quantity, status; durably flushed before the broker placement call |
+| `order.submission_deferred` | original client order ID and order facts plus a bounded local reason; best-effort terminal evidence when a registered request is deferred before broker I/O |
 | `order.submitted` | submission facts plus broker order ID and acknowledged status |
 | `order.submission_failed` | client order ID, symbol, side, outcome, optional sanitized error |
 | `strategy.paused` | `symbol`, `reason`, optional sanitized `error` |

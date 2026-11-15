@@ -3,7 +3,7 @@ import test from "node:test"
 import { Asset, Balance, CanonicalOrder, Commission, Fill, Market, Money, Order, Quantity } from "@coinzilla/entities"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
-import { projectHarvesterJournalRecovery } from "../infrastructure/journal/project-harvester-journal-recovery.js"
+import { projectHarvesterJournalRecovery } from "../infrastructure/journal/project-harvester-journal-recovery-with-deferrals.js"
 import { restoreHarvesterJournalState } from "./restore-harvester-journal-state.js"
 import { auditRecoveredAccountState } from "./audit-recovered-account-state.js"
 
