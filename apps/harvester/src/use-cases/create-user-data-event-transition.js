@@ -677,17 +677,17 @@ async function processUserDataEventTransition({
       symbol,
       recoveryMode })
     if (recoveryGuard) {return recoveryGuard}
-    const fillResult = await reconcileEventFills({ dependencies,
-      order,
-      event,
-      terminalFillsReconciled })
-    if (fillResult) {return fillResult}
     const duplicateResult = await handleDuplicateOrStaleUpdate({ dependencies,
       order,
       symbol,
       update,
       recoveryMode })
     if (duplicateResult) {return duplicateResult}
+    const fillResult = await reconcileEventFills({ dependencies,
+      order,
+      event,
+      terminalFillsReconciled })
+    if (fillResult) {return fillResult}
     if (update.applied === true) {
       const reconciledOrder = getRegisteredOrder({
         registry: state.registry,
