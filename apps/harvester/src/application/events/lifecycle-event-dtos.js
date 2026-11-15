@@ -411,19 +411,6 @@ export const mapOrderSubmissionRequestedData = (input = {}) =>
     status: requireString({ value: order.status, field: "order.status" }),
   }))
 
-/** Map a local pre-broker deferral without retaining raw gate diagnostics. */
-export const mapOrderSubmissionDeferredData = (input = {}) =>
-  mapData(input, "Order-submission-deferred event mapping", ({ order, reason }) => {
-    const boundedReason = requireString({ value: reason, field: "reason" })
-    if (!/^[A-Z][A-Z0-9_]{0,63}$/.test(boundedReason)) {
-      throw new TypeError("reason must be a bounded uppercase deferral code")
-    }
-    return {
-      ...requireOrderFacts({ order }),
-      reason: boundedReason,
-    }
-  })
-
 /** Map only a broker-acknowledged canonical order. */
 export const mapOrderSubmittedData = (input = {}) =>
   mapData(input, "Order-submitted event mapping", ({ order }) => ({
@@ -964,5 +951,18 @@ export const mapMarketTradingRulesCapturedData = (input = {}) =>
           asset: requireString({ value: constraint.value.asset?.code, field: "constraints[" + index + "].asset" }),
         }),
       })),
+    }
+  })
+
+/** Map a local pre-broker deferral without retaining raw gate diagnostics. */
+export const mapOrderSubmissionDeferredData = (input = {}) =>
+  mapData(input, "Order-submission-deferred event mapping", ({ order, reason }) => {
+    const boundedReason = requireString({ value: reason, field: "reason" })
+    if (!/^[A-Z][A-Z0-9_]{0,63}$/.test(boundedReason)) {
+      throw new TypeError("reason must be a bounded uppercase deferral code")
+    }
+    return {
+      ...requireOrderFacts({ order }),
+      reason: boundedReason,
     }
   })

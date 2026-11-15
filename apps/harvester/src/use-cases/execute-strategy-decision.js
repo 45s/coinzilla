@@ -125,7 +125,12 @@ export function makeExecuteStrategyDecision({
     reason = "DURABLE_SUBMISSION_INTENT_NOT_COMMITTED",
   }) => {
     try {
-      await onSubmissionDeferred({ order, purpose, registered: true, reason })
+      await onSubmissionDeferred({
+        order,
+        purpose,
+        registered: true,
+        reason,
+      })
       return toResult({ errors })
     } catch (error) {
       return toResult({ errors: [...errors, error] })

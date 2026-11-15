@@ -572,17 +572,11 @@ function createSubmissionLifecycleCallbacks({
   return {
     onSubmissionDeferred: async ({ order, registered, reason } = {}) => {
       if (registered) {
-        const persisted = await publishDurableIntent({
-          eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_DEFERRED,
-          dataResult: mapOrderSubmissionDeferredData({
-            order,
-            reason: reason ?? "SUBMISSION_NOT_ALLOWED",
-          }),
+        await persistSubmissionDeferral({
+          publishDurableIntent,
+          order,
+          reason: reason ?? "SUBMISSION_NOT_ALLOWED",
         })
-        if (persisted?.ok !== true || persisted.data?.durable !== true) {
-          throw persisted?.errors?.[0] ??
-            new Error("Local submission deferral was not durably journaled")
-        }
         const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
         if (!removal.removed) {
           throw new Error("Cannot remove a pending order deferred before broker submission")
@@ -3459,3 +3453,15 @@ async function reconcileOwnedOrdersTransition({ context, options }) {
 }
 
 /** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
+
+
+async function persistSubmissionDeferral({ publishDurableIntent, order, reason } = {}) {
+  const persisted = await publishDurableIntent({
+    eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_DEFERRED,
+    dataResult: mapOrderSubmissionDeferredData({ order, reason }),
+  })
+  if (persisted?.ok !== true || persisted.data?.durable !== true) {
+    throw persisted?.errors?.[0] ??
+      new Error("Local submission deferral was not durably journaled")
+  }
+}
