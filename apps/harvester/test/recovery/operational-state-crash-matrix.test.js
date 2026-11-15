@@ -26,7 +26,7 @@ const appConfig = {
   strategies: {
     conservative: {
       pairs: {
-        BTCUSDT: { keepQuantity: 0.01, minProfit: 0.01 },
+        BTCUSDT: { enabled: true, keepQuantity: 0.01, minProfit: 0.01 },
       },
     },
   },
@@ -190,18 +190,21 @@ test("reopens the real append-only ledger after intent, acknowledgement, and fil
   assert.equal(afterFill.data.requiresExchangeReconciliation, true)
 })
 
-test("reopens a NOT_COMPLETED recovery SELL with exact cycle evidence and sticky safety state", async (t) => {
-  const directory = await createDirectory(t)
-  const store = createStore(directory)
-  await initializeProcess(store)
-
+async function recordNotCompletedRecoveryCycle({ store } = {}) {
   const buyOrder = await persistOrder({
-    store, clientOrderId: "crash-matrix-noncomplete-buy", side: "BUY",
-    quantity: "0.42", price: "95",
+    store,
+    clientOrderId: "crash-matrix-noncomplete-buy",
+    side: "BUY",
+    quantity: "0.42",
+    price: "95",
   })
   const sellOrder = await persistOrder({
-    store, clientOrderId: "crash-matrix-noncomplete-sell", side: "SELL",
-    quantity: "0.4", price: "100", purpose: "RECOVERY_SELL",
+    store,
+    clientOrderId: "crash-matrix-noncomplete-sell",
+    side: "SELL",
+    quantity: "0.4",
+    price: "100",
+    purpose: "RECOVERY_SELL",
   })
   const buyFill = makeFill({
     tradeId: "crash-matrix-noncomplete-buy-fill",
@@ -229,7 +232,10 @@ test("reopens a NOT_COMPLETED recovery SELL with exact cycle evidence and sticky
     .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const recoveryLedger = RecoveryLedger.empty({ market })
     .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
-    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({
+      fill: sellFill,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).ledger
   const position = portfolio.getPosition({ marketId: market.id })
   const evaluated = evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,
@@ -255,6 +261,14 @@ test("reopens a NOT_COMPLETED recovery SELL with exact cycle evidence and sticky
     minProfit: "0.01",
   })
   assert.equal(recorded.ok, true, recorded.errors?.map(({ message }) => message).join("; "))
+  return { recoveryLedger }
+}
+
+test("reopens a NOT_COMPLETED recovery SELL with exact cycle evidence and sticky safety state", async (t) => {
+  const directory = await createDirectory(t)
+  const store = createStore(directory)
+  await initializeProcess(store)
+  const { recoveryLedger } = await recordNotCompletedRecoveryCycle({ store })
 
   await recordStrategyMarketControl({
     operationalStateStore: store,
@@ -276,7 +290,7 @@ test("reopens a NOT_COMPLETED recovery SELL with exact cycle evidence and sticky
   assert.equal(recovered.data.recoveryCycleEvaluations.length, 1)
   assert.equal(recovered.data.recoveryCycleEvaluations[0].outcome, "CONTINUE_SELL_THROUGH")
   assert.ok(Number.isSafeInteger(recovered.data.recoveryCycleEvaluations[0].sequence), "Durable fact sequence must become a safe numeric replay sequence.")
-  assert.equal(recovered.data.recoveryCycleEvaluations[0].sellOrderClientId, sellOrder.clientOrderId)
+  assert.equal(recovered.data.recoveryCycleEvaluations[0].sellOrderClientId, "crash-matrix-noncomplete-sell")
   assert.deepEqual(recovered.data.recoveryCycleEvaluations[0].appliedFillIds, recoveryLedger.appliedFillIds)
   assert.deepEqual([...recovered.data.durablePausedMarkets], [market.symbol])
   assert.equal(recovered.data.stickySafetyBlockers.length, 1)
