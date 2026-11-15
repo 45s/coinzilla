@@ -14,7 +14,7 @@ import { failureResult, withFailure } from "./recovery-failure.js"
 
 
 async function prepareOrderEvent({ dependencies, event } = {}) {
-  const { state, eventPublisher, pairs, pause } = dependencies
+  const { state, eventPublisher, pairs, pause, onUnownedExternalOrderObserved } = dependencies
   if (event?.eventType === "executionReport" && event?.brokerEvidence) {
     publishLifecycleEvent({
       eventPublisher,
@@ -53,6 +53,34 @@ async function prepareOrderEvent({ dependencies, event } = {}) {
     if (!hasHarvesterIdentity && externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.IGNORE) {
       return { result: toResult({ data: { ignored: true,
         externalOrder: true } }) }
+    }
+    if (!hasHarvesterIdentity &&
+        externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK &&
+        typeof onUnownedExternalOrderObserved === "function") {
+      try {
+        // The callback installs a provisional same-symbol guard synchronously,
+        // then owns the asynchronous authoritative snapshot and durability barrier.
+        onUnownedExternalOrderObserved({ order })
+        return {
+          result: toResult({ data: {
+            ignored: true,
+            externalOrder: true,
+            externalOrderReconciliationPending: true,
+          } }),
+        }
+      } catch (error) {
+        await pause({ symbol,
+          reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+          error })
+        return {
+          result: failureResult({
+            error,
+            category: "OWNERSHIP_INTEGRITY",
+            stage: "EXTERNAL_ORDER_RECONCILIATION_REQUEST",
+            retryable: false,
+          }),
+        }
+      }
     }
     await pause({ symbol,
       reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT" })
