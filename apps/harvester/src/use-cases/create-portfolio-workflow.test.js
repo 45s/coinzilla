@@ -701,3 +701,31 @@ test("serializes recovery completion behind an in-flight durable fill", async ()
   assert.equal(finalPosition.freeBaseQuantity.amount, "0", "No retained inventory may be allocated from a cycle invalidated by the queued BUY fill.")
   assert.equal(workflow.getRecoveryLedger({ marketId: market.id }).buyCost, "195000", "The RecoveryLedger cost must stay aligned with Portfolio after the serialized BUY fill.")
 })
+
+
+test("marks every strategy evaluation and accounting diagnostic with Coin Grabber ownership", async () => {
+  const logs = []
+  const logger = {
+    debug: (entry) => logs.push(entry),
+    info: (entry) => logs.push(entry),
+    error: (entry) => logs.push(entry),
+  }
+  const workflow = createPortfolioWorkflow({
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger,
+  })
+
+  await workflow.updateTradingAccounting({
+    fill: createFill({
+      tradeId: "strategy-marker-fill",
+      quantity: "1",
+      quoteQuantity: "65000",
+    }),
+  })
+
+  assert.ok(logs.length >= 2, "A canonical fill must produce the expected structured accounting diagnostics.")
+  assert.ok(
+    logs.every((entry) => entry.strategyId === StrategyId.COIN_GRABBER),
+    "Every diagnostic emitted by the Coin Grabber Portfolio workflow must identify its canonical strategy owner.",
+  )
+})
