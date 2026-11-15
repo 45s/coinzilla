@@ -251,8 +251,11 @@ side, original quantity, and limit price. Text columns are left-aligned;
 quantity and price are right-aligned. The terminal uses a 24-hour local time
 and does not truncate order identity or decimal values.
 
-SUBMITTED is emitted after a canonical broker acknowledgement and its durable
-outcome have been received; ACCEPTED follows the canonical registry update.
+SUBMITTED is emitted after the durable submission-intent barrier and immediately
+before broker I/O; because the exchange order ID does not exist yet, the order
+column shows `#pending` and the detail line preserves the client order ID.
+ACCEPTED follows the canonical broker acknowledgement and registry update, and
+carries the exchange-assigned broker order ID.
 PARTIAL FILL and terminal states are logged only after canonical fill
 reconciliation. CANCEL REQUESTED is logged after the durable cancellation
 intent barrier and before the broker RPC. CANCELLED is logged only when the
