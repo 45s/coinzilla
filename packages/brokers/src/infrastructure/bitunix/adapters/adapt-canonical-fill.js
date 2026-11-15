@@ -6,7 +6,8 @@ function createAsset({ code }) {
     throw new TypeError("Bitunix Spot fill commission is missing feeCoin")
   }
   const normalizedCode = code.trim().toUpperCase()
-  return new Asset({ id: normalizedCode.toLowerCase(), code: normalizedCode })
+  return new Asset({ id: normalizedCode.toLowerCase(),
+    code: normalizedCode })
 }
 
 function commissionAsset({ code, market }) {
@@ -44,17 +45,21 @@ export function adaptCanonicalFill({ trade, side, market } = {}) {
     throw new TypeError("Bitunix Spot fill liquidity role is unsupported")
   }
 
-  const price = new Money({ amount: trade.price, asset: market.quoteAsset })
-  const quantity = new Quantity({ amount: trade.volume, asset: market.baseAsset })
+  const price = new Money({ amount: trade.price,
+    asset: market.quoteAsset })
+  const quantity = new Quantity({ amount: trade.volume,
+    asset: market.baseAsset })
   const quoteQuantity = new Money({
-    amount: multiplyDecimal({ left: price.amount, right: quantity.amount }),
+    amount: multiplyDecimal({ left: price.amount,
+      right: quantity.amount }),
     asset: market.quoteAsset,
   })
 
   const commissions = []
   let commissionStatus = "UNKNOWN"
   if (trade.fee !== undefined && trade.fee !== null) {
-    const fee = new Money({ amount: trade.fee, asset: market.quoteAsset })
+    const fee = new Money({ amount: trade.fee,
+      asset: market.quoteAsset })
     if (fee.amount.startsWith("-")) {
       throw new TypeError("Bitunix Spot fill commission must be non-negative")
     }
@@ -64,7 +69,8 @@ export function adaptCanonicalFill({ trade, side, market } = {}) {
       commissions.push(new Commission({
         amount: new Money({
           amount: fee.amount,
-          asset: commissionAsset({ code: trade.feeCoin, market }),
+          asset: commissionAsset({ code: trade.feeCoin,
+            market }),
         }),
       }))
       commissionStatus = "COMPLETE"
