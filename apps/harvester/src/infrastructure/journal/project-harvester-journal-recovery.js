@@ -6,6 +6,7 @@ const EVENT = Object.freeze({
   ACCOUNT_SNAPSHOT: "account.snapshot_captured",
   ACCOUNT_OPEN_ORDERS: "account.open_orders_captured",
   SUBMISSION_REQUESTED: "order.submission_requested",
+  SUBMISSION_DEFERRED: "order.submission_deferred",
   SUBMITTED: "order.submitted",
   SUBMISSION_FAILED: "order.submission_failed",
   CANCEL_REQUESTED: "order.cancel_requested",
@@ -22,6 +23,7 @@ const EVENT = Object.freeze({
 
 const ORDER_SIDES = new Set(["BUY", "SELL"])
 const SUBMISSION_OUTCOMES = new Set(["REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"])
+const SUBMISSION_DEFERRAL_REASON_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/
 const CANCEL_OUTCOMES = new Set(["ORDER_STATE_UNKNOWN", "UNCONFIRMED", "NOT_REGISTERED", "NOT_CANCELED"])
 
 // Explicitly non-authoritative telemetry/lifecycle diagnostics. Canonical order,
@@ -202,6 +204,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
     if (!Array.isArray(records)) throw new TypeError("Harvester Journal recovery records must be an array")
 
     const ordersByClientId = new Map()
+    const deferredSubmissions = []
     const clientIdByBrokerId = new Map()
     const fillsById = new Map()
     const tradeIdBySymbol = new Map()
@@ -218,6 +221,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
     const requireOrder = ({ clientOrderId, eventName }) => {
       const order = ordersByClientId.get(clientOrderId)
       if (!order) throw new Error(eventName + " references an unknown clientOrderId " + clientOrderId)
+      if (order.submissionOutcome === "DEFERRED") {
+        throw new Error(eventName + " references a locally deferred submission " + clientOrderId)
+      }
       return order
     }
 
@@ -277,6 +283,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
 
       if ([
         EVENT.SUBMISSION_REQUESTED,
+        EVENT.SUBMISSION_DEFERRED,
         EVENT.SUBMITTED,
         EVENT.SUBMISSION_FAILED,
         EVENT.CANCEL_REQUESTED,
@@ -493,6 +500,39 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         order.recoveryStatus = "UNKNOWN"
         order.requiresExchangeReconciliation = true
         clientIdByBrokerId.set(brokerOrderId, order.clientOrderId)
+        continue
+      }
+
+      if (name === EVENT.SUBMISSION_DEFERRED) {
+        const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
+        const order = requireOrder({ clientOrderId, eventName: name })
+        const intent = requireOrderIntent({ data })
+        assertSameIntent({ current: order, next: intent })
+        const reason = requireString({ value: data.reason, field: "reason" })
+        if (!SUBMISSION_DEFERRAL_REASON_PATTERN.test(reason)) {
+          throw new TypeError("Local submission deferral reason must be a bounded uppercase code")
+        }
+        if (order.submissionOutcome !== "PENDING" ||
+            order.brokerOrderId !== undefined ||
+            order.fillIds.length > 0 ||
+            order.cumulativeFillQuantity !== "0") {
+          throw new Error("Local submission deferral must close an untouched pending request before broker I/O")
+        }
+        order.submissionOutcome = "DEFERRED"
+        order.recoveryStatus = "DEFERRED"
+        order.exchangeStatusHint = "DEFERRED"
+        order.requiresExchangeReconciliation = false
+        deferredSubmissions.push(Object.freeze({
+          fileName,
+          sequence: currentSequence,
+          clientOrderId,
+          symbol: intent.symbol,
+          side: intent.side,
+          type: intent.type,
+          price: intent.price,
+          quantity: intent.quantity,
+          reason,
+        }))
         continue
       }
 
@@ -830,7 +870,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         !session.hasCompleteClosingSnapshot
       ),
     }))
-    const orders = [...ordersByClientId.values()].map((order) => Object.freeze({
+    const orders = [...ordersByClientId.values()]
+      .filter((order) => order.submissionOutcome !== "DEFERRED")
+      .map((order) => Object.freeze({
       ...order,
       fillIds: Object.freeze([...order.fillIds]),
       requiresFillHistoryReconciliation: order.cancellationExecutedQuantity !== undefined &&
@@ -847,6 +889,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
     return toResult({
       data: Object.freeze({
         orders: Object.freeze(orders),
+        deferredSubmissions: Object.freeze(deferredSubmissions),
         fills: Object.freeze(fills),
         recoveryCycles: Object.freeze(cycles.map((cycle) => Object.freeze({ ...cycle }))),
         recoveryCycleEvaluations: Object.freeze(recoveryCycleEvaluations),

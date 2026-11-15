@@ -586,6 +586,48 @@ test("rechecks external-order ownership after the durable order intent and recor
     "A local deferral must not be misclassified as a broker rejection or ambiguous outcome.")
 })
 
+test("retains a registered pending request when terminal deferral evidence cannot be durably flushed", async () => {
+  let hasExternalOrder = false
+  let flushCount = 0
+  const journalEvents = []
+  const harness = await createHarness({
+    appConfig: withExternalOrdersPolicy("block"),
+    hasUnownedOpenOrdersForSymbol: () => hasExternalOrder,
+    eventPublisher: {
+      publish: (event) => {
+        journalEvents.push(event)
+        return { ok: true }
+      },
+      flush: async () => {
+        flushCount += 1
+        if (flushCount === 1) {
+          hasExternalOrder = true
+          return { ok: true, durable: true }
+        }
+        return { ok: false, durable: false, errors: [new Error("deferral flush failed")] }
+      },
+    },
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  assert.equal(result.ok, false,
+    "A failed terminal deferral durability barrier must fail closed.")
+  assert.equal(harness.orders.length, 0,
+    "The broker placement port must remain untouched when the deferral event is not durable.")
+  assert.equal(harness.engine.getOrders().length, 1,
+    "The registered PENDING order must remain visible until its terminal outcome is durable.")
+  assert.ok(journalEvents.some((event) => event.name === "order.submission_requested"))
+  assert.ok(journalEvents.some((event) => event.name === "order.submission_deferred"))
+})
+
 test("subtracts only shared BUY commitments created after the account snapshot", async () => {
   const ethAsset = new Asset({
     id: "eth",

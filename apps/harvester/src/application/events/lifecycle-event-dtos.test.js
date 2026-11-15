@@ -64,6 +64,7 @@ test("exports stable names and source for the initial operational lifecycle cont
     BROKER_EXECUTION_REPORT: "broker.execution_report",
     ORDER_UPDATED: "order.updated",
     ORDER_SUBMISSION_REQUESTED: "order.submission_requested",
+    ORDER_SUBMISSION_DEFERRED: "order.submission_deferred",
     ORDER_SUBMITTED: "order.submitted",
     ORDER_CANCELLATION_REQUESTED: "order.cancel_requested",
     ORDER_SUBMISSION_FAILED: "order.submission_failed",
