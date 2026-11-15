@@ -106,19 +106,23 @@ test("formats console entries as one compact line while retaining structured fie
 })
 
 
-test("prints complete Portfolio Stats inventory and accounting in console output", () => {
+test("renders Portfolio Stats as a concise readable summary instead of JSON", () => {
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => {
     written += chunk.toString()
   })
-  const transport = createHarvesterConsoleTransport({ output })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   transport.write({
     timestamp: "2026-11-05T12:00:00.000Z",
     level: "info",
     data: {
       message: "Portfolio Stats",
+      strategyId: "CG_coinGrabber",
       symbol: "ZROFDUSD",
       inventory: {
         activeBaseQuantity: "25 ZRO",
@@ -126,24 +130,34 @@ test("prints complete Portfolio Stats inventory and accounting in console output
         totalBaseQuantity: "25.15 ZRO",
       },
       accounting: {
-        spent: "0 FDUSD",
-        quoteNetCashFlow: "0 FDUSD",
+        spent: "13.835 FDUSD",
+        quoteNetCashFlow: "-13.835 FDUSD",
       },
     },
   })
 
   const line = written.trim()
-  assert.match(line, /Portfolio Stats/)
-  assert.match(line, /"symbol":"ZROFDUSD"/)
-  assert.match(line, /"activeBaseQuantity":"25 ZRO"/)
-  assert.match(line, /"freeBaseQuantity":"0.15 ZRO"/)
-  assert.match(line, /"totalBaseQuantity":"25.15 ZRO"/)
-  assert.match(line, /"spent":"0 FDUSD"/)
-  assert.match(line, /"quoteNetCashFlow":"0 FDUSD"/)
-  assert.ok(line.length <= 360, "Portfolio Stats should remain a bounded single console line")
+  assert.match(
+    line,
+    /^12:00:00 🪙 CG PORTFOLIO/,
+    "Console timestamps must use the same compact 24-hour local-time format as order lifecycle records.",
+  )
+  assert.match(
+    line,
+    /🪙 CG PORTFOLIO ZROFDUSD \| Inventory: 25\.15 ZRO \| Spent: 13\.835 FDUSD \| Net: -13\.835 FDUSD/,
+    "The operator console must show the market, total inventory, spent quote and net quote flow in a readable compact Portfolio summary.",
+  )
+  assert.doesNotMatch(
+    line,
+    /\{|\}|activeBaseQuantity|freeBaseQuantity|totalBaseQuantity|quoteNetCashFlow/,
+    "Portfolio Stats must not expose nested JSON or internal field names in the operator-facing terminal.",
+  )
+  assert.ok(
+    line.length <= 200,
+    "The concise Portfolio summary must fit the ordinary terminal line budget.",
+  )
   output.destroy()
 })
-
 
 test("suppresses consecutive duplicate console entries and reports their count", () => {
   const output = new PassThrough()
@@ -607,7 +621,7 @@ test("retains the market symbol and source filter types in compact fatal console
   output.destroy()
 })
 
-test("aligns strategy, status, order ID and order facts in fixed-width lifecycle columns", () => {
+test("keeps strategy-owned order facts on compact single-space lifecycle lines", () => {
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => {
@@ -627,12 +641,11 @@ test("aligns strategy, status, order ID and order facts in fixed-width lifecycle
       orderLifecycle: true,
       strategyId: "CG_coinGrabber",
       lifecycleStatus: "SUBMITTED",
-      brokerOrderId: "1341114",
-      clientOrderId: "h-client-1",
-      symbol: "ADAUSDT",
-      side: "BUY",
-      quantity: "50.00",
-      price: "0.15260",
+      clientOrderId: "h-325e71ba16494aeb875e6e-3",
+      symbol: "ZROUSDT",
+      side: "SELL",
+      quantity: "4.98",
+      price: "1.393",
     },
   })
   transport.write({
@@ -643,38 +656,46 @@ test("aligns strategy, status, order ID and order facts in fixed-width lifecycle
       message: "Order lifecycle",
       orderLifecycle: true,
       strategyId: "RS_recoverySeller",
-      lifecycleStatus: "PARTIAL_FILL",
+      lifecycleStatus: "CANCELLED",
       brokerOrderId: "1341115",
       clientOrderId: "h-client-2",
       symbol: "ADAUSDT",
       side: "SELL",
       quantity: "49.90",
       price: "0.15410",
-      executedQuantity: "20",
-      remainingQuantity: "29.90",
-      detail: "Executed: 20 | Remaining: 29.90",
+      detail: "Executed: 20 | Cancelled: 29.90",
     },
   })
 
   const lines = written.trimEnd().split("\n")
-  assert.equal(lines.length, 3, "A partial fill must add one indented detail line.")
-  assert.match(lines[0], /^19:14:52 🪙 CG/, "Coin Grabber must retain its coin marker and spaced CG identity.")
-  assert.match(lines[1], /^19:14:53 🔴 RS/, "Recovery Seller must retain its red marker and spaced RS identity.")
-  const firstColumns = ["SUBMITTED", "#1341114", "ADAUSDT", "BUY", "50.00", "@", "0.15260"]
-    .map((value) => lines[0].indexOf(value))
-  const secondColumns = ["PARTIAL FILL", "#1341115", "ADAUSDT", "SELL", "49.90", "@", "0.15410"]
-    .map((value) => lines[1].indexOf(value))
-  assert.deepEqual(
-    firstColumns,
-    secondColumns,
-    "Status, order ID, symbol, side, quantity and price must begin in identical terminal columns.",
+  assert.equal(
+    lines.length,
+    2,
+    "A cancellation result and its exact executed/cancelled quantities must share one terminal line.",
   )
-  assert.match(lines[2], /^\s+Executed: 20 \| Remaining: 29\.90$/, "Partial-fill details must be indented below their order.")
+  assert.ok(
+    lines.every((line) => line.length < 130),
+    "Order lifecycle records must stay compact rather than reserving large fixed-width terminal columns.",
+  )
+  assert.equal(
+    lines[0],
+    "19:14:52 🪙 CG SUBMITTED #pending ZROUSDT SELL 4.98 @ 1.393 h-325e71ba16494aeb875e6e-3",
+    "A pending submission must use single-space columns and append its raw client order ID on the same line without a verbose label.",
+  )
+  assert.doesNotMatch(
+    lines[0],
+    /\\| Client:|Client order ID:/,
+    "The pending client ID must be printed without a space-consuming explanatory label.",
+  )
+  assert.equal(
+    lines[1],
+    "19:14:53 🔴 RS CANCELLED #1341115 ADAUSDT SELL 49.90 @ 0.15410 | Executed: 20 | Cancelled: 29.90",
+    "The cancellation line must use compact single-space columns and retain its exact cancellation outcome without a second detail line.",
+  )
   output.destroy()
 })
 
-
-test("marks strategy-specific standard console records with canonical strategy markers", () => {
+test("prints strategy markers with one separator and omits the decorative SYS marker", () => {
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => {
@@ -696,14 +717,27 @@ test("marks strategy-specific standard console records with canonical strategy m
   transport.write({
     timestamp: "2026-11-15T19:14:53",
     level: "info",
-    method: "info",
+    method: "system",
     data: {
-      message: "Recovery decision evaluated",
-      strategyId: "RS_recoverySeller",
+      message: "Connected; subscribed to 4 enabled market(s). Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness.",
     },
   })
-  assert.match(written, /🪙 CG Market price evaluated/)
-  assert.match(written, /🔴 RS Recovery decision evaluated/)
+
+  assert.match(
+    written,
+    /🪙 CG Market price evaluated/,
+    "Strategy-owned records must show the icon and strategy label separated by exactly one space.",
+  )
+  assert.match(
+    written,
+    /Binance market-data stream connected; active market subscriptions: 4\. Conservative TESTNET trading is enabled/,
+    "The console must name the Binance market-data stream and the active subscription count explicitly.",
+  )
+  assert.doesNotMatch(
+    written,
+    /⚪ SYS|🪙CG|🔴RS/,
+    "The console must not print the decorative SYS marker or concatenate strategy icons and labels.",
+  )
   output.destroy()
 })
 
@@ -736,3 +770,38 @@ test("does not suppress identical messages from different strategies", () => {
   assert.match(written, /🔴 RS Strategy transition evaluated/)
   output.destroy()
 })
+
+test("identifies the Binance market-data stream when trading is not enabled", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+
+  transport.write({
+    timestamp: "2026-11-15T19:14:54.000Z",
+    level: "info",
+    method: "system",
+    data: {
+      message: "Connected; Binance trading mode is TESTNET.",
+    },
+  })
+
+  assert.match(
+    written,
+    /Binance market-data stream connected; Binance trading mode is TESTNET\./,
+    "A connected read-only runtime must identify its market-data stream instead of reporting an unspecified Binance connection.",
+  )
+  assert.doesNotMatch(
+    written,
+    /user-data readiness|user-data stream ready/i,
+    "A market-data connection summary must not imply that user-data readiness has been established.",
+  )
+  transport.close()
+  output.destroy()
+})
+

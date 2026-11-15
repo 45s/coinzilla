@@ -169,7 +169,7 @@ test("suppresses only a genuinely identical consecutive shutdown phase transitio
     written.trimEnd().split("\n"),
     [
       `${expectedTime} shutdown phase MARKET_INTAKE_STOP STARTED`,
-      `${new Date(SHUTDOWN_PHASE_TEST_TIMESTAMP).toLocaleTimeString()} Previous identical log entry repeated 1 additional time(s)`,
+      `${expectedTime} Previous identical log entry repeated 1 additional time(s)`,
     ],
     "Consecutive identical phase/status summaries may be suppressed, but their repeat count must remain observable.",
   )
