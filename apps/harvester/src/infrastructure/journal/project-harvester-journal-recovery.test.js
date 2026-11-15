@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { Asset, CanonicalOrder, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
-import { projectHarvesterJournalRecovery } from "./project-harvester-journal-recovery.js"
+import { projectHarvesterJournalRecovery } from "./project-harvester-journal-recovery-with-deferrals.js"
 import { restoreHarvesterJournalState } from "../../use-cases/restore-harvester-journal-state.js"
 import {
   mapExecutionAccountingFailedData,
@@ -92,6 +92,75 @@ test("preserves a submission whose broker outcome was unknown", () => {
   assert.equal(result.data.orders[0].submissionOutcome, "REJECTED_OR_UNKNOWN")
   assert.equal(result.data.orders[0].recoveryStatus, "UNKNOWN")
   assert.equal(result.data.orders[0].requiresExchangeReconciliation, true)
+})
+
+test("closes a durable pending submission with local deferral evidence without creating an exchange order", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested(),
+      record("order.submission_deferred", {
+        clientOrderId: "h-BTCUSDT-1",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        reason: "MARKET_BOOK_STALE",
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.deepEqual(result.data.orders, [],
+    "A locally deferred request must not survive as a pending or exchange-reconcilable order.")
+  assert.deepEqual(result.data.deferredSubmissions, [{
+    fileName: "session.jsonl",
+    sequence: 1,
+    clientOrderId: "h-BTCUSDT-1",
+    symbol: "BTCUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    price: "100",
+    quantity: "1",
+    reason: "MARKET_BOOK_STALE",
+  }], "The projection must retain bounded terminal deferral evidence with the original client identity.")
+})
+
+test("rejects a local deferral after broker acknowledgement or with an unsafe reason", () => {
+  const acknowledged = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested(),
+      submitted(),
+      record("order.submission_deferred", {
+        clientOrderId: "h-BTCUSDT-1",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        reason: "MARKET_BOOK_STALE",
+      }),
+    ],
+  })
+  assert.equal(acknowledged.ok, false,
+    "A broker-acknowledged order cannot later be reclassified as a local pre-submission deferral.")
+
+  const unsafeReason = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested(),
+      record("order.submission_deferred", {
+        clientOrderId: "h-BTCUSDT-1",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        reason: "raw broker error apiKey=secret",
+      }),
+    ],
+  })
+  assert.equal(unsafeReason.ok, false,
+    "The replay projector must reject unbounded or secret-bearing deferral diagnostics.")
 })
 
 test("preserves a durable cancellation intent without assuming the exchange canceled the order", () => {

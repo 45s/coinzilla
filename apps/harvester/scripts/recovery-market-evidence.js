@@ -10,7 +10,7 @@ import {
 } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
 import { AccountSnapshot } from "../src/domain/account/account-snapshot.js"
-import { projectHarvesterJournalRecovery } from "../src/infrastructure/journal/project-harvester-journal-recovery.js"
+import { projectHarvesterJournalRecovery } from "../src/infrastructure/journal/project-harvester-journal-recovery-with-deferrals.js"
 import { restoreHarvesterJournalState } from "../src/use-cases/restore-harvester-journal-state.js"
 
 function requireObject({ value, field }) {

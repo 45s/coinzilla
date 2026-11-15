@@ -953,3 +953,19 @@ export const mapMarketTradingRulesCapturedData = (input = {}) =>
       })),
     }
   })
+
+/** Map a local pre-broker deferral without retaining raw gate diagnostics. */
+export const mapOrderSubmissionDeferredData = (input = {}) =>
+  mapData(input, "Order-submission-deferred event mapping", ({ order, reason }) => {
+    const boundedReason = requireString({
+      value: reason,
+      field: "reason",
+    })
+    if (!/^[A-Z][A-Z0-9_]{0,63}$/.test(boundedReason)) {
+      throw new TypeError("reason must be a bounded uppercase deferral code")
+    }
+    return {
+      ...requireOrderFacts({ order }),
+      reason: boundedReason,
+    }
+  })
