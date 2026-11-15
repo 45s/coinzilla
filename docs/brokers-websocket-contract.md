@@ -100,7 +100,7 @@ The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The curren
 | `getOrderHistory({ symbol, status?, side?, type?, startTime?, endTime?, page?, limit? })` | `POST /api/spot/v1/order/history/page` | Symbol required; no exact order-ID filter. Canonical statuses (`OPEN`, `FILLED`, `PARTIALLY_FILLED`, `CANCELED`, `PARTIALLY_FILLED_CANCELED`), sides (`BUY`, `SELL`) and types (`LIMIT`, `MARKET`) are translated to Bitunix numeric codes inside the adapter. |
 | `getOrder({ symbol, orderId })` | `GET /api/spot/v1/order/detail` | Response identity is validated. |
 | `getPrices({ symbol })` | `GET /api/spot/v1/market/last_price` | Request/response lookup only; maps the returned price string to `{ symbol, price }`. |
-| `getFills({ symbol, orderId })` | `POST /api/spot/v1/order/deal/list` | Per-order matching result. |
+| `getFills({ symbol, orderId })` | `POST /api/spot/v1/order/deal/list` | Normalizes the documented single matching-order object. The docs do not establish pagination or completeness for orders with multiple executions; this is not yet a proven complete execution-history contract. |
 
 Mutations and lifecycle-dependent methods are deliberately unavailable:
 
