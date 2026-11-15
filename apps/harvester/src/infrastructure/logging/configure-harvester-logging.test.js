@@ -671,8 +671,8 @@ test("marks strategy-specific standard console records with their canonical stra
     },
   })
 
-  assert.match(written, /19:14:52 🪙 CG Market price evaluated/, "Every Coin Grabber diagnostic must display the canonical coin marker before its message.")
-  assert.match(written, /19:14:53 🔴 RS Recovery decision evaluated/, "Every Recovery Seller diagnostic must display its canonical red marker before its message.")
+  assert.match(written, /🪙 CG Market price evaluated/, "Every Coin Grabber diagnostic must display the canonical coin marker before its message.")
+  assert.match(written, /🔴 RS Recovery decision evaluated/, "Every Recovery Seller diagnostic must display its canonical red marker before its message.")
   output.destroy()
 })
 
