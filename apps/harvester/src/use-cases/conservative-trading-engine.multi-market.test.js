@@ -49,38 +49,32 @@ function makeMarketMetadata(market) {
   }
 }
 
-async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio, initialState, strategyPolicy = conservativeStrategyPolicy, recoveryLedgersByMarket = new Map(), volatilityProtectionEnabled = false, externalOrdersPolicyBySymbol = {} } = {}) {
-  const orders = []
-  const pauses = []
-  const accountedFillIds = new Set()
-  const accountedFills = []
-  const portfolio = initialPortfolio ?? new Portfolio()
-  const metadataBySymbol = new Map(markets.map((market) => [
-    market.symbol,
-    makeMarketMetadata(market),
-  ]))
-  const appConfig = {
+function createHarnessAppConfig({ externalOrdersPolicyBySymbol = {} } = {}) {
+  return {
     strategies: {
       [StrategyId.COIN_GRABBER]: {
         enabled: true,
         settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
         pairs: Object.fromEntries(markets.map((market) => [market.symbol, {
-      enabled: true,
-      ...(externalOrdersPolicyBySymbol[market.symbol] === undefined
-        ? {}
-        : { externalOrdersPolicy: externalOrdersPolicyBySymbol[market.symbol] }),
-      investment: 1000,
-      orderQuantity: 1,
-      keepQuantity: 0.1,
-      minProfit: market.symbol === "DOGEUSDT" ? 0.1 : 0.01,
-      priceStepPercent: 0.05,
-      makerPercent: 0,
-      takerPercent: 0.075,
+          enabled: true,
+          ...(externalOrdersPolicyBySymbol[market.symbol] === undefined
+            ? {}
+            : { externalOrdersPolicy: externalOrdersPolicyBySymbol[market.symbol] }),
+          investment: 1000,
+          orderQuantity: 1,
+          keepQuantity: 0.1,
+          minProfit: market.symbol === "DOGEUSDT" ? 0.1 : 0.01,
+          priceStepPercent: 0.05,
+          makerPercent: 0,
+          takerPercent: 0.075,
         }])),
       },
     },
   }
-  const broker = {
+}
+
+function createHarnessBroker({ orders } = {}) {
+  return {
     placeOrder: async ({ order }) => {
       orders.push(order)
       const market = marketsBySymbol.get(order.symbol)
@@ -122,12 +116,30 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
     }),
     getFills: async () => ({ ok: true, data: [] }),
   }
-  const engine = makeConservativeTradingEngine({
+}
+
+function createHarnessEngine({
+  broker,
+  portfolio,
+  strategyPolicy,
+  appConfig,
+  recoveryLedgersByMarket,
+  metadataBySymbol,
+  quoteFreeBalance,
+  accountedFillIds,
+  accountedFills,
+  pauses,
+  volatilityProtectionEnabled,
+  onUnownedExternalOrderObserved,
+  initialState,
+} = {}) {
+  return makeConservativeTradingEngine({
     broker,
     strategyPolicy,
     appConfig,
     getPortfolio: () => portfolio,
-    getRecoveryLedger: ({ marketId }) => recoveryLedgersByMarket.get(marketId) ?? RecoveryLedger.empty({ market: marketsById.get(marketId) }),
+    getRecoveryLedger: ({ marketId }) =>
+      recoveryLedgersByMarket.get(marketId) ?? RecoveryLedger.empty({ market: marketsById.get(marketId) }),
     getMarketMetadata: ({ symbol }) => metadataBySymbol.get(symbol),
     getAccountSnapshot: () => ({
       getFreeBalance: ({ assetId }) => new Quantity({
@@ -153,6 +165,7 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
     canTrade: () => true,
     isMarketPriceFresh: () => true,
     isMarketBookFresh: () => true,
+    onUnownedExternalOrderObserved,
     isStopping: () => false,
     onPause: async ({ symbol, reason }) => pauses.push({ symbol, reason }),
     getVolatilityData: volatilityProtectionEnabled
@@ -160,18 +173,58 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
       : undefined,
     initialState,
   })
+}
 
+async function initializeHarnessBooks({ engine } = {}) {
   for (const market of markets) {
-    await engine.processBookTicker({ symbol: market.symbol, bookTicker: {
+    await engine.processBookTicker({
       symbol: market.symbol,
-      bestBidPrice: "0.01",
-      bestBidQuantity: "1",
-      bestAskPrice: "1000",
-      bestAskQuantity: "1",
-      timestamp: 1,
-    } })
+      bookTicker: {
+        symbol: market.symbol,
+        bestBidPrice: "0.01",
+        bestBidQuantity: "1",
+        bestAskPrice: "1000",
+        bestAskQuantity: "1",
+        timestamp: 1,
+      },
+    })
   }
+}
 
+async function createHarness({
+  quoteFreeBalance = "10000",
+  portfolio: initialPortfolio,
+  initialState,
+  strategyPolicy = conservativeStrategyPolicy,
+  recoveryLedgersByMarket = new Map(),
+  volatilityProtectionEnabled = false,
+  externalOrdersPolicyBySymbol = {},
+  onUnownedExternalOrderObserved,
+} = {}) {
+  const orders = []
+  const pauses = []
+  const accountedFillIds = new Set()
+  const accountedFills = []
+  const portfolio = initialPortfolio ?? new Portfolio()
+  const metadataBySymbol = new Map(markets.map((market) => [market.symbol, makeMarketMetadata(market)]))
+  const appConfig = createHarnessAppConfig({ externalOrdersPolicyBySymbol })
+  const broker = createHarnessBroker({ orders })
+  const engine = createHarnessEngine({
+    broker,
+    portfolio,
+    strategyPolicy,
+    appConfig,
+    recoveryLedgersByMarket,
+    metadataBySymbol,
+    quoteFreeBalance,
+    accountedFillIds,
+    accountedFills,
+    pauses,
+    volatilityProtectionEnabled,
+    onUnownedExternalOrderObserved,
+    initialState,
+  })
+  await initializeHarnessBooks({ engine })
   return { engine, orders, pauses, accountedFills }
 }
 
@@ -271,9 +324,16 @@ test("shared quote cash flow from another market reduces the account-wide BUY bu
   assert.equal(orders.length, 0)
 })
 
-test("an unowned order in one market pauses only that market and cannot block another market fill", async () => {
+test("a newly observed external order triggers symbol-scoped reconciliation without halting other markets", async () => {
+  const externalOrderObservations = []
   const { engine, pauses, accountedFills } = await createHarness({
     externalOrdersPolicyBySymbol: { SOLUSDT: "block" },
+    onUnownedExternalOrderObserved: ({ order }) => {
+      externalOrderObservations.push({
+        symbol: order.market.symbol,
+        clientOrderId: order.clientOrderId,
+      })
+    },
   })
   await startBothMarkets(engine)
   const dogeOrder = engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT")
@@ -296,12 +356,20 @@ test("an unowned order in one market pauses only that market and cannot block an
   const unowned = await engine.processUserDataEvent({
     event: { eventType: "executionReport", executedOrder: unownedSolOrder },
   })
-  assert.equal(unowned.ok, false)
-  assert.deepEqual(pauses, [{
+  assert.equal(unowned.ok, true,
+    "A manual external order under BLOCK policy must be isolated to its symbol instead of failing the shared user-data stream.")
+  assert.equal(unowned.data.ignored, true,
+    "An unowned external order must remain outside Harvester order ownership and accounting.")
+  assert.equal(unowned.data.externalOrderReconciliationPending, true,
+    "The affected symbol must remain guarded while an authoritative account-wide open-order snapshot is pending.")
+  assert.deepEqual(externalOrderObservations, [{
     symbol: "SOLUSDT",
-    reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
-  }])
-  assert.deepEqual(accountedFills, [])
+    clientOrderId: "manual-sol-client",
+  }], "The engine must request authoritative reconciliation for the exact symbol and client identity observed.")
+  assert.deepEqual(pauses, [],
+    "A manual external order must not create a terminal accounting pause or halt unrelated user-data processing.")
+  assert.deepEqual(accountedFills, [],
+    "An unowned external order report must never be applied to Harvester Portfolio or RecoveryLedger.")
 
   const dogeFillEvent = makePartialFillEvent({
     order: dogeOrder,
@@ -311,10 +379,14 @@ test("an unowned order in one market pauses only that market and cannot block an
   })
   const accepted = await engine.processUserDataEvent({ event: dogeFillEvent })
 
-  assert.equal(accepted.ok, true)
-  assert.equal(accepted.data.waitingForFullFill, true)
-  assert.deepEqual(accountedFills.map((fill) => fill.tradeId), ["doge-execution-1"])
-  assert.deepEqual(engine.getPausedMarkets(), ["SOLUSDT"])
+  assert.equal(accepted.ok, true,
+    "A DOGE execution on an unaffected market must continue through the same user-data stream.")
+  assert.equal(accepted.data.waitingForFullFill, true,
+    "The unaffected DOGE BUY must retain its ordinary partial-fill lifecycle.")
+  assert.deepEqual(accountedFills.map((fill) => fill.tradeId), ["doge-execution-1"],
+    "Only the owned DOGE fill may reach Harvester accounting in this scenario.")
+  assert.deepEqual(engine.getPausedMarkets(), [],
+    "External-order isolation must not turn a manual SOL order into a sticky strategy pause.")
 })
 
 test("accounts the same broker trade ID independently for different markets", async () => {

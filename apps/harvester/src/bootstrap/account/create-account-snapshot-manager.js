@@ -1,5 +1,5 @@
 import { performance } from "node:perf_hooks"
-import { compareDecimal } from "@coinzilla/utils"
+import { compareDecimal, toResult } from "@coinzilla/utils"
 import { AccountSnapshot } from "../../domain/account/account-snapshot.js"
 import { assertAccountSnapshotCoversMarkets } from "../../domain/account/assert-account-snapshot-covers-markets.js"
 import { calculateAccountSnapshotBaselines } from "../../domain/account/calculate-account-snapshot-baselines.js"
@@ -941,6 +941,72 @@ async function publishCommissionAssetBaseline({ context, options }) {
   }
 }
 
+function createExternalOrderReconciliation({
+  state,
+  context,
+  getHasCanonicalOwnershipReconciliation,
+  logger,
+} = {}) {
+  let openOrdersSnapshotTask = Promise.resolve()
+  const publishOrders = (options = {}) => {
+    const task = openOrdersSnapshotTask.then(async () => {
+      const pendingVersions = new Map(state.pendingExternalOrderVersions)
+      const orders = await publishOpenOrdersSnapshot({
+        context,
+        options: {
+          phase: options.phase === undefined ? "PREFLIGHT" : options.phase,
+          ownershipReconciled: options.ownershipReconciled === undefined
+            ? getHasCanonicalOwnershipReconciliation()
+            : options.ownershipReconciled,
+          orders: options.orders,
+        },
+      })
+      for (const [symbol, version] of pendingVersions) {
+        if (state.pendingExternalOrderVersions.get(symbol) === version) {
+          state.pendingExternalOrderVersions.delete(symbol)
+        }
+      }
+      return orders
+    })
+    openOrdersSnapshotTask = task.catch(() => undefined)
+    return task
+  }
+  const observeExternalOrder = ({ symbol } = {}) => {
+    if (typeof symbol !== "string" || !symbol.trim()) {
+      return Promise.resolve(toResult({
+        error: new TypeError("External-order observation requires a non-empty market symbol"),
+      }))
+    }
+    const version = ++state.externalOrderObservationSequence
+    state.pendingExternalOrderVersions.set(symbol, version)
+    return publishOrders({ phase: "RECOVERY" }).then(
+      () => toResult({
+        data: {
+          symbol,
+          reconciled: true,
+        },
+      }),
+      (error) => {
+        try {
+          logger.error?.({
+            message: "authoritative open-orders reconciliation failed after an external order was observed",
+            symbol,
+            error,
+            recoveryFailure: error?.recoveryFailure,
+          })
+        } catch {
+          // A diagnostic logger failure must not release the provisional market blocker.
+        }
+        return toResult({ error })
+      },
+    )
+  }
+  return {
+    publishOrders,
+    observeExternalOrder,
+  }
+}
+
 /**
  * Coordinate account-wide balance/open-order snapshots and their required durable audit events.
  *
@@ -982,6 +1048,8 @@ export function createAccountSnapshotManager({
     commissionBaselineAssetCodesById: new Map(),
     unownedOpenOrderSymbols: new Set(),
     unresolvedHarvesterOpenOrderSymbols: new Set(),
+    pendingExternalOrderVersions: new Map(),
+    externalOrderObservationSequence: 0,
   }
   const context = {
     broker,
@@ -1002,15 +1070,11 @@ export function createAccountSnapshotManager({
     context,
     ...options,
   })
-  const publishOrders = (options = {}) => publishOpenOrdersSnapshot({
+  const { publishOrders, observeExternalOrder } = createExternalOrderReconciliation({
+    state,
     context,
-    options: {
-      phase: options.phase === undefined ? "PREFLIGHT" : options.phase,
-      ownershipReconciled: options.ownershipReconciled === undefined
-        ? getHasCanonicalOwnershipReconciliation()
-        : options.ownershipReconciled,
-      orders: options.orders,
-    },
+    getHasCanonicalOwnershipReconciliation,
+    logger,
   })
   const publishSnapshot = (options = {}) => publishAccountSnapshot({
     context,
@@ -1030,7 +1094,11 @@ export function createAccountSnapshotManager({
   return Object.freeze({
     getAccountSnapshot: () => state.accountSnapshot,
     hasUnownedOpenOrdersForSymbol: ({ symbol } = {}) =>
-      typeof symbol === "string" && state.unownedOpenOrderSymbols.has(symbol),
+      typeof symbol === "string" && (
+        state.unownedOpenOrderSymbols.has(symbol) ||
+        state.pendingExternalOrderVersions.has(symbol)
+      ),
+    observeExternalOrder,
     hasUnresolvedHarvesterOpenOrdersForSymbol: ({ symbol } = {}) =>
       typeof symbol === "string" && state.unresolvedHarvesterOpenOrderSymbols.has(symbol),
     refreshAccountSnapshot: refresh,

@@ -1202,6 +1202,7 @@ function createConservativeEngineOrderEventContext({ context } = {}) {
     completeRecoveryCycle: dependencies.completeRecoveryCycle,
     publishRecoveryCycleNotCompleted: context.publishRecoveryCycleNotCompleted,
     isStopping: dependencies.isStopping,
+    onUnownedExternalOrderObserved: dependencies.onUnownedExternalOrderObserved,
   })
   Object.assign(context, orderEventWorkflow)
   const ownedOrderManagement = createOwnedOrderManagementHandlers({
@@ -1343,6 +1344,7 @@ export function makeConservativeTradingEngine({
   onOperationalStateCancellationIntent,
   onOperationalStateCancellationOutcome,
   onOperationalStateStrategyMarketPaused,
+  onUnownedExternalOrderObserved,
   logger,
   initialState = {},
 } = {}) {
@@ -1370,6 +1372,7 @@ export function makeConservativeTradingEngine({
     onOperationalStateCancellationIntent,
     onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused,
+    onUnownedExternalOrderObserved,
     logger,
     initialState,
   }
