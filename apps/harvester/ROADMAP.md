@@ -29,6 +29,7 @@ The 2026-11-12/13 and 2026-11-13 LIVE session evidence is preserved in the [2026
 - [~] **Explain shutdown phase latency** — [#1105](https://github.com/45s/coinzilla/issues/1105), instrumentation in merged [PR #1120](https://github.com/45s/coinzilla/pull/1120). Structured monotonic phase timings now cover request/stop-state, operator-control cleanup, market-work drain, reconciliation, BUY cancellation, user-data drain, recovery SELL repair, CLOSING audit, Journal barrier, disconnect and process-stop durability. The historical 128.047-second interval remains UNKNOWN: the repository preserves the report, source hashes and derived timeline, but not the original raw log/trace/Journal artifacts. PR #1120's implementation passed its required exact-head checks; #1105 remains open for evidence-preservation and historical disposition, not CI completion.
 
 Remaining safety and observability follow-ups #1103 and #1105 remain open; #1104, #1101, #1102 and P0 #1097 are complete. A merged offline fix or clean audit does not establish runtime safety or authorize another unrestricted LIVE session.
+
 - [~] Refactor CG/RS order lifecycle terminal logging: strategy-owned fixed-width columns, reconciled state transitions, and stale cancellation diagnostics. Implementation is in progress on `fix/harvester/order-lifecycle-logging`; no trading behavior or exchange operations are part of this task.
 
 ## P2 — External trading-pair configuration
