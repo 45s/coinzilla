@@ -459,6 +459,15 @@ The central final order-submission gate and serialized state application remain
 engine-owned; the engine is not a domain policy and does not parse raw Binance
 messages.
 
+Market-price events are validated and handled inside that same serialized
+transition. A stale event is skipped before it can replace the latest accepted
+price or trigger strategy evaluation. A fresh event updates the per-market
+price/event state, then either enters the existing trailing-BUY replacement
+path or evaluates the latest strategy state. The public engine entry point
+refreshes enabled volatility protection before enqueueing this transition; the
+handler itself does not create another queue, perform broker I/O, or mutate
+Portfolio/RecoveryLedger accounting.
+
 P3 has introduced four cohesive use-case boundaries on the current branch:
 
 - `makeCollectOwnedOrderSnapshots` in
