@@ -2,19 +2,16 @@ import { compareDecimal, subtractDecimal } from "@coinzilla/utils"
 
 function getLifecycleDetail({ order, status, executedQuantity, remainingQuantity } = {}) {
   if (status === "PARTIAL_FILL") {
-    return "Executed: " + executedQuantity + " | Remaining: " + remainingQuantity
+    return `Executed: ${executedQuantity} | Remaining: ${remainingQuantity}`
   }
   if (status === "CANCELLED") {
-    return "Executed: " + executedQuantity + " | Cancelled: " + remainingQuantity
+    return `Executed: ${executedQuantity} | Cancelled: ${remainingQuantity}`
   }
-  if (status === "SUBMITTED" && !order.brokerOrderId) {
-    return "Client order ID: " + order.clientOrderId
-  }
-  if (status === "UNKNOWN" && !order.brokerOrderId) {
-    return "Client order ID: " + order.clientOrderId
+  if ((status === "SUBMITTED" || status === "UNKNOWN") && !order.brokerOrderId) {
+    return `Client order ID: ${order.clientOrderId}`
   }
   if (status === "STALE_CANCEL_IGNORED") {
-    return "Already " + order.status
+    return `Already ${order.status}`
   }
   if (status === "CANCEL_UNKNOWN") {
     return "Cancellation outcome unknown; reconciliation required"
@@ -53,6 +50,7 @@ export function createOrderLifecycleLogData({
     executedQuantity,
     remainingQuantity,
   })
+  const lifecycleDetail = detail ?? automaticDetail
 
   return Object.freeze({
     message: "Order lifecycle",
@@ -68,12 +66,14 @@ export function createOrderLifecycleLogData({
     executedQuantity,
     remainingQuantity,
     price: order.limitPrice?.amount,
-    ...(detail ?? automaticDetail ? { detail: detail ?? automaticDetail } : {}),
+    ...(lifecycleDetail ? { detail: lifecycleDetail } : {}),
   })
 }
 
 export function getOrderLifecycleStatus({ order, previousOrder } = {}) {
-  if (!order || typeof order.status !== "string") return undefined
+  if (!order || typeof order.status !== "string") {
+    return undefined
+  }
 
   if (previousOrder) {
     const previousExecuted = previousOrder.executedQuantity?.amount ?? "0"
@@ -117,13 +117,19 @@ export function logOrderLifecycle({
   method = "info",
   detail,
 } = {}) {
-  if (!logger || typeof logger !== "object") return false
-  const write = typeof logger[method] === "function"
-    ? logger[method].bind(logger)
-    : typeof logger.info === "function"
-      ? logger.info.bind(logger)
-      : undefined
-  if (!write) return false
+  if (!logger || typeof logger !== "object") {
+    return false
+  }
+
+  let write
+  if (typeof logger[method] === "function") {
+    write = logger[method].bind(logger)
+  } else if (typeof logger.info === "function") {
+    write = logger.info.bind(logger)
+  }
+  if (!write) {
+    return false
+  }
 
   try {
     write(createOrderLifecycleLogData({
