@@ -99,7 +99,7 @@ The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The curren
 | `getOpenOrders({ symbol })` | `POST /api/spot/v1/order/pending/list` | Symbol required. |
 | `getOrderHistory({ symbol })` | `POST /api/spot/v1/order/history/page` | Symbol required; no exact order-ID filter. |
 | `getOrder({ symbol, orderId })` | `GET /api/spot/v1/order/detail` | Response identity is validated. |
-| `getPrices({ symbol })` | `GET /api/spot/v1/market/last_price` | Request/response lookup only. |
+| `getPrices({ symbol })` | `GET /api/spot/v1/market/last_price` | Request/response lookup only; maps the returned price string to `{ symbol, price }`. |
 | `getFills({ symbol, orderId })` | `POST /api/spot/v1/order/deal/list` | Per-order matching result. |
 
 Mutations and lifecycle-dependent methods are deliberately unavailable:
