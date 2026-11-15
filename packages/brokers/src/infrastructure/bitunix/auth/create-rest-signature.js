@@ -25,7 +25,11 @@ function serializeBody({ body }) {
     return ""
   }
   if (typeof body === "string") {
-    return body.replace(/\s+/g, "")
+    try {
+      return JSON.stringify(JSON.parse(body))
+    } catch {
+      throw new TypeError("Bitunix REST signature body string must contain valid JSON")
+    }
   }
   if (typeof body !== "object" || Array.isArray(body)) {
     throw new TypeError("Bitunix REST signature body must be an object or string")
