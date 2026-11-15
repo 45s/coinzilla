@@ -3,8 +3,14 @@ import assert from "node:assert/strict"
 import { Asset, CanonicalOrder, Market, Money, Quantity } from "@coinzilla/entities"
 import { OrderRegistry } from "./order-registry.js"
 
-const baseAsset = new Asset({ id: "asset:ZRO", code: "ZRO" })
-const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
+const baseAsset = new Asset({
+  id: "asset:ZRO",
+  code: "ZRO",
+})
+const quoteAsset = new Asset({
+  id: "asset:USDT",
+  code: "USDT",
+})
 const market = new Market({
   venue: "binance",
   symbol: "ZROUSDT",
@@ -25,9 +31,18 @@ function makeOrder({
     market,
     side,
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "2.1", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "10.01", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+    limitPrice: new Money({
+      amount: "2.1",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "10.01",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: executedQuantity,
+      asset: baseAsset,
+    }),
     status,
   })
 }
@@ -63,7 +78,9 @@ test("retains immutable strategy and Position ownership when a pending order is 
 })
 
 test("attaches the exchange broker order identity to the original immutable ownership record", () => {
-  const pendingOrder = makeOrder({ clientOrderId: "h-rs-ack" })
+  const pendingOrder = makeOrder({
+    clientOrderId: "h-rs-ack",
+  })
   const registered = OrderRegistry.empty().registerPending({
     order: pendingOrder,
     ownership: recoverySellerOwnership,
@@ -89,7 +106,9 @@ test("attaches the exchange broker order identity to the original immutable owne
 })
 
 test("preserves order ownership when Binance reports a different client ID for a known broker order", () => {
-  const pendingOrder = makeOrder({ clientOrderId: "h-rs-original-client-id" })
+  const pendingOrder = makeOrder({
+    clientOrderId: "h-rs-original-client-id",
+  })
   const registered = OrderRegistry.empty().registerPending({
     order: pendingOrder,
     ownership: recoverySellerOwnership,
@@ -123,7 +142,9 @@ test("preserves order ownership when Binance reports a different client ID for a
 })
 
 test("rejects conflicting ownership when a client order identity is reused", () => {
-  const pendingOrder = makeOrder({ clientOrderId: "h-rs-owner-conflict" })
+  const pendingOrder = makeOrder({
+    clientOrderId: "h-rs-owner-conflict",
+  })
   const registered = OrderRegistry.empty().registerPending({
     order: pendingOrder,
     ownership: recoverySellerOwnership,
@@ -139,8 +160,44 @@ test("rejects conflicting ownership when a client order identity is reused", () 
   }), /ownership|owner/i, "One registered client order ID must never be reassigned to another strategy or Position.")
 })
 
+test("preserves strategy ownership through ambiguous submission and cancellation outcomes", () => {
+  const pendingOrder = makeOrder({
+    clientOrderId: "h-rs-unknown-lifecycle",
+  })
+  const registered = OrderRegistry.empty().registerPending({
+    order: pendingOrder,
+    ownership: recoverySellerOwnership,
+  }).registry
+  const submissionUnknown = registered.markUnknown({
+    clientOrderId: pendingOrder.clientOrderId,
+  })
+  const acknowledged = submissionUnknown.data.registry.applyUpdate({
+    order: makeOrder({
+      clientOrderId: pendingOrder.clientOrderId,
+      brokerOrderId: "broker-rs-unknown-lifecycle",
+      status: "OPEN",
+    }),
+  })
+  const cancellationUnknown = acknowledged.registry.markCancellationUnknown({
+    clientOrderId: pendingOrder.clientOrderId,
+  })
+  const ownership = cancellationUnknown.data.registry.getOwnership({
+    clientOrderId: pendingOrder.clientOrderId,
+    brokerOrderId: "broker-rs-unknown-lifecycle",
+  })
+
+  assert.equal(submissionUnknown.ok, true, "A lost placement acknowledgement must retain the pending order as UNKNOWN.")
+  assert.equal(acknowledged.applied, true, "A later matching broker report must resolve the submission without replacing its owner.")
+  assert.equal(cancellationUnknown.ok, true, "An ambiguous cancellation must retain the exchange order as UNKNOWN.")
+  assert.equal(ownership.strategyId, recoverySellerOwnership.strategyId, "Neither submission nor cancellation ambiguity may change the strategy owner.")
+  assert.equal(ownership.positionId, recoverySellerOwnership.positionId, "Both ambiguous lifecycle transitions must preserve the originating Position.")
+  assert.equal(ownership.brokerOrderId, "broker-rs-unknown-lifecycle", "The exchange identity must remain attached throughout an ambiguous cancellation.")
+})
+
 test("removes ownership together with a pending order that is safely deferred before broker submission", () => {
-  const pendingOrder = makeOrder({ clientOrderId: "h-rs-deferred" })
+  const pendingOrder = makeOrder({
+    clientOrderId: "h-rs-deferred",
+  })
   const registered = OrderRegistry.empty().registerPending({
     order: pendingOrder,
     ownership: recoverySellerOwnership,
@@ -154,4 +211,59 @@ test("removes ownership together with a pending order that is safely deferred be
   assert.equal(removed.registry.getOrder({ clientOrderId: pendingOrder.clientOrderId }), undefined, "The deferred order must no longer reserve an order identity.")
   assert.equal(removed.registry.getOwnership({ clientOrderId: pendingOrder.clientOrderId }), undefined, "Ownership metadata for a removed PENDING order must not become orphaned.")
   assert.equal(registered.getOwnership({ clientOrderId: pendingOrder.clientOrderId }).strategyId, recoverySellerOwnership.strategyId, "Removing the next immutable registry snapshot must not mutate the prior ownership snapshot.")
+})
+
+test("rejects malformed and orphaned order ownership metadata", () => {
+  const pendingOrder = makeOrder({
+    clientOrderId: "h-rs-invalid-owner",
+  })
+
+  assert.throws(() => OrderRegistry.empty().registerPending({
+    order: pendingOrder,
+    ownership: {
+      positionId: "position:rs:zrousdt",
+    },
+  }), /strategyId/, "Order ownership without a strategy identity must be rejected before registration.")
+
+  assert.throws(() => new OrderRegistry({
+    orders: [pendingOrder],
+    ownerships: [{
+      clientOrderId: "h-rs-orphan",
+      strategyId: "RS_recoverySeller",
+      positionId: "position:rs:zrousdt",
+    }],
+  }), /registered canonical order/, "The registry must not accept ownership metadata detached from a canonical order.")
+})
+
+test("rejects lookups whose client and broker identities refer to different orders", () => {
+  const firstOrder = makeOrder({
+    clientOrderId: "h-rs-first-owner",
+  })
+  const secondOrder = makeOrder({
+    clientOrderId: "h-rs-second-owner",
+  })
+  const registry = OrderRegistry.empty()
+    .registerPending({
+      order: firstOrder,
+      ownership: recoverySellerOwnership,
+    }).registry
+    .registerPending({
+      order: secondOrder,
+      ownership: {
+        ...recoverySellerOwnership,
+        positionId: "position:rs:second",
+      },
+    }).registry
+    .applyUpdate({
+      order: makeOrder({
+        clientOrderId: secondOrder.clientOrderId,
+        brokerOrderId: "broker-rs-second-owner",
+        status: "OPEN",
+      }),
+    }).registry
+
+  assert.throws(() => registry.getOwnership({
+    clientOrderId: firstOrder.clientOrderId,
+    brokerOrderId: "broker-rs-second-owner",
+  }), /identify different registered orders/, "A mismatched client/broker identity pair must never return another order's owner.")
 })
