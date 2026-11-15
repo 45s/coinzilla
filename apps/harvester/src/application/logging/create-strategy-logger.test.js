@@ -18,7 +18,10 @@ test("adds the configured strategy identity when structured data has no supporte
   const calls = []
   const logger = Object.fromEntries(LOG_METHODS.map((method) => [
     method,
-    (data) => calls.push({ method, data }),
+    (data) => calls.push({
+      method,
+      data,
+    }),
   ]))
   const strategyLogger = createStrategyLogger({
     logger,
