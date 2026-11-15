@@ -7,19 +7,6 @@ function assertNonNegativeDecimal({ value, field } = {}) {
   }
 }
 
-/**
- * Allocate a strategy decision against the remaining account and pair budgets.
- * Exchange free balances are point-in-time values, so only current-minus-snapshot
- * deltas for Portfolio inventory and active-order commitments adjust them. This
- * prevents pre-snapshot locks from being subtracted twice while reserving orders
- * created after the snapshot. `portfolioBaseBalance` is total tracked base (active
- * plus retained free); `additionalTrackedBaseBalance` is separately verified
- * Harvester-owned Spot inventory outside Portfolio. Both balances and their
- * snapshot baselines contribute to account-wide free-base reconciliation;
- * `activeBaseQuantity` is the pair-level combined SELLable amount.
- * Each accepted action consumes the remaining budget.
- * SELL overcommitment rejects the whole decision before any broker submission.
- */
 function assertAllocationInventoryConsistency({
   activeBaseQuantity,
   accountTrackedBaseBalance,
