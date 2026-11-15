@@ -382,6 +382,7 @@ function createHarnessMutableState({ options } = {}) {
 function createHarnessEngine({ options, brokerState, state } = {}) {
   const {
     strategyPolicy,
+    logger,
     hasUnownedOpenOrdersForSymbol,
     hasUnresolvedHarvesterOpenOrdersForSymbol,
     appConfig: suppliedAppConfig,
@@ -409,6 +410,7 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
   const defaultStrategyPolicy = createHarnessStrategyPolicy({ initialPortfolio: options.initialPortfolio })
   return makeConservativeTradingEngine({
     broker: brokerState.broker,
+    logger,
     strategyPolicy: strategyPolicy ?? defaultStrategyPolicy,
     hasUnownedOpenOrdersForSymbol,
     hasUnresolvedHarvesterOpenOrdersForSymbol,
@@ -1051,7 +1053,16 @@ test("reconciles and pauses when a BUY fills during trailing cancellation", asyn
 test("publishes actionable decisions and order submission facts around broker I/O", async () => {
   const events = []
   const timeline = []
+  const lifecycleLogs = []
   const harness = await createHarness({
+    logger: {
+      info: (entry) => {
+        if (entry.orderLifecycle === true) {
+          lifecycleLogs.push(entry)
+          timeline.push("log:" + entry.lifecycleStatus)
+        }
+      },
+    },
     onPlaceOrder: () => timeline.push("broker.placeOrder"),
     eventPublisher: { publish: (event) => {
       events.push(event)
@@ -1079,8 +1090,10 @@ test("publishes actionable decisions and order submission facts around broker I/
   assert.deepEqual(timeline, [
     "event:strategy.decision",
     "event:order.submission_requested",
+    "log:SUBMITTED",
     "broker.placeOrder",
     "event:order.submitted",
+    "log:ACCEPTED",
   ])
   assert.deepEqual(events.map(({ name }) => name), [
     "strategy.decision",
@@ -1106,6 +1119,11 @@ test("publishes actionable decisions and order submission facts around broker I/
   assert.match(clientOrderId, /^h-[0-9a-f]{22}-1$/)
   assert.equal(events[2].data.status, "OPEN")
   assert.equal(events[2].data.brokerOrderId, `broker-${clientOrderId}`)
+  assert.deepEqual(lifecycleLogs.map(({ lifecycleStatus }) => lifecycleStatus), ["SUBMITTED", "ACCEPTED"])
+  assert.equal(lifecycleLogs[0].strategyId, StrategyId.COIN_GRABBER)
+  assert.equal(lifecycleLogs[0].brokerOrderId, undefined, "SUBMITTED must describe the durable intent before broker acknowledgement assigns an exchange order ID.")
+  assert.equal(lifecycleLogs[0].clientOrderId, clientOrderId, "The pending lifecycle record must retain the client order identity.")
+  assert.equal(lifecycleLogs[1].brokerOrderId, `broker-${clientOrderId}`, "ACCEPTED must carry the exchange-assigned broker order identity.")
 })
 
 test("order intent publication failure prevents a broker order", async () => {
@@ -1818,8 +1836,17 @@ function makeBuyFill({
 test("durably journals recovery SELL cancellation intent before broker cancellation", async () => {
   const events = []
   const sequence = []
+  const lifecycleStatuses = []
   const seeded = makeSeededRecoveryState()
   const harness = await createHarness({
+    logger: {
+      info: (entry) => {
+        if (entry.orderLifecycle === true) {
+          lifecycleStatuses.push(entry.lifecycleStatus)
+          sequence.push("log:" + entry.lifecycleStatus)
+        }
+      },
+    },
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -1878,9 +1905,12 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
   const cancelIntentIndex = sequence.lastIndexOf("publish:cancel_requested")
   const cancelFlushIndex = sequence.lastIndexOf("flush")
   const brokerCancelIndex = sequence.indexOf("broker:cancel")
+  const cancelLogIndex = sequence.lastIndexOf("log:CANCEL_REQUESTED")
   assert.ok(cancelIntentIndex >= 0)
   assert.ok(cancelFlushIndex > cancelIntentIndex)
-  assert.ok(brokerCancelIndex > cancelFlushIndex)
+  assert.ok(cancelLogIndex > cancelFlushIndex, "The terminal must log cancellation only after the durable intent barrier.")
+  assert.ok(brokerCancelIndex > cancelLogIndex, "CANCEL REQUESTED must appear before the broker cancellation call.")
+  assert.ok(lifecycleStatuses.includes("CANCELLED"), "A confirmed cancellation must produce its own terminal lifecycle record.")
 })
 
 test("does not cancel a recovery SELL when its durable cancellation intent flush fails", async () => {
@@ -4884,7 +4914,7 @@ function assertRecoverySellCancellationFillAppliedOnce({ harness, buyResult, lat
   assert.equal(lateResult.ok, true)
   assert.equal(lateResult.data.ignored, true)
   assert.deepEqual(harness.cancellationIds, [sellOrder.brokerOrderId])
-  const canceledSellTradeId = "recovery-cancel-fill-sell-" + sellOrder.brokerOrderId
+  const canceledSellTradeId = `recovery-cancel-fill-sell-${sellOrder.brokerOrderId}`
   assert.equal(harness.accountedFills.filter((fill) => fill.tradeId === canceledSellTradeId).length, 1)
   assert.deepEqual(harness.accountedFills.map((fill) => fill.tradeId), [
     "buy-triggering-recovery-sell-cancel",
@@ -5814,7 +5844,7 @@ test("uses the injected trailing repricing policy", async () => {
 })
 
 
-test("does not evaluate or submit from a stale market price", async () => {
+test("does not cache or evaluate a stale market price", async () => {
   const {
     engine,
     orders
@@ -5827,10 +5857,15 @@ test("does not evaluate or submit from a stale market price", async () => {
       timestamp: 1
     },
   })
-  assert.equal(result.ok, true)
-  assert.equal(result.data.skipped, true)
-  assert.equal(result.data.reason, "STALE_MARKET_PRICE")
-  assert.equal(orders.length, 0)
+  assert.equal(result.ok, true, "A stale market-price event is a safe skip, not a failed engine transition.")
+  assert.equal(result.data.skipped, true, "A stale market-price event must be rejected before strategy evaluation.")
+  assert.equal(result.data.reason, "STALE_MARKET_PRICE", "The skip must retain the stable stale-price reason.")
+  assert.equal(orders.length, 0, "A stale market-price event must never submit an order.")
+  const snapshotResult = await engine.getOperatorMarketSnapshots()
+  assert.equal(snapshotResult.ok, true, "Reading the serialized operator snapshot after a stale event must succeed.")
+  const dogeMarket = snapshotResult.data.markets.find(({ symbol }) => symbol === "DOGEUSDT")
+  assert.equal(dogeMarket.latestPrice, null, "A stale event must not replace the last usable cached market price.")
+  assert.equal(dogeMarket.priceFresh, false, "A market without an accepted price must remain unavailable to strategy evaluation.")
 })
 
 
@@ -6678,7 +6713,7 @@ test("rejects acknowledged REST fills with conflicting broker, market, or side o
       accountingApplied: true,
       getAcknowledgedFills: ({ order }) => [makeBuyFill({
         order,
-        tradeId: "conflicting-ownership-" + Object.keys(identity)[0],
+        tradeId: `conflicting-ownership-${Object.keys(identity)[0]}`,
         price: order.limitPrice.amount,
         quantity: order.originalQuantity.amount,
         quoteQuantity: multiplyDecimal({

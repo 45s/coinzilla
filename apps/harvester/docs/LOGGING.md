@@ -223,3 +223,55 @@ implemented. Cumulative and per-session files therefore grow until an
 operator archives or removes them. Rotation and retention policy are deferred
 in the [Harvester roadmap](../ROADMAP.md). Do not delete session files as part
 of startup or shutdown.
+
+## Order lifecycle terminal records
+
+Order lifecycle events use a dedicated fixed-width terminal formatter so the
+same columns align across Coin Grabber and Recovery Seller:
+
+\`\`\`text
+TIME     STRATEGY STATUS                  ORDER ID               SYMBOL               SIDE       QUANTITY           PRICE
+19:14:52 🟡GC     SUBMITTED                #1341114               ADAUSDT              BUY              50.00 @          0.15260
+19:14:52 🟡GC     ACCEPTED                 #1341114               ADAUSDT              BUY              50.00 @          0.15260
+19:14:53 🔴RS     PARTIAL FILL             #1341115               ADAUSDT              SELL             49.90 @          0.15410
+             Executed: 20 | Remaining: 29.90
+\`\`\`
+
+Order events are reconciled against the registered broker order ID when available, with client order ID as the fallback. Strategy identity is derived only from immutable OrderRegistry ownership:
+🟡GC for CG_coinGrabber and 🔴RS for RS_recoverySeller. It never changes with
+order status. ⚪SYS is reserved for system diagnostics that are not strategy
+lifecycle transitions. Supporting the RS label does not enable RS runtime
+execution.
+
+Lifecycle status is plain text in its own column; it never changes or
+replaces the strategy identity icon. The strategy marker remains 🟡GC or 🔴RS
+for every transition, while non-strategy diagnostics use ⚪SYS. The fixed
+columns are time, strategy, status, broker order ID, symbol,
+side, original quantity, and limit price. Text columns are left-aligned;
+quantity and price are right-aligned. The terminal uses a 24-hour local time
+and does not truncate order identity or decimal values.
+
+SUBMITTED is emitted after the durable submission-intent barrier and immediately
+before broker I/O; because the exchange order ID does not exist yet, the order
+column shows `#pending` and the detail line preserves the client order ID.
+ACCEPTED follows the canonical broker acknowledgement and registry update, and
+carries the exchange-assigned broker order ID.
+PARTIAL FILL and terminal states are logged only after canonical fill
+reconciliation. CANCEL REQUESTED is logged after the durable cancellation
+intent barrier and before the broker RPC. CANCELLED is logged only when the
+canonical cancellation transition has been applied. A fill that wins a
+cancellation race remains FILLED; a later stale cancellation report is shown
+as an informational ⚪SYS event (STALE CANCEL IGNORED), never as a cancellation.
+Stale and duplicate order reports are discarded before terminal fill-history
+reconciliation; a duplicate FILLED report is still allowed to complete any
+previously unprocessed canonical fill transition.
+
+The engine owns successful order lifecycle logging after canonical reconciliation. The user-data boundary does not emit a second raw receipt or generic processed-event line.
+
+No-op duplicate reports do not create repeated lifecycle records. Partial
+fills and partially filled cancellations include an indented exact-decimal
+line showing executed and remaining/cancelled quantity. Full structured
+exchange evidence and diagnostic context remain in the DEBUG/TRACE files;
+the terminal is the compact operator view.
+
+When a broker order ID is not available yet (for example, an unresolved submission), the order ID column displays `#pending`; the client order ID is retained in the indented detail line. The logger never derives strategy identity from a client-order-ID prefix.

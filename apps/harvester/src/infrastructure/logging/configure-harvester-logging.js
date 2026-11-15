@@ -5,6 +5,7 @@ import { finished } from "node:stream/promises"
 import { mkdir } from "node:fs/promises"
 import path from "node:path"
 import { defaultLogger } from "@coinzilla/utils"
+import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 import { createHarvesterLogSessionPaths } from "./create-harvester-log-session-paths.js"
 
 const CONSOLE_TRANSPORT_NAME = "console"
@@ -80,6 +81,244 @@ function summarizeConsoleData({ data } = {}) {
   return { message, details }
 }
 
+
+const STRATEGY_COLUMN_WIDTH = 5
+const STATUS_COLUMN_WIDTH = 23
+const ORDER_ID_COLUMN_WIDTH = 22
+const SYMBOL_COLUMN_WIDTH = 20
+const SIDE_COLUMN_WIDTH = 5
+const QUANTITY_COLUMN_WIDTH = 18
+const PRICE_COLUMN_WIDTH = 18
+const ORDER_DETAIL_INDENT = 15
+
+const STRATEGY_LABELS = Object.freeze({
+  [StrategyId.COIN_GRABBER]: "🟡GC",
+  [StrategyId.RECOVERY_SELLER]: "🔴RS",
+})
+
+const ORDER_STATUS_PRESENTATION = Object.freeze({
+  SUBMITTED: "SUBMITTED",
+  ACCEPTED: "ACCEPTED",
+  PARTIAL_FILL: "PARTIAL FILL",
+  FILLED: "FILLED",
+  CANCEL_REQUESTED: "CANCEL REQUESTED",
+  CANCELLED: "CANCELLED",
+  REJECTED: "REJECTED",
+  EXPIRED: "EXPIRED",
+  FAILED: "FAILED",
+  UNKNOWN: "UNKNOWN",
+  CANCEL_UNKNOWN: "CANCEL UNKNOWN",
+  CANCEL_NOT_CONFIRMED: "CANCEL UNCONFIRMED",
+  CANCEL_NOT_SENT: "CANCEL NOT SENT",
+  CANCEL_FAILED: "CANCEL FAILED",
+  STALE_CANCEL_IGNORED: "STALE CANCEL IGNORED",
+})
+
+function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
+  const time = new Date(timestamp).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+  const strategy = (STRATEGY_LABELS[data.strategyId] ?? "⚪SYS").padEnd(STRATEGY_COLUMN_WIDTH)
+  const status = String(
+    ORDER_STATUS_PRESENTATION[data.lifecycleStatus] ?? data.lifecycleStatus ?? "INFO",
+  ).padEnd(STATUS_COLUMN_WIDTH)
+  const orderId = (data.brokerOrderId ? "#" + data.brokerOrderId : "#pending")
+    .padEnd(ORDER_ID_COLUMN_WIDTH)
+  const symbol = String(data.symbol ?? "-").padEnd(SYMBOL_COLUMN_WIDTH)
+  const side = String(data.side ?? "-").padEnd(SIDE_COLUMN_WIDTH)
+  const quantity = String(data.quantity ?? "-").padStart(QUANTITY_COLUMN_WIDTH)
+  const price = String(data.price ?? "-").padStart(PRICE_COLUMN_WIDTH)
+
+  return [
+    time,
+    strategy,
+    status,
+    orderId,
+    symbol,
+    side,
+    quantity,
+    "@",
+    price,
+  ].join(" ")
+}
+
+function formatOrderLifecycleDetailLine({ detail } = {}) {
+  return " ".repeat(ORDER_DETAIL_INDENT) + String(detail).replace(/[\r\n]+/g, " ")
+}
+
+/**
+ * Attach independent DEBUG and TRACE JSONL destinations to the shared logger.
+ * The compact console destination remains independently configurable.
+ *
+ * @param {{ logger?: object, directory?: string, output?: NodeJS.WritableStream, processIdentity?: { startedAt: string, runtimeSessionId: string } }} input
+ * @returns {Promise<{ directory: string, cumulativeDirectory: string, sessionPaths: object, close: () => Promise<void> }>}
+ */
+async function closeHarvesterLogStreams({ streams } = {}) {
+  const results = await Promise.allSettled(streams.map(async (stream) => {
+    if (stream.closed) {
+      return
+    }
+    if (stream.destroyed) {
+      await once(stream, "close")
+      return
+    }
+    const completion = finished(stream)
+    stream.end()
+    await completion
+  }))
+  const errors = results
+    .filter((result) => result.status === "rejected")
+    .map((result) => result.reason)
+  if (errors.length > 0) {
+    throw new AggregateError(errors, "Failed to flush and close Harvester log streams")
+  }
+}
+
+async function createHarvesterFileTransport({
+  cumulativeDirectory,
+  name,
+  level,
+  filename,
+  sessionFilename,
+} = {}) {
+  const streams = [
+    createWriteStream(path.join(cumulativeDirectory, filename), {
+      flags: "a",
+      encoding: "utf8",
+    }),
+    createWriteStream(sessionFilename, {
+      flags: "wx",
+      encoding: "utf8",
+    }),
+  ]
+  const streamErrors = new Map()
+  streams.forEach((stream, index) => stream.on("error", (error) => streamErrors.set(index, error)))
+
+  const openResults = await Promise.allSettled(streams.map((stream) => new Promise((resolve, reject) => {
+    stream.once("open", resolve)
+    stream.once("error", reject)
+  })))
+  const openErrors = openResults
+    .filter((result) => result.status === "rejected")
+    .map((result) => result.reason)
+  if (openErrors.length > 0) {
+    await Promise.allSettled(streams.map(async (stream) => {
+      if (!stream.destroyed) {
+        stream.destroy()
+      }
+      if (!stream.closed) {
+        await once(stream, "close")
+      }
+    }))
+    throw openErrors[0]
+  }
+
+  return {
+    name,
+    level,
+    write(entry) {
+      const streamError = [...streamErrors.values()][0]
+      if (streamError) {
+        return Promise.reject(streamError)
+      }
+      let serialized
+      try {
+        serialized = JSON.stringify(entry)
+      } catch (error) {
+        return Promise.reject(error)
+      }
+      return Promise.all(streams.map((stream, index) => new Promise((resolve, reject) => {
+        stream.write(`${serialized}\n`, (error) => {
+          const currentError = error ?? streamErrors.get(index)
+          if (currentError) {
+            reject(currentError)
+            return
+          }
+          resolve()
+        })
+      })))
+    },
+    close: () => closeHarvesterLogStreams({ streams }),
+  }
+}
+
+async function registerHarvesterLogTransports({
+  logger,
+  consoleTransport,
+  cumulativeDirectory,
+  sessionPaths,
+} = {}) {
+  let debugTransport
+  let traceTransport
+  let debugTransportRegistered = false
+  let traceTransportRegistered = false
+  try {
+    debugTransport = await createHarvesterFileTransport({
+      cumulativeDirectory,
+      name: DEBUG_TRANSPORT_NAME,
+      level: "debug",
+      filename: "harvester.log",
+      sessionFilename: sessionPaths.debug,
+    })
+    traceTransport = await createHarvesterFileTransport({
+      cumulativeDirectory,
+      name: TRACE_TRANSPORT_NAME,
+      level: "trace",
+      filename: "trace.log",
+      sessionFilename: sessionPaths.trace,
+    })
+    await logger.removeTransport(CONSOLE_TRANSPORT_NAME)
+    await logger.removeTransport(DEBUG_TRANSPORT_NAME)
+    await logger.removeTransport(TRACE_TRANSPORT_NAME)
+    logger.addTransport(consoleTransport)
+    logger.addTransport(debugTransport)
+    debugTransportRegistered = true
+    logger.addTransport(traceTransport)
+    traceTransportRegistered = true
+    logger.setLevel({
+      transport: CONSOLE_TRANSPORT_NAME,
+      level: "info",
+    })
+  } catch (error) {
+    const cleanup = []
+    if (debugTransportRegistered) {
+      cleanup.push(logger.removeTransport(DEBUG_TRANSPORT_NAME))
+    } else if (debugTransport) {
+      cleanup.push(debugTransport.close())
+    }
+    if (traceTransportRegistered) {
+      cleanup.push(logger.removeTransport(TRACE_TRANSPORT_NAME))
+    } else if (traceTransport) {
+      cleanup.push(traceTransport.close())
+    }
+    await Promise.allSettled(cleanup)
+    throw error
+  }
+}
+
+function createHarvesterLogCloseHandler({ logger } = {}) {
+  let closed = false
+  return async () => {
+    if (closed) {
+      return
+    }
+    closed = true
+    const results = await Promise.allSettled([
+      logger.removeTransport(DEBUG_TRANSPORT_NAME),
+      logger.removeTransport(TRACE_TRANSPORT_NAME),
+    ])
+    const errors = results
+      .filter((result) => result.status === "rejected")
+      .map((result) => result.reason)
+    if (errors.length > 0) {
+      throw new AggregateError(errors, "Failed to close Harvester log transports")
+    }
+  }
+}
+
 /**
  * Attach independent DEBUG and TRACE JSONL destinations to the shared logger.
  * The compact console destination remains independently configurable.
@@ -91,7 +330,10 @@ export async function configureHarvesterLogging({
   logger = defaultLogger,
   directory = path.resolve(process.cwd(), "logs"),
   output = process.stdout,
-  processIdentity = { startedAt: new Date().toISOString(), runtimeSessionId: randomUUID() },
+  processIdentity = {
+    startedAt: new Date().toISOString(),
+    runtimeSessionId: randomUUID(),
+  },
 } = {}) {
   if (
     typeof logger?.addTransport !== "function"
@@ -113,138 +355,70 @@ export async function configureHarvesterLogging({
     mkdir(cumulativeDirectory, { recursive: true }),
     mkdir(sessionPaths.sessionDirectory, { recursive: true }),
   ])
+  await registerHarvesterLogTransports({
+    logger,
+    consoleTransport: createHarvesterConsoleTransport({ output }),
+    cumulativeDirectory,
+    sessionPaths,
+  })
 
-  const createFileTransport = async ({ name, level, filename, sessionFilename }) => {
-    const streams = [
-      createWriteStream(path.join(cumulativeDirectory, filename), { flags: "a", encoding: "utf8" }),
-      createWriteStream(sessionFilename, { flags: "wx", encoding: "utf8" }),
-    ]
-    const streamErrors = new Map()
-    streams.forEach((stream, index) => stream.on("error", (error) => streamErrors.set(index, error)))
-
-    const openResults = await Promise.allSettled(streams.map((stream) => new Promise((resolve, reject) => {
-      stream.once("open", resolve)
-      stream.once("error", reject)
-    })))
-    const openErrors = openResults
-      .filter((result) => result.status === "rejected")
-      .map((result) => result.reason)
-    if (openErrors.length > 0) {
-      await Promise.allSettled(streams.map(async (stream) => {
-        if (!stream.destroyed) stream.destroy()
-        if (!stream.closed) await once(stream, "close")
-      }))
-      throw openErrors[0]
-    }
-
-    return {
-      name,
-      level,
-      write(entry) {
-        const streamError = [...streamErrors.values()][0]
-        if (streamError) {
-          return Promise.reject(streamError)
-        }
-        let serialized
-        try {
-          serialized = JSON.stringify(entry)
-        } catch (error) {
-          return Promise.reject(error)
-        }
-        return Promise.all(streams.map((stream, index) => new Promise((resolve, reject) => {
-          stream.write(serialized + "\n", (error) => {
-            const currentError = error ?? streamErrors.get(index)
-            if (currentError) { reject(currentError); return }
-            resolve()
-          })
-        })))
-      },
-      async close() {
-        const results = await Promise.allSettled(streams.map(async (stream) => {
-          if (stream.closed) return
-          if (stream.destroyed) {
-            await once(stream, "close")
-            return
-          }
-          const completion = finished(stream)
-          stream.end()
-          await completion
-        }))
-        const errors = results
-          .filter((result) => result.status === "rejected")
-          .map((result) => result.reason)
-        if (errors.length > 0) {
-          throw new AggregateError(errors, "Failed to flush and close Harvester log streams")
-        }
-      },
-    }
-  }
-
-  const consoleTransport = createHarvesterConsoleTransport({ output })
-  let debugTransport
-  let traceTransport
-  let debugTransportRegistered = false
-  let traceTransportRegistered = false
-
-  try {
-    debugTransport = await createFileTransport({
-      name: DEBUG_TRANSPORT_NAME,
-      level: "debug",
-      filename: "harvester.log",
-      sessionFilename: sessionPaths.debug,
-    })
-    traceTransport = await createFileTransport({
-      name: TRACE_TRANSPORT_NAME,
-      level: "trace",
-      filename: "trace.log",
-      sessionFilename: sessionPaths.trace,
-    })
-
-    await logger.removeTransport(CONSOLE_TRANSPORT_NAME)
-    await logger.removeTransport(DEBUG_TRANSPORT_NAME)
-    await logger.removeTransport(TRACE_TRANSPORT_NAME)
-    logger.addTransport(consoleTransport)
-    logger.addTransport(debugTransport)
-    debugTransportRegistered = true
-    logger.addTransport(traceTransport)
-    traceTransportRegistered = true
-    logger.setLevel({ transport: CONSOLE_TRANSPORT_NAME, level: "info" })
-  } catch (error) {
-    const cleanup = []
-    if (debugTransportRegistered) {
-      cleanup.push(logger.removeTransport(DEBUG_TRANSPORT_NAME))
-    } else if (debugTransport) {
-      cleanup.push(debugTransport.close())
-    }
-    if (traceTransportRegistered) {
-      cleanup.push(logger.removeTransport(TRACE_TRANSPORT_NAME))
-    } else if (traceTransport) {
-      cleanup.push(traceTransport.close())
-    }
-    await Promise.allSettled(cleanup)
-    throw error
-  }
-
-  let closed = false
   return Object.freeze({
     directory,
     cumulativeDirectory,
     sessionPaths,
-    async close() {
-      if (closed) return
-      closed = true
-      const results = await Promise.allSettled([
-        logger.removeTransport(DEBUG_TRANSPORT_NAME),
-        logger.removeTransport(TRACE_TRANSPORT_NAME),
-      ])
-      const errors = results
-        .filter((result) => result.status === "rejected")
-        .map((result) => result.reason)
-      if (errors.length > 0) {
-        throw new AggregateError(errors, "Failed to close Harvester log transports")
-      }
-    },
+    close: createHarvesterLogCloseHandler({ logger }),
   })
+}
+
+function writeOrderLifecycleRecord({ output, color, timestamp, level, method, data } = {}) {
+  const lines = [formatOrderLifecycleConsoleLine({
+    timestamp,
+    data,
+  })]
+  if (typeof data.detail === "string" && data.detail.length > 0) {
+    lines.push(formatOrderLifecycleDetailLine({ detail: data.detail }))
+  }
+  for (const line of lines) {
+    output.write(formatConsoleLine({
+      line,
+      level,
+      method,
+      color,
+    }) + "\n")
+  }
+}
+
+function writeStandardConsoleRecord({ output, color, timestamp, level, method, data } = {}) {
+  const summary = summarizeConsoleData({ data })
+  const time = new Date(timestamp).toLocaleTimeString()
+  const normalizedMethod = String(method ?? level).toLowerCase()
+  const levelLabel = normalizedMethod === "info" || normalizedMethod === "system"
+    ? ""
+    : normalizedMethod.toUpperCase() + " "
+  const plainPrefix = `${time} ${levelLabel}${summary.message}`
+  const serializedDetails = Object.keys(summary.details ?? {}).length > 0
+    ? ` ${JSON.stringify(summary.details)}`
+    : ""
+  const maxLineLength = summary.message === "Portfolio Stats"
+    ? MAX_PORTFOLIO_STATS_LINE_LENGTH
+    : MAX_CONSOLE_LINE_LENGTH
+  const availableDetailsLength = Math.max(0, maxLineLength - plainPrefix.length - 1)
+  let suffix = serializedDetails
+  if (serializedDetails.length > availableDetailsLength) {
+    suffix = availableDetailsLength > 3
+      ? `${serializedDetails.slice(0, availableDetailsLength - 3)}...`
+      : ""
+  }
+  const plainLine = plainPrefix + suffix
+  const boundedLine = plainLine.length > maxLineLength
+    ? `${plainLine.slice(0, maxLineLength - 3)}...`
+    : plainLine
+  output.write(formatConsoleLine({
+    line: boundedLine,
+    level,
+    method,
+    color,
+  }) + "\n")
 }
 
 export function createHarvesterConsoleTransport({
@@ -260,8 +434,12 @@ export function createHarvesterConsoleTransport({
   const flushSuppressed = () => {
     if (suppressedCount === 0) return
     const time = new Date(previousTimestamp).toLocaleTimeString()
-    const line = time + " Previous identical log entry repeated " + suppressedCount + " additional time(s)"
-    output.write(formatConsoleLine({ line, level: "info", color }) + "\n")
+    const line = `${time} Previous identical log entry repeated ${suppressedCount} additional time(s)`
+    output.write(formatConsoleLine({
+      line,
+      level: "info",
+      color,
+    }) + "\n")
     suppressedCount = 0
   }
 
@@ -269,8 +447,18 @@ export function createHarvesterConsoleTransport({
     name: CONSOLE_TRANSPORT_NAME,
     level: "info",
     write({ timestamp, level, method = level, data }) {
-      const summary = summarizeConsoleData({ data })
-      const fingerprint = JSON.stringify({ level, method, summary })
+      const isOrderLifecycle = data?.orderLifecycle === true
+      const summary = isOrderLifecycle
+        ? {
+          message: "Order lifecycle",
+          details: data,
+        }
+        : summarizeConsoleData({ data })
+      const fingerprint = JSON.stringify({
+        level,
+        method,
+        summary,
+      })
       if (fingerprint === previousFingerprint) {
         suppressedCount += 1
         return
@@ -280,34 +468,25 @@ export function createHarvesterConsoleTransport({
       previousFingerprint = fingerprint
       previousTimestamp = timestamp
 
-      const time = new Date(timestamp).toLocaleTimeString()
-      const normalizedMethod = String(method ?? level).toLowerCase()
-      const levelLabel = normalizedMethod === "info" || normalizedMethod === "system"
-        ? ""
-        : normalizedMethod.toUpperCase() + " "
-      const plainPrefix = time + " " + levelLabel + summary.message
-      const serializedDetails = Object.keys(summary.details ?? {}).length > 0
-        ? " " + JSON.stringify(summary.details)
-        : ""
-      const maxLineLength = summary.message === "Portfolio Stats"
-        ? MAX_PORTFOLIO_STATS_LINE_LENGTH
-        : MAX_CONSOLE_LINE_LENGTH
-      const availableDetailsLength = Math.max(0, maxLineLength - plainPrefix.length - 1)
-      const suffix = serializedDetails.length > availableDetailsLength
-        ? (availableDetailsLength > 3
-          ? serializedDetails.slice(0, availableDetailsLength - 3) + "..."
-          : "")
-        : serializedDetails
-      const plainLine = plainPrefix + suffix
-      const boundedLine = plainLine.length > maxLineLength
-        ? plainLine.slice(0, maxLineLength - 3) + "..."
-        : plainLine
-      output.write(formatConsoleLine({
-        line: boundedLine,
+      if (isOrderLifecycle) {
+        writeOrderLifecycleRecord({
+          output,
+          color,
+          timestamp,
+          level,
+          method,
+          data,
+        })
+        return
+      }
+      writeStandardConsoleRecord({
+        output,
+        color,
+        timestamp,
         level,
         method,
-        color,
-      }) + "\n")
+        data,
+      })
     },
     close: flushSuppressed,
   }
