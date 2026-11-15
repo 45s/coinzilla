@@ -209,8 +209,8 @@ suppressed and reported with the existing repeat-count message.
 
 The phase/status pair is part of the pure console-record fingerprint; timestamps
 and omitted diagnostic fields do not prevent genuinely identical terminal
-summaries from being deduplicated. The same presentation helper retains the
-existing order-lifecycle summary and standard console detail allowlist.
+summaries from being deduplicated. The pure console-record presentation helper retains the existing order-
+lifecycle summary and standard console detail allowlist.
 
 The concise terminal line is only the operator-facing summary. The original
 structured DEBUG/TRACE entry remains unchanged in both cumulative and

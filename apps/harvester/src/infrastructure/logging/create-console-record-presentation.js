@@ -59,39 +59,6 @@ function summarizeConsoleData({ data, shutdownPresentation } = {}) {
   return { message, details }
 }
 
-
-const STRATEGY_COLUMN_WIDTH = 5
-const STATUS_COLUMN_WIDTH = 23
-const ORDER_ID_COLUMN_WIDTH = 22
-const SYMBOL_COLUMN_WIDTH = 20
-const SIDE_COLUMN_WIDTH = 5
-const QUANTITY_COLUMN_WIDTH = 18
-const PRICE_COLUMN_WIDTH = 18
-const ORDER_DETAIL_INDENT = 15
-
-const STRATEGY_LABELS = Object.freeze({
-  [StrategyId.COIN_GRABBER]: "🟡GC",
-  [StrategyId.RECOVERY_SELLER]: "🔴RS",
-})
-
-const ORDER_STATUS_PRESENTATION = Object.freeze({
-  SUBMITTED: "SUBMITTED",
-  ACCEPTED: "ACCEPTED",
-  PARTIAL_FILL: "PARTIAL FILL",
-  FILLED: "FILLED",
-  CANCEL_REQUESTED: "CANCEL REQUESTED",
-  CANCELLED: "CANCELLED",
-  REJECTED: "REJECTED",
-  EXPIRED: "EXPIRED",
-  FAILED: "FAILED",
-  UNKNOWN: "UNKNOWN",
-  CANCEL_UNKNOWN: "CANCEL UNKNOWN",
-  CANCEL_NOT_CONFIRMED: "CANCEL UNCONFIRMED",
-  CANCEL_NOT_SENT: "CANCEL NOT SENT",
-  CANCEL_FAILED: "CANCEL FAILED",
-  STALE_CANCEL_IGNORED: "STALE CANCEL IGNORED",
-})
-
 export function createConsoleRecordPresentation({ timestamp, level, method, data } = {}) {
   const isOrderLifecycle = data?.orderLifecycle === true
   const shutdownPresentation = createShutdownPhaseConsolePresentation({

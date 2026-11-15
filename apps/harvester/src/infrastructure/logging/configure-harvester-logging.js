@@ -12,6 +12,7 @@ import { createConsoleRecordPresentation } from "./create-console-record-present
 const CONSOLE_TRANSPORT_NAME = "console"
 const DEBUG_TRANSPORT_NAME = "harvester-debug-file"
 const TRACE_TRANSPORT_NAME = "harvester-trace-file"
+
 const MAX_CONSOLE_LINE_LENGTH = 200
 const MAX_PORTFOLIO_STATS_LINE_LENGTH = 360
 const LEVEL_COLORS = Object.freeze({
@@ -29,6 +30,39 @@ function formatConsoleLine({ line, level, method = level, color }) {
   const code = LEVEL_COLORS[method] ?? LEVEL_COLORS[level]
   return color && code ? code + line + ANSI_RESET : line
 }
+
+
+const STRATEGY_COLUMN_WIDTH = 5
+const STATUS_COLUMN_WIDTH = 23
+const ORDER_ID_COLUMN_WIDTH = 22
+const SYMBOL_COLUMN_WIDTH = 20
+const SIDE_COLUMN_WIDTH = 5
+const QUANTITY_COLUMN_WIDTH = 18
+const PRICE_COLUMN_WIDTH = 18
+const ORDER_DETAIL_INDENT = 15
+
+const STRATEGY_LABELS = Object.freeze({
+  [StrategyId.COIN_GRABBER]: "🟡GC",
+  [StrategyId.RECOVERY_SELLER]: "🔴RS",
+})
+
+const ORDER_STATUS_PRESENTATION = Object.freeze({
+  SUBMITTED: "SUBMITTED",
+  ACCEPTED: "ACCEPTED",
+  PARTIAL_FILL: "PARTIAL FILL",
+  FILLED: "FILLED",
+  CANCEL_REQUESTED: "CANCEL REQUESTED",
+  CANCELLED: "CANCELLED",
+  REJECTED: "REJECTED",
+  EXPIRED: "EXPIRED",
+  FAILED: "FAILED",
+  UNKNOWN: "UNKNOWN",
+  CANCEL_UNKNOWN: "CANCEL UNKNOWN",
+  CANCEL_NOT_CONFIRMED: "CANCEL UNCONFIRMED",
+  CANCEL_NOT_SENT: "CANCEL NOT SENT",
+  CANCEL_FAILED: "CANCEL FAILED",
+  STALE_CANCEL_IGNORED: "STALE CANCEL IGNORED",
+})
 
 function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
   const time = new Date(timestamp).toLocaleTimeString("en-GB", {

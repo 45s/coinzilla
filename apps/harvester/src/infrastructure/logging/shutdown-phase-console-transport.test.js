@@ -13,19 +13,28 @@ function createLogger() {
     transports,
     levels,
     addTransport(transport) {
-      if (transports.has(transport.name)) throw new Error("duplicate transport")
+      if (transports.has(transport.name)) {
+        throw new Error("duplicate transport")
+      }
       transports.set(transport.name, transport)
     },
     async removeTransport(name) {
       const transport = transports.get(name)
-      if (!transport) return false
+      if (!transport) {
+        return false
+      }
       transports.delete(name)
       await transport.close?.()
       return true
     },
     setLevel(input) {
       levels.push(input)
-      return { transports: [...transports.values()].map(({ name, level }) => ({ name, level })) }
+      return {
+        transports: [...transports.values()].map(({ name, level }) => ({
+          name,
+          level,
+        })),
+      }
     },
   }
 }
@@ -233,7 +242,10 @@ test("preserves full shutdown diagnostics in DEBUG and TRACE files while keeping
     if (logging) {
       await logging.close()
     }
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
     output.destroy()
   }
 })
