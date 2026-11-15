@@ -260,6 +260,8 @@ canonical cancellation transition has been applied. A fill that wins a
 cancellation race remains FILLED; a later stale cancellation report is shown
 as an informational ⚪SYS event (STALE CANCEL IGNORED), never as a cancellation.
 
+The engine owns successful order lifecycle logging after canonical reconciliation. The user-data boundary does not emit a second raw receipt or generic processed-event line.
+
 No-op duplicate reports do not create repeated lifecycle records. Partial
 fills and partially filled cancellations include an indented exact-decimal
 line showing executed and remaining/cancelled quantity. Full structured

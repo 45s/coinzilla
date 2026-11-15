@@ -219,47 +219,6 @@ async function handleFailedOrderEvent({ processed, event, tradingEngine, state, 
   })
 }
 
-function getSuccessfulOrderSymbol({ executedOrder, fill }) {
-  return executedOrder?.market?.symbol ?? fill?.market?.symbol
-}
-
-function getSuccessfulOrderBrokerId({ executedOrder, fill }) {
-  return executedOrder?.brokerOrderId ?? fill?.brokerOrderId
-}
-
-function getSuccessfulOrderClientId({ executedOrder, event, fill }) {
-  return executedOrder?.clientOrderId ?? event.clientOrderId ?? fill?.clientOrderId
-}
-
-function createSuccessfulOrderEventLog({ processed, event }) {
-  const { executedOrder, fill } = event
-  const ignored = processed.data?.ignored === true
-  return {
-    message: "Order update processed",
-    eventType: event.eventType ?? "UNKNOWN",
-    executionType: event.executionType,
-    symbol: getSuccessfulOrderSymbol({ executedOrder, fill }),
-    brokerOrderId: getSuccessfulOrderBrokerId({ executedOrder, fill }),
-    clientOrderId: getSuccessfulOrderClientId({ executedOrder, event, fill }),
-    originalClientOrderId: event.originalClientOrderId,
-    side: executedOrder?.side ?? fill?.side,
-    price: executedOrder?.limitPrice?.amount ?? null,
-    quantity: executedOrder?.originalQuantity?.amount,
-    orderStatus: executedOrder?.status,
-    executionId: fill?.id,
-    outcome: ignored ? "IGNORED" : "ACCEPTED",
-    ignored,
-    fillApplied: event.executionType === "TRADE" && !ignored,
-  }
-}
-
-function logSuccessfulOrderEvent({ processed, event, logger }) {
-  logger.info?.(createSuccessfulOrderEventLog({
-    processed,
-    event,
-  }))
-}
-
 async function notifyUserDataObserver({
   event,
   recoveryMode,
@@ -323,11 +282,6 @@ async function processOrderUpdate({
         reevaluateSymbol: undefined,
       }
     }
-    logSuccessfulOrderEvent({
-      processed,
-      event,
-      logger,
-    })
     return {
       shouldNotifyObserver: true,
       reevaluateSymbol: processed.data?.reevaluate === true
@@ -488,14 +442,6 @@ export function createUserDataEventHandler({
       return
     }
     state.eventSequence += 1
-    if (isExecution) {
-      logger.info?.({
-        message: "Trade execution received",
-        symbol: event.fill?.market?.symbol ?? event.executedOrder?.market?.symbol,
-        side: event.fill?.side ?? event.executedOrder?.side,
-      })
-    }
-
     let reevaluateSymbol
     const task = state.eventQueue
       .then(() => processQueuedUserDataEvent({

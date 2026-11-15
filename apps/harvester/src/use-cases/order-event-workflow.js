@@ -30,6 +30,7 @@ export function makeOrderEventWorkflow({
   completeRecoveryCycle,
   publishRecoveryCycleNotCompleted,
   isStopping,
+  logger,
   onUnownedExternalOrderObserved,
 } = {}) {
   const processExecutionFillTransition = (options = {}) => processExecutionFill({
@@ -53,6 +54,7 @@ export function makeOrderEventWorkflow({
 
   const processUserDataEventTransition = createUserDataEventTransition({
     state,
+    logger,
     eventPublisher,
     pairs,
     pause,

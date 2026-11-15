@@ -1,4 +1,5 @@
 import { CanonicalOrder } from "@coinzilla/entities"
+import { getOrderLifecycleStatus, logOrderLifecycle } from "../application/logging/order-lifecycle-log.js"
 import { compareDecimal, toResult } from "@coinzilla/utils"
 import { EXTERNAL_ORDERS_POLICIES } from "../domain/external-orders-policy.js"
 import { isHarvesterClientOrderId } from "../application/orders/is-harvester-client-order-id.js"
@@ -111,6 +112,9 @@ async function prepareOrderEvent({ dependencies, event } = {}) {
     return { result: toResult({ data: { ignored: true } }) }
   }
   const { market: { symbol } } = order
+  const previousOrder = typeof state.registry.getOrder === "function"
+    ? state.registry.getOrder({ clientOrderId: order.clientOrderId })
+    : undefined
   const update = state.registry.applyUpdate({ order })
   if (update.unknown) {
     return handleUnownedOrderEvent({
@@ -134,7 +138,8 @@ async function prepareOrderEvent({ dependencies, event } = {}) {
   }
   return { order,
     symbol,
-    update }
+    update,
+    previousOrder }
 }
 
 async function handlePreFillRecoveryState({ dependencies, order, symbol, recoveryMode } = {}) {
@@ -188,6 +193,20 @@ async function reconcileEventFills({ dependencies, order, event, terminalFillsRe
 async function handleDuplicateOrStaleUpdate({ dependencies, order, symbol, update, recoveryMode } = {}) {
   const { state, cancelAndReconcileRecoverySells, evaluateLatestTransition } = dependencies
    if (update.duplicate || update.stale) {
+        if (update.stale && order.status === "CANCELED" &&
+            typeof state.registry.getOrder === "function") {
+          const reconciledOrder = state.registry.getOrder({
+            clientOrderId: order.clientOrderId,
+          })
+          if (reconciledOrder?.status === "FILLED") {
+            logOrderLifecycle({
+              logger: dependencies.logger,
+              order: reconciledOrder,
+              status: "STALE_CANCEL_IGNORED",
+              method: "system",
+            })
+          }
+        }
         const isUnprocessedFill = order.status === "FILLED" &&
           !state.completedOrderTransitions.has(order.clientOrderId)
         if (!isUnprocessedFill) {
@@ -638,7 +657,7 @@ async function processUserDataEventTransition({
     const prepared = await prepareOrderEvent({ dependencies,
       event })
     if (prepared.result) {return prepared.result}
-    const { order, symbol, update } = prepared
+    const { order, symbol, update, previousOrder } = prepared
     const recoveryGuard = await handlePreFillRecoveryState({ dependencies,
       order,
       symbol,
@@ -655,6 +674,26 @@ async function processUserDataEventTransition({
       update,
       recoveryMode })
     if (duplicateResult) {return duplicateResult}
+    if (update.applied === true) {
+      const reconciledOrder = typeof state.registry.getOrder === "function"
+        ? state.registry.getOrder({ clientOrderId: order.clientOrderId }) ?? order
+        : order
+      const lifecycleStatus = getOrderLifecycleStatus({
+        order: reconciledOrder,
+        previousOrder,
+      })
+      if (lifecycleStatus) {
+        const ownership = state.registry.getOwnership?.({
+          clientOrderId: reconciledOrder.clientOrderId,
+        })
+        logOrderLifecycle({
+          logger: dependencies.logger,
+          order: reconciledOrder,
+          ownership,
+          status: lifecycleStatus,
+        })
+      }
+    }
     if (order.status === "FILLED") {
       if (state.completedOrderTransitions.has(order.clientOrderId)) {
         return toResult({ data: { ignored: true } })
