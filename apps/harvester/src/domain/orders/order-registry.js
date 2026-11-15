@@ -36,6 +36,16 @@ function isStaleOrderUpdate({ current, next }) {
   ) {
     return false
   }
+  // FILLED is terminal: a later non-terminal snapshot with no additional
+  // execution cannot reopen the order, regardless of event timestamp. Binance
+  // may deliver/replay the original NEW report after the submission response
+  // has already established the fully executed state.
+  if (
+    current.status === "FILLED" &&
+    ["OPEN", "PARTIALLY_FILLED"].includes(next.status)
+  ) {
+    return true
+  }
   if (
     current.updatedAt !== undefined &&
     (next.updatedAt === undefined || next.updatedAt < current.updatedAt)
@@ -54,7 +64,6 @@ function isStaleOrderUpdate({ current, next }) {
     // response. The cancellation snapshot and fill history remain authoritative.
     return true
   }
-  // An OPEN report is a stale regression only after a partial fill.
   // UNKNOWN may mean the placement acknowledgement was lost, so its first
   // identity-matching exchange NEW report must be allowed to establish ownership.
   return current.status === "PARTIALLY_FILLED" &&
