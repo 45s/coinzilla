@@ -161,11 +161,11 @@ test("allocates one canonical mixed SELL Fill across recovery and legacy without
   assert.equal(sum({
     left: allocation.recovery.grossBaseQuantity,
     right: allocation.legacy.grossBaseQuantity,
-  }), input.fill.quantity.amount)
+  }), input.fill.quantity.amount, "Recovery and legacy gross quantities must conserve the canonical Fill exactly.")
   assert.equal(sum({
     left: allocation.recovery.quoteProceeds,
     right: allocation.legacy.quoteProceeds,
-  }), input.fill.quoteQuantity.amount)
+  }), input.fill.quoteQuantity.amount, "Recovery and legacy quote proceeds must conserve the canonical Fill exactly.")
 })
 
 test("allocates every actual commission amount and quote valuation without losing canonical facts", () => {
@@ -209,12 +209,12 @@ test("creates deterministic deeply immutable allocation metadata", () => {
   const second = createMixedSellFillAllocation(input)
 
   assert.equal(first.allocationFingerprint, second.allocationFingerprint, "Identical Fill, ownership and split facts must produce the same allocation fingerprint.")
-  assert.equal(Object.isFrozen(first), true)
-  assert.equal(Object.isFrozen(first.orderOwnership), true)
-  assert.equal(Object.isFrozen(first.recovery), true)
-  assert.equal(Object.isFrozen(first.legacy), true)
-  assert.equal(Object.isFrozen(first.recovery.commissions), true)
-  assert.equal(Object.isFrozen(first.recovery.commissions[0]), true)
+  assert.equal(Object.isFrozen(first), true, "The allocation root must be immutable.")
+  assert.equal(Object.isFrozen(first.orderOwnership), true, "The registered order ownership snapshot must be immutable.")
+  assert.equal(Object.isFrozen(first.recovery), true, "The recovery allocation must be immutable.")
+  assert.equal(Object.isFrozen(first.legacy), true, "The legacy allocation must be immutable.")
+  assert.equal(Object.isFrozen(first.recovery.commissions), true, "Recovery commission allocations must be immutable.")
+  assert.equal(Object.isFrozen(first.recovery.commissions[0]), true, "Each recovery commission allocation must be immutable.")
 })
 
 test("supports a recovery-only SELL after legacy quantity is exhausted", () => {
@@ -244,12 +244,12 @@ test("supports a recovery-only SELL after legacy quantity is exhausted", () => {
     legacyQuantity: "0",
   })
 
-  assert.equal(allocation.recovery.grossBaseQuantity, "5")
-  assert.equal(allocation.legacy.grossBaseQuantity, "0")
-  assert.equal(allocation.recovery.quoteProceeds, "10")
-  assert.equal(allocation.legacy.quoteProceeds, "0")
-  assert.equal(allocation.recovery.baseDebit, "5")
-  assert.equal(allocation.legacy.baseDebit, "0")
+  assert.equal(allocation.recovery.grossBaseQuantity, "5", "Recovery-only SELL must allocate the complete gross quantity to recovery.")
+  assert.equal(allocation.legacy.grossBaseQuantity, "0", "An exhausted legacy position must receive no new quantity.")
+  assert.equal(allocation.recovery.quoteProceeds, "10", "Recovery-only SELL must allocate all actual quote proceeds to recovery.")
+  assert.equal(allocation.legacy.quoteProceeds, "0", "An exhausted legacy position must receive no quote proceeds.")
+  assert.equal(allocation.recovery.baseDebit, "5", "Recovery base debit must equal the gross quantity when no base commission is charged.")
+  assert.equal(allocation.legacy.baseDebit, "0", "An exhausted legacy position must receive no base debit.")
 })
 
 test("rejects legacy-only SELL allocation and quantity splits that do not conserve the Fill", () => {
@@ -259,6 +259,7 @@ test("rejects legacy-only SELL allocation and quantity splits that do not conser
       legacyQuantity: "5.01",
     })),
     /recoveryQuantity must be greater than zero/i,
+    "A mixed SELL allocation must contain a positive recovery tranche.",
   )
   assert.throws(
     () => createMixedSellFillAllocation(makeInput({
@@ -266,6 +267,7 @@ test("rejects legacy-only SELL allocation and quantity splits that do not conser
       legacyQuantity: "0.01",
     })),
     /sum to the canonical Fill quantity/i,
+    "Recovery and legacy allocations must exactly conserve the canonical Fill quantity.",
   )
 })
 
@@ -277,6 +279,7 @@ test("requires SELL-side registered ownership that matches the canonical order a
       }),
     })),
     /SELL/i,
+    "A BUY order cannot own a mixed SELL allocation.",
   )
   assert.throws(
     () => createMixedSellFillAllocation(makeInput({
@@ -285,12 +288,14 @@ test("requires SELL-side registered ownership that matches the canonical order a
       }),
     })),
     /SELL/i,
+    "A BUY Fill cannot be allocated as a mixed SELL.",
   )
   assert.throws(
     () => createMixedSellFillAllocation(makeInput({ fill: makeFill({
       brokerOrderId: "other-broker",
     }) })),
     /broker order identity/i,
+    "A Fill must resolve to the registered broker order identity.",
   )
   assert.throws(
     () => createMixedSellFillAllocation(makeInput({
@@ -299,6 +304,7 @@ test("requires SELL-side registered ownership that matches the canonical order a
       }),
     })),
     /Recovery Seller/i,
+    "A non-RS order owner cannot receive Recovery Seller allocation.",
   )
 })
 
@@ -308,6 +314,7 @@ test("rejects incomplete commissions and third-asset fees without quote valuatio
       commissionStatus: "UNKNOWN",
     }) })),
     /commission/i,
+    "Incomplete commission facts must block mixed SELL allocation.",
   )
   const missingThirdAssetValue = makeFill({
     commissions: [new Commission({
@@ -322,6 +329,7 @@ test("rejects incomplete commissions and third-asset fees without quote valuatio
       fill: missingThirdAssetValue,
     })),
     /quote-currency valuation/i,
+    "A third-asset commission without historical quote valuation must fail closed.",
   )
 })
 
@@ -337,8 +345,8 @@ test("allocation fingerprint is stable when canonical commission entries are reo
     fill: reorderedFill,
   })
 
-  assert.equal(first.fillFingerprint, reordered.fillFingerprint)
-  assert.equal(first.allocationFingerprint, reordered.allocationFingerprint)
+  assert.equal(first.fillFingerprint, reordered.fillFingerprint, "Canonical Fill fingerprint must be independent of commission entry order.")
+  assert.equal(first.allocationFingerprint, reordered.allocationFingerprint, "Allocation fingerprint must be independent of commission entry order.")
 })
 
 test("rejects an order from another market or a Fill larger than its registered order", () => {
@@ -353,6 +361,7 @@ test("rejects an order from another market or a Fill larger than its registered 
       market: otherMarket,
     }) })),
     /market identity/i,
+    "A registered order from another market cannot own this Fill allocation.",
   )
   assert.throws(
     () => createMixedSellFillAllocation(makeInput({ order: makeOrder({
@@ -360,6 +369,7 @@ test("rejects an order from another market or a Fill larger than its registered 
     executedQuantity: "5",
   }) })),
     /exceeds registered order quantity/i,
+    "A canonical Fill cannot exceed the registered order quantity.",
   )
 })
 
