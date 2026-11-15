@@ -307,6 +307,7 @@ function getAccountSnapshotBaselines({ context }) {
   const baselineResult = calculateAccountSnapshotBaselines({
     portfolio: context.getPortfolio(),
     activeOrders,
+    additionalTrackedBaseQuantity: context.getAdditionalTrackedBaseQuantity(),
   })
   if (!baselineResult.ok) {
     throw withRecoveryFailure(
@@ -952,6 +953,7 @@ async function publishCommissionAssetBaseline({ context, options }) {
  * @param {object} options.eventPublisher Lifecycle event publisher with durable flush capability.
  * @param {Map<string, object>} options.marketMetadata Metadata for configured markets.
  * @param {Function} options.getPortfolio Current Portfolio accessor.
+ * @param {Function} [options.getAdditionalTrackedBaseQuantity] Verified non-Portfolio Spot allocations by asset.
  * @param {Function} options.getTradingEngine Current trading-engine accessor.
  * @param {Function} options.getRecoveredState Current in-memory recovered-state accessor.
  * @param {Function} options.getHasCanonicalOwnershipReconciliation Ownership reconciliation predicate.
@@ -965,6 +967,7 @@ export function createAccountSnapshotManager({
   eventPublisher,
   marketMetadata,
   getPortfolio,
+  getAdditionalTrackedBaseQuantity = () => [],
   getTradingEngine,
   getRecoveredState,
   getHasCanonicalOwnershipReconciliation,
@@ -974,6 +977,9 @@ export function createAccountSnapshotManager({
   runtimeSessionId,
   operationalStateStore,
 } = {}) {
+  if (typeof getAdditionalTrackedBaseQuantity !== "function") {
+    throw new TypeError("createAccountSnapshotManager requires getAdditionalTrackedBaseQuantity to be a function")
+  }
   const state = {
     accountSnapshot: undefined,
     preflightSourceTime: undefined,
@@ -988,6 +994,7 @@ export function createAccountSnapshotManager({
     eventPublisher,
     marketMetadata,
     getPortfolio,
+    getAdditionalTrackedBaseQuantity,
     getTradingEngine,
     getRecoveredState,
     getHasCanonicalOwnershipReconciliation,

@@ -13,7 +13,10 @@ function assertNonNegativeDecimal({ value, field } = {}) {
  * deltas for Portfolio inventory and active-order commitments adjust them. This
  * prevents pre-snapshot locks from being subtracted twice while reserving orders
  * created after the snapshot. `portfolioBaseBalance` is total tracked base (active
- * plus retained free); `activeBaseQuantity` remains the pair-level SELLable amount.
+ * plus retained free); `additionalTrackedBaseBalance` is separately verified
+ * Harvester-owned Spot inventory outside Portfolio. Both balances and their
+ * snapshot baselines contribute to account-wide free-base reconciliation;
+ * `activeBaseQuantity` is the pair-level combined SELLable amount.
  * Each accepted action consumes the remaining budget.
  * SELL overcommitment rejects the whole decision before any broker submission.
  */
@@ -25,6 +28,8 @@ export function allocateOrderCommitments({
   activeBaseQuantity,
   portfolioBaseBalance,
   portfolioBaseBalanceBaseline = "0",
+  additionalTrackedBaseBalance = "0",
+  additionalTrackedBaseBalanceBaseline = "0",
   outstandingRecoveryAmount,
   committedQuote,
   committedQuoteBalance,
@@ -37,6 +42,10 @@ export function allocateOrderCommitments({
   try {
     if (!Array.isArray(actions)) throw new TypeError("actions must be an array")
     const accountPortfolioBaseBalance = portfolioBaseBalance
+    const accountTrackedBaseBalance = addDecimal({
+      left: accountPortfolioBaseBalance,
+      right: additionalTrackedBaseBalance,
+    })
     const accountCommittedQuote = committedQuoteBalance ?? committedQuote
     const accountCommittedBase = committedBaseBalance ?? committedBase
     for (const [field, value] of Object.entries({
@@ -45,6 +54,8 @@ export function allocateOrderCommitments({
       activeBaseQuantity,
       portfolioBaseBalance: accountPortfolioBaseBalance,
       portfolioBaseBalanceBaseline,
+      additionalTrackedBaseBalance,
+      additionalTrackedBaseBalanceBaseline,
       outstandingRecoveryAmount,
       committedQuote,
       committedQuoteBalance: accountCommittedQuote,
@@ -58,11 +69,11 @@ export function allocateOrderCommitments({
     }
     assertDecimalString({ value: quoteCashFlow, field: "quoteCashFlow" })
 
-    if (compareDecimal({ left: activeBaseQuantity, right: accountPortfolioBaseBalance }) > 0) {
-      throw new RangeError("activeBaseQuantity cannot exceed portfolioBaseBalance")
+    if (compareDecimal({ left: activeBaseQuantity, right: accountTrackedBaseBalance }) > 0) {
+      throw new RangeError("activeBaseQuantity cannot exceed total tracked base balance")
     }
-    if (compareDecimal({ left: accountCommittedBase, right: accountPortfolioBaseBalance }) > 0) {
-      throw new RangeError("committedBaseBalance cannot exceed portfolioBaseBalance")
+    if (compareDecimal({ left: accountCommittedBase, right: accountTrackedBaseBalance }) > 0) {
+      throw new RangeError("committedBaseBalance cannot exceed total tracked base balance")
     }
     if (compareDecimal({ left: committedBase, right: activeBaseQuantity }) > 0) {
       throw new RangeError("committedBase cannot exceed activeBaseQuantity")
@@ -81,7 +92,10 @@ export function allocateOrderCommitments({
     let remainingBaseBalance = subtractDecimal({
       left: addDecimal({
         left: baseFreeBalance,
-        right: subtractDecimal({ left: accountPortfolioBaseBalance, right: portfolioBaseBalanceBaseline }),
+        right: addDecimal({
+          left: subtractDecimal({ left: accountPortfolioBaseBalance, right: portfolioBaseBalanceBaseline }),
+          right: subtractDecimal({ left: additionalTrackedBaseBalance, right: additionalTrackedBaseBalanceBaseline }),
+        }),
       }),
       right: subtractDecimal({ left: accountCommittedBase, right: committedBaseBalanceBaseline }),
     })

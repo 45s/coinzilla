@@ -1,5 +1,5 @@
 import { CanonicalOrder } from "@coinzilla/entities"
-import { addDecimal, multiplyDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, compareDecimal, multiplyDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../portfolio/portfolio.js"
 
 function addAmount({ values, assetId, amount, field }) {
@@ -16,12 +16,12 @@ function toRecords(values) {
 }
 
 /**
- * Capture the Portfolio and active-order accounting state represented by an
- * exchange account snapshot. The caller captures this synchronously after the
+ * Capture Portfolio, separately tracked Spot allocations, and active-order
+ * accounting state represented by an exchange account snapshot. The caller captures this synchronously after the
  * broker balance response; recovery event-sequence fencing discards the whole
  * attempt if a user-data event crosses the REST snapshot boundary.
  */
-export function calculateAccountSnapshotBaselines({ portfolio, activeOrders } = {}) {
+export function calculateAccountSnapshotBaselines({ portfolio, activeOrders, additionalTrackedBaseQuantity = [] } = {}) {
   try {
     if (!(portfolio instanceof Portfolio)) {
       throw new TypeError("calculateAccountSnapshotBaselines requires a Portfolio")
@@ -29,9 +29,13 @@ export function calculateAccountSnapshotBaselines({ portfolio, activeOrders } = 
     if (!Array.isArray(activeOrders) || activeOrders.some((order) => !(order instanceof CanonicalOrder))) {
       throw new TypeError("calculateAccountSnapshotBaselines activeOrders must contain CanonicalOrder values")
     }
+    if (!Array.isArray(additionalTrackedBaseQuantity)) {
+      throw new TypeError("calculateAccountSnapshotBaselines additionalTrackedBaseQuantity must be an array")
+    }
 
     const quoteCashFlow = new Map()
     const portfolioBaseQuantity = new Map()
+    const additionalTrackedBaseQuantityBaseline = new Map()
     const committedQuoteBalance = new Map()
     const committedBaseBalance = new Map()
 
@@ -47,6 +51,28 @@ export function calculateAccountSnapshotBaselines({ portfolio, activeOrders } = 
         assetId: position.market.baseAsset.id,
         amount: position.totalBaseQuantity.amount,
         field: "total Portfolio base quantity",
+      })
+    }
+
+    for (const item of additionalTrackedBaseQuantity) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        throw new TypeError("additionalTrackedBaseQuantity records must be objects")
+      }
+      if (typeof item.assetId !== "string" || !item.assetId.trim()) {
+        throw new TypeError("additionalTrackedBaseQuantity requires a non-empty asset ID")
+      }
+      assertDecimalString({
+        value: item.amount,
+        field: "additionalTrackedBaseQuantity.amount",
+      })
+      if (compareDecimal({ left: item.amount, right: "0" }) < 0) {
+        throw new RangeError("additionalTrackedBaseQuantity.amount must be non-negative")
+      }
+      addAmount({
+        values: additionalTrackedBaseQuantityBaseline,
+        assetId: item.assetId,
+        amount: item.amount,
+        field: "additional tracked Spot base quantity",
       })
     }
 
@@ -81,6 +107,7 @@ export function calculateAccountSnapshotBaselines({ portfolio, activeOrders } = 
       data: Object.freeze({
         quoteCashFlowBaseline: toRecords(quoteCashFlow),
         portfolioBaseQuantityBaseline: toRecords(portfolioBaseQuantity),
+        additionalTrackedBaseQuantityBaseline: toRecords(additionalTrackedBaseQuantityBaseline),
         committedQuoteBalanceBaseline: toRecords(committedQuoteBalance),
         committedBaseBalanceBaseline: toRecords(committedBaseBalance),
       }),

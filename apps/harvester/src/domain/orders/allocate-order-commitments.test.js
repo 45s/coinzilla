@@ -397,7 +397,7 @@ test("rejects pair active inventory greater than total Portfolio base inventory"
   })
 
   assert.equal(result.ok, false, "Pair active inventory cannot exceed the account-wide total Portfolio inventory that includes this Position.")
-  assert.match(result.errors[0].message, /activeBaseQuantity cannot exceed portfolioBaseBalance/, "The allocator must identify the impossible active-versus-total inventory relationship.")
+  assert.match(result.errors[0].message, /activeBaseQuantity cannot exceed total tracked base balance/, "The allocator must identify the impossible active-versus-total inventory relationship.")
 })
 
 test("rejects existing pair SELL commitments greater than active sellable inventory", () => {
@@ -476,7 +476,7 @@ test("rejects aggregate SELL commitments greater than total Portfolio base inven
   })
 
   assert.equal(result.ok, false, "All Harvester-owned SELL commitments against a shared base asset must be backed by total Portfolio holdings across markets.")
-  assert.match(result.errors[0].message, /committedBaseBalance cannot exceed portfolioBaseBalance/, "The allocator must identify account-wide SELL reservations that exceed tracked total base inventory.")
+  assert.match(result.errors[0].message, /committedBaseBalance cannot exceed total tracked base balance/, "The allocator must identify account-wide SELL reservations that exceed tracked total base inventory.")
 })
 
 
@@ -555,6 +555,8 @@ test("rejects malformed commitment inputs without throwing", () => {
     { actions: [{ side: "BUY", price: "10", quantity: "1" }], quoteCashFlow: "not-a-decimal" },
     { actions: [], portfolioBaseBalance: "-1" },
     { actions: [], portfolioBaseBalance: undefined },
+    { actions: [], additionalTrackedBaseBalance: "-0.01" },
+    { actions: [], additionalTrackedBaseBalanceBaseline: "-0.01" },
     { actions: [], committedQuoteBalance: "-1" },
     { actions: [], committedBaseBalance: "-1" },
   ]
@@ -671,5 +673,31 @@ test("shared SELL reservations reduce mixed recovery and legacy availability", (
   })
 
   assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /available free base balance after commitments/)
+})
+
+
+test("rejects a mixed SELL when verified free Spot custody is smaller than tracked recovery plus legacy inventory", () => {
+  const result = allocateOrderCommitments({
+    actions: [{ side: "SELL", quantity: "5.01" }],
+    quoteFreeBalance: "100",
+    baseFreeBalance: "5",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "5.01",
+    portfolioBaseBalance: "5",
+    portfolioBaseBalanceBaseline: "5",
+    additionalTrackedBaseBalance: "0.01",
+    additionalTrackedBaseBalanceBaseline: "0.01",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: "0",
+    committedQuoteBalanceBaseline: "0",
+    committedBase: "0",
+    committedBaseBalance: "0",
+    committedBaseBalanceBaseline: "0",
+    investmentLimit: "100",
+  })
+
+  assert.equal(result.ok, false, "Configured or tracked legacy quantity cannot override insufficient exchange-reported free Spot base.")
   assert.match(result.errors[0].message, /available free base balance after commitments/)
 })
