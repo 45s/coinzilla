@@ -218,7 +218,7 @@ test("Bitunix Spot broker exposes symbol metadata, price, order detail and histo
   assert.equal(price.data.price, "10.25")
   assert.equal(detail.data.id, "123")
   assert.equal(history.data.length, 1)
-  assert.equal(history.data[0].orderId, "123")
+  assert.equal(history.data[0].id, "123")
   assert.deepEqual(calls[3].options.body, { symbol: "BTCUSDT",
     page: 1,
     pageSize: 25 })
