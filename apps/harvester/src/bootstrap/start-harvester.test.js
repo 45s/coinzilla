@@ -3874,30 +3874,41 @@ test("fails startup before market subscriptions when PREFLIGHT account snapshot 
 })
 
 
-test("journals pre-existing account-wide orders and allows trading startup without adopting or changing them", async () => {
+test("treats a prior-process Harvester order as external under IGNORE and evaluates a real market-price event", async () => {
   const calls = []
   const broker = createBroker(calls)
-  let cancelCalls = 0
-  let placeCalls = 0
+  const startupClientOrderId = "h-0123456789abcdef012345-7"
+  const canceledClientOrderIds = []
+  const placedClientOrderIds = []
+  let resolvePlacement
+  const placementObserved = new Promise((resolve) => { resolvePlacement = resolve })
+  const cancelOrder = broker.cancelOrder
   broker.getOpenOrders = async (input = {}) => {
     calls.push("open-orders:account-wide:" + String(input.symbol))
     return {
       ok: true,
       data: [{
-        clientOrderId: "manual-zro-sell",
+        clientOrderId: startupClientOrderId,
         id: "699694",
-        symbol: "ZROUSDT",
-        side: "SELL",
+        symbol: "BTCUSDT",
+        side: "BUY",
         type: "LIMIT",
-        originalPrice: "1.82800000",
-        originalQuantity: "4.98000000",
-        executedQuantity: "0.00000000",
+        originalPrice: "64900.00",
+        originalQuantity: "0.01",
+        executedQuantity: "0",
         status: "NEW",
       }],
     }
   }
-  broker.cancelOrder = async () => { cancelCalls += 1; return { ok: true } }
-  broker.placeOrder = async () => { placeCalls += 1; return { ok: true } }
+  broker.cancelOrder = async (input = {}) => {
+    canceledClientOrderIds.push(input.order?.clientOrderId)
+    return cancelOrder(input)
+  }
+  broker.placeOrder = async ({ order } = {}) => {
+    placedClientOrderIds.push(order.clientOrderId)
+    resolvePlacement()
+    return { ok: true }
+  }
   const events = []
   const eventPublisher = {
     publish: (event) => { events.push(event); return { ok: true } },
@@ -3917,7 +3928,10 @@ test("journals pre-existing account-wide orders and allows trading startup witho
             ...appConfig.strategies.CG_coinGrabber.pairs,
             BTCUSDT: {
               ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
-              enabled: true
+              enabled: true,
+              enableVolatilityProtection: false,
+              makerPercent: 0.1,
+              takerPercent: 0.1,
             },
           },
         },
@@ -3939,17 +3953,34 @@ test("journals pre-existing account-wide orders and allows trading startup witho
   const openingBalances = events.find((event) => event.name === "account.snapshot_captured")
   const openOrders = events.find((event) => event.name === "account.open_orders_captured")
   assert.equal(openingBalances.data.phase, "PREFLIGHT", "trading startup must retain the durable account PREFLIGHT snapshot")
-  assert.equal(openOrders.data.readiness, "BLOCKED", "the audit must explicitly classify the unmatched exchange order as unowned")
-  assert.deepEqual(openOrders.data.blockReasons, ["UNOWNED_OPEN_ORDERS:1"], "the Journal must preserve why the existing order is not considered Harvester-owned")
+  assert.equal(openOrders.data.readiness, "BLOCKED", "the audit must preserve its unowned-order classification independently of trading readiness")
+  assert.deepEqual(openOrders.data.blockReasons, ["UNOWNED_OPEN_ORDERS:1"], "the Journal must preserve why the startup order is not owned by this process")
   assert.equal(openOrders.data.orderCount, 1, "the account-wide audit must record the pre-existing order")
   assert.equal(openOrders.data.orders[0].brokerOrderId, "699694", "the audit must preserve the exact external broker order ID")
+  assert.equal(openOrders.data.orders[0].clientOrderId, startupClientOrderId, "the audit must preserve the prior-process client-order identity")
   assert.ok(calls.includes("open-orders:account-wide:undefined"), "startup must inspect open orders account-wide without a symbol filter")
-  assert.equal(calls.some((call) => call.startsWith("subscribe:book:")), true, "an unowned open order must not prevent market-book subscriptions")
-  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), true, "an unowned open order must not prevent market-price subscriptions")
-  assert.equal(cancelCalls, 0, "startup must never cancel a pre-existing unowned exchange order")
-  assert.equal(placeCalls, 0, "startup must not submit an order merely because an external order was observed")
-  assert.equal(runtime.connected, true, "the trading runtime must start while leaving the external order unadopted")
+  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), true, "an unowned startup order must not prevent market-price subscriptions")
+  assert.equal(runtime.recoveredState.orderRegistry.getActiveOrders().length, 0, "the startup order must remain absent from the current-process OrderRegistry")
+  assert.equal(runtime.connected, true, "the trading runtime must start while leaving the startup order external")
+
+  await broker.emitPrice("BTCUSDT", {
+    symbol: "BTCUSDT",
+    price: "65000",
+    timestamp: Date.now(),
+  })
+  await waitForTestSignal(placementObserved, "strategy order submission after a real market-price event", () => ({
+    placedClientOrderIds,
+    canceledClientOrderIds,
+    userDataReady: runtime.userDataReady,
+  }), 2_000)
+
+  assert.equal(placedClientOrderIds.length, 1, "IGNORE must allow the configured strategy to submit after receiving a real market-price event")
+  assert.notEqual(placedClientOrderIds[0], startupClientOrderId, "the new order must have a new current-process identity")
+  assert.equal(canceledClientOrderIds.includes(startupClientOrderId), false, "the current process must never cancel the startup-snapshot order")
+  assert.equal(runtime.recoveredState.orderRegistry.getActiveOrders().some((order) => order.clientOrderId === startupClientOrderId), false, "the prior-process order must never be adopted into the current registry")
+
   await runtime.stop()
+  assert.equal(canceledClientOrderIds.includes(startupClientOrderId), false, "shutdown must not cancel the prior-process order")
   assert.ok(calls.includes("disconnect"), "the test must close the broker connection after verifying startup")
 })
 
