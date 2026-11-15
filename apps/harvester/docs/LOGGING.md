@@ -240,12 +240,12 @@ or lifecycle status. System and application diagnostics without a strategy
 owner use `⚪ SYS`. Strategy identity is never inferred from a symbol, side,
 order ID, or client-order-ID prefix.
 
-The Conservative engine receives a strategy-scoped adapter around the shared
-`@coinzilla/utils` logger. It adds the immutable CG strategy ID to every
-structured diagnostic emitted by the engine and its composed workflows,
-without mutating the caller's data or changing the shared logger. Other
-strategy workflows must use the same adapter with their own canonical
-`StrategyId`.
+The Conservative engine and the CG Portfolio/RecoveryLedger workflow receive
+strategy-scoped adapters around the shared `@coinzilla/utils` logger. They add
+the immutable CG strategy ID to every structured diagnostic emitted by those
+strategy-owned workflows, including market-price processing failures, without
+mutating caller data or changing the shared logger. Other strategy workflows
+must use the same adapter with their own canonical `StrategyId`.
 
 Strategy identity is part of the console duplicate-suppression fingerprint.
 Identical messages from different strategies therefore remain separate
