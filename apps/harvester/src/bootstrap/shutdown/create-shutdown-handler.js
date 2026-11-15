@@ -144,6 +144,31 @@ async function runShutdownPhaseSafely({ context, phaseRunner, logShutdownFailure
   }
 }
 
+const SHUTDOWN_ERROR_MESSAGE_LIMIT = 2048
+const SHUTDOWN_ERROR_STACK_LIMIT = 8192
+const SHUTDOWN_ERROR_CAUSE_DEPTH_LIMIT = 3
+
+function summarizeShutdownError(error, depth = 0) {
+  const message = typeof error?.message === "string"
+    ? error.message
+    : typeof error === "string" ? error : undefined
+  const summary = {
+    name: typeof error?.name === "string" ? error.name : "Error",
+    code: typeof error?.code === "string" ? error.code : null,
+    failureStage: typeof error?.recoveryFailure?.stage === "string"
+      ? error.recoveryFailure.stage
+      : null,
+    ...(message === undefined ? {} : { message: message.slice(0, SHUTDOWN_ERROR_MESSAGE_LIMIT) }),
+    ...(typeof error?.stack === "string"
+      ? { stack: error.stack.slice(0, SHUTDOWN_ERROR_STACK_LIMIT) }
+      : {}),
+  }
+  if (depth < SHUTDOWN_ERROR_CAUSE_DEPTH_LIMIT && error?.cause !== undefined) {
+    summary.cause = summarizeShutdownError(error.cause, depth + 1)
+  }
+  return summary
+}
+
 function createFailureRecorder({ context, phaseRunner }) {
   const logShutdownFailure = ({ message, stage, result, error } = {}) => {
     let errors
@@ -164,11 +189,7 @@ function createFailureRecorder({ context, phaseRunner }) {
         retryable: typeof failure.retryable === "boolean" ? failure.retryable : null,
       }
       : null
-    const errorDetails = errors.map((entry) => ({
-      name: entry?.name ?? "Error",
-      code: typeof entry?.code === "string" ? entry.code : null,
-      failureStage: entry?.recoveryFailure?.stage ?? null,
-    }))
+    const errorDetails = errors.map((entry) => summarizeShutdownError(entry))
     context.stageFailures.push({
       stage: stage ?? "UNKNOWN",
       failure: failureMetadata,
@@ -179,6 +200,7 @@ function createFailureRecorder({ context, phaseRunner }) {
       stage,
       failure: failureMetadata,
       errors: errorDetails,
+      originalErrors: errors,
       shutdownCorrelationId: context.shutdownCorrelationId,
     })
   }
