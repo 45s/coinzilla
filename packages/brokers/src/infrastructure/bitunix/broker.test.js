@@ -382,3 +382,29 @@ test("Bitunix Spot order history rejects unsupported canonical filters before se
   assert.equal(unsupportedType.ok, false, "unknown order types must not be sent as undocumented Bitunix filters")
   assert.equal(calls.length, 0, "invalid history filters must be rejected before any exchange request")
 })
+
+
+test("Bitunix Spot market catalog excludes pairs without an explicit open status", async () => {
+  const { broker } = createBroker({
+    responses: {
+      "/api/spot/v1/common/coin_pair/list": [
+        { base: "BTC",
+          quote: "USDT",
+          isOpen: "1" },
+        { base: "OLD",
+          quote: "USDT",
+          isOpen: "0" },
+        { base: "UNKNOWN",
+          quote: "USDT" },
+        { base: "UNSURE",
+          quote: "USDT",
+          isOpen: "unknown" },
+      ],
+    },
+  })
+
+  const result = await broker.getExchangeMarkets()
+
+  assert.equal(result.ok, true, "a catalog containing unknown market states should remain readable")
+  assert.deepEqual(result.data.map(({ symbol }) => symbol), ["BTCUSDT"], "only explicitly open Bitunix markets may enter the active catalog")
+})
