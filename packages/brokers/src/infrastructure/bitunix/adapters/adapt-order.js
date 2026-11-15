@@ -1,10 +1,14 @@
 import { Order } from "@coinzilla/entities"
 import { assertDecimalString, compareDecimal, subtractDecimal } from "@coinzilla/utils"
 
-const SIDE_MAP = Object.freeze({ "1": "SELL",
-  "2": "BUY" })
-const TYPE_MAP = Object.freeze({ "1": "LIMIT",
-  "2": "MARKET" })
+const SIDE_MAP = Object.freeze({
+  "1": "SELL",
+  "2": "BUY",
+})
+const TYPE_MAP = Object.freeze({
+  "1": "LIMIT",
+  "2": "MARKET",
+})
 const STATUS_MAP = Object.freeze({
   "1": "OPEN",
   "2": "FILLED",
@@ -42,30 +46,50 @@ export function adaptOrder(bitunixOrder) {
   }
 
   const normalizedSide = SIDE_MAP[String(side)]
-  if (!normalizedSide) throw new TypeError("Bitunix Spot order side is unsupported")
+  if (!normalizedSide) {
+    throw new TypeError("Bitunix Spot order side is unsupported")
+  }
   const normalizedType = TYPE_MAP[String(type ?? bitunixOrder.orderType)]
-  if (!normalizedType) throw new TypeError("Bitunix Spot order type is unsupported")
+  if (!normalizedType) {
+    throw new TypeError("Bitunix Spot order type is unsupported")
+  }
   const normalizedStatus = STATUS_MAP[String(status)]
-  if (!normalizedStatus) throw new TypeError("Bitunix Spot order status is unsupported")
+  if (!normalizedStatus) {
+    throw new TypeError("Bitunix Spot order status is unsupported")
+  }
 
-  assertDecimalString({ value: volume,
-    field: "Bitunix Spot original base quantity" })
-  assertDecimalString({ value: dealVolume,
-    field: "Bitunix Spot executed base quantity" })
-  if (compareDecimal({ left: volume,
-    right: "0" }) < 0 ||
-      compareDecimal({ left: dealVolume,
-        right: "0" }) < 0 ||
-      compareDecimal({ left: dealVolume,
-        right: volume }) > 0) {
+  assertDecimalString({
+    value: volume,
+    field: "Bitunix Spot original base quantity",
+  })
+  assertDecimalString({
+    value: dealVolume,
+    field: "Bitunix Spot executed base quantity",
+  })
+  if (compareDecimal({
+    left: volume,
+    right: "0",
+  }) < 0 ||
+      compareDecimal({
+        left: dealVolume,
+        right: "0",
+      }) < 0 ||
+      compareDecimal({
+        left: dealVolume,
+        right: volume,
+      }) > 0) {
     throw new TypeError("Bitunix Spot order quantities are outside the valid range")
   }
   if (normalizedType === "LIMIT") {
-    assertDecimalString({ value: price,
-      field: "Bitunix Spot limit price" })
+    assertDecimalString({
+      value: price,
+      field: "Bitunix Spot limit price",
+    })
   }
-  const remainingQuantity = subtractDecimal({ left: volume,
-    right: dealVolume })
+  const remainingQuantity = subtractDecimal({
+    left: volume,
+    right: dealVolume,
+  })
 
   const order = new Order({
     type: normalizedType,
