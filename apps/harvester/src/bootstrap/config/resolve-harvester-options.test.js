@@ -177,7 +177,12 @@ test("rejects a pair without an explicit tradingEnvironment before startup", asy
 })
 
 test("rejects configurations without an enabled pair", async () => {
-  const fixture = createFixture({ cfg: config({ enabledSymbols: [] }), env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } })
+  const cfg = config({ enabledSymbols: ["BTCUSDT"] })
+  cfg.strategies.CG_coinGrabber.pairs.BTCUSDT.enabled = false
+  const fixture = createFixture({
+    cfg,
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  })
   await assert.rejects(
     resolveHarvesterOptions(fixture.input),
     (error) => error.code === "HARVESTER_EFFECTIVE_CONFIGURATION_INVALID" &&
