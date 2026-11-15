@@ -1596,3 +1596,6 @@ A separate Binance production LIVE session (runtime session `85046a77-d7de-4afe-
 - [x] Added bounded error summaries (message, stack and up to three cause links) and retained original Error objects for logger integrations in [PR #1148](https://github.com/45s/coinzilla/pull/1148).
 - [x] Added an offline regression proving the original replacement error and nested broker cause remain available in shutdown diagnostics and logs; incomplete-shutdown behavior remains fail-closed.
 - **Disposition:** this fixes the source-level observability gap only. It does not retroactively recover the original incident's missing cause, establish whether the replacement reached Binance, or resolve F-055. No TESTNET/LIVE exchange operation was performed.
+
+
+- [x] Merged [PR #1148](https://github.com/45s/coinzilla/pull/1148) into `develop` as `a04aef010576e459896c2319ab4d1a8e02cfe761`; exact PR head `30fea2b9b9f141cefcb45c163f98c842688a69c5`. Harvester tests passed 1,595/1,595; all six required checks passed, including workspace coverage. The original F-055 broker/exchange cause remains UNKNOWN.
