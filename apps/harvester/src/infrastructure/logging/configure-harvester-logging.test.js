@@ -673,20 +673,20 @@ test("keeps strategy-owned order facts and pending client identity on compact li
     2,
     "A cancellation result and its exact executed/cancelled quantities must share one terminal line.",
   )
-  assert.match(
+  assert.equal(
     lines[0],
-    /^19:14:52 🪙 CG .*#pending .*ZROUSDT .*SELL .*4\.98 .*@ .*1\.393 h-325e71ba16494aeb875e6e-3$/,
-    "A pending submission must keep its client order ID on the same line without a verbose label.",
+    "19:14:52 🪙 CG SUBMITTED #pending ZROUSDT SELL 4.98 @ 1.393 h-325e71ba16494aeb875e6e-3",
+    "A pending submission must use single-space columns and append its raw client order ID on the same line without a verbose label.",
   )
   assert.doesNotMatch(
     lines[0],
-    /\| Client:|Client order ID:/,
+    /\\| Client:|Client order ID:/,
     "The pending client ID must be printed without a space-consuming explanatory label.",
   )
-  assert.match(
+  assert.equal(
     lines[1],
-    /^19:14:53 🔴 RS .*CANCELLED .*#1341115 .*ADAUSDT .*SELL .*49\.90 .*@ .*0\.15410 \| Executed: 20 \| Cancelled: 29\.90$/,
-    "The cancellation line must retain its strategy, order facts and exact cancellation outcome without a second detail line.",
+    "19:14:53 🔴 RS CANCELLED #1341115 ADAUSDT SELL 49.90 @ 0.15410 | Executed: 20 | Cancelled: 29.90",
+    "The cancellation line must use compact single-space columns and retain its exact cancellation outcome without a second detail line.",
   )
   output.destroy()
 })
