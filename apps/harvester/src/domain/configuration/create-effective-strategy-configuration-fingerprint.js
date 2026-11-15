@@ -39,7 +39,10 @@ function canonicalize({ value, path } = {}) {
           expected: "a non-secret strategy setting",
         })
       }
-      result[key] = canonicalize({ value: value[key], path: `${path}.${key}` })
+      result[key] = canonicalize({
+        value: value[key],
+        path: `${path}.${key}`,
+      })
     }
     return result
   }
