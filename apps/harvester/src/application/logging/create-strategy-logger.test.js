@@ -8,6 +8,7 @@ const LOG_METHODS = Object.freeze([
   "debug",
   "info",
   "warn",
+  "warning",
   "error",
   "success",
   "system",
