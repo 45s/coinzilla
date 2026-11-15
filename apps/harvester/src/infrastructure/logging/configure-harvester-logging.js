@@ -425,12 +425,13 @@ export function createHarvesterConsoleTransport({
 } = {}) {
   let previousFingerprint
   let previousTimestamp
+  let previousMarker = SYSTEM_LOG_MARKER
   let suppressedCount = 0
 
   const flushSuppressed = () => {
     if (suppressedCount === 0) return
     const time = new Date(previousTimestamp).toLocaleTimeString()
-    const line = `${time} ${SYSTEM_LOG_MARKER} Previous identical log entry repeated ${suppressedCount} additional time(s)`
+    const line = `${time} ${previousMarker} Previous identical log entry repeated ${suppressedCount} additional time(s)`
     output.write(formatConsoleLine({
       line,
       level: "info",
@@ -463,6 +464,7 @@ export function createHarvesterConsoleTransport({
       flushSuppressed()
       previousFingerprint = fingerprint
       previousTimestamp = timestamp
+      previousMarker = strategyLogMarkers[data?.strategyId] ?? SYSTEM_LOG_MARKER
 
       if (isOrderLifecycle) {
         writeOrderLifecycleRecord({
