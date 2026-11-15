@@ -18,7 +18,7 @@ created: 2026-11-15
 
 Harvester starts with a new process-local `OrderRegistry`. It already reads all exchange open orders and durably records the PREFLIGHT account snapshot and open-order observation before market subscriptions.
 
-The account snapshot manager currently makes an extra distinction based on client-order-ID shape:
+Before PR #1166, the account snapshot manager made an extra distinction based on client-order-ID shape:
 
 - Manual-looking unmatched orders are classified as external and passed through the configured per-pair `externalOrdersPolicy`.
 - Unmatched orders with a Harvester-looking client ID are classified as unresolved prior-process Harvester orders.
@@ -89,15 +89,13 @@ Every unmatched order in the startup snapshot is external, regardless of client-
 
 Exact-head verification for #1166 passed the Harvester targeted tests (5 configured files), Harvester unit suite (1,630 passed), workspace unit tests, workspace coverage jobs and gate, syntax/actionlint, changed-file ESLint, Markdown style, dependency audit, external documentation links and Utils unit tests. The read-only Binance TESTNET integration job was skipped. No TESTNET/LIVE exchange operation was performed.
 
-## Original implementation requirements
+## Original implementation requirements — all completed by #1166
 
-The following requirements were completed by #1166:
-
-1. Remove the prefix-based unresolved-prior-process classification and unconditional engine gate.
-2. Route all unmatched startup orders through the existing external-order classification and configured per-pair policy.
-3. Remove obsolete state, callbacks and tests once all consumers are migrated.
-4. Add deterministic tests for Harvester-prefixed startup orders under both `IGNORE` and `BLOCK`, including unrelated-market isolation.
-5. Preserve durable snapshot ordering, fail-closed snapshot errors, current-run order ownership, and external execution safety.
-6. Update the source, tests, this ADR, Journal operations and roadmaps together.
+1. [x] Remove the prefix-based unresolved-prior-process classification and unconditional engine gate.
+2. [x] Route all unmatched startup orders through the existing external-order classification and configured per-pair policy.
+3. [x] Remove obsolete state, callbacks and tests once all consumers are migrated.
+4. [x] Add deterministic tests for Harvester-prefixed startup orders under both `IGNORE` and `BLOCK`, including unrelated-market isolation.
+5. [x] Preserve durable snapshot ordering, fail-closed snapshot errors, current-run order ownership, and external execution safety.
+6. [x] Update the source, tests, this ADR, Journal operations and roadmaps together.
 
 No TESTNET or LIVE exchange operation is required or authorized by this decision.
