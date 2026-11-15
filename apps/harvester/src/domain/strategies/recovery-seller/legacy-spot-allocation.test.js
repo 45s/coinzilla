@@ -207,7 +207,10 @@ test("aggregates authorized legacy quantities sharing one base asset without dou
 
   assert.deepEqual(
     allocations,
-    [{ assetId: btcAsset.id, amount: "0.5" }],
+    [{
+      assetId: btcAsset.id,
+      amount: "0.5",
+    }],
     "Two authorized legacy positions sharing BTC must aggregate against the same 0.5 BTC account custody instead of each claiming it independently.",
   )
 })
