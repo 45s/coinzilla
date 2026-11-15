@@ -21,7 +21,6 @@ function validateOptionalCallbacks({
   onOperationalStateCancellationOutcome,
   onOperationalStateStrategyMarketPaused,
   hasUnownedOpenOrdersForSymbol,
-  hasUnresolvedHarvesterOpenOrdersForSymbol,
 } = {}) {
   if (getVolatilityData !== undefined && typeof getVolatilityData !== "function") {
     throw new TypeError("getVolatilityData must be a function when provided")
@@ -47,9 +46,6 @@ function validateOptionalCallbacks({
   }
   if (typeof hasUnownedOpenOrdersForSymbol !== "function") {
     throw new TypeError("hasUnownedOpenOrdersForSymbol must be a function")
-  }
-  if (typeof hasUnresolvedHarvesterOpenOrdersForSymbol !== "function") {
-    throw new TypeError("hasUnresolvedHarvesterOpenOrdersForSymbol must be a function")
   }
   if (typeof isMarketBookFresh !== "function") {
     throw new TypeError("isMarketBookFresh must be a function")
@@ -85,7 +81,6 @@ export function validateConservativeTradingEngineOptions({
   onOperationalStateCancellationOutcome,
   onOperationalStateStrategyMarketPaused,
   hasUnownedOpenOrdersForSymbol,
-  hasUnresolvedHarvesterOpenOrdersForSymbol,
   initialState,
 } = {}) {
   validateStrategyPolicy({ strategyPolicy })
@@ -110,7 +105,6 @@ export function validateConservativeTradingEngineOptions({
     onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused,
     hasUnownedOpenOrdersForSymbol,
-    hasUnresolvedHarvesterOpenOrdersForSymbol,
-  })
+    })
   validateInitialState({ initialState })
 }
