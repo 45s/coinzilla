@@ -45,6 +45,7 @@ function validateRequest(input = {}) {
     path,
     queryParams = {},
     body,
+    stateChanging = false,
   } = input
   const normalizedMethod = typeof method === "string" ? method.toUpperCase() : ""
   if (normalizedMethod !== "GET" && normalizedMethod !== "POST") {
@@ -67,6 +68,7 @@ function validateRequest(input = {}) {
     path,
     queryParams,
     body,
+    stateChanging,
   }
 }
 
