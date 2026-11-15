@@ -913,3 +913,18 @@ Cross-domain request [#702](https://github.com/45s/coinzilla/issues/702) include
 The Binance `getSymbolFilters` path now retrieves authenticated `myFilters` alongside public `exchangeInfo` and passes account symbol, exchange and asset filters to the adapter. Retrieval failure or incomplete response shape is fail-closed. Applicable constraints not yet evaluated by the trading domain are surfaced as exchange-neutral metadata for the Harvester readiness gate.
 
 This work is in an open task PR targeting `develop`; do not mark it complete until exact-head broker tests, workspace CI and the linked Harvester readiness regressions pass. See [Harvester exchange trading constraints](../../apps/harvester/docs/exchange-trading-constraints.md) for the cross-domain contract.
+
+## 2026-11-16 — Bitunix Spot broker foundation
+
+**Status: In progress — read-only adapter foundation; not Harvester-ready.**
+
+- Added a separate `infrastructure/bitunix/` REST integration, validated live-only configuration, Bitunix REST signing/client, canonical market and balance adapters, legacy order mapping, and per-order canonical fill mapping.
+- Added `BitunixSpotBroker` behind the existing `CoreBroker` compatibility base and exported it from the package entry point. Read operations currently cover market catalog/metadata, balances, per-symbol pending orders/history, order detail, latest price lookup, and per-order fills.
+- Order quantity adaptation uses shared exact decimal subtraction and retains exact original/executed/remaining strings. No Binance protocol code is reused.
+- Order placement and cancellation are explicitly disabled. Bitunix Spot has no documented client-order ID; a lost placement response therefore cannot be reliably reconciled. Private Spot WebSocket docs do not define continuous order/execution events, and public market WS methods are request/response rather than subscriptions.
+- `getAccountSnapshot()` fails closed because the account response has no source timestamp. Open orders and order history require a symbol. Canonical order methods fail closed because Bitunix does not provide the required client-order identity.
+- No Spot TESTNET endpoint is documented. The single-order REST endpoint says limit `volume` is quote quantity and market `volume` is base quantity, while the REST batch-order and WebSocket order docs say the inverse. No order submission or quantity conversion is attempted until clarified.
+- Offline tests cover signing, REST transport, lossless account-balance parsing, config, adapters, supported reads, unsupported operations, and exact quantity arithmetic. The first PR CI run exposed four export/assertion expectation mismatches; those were corrected and the suite was expanded. Latest exact-head package tests, coverage and repository checks are pending.
+- See the [Bitunix capability contract](../../docs/brokers-websocket-contract.md#bitunix-spot-capability-contract) and [package README](./README.md#bitunix-spot-integration).
+
+**Remaining work before any trading use:** verify all response envelopes against actual Spot API examples, clarify the order quantity discrepancy with Bitunix, obtain a stable exchange-supported client order identity or an equivalent authoritative reconciliation mechanism, establish private order/execution event coverage or a safe polling/recovery contract, and add the missing canonical order/account lifecycle contract only when the exchange supplies the required facts.
