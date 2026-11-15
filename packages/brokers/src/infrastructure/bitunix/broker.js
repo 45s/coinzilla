@@ -17,6 +17,22 @@ const API = Object.freeze({
   lastPrice: "/api/spot/v1/market/last_price",
 })
 
+const HISTORY_STATUS_CODES = Object.freeze({
+  OPEN: "1",
+  FILLED: "2",
+  PARTIALLY_FILLED: "3",
+  CANCELED: "4",
+  PARTIALLY_FILLED_CANCELED: "7",
+})
+const HISTORY_SIDE_CODES = Object.freeze({
+  SELL: "1",
+  BUY: "2",
+})
+const HISTORY_TYPE_CODES = Object.freeze({
+  LIMIT: "1",
+  MARKET: "2",
+})
+
 function unsupported({ operation, reason }) {
   return new Error(`Bitunix Spot ${operation} is not supported safely: ${reason}`)
 }
@@ -82,6 +98,9 @@ function createHistoryRequest({ input }) {
     endTime,
     limit,
     page = 1,
+    status,
+    side,
+    type,
   } = input
   const normalizedSymbol = requireSymbol({
     symbol,
@@ -117,6 +136,19 @@ function createHistoryRequest({ input }) {
   }
   if (endTime !== undefined) {
     body.endTime = new Date(endTime).toISOString()
+  }
+  for (const [field, value, codes] of [
+    ["status", status, HISTORY_STATUS_CODES],
+    ["side", side, HISTORY_SIDE_CODES],
+    ["type", type, HISTORY_TYPE_CODES],
+  ]) {
+    if (value === undefined) {
+      continue
+    }
+    if (typeof value !== "string" || !Object.hasOwn(codes, value)) {
+      throw new TypeError(`Bitunix Spot order history ${field} filter is unsupported`)
+    }
+    body[field] = codes[value]
   }
   return { body }
 }
