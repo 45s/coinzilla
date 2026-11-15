@@ -35,6 +35,12 @@ function requireArray({ value, operation }) {
   return value
 }
 
+function normalizeOrderSide({ side }) {
+  if (String(side) === "2") return "BUY"
+  if (String(side) === "1") return "SELL"
+  throw new TypeError("Bitunix Spot order side is unsupported")
+}
+
 /** Bitunix Spot adapter. Capabilities are intentionally read-only until its order lifecycle can be reconciled safely. */
 export class BitunixSpotBroker extends CoreBroker {
   /**
@@ -238,7 +244,7 @@ export class BitunixSpotBroker extends CoreBroker {
       return toResult({
         data: deals.map((trade) => adaptCanonicalFill({
           trade: { ...trade, orderId: String(orderId) },
-          side: String(order.side) === "2" ? "BUY" : String(order.side) === "1" ? "SELL" : "",
+          side: normalizeOrderSide({ side: order.side }),
           market,
         })),
       })
