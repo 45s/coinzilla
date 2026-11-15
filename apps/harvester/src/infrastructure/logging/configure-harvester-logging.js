@@ -442,7 +442,7 @@ export function createHarvesterConsoleTransport({
         timestamp,
         level,
         method,
-        data,
+        summary,
       })
     },
     close: flushSuppressed,
