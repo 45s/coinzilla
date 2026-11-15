@@ -17,6 +17,7 @@ const createFixture = ({
   portfolio = new Portfolio(),
   activeOrders = [],
   additionalTrackedBaseQuantity = [],
+  additionalTrackedBaseQuantityProvider,
   operationalStateStore,
   logger = {},
   monotonicNow
@@ -67,7 +68,7 @@ const createFixture = ({
     },
     marketMetadata: new Map([[market.symbol, { market }]]),
     getPortfolio: () => portfolio,
-    getAdditionalTrackedBaseQuantity: () => additionalTrackedBaseQuantity,
+    getAdditionalTrackedBaseQuantity: additionalTrackedBaseQuantityProvider ?? (() => additionalTrackedBaseQuantity),
     getTradingEngine: () => ({ getActiveOrders: () => activeOrders }),
     getRecoveredState: () => ({ orderRegistry: { orders: [] } }),
     getHasCanonicalOwnershipReconciliation: () => false,
@@ -1121,6 +1122,30 @@ test("times the CLOSING Journal durability barrier and reports failed flushes", 
   assert.equal(completed.phase, "CLOSING")
 })
 
+
+
+test("provides the authoritative account balances and current Portfolio to the tracked Spot source", async () => {
+  const { market } = createFixture()
+  const accountSnapshot = createAccountSnapshot({
+    market,
+    sourceTime: 103,
+  })
+  const portfolio = new Portfolio()
+  let sourceInput
+  const fixture = createFixture({
+    accountSnapshots: [accountSnapshot],
+    portfolio,
+    additionalTrackedBaseQuantityProvider: (input) => {
+      sourceInput = input
+      return []
+    },
+  })
+
+  await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
+
+  assert.equal(sourceInput.portfolio, portfolio, "The Spot allocation source must receive the same current Portfolio used for the account snapshot baseline.")
+  assert.equal(sourceInput.balances, accountSnapshot.data.balances, "The Spot allocation source must verify custody against the exact canonical balances returned by the broker for this snapshot.")
+})
 
 test("captures additional tracked Spot allocation separately from Portfolio in account snapshot baselines", async () => {
   const { market } = createFixture()
