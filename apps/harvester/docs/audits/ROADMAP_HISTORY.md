@@ -1588,3 +1588,11 @@ A separate Binance production LIVE session (runtime session `85046a77-d7de-4afe-
 - [x] Preserved the monotonic executed-quantity invariant and existing transition validation; no registry invariant was relaxed.
 - [x] Merged [PR #1146](https://github.com/45s/coinzilla/pull/1146) into `develop` as `3438ed703e8997c872f65fa357faa6993e604dc4`. Exact PR head `448aadd3dda3e98cc33e2c99ffabb456a67959fd`: Harvester tests 1,585/1,585; configured Harvester targeted tests, workspace package tests, workspace coverage, JavaScript syntax/changed-file lint/actionlint, external documentation links and dependency audit all passed.
 - TESTNET integration was skipped. No Binance TESTNET/LIVE operation was performed; exchange-side event history remains required to determine the delivery cause/order. F-055 shutdown replacement uncertainty remains separate and open.
+
+
+## 2026-11-15 — F-055 shutdown replacement diagnostic capture correction
+
+- [x] Confirmed the shutdown failure recorder previously omitted error messages, stack traces and nested causes from its retained stage-failure summary and structured error log.
+- [x] Added bounded error summaries (message, stack and up to three cause links) and retained original Error objects for logger integrations in [PR #1148](https://github.com/45s/coinzilla/pull/1148).
+- [x] Added an offline regression proving the original replacement error and nested broker cause remain available in shutdown diagnostics and logs; incomplete-shutdown behavior remains fail-closed.
+- **Disposition:** this fixes the source-level observability gap only. It does not retroactively recover the original incident's missing cause, establish whether the replacement reached Binance, or resolve F-055. No TESTNET/LIVE exchange operation was performed.
