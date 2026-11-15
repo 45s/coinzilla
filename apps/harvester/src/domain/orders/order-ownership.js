@@ -25,11 +25,12 @@ export function createOrderOwnership({ ownership, clientOrderId, brokerOrderId }
   if (ownership.brokerOrderId !== undefined && ownership.brokerOrderId !== brokerOrderId) {
     throw new Error("Order ownership brokerOrderId does not match its canonical order")
   }
-  for (const field of ["purpose", "cycleId"]) {
-    if (ownership[field] !== undefined && ownership[field] !== null &&
-        (typeof ownership[field] !== "string" || !ownership[field].trim())) {
-      throw new TypeError(`Order ownership ${field} must be a non-empty string when provided`)
-    }
+  if (typeof ownership.purpose !== "string" || !ownership.purpose.trim()) {
+    throw new TypeError("Order ownership requires a non-empty purpose")
+  }
+  if (ownership.cycleId !== undefined &&
+      (typeof ownership.cycleId !== "string" || !ownership.cycleId.trim())) {
+    throw new TypeError("Order ownership cycleId must be a non-empty string when provided")
   }
 
   const normalized = {
@@ -40,9 +41,7 @@ export function createOrderOwnership({ ownership, clientOrderId, brokerOrderId }
   if (brokerOrderId !== undefined) {
     normalized.brokerOrderId = brokerOrderId
   }
-  if (typeof ownership.purpose === "string") {
-    normalized.purpose = ownership.purpose.trim()
-  }
+  normalized.purpose = ownership.purpose.trim()
   if (typeof ownership.cycleId === "string") {
     normalized.cycleId = ownership.cycleId.trim()
   }
