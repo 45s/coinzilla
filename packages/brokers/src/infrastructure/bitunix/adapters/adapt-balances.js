@@ -1,4 +1,5 @@
 import { Asset, Balance, Quantity } from "@coinzilla/entities"
+import { assertDecimalString, compareDecimal } from "@coinzilla/utils"
 
 function createAsset({ coin }) {
   if (typeof coin !== "string" || !coin.trim()) {
@@ -11,6 +12,10 @@ function createAsset({ coin }) {
 function normalizeAmount({ value, field }) {
   if (typeof value !== "string") {
     throw new TypeError(`Bitunix Spot account balance ${field} must be a precision-preserving decimal string`)
+  }
+  assertDecimalString({ value, field: `Bitunix Spot ${field}` })
+  if (compareDecimal({ left: value, right: "0" }) < 0) {
+    throw new RangeError(`Bitunix Spot account balance ${field} must be non-negative`)
   }
   return value
 }
