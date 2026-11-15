@@ -205,6 +205,10 @@ the normalized phase/status pair alongside the existing log level and method,
 so different phases or statuses are always visible. A genuinely identical consecutive phase/status line may be
 suppressed and reported with the existing repeat-count message.
 
+The phase/status pair is part of the pure console-record fingerprint; timestamps
+and omitted diagnostic fields do not prevent genuinely identical terminal
+summaries from being deduplicated.
+
 The concise terminal line is only the operator-facing summary. The original
 structured DEBUG/TRACE entry remains unchanged in both cumulative and
 per-session files, including `shutdownPhase`, `phaseStatus`,
