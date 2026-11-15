@@ -330,8 +330,7 @@ export async function main({
     if (!runtime.connected) {
       startupMessage = "Binance connection was not established."
     } else if (runtime.tradingEnabled && runtime.strategyMode === "conservative") {
-      startupMessage = "Binance market-data stream connected; " + runtime.subscriptions.length +
-        " subscriptions active. Conservative " + runtimeConfig.tradingMode.toUpperCase() + " trading is enabled; waiting for validated market prices and user-data readiness."
+      startupMessage = "Binance market-data stream connected; active market subscriptions: " + runtime.subscriptions.length + ". Conservative " + runtimeConfig.tradingMode.toUpperCase() + " trading is enabled; waiting for validated market prices and user-data readiness."
     } else {
       startupMessage = "Binance connection established; Binance trading mode is " + runtimeConfig.tradingMode.toUpperCase() + "."
     }
