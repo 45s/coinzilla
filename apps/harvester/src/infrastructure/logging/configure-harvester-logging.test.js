@@ -652,7 +652,7 @@ function createShutdownPhaseEntry({ phase, status, failureReason } = {}) {
     level: "info",
     method: "system",
     data: {
-      message: "Harvester shutdown phase " + status.toLowerCase(),
+      message: `Harvester shutdown phase ${status.toLowerCase()}`,
       shutdownPhase: phase,
       phaseStatus: status,
       shutdownCorrelationId: "runtime-session-1",
@@ -691,9 +691,9 @@ test("renders STARTED, COMPLETED, and FAILED shutdown phases in the exact concis
   assert.deepEqual(
     written.trimEnd().split("\n"),
     [
-      expectedTime + " shutdown phase MARKET_INTAKE_STOP STARTED",
-      expectedTime + " shutdown phase MARKET_INTAKE_STOP COMPLETED",
-      expectedTime + " shutdown phase MARKET_INTAKE_STOP FAILED",
+      `${expectedTime} shutdown phase MARKET_INTAKE_STOP STARTED`,
+      `${expectedTime} shutdown phase MARKET_INTAKE_STOP COMPLETED`,
+      `${expectedTime} shutdown phase MARKET_INTAKE_STOP FAILED`,
     ],
     "Every shutdown transition must show its timestamp, exact phase identity, and status without generic prose or diagnostic metadata.",
   )
@@ -707,10 +707,22 @@ test("keeps consecutive transitions for different phases and statuses visible", 
   output.on("data", (chunk) => { written += chunk.toString() })
   const transport = createHarvesterConsoleTransport({ output, color: false })
   const phaseTransitions = [
-    { phase: "MARKET_INTAKE_STOP", status: "STARTED" },
-    { phase: "EVENT_DRAIN", status: "STARTED" },
-    { phase: "EVENT_DRAIN", status: "COMPLETED" },
-    { phase: "MARKET_INTAKE_STOP", status: "COMPLETED" },
+    {
+      phase: "MARKET_INTAKE_STOP",
+      status: "STARTED",
+    },
+    {
+      phase: "EVENT_DRAIN",
+      status: "STARTED",
+    },
+    {
+      phase: "EVENT_DRAIN",
+      status: "COMPLETED",
+    },
+    {
+      phase: "MARKET_INTAKE_STOP",
+      status: "COMPLETED",
+    },
   ]
 
   for (const transition of phaseTransitions) {
@@ -721,10 +733,10 @@ test("keeps consecutive transitions for different phases and statuses visible", 
   assert.deepEqual(
     written.trimEnd().split("\n"),
     [
-      expectedTime + " shutdown phase MARKET_INTAKE_STOP STARTED",
-      expectedTime + " shutdown phase EVENT_DRAIN STARTED",
-      expectedTime + " shutdown phase EVENT_DRAIN COMPLETED",
-      expectedTime + " shutdown phase MARKET_INTAKE_STOP COMPLETED",
+      `${expectedTime} shutdown phase MARKET_INTAKE_STOP STARTED`,
+      `${expectedTime} shutdown phase EVENT_DRAIN STARTED`,
+      `${expectedTime} shutdown phase EVENT_DRAIN COMPLETED`,
+      `${expectedTime} shutdown phase MARKET_INTAKE_STOP COMPLETED`,
     ],
     "Different consecutive phase identifiers and statuses must never be collapsed by console deduplication.",
   )
@@ -753,8 +765,8 @@ test("suppresses only a genuinely identical consecutive shutdown phase transitio
   assert.deepEqual(
     written.trimEnd().split("\n"),
     [
-      expectedTime + " shutdown phase MARKET_INTAKE_STOP STARTED",
-      "21:25:58 Previous identical log entry repeated 1 additional time(s)",
+      `${expectedTime} shutdown phase MARKET_INTAKE_STOP STARTED`,
+      `${new Date(SHUTDOWN_PHASE_TEST_TIMESTAMP).toLocaleTimeString()} Previous identical log entry repeated 1 additional time(s)`,
     ],
     "Consecutive identical phase/status summaries may be suppressed, but their repeat count must remain observable.",
   )
@@ -801,7 +813,7 @@ test("preserves full shutdown diagnostics in DEBUG and TRACE files while keeping
     const expectedTime = getExpectedShutdownTime()
     assert.equal(
       written.trimEnd(),
-      expectedTime + " shutdown phase BROKER_DISCONNECT FAILED",
+      `${expectedTime} shutdown phase BROKER_DISCONNECT FAILED`,
       "The ordinary terminal must show only the concise failed phase identity and status.",
     )
 

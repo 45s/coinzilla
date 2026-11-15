@@ -69,11 +69,11 @@ test("outer process-stop orchestration uses concise shutdown phase and milestone
   assert.deepEqual(
     terminal.lines(),
     [
-      expectedTime + " shutdown requested",
-      expectedTime + " shutdown state established",
-      expectedTime + " shutdown phase OPERATOR_CONTROL_STOP STARTED",
-      expectedTime + " shutdown phase OPERATOR_CONTROL_STOP COMPLETED",
-      expectedTime + " shutdown phase SHUTDOWN_COMPLETED COMPLETED",
+      `${expectedTime} shutdown requested`,
+      `${expectedTime} shutdown state established`,
+      `${expectedTime} shutdown phase OPERATOR_CONTROL_STOP STARTED`,
+      `${expectedTime} shutdown phase OPERATOR_CONTROL_STOP COMPLETED`,
+      `${expectedTime} shutdown phase SHUTDOWN_COMPLETED COMPLETED`,
     ],
     "The outer process-stop lifecycle must use the shared concise format and keep instantaneous milestones distinct from work phases.",
   )
@@ -124,19 +124,19 @@ test("runtime cleanup orchestration uses the same concise phase terminal format"
   const expectedTime = getExpectedTime()
   const lines = terminal.lines()
   assert.ok(
-    lines.includes(expectedTime + " shutdown phase MARKET_INTAKE_STOP STARTED"),
+    lines.includes(`${expectedTime} shutdown phase MARKET_INTAKE_STOP STARTED`),
     "Runtime cleanup must print the MARKET_INTAKE_STOP STARTED transition in the shared terminal format.",
   )
   assert.ok(
-    lines.includes(expectedTime + " shutdown phase MARKET_INTAKE_STOP COMPLETED"),
+    lines.includes(`${expectedTime} shutdown phase MARKET_INTAKE_STOP COMPLETED`),
     "Runtime cleanup must print the MARKET_INTAKE_STOP COMPLETED transition in the shared terminal format.",
   )
   assert.ok(
-    lines.includes(expectedTime + " shutdown phase BROKER_DISCONNECT COMPLETED"),
+    lines.includes(`${expectedTime} shutdown phase BROKER_DISCONNECT COMPLETED`),
     "Runtime cleanup must print the broker-disconnect outcome with its exact phase identity and status.",
   )
   assert.ok(
-    lines.includes(expectedTime + " shutdown phase RUNTIME_SHUTDOWN_COMPLETED COMPLETED"),
+    lines.includes(`${expectedTime} shutdown phase RUNTIME_SHUTDOWN_COMPLETED COMPLETED`),
     "Runtime cleanup must retain the final successful shutdown transition.",
   )
   assert.equal(state.status, "STOPPED", "The existing runtime shutdown outcome must remain successful after logging.");

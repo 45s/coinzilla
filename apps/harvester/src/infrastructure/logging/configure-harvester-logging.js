@@ -36,6 +36,12 @@ const CONSOLE_DETAIL_KEYS = Object.freeze([
   "broker",
   "reason",
 ])
+const SHUTDOWN_PHASE_STATUSES = new Set(["STARTED", "COMPLETED", "FAILED"])
+const SHUTDOWN_PHASE_PATTERN = /^[A-Z][A-Z0-9_]*$/
+const SHUTDOWN_MILESTONE_MESSAGES = Object.freeze({
+  SHUTDOWN_REQUESTED: "shutdown requested",
+  STOP_STATE_ESTABLISHED: "shutdown state established",
+})
 const MAX_CONSOLE_LINE_LENGTH = 200
 const MAX_PORTFOLIO_STATS_LINE_LENGTH = 360
 const LEVEL_COLORS = Object.freeze({
@@ -52,6 +58,61 @@ const ANSI_RESET = "\u001b[0m"
 function formatConsoleLine({ line, level, method = level, color }) {
   const code = LEVEL_COLORS[method] ?? LEVEL_COLORS[level]
   return color && code ? code + line + ANSI_RESET : line
+}
+
+function getShutdownConsolePresentation({ data } = {}) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return null
+  }
+
+  const phase = typeof data.shutdownPhase === "string"
+    ? data.shutdownPhase.trim().toUpperCase()
+    : ""
+  const status = typeof data.phaseStatus === "string"
+    ? data.phaseStatus.trim().toUpperCase()
+    : ""
+  if (!SHUTDOWN_PHASE_PATTERN.test(phase) || !SHUTDOWN_PHASE_STATUSES.has(status)) {
+    return null
+  }
+
+  const milestoneMessage = status === "COMPLETED" && Object.hasOwn(SHUTDOWN_MILESTONE_MESSAGES, phase)
+    ? SHUTDOWN_MILESTONE_MESSAGES[phase]
+    : undefined
+  return {
+    phase,
+    status,
+    message: milestoneMessage ?? `shutdown phase ${phase} ${status}`,
+  }
+}
+
+function formatShutdownPhaseConsoleLine({ timestamp, presentation } = {}) {
+  const time = new Date(timestamp).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+  return `${time} ${presentation.message}`
+}
+
+function writeShutdownPhaseConsoleRecord({
+  output,
+  color,
+  timestamp,
+  level,
+  method,
+  presentation,
+} = {}) {
+  const line = formatShutdownPhaseConsoleLine({
+    timestamp,
+    presentation,
+  })
+  output.write(formatConsoleLine({
+    line,
+    level,
+    method,
+    color,
+  }) + "\\n")
 }
 
 function summarizeConsoleData({ data } = {}) {
@@ -448,16 +509,28 @@ export function createHarvesterConsoleTransport({
     level: "info",
     write({ timestamp, level, method = level, data }) {
       const isOrderLifecycle = data?.orderLifecycle === true
-      const summary = isOrderLifecycle
+      const shutdownPresentation = getShutdownConsolePresentation({ data })
+      const summary = shutdownPresentation
         ? {
-          message: "Order lifecycle",
-          details: data,
+          message: shutdownPresentation.message,
+          details: {},
         }
-        : summarizeConsoleData({ data })
+        : isOrderLifecycle
+          ? {
+            message: "Order lifecycle",
+            details: data,
+          }
+          : summarizeConsoleData({ data })
       const fingerprint = JSON.stringify({
         level,
         method,
         summary,
+        ...(shutdownPresentation
+          ? {
+            shutdownPhase: shutdownPresentation.phase,
+            phaseStatus: shutdownPresentation.status,
+          }
+          : {}),
       })
       if (fingerprint === previousFingerprint) {
         suppressedCount += 1
@@ -468,6 +541,17 @@ export function createHarvesterConsoleTransport({
       previousFingerprint = fingerprint
       previousTimestamp = timestamp
 
+      if (shutdownPresentation) {
+        writeShutdownPhaseConsoleRecord({
+          output,
+          color,
+          timestamp,
+          level,
+          method,
+          presentation: shutdownPresentation,
+        })
+        return
+      }
       if (isOrderLifecycle) {
         writeOrderLifecycleRecord({
           output,
