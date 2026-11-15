@@ -53,6 +53,9 @@ function validateAllocationInput({ fill, order, ownership, recoveryQuantity, leg
   if (!(fill instanceof Fill)) {
     throw new TypeError("Mixed SELL allocation requires a canonical Fill")
   }
+  if (!(order instanceof CanonicalOrder)) {
+    throw new TypeError("Mixed SELL allocation requires a canonical registered order")
+  }
   if (fill.side !== "SELL") {
     throw new TypeError("Mixed SELL allocation requires a SELL canonical Fill")
   }
@@ -63,30 +66,63 @@ function validateAllocationInput({ fill, order, ownership, recoveryQuantity, leg
     throw new Error("Mixed SELL Fill broker order identity does not match registered order")
   }
 
-  assertPositiveDecimal({ value: fill.quantity.amount, field: "fill.quantity.amount" })
-  assertPositiveDecimal({ value: fill.quoteQuantity.amount, field: "fill.quoteQuantity.amount" })
-  assertPositiveDecimal({ value: order.originalQuantity.amount, field: "order.originalQuantity.amount" })
-  if (compareDecimal({ left: fill.quantity.amount, right: order.originalQuantity.amount }) > 0) {
+  assertPositiveDecimal({
+    value: fill.quantity.amount,
+    field: "fill.quantity.amount",
+  })
+  assertPositiveDecimal({
+    value: fill.quoteQuantity.amount,
+    field: "fill.quoteQuantity.amount",
+  })
+  assertPositiveDecimal({
+    value: order.originalQuantity.amount,
+    field: "order.originalQuantity.amount",
+  })
+  if (compareDecimal({
+    left: fill.quantity.amount,
+    right: order.originalQuantity.amount,
+  }) > 0) {
     throw new RangeError("Canonical Fill quantity exceeds registered order quantity")
   }
 
-  assertPositiveDecimal({ value: recoveryQuantity, field: "recoveryQuantity" })
-  assertNonNegativeDecimal({ value: legacyQuantity, field: "legacyQuantity" })
+  assertPositiveDecimal({
+    value: recoveryQuantity,
+    field: "recoveryQuantity",
+  })
+  assertNonNegativeDecimal({
+    value: legacyQuantity,
+    field: "legacyQuantity",
+  })
   const allocatedQuantity = addDecimal({
     left: recoveryQuantity,
     right: legacyQuantity,
   })
-  if (compareDecimal({ left: allocatedQuantity, right: fill.quantity.amount }) !== 0) {
+  if (compareDecimal({
+    left: allocatedQuantity,
+    right: fill.quantity.amount,
+  }) !== 0) {
     throw new RangeError("Recovery and legacy allocations must sum to the canonical Fill quantity")
   }
 
-  validateFillCommissions({ market: fill.market, fill })
-  return resolveRegisteredOwnership({ order, ownership })
+  validateFillCommissions({
+    market: fill.market,
+    fill,
+  })
+  return resolveRegisteredOwnership({
+    order,
+    ownership,
+  })
 }
 
 function splitDecimalAmount({ amount, recoveryQuantity, fillQuantity }) {
-  if (compareDecimal({ left: recoveryQuantity, right: fillQuantity }) === 0) {
-    return Object.freeze({ recovery: amount, legacy: "0" })
+  if (compareDecimal({
+    left: recoveryQuantity,
+    right: fillQuantity,
+  }) === 0) {
+    return Object.freeze({
+      recovery: amount,
+      legacy: "0",
+    })
   }
 
   const recovery = divideDecimal({
@@ -107,29 +143,18 @@ function splitDecimalAmount({ amount, recoveryQuantity, fillQuantity }) {
   })
 }
 
-function commissionSortKey(commission) {
-  return [
-    commission.assetId,
-    commission.amount,
-    commission.quoteValue?.assetId ?? "",
-    commission.quoteValue?.amount ?? "",
-  ].join(":")
-}
-
 function freezeCommissionAllocations(allocations) {
+  const serializedAllocations = allocations
+    .map((allocation) => JSON.stringify(allocation))
+    .sort()
   return Object.freeze(
-    allocations
-      .sort((left, right) => {
-        const leftKey = commissionSortKey(left)
-        const rightKey = commissionSortKey(right)
-        return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
-      })
-      .map((commission) => Object.freeze({
-        ...commission,
-        ...(commission.quoteValue === undefined
-          ? {}
-          : { quoteValue: Object.freeze({ ...commission.quoteValue }) }),
-      })),
+    serializedAllocations.map((serialized) => {
+      const commission = JSON.parse(serialized)
+      if (commission.quoteValue !== undefined) {
+        Object.freeze(commission.quoteValue)
+      }
+      return Object.freeze(commission)
+    }),
   )
 }
 
@@ -187,11 +212,16 @@ function allocateCommissions({ fill, recoveryQuantity }) {
 }
 
 function sumCommissionAmount({ commissions, assetId }) {
-  return commissions.reduce((total, commission) => (
-    commission.assetId === assetId
-      ? addDecimal({ left: total, right: commission.amount })
-      : total
-  ), "0")
+  let total = "0"
+  for (const commission of commissions) {
+    if (commission.assetId === assetId) {
+      total = addDecimal({
+        left: total,
+        right: commission.amount,
+      })
+    }
+  }
+  return total
 }
 
 function createAllocationSide({ grossBaseQuantity, quoteProceeds, commissions, baseAssetId }) {
@@ -260,7 +290,9 @@ export function createMixedSellFillAllocation({
   })
   const allocationFacts = {
     fillId: fill.id,
-    fillFingerprint: createFillFingerprint({ fill }),
+    fillFingerprint: createFillFingerprint({
+      fill,
+    }),
     marketId: fill.market.id,
     orderOwnership,
     recovery,
