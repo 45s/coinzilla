@@ -20,6 +20,14 @@ export class BitunixRestError extends Error {
   }
 }
 
+function parseResponseText({ text }) {
+  const losslessText = text.replace(
+    /("(?:balance|balanceLocked)"\s*:\s*)(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)(?=\s*[,}])/g,
+    (_match, prefix, amount) => prefix + JSON.stringify(amount),
+  )
+  return JSON.parse(losslessText)
+}
+
 /**
  * Signed Bitunix Spot REST client. It never retries a request, especially a
  * state-changing order operation whose response may have been lost.
@@ -138,7 +146,7 @@ export class BitunixRestClient {
       })
     }
 
-    if (!response || typeof response.json !== "function") {
+    if (!response || (typeof response.json !== "function" && typeof response.text !== "function")) {
       throw new BitunixRestError("Bitunix REST response is malformed", {
         path,
         status: response?.status ?? null,
@@ -148,7 +156,15 @@ export class BitunixRestClient {
 
     let payload
     try {
-      payload = await response.json()
+      if (typeof response.text === "function") {
+        const responseText = await response.text()
+        if (typeof responseText !== "string") {
+          throw new TypeError("Bitunix REST response text must be a string")
+        }
+        payload = parseResponseText({ text: responseText })
+      } else {
+        payload = await response.json()
+      }
     } catch (error) {
       throw new BitunixRestError(`Bitunix REST response JSON is invalid: ${error.message}`, {
         path,
