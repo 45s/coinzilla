@@ -2,6 +2,10 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## P0 — Startup open-order ownership boundary (#1157)
+
+- [ ] **Treat all startup-snapshot orders as external to the current process.** The accepted contract is [ADR-0004](./docs/architecture/decisions/0004-startup-open-orders-are-external.md); the detailed implementation plan and autonomous prompt are in [STARTUP_EXTERNAL_ORDER_BOUNDARY.md](./docs/plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md). Current source still treats Harvester-prefixed unmatched orders as unconditional same-market blockers. Remove that special case and apply the configured per-pair `externalOrdersPolicy` uniformly. Preserve the account-wide snapshot, required durable Journal barrier, fail-closed snapshot errors, current-process order ownership and external-execution safety. No historical order adoption or exchange operations. Tracking: [#1157](https://github.com/45s/coinzilla/issues/1157).
+
 ## Current safety priorities — LIVE-session audit findings
 
 The 2026-11-12/13 and 2026-11-13 LIVE session evidence is preserved in the [2026-11-12/13 audit](./docs/audits/sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md) and [2026-11-13 audit](./docs/audits/sessions/AUDIT_SESSION_2026-11-13_15-50-59Z.md). These findings are current safety priorities; historical reports remain immutable evidence.
