@@ -628,8 +628,8 @@ test("aligns strategy, status, order ID and order facts in fixed-width lifecycle
 
   const lines = written.trimEnd().split("\n")
   assert.equal(lines.length, 3, "A partial fill must add one indented detail line.")
-  assert.match(lines[0], /^19:14:52 🟡GC/, "Coin Grabber must retain its yellow GC identity.")
-  assert.match(lines[1], /^19:14:53 🔴RS/, "Recovery Seller must retain its red RS identity.")
+  assert.match(lines[0], /^19:14:52 🪙 CG/, "Coin Grabber lifecycle records must use the coin marker followed by a space and CG.")
+  assert.match(lines[1], /^19:14:53 🔴 RS/, "Recovery Seller lifecycle records must use the red marker followed by a space and RS.")
   const firstColumns = ["SUBMITTED", "#1341114", "ADAUSDT", "BUY", "50.00", "@", "0.15260"]
     .map((value) => lines[0].indexOf(value))
   const secondColumns = ["PARTIAL FILL", "#1341115", "ADAUSDT", "SELL", "49.90", "@", "0.15410"]
@@ -640,5 +640,62 @@ test("aligns strategy, status, order ID and order facts in fixed-width lifecycle
     "Status, order ID, symbol, side, quantity and price must begin in identical terminal columns.",
   )
   assert.match(lines[2], /^\s+Executed: 20 \| Remaining: 29\.90$/, "Partial-fill details must be indented below their order.")
+  output.destroy()
+})
+
+
+test("marks strategy-specific standard console records with their canonical strategy marker", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({ output, color: false })
+
+  transport.write({
+    timestamp: "2026-11-15T19:14:52",
+    level: "info",
+    method: "info",
+    data: {
+      message: "Market price evaluated",
+      strategyId: "CG_coinGrabber",
+      symbol: "ADAUSDT",
+    },
+  })
+  transport.write({
+    timestamp: "2026-11-15T19:14:53",
+    level: "info",
+    method: "info",
+    data: {
+      message: "Recovery decision evaluated",
+      strategyId: "RS_recoverySeller",
+      symbol: "ADAUSDT",
+    },
+  })
+
+  assert.match(written, /19:14:52 🪙 CG Market price evaluated/, "Every Coin Grabber diagnostic must display the canonical coin marker before its message.")
+  assert.match(written, /19:14:53 🔴 RS Recovery decision evaluated/, "Every Recovery Seller diagnostic must display its canonical red marker before its message.")
+  output.destroy()
+})
+
+test("does not suppress identical messages emitted by different strategies", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({ output, color: false })
+
+  for (const [timestamp, strategyId] of [
+    ["2026-11-15T19:14:52", "CG_coinGrabber"],
+    ["2026-11-15T19:14:53", "RS_recoverySeller"],
+  ]) {
+    transport.write({
+      timestamp,
+      level: "info",
+      method: "info",
+      data: { message: "Strategy transition evaluated", strategyId },
+    })
+  }
+
+  assert.equal((written.match(/Strategy transition evaluated/g) ?? []).length, 2, "Identical text from two different strategy owners must remain two independently identifiable console records.")
+  assert.match(written, /🪙 CG Strategy transition evaluated/, "The first record must retain its Coin Grabber identity.")
+  assert.match(written, /🔴 RS Strategy transition evaluated/, "The second record must retain its Recovery Seller identity.")
   output.destroy()
 })
