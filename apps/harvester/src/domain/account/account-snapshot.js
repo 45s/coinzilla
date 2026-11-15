@@ -86,7 +86,7 @@ export class AccountSnapshot {
     for (const assetId of additionalTrackedBaseQuantityBaselineByAssetId.keys()) {
       if (!balancesByAssetId.has(assetId)) {
         throw new TypeError(
-          "AccountSnapshot additionalTrackedBaseQuantityBaseline references asset missing from balances: " + assetId,
+          `AccountSnapshot additionalTrackedBaseQuantityBaseline references asset missing from balances: ${assetId}`,
         )
       }
     }

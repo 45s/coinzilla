@@ -301,6 +301,18 @@ function capturePreflightBalances({ result, state }) {
   ]))
 }
 
+function createInitialAccountSnapshotManagerState() {
+  return {
+    accountSnapshot: undefined,
+    preflightSourceTime: undefined,
+    preflightBalancesByCode: new Map(),
+    commissionBaselineAssetIds: new Map(),
+    commissionBaselineAssetCodesById: new Map(),
+    unownedOpenOrderSymbols: new Set(),
+    unresolvedHarvesterOpenOrderSymbols: new Set(),
+  }
+}
+
 function resolveAdditionalTrackedBaseQuantityGetter({ getter } = {}) {
   if (typeof getter !== "function") {
     throw new TypeError("createAccountSnapshotManager requires getAdditionalTrackedBaseQuantity to be a function")
@@ -987,15 +999,7 @@ export function createAccountSnapshotManager({
   const additionalTrackedBaseQuantityGetter = resolveAdditionalTrackedBaseQuantityGetter({
     getter: getAdditionalTrackedBaseQuantity,
   })
-  const state = {
-    accountSnapshot: undefined,
-    preflightSourceTime: undefined,
-    preflightBalancesByCode: new Map(),
-    commissionBaselineAssetIds: new Map(),
-    commissionBaselineAssetCodesById: new Map(),
-    unownedOpenOrderSymbols: new Set(),
-    unresolvedHarvesterOpenOrderSymbols: new Set(),
-  }
+  const state = createInitialAccountSnapshotManagerState()
   const context = {
     broker,
     eventPublisher,

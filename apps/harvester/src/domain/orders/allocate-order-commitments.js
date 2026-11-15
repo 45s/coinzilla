@@ -20,6 +20,24 @@ function assertNonNegativeDecimal({ value, field } = {}) {
  * Each accepted action consumes the remaining budget.
  * SELL overcommitment rejects the whole decision before any broker submission.
  */
+function assertAllocationInventoryConsistency({
+  activeBaseQuantity,
+  accountTrackedBaseBalance,
+  accountCommittedBase,
+  committedBase,
+  committedQuote,
+  accountCommittedQuote,
+} = {}) {
+  assertAllocationInventoryConsistency({
+    activeBaseQuantity,
+    accountTrackedBaseBalance,
+    accountCommittedBase,
+    committedBase,
+    committedQuote,
+    accountCommittedQuote,
+  })
+}
+
 function createAllocationContext({
   actions,
   quoteFreeBalance,
