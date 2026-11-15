@@ -341,7 +341,10 @@ test("omits INFO labels while retaining DEBUG, WARN, and ERROR labels", () => {
   output.on("data", (chunk) => {
     written += chunk.toString()
   })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   for (const [level, message] of [
     ["INFO", "Informational event"],
@@ -610,7 +613,10 @@ test("aligns strategy, status, order ID and order facts in fixed-width lifecycle
   output.on("data", (chunk) => {
     written += chunk.toString()
   })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   transport.write({
     timestamp: "2026-11-15T19:14:52",
@@ -674,7 +680,10 @@ test("marks strategy-specific standard console records with canonical strategy m
   output.on("data", (chunk) => {
     written += chunk.toString()
   })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
   transport.write({
     timestamp: "2026-11-15T19:14:52",
     level: "info",
@@ -704,7 +713,10 @@ test("does not suppress identical messages from different strategies", () => {
   output.on("data", (chunk) => {
     written += chunk.toString()
   })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
   for (const [timestamp, strategyId] of [
     ["2026-11-15T19:14:52", "CG_coinGrabber"],
     ["2026-11-15T19:14:53", "RS_recoverySeller"],
