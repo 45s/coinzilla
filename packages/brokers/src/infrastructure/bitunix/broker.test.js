@@ -149,3 +149,107 @@ test("Bitunix Spot broker never submits or cancels orders without safe identity 
   assert.equal(cancelled.cancellationOutcome, "NOT_SENT")
   assert.equal(calls.length, 0)
 })
+
+
+test("Bitunix Spot broker exposes symbol metadata, price, order detail and history reads", async () => {
+  const order = {
+    orderId: "123",
+    symbol: "BTCUSDT",
+    side: "2",
+    type: "1",
+    status: "2",
+    volume: "0.5",
+    dealVolume: "0.5",
+    price: "10",
+    ctime: "2026-11-15T12:00:00Z",
+    utime: "2026-11-15T12:00:01Z",
+  }
+  const { broker, calls } = createBroker({
+    responses: {
+      "/api/spot/v1/common/coin_pair/list": [
+        { symbol: "BTCUSDT", base: "BTC", quote: "USDT", basePrecision: 8, isOpen: "1" },
+      ],
+      "/api/spot/v1/market/last_price": { symbol: "BTCUSDT", price: "10.25" },
+      "/api/spot/v1/order/detail": order,
+      "/api/spot/v1/order/history/page": { data: [order], total: 1 },
+    },
+  })
+
+  const metadata = await broker.getSymbolFilters({ symbol: "btcusdt" })
+  const price = await broker.getPrice({ symbol: "btcusdt" })
+  const detail = await broker.getOrder({ symbol: "BTCUSDT", orderId: "123" })
+  const history = await broker.getOrderHistory({ symbol: "BTCUSDT", limit: 25 })
+
+  assert.equal(metadata.data.basePrecision, 8)
+  assert.equal(price.data.price, "10.25")
+  assert.equal(detail.data.id, "123")
+  assert.equal(history.data.length, 1)
+  assert.equal(history.data[0].orderId, "123")
+  assert.deepEqual(calls[3].options.body, { symbol: "BTCUSDT", page: 1, pageSize: 25 })
+})
+
+test("Bitunix Spot broker validates order history query boundaries", async () => {
+  const { broker, calls } = createBroker()
+
+  const missingSymbol = await broker.getOrderHistory()
+  const exactOrderId = await broker.getOrderHistory({ symbol: "BTCUSDT", orderId: "123" })
+  const invalidLimit = await broker.getOrderHistory({ symbol: "BTCUSDT", limit: 101 })
+  const invalidRange = await broker.getOrderHistory({
+    symbol: "BTCUSDT",
+    startTime: 20,
+    endTime: 10,
+  })
+
+  assert.equal(missingSymbol.ok, false)
+  assert.equal(exactOrderId.ok, false)
+  assert.equal(invalidLimit.ok, false)
+  assert.equal(invalidRange.ok, false)
+  assert.equal(calls.length, 0)
+})
+
+test("Bitunix Spot broker keeps lifecycle and unsupported read capabilities explicit", async () => {
+  const { broker, calls } = createBroker()
+
+  await broker.connect()
+  assert.equal(broker.connected, true)
+  await broker.disconnect()
+  assert.equal(broker.connected, false)
+
+  const unsupportedResults = await Promise.all([
+    broker.getAssets(),
+    broker.getMyTrades(),
+    broker.getCanonicalOrder(),
+    broker.getCanonicalOrderHistory(),
+    broker.getServerTime(),
+    broker.getCandles(),
+  ])
+  for (const result of unsupportedResults) {
+    assert.equal(result.ok, false)
+  }
+  await assert.rejects(broker.subscribeForUserData(), /private Spot WebSocket/i)
+  await assert.rejects(broker.subscribeForBookTicker(), /order-book subscription/i)
+  await assert.rejects(broker.subscribeForPrices(), /continuous price subscription/i)
+  assert.equal(calls.length, 0)
+})
+
+test("Bitunix Spot broker rejects order detail identity mismatches", async () => {
+  const { broker } = createBroker({
+    responses: {
+      "/api/spot/v1/order/detail": {
+        orderId: "different",
+        symbol: "BTCUSDT",
+        side: "2",
+        type: "1",
+        status: "2",
+        volume: "1",
+        dealVolume: "1",
+        price: "10",
+      },
+    },
+  })
+
+  const result = await broker.getOrder({ symbol: "BTCUSDT", orderId: "123" })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /identity/i)
+})
