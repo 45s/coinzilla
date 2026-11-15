@@ -15,25 +15,25 @@ test("BitunixSpotConfig requires explicit live mode and credentials", () => {
   }), /unsupported/i)
 })
 
-test("BitunixSpotConfig selects the documented Spot WebSocket API endpoint", () => {
+test("BitunixSpotConfig selects the documented Spot REST endpoint", () => {
   const config = new BitunixSpotConfig({
     apiKey: "key",
     apiSecret: "secret",
     tradingMode: "live",
   })
 
-  assert.equal(config.websocketApiUrl, "wss://openapi.bitunix.com:443/ws-api/v1")
+  assert.equal(config.baseUrl, "https://openapi.bitunix.com")
   assert.equal(config.tradingMode, "live")
   assert.equal(config.requestTimeout, 10_000)
 })
 
-test("BitunixSpotConfig validates explicit endpoint overrides and timeout", () => {
+test("BitunixSpotConfig validates endpoint overrides and timeout", () => {
   assert.throws(() => new BitunixSpotConfig({
     apiKey: "key",
     apiSecret: "secret",
     tradingMode: "live",
-    websocketApiUrl: "https://openapi.bitunix.com",
-  }), /wss/i)
+    baseUrl: "http://openapi.bitunix.com",
+  }), /https/i)
   assert.throws(() => new BitunixSpotConfig({
     apiKey: "key",
     apiSecret: "secret",
