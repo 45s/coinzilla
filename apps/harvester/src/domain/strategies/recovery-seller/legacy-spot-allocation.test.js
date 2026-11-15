@@ -50,7 +50,7 @@ function createBalance({ asset, free, locked = "0" }) {
 function createBuyFill({ market, tradeId, quantity, quoteQuantity }) {
   return new Fill({
     tradeId,
-    brokerOrderId: "broker-" + tradeId,
+    brokerOrderId: `broker-${tradeId}`,
     market,
     side: "BUY",
     price: new Money({
@@ -73,11 +73,12 @@ function createBuyFill({ market, tradeId, quantity, quoteQuantity }) {
 function createPortfolio({ acquisitions = [] } = {}) {
   let portfolio = new Portfolio()
   for (const acquisition of acquisitions) {
-    portfolio = portfolio.applyFill({
+    const { portfolio: nextPortfolio } = portfolio.applyFill({
       fill: acquisition.fill,
       positionId: acquisition.positionId,
       strategyId: acquisition.strategyId,
-    }).portfolio
+    })
+    portfolio = nextPortfolio
   }
   return portfolio
 }
@@ -133,7 +134,10 @@ test("tracks only Spot base quantity left after every Portfolio Position for the
 
   assert.deepEqual(
     allocations,
-    [{ assetId: btcAsset.id, amount: "0.5" }],
+    [{
+      assetId: btcAsset.id,
+      amount: "0.5",
+    }],
     "The allocation must subtract all five Portfolio BTC across both markets and strategies from the 5.5 BTC Spot total, then cap the remaining 0.5 BTC by authorized legacy quantity.",
   )
 })
@@ -169,7 +173,10 @@ test("caps verified Spot allocation at the remaining authorized legacy quantity"
 
   assert.deepEqual(
     allocations,
-    [{ assetId: btcAsset.id, amount: "0.25" }],
+    [{
+      assetId: btcAsset.id,
+      amount: "0.25",
+    }],
     "An account may hold more untracked Spot BTC than the operator authorized; only the 0.25 remaining legacy BTC may be tracked for RS.",
   )
 })
