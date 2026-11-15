@@ -222,7 +222,6 @@ Before editing, creating branches, or performing any other state-changing action
 
 **Final response:** provide the PR link, exact head SHA, test/CI results, changed behavior, remaining blockers (if any), and explicitly confirm that the PR was not merged.
 
-
 ## Completion record
 
 - Implementation PR: [#1166](https://github.com/45s/coinzilla/pull/1166), merged into `develop`.
