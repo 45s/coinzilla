@@ -5,6 +5,7 @@ import { addDecimal } from "@coinzilla/utils"
 import { StrategyId } from "../strategy-ids.js"
 import { createOrderOwnership } from "../../orders/order-ownership.js"
 import { OrderRegistry } from "../../orders/order-registry.js"
+import { OrderRegistry } from "../../orders/order-registry.js"
 import { createFillFingerprint } from "../../fills/fill-fingerprint.js"
 import { createMixedSellFillAllocation } from "./mixed-sell-fill-allocation.js"
 
@@ -31,7 +32,7 @@ function makeFill(overrides = {}) {
   return new Fill({
     tradeId: "trade-1",
     brokerOrderId: "broker-1",
-    clientOrderId: "exchange-client-id",
+    clientOrderId: "harvester-rs-sell",
     market,
     side: "SELL",
     price: new Money({
@@ -123,10 +124,14 @@ function makeInput(overrides = {}) {
   const fill = overrides.fill ?? makeFill()
   const order = overrides.order ?? makeOrder()
   const ownership = overrides.ownership ?? makeOwnership()
+  const orderRegistry = overrides.orderRegistry ?? new OrderRegistry({
+    orders: [order],
+    ownerships: [ownership],
+  })
   return {
     fill,
-    order,
     ownership,
+    orderRegistry,
     recoveryQuantity: overrides.recoveryQuantity ?? "5",
     legacyQuantity: overrides.legacyQuantity ?? "0.01",
   }
@@ -229,10 +234,13 @@ test("supports a recovery-only SELL after legacy quantity is exhausted", () => {
     quantity: "5",
     executedQuantity: "5",
   })
+  const orderRegistry = new OrderRegistry({
+    orders: [order],
+    ownerships: [makeOwnership()],
+  })
   const allocation = createMixedSellFillAllocation({
     fill,
-    order,
-    ownership: makeOwnership(),
+    orderRegistry,
     recoveryQuantity: "5",
     legacyQuantity: "0",
   })
@@ -358,36 +366,67 @@ test("rejects an order from another market or a Fill larger than its registered 
 
 
 test("resolves immutable Recovery Seller ownership from the registered order registry", () => {
-  const order = makeOrder()
-  const ownership = makeOwnership()
-  const orderRegistry = new OrderRegistry({
-    orders: [order],
-    ownerships: [ownership],
-  })
-  const fill = makeFill({
-    clientOrderId: order.clientOrderId,
-  })
-
-  const allocation = createMixedSellFillAllocation({
-    fill,
-    orderRegistry,
-    recoveryQuantity: "5",
-    legacyQuantity: "0.01",
-  })
+  const input = makeInput()
+  const allocation = createMixedSellFillAllocation(input)
 
   assert.equal(
     allocation.orderOwnership.clientOrderId,
-    order.clientOrderId,
+    "harvester-rs-sell",
     "Mixed SELL allocation must retain the Harvester client identity resolved from OrderRegistry.",
   )
   assert.equal(
     allocation.orderOwnership.brokerOrderId,
-    order.brokerOrderId,
+    "broker-1",
     "Mixed SELL allocation must retain the broker identity linked to the registered order.",
   )
   assert.equal(
     allocation.orderOwnership.strategyId,
     StrategyId.RECOVERY_SELLER,
     "Mixed SELL allocation must derive its Recovery Seller attribution from the immutable registered ownership record.",
+  )
+})
+
+test("rejects a canonical Fill whose client order identity differs from its registered order", () => {
+  const input = makeInput({
+    fill: makeFill({
+      clientOrderId: "different-harvester-order",
+    }),
+  })
+
+  assert.throws(
+    () => createMixedSellFillAllocation(input),
+    /clientOrderId/i,
+    "A Fill must not be attributed to an order with a different Harvester client identity.",
+  )
+})
+
+test("rejects a registry order without a registered ownership record", () => {
+  const order = makeOrder()
+  const input = makeInput({
+    orderRegistry: new OrderRegistry({
+      orders: [order],
+      ownerships: [],
+    }),
+  })
+
+  assert.throws(
+    () => createMixedSellFillAllocation(input),
+    /ownership/i,
+    "A canonical order without immutable OrderRegistry ownership must never receive RS allocation.",
+  )
+})
+
+test("rejects an order registry that is not the canonical OrderRegistry", () => {
+  const input = makeInput({
+    orderRegistry: {
+      getOrderByBrokerOrderId: () => makeOrder(),
+      getOwnership: () => makeOwnership(),
+    },
+  })
+
+  assert.throws(
+    () => createMixedSellFillAllocation(input),
+    /OrderRegistry/i,
+    "Mixed SELL allocation must resolve attribution only through the immutable application OrderRegistry.",
   )
 })
