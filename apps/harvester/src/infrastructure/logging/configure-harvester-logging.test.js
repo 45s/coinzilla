@@ -630,9 +630,9 @@ test("aligns strategy, status, order ID and order facts in fixed-width lifecycle
   assert.equal(lines.length, 3, "A partial fill must add one indented detail line.")
   assert.match(lines[0], /^19:14:52 🟡GC/, "Coin Grabber must retain its yellow GC identity.")
   assert.match(lines[1], /^19:14:53 🔴RS/, "Recovery Seller must retain its red RS identity.")
-  const firstColumns = ["🔵 SUBMITTED", "#1341114", "ADAUSDT", "BUY", "50.00", "@", "0.15260"]
+  const firstColumns = ["SUBMITTED", "#1341114", "ADAUSDT", "BUY", "50.00", "@", "0.15260"]
     .map((value) => lines[0].indexOf(value))
-  const secondColumns = ["🟠 PARTIAL FILL", "#1341115", "ADAUSDT", "SELL", "49.90", "@", "0.15410"]
+  const secondColumns = ["PARTIAL FILL", "#1341115", "ADAUSDT", "SELL", "49.90", "@", "0.15410"]
     .map((value) => lines[1].indexOf(value))
   assert.deepEqual(
     firstColumns,
