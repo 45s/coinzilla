@@ -35,7 +35,7 @@ The 2026-11-12/13 and 2026-11-13 LIVE session evidence is preserved in the [2026
 
 Remaining safety and observability follow-ups #1103 and #1105 remain open; #1104, #1101, #1102 and P0 #1097 are complete. A merged offline fix or clean audit does not establish runtime safety or authorize another unrestricted LIVE session.
 
-- [~] **Simplify Harvester terminal log presentation** — active implementation on `fix/harvester/compact-terminal-log-presentation`. Restore compact strategy markers without `⚪ SYS`, identify Binance market-data connection state explicitly, render Portfolio Stats as a concise summary, keep pending client IDs and cancellation outcomes on the order line, and tighten lifecycle columns. Presentation-only; preserve structured DEBUG/TRACE evidence and all trading/order behavior. No exchange operations are part of this task.
+- [~] **Simplify Harvester terminal log presentation** — active implementation in [PR #1169](https://github.com/45s/coinzilla/pull/1169) on `fix/harvester/compact-terminal-log-presentation`. Restore compact strategy markers without `⚪ SYS`, identify Binance market-data connection state explicitly, render Portfolio Stats as a concise summary, keep pending client IDs and cancellation outcomes on the order line, and tighten lifecycle columns. Presentation-only; preserve structured DEBUG/TRACE evidence and all trading/order behavior. No exchange operations are part of this task.
 
 ## P2 — External trading-pair configuration
 
