@@ -112,6 +112,18 @@ test("fingerprints effective per-market settings and publishes the matching enab
     "Changing an effective per-market strategy setting must change the fingerprint.")
 })
 
+test("fails closed rather than fingerprinting secret-bearing strategy settings", async () => {
+  const cfg = config()
+  cfg.strategies.CG_coinGrabber.pairs.BTCUSDT.apiKey = "must-not-be-recorded"
+  const fixture = createFixture({ cfg, env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET } })
+  await assert.rejects(
+    resolveHarvesterOptions(fixture.input),
+    (error) => error.code === "HARVESTER_EFFECTIVE_CONFIGURATION_INVALID",
+    "A strategy configuration containing credentials must not be fingerprinted or reported as validated.",
+  )
+  assert.equal(fixture.events.length, 0, "Invalid evidence must fail before config.validated is published.")
+})
+
 test("rejects an invalid TRADING_MODE", async () => {
   const fixture = createFixture({ env: { TRADING_MODE: "production" } })
   await assert.rejects(
@@ -139,6 +151,8 @@ test("selects only matching pairs and strips tradingEnvironment before runtime",
   const live = await resolveHarvesterOptions(createFixture({ cfg, env: { TRADING_MODE: TRADING_ENVIRONMENTS.LIVE } }).input)
   assert.deepEqual(Object.keys(live.pairs), ["ETHUSDT", "DOGEUSDT"], "LIVE must include live-only and both pairs, but exclude testnet-only pairs.")
   assert.deepEqual(live.enabledSymbols, ["ETHUSDT"], "Disabled both-environment pairs must remain configured but not become enabled.")
+  assert.notEqual(testnet.configurationFingerprint, live.configurationFingerprint,
+    "The fingerprint must reflect the effective trading-mode-filtered strategy configuration.")
   assert.equal(Object.hasOwn(live.pairs.ETHUSDT, "tradingEnvironment"), false, "LIVE runtime pair settings must also omit the selector.")
 })
 
