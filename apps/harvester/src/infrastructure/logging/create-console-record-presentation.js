@@ -47,7 +47,7 @@ function summarizeConsoleData({ data, shutdownPresentation } = {}) {
         if (typeof value === "string") {
           const maxLength = key === "errorMessage" ? 72 : 100
           if (value.length > maxLength) {
-            return [key, value.slice(0, maxLength - 3) + "..."]
+            return [key, `${value.slice(0, maxLength - 3)}...`]
           }
         }
         if (Array.isArray(value)) {
@@ -56,7 +56,10 @@ function summarizeConsoleData({ data, shutdownPresentation } = {}) {
         return [key, value]
       }),
   )
-  return { message, details }
+  return {
+    message,
+    details,
+  }
 }
 
 export function createConsoleRecordPresentation({ timestamp, level, method, data } = {}) {

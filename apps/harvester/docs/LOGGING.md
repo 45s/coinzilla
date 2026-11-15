@@ -211,7 +211,7 @@ The phase/status pair is part of the pure console-record fingerprint; timestamps
 and omitted diagnostic fields do not prevent genuinely identical terminal
 summaries from being deduplicated. The pure console-record presentation helper supplies the console summary and
 deduplication identity once per record, while retaining the existing order-
-lifecycle summary and standard console detail allowlist.
+lifecycle summary, standard console detail allowlist, and existing detail truncation rules.
 
 The concise terminal line is only the operator-facing summary. The original
 structured DEBUG/TRACE entry remains unchanged in both cumulative and
