@@ -6,15 +6,18 @@ function createAsset({ coin }) {
     throw new TypeError("Bitunix Spot account balance is missing coin code")
   }
   const code = coin.trim().toUpperCase()
-  return new Asset({ id: code.toLowerCase(), code })
+  return new Asset({ id: code.toLowerCase(),
+    code })
 }
 
 function normalizeAmount({ value, field }) {
   if (typeof value !== "string") {
     throw new TypeError(`Bitunix Spot account balance ${field} must be a precision-preserving decimal string`)
   }
-  assertDecimalString({ value, field: `Bitunix Spot ${field}` })
-  if (compareDecimal({ left: value, right: "0" }) < 0) {
+  assertDecimalString({ value,
+    field: `Bitunix Spot ${field}` })
+  if (compareDecimal({ left: value,
+    right: "0" }) < 0) {
     throw new RangeError(`Bitunix Spot account balance ${field} must be non-negative`)
   }
   return value
@@ -43,13 +46,16 @@ export function adaptBalances(input) {
     seenAssets.add(asset.id)
 
     const free = new Quantity({
-      amount: normalizeAmount({ value: row.balance, field: "balance" }),
+      amount: normalizeAmount({ value: row.balance,
+        field: "balance" }),
       asset,
     })
     const locked = new Quantity({
-      amount: normalizeAmount({ value: row.balanceLocked, field: "balanceLocked" }),
+      amount: normalizeAmount({ value: row.balanceLocked,
+        field: "balanceLocked" }),
       asset,
     })
-    return new Balance({ free, locked })
+    return new Balance({ free,
+      locked })
   })
 }
