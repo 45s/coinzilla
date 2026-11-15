@@ -605,15 +605,19 @@ price, and allowlisted order intents.
 The order-request event is published after the local PENDING canonical order
 has been registered and durably flushed immediately before broker I/O. If a
 local submission gate closes after that request is durable but before the
-broker call, Harvester writes `order.submission_deferred` with the original
-client order ID, exact order facts and a bounded uppercase reason such as
-`MARKET_BOOK_STALE`. The deferral event is durably flushed before the pending
-registry entry is removed. Journal recovery retains it in
-`deferredSubmissions` and does not restore it as an exchange order or
-reservation. It is distinct from `order.submission_failed`: a local deferral
-means broker I/O was not attempted, while REJECTED/UNKNOWN continue to describe
-broker outcomes. If the deferral event cannot be durably flushed, Harvester
-retains the pending request and fails closed.
+broker call, Harvester publishes `order.submission_deferred` best-effort with
+the original client order ID, exact order facts and a bounded uppercase
+reason such as `MARKET_BOOK_STALE`. This is a terminal investigation marker,
+not another Journal durability barrier: the mandatory request flush remains
+the only blocking Journal operation in the submission path. Journal
+publication failure is reported as an evidence gap and does not block market
+processing or change the known local fact that broker I/O was not attempted.
+When present, Journal recovery retains the event in `deferredSubmissions`
+and does not restore it as an exchange order or reservation. If the event is
+missing, the durable request remains conservatively unresolved in offline
+projection and still requires reconciliation. The deferral is distinct from
+`order.submission_failed`: REJECTED/UNKNOWN continue to describe broker
+outcomes.
 
 The submitted event is published only after the broker returns a canonical
 acknowledgement with the matching client order ID and the local order registry
