@@ -260,7 +260,7 @@ For that integration:
 - Resolve competing intents deterministically; never rely on timing to avoid double-spend or oversell.
 - Pause/disable remains strategy-scoped and must not silently stop the other strategy.
 
-The first in-memory ownership-registry contract is being implemented in [PR #1144](https://github.com/45s/coinzilla/pull/1144): it records immutable strategy/Position/purpose attribution against the original Harvester client order identity and links the broker identity when acknowledged. This does not yet wire RS order submission, canonical Fill allocation, or restart restoration. The remaining bullets above are target requirements, not current runtime behavior. See the [Recovery Seller Domain Specification](./domain/recovery-seller-domain-specification.md) and [implementation roadmap](./domain/recovery-seller-implementation-roadmap.md).
+The in-memory ownership-registry contract implemented in merged [PR #1144](https://github.com/45s/coinzilla/pull/1144) records immutable strategy/Position/purpose attribution against the original Harvester client order identity and links the broker identity when acknowledged. This does not yet wire RS order submission, canonical Fill allocation, or restart restoration. The remaining bullets above are target requirements, not current runtime behavior. See the [Recovery Seller Domain Specification](./domain/recovery-seller-domain-specification.md) and [implementation roadmap](./domain/recovery-seller-implementation-roadmap.md).
 
 ## Non-negotiable boundaries
 
