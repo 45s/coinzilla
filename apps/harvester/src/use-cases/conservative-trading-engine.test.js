@@ -3869,6 +3869,7 @@ function createShutdownBuyRaceState({ seeded }) {
       current: undefined,
     },
     buyFills: [],
+    marketPriceFresh: true,
     seeded,
   }
 }
@@ -3892,6 +3893,7 @@ async function createShutdownBuyRaceHarness({ seeded, scenario }) {
     hasUnownedOpenOrdersForSymbol: () => true,
     canTrade: () => !scenario.stopping.value,
     isStopping: () => scenario.stopping.value,
+    isMarketPriceFresh: () => scenario.marketPriceFresh,
     getPortfolio: () => scenario.portfolioRef.current,
     getRecoveryLedger: () => scenario.ledgerRef.current,
     updateTradingAccounting: async ({ fill }) => {
@@ -4120,6 +4122,24 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
     lateFinalFill,
   ])
 
+  for (const updatedAt of [3, 4]) {
+    const lateNewReport = await scenario.harness.engine.processUserDataEvent({
+      event: {
+        eventType: "executionReport",
+        executionType: "NEW",
+        executedOrder: makeOrderStatusUpdate({
+          order: buyOrder,
+          status: "OPEN",
+          executedQuantity: "0",
+          updatedAt,
+        }),
+      },
+    })
+    assert.equal(lateNewReport.ok, true)
+    assert.equal(lateNewReport.data.ignored, true)
+  }
+  assert.deepEqual(scenario.harness.pauses, [], "A late zero-cumulative NEW report must not pause the pair or block shutdown recovery.")
+
   assert.equal(cancellationResult.ok, true, cancellationResult.errors?.[0]?.message)
   assert.equal(lateFillResult.ok, true, lateFillResult.errors?.[0]?.message)
   assertShutdownBuyRaceAccounting({
@@ -4135,6 +4155,47 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
   })
 })
 
+
+
+test("preserves the existing recovery SELL when shutdown market data is stale", async () => {
+  const scenario = await createShutdownBuyRaceScenario()
+  const { harness, buyOrder, originalRecoverySell } = scenario
+  const fill = createShutdownBuyFill({
+    order: buyOrder,
+    tradeId: "shutdown-stale-price-buy-fill",
+    quantity: buyOrder.originalQuantity.amount,
+    quoteQuantity: multiplyDecimal({
+      left: buyOrder.limitPrice.amount,
+      right: buyOrder.originalQuantity.amount,
+    }),
+  })
+  scenario.stopping.value = true
+  const fillResult = await harness.engine.processUserDataEvent({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill,
+    },
+  })
+  assert.equal(fillResult.ok, true, fillResult.errors?.[0]?.message)
+
+  scenario.marketPriceFresh = false
+  const reconciliation = await harness.engine.reconcileRecoverySellsForShutdown()
+  assert.equal(reconciliation.ok, false)
+  assert.equal(reconciliation.errors?.[0]?.code, "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE")
+  assert.match(reconciliation.errors?.[0]?.message ?? "", /STALE_MARKET_PRICE/)
+
+  const retainedSell = harness.engine.getOrders().find((order) =>
+    order.clientOrderId === originalRecoverySell.clientOrderId)
+  assert.equal(retainedSell.status, "OPEN", "Do not cancel the existing exchange SELL without a fresh price for its replacement.")
+  assert.equal(scenario.sequence.filter((entry) => entry === "cancel:SELL").length, 0)
+
+  const coverage = await harness.engine.auditShutdownRecoverySellCoverage()
+  assert.equal(coverage.ok, true)
+  assert.equal(coverage.data.covered, false)
+  assert.equal(coverage.data.findings[0].reason, "STALE_MARKET_PRICE")
+})
 
 
 async function createShutdownRecoveryFailureHarness({ scenario, seeded, state }) {
