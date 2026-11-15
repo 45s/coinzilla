@@ -41,3 +41,17 @@ test("createRestSignature rejects missing credentials and invalid input", () => 
     secretKey: "",
   }), /secret/i)
 })
+
+test("createRestSignature preserves whitespace inside JSON string values", () => {
+  const options = {
+    nonce: "nonce",
+    timestamp: "1700000000000",
+    apiKey: "api-key",
+    secretKey: "secret",
+  }
+
+  assert.equal(
+    createRestSignature({ ...options, body: '{ "note": "two words" }' }),
+    createRestSignature({ ...options, body: { note: "two words" } }),
+  )
+})
