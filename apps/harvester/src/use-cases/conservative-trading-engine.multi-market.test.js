@@ -49,38 +49,32 @@ function makeMarketMetadata(market) {
   }
 }
 
-async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio, initialState, strategyPolicy = conservativeStrategyPolicy, recoveryLedgersByMarket = new Map(), volatilityProtectionEnabled = false, externalOrdersPolicyBySymbol = {}, onUnownedExternalOrderObserved } = {}) {
-  const orders = []
-  const pauses = []
-  const accountedFillIds = new Set()
-  const accountedFills = []
-  const portfolio = initialPortfolio ?? new Portfolio()
-  const metadataBySymbol = new Map(markets.map((market) => [
-    market.symbol,
-    makeMarketMetadata(market),
-  ]))
-  const appConfig = {
+function createHarnessAppConfig({ externalOrdersPolicyBySymbol = {} } = {}) {
+  return {
     strategies: {
       [StrategyId.COIN_GRABBER]: {
         enabled: true,
         settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
         pairs: Object.fromEntries(markets.map((market) => [market.symbol, {
-      enabled: true,
-      ...(externalOrdersPolicyBySymbol[market.symbol] === undefined
-        ? {}
-        : { externalOrdersPolicy: externalOrdersPolicyBySymbol[market.symbol] }),
-      investment: 1000,
-      orderQuantity: 1,
-      keepQuantity: 0.1,
-      minProfit: market.symbol === "DOGEUSDT" ? 0.1 : 0.01,
-      priceStepPercent: 0.05,
-      makerPercent: 0,
-      takerPercent: 0.075,
+          enabled: true,
+          ...(externalOrdersPolicyBySymbol[market.symbol] === undefined
+            ? {}
+            : { externalOrdersPolicy: externalOrdersPolicyBySymbol[market.symbol] }),
+          investment: 1000,
+          orderQuantity: 1,
+          keepQuantity: 0.1,
+          minProfit: market.symbol === "DOGEUSDT" ? 0.1 : 0.01,
+          priceStepPercent: 0.05,
+          makerPercent: 0,
+          takerPercent: 0.075,
         }])),
       },
     },
   }
-  const broker = {
+}
+
+function createHarnessBroker({ orders } = {}) {
+  return {
     placeOrder: async ({ order }) => {
       orders.push(order)
       const market = marketsBySymbol.get(order.symbol)
@@ -122,12 +116,30 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
     }),
     getFills: async () => ({ ok: true, data: [] }),
   }
-  const engine = makeConservativeTradingEngine({
+}
+
+function createHarnessEngine({
+  broker,
+  portfolio,
+  strategyPolicy,
+  appConfig,
+  recoveryLedgersByMarket,
+  metadataBySymbol,
+  quoteFreeBalance,
+  accountedFillIds,
+  accountedFills,
+  pauses,
+  volatilityProtectionEnabled,
+  onUnownedExternalOrderObserved,
+  initialState,
+} = {}) {
+  return makeConservativeTradingEngine({
     broker,
     strategyPolicy,
     appConfig,
     getPortfolio: () => portfolio,
-    getRecoveryLedger: ({ marketId }) => recoveryLedgersByMarket.get(marketId) ?? RecoveryLedger.empty({ market: marketsById.get(marketId) }),
+    getRecoveryLedger: ({ marketId }) =>
+      recoveryLedgersByMarket.get(marketId) ?? RecoveryLedger.empty({ market: marketsById.get(marketId) }),
     getMarketMetadata: ({ symbol }) => metadataBySymbol.get(symbol),
     getAccountSnapshot: () => ({
       getFreeBalance: ({ assetId }) => new Quantity({
@@ -161,18 +173,58 @@ async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPor
       : undefined,
     initialState,
   })
+}
 
+async function initializeHarnessBooks({ engine } = {}) {
   for (const market of markets) {
-    await engine.processBookTicker({ symbol: market.symbol, bookTicker: {
+    await engine.processBookTicker({
       symbol: market.symbol,
-      bestBidPrice: "0.01",
-      bestBidQuantity: "1",
-      bestAskPrice: "1000",
-      bestAskQuantity: "1",
-      timestamp: 1,
-    } })
+      bookTicker: {
+        symbol: market.symbol,
+        bestBidPrice: "0.01",
+        bestBidQuantity: "1",
+        bestAskPrice: "1000",
+        bestAskQuantity: "1",
+        timestamp: 1,
+      },
+    })
   }
+}
 
+async function createHarness({
+  quoteFreeBalance = "10000",
+  portfolio: initialPortfolio,
+  initialState,
+  strategyPolicy = conservativeStrategyPolicy,
+  recoveryLedgersByMarket = new Map(),
+  volatilityProtectionEnabled = false,
+  externalOrdersPolicyBySymbol = {},
+  onUnownedExternalOrderObserved,
+} = {}) {
+  const orders = []
+  const pauses = []
+  const accountedFillIds = new Set()
+  const accountedFills = []
+  const portfolio = initialPortfolio ?? new Portfolio()
+  const metadataBySymbol = new Map(markets.map((market) => [market.symbol, makeMarketMetadata(market)]))
+  const appConfig = createHarnessAppConfig({ externalOrdersPolicyBySymbol })
+  const broker = createHarnessBroker({ orders })
+  const engine = createHarnessEngine({
+    broker,
+    portfolio,
+    strategyPolicy,
+    appConfig,
+    recoveryLedgersByMarket,
+    metadataBySymbol,
+    quoteFreeBalance,
+    accountedFillIds,
+    accountedFills,
+    pauses,
+    volatilityProtectionEnabled,
+    onUnownedExternalOrderObserved,
+    initialState,
+  })
+  await initializeHarnessBooks({ engine })
   return { engine, orders, pauses, accountedFills }
 }
 
