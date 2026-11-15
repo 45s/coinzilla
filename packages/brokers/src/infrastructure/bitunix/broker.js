@@ -1,10 +1,10 @@
-import { handleErr, toResult } from "@coinzilla/utils"
+import { assertDecimalString, handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { BitunixRestClient } from "./api/rest-client.js"
 import { adaptBalances } from "./adapters/adapt-balances.js"
 import { adaptCanonicalFill } from "./adapters/adapt-canonical-fill.js"
 import { adaptOrder } from "./adapters/adapt-order.js"
-import { createCanonicalMarket } from "./adapters/create-canonical-market.js"
+import { createCanonicalMarket, getBitunixSymbol } from "./adapters/create-canonical-market.js"
 import { BitunixSpotConfig } from "./config/bitunix-spot-config.js"
 
 const API = Object.freeze({
@@ -66,6 +66,12 @@ function normalizeDeals({ value }) {
     return value
   }
   return [value]
+}
+
+function isOpenMarket({ symbolInfo }) {
+  return symbolInfo.isOpen !== "0" &&
+    symbolInfo.isOpen !== 0 &&
+    symbolInfo.isOpen !== false
 }
 
 function createHistoryRequest({ input }) {
@@ -182,7 +188,9 @@ export class BitunixSpotBroker extends CoreBroker {
         value: response.data,
         operation: "market catalog",
       })
-      const markets = rows.map((symbolInfo) => createCanonicalMarket({ symbolInfo }))
+      const markets = rows
+        .filter((symbolInfo) => isOpenMarket({ symbolInfo }))
+        .map((symbolInfo) => createCanonicalMarket({ symbolInfo }))
       const seen = new Set()
       for (const market of markets) {
         if (seen.has(market.symbol)) {
@@ -216,12 +224,17 @@ export class BitunixSpotBroker extends CoreBroker {
         operation: "market catalog",
       })
       const symbolInfo = rows.find((row) =>
-        typeof row?.symbol === "string" && row.symbol.toUpperCase() === normalizedSymbol,
+        getBitunixSymbol({ symbolInfo: row }) === normalizedSymbol,
       )
       if (!symbolInfo) {
         throw new Error(`Bitunix Spot market ${normalizedSymbol} was not found`)
       }
-      return toResult({ data: symbolInfo })
+      return toResult({
+        data: {
+          ...symbolInfo,
+          symbol: normalizedSymbol,
+        },
+      })
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.getSymbolFilters()",
@@ -319,7 +332,16 @@ export class BitunixSpotBroker extends CoreBroker {
         path: API.lastPrice,
         queryParams: { symbol: normalizedSymbol },
       })
-      return toResult({ data: response.data })
+      assertDecimalString({
+        value: response.data,
+        field: "Bitunix Spot last price",
+      })
+      return toResult({
+        data: {
+          symbol: normalizedSymbol,
+          price: response.data,
+        },
+      })
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.getPrices()",
@@ -359,13 +381,16 @@ export class BitunixSpotBroker extends CoreBroker {
         operation: "market catalog",
       })
       const symbolInfo = marketRows.find((row) =>
-        typeof row?.symbol === "string" && row.symbol.toUpperCase() === normalizedSymbol,
+        getBitunixSymbol({ symbolInfo: row }) === normalizedSymbol,
       )
       if (!symbolInfo) {
         throw new Error(`Bitunix Spot market ${normalizedSymbol} was not found for fill lookup`)
       }
       const market = this.canonicalMarkets.get(normalizedSymbol) ??
-        createCanonicalMarket({ symbolInfo })
+        createCanonicalMarket({
+          symbolInfo,
+          allowClosed: true,
+        })
       this.canonicalMarkets.set(normalizedSymbol, market)
 
       const dealsResponse = await this.restClient.request({
