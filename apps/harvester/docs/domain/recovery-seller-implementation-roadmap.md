@@ -107,7 +107,7 @@ Relevant tests located include `strategy.test.js`, `recovery-sell-plan.test.js`,
 
 This is pure logical accounting only. It does not establish Spot custody, seed/debit Portfolio inventory, allocate canonical SELL fills between recovery and legacy, submit orders, register runtime configuration, or provide exact-once lifecycle orchestration. The application integration must call the disposal transition only after a fully reconciled successful cycle and must supply the canonical exact-once allocation boundary described in the domain specification. RS remains non-executable.
 
-Before implementing each rule, add a focused test that expresses the agreed business invariant and observe it fail. Reuse existing domain capabilities directly where their contracts fit. If a required CG function is a genuine strategy-neutral capability, characterize it, extract it in the same focused change, add direct shared tests, and prove CG behavior is unchanged. Do not perform a separate speculative extraction pass.
+Before implementing each rule, add a focused test that expresses the agreed business invariant and observe it fail. The mixed SELL allocation contract test is registered in `apps/harvester/package.json` `targetedTestFiles` so the focused Harvester regression workflow exercises this boundary directly. Reuse existing domain capabilities directly where their contracts fit. If a required CG function is a genuine strategy-neutral capability, characterize it, extract it in the same focused change, add direct shared tests, and prove CG behavior is unchanged. Do not perform a separate speculative extraction pass.
 
 Model only the concepts required by the approved RS contract:
 

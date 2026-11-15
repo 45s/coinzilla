@@ -41,7 +41,8 @@
       "test/replays/doge-zro-conservative-replay.test.js",
       "src/bootstrap/start-harvester.test.js",
       "test/bootstrap/start-harvester.test.js",
-      "test/recovery/operational-state-crash-matrix.test.js"
+      "test/recovery/operational-state-crash-matrix.test.js",
+      "src/domain/strategies/recovery-seller/mixed-sell-fill-allocation.test.js"
     ]
   }
 }
