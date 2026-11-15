@@ -193,7 +193,7 @@ test("Bitunix Spot broker validates order history query boundaries", async () =>
 
   const missingSymbol = await broker.getOrderHistory()
   const exactOrderId = await broker.getOrderHistory({ symbol: "BTCUSDT", orderId: "123" })
-  const invalidLimit = await broker.getOrderHistory({ symbol: "BTCUSDT", limit: 101 })
+  const invalidLimit = await broker.getOrderHistory({ symbol: "BTCUSDT", limit: 0 })
   const invalidRange = await broker.getOrderHistory({
     symbol: "BTCUSDT",
     startTime: 20,
