@@ -262,6 +262,9 @@ intent barrier and before the broker RPC. CANCELLED is logged only when the
 canonical cancellation transition has been applied. A fill that wins a
 cancellation race remains FILLED; a later stale cancellation report is shown
 as an informational ⚪SYS event (STALE CANCEL IGNORED), never as a cancellation.
+Stale and duplicate order reports are discarded before terminal fill-history
+reconciliation; a duplicate FILLED report is still allowed to complete any
+previously unprocessed canonical fill transition.
 
 The engine owns successful order lifecycle logging after canonical reconciliation. The user-data boundary does not emit a second raw receipt or generic processed-event line.
 
