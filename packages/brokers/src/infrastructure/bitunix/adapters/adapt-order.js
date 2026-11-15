@@ -17,68 +17,11 @@ const STATUS_MAP = Object.freeze({
   "7": "PARTIALLY_FILLED_CANCELED",
 })
 
-/**
- * Adapt a Bitunix Spot open/history order row to the legacy broker Order entity.
- *
- * @param {Record<string, unknown>} bitunixOrder
- * @returns {import("@coinzilla/entities").Order}
- */
-export function adaptOrder(bitunixOrder) {
-  if (!bitunixOrder || typeof bitunixOrder !== "object" || Array.isArray(bitunixOrder)) {
-    throw new TypeError("Bitunix Spot order should be an object")
-  }
-
-  const {
-    orderId,
-    symbol,
-    side,
-    type,
-    status,
+function assertOrderQuantities({ volume, dealVolume }) {
+  assertOrderQuantities({
     volume,
     dealVolume,
-    price,
-  } = bitunixOrder
-  if ((typeof orderId !== "string" && typeof orderId !== "number") || String(orderId).trim() === "") {
-    throw new TypeError("Bitunix Spot order is missing order ID")
-  }
-  if (typeof symbol !== "string" || !symbol.trim()) {
-    throw new TypeError("Bitunix Spot order is missing symbol")
-  }
-  const normalizedSide = SIDE_MAP[String(side)]
-  if (!normalizedSide) {
-    throw new TypeError("Bitunix Spot order side is unsupported")
-  }
-  const normalizedType = TYPE_MAP[String(type ?? bitunixOrder.orderType)]
-  if (!normalizedType) {
-    throw new TypeError("Bitunix Spot order type is unsupported")
-  }
-  const normalizedStatus = STATUS_MAP[String(status)]
-  if (!normalizedStatus) {
-    throw new TypeError("Bitunix Spot order status is unsupported")
-  }
-
-  assertDecimalString({
-    value: volume,
-    field: "Bitunix Spot original base quantity",
   })
-  assertDecimalString({
-    value: dealVolume,
-    field: "Bitunix Spot executed base quantity",
-  })
-  if (compareDecimal({
-    left: volume,
-    right: "0",
-  }) < 0 ||
-      compareDecimal({
-        left: dealVolume,
-        right: "0",
-      }) < 0 ||
-      compareDecimal({
-        left: dealVolume,
-        right: volume,
-      }) > 0) {
-    throw new TypeError("Bitunix Spot order quantities are outside the valid range")
-  }
   if (normalizedType === "LIMIT") {
     assertDecimalString({
       value: price,
