@@ -91,7 +91,7 @@ Prefer short, specific, past-tense descriptions:
 | --- | --- |
 | `Harvester order event processed` | `Order update processed` |
 | `Harvester subscribed to market prices` | `Market data subscribed` |
-| `Harvester connected and subscribed to 2 enabled markets` | `Connected; subscribed to 2 markets` |
+| `Harvester connected and subscribed to 2 enabled markets` | `Binance market-data stream connected; 2 market subscriptions active` |
 | `Harvester market price error handler failed` | `Market price error handler failed` |
 
 Keep variable context in structured fields rather than embedding it in the
@@ -157,6 +157,22 @@ These are message-design examples, not a claim that every current call site
 already follows this policy. When changing a log call, update its tests and
 keep the console allowlist in sync with any new fields intended for INFO.
 
+### Portfolio Stats
+
+Portfolio Stats remains a structured event in DEBUG/TRACE. The operator
+console renders only a compact summary: market symbol, total base inventory,
+quote spent, and quote net cash flow. It must not print nested inventory or
+accounting JSON, and the line must remain within the ordinary 200-character
+console budget. Example: `🪙 CG PORTFOLIO ZROUSDT | Inventory: 9.99 ZRO | Spent: 13.835 USDT | Net: -13.835 USDT`.
+
+### Startup connection summary
+
+Name the connected resource explicitly. Prefer
+`Binance market-data stream connected; 4 market subscriptions active.` over
+`Connected; subscribed to 4 markets`, which leaves the connection target
+ambiguous. Keep the separate user-data readiness state explicit when it is
+still pending; a market-data connection does not imply trading readiness.
+
 ### SYSTEM lifecycle events
 
 Use `logger.system()` for meaningful infrastructure and process lifecycle
@@ -173,7 +189,7 @@ Examples include:
 Do not use SYSTEM for every incoming event, market tick, strategy evaluation,
 or repeated connection-status heartbeat. Those belong at DEBUG or INFO
 according to whether they represent an operator-relevant trading event.
-SYSTEM entries are cyan; unowned system diagnostics retain the `⚪ SYS` ownership marker.
+SYSTEM entries remain cyan, but infrastructure/application records have no decorative ownership marker. Strategy markers are reserved for records with a canonical strategy owner.
 
 ## Shutdown phase terminal records
 
@@ -279,9 +295,10 @@ single immutable `strategyLogMarkers` mapping:
 | `RS_recoverySeller` | 🔴 RS |
 
 The marker is printed immediately after the timestamp and before the message
-or lifecycle status. System and application diagnostics without a strategy
-owner use `⚪ SYS`. Strategy identity is never inferred from a symbol, side,
-order ID, or client-order-ID prefix.
+or lifecycle status. Records without a canonical strategy owner have no
+strategy marker; the console does not print a decorative `⚪ SYS` label.
+Strategy identity is never inferred from a symbol, side, order ID, or
+client-order-ID prefix.
 
 The Conservative engine and CG Portfolio/RecoveryLedger workflow receive
 strategy-scoped adapters around the shared `@coinzilla/utils` logger. They add
@@ -296,30 +313,29 @@ records. Structured DEBUG/TRACE files retain the strategy ID as a field.
 
 ## Order lifecycle terminal records
 
-Order lifecycle events use a dedicated fixed-width terminal formatter so the
-same columns align across Coin Grabber and Recovery Seller:
+Order lifecycle events use a compact terminal formatter with consistent
+columns across Coin Grabber and Recovery Seller. Keep the strategy marker and
+label separated by one space; avoid oversized column gaps and explanatory
+client-ID labels:
 
 \`\`\`text
-TIME     STRATEGY STATUS                  ORDER ID               SYMBOL               SIDE       QUANTITY           PRICE
-19:14:52 🪙 CG     SUBMITTED                #1341114               ADAUSDT              BUY              50.00 @          0.15260
-19:14:52 🪙 CG     ACCEPTED                 #1341114               ADAUSDT              BUY              50.00 @          0.15260
-19:14:53 🔴 RS     PARTIAL FILL             #1341115               ADAUSDT              SELL             49.90 @          0.15410
-             Executed: 20 | Remaining: 29.90
+TIME     STRATEGY STATUS             ORDER ID CLIENT ID                 SYMBOL   SIDE QUANTITY @ PRICE
+19:14:52 🪙 CG SUBMITTED #pending h-325e71ba16494aeb875e6e-3 ADAUSDT BUY 50.00 @ 0.15260
+19:14:52 🪙 CG ACCEPTED #1341114 ADAUSDT BUY 50.00 @ 0.15260
+19:14:53 🔴 RS PARTIAL FILL #1341115 ADAUSDT SELL 49.90 @ 0.15410 | Executed: 20 | Remaining: 29.90
 \`\`\`
 
 Order events are reconciled against the registered broker order ID when available, with client order ID as the fallback. Strategy identity is derived only from immutable OrderRegistry ownership:
 🪙 CG for CG_coinGrabber and 🔴 RS for RS_recoverySeller. It never changes with
-order status. ⚪ SYS is reserved for system diagnostics that are not strategy
-lifecycle transitions. Supporting the RS label does not enable RS runtime
-execution.
+order status. Unowned diagnostics have no strategy marker. Supporting the RS
+label does not enable RS runtime execution.
 
-Lifecycle status is plain text in its own column; it never changes or
-replaces the strategy identity icon. The strategy marker remains 🪙 CG or 🔴 RS
-for every transition, while non-strategy diagnostics use ⚪ SYS. The fixed
-columns are time, strategy, status, broker order ID, symbol,
-side, original quantity, and limit price. Text columns are left-aligned;
-quantity and price are right-aligned. The terminal uses a 24-hour local time
-and does not truncate order identity or decimal values.
+Lifecycle status is plain text and never replaces the strategy identity.
+Only strategy-owned records carry 🪙 CG or 🔴 RS; unowned system/application
+records have no icon. Keep the fixed field order compact: time, strategy,
+status, broker order ID (or `#pending`), pending client ID when needed, symbol,
+side, quantity, and price. Use one separator between the strategy marker and
+label. Keep quantities/prices exact and do not truncate order or client IDs.
 
 SUBMITTED is emitted after the durable submission-intent barrier and immediately
 before broker I/O; because the exchange order ID does not exist yet, the order
@@ -329,9 +345,11 @@ carries the exchange-assigned broker order ID.
 PARTIAL FILL and terminal states are logged only after canonical fill
 reconciliation. CANCEL REQUESTED is logged after the durable cancellation
 intent barrier and before the broker RPC. CANCELLED is logged only when the
-canonical cancellation transition has been applied. A fill that wins a
-cancellation race remains FILLED; a later stale cancellation report is shown
-as an informational ⚪ SYS event (STALE CANCEL IGNORED), never as a cancellation.
+canonical cancellation transition has been applied. Keep cancellation outcome
+quantities (for example, `Executed: 0 | Cancelled: 400`) on the same terminal
+line as the cancellation event. A fill that wins a cancellation race remains
+FILLED; a later stale cancellation report is shown as an unowned informational
+`STALE CANCEL IGNORED` record, never as a cancellation.
 Stale and duplicate order reports are discarded before terminal fill-history
 reconciliation; a duplicate FILLED report is still allowed to complete any
 previously unprocessed canonical fill transition.
@@ -339,9 +357,13 @@ previously unprocessed canonical fill transition.
 The engine owns successful order lifecycle logging after canonical reconciliation. The user-data boundary does not emit a second raw receipt or generic processed-event line.
 
 No-op duplicate reports do not create repeated lifecycle records. Partial
-fills and partially filled cancellations include an indented exact-decimal
-line showing executed and remaining/cancelled quantity. Full structured
-exchange evidence and diagnostic context remain in the DEBUG/TRACE files;
-the terminal is the compact operator view.
+fills and partially filled cancellations append exact-decimal executed and
+remaining/cancelled quantities to the same line, separated by ` | `. Full
+structured exchange evidence and diagnostic context remain in the DEBUG/TRACE
+files; the terminal is the compact operator view.
 
-When a broker order ID is not available yet (for example, an unresolved submission), the order ID column displays `#pending`; the client order ID is retained in the indented detail line. The logger never derives strategy identity from a client-order-ID prefix.
+When a broker order ID is not available yet (for example, a pending
+submission), display `#pending` followed immediately by the raw client order
+ID on the same line. Do not add `Client:`, `Client order ID:`, or a separate
+indented line. The logger never derives strategy identity from a client-order-ID
+prefix.
