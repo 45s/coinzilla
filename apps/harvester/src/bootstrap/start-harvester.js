@@ -1,6 +1,7 @@
 import { isMarketDataFresh } from "../domain/market/is-market-data-fresh.js"
 import { defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeConservativeTradingEngine } from "../use-cases/conservative-trading-engine.js"
 import { createCandleHistoryService } from "../use-cases/create-candle-history-service.js"
@@ -193,7 +194,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     logger = defaultLogger,
     eventPublisher,
     onMarketPriceError = ({ symbol, error, errors }) => {
-      logger.error?.({ message: "Market price processing failed", symbol, error, errors })
+      logger.error?.({ message: "Market price processing failed", strategyId: StrategyId.COIN_GRABBER, symbol, error, errors })
     },
     onUserDataEvent = async () => {},
     onUserDataStatus = () => {},
