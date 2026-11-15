@@ -3458,7 +3458,10 @@ async function reconcileOwnedOrdersTransition({ context, options }) {
 async function persistSubmissionDeferral({ publishDurableIntent, order, reason } = {}) {
   const persisted = await publishDurableIntent({
     eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_DEFERRED,
-    dataResult: mapOrderSubmissionDeferredData({ order, reason }),
+    dataResult: mapOrderSubmissionDeferredData({
+      order,
+      reason,
+    }),
   })
   if (persisted?.ok !== true || persisted.data?.durable !== true) {
     throw persisted?.errors?.[0] ??

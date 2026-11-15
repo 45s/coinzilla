@@ -10638,7 +10638,10 @@ test("retains a registered pending request when terminal deferral evidence canno
         flushCount += 1
         if (flushCount === 1) {
           hasExternalOrder = true
-          return { ok: true, durable: true }
+          return {
+            ok: true,
+            durable: true,
+          }
         }
         return {
           ok: false,

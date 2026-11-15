@@ -197,6 +197,7 @@ function fillFingerprint({ fill }) {
  * This does not open the trading gate: every projected order still requires
  * canonical exchange reconciliation before it can be restored as actionable.
  */
+// eslint-disable-next-line complexity, max-lines-per-function -- Existing strict replay dispatcher; bounded event handlers are extracted incrementally.
 export function projectHarvesterJournalRecovery({ records } = {}) {
   try {
     if (!Array.isArray(records)) throw new TypeError("Harvester Journal recovery records must be an array")
@@ -509,7 +510,6 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         order.recoveryStatus = getSubmissionOutcomeStatus({ outcome: data.outcome })
         order.exchangeStatusHint = getSubmissionOutcomeStatus({ outcome: data.outcome })
         order.requiresExchangeReconciliation = applySubmissionOutcomeProjection({
-          order,
           data,
           clientOrderId,
           ordersByClientId,
@@ -856,7 +856,10 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         fills: Object.freeze(fills),
         recoveryCycles: Object.freeze(cycles.map((cycle) => Object.freeze({ ...cycle }))),
         recoveryCycleEvaluations: Object.freeze(recoveryCycleEvaluations),
-        pausedMarkets: Object.freeze([...pausedMarkets].map(([symbol, reason]) => Object.freeze({ symbol, reason }))),
+        pausedMarkets: Object.freeze([...pausedMarkets].map(([symbol, reason]) => Object.freeze({
+          symbol,
+          reason,
+        }))),
         stickySafetyBlockers: Object.freeze(stickySafetyBlockers),
         sessions: Object.freeze(sessions),
         accountSnapshots: Object.freeze(accountSnapshots),
@@ -875,7 +878,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
 function normalizeSubmissionDeferralRecords({ records } = {}) {
   return records.map((record) => {
     const payload = record?.payload
-    if (payload?.name !== "order.submission_deferred") return record
+    if (payload?.name !== "order.submission_deferred") {
+      return record
+    }
     const data = requireObject({
       value: payload.data,
       field: "order.submission_deferred data",
@@ -906,7 +911,9 @@ function projectDeferredSubmissions({ records } = {}) {
   for (let sequence = 0; sequence < records.length; sequence += 1) {
     const record = records[sequence]
     const payload = record?.payload
-    if (payload?.name !== "order.submission_deferred") continue
+    if (payload?.name !== "order.submission_deferred") {
+      continue
+    }
     const data = requireObject({
       value: payload.data,
       field: "order.submission_deferred data",
@@ -947,13 +954,16 @@ function getInvalidSubmissionOutcomeMessage({ data } = {}) {
 }
 
 function getSubmissionOutcomeStatus({ outcome } = {}) {
-  if (outcome === "REJECTED") return "REJECTED"
-  if (outcome === "DEFERRED") return "DEFERRED"
+  if (outcome === "REJECTED") {
+    return "REJECTED"
+  }
+  if (outcome === "DEFERRED") {
+    return "DEFERRED"
+  }
   return "UNKNOWN"
 }
 
 function applySubmissionOutcomeProjection({
-  order,
   data,
   clientOrderId,
   ordersByClientId,
