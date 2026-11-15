@@ -1341,15 +1341,24 @@ function createConservativeEngineRuntimeOperations({ context } = {}) {
   context.processMarketPrice = async ({ symbol, priceEvent } = {}) => {
     const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
     if (!protection?.ok) {return protection}
-    return context.runTransition({ task: () => context.processMarketPriceTransition({ symbol, priceEvent }) })
+    return context.runTransition({ task: () => context.processMarketPriceTransition({
+      symbol,
+      priceEvent,
+    }) })
   }
   context.processBookTicker = async ({ symbol, bookTicker } = {}) => {
     const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
     if (!protection?.ok) {return protection}
-    return context.runTransition({ task: () => context.processMarketBookTransition({ symbol, bookTicker }) })
+    return context.runTransition({ task: () => context.processMarketBookTransition({
+      symbol,
+      bookTicker,
+    }) })
   }
   context.processUserDataEvent = ({ event, recoveryMode = false } = {}) =>
-    context.runTransition({ task: () => context.processUserDataEventTransition({ event, recoveryMode }) })
+    context.runTransition({ task: () => context.processUserDataEventTransition({
+      event,
+      recoveryMode,
+    }) })
   context.evaluateLatest = ({ symbol } = {}) =>
     context.runTransition({ task: () => context.evaluateLatestTransition({ symbol }) })
   context.resumeDeferredEvaluations = () => context.runTransition({
