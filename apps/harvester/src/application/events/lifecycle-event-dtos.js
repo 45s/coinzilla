@@ -2,6 +2,7 @@ import { CanonicalOrder, Fill } from "@coinzilla/entities"
 import { addDecimal, assertDecimalString, assertObjectInput, compareDecimal, toResult } from "@coinzilla/utils"
 
 const STRATEGY_MODES = Object.freeze(["read-only", "conservative", "aggressive"])
+const TRADING_MODES = Object.freeze(["testnet", "live"])
 const OUTCOMES = Object.freeze(["success", "failed"])
 const SECRET_ASSIGNMENT = /\b(api[\s_-]?key|api[\s_-]?secret|client[\s_-]?secret|access[\s_-]?token|secret|token|password|authorization|signature)\b(\s*[:=]\s*|\s+is\s+|\s+)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi
 const BEARER_TOKEN = /\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi
@@ -39,6 +40,20 @@ const requireBoolean = ({ value, field }) => {
 const requireStrategyMode = ({ value }) => {
   if (!STRATEGY_MODES.includes(value)) {
     throw new TypeError("strategyMode must be read-only, conservative, or aggressive")
+  }
+  return value
+}
+
+const requireTradingMode = ({ value }) => {
+  if (!TRADING_MODES.includes(value)) {
+    throw new TypeError("tradingMode must be testnet or live")
+  }
+  return value
+}
+
+const requireConfigurationFingerprint = ({ value }) => {
+  if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)) {
+    throw new TypeError("configurationFingerprint must be a lowercase SHA-256 hex digest")
   }
   return value
 }
@@ -199,10 +214,14 @@ export const mapConfigValidatedData = (input = {}) =>
   mapData(input, "Configuration-validated event mapping", ({
     enabledMarkets,
     strategyMode,
+    tradingMode,
+    configurationFingerprint,
     tradingEnabled,
   }) => ({
     enabledMarkets: requireMarkets({ value: enabledMarkets }),
     strategyMode: requireStrategyMode({ value: strategyMode }),
+    tradingMode: requireTradingMode({ value: tradingMode }),
+    configurationFingerprint: requireConfigurationFingerprint({ value: configurationFingerprint }),
     tradingEnabled: requireBoolean({ value: tradingEnabled, field: "tradingEnabled" }),
   }))
 

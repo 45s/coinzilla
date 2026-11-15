@@ -1,43 +1,5 @@
-import { createHash } from "node:crypto"
 import { toResult } from "@coinzilla/utils"
-
-const SECRET_KEY = /(?:api.?key|secret|password|token|authorization|credential)/i
-
-function canonicalize(value) {
-  if (Array.isArray(value)) { return value.map(canonicalize) }
-  if (value && typeof value === "object") {
-    const result = {}
-    for (const key of Object.keys(value).sort()) {
-      if (SECRET_KEY.test(key)) { throw new TypeError("Configuration baseline cannot fingerprint secret-bearing settings") }
-      result[key] = canonicalize(value[key])
-    }
-    return result
-  }
-  if (typeof value === "number" && !Number.isFinite(value)) { throw new TypeError("Configuration baseline requires finite numeric settings") }
-  if (value === undefined || typeof value === "function" || typeof value === "symbol") {
-    throw new TypeError("Configuration baseline contains a non-JSON setting")
-  }
-  return value
-}
-
-function getEnabledMarketSymbols({ pairs } = {}) {
-  if (!pairs || typeof pairs !== "object" || Array.isArray(pairs)) {
-    throw new TypeError("Configuration baseline requires validated strategy pairs")
-  }
-  const markets = []
-  for (const [symbol, pair] of Object.entries(pairs)) {
-    if (!pair || typeof pair !== "object" || Array.isArray(pair) || typeof pair.enabled !== "boolean") {
-      throw new TypeError(`Configuration baseline requires an explicit enabled flag for every configured market: ${symbol}`)
-    }
-    if (pair.enabled) {
-      markets.push(symbol)
-    }
-  }
-  if (markets.length === 0) {
-    throw new TypeError("Configuration baseline requires at least one enabled market")
-  }
-  return markets.sort()
-}
+import { createEffectiveStrategyConfigurationFingerprint } from "../domain/configuration/create-effective-strategy-configuration-fingerprint.js"
 
 /** Persist a deterministic, non-secret fingerprint of all strategy decision settings. */
 export async function recordConfigurationBaseline({ operationalStateStore, appConfig } = {}) {
@@ -50,9 +12,10 @@ export async function recordConfigurationBaseline({ operationalStateStore, appCo
     const strategyNames = Object.keys(strategies).sort()
     if (strategyNames.length !== 1) { throw new TypeError("Configuration baseline requires exactly one configured strategy") }
     const strategyName = strategyNames[0]
-    const strategy = canonicalize(strategies[strategyName])
-    const markets = getEnabledMarketSymbols({ pairs: strategies[strategyName]?.pairs })
-    const fingerprint = createHash("sha256").update(JSON.stringify({ schemaVersion: 1, strategyName, strategy })).digest("hex")
+    const { fingerprint, enabledMarkets: markets } = createEffectiveStrategyConfigurationFingerprint({
+      strategyName,
+      strategy: strategies[strategyName],
+    })
     const result = await operationalStateStore.append({
       factId: "configuration-baseline:" + fingerprint,
       factType: "CONFIGURATION_BASELINE",

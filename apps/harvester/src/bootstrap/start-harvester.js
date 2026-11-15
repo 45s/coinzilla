@@ -10,6 +10,7 @@ import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-br
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
 import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
 import { resolveHarvesterOptions } from "./config/resolve-harvester-options.js"
+import { EffectiveConfigurationError } from "../domain/configuration/create-effective-strategy-configuration-fingerprint.js"
 import { cleanupBroker } from "./broker/cleanup-broker.js"
 import { createAccountSnapshotManager } from "./account/create-account-snapshot-manager.js"
 import { loadMarketMetadata } from "./market/load-market-metadata.js"
@@ -92,7 +93,13 @@ async function verifyOperationalStateStore({ operationalStateStore } = {}) {
   assertOperationalStateCanStart({ projection })
 }
 
-async function persistHarvesterProcessStart({ operationalStateStore, appConfig, tradingEnabled } = {}) {
+async function persistHarvesterProcessStart({
+  operationalStateStore,
+  appConfig,
+  tradingEnabled,
+  configurationFingerprint,
+  enabledMarkets,
+} = {}) {
   if (!operationalStateStore) {
     return
   }
@@ -100,6 +107,15 @@ async function persistHarvesterProcessStart({ operationalStateStore, appConfig, 
   if (baseline?.ok !== true || baseline.data?.durable !== true) {
     throw new Error("Harvester cannot connect to the broker without a durable configuration baseline: " +
       (baseline?.errors?.[0]?.message ?? "durable acknowledgement missing"))
+  }
+  if (
+    baseline.data.fingerprint !== configurationFingerprint ||
+    JSON.stringify(baseline.data.markets) !== JSON.stringify(enabledMarkets)
+  ) {
+    throw new EffectiveConfigurationError(
+      "strategies.CG_coinGrabber.pairs",
+      "the durable baseline fingerprint and enabled markets to match the resolved runtime configuration",
+    )
   }
   const started = await recordProcessStarted({
     operationalStateStore,
@@ -205,7 +221,13 @@ async function createHarvesterStartupContext({ options } = {}) {
   })
   const operationalStateStore = suppliedOperationalStateStore ?? operatorControlLifecycle.operationalStateStore
   await verifyOperationalStateStore({ operationalStateStore })
-  await persistHarvesterProcessStart({ operationalStateStore, appConfig: resolved.appConfig, tradingEnabled: resolved.tradingEnabled })
+  await persistHarvesterProcessStart({
+    operationalStateStore,
+    appConfig: resolved.appConfig,
+    tradingEnabled: resolved.tradingEnabled,
+    configurationFingerprint: resolved.configurationFingerprint,
+    enabledMarkets: resolved.enabledSymbols,
+  })
   const operationalStateCallbacks = createHarvesterOperationalStateCallbacks({ operationalStateStore })
   const accountSnapshotManagerRef = { current: null }
   const onCommissionAsset = ({ assetId, assetCode } = {}) => {

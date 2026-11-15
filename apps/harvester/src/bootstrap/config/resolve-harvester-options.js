@@ -2,6 +2,10 @@ import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { publishLifecycleEvent } from "../../application/events/publish-lifecycle-event.js"
 import { mapConfigValidatedData } from "../../application/events/lifecycle-event-dtos.js"
 import { resolveRuntimeConfig, selectPairsForTradingMode } from "../../domain/app-config.js"
+import {
+  createEffectiveStrategyConfigurationFingerprint,
+  EffectiveConfigurationError,
+} from "../../domain/configuration/create-effective-strategy-configuration-fingerprint.js"
 import { resolveTelegramOperatorConfig } from "../operator-control/resolve-telegram-operator-config.js"
 
 function assertSupportedStrategyConfig(strategyConfig) {
@@ -37,13 +41,25 @@ export async function resolveHarvesterOptions({ configSource, appConfig: supplie
       CG_coinGrabber: { ...strategyConfig, pairs },
     },
   }
-  const enabledSymbols = Object.entries(pairs).filter(([, pairConfig]) => pairConfig.enabled).map(([symbol]) => symbol)
-  if (enabledSymbols.length === 0) {
-    throw new Error(`Conservative trading requires at least one enabled pair for TRADING_MODE=${tradingMode}`)
+  const effectiveConfiguration = createEffectiveStrategyConfigurationFingerprint({
+    strategyName: "CG_coinGrabber",
+    strategy: appConfig.strategies.CG_coinGrabber,
+  })
+  const enabledSymbols = [...effectiveConfiguration.enabledMarkets]
+  const validatedConfigurationData = mapConfigValidatedData({
+    enabledMarkets: enabledSymbols,
+    strategyMode: "conservative",
+    tradingMode,
+    configurationFingerprint: effectiveConfiguration.fingerprint,
+    tradingEnabled,
+  })
+  if (validatedConfigurationData?.ok !== true) {
+    throw new EffectiveConfigurationError("config.validated", "a complete effective-configuration evidence DTO")
   }
   publishLifecycleEvent({
-    eventPublisher, eventName: HARVESTER_EVENT_NAMES.CONFIG_VALIDATED,
-    dataResult: mapConfigValidatedData({ enabledMarkets: enabledSymbols, strategyMode: "conservative", tradingEnabled: true }),
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.CONFIG_VALIDATED,
+    dataResult: validatedConfigurationData,
   })
   const log = { message: "App configuration validated", environment, broker: brokerName, tradingMode, enabledSymbols, strategyMode: `conservative-${tradingMode}` }
   if (typeof logger?.system === "function") {
@@ -51,5 +67,15 @@ export async function resolveHarvesterOptions({ configSource, appConfig: supplie
   } else {
     logger?.info?.(log)
   }
-  return Object.freeze({ appConfig, settings, pairs, enabledSymbols: Object.freeze(enabledSymbols), environment, brokerName, tradingMode, tradingEnabled })
+  return Object.freeze({
+    appConfig,
+    settings,
+    pairs,
+    enabledSymbols: Object.freeze(enabledSymbols),
+    configurationFingerprint: effectiveConfiguration.fingerprint,
+    environment,
+    brokerName,
+    tradingMode,
+    tradingEnabled,
+  })
 }
