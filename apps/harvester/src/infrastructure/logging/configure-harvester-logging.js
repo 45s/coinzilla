@@ -5,7 +5,7 @@ import { finished } from "node:stream/promises"
 import { mkdir } from "node:fs/promises"
 import path from "node:path"
 import { defaultLogger } from "@coinzilla/utils"
-import { StrategyId } from "../../domain/strategies/strategy-ids.js"
+import { strategyLogMarkers, SYSTEM_LOG_MARKER } from "../../application/logging/strategy-log-markers.js"
 import { createHarvesterLogSessionPaths } from "./create-harvester-log-session-paths.js"
 
 const CONSOLE_TRANSPORT_NAME = "console"
@@ -56,7 +56,7 @@ function formatConsoleLine({ line, level, method = level, color }) {
 
 function summarizeConsoleData({ data } = {}) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
-    return { message: String(data ?? "") }
+    return { message: String(data ?? ""), strategyId: undefined }
   }
 
   const message = String(data.message ?? "Harvester event")
@@ -78,23 +78,18 @@ function summarizeConsoleData({ data } = {}) {
         return [key, value]
       }),
   )
-  return { message, details }
+  return { message, details, strategyId: data.strategyId }
 }
 
 
-const STRATEGY_COLUMN_WIDTH = 5
+const STRATEGY_COLUMN_WIDTH = 6
 const STATUS_COLUMN_WIDTH = 23
 const ORDER_ID_COLUMN_WIDTH = 22
 const SYMBOL_COLUMN_WIDTH = 20
 const SIDE_COLUMN_WIDTH = 5
 const QUANTITY_COLUMN_WIDTH = 18
 const PRICE_COLUMN_WIDTH = 18
-const ORDER_DETAIL_INDENT = 15
-
-const STRATEGY_LABELS = Object.freeze({
-  [StrategyId.COIN_GRABBER]: "🟡GC",
-  [StrategyId.RECOVERY_SELLER]: "🔴RS",
-})
+const ORDER_DETAIL_INDENT = 16
 
 const ORDER_STATUS_PRESENTATION = Object.freeze({
   SUBMITTED: "SUBMITTED",
@@ -121,7 +116,7 @@ function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
     second: "2-digit",
     hour12: false,
   })
-  const strategy = (STRATEGY_LABELS[data.strategyId] ?? "⚪SYS").padEnd(STRATEGY_COLUMN_WIDTH)
+  const strategy = (strategyLogMarkers[data.strategyId] ?? SYSTEM_LOG_MARKER).padEnd(STRATEGY_COLUMN_WIDTH)
   const status = String(
     ORDER_STATUS_PRESENTATION[data.lifecycleStatus] ?? data.lifecycleStatus ?? "INFO",
   ).padEnd(STATUS_COLUMN_WIDTH)
@@ -395,7 +390,8 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, d
   const levelLabel = normalizedMethod === "info" || normalizedMethod === "system"
     ? ""
     : normalizedMethod.toUpperCase() + " "
-  const plainPrefix = `${time} ${levelLabel}${summary.message}`
+  const strategyMarker = strategyLogMarkers[summary.strategyId] ?? SYSTEM_LOG_MARKER
+  const plainPrefix = `${time} ${strategyMarker} ${levelLabel}${summary.message}`
   const serializedDetails = Object.keys(summary.details ?? {}).length > 0
     ? ` ${JSON.stringify(summary.details)}`
     : ""
@@ -434,7 +430,7 @@ export function createHarvesterConsoleTransport({
   const flushSuppressed = () => {
     if (suppressedCount === 0) return
     const time = new Date(previousTimestamp).toLocaleTimeString()
-    const line = `${time} Previous identical log entry repeated ${suppressedCount} additional time(s)`
+    const line = `${time} ${SYSTEM_LOG_MARKER} Previous identical log entry repeated ${suppressedCount} additional time(s)`
     output.write(formatConsoleLine({
       line,
       level: "info",
