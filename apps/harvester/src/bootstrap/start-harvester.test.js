@@ -3930,6 +3930,7 @@ test("treats a prior-process Harvester order as external under IGNORE and evalua
               ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
               enabled: true,
               enableVolatilityProtection: false,
+              orderQuantity: 0.001,
               makerPercent: 0.1,
               takerPercent: 0.1,
             },

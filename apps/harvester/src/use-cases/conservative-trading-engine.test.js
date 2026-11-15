@@ -252,7 +252,6 @@ function getHarnessCancelExecutedQuantity({ cancelWithFill, cancelExecutedQuanti
 
 const DEFAULT_HARNESS_OPTIONS = {
   hasUnownedOpenOrdersForSymbol: noOpenOrders,
-  hasUnresolvedHarvesterOpenOrdersForSymbol: noOpenOrders,
   isMarketPriceFresh: marketDataFresh,
   isMarketBookFresh: marketDataFresh,
   initialBook: true,
@@ -384,7 +383,6 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     strategyPolicy,
     logger,
     hasUnownedOpenOrdersForSymbol,
-    hasUnresolvedHarvesterOpenOrdersForSymbol,
     appConfig: suppliedAppConfig,
     isMarketPriceFresh,
     isMarketBookFresh,
