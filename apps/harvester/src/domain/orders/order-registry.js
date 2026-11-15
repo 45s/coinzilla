@@ -27,6 +27,48 @@ function sameOrderState({ current, next }) {
   return JSON.stringify(current.value) === JSON.stringify(next.value)
 }
 
+function normalizeOrderOwnership({ ownership, clientOrderId, brokerOrderId } = {}) {
+  if (!ownership || typeof ownership !== "object" || Array.isArray(ownership)) {
+    throw new TypeError("Order ownership must be an object")
+  }
+  for (const field of ["strategyId", "positionId"]) {
+    if (typeof ownership[field] !== "string" || !ownership[field].trim()) {
+      throw new TypeError("Order ownership requires a non-empty " + field)
+    }
+  }
+  if (ownership.clientOrderId !== undefined && ownership.clientOrderId !== clientOrderId) {
+    throw new Error("Order ownership clientOrderId does not match its canonical order")
+  }
+  if (ownership.brokerOrderId !== undefined && ownership.brokerOrderId !== brokerOrderId) {
+    throw new Error("Order ownership brokerOrderId does not match its canonical order")
+  }
+  for (const field of ["purpose", "cycleId"]) {
+    if (ownership[field] !== undefined && ownership[field] !== null &&
+        (typeof ownership[field] !== "string" || !ownership[field].trim())) {
+      throw new TypeError("Order ownership " + field + " must be a non-empty string when provided")
+    }
+  }
+
+  return Object.freeze({
+    clientOrderId,
+    ...(brokerOrderId === undefined ? {} : { brokerOrderId }),
+    strategyId: ownership.strategyId.trim(),
+    positionId: ownership.positionId.trim(),
+    ...(typeof ownership.purpose === "string" ? { purpose: ownership.purpose.trim() } : {}),
+    ...(typeof ownership.cycleId === "string" ? { cycleId: ownership.cycleId.trim() } : {}),
+  })
+}
+
+function sameOrderOwnership({ current, next } = {}) {
+  return JSON.stringify(current) === JSON.stringify(next)
+}
+
+function attachBrokerOrderIdToOwnership({ ownerships, clientOrderId, brokerOrderId } = {}) {
+  return ownerships.map((ownership) => ownership.clientOrderId === clientOrderId
+    ? Object.freeze({ ...ownership, brokerOrderId })
+    : ownership)
+}
+
 function isStaleOrderUpdate({ current, next }) {
   if (
     compareDecimal({
@@ -100,17 +142,21 @@ function validateOrderUpdate({ current, next }) {
 }
 
 /**
- * Immutable registry of Harvester-owned canonical orders.
+ * Immutable registry of Harvester-owned canonical orders and their application-owned attribution.
  *
- * Unknown exchange orders are deliberately not adopted. The caller must
- * reconcile them separately before treating account state as fully known.
+ * Order ownership is keyed by Harvester's original clientOrderId and linked to the brokerOrderId
+ * once the exchange identity is known. Unknown exchange orders are deliberately not adopted.
  */
 export class OrderRegistry {
   #orders
+  #ownerships
 
-  constructor({ orders = [] } = {}) {
+  constructor({ orders = [], ownerships = [] } = {}) {
     if (!Array.isArray(orders) || orders.some((order) => !(order instanceof CanonicalOrder))) {
       throw new TypeError("OrderRegistry.orders must contain CanonicalOrder values")
+    }
+    if (!Array.isArray(ownerships)) {
+      throw new TypeError("OrderRegistry.ownerships must be an array")
     }
     const clientOrderIds = orders.map((order) => order.clientOrderId)
     const brokerOrderIds = orders
@@ -122,11 +168,37 @@ export class OrderRegistry {
     if (new Set(brokerOrderIds).size !== brokerOrderIds.length) {
       throw new TypeError("OrderRegistry cannot contain duplicate brokerOrderIds")
     }
+
+    const normalizedOwnerships = ownerships.map((ownership) => {
+      const order = orders.find((item) => item.clientOrderId === ownership?.clientOrderId)
+      if (!order) {
+        throw new Error("Order ownership must reference a registered canonical order")
+      }
+      const normalized = normalizeOrderOwnership({
+        ownership,
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: order.brokerOrderId,
+      })
+      return normalized
+    })
+    const ownershipClientOrderIds = normalizedOwnerships.map((ownership) => ownership.clientOrderId)
+    const ownershipBrokerOrderIds = normalizedOwnerships
+      .map((ownership) => ownership.brokerOrderId)
+      .filter((id) => id !== undefined)
+    if (new Set(ownershipClientOrderIds).size !== ownershipClientOrderIds.length) {
+      throw new TypeError("OrderRegistry cannot contain duplicate ownership clientOrderIds")
+    }
+    if (new Set(ownershipBrokerOrderIds).size !== ownershipBrokerOrderIds.length) {
+      throw new TypeError("OrderRegistry cannot contain duplicate ownership brokerOrderIds")
+    }
+
     this.#orders = Object.freeze([...orders])
+    this.#ownerships = Object.freeze(normalizedOwnerships)
     Object.freeze(this)
   }
 
   get orders() { return this.#orders }
+  get ownerships() { return this.#ownerships }
 
   getOrder({ clientOrderId } = {}) {
     if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
@@ -140,6 +212,30 @@ export class OrderRegistry {
       throw new TypeError("OrderRegistry.getOrderByBrokerOrderId requires brokerOrderId")
     }
     return this.#orders.find((order) => order.brokerOrderId === brokerOrderId)
+  }
+
+  getOwnership({ clientOrderId, brokerOrderId } = {}) {
+    if (clientOrderId === undefined && brokerOrderId === undefined) {
+      throw new TypeError("OrderRegistry.getOwnership requires clientOrderId or brokerOrderId")
+    }
+    if (clientOrderId !== undefined && (typeof clientOrderId !== "string" || !clientOrderId.trim())) {
+      throw new TypeError("OrderRegistry.getOwnership clientOrderId must be a non-empty string")
+    }
+    if (brokerOrderId !== undefined && (typeof brokerOrderId !== "string" || !brokerOrderId.trim())) {
+      throw new TypeError("OrderRegistry.getOwnership brokerOrderId must be a non-empty string")
+    }
+
+    const byClientOrderId = clientOrderId === undefined
+      ? undefined
+      : this.#ownerships.find((ownership) => ownership.clientOrderId === clientOrderId)
+    const byBrokerOrderId = brokerOrderId === undefined
+      ? undefined
+      : this.#ownerships.find((ownership) => ownership.brokerOrderId === brokerOrderId)
+    if (clientOrderId !== undefined && brokerOrderId !== undefined &&
+        byClientOrderId !== byBrokerOrderId) {
+      throw new Error("Order ownership clientOrderId and brokerOrderId identify different registered orders")
+    }
+    return byClientOrderId ?? byBrokerOrderId
   }
 
   getActiveOrders({ marketId } = {}) {
@@ -156,14 +252,29 @@ export class OrderRegistry {
     )
   }
 
-  registerPending({ order } = {}) {
+  registerPending({ order, ownership } = {}) {
     if (!(order instanceof CanonicalOrder) || order.status !== "PENDING") {
       throw new TypeError("OrderRegistry.registerPending requires a PENDING CanonicalOrder")
     }
     const existing = this.getOrder({ clientOrderId: order.clientOrderId })
+    const nextOwnership = ownership === undefined
+      ? undefined
+      : normalizeOrderOwnership({
+          ownership,
+          clientOrderId: order.clientOrderId,
+          brokerOrderId: order.brokerOrderId,
+        })
     if (existing) {
       if (!sameOrderState({ current: existing, next: order })) {
         throw new Error("Conflicting pending order reused clientOrderId " + order.clientOrderId)
+      }
+      const existingOwnership = this.getOwnership({ clientOrderId: order.clientOrderId })
+      if (nextOwnership !== undefined &&
+          (!existingOwnership || !sameOrderOwnership({
+            current: existingOwnership,
+            next: nextOwnership,
+          }))) {
+        throw new Error("Conflicting order ownership reused clientOrderId " + order.clientOrderId)
       }
       return Object.freeze({ registry: this, applied: false, duplicate: true })
     }
@@ -171,7 +282,12 @@ export class OrderRegistry {
       throw new Error("Pending order cannot already have a brokerOrderId")
     }
     return Object.freeze({
-      registry: new OrderRegistry({ orders: [...this.#orders, order] }),
+      registry: new OrderRegistry({
+        orders: [...this.#orders, order],
+        ownerships: nextOwnership === undefined
+          ? this.#ownerships
+          : [...this.#ownerships, nextOwnership],
+      }),
       applied: true,
       duplicate: false,
     })
@@ -191,6 +307,7 @@ export class OrderRegistry {
     return Object.freeze({
       registry: new OrderRegistry({
         orders: this.#orders.filter((order) => order.clientOrderId !== clientOrderId),
+        ownerships: this.#ownerships.filter((ownership) => ownership.clientOrderId !== clientOrderId),
       }),
       removed: true,
     })
@@ -231,7 +348,7 @@ export class OrderRegistry {
       )
       return toResult({
         data: {
-          registry: new OrderRegistry({ orders }),
+          registry: new OrderRegistry({ orders, ownerships: this.#ownerships }),
           order: unknownOrder,
           applied: true,
           duplicate: false,
@@ -241,6 +358,7 @@ export class OrderRegistry {
       return toResult({ error })
     }
   }
+
   markCancellationUnknown({ clientOrderId } = {}) {
     try {
       if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
@@ -276,7 +394,7 @@ export class OrderRegistry {
       )
       return toResult({
         data: {
-          registry: new OrderRegistry({ orders }),
+          registry: new OrderRegistry({ orders, ownerships: this.#ownerships }),
           order: unknownOrder,
           applied: true,
           duplicate: false,
@@ -330,8 +448,13 @@ export class OrderRegistry {
       updatedAt: order.updatedAt,
     })
     const orders = this.#orders.map((item, itemIndex) => itemIndex === index ? attached : item)
+    const ownerships = attachBrokerOrderIdToOwnership({
+      ownerships: this.#ownerships,
+      clientOrderId: current.clientOrderId,
+      brokerOrderId: order.brokerOrderId,
+    })
     return Object.freeze({
-      registry: new OrderRegistry({ orders }),
+      registry: new OrderRegistry({ orders, ownerships }),
       applied: true,
       duplicate: false,
     })
@@ -424,8 +547,15 @@ export class OrderRegistry {
     const orders = this.#orders.map((item, itemIndex) =>
       itemIndex === index ? nextOrder : item,
     )
+    const ownerships = nextOrder.brokerOrderId === undefined
+      ? this.#ownerships
+      : attachBrokerOrderIdToOwnership({
+          ownerships: this.#ownerships,
+          clientOrderId: current.clientOrderId,
+          brokerOrderId: nextOrder.brokerOrderId,
+        })
     return Object.freeze({
-      registry: new OrderRegistry({ orders }),
+      registry: new OrderRegistry({ orders, ownerships }),
       applied: true,
       duplicate: false,
       stale: false,
@@ -440,6 +570,7 @@ export class OrderRegistry {
   get value() {
     return Object.freeze({
       orders: this.#orders.map((order) => order.value),
+      ownerships: Object.freeze(this.#ownerships.map((ownership) => Object.freeze({ ...ownership }))),
     })
   }
 }
