@@ -535,13 +535,17 @@ test("defers strategy activity only for the symbol with an unowned open order", 
   assert.equal(unrelatedSymbolHarness.orders.length, 1)
 })
 
-test("rechecks external-order ownership after the durable order intent and before broker submission", async () => {
+test("rechecks external-order ownership after the durable order intent and records a terminal local deferral", async () => {
   let hasExternalOrder = false
+  const journalEvents = []
   const harness = await createHarness({
     appConfig: withExternalOrdersPolicy("block"),
     hasUnownedOpenOrdersForSymbol: () => hasExternalOrder,
     eventPublisher: {
-      publish: () => ({ ok: true }),
+      publish: (event) => {
+        journalEvents.push(event)
+        return { ok: true }
+      },
       flush: async () => {
         hasExternalOrder = true
         return {
@@ -562,9 +566,24 @@ test("rechecks external-order ownership after the durable order intent and befor
   })
 
   assert.equal(result.ok, true)
-  assert.deepEqual(harness.orders, [])
-  assert.equal(harness.engine.getOrders().length, 0)
+  assert.deepEqual(harness.orders, [],
+    "A locally deferred submission must never call the broker placeOrder port.")
+  assert.equal(harness.engine.getOrders().length, 0,
+    "The pending registry entry must be removed after its terminal deferral evidence is durable.")
   assert.deepEqual(harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
+  assert.ok(journalEvents.some((event) => event.name === "order.submission_requested"),
+    "The original pending request must be durably recorded before its deferral outcome.")
+  const deferred = journalEvents.find((event) => event.name === "order.submission_deferred")
+  assert.ok(deferred, "A durable terminal deferral event must close the original request lifecycle.")
+  assert.equal(deferred.data.clientOrderId, journalEvents.find((event) =>
+    event.name === "order.submission_requested").data.clientOrderId,
+  "The deferral outcome must preserve the exact original client-order identity.")
+  assert.equal(deferred.data.reason, "UNOWNED_OPEN_ORDERS_PRESENT",
+    "The deferral must carry a bounded safe reason, not raw diagnostics.")
+  assert.equal(journalEvents.some((event) => event.name === "order.submitted"), false,
+    "A local deferral must not fabricate a broker acknowledgement.")
+  assert.equal(journalEvents.some((event) => event.name === "order.submission_failed"), false,
+    "A local deferral must not be misclassified as a broker rejection or ambiguous outcome.")
 })
 
 test("subtracts only shared BUY commitments created after the account snapshot", async () => {

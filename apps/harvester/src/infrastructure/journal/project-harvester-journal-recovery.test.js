@@ -94,6 +94,40 @@ test("preserves a submission whose broker outcome was unknown", () => {
   assert.equal(result.data.orders[0].requiresExchangeReconciliation, true)
 })
 
+test("closes a durable pending submission with local deferral evidence without creating an exchange order", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested(),
+      record("order.submission_deferred", {
+        clientOrderId: "h-BTCUSDT-1",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        reason: "MARKET_BOOK_STALE",
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.deepEqual(result.data.orders, [],
+    "A locally deferred request must not survive as a pending or exchange-reconcilable order.")
+  assert.deepEqual(result.data.deferredSubmissions, [{
+    fileName: "session.jsonl",
+    sequence: 1,
+    clientOrderId: "h-BTCUSDT-1",
+    symbol: "BTCUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    price: "100",
+    quantity: "1",
+    reason: "MARKET_BOOK_STALE",
+  }], "The projection must retain bounded terminal deferral evidence with the original client identity.")
+  assert.equal(result.data.requiresExchangeReconciliation, false,
+    "A local deferral must not create an exchange order or require exchange order reconciliation.")
+})
+
 test("preserves a durable cancellation intent without assuming the exchange canceled the order", () => {
   const result = projectHarvesterJournalRecovery({
     records: [
