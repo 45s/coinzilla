@@ -133,11 +133,19 @@ test("Bitunix Spot broker never submits or cancels orders without safe identity 
   const { broker, calls } = createBroker()
 
   const created = await broker.createOrder({ symbol: "BTCUSDT", side: "BUY" })
+  const canonicalCreated = await broker.createCanonicalOrder({
+    symbol: "BTCUSDT",
+    clientOrderId: "caller-order-1",
+  })
   const cancelled = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: "123" })
+  const cancelledAll = await broker.cancelAllOpenOrders({ symbol: "BTCUSDT" })
 
   assert.equal(created.ok, false)
+  assert.equal(canonicalCreated.ok, false)
   assert.equal(cancelled.ok, false)
+  assert.equal(cancelledAll.ok, false)
   assert.match(created.errors[0].message, /client order identity/i)
+  assert.match(canonicalCreated.errors[0].message, /clientOrderId/i)
   assert.equal(cancelled.cancellationOutcome, "NOT_SENT")
   assert.equal(calls.length, 0)
 })
