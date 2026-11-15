@@ -301,6 +301,13 @@ function capturePreflightBalances({ result, state }) {
   ]))
 }
 
+function resolveAdditionalTrackedBaseQuantityGetter({ getter } = {}) {
+  if (typeof getter !== "function") {
+    throw new TypeError("createAccountSnapshotManager requires getAdditionalTrackedBaseQuantity to be a function")
+  }
+  return getter
+}
+
 function getAccountSnapshotBaselines({ context }) {
   const activeOrders = context.getTradingEngine()?.getActiveOrders?.() ??
     context.getRecoveredState()?.orderRegistry?.getActiveOrders?.() ?? []
@@ -977,9 +984,9 @@ export function createAccountSnapshotManager({
   runtimeSessionId,
   operationalStateStore,
 } = {}) {
-  if (typeof getAdditionalTrackedBaseQuantity !== "function") {
-    throw new TypeError("createAccountSnapshotManager requires getAdditionalTrackedBaseQuantity to be a function")
-  }
+  const additionalTrackedBaseQuantityGetter = resolveAdditionalTrackedBaseQuantityGetter({
+    getter: getAdditionalTrackedBaseQuantity,
+  })
   const state = {
     accountSnapshot: undefined,
     preflightSourceTime: undefined,
@@ -994,7 +1001,7 @@ export function createAccountSnapshotManager({
     eventPublisher,
     marketMetadata,
     getPortfolio,
-    getAdditionalTrackedBaseQuantity,
+    getAdditionalTrackedBaseQuantity: additionalTrackedBaseQuantityGetter,
     getTradingEngine,
     getRecoveredState,
     getHasCanonicalOwnershipReconciliation,

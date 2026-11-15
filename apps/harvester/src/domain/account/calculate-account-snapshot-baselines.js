@@ -9,6 +9,31 @@ function addAmount({ values, assetId, amount, field }) {
   values.set(assetId, addDecimal({ left: values.get(assetId) ?? "0", right: amount }))
 }
 
+function addAdditionalTrackedBaseQuantity({ values, item } = {}) {
+  if (!item || typeof item !== "object" || Array.isArray(item)) {
+    throw new TypeError("additionalTrackedBaseQuantity records must be objects")
+  }
+  if (typeof item.assetId !== "string" || !item.assetId.trim()) {
+    throw new TypeError("additionalTrackedBaseQuantity requires a non-empty asset ID")
+  }
+  assertDecimalString({
+    value: item.amount,
+    field: "additionalTrackedBaseQuantity.amount",
+  })
+  if (compareDecimal({
+    left: item.amount,
+    right: "0",
+  }) < 0) {
+    throw new RangeError("additionalTrackedBaseQuantity.amount must be non-negative")
+  }
+  addAmount({
+    values,
+    assetId: item.assetId,
+    amount: item.amount,
+    field: "additional tracked Spot base quantity",
+  })
+}
+
 function toRecords(values) {
   return Object.freeze([...values]
     .sort(([left], [right]) => left.localeCompare(right))
@@ -20,6 +45,11 @@ function toRecords(values) {
  * accounting state represented by an exchange account snapshot. The caller captures this synchronously after the
  * broker balance response; recovery event-sequence fencing discards the whole
  * attempt if a user-data event crosses the REST snapshot boundary.
+ *
+ * @param {object} options Snapshot baseline inputs.
+ * @param {Portfolio} options.portfolio Current Portfolio.
+ * @param {CanonicalOrder[]} options.activeOrders Current active orders.
+ * @param {Array<{assetId: string, amount: string}>} [options.additionalTrackedBaseQuantity] Verified Spot inventory tracked outside Portfolio.
  */
 export function calculateAccountSnapshotBaselines({ portfolio, activeOrders, additionalTrackedBaseQuantity = [] } = {}) {
   try {
@@ -55,24 +85,9 @@ export function calculateAccountSnapshotBaselines({ portfolio, activeOrders, add
     }
 
     for (const item of additionalTrackedBaseQuantity) {
-      if (!item || typeof item !== "object" || Array.isArray(item)) {
-        throw new TypeError("additionalTrackedBaseQuantity records must be objects")
-      }
-      if (typeof item.assetId !== "string" || !item.assetId.trim()) {
-        throw new TypeError("additionalTrackedBaseQuantity requires a non-empty asset ID")
-      }
-      assertDecimalString({
-        value: item.amount,
-        field: "additionalTrackedBaseQuantity.amount",
-      })
-      if (compareDecimal({ left: item.amount, right: "0" }) < 0) {
-        throw new RangeError("additionalTrackedBaseQuantity.amount must be non-negative")
-      }
-      addAmount({
+      addAdditionalTrackedBaseQuantity({
         values: additionalTrackedBaseQuantityBaseline,
-        assetId: item.assetId,
-        amount: item.amount,
-        field: "additional tracked Spot base quantity",
+        item,
       })
     }
 

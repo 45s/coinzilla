@@ -82,6 +82,14 @@ export class AccountSnapshot {
       records: additionalTrackedBaseQuantityBaseline,
       field: "additionalTrackedBaseQuantityBaseline",
     })
+
+    for (const assetId of additionalTrackedBaseQuantityBaselineByAssetId.keys()) {
+      if (!balancesByAssetId.has(assetId)) {
+        throw new TypeError(
+          "AccountSnapshot additionalTrackedBaseQuantityBaseline references asset missing from balances: " + assetId,
+        )
+      }
+    }
     const committedQuoteBalanceBaselineByAssetId = createBaselineMap({
       records: committedQuoteBalanceBaseline,
       field: "committedQuoteBalanceBaseline",
