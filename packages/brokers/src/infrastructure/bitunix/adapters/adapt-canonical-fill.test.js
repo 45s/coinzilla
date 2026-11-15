@@ -5,7 +5,10 @@ import { createCanonicalMarket } from "./create-canonical-market.js"
 import { adaptCanonicalFill } from "./adapt-canonical-fill.js"
 
 const market = createCanonicalMarket({
-  symbolInfo: { symbol: "BTCUSDT", base: "BTC", quote: "USDT", isOpen: "1" },
+  symbolInfo: { symbol: "BTCUSDT",
+    base: "BTC",
+    quote: "USDT",
+    isOpen: "1" },
 })
 
 test("adapts Bitunix Spot matching-order facts into an exact canonical fill", () => {
@@ -48,7 +51,16 @@ test("rejects missing execution identity, invalid liquidity role, and invalid ti
     ctime: "2026-11-15T10:00:00.000Z",
   }
 
-  assert.throws(() => adaptCanonicalFill({ trade: { ...trade, id: "" }, side: "BUY", market }))
-  assert.throws(() => adaptCanonicalFill({ trade: { ...trade, role: "9" }, side: "BUY", market }))
-  assert.throws(() => adaptCanonicalFill({ trade: { ...trade, ctime: "invalid" }, side: "BUY", market }))
+  assert.throws(() => adaptCanonicalFill({ trade: { ...trade,
+      id: "" },
+    side: "BUY",
+    market }))
+  assert.throws(() => adaptCanonicalFill({ trade: { ...trade,
+      role: "9" },
+    side: "BUY",
+    market }))
+  assert.throws(() => adaptCanonicalFill({ trade: { ...trade,
+      ctime: "invalid" },
+    side: "BUY",
+    market }))
 })
