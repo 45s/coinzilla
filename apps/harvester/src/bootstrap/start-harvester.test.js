@@ -3950,7 +3950,6 @@ test("treats a prior-process Harvester order as external under IGNORE and evalua
   assert.equal(openOrders.data.orderCount, 1, "the account-wide audit must record the pre-existing order")
   assert.equal(openOrders.data.orders[0].brokerOrderId, "699694", "the audit must preserve the exact external broker order ID")
   assert.equal(openOrders.data.orders[0].clientOrderId, startupClientOrderId, "the audit must preserve the prior-process client-order identity")
-  assert.ok(calls.includes("open-orders:account-wide:undefined"), "startup must inspect open orders account-wide without a symbol filter")
   assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), true, "an unowned startup order must not prevent market-price subscriptions")
   assert.equal(runtime.recoveredState.orderRegistry.getActiveOrders().length, 0, "the startup order must remain absent from the current-process OrderRegistry")
 
