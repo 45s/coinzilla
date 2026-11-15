@@ -719,7 +719,7 @@ test("prints strategy markers with one separator and omits the decorative SYS ma
     level: "info",
     method: "system",
     data: {
-      message: "Binance market-data stream connected",
+      message: "Connected; subscribed to 4 enabled market(s). Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness.",
     },
   })
 
@@ -730,8 +730,8 @@ test("prints strategy markers with one separator and omits the decorative SYS ma
   )
   assert.match(
     written,
-    /Binance market-data stream connected/,
-    "Unowned infrastructure records must remain visible without an artificial ownership marker.",
+    /Binance market-data stream connected; active market subscriptions: 4\. Conservative TESTNET trading is enabled/,
+    "The console must name the Binance market-data stream and the active subscription count explicitly.",
   )
   assert.doesNotMatch(
     written,
