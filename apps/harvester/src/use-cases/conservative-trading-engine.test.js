@@ -492,7 +492,7 @@ test("ignores manual external open orders under the default per-pair policy", as
 
 test("allows strategy evaluation under IGNORE when an unmatched startup order has a Harvester client-order ID", async () => {
   const harness = await createHarness({
-    hasUnresolvedHarvesterOpenOrdersForSymbol: () => true,
+    hasUnownedOpenOrdersForSymbol: () => true,
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
