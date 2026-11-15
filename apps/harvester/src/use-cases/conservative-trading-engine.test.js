@@ -6708,7 +6708,7 @@ test("rejects acknowledged REST fills with conflicting broker, market, or side o
       accountingApplied: true,
       getAcknowledgedFills: ({ order }) => [makeBuyFill({
         order,
-        tradeId: "conflicting-ownership-" + Object.keys(identity)[0],
+        tradeId: `conflicting-ownership-${Object.keys(identity)[0]}`,
         price: order.limitPrice.amount,
         quantity: order.originalQuantity.amount,
         quoteQuantity: multiplyDecimal({
