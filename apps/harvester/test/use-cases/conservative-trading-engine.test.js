@@ -38,7 +38,7 @@ const createFixture = ({
   isMarketPriceFresh = () => true,
   isMarketBookFresh = () => true,
   hasUnownedOpenOrdersForSymbol = () => false,
-  // All unmatched startup orders use this same external-order policy.
+  hasUnresolvedHarvesterOpenOrdersForSymbol = () => false,
   externalOrdersPolicy,
   getVolatilityData,
   pausedMarkets = [],
@@ -177,6 +177,7 @@ const createFixture = ({
     completeRecoveryCycle: () => toResult({ data: { eligible: true, freeQuantity: "1" } }),
     canTrade: () => ready,
     hasUnownedOpenOrdersForSymbol,
+    hasUnresolvedHarvesterOpenOrdersForSymbol,
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData,

@@ -5740,7 +5740,10 @@ test("stops broker intake before draining queued user-data and disconnects after
   let queuedEvents = 0
   const runtime = await startHarvesterForTest({
     loadConfig: async () => appConfig,
-    env: { ...binanceEnv, NODE_ENV: "development" },
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development",
+    },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     onUserDataEvent: async () => {
