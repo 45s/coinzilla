@@ -3880,34 +3880,57 @@ test("treats a prior-process Harvester order as external under IGNORE and evalua
   const startupClientOrderId = "h-0123456789abcdef012345-7"
   const canceledClientOrderIds = []
   const placedClientOrderIds = []
+  const startupOpenOrder = {
+    clientOrderId: startupClientOrderId,
+    id: "699694",
+    symbol: "BTCUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    originalPrice: "64900.00",
+    originalQuantity: "0.01",
+    executedQuantity: "0",
+    status: "NEW",
+  }
+  let currentProcessOrder
   let resolvePlacement
   const placementObserved = new Promise((resolve) => { resolvePlacement = resolve })
   const cancelOrder = broker.cancelOrder
   broker.getOpenOrders = async (input = {}) => {
     calls.push("open-orders:account-wide:" + String(input.symbol))
+    const orders = [startupOpenOrder]
+    if (currentProcessOrder && ["OPEN", "PARTIALLY_FILLED"].includes(currentProcessOrder.status)) {
+      orders.push(createOpenOrderSnapshot({ order: currentProcessOrder }))
+    }
     return {
       ok: true,
-      data: [{
-        clientOrderId: startupClientOrderId,
-        id: "699694",
-        symbol: "BTCUSDT",
-        side: "BUY",
-        type: "LIMIT",
-        originalPrice: "64900.00",
-        originalQuantity: "0.01",
-        executedQuantity: "0",
-        status: "NEW",
-      }],
+      data: orders.filter((order) => !input.symbol || order.symbol === input.symbol),
     }
   }
   broker.cancelOrder = async (input = {}) => {
     canceledClientOrderIds.push(input.order?.clientOrderId)
-    return cancelOrder(input)
+    const result = await cancelOrder(input)
+    if (result.ok) currentProcessOrder = result.data
+    return result
   }
   broker.placeOrder = async ({ order } = {}) => {
+    const timestamp = Date.now()
+    currentProcessOrder = new CanonicalOrder({
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: "current-process-broker-order",
+      market: order.market,
+      side: order.side,
+      type: order.type,
+      limitPrice: order.limitPrice,
+      originalQuantity: order.originalQuantity,
+      executedQuantity: order.executedQuantity,
+      status: "OPEN",
+      createdAt: order.createdAt,
+      acknowledgedAt: timestamp,
+      updatedAt: timestamp,
+    })
     placedClientOrderIds.push(order.clientOrderId)
     resolvePlacement()
-    return { ok: true }
+    return { ok: true, data: currentProcessOrder }
   }
   const events = []
   const eventPublisher = {
