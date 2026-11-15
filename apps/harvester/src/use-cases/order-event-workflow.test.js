@@ -252,7 +252,10 @@ function makeWorkflow({
     isStopping,
     accountingResult,
   })
-  const workflow = makeOrderEventWorkflow({ ...dependencies, logger })
+  const workflow = makeOrderEventWorkflow({
+    ...dependencies,
+    logger,
+  })
   return { workflow, state, calls }
 }
 
@@ -520,7 +523,10 @@ test("logs partial fills from reconciled order state with immutable strategy own
     positionId: "doge-coin-grabber",
     purpose: "CONSERVATIVE_BUY",
   }
-  const registry = createLifecycleRegistry({ currentOrder: previousOrder, ownership })
+  const registry = createLifecycleRegistry({
+    currentOrder: previousOrder,
+    ownership,
+  })
   const logs = []
   const { workflow, calls } = makeWorkflow({
     registry,
@@ -565,7 +571,10 @@ test("reports a stale cancellation after FILLED as an informational ignored even
     positionId: "doge-coin-grabber",
     purpose: "CONSERVATIVE_BUY",
   }
-  const registry = createLifecycleRegistry({ currentOrder: filledOrder, ownership })
+  const registry = createLifecycleRegistry({
+    currentOrder: filledOrder,
+    ownership,
+  })
   const infoLogs = []
   const systemLogs = []
   const { workflow } = makeWorkflow({
