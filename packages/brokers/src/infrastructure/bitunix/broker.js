@@ -85,9 +85,7 @@ function normalizeDeals({ value }) {
 }
 
 function isOpenMarket({ symbolInfo }) {
-  return symbolInfo.isOpen !== "0" &&
-    symbolInfo.isOpen !== 0 &&
-    symbolInfo.isOpen !== false
+  return symbolInfo?.isOpen === "1" || symbolInfo?.isOpen === 1
 }
 
 function createHistoryRequest({ input }) {
