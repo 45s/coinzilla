@@ -20,9 +20,10 @@ export class BitunixRestError extends Error {
   }
 }
 
-function parseResponseText({ text }) {
+function parseResponseText({ text, path }) {
+  if (!path.endsWith("/user/account")) return JSON.parse(text)
   const losslessText = text.replace(
-    /("(?:balance|balanceLocked)"\s*:\s*)(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)(?=\s*[,}])/g,
+    /("(?:balance|balanceLocked)"\\s*:\\s*)(-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)(?=\\s*[,}])/g,
     (_match, prefix, amount) => prefix + JSON.stringify(amount),
   )
   return JSON.parse(losslessText)
