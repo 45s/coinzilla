@@ -1053,8 +1053,6 @@ Runtime provenance reports `workingTree: dirty`. Enabled markets and effective p
 
 All four enabled pair configurations record `externalOrdersPolicy: ignore`. PREFLIGHT found zero account-wide open orders, so no external-order collision occurred in this session. This does not close prior F-047: four unowned WLDFDUSD BUY orders coexisted with Harvester WLD strategy activity in the separate 2026-11-12/13 audit. Manual orders must remain unowned and untouched; the same-symbol blocking policy remains separate work.
 
-
-
 ## 2026-11-14/15 TESTNET session findings addendum
 
 Full artifact inventory, hashes, complete Journal event inventory, order/fill ledger, account reconciliation, shutdown chronology and source correlation are preserved in [the 2026-11-14/15 session audit](../sessions/AUDIT_SESSION_2026-11-14_23-41-12Z.md). Tracking remains in [#1132](https://github.com/45s/coinzilla/issues/1132). The uploaded originals remain the raw evidence source; large logs were not copied into the repository.
