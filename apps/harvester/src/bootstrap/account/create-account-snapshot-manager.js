@@ -301,12 +301,34 @@ function capturePreflightBalances({ result, state }) {
   ]))
 }
 
+function createInitialAccountSnapshotManagerState() {
+  return {
+    accountSnapshot: undefined,
+    preflightSourceTime: undefined,
+    preflightBalancesByCode: new Map(),
+    commissionBaselineAssetIds: new Map(),
+    commissionBaselineAssetCodesById: new Map(),
+    unownedOpenOrderSymbols: new Set(),
+    unresolvedHarvesterOpenOrderSymbols: new Set(),
+    pendingExternalOrderVersions: new Map(),
+    externalOrderObservationSequence: 0,
+  }
+}
+
+function resolveAdditionalTrackedBaseQuantityGetter({ getter } = {}) {
+  if (typeof getter !== "function") {
+    throw new TypeError("createAccountSnapshotManager requires getAdditionalTrackedBaseQuantity to be a function")
+  }
+  return getter
+}
+
 function getAccountSnapshotBaselines({ context }) {
   const activeOrders = context.getTradingEngine()?.getActiveOrders?.() ??
     context.getRecoveredState()?.orderRegistry?.getActiveOrders?.() ?? []
   const baselineResult = calculateAccountSnapshotBaselines({
     portfolio: context.getPortfolio(),
     activeOrders,
+    additionalTrackedBaseQuantity: context.getAdditionalTrackedBaseQuantity(),
   })
   if (!baselineResult.ok) {
     throw withRecoveryFailure(
@@ -1018,6 +1040,7 @@ function createExternalOrderReconciliation({
  * @param {object} options.eventPublisher Lifecycle event publisher with durable flush capability.
  * @param {Map<string, object>} options.marketMetadata Metadata for configured markets.
  * @param {Function} options.getPortfolio Current Portfolio accessor.
+ * @param {Function} [options.getAdditionalTrackedBaseQuantity] Verified non-Portfolio Spot allocations by asset.
  * @param {Function} options.getTradingEngine Current trading-engine accessor.
  * @param {Function} options.getRecoveredState Current in-memory recovered-state accessor.
  * @param {Function} options.getHasCanonicalOwnershipReconciliation Ownership reconciliation predicate.
@@ -1031,6 +1054,7 @@ export function createAccountSnapshotManager({
   eventPublisher,
   marketMetadata,
   getPortfolio,
+  getAdditionalTrackedBaseQuantity = () => [],
   getTradingEngine,
   getRecoveredState,
   getHasCanonicalOwnershipReconciliation,
@@ -1040,22 +1064,16 @@ export function createAccountSnapshotManager({
   runtimeSessionId,
   operationalStateStore,
 } = {}) {
-  const state = {
-    accountSnapshot: undefined,
-    preflightSourceTime: undefined,
-    preflightBalancesByCode: new Map(),
-    commissionBaselineAssetIds: new Map(),
-    commissionBaselineAssetCodesById: new Map(),
-    unownedOpenOrderSymbols: new Set(),
-    unresolvedHarvesterOpenOrderSymbols: new Set(),
-    pendingExternalOrderVersions: new Map(),
-    externalOrderObservationSequence: 0,
-  }
+  const additionalTrackedBaseQuantityGetter = resolveAdditionalTrackedBaseQuantityGetter({
+    getter: getAdditionalTrackedBaseQuantity,
+  })
+  const state = createInitialAccountSnapshotManagerState()
   const context = {
     broker,
     eventPublisher,
     marketMetadata,
     getPortfolio,
+    getAdditionalTrackedBaseQuantity: additionalTrackedBaseQuantityGetter,
     getTradingEngine,
     getRecoveredState,
     getHasCanonicalOwnershipReconciliation,

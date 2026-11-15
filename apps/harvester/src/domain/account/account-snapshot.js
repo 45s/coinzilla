@@ -35,6 +35,7 @@ export class AccountSnapshot {
   #sourceTime
   #quoteCashFlowBaselineByAssetId
   #portfolioBaseQuantityBaselineByAssetId
+  #additionalTrackedBaseQuantityBaselineByAssetId
   #committedQuoteBalanceBaselineByAssetId
   #committedBaseBalanceBaselineByAssetId
 
@@ -43,6 +44,7 @@ export class AccountSnapshot {
     sourceTime,
     quoteCashFlowBaseline = [],
     portfolioBaseQuantityBaseline = [],
+    additionalTrackedBaseQuantityBaseline = [],
     committedQuoteBalanceBaseline = [],
     committedBaseBalanceBaseline = [],
   } = {}) {
@@ -76,6 +78,18 @@ export class AccountSnapshot {
       records: portfolioBaseQuantityBaseline,
       field: "portfolioBaseQuantityBaseline",
     })
+    const additionalTrackedBaseQuantityBaselineByAssetId = createBaselineMap({
+      records: additionalTrackedBaseQuantityBaseline,
+      field: "additionalTrackedBaseQuantityBaseline",
+    })
+
+    for (const assetId of additionalTrackedBaseQuantityBaselineByAssetId.keys()) {
+      if (!balancesByAssetId.has(assetId)) {
+        throw new TypeError(
+          `AccountSnapshot additionalTrackedBaseQuantityBaseline references asset missing from balances: ${assetId}`,
+        )
+      }
+    }
     const committedQuoteBalanceBaselineByAssetId = createBaselineMap({
       records: committedQuoteBalanceBaseline,
       field: "committedQuoteBalanceBaseline",
@@ -90,6 +104,7 @@ export class AccountSnapshot {
     this.#sourceTime = sourceTime
     this.#quoteCashFlowBaselineByAssetId = quoteCashFlowBaselineByAssetId
     this.#portfolioBaseQuantityBaselineByAssetId = portfolioBaseQuantityBaselineByAssetId
+    this.#additionalTrackedBaseQuantityBaselineByAssetId = additionalTrackedBaseQuantityBaselineByAssetId
     this.#committedQuoteBalanceBaselineByAssetId = committedQuoteBalanceBaselineByAssetId
     this.#committedBaseBalanceBaselineByAssetId = committedBaseBalanceBaselineByAssetId
     Object.freeze(this)
@@ -119,6 +134,14 @@ export class AccountSnapshot {
       throw new TypeError("AccountSnapshot.getPortfolioBaseQuantityBaseline requires assetId")
     }
     return this.#portfolioBaseQuantityBaselineByAssetId.get(assetId) ?? "0"
+  }
+
+  /** Return separately tracked Spot base quantity already represented by this snapshot, outside Portfolio. */
+  getAdditionalTrackedBaseQuantityBaseline({ assetId } = {}) {
+    if (typeof assetId !== "string" || !assetId.trim()) {
+      throw new TypeError("AccountSnapshot.getAdditionalTrackedBaseQuantityBaseline requires assetId")
+    }
+    return this.#additionalTrackedBaseQuantityBaselineByAssetId.get(assetId) ?? "0"
   }
 
   getCommittedQuoteBalanceBaseline({ assetId } = {}) {
