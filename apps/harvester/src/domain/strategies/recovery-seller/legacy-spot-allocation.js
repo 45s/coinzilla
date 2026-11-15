@@ -33,7 +33,8 @@ export class LegacySpotAllocationError extends Error {
 /**
  * @typedef {object} LegacySpotPosition
  * @property {Market} market Canonical market whose base asset is authorized.
- * @property {string} remainingQuantity Remaining operator-authorized legacy quantity.
+ * @property {string} originalQuantity Original operator-authorized legacy quantity.
+ * @property {string} remainingQuantity Remaining quantity; must not exceed originalQuantity.
  */
 
 /**
@@ -116,14 +117,30 @@ export function calculateVerifiedLegacySpotAllocation({
       throw new TypeError("Every legacy position allocation requires a canonical Market")
     }
     assertDecimalString({
+      value: legacyPosition.originalQuantity,
+      field: "legacyPosition.originalQuantity",
+    })
+    assertDecimalString({
       value: legacyPosition.remainingQuantity,
       field: "legacyPosition.remainingQuantity",
     })
+    if (compareDecimal({
+      left: legacyPosition.originalQuantity,
+      right: "0",
+    }) <= 0) {
+      throw new RangeError("legacyPosition.originalQuantity must be greater than zero")
+    }
     if (compareDecimal({
       left: legacyPosition.remainingQuantity,
       right: "0",
     }) < 0) {
       throw new RangeError("legacyPosition.remainingQuantity must be non-negative")
+    }
+    if (compareDecimal({
+      left: legacyPosition.remainingQuantity,
+      right: legacyPosition.originalQuantity,
+    }) > 0) {
+      throw new RangeError("legacyPosition.remainingQuantity cannot exceed originalQuantity")
     }
     if (compareDecimal({
       left: legacyPosition.remainingQuantity,
