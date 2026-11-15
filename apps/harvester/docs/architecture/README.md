@@ -1,13 +1,14 @@
 # Harvester architecture documentation
 
 - [Application architecture](../architecture.md) — current application boundaries, dependency direction, use cases and composition.
+- [Workflow decomposition and pipeline migration plan](../plans/WORKFLOW_PIPELINE_MIGRATION.md) — proposed application-layer composition guidance and a narrow first implementation slice; not a runtime contract.
 - [Operator control](../operator-control/README.md) — transport-independent operator pause contract, Telegram Command Center and current implementation status.
 - [Telegram Command Center runbook](../operations/telegram-command-center.md) — menu, inline navigation, confirmations, authorization and troubleshooting.
 - [ADR-0002 — Transport-independent operator control](decisions/0002-transport-independent-operator-control.md) — accepted application, engine and Telegram-adapter ownership/safety contract.
 - [ADR-0003 — Process-lifetime operator pause](decisions/0003-process-lifetime-operator-pause.md) — initial pause scope; restart restoration is explicitly deferred to ADR-0001 / issue #654.
 - [Volatility Protection](../volatility-protection.md) — market-data collection, per-market protection policy and central order gate are implemented in merged PR #1041; historical threshold calibration remains open.
-- [ADR-0001 — Application-owned durable facts for process-restart recovery](decisions/0001-application-owned-recovery-facts.md) — accepted durable-fact architecture; runtime restoration remains separately gated under #654.
-- [ADR-0004 — Startup open orders are external](decisions/0004-startup-open-orders-are-external.md) — accepted ownership boundary: startup-snapshot orders remain external to the new process and follow the configured per-pair external-order policy; implementation is tracked by #1157.
+- [ADR-0004 — Startup open orders are external](decisions/0004-startup-open-orders-are-external.md) — accepted and implemented ownership boundary for startup-snapshot orders; see merged PR #1166.
+- [ADR-0001 — Application-owned durable facts for process-restart recovery](decisions/0001-application-owned-recovery-facts.md) — accepted contract, durable fact producers/barriers and offline candidate Portfolio/RecoveryLedger/OrderRegistry projection are merged in PR #1055; candidate restoration remains disabled pending projection/invariant parity, account-wide reconciliation readiness and Step 9 crash/restart proof.
 - [Broker–Harvester trading flow](BROKER_HARVESTER_TRADING_FLOW.md) — visual interaction and startup paths.
 - [Broker–Harvester trading flow (text)](BROKER_HARVESTER_TRADING_FLOW_TEXT.md) — accessible text representation and detailed sequence.
 

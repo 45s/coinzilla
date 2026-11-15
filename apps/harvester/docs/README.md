@@ -10,6 +10,8 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Shared token specification generator](../README.md#generate-or-refresh-market-metadata) — retrieve and maintain exchange-derived market precision through `pnpm run config:symbol`; strategy pairs remain operator-owned
 - [Harvester agent instructions](../AGENTS.md) — mandatory preflight and domain-specific constraints
 - [Harvester roadmap](../ROADMAP.md) — current domain work and status
+- [Startup open-order ownership (ADR-0004)](architecture/decisions/0004-startup-open-orders-are-external.md) — accepted and implemented ownership rule for startup-snapshot orders
+- [Startup open-order boundary plan](plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md) — completed design and implementation record for #1157
 - [Trading First](TRADING_FIRST.md) — authoritative trading priority and exchange-safety requirements
 
 ## Current architecture and domain contracts
@@ -19,8 +21,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Telegram Command Center runbook](operations/telegram-command-center.md) — safe menu navigation, refresh, confirmations, authorization and troubleshooting
 - [Volatility Protection](volatility-protection.md) — per-market protection, required explicit pair-level policy and order gate; provisional thresholds still require offline historical calibration
 - [Exchange trading constraints](exchange-trading-constraints.md) — canonical exchange-neutral constraint contract, Binance's non-blocking diagnostic policy, and local-versus-venue enforcement boundary
-- [Process-restart recovery contract (ADR-0001)](architecture/decisions/0001-application-owned-recovery-facts.md) — accepted durable-fact architecture; runtime restoration remains separately gated.
-- [Startup open-order ownership (ADR-0004)](architecture/decisions/0004-startup-open-orders-are-external.md) — startup-snapshot orders are external to the current process and follow the configured per-pair external-order policy; implementation is tracked by #1157.
+- [Process-restart recovery contract (ADR-0001)](architecture/decisions/0001-application-owned-recovery-facts.md) — accepted target design; runtime recovery remains disabled.
 - [One-market recovery reconciliation](recovery/README.md) — Step 7 offline evidence bundle, audit-only CLI and guarded coverage confirmation.
 - [Conservative Domain Specification](domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) — sole current authority for Conservative behavior
 - [Domain glossary](domain/DOMAIN_GLOSSARY.md)
@@ -65,7 +66,6 @@ Historical reports are snapshots, not current implementation authority. Use thei
 
 ## Plans and inventories
 
-- [Startup open-order boundary plan](plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md) — implementation goals, acceptance criteria, TDD sequence and autonomous handoff prompt for #1157.
 - [Documentation plans index](plans/README.md)
 - [Documentation migration plan](plans/DOCUMENTATION_MIGRATION.md)
 - [Harvester documentation inventory](plans/HARVESTER_DOCUMENTATION_INVENTORY.md)

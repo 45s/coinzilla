@@ -252,7 +252,6 @@ function getHarnessCancelExecutedQuantity({ cancelWithFill, cancelExecutedQuanti
 
 const DEFAULT_HARNESS_OPTIONS = {
   hasUnownedOpenOrdersForSymbol: noOpenOrders,
-  hasUnresolvedHarvesterOpenOrdersForSymbol: noOpenOrders,
   isMarketPriceFresh: marketDataFresh,
   isMarketBookFresh: marketDataFresh,
   initialBook: true,
@@ -384,7 +383,6 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     strategyPolicy,
     logger,
     hasUnownedOpenOrdersForSymbol,
-    hasUnresolvedHarvesterOpenOrdersForSymbol,
     appConfig: suppliedAppConfig,
     isMarketPriceFresh,
     isMarketBookFresh,
@@ -413,7 +411,6 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     logger,
     strategyPolicy: strategyPolicy ?? defaultStrategyPolicy,
     hasUnownedOpenOrdersForSymbol,
-    hasUnresolvedHarvesterOpenOrdersForSymbol,
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData: getVolatilityDataOverride,
@@ -490,9 +487,9 @@ test("ignores manual external open orders under the default per-pair policy", as
   assert.equal(harness.orders.length, 1, "The default ignore policy must not defer the pair because of a manual order.")
 })
 
-test("keeps unresolved Harvester-owned orders blocked regardless of the external-order policy", async () => {
+test("allows strategy evaluation under IGNORE when an unmatched startup order has a Harvester client-order ID", async () => {
   const harness = await createHarness({
-    hasUnresolvedHarvesterOpenOrdersForSymbol: () => true,
+    hasUnownedOpenOrdersForSymbol: () => true,
   })
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -502,9 +499,9 @@ test("keeps unresolved Harvester-owned orders blocked regardless of the external
       timestamp: Date.now()
     },
   })
-  assert.equal(result.ok, true, "A safety deferral is not an execution failure.")
-  assert.equal(harness.orders.length, 0, "An unresolved prior-process Harvester order must block new submissions.")
-  assert.deepEqual(harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
+  assert.equal(result.ok, true, "A prior-process order must not turn a valid market-price event into an engine failure.")
+  assert.equal(harness.orders.length, 1, "The default IGNORE policy must allow a real market-price event to reach strategy order submission.")
+  assert.deepEqual(harness.engine.getRecoveryIntents().deferredEvaluations, [], "A Harvester-looking external order must not create an unconditional market deferral.")
 })
 
 test("defers strategy activity only for the symbol with an unowned open order", async () => {

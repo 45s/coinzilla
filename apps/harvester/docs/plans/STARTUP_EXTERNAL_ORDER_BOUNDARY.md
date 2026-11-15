@@ -1,6 +1,6 @@
 ---
 title: Startup open-order boundary — snapshot, persist, ignore as prior-process ownership
-status: active
+status: completed
 type: implementation-plan
 owner: harvester
 created: 2026-11-15
@@ -12,7 +12,7 @@ created: 2026-11-15
 
 **Decision:** [ADR-0004 — Startup open orders are external to the current process](../architecture/decisions/0004-startup-open-orders-are-external.md)
 
-**Target:** a focused implementation PR into `develop`.
+**Implementation:** completed and merged in [PR #1166](https://github.com/45s/coinzilla/pull/1166), merge commit `48af5b7670177697a8c1cbcb3bcb0d677cf662d2`. Tracking issue [#1157](https://github.com/45s/coinzilla/issues/1157) is closed.
 
 ## Goal
 
@@ -41,7 +41,7 @@ flowchart TD
 
 The diagram describes the target behavior. The source and tests remain authoritative. Snapshot retrieval, validation, and required durability are still startup safety requirements; only prior-process order adoption/recovery blocking is removed.
 
-## Current source-level problem
+## Original source-level problem (before PR #1166)
 
 The current implementation has two different paths for unmatched startup orders:
 
@@ -55,7 +55,7 @@ The relevant current code includes:
 - `src/use-cases/conservative-trading-engine.js`: `hasBlockingOpenOrdersForSymbol()` treats unresolved prior-process Harvester orders as a blocker regardless of the pair policy.
 - Existing tests explicitly preserve this unconditional blocker, but the startup integration test covers only a manual-looking external order.
 
-This is the hidden behavior that issue #1157 removes.
+This was the hidden behavior removed by PR #1166. Current source and tests on `develop` are authoritative for delivered behavior.
 
 ## Target contract
 
@@ -120,7 +120,7 @@ Avoid an unnecessary event-schema migration. If the implementation determines th
 
 The retained offline recovery helpers and ADR-0001's broader durable-fact work are not to be wired into startup as part of this task. This plan only clarifies the startup open-order ownership boundary; any separate decision about historical Portfolio/fill restoration remains separate.
 
-## TDD implementation sequence
+## TDD implementation sequence (completed by PR #1166)
 
 1. **Preflight and call-graph audit**
    - Read all required root and Harvester agent instructions, engineering standards, task checklist, roadmap, Conservative specification, ADR-0001 and ADR-0004, Journal operations, architecture, BrokerPort contract, event/DTO contracts, and relevant runbooks.
@@ -149,27 +149,27 @@ The retained offline recovery helpers and ADR-0001's broader durable-fact work a
    - Inspect all required GitHub Actions checks on the exact final PR head SHA and ensure the branch is up to date with `develop`.
    - No exchange operations.
 
-## Acceptance checklist
+## Acceptance checklist — completed by PR #1166
 
-- [ ] Harvester-prefixed startup order is recorded and treated as external.
-- [ ] No startup order is restored/adopted into current `OrderRegistry`.
-- [ ] No startup order is cancelled/replaced/repriced.
-- [ ] `IGNORE` allows same-market subscriptions and strategy evaluation.
-- [ ] `BLOCK` blocks only the configured market; unrelated markets remain active.
-- [ ] External execution reports remain outside current-process order accounting and retain existing safety handling.
-- [ ] Snapshot data and identities are durably recorded before subscriptions.
-- [ ] Snapshot/read/validation/durability failures still fail closed.
-- [ ] Prefix-specific unresolved state/callback/gate has no remaining consumers.
-- [ ] Focused tests and required exact-head CI pass.
-- [ ] Living docs and roadmaps agree with source/tests.
+- [x] Harvester-prefixed startup order is recorded and treated as external.
+- [x] No startup order is restored/adopted into current `OrderRegistry`.
+- [x] No startup order is cancelled/replaced/repriced.
+- [x] `IGNORE` allows same-market subscriptions and strategy evaluation.
+- [x] `BLOCK` blocks only the configured market; unrelated markets remain active.
+- [x] External execution reports remain outside current-process order accounting and retain existing safety handling.
+- [x] Snapshot data and identities are durably recorded before subscriptions.
+- [x] Snapshot/read/validation/durability failures still fail closed.
+- [x] Prefix-specific unresolved state/callback/gate has no remaining consumers.
+- [x] Focused tests and required exact-head CI pass.
+- [x] Living docs and roadmaps agree with source/tests.
 
-## Autonomous implementation prompt
+## Historical autonomous implementation prompt
 
-Use the following prompt in a new AI coding session to finish issue #1157. The implementation agent must independently repeat the full mandatory preflight; this plan and the current conversation are not substitutes for reading the repository documents.
+The prompt below was used as the implementation handoff for #1157. The work is complete in PR #1166; do not rerun it as an outstanding task. Retain it as historical evidence of the original execution requirements.
 
 ---
 
-### Prompt: Implement startup open-order externalization (#1157)
+### Historical prompt: Implement startup open-order externalization (#1157)
 
 Repository: `https://github.com/45s/coinzilla`
 
@@ -221,3 +221,13 @@ Before editing, creating branches, or performing any other state-changing action
 **Definition of done:** all acceptance criteria in issue #1157 and this plan are satisfied; required CI is green on the exact PR head; documentation matches source/tests; PR targets `develop`; PR remains unmerged for user review.
 
 **Final response:** provide the PR link, exact head SHA, test/CI results, changed behavior, remaining blockers (if any), and explicitly confirm that the PR was not merged.
+
+
+## Completion record
+
+- Implementation PR: [#1166](https://github.com/45s/coinzilla/pull/1166), merged into `develop`.
+- Merge commit: `48af5b7670177697a8c1cbcb3bcb0d677cf662d2`.
+- Tracking issue: [#1157](https://github.com/45s/coinzilla/issues/1157), closed.
+- Exact-head verification: 1,630 Harvester unit tests passed; 5 targeted test files passed; workspace unit tests and coverage gate passed; syntax/actionlint, ESLint, Markdown style, dependency audit, external documentation links and Utils unit tests passed. Read-only TESTNET integration was skipped.
+- No exchange writes or TESTNET/LIVE order operations were performed.
+- This plan is now a design and implementation record, not a pending task.

@@ -5,7 +5,6 @@ import { assertAccountSnapshotCoversMarkets } from "../../domain/account/assert-
 import { calculateAccountSnapshotBaselines } from "../../domain/account/calculate-account-snapshot-baselines.js"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { publishLifecycleEvent } from "../../application/events/publish-lifecycle-event.js"
-import { isHarvesterClientOrderId } from "../../application/orders/is-harvester-client-order-id.js"
 import {
   mapAccountSnapshotCapturedData,
   mapAccountOpenOrdersCapturedData,
@@ -309,7 +308,6 @@ function createInitialAccountSnapshotManagerState() {
     commissionBaselineAssetIds: new Map(),
     commissionBaselineAssetCodesById: new Map(),
     unownedOpenOrderSymbols: new Set(),
-    unresolvedHarvesterOpenOrderSymbols: new Set(),
     pendingExternalOrderVersions: new Map(),
     externalOrderObservationSequence: 0,
   }
@@ -686,19 +684,8 @@ async function publishOpenOrdersAuditEvent({ eventPublisher, dataResult }) {
 }
 
 function createOpenOrdersGuardState({ unownedOrders }) {
-  const externalOrders = unownedOrders.filter((order) =>
-    typeof order?.clientOrderId === "string" &&
-    order.clientOrderId.trim().length > 0 &&
-    !isHarvesterClientOrderId(order.clientOrderId))
-  const unresolvedHarvesterOrders = unownedOrders.filter((order) =>
-    typeof order?.clientOrderId !== "string" ||
-    !order.clientOrderId.trim() ||
-    isHarvesterClientOrderId(order.clientOrderId))
   return {
-    unownedOpenOrderSymbols: new Set(externalOrders
-      .map((order) => order?.market?.symbol ?? order?.symbol)
-      .filter((symbol) => typeof symbol === "string" && symbol.trim().length > 0)),
-    unresolvedHarvesterOpenOrderSymbols: new Set(unresolvedHarvesterOrders
+    unownedOpenOrderSymbols: new Set(unownedOrders
       .map((order) => order?.market?.symbol ?? order?.symbol)
       .filter((symbol) => typeof symbol === "string" && symbol.trim().length > 0)),
   }
@@ -751,7 +738,6 @@ async function publishOpenOrdersSnapshot({ context, options }) {
     unownedOrders: classification.unownedOrders,
   })
   context.state.unownedOpenOrderSymbols = guardState.unownedOpenOrderSymbols
-  context.state.unresolvedHarvesterOpenOrderSymbols = guardState.unresolvedHarvesterOpenOrderSymbols
   logOpenOrdersAudit({
     logger: context.logger,
     orders,
@@ -1128,8 +1114,6 @@ export function createAccountSnapshotManager({
         state.pendingExternalOrderVersions.has(symbol)
       ),
     observeExternalOrder,
-    hasUnresolvedHarvesterOpenOrdersForSymbol: ({ symbol } = {}) =>
-      typeof symbol === "string" && state.unresolvedHarvesterOpenOrderSymbols.has(symbol),
     refreshAccountSnapshot: refresh,
     publishOpenOrdersSnapshot: publishOrders,
     publishAccountSnapshot: publishSnapshot,

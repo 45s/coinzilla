@@ -10,7 +10,7 @@ created: 2026-11-15
 
 ## Status
 
-**Accepted — implementation tracked by [#1157](https://github.com/45s/coinzilla/issues/1157).** This decision defines the ownership boundary for orders observed in the account-wide startup snapshot. The runtime implementation and regression coverage are pending.
+**Accepted and implemented** in [PR #1166](https://github.com/45s/coinzilla/pull/1166) for [#1157](https://github.com/45s/coinzilla/issues/1157). This decision defines the ownership boundary for orders observed in the account-wide startup snapshot. The implementation and regression coverage are merged into `develop`.
 
 **Related:** [ADR-0001](0001-application-owned-recovery-facts.md), [Journal Operations](../../JOURNAL_OPERATIONS.md), [#654](https://github.com/45s/coinzilla/issues/654), [#1157](https://github.com/45s/coinzilla/issues/1157).
 
@@ -81,9 +81,17 @@ This ADR does not wire historical Journal replay, the retained offline projectio
 - Harvester deliberately does not manage or reconstruct an order that was open before the current process started. If `IGNORE` is configured, a strategy may submit another order on the same market when its own current-process state and available balances permit it. This is the explicit consequence of treating startup orders as external; the exchange remains authoritative for locked/free balances.
 - Any broader decision about restoring historical Portfolio/Position/fill accounting is separate from this open-order ownership contract and must not be smuggled into this implementation.
 
-## Implementation requirements
+## Implementation closeout
 
-Tracked in [#1157](https://github.com/45s/coinzilla/issues/1157):
+Implemented and merged in [PR #1166](https://github.com/45s/coinzilla/pull/1166), merge commit `48af5b7670177697a8c1cbcb3bcb0d677cf662d2`. Tracking issue [#1157](https://github.com/45s/coinzilla/issues/1157) is closed.
+
+Every unmatched order in the startup snapshot is external, regardless of client-order-ID prefix. The configured per-market `IGNORE`/`BLOCK` policy applies uniformly. Startup orders are not adopted or modified. Later unmatched `h-` execution reports remain fail-closed. The account-wide snapshot, Journal durability barriers, balance semantics, current-process ownership and shutdown safety remain intact.
+
+Exact-head verification for #1166 passed the Harvester targeted tests (5 configured files), Harvester unit suite (1,630 passed), workspace unit tests, workspace coverage jobs and gate, syntax/actionlint, changed-file ESLint, Markdown style, dependency audit, external documentation links and Utils unit tests. The read-only Binance TESTNET integration job was skipped. No TESTNET/LIVE exchange operation was performed.
+
+## Original implementation requirements
+
+The following requirements were completed by #1166:
 
 1. Remove the prefix-based unresolved-prior-process classification and unconditional engine gate.
 2. Route all unmatched startup orders through the existing external-order classification and configured per-pair policy.

@@ -129,11 +129,13 @@ PR #1021 updates existing Harvester README, roadmap, Volatility Protection, arch
 ## Source-verified documentation updates — PR #1041
 
 Merged PR #1041 implements and wires the per-market protection state machine, central order-submission gate, explicit recovery-SELL purpose, owned-BUY cancellation/reconciliation and freshness monitoring. The regression matrix and all seven required workflows passed on exact PR head `e20d726b6707a0dbee0e5ae188b462a4427a16c3`. The initial warning/protection/recovery thresholds remain provisional pending representative offline historical market-data validation. No TESTNET/LIVE exchange operation was performed or authorized.
-## Pending additions on the startup open-order boundary PR
 
-The current task branch adds these two maintained documents. They are additions after the last source-verified inventory checkpoint above; record the next complete recursive tree count after merge.
 
-| Added path | Purpose | Disposition |
-| --- | --- | --- |
-| `apps/harvester/docs/architecture/decisions/0004-startup-open-orders-are-external.md` | Accepted ownership boundary for every order in the startup snapshot; applies the configured per-pair external-order policy. | **KEEP** |
-| `apps/harvester/docs/plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md` | Detailed implementation plan, TDD acceptance criteria and autonomous implementation prompt for #1157. | **KEEP** |
+## Post-baseline additions — startup open-order boundary
+
+The following maintained documents were added for #1157 and completed in PR #1166. They are outside the frozen 42-file baseline above and must be included in the next complete recursive tree verification.
+
+| Added path | Purpose |
+| --- | --- |
+| `apps/harvester/docs/architecture/decisions/0004-startup-open-orders-are-external.md` | Accepted and implemented ownership decision for all orders in the startup snapshot. |
+| `apps/harvester/docs/plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md` | Completed design, original acceptance criteria, TDD sequence and implementation closeout. |

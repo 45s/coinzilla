@@ -951,7 +951,6 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
     getMarketMetadata,
     initialState,
     getVolatilityData,
-    hasUnresolvedHarvesterOpenOrdersForSymbol,
     hasUnownedOpenOrdersForSymbol,
   } = dependencies
   const { settings, pairs } = appConfig.strategies[StrategyId.COIN_GRABBER]
@@ -959,9 +958,8 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
   const isVolatilityProtectionEnabledForSymbol = (symbol) =>
     volatilityProtectionEnabled && pairs[symbol]?.enableVolatilityProtection !== false
   const hasBlockingOpenOrdersForSymbol = ({ symbol } = {}) =>
-    hasUnresolvedHarvesterOpenOrdersForSymbol({ symbol }) ||
-    (pairs[symbol]?.externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK &&
-      hasUnownedOpenOrdersForSymbol({ symbol }))
+    pairs[symbol]?.externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK &&
+    hasUnownedOpenOrdersForSymbol({ symbol })
   const initialRegistry = validateInitialEngineState({ initialState, pairs })
   const marketMetadataCache = createMarketMetadataCache({ getMarketMetadata })
   const { refreshedMarketMetadata, getCurrentMarketMetadata } = marketMetadataCache
@@ -1386,7 +1384,6 @@ export function makeConservativeTradingEngine({
   isStopping,
   eventPublisher,
   hasUnownedOpenOrdersForSymbol = () => false,
-  hasUnresolvedHarvesterOpenOrdersForSymbol = () => false,
   isMarketPriceFresh,
   isMarketBookFresh = () => false,
   getVolatilityData,
@@ -1414,7 +1411,6 @@ export function makeConservativeTradingEngine({
     isStopping,
     eventPublisher,
     hasUnownedOpenOrdersForSymbol,
-    hasUnresolvedHarvesterOpenOrdersForSymbol,
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData,
