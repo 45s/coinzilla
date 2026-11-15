@@ -140,7 +140,10 @@ function createHistoryRequest({ input }) {
   if (orderId !== undefined && orderId !== null) {
     throw new TypeError("Bitunix Spot order history does not support exact orderId filtering")
   }
-  validateHistoryTimeRange({ startTime, endTime })
+  validateHistoryTimeRange({
+    startTime,
+    endTime,
+  })
 
   const body = {
     symbol: normalizedSymbol,
@@ -155,7 +158,12 @@ function createHistoryRequest({ input }) {
   if (endTime !== undefined) {
     body.endTime = new Date(endTime).toISOString()
   }
-  applyHistoryFilters({ body, status, side, type })
+  applyHistoryFilters({
+    body,
+    status,
+    side,
+    type,
+  })
   return { body }
 }
 
