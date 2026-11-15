@@ -8,7 +8,7 @@ created: 2026-11-14
 
 # Recovery Seller (RS) — Implementation Roadmap
 
-**Status:** RS-2a shared Portfolio/multi-Position foundation is COMPLETE; RS-2b legacy accounting, verified-Spot snapshot/reservation plumbing, and immutable in-memory order ownership metadata are merged in PRs #1131, #1137 and #1144. Verified legacy Spot allocation, canonical mixed SELL accounting, exact-once reconciliation and independent profitability integration remain unfinished. RS policy and runtime execution remain unimplemented.
+**Status:** RS-2a shared Portfolio/multi-Position foundation is COMPLETE; RS-2b legacy accounting, verified-Spot snapshot/reservation plumbing, and immutable in-memory order ownership metadata are merged in PRs #1131, #1137 and #1144. The snapshot manager now passes immutable canonical balances and the current Portfolio to the injectable Spot source; its verified allocation calculation is in progress in [PR #1149](https://github.com/45s/coinzilla/pull/1149). Canonical mixed SELL accounting, exact-once reconciliation and independent profitability integration remain unfinished. RS policy and runtime execution remain unimplemented.
 **Tracking:** [issue #1127](https://github.com/45s/coinzilla/issues/1127) tracks the remaining RS work. [PR #1118](https://github.com/45s/coinzilla/pull/1118), [PR #1131](https://github.com/45s/coinzilla/pull/1131), [PR #1137](https://github.com/45s/coinzilla/pull/1137) and [PR #1144](https://github.com/45s/coinzilla/pull/1144) are merged.
 **Domain contract:** [Recovery Seller Domain Specification](./recovery-seller-domain-specification.md).
 **CG baseline:** [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
