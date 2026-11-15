@@ -38,3 +38,15 @@ test("rejects malformed Bitunix market metadata rather than inventing assets", (
     assert.throws(() => createCanonicalMarket({ symbolInfo }))
   }
 })
+
+test("derives Bitunix Spot market symbols from the documented base and quote pair", () => {
+  const market = createCanonicalMarket({
+    symbolInfo: {
+      base: "BTC",
+      quote: "USDT",
+      isOpen: "1",
+    },
+  })
+
+  assert.equal(market.symbol, "BTCUSDT")
+})
