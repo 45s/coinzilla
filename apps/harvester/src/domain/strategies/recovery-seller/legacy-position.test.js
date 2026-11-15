@@ -68,17 +68,26 @@ test("allows recovery-only cycles after legacy inventory is exhausted", () => {
 
 test("rejects invalid original legacy basis and invalid legacy disposals", () => {
   assert.throws(
-    () => legacyPosition.createLegacyPosition({ invested: "0", quantity: "50" }),
+    () => legacyPosition.createLegacyPosition({
+      invested: "0",
+      quantity: "50",
+    }),
     /invested/i,
     "A legacy position must have a positive original quote investment.",
   )
   assert.throws(
-    () => legacyPosition.createLegacyPosition({ invested: "100", quantity: "0" }),
+    () => legacyPosition.createLegacyPosition({
+      invested: "100",
+      quantity: "0",
+    }),
     /quantity/i,
     "A legacy position must have a positive original base quantity.",
   )
   assert.throws(
-    () => legacyPosition.createLegacyPosition({ invested: "-1", quantity: "50" }),
+    () => legacyPosition.createLegacyPosition({
+      invested: "-1",
+      quantity: "50",
+    }),
     /invested/i,
     "Negative historical investment must be rejected.",
   )
@@ -88,12 +97,18 @@ test("rejects invalid original legacy basis and invalid legacy disposals", () =>
     quantity: "50",
   })
   assert.throws(
-    () => legacyPosition.recordLegacySale({ position, quantitySold: "50.01" }),
+    () => legacyPosition.recordLegacySale({
+      position,
+      quantitySold: "50.01",
+    }),
     /remaining/i,
     "A legacy disposal must never exceed the remaining authorized legacy quantity.",
   )
   assert.throws(
-    () => legacyPosition.recordLegacySale({ position, quantitySold: "0" }),
+    () => legacyPosition.recordLegacySale({
+      position,
+      quantitySold: "0",
+    }),
     /greater than zero/i,
     "A successful legacy disposal must represent a positive quantity.",
   )
