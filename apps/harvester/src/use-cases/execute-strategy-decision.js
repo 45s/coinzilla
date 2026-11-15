@@ -125,7 +125,7 @@ export function makeExecuteStrategyDecision({
     reason = "DURABLE_SUBMISSION_INTENT_NOT_COMMITTED",
   }) => {
     try {
-      await deferSubmission(onSubmissionDeferred, order, purpose, reason)
+      await onSubmissionDeferred(Object.assign({}, { order }, { purpose }, { registered: true }, { reason }))
       return toResult({ errors })
     } catch (error) {
       return toResult({ errors: [...errors, error] })
@@ -281,13 +281,4 @@ export function makeExecuteStrategyDecision({
   }
   executeStrategyDecision.validate = validateDecision
   return executeStrategyDecision
-}
-
-async function deferSubmission(onSubmissionDeferred, order, purpose, reason) {
-  await onSubmissionDeferred({
-    order,
-    purpose,
-    registered: true,
-    reason,
-  })
 }

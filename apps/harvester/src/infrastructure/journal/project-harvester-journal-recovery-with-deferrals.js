@@ -32,8 +32,8 @@ function validateLocalDeferralTransitions({ records } = {}) {
     }
     const state = states.get(clientOrderId)
     if (name === SUBMISSION_REQUESTED_EVENT) {
-      if (state === "DEFERRED") {
-        throw new Error("A deferred clientOrderId cannot be requested again")
+      if (state !== undefined && state !== "PENDING") {
+        throw new Error("A terminal clientOrderId cannot be requested again")
       }
       states.set(clientOrderId, "PENDING")
       continue
