@@ -1053,3 +1053,25 @@ Runtime provenance reports `workingTree: dirty`. Enabled markets and effective p
 
 All four enabled pair configurations record `externalOrdersPolicy: ignore`. PREFLIGHT found zero account-wide open orders, so no external-order collision occurred in this session. This does not close prior F-047: four unowned WLDFDUSD BUY orders coexisted with Harvester WLD strategy activity in the separate 2026-11-12/13 audit. Manual orders must remain unowned and untouched; the same-symbol blocking policy remains separate work.
 
+## 2026-11-14/15 TESTNET session findings addendum
+
+Full artifact inventory, hashes, complete Journal event inventory, order/fill ledger, account reconciliation, shutdown chronology and source correlation are preserved in [the 2026-11-14/15 session audit](../sessions/AUDIT_SESSION_2026-11-14_23-41-12Z.md). Tracking remains in [#1132](https://github.com/45s/coinzilla/issues/1132). The uploaded originals remain the raw evidence source; large logs were not copied into the repository.
+
+### F-054 — Late NEW execution report after FILLED order causes terminal accounting-integrity failure
+
+**Status:** CONFIRMED. **Severity:** Critical — user-data readiness/trading availability. **Tracking:** [#1132](https://github.com/45s/coinzilla/issues/1132).
+
+The 2026-11-14/15 ZROUSDT TESTNET session applied trade 13588 once (5 ZRO at 1.378, 6.89 USDT, 0.005 ZRO commission). After the order registry had reached FILLED with executed quantity 5, a same-order Binance executionReport arrived with executionType NEW, raw orderStatus NEW (canonical OPEN), and cumulative executed quantity 0. The structured error reports both client and broker identity matched and the existing registry status was FILLED. The registry threw “Canonical order executed quantity cannot move backwards” at order-registry.js:80; stack proceeds through OrderRegistry.applyUpdate, prepareOrderEvent and processUserDataEventTransition. The user-data handler latched accountingFailed, closed readiness and reported EXECUTION_ACCOUNTING_FAILED.
+
+Source review confirms the stale predicate does not classify FILLED → OPEN as stale when the incoming timestamp is not earlier; monotonic quantity validation then throws. The later TRADE report was recognized as a duplicate. PREFLIGHT/CLOSING balances reconcile exactly to the one applied fill and its base-asset commission, so this is not evidence of a lost fill.
+
+**Expected:** a nonterminal zero-cumulative report that arrives after a terminal FILLED state must not regress canonical order state or convert an already applied fill into terminal accounting failure. Add a test-first regression and fix without weakening monotonic execution checks. No code fix or regression test is claimed in this audit.
+
+### F-055 — Shutdown recovery SELL replacement unconfirmed; final coverage audit fails
+
+**Status:** CONFIRMED observed failure; underlying cause UNKNOWN. **Severity:** High. **Tracking:** [#1132](https://github.com/45s/coinzilla/issues/1132).
+
+During the same session, shutdown phase RECOVERY_SELL_RECONCILIATION failed with retryable ORDER_TRANSITION and SHUTDOWN_RECOVERY_REPLACEMENT_UNCONFIRMED. The next coverage audit required 4.98 ZRO at 1.387 but found 0 committed and 0 active SELLs, with outstanding recovery amount 6.89. CLOSING was durably recorded INCOMPLETE with explicit recovery-SELL and user-data/accounting reasons. Runtime did not reach STOPPED; the broker disconnect succeeded, and the process lock was retained because shutdown was not confirmed.
+
+The supplied evidence does not identify the inner replacement error/cause or establish the exchange-side order outcome. Do not infer that F-054 caused F-055. The shutdown path's fail-closed incomplete result and lock retention are not themselves defects. Correlate the replacement intent, broker response/lookup, canonical order state and final Position/RecoveryLedger before assigning a source root cause.
+

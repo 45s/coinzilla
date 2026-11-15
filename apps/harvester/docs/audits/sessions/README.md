@@ -10,3 +10,5 @@ See the [audit reports index](../reports/README.md) for findings and chronology.
 
 - [2026-11-12/13 LIVE trading-session audit](AUDIT_SESSION_2026-11-12_19-27-13Z.md) — 8h28m session; includes shutdown-race, runtime-config drift and external-order findings.
 - [2026-11-13 LIVE trading-session audit](AUDIT_SESSION_2026-11-13_15-50-59Z.md) — separate 3h56m session; 60 applied fills, 21 completed recovery cycles, exact balance/retained-inventory reconciliation, notification and evidence gaps.
+
+- [2026-11-14/15 TESTNET session audit](AUDIT_SESSION_2026-11-14_23-41-12Z.md) — 42 Journal records plus complete structured application/TRACE logs and terminal capture; confirmed stale NEW-after-FILLED order-event failure, exact ZRO fill/account reconciliation, and incomplete shutdown recovery SELL coverage.
