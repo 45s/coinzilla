@@ -1,5 +1,5 @@
 import { Order } from "@coinzilla/entities"
-import { assertDecimalString } from "@coinzilla/utils"
+import { assertDecimalString, compareDecimal, subtractDecimal } from "@coinzilla/utils"
 
 const SIDE_MAP = Object.freeze({ "1": "SELL", "2": "BUY" })
 const TYPE_MAP = Object.freeze({ "1": "LIMIT", "2": "MARKET" })
@@ -13,7 +13,6 @@ const STATUS_MAP = Object.freeze({
 
 /**
  * Adapt a Bitunix Spot open/history order row to the legacy broker Order entity.
- * The exchange's exact price and base-quantity strings remain available on the result.
  *
  * @param {Record<string, unknown>} bitunixOrder
  * @returns {import("@coinzilla/entities").Order}
@@ -49,19 +48,21 @@ export function adaptOrder(bitunixOrder) {
 
   assertDecimalString({ value: volume, field: "Bitunix Spot original base quantity" })
   assertDecimalString({ value: dealVolume, field: "Bitunix Spot executed base quantity" })
+  if (compareDecimal({ left: volume, right: "0" }) < 0 ||
+      compareDecimal({ left: dealVolume, right: "0" }) < 0 ||
+      compareDecimal({ left: dealVolume, right: volume }) > 0) {
+    throw new TypeError("Bitunix Spot order quantities are outside the valid range")
+  }
   if (normalizedType === "LIMIT") {
     assertDecimalString({ value: price, field: "Bitunix Spot limit price" })
   }
-  const remainingQuantity = Number(volume) - Number(dealVolume)
-  if (!Number.isFinite(remainingQuantity) || remainingQuantity < 0) {
-    throw new TypeError("Bitunix Spot order remaining quantity is invalid")
-  }
+  const remainingQuantity = subtractDecimal({ left: volume, right: dealVolume })
 
   const order = new Order({
     type: normalizedType,
     side: normalizedSide,
     symbol: symbol.trim().toUpperCase(),
-    quantity: remainingQuantity,
+    quantity: Number(remainingQuantity),
     price: normalizedType === "MARKET" ? 0 : Number(price),
     id: String(orderId),
   })
@@ -69,6 +70,7 @@ export function adaptOrder(bitunixOrder) {
   order.originalPrice = normalizedType === "MARKET" ? undefined : String(price)
   order.originalQuantity = String(volume)
   order.executedQuantity = String(dealVolume)
+  order.remainingQuantity = remainingQuantity
   order.status = normalizedStatus
   order.createdAt = bitunixOrder.ctime
   order.updatedAt = bitunixOrder.utime
