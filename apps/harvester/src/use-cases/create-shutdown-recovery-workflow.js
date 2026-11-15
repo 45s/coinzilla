@@ -397,13 +397,23 @@ function getShutdownRecoveryReplacementFailure({ replacement, symbol } = {}) {
       message: `Shutdown recovery SELL replacement failed for ${symbol}`,
     })
   }
-  return getShutdownRecoveryReplacementDeferredFailure({ replacement, symbol }) ??
-    getShutdownRecoveryReplacementSkippedFailure({ replacement, symbol }) ??
-    getShutdownRecoveryReplacementNotSubmittedFailure({ replacement, symbol })
+  return getShutdownRecoveryReplacementDeferredFailure({
+    replacement,
+    symbol,
+  }) ?? getShutdownRecoveryReplacementSkippedFailure({
+    replacement,
+    symbol,
+  }) ?? getShutdownRecoveryReplacementNotSubmittedFailure({
+    replacement,
+    symbol,
+  })
 }
 
 async function submitShutdownRecoveryReplacement({ dependencies, symbol } = {}) {
-  const blocker = getShutdownRecoveryReplacementBlocker({ dependencies, symbol })
+  const blocker = getShutdownRecoveryReplacementBlocker({
+    dependencies,
+    symbol,
+  })
   if (blocker) {
     return {
       ok: false,
