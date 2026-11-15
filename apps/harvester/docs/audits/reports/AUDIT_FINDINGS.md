@@ -1065,7 +1065,9 @@ The 2026-11-14/15 ZROUSDT TESTNET session applied trade 13588 once (5 ZRO at 1.3
 
 Source review confirms the stale predicate does not classify FILLED → OPEN as stale when the incoming timestamp is not earlier; monotonic quantity validation then throws. The later TRADE report was recognized as a duplicate. PREFLIGHT/CLOSING balances reconcile exactly to the one applied fill and its base-asset commission, so this is not evidence of a lost fill.
 
-**Expected:** a nonterminal zero-cumulative report that arrives after a terminal FILLED state must not regress canonical order state or convert an already applied fill into terminal accounting failure. Add a test-first regression and fix without weakening monotonic execution checks. No code fix or regression test is claimed in this audit.
+**Fix implemented in PR (pending exact-head CI):** `isStaleOrderUpdate()` now classifies `FILLED → OPEN/PARTIALLY_FILLED` as stale before timestamp validation whenever the incoming cumulative execution does not exceed the already-filled quantity. This terminal-state rule is independent of whether the report timestamp is older, equal, or newer. The strict monotonic executed-quantity validator and terminal transition table are unchanged. A registry regression covers older/equal/newer timestamps and asserts the exact immutable FILLED snapshot, zero remaining commitment, and terminal/active registry membership remain unchanged. The existing `PARTIALLY_FILLED → OPEN`, duplicate-fill, and late terminal-to-FILLED regressions remain intact.
+
+**Verification boundary:** offline source/test change only. Exact-head Harvester tests and required CI are pending; no Binance TESTNET/LIVE request or order operation was performed. The exchange-side cause/order of delivery remains unproven and requires the canonical TESTNET order/trade history already tracked by #1132.
 
 ### F-055 — Shutdown recovery SELL replacement unconfirmed; final coverage audit fails
 
