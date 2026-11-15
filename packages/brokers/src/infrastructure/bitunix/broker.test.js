@@ -35,12 +35,10 @@ test("Bitunix Spot broker loads canonical Spot markets", async () => {
   const { broker, calls } = createBroker({
     responses: {
       "/api/spot/v1/common/coin_pair/list": [
-        { symbol: "BTCUSDT",
-          base: "BTC",
+        { base: "BTC",
           quote: "USDT",
           isOpen: "1" },
-        { symbol: "ETHUSDT",
-          base: "ETH",
+        { base: "ETH",
           quote: "USDT",
           isOpen: "1" },
       ],
@@ -122,8 +120,7 @@ test("Bitunix Spot broker fetches canonical fills for a specific order", async (
         utime: "2026-11-15T12:00:01Z",
       },
       "/api/spot/v1/common/coin_pair/list": [
-        { symbol: "BTCUSDT",
-          base: "BTC",
+        { base: "BTC",
           quote: "USDT",
           isOpen: "1" },
       ],
@@ -193,14 +190,12 @@ test("Bitunix Spot broker exposes symbol metadata, price, order detail and histo
   const { broker, calls } = createBroker({
     responses: {
       "/api/spot/v1/common/coin_pair/list": [
-        { symbol: "BTCUSDT",
-          base: "BTC",
+        { base: "BTC",
           quote: "USDT",
           basePrecision: 8,
           isOpen: "1" },
       ],
-      "/api/spot/v1/market/last_price": { symbol: "BTCUSDT",
-        price: "10.25" },
+      "/api/spot/v1/market/last_price": "10.25",
       "/api/spot/v1/order/detail": order,
       "/api/spot/v1/order/history/page": { data: [order],
         total: 1 },
@@ -215,6 +210,7 @@ test("Bitunix Spot broker exposes symbol metadata, price, order detail and histo
     limit: 25 })
 
   assert.equal(metadata.data.basePrecision, 8)
+  assert.equal(price.data.symbol, "BTCUSDT")
   assert.equal(price.data.price, "10.25")
   assert.equal(detail.data.id, "123")
   assert.equal(history.data.length, 1)
