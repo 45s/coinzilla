@@ -4,6 +4,7 @@ import { Asset, CanonicalOrder, Commission, Fill, Market, Money, Quantity } from
 import { addDecimal } from "@coinzilla/utils"
 import { StrategyId } from "../strategy-ids.js"
 import { createOrderOwnership } from "../../orders/order-ownership.js"
+import { OrderRegistry } from "../../orders/order-registry.js"
 import { createFillFingerprint } from "../../fills/fill-fingerprint.js"
 import { createMixedSellFillAllocation } from "./mixed-sell-fill-allocation.js"
 
@@ -352,5 +353,41 @@ test("rejects an order from another market or a Fill larger than its registered 
     executedQuantity: "5",
   }) })),
     /exceeds registered order quantity/i,
+  )
+})
+
+
+test("resolves immutable Recovery Seller ownership from the registered order registry", () => {
+  const order = makeOrder()
+  const ownership = makeOwnership()
+  const orderRegistry = new OrderRegistry({
+    orders: [order],
+    ownerships: [ownership],
+  })
+  const fill = makeFill({
+    clientOrderId: order.clientOrderId,
+  })
+
+  const allocation = createMixedSellFillAllocation({
+    fill,
+    orderRegistry,
+    recoveryQuantity: "5",
+    legacyQuantity: "0.01",
+  })
+
+  assert.equal(
+    allocation.orderOwnership.clientOrderId,
+    order.clientOrderId,
+    "Mixed SELL allocation must retain the Harvester client identity resolved from OrderRegistry.",
+  )
+  assert.equal(
+    allocation.orderOwnership.brokerOrderId,
+    order.brokerOrderId,
+    "Mixed SELL allocation must retain the broker identity linked to the registered order.",
+  )
+  assert.equal(
+    allocation.orderOwnership.strategyId,
+    StrategyId.RECOVERY_SELLER,
+    "Mixed SELL allocation must derive its Recovery Seller attribution from the immutable registered ownership record.",
   )
 })
