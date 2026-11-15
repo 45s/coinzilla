@@ -14,6 +14,8 @@ created: 2026-11-11
 
 > **Terminology note (2026-11-14):** This ADR retains its original title and durable-fact vocabulary as part of the accepted architectural record. The current application-facing component name is **Operational State Store**; current setup instructions and commands are maintained in the implementation section below and the Harvester operator documentation.
 
+> **Startup open-order clarification (2026-11-15):** [ADR-0004](0004-startup-open-orders-are-external.md) is the more specific decision for orders present in the account-wide startup snapshot. Those orders remain external to the new process and are not restored into its `OrderRegistry`; they follow the configured per-pair external-order policy. This supersedes the proposed startup restoration of those open-order identities in this ADR, but does not by itself decide the separate question of historical fill/Portfolio reconstruction tracked by #654.
+
 **Owner:** Harvester
 
 **Tracking:** [#654](https://github.com/45s/coinzilla/issues/654), umbrella [#626](https://github.com/45s/coinzilla/issues/626)
