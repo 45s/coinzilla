@@ -4,6 +4,7 @@ import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../../domain/portfolio/portfolio.js"
 import { createAccountSnapshotManager } from "./create-account-snapshot-manager.js"
+import { calculateVerifiedLegacySpotAllocation } from "../../domain/strategies/recovery-seller/legacy-spot-allocation.js"
 
 const test = (name, ...args) => nodeTest("[create-account-snapshot-manager.test.js] " + name, ...args)
 
@@ -17,6 +18,7 @@ const createFixture = ({
   portfolio = new Portfolio(),
   activeOrders = [],
   additionalTrackedBaseQuantity = [],
+  additionalTrackedBaseQuantityProvider,
   operationalStateStore,
   logger = {},
   monotonicNow
@@ -67,7 +69,7 @@ const createFixture = ({
     },
     marketMetadata: new Map([[market.symbol, { market }]]),
     getPortfolio: () => portfolio,
-    getAdditionalTrackedBaseQuantity: () => additionalTrackedBaseQuantity,
+    getAdditionalTrackedBaseQuantity: additionalTrackedBaseQuantityProvider ?? (() => additionalTrackedBaseQuantity),
     getTradingEngine: () => ({ getActiveOrders: () => activeOrders }),
     getRecoveredState: () => ({ orderRegistry: { orders: [] } }),
     getHasCanonicalOwnershipReconciliation: () => false,
@@ -1121,6 +1123,67 @@ test("times the CLOSING Journal durability barrier and reports failed flushes", 
   assert.equal(completed.phase, "CLOSING")
 })
 
+
+
+test("provides the authoritative account balances and current Portfolio to the tracked Spot source", async () => {
+  const { market } = createFixture()
+  const accountSnapshot = createAccountSnapshot({
+    market,
+    sourceTime: 103,
+  })
+  const portfolio = new Portfolio()
+  let sourceInput
+  const fixture = createFixture({
+    accountSnapshots: [accountSnapshot],
+    portfolio,
+    additionalTrackedBaseQuantityProvider: (input) => {
+      sourceInput = input
+      return []
+    },
+  })
+
+  await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
+
+  assert.equal(sourceInput.portfolio, portfolio, "The Spot allocation source must receive the same current Portfolio used for the account snapshot baseline.")
+  assert.equal(Object.isFrozen(sourceInput.balances), true, "The allocation source must receive an immutable snapshot of canonical broker balances.")
+  assert.equal(sourceInput.balances[0], accountSnapshot.data.balances[0], "The Spot allocation source must receive the exact canonical Balance values returned by the broker for this snapshot.")
+})
+
+
+test("publishes only the verified legacy Spot quantity into the separate account baseline", async () => {
+  const { market } = createFixture()
+  const fixture = createFixture({
+    accountSnapshots: [
+      createAccountSnapshot({
+        market,
+        sourceTime: 104,
+      }),
+    ],
+    additionalTrackedBaseQuantityProvider: ({ balances, portfolio }) =>
+      calculateVerifiedLegacySpotAllocation({
+        balances,
+        portfolio,
+        legacyPositions: [{
+          market,
+          originalQuantity: "50",
+          remainingQuantity: "0.01",
+        }],
+      }),
+  })
+
+  const snapshot = await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
+
+  assert.equal(
+    snapshot.getAdditionalTrackedBaseQuantityBaseline({ assetId: market.baseAsset.id }),
+    "0.01",
+    "The account baseline must retain only the operator-authorized legacy quantity verified beyond the shared Portfolio.",
+  )
+  assert.equal(
+    snapshot.getPortfolioBaseQuantityBaseline({ assetId: market.baseAsset.id }),
+    "0",
+    "Verified legacy Spot custody must remain separate from Portfolio rather than creating an opening Position balance.",
+  )
+})
 
 test("captures additional tracked Spot allocation separately from Portfolio in account snapshot baselines", async () => {
   const { market } = createFixture()
