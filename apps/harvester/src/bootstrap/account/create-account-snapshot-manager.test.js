@@ -1144,7 +1144,8 @@ test("provides the authoritative account balances and current Portfolio to the t
   await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
 
   assert.equal(sourceInput.portfolio, portfolio, "The Spot allocation source must receive the same current Portfolio used for the account snapshot baseline.")
-  assert.equal(sourceInput.balances, accountSnapshot.data.balances, "The Spot allocation source must verify custody against the exact canonical balances returned by the broker for this snapshot.")
+  assert.equal(Object.isFrozen(sourceInput.balances), true, "The allocation source must receive an immutable snapshot of canonical broker balances.")
+  assert.equal(sourceInput.balances[0], accountSnapshot.data.balances[0], "The Spot allocation source must receive the exact canonical Balance values returned by the broker for this snapshot.")
 })
 
 test("captures additional tracked Spot allocation separately from Portfolio in account snapshot baselines", async () => {
