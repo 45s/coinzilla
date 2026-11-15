@@ -8,8 +8,11 @@ test("createRestSignature signs sorted query parameters and compact JSON body", 
     timestamp: "1700000000000",
     apiKey: "api-key",
     secretKey: "secret",
-    queryParams: { symbol: "BTCUSDT", limit: 10, category: "spot" },
-    body: { symbol: "BTCUSDT", side: "BUY" },
+    queryParams: { symbol: "BTCUSDT",
+      limit: 10,
+      category: "spot" },
+    body: { symbol: "BTCUSDT",
+      side: "BUY" },
   })
 
   assert.equal(signature, "c5794eae3d75ac177a2bf3774a60b4050984dbb6f8841289e0126056bbb475af")
@@ -51,7 +54,9 @@ test("createRestSignature preserves whitespace inside JSON string values", () =>
   }
 
   assert.equal(
-    createRestSignature({ ...options, body: '{ "note": "two words" }' }),
-    createRestSignature({ ...options, body: { note: "two words" } }),
+    createRestSignature({ ...options,
+      body: '{ "note": "two words" }' }),
+    createRestSignature({ ...options,
+      body: { note: "two words" } }),
   )
 })
