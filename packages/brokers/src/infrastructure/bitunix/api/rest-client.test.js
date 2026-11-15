@@ -33,6 +33,25 @@ test("Bitunix REST client signs authenticated requests and unwraps successful da
   assert.equal(result.data, "10000.00")
 })
 
+test("Bitunix REST client preserves balance precision from JSON number tokens", async () => {
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      async text() {
+        return '{"code":0,"msg":"success","data":[{"coin":"BTC","balance":0.123456789012345678,"balanceLocked":0.000000000000000001}]}'
+      },
+    }),
+  })
+
+  const result = await client.request("GET", "/api/spot/v1/user/account")
+
+  assert.equal(result.data[0].balance, "0.123456789012345678")
+  assert.equal(result.data[0].balanceLocked, "0.000000000000000001")
+})
+
 test("Bitunix REST client signs compact POST bodies and does not retry state-changing requests", async () => {
   let callCount = 0
   const client = new BitunixRestClient({
