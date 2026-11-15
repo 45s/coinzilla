@@ -6,7 +6,10 @@ import { validateOrderAgainstTradingRules } from "../domain/orders/validate-orde
 
 function createSubmissionDeferralResolver({ canSubmit } = {}) {
   return ({ order, purpose } = {}) => {
-    const gate = canSubmit({ order, purpose })
+    const gate = canSubmit({
+      order,
+      purpose,
+    })
     if (gate === true) {return null}
     if (gate === false) {return { reason: "SUBMISSION_NOT_ALLOWED" }}
     if (!gate || typeof gate !== "object" || Array.isArray(gate) || typeof gate.allowed !== "boolean") {
@@ -175,7 +178,11 @@ async function persistDurableSubmissionOutcome({ context, order, outcome, purpos
     return toResult({ data: { skipped: true } })
   }
   try {
-    const result = await context.onDurableSubmissionOutcome({ order, outcome, purpose })
+    const result = await context.onDurableSubmissionOutcome({
+      order,
+      outcome,
+      purpose,
+    })
     if (result?.ok !== true || result.data?.durable !== true) {
       return toResult({
         errors: result?.errors?.length
@@ -269,7 +276,10 @@ async function preparePendingSubmission({ context, candidate } = {}) {
   if (context.onDurableSubmissionIntent) {
     let durableIntent
     try {
-      durableIntent = await context.onDurableSubmissionIntent({ order: pendingOrder, purpose })
+      durableIntent = await context.onDurableSubmissionIntent({
+        order: pendingOrder,
+        purpose,
+      })
     } catch (error) {
       return deferRegisteredSubmission({
         context,
@@ -338,7 +348,10 @@ async function handleBrokerPlacementException({ context, pendingOrder, purpose, 
 }
 
 async function handleBrokerFailureResult({ context, pendingOrder, purpose, brokerResult } = {}) {
-  const { errors, outcome } = classifyBrokerSubmissionFailure({ pendingOrder, brokerResult })
+  const { errors, outcome } = classifyBrokerSubmissionFailure({
+    pendingOrder,
+    brokerResult,
+  })
   const durableOutcome = await persistDurableSubmissionOutcome({
     context,
     order: pendingOrder,
@@ -353,7 +366,11 @@ async function handleBrokerFailureResult({ context, pendingOrder, purpose, broke
     })
     return durableOutcome
   }
-  await context.onSubmissionFailure({ order: pendingOrder, errors, outcome })
+  await context.onSubmissionFailure({
+    order: pendingOrder,
+    errors,
+    outcome,
+  })
   return toResult({ errors })
 }
 
@@ -449,7 +466,10 @@ async function submitBrokerOrder({ context, candidate } = {}) {
 async function executePendingOrders({ context, pendingOrders } = {}) {
   const submittedOrders = []
   for (const candidate of pendingOrders) {
-    const prepared = await preparePendingSubmission({ context, candidate })
+    const prepared = await preparePendingSubmission({
+      context,
+      candidate,
+    })
     if (!prepared.ok) {return prepared}
     if (prepared.data?.deferred) {
       return toResult({
@@ -459,7 +479,10 @@ async function executePendingOrders({ context, pendingOrders } = {}) {
         },
       })
     }
-    const submitted = await submitBrokerOrder({ context, candidate })
+    const submitted = await submitBrokerOrder({
+      context,
+      candidate,
+    })
     if (!submitted.ok) {return submitted}
     submittedOrders.push(submitted.data.order)
   }
@@ -479,7 +502,10 @@ async function executeStrategyDecision({ context, decision, marketMetadata } = {
       decision,
       marketMetadata,
     })
-    return await executePendingOrders({ context, pendingOrders })
+    return await executePendingOrders({
+      context,
+      pendingOrders,
+    })
   } catch (error) {
     return toResult({ error })
   }
@@ -495,7 +521,11 @@ async function executeStrategyDecision({ context, decision, marketMetadata } = {
 export function makeExecuteStrategyDecision(options = {}) {
   const context = createExecutionContext({ options })
   const execute = async ({ decision, marketMetadata } = {}) =>
-    executeStrategyDecision({ context, decision, marketMetadata })
+    executeStrategyDecision({
+      context,
+      decision,
+      marketMetadata,
+    })
   execute.validate = async ({ decision, marketMetadata, notifyValidationFailure = true } = {}) =>
     validateDecision({
       context,
