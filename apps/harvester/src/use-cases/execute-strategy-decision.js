@@ -196,6 +196,25 @@ async function persistDurableSubmissionOutcome({ context, order, outcome, purpos
   }
 }
 
+async function persistDurableSubmissionIntent({ context, pendingOrder, purpose } = {}) {
+  try {
+    const result = await context.onDurableSubmissionIntent({
+      order: pendingOrder,
+      purpose,
+    })
+    if (result?.ok !== true || result.data?.durable !== true) {
+      return toResult({
+        errors: result?.errors?.length
+          ? result.errors
+          : [new Error("Durable order-submission intent was not acknowledged")],
+      })
+    }
+    return result
+  } catch (error) {
+    return toResult({ error })
+  }
+}
+
 async function deferRegisteredSubmission({ context, order, purpose, errors, reason } = {}) {
   try {
     await context.onSubmissionDeferred({
@@ -274,29 +293,17 @@ async function preparePendingSubmission({ context, candidate } = {}) {
     })
   }
   if (context.onDurableSubmissionIntent) {
-    let durableIntent
-    try {
-      durableIntent = await context.onDurableSubmissionIntent({
-        order: pendingOrder,
-        purpose,
-      })
-    } catch (error) {
+    const durableIntent = await persistDurableSubmissionIntent({
+      context,
+      pendingOrder,
+      purpose,
+    })
+    if (!durableIntent.ok) {
       return deferRegisteredSubmission({
         context,
         order: pendingOrder,
         purpose,
-        errors: [error],
-      })
-    }
-    if (durableIntent?.ok !== true || durableIntent.data?.durable !== true) {
-      const errors = durableIntent?.errors?.length
-        ? durableIntent.errors
-        : [new Error("Durable order-submission intent was not acknowledged")]
-      return deferRegisteredSubmission({
-        context,
-        order: pendingOrder,
-        purpose,
-        errors,
+        errors: durableIntent.errors,
       })
     }
   }
