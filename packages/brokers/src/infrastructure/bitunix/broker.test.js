@@ -334,3 +334,77 @@ test("Bitunix Spot broker supports explicit history page selection", async () =>
     page: 3,
     pageSize: 20 })
 })
+
+
+test("Bitunix Spot order history maps exchange-neutral filters to documented API codes", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      "/api/spot/v1/order/history/page": { data: [],
+        total: 0 },
+    },
+  })
+
+  const result = await broker.getOrderHistory({
+    symbol: "BTCUSDT",
+    status: "PARTIALLY_FILLED",
+    side: "BUY",
+    type: "LIMIT",
+  })
+
+  assert.equal(result.ok, true, "valid canonical history filters must return a successful broker result")
+  assert.deepEqual(calls[0].options.body, {
+    symbol: "BTCUSDT",
+    page: 1,
+    status: "3",
+    side: "2",
+    type: "1",
+  }, "history filters must be translated to Bitunix wire codes without leaking exchange codes to callers")
+})
+
+test("Bitunix Spot order history rejects unsupported canonical filters before sending a request", async () => {
+  const { broker, calls } = createBroker()
+
+  const unsupportedStatus = await broker.getOrderHistory({
+    symbol: "BTCUSDT",
+    status: "UNKNOWN",
+  })
+  const unsupportedSide = await broker.getOrderHistory({
+    symbol: "BTCUSDT",
+    side: "BID",
+  })
+  const unsupportedType = await broker.getOrderHistory({
+    symbol: "BTCUSDT",
+    type: "STOP_LIMIT",
+  })
+
+  assert.equal(unsupportedStatus.ok, false, "unknown order statuses must not be sent as undocumented Bitunix filters")
+  assert.equal(unsupportedSide.ok, false, "unknown order sides must not be sent as undocumented Bitunix filters")
+  assert.equal(unsupportedType.ok, false, "unknown order types must not be sent as undocumented Bitunix filters")
+  assert.equal(calls.length, 0, "invalid history filters must be rejected before any exchange request")
+})
+
+
+test("Bitunix Spot market catalog excludes pairs without an explicit open status", async () => {
+  const { broker } = createBroker({
+    responses: {
+      "/api/spot/v1/common/coin_pair/list": [
+        { base: "BTC",
+          quote: "USDT",
+          isOpen: "1" },
+        { base: "OLD",
+          quote: "USDT",
+          isOpen: "0" },
+        { base: "UNKNOWN",
+          quote: "USDT" },
+        { base: "UNSURE",
+          quote: "USDT",
+          isOpen: "unknown" },
+      ],
+    },
+  })
+
+  const result = await broker.getExchangeMarkets()
+
+  assert.equal(result.ok, true, "a catalog containing unknown market states should remain readable")
+  assert.deepEqual(result.data.map(({ symbol }) => symbol), ["BTCUSDT"], "only explicitly open Bitunix markets may enter the active catalog")
+})

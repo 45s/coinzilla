@@ -94,13 +94,13 @@ The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The curren
 | Broker method | Bitunix operation | Constraint |
 |---|---|---|
 | `getBalances()` | `GET /api/spot/v1/user/account` | Raw JSON balance numeric tokens are preserved as decimal strings before canonical entity construction; no source update timestamp. |
-| `getExchangeMarkets()` | `GET /api/spot/v1/common/coin_pair/list` | Filters closed pairs; derives each pair symbol by concatenating base and quote because the catalog response omits symbol. |
+| `getExchangeMarkets()` | `GET /api/spot/v1/common/coin_pair/list` | Includes only pairs explicitly marked open (unknown states are excluded); derives each pair symbol by concatenating base and quote because the catalog response omits symbol. |
 | `getSymbolFilters({ symbol })` | Spot coin-pair catalog | Returns Bitunix metadata, not Binance filter schema. |
 | `getOpenOrders({ symbol })` | `POST /api/spot/v1/order/pending/list` | Symbol required. |
-| `getOrderHistory({ symbol })` | `POST /api/spot/v1/order/history/page` | Symbol required; no exact order-ID filter. |
+| `getOrderHistory({ symbol, status?, side?, type?, startTime?, endTime?, page?, limit? })` | `POST /api/spot/v1/order/history/page` | Symbol required; no exact order-ID filter. Canonical statuses (`OPEN`, `FILLED`, `PARTIALLY_FILLED`, `CANCELED`, `PARTIALLY_FILLED_CANCELED`), sides (`BUY`, `SELL`) and types (`LIMIT`, `MARKET`) are translated to Bitunix numeric codes inside the adapter. |
 | `getOrder({ symbol, orderId })` | `GET /api/spot/v1/order/detail` | Response identity is validated. |
 | `getPrices({ symbol })` | `GET /api/spot/v1/market/last_price` | Request/response lookup only; maps the returned price string to `{ symbol, price }`. |
-| `getFills({ symbol, orderId })` | `POST /api/spot/v1/order/deal/list` | Per-order matching result. |
+| `getFills({ symbol, orderId })` | `POST /api/spot/v1/order/deal/list` | Normalizes the documented single matching-order object. The docs do not establish pagination or completeness for orders with multiple executions; this is not yet a proven complete execution-history contract. |
 
 Mutations and lifecycle-dependent methods are deliberately unavailable:
 
