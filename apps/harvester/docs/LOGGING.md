@@ -205,6 +205,7 @@ The concise terminal line is only the operator-facing summary. The original
 structured DEBUG/TRACE entry remains unchanged in both cumulative and
 per-session files, including `shutdownPhase`, `phaseStatus`,
 `shutdownCorrelationId`, elapsed/duration timing, and safe failure details.
+
 ## Runtime commands
 
 In an interactive development terminal:

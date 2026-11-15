@@ -48,7 +48,10 @@ test("configures independent DEBUG and TRACE JSONL files and INFO console thresh
       data: { message: "diagnostic", symbol: "ZROUSDT" },
     }
     await logger.transports.get("harvester-debug-file").write(entry)
-    await logger.transports.get("harvester-trace-file").write({ ...entry, level: "trace" })
+    await logger.transports.get("harvester-trace-file").write({
+      ...entry,
+      level: "trace",
+    })
 
     const debugLines = (await readFile(path.join(directory, "cumulative", "harvester.log"), "utf8")).trim().split("\n")
     const traceLines = (await readFile(path.join(directory, "cumulative", "trace.log"), "utf8")).trim().split("\n")
@@ -712,11 +715,11 @@ test("keeps consecutive transitions for different phases and statuses visible", 
       status: "STARTED",
     },
     {
-      phase: "EVENT_DRAIN",
+      phase: "MARKET_WORK_DRAIN",
       status: "STARTED",
     },
     {
-      phase: "EVENT_DRAIN",
+      phase: "MARKET_WORK_DRAIN",
       status: "COMPLETED",
     },
     {
@@ -734,8 +737,8 @@ test("keeps consecutive transitions for different phases and statuses visible", 
     written.trimEnd().split("\n"),
     [
       `${expectedTime} shutdown phase MARKET_INTAKE_STOP STARTED`,
-      `${expectedTime} shutdown phase EVENT_DRAIN STARTED`,
-      `${expectedTime} shutdown phase EVENT_DRAIN COMPLETED`,
+      `${expectedTime} shutdown phase MARKET_WORK_DRAIN STARTED`,
+      `${expectedTime} shutdown phase MARKET_WORK_DRAIN COMPLETED`,
       `${expectedTime} shutdown phase MARKET_INTAKE_STOP COMPLETED`,
     ],
     "Different consecutive phase identifiers and statuses must never be collapsed by console deduplication.",
@@ -806,7 +809,10 @@ test("preserves full shutdown diagnostics in DEBUG and TRACE files while keeping
         runtimeSessionId: "runtime-session-1",
       },
     })
-    logger.transports.get("console").write({ ...entry, level: "info" })
+    logger.transports.get("console").write({
+      ...entry,
+      level: "info",
+    })
     await logger.transports.get("harvester-debug-file").write(entry)
     await logger.transports.get("harvester-trace-file").write({ ...entry, level: "trace" })
 

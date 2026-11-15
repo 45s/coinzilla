@@ -112,7 +112,7 @@ function writeShutdownPhaseConsoleRecord({
     level,
     method,
     color,
-  }) + "\\n")
+  }) + "\n")
 }
 
 function summarizeConsoleData({ data } = {}) {
@@ -510,17 +510,20 @@ export function createHarvesterConsoleTransport({
     write({ timestamp, level, method = level, data }) {
       const isOrderLifecycle = data?.orderLifecycle === true
       const shutdownPresentation = getShutdownConsolePresentation({ data })
-      const summary = shutdownPresentation
-        ? {
+      let summary
+      if (shutdownPresentation) {
+        summary = {
           message: shutdownPresentation.message,
           details: {},
         }
-        : isOrderLifecycle
-          ? {
-            message: "Order lifecycle",
-            details: data,
-          }
-          : summarizeConsoleData({ data })
+      } else if (isOrderLifecycle) {
+        summary = {
+          message: "Order lifecycle",
+          details: data,
+        }
+      } else {
+        summary = summarizeConsoleData({ data })
+      }
       const fingerprint = JSON.stringify({
         level,
         method,
