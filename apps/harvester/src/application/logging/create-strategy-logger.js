@@ -49,7 +49,10 @@ export function createStrategyLogger({ logger, strategyId } = {}) {
         if (typeof logger[method] !== "function") {
           return undefined
         }
-        return logger[method](createStrategyLogData({ data, strategyId }))
+        return logger[method](createStrategyLogData({
+          data,
+          strategyId,
+        }))
       },
     ]),
   )
