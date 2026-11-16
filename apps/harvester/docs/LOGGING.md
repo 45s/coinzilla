@@ -43,25 +43,17 @@ DEBUG remains magenta, TRACE bright magenta, SUCCESS green, WARN yellow, and
 ERROR red. `SUCCESS` and `SYSTEM` retain their semantic methods in structured
 log entries even though both use INFO severity for transport filtering.
 Non-interactive output remains plain text. The terminal is intentionally a
-summary, not a second diagnostic dump: it removes a redundant leading
-`Harvester ` from the displayed message, then prints the event message plus
-a small allowlist of actionable fields (including the stable `diagnosticId`
-for catalogued startup failures). When a `symbol` is present, its value is
-shown first; remaining fields are rendered as `key value` pairs separated by
-commas. When no symbol is present, every displayed detail retains its key. Arrays of scalar values are comma-separated, and nested objects are
-flattened into dotted field names, such as `readiness.state BLOCKED`. For example:
-
-```text
-04:30:15 🪙 CG recovery SELL cancellation requested: DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL
-```
-
-The terminal omits stacks/fingerprints/audit internals and caps each line at
-200 characters. Consecutive identical summaries are suppressed and reported
-with a repeat-count message. This is presentation only: the original message
-and every structured field remain unchanged in the DEBUG/TRACE JSONL files.
-Each entry retains its timestamp, normalized severity, logging method, and
-redacted, JSON-safe structured data. A console threshold change does not
-change either file threshold.
+summary, not a second diagnostic dump: it prints the event message plus a
+small allowlist of actionable fields (including the stable `diagnosticId`
+for catalogued startup failures), omits stacks/fingerprints/audit internals,
+and caps each line at 200 characters. The recovery SELL cancellation
+summary is rendered as `04:30:15 🪙 CG recovery SELL cancellation requested:
+DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL`, with the redundant
+`Harvester` prefix omitted and symbol/reason shown inline. Full structured
+entries—including stack traces and all other normalized fields—remain in the
+DEBUG/TRACE JSONL files. Each entry retains its timestamp, normalized
+severity, logging method, and redacted, JSON-safe structured data. A console
+threshold change does not change either file threshold.
 
 The log directory is relative to the Harvester working directory. Run
 `pnpm --filter @coinzilla/harvester dev` from the repository root, or run

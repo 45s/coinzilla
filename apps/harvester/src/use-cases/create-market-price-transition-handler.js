@@ -45,6 +45,114 @@ function logStaleMarketPriceSkipped({ logger, marketEventId, symbol, price } = {
   })
 }
 
+/** Validate, identify and log the incoming event before the freshness gate. */
+function prepareMarketPriceTransition({
+  state,
+  logger,
+  getCurrentMarketMetadata,
+  getPortfolio,
+  getRecoveryLedger,
+  canTrade,
+  nextMarketPriceEventId,
+  symbol,
+  priceEvent,
+} = {}) {
+  const price = createMarketPrice({ priceEvent })
+  if (price.symbol !== symbol) {
+    throw new Error("Market price symbol does not match subscription")
+  }
+  const marketEventId = nextMarketPriceEventId()
+  const previousPrice = state.prices.get(symbol)
+  const metadata = getCurrentMarketMetadata({ symbol })
+  const activeOrdersBefore = state.registry.getActiveOrders({
+    marketId: metadata.market.id,
+  })
+  logMarketPriceReceived({
+    state,
+    logger,
+    marketEventId,
+    symbol,
+    price,
+    previousPrice,
+    metadata,
+    activeOrdersBefore,
+    getPortfolio,
+    getRecoveryLedger,
+    canTrade,
+  })
+
+  return {
+    symbol,
+    price,
+    marketEventId,
+    metadata,
+  }
+}
+
+/** Reject stale prices or commit the accepted event identity and price. */
+function acceptFreshMarketPriceTransition({
+  state,
+  isMarketPriceFresh,
+  logger,
+  transition,
+} = {}) {
+  const { symbol, price, marketEventId } = transition
+  if (!isMarketPriceFresh(price)) {
+    logStaleMarketPriceSkipped({
+      logger,
+      marketEventId,
+      symbol,
+      price,
+    })
+    return {
+      accepted: false,
+      result: toResult({
+        data: {
+          skipped: true,
+          reason: "STALE_MARKET_PRICE",
+        },
+      }),
+    }
+  }
+
+  state.marketPriceEventIds.set(symbol, marketEventId)
+  state.prices.set(symbol, price)
+
+  return {
+    accepted: true,
+  }
+}
+
+/** Dispatch an accepted price through the existing trailing or evaluation workflow. */
+function dispatchAcceptedMarketPriceTransition({
+  state,
+  canTrade,
+  maybeReplaceTrailingBuy,
+  evaluateLatestTransition,
+  transition,
+} = {}) {
+  const { symbol, price, metadata } = transition
+  if (!canTrade({ symbol }) || state.paused.has(symbol)) {
+    return evaluateLatestTransition({ symbol })
+  }
+
+  const activeBuy = state.registry.getActiveOrders({
+    marketId: metadata.market.id,
+  }).find((order) => order.side === "BUY")
+  if (
+    activeBuy &&
+    state.trailingBuy.get(symbol) !== false &&
+    !state.operatorPausedMarkets.has(symbol)
+  ) {
+    return maybeReplaceTrailingBuy({
+      symbol,
+      marketPrice: price,
+    })
+  }
+
+  return evaluateLatestTransition({ symbol })
+}
+
 /** Create a market-price transition handler for the engine's existing serialized queue. */
 export function createMarketPriceTransitionHandler({
   state,
@@ -60,62 +168,34 @@ export function createMarketPriceTransitionHandler({
 } = {}) {
   return async ({ symbol, priceEvent } = {}) => {
     try {
-      const price = createMarketPrice({ priceEvent })
-      if (price.symbol !== symbol) {
-        throw new Error("Market price symbol does not match subscription")
-      }
-      const marketEventId = nextMarketPriceEventId()
-      const previousPrice = state.prices.get(symbol)
-      const metadata = getCurrentMarketMetadata({ symbol })
-      const activeOrdersBefore = state.registry.getActiveOrders({
-        marketId: metadata.market.id,
-      })
-      logMarketPriceReceived({
+      const transition = prepareMarketPriceTransition({
         state,
         logger,
-        marketEventId,
-        symbol,
-        price,
-        previousPrice,
-        metadata,
-        activeOrdersBefore,
+        getCurrentMarketMetadata,
         getPortfolio,
         getRecoveryLedger,
         canTrade,
+        nextMarketPriceEventId,
+        symbol,
+        priceEvent,
       })
-      if (!isMarketPriceFresh(price)) {
-        logStaleMarketPriceSkipped({
-          logger,
-          marketEventId,
-          symbol,
-          price,
-        })
-        return toResult({
-          data: {
-            skipped: true,
-            reason: "STALE_MARKET_PRICE",
-          },
-        })
+      const acceptance = acceptFreshMarketPriceTransition({
+        state,
+        isMarketPriceFresh,
+        logger,
+        transition,
+      })
+      if (!acceptance.accepted) {
+        return acceptance.result
       }
-      state.marketPriceEventIds.set(symbol, marketEventId)
-      state.prices.set(symbol, price)
-      if (!canTrade({ symbol }) || state.paused.has(symbol)) {
-        return evaluateLatestTransition({ symbol })
-      }
-      const activeBuy = state.registry.getActiveOrders({
-        marketId: metadata.market.id,
-      }).find((order) => order.side === "BUY")
-      if (
-        activeBuy &&
-        state.trailingBuy.get(symbol) !== false &&
-        !state.operatorPausedMarkets.has(symbol)
-      ) {
-        return maybeReplaceTrailingBuy({
-          symbol,
-          marketPrice: price,
-        })
-      }
-      return evaluateLatestTransition({ symbol })
+
+      return dispatchAcceptedMarketPriceTransition({
+        state,
+        canTrade,
+        maybeReplaceTrailingBuy,
+        evaluateLatestTransition,
+        transition,
+      })
     } catch (error) {
       return toResult({ error })
     }

@@ -376,48 +376,6 @@ function formatStartupConsoleMessage(message) {
   return message
 }
 
-function formatConsoleDetailValue(value) {
-  if (Array.isArray(value)) {
-    return value.map((item) => (
-      item && typeof item === "object"
-        ? JSON.stringify(item)
-        : String(item).replace(/[\r\n]+/g, " ")
-    )).join(", ")
-  }
-  return String(value).replace(/[\r\n]+/g, " ")
-}
-
-function appendConsoleDetail({ parts, key, value } = {}) {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    for (const [nestedKey, nestedValue] of Object.entries(value)) {
-      appendConsoleDetail({
-        parts,
-        key: `${key}.${nestedKey}`,
-        value: nestedValue,
-      })
-    }
-    return
-  }
-  parts.push(`${key} ${formatConsoleDetailValue(value)}`)
-}
-
-function formatConsoleDetails(details = {}) {
-  const parts = []
-  if (details.symbol !== undefined && details.symbol !== null) {
-    parts.push(formatConsoleDetailValue(details.symbol))
-  }
-  for (const [key, value] of Object.entries(details)) {
-    if (key !== "symbol") {
-      appendConsoleDetail({
-        parts,
-        key,
-        value,
-      })
-    }
-  }
-  return parts.length > 0 ? `: ${parts.join(", ")}` : ""
-}
-
 function writeStandardConsoleRecord({ output, color, timestamp, level, method, summary, strategyId } = {}) {
   const time = new Date(timestamp).toLocaleTimeString("en-GB", {
     hour: "2-digit",
@@ -449,12 +407,14 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
   }
 
   const plainPrefix = `${time} ${strategyPrefix}${levelLabel}${summaryMessage}`
-  const formattedDetails = formatConsoleDetails(summary.details ?? {})
-  const availableDetailsLength = Math.max(0, MAX_CONSOLE_LINE_LENGTH - plainPrefix.length)
-  let suffix = formattedDetails
-  if (formattedDetails.length > availableDetailsLength) {
+  const serializedDetails = Object.keys(summary.details ?? {}).length > 0
+    ? ` ${JSON.stringify(summary.details)}`
+    : ""
+  const availableDetailsLength = Math.max(0, MAX_CONSOLE_LINE_LENGTH - plainPrefix.length - 1)
+  let suffix = serializedDetails
+  if (serializedDetails.length > availableDetailsLength) {
     suffix = availableDetailsLength > 3
-      ? `${formattedDetails.slice(0, availableDetailsLength - 3)}...`
+      ? `${serializedDetails.slice(0, availableDetailsLength - 3)}...`
       : ""
   }
   const plainLine = `${plainPrefix}${suffix}`

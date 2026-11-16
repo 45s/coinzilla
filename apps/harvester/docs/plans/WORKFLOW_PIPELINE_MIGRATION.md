@@ -14,6 +14,54 @@ This is a **proposed, incremental implementation plan**, not an accepted runtime
 
 The goal is to improve cohesion and readability in application workflows while preserving DDD dependency direction and the existing trading lifecycle. Start with one narrow workflow and evaluate the result before generalizing anything.
 
+## Implementation checkpoints
+
+### Step 0 — source map completed on 2026-11-16
+
+Reviewed against `develop` at `5a5cfb8a779d4809663c022b8870863be50d56a5`, after merged [PR #1159](https://github.com/45s/coinzilla/pull/1159).
+
+The current market-price path is:
+
+1. Bootstrap injects the caller-supplied market-data freshness policy and composes `makeConservativeTradingEngine`.
+2. The public `processMarketPrice` operation refreshes volatility protection before entering the engine transition queue.
+3. The existing serialized queue invokes `createMarketPriceTransitionHandler`; this internal handler does not enqueue another transition.
+4. The handler validates the normalized immutable `MarketPrice`, checks subscription-symbol identity, allocates the diagnostic event ID, reads the previous accepted price and market metadata, and logs the received event with the current portfolio, recovery ledger, order and readiness context.
+5. The handler checks freshness. A stale event is logged and returns the existing successful `STALE_MARKET_PRICE` skip without changing the accepted event ID or cached price.
+6. A fresh event commits `marketPriceEventIds` and `prices`, then delegates either to `maybeReplaceTrailingBuy` or `evaluateLatestTransition` according to the existing readiness, pause, active-BUY and trailing settings.
+7. The evaluator and trailing replacement workflow retain their existing responsibilities. Submission/cancellation durability, broker I/O, fill reconciliation and Portfolio/RecoveryLedger accounting remain downstream and outside this handler.
+
+The market-price handler itself publishes no lifecycle event, performs no broker I/O, and adds no durability wait. The public engine queue, volatility refresh order, state ownership and downstream safety gates remain unchanged.
+
+### Step 1 — explicit market-price stages
+
+- [x] Add direct offline characterization tests for receipt/freshness ordering, stale-cache preservation, accepted-price commit before dispatch, existing trailing-BUY eligibility gates, malformed-price rejection, and symbol-mismatch failure.
+- [x] Refactor only the handler's local orchestration into three explicit named stages: prepare/log, freshness acceptance/state commit, and accepted-price dispatch.
+- [x] Re-run the direct handler tests and existing Conservative engine tests after the extraction on the implementation head.
+- [x] Reconcile the architecture guide with the source-backed stage sequence.
+
+Test-first evidence on commit `da359a83fabf6eeb80b577073cd60ba9abdff96a`:
+
+- Harvester unit suite: 1,658 passed, 0 failed (including all eight new direct handler characterization cases).
+- Harvester coverage: 80.73% lines, 81.65% branches, 82.02% functions.
+- Configured Harvester targeted regressions: 5/5 files passed.
+- Utils Unit Tests, Dependency Audit, and External Documentation Links passed.
+- Full workspace unit tests, workspace coverage and JavaScript Syntax were still running at this checkpoint; their final results are not inferred here.
+- The first changed-file ESLint run identified five `prefer-template` errors and one helper-length warning in the new test fixture. The next test-only correction splits fixture setup into focused helpers and uses template literals; no lint rules or assertions are suppressed.
+- The first final-head Markdown style check after registering the targeted test identified one repeated blank line in this plan. This follow-up removes it without changing or suppressing any style rule.
+- The direct handler suite was extended with a malformed positive-decimal validation case; it proves invalid domain input is rejected before event-ID allocation, receipt logging or dispatch.
+
+Implementation verification on commit `271d5fdcfca7e4be94a6da2a343d548bd030a80b`:
+
+- Harvester unit suite: 1,659 passed, 0 failed; the nine direct handler characterization cases are included.
+- Harvester coverage: 80.76% lines, 81.65% branches, 82.04% functions.
+- Workspace unit-test matrix: all 10 package jobs passed.
+- Workspace coverage matrix: all 10 package jobs and the aggregate coverage gate passed.
+- Harvester targeted regressions: all five configured files passed on this checkpoint. The direct market-price handler test was added to the configured targeted list in follow-up commit `b27aeb6cb23337686ccbb971a35b854f2e2280e4`.
+- JavaScript Syntax (including changed-file ESLint, Markdown style and agent-policy checks), actionlint, Utils Unit Tests, Dependency Audit and External Documentation Links passed.
+- The optional read-only TESTNET integration job was skipped by its workflow condition. No exchange operation was performed.
+
+The extraction adds no new runtime state, dependency, queue, broker call, event publication, persistence operation or domain rule. It does not change Conservative behavior or the status of the wider migration plan.
+
 ## Goals
 
 - Split large application workflows by meaningful responsibility.
