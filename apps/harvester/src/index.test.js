@@ -1746,3 +1746,86 @@ test("does not construct, verify, or inject Operational State Store records even
   assert.equal(runtimeStarted, true, "A missing or malformed recovery directory must not block startup while recovery is disabled.")
 })
 
+
+
+test("retains Journal, EventBus, process lock and logger when strategy shutdown safety is unresolved", async () => {
+  const calls = []
+  const signalHandlers = new Map()
+  const unsafeShutdown = new Error("BTCUSDT owned BUY remains UNKNOWN")
+  const eventBus = {
+    publish: () => ({
+      ok: true,
+    }),
+    flush: async () => ({
+      ok: true,
+    }),
+    close: async () => {
+      calls.push("event-bus-close")
+      return { ok: true }
+    },
+  }
+  const journalService = {
+    ready: Promise.resolve({
+      ok: true,
+    }),
+    flush: async () => ({
+      ok: true,
+      durable: true,
+    }),
+    close: async () => {
+      calls.push("journal-close")
+      return { ok: true, closed: true }
+    },
+  }
+  const logger = {
+    info() {},
+    system() {},
+    error: () => calls.push("logger-error"),
+  }
+
+  await runMain({
+    createEventBus: () => eventBus,
+    createJournalService: () => journalService,
+    acquireProcessLock: async () => ({
+      ok: true,
+      release: async () => {
+        calls.push("process-lock-release")
+        return { ok: true, released: true }
+      },
+    }),
+    registerSignalHandler: (...args) => {
+      const [signal, handler] = args
+      signalHandlers.set(signal, handler)
+    },
+    closeLogger: async () => calls.push("logger-close"),
+    start: async () => ({
+      connected: true,
+      brokerName: "binance",
+      tradingEnabled: true,
+      strategyMode: "conservative",
+      subscriptions: ["BTCUSDT"],
+      stop: async () => {
+        calls.push("runtime-stop")
+        throw unsafeShutdown
+      },
+    }),
+    logger,
+  })
+
+  await signalHandlers.get("SIGINT")()
+
+  assert.deepEqual(
+    calls.filter((call) => [
+      "event-bus-close",
+      "journal-close",
+      "process-lock-release",
+      "logger-close",
+    ].includes(call)),
+    [],
+    "An unresolved trading-safety proof must retain Journal, EventBus, the process lock and logging so recovery evidence remains available.",
+  )
+  assert.ok(
+    calls.includes("logger-error"),
+    "The failed shutdown attempt must report the exact safety blocker while leaving required runtime services connected.",
+  )
+})
