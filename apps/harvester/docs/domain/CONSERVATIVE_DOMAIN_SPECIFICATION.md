@@ -214,12 +214,11 @@ The shutdown sequence is:
 1. **Block BUYs immediately.** Set the Conservative BUY-shutdown gate before stopping any service, subscription, or exchange connection.
 2. **Cancel owned BUY orders.** Start cancellation of every Harvester-owned active BUY for every enabled Conservative market. Never cancel or adopt external/manual orders. Resolve PENDING/UNKNOWN identity safely; do not guess an exchange order ID. Reconcile every cancellation's terminal state, all fills that raced with it, and actual commissions.
 3. **Keep the system connected.** Do not stop operator/runtime services, market-price or order-book intake, Binance user-data intake, or the broker connection while any Conservative market is unsafe. Market events may continue, but the BUY-shutdown gate must reject BUY decisions.
-4. **Wait for BUY quiet.** Once the market's owned BUY orders are terminal and their fills are reconciled, require an initial 20-second period with no new BUY fills. A BUY fill received during cancellation, draining, waiting, or final verification must be applied exactly once with actual commission facts, must reset that market's quiet-period timer, and must trigger recovery SELL recalculation and verification.
+4. **Verify readiness immediately; do not wait for a timer.** As soon as cancellation outcomes, accepted user-data work, fills, commissions, and exchange state are fully reconciled, evaluate the market's safety conditions. There is no arbitrary 20-second quiet period. A market that already satisfies every condition becomes `SAFE_TO_SHUTDOWN` immediately.
 5. **Protect each market independently.** A market may enter `SAFE_TO_SHUTDOWN` only when all of these conditions are authoritatively verified:
    - its Conservative BUY-shutdown gate remains active;
    - no Harvester-owned BUY is PENDING, OPEN, PARTIALLY_FILLED, or UNKNOWN;
    - all accepted user-data work and all BUY/SELL fills and actual commissions are reconciled, with no accounting or order-state ambiguity;
-   - its 20-second quiet period has elapsed since the most recent BUY fill;
    - if recovery is required, the recovery SELL is calculated from the final Position and RecoveryLedger, including actual commissions and the full recovery target, and the final owned SELL is acknowledged and verified against canonical Binance order state for required quantity and financial coverage; and
    - any old recovery SELL that no longer matches the final plan has a confirmed terminal state and complete raced-fill reconciliation before a replacement is submitted.
    
@@ -228,7 +227,7 @@ The shutdown sequence is:
 
 If any condition cannot be proven, keep the connections and recovery processing needed to protect the position alive, report the exact market and blocker, and do not report `STOPPED`. Unknown placement/cancellation outcomes must be reconciled by canonical identity; never submit a blind duplicate recovery SELL.
 
-The 20-second quiet period is the initial owner-approved value. Any later change to that value requires an explicit strategy-rule change. The per-market `SAFE_TO_SHUTDOWN` state is a safety result, not permission to weaken order ownership, fill accounting, Journal durability, or exchange reconciliation.
+A `SAFE_TO_SHUTDOWN` marker is derived from verified facts, not a timer. If a late execution, newly discovered open BUY, changed SELL state, or reconciliation discrepancy appears after a market was marked safe, immediately invalidate that marker, keep the required services connected, process the new facts, and re-establish recovery SELL coverage before marking it safe again. The marker must be persisted/committed consistently with the Journal and serialized market lifecycle. This rule does not weaken order ownership, fill accounting, Journal durability, or exchange reconciliation.
 
 Implementation tracking: [issue #1186](https://github.com/45s/coinzilla/issues/1186). This specification defines the required behavior; it does not claim that the current shutdown implementation already conforms.
 
