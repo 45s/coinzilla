@@ -7,14 +7,15 @@ function createAsset(code) {
   }
 
   const normalizedCode = code.trim().toUpperCase()
-  return new Asset({ id: normalizedCode.toLowerCase(), code: normalizedCode })
+  return new Asset({ id: normalizedCode.toLowerCase(),
+code: normalizedCode })
 }
 
 function commissionAssetFor(code, market) {
-  if (typeof code !== "string" || !code.trim()) return undefined
+  if (typeof code !== "string" || !code.trim()) {return undefined}
   const normalizedCode = code.trim().toUpperCase()
-  if (normalizedCode === market.baseAsset.code) return market.baseAsset
-  if (normalizedCode === market.quoteAsset.code) return market.quoteAsset
+  if (normalizedCode === market.baseAsset.code) {return market.baseAsset}
+  if (normalizedCode === market.quoteAsset.code) {return market.quoteAsset}
   return createAsset(normalizedCode)
 }
 
@@ -45,7 +46,8 @@ export function adaptCanonicalFill({ trade, market } = {}) {
   const commissions = []
   let commissionStatus = "UNKNOWN"
   if (trade.commission !== undefined && trade.commission !== null) {
-    const commission = new Money({ amount: trade.commission, asset: market.quoteAsset })
+    const commission = new Money({ amount: trade.commission,
+asset: market.quoteAsset })
     if (commission.amount.startsWith("-")) {
       throw new TypeError("Binance commission amount should be non-negative")
     }
@@ -54,7 +56,8 @@ export function adaptCanonicalFill({ trade, market } = {}) {
     } else if (typeof trade.commissionAsset === "string" && trade.commissionAsset.trim()) {
       const asset = commissionAssetFor(trade.commissionAsset, market)
       commissions.push(new Commission({
-        amount: new Money({ amount: commission.amount, asset }),
+        amount: new Money({ amount: commission.amount,
+asset }),
       }))
       commissionStatus = "COMPLETE"
     }
@@ -69,9 +72,12 @@ export function adaptCanonicalFill({ trade, market } = {}) {
     brokerOrderId: normalizeBinanceId(trade.orderId, "order ID"),
     market,
     side: trade.isBuyer ? "BUY" : "SELL",
-    price: new Money({ amount: trade.price, asset: market.quoteAsset }),
-    quantity: new Quantity({ amount: trade.qty, asset: market.baseAsset }),
-    quoteQuantity: new Money({ amount: trade.quoteQty, asset: market.quoteAsset }),
+    price: new Money({ amount: trade.price,
+asset: market.quoteAsset }),
+    quantity: new Quantity({ amount: trade.qty,
+asset: market.baseAsset }),
+    quoteQuantity: new Money({ amount: trade.quoteQty,
+asset: market.quoteAsset }),
     liquidityRole,
     ...(trade.time === undefined || trade.time === null ? {} : { executedAt: trade.time }),
     commissions,
