@@ -7,10 +7,13 @@ import { createFakeRpcClient, createFakeStreamsClient } from "../test-helpers/fa
 
 async function assertOrderMutationsBlocked({ broker, client, first }) {
   assert.equal(first.data.acknowledgeRecovery(), false)
-  const blocked = await broker.createOrder({ symbol: "BTCUSDT", quantity: "0.01", price: "50000" })
+  const blocked = await broker.createOrder({ symbol: "BTCUSDT",
+    quantity: "0.01",
+    price: "50000" })
   assert.equal(blocked.ok, false)
   assert.equal(client.calls.some((call) => call.method === "order.place"), false)
-  const blockedCancel = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: 77 })
+  const blockedCancel = await broker.cancelOrder({ symbol: "BTCUSDT",
+    orderId: 77 })
   const blockedCancelAll = await broker.cancelAllOpenOrders({ symbol: "BTCUSDT" })
   assert.equal(blockedCancel.ok, false)
   assert.equal(blockedCancelAll.ok, false)
@@ -140,12 +143,18 @@ wasClean: false })
   assert.equal(broker.userDataUnavailable, true)
   assert.equal(scheduler.pendingCount, 1)
 
-  await assertOrderMutationsBlocked({ broker, client: clients[1], first })
+  await assertOrderMutationsBlocked({ broker,
+    client: clients[1],
+    first })
 
   assert.equal(firstStatuses.filter((status) => status.type === "reconciled").length, 0)
   assert.equal(secondStatuses.filter((status) => status.type === "reconciled").length, 0)
 
-  assertRecoveryAcknowledged({ broker, scheduler, second, firstStatuses, secondStatuses })
+  assertRecoveryAcknowledged({ broker,
+    scheduler,
+    second,
+    firstStatuses,
+    secondStatuses })
   const placed = await broker.createOrder({ symbol: "BTCUSDT",
 quantity: "0.01",
 price: "50000" })

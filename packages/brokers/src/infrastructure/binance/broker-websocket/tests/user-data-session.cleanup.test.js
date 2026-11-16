@@ -10,7 +10,9 @@ async function assertListenerCleanup({ broker, client, logs, removals }) {
   assert.ok(logs.some(([message]) => message === "Unable to detach Binance user-data listener"))
   assert.ok(logs.some(([message]) => message === "Unable to detach Binance user-data close listener"))
   await assert.doesNotReject(broker.disconnect())
-  assert.deepEqual(removals, { event: 1, error: 1, close: 2 })
+  assert.deepEqual(removals, { event: 1,
+    error: 1,
+    close: 2 })
 }
 
 async function disconnectSubscription({ subscription, broker, scheduler }) {
@@ -162,7 +164,10 @@ close: 0 }
     assert.equal(removals.error, 1)
     assert.equal(removals.close, 2)
     assert.equal(client.listenerCount, 0)
-    await assertListenerCleanup({ broker, client, logs, removals })
+    await assertListenerCleanup({ broker,
+      client,
+      logs,
+      removals })
   })
 })
 
@@ -360,7 +365,9 @@ wasClean: false })
     assert.equal(clients[1].closeListenerCount, 0)
     assert.equal(scheduler.pendingCount, 1)
 
-    await disconnectSubscription({ subscription, broker, scheduler })
+    await disconnectSubscription({ subscription,
+      broker,
+      scheduler })
   })
 })
 

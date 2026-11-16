@@ -123,11 +123,12 @@ function createRequestIdentity({ idFactory, pending }) {
   if (pending.has(key)) {
     throw new Error(`Duplicate in-flight Binance request ID: ${key}`)
   }
-  return { id, key }
+  return { id,
+    key }
 }
 
 function createFinalParams({ requestParams, signed, apiKey, apiSecret, now, recvWindow }) {
-  if (!signed) return requestParams
+  if (!signed) {return requestParams}
   return createSignedBinanceParams(requestParams, {
     apiKey,
     apiSecret,
@@ -257,7 +258,8 @@ export class BinanceWebSocketApiClient {
     if (this.#state !== "open") {
       return Promise.reject(new BinanceRpcConnectionError(
         `Cannot send "${method}" while Binance WebSocket API is ${this.#state}`,
-        { method, stateChanging },
+        { method,
+          stateChanging },
       ))
     }
     if (!Number.isInteger(timeout) || timeout < 1) {
@@ -266,7 +268,8 @@ export class BinanceWebSocketApiClient {
 
     let identity
     try {
-      identity = createRequestIdentity({ idFactory: this.idFactory, pending: this.#pending })
+      identity = createRequestIdentity({ idFactory: this.idFactory,
+        pending: this.#pending })
     } catch (error) {
       return Promise.reject(error)
     }
@@ -295,7 +298,8 @@ export class BinanceWebSocketApiClient {
   }
 
   #sendRequest({ id, key, method, finalParams, timeout, stateChanging }) {
-    const envelope = { id, method }
+    const envelope = { id,
+      method }
     if (Object.keys(finalParams).length > 0) {envelope.params = finalParams}
 
     return new Promise((...args) => {
@@ -313,7 +317,9 @@ export class BinanceWebSocketApiClient {
         }))
       }, timeout)
 
-      this.#pending.set(key, { id, method, resolve,
+      this.#pending.set(key, { id,
+        method,
+        resolve,
         reject,
         timer,
         stateChanging })
@@ -370,7 +376,7 @@ export class BinanceWebSocketApiClient {
 
   #handleMessage(message) {
     const payload = this.#parseMessage(message)
-    if (!payload) return
+    if (!payload) {return}
     if (!hasOwn(payload, "id") || payload.id === null) {
       this.#notifyEventListeners(payload)
       return
@@ -415,7 +421,7 @@ export class BinanceWebSocketApiClient {
   #handleAcknowledgement(payload) {
     const key = String(payload.id)
     const pending = this.#pending.get(key)
-    if (!pending) return
+    if (!pending) {return}
 
     if (!Number.isInteger(payload.status) || payload.status < 100 || payload.status > 599) {
       this.#settleProtocolError({

@@ -90,7 +90,12 @@ export class BinanceStreamsClient {
     nowFn = Date.now,
     onError = () => {},
   } = {}] = args
-    validateClientOptions({ url, transportFactory, ackTimeout, reconnectDelay, maxReconnectDelay, rotationDelay,
+    validateClientOptions({ url,
+      transportFactory,
+      ackTimeout,
+      reconnectDelay,
+      maxReconnectDelay,
+      rotationDelay,
       onError })
 
 

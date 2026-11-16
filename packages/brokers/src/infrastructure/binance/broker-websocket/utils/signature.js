@@ -24,9 +24,10 @@ export function buildBinanceSignaturePayload(params) {
 
   return Object.keys(params)
     .filter((key) => key !== "signature")
-    .sort((left, right) => {
-      if (left < right) return -1
-      if (left > right) return 1
+    .sort((...args) => {
+      const [left, right] = args
+      if (left < right) {return -1}
+      if (left > right) {return 1}
       return 0
     })
     .map((key) => `${key}=${normalizeValue({ key,
