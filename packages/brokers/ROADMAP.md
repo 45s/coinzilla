@@ -1053,6 +1053,7 @@ The following comparison resolves what the references actually implement; it doe
 - [x] Audit account-wide open-order coverage: the official endpoint and .NET reference require a symbol; per-market fan-out cannot prove exhaustive, atomic account coverage. Keep account-wide retrieval unsupported.
 - [x] Audit `dealVolume` versus matching-order response presence — [PR #1205](https://github.com/45s/coinzilla/pull/1205) added a temporary consistency guard. Subsequent audit found that quantity denomination, multi-execution completeness and stable identity remain unproven; [PR #1225](https://github.com/45s/coinzilla/pull/1225) keeps `getFills()` unsupported until those facts are documented.
 - [x] Map documented Bitunix `minVolume`/`minPrice` into canonical Harvester `MIN_QUANTITY`/`MIN_NOTIONAL`; leave all unresolved increments/maxima UNKNOWN — [PR #1209](https://github.com/45s/coinzilla/pull/1209).
+- [x] Reject ambiguous duplicate market metadata in `getSymbolFilters()` instead of silently selecting the first matching catalog row; exactly one matching canonical symbol is required — [PR #1271](https://github.com/45s/coinzilla/pull/1271).
 - [ ] Resolve per-order fill completeness, execution-ID guarantees, and the unit of deal `volume`; only add fail-closed checks where the exchange contract makes the inconsistency unambiguous.
 
 ### Recommended implementation order
