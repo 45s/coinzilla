@@ -7,14 +7,16 @@ import { ESLint } from "eslint"
 const workspaceRoot = fileURLToPath(new URL("../../../../", import.meta.url))
 
 test("keeps every application-layer JavaScript file free of ESLint errors and warnings", async () => {
-  const autofixResults = await new ESLint({ cwd: workspaceRoot, fix: true }).lintFiles([
-    "apps/harvester/src/application",
-  ])
+  const autofixResults = await new ESLint({
+    cwd: workspaceRoot,
+    fix: true,
+    overrideConfig: [{ rules: { indent: ["error", 2] } }],
+  }).lintFiles(["apps/harvester/src/application"])
   for (const result of autofixResults) {
     if (typeof result.output === "string") {
-      process.stderr.write(`\\nAPPLICATION_ESLINT_AUTOFIX_BEGIN:${relative(workspaceRoot, result.filePath)}\\n`)
+      process.stderr.write(`\nAPPLICATION_ESLINT_AUTOFIX_BEGIN:${relative(workspaceRoot, result.filePath)}\n`)
       process.stderr.write(result.output)
-      process.stderr.write("\\nAPPLICATION_ESLINT_AUTOFIX_END\\n")
+      process.stderr.write("\nAPPLICATION_ESLINT_AUTOFIX_END\n")
     }
   }
 
