@@ -31,11 +31,13 @@ export async function recordProcessStopped(options = {}) {
     const { operationalStateStore, reason, clean } = options
     const sessionId = validateProcessStopInput(options)
     const history = await operationalStateStore.readAll()
-    findStartedProcessSession({ history, sessionId })
+    findStartedProcessSession({ history, 
+      sessionId })
     const result = await operationalStateStore.append({
       factId: `process-stopped:${sessionId}`,
       factType: "PROCESS_STOPPED",
-      data: { reason, clean },
+      data: { reason, 
+        clean },
     })
     if (result?.ok !== true || result.data?.durable !== true) {
       return toResult({
