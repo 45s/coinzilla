@@ -54,7 +54,10 @@ test("rejects removed or renamed applied migrations", () => {
   )
   assert.throws(
     () => findPendingMigrations(
-      [migration({ version: 1, name: "renamed" })],
+      [migration({
+        version: 1,
+        name: "renamed",
+      })],
       [{
         version: 1,
         name: "migration-1",
