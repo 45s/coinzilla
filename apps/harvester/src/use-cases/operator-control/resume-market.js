@@ -34,9 +34,9 @@ export function createResumeMarket({ engine, operationalStateStore } = {}) {
       const normalizedRequestId = requestId.trim()
       return await engine.resumeMarket({
         symbol: normalizedSymbol,
-        // TEMPORARY: no store means a process-local resume; no recovery fact is written.
-        beforeApply: () => typeof operationalStateStore?.append === "function"
-          ? operationalStateStore.append({
+        // TEMPORARY: omit durable facts when CC recovery storage is disabled.
+        ...(typeof operationalStateStore?.append === "function" ? {
+          beforeApply: () => operationalStateStore.append({
             factId: "operator-control:" + normalizedRequestId,
             factType: "OPERATOR_MARKET_RESUMED",
             data: {
@@ -44,8 +44,8 @@ export function createResumeMarket({ engine, operationalStateStore } = {}) {
               actorId: authorizedActor.id,
               symbol: normalizedSymbol,
             },
-          })
-          : Promise.resolve({ ok: true, data: { durable: false, processLocal: true } }),
+          }),
+        } : {}),
       })
     } catch (error) {
       return toResult({ error })
