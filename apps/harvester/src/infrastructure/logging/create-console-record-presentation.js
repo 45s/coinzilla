@@ -19,7 +19,6 @@ const CONSOLE_DETAIL_KEYS = Object.freeze([
   "inventory",
   "accounting",
   "sourceFilterTypes",
-  "sourceFilterTypes",
   "orderCount",
   "readiness",
   "symbols",
