@@ -6,6 +6,17 @@ type: roadmap
 owner: journal
 ---
 
+## Maintenance — package ESLint compliance (issue #1243)
+
+**Status:** IN PROGRESS on `fix/journal/eslint-violations`.
+
+- Objective: bring every JavaScript source and test under `packages/journal/` to zero ESLint errors and warnings without changing runtime behavior or public contracts.
+- Scope: Journal-owned files only. Root ESLint rules, scripts, CI policy, other packages, JSONL compatibility, record semantics, lifecycle, replay, and durability guarantees are explicitly unchanged.
+- Method: inventory findings across the full package, group by file/rule, fix incrementally without suppressions, and verify package lint, tests, coverage (85% lines / 80% branches), and exact-head CI.
+
+- Added a package-owned `lint` command (`eslint src`) and made the existing Journal test/coverage commands invoke it first. This uses the repository ESLint configuration unchanged and makes the full Journal lint result visible in the existing package CI jobs.
+- Tracking: [issue #1243](https://github.com/45s/coinzilla/issues/1243). This status is not a claim that lint or tests have passed.
+
 ## Priority execution plan — current develop direction (2026-11-10)
 
 ### Completed — accept writer-generated session identity filenames (#877 / PR #880)
