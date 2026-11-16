@@ -50,16 +50,16 @@ export function createMarketBook({ bookTicker } = {}) {
   if (!isCanonicalNonNegativeSafeInteger(timestamp)) {
     throw new TypeError("Market book timestamp must be a non-negative safe integer other than negative zero")
   }
-  const positive = (value, field) => {
+  const positive = ({ value, field }) => {
     assertDecimalString({ value,
 field })
     if (compareDecimal({ left: value,
 right: "0" }) <= 0) {throw new RangeError(`${field  } must be positive`)}
     return value
   }
-  const bestBidPrice = positive(bookTicker.bestBidPrice, "bestBidPrice")
+  const bestBidPrice = positive({ value: bookTicker.bestBidPrice, field: "bestBidPrice" })
   const bestBidQuantity = positive(bookTicker.bestBidQuantity, "bestBidQuantity")
-  const bestAskPrice = positive(bookTicker.bestAskPrice, "bestAskPrice")
+  const bestAskPrice = positive({ value: bookTicker.bestAskPrice, field: "bestAskPrice" })
   const bestAskQuantity = positive(bookTicker.bestAskQuantity, "bestAskQuantity")
   if (compareDecimal({ left: bestBidPrice,
 right: bestAskPrice }) >= 0) {
@@ -287,7 +287,7 @@ marketId })
     const keepQuantity = data.keepQuantity ?? String(pairs[order.market.symbol].keepQuantity)
     const minProfit = data.minProfit ?? String(pairs[order.market.symbol].minProfit)
     if ([realizedNetProfit, activeQuantity, keepQuantity, minProfit].some((value) => value === undefined)) {
-      return
+      return undefined
     }
     const continueReasons = [
       "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
@@ -1124,7 +1124,7 @@ function createConservativeEngineCancellationContext({ context } = {}) {
   }) => {
     const result = validateCancellationEligibility({ order })
     if (result.ok) {return result}
-    const error = result.errors[0]
+    const [error] = result.errors
     context.publishOrderCancelFailed({
       order,
       outcome: "INVALID_CANCELLATION_REQUEST",
@@ -1557,17 +1557,18 @@ function inspectAcknowledgedFillHistory({ order, fills }) {
       fillsById.set(fill.id, fill)
     }
   }
-  const uniqueFills = [...fillsById.values()].sort((left, right) => {
+  const uniqueFills = [...fillsById.values()].sort((...entries) => {
+    const [left, right] = entries
     if (left.executedAt !== undefined && right.executedAt !== undefined &&
         left.executedAt !== right.executedAt) {
       return left.executedAt - right.executedAt
     }
     return left.tradeId.localeCompare(right.tradeId)
   })
-  const reconciledQuantity = uniqueFills.reduce((total, fill) => addDecimal({
-    left: total,
-    right: fill.quantity.amount,
-  }), "0")
+  const reconciledQuantity = uniqueFills.reduce((...entries) => {
+    const [total, fill] = entries
+    return addDecimal({ left: total, right: fill.quantity.amount })
+  }, "0")
   const fillQuantityMatches = compareDecimal({
     left: reconciledQuantity,
     right: order.executedQuantity.amount,
@@ -2862,7 +2863,8 @@ async function applyOwnedOrderSnapshotTransitions({ context, snapshots, recovery
 }
 
 async function applyOwnedOrderSnapshots({ context, snapshots, symbols, recoveryMode }) {
-  context.affectedSymbol = symbols[0]
+  const [firstSymbol] = symbols
+  context.affectedSymbol = firstSymbol
   try {
     validateOwnedOrderSnapshotParity({
       context,
@@ -3124,10 +3126,10 @@ function validateOwnedBuyExecutionHistory({ order, fillsResult, reasonPrefix }) 
 }
 
 function getOwnedBuyReconciledQuantity({ fills }) {
-  return fills.reduce((total, fill) => addDecimal({
-    left: total,
-    right: fill.quantity.amount,
-  }), "0")
+  return fills.reduce((...entries) => {
+    const [total, fill] = entries
+    return addDecimal({ left: total, right: fill.quantity.amount })
+  }, "0")
 }
 
 async function applyOwnedBuyExecutionFills({ context, order, fills, reasonPrefix }) {
