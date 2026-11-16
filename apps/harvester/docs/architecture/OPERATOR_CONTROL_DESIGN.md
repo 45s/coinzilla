@@ -34,6 +34,7 @@ apps/harvester/src/
       pause-market.js
       resume-market.js
       buy-controls.js
+      buy-controls.js
   infrastructure/
     telegram/
       telegram-operator-adapter.js       # implemented; optional runtime wiring is active
@@ -304,7 +305,8 @@ Typed `/pause SYMBOL` and `/resume SYMBOL` remain explicit command invocations a
 | Durable fact write failed or uncertain (when a store is supplied) | No state transition and no successful acknowledgement. |
 | Process restart after a pause | The initial scope does not replay operator facts. The process starts without the operator pause; the operator must issue `/pause <SYMBOL>` again if needed. |
 | Existing BUY fills after `/pause SYMBOL` | Apply the fill normally; continue risk-reducing recovery SELL behavior; suppress new BUY intents. |
-| Emergency BUY cancellation is unresolved | Keep the requested BUY gate active; return `OPERATOR_BUY_CANCELLATION_INCOMPLETE`; tell the operator to inspect `/orders` and diagnostics. Never claim the emergency pause fully canceled all owned BUYs. |\n| Global/market BUY pauses overlap | Effective BUY gate remains active until both applicable scopes are resumed. |
+| Emergency BUY cancellation is unresolved | Keep the requested BUY gate active; return `OPERATOR_BUY_CANCELLATION_INCOMPLETE`; tell the operator to inspect `/orders` and diagnostics. Never claim the emergency pause fully canceled all owned BUYs. |
+| Global/market BUY pauses overlap | Effective BUY gate remains active until both applicable scopes are resumed. |
 | Resume while safety/recovery blocker exists | Reject before writing a resume fact; preserve the blocker. |
 | Telegram transport failure | Log actionable diagnostics; never mutate trading state outside the application use case. |
 
@@ -325,7 +327,8 @@ Typed `/pause SYMBOL` and `/resume SYMBOL` remain explicit command invocations a
 ## References
 
 - [ADR-0002 — Transport-independent operator control](./decisions/0002-transport-independent-operator-control.md)
-- [ADR-0005 — Emergency BUY pause](./decisions/0005-emergency-buy-pause.md)\n- [ADR-0001 — Application-owned durable facts](./decisions/0001-application-owned-recovery-facts.md)
+- [ADR-0005 — Emergency BUY pause](./decisions/0005-emergency-buy-pause.md)
+- [ADR-0001 — Application-owned durable facts](./decisions/0001-application-owned-recovery-facts.md)
 - [Harvester roadmap](../../ROADMAP.md)
 - [Harvester architecture](../architecture.md)
 - [Harvester documentation index](../README.md)
