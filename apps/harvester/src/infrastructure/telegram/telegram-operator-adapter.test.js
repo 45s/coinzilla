@@ -1653,3 +1653,119 @@ test("retains a confirmation when callback acknowledgement fails and retries the
   assert.equal(completion?.stateChanged, true)
 })
 
+
+
+test("does not consume a pending confirmation when Telegram reports an expired callback acknowledgement", async () => {
+  const askUpdate = makeCallbackUpdate({
+    updateId: 1501,
+    messageId: 1501,
+    data: "cc:ask:PAUSE:LINKUSDT",
+  })
+  const expiredConfirmation = makeCallbackUpdate({
+    updateId: 1502,
+    messageId: 1501,
+    data: "cc:confirm:PAUSE:LINKUSDT:1501",
+  })
+  const retriedConfirmation = makeCallbackUpdate({
+    updateId: 1503,
+    messageId: 1501,
+    data: "cc:confirm:PAUSE:LINKUSDT:1501",
+  })
+  const operatorCalls = []
+  const diagnostics = []
+  let pollCount = 0
+  let callbackAckCount = 0
+  let finishSecondPoll
+  const secondPoll = new Promise(resolve => {
+    finishSecondPoll = resolve
+  })
+  const fetchImpl = async (...args) => {
+    const [url, options = {}] = args
+    const method = url.split("/").pop()
+    if (method === "getMe") {
+      return makeResponse({
+        ok: true,
+        result: { username: "coinzilla_bot" },
+      })
+    }
+    if (method === "setMyCommands") {
+      return makeResponse({
+        ok: true,
+        result: true,
+      })
+    }
+    if (method === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) {
+        return makeResponse({
+          ok: true,
+          result: [askUpdate, expiredConfirmation, retriedConfirmation],
+        })
+      }
+      finishSecondPoll()
+      return new Promise((resolve, reject) => {
+        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+      })
+    }
+    if (method === "answerCallbackQuery") {
+      callbackAckCount += 1
+      if (callbackAckCount === 2) {
+        return makeResponse({
+          ok: false,
+          description: "Bad Request: query is too old",
+        }, 400)
+      }
+      return makeResponse({
+        ok: true,
+        result: true,
+      })
+    }
+    if (method === "editMessageText") {
+      return makeResponse({
+        ok: true,
+        result: true,
+      })
+    }
+    throw new Error(`Unexpected Telegram API method: ${method}`)
+  }
+  const adapter = createTelegramOperatorAdapter({
+    botToken: "test-token",
+    allowedUserIds: ["12345"],
+    operator: {
+      pauseMarket: async request => {
+        operatorCalls.push(request)
+        return {
+          ok: true,
+          data: {
+            symbol: request.symbol,
+            paused: true,
+            alreadyPaused: false,
+          },
+        }
+      },
+    },
+    logger: {
+      debug: entry => diagnostics.push(entry),
+      info: entry => diagnostics.push(entry),
+      warn: entry => diagnostics.push(entry),
+      error: entry => diagnostics.push(entry),
+    },
+    fetchImpl,
+    retryDelayMs: 1,
+  })
+  await adapter.start()
+  await secondPoll
+  await adapter.stop()
+
+  assert.equal(callbackAckCount, 3)
+  assert.equal(operatorCalls.length, 1)
+  assert.equal(operatorCalls[0].symbol, "LINKUSDT")
+  const expired = diagnostics.find(entry =>
+    entry.message === "Telegram callback acknowledgement EXPIRED"
+      && entry.correlationId === "telegram:1502")
+  assert.equal(expired?.acknowledged, false)
+  const completion = diagnostics.find(entry =>
+    entry.message === "Telegram application operation COMPLETED")
+  assert.equal(completion?.applicationOperationCompleted, true)
+  assert.equal(completion?.stateChanged, true)
+})

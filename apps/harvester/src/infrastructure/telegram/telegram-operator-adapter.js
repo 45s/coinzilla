@@ -388,12 +388,15 @@ async function handleConfirmationCallback({
     message: "Telegram confirmation RECEIVED",
     stage: "CONFIRMATION_RECEIVED",
   })
-  await answerCallback({
+  const acknowledgement = await answerCallback({
     callbackId: callback.id,
     text: "Processing confirmed action.",
     signal,
     interaction,
   })
+  if (acknowledgement === undefined) {
+    return
+  }
   pendingConfirmations.delete(confirm[3])
   await executeControl({
     action: pending.action,
