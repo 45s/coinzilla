@@ -281,6 +281,21 @@ test("fails closed when a full SELL is present but its cycle outcome has not yet
   assert.match(projection.errors[0].message, /fully filled SELL has no explicit recovery-cycle outcome/)
 })
 
+const expectedRecoveryCrashSessions = [
+  {
+    fileName: "process-001.jsonl",
+    tradingEnabled: true,
+    hasTradingActivity: true,
+    uncleanTradingShutdown: true,
+  },
+  {
+    fileName: "process-002.jsonl",
+    tradingEnabled: true,
+    hasTradingActivity: true,
+    uncleanTradingShutdown: true,
+  },
+];
+
 function createExpectedRecoveredCrashState(fixture) {
   return {
     orders: [
@@ -350,21 +365,7 @@ function createExpectedRecoveredCrashState(fixture) {
     recoveryManagedPausedMarkets: [],
     completedOrderClientIds: ["harvester-BTCUSDT-sell-001"],
     requiresExchangeReconciliation: true,
-    sessions: [
-      {
-        fileName: "process-001.jsonl",
-        tradingEnabled: true,
-        hasTradingActivity: true,
-        uncleanTradingShutdown: true,
-      },
-      {
-        fileName: "process-002.jsonl",
-        tradingEnabled: true,
-        hasTradingActivity: true,
-        uncleanTradingShutdown: true,
-      },
-    ],
-  };
+    sessions: expectedRecoveryCrashSessions,  };
 }
 
 test("restores retained inventory, reset basis, and sticky pause after cycle and blocker publication", () => {

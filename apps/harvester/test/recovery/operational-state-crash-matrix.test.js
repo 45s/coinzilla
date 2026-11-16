@@ -424,7 +424,7 @@ test("reopens a completed cycle with exact retained inventory and reset recovery
   const store = createStore(directory)
   await initializeProcess(store)
 
-  const { buyOrder, sellOrder, recoveryLedger, recorded } = await recordCompletedRecoveryCycle({ store });
+  const { sellOrder, recoveryLedger, recorded } = await recordCompletedRecoveryCycle({ store });
 
   const recovered = await readCandidate(directory, "crash-reader-after-completed-cycle")
   assert.equal(recovered.ok, true, recovered.errors?.map(({ message }) => message).join("; "))

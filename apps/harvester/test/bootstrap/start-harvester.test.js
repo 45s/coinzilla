@@ -617,7 +617,7 @@ function createVolatilityTestMarkets() {
     })],
   ])
   const markets = [...metadataBySymbol.values()].map(({ market }) => market)
-  const {quoteAsset} = markets[0]
+  const [{ quoteAsset }] = markets
   const balances = [
     ...markets.map((market) => new Balance({
       free: new Quantity({
