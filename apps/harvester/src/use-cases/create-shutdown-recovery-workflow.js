@@ -122,10 +122,10 @@ function buildShutdownRecoveryInventory({
     activeSellCount: activeSells.length,
     committedQuantity,
   }
+  // A recovery SELL is only required while inventory remains above keepQuantity.
+  // An outstanding cost balance cannot justify selling the retained keep quantity.
   const requiresSell = compareDecimal({ left: sellableQuantity,
-    right: "0" }) > 0 ||
-    compareDecimal({ left: outstandingRecoveryAmount,
-      right: "0" }) > 0
+    right: "0" }) > 0
   return {
     symbol,
     metadata,
@@ -271,15 +271,21 @@ function assessShutdownRecoverySellCoverage({ dependencies, symbol } = {}) {
     }
   }
   if (inventory.noRecoveryRequired) {
-    return {
-      covered: true,
-      symbol,
+    const common = inventory.common ?? {
       activeQuantity: inventory.position?.quantity.amount ?? "0",
-      keepQuantity: String(pairs[symbol].keepQuantity),
+      keepQuantity: String(pairs[symbol]?.keepQuantity ?? "0"),
       sellableQuantity: "0",
       outstandingRecoveryAmount: "0",
       activeSellCount: 0,
       committedQuantity: "0",
+    }
+    return {
+      covered: true,
+      symbol,
+      ...common,
+      reason: common.outstandingRecoveryAmount !== "0"
+        ? "KEEP_QUANTITY_RETAINED"
+        : null,
     }
   }
   if (!inventory.metadata?.market) {

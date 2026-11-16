@@ -11098,12 +11098,16 @@ function assertNoShutdownSafetyPauses({ harness } = {}) {
   assert.deepEqual(
     harness.pauses,
     [],
-    "The late owned SELL fill must not create a hard safety pause that blocks its own shutdown recovery replacement.",
+    "Late owned SELL reconciliation must not create a hard safety pause.",
   )
 }
 
-async function applyLateRecoverySellFill({ harness, sellOrder } = {}) {
-  const quantity = "0.1"
+async function applyLateRecoverySellFill({
+  harness,
+  sellOrder,
+  quantity,
+  fullFill = false,
+} = {}) {
   const lateFill = makeSellFill({
     order: sellOrder,
     tradeId: "late-shutdown-recovery-sell-fill",
@@ -11124,25 +11128,29 @@ async function applyLateRecoverySellFill({ harness, sellOrder } = {}) {
   return harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
-      executedOrder: makePartiallyFilledOrder({
-        order: sellOrder,
-        executedQuantity: quantity,
-        updatedAt: 3,
-      }),
+      executedOrder: fullFill
+        ? makeFilledOrder({ order: sellOrder })
+        : makePartiallyFilledOrder({
+          order: sellOrder,
+          executedQuantity: quantity,
+          updatedAt: 3,
+        }),
       fill: lateFill,
     },
   })
 }
 
-test("invalidates and rechecks a safe market after a late owned SELL execution", async () => {
+async function prepareLateSellShutdownScenario({ fillFraction } = {}) {
   const seeded = makeSeededRecoveryState()
   let shutdownStarted = false
+  let cancelSellExecutedQuantity = "0"
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
     accountingApplied: true,
-    cancelExecutedQuantity: ({ order }) => order.side === "SELL" ? "0.1" : "0",
+    cancelExecutedQuantity: ({ order }) =>
+      order.side === "SELL" ? cancelSellExecutedQuantity : "0",
     isStopping: () => shutdownStarted,
   })
   await harness.engine.processMarketPrice({
@@ -11173,9 +11181,23 @@ test("invalidates and rechecks a safe market after a late owned SELL execution",
   const sellOrder = harness.engine.getOrders().find((order) =>
     order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
   assert.ok(sellOrder, "The safe market must retain an acknowledged recovery SELL.")
+  const fullFill = fillFraction === "1"
+  const quantity = fullFill
+    ? sellOrder.originalQuantity.amount
+    : multiplyDecimal({
+      left: sellOrder.originalQuantity.amount,
+      right: fillFraction,
+    })
+  assert.ok(
+    compareDecimal({ left: quantity, right: sellOrder.originalQuantity.amount }) <= 0,
+    "The late fill must not exceed the original recovery SELL quantity.",
+  )
+  cancelSellExecutedQuantity = quantity
   const lateEvidence = await applyLateRecoverySellFill({
     harness,
     sellOrder,
+    quantity,
+    fullFill,
   })
 
   assert.equal(lateEvidence.ok, true, lateEvidence.errors?.[0]?.message)
@@ -11185,23 +11207,64 @@ test("invalidates and rechecks a safe market after a late owned SELL execution",
     "UNSAFE",
     "Late execution evidence must immediately invalidate the previous safe marker.",
   )
+  return {
+    harness,
+    sellOrder,
+    quantity,
+  }
+}
 
-  const recoveryReconciliation = await harness.engine.reconcileRecoverySellsForShutdown({ symbols: ["DOGEUSDT"] })
+test("replans a recovery SELL when a late owned SELL fill leaves sellable quantity", async () => {
+  const { harness, sellOrder } = await prepareLateSellShutdownScenario({
+    fillFraction: "0.5",
+  })
+  const recoveryReconciliation = await harness.engine.reconcileRecoverySellsForShutdown({
+    symbols: ["DOGEUSDT"],
+  })
   assert.equal(
     recoveryReconciliation.ok,
     true,
-    `Shutdown must reconcile and replan recovery SELL coverage after a late owned SELL fill. Errors: ${recoveryReconciliation.errors?.map((error) => error.message).join("; ") ?? "none"}. Pause reasons: ${JSON.stringify(harness.pauses)}`,
+    `Shutdown must replan remaining sellable quantity. Errors: ${recoveryReconciliation.errors?.map((error) => error.message).join("; ") ?? "none"}. Pause reasons: ${JSON.stringify(harness.pauses)}`,
   )
 
+  const activeRecoverySells = harness.engine.getActiveOrders().filter((order) =>
+    order.side === "SELL")
+  assert.equal(activeRecoverySells.length, 1)
+  assert.notEqual(activeRecoverySells[0].clientOrderId, sellOrder.clientOrderId)
+
   const finalCoverage = await harness.engine.auditShutdownRecoverySellCoverage()
+  assert.equal(finalCoverage.data.covered, true)
   const recheckedSafety = await harness.engine.auditShutdownSafety({
     reconciliationComplete: true,
     journalDurable: true,
     coverageResult: finalCoverage,
   })
+  assert.equal(recheckedSafety.data.markets[0].status, "SAFE_TO_SHUTDOWN")
+})
+
+test("does not submit a recovery SELL when a late fill exhausts sellable quantity above keepQuantity", async () => {
+  const { harness } = await prepareLateSellShutdownScenario({
+    fillFraction: "1",
+  })
+  const recoveryReconciliation = await harness.engine.reconcileRecoverySellsForShutdown({
+    symbols: ["DOGEUSDT"],
+  })
   assert.equal(
-    recheckedSafety.data.markets[0].status,
-    "SAFE_TO_SHUTDOWN",
-    "The market may become safe again only after post-fill recovery SELL coverage is verified.",
+    recoveryReconciliation.ok,
+    true,
+    `No replacement is needed when only keepQuantity remains. Errors: ${recoveryReconciliation.errors?.map((error) => error.message).join("; ") ?? "none"}. Pause reasons: ${JSON.stringify(harness.pauses)}`,
   )
+  assert.equal(
+    harness.engine.getActiveOrders().filter((order) => order.side === "SELL").length,
+    0,
+  )
+
+  const finalCoverage = await harness.engine.auditShutdownRecoverySellCoverage()
+  assert.equal(finalCoverage.data.covered, true)
+  const recheckedSafety = await harness.engine.auditShutdownSafety({
+    reconciliationComplete: true,
+    journalDurable: true,
+    coverageResult: finalCoverage,
+  })
+  assert.equal(recheckedSafety.data.markets[0].status, "SAFE_TO_SHUTDOWN")
 })
