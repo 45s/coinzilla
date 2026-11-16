@@ -502,32 +502,3 @@ test("rejects an unauthorized persistent-keyboard action before reading market s
   assert.deepEqual(marketQueries, [], "An unauthorized keyboard action must not read protected operator market state.")
   assert.equal(sentMessages[0].text, "Not authorized.", "An unauthorized keyboard action must receive the existing authorization response.")
 })
-
-test("temporary infrastructure ESLint inventory", async () => {
-  const { ESLint } = await import("eslint");
-  const { relative } = await import("node:path");
-  const eslint = new ESLint();
-  const results = await eslint.lintFiles(["src/infrastructure"]);
-  const findings = results
-    .filter((result) => result.errorCount > 0 || result.warningCount > 0)
-    .map((result) => {
-      const rules = {};
-      for (const message of result.messages) {
-        const rule = message.ruleId ?? "fatal";
-        rules[rule] = (rules[rule] ?? 0) + 1;
-      }
-      return {
-        file: relative(process.cwd(), result.filePath),
-        errors: result.errorCount,
-        warnings: result.warningCount,
-        rules,
-      };
-    });
-  const errorCount = findings.reduce((total, file) => total + file.errors, 0);
-  const warningCount = findings.reduce((total, file) => total + file.warnings, 0);
-  assert.equal(
-    errorCount + warningCount,
-    0,
-    JSON.stringify({ filesWithFindings: findings.length, errorCount, warningCount, findings }, null, 2),
-  );
-});
