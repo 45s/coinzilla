@@ -19,6 +19,8 @@ const createFixture = ({
   activeOrders = [],
   additionalTrackedBaseQuantity = [],
   additionalTrackedBaseQuantityProvider,
+  additionalTrackedQuoteCashFlow = [],
+  additionalTrackedQuoteCashFlowProvider,
   operationalStateStore,
   logger = {},
   monotonicNow
@@ -70,6 +72,7 @@ const createFixture = ({
     marketMetadata: new Map([[market.symbol, { market }]]),
     getPortfolio: () => portfolio,
     getAdditionalTrackedBaseQuantity: additionalTrackedBaseQuantityProvider ?? (() => additionalTrackedBaseQuantity),
+    getAdditionalTrackedQuoteCashFlow: additionalTrackedQuoteCashFlowProvider ?? (() => additionalTrackedQuoteCashFlow),
     getTradingEngine: () => ({ getActiveOrders: () => activeOrders }),
     getRecoveredState: () => ({ orderRegistry: { orders: [] } }),
     getHasCanonicalOwnershipReconciliation: () => false,
@@ -1205,4 +1208,26 @@ test("captures additional tracked Spot allocation separately from Portfolio in a
 
   assert.equal(snapshot.getAdditionalTrackedBaseQuantityBaseline({ assetId: market.baseAsset.id }), "0.01")
   assert.equal(snapshot.getPortfolioBaseQuantityBaseline({ assetId: market.baseAsset.id }), "0")
+})
+
+test("captures separately tracked legacy quote proceeds in the shared snapshot cash-flow baseline", async () => {
+  const fixture = createFixture({
+    accountSnapshots: [
+      createAccountSnapshot({
+        market: createFixture().market,
+        sourceTime: 104,
+      }),
+    ],
+    additionalTrackedQuoteCashFlow: [
+      { assetId: "asset:USDT", amount: "12.5" },
+    ],
+  })
+
+  const snapshot = await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
+
+  assert.equal(
+    snapshot.getQuoteCashFlowBaseline({ assetId: fixture.quoteAsset.id }),
+    "12.5",
+    "The shared account snapshot must include net quote proceeds from tracked legacy inventory outside Portfolio.",
+  )
 })
