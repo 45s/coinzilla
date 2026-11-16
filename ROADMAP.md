@@ -4,8 +4,12 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-15
+**Last reviewed:** 2026-11-16
 **Last source-verified develop checkpoint:** `70592ae7da28320d5173b2a12e3a2b91c14b6a12` (2026-11-15; includes merged PR #1166 for startup open-order ownership, documentation sync #1167 and shutdown-log documentation PR #1163).
+
+## Repository-wide agent workflow continuity
+
+- **Incremental commits and resumable handoffs — IN PROGRESS** ([issue #1199](https://github.com/45s/coinzilla/issues/1199)). Strengthen the existing agent workflow so task issues remain the live contract, commits form small meaningful checkpoints, and every pause/ownership transfer leaves a complete GitHub handoff. Canonical rules live in [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md); root [AGENTS.md](AGENTS.md), [task checklists](docs/engineering/TASK_WORKFLOWS.md) and the [PR template](.github/PULL_REQUEST_TEMPLATE.md) point contributors to the same contract. Documentation-only scope; no runtime or exchange operations.
 
 ## 2026-11-14 repository status audit
 
