@@ -37,7 +37,8 @@ function adaptCommission({ trade, market }) {
   const commissions = []
   let commissionStatus = "UNKNOWN"
   if (trade.commission === undefined || trade.commission === null) {
-    return { commissions, commissionStatus }
+    return { commissions,
+      commissionStatus }
   }
 
   const commission = new Money({
@@ -48,22 +49,26 @@ function adaptCommission({ trade, market }) {
     throw new TypeError("Binance commission amount should be non-negative")
   }
   if (commission.amount === "0") {
-    return { commissions, commissionStatus: "COMPLETE" }
+    return { commissions,
+      commissionStatus: "COMPLETE" }
   }
 
   if (typeof trade.commissionAsset === "string" && trade.commissionAsset.trim()) {
-    const asset = commissionAssetFor({ code: trade.commissionAsset, market })
+    const asset = commissionAssetFor({ code: trade.commissionAsset,
+      market })
     commissions.push(new Commission({
-      amount: new Money({ amount: commission.amount, asset }),
+      amount: new Money({ amount: commission.amount,
+        asset }),
     }))
     commissionStatus = "COMPLETE"
   }
 
-  return { commissions, commissionStatus }
+  return { commissions,
+    commissionStatus }
 }
 
 function resolveLiquidityRole(isMaker) {
-  if (typeof isMaker !== "boolean") return "UNKNOWN"
+  if (typeof isMaker !== "boolean") {return "UNKNOWN"}
   return isMaker ? "MAKER" : "TAKER"
 }
 
@@ -83,7 +88,8 @@ export function adaptCanonicalFill({ trade, market } = {}) {
   }
 
   validateTradeIdentity(trade)
-  const { commissions, commissionStatus } = adaptCommission({ trade, market })
+  const { commissions, commissionStatus } = adaptCommission({ trade,
+    market })
 
   return new Fill({
     tradeId: normalizeBinanceId(trade.id, "trade ID"),

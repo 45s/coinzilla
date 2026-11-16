@@ -75,23 +75,28 @@ function normalizeOrderQuantities(order) {
   if (typeof originalQuantity !== "string" || typeof executedQuantity !== "string") {
     throw new TypeError("Binance order quantities must be exact decimal strings")
   }
-  return { originalQuantity, executedQuantity }
+  return { originalQuantity,
+    executedQuantity }
 }
 
 function normalizeOrderTimestamps(order) {
   return {
-    createdAt: normalizeTimestamp({ value: order.time, name: "time" }),
-    updatedAt: normalizeTimestamp({ value: order.updateTime, name: "updateTime" }),
+    createdAt: normalizeTimestamp({ value: order.time,
+      name: "time" }),
+    updatedAt: normalizeTimestamp({ value: order.updateTime,
+      name: "updateTime" }),
   }
 }
 
 function createOrderLimitPrice({ type, order, market }) {
-  if (type === "MARKET") return undefined
-  return new Money({ amount: order.price, asset: market.quoteAsset })
+  if (type === "MARKET") {return undefined}
+  return new Money({ amount: order.price,
+    asset: market.quoteAsset })
 }
 
 function createCanonicalOrderDetails({ order, market }) {
-  validateOrderInput({ order, market })
+  validateOrderInput({ order,
+    market })
   const clientOrderId = normalizeClientOrderId(order)
   const type = normalizeOrderType(order)
   const side = normalizeOrderSide(order)
@@ -99,7 +104,8 @@ function createCanonicalOrderDetails({ order, market }) {
   const { originalQuantity, executedQuantity } = normalizeOrderQuantities(order)
   const brokerOrderId = normalizeBinanceId(order.orderId, "order ID")
   const { createdAt, updatedAt } = normalizeOrderTimestamps(order)
-  const limitPrice = createOrderLimitPrice({ type, order,
+  const limitPrice = createOrderLimitPrice({ type,
+    order,
     market })
 
   return {

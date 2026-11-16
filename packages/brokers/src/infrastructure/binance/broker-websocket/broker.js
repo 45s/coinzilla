@@ -148,7 +148,10 @@ function buildCanonicalOrderLookup({ symbol, orderId, clientOrderId }) {
     params.origClientOrderId = clientOrderId.trim()
   }
 
-  return { normalizedSymbol, params, hasOrderId, hasClientOrderId }
+  return { normalizedSymbol,
+    params,
+    hasOrderId,
+    hasClientOrderId }
 }
 
 function validateCanonicalOrderResponse({ order, normalizedSymbol, params, hasOrderId, hasClientOrderId }) {
@@ -171,7 +174,8 @@ function buildCandleQuery({ symbol, interval, limit, startTime, endTime }) {
     throw new TypeError("getCandles requires a non-empty symbol")
   }
   const normalizedSymbol = symbol.trim().toUpperCase()
-  createStreamName("kline", { symbol: normalizedSymbol, interval })
+  createStreamName("kline", { symbol: normalizedSymbol,
+    interval })
 
   if (!Number.isInteger(limit) || limit < 1 || limit > 1_000) {
     throw new RangeError("getCandles limit must be an integer from 1 to 1000")
@@ -185,10 +189,13 @@ function buildCandleQuery({ symbol, interval, limit, startTime, endTime }) {
     throw new RangeError("getCandles startTime must not be after endTime")
   }
 
-  const params = { symbol: normalizedSymbol, interval, limit }
-  if (startTime !== undefined) params.startTime = startTime
-  if (endTime !== undefined) params.endTime = endTime
-  return { normalizedSymbol, params }
+  const params = { symbol: normalizedSymbol,
+    interval,
+    limit }
+  if (startTime !== undefined) {params.startTime = startTime}
+  if (endTime !== undefined) {params.endTime = endTime}
+  return { normalizedSymbol,
+    params }
 }
 
 function normalizeCandleRows({ rows, symbol, interval, serverTime }) {
@@ -243,19 +250,27 @@ function createExecutedFillInput({ sourceFill }) {
 
 async function normalizeUserDataExecution({ broker, event, isTrade }) {
   const symbol = event.executedOrder?.symbol ?? event.fill?.symbol
-  const market = await getCanonicalMarket({ broker, symbol })
+  const market = await getCanonicalMarket({ broker,
+    symbol })
   const executedOrder = adaptCanonicalOrder({
     market,
     order: createExecutedOrderInput({ sourceOrder: event.executedOrder }),
   })
 
-  if (!isTrade) return { ...event, executedOrder }
+  if (!isTrade) {
+    return {
+      ...event,
+      executedOrder,
+    }
+  }
 
   const fill = adaptCanonicalFill({
     market,
     trade: createExecutedFillInput({ sourceFill: event.fill }),
   })
-  return { ...event, executedOrder, fill }
+  return { ...event,
+    executedOrder,
+    fill }
 }
 
 function createUserDataEventForwarder({ broker, onEvent, onStatus, logger }) {
@@ -274,7 +289,9 @@ function createUserDataEventForwarder({ broker, onEvent, onStatus, logger }) {
 
     Promise.resolve()
       .then(async () => {
-        const normalizedEvent = await normalizeUserDataExecution({ broker, event, isTrade })
+        const normalizedEvent = await normalizeUserDataExecution({ broker,
+          event,
+          isTrade })
         await onEvent({ event: normalizedEvent })
       })
       .catch((error) => {
@@ -530,7 +547,9 @@ error })
    */
   async getCanonicalOrder({ symbol, orderId, clientOrderId } = {}) {
     try {
-      const lookup = buildCanonicalOrderLookup({ symbol, orderId, clientOrderId })
+      const lookup = buildCanonicalOrderLookup({ symbol,
+        orderId,
+        clientOrderId })
       const response = await this.tradingConnection.request("order.status", lookup.params, { signed: true })
       validateCanonicalOrderResponse({
         order: response?.data,
@@ -544,9 +563,11 @@ error })
         symbol: lookup.normalizedSymbol,
         exchangeInfo: metadataResponse.data,
       })
-      return toResult({ data: adaptCanonicalOrder({ order: response.data, market }) })
+      return toResult({ data: adaptCanonicalOrder({ order: response.data,
+        market }) })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getCanonicalOrder()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getCanonicalOrder()",
+        error })
       return toResult({ errors: [error] })
     }
   }
@@ -778,7 +799,11 @@ error })
    */
   async getCandles({ symbol, interval, limit = 500, startTime, endTime } = {}) {
     try {
-      const query = buildCandleQuery({ symbol, interval, limit, startTime, endTime })
+      const query = buildCandleQuery({ symbol,
+        interval,
+        limit,
+        startTime,
+        endTime })
       const timeResponse = await this.tradingConnection.request("time")
       const serverTime = timeResponse.data?.serverTime
       if (!Number.isSafeInteger(serverTime) || serverTime < 0) {
@@ -794,7 +819,8 @@ error })
       })
       return toResult({ data: candles })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getCandles()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getCandles()",
+        error })
       return toResult({ errors: [error] })
     }
   }
@@ -966,7 +992,7 @@ error })
         throw new Error("Binance broker must be connected before subscribing to user data")
       }
       validateCallback(onEvent, "onEvent")
-      if (onStatus !== undefined) validateCallback(onStatus, "onStatus")
+      if (onStatus !== undefined) {validateCallback(onStatus, "onStatus")}
 
       const forwardEvent = createUserDataEventForwarder({
         broker: this,
@@ -974,10 +1000,12 @@ error })
         onStatus,
         logger: this.logger,
       })
-      const result = await this.userDataSession.subscribe({ onEvent: forwardEvent, onStatus })
+      const result = await this.userDataSession.subscribe({ onEvent: forwardEvent,
+        onStatus })
       return toResult(result)
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.subscribeForUserData()", error })
+      handleErr({ where: "BinanceWebSocketBroker.subscribeForUserData()",
+        error })
       return toResult({ errors: [error] })
     }
   }

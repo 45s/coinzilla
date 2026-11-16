@@ -92,7 +92,7 @@ function createRecoveryFixture({ failReconnect = false } = {}) {
       ports.get(currentClient).close()
     },
     async reconnect() {
-      const pending = [...timers.entries()][0]
+      const [pending] = [...timers.entries()]
       assert.ok(pending, "expected a scheduled reconnect")
       timers.delete(pending[0])
       await pending[1]()
