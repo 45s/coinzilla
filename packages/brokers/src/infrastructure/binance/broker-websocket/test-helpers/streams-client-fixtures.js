@@ -38,7 +38,8 @@ export class FakeTransport {
     this.sent.push(JSON.parse(payload))
   }
 
-  async close(code = 1000, reason = "") {
+  async close(...args) {
+    const [code = 1000, reason = ""] = args
     this.closeCalls.push({ code,
 reason })
     this.serverClose({ code,
@@ -93,7 +94,8 @@ export async function flush() {
   for (let index = 0; index < 8; index += 1) {await Promise.resolve()}
 }
 
-export function acknowledge(transport, index = 0, response = { result: null }) {
+export function acknowledge(...args) {
+  const [transport, index = 0, response = { result: null }] = args
   const request = transport.sent[index]
   assert.ok(request, "expected a sent control request")
   transport.receive({ id: request.id,

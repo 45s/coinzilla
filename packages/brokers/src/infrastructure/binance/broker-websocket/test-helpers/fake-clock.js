@@ -3,7 +3,8 @@ export class FakeClock {
   #nextId = 1
   #timers = new Map()
 
-  setTimeout(callback, delay = 0) {
+  setTimeout(...args) {
+    const [callback, delay = 0] = args
     const id = this.#nextId++
     const normalizedDelay = Number.isFinite(Number(delay))
       ? Math.max(0, Number(delay))

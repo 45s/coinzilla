@@ -25,7 +25,8 @@ wasClean: true })
       closeListeners.clear()
     },
 
-    async request(method, params = {}, options = {}) {
+    async request(...args) {
+      const [method, params = {}, options = {}] = args
       calls.push({ method,
 params,
 options })
@@ -83,7 +84,8 @@ export function createFakeStreamsClient() {
 
   return {
     calls,
-    async subscribe(stream, listener) {
+    async subscribe(...args) {
+      const [stream, listener] = args
       calls.push({ method: "subscribe",
 stream })
       const streamListeners = listeners.get(stream) ?? new Set()
@@ -91,7 +93,8 @@ stream })
       listeners.set(stream, streamListeners)
       return [stream]
     },
-    async unsubscribe(stream, listener) {
+    async unsubscribe(...args) {
+      const [stream, listener] = args
       calls.push({ method: "unsubscribe",
 stream })
       const streamListeners = listeners.get(stream)
@@ -102,7 +105,8 @@ stream })
     async disconnect() {
       listeners.clear()
     },
-    emit(stream, event) {
+    emit(...args) {
+      const [stream, event] = args
       for (const listener of listeners.get(stream) ?? []) {listener(event)}
     },
     get listenerCount() {

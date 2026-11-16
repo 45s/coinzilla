@@ -5,7 +5,8 @@ export function createScheduler() {
   let nextId = 0
   const tasks = new Map()
   return {
-    setTimeout(callback, delay) {
+    setTimeout(...args) {
+      const [callback, delay] = args
       const id = ++nextId
       tasks.set(id, { callback,
 delay })

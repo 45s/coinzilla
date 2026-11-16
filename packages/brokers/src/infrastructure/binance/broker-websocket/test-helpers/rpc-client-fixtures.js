@@ -44,7 +44,8 @@ export async function connectClient(context) {
   await connecting
 }
 
-export function response(socket, id, result, status = 200) {
+export function response(...args) {
+  const [socket, id, result, status = 200] = args
   socket.receive(JSON.stringify({ id,
 status,
 result }))

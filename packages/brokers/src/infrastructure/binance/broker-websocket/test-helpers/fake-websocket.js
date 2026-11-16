@@ -24,7 +24,8 @@ export class FakeWebSocket extends EventTarget {
     this.sent.push(data)
   }
 
-  close(code = 1000, reason = "") {
+  close(...args) {
+    const [code = 1000, reason = ""] = args
     if (
       this.readyState === FakeWebSocket.CLOSING ||
       this.readyState === FakeWebSocket.CLOSED
@@ -50,7 +51,8 @@ reason })
     this.dispatchEvent(event)
   }
 
-  fail(error = new Error("Fake WebSocket error"), message = error?.message ?? "") {
+  fail(...args) {
+    const [error = new Error("Fake WebSocket error"), message = error?.message ?? ""] = args
     const event = new Event("error")
     Object.defineProperties(event, {
       error: { value: error },
