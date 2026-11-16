@@ -342,7 +342,10 @@ function throwForUnsafeConservativeMarkets({ failedMarkets } = {}) {
     `${symbol}: ${blockers.join(", ")}`).join("; ")
   const error = new AggregateError(
     failedMarkets.map(({ symbol, blockers }) =>
-      createMarketSafetyError({ symbol, blockers })),
+      createMarketSafetyError({
+        symbol,
+        blockers,
+      })),
     `Conservative shutdown safety could not be proven for every market: ${blockerSummary}`,
   )
   error.code = "CONSERVATIVE_SHUTDOWN_SAFETY_UNPROVEN"

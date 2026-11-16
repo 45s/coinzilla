@@ -1351,7 +1351,10 @@ function createMarketEventOperations({ context } = {}) {
     } })
   context.evaluateLatest = ({ symbol, shutdownRecoveryOnly = false } = {}) =>
     context.runTransition({
-      task: () => context.evaluateLatestTransition({ symbol, shutdownRecoveryOnly }),
+      task: () => context.evaluateLatestTransition({
+        symbol,
+        shutdownRecoveryOnly,
+      }),
     })
 }
 

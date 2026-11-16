@@ -11062,6 +11062,7 @@ test("invalidates and rechecks a safe market after a late owned SELL execution",
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
     accountingApplied: true,
+    cancelExecutedQuantity: "0.1",
     isStopping: () => shutdownStarted,
   })
   await harness.engine.processMarketPrice({
@@ -11100,7 +11101,10 @@ test("invalidates and rechecks a safe market after a late owned SELL execution",
   })
   const lateSellOrder = harness.engine.getOrders().find(({ brokerOrderId }) => brokerOrderId === lateFill.brokerOrderId)
   assert.ok(lateSellOrder, "The late fill must belong to a known Harvester-owned recovery SELL.")
-  harness.setAcknowledgedOrder({ order: lateSellOrder, fills: [lateFill] })
+  harness.setAcknowledgedOrder({
+    order: lateSellOrder,
+    fills: [lateFill],
+  })
   const lateEvidence = await harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",
