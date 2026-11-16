@@ -2,7 +2,106 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { UserDataSession } from "./user-data-session.js"
 
-describe("Application user-data session", () => {
+function createRecoveryPort({ subscriptionId, isReconnectClient, failReconnect }) {
+  const listeners = {
+    event: new Set(),
+    error: new Set(),
+    close: new Set(),
+  }
+  return {
+    state: "open",
+    async connect() {
+      if (isReconnectClient && failReconnect) {
+        throw new Error("reconnect unavailable")
+      }
+      this.state = "open"
+    },
+    async disconnect() {
+      this.state = "closed"
+    },
+    async subscribe() {
+      return subscriptionId
+    },
+    async listSubscriptions() {
+      return [subscriptionId]
+    },
+    async unsubscribe() {},
+    onEvent(listener) {
+      listeners.event.add(listener)
+      return () => listeners.event.delete(listener)
+    },
+    onError(listener) {
+      listeners.error.add(listener)
+      return () => listeners.error.delete(listener)
+    },
+    onClose(listener) {
+      listeners.close.add(listener)
+      return () => listeners.close.delete(listener)
+    },
+    close() {
+      this.state = "closed"
+      for (const listener of [...listeners.close]) {listener({ code: 1006 })}
+    },
+  }
+}
+
+function createRecoveryFixture({ failReconnect = false } = {}) {
+  let currentClient = { name: "initial" }
+  const initialClient = currentClient
+  const reconnectClient = { name: "reconnected" }
+  const ports = new WeakMap()
+  const timers = new Map()
+  let nextTimerId = 0
+
+  const session = new UserDataSession({
+    getClient: () => currentClient,
+    createClient: () => reconnectClient,
+    createUserDataClientPort: (client) => {
+      if (!ports.has(client)) {
+        ports.set(client, createRecoveryPort({
+          subscriptionId: client === initialClient ? 17 : 18,
+          isReconnectClient: client === reconnectClient,
+          failReconnect,
+        }))
+      }
+      return ports.get(client)
+    },
+    setClient: (client) => {
+      currentClient = client
+    },
+    setConnected() {},
+    setUnavailable() {},
+    recoveryWarningThreshold: 1,
+    reconnectDelay: 1,
+    setTimeoutFn: (callback) => {
+      const id = ++nextTimerId
+      timers.set(id, callback)
+      return id
+    },
+    clearTimeoutFn: (id) => {
+      timers.delete(id)
+    },
+  })
+
+  return {
+    session,
+    closeInitialConnection() {
+      ports.get(initialClient).close()
+    },
+    closeCurrentConnection() {
+      ports.get(currentClient).close()
+    },
+    async reconnect() {
+      const pending = [...timers.entries()][0]
+      assert.ok(pending, "expected a scheduled reconnect")
+      timers.delete(pending[0])
+      await pending[1]()
+      await session.waitForRecovery()
+    },
+  }
+}
+
+describe("Application user-data session dependency validation", () => {
   it("validates required dependencies and retry policy", () => {
     assert.throws(() => new UserDataSession({}), TypeError)
     assert.throws(() => new UserDataSession({
@@ -92,7 +191,9 @@ onStatus: null }),
     assert.equal(portFactoryCalls, 0)
     await session.stop()
   })
+})
 
+describe("Application user-data session client port", () => {
   it("coordinates user-data subscriptions through the injected port, not a raw RPC client", async () => {
     const rawClient = {}
     const calls = []
@@ -152,106 +253,9 @@ close: new Set() }
     await session.stop()
     assert.equal(listeners.close.size, 0)
   })
+})
 
-
-function createRecoveryFixture({ failReconnect = false } = {}) {
-  let currentClient = { name: "initial" }
-  const initialClient = currentClient
-  const reconnectClient = { name: "reconnected" }
-  const ports = new WeakMap()
-  const timers = new Map()
-  let nextTimerId = 0
-
-  function createPort(subscriptionId, isReconnectClient = false) {
-    const listeners = {
-      event: new Set(),
-      error: new Set(),
-      close: new Set(),
-    }
-    return {
-      state: "open",
-      async connect() {
-        if (isReconnectClient && failReconnect) {
-          throw new Error("reconnect unavailable")
-        }
-        this.state = "open"
-      },
-      async disconnect() {
-        this.state = "closed"
-      },
-      async subscribe() {
-        return subscriptionId
-      },
-      async listSubscriptions() {
-        return [subscriptionId]
-      },
-      async unsubscribe() {},
-      onEvent(listener) {
-        listeners.event.add(listener)
-        return () => listeners.event.delete(listener)
-      },
-      onError(listener) {
-        listeners.error.add(listener)
-        return () => listeners.error.delete(listener)
-      },
-      onClose(listener) {
-        listeners.close.add(listener)
-        return () => listeners.close.delete(listener)
-      },
-      close() {
-        this.state = "closed"
-        for (const listener of [...listeners.close]) {listener({ code: 1006 })}
-      },
-    }
-  }
-
-  const session = new UserDataSession({
-    getClient: () => currentClient,
-    createClient: () => reconnectClient,
-    createUserDataClientPort: (client) => {
-      if (!ports.has(client)) {
-        ports.set(client, createPort(client === initialClient ? 17 : 18, client === reconnectClient))
-      }
-      return ports.get(client)
-    },
-    setClient: (client) => {
-      currentClient = client
-    },
-    setConnected() {},
-    setUnavailable() {},
-    recoveryWarningThreshold: 1,
-    reconnectDelay: 1,
-    setTimeoutFn: (callback) => {
-      const id = ++nextTimerId
-      timers.set(id, callback)
-      return id
-    },
-    clearTimeoutFn: (id) => {
-      timers.delete(id)
-    },
-  })
-
-  return {
-    session,
-    closeInitialConnection() {
-      ports.get(initialClient).close()
-    },
-    closeCurrentConnection() {
-      ports.get(currentClient).close()
-    },
-    async reconnect() {
-      const pending = [...timers.entries()][0]
-      assert.ok(pending, "expected a scheduled reconnect")
-      timers.delete(pending[0])
-      await pending[1]()
-      await session.waitForRecovery()
-    },
-  }
-}
-
-
-
-
+describe("Application user-data session recovery acknowledgements", () => {
   it("keeps recovery pending and rejects acknowledgement while reconnect is unavailable", async () => {
     const statuses = []
     const fixture = createRecoveryFixture({ failReconnect: true })
@@ -320,7 +324,9 @@ function createRecoveryFixture({ failReconnect = false } = {}) {
 
     await fixture.session.stop()
   })
+})
 
+describe("Application user-data session recovery generations", () => {
   it("rejects an acknowledgement from an older recovery generation without counting it toward the newer generation", async () => {
     const firstStatuses = []
     const secondStatuses = []
@@ -407,7 +413,9 @@ completed: true },
 
     await fixture.session.stop()
   })
+})
 
+describe("Application user-data session inactive subscribers", () => {
   it("rejects a recovery acknowledgement from a disconnected subscriber", async () => {
     const fixture = createRecoveryFixture()
     fixture.session.start()
@@ -425,5 +433,4 @@ completed: true },
 
     await fixture.session.stop()
   })
-
 })
