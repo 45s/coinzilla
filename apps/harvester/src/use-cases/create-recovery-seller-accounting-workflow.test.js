@@ -310,14 +310,16 @@ test("treats a repeated terminal RS accounting event as an exact no-op", async (
     minProfit: "0.2",
   }
 
-  const first = await workflow.reconcileTerminalMixedSell(input)
+  const [first, replay] = await Promise.all([
+    workflow.reconcileTerminalMixedSell(input),
+    workflow.reconcileTerminalMixedSell(input),
+  ])
   assert.equal(first.ok, true, first.errors?.[0]?.message)
+  assert.equal(replay.ok, true, replay.errors?.[0]?.message)
   const portfolioAfterFirst = workflow.getPortfolio()
   const legacyPositionAfterFirst = workflow.getLegacyPosition({ marketId: market.id })
   const legacyAccountingAfterFirst = workflow.getLegacyAccounting({ marketId: market.id })
   const registryAfterFirst = workflow.getOrderRegistry()
-
-  const replay = await workflow.reconcileTerminalMixedSell(input)
 
   assert.equal(replay.ok, true, replay.errors?.[0]?.message)
   assert.equal(replay.data.duplicate, true,
