@@ -39,7 +39,9 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 
 ### Active maintenance
 
-- [~] **Eliminate existing package ESLint violations (#1228).** Produce a complete file/rule inventory, fix all findings without changing runtime behavior or public contracts, and verify the package tests and required CI before marking complete.
+- [~] **Eliminate existing package ESLint violations (#1228).** Produce a complete
+  file/rule inventory, fix all findings without changing runtime behavior or public
+  contracts, and verify package tests and required CI before marking complete.
 
 ## Principles
 
