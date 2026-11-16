@@ -19,6 +19,19 @@ const KEYBOARD_ACTIONS = Object.freeze({
   "open orders": Object.freeze({ type: "ORDERS" }),
 })
 
+const ENTRY_COMMAND_TYPES = Object.freeze({
+  "/start": "START",
+  "/menu": "MENU",
+  "/help": "HELP",
+})
+
+function parseEntryCommand({ command, argumentsList }) {
+  const type = ENTRY_COMMAND_TYPES[command]
+  if (!type) { return undefined }
+  if (argumentsList.length !== 0) { return Object.freeze({ type: "INVALID" }) }
+  return Object.freeze({ type })
+}
+
 function resolveMarketAction(page) {
   if (page === "pause") { return "PAUSE" }
   if (page === "resume") { return "RESUME" }
@@ -99,21 +112,8 @@ export function parseTelegramOperatorCommand(text, { botUsername } = {}) {
       (typeof botUsername !== "string" || targetUsername.toLowerCase() !== botUsername.toLowerCase())) {
     return Object.freeze({ type: "IGNORE" })
   }
-  if (command === "/start") {
-    return argumentsList.length === 0
-      ? Object.freeze({ type: "START" })
-      : Object.freeze({ type: "INVALID" })
-  }
-  if (command === "/menu") {
-    return argumentsList.length === 0
-      ? Object.freeze({ type: "MENU" })
-      : Object.freeze({ type: "INVALID" })
-  }
-  if (command === "/help") {
-    return argumentsList.length === 0
-      ? Object.freeze({ type: "HELP" })
-      : Object.freeze({ type: "INVALID" })
-  }
+  const entryCommand = parseEntryCommand({ command, argumentsList })
+  if (entryCommand) { return entryCommand }
   if (["/status", "/markets", "/positions", "/orders", "/balances"].includes(command)) {
     if (argumentsList.length !== 0) {
       return Object.freeze({ type: "INVALID", command: command.slice(1).toUpperCase() })
@@ -495,9 +495,12 @@ export function createTelegramOperatorAdapter({
     }
     const action = parsed.type === "RESUME" ? "RESUME" : "PAUSE"
     await executeControl({
-      action, symbol: parsed.symbol, userId,
+      action,
+      symbol: parsed.symbol,
+      userId,
       requestId: `telegram:${update.update_id}:${message.date ?? "0"}:${userId}`,
-      chatId: message.chat.id, signal,
+      chatId: message.chat.id,
+      signal,
     })
   }
 
@@ -523,7 +526,10 @@ export function createTelegramOperatorAdapter({
           if (!Number.isSafeInteger(update?.update_id) || update.update_id < 0) {
             throw new TypeError("Telegram update has no valid update_id")
           }
-          await respondToUpdate({ update, signal })
+          await respondToUpdate({
+            update,
+            signal,
+          })
           offset = update.update_id + 1
         }
         currentRetryDelay = retryDelayMs
@@ -536,7 +542,10 @@ export function createTelegramOperatorAdapter({
         const retryAfterMs = Number.isSafeInteger(error?.retryAfter)
           ? Math.min(error.retryAfter * 1000, MAX_RETRY_DELAY_MS)
           : currentRetryDelay
-        await waitForRetry({ milliseconds: retryAfterMs, signal })
+        await waitForRetry({
+          milliseconds: retryAfterMs,
+          signal,
+        })
         currentRetryDelay = Math.min(currentRetryDelay * 2, MAX_RETRY_DELAY_MS)
       }
     }
@@ -546,7 +555,12 @@ export function createTelegramOperatorAdapter({
     async start() {
       if (stopPromise) {await stopPromise}
       if (startPromise) {return startPromise}
-      if (controller) {return Object.freeze({ started: true, alreadyStarted: true })}
+      if (controller) {
+        return Object.freeze({
+          started: true,
+          alreadyStarted: true,
+        })
+      }
 
       const nextController = new AbortController()
       controller = nextController

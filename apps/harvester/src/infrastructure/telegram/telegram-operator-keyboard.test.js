@@ -88,9 +88,15 @@ async function runAdapter({ updates, operator } = {}) {
         })
       }
       finishSecondPoll()
-      return new Promise((resolve, reject) => {
+      const abortPoll = (...settlers) => {
+        const [, reject] = settlers
+        if (options.signal.aborted) {
+          reject(new Error("poll aborted"))
+          return
+        }
         options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
-      })
+      }
+      return new Promise(abortPoll)
     }
     if (method === "sendMessage") {
       sentMessages.push(JSON.parse(options.body))
