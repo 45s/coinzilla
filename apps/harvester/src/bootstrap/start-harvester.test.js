@@ -560,79 +560,39 @@ test("rejects enabled Telegram operator control without a bot token before conne
   assert.equal(brokerFactoryCalled, false, "Invalid operator-control configuration must fail before Binance adapter construction.")
 })
 
-test("initializes an empty Operational State Store and accepts Telegram commands when restart recovery is disabled", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-operator-control-empty-store-"))
+test("fails closed before broker construction when explicitly enabled with an uninitialized store", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-operator-control-preflight-"))
   const config = {
     ...appConfig,
-    operatorControl: {
-      telegram: {
-        enabled: true,
-        allowedUserIds: ["12345"],
-      },
-    },
-    strategies: {
-      ...appConfig.strategies,
-      CG_coinGrabber: {
-        ...appConfig.strategies.CG_coinGrabber,
-        settings: {
-          ...appConfig.strategies.CG_coinGrabber.settings,
-          recovery: {
-            enabled: false,
-          },
-        },
-      },
-    },
+    operatorControl: { telegram: {
+      enabled: true,
+      allowedUserIds: ["12345"]
+    } },
   }
-  let operator
-  let operatorAdapterStarted = false
-  let operationalStateStore
-  let runtime
+  let brokerFactoryCalled = false
 
   try {
-    runtime = await startHarvesterForTest({
-      loadConfig: async () => config,
-      env: {
-        ...binanceEnv,
-        TELEGRAM_BOT_TOKEN: "test-telegram-token",
-        OPERATIONAL_STATE_DIRECTORY: directory,
-      },
-      runtimeSessionId: "empty-store-telegram-session",
-      createOperationalStateStore: (options) => {
-        operationalStateStore = createFileOperationalStateStore(options)
-        return operationalStateStore
-      },
-      createTelegramOperatorAdapter: ({ operator: suppliedOperator }) => {
-        operator = suppliedOperator
-        return {
-          start: async () => {
-            operatorAdapterStarted = true
-            return { ok: true, started: true }
-          },
-          stop: async () => ({ ok: true, stopped: true }),
-        }
-      },
-    })
-
-    assert.equal(operatorAdapterStarted, true, "Telegram polling must start after an empty store is initialized")
-    const symbol = Object.keys(config.strategies.CG_coinGrabber.pairs)[0]
-    const pauseResult = await operator.pauseMarket({
-      actor: {
-        id: "telegram-user:12345",
-        roles: ["trading-operator"],
-      },
-      requestId: "telegram-empty-store-pause",
-      symbol,
-    })
-    assert.equal(pauseResult.ok, true, "an authorized Telegram pause command must be accepted and durably committed")
-    const history = await operationalStateStore.readAll()
-    assert.equal(history.ok, true, "the initialized Operational State Store must remain verifiable after the command")
-    assert.equal(
-      history.data.records.some((record) => record.factType === "OPERATOR_MARKET_PAUSED"),
-      true,
-      "the accepted Telegram pause command must be present in the durable ledger",
+    await assert.rejects(
+      startHarvesterForTest({
+        loadConfig: async () => config,
+        env: {
+          ...binanceEnv,
+          NODE_ENV: "production",
+          TELEGRAM_BOT_TOKEN: "test-telegram-token",
+          OPERATIONAL_STATE_DIRECTORY: directory,
+        },
+        runtimeSessionId: "telegram-default-directory-session",
+        brokerAdapterFactory: () => {
+          brokerFactoryCalled = true
+          throw new Error("Broker connection must not start before the Operational State Store is verified.")
+        },
+      }),
+      (error) => error.code === "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID",
+      "Telegram operator control must fail closed until its one-time initialized Operational State Store is valid.",
     )
+
+    assert.equal(brokerFactoryCalled, false, "An uninitialized Operational State Store must fail before connecting to Binance.")
   } finally {
-    await runtime?.stop?.()
     await rm(directory, { recursive: true, force: true })
   }
 })
