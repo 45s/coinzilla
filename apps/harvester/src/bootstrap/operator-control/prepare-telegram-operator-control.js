@@ -26,7 +26,7 @@ const disabledLifecycle = Object.freeze({
  * recovery design is explicitly revisited and its startup requirements are accepted.
  */
 export async function prepareTelegramOperatorControl({
-  telegramConfig, env = process.env,
+  telegramConfig, env = process.env, operationalStateStore: suppliedOperationalStateStore,
   createAdapter = createTelegramOperatorAdapter, fetchImpl, logger,
 } = {}) {
   if (telegramConfig?.enabled !== true) {
@@ -36,9 +36,10 @@ export async function prepareTelegramOperatorControl({
   if (!botToken) {
     throw new OperatorControlStartupError("Telegram operator control is enabled but TELEGRAM_BOT_TOKEN is missing", "OPERATOR_CONTROL_TELEGRAM_TOKEN_REQUIRED")
   }
-  // TEMPORARILY DISABLED: Telegram CC must not depend on ADR-0001 recovery storage.
-  // Commands below operate against the live engine only; nothing is replayed after restart.
-  const operationalStateStore = undefined
+  // TEMPORARILY DISABLED: Telegram CC does not construct or verify ADR-0001 recovery storage.
+  // An independently supplied store may still record process-lifetime operator commands.
+  // Without one, pause/resume are process-local and are lost on restart.
+  const operationalStateStore = suppliedOperationalStateStore
   let adapter
   return Object.freeze({
     enabled: true,
