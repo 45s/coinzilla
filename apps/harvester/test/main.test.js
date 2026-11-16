@@ -3,15 +3,27 @@ import assert from 'node:assert/strict';
 import { main as startMain } from '../src/index.js';
 
 const disabledJournalService = () => ({
-  ready: Promise.resolve({ ok: true, disabled: true }),
-  status: { state: 'disabled', enabled: false },
-  flush: async () => ({ ok: true, durable: true }),
-  close: async () => ({ ok: true, closed: true, disabled: true }),
+  ready: Promise.resolve({ ok: true,
+disabled: true }),
+  status: { state: 'disabled',
+enabled: false },
+  flush: async () => ({ ok: true,
+durable: true }),
+  close: async () => ({ ok: true,
+closed: true,
+disabled: true }),
 });
 
 const runMain = (options = {}) => {
   const { env = {}, ...rest } = options;
-  return startMain({ acquireProcessLock: async () => ({ ok: true, release: async () => ({ ok: true }) }), createOperationalStateStore: () => ({ verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }) }), ...rest, env: { TRADING_MODE: 'testnet', ...env } });
+  return startMain({ acquireProcessLock: async () => ({ ok: true,
+release: async () => ({ ok: true }) }),
+createOperationalStateStore: () => ({ verify: async () => ({ ok: true,
+data: { valid: true,
+durableWriteSupported: true } }) }),
+...rest,
+env: { TRADING_MODE: 'testnet',
+...env } });
 };
 
 test('reports successful Binance TESTNET startup without claiming a workflow ran', async () => {
@@ -22,7 +34,13 @@ test('reports successful Binance TESTNET startup without claiming a workflow ran
     system: (message) => messages.push(['system', message]),
   };
 
-  await runMain({ createJournalService: disabledJournalService, start: async () => ({ connected: true, brokerName: 'binance', tradingEnabled: true, strategyMode: 'conservative', subscriptions: [] }), logger });
+  await runMain({ createJournalService: disabledJournalService,
+start: async () => ({ connected: true,
+brokerName: 'binance',
+tradingEnabled: true,
+strategyMode: 'conservative',
+subscriptions: [] }),
+logger });
 
   assert.deepEqual(messages, [[
     'system',
