@@ -20,20 +20,26 @@ export async function recordRecoveryCycleCompleted({
     }
     assertTerminalRecoverySellOrder({ sellOrder })
     if (completion?.eligible !== true) { throw new TypeError("Only an eligible recovery cycle can be durably completed") }
-    const market = recoveryLedger.market
+    const {market} = recoveryLedger
     if (position.market.id !== market.id || sellOrder.market.id !== market.id) {
       throw new TypeError("Recovery-cycle Position, ledger, and terminal SELL markets must match")
     }
-    if (compareDecimal({ left: position.spent.amount, right: recoveryLedger.buyCost }) !== 0) {
+    if (compareDecimal({ left: position.spent.amount,
+right: recoveryLedger.buyCost }) !== 0) {
       throw new TypeError("Recovery-cycle authoritative Position.spent must match RecoveryLedger buyCost")
     }
-    if (compareDecimal({ left: completion.realizedNetProfit, right: recoveryLedger.realizedNetProfit }) !== 0 ||
-        compareDecimal({ left: completion.realizedNetProfit, right: minProfit }) < 0) {
+    if (compareDecimal({ left: completion.realizedNetProfit,
+right: recoveryLedger.realizedNetProfit }) !== 0 ||
+        compareDecimal({ left: completion.realizedNetProfit,
+right: minProfit }) < 0) {
       throw new TypeError("Recovery-cycle completion profit must match the ledger and satisfy minProfit")
     }
-    if (compareDecimal({ left: completion.activeQuantity, right: position.baseQuantity.amount }) !== 0 ||
-        compareDecimal({ left: completion.freeQuantity, right: completion.activeQuantity }) !== 0 ||
-        compareDecimal({ left: completion.minProfit, right: minProfit }) !== 0) {
+    if (compareDecimal({ left: completion.activeQuantity,
+right: position.baseQuantity.amount }) !== 0 ||
+        compareDecimal({ left: completion.freeQuantity,
+right: completion.activeQuantity }) !== 0 ||
+        compareDecimal({ left: completion.minProfit,
+right: minProfit }) !== 0) {
       throw new TypeError("Recovery-cycle quantities and minProfit must match the canonical completion input")
     }
     const inventoryDisposition = completion.dust ?? null
@@ -59,7 +65,7 @@ export async function recordRecoveryCycleCompleted({
     ])
     const cycleId = createHash("sha256").update(cycleIdentity).digest("hex")
     const result = await operationalStateStore.append({
-      factId: "recovery-cycle-completed:" + market.id + ":" + cycleId,
+      factId: `recovery-cycle-completed:${  market.id  }:${  cycleId}`,
       factType: "RECOVERY_CYCLE_COMPLETED",
       data: {
         cycleId,
