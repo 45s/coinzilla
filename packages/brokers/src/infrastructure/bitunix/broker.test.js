@@ -425,15 +425,42 @@ test("Bitunix Spot order history rejects missing or inconsistent pagination meta
     price: "10",
   }
   const cases = [
-    { name: "missing total", response: { pageNum: "1", data: [] } },
-    { name: "string total", response: { total: "0", pageNum: "1", data: [] } },
-    { name: "negative total", response: { total: -1, pageNum: "1", data: [] } },
-    { name: "fractional total", response: { total: 0.5, pageNum: "1", data: [] } },
-    { name: "missing page number", response: { total: 0, data: [] } },
-    { name: "invalid page number", response: { total: 0, pageNum: "one", data: [] } },
-    { name: "numeric page number conflicts with documented string type", response: { total: 0, pageNum: 1, data: [] } },
-    { name: "wrong returned page", response: { total: 0, pageNum: "2", data: [] } },
-    { name: "more rows than total", response: { total: 0, pageNum: "1", data: [order] } },
+    {
+      name: "missing total",
+      response: { pageNum: "1", data: [] },
+    },
+    {
+      name: "string total",
+      response: { total: "0", pageNum: "1", data: [] },
+    },
+    {
+      name: "negative total",
+      response: { total: -1, pageNum: "1", data: [] },
+    },
+    {
+      name: "fractional total",
+      response: { total: 0.5, pageNum: "1", data: [] },
+    },
+    {
+      name: "missing page number",
+      response: { total: 0, data: [] },
+    },
+    {
+      name: "invalid page number",
+      response: { total: 0, pageNum: "one", data: [] },
+    },
+    {
+      name: "numeric page number conflicts with documented string type",
+      response: { total: 0, pageNum: 1, data: [] },
+    },
+    {
+      name: "wrong returned page",
+      response: { total: 0, pageNum: "2", data: [] },
+    },
+    {
+      name: "more rows than total",
+      response: { total: 0, pageNum: "1", data: [order] },
+    },
   ]
   const unexpectedSuccesses = []
 
