@@ -4,11 +4,13 @@ import { formatTimeRelatively } from './format-time-relatively.js'
 
 describe('formatTimeRelatively', () => {
   it('formats past values', () => {
-    assert.equal(formatTimeRelatively({ value: -123, unit: 'minute' }), '123 minutes ago')
+    assert.equal(formatTimeRelatively({ value: -123,
+      unit: 'minute' }), '123 minutes ago')
   })
 
   it('formats future values', () => {
-    assert.equal(formatTimeRelatively({ value: 2, unit: 'day' }), 'in 2 days')
+    assert.equal(formatTimeRelatively({ value: 2,
+      unit: 'day' }), 'in 2 days')
   })
 
   it('defaults to hours', () => {
@@ -18,7 +20,8 @@ describe('formatTimeRelatively', () => {
 
 it("rejects unsupported relative-time units", () => {
   assert.throws(
-    () => formatTimeRelatively({ value: 1, unit: "fortnight" }),
+    () => formatTimeRelatively({ value: 1,
+      unit: "fortnight" }),
     { name: "RangeError" },
   )
 })

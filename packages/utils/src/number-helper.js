@@ -7,9 +7,29 @@ import { fixNumber, preciseNumber, roundNumber } from './number-operations.js'
  */
 export class NH {
   /** @param {number} number @param {number} [decimals=2] @returns {number} */
-  static round = (number, decimals = 2) => roundNumber(number, decimals)
+  static round(number) {
+    const decimals = arguments[1] === undefined ? 2 : arguments[1]
+    return roundNumber({
+      number,
+      decimals,
+    })
+  }
+
   /** @param {number} number @param {number} [digits=4] @returns {number} */
-  static fix = (number, digits = 4) => fixNumber(number, digits)
+  static fix(number) {
+    const digits = arguments[1] === undefined ? 4 : arguments[1]
+    return fixNumber({
+      number,
+      digits,
+    })
+  }
+
   /** @param {number} number @param {number} [precision=2] @returns {number} */
-  static precise = (number, precision = 2) => preciseNumber(number, precision)
+  static precise(number) {
+    const precision = arguments[1] === undefined ? 2 : arguments[1]
+    return preciseNumber({
+      number,
+      precision,
+    })
+  }
 }
