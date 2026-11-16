@@ -101,7 +101,10 @@ test("keeps structured logs and Journal records together while cumulative logs s
     assert.equal(published.ok, true, "The session-layout event must be accepted for Journal persistence")
     assert.equal((await journal.flush()).ok, true, "The Journal must durably flush its event in the process session directory")
 
-    await assertSessionDirectoryLayout({ directory, paths })
+    await assertSessionDirectoryLayout({
+      directory,
+      paths,
+    })
   } finally {
     await journal.close()
     await eventBus.close()
