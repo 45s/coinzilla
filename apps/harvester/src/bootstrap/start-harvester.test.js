@@ -560,101 +560,35 @@ test("rejects enabled Telegram operator control without a bot token before conne
   assert.equal(brokerFactoryCalled, false, "Invalid operator-control configuration must fail before Binance adapter construction.")
 })
 
-test("fails closed before broker construction when explicitly enabled with an uninitialized store", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-operator-control-preflight-"))
+test("starts Telegram CC without constructing or verifying the recovery store", async () => {
   const config = {
     ...appConfig,
-    operatorControl: { telegram: {
-      enabled: true,
-      allowedUserIds: ["12345"]
-    } },
+    operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } },
   }
-  let brokerFactoryCalled = false
-
-  try {
-    await assert.rejects(
-      startHarvesterForTest({
-        loadConfig: async () => config,
-        env: {
-          ...binanceEnv,
-          NODE_ENV: "production",
-          TELEGRAM_BOT_TOKEN: "test-telegram-token",
-          OPERATIONAL_STATE_DIRECTORY: directory,
-        },
-        runtimeSessionId: "telegram-default-directory-session",
-        brokerAdapterFactory: () => {
-          brokerFactoryCalled = true
-          throw new Error("Broker connection must not start before the Operational State Store is verified.")
-        },
-      }),
-      (error) => error.code === "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID",
-      "Telegram operator control must fail closed until its one-time initialized Operational State Store is valid.",
-    )
-
-    assert.equal(brokerFactoryCalled, false, "An uninitialized Operational State Store must fail before connecting to Binance.")
-  } finally {
-    await rm(directory, { recursive: true, force: true })
-  }
-})
-
-test("verifies the existing Operational State Store before connecting when Telegram operator control is enabled", async () => {
-  const config = {
-    ...appConfig,
-    operatorControl: { telegram: {
-      enabled: true,
-      allowedUserIds: ["12345"]
-    } },
-  }
-  const calls = []
-  let brokerFactoryCalled = false
-
-  await assert.rejects(
-    startHarvesterForTest({
-      loadConfig: async () => config,
-      env: {
-        ...binanceEnv,
-        NODE_ENV: "production",
-        TELEGRAM_BOT_TOKEN: "test-telegram-token",
-        OPERATIONAL_STATE_DIRECTORY: process.cwd()
-      },
-      runtimeSessionId: "test-runtime-session",
-      createOperationalStateStore: ({
-        directory,
-        runtimeSessionId
-      }) => {
-        calls.push({
-          type: "create-store",
-          directory,
-          runtimeSessionId
-        })
-        return {
-          verify: async () => ({
-            ok: false,
-            errors: [new Error("ledger genesis is missing")]
-          }),
-          append: async () => ({
-            ok: true,
-            data: { durable: true }
-          }),
-        }
-      },
-      brokerAdapterFactory: () => {
-        brokerFactoryCalled = true
-        throw new Error("Broker connection must not start when Operational State Store records verification fails.")
-      },
-    }),
-    (error) => {
-      assert.equal(error.code, "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID")
-      assert.match(error.message, /ledger genesis is missing/)
-      assert.match(error.cause?.message ?? "", /ledger genesis is missing/)
-      return true
+  let storeFactoryCalls = 0
+  let adapterStarted = false
+  const broker = createBroker()
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => config,
+    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token" },
+    createOperationalStateStore: () => {
+      storeFactoryCalls += 1
+      throw new Error("Telegram CC must not construct or verify ADR-0001 recovery storage.")
     },
-    "An absent or invalid initialized ADR-0001 store must prevent inbound operator control and broker startup while preserving the exact cause.",
-  )
-
-  assert.equal(calls.length, 1, "Enabled operator control must construct exactly one Operational State Store records adapter for verification.")
-  assert.equal(calls[0].runtimeSessionId, "test-runtime-session", "Operational State Store records must be attributed to this Harvester process session.")
-  assert.equal(brokerFactoryCalled, false, "Operational State Store records verification must complete before connecting to Binance.")
+    createTelegramOperatorAdapter: () => ({
+      start: async () => { adapterStarted = true },
+      stop: async () => ({ stopped: true }),
+    }),
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  })
+  try {
+    assert.equal(storeFactoryCalls, 0, "Telegram CC must not construct the recovery store when restart recovery is disabled.")
+    assert.equal(adapterStarted, true, "Telegram polling must start without an initialized recovery store.")
+    assert.equal(runtime.connected, true, "The recovery-store gate must not block broker/runtime startup.")
+  } finally {
+    await runtime.stop()
+  }
 })
 
 test("retries Telegram adapter shutdown during startup rollback before giving up", async () => {
