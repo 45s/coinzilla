@@ -506,52 +506,71 @@ test("rejects an unauthorized persistent-keyboard action before reading market s
 
 
 
-test("temporary ESLint remaining detail", async () => {
+
+test("temporary ESLint autofix preview", async () => {
   const { ESLint } = await import("eslint");
-  const eslint = new ESLint();
+  const eslint = new ESLint({ fix: true });
   const results = await eslint.lintFiles([
   "src/infrastructure/brokers/binance-broker-adapter.js",
+  "src/infrastructure/brokers/binance-broker-adapter.test.js",
   "src/infrastructure/brokers/binance-market-metadata.js",
   "src/infrastructure/brokers/binance-market-metadata.test.js",
+  "src/infrastructure/brokers/bitunix-market-metadata.js",
+  "src/infrastructure/brokers/bitunix-market-metadata.test.js",
+  "src/infrastructure/config/load-app-config.js",
+  "src/infrastructure/config/token-specifications.js",
+  "src/infrastructure/config/token-specifications.test.js",
   "src/infrastructure/journal/prepare-optional-journal.js",
+  "src/infrastructure/journal/prepare-optional-journal.test.js",
+  "src/infrastructure/journal/project-harvester-journal-recovery-with-deferrals.js",
   "src/infrastructure/journal/project-harvester-journal-recovery.js",
   "src/infrastructure/journal/project-harvester-journal-recovery.test.js",
   "src/infrastructure/journal/read-harvester-journal-history.js",
+  "src/infrastructure/journal/read-harvester-journal-history.test.js",
   "src/infrastructure/journal/summarize-harvester-journal-history.js",
+  "src/infrastructure/journal/summarize-harvester-journal-history.test.js",
   "src/infrastructure/logging/configure-harvester-logging.js",
   "src/infrastructure/logging/configure-harvester-logging.test.js",
+  "src/infrastructure/logging/create-console-record-presentation.js",
+  "src/infrastructure/logging/create-console-record-presentation.test.js",
+  "src/infrastructure/logging/create-harvester-log-session-paths.js",
+  "src/infrastructure/logging/create-harvester-log-session-paths.test.js",
+  "src/infrastructure/logging/create-log-command-interface.js",
+  "src/infrastructure/logging/create-log-command-interface.test.js",
+  "src/infrastructure/logging/create-shutdown-phase-console-presentation.js",
+  "src/infrastructure/logging/create-shutdown-phase-console-presentation.test.js",
   "src/infrastructure/logging/session-log-directory-layout.test.js",
+  "src/infrastructure/logging/shutdown-console-logging.test.js",
+  "src/infrastructure/logging/shutdown-phase-console-transport.test.js",
   "src/infrastructure/operational-state/account-reconciliation.test.js",
   "src/infrastructure/operational-state/create-file-operational-state-store.js",
   "src/infrastructure/operational-state/create-file-operational-state-store.test.js",
   "src/infrastructure/operational-state/operational-state-canonical.js",
   "src/infrastructure/operational-state/operational-state-canonical.test.js",
+  "src/infrastructure/operational-state/operational-state-control.test.js",
   "src/infrastructure/operational-state/project-harvester-operational-state.js",
   "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
+  "src/infrastructure/operational-state/resolve-operational-state-directory.js",
+  "src/infrastructure/operational-state/resolve-operational-state-directory.test.js",
   "src/infrastructure/process-lock/acquire-harvester-process-lock.js",
+  "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
   "src/infrastructure/process-lock/acquire-harvester-process-locks.js",
   "src/infrastructure/process-lock/acquire-harvester-process-locks.test.js",
   "src/infrastructure/process/create-harvester-process-identity.js",
+  "src/infrastructure/process/create-harvester-process-identity.test.js",
   "src/infrastructure/telegram/format-telegram-operator-response.js",
   "src/infrastructure/telegram/format-telegram-operator-response.test.js",
   "src/infrastructure/telegram/telegram-operator-adapter.js",
-  "src/infrastructure/telegram/telegram-operator-adapter.test.js"
+  "src/infrastructure/telegram/telegram-operator-adapter.test.js",
+  "src/infrastructure/telegram/telegram-operator-diagnostics.js",
+  "src/infrastructure/telegram/telegram-operator-diagnostics.test.js"
 ]);
-  const findings = [];
-  for (const result of results) {
-    for (const message of result.messages) {
-      findings.push({
-        file: result.filePath.split("/apps/harvester/").pop(),
-        line: message.line,
-        column: message.column,
-        ruleId: message.ruleId,
-        severity: message.severity,
-        message: message.message,
-        source: message.source ?? null,
-        nodeType: message.nodeType ?? null,
-      });
-    }
-  }
-  process.stdout.write("ESLINT_DETAILS=" + JSON.stringify({ findings }) + "\\n");
+  const changed = results
+    .filter((result) => typeof result.output === "string")
+    .map((result) => ({
+      path: result.filePath.split("/apps/harvester/").pop(),
+      content: result.output,
+    }));
+  process.stdout.write("ESLINT_AUTOFIX_OUTPUT=" + JSON.stringify({ files: changed }) + "\\n");
   assert.ok(true);
 });
