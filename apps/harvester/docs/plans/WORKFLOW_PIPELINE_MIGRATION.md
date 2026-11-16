@@ -46,6 +46,7 @@ Test-first evidence on commit `da359a83fabf6eeb80b577073cd60ba9abdff96a`:
 - Configured Harvester targeted regressions: 5/5 files passed.
 - Utils Unit Tests, Dependency Audit, and External Documentation Links passed.
 - Full workspace unit tests, workspace coverage and JavaScript Syntax were still running at this checkpoint; their final results are not inferred here.
+- The first changed-file ESLint run identified five `prefer-template` errors and one helper-length warning in the new test fixture. The next test-only correction splits fixture setup into focused helpers and uses template literals; no lint rules or assertions are suppressed.
 
 The extraction adds no new runtime state, dependency, queue, broker call, event publication, persistence operation or domain rule. It does not change Conservative behavior or the status of the wider migration plan.
 

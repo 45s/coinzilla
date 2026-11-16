@@ -9,9 +9,7 @@ const activeBuyOrder = Object.freeze({
   }),
 })
 
-function createHarness({
-  isFresh = true,
-  canTrade = true,
+function createState({
   paused = false,
   operatorPaused = false,
   trailingBuyEnabled = true,
@@ -19,7 +17,6 @@ function createHarness({
   initialPrice,
   initialEventId,
 } = {}) {
-  const trace = []
   const state = {
     prices: new Map(),
     marketPriceEventIds: new Map(),
@@ -47,7 +44,11 @@ function createHarness({
     state.operatorPausedMarkets.add("DOGEUSDT")
   }
 
-  const handler = createMarketPriceTransitionHandler({
+  return state
+}
+
+function createHandler({ state, trace, isFresh, canTrade } = {}) {
+  return createMarketPriceTransitionHandler({
     state,
     isMarketPriceFresh: () => {
       trace.push("freshness")
@@ -121,6 +122,17 @@ function createHarness({
       trace.push("event-id")
       return 8
     },
+  })
+}
+
+function createHarness(options = {}) {
+  const trace = []
+  const state = createState(options)
+  const handler = createHandler({
+    state,
+    trace,
+    isFresh: options.isFresh ?? true,
+    canTrade: options.canTrade ?? true,
   })
 
   return {
@@ -224,7 +236,7 @@ const evaluationOnlyScenarios = [
 ]
 
 for (const scenario of evaluationOnlyScenarios) {
-  test("routes an accepted price to normal evaluation when " + scenario.name, async () => {
+  test(`routes an accepted price to normal evaluation when ${scenario.name}`, async () => {
     const harness = createHarness(scenario)
 
     const result = await harness.handler({
@@ -232,17 +244,17 @@ for (const scenario of evaluationOnlyScenarios) {
       priceEvent: validPriceEvent,
     })
 
-    assert.equal(result.ok, true, "A fresh price must continue through the existing evaluator when " + scenario.name + ".")
-    assert.equal(result.data.route, "evaluate", "The normal latest-transition evaluator must remain the fallback when " + scenario.name + ".")
+    assert.equal(result.ok, true, `A fresh price must continue through the existing evaluator when ${scenario.name}.`)
+    assert.equal(result.data.route, "evaluate", `The normal latest-transition evaluator must remain the fallback when ${scenario.name}.`)
     assert.equal(
       harness.trace.includes("trailing-buy"),
       false,
-      "Trailing replacement must not run when " + scenario.name + ".",
+      `Trailing replacement must not run when ${scenario.name}.`,
     )
     assert.equal(
       harness.trace.includes("evaluate"),
       true,
-      "The accepted price must still reach normal strategy evaluation when " + scenario.name + ".",
+      `The accepted price must still reach normal strategy evaluation when ${scenario.name}.`,
     )
   })
 }
