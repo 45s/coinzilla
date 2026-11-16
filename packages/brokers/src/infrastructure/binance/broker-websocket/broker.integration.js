@@ -101,7 +101,8 @@ describe(
           assert.ok(order.id)
           assert.equal(order.symbol, symbol)
 
-          const result = await broker.getOrder({ symbol, orderId: order.id })
+          const result = await broker.getOrder({ symbol,
+orderId: order.id })
           assert.ok(result.ok)
           assert.equal(result.data.id, order.id)
         } finally {
