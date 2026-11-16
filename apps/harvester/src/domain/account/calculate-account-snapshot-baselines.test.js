@@ -221,3 +221,35 @@ test("rejects invalid additional tracked Spot inventory baselines", () => {
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /non-negative/)
 })
+
+test("includes separately tracked legacy quote proceeds in the shared quote cash-flow baseline", () => {
+  const portfolio = new Portfolio().applyFill({
+    fill: makeBuyFill({
+      market: btcMarket,
+      tradeId: "baseline-btc-buy",
+      quantity: "10",
+      quoteQuantity: "100",
+    }),
+    strategyId: StrategyId.COIN_GRABBER,
+  }).portfolio
+
+  const result = calculateAccountSnapshotBaselines({
+    portfolio,
+    activeOrders: [],
+    additionalTrackedQuoteCashFlow: [
+      { assetId: usdt.id, amount: "2.5" },
+      { assetId: usdt.id, amount: "1.5" },
+      { assetId: fdusd.id, amount: "-0.25" },
+    ],
+  })
+
+  assert.equal(result.ok, true, "Separately tracked quote cash flow must participate in the shared account baseline.")
+  assert.deepEqual(
+    result.data.quoteCashFlowBaseline,
+    [
+      { assetId: fdusd.id, amount: "-0.25" },
+      { assetId: usdt.id, amount: "-96" },
+    ],
+    "Legacy realized proceeds must be added to Portfolio quote cash flow exactly once, aggregated by canonical quote asset.",
+  )
+})
