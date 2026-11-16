@@ -313,8 +313,7 @@ const createFixture = ({
     updateTradingAccounting: ({ fill } = {}) => {
       const result = applyTradingAccounting({ portfolio, recoveryLedger, fill });
       if (result.ok) {
-        portfolio = result.data.portfolio;
-        recoveryLedger = result.data.recoveryLedger;
+        ({ portfolio, recoveryLedger } = result.data);
       }
       return result;
     },
@@ -364,11 +363,13 @@ test("readiness closing after PENDING registration removes the local order witho
       return readinessChecks === 1
     },
     onPendingOrder: ({ order } = {}) => {
-      registry = registry.registerPending({ order }).registry
+      const { registry: registeredRegistry } = registry.registerPending({ order });
+      registry = registeredRegistry
     },
     onSubmissionDeferred: ({ order, registered } = {}) => {
       if (registered) {
-        registry = registry.removePending({ clientOrderId: order.clientOrderId }).registry
+        const { registry: removedRegistry } = registry.removePending({ clientOrderId: order.clientOrderId });
+        registry = removedRegistry
       }
     },
     onAcknowledgedOrder: () => {},
