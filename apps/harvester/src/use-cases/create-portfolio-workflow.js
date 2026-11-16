@@ -338,7 +338,11 @@ async function runUpdateTradingAccounting({
   return enqueueAccountingTransition({
     state,
     transition: async () => {
-      const prepared = prepareTradingAccounting({ state, fill, logger })
+      const prepared = prepareTradingAccounting({
+        state,
+        fill,
+        logger,
+      })
       if (prepared.result) {
         return prepared.result
       }
