@@ -108,7 +108,6 @@ function validateFillResponsePresence({ executedQuantityComparison, deals }) {
   }
 }
 
-
 function isOpenMarket({ symbolInfo }) {
   return symbolInfo?.isOpen === "1" || symbolInfo?.isOpen === 1
 }
