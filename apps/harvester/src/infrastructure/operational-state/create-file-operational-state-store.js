@@ -647,383 +647,617 @@ function validateExecutionFillAppliedFact({ factType, canonicalData, factId }) {
   })
 }
 
-function validateRecoveryCycleCompletedFact({ factType, canonicalData, factId }) {
-  if (factType === "RECOVERY_CYCLE_COMPLETED") {
-    const allowedFields = new Set(["cycleId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "appliedFillIds", "sellOrderClientId", "sellOrderBrokerOrderId", "buyCost", "spent", "netSellProceeds", "realizedNetProfit", "minProfit", "activeQuantity", "keepQuantity", "freeQuantity", "inventoryDisposition"])
-    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {throw new TypeError("Recovery-cycle completion fact contains unsupported fields")}
-    const cycleId = requireNonEmptyString({ value: canonicalData.cycleId,
-field: "data.cycleId",
-maxLength: 64 })
-    const marketId = requireNonEmptyString({ value: canonicalData.marketId,
-field: "data.marketId",
-maxLength: MAX_FACT_ID_LENGTH })
-    const venue = requireNonEmptyString({ value: canonicalData.venue,
-field: "data.venue",
-maxLength: 32 })
-    const sellOrderClientId = requireNonEmptyString({ value: canonicalData.sellOrderClientId,
-field: "data.sellOrderClientId",
-maxLength: MAX_FACT_ID_LENGTH })
-    const sellOrderBrokerOrderId = requireNonEmptyString({ value: canonicalData.sellOrderBrokerOrderId,
-field: "data.sellOrderBrokerOrderId",
-maxLength: MAX_FACT_ID_LENGTH })
-    requireNonEmptyString({ value: canonicalData.baseAssetId,
-field: "data.baseAssetId",
-maxLength: MAX_FACT_ID_LENGTH })
-    requireNonEmptyString({ value: canonicalData.quoteAssetId,
-field: "data.quoteAssetId",
-maxLength: MAX_FACT_ID_LENGTH })
-    if (!SHA256_PATTERN.test(cycleId) || venue !== venue.toLowerCase() ||
-        marketId !== `${venue  }:${  canonicalData.symbol}` ||
-        factId !== factIdForRecoveryCycle(marketId, cycleId)) {
-      throw new TypeError("Recovery-cycle completion identity is not canonical")
-    }
-    if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {throw new TypeError("Recovery-cycle symbol must be canonical uppercase alphanumeric")}
-    if (canonicalData.baseAssetId === canonicalData.quoteAssetId) {throw new TypeError("Recovery-cycle base and quote assets must differ")}
-    if (!Array.isArray(canonicalData.appliedFillIds) || canonicalData.appliedFillIds.length === 0 ||
-        canonicalData.appliedFillIds.some((id) => typeof id !== "string" || !id.trim()) ||
-        new Set(canonicalData.appliedFillIds).size !== canonicalData.appliedFillIds.length) {
-      throw new TypeError("Recovery-cycle completion requires unique applied fill identities")
-    }
-    const isDecimalString = (value) => typeof value === "string" && /^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)
-    const isPositiveDecimalString = (value) => isDecimalString(value) && /[1-9]/.test(value)
-    if (!isDecimalString(canonicalData.buyCost) || compareDecimal({ left: canonicalData.buyCost,
-right: canonicalData.spent }) !== 0 ||
-        !isDecimalString(canonicalData.netSellProceeds) ||
-        !isPositiveDecimalString(canonicalData.realizedNetProfit) ||
-        !isPositiveDecimalString(canonicalData.minProfit) ||
-        !isDecimalString(canonicalData.activeQuantity) ||
-        !isDecimalString(canonicalData.keepQuantity) ||
-        !isDecimalString(canonicalData.freeQuantity)) {
-      throw new TypeError("Recovery-cycle completion accounting values must be exact canonical decimals")
-    }
-    if (compareDecimal({ left: canonicalData.realizedNetProfit,
-right: subtractDecimal({ left: canonicalData.netSellProceeds,
-right: canonicalData.spent }) }) !== 0 ||
-        compareDecimal({ left: canonicalData.realizedNetProfit,
-right: canonicalData.minProfit }) < 0 ||
-        compareDecimal({ left: canonicalData.activeQuantity,
-right: canonicalData.keepQuantity }) < 0 ||
-        compareDecimal({ left: canonicalData.activeQuantity,
-right: canonicalData.freeQuantity }) !== 0 ||
-        compareDecimal({ left: canonicalData.minProfit,
-right: "0.01" }) < 0) {
-      throw new TypeError("Recovery-cycle completion profit and inventory allocation must reconcile exactly")
-    }
-    if (canonicalData.inventoryDisposition !== null) {
-      const dust = canonicalData.inventoryDisposition
-      const dustFields = new Set(["status", "quantity", "reason", "minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional", "quantityStepSize"])
-      if (!dust || typeof dust !== "object" || Array.isArray(dust) ||
-          Object.keys(dust).some((key) => !dustFields.has(key)) ||
-          dust.status !== "EXCHANGE_CONSTRAINED_DUST" ||
-          !["MIN_QUANTITY", "MIN_NOTIONAL", "QUANTITY_INCREMENT"].includes(dust.reason) ||
-          !isPositiveDecimalString(dust.quantity)) {
-        throw new TypeError("Recovery-cycle inventory disposition must be validated exchange-constrained dust")
-      }
-      for (const field of ["minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional", "quantityStepSize"]) {
-        if (dust[field] !== undefined && !isDecimalString(dust[field])) {
-          throw new TypeError(`Recovery-cycle dust ${  field  } must be an exact decimal string`)
-        }
-      }
-      if (dust.reason === "MIN_QUANTITY" &&
-          (dust.minimumQuantity === undefined || dust.evaluatedQuantity === undefined)) {
-        throw new TypeError("MIN_QUANTITY dust requires its exchange minimum and evaluated quantity")
-      }
-      if (dust.reason === "MIN_NOTIONAL" &&
-          (dust.minimumQuantity === undefined || dust.minimumNotional === undefined ||
-           dust.evaluatedQuantity === undefined || dust.evaluatedNotional === undefined)) {
-        throw new TypeError("MIN_NOTIONAL dust requires exact quantity and notional evidence")
-      }
-      if (dust.reason === "QUANTITY_INCREMENT" &&
-          (dust.quantityStepSize === undefined || dust.evaluatedQuantity !== "0")) {
-        throw new TypeError("QUANTITY_INCREMENT dust requires exact step-size evidence and zero evaluated quantity")
-      }
-      if (compareDecimal({ left: canonicalData.activeQuantity,
-right: addDecimal({ left: canonicalData.keepQuantity,
-right: dust.quantity }) }) !== 0) {
-        throw new TypeError("Recovery-cycle dust quantity must exactly reconcile the retained inventory allocation")
-      }
-    } else if (compareDecimal({ left: canonicalData.freeQuantity,
-right: canonicalData.keepQuantity }) !== 0) {
+function validateRecoveryCycleCompletedIdentity({ canonicalData, factId }) {
+  const cycleId = requireNonEmptyString({
+    value: canonicalData.cycleId,
+    field: "data.cycleId",
+    maxLength: 64,
+  })
+  const marketId = requireNonEmptyString({
+    value: canonicalData.marketId,
+    field: "data.marketId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  const venue = requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
+  const sellOrderClientId = requireNonEmptyString({
+    value: canonicalData.sellOrderClientId,
+    field: "data.sellOrderClientId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  const sellOrderBrokerOrderId = requireNonEmptyString({
+    value: canonicalData.sellOrderBrokerOrderId,
+    field: "data.sellOrderBrokerOrderId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  requireNonEmptyString({
+    value: canonicalData.baseAssetId,
+    field: "data.baseAssetId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  requireNonEmptyString({
+    value: canonicalData.quoteAssetId,
+    field: "data.quoteAssetId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  if (
+    !SHA256_PATTERN.test(cycleId) ||
+    venue !== venue.toLowerCase() ||
+    marketId !== `${venue}:${canonicalData.symbol}` ||
+    factId !== factIdForRecoveryCycle(marketId, cycleId)
+  ) {
+    throw new TypeError("Recovery-cycle completion identity is not canonical")
+  }
+  if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
+    throw new TypeError("Recovery-cycle symbol must be canonical uppercase alphanumeric")
+  }
+  if (canonicalData.baseAssetId === canonicalData.quoteAssetId) {
+    throw new TypeError("Recovery-cycle base and quote assets must differ")
+  }
+  if (
+    !Array.isArray(canonicalData.appliedFillIds) ||
+    canonicalData.appliedFillIds.length === 0 ||
+    canonicalData.appliedFillIds.some((id) => typeof id !== "string" || !id.trim()) ||
+    new Set(canonicalData.appliedFillIds).size !== canonicalData.appliedFillIds.length
+  ) {
+    throw new TypeError("Recovery-cycle completion requires unique applied fill identities")
+  }
+  return { cycleId, marketId, sellOrderClientId, sellOrderBrokerOrderId }
+}
+
+function validateRecoveryCycleCompletedAmounts({ canonicalData }) {
+  if (
+    !isCanonicalDecimalString({ value: canonicalData.buyCost }) ||
+    compareDecimal({ left: canonicalData.buyCost, right: canonicalData.spent }) !== 0 ||
+    !isCanonicalDecimalString({ value: canonicalData.netSellProceeds }) ||
+    !isPositiveCanonicalDecimalString({ value: canonicalData.realizedNetProfit }) ||
+    !isPositiveCanonicalDecimalString({ value: canonicalData.minProfit }) ||
+    !isCanonicalDecimalString({ value: canonicalData.activeQuantity }) ||
+    !isCanonicalDecimalString({ value: canonicalData.keepQuantity }) ||
+    !isCanonicalDecimalString({ value: canonicalData.freeQuantity })
+  ) {
+    throw new TypeError("Recovery-cycle completion accounting values must be exact canonical decimals")
+  }
+  if (
+    compareDecimal({
+      left: canonicalData.realizedNetProfit,
+      right: subtractDecimal({
+        left: canonicalData.netSellProceeds,
+        right: canonicalData.spent,
+      }),
+    }) !== 0 ||
+    compareDecimal({ left: canonicalData.realizedNetProfit, right: canonicalData.minProfit }) < 0 ||
+    compareDecimal({ left: canonicalData.activeQuantity, right: canonicalData.keepQuantity }) < 0 ||
+    compareDecimal({ left: canonicalData.activeQuantity, right: canonicalData.freeQuantity }) !== 0 ||
+    compareDecimal({ left: canonicalData.minProfit, right: "0.01" }) < 0
+  ) {
+    throw new TypeError("Recovery-cycle completion profit and inventory allocation must reconcile exactly")
+  }
+}
+
+function validateRecoveryCycleInventoryDisposition({ canonicalData }) {
+  if (canonicalData.inventoryDisposition === null) {
+    if (compareDecimal({ left: canonicalData.freeQuantity, right: canonicalData.keepQuantity }) !== 0) {
       throw new TypeError("Recovery-cycle free quantity must equal keepQuantity when no dust is recorded")
     }
-    const cycleIdentity = JSON.stringify([
-      marketId,
-      sellOrderClientId,
-      sellOrderBrokerOrderId,
-      canonicalData.appliedFillIds,
-      canonicalData.buyCost,
-      canonicalData.spent,
-      canonicalData.netSellProceeds,
-      canonicalData.realizedNetProfit,
-      canonicalData.minProfit,
-      canonicalData.activeQuantity,
-      canonicalData.keepQuantity,
-      canonicalData.freeQuantity,
-      canonicalData.inventoryDisposition,
-    ])
-    if (sha256OperationalStateValue(cycleIdentity) !== cycleId) {
-      throw new TypeError("Recovery-cycle ID must be derived from the exact fill, accounting, inventory, and terminal SELL identity")
+    return
+  }
+
+  const dust = canonicalData.inventoryDisposition
+  const dustFields = new Set([
+    "status",
+    "quantity",
+    "reason",
+    "minimumQuantity",
+    "minimumNotional",
+    "evaluatedQuantity",
+    "evaluatedNotional",
+    "quantityStepSize",
+  ])
+  if (
+    !dust ||
+    typeof dust !== "object" ||
+    Array.isArray(dust) ||
+    Object.keys(dust).some((key) => !dustFields.has(key)) ||
+    dust.status !== "EXCHANGE_CONSTRAINED_DUST" ||
+    !["MIN_QUANTITY", "MIN_NOTIONAL", "QUANTITY_INCREMENT"].includes(dust.reason) ||
+    !isPositiveCanonicalDecimalString({ value: dust.quantity })
+  ) {
+    throw new TypeError("Recovery-cycle inventory disposition must be validated exchange-constrained dust")
+  }
+  for (const field of ["minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional", "quantityStepSize"]) {
+    if (dust[field] !== undefined && !isCanonicalDecimalString({ value: dust[field] })) {
+      throw new TypeError(`Recovery-cycle dust ${field} must be an exact decimal string`)
     }
+  }
+  if (
+    dust.reason === "MIN_QUANTITY" &&
+    (dust.minimumQuantity === undefined || dust.evaluatedQuantity === undefined)
+  ) {
+    throw new TypeError("MIN_QUANTITY dust requires its exchange minimum and evaluated quantity")
+  }
+  if (
+    dust.reason === "MIN_NOTIONAL" &&
+    (
+      dust.minimumQuantity === undefined ||
+      dust.minimumNotional === undefined ||
+      dust.evaluatedQuantity === undefined ||
+      dust.evaluatedNotional === undefined
+    )
+  ) {
+    throw new TypeError("MIN_NOTIONAL dust requires exact quantity and notional evidence")
+  }
+  if (
+    dust.reason === "QUANTITY_INCREMENT" &&
+    (dust.quantityStepSize === undefined || dust.evaluatedQuantity !== "0")
+  ) {
+    throw new TypeError("QUANTITY_INCREMENT dust requires exact step-size evidence and zero evaluated quantity")
+  }
+  if (
+    compareDecimal({
+      left: canonicalData.activeQuantity,
+      right: addDecimal({
+        left: canonicalData.keepQuantity,
+        right: dust.quantity,
+      }),
+    }) !== 0
+  ) {
+    throw new TypeError("Recovery-cycle dust quantity must exactly reconcile the retained inventory allocation")
+  }
+}
+
+function validateRecoveryCycleCompletedIdentityDigest({ canonicalData, identity }) {
+  const cycleIdentity = JSON.stringify([
+    identity.marketId,
+    identity.sellOrderClientId,
+    identity.sellOrderBrokerOrderId,
+    canonicalData.appliedFillIds,
+    canonicalData.buyCost,
+    canonicalData.spent,
+    canonicalData.netSellProceeds,
+    canonicalData.realizedNetProfit,
+    canonicalData.minProfit,
+    canonicalData.activeQuantity,
+    canonicalData.keepQuantity,
+    canonicalData.freeQuantity,
+    canonicalData.inventoryDisposition,
+  ])
+  if (sha256OperationalStateValue(cycleIdentity) !== identity.cycleId) {
+    throw new TypeError("Recovery-cycle ID must be derived from the exact fill, accounting, inventory, and terminal SELL identity")
+  }
+}
+
+function validateRecoveryCycleCompletedFact({ factType, canonicalData, factId }) {
+  if (factType !== "RECOVERY_CYCLE_COMPLETED") {
+    return
+  }
+  const allowedFields = new Set([
+    "cycleId",
+    "marketId",
+    "venue",
+    "symbol",
+    "baseAssetId",
+    "quoteAssetId",
+    "appliedFillIds",
+    "sellOrderClientId",
+    "sellOrderBrokerOrderId",
+    "buyCost",
+    "spent",
+    "netSellProceeds",
+    "realizedNetProfit",
+    "minProfit",
+    "activeQuantity",
+    "keepQuantity",
+    "freeQuantity",
+    "inventoryDisposition",
+  ])
+  if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+    throw new TypeError("Recovery-cycle completion fact contains unsupported fields")
+  }
+  const identity = validateRecoveryCycleCompletedIdentity({ canonicalData, factId })
+  validateRecoveryCycleCompletedAmounts({ canonicalData })
+  validateRecoveryCycleInventoryDisposition({ canonicalData })
+  validateRecoveryCycleCompletedIdentityDigest({ canonicalData, identity })
+}
+
+function validateRecoveryCycleNotCompletedIdentity({ canonicalData, factId }) {
+  const evaluationId = requireNonEmptyString({
+    value: canonicalData.evaluationId,
+    field: "data.evaluationId",
+    maxLength: 64,
+  })
+  const marketId = requireNonEmptyString({
+    value: canonicalData.marketId,
+    field: "data.marketId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  const venue = requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
+  const sellOrderClientId = requireNonEmptyString({
+    value: canonicalData.sellOrderClientId,
+    field: "data.sellOrderClientId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  const sellOrderBrokerOrderId = requireNonEmptyString({
+    value: canonicalData.sellOrderBrokerOrderId,
+    field: "data.sellOrderBrokerOrderId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  requireNonEmptyString({
+    value: canonicalData.baseAssetId,
+    field: "data.baseAssetId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  requireNonEmptyString({
+    value: canonicalData.quoteAssetId,
+    field: "data.quoteAssetId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  const reason = requireNonEmptyString({ value: canonicalData.reason, field: "data.reason", maxLength: 64 })
+  if (
+    !SHA256_PATTERN.test(evaluationId) ||
+    venue !== venue.toLowerCase() ||
+    marketId !== `${venue}:${canonicalData.symbol}` ||
+    factId !== `recovery-cycle-not-completed:${marketId}:${evaluationId}` ||
+    !/^[A-Z][A-Z0-9_]{1,63}$/.test(reason)
+  ) {
+    throw new TypeError("Recovery-cycle non-completion identity or reason is not canonical")
+  }
+  if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
+    throw new TypeError("Recovery-cycle symbol must be canonical uppercase alphanumeric")
+  }
+  if (canonicalData.baseAssetId === canonicalData.quoteAssetId) {
+    throw new TypeError("Recovery-cycle base and quote assets must differ")
+  }
+  if (
+    !Array.isArray(canonicalData.appliedFillIds) ||
+    canonicalData.appliedFillIds.length === 0 ||
+    canonicalData.appliedFillIds.some((id) => typeof id !== "string" || !id.trim()) ||
+    new Set(canonicalData.appliedFillIds).size !== canonicalData.appliedFillIds.length
+  ) {
+    throw new TypeError("Recovery-cycle non-completion requires unique applied fill identities")
+  }
+  return { evaluationId, marketId, sellOrderClientId, sellOrderBrokerOrderId, reason }
+}
+
+function validateRecoveryCycleNotCompletedAmounts({ canonicalData }) {
+  if (
+    !isCanonicalDecimalString({ value: canonicalData.buyCost }) ||
+    compareDecimal({ left: canonicalData.buyCost, right: canonicalData.spent }) !== 0 ||
+    !isCanonicalDecimalString({ value: canonicalData.netSellProceeds }) ||
+    !isSignedCanonicalDecimalString({ value: canonicalData.realizedNetProfit }) ||
+    !isPositiveCanonicalDecimalString({ value: canonicalData.minProfit }) ||
+    !isCanonicalDecimalString({ value: canonicalData.activeQuantity }) ||
+    !isCanonicalDecimalString({ value: canonicalData.keepQuantity }) ||
+    compareDecimal({
+      left: canonicalData.realizedNetProfit,
+      right: subtractDecimal({
+        left: canonicalData.netSellProceeds,
+        right: canonicalData.spent,
+      }),
+    }) !== 0 ||
+    compareDecimal({ left: canonicalData.minProfit, right: "0.01" }) < 0
+  ) {
+    throw new TypeError("Recovery-cycle non-completion accounting values must be exact and internally consistent")
+  }
+}
+
+function validateRecoveryCycleNotCompletedOutcome({ canonicalData, reason }) {
+  const continueReasons = new Set([
+    "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+    "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+  ])
+  if (canonicalData.outcome === "CONTINUE_SELL_THROUGH") {
+    if (
+      !continueReasons.has(reason) ||
+      compareDecimal({ left: canonicalData.activeQuantity, right: canonicalData.keepQuantity }) <= 0
+    ) {
+      throw new TypeError("CONTINUE_SELL_THROUGH requires an approved continuation reason and residual active inventory")
+    }
+    if (
+      reason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" &&
+      compareDecimal({ left: canonicalData.realizedNetProfit, right: canonicalData.minProfit }) < 0
+    ) {
+      throw new TypeError("Residual sell-through requires the minimum profit target to be met")
+    }
+    if (
+      reason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" &&
+      compareDecimal({ left: canonicalData.realizedNetProfit, right: canonicalData.minProfit }) >= 0
+    ) {
+      throw new TypeError("Profit-target continuation requires realized profit below minProfit")
+    }
+    return
+  }
+  if (canonicalData.outcome === "BLOCKED") {
+    if (continueReasons.has(reason)) {
+      throw new TypeError("A continue-sell-through reason cannot be persisted as BLOCKED")
+    }
+    if (
+      reason === "RECOVERY_SELL_FAILED_MIN_PROFIT" &&
+      compareDecimal({ left: canonicalData.realizedNetProfit, right: canonicalData.minProfit }) >= 0
+    ) {
+      throw new TypeError("A minimum-profit blocker requires realized profit below minProfit")
+    }
+    return
+  }
+  throw new TypeError("Recovery-cycle non-completion outcome must be BLOCKED or CONTINUE_SELL_THROUGH")
+}
+
+function validateRecoveryCycleNotCompletedIdentityDigest({ canonicalData, identity }) {
+  const evaluationIdentity = JSON.stringify([
+    identity.marketId,
+    identity.sellOrderClientId,
+    identity.sellOrderBrokerOrderId,
+    canonicalData.appliedFillIds,
+    canonicalData.buyCost,
+    canonicalData.spent,
+    canonicalData.netSellProceeds,
+    canonicalData.realizedNetProfit,
+    canonicalData.minProfit,
+    canonicalData.activeQuantity,
+    canonicalData.keepQuantity,
+    canonicalData.outcome,
+    identity.reason,
+  ])
+  if (sha256OperationalStateValue(evaluationIdentity) !== identity.evaluationId) {
+    throw new TypeError("Recovery-cycle evaluation ID must be derived from its exact fill, accounting, and terminal SELL identity")
   }
 }
 
 function validateRecoveryCycleNotCompletedFact({ factType, canonicalData, factId }) {
-  if (factType === "RECOVERY_CYCLE_NOT_COMPLETED") {
-    const allowedFields = new Set(["evaluationId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "appliedFillIds", "sellOrderClientId", "sellOrderBrokerOrderId", "buyCost", "spent", "netSellProceeds", "realizedNetProfit", "minProfit", "activeQuantity", "keepQuantity", "outcome", "reason"])
-    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {throw new TypeError("Recovery-cycle non-completion fact contains unsupported fields")}
-    const evaluationId = requireNonEmptyString({ value: canonicalData.evaluationId,
-field: "data.evaluationId",
-maxLength: 64 })
-    const marketId = requireNonEmptyString({ value: canonicalData.marketId,
-field: "data.marketId",
-maxLength: MAX_FACT_ID_LENGTH })
-    const venue = requireNonEmptyString({ value: canonicalData.venue,
-field: "data.venue",
-maxLength: 32 })
-    const sellOrderClientId = requireNonEmptyString({ value: canonicalData.sellOrderClientId,
-field: "data.sellOrderClientId",
-maxLength: MAX_FACT_ID_LENGTH })
-    const sellOrderBrokerOrderId = requireNonEmptyString({ value: canonicalData.sellOrderBrokerOrderId,
-field: "data.sellOrderBrokerOrderId",
-maxLength: MAX_FACT_ID_LENGTH })
-    requireNonEmptyString({ value: canonicalData.baseAssetId,
-field: "data.baseAssetId",
-maxLength: MAX_FACT_ID_LENGTH })
-    requireNonEmptyString({ value: canonicalData.quoteAssetId,
-field: "data.quoteAssetId",
-maxLength: MAX_FACT_ID_LENGTH })
-    const reason = requireNonEmptyString({ value: canonicalData.reason,
-field: "data.reason",
-maxLength: 64 })
-    const continueReasons = new Set(["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"])
-    if (!SHA256_PATTERN.test(evaluationId) || venue !== venue.toLowerCase() ||
-        marketId !== `${venue  }:${  canonicalData.symbol}` ||
-        factId !== `recovery-cycle-not-completed:${  marketId  }:${  evaluationId}` ||
-        !/^[A-Z][A-Z0-9_]{1,63}$/.test(reason)) {
-      throw new TypeError("Recovery-cycle non-completion identity or reason is not canonical")
+  if (factType !== "RECOVERY_CYCLE_NOT_COMPLETED") {
+    return
+  }
+  const allowedFields = new Set([
+    "evaluationId",
+    "marketId",
+    "venue",
+    "symbol",
+    "baseAssetId",
+    "quoteAssetId",
+    "appliedFillIds",
+    "sellOrderClientId",
+    "sellOrderBrokerOrderId",
+    "buyCost",
+    "spent",
+    "netSellProceeds",
+    "realizedNetProfit",
+    "minProfit",
+    "activeQuantity",
+    "keepQuantity",
+    "outcome",
+    "reason",
+  ])
+  if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+    throw new TypeError("Recovery-cycle non-completion fact contains unsupported fields")
+  }
+  const identity = validateRecoveryCycleNotCompletedIdentity({ canonicalData, factId })
+  validateRecoveryCycleNotCompletedAmounts({ canonicalData })
+  validateRecoveryCycleNotCompletedOutcome({ canonicalData, reason: identity.reason })
+  validateRecoveryCycleNotCompletedIdentityDigest({ canonicalData, identity })
+}
+
+function validateAccountSnapshotMetadata({ canonicalData }) {
+  const allowedFields = new Set(["phase", "auditStatus", "sourceTime", "assetCount", "balances", "auditReasons"])
+  if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+    throw new TypeError("Account snapshot contains unsupported fields")
+  }
+  if (!["OPENING", "CLOSING", "PREFLIGHT", "RECOVERY", "COMMISSION_BASELINE"].includes(canonicalData.phase)) {
+    throw new TypeError("Account snapshot phase is unsupported")
+  }
+  if (!["COMPLETE", "INCOMPLETE"].includes(canonicalData.auditStatus)) {
+    throw new TypeError("Account snapshot auditStatus must be COMPLETE or INCOMPLETE")
+  }
+  if (!Number.isSafeInteger(canonicalData.sourceTime) || canonicalData.sourceTime < 0) {
+    throw new TypeError("Account snapshot sourceTime must be a non-negative safe integer")
+  }
+  if (
+    !Array.isArray(canonicalData.balances) ||
+    !Number.isSafeInteger(canonicalData.assetCount) ||
+    canonicalData.assetCount !== canonicalData.balances.length
+  ) {
+    throw new TypeError("Account snapshot assetCount must match its complete balances array")
+  }
+  if (
+    canonicalData.phase === "COMMISSION_BASELINE" &&
+    (canonicalData.auditStatus !== "COMPLETE" || canonicalData.balances.length !== 1)
+  ) {
+    throw new TypeError("COMMISSION_BASELINE account snapshot must be complete and contain exactly one fee-asset balance")
+  }
+  if (
+    !Array.isArray(canonicalData.auditReasons) ||
+    canonicalData.auditReasons.some((reason) =>
+      typeof reason !== "string" || reason.trim() === "" || reason !== reason.trim()
+    )
+  ) {
+    throw new TypeError("Account snapshot auditReasons must contain canonical non-empty strings")
+  }
+  if (canonicalData.auditStatus === "COMPLETE" && canonicalData.auditReasons.length > 0) {
+    throw new TypeError("A COMPLETE account snapshot cannot contain auditReasons")
+  }
+  if (canonicalData.auditStatus === "INCOMPLETE" && canonicalData.auditReasons.length === 0) {
+    throw new TypeError("An INCOMPLETE account snapshot requires auditReasons")
+  }
+}
+
+function validateAccountSnapshotBalances({ balances }) {
+  const assets = new Set()
+  let previousAsset = null
+  for (const [index, balance] of balances.entries()) {
+    const allowedBalanceFields = new Set(["asset", "free", "locked", "total"])
+    if (
+      !balance ||
+      typeof balance !== "object" ||
+      Array.isArray(balance) ||
+      Object.keys(balance).some((key) => !allowedBalanceFields.has(key))
+    ) {
+      throw new TypeError(`Account snapshot balance ${index} contains unsupported fields`)
     }
-    if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {throw new TypeError("Recovery-cycle symbol must be canonical uppercase alphanumeric")}
-    if (canonicalData.baseAssetId === canonicalData.quoteAssetId) {throw new TypeError("Recovery-cycle base and quote assets must differ")}
-    if (!Array.isArray(canonicalData.appliedFillIds) || canonicalData.appliedFillIds.length === 0 ||
-        canonicalData.appliedFillIds.some((id) => typeof id !== "string" || !id.trim()) ||
-        new Set(canonicalData.appliedFillIds).size !== canonicalData.appliedFillIds.length) {
-      throw new TypeError("Recovery-cycle non-completion requires unique applied fill identities")
+    const asset = requireNonEmptyString({
+      value: balance.asset,
+      field: `balances[${index}].asset`,
+      maxLength: 32,
+    })
+    if (!/^[A-Z0-9]{2,32}$/.test(asset) || assets.has(asset)) {
+      throw new TypeError("Account snapshot assets must be unique canonical uppercase asset codes")
     }
-    const isDecimalString = (value) => typeof value === "string" && /^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)
-    const isSignedDecimalString = (value) => typeof value === "string" && /^-?(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)
-    const isPositiveDecimalString = (value) => isDecimalString(value) && /[1-9]/.test(value)
-    if (!isDecimalString(canonicalData.buyCost) || compareDecimal({ left: canonicalData.buyCost,
-right: canonicalData.spent }) !== 0 ||
-        !isDecimalString(canonicalData.netSellProceeds) ||
-        !isSignedDecimalString(canonicalData.realizedNetProfit) ||
-        !isPositiveDecimalString(canonicalData.minProfit) ||
-        !isDecimalString(canonicalData.activeQuantity) ||
-        !isDecimalString(canonicalData.keepQuantity) ||
-        compareDecimal({ left: canonicalData.realizedNetProfit,
-right: subtractDecimal({ left: canonicalData.netSellProceeds,
-right: canonicalData.spent }) }) !== 0 ||
-        compareDecimal({ left: canonicalData.minProfit,
-right: "0.01" }) < 0) {
-      throw new TypeError("Recovery-cycle non-completion accounting values must be exact and internally consistent")
+    if (previousAsset !== null && previousAsset.localeCompare(asset) >= 0) {
+      throw new TypeError("Account snapshot balances must be sorted by canonical asset code")
     }
-    if (canonicalData.outcome === "CONTINUE_SELL_THROUGH") {
-      if (!continueReasons.has(reason) || compareDecimal({ left: canonicalData.activeQuantity,
-right: canonicalData.keepQuantity }) <= 0) {
-        throw new TypeError("CONTINUE_SELL_THROUGH requires an approved continuation reason and residual active inventory")
+    previousAsset = asset
+    assets.add(asset)
+    for (const field of ["free", "locked", "total"]) {
+      if (!isCanonicalDecimalString({ value: balance[field] })) {
+        throw new TypeError(`Account snapshot ${field} balance must be a non-negative exact decimal string`)
       }
-      if (reason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" &&
-          compareDecimal({ left: canonicalData.realizedNetProfit,
-right: canonicalData.minProfit }) < 0) {
-        throw new TypeError("Residual sell-through requires the minimum profit target to be met")
-      }
-      if (reason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" &&
-          compareDecimal({ left: canonicalData.realizedNetProfit,
-right: canonicalData.minProfit }) >= 0) {
-        throw new TypeError("Profit-target continuation requires realized profit below minProfit")
-      }
-    } else if (canonicalData.outcome === "BLOCKED") {
-      if (continueReasons.has(reason)) {
-        throw new TypeError("A continue-sell-through reason cannot be persisted as BLOCKED")
-      }
-      if (reason === "RECOVERY_SELL_FAILED_MIN_PROFIT" &&
-          compareDecimal({ left: canonicalData.realizedNetProfit,
-right: canonicalData.minProfit }) >= 0) {
-        throw new TypeError("A minimum-profit blocker requires realized profit below minProfit")
-      }
-    } else {
-      throw new TypeError("Recovery-cycle non-completion outcome must be BLOCKED or CONTINUE_SELL_THROUGH")
     }
-    const evaluationIdentity = JSON.stringify([
-      marketId,
-      sellOrderClientId,
-      sellOrderBrokerOrderId,
-      canonicalData.appliedFillIds,
-      canonicalData.buyCost,
-      canonicalData.spent,
-      canonicalData.netSellProceeds,
-      canonicalData.realizedNetProfit,
-      canonicalData.minProfit,
-      canonicalData.activeQuantity,
-      canonicalData.keepQuantity,
-      canonicalData.outcome,
-      reason,
-    ])
-    if (sha256OperationalStateValue(evaluationIdentity) !== evaluationId) {
-      throw new TypeError("Recovery-cycle evaluation ID must be derived from its exact fill, accounting, and terminal SELL identity")
+    if (compareDecimal({
+      left: balance.total,
+      right: addDecimal({ left: balance.free, right: balance.locked }),
+    }) !== 0) {
+      throw new TypeError("Account snapshot total balance must equal exact free plus locked quantities")
     }
   }
 }
 
 function validateAccountSnapshotCapturedFact({ factType, canonicalData }) {
-  if (factType === "ACCOUNT_SNAPSHOT_CAPTURED") {
-    const allowedFields = new Set(["phase", "auditStatus", "sourceTime", "assetCount", "balances", "auditReasons"])
-    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
-      throw new TypeError("Account snapshot contains unsupported fields")
+  if (factType !== "ACCOUNT_SNAPSHOT_CAPTURED") {
+    return
+  }
+  validateAccountSnapshotMetadata({ canonicalData })
+  validateAccountSnapshotBalances({ balances: canonicalData.balances })
+}
+
+function validateAccountOpenOrdersMetadata({ canonicalData }) {
+  const allowedFields = new Set(["phase", "observedAt", "readiness", "orderCount", "orders", "blockReasons"])
+  if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+    throw new TypeError("Account open-order snapshot contains unsupported fields")
+  }
+  if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(canonicalData.phase)) {
+    throw new TypeError("Account open-order snapshot phase is unsupported")
+  }
+  if (!Number.isSafeInteger(canonicalData.observedAt) || canonicalData.observedAt < 0) {
+    throw new TypeError("Account open-order snapshot observedAt must be a non-negative safe integer")
+  }
+  if (!["READY", "RECONCILED", "BLOCKED"].includes(canonicalData.readiness)) {
+    throw new TypeError("Account open-order snapshot readiness is unsupported")
+  }
+  if (
+    !Array.isArray(canonicalData.orders) ||
+    !Number.isSafeInteger(canonicalData.orderCount) ||
+    canonicalData.orderCount !== canonicalData.orders.length
+  ) {
+    throw new TypeError("Account open-order snapshot orderCount must match its orders array")
+  }
+  if (
+    !Array.isArray(canonicalData.blockReasons) ||
+    canonicalData.blockReasons.some((reason) =>
+      typeof reason !== "string" || reason.trim() === "" || reason !== reason.trim()
+    )
+  ) {
+    throw new TypeError("Account open-order blockReasons must contain canonical non-empty strings")
+  }
+}
+
+function validateAccountOpenOrder({ order, index }) {
+  const allowedOrderFields = new Set([
+    "clientOrderId",
+    "brokerOrderId",
+    "symbol",
+    "side",
+    "type",
+    "price",
+    "quantity",
+    "executedQuantity",
+    "status",
+  ])
+  if (
+    !order ||
+    typeof order !== "object" ||
+    Array.isArray(order) ||
+    Object.keys(order).some((key) => !allowedOrderFields.has(key))
+  ) {
+    throw new TypeError(`Account open order ${index} contains unsupported fields`)
+  }
+  const brokerOrderId = requireNonEmptyString({
+    value: order.brokerOrderId,
+    field: `orders[${index}].brokerOrderId`,
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  const symbol = requireNonEmptyString({
+    value: order.symbol,
+    field: `orders[${index}].symbol`,
+    maxLength: 32,
+  })
+  if (!/^[A-Z0-9]{3,30}$/.test(symbol)) {
+    throw new TypeError("Account open-order symbol must be canonical uppercase alphanumeric")
+  }
+  if (order.clientOrderId !== undefined) {
+    requireNonEmptyString({
+      value: order.clientOrderId,
+      field: `orders[${index}].clientOrderId`,
+      maxLength: MAX_FACT_ID_LENGTH,
+    })
+  }
+  if (order.side !== "BUY" && order.side !== "SELL") {
+    throw new TypeError("Account open-order side must be BUY or SELL")
+  }
+  requireNonEmptyString({ value: order.type, field: `orders[${index}].type`, maxLength: 32 })
+  if (
+    order.price !== undefined &&
+    !isPositiveCanonicalDecimalString({ value: order.price })
+  ) {
+    throw new TypeError("Account open-order price must be a positive exact decimal string when present")
+  }
+  if (
+    !isPositiveCanonicalDecimalString({ value: order.quantity }) ||
+    !isCanonicalDecimalString({ value: order.executedQuantity })
+  ) {
+    throw new TypeError("Account open-order quantities must be exact canonical decimal strings")
+  }
+  if (compareDecimal({ left: order.executedQuantity, right: order.quantity }) > 0) {
+    throw new TypeError("Account open-order executed quantity cannot exceed original quantity")
+  }
+  if (!["NEW", "OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
+    throw new TypeError("Account open-order status must be OPEN or PARTIALLY_FILLED")
+  }
+  return `${symbol}:${brokerOrderId}`
+}
+
+function validateAccountOpenOrderCollection({ orders }) {
+  const orderIdentities = new Set()
+  for (const [index, order] of orders.entries()) {
+    const identity = validateAccountOpenOrder({ order, index })
+    if (orderIdentities.has(identity)) {
+      throw new TypeError("Account open-order snapshot contains duplicate symbol/brokerOrderId identities")
     }
-    if (!["OPENING", "CLOSING", "PREFLIGHT", "RECOVERY", "COMMISSION_BASELINE"].includes(canonicalData.phase)) {
-      throw new TypeError("Account snapshot phase is unsupported")
-    }
-    if (!["COMPLETE", "INCOMPLETE"].includes(canonicalData.auditStatus)) {
-      throw new TypeError("Account snapshot auditStatus must be COMPLETE or INCOMPLETE")
-    }
-    if (!Number.isSafeInteger(canonicalData.sourceTime) || canonicalData.sourceTime < 0) {
-      throw new TypeError("Account snapshot sourceTime must be a non-negative safe integer")
-    }
-    if (!Array.isArray(canonicalData.balances) || !Number.isSafeInteger(canonicalData.assetCount) ||
-        canonicalData.assetCount !== canonicalData.balances.length) {
-      throw new TypeError("Account snapshot assetCount must match its complete balances array")
-    }
-    if (canonicalData.phase === "COMMISSION_BASELINE" &&
-        (canonicalData.auditStatus !== "COMPLETE" || canonicalData.balances.length !== 1)) {
-      throw new TypeError("COMMISSION_BASELINE account snapshot must be complete and contain exactly one fee-asset balance")
-    }
-    if (!Array.isArray(canonicalData.auditReasons) ||
-        canonicalData.auditReasons.some((reason) => typeof reason !== "string" || reason.trim() === "" || reason !== reason.trim())) {
-      throw new TypeError("Account snapshot auditReasons must contain canonical non-empty strings")
-    }
-    if (canonicalData.auditStatus === "COMPLETE" && canonicalData.auditReasons.length > 0) {
-      throw new TypeError("A COMPLETE account snapshot cannot contain auditReasons")
-    }
-    if (canonicalData.auditStatus === "INCOMPLETE" && canonicalData.auditReasons.length === 0) {
-      throw new TypeError("An INCOMPLETE account snapshot requires auditReasons")
-    }
-    const assets = new Set()
-    let previousAsset = null
-    for (const [index, balance] of canonicalData.balances.entries()) {
-      const allowedBalanceFields = new Set(["asset", "free", "locked", "total"])
-      if (!balance || typeof balance !== "object" || Array.isArray(balance) ||
-          Object.keys(balance).some((key) => !allowedBalanceFields.has(key))) {
-        throw new TypeError(`Account snapshot balance ${  index  } contains unsupported fields`)
-      }
-      const asset = requireNonEmptyString({ value: balance.asset,
-field: `balances[${  index  }].asset`,
-maxLength: 32 })
-      if (!/^[A-Z0-9]{2,32}$/.test(asset) || assets.has(asset)) {
-        throw new TypeError("Account snapshot assets must be unique canonical uppercase asset codes")
-      }
-      if (previousAsset !== null && previousAsset.localeCompare(asset) >= 0) {
-        throw new TypeError("Account snapshot balances must be sorted by canonical asset code")
-      }
-      previousAsset = asset
-      assets.add(asset)
-      for (const field of ["free", "locked", "total"]) {
-        const value = balance[field]
-        if (typeof value !== "string" || !/^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)) {
-          throw new TypeError(`Account snapshot ${  field  } balance must be a non-negative exact decimal string`)
-        }
-      }
-      if (compareDecimal({ left: balance.total,
-right: addDecimal({ left: balance.free,
-right: balance.locked }) }) !== 0) {
-        throw new TypeError("Account snapshot total balance must equal exact free plus locked quantities")
-      }
-    }
+    orderIdentities.add(identity)
+  }
+}
+
+function validateAccountOpenOrderReadiness({ canonicalData }) {
+  if (
+    canonicalData.readiness === "READY" &&
+    (canonicalData.orders.length > 0 || canonicalData.blockReasons.length > 0)
+  ) {
+    throw new TypeError("READY account open-order snapshot requires no orders and no block reasons")
+  }
+  if (
+    canonicalData.readiness === "RECONCILED" &&
+    (canonicalData.orders.length === 0 || canonicalData.blockReasons.length > 0)
+  ) {
+    throw new TypeError("RECONCILED account open-order snapshot requires owned open orders and no block reasons")
+  }
+  if (canonicalData.readiness === "BLOCKED" && canonicalData.blockReasons.length === 0) {
+    throw new TypeError("BLOCKED account open-order snapshot requires explicit blockReasons")
   }
 }
 
 function validateAccountOpenOrdersCapturedFact({ factType, canonicalData }) {
-  if (factType === "ACCOUNT_OPEN_ORDERS_CAPTURED") {
-    const allowedFields = new Set(["phase", "observedAt", "readiness", "orderCount", "orders", "blockReasons"])
-    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
-      throw new TypeError("Account open-order snapshot contains unsupported fields")
-    }
-    if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(canonicalData.phase)) {
-      throw new TypeError("Account open-order snapshot phase is unsupported")
-    }
-    if (!Number.isSafeInteger(canonicalData.observedAt) || canonicalData.observedAt < 0) {
-      throw new TypeError("Account open-order snapshot observedAt must be a non-negative safe integer")
-    }
-    if (!["READY", "RECONCILED", "BLOCKED"].includes(canonicalData.readiness)) {
-      throw new TypeError("Account open-order snapshot readiness is unsupported")
-    }
-    if (!Array.isArray(canonicalData.orders) || !Number.isSafeInteger(canonicalData.orderCount) ||
-        canonicalData.orderCount !== canonicalData.orders.length) {
-      throw new TypeError("Account open-order snapshot orderCount must match its orders array")
-    }
-    if (!Array.isArray(canonicalData.blockReasons) ||
-        canonicalData.blockReasons.some((reason) => typeof reason !== "string" || reason.trim() === "" || reason !== reason.trim())) {
-      throw new TypeError("Account open-order blockReasons must contain canonical non-empty strings")
-    }
-    const orderIdentities = new Set()
-    for (const [index, order] of canonicalData.orders.entries()) {
-      const allowedOrderFields = new Set(["clientOrderId", "brokerOrderId", "symbol", "side", "type", "price", "quantity", "executedQuantity", "status"])
-      if (!order || typeof order !== "object" || Array.isArray(order) ||
-          Object.keys(order).some((key) => !allowedOrderFields.has(key))) {
-        throw new TypeError(`Account open order ${  index  } contains unsupported fields`)
-      }
-      const brokerOrderId = requireNonEmptyString({ value: order.brokerOrderId,
-field: `orders[${  index  }].brokerOrderId`,
-maxLength: MAX_FACT_ID_LENGTH })
-      const symbol = requireNonEmptyString({ value: order.symbol,
-field: `orders[${  index  }].symbol`,
-maxLength: 32 })
-      if (!/^[A-Z0-9]{3,30}$/.test(symbol)) {
-        throw new TypeError("Account open-order symbol must be canonical uppercase alphanumeric")
-      }
-      if (order.clientOrderId !== undefined) {
-        requireNonEmptyString({ value: order.clientOrderId,
-field: `orders[${  index  }].clientOrderId`,
-maxLength: MAX_FACT_ID_LENGTH })
-      }
-      if (order.side !== "BUY" && order.side !== "SELL") {
-        throw new TypeError("Account open-order side must be BUY or SELL")
-      }
-      requireNonEmptyString({ value: order.type,
-field: `orders[${  index  }].type`,
-maxLength: 32 })
-      if (order.price !== undefined &&
-          (typeof order.price !== "string" || !/^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(order.price) || !/[1-9]/.test(order.price))) {
-        throw new TypeError("Account open-order price must be a positive exact decimal string when present")
-      }
-      if (typeof order.quantity !== "string" || !/^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(order.quantity) || !/[1-9]/.test(order.quantity) ||
-          typeof order.executedQuantity !== "string" || !/^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(order.executedQuantity)) {
-        throw new TypeError("Account open-order quantities must be exact canonical decimal strings")
-      }
-      if (compareDecimal({ left: order.executedQuantity,
-right: order.quantity }) > 0) {
-        throw new TypeError("Account open-order executed quantity cannot exceed original quantity")
-      }
-      if (!["NEW", "OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
-        throw new TypeError("Account open-order status must be OPEN or PARTIALLY_FILLED")
-      }
-      const identity = `${symbol  }:${  brokerOrderId}`
-      if (orderIdentities.has(identity)) {
-        throw new TypeError("Account open-order snapshot contains duplicate symbol/brokerOrderId identities")
-      }
-      orderIdentities.add(identity)
-    }
-    if (canonicalData.readiness === "READY" &&
-        (canonicalData.orders.length > 0 || canonicalData.blockReasons.length > 0)) {
-      throw new TypeError("READY account open-order snapshot requires no orders and no block reasons")
-    }
-    if (canonicalData.readiness === "RECONCILED" &&
-        (canonicalData.orders.length === 0 || canonicalData.blockReasons.length > 0)) {
-      throw new TypeError("RECONCILED account open-order snapshot requires owned open orders and no block reasons")
-    }
-    if (canonicalData.readiness === "BLOCKED" && canonicalData.blockReasons.length === 0) {
-      throw new TypeError("BLOCKED account open-order snapshot requires explicit blockReasons")
-    }
+  if (factType !== "ACCOUNT_OPEN_ORDERS_CAPTURED") {
+    return
   }
+  validateAccountOpenOrdersMetadata({ canonicalData })
+  validateAccountOpenOrderCollection({ orders: canonicalData.orders })
+  validateAccountOpenOrderReadiness({ canonicalData })
 }
 
 function validateMarketHistoryCoverageConfirmedFact({ factType, canonicalData }) {
