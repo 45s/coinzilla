@@ -392,9 +392,19 @@ function assertFinalRecoveryCycleResult({ dogeTradingReplay, recoveryCycleComple
 
 runDogeTradingReplayTest("combines four completed BUY fills into one profitable recovery SELL and retains the configured inventory", async (dogeTradingReplay) => {
   const { completedBuyOrders, latestRecoverySellOrder } = await completeFourBuyOrders(dogeTradingReplay);
-  assertFourBuyExecutionHistory({ dogeTradingReplay, completedBuyOrders, latestRecoverySellOrder });
-  const recoveryCycleCompletion = await completeFinalRecoveryCycle({ dogeTradingReplay, latestRecoverySellOrder });
-  assertFinalRecoveryCycleResult({ dogeTradingReplay, recoveryCycleCompletion });
+  assertFourBuyExecutionHistory({
+    dogeTradingReplay,
+    completedBuyOrders,
+    latestRecoverySellOrder,
+  });
+  const recoveryCycleCompletion = await completeFinalRecoveryCycle({
+    dogeTradingReplay,
+    latestRecoverySellOrder,
+  });
+  assertFinalRecoveryCycleResult({
+    dogeTradingReplay,
+    recoveryCycleCompletion,
+  });
 });
 
 runDogeTradingReplayTest("completes the recovery cycle only after the SELL fill report is received and reconciled", async (dogeTradingReplay) => {
