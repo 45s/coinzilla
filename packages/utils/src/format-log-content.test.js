@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { formatLogContent } from './format-log-content.js'
 
-describe('formatLogContent', () => {
+describe('formatLogContent values and errors', () => {
   it('preserves primitive values and serializes structured values', () => {
     assert.equal(formatLogContent('message'), 'message')
     assert.equal(formatLogContent(42), 42)
@@ -13,7 +13,8 @@ describe('formatLogContent', () => {
   it('preserves Error diagnostics directly and when nested in objects and arrays', () => {
     const error = new TypeError('broker failed')
     const direct = JSON.parse(formatLogContent(error))
-    const nested = JSON.parse(formatLogContent({ error, errors: [error] }))
+    const nested = JSON.parse(formatLogContent({ error,
+      errors: [error] }))
 
     assert.equal(direct.name, 'TypeError')
     assert.equal(direct.message, 'broker failed')
@@ -45,6 +46,9 @@ describe('formatLogContent', () => {
     assert.equal(JSON.parse(formatLogContent(error)).cause, '[Circular]')
   })
 
+})
+
+describe('formatLogContent redaction and fallbacks', () => {
   it('redacts common credential fields in nested structured log data and Error causes', () => {
     const error = new Error('request failed', {
       cause: Object.assign(new Error('nested'), { apiKey: 'sensitive-error-key' }),
@@ -52,7 +56,8 @@ describe('formatLogContent', () => {
     const formatted = formatLogContent({
       symbol: 'BTCUSDT',
       accessToken: 'sensitive-token',
-      nested: { apiKey: 'sensitive-key', password: 'sensitive-password' },
+      nested: { apiKey: 'sensitive-key',
+        password: 'sensitive-password' },
       error,
     })
     assert.match(formatted, /BTCUSDT/)
@@ -72,7 +77,8 @@ describe('formatLogContent', () => {
       ownKeys() { throw new Error('proxy blocked') },
     })
 
-    assert.match(formatLogContent({ hostileGetter, hostileProxy }), /Unreadable property/)
+    assert.match(formatLogContent({ hostileGetter,
+      hostileProxy }), /Unreadable property/)
   })
 
   it('falls back for BigInt-containing objects and preserves non-Error thrown values', () => {

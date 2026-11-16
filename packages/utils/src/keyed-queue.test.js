@@ -36,7 +36,8 @@ test("runs tasks for different keys independently", async () => {
   const firstGate = new Promise((resolve) => { releaseFirst = resolve })
   let secondStarted = false
 
-  const first = queue.enqueue({ key: "DOGEUSDT", task: () => firstGate })
+  const first = queue.enqueue({ key: "DOGEUSDT",
+    task: () => firstGate })
   const second = queue.enqueue({
     key: "BTCUSDT",
     task: async () => { secondStarted = true },
@@ -54,8 +55,10 @@ test("reports task failures and continues the same key queue", async () => {
   const order = []
   const failure = new Error("simulated failure")
 
-  await queue.enqueue({ key: "DOGEUSDT", task: async () => { throw failure } })
-  await queue.enqueue({ key: "DOGEUSDT", task: async () => { order.push("continued") } })
+  await queue.enqueue({ key: "DOGEUSDT",
+    task: async () => { throw failure } })
+  await queue.enqueue({ key: "DOGEUSDT",
+    task: async () => { order.push("continued") } })
 
   assert.equal(errors.length, 1)
   assert.equal(errors[0].key, "DOGEUSDT")
@@ -68,10 +71,12 @@ test("propagates task failures when no error handler is configured and continues
   const order = []
 
   await assert.rejects(
-    queue.enqueue({ key: "same", task: async () => { throw new Error("task failed") } }),
+    queue.enqueue({ key: "same",
+      task: async () => { throw new Error("task failed") } }),
     /task failed/,
   )
-  await queue.enqueue({ key: "same", task: async () => { order.push("next") } })
+  await queue.enqueue({ key: "same",
+    task: async () => { order.push("next") } })
   await queue.drain()
 
   assert.deepEqual(order, ["next"])
@@ -84,10 +89,12 @@ test("a failing error handler does not poison later tasks", async () => {
   const order = []
 
   await assert.rejects(
-    queue.enqueue({ key: "same", task: async () => { throw new Error("task failed") } }),
+    queue.enqueue({ key: "same",
+      task: async () => { throw new Error("task failed") } }),
     /reporting failed/,
   )
-  await queue.enqueue({ key: "same", task: async () => { order.push("next") } })
+  await queue.enqueue({ key: "same",
+    task: async () => { order.push("next") } })
   await queue.drain()
 
   assert.deepEqual(order, ["next"])
@@ -107,7 +114,8 @@ test("drain waits for pending tasks across all keys", async () => {
       taskFinished = true
     },
   })
-  const second = queue.enqueue({ key: "BTCUSDT", task: async () => {} })
+  const second = queue.enqueue({ key: "BTCUSDT",
+    task: async () => {} })
   const drain = queue.drain().then(() => { drainFinished = true })
 
   await second
@@ -127,6 +135,7 @@ test("validates queue options and enqueue input", () => {
   assert.throws(() => createKeyedQueue({ onError: true }), /onError/)
   const queue = createKeyedQueue()
   assert.throws(() => queue.enqueue({ task() {} }), /key/)
-  assert.throws(() => queue.enqueue({ key: "x", task: true }), /task/)
+  assert.throws(() => queue.enqueue({ key: "x",
+    task: true }), /task/)
   assert.equal(Object.isFrozen(queue), true)
 })
