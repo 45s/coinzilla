@@ -58,24 +58,17 @@ export const normalizeOrderHistory = ({ orders, limit = 20 }) => {
     throw new RangeError(`Order history limit must be an integer between 1 and ${MAX_ORDER_HISTORY_LIMIT}`)
   }
 
-  const normalizedOrders = orders.map((order, index) => ({
-    order: validateOrder({ order, index }),
-    index,
-  }))
-  normalizedOrders.sort((left, right) => {
-    const leftTime = left.order.time
-    const rightTime = right.order.time
-    if (leftTime !== rightTime) {
-      return rightTime - leftTime
-    }
-    const leftId = BigInt(left.order.orderId)
-    const rightId = BigInt(right.order.orderId)
-    if (leftId === rightId) {
-      return left.index - right.index
-    }
-    return leftId > rightId ? -1 : 1
+  const normalizedOrders = orders.map((order, index) => {
+    const normalized = validateOrder({ order, index })
+    const invertedTime = String(Number.MAX_SAFE_INTEGER - normalized.time).padStart(16, "0")
+    const normalizedId = BigInt(normalized.orderId).toString()
+    const invertedId = normalizedId.replace(/\d/g, (digit) => String(9 - Number(digit)))
+    const invertedIdLength = String(16 - normalizedId.length).padStart(2, "0")
+    const sortKey = `${invertedTime}:${invertedIdLength}:${invertedId}:${String(index).padStart(8, "0")}`
+    return { normalized, sortKey }
   })
-  return { orders: normalizedOrders.slice(0, limit).map(({ order }) => order) }
+  normalizedOrders.sort((left, right) => left.sortKey.localeCompare(right.sortKey))
+  return { orders: normalizedOrders.slice(0, limit).map(({ normalized }) => normalized) }
 }
 
 export const parseOrderHistoryArguments = ({ args = [] } = {}) => {
