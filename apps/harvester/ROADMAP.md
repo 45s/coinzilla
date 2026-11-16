@@ -1790,5 +1790,5 @@ The current rationale, filter mapping, deliberately excluded order-type-specific
 ## 2026-11-16 — Bitunix Spot market metadata preparation (issue #1185)
 
 - [x] Implement a pure Harvester mapping from raw Bitunix Spot pair metadata into canonical `Market` and `TradingRules`: `minVolume` to `MIN_QUANTITY`, `minPrice` to `MIN_NOTIONAL`.
-- [x] Keep price/quantity increments, maximum bounds, and depth precision UNKNOWN where the official API does not define their semantics; preserve reference-only maximum fields as unvalidated diagnostics.
+- [x] Keep price/quantity increments, maximum bounds, and depth precision UNKNOWN where the official API does not define their semantics; record reference-only maximum field names as unvalidated diagnostics.
 - [ ] Keep this helper disconnected from runtime bootstrap until Bitunix lifecycle and reconciliation prerequisites in [issue #1185](https://github.com/45s/coinzilla/issues/1185) are resolved. This work does not enable Bitunix trading. Implemented as a pure helper in [PR #1209](https://github.com/45s/coinzilla/pull/1209).

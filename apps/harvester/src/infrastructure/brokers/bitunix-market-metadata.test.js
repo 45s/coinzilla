@@ -107,6 +107,16 @@ test("advertises only documented order types for an explicitly open market", () 
   )
 })
 
+test("accepts the numeric open flag used by the reference model", () => {
+  const metadata = createMetadata({
+    overrides: {
+      isOpen: 1,
+    },
+  })
+
+  assert.deepEqual(metadata.supportedOrderTypes, ["LIMIT", "MARKET"])
+})
+
 test("does not advertise order types for closed or unknown markets", () => {
   const closed = createMetadata({
     overrides: {
@@ -218,7 +228,7 @@ test("keeps precision and undocumented maximum metadata explicitly unvalidated",
     "depth precision semantics must remain unresolved",
   )
   assert.ok(
-    unvalidatedTypes.includes("MAX_ORDER_QUANTITY"),
+    unvalidatedTypes.includes("UNDOCUMENTED_MAX_AMOUNT_METADATA"),
     "reference-only max amount fields must not be promoted into supported rules",
   )
   assert.equal(

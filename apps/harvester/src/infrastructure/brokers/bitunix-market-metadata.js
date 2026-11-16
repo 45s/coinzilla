@@ -69,7 +69,7 @@ function createUnvalidatedConstraints({ symbolFilters }) {
   ].some((field) => symbolFilters[field] !== undefined && symbolFilters[field] !== null)
   if (hasMaximumMetadata) {
     constraints.push(createUnvalidatedConstraint({
-      type: "MAX_ORDER_QUANTITY",
+      type: "UNDOCUMENTED_MAX_AMOUNT_METADATA",
       sourceFilterType: "maxAmount/maxLimitOrderAmount/maxMarketOrderAmount",
     }))
   }
