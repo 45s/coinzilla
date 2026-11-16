@@ -449,7 +449,7 @@ export function reportMarkdownStyleBaseline() {
   )
 
   for (const [name, entries] of Object.entries(report.findings)) {
-    const total = entries.reduce((sum, entry) => sum + entry.count, 0)
+    const total = entries.reduce((...values) => values[0] + values[1].count, 0)
     process.stdout.write(`- ${  FINDING_LABELS[name]  }: ${  entries.length  } files / ${  total  } occurrences\n`)
     for (const entry of entries) {
       const lineDetail = entry.lines.length > 0
