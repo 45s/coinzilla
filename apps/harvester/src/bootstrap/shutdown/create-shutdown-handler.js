@@ -368,7 +368,6 @@ async function stopUserDataIntakeAndDrain(context) {
     return context.userDataIntakeErrors
   }
 
-  context.state.intakeStopped = true
   const finalDrain = await context.failureRecorder.runPhaseSafely({
     phase: "USER_DATA_DRAIN_FINAL",
     operation: () => context.state.eventQueue,
@@ -378,6 +377,8 @@ async function stopUserDataIntakeAndDrain(context) {
   })
   if (finalDrain?.ok === false) {
     context.userDataIntakeErrors.push(...(finalDrain.errors ?? [new Error("Final user-data drain failed")]))
+  } else {
+    context.state.intakeStopped = true
   }
   return context.userDataIntakeErrors
 }
@@ -553,6 +554,16 @@ async function proveStrategySafety(context) {
   }
 }
 
+async function reproveStrategySafety(context) {
+  try {
+    await proveStrategySafety(context)
+  } catch (error) {
+    await publishClosingAudit(context)
+    if (context.snapshotError) throw context.snapshotError
+    throw error
+  }
+}
+
 async function stopOperatorControlAfterSafety(context) {
   if (typeof context.beforeSharedServicesStop !== "function") return
   const result = await context.failureRecorder.runPhaseSafely({
@@ -572,7 +583,7 @@ async function runShutdownLifecycle(context) {
   await publishClosingAudit(context)
   if (context.snapshotError) throw context.snapshotError
   if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
-    await proveStrategySafety(context)
+    await reproveStrategySafety(context)
     await publishClosingAudit(context)
     if (context.snapshotError) throw context.snapshotError
   }
@@ -585,16 +596,30 @@ async function runShutdownLifecycle(context) {
   }
 
   if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
-    await proveStrategySafety(context)
+    await reproveStrategySafety(context)
     await publishClosingAudit(context)
     if (context.snapshotError) throw context.snapshotError
   }
-  await flushShutdownJournal(context)
-  if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
-    await proveStrategySafety(context)
+  try {
+    await flushShutdownJournal(context)
+  } catch (error) {
+    context.auditReasons.push("JOURNAL_NOT_DURABLE")
     await publishClosingAudit(context)
     if (context.snapshotError) throw context.snapshotError
-    await flushShutdownJournal(context)
+    throw error
+  }
+  if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
+    await reproveStrategySafety(context)
+    await publishClosingAudit(context)
+    if (context.snapshotError) throw context.snapshotError
+    try {
+      await flushShutdownJournal(context)
+    } catch (error) {
+      context.auditReasons.push("JOURNAL_NOT_DURABLE")
+      await publishClosingAudit(context)
+      if (context.snapshotError) throw context.snapshotError
+      throw error
+    }
   }
 
   await stopOperatorControlAfterSafety(context)
@@ -609,10 +634,10 @@ async function runShutdownLifecycle(context) {
 /**
  * Create an idempotent Harvester shutdown handler.
  *
- * The shutdown path drains accepted work, reconciles owned BUYs, stops user-data
- * intake, then reconciles and verifies recovery SELL coverage against the final
- * accounting state. Shutdown recovery can submit SELLs only; it cannot submit
- * a new standing BUY.
+ * The application coordinator waits for strategy-owned safety participants
+ * before stopping shared services. Conservative owns BUY gating, order/fill
+ * reconciliation and recovery SELL coverage; other strategies keep separate
+ * shutdown policies.
  */
 export function createShutdownHandler(options = {}) {
   const {
@@ -685,11 +710,14 @@ export function createShutdownHandler(options = {}) {
     shutdownPromise = runShutdownLifecycle(context).catch((error) => {
       context.strategyShutdownError = error
       state.status = "SHUTDOWN_INCOMPLETE"
-      if (!error.shutdownDiagnostics) {
-        error.shutdownDiagnostics = createShutdownDiagnostics({
-          context,
-          cleanupErrors: [error],
-        })
+      const diagnostics = createShutdownDiagnostics({
+        context,
+        cleanupErrors: [error],
+      })
+      error.shutdownDiagnostics = {
+        ...diagnostics,
+        ...(error.shutdownDiagnostics ?? {}),
+        strategyBlockers: error.shutdownDiagnostics?.strategyBlockers ?? diagnostics.strategyBlockers,
       }
       options.logger?.error?.({
         message: "Shutdown safety or durability was not proven; required runtime services remain connected",
