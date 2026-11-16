@@ -62,7 +62,8 @@ count: startedRecords.length },
   }
   if (startedRecords.length === 0) { return undefined }
 
-  const processStartedEvent = startedRecords[0].payload
+  const [firstStartedRecord] = startedRecords
+  const processStartedEvent = firstStartedRecord.payload
   const data = processStartedEvent?.data
   const startedAt = data?.startedAt
   const runtimeSessionId = data?.runtimeSessionId
@@ -147,7 +148,7 @@ directory })
     })
   }
 
-  const firstRecordTimestamp = eventTimestamps[0]
+  const [firstRecordTimestamp] = eventTimestamps
   const lastRecordTimestamp = eventTimestamps.at(-1)
   if (processStarted) {
     if (eventTimestamps.some((timestamp) => timestamp < processStarted.chronologyTimestamp)) {
