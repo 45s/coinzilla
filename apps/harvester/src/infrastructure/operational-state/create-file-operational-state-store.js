@@ -318,86 +318,105 @@ maxLength: MAX_FACT_ID_LENGTH })
   }
 }
 
-function validateOrderSubmissionOutcomeFact({ factType, canonicalData, factId }) {
-  if (factType === "ORDER_SUBMISSION_OUTCOME") {
-    const allowedFields = new Set([
-      "clientOrderId",
-      "marketId",
-      "venue",
-      "symbol",
-      "baseAssetId",
-      "quoteAssetId",
-      "side",
-      "type",
-      "price",
-      "quantity",
-      "executedQuantity",
-      "purpose",
-      "outcome",
-      "brokerOrderId",
-      "status",
-    ])
-    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
-      throw new TypeError("Order-submission outcome fact contains unsupported fields")
-    }
-    const clientOrderId = requireNonEmptyString({
-      value: canonicalData.clientOrderId,
-      field: "data.clientOrderId",
+function isCanonicalDecimalString({ value }) {
+  return typeof value === "string" && /^(0|[1-9][0-9]*)(\\.[0-9]+)?$/.test(value)
+}
+
+function isPositiveCanonicalDecimalString({ value }) {
+  return isCanonicalDecimalString({ value }) && /[1-9]/.test(value)
+}
+
+function isSignedCanonicalDecimalString({ value }) {
+  return typeof value === "string" && /^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$/.test(value)
+}
+
+function validateOrderSubmissionOutcomeIdentity({ canonicalData, factId, clientOrderId }) {
+  if (factIdForOrderOutcome(clientOrderId, canonicalData.outcome) !== factId) {
+    throw new TypeError("Order-submission outcome factId must match its stable clientOrderId and outcome identity")
+  }
+  if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
+    throw new TypeError("Order-submission outcome symbol must be canonical uppercase alphanumeric")
+  }
+  if (canonicalData.side !== "BUY" && canonicalData.side !== "SELL") {
+    throw new TypeError("Order-submission outcome side must be BUY or SELL")
+  }
+  if (canonicalData.type !== "LIMIT" && canonicalData.type !== "LIMIT_MAKER") {
+    throw new TypeError("Order-submission outcome type must be LIMIT or LIMIT_MAKER")
+  }
+}
+
+function validateOrderSubmissionOutcomeAmounts({ canonicalData }) {
+  if (
+    !isPositiveCanonicalDecimalString({ value: canonicalData.price }) ||
+    !isPositiveCanonicalDecimalString({ value: canonicalData.quantity }) ||
+    !isCanonicalDecimalString({ value: canonicalData.executedQuantity })
+  ) {
+    throw new TypeError("Order-submission outcome amounts must be canonical exact decimal strings")
+  }
+}
+
+function validateOrderSubmissionOutcomeState({ canonicalData }) {
+  if (canonicalData.purpose !== null && canonicalData.purpose !== "RECOVERY_SELL") {
+    throw new TypeError("Order-submission outcome purpose must be null or RECOVERY_SELL")
+  }
+  if (!["ACKNOWLEDGED", "REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"].includes(canonicalData.outcome)) {
+    throw new TypeError("Order-submission outcome classification is unsupported")
+  }
+  requireNonEmptyString({ value: canonicalData.status, field: "data.status", maxLength: 32 })
+  if (canonicalData.outcome === "ACKNOWLEDGED") {
+    requireNonEmptyString({
+      value: canonicalData.brokerOrderId,
+      field: "data.brokerOrderId",
       maxLength: MAX_FACT_ID_LENGTH,
     })
-    requireNonEmptyString({ value: canonicalData.marketId,
-field: "data.marketId",
-maxLength: MAX_FACT_ID_LENGTH })
-    requireNonEmptyString({ value: canonicalData.venue,
-field: "data.venue",
-maxLength: 32 })
-    requireNonEmptyString({ value: canonicalData.baseAssetId,
-field: "data.baseAssetId",
-maxLength: MAX_FACT_ID_LENGTH })
-    requireNonEmptyString({ value: canonicalData.quoteAssetId,
-field: "data.quoteAssetId",
-maxLength: MAX_FACT_ID_LENGTH })
-    if (factIdForOrderOutcome(clientOrderId, canonicalData.outcome) !== factId) {
-      throw new TypeError("Order-submission outcome factId must match its stable clientOrderId and outcome identity")
+    if (canonicalData.status === "PENDING") {
+      throw new TypeError("Acknowledged order-submission outcome cannot have PENDING status")
     }
-    if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
-      throw new TypeError("Order-submission outcome symbol must be canonical uppercase alphanumeric")
-    }
-    if (canonicalData.side !== "BUY" && canonicalData.side !== "SELL") {
-      throw new TypeError("Order-submission outcome side must be BUY or SELL")
-    }
-    if (canonicalData.type !== "LIMIT" && canonicalData.type !== "LIMIT_MAKER") {
-      throw new TypeError("Order-submission outcome type must be LIMIT or LIMIT_MAKER")
-    }
-    const isDecimalString = (value) =>
-      typeof value === "string" && /^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)
-    const isPositiveDecimalString = (value) => isDecimalString(value) && /[1-9]/.test(value)
-    if (!isPositiveDecimalString(canonicalData.price) ||
-        !isPositiveDecimalString(canonicalData.quantity) ||
-        !isDecimalString(canonicalData.executedQuantity)) {
-      throw new TypeError("Order-submission outcome amounts must be canonical exact decimal strings")
-    }
-    if (canonicalData.purpose !== null && canonicalData.purpose !== "RECOVERY_SELL") {
-      throw new TypeError("Order-submission outcome purpose must be null or RECOVERY_SELL")
-    }
-    if (!["ACKNOWLEDGED", "REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"].includes(canonicalData.outcome)) {
-      throw new TypeError("Order-submission outcome classification is unsupported")
-    }
-    requireNonEmptyString({ value: canonicalData.status,
-field: "data.status",
-maxLength: 32 })
-    if (canonicalData.outcome === "ACKNOWLEDGED") {
-      requireNonEmptyString({ value: canonicalData.brokerOrderId,
-field: "data.brokerOrderId",
-maxLength: MAX_FACT_ID_LENGTH })
-      if (canonicalData.status === "PENDING") {
-        throw new TypeError("Acknowledged order-submission outcome cannot have PENDING status")
-      }
-    } else if (canonicalData.brokerOrderId !== null || canonicalData.status !== "PENDING" ||
-        canonicalData.executedQuantity !== "0") {
-      throw new TypeError("Unacknowledged order-submission outcome must preserve a PENDING order without broker identity or execution")
-    }
+  } else if (
+    canonicalData.brokerOrderId !== null ||
+    canonicalData.status !== "PENDING" ||
+    canonicalData.executedQuantity !== "0"
+  ) {
+    throw new TypeError("Unacknowledged order-submission outcome must preserve a PENDING order without broker identity or execution")
   }
+}
+
+function validateOrderSubmissionOutcomeFact({ factType, canonicalData, factId }) {
+  if (factType !== "ORDER_SUBMISSION_OUTCOME") {
+    return
+  }
+  const allowedFields = new Set([
+    "clientOrderId",
+    "marketId",
+    "venue",
+    "symbol",
+    "baseAssetId",
+    "quoteAssetId",
+    "side",
+    "type",
+    "price",
+    "quantity",
+    "executedQuantity",
+    "purpose",
+    "outcome",
+    "brokerOrderId",
+    "status",
+  ])
+  if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+    throw new TypeError("Order-submission outcome fact contains unsupported fields")
+  }
+  const clientOrderId = requireNonEmptyString({
+    value: canonicalData.clientOrderId,
+    field: "data.clientOrderId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  requireNonEmptyString({ value: canonicalData.marketId, field: "data.marketId", maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
+  requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
+  validateOrderSubmissionOutcomeIdentity({ canonicalData, factId, clientOrderId })
+  validateOrderSubmissionOutcomeAmounts({ canonicalData })
+  validateOrderSubmissionOutcomeState({ canonicalData })
 }
 
 function validateOrderCancellationIntentFact({ factType, canonicalData, factId }) {
@@ -487,72 +506,145 @@ maxLength: 64 })
   }
 }
 
-function validateExecutionFillAppliedFact({ factType, canonicalData, factId }) {
-  if (factType === "EXECUTION_FILL_APPLIED") {
-    const allowedFields = new Set(["fillId", "tradeId", "brokerOrderId", "clientOrderId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "price", "quantity", "quoteQuantity", "liquidityRole", "executedAt", "commissionStatus", "commissions"])
-    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {throw new TypeError("Execution-fill fact contains unsupported fields")}
-    const fillId = requireNonEmptyString({ value: canonicalData.fillId,
-field: "data.fillId",
-maxLength: MAX_FACT_ID_LENGTH })
-    const tradeId = requireNonEmptyString({ value: canonicalData.tradeId,
-field: "data.tradeId",
-maxLength: MAX_FACT_ID_LENGTH })
-    requireNonEmptyString({ value: canonicalData.brokerOrderId,
-field: "data.brokerOrderId",
-maxLength: MAX_FACT_ID_LENGTH })
-    if (canonicalData.clientOrderId !== null) {requireNonEmptyString({ value: canonicalData.clientOrderId,
-field: "data.clientOrderId",
-maxLength: MAX_FACT_ID_LENGTH })}
-    const marketId = requireNonEmptyString({ value: canonicalData.marketId,
-field: "data.marketId",
-maxLength: MAX_FACT_ID_LENGTH })
-    const venue = requireNonEmptyString({ value: canonicalData.venue,
-field: "data.venue",
-maxLength: 32 })
-    requireNonEmptyString({ value: canonicalData.baseAssetId,
-field: "data.baseAssetId",
-maxLength: MAX_FACT_ID_LENGTH })
-    requireNonEmptyString({ value: canonicalData.quoteAssetId,
-field: "data.quoteAssetId",
-maxLength: MAX_FACT_ID_LENGTH })
-    if (canonicalData.baseAssetId === canonicalData.quoteAssetId || venue !== venue.toLowerCase() || marketId !== `${venue  }:${  canonicalData.symbol}` || fillId !== `${marketId  }:${  tradeId}` || factId !== factIdForExecutionFill(fillId)) {
-      throw new TypeError("Execution-fill fact identities must match its canonical market, trade and stable fact identity")
-    }
-    if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {throw new TypeError("Execution-fill symbol must be canonical uppercase alphanumeric")}
-    if (canonicalData.side !== "BUY" && canonicalData.side !== "SELL") {throw new TypeError("Execution-fill side must be BUY or SELL")}
-    if (!["MAKER", "TAKER", "UNKNOWN"].includes(canonicalData.liquidityRole)) {throw new TypeError("Execution-fill liquidity role is unsupported")}
-    const isDecimalString = (value) => typeof value === "string" && /^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)
-    const isPositiveDecimalString = (value) => isDecimalString(value) && /[1-9]/.test(value)
-    if (!isPositiveDecimalString(canonicalData.price) || !isPositiveDecimalString(canonicalData.quantity) || !isPositiveDecimalString(canonicalData.quoteQuantity)) {
-      throw new TypeError("Execution-fill price and quantities must be positive exact decimal strings")
-    }
-    if (canonicalData.executedAt !== null && (!Number.isSafeInteger(canonicalData.executedAt) || canonicalData.executedAt < 0)) {throw new TypeError("Execution-fill executedAt must be a non-negative safe integer or null")}
-    if (!["COMPLETE", "PARTIAL", "UNKNOWN"].includes(canonicalData.commissionStatus) || !Array.isArray(canonicalData.commissions)) {throw new TypeError("Execution-fill commission status or collection is invalid")}
-    if ((canonicalData.commissionStatus === "UNKNOWN" && canonicalData.commissions.length !== 0) || (canonicalData.commissionStatus === "PARTIAL" && canonicalData.commissions.length === 0)) {
-      throw new TypeError("Execution-fill commission entries contradict commission completeness")
-    }
-    for (const commission of canonicalData.commissions) {
-      if (!commission || typeof commission !== "object" || Array.isArray(commission) || Object.keys(commission).some((key) => !["amount", "assetId", "assetCode", "quoteValue"].includes(key))) {
-        throw new TypeError("Execution-fill commission contains unsupported fields")
-      }
-      if (!isDecimalString(commission.amount)) {throw new TypeError("Execution-fill commission amount must be a non-negative exact decimal string")}
-      requireNonEmptyString({ value: commission.assetId,
-field: "commission.assetId",
-maxLength: MAX_FACT_ID_LENGTH })
-      requireNonEmptyString({ value: commission.assetCode,
-field: "commission.assetCode",
-maxLength: 32 })
-      if (commission.quoteValue !== null) {
-        const {quoteValue} = commission
-        if (!quoteValue || typeof quoteValue !== "object" || Array.isArray(quoteValue) || Object.keys(quoteValue).some((key) => !["amount", "assetId", "assetCode"].includes(key)) || !isDecimalString(quoteValue.amount) || quoteValue.assetId !== canonicalData.quoteAssetId) {
-          throw new TypeError("Execution-fill commission quote valuation must use the canonical quote asset")
-        }
-        requireNonEmptyString({ value: quoteValue.assetCode,
-field: "commission.quoteValue.assetCode",
-maxLength: 32 })
-      }
-    }
+function validateExecutionFillIdentity({ canonicalData, factId, fillId, tradeId, marketId, venue }) {
+  if (
+    canonicalData.baseAssetId === canonicalData.quoteAssetId ||
+    venue !== venue.toLowerCase() ||
+    marketId !== `${venue}:${canonicalData.symbol}` ||
+    fillId !== `${marketId}:${tradeId}` ||
+    factId !== factIdForExecutionFill(fillId)
+  ) {
+    throw new TypeError("Execution-fill fact identities must match its canonical market, trade and stable fact identity")
   }
+}
+
+function validateExecutionFillSideAndLiquidity({ canonicalData }) {
+  if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
+    throw new TypeError("Execution-fill symbol must be canonical uppercase alphanumeric")
+  }
+  if (canonicalData.side !== "BUY" && canonicalData.side !== "SELL") {
+    throw new TypeError("Execution-fill side must be BUY or SELL")
+  }
+  if (!["MAKER", "TAKER", "UNKNOWN"].includes(canonicalData.liquidityRole)) {
+    throw new TypeError("Execution-fill liquidity role is unsupported")
+  }
+}
+
+function validateExecutionFillAmounts({ canonicalData }) {
+  if (
+    !isPositiveCanonicalDecimalString({ value: canonicalData.price }) ||
+    !isPositiveCanonicalDecimalString({ value: canonicalData.quantity }) ||
+    !isPositiveCanonicalDecimalString({ value: canonicalData.quoteQuantity })
+  ) {
+    throw new TypeError("Execution-fill price and quantities must be positive exact decimal strings")
+  }
+}
+
+function validateExecutionFillCommissionStatus({ canonicalData }) {
+  if (
+    !["COMPLETE", "PARTIAL", "UNKNOWN"].includes(canonicalData.commissionStatus) ||
+    !Array.isArray(canonicalData.commissions)
+  ) {
+    throw new TypeError("Execution-fill commission status or collection is invalid")
+  }
+  if (
+    (canonicalData.commissionStatus === "UNKNOWN" && canonicalData.commissions.length !== 0) ||
+    (canonicalData.commissionStatus === "PARTIAL" && canonicalData.commissions.length === 0)
+  ) {
+    throw new TypeError("Execution-fill commission entries contradict commission completeness")
+  }
+}
+
+function validateExecutionFillCommissionEntry({ commission, quoteAssetId }) {
+  if (
+    !commission ||
+    typeof commission !== "object" ||
+    Array.isArray(commission) ||
+    Object.keys(commission).some((key) => !["amount", "assetId", "assetCode", "quoteValue"].includes(key))
+  ) {
+    throw new TypeError("Execution-fill commission contains unsupported fields")
+  }
+  if (!isCanonicalDecimalString({ value: commission.amount })) {
+    throw new TypeError("Execution-fill commission amount must be a non-negative exact decimal string")
+  }
+  requireNonEmptyString({ value: commission.assetId, field: "commission.assetId", maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: commission.assetCode, field: "commission.assetCode", maxLength: 32 })
+  if (commission.quoteValue !== null) {
+    const { quoteValue } = commission
+    if (
+      !quoteValue ||
+      typeof quoteValue !== "object" ||
+      Array.isArray(quoteValue) ||
+      Object.keys(quoteValue).some((key) => !["amount", "assetId", "assetCode"].includes(key)) ||
+      !isCanonicalDecimalString({ value: quoteValue.amount }) ||
+      quoteValue.assetId !== quoteAssetId
+    ) {
+      throw new TypeError("Execution-fill commission quote valuation must use the canonical quote asset")
+    }
+    requireNonEmptyString({ value: quoteValue.assetCode, field: "commission.quoteValue.assetCode", maxLength: 32 })
+  }
+}
+
+function validateExecutionFillCommissions({ commissions, quoteAssetId }) {
+  for (const commission of commissions) {
+    validateExecutionFillCommissionEntry({ commission, quoteAssetId })
+  }
+}
+
+function validateExecutionFillAppliedFact({ factType, canonicalData, factId }) {
+  if (factType !== "EXECUTION_FILL_APPLIED") {
+    return
+  }
+  const allowedFields = new Set([
+    "fillId",
+    "tradeId",
+    "brokerOrderId",
+    "clientOrderId",
+    "marketId",
+    "venue",
+    "symbol",
+    "baseAssetId",
+    "quoteAssetId",
+    "side",
+    "price",
+    "quantity",
+    "quoteQuantity",
+    "liquidityRole",
+    "executedAt",
+    "commissionStatus",
+    "commissions",
+  ])
+  if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+    throw new TypeError("Execution-fill fact contains unsupported fields")
+  }
+  const fillId = requireNonEmptyString({ value: canonicalData.fillId, field: "data.fillId", maxLength: MAX_FACT_ID_LENGTH })
+  const tradeId = requireNonEmptyString({ value: canonicalData.tradeId, field: "data.tradeId", maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: canonicalData.brokerOrderId, field: "data.brokerOrderId", maxLength: MAX_FACT_ID_LENGTH })
+  if (canonicalData.clientOrderId !== null) {
+    requireNonEmptyString({
+      value: canonicalData.clientOrderId,
+      field: "data.clientOrderId",
+      maxLength: MAX_FACT_ID_LENGTH,
+    })
+  }
+  const marketId = requireNonEmptyString({ value: canonicalData.marketId, field: "data.marketId", maxLength: MAX_FACT_ID_LENGTH })
+  const venue = requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
+  requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
+  validateExecutionFillIdentity({ canonicalData, factId, fillId, tradeId, marketId, venue })
+  validateExecutionFillSideAndLiquidity({ canonicalData })
+  validateExecutionFillAmounts({ canonicalData })
+  if (
+    canonicalData.executedAt !== null &&
+    (!Number.isSafeInteger(canonicalData.executedAt) || canonicalData.executedAt < 0)
+  ) {
+    throw new TypeError("Execution-fill executedAt must be a non-negative safe integer or null")
+  }
+  validateExecutionFillCommissionStatus({ canonicalData })
+  validateExecutionFillCommissions({
+    commissions: canonicalData.commissions,
+    quoteAssetId: canonicalData.quoteAssetId,
+  })
 }
 
 function validateRecoveryCycleCompletedFact({ factType, canonicalData, factId }) {
