@@ -4,7 +4,7 @@
 
 ## Internal process entry-point refactor
 
-- [~] Refactor `src/index.js` into cohesive process-composition, lifecycle, and diagnostic modules without changing the exported `main()` contract, startup/shutdown ordering, trading behavior, or safety gates. Keep each implementation commit paired with its tests and this roadmap update. No exchange operations are part of this work.
+- [~] Refactor `src/index.js` into cohesive process-composition, lifecycle, and diagnostic modules without changing the exported `main()` contract, startup/shutdown ordering, trading behavior, or safety gates. Extracted recursive process-error diagnostics and the signal-shutdown lifecycle; existing `index.test.js` integration coverage remains the compatibility baseline, with focused diagnostic tests added. No exchange operations are part of this work.
 
 ## Current safety priorities — LIVE-session audit findings
 
