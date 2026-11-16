@@ -141,15 +141,51 @@ test("marks a stream recovered only after aggTrade covers the independent ticker
   monitor.dispose()
 })
 
-test("bounds repeated resubscription attempts and reports an exhausted stream", async () => {
-  const { monitor, clock, recoveries, errors } = createMonitor()
+test("does not repeat successful recovery attempts without new ticker trade activity", async () => {
+  const { monitor, clock, recoveries } = createMonitor()
   monitor.onAggTrade({ l: 10 })
   monitor.onTicker({
     s: "BTCUSDT",
     L: 11,
   })
+  clock.advanceBy(50)
+  await flush()
+  clock.advanceBy(5_000)
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  assert.equal(
+    recoveries.length,
+    1,
+    "a successful resubscription must not be retried while the market reports no newer trade ID",
+  )
+  assert.equal(
+    monitor.diagnostics.state,
+    "awaiting-aggTrade",
+    "the monitor must wait for new trade evidence before another recovery attempt",
+  )
+
+  monitor.onTicker({
+    s: "BTCUSDT",
+    L: 12,
+  })
+  clock.advanceBy(50)
+  await flush()
+  assert.equal(
+    recoveries.length,
+    2,
+    "new independent ticker trade activity must re-arm the bounded recovery check",
+  )
+  monitor.dispose()
+})
+
+test("bounds repeated resubscription attempts and reports an exhausted stream", async () => {
+  const { monitor, clock, recoveries, errors } = createMonitor()
+  monitor.onAggTrade({ l: 10 })
+
+  for (let tradeId = 11; tradeId <= 14; tradeId += 1) {
+    monitor.onTicker({
+      s: "BTCUSDT",
+      L: tradeId,
+    })
     clock.advanceBy(50)
     await flush()
   }
@@ -162,7 +198,7 @@ test("bounds repeated resubscription attempts and reports an exhausted stream", 
   assert.equal(
     monitor.diagnostics.state,
     "exhausted",
-    "a stream that remains behind after bounded recovery attempts must be marked exhausted",
+    "a stream that remains behind across fresh trade activity after bounded recovery attempts must be marked exhausted",
   )
   assert.equal(
     errors[0].code,
