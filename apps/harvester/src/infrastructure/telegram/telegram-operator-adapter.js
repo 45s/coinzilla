@@ -1,3 +1,4 @@
+import { createTelegramOperatorDiagnostics } from "./telegram-operator-diagnostics.js"
 import {
   formatTelegramOperatorMarkets,
   formatTelegramOperatorStatus,
@@ -220,24 +221,97 @@ export function createTelegramOperatorAdapter({
   const CONFIRMATION_TTL_MS = 5 * 60 * 1000
   const PAGE_METHODS = Object.freeze({ status: "getStatus", markets: "getMarkets", positions: "getPositions", orders: "getOrders", balances: "getBalances" })
   const PAGE_TITLES = Object.freeze({ status: "runtime status", markets: "market snapshot", positions: "position snapshot", orders: "order snapshot", balances: "balance snapshot" })
+  const diagnostics = createTelegramOperatorDiagnostics({ logger, botToken })
+  const createInteraction = ({ update }) => ({
+    correlationId: "telegram:" + update.update_id,
+    interactionType: update.callback_query ? "callback" : "message",
+    action: "UNKNOWN",
+    stage: "UPDATE_RECEIVED",
+    applicationOperationInvoked: false,
+    applicationOperationCompleted: false,
+    stateChanged: false,
+    failed: false,
+    loggedErrors: new Set(),
+  })
+  const resolveCallbackAction = (data) => {
+    const control = /^cc:(?:ask|confirm):(PAUSE|RESUME):([A-Z0-9]{2,30})(?::\d+)?$/.exec(data ?? "")
+    if (control) { return { action: control[1], symbol: control[2] } }
+    const navigation = /^cc:(?:nav|refresh):(home|status|markets|pause|resume|positions|orders|balances)$/.exec(data ?? "")
+    if (navigation) {
+      return { action: navigation[2] === "home" ? "MENU" : navigation[2].toUpperCase() }
+    }
+    if (/^cc:cancel:\d+$/.test(data ?? "")) { return { action: "CANCEL" } }
+    return { action: "UNKNOWN" }
+  }
 
-  const sendMessage = ({ chatId, text, replyMarkup, signal }) =>
-    callApi({ method: "sendMessage", payload: { chat_id: chatId, text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) }, signal })
+  const sendMessage = async ({ chatId, text, replyMarkup, signal, interaction }) => {
+    if (interaction) { interaction.stage = "RESPONSE_DELIVERY" }
+    const startedAt = Date.now()
+    const result = await callApi({
+      method: "sendMessage",
+      payload: { chat_id: chatId, text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) },
+      signal,
+    })
+    diagnostics.log({
+      interaction,
+      message: "Telegram response SENT",
+      fields: { stage: "RESPONSE_DELIVERED", delivery: "SEND_MESSAGE", durationMs: Date.now() - startedAt },
+    })
+    return result
+  }
 
-  const editMessage = async ({ chatId, messageId, text, replyMarkup, signal }) => {
+  const editMessage = async ({ chatId, messageId, text, replyMarkup, signal, interaction }) => {
+    if (interaction) { interaction.stage = "RESPONSE_DELIVERY" }
+    const startedAt = Date.now()
     try {
-      return await callApi({ method: "editMessageText", payload: { chat_id: chatId, message_id: messageId, text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) }, signal })
+      const result = await callApi({
+        method: "editMessageText",
+        payload: { chat_id: chatId, message_id: messageId, text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) },
+        signal,
+      })
+      diagnostics.log({
+        interaction,
+        message: "Telegram response SENT",
+        fields: { stage: "RESPONSE_DELIVERED", delivery: "EDIT_MESSAGE", durationMs: Date.now() - startedAt },
+      })
+      return result
     } catch (error) {
-      if (/message is not modified/i.test(error?.message ?? "")) { return undefined }
+      if (/message is not modified/i.test(error?.message ?? "")) {
+        diagnostics.log({
+          interaction,
+          message: "Telegram response SENT",
+          fields: { stage: "RESPONSE_DELIVERED", delivery: "ALREADY_CURRENT", durationMs: Date.now() - startedAt },
+        })
+        return undefined
+      }
       throw error
     }
   }
 
-  const answerCallback = async ({ callbackId, text, signal }) => {
+  const answerCallback = async ({ callbackId, text, signal, interaction }) => {
+    if (interaction) { interaction.stage = "CALLBACK_ACKNOWLEDGEMENT" }
+    const startedAt = Date.now()
     try {
-      return await callApi({ method: "answerCallbackQuery", payload: { callback_query_id: callbackId, ...(text ? { text } : {}) }, signal })
+      const result = await callApi({
+        method: "answerCallbackQuery",
+        payload: { callback_query_id: callbackId, ...(text ? { text } : {}) },
+        signal,
+      })
+      diagnostics.log({
+        interaction,
+        message: "Telegram callback ACKNOWLEDGED",
+        fields: { stage: "CALLBACK_ACKNOWLEDGED", durationMs: Date.now() - startedAt },
+      })
+      return result
     } catch (error) {
-      if (/query is too old|query id is invalid|query has expired/i.test(error?.message ?? "")) { return undefined }
+      if (/query is too old|query id is invalid|query has expired/i.test(error?.message ?? "")) {
+        diagnostics.log({
+          interaction,
+          message: "Telegram callback acknowledgement EXPIRED",
+          fields: { stage: "CALLBACK_ACKNOWLEDGEMENT", acknowledged: false },
+        })
+        return undefined
+      }
       throw error
     }
   }
@@ -295,25 +369,54 @@ export function createTelegramOperatorAdapter({
     "Operator pause lasts only for this process and is not restored after restart.",
   ].join("\n")
 
-  const readPage = async ({ page, userId }) => {
+  const readPage = async ({ page, userId, interaction }) => {
     if (page === "home") { return { text: helpText(), keyboard: navigationKeyboard() } }
     const marketAction = resolveMarketAction(page)
     const queryPage = marketAction ? "markets" : page
     const method = PAGE_METHODS[queryPage]
     if (!method || typeof operator[method] !== "function") {
-      return { text: "This read-only query is not available in the current operator configuration.", keyboard: navigationKeyboard({ page: queryPage }) }
+      const error = Object.assign(new Error("Read-only operator query is not available: " + queryPage), {
+        code: "OPERATOR_QUERY_UNAVAILABLE",
+      })
+      diagnostics.fail({ interaction, error, stage: "QUERY_CONFIGURATION", operation: method ?? queryPage })
+      return {
+        text: "This read-only query is not available in the current operator configuration.",
+        keyboard: navigationKeyboard({ page: queryPage }),
+      }
     }
+    interaction.operation = method
+    const startedAt = Date.now()
+    diagnostics.log({
+      interaction,
+      message: "Telegram query STARTED",
+      fields: { stage: "QUERY_STARTED", queryPage },
+    })
     let result
     try {
-      result = await operator[method]({ actor: { id: "telegram-user:" + userId, roles: ["trading-operator"] } })
+      result = await operator[method]({
+        actor: { id: "telegram-user:" + userId, roles: ["trading-operator"] },
+      })
     } catch (error) {
-      logger?.error?.({ message: "Telegram operator read query failed", component: "harvester.operator", operation: method, error })
-      result = { ok: false }
+      diagnostics.fail({ interaction, error, stage: "QUERY_EXECUTION", operation: method })
+      return {
+        text: "Unable to read the Harvester " + PAGE_TITLES[queryPage] + ". No trading state was changed; check Harvester diagnostics.",
+        keyboard: navigationKeyboard({ page: queryPage }),
+      }
     }
     if (result?.ok !== true) {
-      logger?.error?.({ message: "Telegram operator read query returned a failure", component: "harvester.operator", operation: method, error: result?.errors ?? result?.error ?? "Unclassified query failure" })
-      return { text: "Unable to read the Harvester " + PAGE_TITLES[queryPage] + ". No trading state was changed; check Harvester diagnostics.", keyboard: navigationKeyboard({ page: queryPage }) }
+      const error = result?.errors?.[0] ?? result?.error ??
+        new Error("Operator read query returned ok:false without error details: " + method)
+      diagnostics.fail({ interaction, error, stage: "QUERY_RESULT", operation: method })
+      return {
+        text: "Unable to read the Harvester " + PAGE_TITLES[queryPage] + ". No trading state was changed; check Harvester diagnostics.",
+        keyboard: navigationKeyboard({ page: queryPage }),
+      }
     }
+    diagnostics.log({
+      interaction,
+      message: "Telegram query COMPLETED",
+      fields: { stage: "QUERY_COMPLETED", durationMs: Date.now() - startedAt },
+    })
     const text = ({
       status: () => formatTelegramOperatorStatus({ status: result.data }),
       markets: () => formatTelegramOperatorMarkets({ snapshot: result.data }),
@@ -325,162 +428,424 @@ export function createTelegramOperatorAdapter({
     const keyboard = navigationKeyboard({ page: queryPage, markets, marketAction })
     if (!marketAction) { return { text, keyboard } }
     const eligibleMarkets = selectMarketsForAction({ markets, action: marketAction })
+    diagnostics.log({
+      interaction,
+      message: "Telegram market selection READY",
+      fields: { stage: "MARKET_SELECTION_READY", eligibleMarketCount: eligibleMarkets.length },
+    })
     return {
       text: formatMarketActionPrompt({ action: marketAction, eligibleMarkets, text }),
       keyboard,
     }
   }
 
-  const editPage = async ({ page, chatId, messageId, userId, signal }) => {
-    const rendered = await readPage({ page, userId })
-    await editMessage({ chatId, messageId, text: rendered.text, replyMarkup: rendered.keyboard, signal })
+  const editPage = async ({ page, chatId, messageId, userId, signal, interaction }) => {
+    const rendered = await readPage({ page, userId, interaction })
+    await editMessage({
+      chatId,
+      messageId,
+      text: rendered.text,
+      replyMarkup: rendered.keyboard,
+      signal,
+      interaction,
+    })
   }
 
-  const executeControl = async ({ action, symbol, userId, requestId, chatId, messageId, signal }) => {
+  const executeControl = async ({ action, symbol, userId, requestId, chatId, messageId, signal, interaction }) => {
     const method = action === "RESUME" ? "resumeMarket" : "pauseMarket"
+    interaction.action = action
+    interaction.symbol = symbol
+    interaction.operation = method
     if (typeof operator[method] !== "function") {
-      const text = action === "RESUME" ? "Resume is not available in this operator adapter configuration." : "Pause is not available in this operator adapter configuration."
-      if (messageId !== undefined) { await editMessage({ chatId, messageId, text, replyMarkup: navigationKeyboard(), signal }) }
-      else { await sendMessage({ chatId, text, replyMarkup: navigationKeyboard(), signal }) }
+      const error = Object.assign(new Error("Operator control use case is unavailable: " + method), {
+        code: "OPERATOR_CONTROL_UNAVAILABLE",
+      })
+      diagnostics.fail({ interaction, error, stage: "APPLICATION_OPERATION_UNAVAILABLE", operation: method, symbol })
+      const text = action === "RESUME"
+        ? "Resume is not available in this operator configuration."
+        : "Pause is not available in this operator configuration."
+      if (messageId !== undefined) {
+        await editMessage({ chatId, messageId, text, replyMarkup: navigationKeyboard(), signal, interaction })
+      } else {
+        await sendMessage({ chatId, text, replyMarkup: navigationKeyboard(), signal, interaction })
+      }
       return
     }
+    const startedAt = Date.now()
+    interaction.stage = "APPLICATION_OPERATION"
+    interaction.applicationOperationInvoked = true
+    diagnostics.log({
+      interaction,
+      message: "Telegram application operation STARTED",
+      fields: { stage: "APPLICATION_OPERATION_STARTED" },
+    })
     let result
     try {
-      result = await operator[method]({ actor: { id: "telegram-user:" + userId, roles: ["trading-operator"] }, requestId, symbol })
+      result = await operator[method]({
+        actor: { id: "telegram-user:" + userId, roles: ["trading-operator"] },
+        requestId,
+        symbol,
+      })
     } catch (error) {
-      logger?.error?.({ message: "Telegram operator control use case threw unexpectedly", component: "harvester.operator", operation: method, symbol, error })
-      result = { ok: false, errors: [] }
+      diagnostics.fail({ interaction, error, stage: "APPLICATION_OPERATION", operation: method, symbol })
     }
     let reply
-    if (!result?.ok) {
-      const code = result?.errors?.[0]?.code
-      if (code === "INVALID_OPERATOR_MARKET") { reply = "Unknown configured market: " + symbol + "." }
-      else if (code === "SAFETY_BLOCKER_ACTIVE") { reply = "Cannot resume " + symbol + ": a safety, recovery, or volatility blocker is still active. The blocker was not changed." }
-      else {
+    if (result?.ok !== true) {
+      if (!interaction.failed) {
+        const error = result?.errors?.[0] ?? result?.error ??
+          new Error("Operator control use case returned ok:false without error details: " + method)
+        diagnostics.fail({ interaction, error, stage: "APPLICATION_OPERATION_RESULT", operation: method, symbol })
+      }
+      const code = result?.errors?.[0]?.code ?? result?.error?.code
+      if (code === "INVALID_OPERATOR_MARKET") {
+        reply = "Unknown configured market: " + symbol + "."
+      } else if (code === "SAFETY_BLOCKER_ACTIVE") {
+        reply = "Cannot resume " + symbol + ": a safety, recovery, or volatility blocker is still active. The blocker was not changed."
+      } else {
         const actionLabel = action === "RESUME" ? "Resume" : "Pause"
         reply = actionLabel + " was not acknowledged; check Harvester logs and retry."
       }
-    } else if (action === "RESUME") {
+    } else if (action === "RESUME" && result.data?.resumed === true) {
+      interaction.applicationOperationCompleted = true
+      interaction.stateChanged = true
       reply = "Resumed " + symbol + ": the operator-owned pause was removed. Safety, recovery, and volatility controls remain in force."
-    } else if (result.data?.alreadyPaused === true) {
-      reply = "Already paused " + symbol + ". New strategy BUYs remain blocked."
+    } else if (action === "RESUME" && result.data?.resumed === false) {
+      interaction.applicationOperationCompleted = true
+      interaction.stateChanged = false
+      reply = symbol + " is not operator-paused. No state change was made."
+    } else if (action === "PAUSE" && result.data?.paused === true) {
+      interaction.applicationOperationCompleted = true
+      interaction.stateChanged = result.data?.alreadyPaused !== true
+      if (result.data?.alreadyPaused === true) {
+        reply = "Already paused " + symbol + ". New strategy BUYs remain blocked."
+      } else {
+        reply = "Paused " + symbol + ": new strategy BUYs and trailing-BUY replacements are blocked. Existing exchange orders remain open and may still fill. This pause is process-local and is not restored after restart."
+      }
     } else {
-      reply = "Paused " + symbol + ": new strategy BUYs and trailing-BUY replacements are blocked. Existing exchange orders remain open and may still fill. This pause is process-local and is not restored after restart."
+      const error = Object.assign(new Error("Operator control use case returned an invalid success result: " + method), {
+        code: "OPERATOR_CONTROL_RESULT_INVALID",
+      })
+      diagnostics.fail({ interaction, error, stage: "APPLICATION_OPERATION_RESULT", operation: method, symbol })
+      reply = (action === "RESUME" ? "Resume" : "Pause") + " was not acknowledged; check Harvester logs and retry."
     }
-    if (messageId !== undefined) { await editMessage({ chatId, messageId, text: reply, replyMarkup: navigationKeyboard(), signal }) }
-    else { await sendMessage({ chatId, text: reply, replyMarkup: navigationKeyboard(), signal }) }
+    if (interaction.applicationOperationCompleted) {
+      diagnostics.log({
+        interaction,
+        message: "Telegram application operation COMPLETED",
+        level: interaction.stateChanged ? "info" : "debug",
+        fields: {
+          stage: "APPLICATION_OPERATION_COMPLETED",
+          durationMs: Date.now() - startedAt,
+          result: action === "PAUSE" ? "PAUSED" : "RESUME_PROCESSED",
+        },
+      })
+    }
+    if (messageId !== undefined) {
+      await editMessage({ chatId, messageId, text: reply, replyMarkup: navigationKeyboard(), signal, interaction })
+    } else {
+      await sendMessage({ chatId, text: reply, replyMarkup: navigationKeyboard(), signal, interaction })
+    }
   }
 
-  const respondToCallback = async ({ update, signal }) => {
+  const respondToCallback = async ({ update, signal, interaction }) => {
     const callback = update.callback_query
+    const callbackAction = resolveCallbackAction(callback?.data)
+    interaction.action = callbackAction.action
+    interaction.symbol = callbackAction.symbol
     const userId = normalizeTelegramUserId(callback?.from?.id)
     const chat = callback?.message?.chat
     const chatId = normalizeTelegramUserId(chat?.id)
-    if (!callback || chat?.type !== "private" || !userId || chatId !== userId || !allowedUsers.has(userId) || callback.from?.is_bot === true || typeof callback.id !== "string") { return }
-    const messageId = callback.message.message_id
+    const callbackIdIsValid = typeof callback?.id === "string" && callback.id.trim() !== ""
+    if (!callbackIdIsValid) {
+      diagnostics.log({
+        interaction,
+        message: "Telegram interaction REJECTED",
+        level: "warn",
+        fields: { stage: "AUTHORIZATION", reason: "INVALID_CALLBACK_ID" },
+      })
+      return
+    }
+    let rejectionReason
+    if (!callback || callback.from?.is_bot === true) {
+      rejectionReason = "INVALID_CALLBACK_SENDER"
+    } else if (chat?.type !== "private") {
+      rejectionReason = "PRIVATE_CHAT_REQUIRED"
+    } else if (!userId || chatId !== userId) {
+      rejectionReason = "PRIVATE_CHAT_IDENTITY_MISMATCH"
+    } else if (!allowedUsers.has(userId)) {
+      rejectionReason = "USER_NOT_ALLOWLISTED"
+    }
+    if (rejectionReason) {
+      diagnostics.log({
+        interaction,
+        message: "Telegram interaction REJECTED",
+        level: "warn",
+        fields: { stage: "AUTHORIZATION", reason: rejectionReason },
+      })
+      await answerCallback({ callbackId: callback.id, text: "Not authorized.", signal, interaction })
+      return
+    }
+    diagnostics.log({
+      interaction,
+      message: "Telegram interaction AUTHORIZED",
+      fields: { stage: "AUTHORIZED" },
+    })
+    const messageId = callback.message?.message_id
     if (!Number.isSafeInteger(messageId) || messageId <= 0 || typeof callback.data !== "string") {
-      await answerCallback({ callbackId: callback.id, text: "Invalid or expired control.", signal })
+      diagnostics.log({
+        interaction,
+        message: "Telegram interaction REJECTED",
+        level: "warn",
+        fields: { stage: "CALLBACK_VALIDATION", reason: "INVALID_OR_EXPIRED_CALLBACK" },
+      })
+      await answerCallback({ callbackId: callback.id, text: "Invalid or expired control.", signal, interaction })
       return
     }
 
     const navigation = /^cc:(nav|refresh):(home|status|markets|pause|resume|positions|orders|balances)$/.exec(callback.data)
     if (navigation) {
-      await answerCallback({ callbackId: callback.id, signal })
-      await editPage({ page: navigation[2], chatId: chat.id, messageId, userId, signal })
+      diagnostics.log({ interaction, message: "Telegram command STARTED", fields: { stage: "COMMAND_STARTED" } })
+      await answerCallback({ callbackId: callback.id, signal, interaction })
+      await editPage({ page: navigation[2], chatId: chat.id, messageId, userId, signal, interaction })
       return
     }
 
     const ask = /^cc:ask:(PAUSE|RESUME):([A-Z0-9]{2,30})$/.exec(callback.data)
     if (ask) {
+      interaction.action = ask[1]
+      interaction.symbol = ask[2]
+      diagnostics.log({
+        interaction,
+        message: "Telegram market selection RECEIVED",
+        fields: { stage: "MARKET_SELECTION_RECEIVED" },
+      })
       const token = String(update.update_id)
       const now = Date.now()
       for (const [pendingToken, pending] of pendingConfirmations) {
         if (pending.expiresAt < now) { pendingConfirmations.delete(pendingToken) }
       }
       while (pendingConfirmations.size >= 1000) { pendingConfirmations.delete(pendingConfirmations.keys().next().value) }
-      pendingConfirmations.set(token, { action: ask[1], symbol: ask[2], userId, chatId: String(chat.id), messageId, expiresAt: now + CONFIRMATION_TTL_MS })
-      await answerCallback({ callbackId: callback.id, text: "Review the confirmation prompt.", signal })
+      pendingConfirmations.set(token, {
+        action: ask[1],
+        symbol: ask[2],
+        userId,
+        chatId: String(chat.id),
+        messageId,
+        expiresAt: now + CONFIRMATION_TTL_MS,
+      })
+      await answerCallback({ callbackId: callback.id, text: "Review the confirmation prompt.", signal, interaction })
+      diagnostics.log({
+        interaction,
+        message: "Telegram confirmation REQUESTED",
+        fields: { stage: "CONFIRMATION_REQUESTED", confirmationExpiresInMs: CONFIRMATION_TTL_MS },
+      })
       await editMessage({
-        chatId: chat.id, messageId,
+        chatId: chat.id,
+        messageId,
         text: "Confirm " + ask[1].toLowerCase() + " of " + ask[2] + "? No action has been taken yet.",
         replyMarkup: { inline_keyboard: [[
           { text: "Confirm " + ask[1].toLowerCase(), callback_data: "cc:confirm:" + ask[1] + ":" + ask[2] + ":" + token },
           { text: "Cancel", callback_data: "cc:cancel:" + token },
         ], [{ text: "Main menu", callback_data: "cc:nav:home" }]] },
         signal,
+        interaction,
       })
       return
     }
 
     const confirm = /^cc:confirm:(PAUSE|RESUME):([A-Z0-9]{2,30}):(\d+)$/.exec(callback.data)
     if (confirm) {
+      interaction.action = confirm[1]
+      interaction.symbol = confirm[2]
       const pending = pendingConfirmations.get(confirm[3])
       const valid = pending && pending.action === confirm[1] && pending.symbol === confirm[2] &&
         pending.userId === userId && pending.chatId === String(chat.id) && pending.messageId === messageId &&
         pending.expiresAt >= Date.now()
       pendingConfirmations.delete(confirm[3])
       if (!valid) {
-        await answerCallback({ callbackId: callback.id, text: "Confirmation expired or already used. Start again.", signal })
-        await editMessage({ chatId: chat.id, messageId, text: "Confirmation expired or already used. No action was taken.", replyMarkup: navigationKeyboard(), signal })
+        diagnostics.log({
+          interaction,
+          message: "Telegram interaction REJECTED",
+          level: "warn",
+          fields: { stage: "CONFIRMATION_VALIDATION", reason: "STALE_OR_REPLAYED_CONFIRMATION" },
+        })
+        await answerCallback({ callbackId: callback.id, text: "Confirmation expired or already used. Start again.", signal, interaction })
+        await editMessage({
+          chatId: chat.id,
+          messageId,
+          text: "Confirmation expired or already used. No action was taken.",
+          replyMarkup: navigationKeyboard(),
+          signal,
+          interaction,
+        })
         return
       }
-      await answerCallback({ callbackId: callback.id, text: "Processing confirmed action.", signal })
-      await executeControl({ action: pending.action, symbol: pending.symbol, userId, requestId: "telegram:callback:" + callback.id, chatId: chat.id, messageId, signal })
+      diagnostics.log({
+        interaction,
+        message: "Telegram confirmation RECEIVED",
+        fields: { stage: "CONFIRMATION_RECEIVED" },
+      })
+      await answerCallback({ callbackId: callback.id, text: "Processing confirmed action.", signal, interaction })
+      await executeControl({
+        action: pending.action,
+        symbol: pending.symbol,
+        userId,
+        requestId: "telegram:callback:" + callback.id,
+        chatId: chat.id,
+        messageId,
+        signal,
+        interaction,
+      })
       return
     }
 
     const cancel = /^cc:cancel:(\d+)$/.exec(callback.data)
     if (cancel) {
       const pending = pendingConfirmations.get(cancel[1])
-      if (pending && pending.userId === userId && pending.chatId === String(chat.id) && pending.messageId === messageId) { pendingConfirmations.delete(cancel[1]) }
-      await answerCallback({ callbackId: callback.id, text: "Cancelled.", signal })
-      await editMessage({ chatId: chat.id, messageId, text: "Control action cancelled. No action was taken.", replyMarkup: navigationKeyboard(), signal })
+      if (pending && pending.userId === userId && pending.chatId === String(chat.id) && pending.messageId === messageId) {
+        pendingConfirmations.delete(cancel[1])
+      }
+      interaction.action = "CANCEL"
+      diagnostics.log({
+        interaction,
+        message: "Telegram confirmation CANCELLED",
+        fields: { stage: "CONFIRMATION_CANCELLED" },
+      })
+      await answerCallback({ callbackId: callback.id, text: "Cancelled.", signal, interaction })
+      await editMessage({
+        chatId: chat.id,
+        messageId,
+        text: "Control action cancelled. No action was taken.",
+        replyMarkup: navigationKeyboard(),
+        signal,
+        interaction,
+      })
       return
     }
-    await answerCallback({ callbackId: callback.id, text: "Unknown or expired action.", signal })
+    diagnostics.log({
+      interaction,
+      message: "Telegram interaction REJECTED",
+      level: "warn",
+      fields: { stage: "CALLBACK_ROUTING", reason: "UNSUPPORTED_CALLBACK_DATA" },
+    })
+    await answerCallback({ callbackId: callback.id, text: "Unknown or expired action.", signal, interaction })
   }
 
-  const respondToMenuCommand = async ({ parsed, message, userId, signal }) => {
+  const respondToMenuCommand = async ({ parsed, message, userId, signal, interaction }) => {
     if (parsed.type === "START" || parsed.type === "MENU") {
-      await sendMessage({ chatId: message.chat.id, text: helpText(), replyMarkup: mainMenuKeyboard(), signal })
+      interaction.action = parsed.type
+      diagnostics.log({ interaction, message: "Telegram command STARTED", fields: { stage: "COMMAND_STARTED" } })
+      await sendMessage({ chatId: message.chat.id, text: helpText(), replyMarkup: mainMenuKeyboard(), signal, interaction })
       return true
     }
     if (parsed.type === "HELP") {
-      await sendMessage({ chatId: message.chat.id, text: helpText(), replyMarkup: navigationKeyboard(), signal })
+      interaction.action = parsed.type
+      diagnostics.log({ interaction, message: "Telegram command STARTED", fields: { stage: "COMMAND_STARTED" } })
+      await sendMessage({ chatId: message.chat.id, text: helpText(), replyMarkup: navigationKeyboard(), signal, interaction })
       return true
     }
     if (parsed.type === "PAUSE_MENU" || parsed.type === "RESUME_MENU") {
       const page = parsed.type === "PAUSE_MENU" ? "pause" : "resume"
-      const rendered = await readPage({ page, userId })
-      await sendMessage({ chatId: message.chat.id, text: rendered.text, replyMarkup: rendered.keyboard, signal })
+      interaction.action = page.toUpperCase()
+      diagnostics.log({ interaction, message: "Telegram command STARTED", fields: { stage: "COMMAND_STARTED" } })
+      const rendered = await readPage({ page, userId, interaction })
+      await sendMessage({ chatId: message.chat.id, text: rendered.text, replyMarkup: rendered.keyboard, signal, interaction })
       return true
     }
     return false
   }
 
-  const respondToReadCommand = async ({ parsed, message, userId, signal }) => {
+  const respondToReadCommand = async ({ parsed, message, userId, signal, interaction }) => {
     const page = parsed.type.toLowerCase()
     if (!PAGE_METHODS[page]) { return false }
-    const rendered = await readPage({ page, userId })
-    await sendMessage({ chatId: message.chat.id, text: rendered.text, replyMarkup: rendered.keyboard, signal })
+    interaction.action = parsed.type
+    diagnostics.log({ interaction, message: "Telegram command STARTED", fields: { stage: "COMMAND_STARTED" } })
+    const rendered = await readPage({ page, userId, interaction })
+    await sendMessage({ chatId: message.chat.id, text: rendered.text, replyMarkup: rendered.keyboard, signal, interaction })
     return true
   }
 
-  const respondToUpdate = async ({ update, signal }) => {
-    if (update.callback_query) { await respondToCallback({ update, signal }); return }
+  const respondToUpdate = async ({ update, signal, interaction }) => {
+    if (update.callback_query) {
+      await respondToCallback({ update, signal, interaction })
+      return
+    }
     const message = update.message
-    if (!message || message.chat?.type !== "private" || message.from?.is_bot === true) { return }
+    if (!message) {
+      diagnostics.log({
+        interaction,
+        message: "Telegram interaction IGNORED",
+        fields: { stage: "UPDATE_ROUTING", reason: "NO_MESSAGE_OR_CALLBACK" },
+      })
+      return
+    }
+    if (message.chat?.type !== "private") {
+      diagnostics.log({
+        interaction,
+        message: "Telegram interaction REJECTED",
+        level: "warn",
+        fields: { stage: "AUTHORIZATION", reason: "PRIVATE_CHAT_REQUIRED" },
+      })
+      return
+    }
+    if (message.from?.is_bot === true) {
+      diagnostics.log({
+        interaction,
+        message: "Telegram interaction REJECTED",
+        level: "warn",
+        fields: { stage: "AUTHORIZATION", reason: "BOT_SENDER_NOT_ALLOWED" },
+      })
+      return
+    }
     const userId = normalizeTelegramUserId(message.from?.id)
     const privateChatUserId = normalizeTelegramUserId(message.chat.id)
-    if (!userId || privateChatUserId !== userId) { return }
+    if (!userId || privateChatUserId !== userId) {
+      diagnostics.log({
+        interaction,
+        message: "Telegram interaction REJECTED",
+        level: "warn",
+        fields: { stage: "AUTHORIZATION", reason: "PRIVATE_CHAT_IDENTITY_MISMATCH" },
+      })
+      return
+    }
 
     const parsed = parseTelegramOperatorCommand(message.text, { botUsername })
-    if (parsed.type === "IGNORE") { return }
-    if (!allowedUsers.has(userId)) { await sendMessage({ chatId: message.chat.id, text: "Not authorized.", signal }); return }
-    if (await respondToMenuCommand({ parsed, message, userId, signal })) { return }
-    if (await respondToReadCommand({ parsed, message, userId, signal })) { return }
+    if (parsed.type === "IGNORE") {
+      diagnostics.log({
+        interaction,
+        message: "Telegram interaction IGNORED",
+        fields: { stage: "COMMAND_PARSING", reason: "NOT_A_SUPPORTED_COMMAND_OR_BUTTON" },
+      })
+      return
+    }
+    interaction.action = parsed.type
+    interaction.symbol = parsed.symbol
+    if (!allowedUsers.has(userId)) {
+      diagnostics.log({
+        interaction,
+        message: "Telegram interaction REJECTED",
+        level: "warn",
+        fields: { stage: "AUTHORIZATION", reason: "USER_NOT_ALLOWLISTED" },
+      })
+      await sendMessage({ chatId: message.chat.id, text: "Not authorized.", signal, interaction })
+      return
+    }
+    diagnostics.log({
+      interaction,
+      message: "Telegram interaction AUTHORIZED",
+      fields: { stage: "AUTHORIZED" },
+    })
+    if (await respondToMenuCommand({ parsed, message, userId, signal, interaction })) { return }
+    if (await respondToReadCommand({ parsed, message, userId, signal, interaction })) { return }
+    diagnostics.log({ interaction, message: "Telegram command STARTED", fields: { stage: "COMMAND_STARTED" } })
     if (parsed.type === "UNSUPPORTED") {
-      await sendMessage({ chatId: message.chat.id, text: "Unknown command. Use /help to see available commands.", replyMarkup: navigationKeyboard(), signal })
+      await sendMessage({
+        chatId: message.chat.id,
+        text: "Unknown command. Use /help to see available commands.",
+        replyMarkup: navigationKeyboard(),
+        signal,
+        interaction,
+      })
       return
     }
     if (parsed.type === "INVALID") {
@@ -490,6 +855,7 @@ export function createTelegramOperatorAdapter({
           ? "Usage: /" + parsed.command.toLowerCase() + " <SYMBOL>. Use /help for commands."
           : `Usage: /${String(parsed.command ?? "command").toLowerCase()} with no arguments. Use /help for commands.`,
         signal,
+        interaction,
       })
       return
     }
@@ -501,12 +867,14 @@ export function createTelegramOperatorAdapter({
       requestId: `telegram:${update.update_id}:${message.date ?? "0"}:${userId}`,
       chatId: message.chat.id,
       signal,
+      interaction,
     })
   }
 
   const poll = async ({ signal }) => {
     let currentRetryDelay = retryDelayMs
     while (!signal.aborted) {
+      let interactionFailureLogged = false
       try {
         const payload = {
           timeout: pollTimeoutSeconds,
@@ -526,22 +894,57 @@ export function createTelegramOperatorAdapter({
           if (!Number.isSafeInteger(update?.update_id) || update.update_id < 0) {
             throw new TypeError("Telegram update has no valid update_id")
           }
-          await respondToUpdate({
-            update,
-            signal,
+          const interaction = createInteraction({ update })
+          diagnostics.log({
+            interaction,
+            message: "Telegram update RECEIVED",
+            fields: { stage: "UPDATE_RECEIVED" },
           })
+          try {
+            await respondToUpdate({ update, signal, interaction })
+          } catch (error) {
+            diagnostics.fail({ interaction, error, stage: interaction.stage })
+            interactionFailureLogged = true
+            throw error
+          }
+          if (interaction.failed) {
+            diagnostics.log({
+              interaction,
+              message: "Telegram interaction HANDLED",
+              fields: { stage: "HANDLED", outcome: "FAILURE_REPORTED" },
+            })
+          } else {
+            diagnostics.log({
+              interaction,
+              message: "Telegram interaction COMPLETED",
+              fields: { stage: "COMPLETED" },
+            })
+          }
           offset = update.update_id + 1
         }
         currentRetryDelay = retryDelayMs
       } catch (error) {
         if (signal.aborted) {break}
-        logger?.warn?.({
-          message: "Telegram operator polling failed; retrying",
-          error: error?.message ?? String(error),
-        })
         const retryAfterMs = Number.isSafeInteger(error?.retryAfter)
           ? Math.min(error.retryAfter * 1000, MAX_RETRY_DELAY_MS)
           : currentRetryDelay
+        if (interactionFailureLogged) {
+          diagnostics.log({
+            message: "Telegram polling retry scheduled",
+            level: "debug",
+            fields: { operation: "update-handler", retryDelayMs: retryAfterMs },
+          })
+        } else {
+          const errorDetails = diagnostics.describeError(error)
+          logger?.warn?.({
+            message: "Telegram polling FAILED; retrying",
+            component: "harvester.operator",
+            operation: "getUpdates",
+            failureClassification: errorDetails.code ?? errorDetails.name,
+            errorDetails,
+            retryDelayMs: retryAfterMs,
+          })
+        }
         await waitForRetry({
           milliseconds: retryAfterMs,
           signal,
@@ -631,7 +1034,7 @@ export function createTelegramOperatorAdapter({
               message: "Telegram command menu registration failed; text commands remain available",
               component: "harvester.operator",
               operation: "setMyCommands",
-              error,
+              errorDetails: diagnostics.describeError(error),
             })
           }
           pollPromise = poll({ signal: nextController.signal })

@@ -159,6 +159,32 @@ These are message-design examples, not a claim that every current call site
 already follows this policy. When changing a log call, update its tests and
 keep the console allowlist in sync with any new fields intended for INFO.
 
+
+## Telegram Command Center interaction diagnostics
+
+Inbound Telegram interactions use the update ID as a non-sensitive correlation key: telegram:<update_id>. Every event for one delivered update carries the same correlationId; Telegram user IDs, chat IDs, callback IDs, bot tokens, complete update objects and account/order payloads are never logged.
+
+The interaction lifecycle is emitted at DEBUG unless it represents a confirmed state change or an actionable failure:
+
+- Telegram update RECEIVED
+- Telegram interaction AUTHORIZED or Telegram interaction REJECTED
+- Telegram command STARTED
+- Telegram query STARTED / Telegram query COMPLETED
+- Telegram callback ACKNOWLEDGED
+- Telegram market selection RECEIVED
+- Telegram confirmation REQUESTED / Telegram confirmation RECEIVED / Telegram confirmation CANCELLED
+- Telegram application operation STARTED / Telegram application operation COMPLETED
+- Telegram response SENT
+- Telegram interaction FAILED or Telegram interaction HANDLED
+
+A market selection and confirmation prompt are not a pause/resume operation. Only Telegram application operation COMPLETED with stateChanged: true confirms that the application changed operator state. applicationOperationInvoked, applicationOperationCompleted and stateChanged are separate fields so an unsuccessful use case and a failed Telegram response cannot be confused.
+
+A failure record includes the interaction correlationId, action, symbol when applicable, operation, stage, failureClassification, errorName, errorCode, errorMessage, errorStack, safe errorContext, and nested errorCause / errorErrors when present. Error text and stack traces redact the configured Telegram bot token and token-shaped credentials. Telegram identities and update payloads are excluded.
+
+Read-query failures are logged once at the query boundary. Application-returned failures and thrown failures are both logged. A later Telegram API delivery failure is a separate failure stage and retains the application-operation flags from the same interaction. Polling failures before an update is received are logged as getUpdates transport failures without an interaction correlation ID.
+
+Routine interaction stages use DEBUG so they remain available in session/cumulative DEBUG logs without flooding the INFO console. Confirmed operator state changes use INFO. Authorization rejection uses WARN. Failed queries, application operations or Telegram response delivery use ERROR. Do not add duplicate exception logs at each adapter layer.
+
 ### Portfolio Stats
 
 Portfolio Stats remains a structured event in DEBUG/TRACE. The operator
