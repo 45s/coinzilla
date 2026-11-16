@@ -5,12 +5,20 @@ import { Asset } from "../assets/asset.js"
 import { Quantity } from "../quantity/quantity.js"
 import { Balance, balanceErrMsgs } from "./balance.js"
 
+const btc = new Asset({
+  id: "bitcoin",
+  code: "BTC",
+})
+const otherBtc = new Asset({
+  id: "wrapped-bitcoin",
+  code: "BTC",
+})
+const quantity = (amount) => new Quantity({
+  amount,
+  asset: btc,
+})
+
 describe(Balance.name, () => {
-  const btc = new Asset({ id: "bitcoin", code: "BTC" })
-  const otherBtc = new Asset({ id: "wrapped-bitcoin", code: "BTC" })
-
-  const quantity = (amount, asset = btc) => new Quantity({ amount, asset })
-
   it("stores exact free and locked quantities and derives total", () => {
     const balance = new Balance({
       free: quantity("1.25"),
@@ -23,10 +31,17 @@ describe(Balance.name, () => {
     assert.equal(balance.total.amount, "2")
     assert.strictEqual(balance.total.asset, btc)
     assert.deepEqual(balance.value, {
-      asset: { id: "bitcoin", code: "BTC" },
-      free: { amount: "1.25", asset: { id: "bitcoin", code: "BTC" } },
-      locked: { amount: "0.75", asset: { id: "bitcoin", code: "BTC" } },
-      total: { amount: "2", asset: { id: "bitcoin", code: "BTC" } },
+      asset: { id: "bitcoin",
+        code: "BTC" },
+      free: { amount: "1.25",
+        asset: { id: "bitcoin",
+          code: "BTC" } },
+      locked: { amount: "0.75",
+        asset: { id: "bitcoin",
+          code: "BTC" } },
+      total: { amount: "2",
+        asset: { id: "bitcoin",
+          code: "BTC" } },
     })
   })
 
@@ -49,16 +64,20 @@ describe(Balance.name, () => {
   })
 
   it("rejects missing or invalid free quantities", () => {
-    for (const free of [undefined, null, "1", { amount: "1", asset: btc }]) {
-      assert.throws(() => new Balance({ free, locked: quantity("0") }), {
+    for (const free of [undefined, null, "1", { amount: "1",
+      asset: btc }]) {
+      assert.throws(() => new Balance({ free,
+        locked: quantity("0") }), {
         message: balanceErrMsgs.free,
       })
     }
   })
 
   it("rejects missing or invalid locked quantities", () => {
-    for (const locked of [undefined, null, "1", { amount: "1", asset: btc }]) {
-      assert.throws(() => new Balance({ free: quantity("0"), locked }), {
+    for (const locked of [undefined, null, "1", { amount: "1",
+      asset: btc }]) {
+      assert.throws(() => new Balance({ free: quantity("0"),
+locked }), {
         message: balanceErrMsgs.locked,
       })
     }
@@ -67,13 +86,17 @@ describe(Balance.name, () => {
   it("rejects quantities belonging to different canonical assets even when codes match", () => {
     assert.throws(
       () => new Balance({
-        free: quantity("1", btc),
-        locked: quantity("1", otherBtc),
+        free: quantity("1"),
+        locked: new Quantity({ amount: "1",
+          asset: otherBtc }),
       }),
       { message: balanceErrMsgs.asset },
     )
   })
 
+})
+
+describe(`${Balance.name} snapshots`, () => {
   it("returns independent snapshots", () => {
     const balance = new Balance({
       free: quantity("1"),
@@ -88,10 +111,17 @@ describe(Balance.name, () => {
     snapshot.total.amount = "999"
 
     assert.deepEqual(balance.value, {
-      asset: { id: "bitcoin", code: "BTC" },
-      free: { amount: "1", asset: { id: "bitcoin", code: "BTC" } },
-      locked: { amount: "2", asset: { id: "bitcoin", code: "BTC" } },
-      total: { amount: "3", asset: { id: "bitcoin", code: "BTC" } },
+      asset: { id: "bitcoin",
+        code: "BTC" },
+      free: { amount: "1",
+        asset: { id: "bitcoin",
+          code: "BTC" } },
+      locked: { amount: "2",
+        asset: { id: "bitcoin",
+          code: "BTC" } },
+      total: { amount: "3",
+        asset: { id: "bitcoin",
+          code: "BTC" } },
     })
   })
 

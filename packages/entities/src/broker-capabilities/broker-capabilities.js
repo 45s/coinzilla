@@ -57,7 +57,8 @@ export class BrokerCapabilities {
         throw new Error(brokerCapabilitiesErrMsgs.status)
       }
 
-      return Object.freeze({ type, status })
+      return Object.freeze({ type,
+status })
     })
 
     const types = normalized.map(({ type }) => type)
@@ -85,7 +86,8 @@ export class BrokerCapabilities {
 
   get value() {
     return {
-      capabilities: this.#capabilities.map(({ type, status }) => ({ type, status })),
+      capabilities: this.#capabilities.map(({ type, status }) => ({ type,
+status })),
     }
   }
 }
