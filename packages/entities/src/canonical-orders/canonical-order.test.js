@@ -10,32 +10,42 @@ import {
   canonicalOrderErrMsgs,
 } from "./canonical-order.js"
 
-describe(CanonicalOrder.name, () => {
-  const baseAsset = new Asset({ id: "dogecoin",
-code: "DOGE" })
-  const quoteAsset = new Asset({ id: "fdusd",
-code: "FDUSD" })
-  const market = new Market({
-    venue: "binance",
-    symbol: "DOGEFDUSD",
-    baseAsset,
-    quoteAsset,
+const baseAsset = new Asset({
+  id: "dogecoin",
+  code: "DOGE",
+})
+const quoteAsset = new Asset({
+  id: "fdusd",
+  code: "FDUSD",
+})
+const market = new Market({
+  venue: "binance",
+  symbol: "DOGEFDUSD",
+  baseAsset,
+  quoteAsset,
+})
+const createOrder = (overrides = {}) =>
+  new CanonicalOrder({
+    clientOrderId: "bot-order-001",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({
+      amount: "0.1",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "100",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    ...overrides,
   })
-  const createOrder = (overrides = {}) =>
-    new CanonicalOrder({
-      clientOrderId: "bot-order-001",
-      market,
-      side: "BUY",
-      type: "LIMIT",
-      limitPrice: new Money({ amount: "0.1",
-asset: quoteAsset }),
-      originalQuantity: new Quantity({ amount: "100",
-asset: baseAsset }),
-      executedQuantity: new Quantity({ amount: "0",
-asset: baseAsset }),
-      ...overrides,
-    })
 
+describe(`${CanonicalOrder.name} lifecycle`, () => {
   it("represents a pending order intent before broker acknowledgement", () => {
     const order = createOrder()
 
@@ -110,6 +120,9 @@ status: "FILLED" }),
     assert.equal(order.brokerOrderId, undefined)
   })
 
+})
+
+describe(`${CanonicalOrder.name} price validation`, () => {
   it("supports market orders without a limit price", () => {
     const order = createOrder({
       type: "MARKET",
@@ -157,6 +170,9 @@ asset: quoteAsset }),
     }
   })
 
+})
+
+describe(`${CanonicalOrder.name} quantity validation`, () => {
   it("rejects mismatched markets and quantity assets", () => {
     assert.throws(
       () => createOrder({ market: {} }),
@@ -212,6 +228,9 @@ asset: baseAsset }),
     )
   })
 
+})
+
+describe(`${CanonicalOrder.name} identity and timestamps`, () => {
   it("requires broker identity for acknowledged lifecycle states", () => {
     for (const status of [
       "OPEN",
