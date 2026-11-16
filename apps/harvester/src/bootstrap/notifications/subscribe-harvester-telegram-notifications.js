@@ -179,10 +179,10 @@ export async function subscribeHarvesterTelegramNotifications({
   const notificationEventBus = Object.freeze({
     subscribe: ({ name, handler }) => eventBus.subscribe({
       name,
-      handler: (event) => {
+      handler: async (event) => {
         if (!policy.shouldNotify({ name: event.name,
 data: event.data })) {return}
-        return handler(event)
+        await handler(event)
       },
     }),
   })
