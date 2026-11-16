@@ -118,7 +118,10 @@ export const cancelAllOpenOrders = async ({
   logger,
 }) => {
   const { orders } = await getOpenOrders()
-  logInitialOpenOrders({ logger, orders })
+  logInitialOpenOrders({
+    logger,
+    orders,
+  })
 
   if (orders.length === 0) {
     logger.info({ message: "No open orders found. Nothing to cancel." })
@@ -140,7 +143,10 @@ export const cancelAllOpenOrders = async ({
 
   // Verify exchange state; a successful cancel response alone is not proof.
   const { orders: remainingOrders } = await getOpenOrders()
-  logFinalOpenOrders({ logger, remainingOrders })
+  logFinalOpenOrders({
+    logger,
+    remainingOrders,
+  })
 
   return logCancellationOutcome({
     logger,
