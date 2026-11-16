@@ -57,7 +57,8 @@ function collectThirdAssetCommissions({ fill }) {
     const { amount } = commission
     if (amount.asset.id === fill.market.baseAsset.id ||
         amount.asset.id === fill.market.quoteAsset.id ||
-        compareDecimal({ left: amount.amount, right: "0" }) <= 0) {
+        compareDecimal({ left: amount.amount, 
+          right: "0" }) <= 0) {
       continue
     }
     const existingCode = thirdAssetCommissions.get(amount.asset.id)
@@ -109,7 +110,8 @@ async function captureThirdAssetCommissionBaselines({ onCommissionAsset, logger,
       throw new Error("Third-asset commission baseline capture is unavailable")
     }
     for (const [assetId, assetCode] of commissions) {
-      const baselineResult = await onCommissionAsset({ assetId, assetCode })
+      const baselineResult = await onCommissionAsset({ assetId, 
+        assetCode })
       if (baselineResult?.ok !== true) {
         throw baselineResult?.errors?.[0] ?? new Error(`Unable to persist the third-asset commission baseline for ${assetCode}`)
       }
@@ -120,7 +122,8 @@ async function captureThirdAssetCommissionBaselines({ onCommissionAsset, logger,
       executionId: fill.id,
       tradeId: fill.tradeId,
       symbol: fill.market.symbol,
-      errors: [{ name: error?.name, message: error?.message ?? String(error) }],
+      errors: [{ name: error?.name, 
+        message: error?.message ?? String(error) }],
     })
   }
 }
@@ -210,7 +213,8 @@ function createExecutionAccountingDelta({ nextPosition, previousPosition, nextLe
 }
 
 function logExecutionAccounted({ logger, fill, result, previousPosition, currentLedger, nextPosition, nextLedger }) {
-  if (result.data.applied === true && hasPortfolioStatsChanged({ previousPosition, nextPosition })) {
+  if (result.data.applied === true && hasPortfolioStatsChanged({ previousPosition, 
+    nextPosition })) {
     const portfolioStats = createPortfolioStatsLogSummary({ position: nextPosition })
     if (portfolioStats) {
       logger.info?.(portfolioStats)
@@ -282,7 +286,10 @@ async function runUpdateTradingAccounting({
         marketId: fill.market.id,
         strategyId: StrategyId.COIN_GRABBER,
       })
-      logExecutionReceived({ logger, fill, previousPosition, currentLedger })
+      logExecutionReceived({ logger, 
+        fill, 
+        previousPosition, 
+        currentLedger })
 
       const result = applyTradingAccounting({
         portfolio: state.portfolio,
@@ -298,7 +305,8 @@ async function runUpdateTradingAccounting({
         })
       }
       if (result.ok && result.data.applied === true && onOperationalStateExecutionFill) {
-        const durableFailure = await persistExecutionFill({ onOperationalStateExecutionFill, fill })
+        const durableFailure = await persistExecutionFill({ onOperationalStateExecutionFill, 
+          fill })
         if (durableFailure) {
           return durableFailure
         }
@@ -348,15 +356,18 @@ function createRecoveryCompletionInput({ position, recoveryLedger, keepQuantity,
 
 function stageRecoveryCycleState({ state, marketId, position, recoveryLedger, completion, minProfit }) {
   let nextPortfolio = state.portfolio
-  if (compareDecimal({ left: completion.freeQuantity, right: "0" }) > 0) {
+  if (compareDecimal({ left: completion.freeQuantity, 
+    right: "0" }) > 0) {
     nextPortfolio = nextPortfolio.allocateFreeQuantity({
       marketId,
       strategyId: StrategyId.COIN_GRABBER,
       quantity: completion.freeQuantity,
     })
   }
-  nextPortfolio = nextPortfolio.resetRecoveryBasis({ marketId, strategyId: StrategyId.COIN_GRABBER })
-  const resetLedger = recoveryLedger.resetCycle({ minProfit, spent: position.spent })
+  nextPortfolio = nextPortfolio.resetRecoveryBasis({ marketId, 
+    strategyId: StrategyId.COIN_GRABBER })
+  const resetLedger = recoveryLedger.resetCycle({ minProfit, 
+    spent: position.spent })
   const nextRecoveryLedgers = new Map(state.recoveryLedgers)
   nextRecoveryLedgers.set(marketId, resetLedger)
   const nextPosition = nextPortfolio.getPosition({
@@ -431,7 +442,8 @@ function logRecoveryCycleStats({ logger, position, nextPosition }) {
     [position.totalBaseQuantity.amount, nextPosition.totalBaseQuantity.amount],
     [position.spent.amount, nextPosition.spent.amount],
     [position.quoteNetCashFlow.amount, nextPosition.quoteNetCashFlow.amount],
-  ].some(([previous, next]) => compareDecimal({ left: previous, right: next }) !== 0)
+  ].some(([previous, next]) => compareDecimal({ left: previous, 
+    right: next }) !== 0)
   if (portfolioStatsChanged) {
     const portfolioStats = createPortfolioStatsLogSummary({ position: nextPosition })
     if (portfolioStats) {
@@ -458,7 +470,8 @@ function logRecoveryCompletionFailure({ logger, state, marketId, error, recovery
     errorName: error?.name,
     errorMessage: error?.message ?? String(error),
     errorStack: error?.stack,
-    unchangedPortfolio: createPortfolioLogSummary({ portfolio: state.portfolio, marketId }),
+    unchangedPortfolio: createPortfolioLogSummary({ portfolio: state.portfolio, 
+      marketId }),
     unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
   })
 }
@@ -527,10 +540,16 @@ async function completeEligibleRecoveryCycle({
   if (durableFailure) {
     return durableFailure
   }
-  logRecoveryCycleCompleted({ logger, marketId, recoveryLedger, completion, staged })
+  logRecoveryCycleCompleted({ logger, 
+    marketId, 
+    recoveryLedger, 
+    completion, 
+    staged })
   state.portfolio = staged.nextPortfolio
   state.recoveryLedgers = staged.nextRecoveryLedgers
-  logRecoveryCycleStats({ logger, position, nextPosition: staged.nextPosition })
+  logRecoveryCycleStats({ logger, 
+    position, 
+    nextPosition: staged.nextPosition })
   return undefined
 }
 
@@ -556,7 +575,11 @@ async function recordIneligibleRecoveryCycle({
   if (durableFailure) {
     return durableFailure
   }
-  logRecoveryCycleNotCompleted({ logger, marketId, recoveryLedger, position, completion })
+  logRecoveryCycleNotCompleted({ logger, 
+    marketId, 
+    recoveryLedger, 
+    position, 
+    completion })
   return undefined
 }
 
@@ -580,7 +603,8 @@ async function runCompleteRecoveryCycle({
     return toResult({ error: new Error("Cannot complete a recovery cycle without an active Position and RecoveryLedger") })
   }
   try {
-    assertTerminalRecoverySellOrder({ sellOrder, marketId })
+    assertTerminalRecoverySellOrder({ sellOrder, 
+      marketId })
     const completion = evaluatePortfolioRecoveryCompletion({
       logger,
       marketId,
@@ -620,7 +644,11 @@ async function runCompleteRecoveryCycle({
     }
     return toResult({ data: completion })
   } catch (error) {
-    logRecoveryCompletionFailure({ logger, state, marketId, error, recoveryLedger })
+    logRecoveryCompletionFailure({ logger, 
+      state, 
+      marketId, 
+      error, 
+      recoveryLedger })
     return toResult({ error })
   }
 }
@@ -705,7 +733,8 @@ export const createPortfolioWorkflow = ({
   return {
     updatePortfolio: updateTradingAccounting,
     updateTradingAccounting,
-    processMarketPrice: (input = {}) => processMarketPrice({ ...input, portfolio: state.portfolio }),
+    processMarketPrice: (input = {}) => processMarketPrice({ ...input, 
+      portfolio: state.portfolio }),
     getPortfolio: () => state.portfolio,
     getRecoveryLedger: ({ marketId } = {}) => state.recoveryLedgers.get(marketId),
     completeRecoveryCycle,
