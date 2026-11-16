@@ -2,7 +2,7 @@ import { toResult } from "@coinzilla/utils"
 import { authorizeOperatorActor } from "../../application/operator/authorize-operator-actor.js"
 import { OperatorQueryError } from "./errors/operator-query-error.js"
 
-function validateRuntimeSnapshot(snapshot, { operation }) {
+function validateRuntimeSnapshot({ snapshot, operation }) {
   const runtimeState = snapshot?.runtimeState ?? (snapshot?.connected === true ? "RUNNING" : "UNKNOWN")
   if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot) ||
       !Number.isSafeInteger(snapshot.observedAt) ||
@@ -45,8 +45,7 @@ function createMarketReadModels({ markets, runtime }) {
         message: "Harvester operator market snapshot is invalid",
         code: "HARVESTER_OPERATOR_MARKET_SNAPSHOT_INVALID",
         cause,
-        context: { operation: "READ_MARKETS",
-symbol: market?.symbol ?? "unknown" },
+        context: { operation: "READ_MARKETS", symbol: market?.symbol ?? "unknown" },
       })
     }
     const blockers = [...market.blockers]
@@ -74,6 +73,125 @@ symbol: market?.symbol ?? "unknown" },
   }))
 }
 
+async function readOperatorSnapshot({ engine, getRuntimeSnapshot, actor, operation }) {
+  try {
+    authorizeOperatorActor({ actor })
+    let runtimeSource
+    try {
+      runtimeSource = getRuntimeSnapshot()
+    } catch (cause) {
+      throw new OperatorQueryError({
+        message: "Harvester operator runtime snapshot could not be read",
+        code: "HARVESTER_OPERATOR_RUNTIME_SNAPSHOT_READ_FAILED",
+        cause,
+        context: { operation },
+      })
+    }
+    const runtime = validateRuntimeSnapshot({ snapshot: runtimeSource, operation })
+    let marketResult
+    try {
+      marketResult = await engine.getOperatorMarketSnapshots()
+    } catch (cause) {
+      throw new OperatorQueryError({
+        message: "Harvester operator market snapshot could not be read",
+        code: "HARVESTER_OPERATOR_MARKET_SNAPSHOT_READ_FAILED",
+        cause,
+        context: { operation },
+      })
+    }
+    if (marketResult?.ok !== true) {
+      const cause = marketResult?.errors?.[0] ?? marketResult?.error
+      if (cause instanceof Error && typeof cause.code === "string") {
+        return marketResult
+      }
+      throw new OperatorQueryError({
+        message: "Harvester operator market snapshot could not be read",
+        code: "HARVESTER_OPERATOR_MARKET_SNAPSHOT_READ_FAILED",
+        cause,
+        context: { operation },
+      })
+    }
+    const sourceMarkets = marketResult.data?.markets
+    if (!Array.isArray(sourceMarkets)) {
+      const cause = new TypeError("Engine operator market snapshot must contain a markets array.")
+      throw new OperatorQueryError({
+        message: "Harvester operator market snapshot is invalid",
+        code: "HARVESTER_OPERATOR_MARKET_SNAPSHOT_INVALID",
+        cause,
+        context: { operation },
+      })
+    }
+    return toResult({
+      data: Object.freeze({
+        runtime,
+        markets: createMarketReadModels({ markets: sourceMarkets, runtime }),
+      }),
+    })
+  } catch (error) {
+    if (error instanceof OperatorQueryError || error?.code === "OPERATOR_UNAUTHORIZED") {
+      return toResult({ error })
+    }
+    return toResult({
+      error: new OperatorQueryError({
+        message: "Harvester operator read query failed",
+        code: "HARVESTER_OPERATOR_QUERY_FAILED",
+        cause: error,
+        context: { operation },
+      }),
+    })
+  }
+}
+
+function createOperatorStatus({ runtime, markets }) {
+  const blockers = []
+  if (runtime.runtimeState !== "RUNNING") {
+    blockers.push("RUNTIME_NOT_RUNNING")
+  }
+  if (runtime.tradingEnabled && runtime.userData.ready !== true) {
+    blockers.push(runtime.userData.status || "USER_DATA_NOT_READY")
+  }
+  if (runtime.stopping) {
+    blockers.push("RUNTIME_STOPPING")
+  }
+  let state = "READY"
+  if (!runtime.tradingEnabled) {
+    state = "TRADING_DISABLED"
+  } else if (blockers.length > 0) {
+    state = "BLOCKED"
+  }
+  return toResult({
+    data: Object.freeze({
+      observedAt: runtime.observedAt,
+      startedAt: runtime.startedAt,
+      runtimeState: runtime.runtimeState,
+      broker: runtime.broker,
+      tradingEnabled: runtime.tradingEnabled,
+      tradingMode: runtime.tradingMode,
+      strategyMode: runtime.strategyMode,
+      stopping: runtime.stopping,
+      userData: runtime.userData,
+      readiness: Object.freeze({ state, blockers: Object.freeze(blockers) }),
+      markets: Object.freeze({
+        configured: markets.length,
+        enabled: markets.filter(({ enabled }) => enabled).length,
+        blocked: markets.filter(({ readiness }) => readiness === "BLOCKED").length,
+      }),
+    }),
+  })
+}
+
+function createOperatorMarkets({ runtime, markets }) {
+  return toResult({
+    data: Object.freeze({
+      observedAt: runtime.observedAt,
+      tradingEnabled: runtime.tradingEnabled,
+      userDataReady: runtime.userData.ready,
+      userDataStatus: runtime.userData.status,
+      markets,
+    }),
+  })
+}
+
 /**
  * Create the authorized, transport-neutral read-only operator queries.
  *
@@ -94,131 +212,31 @@ export function createReadOperatorState({ engine, getRuntimeSnapshot } = {}) {
     throw new TypeError("createReadOperatorState requires a runtime snapshot provider")
   }
 
-  const readSnapshot = async ({ actor, operation } = {}) => {
-    try {
-      authorizeOperatorActor({ actor })
-      let runtimeSource
-      try {
-        runtimeSource = getRuntimeSnapshot()
-      } catch (cause) {
-        throw new OperatorQueryError({
-          message: "Harvester operator runtime snapshot could not be read",
-          code: "HARVESTER_OPERATOR_RUNTIME_SNAPSHOT_READ_FAILED",
-          cause,
-          context: { operation },
-        })
-      }
-      const runtime = validateRuntimeSnapshot(runtimeSource, { operation })
-      let marketResult
-      try {
-        marketResult = await engine.getOperatorMarketSnapshots()
-      } catch (cause) {
-        throw new OperatorQueryError({
-          message: "Harvester operator market snapshot could not be read",
-          code: "HARVESTER_OPERATOR_MARKET_SNAPSHOT_READ_FAILED",
-          cause,
-          context: { operation },
-        })
-      }
-      if (marketResult?.ok !== true) {
-        const cause = marketResult?.errors?.[0] ?? marketResult?.error
-        if (cause instanceof Error && typeof cause.code === "string") {
-          return marketResult
-        }
-        throw new OperatorQueryError({
-          message: "Harvester operator market snapshot could not be read",
-          code: "HARVESTER_OPERATOR_MARKET_SNAPSHOT_READ_FAILED",
-          cause,
-          context: { operation },
-        })
-      }
-      const sourceMarkets = marketResult.data?.markets
-      if (!Array.isArray(sourceMarkets)) {
-        const cause = new TypeError("Engine operator market snapshot must contain a markets array.")
-        throw new OperatorQueryError({
-          message: "Harvester operator market snapshot is invalid",
-          code: "HARVESTER_OPERATOR_MARKET_SNAPSHOT_INVALID",
-          cause,
-          context: { operation },
-        })
-      }
-      return toResult({
-        data: Object.freeze({
-          runtime,
-          markets: createMarketReadModels({ markets: sourceMarkets,
-runtime }),
-        }),
-      })
-    } catch (error) {
-      if (error instanceof OperatorQueryError || error?.code === "OPERATOR_UNAUTHORIZED") {
-        return toResult({ error })
-      }
-      return toResult({
-        error: new OperatorQueryError({
-          message: "Harvester operator read query failed",
-          code: "HARVESTER_OPERATOR_QUERY_FAILED",
-          cause: error,
-          context: { operation },
-        }),
-      })
-    }
-  }
-
   const getStatus = async ({ actor } = {}) => {
-    const snapshotResult = await readSnapshot({ actor,
-operation: "READ_STATUS" })
-    if (!snapshotResult?.ok) {return snapshotResult}
-    const { runtime, markets } = snapshotResult.data
-    const blockers = []
-    if (runtime.runtimeState !== "RUNNING") {blockers.push("RUNTIME_NOT_RUNNING")}
-    if (runtime.tradingEnabled && runtime.userData.ready !== true) {
-      blockers.push(runtime.userData.status || "USER_DATA_NOT_READY")
-    }
-    if (runtime.stopping) {blockers.push("RUNTIME_STOPPING")}
-    let state = "READY"
-    if (!runtime.tradingEnabled) {
-      state = "TRADING_DISABLED"
-    } else if (blockers.length > 0) {
-      state = "BLOCKED"
-    }
-    return toResult({
-      data: Object.freeze({
-        observedAt: runtime.observedAt,
-        startedAt: runtime.startedAt,
-        runtimeState: runtime.runtimeState,
-        broker: runtime.broker,
-        tradingEnabled: runtime.tradingEnabled,
-        tradingMode: runtime.tradingMode,
-        strategyMode: runtime.strategyMode,
-        stopping: runtime.stopping,
-        userData: runtime.userData,
-        readiness: Object.freeze({ state,
-blockers: Object.freeze(blockers) }),
-        markets: Object.freeze({
-          configured: markets.length,
-          enabled: markets.filter(({ enabled }) => enabled).length,
-          blocked: markets.filter(({ readiness }) => readiness === "BLOCKED").length,
-        }),
-      }),
+    const snapshotResult = await readOperatorSnapshot({
+      engine,
+      getRuntimeSnapshot,
+      actor,
+      operation: "READ_STATUS",
     })
+    if (!snapshotResult?.ok) {
+      return snapshotResult
+    }
+    return createOperatorStatus(snapshotResult.data)
   }
 
   const getMarkets = async ({ actor } = {}) => {
-    const snapshotResult = await readSnapshot({ actor,
-operation: "READ_MARKETS" })
-    if (!snapshotResult?.ok) {return snapshotResult}
-    const { runtime, markets } = snapshotResult.data
-    return toResult({
-      data: Object.freeze({
-        observedAt: runtime.observedAt,
-        tradingEnabled: runtime.tradingEnabled,
-        userDataReady: runtime.userData.ready,
-        userDataStatus: runtime.userData.status,
-        markets,
-      }),
+    const snapshotResult = await readOperatorSnapshot({
+      engine,
+      getRuntimeSnapshot,
+      actor,
+      operation: "READ_MARKETS",
     })
+    if (!snapshotResult?.ok) {
+      return snapshotResult
+    }
+    return createOperatorMarkets(snapshotResult.data)
   }
 
-  return Object.freeze({ getStatus,
-getMarkets })
+  return Object.freeze({ getStatus, getMarkets })
 }
