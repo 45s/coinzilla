@@ -83,7 +83,8 @@ test("keeps structured logs and Journal records together while cumulative logs s
   })
 
   try {
-    await writeSessionLogs({ logger, processIdentity })
+    await writeSessionLogs({ logger,
+processIdentity })
 
     const journalReady = await journal.ready
     assert.equal(journalReady.ok, true, "The Journal must start successfully in the current process session directory")

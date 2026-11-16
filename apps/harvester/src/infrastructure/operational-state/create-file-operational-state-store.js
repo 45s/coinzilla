@@ -362,7 +362,9 @@ function validateOrderSubmissionOutcomeState({ canonicalData }) {
   if (!["ACKNOWLEDGED", "REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"].includes(canonicalData.outcome)) {
     throw new TypeError("Order-submission outcome classification is unsupported")
   }
-  requireNonEmptyString({ value: canonicalData.status, field: "data.status", maxLength: 32 })
+  requireNonEmptyString({ value: canonicalData.status,
+field: "data.status",
+maxLength: 32 })
   if (canonicalData.outcome === "ACKNOWLEDGED") {
     requireNonEmptyString({
       value: canonicalData.brokerOrderId,
@@ -410,11 +412,21 @@ function validateOrderSubmissionOutcomeFact({ factType, canonicalData, factId })
     field: "data.clientOrderId",
     maxLength: MAX_FACT_ID_LENGTH,
   })
-  requireNonEmptyString({ value: canonicalData.marketId, field: "data.marketId", maxLength: MAX_FACT_ID_LENGTH })
-  requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
-  requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
-  requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
-  validateOrderSubmissionOutcomeIdentity({ canonicalData, factId, clientOrderId })
+  requireNonEmptyString({ value: canonicalData.marketId,
+field: "data.marketId",
+maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: canonicalData.venue,
+field: "data.venue",
+maxLength: 32 })
+  requireNonEmptyString({ value: canonicalData.baseAssetId,
+field: "data.baseAssetId",
+maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: canonicalData.quoteAssetId,
+field: "data.quoteAssetId",
+maxLength: MAX_FACT_ID_LENGTH })
+  validateOrderSubmissionOutcomeIdentity({ canonicalData,
+factId,
+clientOrderId })
   validateOrderSubmissionOutcomeAmounts({ canonicalData })
   validateOrderSubmissionOutcomeState({ canonicalData })
 }
@@ -567,8 +579,12 @@ function validateExecutionFillCommissionEntry({ commission, quoteAssetId }) {
   if (!isCanonicalDecimalString({ value: commission.amount })) {
     throw new TypeError("Execution-fill commission amount must be a non-negative exact decimal string")
   }
-  requireNonEmptyString({ value: commission.assetId, field: "commission.assetId", maxLength: MAX_FACT_ID_LENGTH })
-  requireNonEmptyString({ value: commission.assetCode, field: "commission.assetCode", maxLength: 32 })
+  requireNonEmptyString({ value: commission.assetId,
+field: "commission.assetId",
+maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: commission.assetCode,
+field: "commission.assetCode",
+maxLength: 32 })
   if (commission.quoteValue !== null) {
     const { quoteValue } = commission
     if (
@@ -581,13 +597,16 @@ function validateExecutionFillCommissionEntry({ commission, quoteAssetId }) {
     ) {
       throw new TypeError("Execution-fill commission quote valuation must use the canonical quote asset")
     }
-    requireNonEmptyString({ value: quoteValue.assetCode, field: "commission.quoteValue.assetCode", maxLength: 32 })
+    requireNonEmptyString({ value: quoteValue.assetCode,
+field: "commission.quoteValue.assetCode",
+maxLength: 32 })
   }
 }
 
 function validateExecutionFillCommissions({ commissions, quoteAssetId }) {
   for (const commission of commissions) {
-    validateExecutionFillCommissionEntry({ commission, quoteAssetId })
+    validateExecutionFillCommissionEntry({ commission,
+quoteAssetId })
   }
 }
 
@@ -617,9 +636,15 @@ function validateExecutionFillAppliedFact({ factType, canonicalData, factId }) {
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Execution-fill fact contains unsupported fields")
   }
-  const fillId = requireNonEmptyString({ value: canonicalData.fillId, field: "data.fillId", maxLength: MAX_FACT_ID_LENGTH })
-  const tradeId = requireNonEmptyString({ value: canonicalData.tradeId, field: "data.tradeId", maxLength: MAX_FACT_ID_LENGTH })
-  requireNonEmptyString({ value: canonicalData.brokerOrderId, field: "data.brokerOrderId", maxLength: MAX_FACT_ID_LENGTH })
+  const fillId = requireNonEmptyString({ value: canonicalData.fillId,
+field: "data.fillId",
+maxLength: MAX_FACT_ID_LENGTH })
+  const tradeId = requireNonEmptyString({ value: canonicalData.tradeId,
+field: "data.tradeId",
+maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: canonicalData.brokerOrderId,
+field: "data.brokerOrderId",
+maxLength: MAX_FACT_ID_LENGTH })
   if (canonicalData.clientOrderId !== null) {
     requireNonEmptyString({
       value: canonicalData.clientOrderId,
@@ -627,11 +652,24 @@ function validateExecutionFillAppliedFact({ factType, canonicalData, factId }) {
       maxLength: MAX_FACT_ID_LENGTH,
     })
   }
-  const marketId = requireNonEmptyString({ value: canonicalData.marketId, field: "data.marketId", maxLength: MAX_FACT_ID_LENGTH })
-  const venue = requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
-  requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
-  requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
-  validateExecutionFillIdentity({ canonicalData, factId, fillId, tradeId, marketId, venue })
+  const marketId = requireNonEmptyString({ value: canonicalData.marketId,
+field: "data.marketId",
+maxLength: MAX_FACT_ID_LENGTH })
+  const venue = requireNonEmptyString({ value: canonicalData.venue,
+field: "data.venue",
+maxLength: 32 })
+  requireNonEmptyString({ value: canonicalData.baseAssetId,
+field: "data.baseAssetId",
+maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: canonicalData.quoteAssetId,
+field: "data.quoteAssetId",
+maxLength: MAX_FACT_ID_LENGTH })
+  validateExecutionFillIdentity({ canonicalData,
+factId,
+fillId,
+tradeId,
+marketId,
+venue })
   validateExecutionFillSideAndLiquidity({ canonicalData })
   validateExecutionFillAmounts({ canonicalData })
   if (
@@ -658,7 +696,9 @@ function validateRecoveryCycleCompletedIdentity({ canonicalData, factId }) {
     field: "data.marketId",
     maxLength: MAX_FACT_ID_LENGTH,
   })
-  const venue = requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
+  const venue = requireNonEmptyString({ value: canonicalData.venue,
+field: "data.venue",
+maxLength: 32 })
   const sellOrderClientId = requireNonEmptyString({
     value: canonicalData.sellOrderClientId,
     field: "data.sellOrderClientId",
@@ -701,13 +741,17 @@ function validateRecoveryCycleCompletedIdentity({ canonicalData, factId }) {
   ) {
     throw new TypeError("Recovery-cycle completion requires unique applied fill identities")
   }
-  return { cycleId, marketId, sellOrderClientId, sellOrderBrokerOrderId }
+  return { cycleId,
+marketId,
+sellOrderClientId,
+sellOrderBrokerOrderId }
 }
 
 function validateRecoveryCycleCompletedAmounts({ canonicalData }) {
   if (
     !isCanonicalDecimalString({ value: canonicalData.buyCost }) ||
-    compareDecimal({ left: canonicalData.buyCost, right: canonicalData.spent }) !== 0 ||
+    compareDecimal({ left: canonicalData.buyCost,
+right: canonicalData.spent }) !== 0 ||
     !isCanonicalDecimalString({ value: canonicalData.netSellProceeds }) ||
     !isPositiveCanonicalDecimalString({ value: canonicalData.realizedNetProfit }) ||
     !isPositiveCanonicalDecimalString({ value: canonicalData.minProfit }) ||
@@ -725,10 +769,14 @@ function validateRecoveryCycleCompletedAmounts({ canonicalData }) {
         right: canonicalData.spent,
       }),
     }) !== 0 ||
-    compareDecimal({ left: canonicalData.realizedNetProfit, right: canonicalData.minProfit }) < 0 ||
-    compareDecimal({ left: canonicalData.activeQuantity, right: canonicalData.keepQuantity }) < 0 ||
-    compareDecimal({ left: canonicalData.activeQuantity, right: canonicalData.freeQuantity }) !== 0 ||
-    compareDecimal({ left: canonicalData.minProfit, right: "0.01" }) < 0
+    compareDecimal({ left: canonicalData.realizedNetProfit,
+right: canonicalData.minProfit }) < 0 ||
+    compareDecimal({ left: canonicalData.activeQuantity,
+right: canonicalData.keepQuantity }) < 0 ||
+    compareDecimal({ left: canonicalData.activeQuantity,
+right: canonicalData.freeQuantity }) !== 0 ||
+    compareDecimal({ left: canonicalData.minProfit,
+right: "0.01" }) < 0
   ) {
     throw new TypeError("Recovery-cycle completion profit and inventory allocation must reconcile exactly")
   }
@@ -808,7 +856,8 @@ function validateRecoveryCycleDustQuantity({ canonicalData, dust }) {
 
 function validateRecoveryCycleInventoryDisposition({ canonicalData }) {
   if (canonicalData.inventoryDisposition === null) {
-    if (compareDecimal({ left: canonicalData.freeQuantity, right: canonicalData.keepQuantity }) !== 0) {
+    if (compareDecimal({ left: canonicalData.freeQuantity,
+right: canonicalData.keepQuantity }) !== 0) {
       throw new TypeError("Recovery-cycle free quantity must equal keepQuantity when no dust is recorded")
     }
     return
@@ -817,7 +866,8 @@ function validateRecoveryCycleInventoryDisposition({ canonicalData }) {
   validateRecoveryCycleDustMetadata({ dust })
   validateRecoveryCycleDustDecimalEvidence({ dust })
   validateRecoveryCycleDustReasonEvidence({ dust })
-  validateRecoveryCycleDustQuantity({ canonicalData, dust })
+  validateRecoveryCycleDustQuantity({ canonicalData,
+dust })
 }
 
 function validateRecoveryCycleCompletedIdentityDigest({ canonicalData, identity }) {
@@ -868,10 +918,12 @@ function validateRecoveryCycleCompletedFact({ factType, canonicalData, factId })
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Recovery-cycle completion fact contains unsupported fields")
   }
-  const identity = validateRecoveryCycleCompletedIdentity({ canonicalData, factId })
+  const identity = validateRecoveryCycleCompletedIdentity({ canonicalData,
+factId })
   validateRecoveryCycleCompletedAmounts({ canonicalData })
   validateRecoveryCycleInventoryDisposition({ canonicalData })
-  validateRecoveryCycleCompletedIdentityDigest({ canonicalData, identity })
+  validateRecoveryCycleCompletedIdentityDigest({ canonicalData,
+identity })
 }
 
 function validateRecoveryCycleNotCompletedIdentity({ canonicalData, factId }) {
@@ -885,7 +937,9 @@ function validateRecoveryCycleNotCompletedIdentity({ canonicalData, factId }) {
     field: "data.marketId",
     maxLength: MAX_FACT_ID_LENGTH,
   })
-  const venue = requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
+  const venue = requireNonEmptyString({ value: canonicalData.venue,
+field: "data.venue",
+maxLength: 32 })
   const sellOrderClientId = requireNonEmptyString({
     value: canonicalData.sellOrderClientId,
     field: "data.sellOrderClientId",
@@ -906,7 +960,9 @@ function validateRecoveryCycleNotCompletedIdentity({ canonicalData, factId }) {
     field: "data.quoteAssetId",
     maxLength: MAX_FACT_ID_LENGTH,
   })
-  const reason = requireNonEmptyString({ value: canonicalData.reason, field: "data.reason", maxLength: 64 })
+  const reason = requireNonEmptyString({ value: canonicalData.reason,
+field: "data.reason",
+maxLength: 64 })
   if (
     !SHA256_PATTERN.test(evaluationId) ||
     venue !== venue.toLowerCase() ||
@@ -930,13 +986,18 @@ function validateRecoveryCycleNotCompletedIdentity({ canonicalData, factId }) {
   ) {
     throw new TypeError("Recovery-cycle non-completion requires unique applied fill identities")
   }
-  return { evaluationId, marketId, sellOrderClientId, sellOrderBrokerOrderId, reason }
+  return { evaluationId,
+marketId,
+sellOrderClientId,
+sellOrderBrokerOrderId,
+reason }
 }
 
 function validateRecoveryCycleNotCompletedAmounts({ canonicalData }) {
   if (
     !isCanonicalDecimalString({ value: canonicalData.buyCost }) ||
-    compareDecimal({ left: canonicalData.buyCost, right: canonicalData.spent }) !== 0 ||
+    compareDecimal({ left: canonicalData.buyCost,
+right: canonicalData.spent }) !== 0 ||
     !isCanonicalDecimalString({ value: canonicalData.netSellProceeds }) ||
     !isSignedCanonicalDecimalString({ value: canonicalData.realizedNetProfit }) ||
     !isPositiveCanonicalDecimalString({ value: canonicalData.minProfit }) ||
@@ -949,7 +1010,8 @@ function validateRecoveryCycleNotCompletedAmounts({ canonicalData }) {
         right: canonicalData.spent,
       }),
     }) !== 0 ||
-    compareDecimal({ left: canonicalData.minProfit, right: "0.01" }) < 0
+    compareDecimal({ left: canonicalData.minProfit,
+right: "0.01" }) < 0
   ) {
     throw new TypeError("Recovery-cycle non-completion accounting values must be exact and internally consistent")
   }
@@ -963,19 +1025,22 @@ function validateRecoveryCycleNotCompletedOutcome({ canonicalData, reason }) {
   if (canonicalData.outcome === "CONTINUE_SELL_THROUGH") {
     if (
       !continueReasons.has(reason) ||
-      compareDecimal({ left: canonicalData.activeQuantity, right: canonicalData.keepQuantity }) <= 0
+      compareDecimal({ left: canonicalData.activeQuantity,
+right: canonicalData.keepQuantity }) <= 0
     ) {
       throw new TypeError("CONTINUE_SELL_THROUGH requires an approved continuation reason and residual active inventory")
     }
     if (
       reason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" &&
-      compareDecimal({ left: canonicalData.realizedNetProfit, right: canonicalData.minProfit }) < 0
+      compareDecimal({ left: canonicalData.realizedNetProfit,
+right: canonicalData.minProfit }) < 0
     ) {
       throw new TypeError("Residual sell-through requires the minimum profit target to be met")
     }
     if (
       reason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" &&
-      compareDecimal({ left: canonicalData.realizedNetProfit, right: canonicalData.minProfit }) >= 0
+      compareDecimal({ left: canonicalData.realizedNetProfit,
+right: canonicalData.minProfit }) >= 0
     ) {
       throw new TypeError("Profit-target continuation requires realized profit below minProfit")
     }
@@ -987,7 +1052,8 @@ function validateRecoveryCycleNotCompletedOutcome({ canonicalData, reason }) {
     }
     if (
       reason === "RECOVERY_SELL_FAILED_MIN_PROFIT" &&
-      compareDecimal({ left: canonicalData.realizedNetProfit, right: canonicalData.minProfit }) >= 0
+      compareDecimal({ left: canonicalData.realizedNetProfit,
+right: canonicalData.minProfit }) >= 0
     ) {
       throw new TypeError("A minimum-profit blocker requires realized profit below minProfit")
     }
@@ -1044,10 +1110,13 @@ function validateRecoveryCycleNotCompletedFact({ factType, canonicalData, factId
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Recovery-cycle non-completion fact contains unsupported fields")
   }
-  const identity = validateRecoveryCycleNotCompletedIdentity({ canonicalData, factId })
+  const identity = validateRecoveryCycleNotCompletedIdentity({ canonicalData,
+factId })
   validateRecoveryCycleNotCompletedAmounts({ canonicalData })
-  validateRecoveryCycleNotCompletedOutcome({ canonicalData, reason: identity.reason })
-  validateRecoveryCycleNotCompletedIdentityDigest({ canonicalData, identity })
+  validateRecoveryCycleNotCompletedOutcome({ canonicalData,
+reason: identity.reason })
+  validateRecoveryCycleNotCompletedIdentityDigest({ canonicalData,
+identity })
 }
 
 function validateAccountSnapshotMetadata({ canonicalData }) {
@@ -1126,7 +1195,8 @@ function validateAccountSnapshotBalances({ balances }) {
     }
     if (compareDecimal({
       left: balance.total,
-      right: addDecimal({ left: balance.free, right: balance.locked }),
+      right: addDecimal({ left: balance.free,
+right: balance.locked }),
     }) !== 0) {
       throw new TypeError("Account snapshot total balance must equal exact free plus locked quantities")
     }
@@ -1215,7 +1285,9 @@ function validateAccountOpenOrder({ order, index }) {
   if (order.side !== "BUY" && order.side !== "SELL") {
     throw new TypeError("Account open-order side must be BUY or SELL")
   }
-  requireNonEmptyString({ value: order.type, field: `orders[${index}].type`, maxLength: 32 })
+  requireNonEmptyString({ value: order.type,
+field: `orders[${index}].type`,
+maxLength: 32 })
   if (
     order.price !== undefined &&
     !isPositiveCanonicalDecimalString({ value: order.price })
@@ -1228,7 +1300,8 @@ function validateAccountOpenOrder({ order, index }) {
   ) {
     throw new TypeError("Account open-order quantities must be exact canonical decimal strings")
   }
-  if (compareDecimal({ left: order.executedQuantity, right: order.quantity }) > 0) {
+  if (compareDecimal({ left: order.executedQuantity,
+right: order.quantity }) > 0) {
     throw new TypeError("Account open-order executed quantity cannot exceed original quantity")
   }
   if (!["NEW", "OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
@@ -1240,7 +1313,8 @@ function validateAccountOpenOrder({ order, index }) {
 function validateAccountOpenOrderCollection({ orders }) {
   const orderIdentities = new Set()
   for (const [index, order] of orders.entries()) {
-    const identity = validateAccountOpenOrder({ order, index })
+    const identity = validateAccountOpenOrder({ order,
+index })
     if (orderIdentities.has(identity)) {
       throw new TypeError("Account open-order snapshot contains duplicate symbol/brokerOrderId identities")
     }
@@ -1338,7 +1412,10 @@ function validateFactData({ factType, data, factId, runtimeSessionId }) {
   }
   const validator = FACT_DATA_VALIDATORS[factType]
   if (validator) {
-    validator({ factType, canonicalData, factId, runtimeSessionId })
+    validator({ factType,
+canonicalData,
+factId,
+runtimeSessionId })
   }
   return canonicalData
 }
@@ -1521,7 +1598,8 @@ function createOperationalStateStoreContext({
   now = () => new Date(),
   fileSystem = nodeFileSystem,
 }) {
-  const resolvedDirectory = requireNonEmptyString({ value: directory, field: "directory" })
+  const resolvedDirectory = requireNonEmptyString({ value: directory,
+field: "directory" })
   const resolvedRuntimeSessionId = requireNonEmptyString({
     value: runtimeSessionId,
     field: "runtimeSessionId",
@@ -1583,7 +1661,9 @@ function createOperationalStateStoreCoordination({ store }) {
     await syncFile(store.manifestPath)
   }
 
-  return { assertNoUncertainWrite, serialize, syncStreams }
+  return { assertNoUncertainWrite,
+serialize,
+syncStreams }
 }
 
 async function assertOperationalStateStoreDirectoryIsSafe({ store }) {
@@ -1634,7 +1714,8 @@ async function readOperationalStateStoreStreams({ store }) {
     store.fileSystem.readFile(store.logPath, "utf8"),
     store.fileSystem.readFile(store.manifestPath, "utf8"),
   ])
-  return { rawLog, rawManifest }
+  return { rawLog,
+rawManifest }
 }
 
 function validateOperationalStateStoreStreams({ store, rawLog, rawManifest }) {
@@ -1694,7 +1775,9 @@ function createOperationalStateStoreVerifier({ store }) {
     await assertOperationalStateStoreDirectoryIsSafe({ store })
     await assertOperationalStateStoreStreamsAreSafe({ store })
     const { rawLog, rawManifest } = await readOperationalStateStoreStreams({ store })
-    return validateOperationalStateStoreStreams({ store, rawLog, rawManifest })
+    return validateOperationalStateStoreStreams({ store,
+rawLog,
+rawManifest })
   }
 }
 
@@ -1728,7 +1811,8 @@ function createOperationalStateStoreInitializer({
   verifyState,
 }) {
   return () => serialize(async () => {
-    const writeState = { factWriteStarted: false, manifestWriteStarted: false }
+    const writeState = { factWriteStarted: false,
+manifestWriteStarted: false }
     try {
       assertNoUncertainWrite()
       await store.fileSystem.mkdir(store.absoluteDirectory, {
@@ -1762,13 +1846,17 @@ function createOperationalStateStoreInitializer({
         ...genesisBody,
         digest: digestOperationalStateRecord(genesisBody),
       }
-      await writeOperationalStateGenesisFact({ store, genesisRecord, writeState })
+      await writeOperationalStateGenesisFact({ store,
+genesisRecord,
+writeState })
       const genesisCheckpointBody = createManifestCheckpoint({
         schemaVersion: store.schemaVersion,
         record: genesisRecord,
         previousManifestDigest: null,
       })
-      await writeOperationalStateGenesisManifest({ store, genesisCheckpointBody, writeState })
+      await writeOperationalStateGenesisManifest({ store,
+genesisCheckpointBody,
+writeState })
       await syncStreams()
       const verified = await verifyState()
       return toResult({
@@ -1863,12 +1951,14 @@ function createOperationalStateAppendRecord({ store, state, input, recordedAt })
     previousDigest: state.lastRecord.digest,
     data: input.data,
   }
-  const record = { ...body, digest: digestOperationalStateRecord(body) }
+  const record = { ...body,
+digest: digestOperationalStateRecord(body) }
   const line = canonicalStringifyOperationalStateValue(record)
   if (Buffer.byteLength(line, "utf8") > MAX_RECORD_BYTES) {
     throw new RangeError(`Operational State record exceeds the ${MAX_RECORD_BYTES} byte limit`)
   }
-  return { record, line }
+  return { record,
+line }
 }
 
 async function writeOperationalStateFactRecord({ store, line, writeState }) {
@@ -1933,15 +2023,18 @@ function createOperationalStateStoreAppender({
     }
     try {
       assertNoUncertainWrite()
-      await synchronizeOperationalStateBeforeAppend({ syncStreams, writeState })
-      const state = await verifyOperationalStateBeforeAppend({ verifyState, writeState })
+      await synchronizeOperationalStateBeforeAppend({ syncStreams,
+writeState })
+      const state = await verifyOperationalStateBeforeAppend({ verifyState,
+writeState })
       const input = validateFactInput({
         fact,
         runtimeSessionId: store.runtimeSessionId,
       })
       const existing = state.records.find((record) => record.factId === input.factId)
       if (existing) {
-        assertDuplicateOperationalStateFactMatches({ existing, input })
+        assertDuplicateOperationalStateFactMatches({ existing,
+input })
         return toResult({
           data: {
             durable: true,
@@ -1951,15 +2044,22 @@ function createOperationalStateStoreAppender({
         })
       }
       const recordedAt = normalizeOperationalStateRecordedAt(store.now())
-      validateMarketHistoryCoverageProgress({ state, input, recordedAt })
+      validateMarketHistoryCoverageProgress({ state,
+input,
+recordedAt })
       const { record, line } = createOperationalStateAppendRecord({
         store,
         state,
         input,
         recordedAt,
       })
-      await writeOperationalStateFactRecord({ store, line, writeState })
-      await writeOperationalStateManifestCheckpoint({ store, state, record, writeState })
+      await writeOperationalStateFactRecord({ store,
+line,
+writeState })
+      await writeOperationalStateManifestCheckpoint({ store,
+state,
+record,
+writeState })
       const verified = await verifyState()
       return toResult({
         data: {
@@ -1971,7 +2071,9 @@ function createOperationalStateStoreAppender({
         },
       })
     } catch (error) {
-      return handleOperationalStateAppendFailure({ store, writeState, error })
+      return handleOperationalStateAppendFailure({ store,
+writeState,
+error })
     }
   })
 }
@@ -2040,10 +2142,18 @@ function createOperationalStateStoreReadAllOperation({
 function createOperationalStateStoreOperations({ store }) {
   const coordination = createOperationalStateStoreCoordination({ store })
   const verifyState = createOperationalStateStoreVerifier({ store })
-  const initialize = createOperationalStateStoreInitializer({ store, ...coordination, verifyState })
-  const append = createOperationalStateStoreAppender({ store, ...coordination, verifyState })
-  const verify = createOperationalStateStoreVerificationOperation({ store, ...coordination, verifyState })
-  const readAll = createOperationalStateStoreReadAllOperation({ store, ...coordination, verifyState })
+  const initialize = createOperationalStateStoreInitializer({ store,
+...coordination,
+verifyState })
+  const append = createOperationalStateStoreAppender({ store,
+...coordination,
+verifyState })
+  const verify = createOperationalStateStoreVerificationOperation({ store,
+...coordination,
+verifyState })
+  const readAll = createOperationalStateStoreReadAllOperation({ store,
+...coordination,
+verifyState })
   return Object.freeze({
     runtimeSessionId: store.runtimeSessionId,
     initialize,

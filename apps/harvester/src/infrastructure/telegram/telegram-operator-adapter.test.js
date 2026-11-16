@@ -139,7 +139,8 @@ function createPauseAcknowledgementFetch({ update, sentMessages, pollRequests })
     if (telegramApiMethod === "getMe") {
       return makeResponse({
         ok: true,
-        result: { id: 99, username: "coinzilla_bot" },
+        result: { id: 99,
+username: "coinzilla_bot" },
       })
     }
     if (telegramApiMethod === "getUpdates") {
@@ -147,7 +148,8 @@ function createPauseAcknowledgementFetch({ update, sentMessages, pollRequests })
       pollRequests.push(params)
       pollCount += 1
       if (pollCount === 1) {
-        return makeResponse({ ok: true, result: [update] })
+        return makeResponse({ ok: true,
+result: [update] })
       }
       finishSecondPoll()
       return new Promise((...promiseArguments) => {
@@ -159,11 +161,13 @@ function createPauseAcknowledgementFetch({ update, sentMessages, pollRequests })
     }
     if (telegramApiMethod === "sendMessage") {
       sentMessages.push(JSON.parse(telegramRequestOptions.body))
-      return makeResponse({ ok: true, result: { message_id: 200 } })
+      return makeResponse({ ok: true,
+result: { message_id: 200 } })
     }
     throw new Error(`Unexpected Telegram API method: ${telegramApiMethod}`)
   }
-  return { fetchImpl, secondPoll }
+  return { fetchImpl,
+secondPoll }
 }
 
 test("polls serially, maps an allowlisted private sender to an actor, and acknowledges pause", async () => {
@@ -601,7 +605,8 @@ function createStatusAndMarketsQueryOperator({ queryCalls }) {
     pauseMarket: async () => assert.fail("Read-only queries must never invoke pauseMarket."),
     resumeMarket: async () => assert.fail("Read-only queries must never invoke resumeMarket."),
     getStatus: async (request) => {
-      queryCalls.push({ type: "status", request })
+      queryCalls.push({ type: "status",
+request })
       return {
         ok: true,
         data: {
@@ -618,12 +623,15 @@ function createStatusAndMarketsQueryOperator({ queryCalls }) {
             status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
             ageMs: 1000,
           },
-          markets: { configured: 2, enabled: 2, blocked: 1 },
+          markets: { configured: 2,
+enabled: 2,
+blocked: 1 },
         },
       }
     },
     getMarkets: async (request) => {
-      queryCalls.push({ type: "markets", request })
+      queryCalls.push({ type: "markets",
+request })
       return {
         ok: true,
         data: {
@@ -658,16 +666,19 @@ function createStatusAndMarketsQueryFetch({ updates, sentMessages }) {
     const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") {
-      return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })
+      return makeResponse({ ok: true,
+result: { username: "coinzilla_bot" } })
     }
     if (telegramApiMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) {
-        return makeResponse({ ok: true, result: updates })
+        return makeResponse({ ok: true,
+result: updates })
       }
       if (pollCount === 2) {
         finishSecondPoll()
-        return makeResponse({ ok: true, result: [] })
+        return makeResponse({ ok: true,
+result: [] })
       }
       return new Promise((...promiseArguments) => {
         const [, reject] = promiseArguments
@@ -678,17 +689,21 @@ function createStatusAndMarketsQueryFetch({ updates, sentMessages }) {
     }
     if (telegramApiMethod === "sendMessage") {
       sentMessages.push(JSON.parse(telegramRequestOptions.body))
-      return makeResponse({ ok: true, result: { message_id: 212 } })
+      return makeResponse({ ok: true,
+result: { message_id: 212 } })
     }
     throw new Error(`Unexpected Telegram API method: ${telegramApiMethod}`)
   }
-  return { fetchImpl, secondPoll }
+  return { fetchImpl,
+secondPoll }
 }
 
 test("dispatches authorized read-only status and market queries without invoking trading controls", async () => {
   const updates = [
-    makeUpdate({ updateId: 112, text: "/status" }),
-    makeUpdate({ updateId: 113, text: "/markets" }),
+    makeUpdate({ updateId: 112,
+text: "/status" }),
+    makeUpdate({ updateId: 113,
+text: "/markets" }),
   ]
   const queryCalls = []
   const sentMessages = []
@@ -1406,12 +1421,14 @@ function createMarketControlsFetch({ update, edits }) {
     const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") {
-      return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })
+      return makeResponse({ ok: true,
+result: { username: "coinzilla_bot" } })
     }
     if (telegramApiMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) {
-        return makeResponse({ ok: true, result: [update] })
+        return makeResponse({ ok: true,
+result: [update] })
       }
       finishSecondPoll()
       return new Promise((...promiseArguments) => {
@@ -1422,15 +1439,18 @@ function createMarketControlsFetch({ update, edits }) {
       })
     }
     if (telegramApiMethod === "answerCallbackQuery" || telegramApiMethod === "setMyCommands") {
-      return makeResponse({ ok: true, result: true })
+      return makeResponse({ ok: true,
+result: true })
     }
     if (telegramApiMethod === "editMessageText") {
       edits.push(JSON.parse(telegramRequestOptions.body))
-      return makeResponse({ ok: true, result: true })
+      return makeResponse({ ok: true,
+result: true })
     }
     throw new Error(`Unexpected Telegram API method: ${telegramApiMethod}`)
   }
-  return { fetchImpl, secondPoll }
+  return { fetchImpl,
+secondPoll }
 }
 
 test("shows only enabled configured markets as inline pause or resume controls", async () => {
@@ -1441,7 +1461,8 @@ test("shows only enabled configured markets as inline pause or resume controls",
   })
   const edits = []
   const diagnosticEntries = []
-  const { fetchImpl, secondPoll } = createMarketControlsFetch({ update, edits })
+  const { fetchImpl, secondPoll } = createMarketControlsFetch({ update,
+edits })
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
     allowedUserIds: ["12345"],

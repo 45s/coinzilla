@@ -327,7 +327,8 @@ function handleSessionLifecycleEvent({ name, data, session }) {
     if (!["success", "failed"].includes(data.outcome)) {
       throw new TypeError("harvester.stopped outcome must be success or failed")
     }
-    requireString({ value: data.reason, field: "harvester.stopped reason" })
+    requireString({ value: data.reason,
+field: "harvester.stopped reason" })
     session.stoppedOutcome = data.outcome
     return true
   }
@@ -337,14 +338,22 @@ function handleSessionLifecycleEvent({ name, data, session }) {
 function normalizeAccountBalances({ balances }) {
   const normalizedBalances = []
   for (const [index, balance] of balances.entries()) {
-    const asset = requireString({ value: balance?.asset, field: `balances[${index}].asset` })
-    const free = requireDecimal({ value: balance?.free, field: `balances[${index}].free` })
-    const locked = requireDecimal({ value: balance?.locked, field: `balances[${index}].locked` })
-    const total = requireDecimal({ value: balance?.total, field: `balances[${index}].total` })
-    if (total !== addDecimal({ left: free, right: locked })) {
+    const asset = requireString({ value: balance?.asset,
+field: `balances[${index}].asset` })
+    const free = requireDecimal({ value: balance?.free,
+field: `balances[${index}].free` })
+    const locked = requireDecimal({ value: balance?.locked,
+field: `balances[${index}].locked` })
+    const total = requireDecimal({ value: balance?.total,
+field: `balances[${index}].total` })
+    if (total !== addDecimal({ left: free,
+right: locked })) {
       throw new Error(`Account snapshot total does not equal free plus locked for ${asset}`)
     }
-    normalizedBalances.push(Object.freeze({ asset, free, locked, total }))
+    normalizedBalances.push(Object.freeze({ asset,
+free,
+locked,
+total }))
   }
   if (new Set(normalizedBalances.map(({ asset }) => asset)).size !== normalizedBalances.length) {
     throw new Error("Account snapshot contains duplicate asset balances")
@@ -355,7 +364,8 @@ function normalizeAccountBalances({ balances }) {
 function normalizeAuditReasons({ auditReasons }) {
   const normalizedReasons = []
   for (const [index, reason] of auditReasons.entries()) {
-    normalizedReasons.push(requireString({ value: reason, field: `auditReasons[${index}]` }))
+    normalizedReasons.push(requireString({ value: reason,
+field: `auditReasons[${index}]` }))
   }
   return normalizedReasons
 }
@@ -398,10 +408,13 @@ function validateAccountSnapshotAuditStatus({ auditStatus, auditReasons }) {
 }
 
 function handleAccountSnapshotEvent({ data, fileName, sequence, session, state }) {
-  validateAccountSnapshotMetadata({ data, fileName, session })
+  validateAccountSnapshotMetadata({ data,
+fileName,
+session })
   const balances = normalizeAccountBalances({ balances: data.balances })
   const auditReasons = normalizeAuditReasons({ auditReasons: data.auditReasons })
-  validateAccountSnapshotAuditStatus({ auditStatus: data.auditStatus, auditReasons })
+  validateAccountSnapshotAuditStatus({ auditStatus: data.auditStatus,
+auditReasons })
   state.accountSnapshots.push(Object.freeze({
     fileName,
     sequence,
@@ -429,11 +442,13 @@ function normalizeOpenOrder({ order, index }) {
     value: order?.brokerOrderId,
     field: `orders[${index}].brokerOrderId`,
   })
-  const symbol = requireString({ value: order?.symbol, field: `orders[${index}].symbol` })
+  const symbol = requireString({ value: order?.symbol,
+field: `orders[${index}].symbol` })
   if (!ORDER_SIDES.has(order?.side)) {
     throw new TypeError(`orders[${index}].side must be BUY or SELL`)
   }
-  const type = requireString({ value: order?.type, field: `orders[${index}].type` })
+  const type = requireString({ value: order?.type,
+field: `orders[${index}].type` })
   const quantity = requireDecimal({
     value: order?.quantity,
     field: `orders[${index}].quantity`,
@@ -445,8 +460,11 @@ function normalizeOpenOrder({ order, index }) {
   })
   const price = order?.price === undefined
     ? undefined
-    : requireDecimal({ value: order.price, field: `orders[${index}].price`, positive: true })
-  if (compareDecimal({ left: executedQuantity, right: quantity }) > 0) {
+    : requireDecimal({ value: order.price,
+field: `orders[${index}].price`,
+positive: true })
+  if (compareDecimal({ left: executedQuantity,
+right: quantity }) > 0) {
     throw new Error("Open-order snapshot executed quantity exceeds original quantity")
   }
   return Object.freeze({
@@ -463,14 +481,16 @@ function normalizeOpenOrder({ order, index }) {
     ...(price === undefined ? {} : { price }),
     quantity,
     executedQuantity,
-    status: requireString({ value: order.status, field: `orders[${index}].status` }),
+    status: requireString({ value: order.status,
+field: `orders[${index}].status` }),
   })
 }
 
 function normalizeOpenOrderSnapshotOrders({ orders }) {
   const normalizedOrders = []
   for (const [index, order] of orders.entries()) {
-    normalizedOrders.push(normalizeOpenOrder({ order, index }))
+    normalizedOrders.push(normalizeOpenOrder({ order,
+index }))
   }
   const identities = normalizedOrders.map(({ symbol, brokerOrderId }) => `${symbol}:${brokerOrderId}`)
   if (new Set(identities).size !== identities.length) {
@@ -482,7 +502,8 @@ function normalizeOpenOrderSnapshotOrders({ orders }) {
 function normalizeOpenOrderBlockReasons({ blockReasons }) {
   const normalizedReasons = []
   for (const [index, reason] of blockReasons.entries()) {
-    normalizedReasons.push(requireString({ value: reason, field: `blockReasons[${index}]` }))
+    normalizedReasons.push(requireString({ value: reason,
+field: `blockReasons[${index}]` }))
   }
   return normalizedReasons
 }
@@ -501,11 +522,14 @@ function assertReconciledOpenOrderMatchesOwnership({ order, state }) {
     owned.symbol !== order.symbol ||
     owned.side !== order.side ||
     owned.type !== order.type ||
-    compareDecimal({ left: owned.quantity, right: order.quantity }) !== 0 ||
-    compareDecimal({ left: owned.cumulativeFillQuantity, right: order.executedQuantity }) !== 0 ||
+    compareDecimal({ left: owned.quantity,
+right: order.quantity }) !== 0 ||
+    compareDecimal({ left: owned.cumulativeFillQuantity,
+right: order.executedQuantity }) !== 0 ||
     (owned.price === undefined
       ? order.price !== undefined
-      : order.price === undefined || compareDecimal({ left: owned.price, right: order.price }) !== 0)
+      : order.price === undefined || compareDecimal({ left: owned.price,
+right: order.price }) !== 0)
   ) {
     throw new Error(`RECONCILED open-order snapshot contradicts durable Harvester ownership for ${order.clientOrderId}`)
   }
@@ -552,13 +576,18 @@ function validateOpenOrderSnapshotMetadata({ data, fileName, session }) {
 }
 
 function handleOpenOrderSnapshotEvent({ data, fileName, session, state }) {
-  validateOpenOrderSnapshotMetadata({ data, fileName, session })
+  validateOpenOrderSnapshotMetadata({ data,
+fileName,
+session })
   const orders = normalizeOpenOrderSnapshotOrders({ orders: data.orders })
   const blockReasons = normalizeOpenOrderBlockReasons({ blockReasons: data.blockReasons })
-  validateOpenOrderSnapshotReadiness({ readiness: data.readiness, orders, blockReasons })
+  validateOpenOrderSnapshotReadiness({ readiness: data.readiness,
+orders,
+blockReasons })
   if (data.readiness === "RECONCILED") {
     for (const order of orders) {
-      assertReconciledOpenOrderMatchesOwnership({ order, state })
+      assertReconciledOpenOrderMatchesOwnership({ order,
+state })
     }
   }
   state.openOrderSnapshots.push(Object.freeze({
@@ -578,7 +607,8 @@ function handleSubmissionRequestedEvent({ data, sequence, state }) {
   }
   const existing = state.ordersByClientId.get(intent.clientOrderId)
   if (existing) {
-    assertSameIntent({ current: existing, next: intent })
+    assertSameIntent({ current: existing,
+next: intent })
     if (existing.submissionRequested) {
       return
     }
@@ -612,9 +642,12 @@ function handleSubmittedEvent({ data, name, state }) {
     clientOrderId: intent.clientOrderId,
     eventName: name,
   })
-  assertSameIntent({ current: order, next: intent })
-  const brokerOrderId = requireString({ value: data.brokerOrderId, field: "brokerOrderId" })
-  const status = requireString({ value: data.status, field: "status" })
+  assertSameIntent({ current: order,
+next: intent })
+  const brokerOrderId = requireString({ value: data.brokerOrderId,
+field: "brokerOrderId" })
+  const status = requireString({ value: data.status,
+field: "status" })
   const existingOwner = state.clientIdByBrokerId.get(brokerOrderId)
   if (existingOwner && existingOwner !== order.clientOrderId) {
     throw new Error(`Broker order ID is assigned to multiple Harvester client order IDs: ${brokerOrderId}`)
@@ -634,12 +667,19 @@ function handleSubmittedEvent({ data, name, state }) {
 }
 
 function handleSubmissionFailedEvent({ data, name, state }) {
-  const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
-  const order = requireProjectedOrder({ state, clientOrderId, eventName: name })
+  const clientOrderId = requireString({ value: data.clientOrderId,
+field: "clientOrderId" })
+  const order = requireProjectedOrder({ state,
+clientOrderId,
+eventName: name })
   const intent = requireOrderIntent({
-    data: { ...data, price: order.price, quantity: order.quantity, type: order.type },
+    data: { ...data,
+price: order.price,
+quantity: order.quantity,
+type: order.type },
   })
-  assertSameIntent({ current: order, next: intent })
+  assertSameIntent({ current: order,
+next: intent })
   if (!SUBMISSION_OUTCOMES.has(data.outcome)) {
     throw new TypeError("Invalid order submission outcome")
   }
@@ -653,15 +693,19 @@ function handleSubmissionFailedEvent({ data, name, state }) {
 }
 
 function handleCancelRequestedEvent({ data, name, sequence, state }) {
-  const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
-  const order = requireProjectedOrder({ state, clientOrderId, eventName: name })
+  const clientOrderId = requireString({ value: data.clientOrderId,
+field: "clientOrderId" })
+  const order = requireProjectedOrder({ state,
+clientOrderId,
+eventName: name })
   if (order.submissionOutcome === "REJECTED") {
     throw new Error(`Cancellation intent references a definitively rejected submission: ${clientOrderId}`)
   }
   if (order.cancellationState !== "NONE") {
     throw new Error(`Cancellation intent cannot be retried or duplicated before prior cancellation resolution: ${clientOrderId}`)
   }
-  const brokerOrderId = requireString({ value: data.brokerOrderId, field: "brokerOrderId" })
+  const brokerOrderId = requireString({ value: data.brokerOrderId,
+field: "brokerOrderId" })
   if (order.brokerOrderId === undefined) {
     const existingOwner = state.clientIdByBrokerId.get(brokerOrderId)
     if (existingOwner && existingOwner !== order.clientOrderId) {
@@ -687,23 +731,30 @@ function handleCancelRequestedEvent({ data, name, sequence, state }) {
   if (!["OPEN", "PARTIALLY_FILLED"].includes(data.status)) {
     throw new Error("Cancellation intent must record an active order status")
   }
-  const executedQuantity = requireDecimal({ value: data.executedQuantity, field: "executedQuantity" })
-  if (compareDecimal({ left: executedQuantity, right: order.quantity }) > 0) {
+  const executedQuantity = requireDecimal({ value: data.executedQuantity,
+field: "executedQuantity" })
+  if (compareDecimal({ left: executedQuantity,
+right: order.quantity }) > 0) {
     throw new Error("Cancellation intent executed quantity exceeds original order quantity")
   }
-  if (compareDecimal({ left: executedQuantity, right: order.cumulativeFillQuantity }) < 0) {
+  if (compareDecimal({ left: executedQuantity,
+right: order.cumulativeFillQuantity }) < 0) {
     throw new Error("Cancellation intent executed quantity is behind journaled fills")
   }
   order.cancellationState = "REQUESTED"
-  order.cancellationReason = requireString({ value: data.reason, field: "cancellation reason" })
+  order.cancellationReason = requireString({ value: data.reason,
+field: "cancellation reason" })
   order.cancellationSequence = sequence
   order.cancellationExecutedQuantity = executedQuantity
   order.requiresExchangeReconciliation = true
 }
 
 function handleCancelledEvent({ data, name, sequence, state }) {
-  const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
-  const order = requireProjectedOrder({ state, clientOrderId, eventName: name })
+  const clientOrderId = requireString({ value: data.clientOrderId,
+field: "clientOrderId" })
+  const order = requireProjectedOrder({ state,
+clientOrderId,
+eventName: name })
   if (order.cancellationState !== "REQUESTED") {
     throw new Error("Confirmed cancellation has no preceding durable cancellation intent")
   }
@@ -718,11 +769,14 @@ function handleCancelledEvent({ data, name, sequence, state }) {
   ) {
     throw new Error("Confirmed cancellation conflicts with the owned order identity")
   }
-  const executedQuantity = requireDecimal({ value: data.executedQuantity, field: "executedQuantity" })
-  if (compareDecimal({ left: executedQuantity, right: order.quantity }) > 0) {
+  const executedQuantity = requireDecimal({ value: data.executedQuantity,
+field: "executedQuantity" })
+  if (compareDecimal({ left: executedQuantity,
+right: order.quantity }) > 0) {
     throw new Error("Confirmed cancellation executed quantity exceeds original order quantity")
   }
-  if (compareDecimal({ left: executedQuantity, right: order.cumulativeFillQuantity }) < 0) {
+  if (compareDecimal({ left: executedQuantity,
+right: order.cumulativeFillQuantity }) < 0) {
     throw new Error("Confirmed cancellation executed quantity is behind journaled fills")
   }
   order.cancellationState = "CANCELED"
@@ -734,8 +788,11 @@ function handleCancelledEvent({ data, name, sequence, state }) {
 }
 
 function handleCancelFailedEvent({ data, name, sequence, state }) {
-  const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
-  const order = requireProjectedOrder({ state, clientOrderId, eventName: name })
+  const clientOrderId = requireString({ value: data.clientOrderId,
+field: "clientOrderId" })
+  const order = requireProjectedOrder({ state,
+clientOrderId,
+eventName: name })
   if (order.submissionOutcome === "REJECTED") {
     throw new Error(`Cancellation failure references a definitively rejected submission: ${clientOrderId}`)
   }
@@ -749,7 +806,8 @@ function handleCancelFailedEvent({ data, name, sequence, state }) {
     throw new Error("Cancellation failure conflicts with the owned order identity")
   }
   if (data.brokerOrderId !== undefined) {
-    const brokerOrderId = requireString({ value: data.brokerOrderId, field: "brokerOrderId" })
+    const brokerOrderId = requireString({ value: data.brokerOrderId,
+field: "brokerOrderId" })
     if (order.brokerOrderId === undefined) {
       const existingOwner = state.clientIdByBrokerId.get(brokerOrderId)
       if (existingOwner && existingOwner !== order.clientOrderId) {
@@ -826,13 +884,16 @@ function applyFillToProjection({ fill, fingerprint, order, sequence, state }) {
     left: order.cumulativeFillQuantity,
     right: fill.quantity,
   })
-  if (compareDecimal({ left: cumulativeFillQuantity, right: order.quantity }) > 0) {
+  if (compareDecimal({ left: cumulativeFillQuantity,
+right: order.quantity }) > 0) {
     throw new Error(`Journaled fills exceed original order quantity for ${order.clientOrderId}`)
   }
   order.cumulativeFillQuantity = cumulativeFillQuantity
   order.fillIds.push(fill.fillId)
   order.requiresExchangeReconciliation = true
-  state.fillsById.set(fill.fillId, { fill, fingerprint, sequence })
+  state.fillsById.set(fill.fillId, { fill,
+fingerprint,
+sequence })
   state.tradeIdBySymbol.set(tradeKey, fill.fillId)
   if (order.side === "BUY") {
     order.lastBuyFillSequence = sequence
@@ -855,30 +916,48 @@ function applyFillToProjection({ fill, fingerprint, order, sequence, state }) {
 
 function handleFillAppliedEvent({ data, sequence, state }) {
   const fill = requireFill({ data })
-  const order = resolveFillOrder({ fill, state })
+  const order = resolveFillOrder({ fill,
+state })
   const fingerprint = fillFingerprint({ fill })
-  if (!assertUniqueAppliedFill({ fill, fingerprint, state })) {
+  if (!assertUniqueAppliedFill({ fill,
+fingerprint,
+state })) {
     return
   }
-  applyFillToProjection({ fill, fingerprint, order, sequence, state })
+  applyFillToProjection({ fill,
+fingerprint,
+order,
+sequence,
+state })
 }
 
 function handleRecoveryCompletedEvent({ data, sequence, state }) {
-  const symbol = requireString({ value: data.symbol, field: "symbol" })
-  const marketId = requireString({ value: data.marketId, field: "marketId" })
-  const freeQuantity = requireDecimal({ value: data.freeQuantity, field: "freeQuantity" })
-  const keepQuantity = requireDecimal({ value: data.keepQuantity, field: "keepQuantity" })
-  const minProfit = requireDecimal({ value: data.minProfit, field: "minProfit", positive: true })
-  const realizedNetProfit = requireDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
-  if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) {
+  const symbol = requireString({ value: data.symbol,
+field: "symbol" })
+  const marketId = requireString({ value: data.marketId,
+field: "marketId" })
+  const freeQuantity = requireDecimal({ value: data.freeQuantity,
+field: "freeQuantity" })
+  const keepQuantity = requireDecimal({ value: data.keepQuantity,
+field: "keepQuantity" })
+  const minProfit = requireDecimal({ value: data.minProfit,
+field: "minProfit",
+positive: true })
+  const realizedNetProfit = requireDecimal({ value: data.realizedNetProfit,
+field: "realizedNetProfit" })
+  if (compareDecimal({ left: minProfit,
+right: "0.01" }) < 0) {
     throw new RangeError("Recovery-cycle minProfit must be at least 0.01")
   }
-  if (compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0) {
+  if (compareDecimal({ left: realizedNetProfit,
+right: minProfit }) < 0) {
     throw new RangeError("Recovery-cycle realizedNetProfit does not meet minProfit")
   }
   const dust = requireRecoveryDust({ value: data.dust })
-  const expectedFreeQuantity = addDecimal({ left: keepQuantity, right: dust?.quantity ?? "0" })
-  if (compareDecimal({ left: freeQuantity, right: expectedFreeQuantity }) !== 0) {
+  const expectedFreeQuantity = addDecimal({ left: keepQuantity,
+right: dust?.quantity ?? "0" })
+  if (compareDecimal({ left: freeQuantity,
+right: expectedFreeQuantity }) !== 0) {
     throw new Error("Recovery-cycle freeQuantity must equal keepQuantity plus validated dust")
   }
   const completedSellOrder = state.lastFullyFilledSellBySymbol.get(symbol)
@@ -915,18 +994,21 @@ function validateRecoveryCycleNonCompletionReason({
     if (!["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(reason)) {
       throw new Error("CONTINUE_SELL_THROUGH has an unsupported reason")
     }
-    if (compareDecimal({ left: activeQuantity, right: keepQuantity }) <= 0) {
+    if (compareDecimal({ left: activeQuantity,
+right: keepQuantity }) <= 0) {
       throw new Error("CONTINUE_SELL_THROUGH requires active inventory above keepQuantity")
     }
     if (
       reason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" &&
-      compareDecimal({ left: realizedNetProfit, right: minProfit }) >= 0
+      compareDecimal({ left: realizedNetProfit,
+right: minProfit }) >= 0
     ) {
       throw new Error("Profit-target continuation requires realized profit below minProfit")
     }
     if (
       reason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" &&
-      compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0
+      compareDecimal({ left: realizedNetProfit,
+right: minProfit }) < 0
     ) {
       throw new Error("Residual sell-through requires realized profit to meet minProfit")
     }
@@ -937,26 +1019,38 @@ function validateRecoveryCycleNonCompletionReason({
   }
   if (
     reason === "RECOVERY_SELL_FAILED_MIN_PROFIT" &&
-    compareDecimal({ left: realizedNetProfit, right: minProfit }) >= 0
+    compareDecimal({ left: realizedNetProfit,
+right: minProfit }) >= 0
   ) {
     throw new Error("RECOVERY_SELL_FAILED_MIN_PROFIT requires realized profit below minProfit")
   }
 }
 
 function handleRecoveryNotCompletedEvent({ data, sequence, state }) {
-  const symbol = requireString({ value: data.symbol, field: "symbol" })
-  const marketId = requireString({ value: data.marketId, field: "marketId" })
-  const sellOrderClientId = requireString({ value: data.sellOrderClientId, field: "sellOrderClientId" })
-  const sellOrderBrokerOrderId = requireString({ value: data.sellOrderBrokerOrderId, field: "sellOrderBrokerOrderId" })
+  const symbol = requireString({ value: data.symbol,
+field: "symbol" })
+  const marketId = requireString({ value: data.marketId,
+field: "marketId" })
+  const sellOrderClientId = requireString({ value: data.sellOrderClientId,
+field: "sellOrderClientId" })
+  const sellOrderBrokerOrderId = requireString({ value: data.sellOrderBrokerOrderId,
+field: "sellOrderBrokerOrderId" })
   if (!["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(data.outcome)) {
     throw new TypeError("Recovery-cycle non-completion outcome is invalid")
   }
-  const reason = requireString({ value: data.reason, field: "reason" })
-  const realizedNetProfit = requireSignedDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
-  const activeQuantity = requireDecimal({ value: data.activeQuantity, field: "activeQuantity" })
-  const keepQuantity = requireDecimal({ value: data.keepQuantity, field: "keepQuantity" })
-  const minProfit = requireDecimal({ value: data.minProfit, field: "minProfit", positive: true })
-  if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) {
+  const reason = requireString({ value: data.reason,
+field: "reason" })
+  const realizedNetProfit = requireSignedDecimal({ value: data.realizedNetProfit,
+field: "realizedNetProfit" })
+  const activeQuantity = requireDecimal({ value: data.activeQuantity,
+field: "activeQuantity" })
+  const keepQuantity = requireDecimal({ value: data.keepQuantity,
+field: "keepQuantity" })
+  const minProfit = requireDecimal({ value: data.minProfit,
+field: "minProfit",
+positive: true })
+  if (compareDecimal({ left: minProfit,
+right: "0.01" }) < 0) {
     throw new RangeError("Recovery-cycle minProfit must be at least 0.01")
   }
   validateRecoveryCycleNonCompletionReason({
@@ -995,13 +1089,16 @@ function handleRecoveryNotCompletedEvent({ data, sequence, state }) {
 }
 
 function handleStrategyPausedEvent({ data, state }) {
-  const symbol = requireString({ value: data.symbol, field: "symbol" })
-  const reason = requireString({ value: data.reason, field: "reason" })
+  const symbol = requireString({ value: data.symbol,
+field: "symbol" })
+  const reason = requireString({ value: data.reason,
+field: "reason" })
   state.pausedMarkets.set(symbol, reason)
 }
 
 function handleExecutionSafetyEvent({ data, name, sequence, state }) {
-  const symbol = requireString({ value: data.symbol, field: `${name} symbol` })
+  const symbol = requireString({ value: data.symbol,
+field: `${name} symbol` })
   const reason = requireString({
     value: data.reason ?? data.error?.message ?? data.error?.code ?? name,
     field: `${name} reason`,
@@ -1023,7 +1120,8 @@ function handleExecutionSafetyEvent({ data, name, sequence, state }) {
       }),
     }),
     ...(data.fillId === undefined ? {} : {
-      fillId: requireString({ value: data.fillId, field: `${name} fillId` }),
+      fillId: requireString({ value: data.fillId,
+field: `${name} fillId` }),
     }),
     sequence,
   }))
@@ -1048,7 +1146,8 @@ const JOURNAL_EVENT_HANDLERS = Object.freeze({
 })
 
 function processJournalRecoveryRecord({ record, sequence, state }) {
-  const payload = requireObject({ value: record?.payload, field: "Journal record payload" })
+  const payload = requireObject({ value: record?.payload,
+field: "Journal record payload" })
   const { name } = payload
   if (typeof name !== "string") {
     throw new TypeError("Journal event name must be a string")
@@ -1063,17 +1162,21 @@ function processJournalRecoveryRecord({ record, sequence, state }) {
     return
   }
 
-  const data = requireObject({ value: payload.data, field: `${name} data` })
+  const data = requireObject({ value: payload.data,
+field: `${name} data` })
   const { fileName: recordFileName } = record.position ?? {}
   const fileName = requireString({
     value: recordFileName,
     field: "Journal record position.fileName",
   })
-  const session = getOrCreateProjectionSession({ state, fileName })
+  const session = getOrCreateProjectionSession({ state,
+fileName })
   if (session.stoppedOutcome !== undefined) {
     throw new Error("Journal session contains recognized events after harvester.stopped")
   }
-  if (handleSessionLifecycleEvent({ name, data, session })) {
+  if (handleSessionLifecycleEvent({ name,
+data,
+session })) {
     return
   }
   if (session.closingSnapshotCount > 0) {
@@ -1084,11 +1187,19 @@ function processJournalRecoveryRecord({ record, sequence, state }) {
   }
   const handler = JOURNAL_EVENT_HANDLERS[name]
   if (handler) {
-    handler({ data, name, fileName, sequence, session, state })
+    handler({ data,
+name,
+fileName,
+sequence,
+session,
+state })
     return
   }
   if (SAFETY_BLOCKER_EVENTS.has(name)) {
-    handleExecutionSafetyEvent({ data, name, sequence, state })
+    handleExecutionSafetyEvent({ data,
+name,
+sequence,
+state })
   }
 }
 
@@ -1124,7 +1235,8 @@ function createJournalRecoveryProjectionData({ state }) {
     commissions: Object.freeze(fill.commissions.map((commission) => Object.freeze({ ...commission }))),
   }))
   const recoveryCycles = state.cycles.map((cycle) => Object.freeze({ ...cycle }))
-  const pausedMarkets = [...state.pausedMarkets].map(([symbol, reason]) => Object.freeze({ symbol, reason }))
+  const pausedMarkets = [...state.pausedMarkets].map(([symbol, reason]) => Object.freeze({ symbol,
+reason }))
   const requiresExchangeReconciliation = orders.some((order) => order.requiresExchangeReconciliation) ||
     fills.length > 0 || recoveryCycles.length > 0 ||
     sessions.some((session) => session.tradingEnabled || session.uncleanTradingShutdown)
@@ -1155,7 +1267,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
     }
     const state = createProjectionState()
     for (const [sequence, record] of records.entries()) {
-      processJournalRecoveryRecord({ record, sequence, state })
+      processJournalRecoveryRecord({ record,
+sequence,
+state })
     }
     assertFullyFilledSellOutcomesResolved({ state })
     return toResult({ data: createJournalRecoveryProjectionData({ state }) })

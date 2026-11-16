@@ -509,10 +509,10 @@ test("TEMPORARY: export ESLint autofix output for the complete Harvester infrast
   const results = await eslint.lintFiles(["src/infrastructure/**/*.js"])
   for (const result of results) {
     if (typeof result.output === "string") {
-      t.diagnostic("HARVESTER_ESLINT_FIXED_FILE "+JSON.stringify({
+      t.diagnostic(`HARVESTER_ESLINT_FIXED_FILE ${JSON.stringify({
         path: result.filePath.slice(process.cwd().length + 1),
         content: result.output,
-      }))
+      })}`)
     }
   }
   const findings = results.flatMap(({ filePath, messages }) =>
@@ -525,9 +525,9 @@ test("TEMPORARY: export ESLint autofix output for the complete Harvester infrast
       message,
     }))
   )
-  t.diagnostic("HARVESTER_ESLINT_AFTER_FIX "+JSON.stringify({
+  t.diagnostic(`HARVESTER_ESLINT_AFTER_FIX ${JSON.stringify({
     errorCount: findings.filter(({ severity }) => severity === 2).length,
     warningCount: findings.filter(({ severity }) => severity === 1).length,
     findings,
-  }))
+  })}`)
 })

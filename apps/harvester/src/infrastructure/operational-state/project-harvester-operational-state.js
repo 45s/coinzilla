@@ -99,11 +99,13 @@ function assertIntentMatches({ intent, data, fields, context }) {
 }
 
 function mapAccountSnapshotFact({ data }) {
-  return [{ name: EVENT.ACCOUNT_SNAPSHOT, data }]
+  return [{ name: EVENT.ACCOUNT_SNAPSHOT,
+data }]
 }
 
 function mapAccountOpenOrdersFact({ data }) {
-  return [{ name: EVENT.ACCOUNT_OPEN_ORDERS, data }]
+  return [{ name: EVENT.ACCOUNT_OPEN_ORDERS,
+data }]
 }
 
 function mapOrderSubmissionIntentFact({ data, orderIntents }) {
@@ -241,7 +243,8 @@ function mapOrderCancellationOutcomeFact({ data, orderIntents, cancellationInten
 }
 
 function mapExecutionFillFact({ data }) {
-  return [{ name: EVENT.FILL_APPLIED, data: mapFill({ data }) }]
+  return [{ name: EVENT.FILL_APPLIED,
+data: mapFill({ data }) }]
 }
 
 function mapRecoveryCycleCompletedFact({ data }) {
@@ -362,7 +365,8 @@ function handleConfigurationBaselineFact({ record, state }) {
   ) {
     throw new TypeError("Durable configuration baseline is malformed")
   }
-  const baseline = { strategyName, markets }
+  const baseline = { strategyName,
+markets }
   const existing = state.configurationBaselines.get(fingerprint)
   if (existing && JSON.stringify(existing) !== JSON.stringify(baseline)) {
     throw new Error("Configuration fingerprint was reused with conflicting strategy metadata")
@@ -579,7 +583,8 @@ const FACT_RECORD_HANDLERS = Object.freeze({
 })
 
 function processOperationalStateRecord({ rawRecord, index, state }) {
-  const record = requireRecord({ record: rawRecord, index })
+  const record = requireRecord({ record: rawRecord,
+index })
   const sequence = BigInt(record.sequence)
   if (sequence <= state.previousSequence) {
     throw new Error("Operational State Store record sequence must be strictly increasing")
@@ -594,10 +599,13 @@ function processOperationalStateRecord({ rawRecord, index, state }) {
   }
   const handler = FACT_RECORD_HANDLERS[record.factType]
   if (handler) {
-    handler({ record, sequence, state })
+    handler({ record,
+sequence,
+state })
     return
   }
-  handleTradingOperationalFact({ record, state })
+  handleTradingOperationalFact({ record,
+state })
 }
 
 function sortSessionsByStartedSequence({ sessions }) {
@@ -638,13 +646,17 @@ function createSessionSyntheticRecords({ session, latestSession, state }) {
     const name = record.factType === "ACCOUNT_SNAPSHOT_CAPTURED"
       ? EVENT.ACCOUNT_SNAPSHOT
       : EVENT.ACCOUNT_OPEN_ORDERS
-    emit({ name, data: record.data })
+    emit({ name,
+data: record.data })
   }
-  emit({ name: EVENT.STARTED, data: { tradingEnabled: session.tradingEnabled } })
+  emit({ name: EVENT.STARTED,
+data: { tradingEnabled: session.tradingEnabled } })
 
   if (session === latestSession) {
     for (const [symbol, pause] of state.strategyPauses) {
-      emit({ name: EVENT.STRATEGY_PAUSED, data: { symbol, reason: pause.reason } })
+      emit({ name: EVENT.STRATEGY_PAUSED,
+data: { symbol,
+reason: pause.reason } })
     }
     for (const blocker of state.activeBlockers.values()) {
       emit({
@@ -664,7 +676,8 @@ function createSessionSyntheticRecords({ session, latestSession, state }) {
       cancellationIntents: state.cancellationIntents,
     })
     for (const event of events) {
-      emit({ name: event.name, data: event.data })
+      emit({ name: event.name,
+data: event.data })
     }
   }
   if (session.stop) {
@@ -723,7 +736,8 @@ function mapCompletedRecoveryCycles({ cycles, facts }) {
       factId: fact.factId,
       // Keep the synthetic replay sequence in the same ordering domain as
       // projected fills. The durable stream sequence is separate metadata.
-      durableSequence: requireSafeSequence({ sequence: fact.sequence, factId: fact.factId }),
+      durableSequence: requireSafeSequence({ sequence: fact.sequence,
+factId: fact.factId }),
     }))
   }
   if (mappedCycles.length !== facts.length) {
@@ -762,7 +776,8 @@ function mapRecoveryCycleEvaluations({ evaluations, facts }) {
       factId: fact.factId,
       // Keep the synthetic replay sequence in the same ordering domain as
       // projected fills. The durable stream sequence is separate metadata.
-      durableSequence: requireSafeSequence({ sequence: fact.sequence, factId: fact.factId }),
+      durableSequence: requireSafeSequence({ sequence: fact.sequence,
+factId: fact.factId }),
     }))
   }
   if (mappedEvaluations.length !== facts.length) {
@@ -781,10 +796,12 @@ function createOperationalProjectionResult({ projected, state }) {
     facts: state.recoveryCycleNotCompletedFacts,
   })
   const stickySafetyBlockers = Object.freeze([...state.activeBlockers.values()].map((blocker) =>
-    Object.freeze({ ...blocker, scope: blocker.scope })
+    Object.freeze({ ...blocker,
+scope: blocker.scope })
   ))
   const pausedMarkets = Object.freeze([...state.strategyPauses].map(([symbol, pause]) =>
-    Object.freeze({ symbol, reason: pause.reason })
+    Object.freeze({ symbol,
+reason: pause.reason })
   ))
   return toResult({
     data: Object.freeze({
@@ -826,14 +843,17 @@ export function projectHarvesterOperationalState({ records } = {}) {
     }
     const state = createOperationalProjectionState()
     for (const [index, rawRecord] of records.entries()) {
-      processOperationalStateRecord({ rawRecord, index, state })
+      processOperationalStateRecord({ rawRecord,
+index,
+state })
     }
     const syntheticRecords = createSyntheticJournalRecords({ state })
     const projected = projectHarvesterJournalRecovery({ records: syntheticRecords })
     if (projected?.ok !== true) {
       return projected
     }
-    return createOperationalProjectionResult({ projected, state })
+    return createOperationalProjectionResult({ projected,
+state })
   } catch (error) {
     return toResult({ error })
   }

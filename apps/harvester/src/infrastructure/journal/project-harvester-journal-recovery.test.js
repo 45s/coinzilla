@@ -923,7 +923,8 @@ function assertAccountingParity({ livePortfolio, liveLedger, restored }) {
 }
 
 test("matches live BUY/SELL accounting through DTO, projection, and restore for base, quote, and third-asset fees", () => {
-  const bnbAsset = new Asset({ id: "binance:BNB", code: "BNB" })
+  const bnbAsset = new Asset({ id: "binance:BNB",
+code: "BNB" })
   const fills = createAccountingParityFills({ bnbAsset })
   let livePortfolio = new Portfolio()
   let liveLedger = RecoveryLedger.empty({ market: canonicalMarket })
@@ -937,7 +938,8 @@ test("matches live BUY/SELL accounting through DTO, projection, and restore for 
     assert.equal(live.ok, true, live.errors?.map(({ message }) => message).join("; "))
     livePortfolio = live.data.portfolio
     liveLedger = live.data.recoveryLedger
-    appendAccountingParityFillRecords({ records, fillValue })
+    appendAccountingParityFillRecords({ records,
+fillValue })
   }
 
   const projection = projectHarvesterJournalRecovery({ records })
@@ -947,7 +949,9 @@ test("matches live BUY/SELL accounting through DTO, projection, and restore for 
     marketMetadata: new Map([[canonicalMarket.symbol, canonicalMarket]]),
   })
   assert.equal(restored.ok, true, restored.errors?.map(({ message }) => message).join("; "))
-  assertAccountingParity({ livePortfolio, liveLedger, restored })
+  assertAccountingParity({ livePortfolio,
+liveLedger,
+restored })
 
   const livePosition = livePortfolio.getPosition({ marketId: canonicalMarket.id })
   assert.equal(livePosition.baseQuantity.amount, "48.5")
@@ -1741,8 +1745,11 @@ const harvesterRecord = (...parameters) => {
   const [name, data, id = name] = parameters
   return ({
     id,
-    payload: { id, name, data },
-    position: { fileName: "session.jsonl", lineNumber: 1 },
+    payload: { id,
+name,
+data },
+    position: { fileName: "session.jsonl",
+lineNumber: 1 },
   })
 }
 

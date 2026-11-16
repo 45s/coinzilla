@@ -104,7 +104,8 @@ function parseProcessStarted({ records, directory }) {
     throw createHistoryError({
       code: "HARVESTER_JOURNAL_PROCESS_IDENTITY_INVALID",
       message: `Journal session contains more than one harvester.process_started record: ${directory}`,
-      details: { directory, count: startedRecords.length },
+      details: { directory,
+count: startedRecords.length },
     })
   }
   if (startedRecords.length === 0) {
@@ -130,11 +131,16 @@ function parseProcessStarted({ records, directory }) {
     throw createHistoryError({
       code: "HARVESTER_JOURNAL_PROCESS_IDENTITY_INVALID",
       message: `Journal session has invalid process-start identity metadata: ${directory}`,
-      details: { directory, startedAt, runtimeSessionId, processId },
+      details: { directory,
+startedAt,
+runtimeSessionId,
+processId },
     })
   }
 
-  assertProcessStartedDirectoryMatches({ directory, startedAt, runtimeSessionId })
+  assertProcessStartedDirectoryMatches({ directory,
+startedAt,
+runtimeSessionId })
   return Object.freeze({
     chronologySource: "PROCESS_STARTED",
     chronologyTimestamp: timestamp,
@@ -328,7 +334,8 @@ function validateSessionDirectoryEntries({ directory, entries }) {
     throw createHistoryError({
       code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
       message: `Symbolic links make Journal session discovery incomplete: ${directory}`,
-      details: { directory, entries: symbolicLinks.map((entry) => entry.name) },
+      details: { directory,
+entries: symbolicLinks.map((entry) => entry.name) },
     })
   }
 
@@ -338,7 +345,8 @@ function validateSessionDirectoryEntries({ directory, entries }) {
     throw createHistoryError({
       code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
       message: `A Journal session entry is not a regular file: ${directory}`,
-      details: { directory, entries: invalidJournalEntries.map((entry) => entry.name) },
+      details: { directory,
+entries: invalidJournalEntries.map((entry) => entry.name) },
     })
   }
 
@@ -348,11 +356,13 @@ function validateSessionDirectoryEntries({ directory, entries }) {
     throw createHistoryError({
       code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
       message: `Unsupported filesystem entry in Journal session tree: ${directory}`,
-      details: { directory, entries: unknownEntries.map((entry) => entry.name) },
+      details: { directory,
+entries: unknownEntries.map((entry) => entry.name) },
     })
   }
 
-  return { journalEntries, childDirectories }
+  return { journalEntries,
+childDirectories }
 }
 
 function recordDiscoveredSessionDirectory({
@@ -370,7 +380,9 @@ function recordDiscoveredSessionDirectory({
       throw createHistoryError({
         code: "JOURNAL_RECOVERY_LIMIT_EXCEEDED",
         message: "Harvester Journal history exceeds maxSessions during discovery",
-        details: { maxSessions, sessionsDiscovered: state.sessionsDiscovered, directory },
+        details: { maxSessions,
+sessionsDiscovered: state.sessionsDiscovered,
+directory },
       })
     }
     state.discovered.push({
@@ -391,14 +403,16 @@ function recordDiscoveredSessionDirectory({
     throw createHistoryError({
       code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
       message: `Journal session container has files but no session record file: ${directory}`,
-      details: { directory, entries: entries.filter((entry) => entry.isFile()).map((entry) => entry.name) },
+      details: { directory,
+entries: entries.filter((entry) => entry.isFile()).map((entry) => entry.name) },
     })
   }
   if (isRoot && entries.some((entry) => entry.isFile() && !entry.name.endsWith(".jsonl"))) {
     throw createHistoryError({
       code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
       message: `Unexpected file in Journal sessions root: ${directory}`,
-      details: { directory, entries: entries.filter((entry) => entry.isFile()).map((entry) => entry.name) },
+      details: { directory,
+entries: entries.filter((entry) => entry.isFile()).map((entry) => entry.name) },
     })
   }
 }
@@ -430,12 +444,14 @@ async function walkSessionDirectories({
     throw createHistoryError({
       code: "HARVESTER_JOURNAL_DISCOVERY_LIMIT_EXCEEDED",
       message: "Harvester Journal session discovery exceeds maxDirectories",
-      details: { maxDirectories, directory },
+      details: { maxDirectories,
+directory },
     })
   }
 
   const entries = await readSessionDirectoryEntries({ directory })
-  const { journalEntries, childDirectories } = validateSessionDirectoryEntries({ directory, entries })
+  const { journalEntries, childDirectories } = validateSessionDirectoryEntries({ directory,
+entries })
   recordDiscoveredSessionDirectory({
     directory,
     entries,
@@ -554,7 +570,8 @@ async function discoverRootSessionDirectories({
     sessionDirectories.push(...discovered.directories)
     directoriesVisited = discovered.directoriesVisited
   }
-  return { sessionDirectories, directoriesVisited }
+  return { sessionDirectories,
+directoriesVisited }
 }
 
 function assertDiscoveredSessionCount({ sessionDirectories, maxSessions }) {
@@ -566,7 +583,8 @@ function assertDiscoveredSessionCount({ sessionDirectories, maxSessions }) {
     throw createHistoryError({
       code: "JOURNAL_RECOVERY_LIMIT_EXCEEDED",
       message: "Harvester Journal history exceeds maxSessions",
-      details: { maxSessions, discoveredSessions },
+      details: { maxSessions,
+discoveredSessions },
     })
   }
 }
@@ -589,7 +607,8 @@ function assertDiscoveredSessionNamesMatch({ entry, sessionNames }) {
       throw createHistoryError({
         code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
         message: `A discovered Journal session was not returned by the Journal reader: ${fileName}`,
-        details: { directory: entry.directory, fileName },
+        details: { directory: entry.directory,
+fileName },
       })
     }
   }
@@ -598,7 +617,8 @@ function assertDiscoveredSessionNamesMatch({ entry, sessionNames }) {
       throw createHistoryError({
         code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
         message: `Journal reader returned a session that was not discovered: ${fileName}`,
-        details: { directory: entry.directory, fileName },
+        details: { directory: entry.directory,
+fileName },
       })
     }
   }
@@ -612,7 +632,8 @@ function groupJournalRecordsByFile({ entry, records }) {
       throw createHistoryError({
         code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
         message: "Journal reader returned a record without a discovered session position",
-        details: { directory: entry.directory, fileName },
+        details: { directory: entry.directory,
+fileName },
       })
     }
     recordsByFile.get(fileName).push(record)
@@ -657,7 +678,8 @@ async function readJournalDirectory({
   bytesRead,
   rootDirectory,
 }) {
-  const journal = journalFactory({ directory: entry.directory, logger })
+  const journal = journalFactory({ directory: entry.directory,
+logger })
   if (!journal || typeof journal.read !== "function") {
     throw new TypeError("Harvester Journal history reader must provide read()")
   }
@@ -678,11 +700,15 @@ async function readJournalDirectory({
   }
 
   assertJournalReadSnapshot({ result })
-  assertDiscoveredSessionNamesMatch({ entry, sessionNames: result.sessions })
-  const recordsByFile = groupJournalRecordsByFile({ entry, records: result.records })
+  assertDiscoveredSessionNamesMatch({ entry,
+sessionNames: result.sessions })
+  const recordsByFile = groupJournalRecordsByFile({ entry,
+records: result.records })
   return {
     isFailure: false,
-    sessions: createJournalSessions({ entry, recordsByFile, rootDirectory }),
+    sessions: createJournalSessions({ entry,
+recordsByFile,
+rootDirectory }),
     recordsRead: result.records.length,
     bytesRead: result.bytesRead,
   }
@@ -698,7 +724,9 @@ async function readDiscoveredJournalSessions({
   maxRecordBytes,
   rootDirectory,
 }) {
-  const state = { sessions: [], recordsRead: 0, bytesRead: 0 }
+  const state = { sessions: [],
+recordsRead: 0,
+bytesRead: 0 }
   for (const entry of sessionDirectories) {
     const directoryResult = await readJournalDirectory({
       entry,
@@ -733,7 +761,8 @@ async function readDiscoveredJournalSessions({
       })
     }
   }
-  return { isFailure: false, ...state }
+  return { isFailure: false,
+...state }
 }
 
 function assertUniqueJournalRecordIds({ sessions }) {
@@ -779,7 +808,8 @@ function flattenOrderedJournalSessions({ orderedSessions }) {
       processId: session.processId,
     })
   }
-  return { records, sessionMetadata }
+  return { records,
+sessionMetadata }
 }
 
 function normalizeHistoryReadError({ error, directory }) {
