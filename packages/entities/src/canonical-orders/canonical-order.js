@@ -48,6 +48,133 @@ export const canonicalOrderErrMsgs = {
   timestamp: "CanonicalOrder timestamps should be non-negative safe integers",
 }
 
+function validateOrderIdentity({ clientOrderId, brokerOrderId }) {
+  if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
+    throw new Error(canonicalOrderErrMsgs.clientOrderId)
+  }
+  if (
+    brokerOrderId !== undefined &&
+    brokerOrderId !== null &&
+    (typeof brokerOrderId !== "string" || !brokerOrderId.trim())
+  ) {
+    throw new Error(canonicalOrderErrMsgs.brokerOrderId)
+  }
+}
+
+function validateOrderType({ market, side, type, status }) {
+  if (!(market instanceof Market)) {
+    throw new Error(canonicalOrderErrMsgs.market)
+  }
+  if (!CANONICAL_ORDER_SIDES.includes(side)) {
+    throw new Error(canonicalOrderErrMsgs.side)
+  }
+  if (!CANONICAL_ORDER_TYPES.includes(type)) {
+    throw new Error(canonicalOrderErrMsgs.type)
+  }
+  if (!CANONICAL_ORDER_STATUSES.includes(status)) {
+    throw new Error(canonicalOrderErrMsgs.status)
+  }
+}
+
+function normalizeLimitPrice({ type, limitPrice, market }) {
+  const normalizedLimitPrice = limitPrice ?? undefined
+  if (type === "MARKET" && normalizedLimitPrice !== undefined) {
+    throw new Error(canonicalOrderErrMsgs.marketPrice)
+  }
+  if (type !== "MARKET" && !(normalizedLimitPrice instanceof Money)) {
+    throw new Error(canonicalOrderErrMsgs.limitPrice)
+  }
+  if (
+    normalizedLimitPrice &&
+    normalizedLimitPrice.asset.id !== market.quoteAsset.id
+  ) {
+    throw new Error(canonicalOrderErrMsgs.priceAsset)
+  }
+  if (
+    normalizedLimitPrice &&
+    (normalizedLimitPrice.amount === "0" ||
+      normalizedLimitPrice.amount.startsWith("-"))
+  ) {
+    throw new Error(canonicalOrderErrMsgs.limitPricePositive)
+  }
+
+  return normalizedLimitPrice
+}
+
+function deriveRemainingQuantity({ market, originalQuantity, executedQuantity }) {
+  if (!(originalQuantity instanceof Quantity)) {
+    throw new Error(canonicalOrderErrMsgs.originalQuantity)
+  }
+  if (!(executedQuantity instanceof Quantity)) {
+    throw new Error(canonicalOrderErrMsgs.executedQuantity)
+  }
+  if (
+    originalQuantity.asset.id !== market.baseAsset.id ||
+    executedQuantity.asset.id !== market.baseAsset.id
+  ) {
+    throw new Error(canonicalOrderErrMsgs.quantityAsset)
+  }
+  if (originalQuantity.amount === "0") {
+    throw new Error(canonicalOrderErrMsgs.positiveQuantity)
+  }
+
+  const remainingResult = subtractDecimalStrings({
+    left: originalQuantity.amount,
+    right: executedQuantity.amount,
+  })
+  if (!remainingResult.ok) {
+    throw remainingResult.errors[0]
+  }
+  if (remainingResult.value.startsWith("-")) {
+    throw new Error(canonicalOrderErrMsgs.executedRange)
+  }
+
+  return new Quantity({
+    amount: remainingResult.value,
+    asset: market.baseAsset,
+  })
+}
+
+function validateOrderLifecycle({
+  status,
+  brokerOrderId,
+  executedQuantity,
+  remainingQuantity,
+}) {
+  if (
+    brokerAcknowledgedStatuses.includes(status) &&
+    (typeof brokerOrderId !== "string" || !brokerOrderId.trim())
+  ) {
+    throw new Error(canonicalOrderErrMsgs.brokerAcknowledgement)
+  }
+  if (status === "PENDING" && brokerOrderId != null) {
+    throw new Error(canonicalOrderErrMsgs.pendingBrokerId)
+  }
+  if (status === "PENDING" && executedQuantity.amount !== "0") {
+    throw new Error(canonicalOrderErrMsgs.pendingExecution)
+  }
+  if (status === "OPEN" && executedQuantity.amount !== "0") {
+    throw new Error(canonicalOrderErrMsgs.openExecution)
+  }
+  if (
+    status === "PARTIALLY_FILLED" &&
+    (executedQuantity.amount === "0" || remainingQuantity.amount === "0")
+  ) {
+    throw new Error(canonicalOrderErrMsgs.partialExecution)
+  }
+  if (status === "FILLED" && remainingQuantity.amount !== "0") {
+    throw new Error(canonicalOrderErrMsgs.filledExecution)
+  }
+}
+
+function validateTimestamps({ createdAt, acknowledgedAt, updatedAt, completedAt }) {
+  for (const timestamp of [createdAt, acknowledgedAt, updatedAt, completedAt]) {
+    if (timestamp !== undefined && (!Number.isSafeInteger(timestamp) || timestamp < 0)) {
+      throw new Error(canonicalOrderErrMsgs.timestamp)
+    }
+  }
+}
+
 export class CanonicalOrder {
   #clientOrderId
   #brokerOrderId
@@ -79,114 +206,40 @@ export class CanonicalOrder {
     updatedAt,
     completedAt,
   } = {}) {
-    if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
-      throw new Error(canonicalOrderErrMsgs.clientOrderId)
-    }
-    if (
-      brokerOrderId !== undefined &&
-      brokerOrderId !== null &&
-      (typeof brokerOrderId !== "string" || !brokerOrderId.trim())
-    ) {
-      throw new Error(canonicalOrderErrMsgs.brokerOrderId)
-    }
-    if (!(market instanceof Market)) {
-      throw new Error(canonicalOrderErrMsgs.market)
-    }
-    if (!CANONICAL_ORDER_SIDES.includes(side)) {
-      throw new Error(canonicalOrderErrMsgs.side)
-    }
-    if (!CANONICAL_ORDER_TYPES.includes(type)) {
-      throw new Error(canonicalOrderErrMsgs.type)
-    }
-    if (!CANONICAL_ORDER_STATUSES.includes(status)) {
-      throw new Error(canonicalOrderErrMsgs.status)
-    }
-
-    const normalizedLimitPrice = limitPrice ?? undefined
-    if (type === "MARKET" && normalizedLimitPrice !== undefined) {
-      throw new Error(canonicalOrderErrMsgs.marketPrice)
-    }
-    if (
-      type !== "MARKET" &&
-      !(normalizedLimitPrice instanceof Money)
-    ) {
-      throw new Error(canonicalOrderErrMsgs.limitPrice)
-    }
-    if (
-      normalizedLimitPrice &&
-      normalizedLimitPrice.asset.id !== market.quoteAsset.id
-    ) {
-      throw new Error(canonicalOrderErrMsgs.priceAsset)
-    }
-    if (
-      normalizedLimitPrice &&
-      (normalizedLimitPrice.amount === "0" || normalizedLimitPrice.amount.startsWith("-"))
-    ) {
-      throw new Error(canonicalOrderErrMsgs.limitPricePositive)
-    }
-
-    if (!(originalQuantity instanceof Quantity)) {
-      throw new Error(canonicalOrderErrMsgs.originalQuantity)
-    }
-    if (!(executedQuantity instanceof Quantity)) {
-      throw new Error(canonicalOrderErrMsgs.executedQuantity)
-    }
-    if (
-      originalQuantity.asset.id !== market.baseAsset.id ||
-      executedQuantity.asset.id !== market.baseAsset.id
-    ) {
-      throw new Error(canonicalOrderErrMsgs.quantityAsset)
-    }
-    if (originalQuantity.amount === "0") {
-      throw new Error(canonicalOrderErrMsgs.positiveQuantity)
-    }
-
-    const remainingResult = subtractDecimalStrings({
-      left: originalQuantity.amount,
-      right: executedQuantity.amount,
+    validateOrderIdentity({
+      clientOrderId,
+      brokerOrderId,
     })
-    if (!remainingResult.ok) {
-      throw remainingResult.errors[0]
-    }
-    if (remainingResult.value.startsWith("-")) {
-      throw new Error(canonicalOrderErrMsgs.executedRange)
-    }
-
-    const remainingQuantity = new Quantity({
-      amount: remainingResult.value,
-      asset: market.baseAsset,
+    validateOrderType({
+      market,
+      side,
+      type,
+      status,
     })
 
-    if (
-      brokerAcknowledgedStatuses.includes(status) &&
-      (typeof brokerOrderId !== "string" || !brokerOrderId.trim())
-    ) {
-      throw new Error(canonicalOrderErrMsgs.brokerAcknowledgement)
-    }
-    if (status === "PENDING" && brokerOrderId != null) {
-      throw new Error(canonicalOrderErrMsgs.pendingBrokerId)
-    }
-    if (status === "PENDING" && executedQuantity.amount !== "0") {
-      throw new Error(canonicalOrderErrMsgs.pendingExecution)
-    }
-    if (status === "OPEN" && executedQuantity.amount !== "0") {
-      throw new Error(canonicalOrderErrMsgs.openExecution)
-    }
-    if (
-      status === "PARTIALLY_FILLED" &&
-      (executedQuantity.amount === "0" || remainingQuantity.amount === "0")
-    ) {
-      throw new Error(canonicalOrderErrMsgs.partialExecution)
-    }
-    if (status === "FILLED" && remainingQuantity.amount !== "0") {
-      throw new Error(canonicalOrderErrMsgs.filledExecution)
-    }
+    const normalizedLimitPrice = normalizeLimitPrice({
+      type,
+      limitPrice,
+      market,
+    })
+    const remainingQuantity = deriveRemainingQuantity({
+      market,
+      originalQuantity,
+      executedQuantity,
+    })
 
-    for (const timestamp of [createdAt, acknowledgedAt, updatedAt, completedAt]) {
-      if (timestamp !== undefined && (!Number.isSafeInteger(timestamp) || timestamp < 0)) {
-        throw new Error(canonicalOrderErrMsgs.timestamp)
-      }
-    }
+    validateOrderLifecycle({
+      status,
+      brokerOrderId,
+      executedQuantity,
+      remainingQuantity,
+    })
+    validateTimestamps({
+      createdAt,
+      acknowledgedAt,
+      updatedAt,
+      completedAt,
+    })
 
     this.#clientOrderId = clientOrderId.trim()
     this.#brokerOrderId = brokerOrderId == null ? undefined : brokerOrderId.trim()

@@ -12,17 +12,23 @@ describe(BrokerCapabilities.name, () => {
   it("stores supported and unsupported broker capabilities", () => {
     const capabilities = new BrokerCapabilities({
       capabilities: [
-        { type: "PLACE_LIMIT_ORDER", status: "SUPPORTED" },
-        { type: "PLACE_MARKET_ORDER", status: "UNSUPPORTED" },
-        { type: "SUBSCRIBE_USER_DATA", status: "SUPPORTED" },
+        { type: "PLACE_LIMIT_ORDER",
+          status: "SUPPORTED" },
+        { type: "PLACE_MARKET_ORDER",
+          status: "UNSUPPORTED" },
+        { type: "SUBSCRIBE_USER_DATA",
+          status: "SUPPORTED" },
       ],
     })
 
     assert.deepEqual(capabilities.value, {
       capabilities: [
-        { type: "PLACE_LIMIT_ORDER", status: "SUPPORTED" },
-        { type: "PLACE_MARKET_ORDER", status: "UNSUPPORTED" },
-        { type: "SUBSCRIBE_USER_DATA", status: "SUPPORTED" },
+        { type: "PLACE_LIMIT_ORDER",
+          status: "SUPPORTED" },
+        { type: "PLACE_MARKET_ORDER",
+          status: "UNSUPPORTED" },
+        { type: "SUBSCRIBE_USER_DATA",
+          status: "SUPPORTED" },
       ],
     })
     assert.equal(capabilities.getStatus({ type: "PLACE_LIMIT_ORDER" }), "SUPPORTED")
@@ -46,6 +52,9 @@ describe(BrokerCapabilities.name, () => {
     }
   })
 
+})
+
+describe(`${BrokerCapabilities.name} validation`, () => {
   it("rejects invalid capability collections", () => {
     for (const capabilities of [null, {}, "capabilities", [undefined]]) {
       assert.throws(() => new BrokerCapabilities({ capabilities }), {
@@ -66,13 +75,15 @@ describe(BrokerCapabilities.name, () => {
   it("rejects unsupported capability types and statuses", () => {
     assert.throws(
       () => new BrokerCapabilities({
-        capabilities: [{ type: "BINANCE_MARGIN_BORROW", status: "SUPPORTED" }],
+        capabilities: [{ type: "BINANCE_MARGIN_BORROW",
+          status: "SUPPORTED" }],
       }),
       { message: brokerCapabilitiesErrMsgs.type },
     )
     assert.throws(
       () => new BrokerCapabilities({
-        capabilities: [{ type: "READ_BALANCES", status: "MAYBE" }],
+        capabilities: [{ type: "READ_BALANCES",
+          status: "MAYBE" }],
       }),
       { message: brokerCapabilitiesErrMsgs.status },
     )
@@ -82,8 +93,10 @@ describe(BrokerCapabilities.name, () => {
     assert.throws(
       () => new BrokerCapabilities({
         capabilities: [
-          { type: "READ_BALANCES", status: "SUPPORTED" },
-          { type: "READ_BALANCES", status: "UNSUPPORTED" },
+          { type: "READ_BALANCES",
+            status: "SUPPORTED" },
+          { type: "READ_BALANCES",
+            status: "UNSUPPORTED" },
         ],
       }),
       { message: brokerCapabilitiesErrMsgs.duplicate },
@@ -100,9 +113,13 @@ describe(BrokerCapabilities.name, () => {
     }
   })
 
+})
+
+describe(`${BrokerCapabilities.name} immutability`, () => {
   it("returns independent snapshots and immutable capability collections", () => {
     const capabilities = new BrokerCapabilities({
-      capabilities: [{ type: "READ_BALANCES", status: "SUPPORTED" }],
+      capabilities: [{ type: "READ_BALANCES",
+        status: "SUPPORTED" }],
     })
     const snapshot = capabilities.value
 
@@ -110,7 +127,8 @@ describe(BrokerCapabilities.name, () => {
 
     assert.equal(capabilities.getStatus({ type: "READ_BALANCES" }), "SUPPORTED")
     assert.throws(() => {
-      capabilities.capabilities.push({ type: "READ_ORDER", status: "SUPPORTED" })
+      capabilities.capabilities.push({ type: "READ_ORDER",
+        status: "SUPPORTED" })
     }, TypeError)
     assert.throws(() => {
       capabilities.capabilities[0].status = "UNSUPPORTED"
