@@ -484,7 +484,7 @@ async function reconcileRecoverySellForShutdownSymbol({ dependencies, symbol } =
   }
 }
 
-async function reconcileRecoverySellsForShutdown(dependencies, { symbols: requestedSymbols } = {}) {
+async function reconcileRecoverySellsForShutdown({ dependencies, symbols: requestedSymbols } = {}) {
   const { runTransition, isStopping, pairs, state } = dependencies
   const symbols = Array.isArray(requestedSymbols)
     ? requestedSymbols
@@ -524,7 +524,7 @@ async function reconcileRecoverySellsForShutdown(dependencies, { symbols: reques
   })
 }
 
-async function auditShutdownRecoverySellCoverage(dependencies, { symbols: requestedSymbols } = {}) {
+async function auditShutdownRecoverySellCoverage({ dependencies, symbols: requestedSymbols } = {}) {
   const { runTransition, pairs } = dependencies
   const symbols = Array.isArray(requestedSymbols)
     ? requestedSymbols
@@ -561,7 +561,7 @@ async function auditShutdownRecoverySellCoverage(dependencies, { symbols: reques
 
 export function createShutdownRecoveryWorkflow(dependencies = {}) {
   return Object.freeze({
-    reconcileRecoverySellsForShutdown: (options = {}) => reconcileRecoverySellsForShutdown(dependencies, options),
-    auditShutdownRecoverySellCoverage: (options = {}) => auditShutdownRecoverySellCoverage(dependencies, options),
+    reconcileRecoverySellsForShutdown: (options = {}) => reconcileRecoverySellsForShutdown({ ...options, dependencies }),
+    auditShutdownRecoverySellCoverage: (options = {}) => auditShutdownRecoverySellCoverage({ ...options, dependencies }),
   })
 }

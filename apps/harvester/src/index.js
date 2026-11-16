@@ -154,6 +154,200 @@ const describeError = (error) => {
 const resolveHostProcessLockDirectory = () =>
   path.join(os.homedir(), ".coinzilla", "harvester", "process-locks")
 
+async function stopRuntimeForShutdown({ runtime, logger } = {}) {
+  try {
+    const stopResult = await runtime.stop()
+    const runtimeStopped = stopResult === undefined || stopResult?.ok === true
+    if (!runtimeStopped) {
+      const error = stopResult?.errors?.[0] ??
+        new Error("Harvester runtime stop did not confirm shutdown")
+      process.exitCode = 1
+      logger.error({
+        message: "Shutdown was not confirmed; required runtime services remain connected.",
+        error,
+      })
+      return {
+        runtimeStopped: false,
+        error,
+      }
+    }
+    logSystem(logger, "Shutdown completed.")
+    return { runtimeStopped: true }
+  } catch (error) {
+    process.exitCode = 1
+    try {
+      logger.error({
+        message: "Shutdown failed; required runtime services remain connected.",
+        error,
+        shutdownDiagnostics: error?.shutdownDiagnostics,
+      })
+    } catch {
+      // Logging failure must not prevent the shutdown event attempt.
+    }
+    return {
+      runtimeStopped: false,
+      error,
+    }
+  }
+}
+
+async function flushShutdownEventBus({ eventBus } = {}) {
+  if (typeof eventBus?.flush !== "function") {
+    return []
+  }
+  try {
+    const result = await eventBus.flush()
+    if (result?.ok === false) {
+      return result.errors ?? [new Error("EventBus flush failed before Telegram shutdown")]
+    }
+    return []
+  } catch (error) {
+    return [error]
+  }
+}
+
+async function closeTelegramNotifications({ notifications, logger } = {}) {
+  if (!notifications) {
+    return []
+  }
+  const errors = []
+  try {
+    await notifications.close()
+  } catch (error) {
+    errors.push(error)
+    logger.error?.({
+      message: "Telegram notification shutdown failed.",
+      error,
+    })
+  }
+  logTelegramNotificationSummary({
+    notifications,
+    logger,
+  })
+  return errors
+}
+
+async function closeProcessLogger({ closeLogger, logger } = {}) {
+  try {
+    await closeLogger()
+  } catch (error) {
+    process.exitCode = 1
+    try {
+      logger.error({
+        message: "Log transport shutdown failed.",
+        error,
+      })
+    } catch {
+      // Logging cleanup failure must not interrupt process shutdown.
+    }
+  }
+}
+
+async function runRuntimeShutdown({
+  runtime,
+  reason,
+  eventPublisher,
+  eventBus,
+  telegramNotifications,
+  journalService,
+  processLock,
+  logger,
+  closeLogger,
+} = {}) {
+  const stopResult = await stopRuntimeForShutdown({
+    runtime,
+    logger,
+  })
+  if (!stopResult.runtimeStopped) {
+    return { runtimeStopped: false }
+  }
+
+  publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.STOPPED,
+    dataResult: mapHarvesterStoppedData({
+      reason,
+      outcome: stopResult.error ? "failed" : "success",
+      error: stopResult.error,
+    }),
+  })
+
+  const notificationErrors = await flushShutdownEventBus({ eventBus })
+  notificationErrors.push(...await closeTelegramNotifications({
+    notifications: telegramNotifications,
+    logger,
+  }))
+  const cleanupErrors = await closeObservability({
+    journalService,
+    eventBus,
+    processLock,
+    allowProcessLockRelease: true,
+    logger,
+  })
+
+  if (notificationErrors.length > 0) {
+    logger.error?.({
+      message: "Telegram notification shutdown was incomplete.",
+      errors: notificationErrors,
+    })
+    process.exitCode = 1
+  }
+  if (cleanupErrors.length > 0) {
+    process.exitCode = 1
+  }
+
+  await closeProcessLogger({
+    closeLogger,
+    logger,
+  })
+  return { runtimeStopped: true }
+}
+
+function createRuntimeShutdownHandler({
+  runtime,
+  eventPublisher,
+  eventBus,
+  telegramNotifications,
+  journalService,
+  processLock,
+  logger,
+  closeLogger,
+} = {}) {
+  let shutdownPromise
+  return (reason) => {
+    if (shutdownPromise) {
+      return shutdownPromise
+    }
+    shutdownPromise = runRuntimeShutdown({
+      runtime,
+      reason,
+      eventPublisher,
+      eventBus,
+      telegramNotifications,
+      journalService,
+      processLock,
+      logger,
+      closeLogger,
+    }).then(({ runtimeStopped }) => {
+      if (!runtimeStopped) {
+        shutdownPromise = undefined
+      }
+    }).catch((error) => {
+      process.exitCode = 1
+      try {
+        logger.error?.({
+          message: "Unexpected process shutdown failure.",
+          error,
+        })
+      } catch {
+        // The process must retain its runtime resources when shutdown is unproven.
+      }
+      shutdownPromise = undefined
+    })
+    return shutdownPromise
+  }
+}
+
 export async function main({
   start = startHarvester,
   logger = defaultLogger,
@@ -303,12 +497,18 @@ export async function main({
     const journalReady = await journalService.ready
     if (journalReady?.ok !== true) {
       const details = journalReady?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-      throw new Error("Harvester trading cannot start because the Journal is unavailable" + (details ? ": " + details : ""))
+      throw new Error(`Harvester trading cannot start because the Journal is unavailable${details ? `: ${details}` : ""}`)
     }
     await processStartedPublication
 
     runtimeStartAttempted = true
-    const runtime = await start({ eventPublisher, appConfig, env, runtimeSessionId: processIdentity.runtimeSessionId, operationalStateStore: operationalStateStore })
+    const runtime = await start({
+      eventPublisher,
+      appConfig,
+      env,
+      runtimeSessionId: processIdentity.runtimeSessionId,
+      operationalStateStore,
+    })
     const configuredPairs = runtime.appConfig?.strategies?.CG_coinGrabber?.pairs
     const enabledMarkets = configuredPairs
       ? Object.entries(configuredPairs)
@@ -330,102 +530,23 @@ export async function main({
     if (!runtime.connected) {
       startupMessage = "Binance connection was not established."
     } else if (runtime.tradingEnabled && runtime.strategyMode === "conservative") {
-      startupMessage = "Connected; subscribed to " + runtime.subscriptions.length +
-        " enabled market(s). Conservative " + runtimeConfig.tradingMode.toUpperCase() + " trading is enabled; waiting for validated market prices and user-data readiness."
+      startupMessage = `Connected; subscribed to ${runtime.subscriptions.length} enabled market(s). Conservative ${runtimeConfig.tradingMode.toUpperCase()} trading is enabled; waiting for validated market prices and user-data readiness.`
     } else {
-      startupMessage = "Connected; Binance trading mode is " + runtimeConfig.tradingMode.toUpperCase() + "."
+      startupMessage = `Connected; Binance trading mode is ${runtimeConfig.tradingMode.toUpperCase()}.`
     }
     logSystem(logger, startupMessage)
 
     if (typeof runtime.stop === "function") {
-      let shutdownPromise
-      const shutdown = (reason) => {
-        if (shutdownPromise) {
-          return shutdownPromise
-        }
-        shutdownPromise = (async () => {
-          let shutdownError
-          let runtimeStopped = false
-          try {
-            const stopResult = await runtime.stop()
-            runtimeStopped = stopResult === undefined || stopResult?.ok === true
-            if (!runtimeStopped) {
-              shutdownError = stopResult?.errors?.[0]
-                ?? new Error("Harvester runtime stop did not confirm shutdown")
-              process.exitCode = 1
-              logger.error({ message: "shutdown was not confirmed; required runtime services remain connected.", error: shutdownError })
-            } else {
-              logSystem(logger, "Shutdown completed.")
-            }
-          } catch (error) {
-            shutdownError = error
-            process.exitCode = 1
-            try {
-              logger.error({ message: "shutdown failed; required runtime services remain connected.", error, shutdownDiagnostics: error?.shutdownDiagnostics })
-            } catch {
-              // Logging failure must not prevent the shutdown event attempt.
-            }
-          }
-          if (!runtimeStopped) {
-            shutdownPromise = undefined
-            return
-          }
-          publishLifecycleEvent({
-            eventPublisher,
-            eventName: HARVESTER_EVENT_NAMES.STOPPED,
-            dataResult: mapHarvesterStoppedData({
-              reason,
-              outcome: shutdownError ? "failed" : "success",
-              error: shutdownError,
-            }),
-          })
-          const notificationErrors = []
-          if (typeof eventBus?.flush === "function") {
-            try {
-              const flushResult = await eventBus.flush()
-              if (flushResult?.ok === false) {
-                notificationErrors.push(...(flushResult.errors ?? [new Error("EventBus flush failed before Telegram shutdown")]))
-              }
-            } catch (error) {
-              notificationErrors.push(error)
-            }
-          }
-          if (telegramNotifications) {
-            try {
-              await telegramNotifications.close()
-            } catch (error) {
-              notificationErrors.push(error)
-              logger.error?.({ message: "Telegram notification shutdown failed.", error })
-            }
-            logTelegramNotificationSummary({ notifications: telegramNotifications, logger })
-          }
-          const cleanupErrors = await closeObservability({
-            journalService,
-            eventBus,
-            processLock,
-            allowProcessLockRelease: runtimeStopped,
-            logger,
-          })
-          if (notificationErrors.length > 0) {
-            logger.error?.({ message: "Telegram notification shutdown was incomplete.", errors: notificationErrors })
-            process.exitCode = 1
-          }
-          if (cleanupErrors.length > 0) {
-            process.exitCode = 1
-          }
-          try {
-            await closeLogger()
-          } catch (error) {
-            process.exitCode = 1
-            try {
-              logger.error({ message: "log transport shutdown failed.", error })
-            } catch {
-              // Logging cleanup failure must not interrupt process shutdown.
-            }
-          }
-        })()
-        return shutdownPromise
-      }
+      const shutdown = createRuntimeShutdownHandler({
+        runtime,
+        eventPublisher,
+        eventBus,
+        telegramNotifications,
+        journalService,
+        processLock,
+        logger,
+        closeLogger,
+      })
       registerSignalHandler("SIGINT", () => shutdown("SIGINT"))
       registerSignalHandler("SIGTERM", () => shutdown("SIGTERM"))
     } else {
@@ -499,7 +620,10 @@ if (isDirectExecution) {
   if (processStartedContext.ok) {
     defaultLogger.setContext(processStartedContext.data)
   }
-  const logging = await configureHarvesterLogging({ logger: defaultLogger, processIdentity: PROCESS_IDENTITY })
+  const logging = await configureHarvesterLogging({
+    logger: defaultLogger,
+    processIdentity: PROCESS_IDENTITY,
+  })
   let commandInterface
   try {
     commandInterface = createLogCommandInterface({ logger: defaultLogger })

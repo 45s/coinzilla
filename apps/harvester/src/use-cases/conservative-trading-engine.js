@@ -1299,6 +1299,15 @@ function createConservativeEngineProtectionContext({ context } = {}) {
   })
 }
 
+function getUserDataEventSymbol(event) {
+  return event?.executedOrder?.market?.symbol ??
+    event?.order?.market?.symbol ??
+    event?.fill?.market?.symbol ??
+    event?.market?.symbol ??
+    event?.symbol ??
+    event?.s
+}
+
 function createConservativeEngineRuntimeOperations({ context } = {}) {
   const { dependencies } = context
   context.processMarketPrice = async ({ symbol, priceEvent } = {}) => {
@@ -1323,12 +1332,7 @@ function createConservativeEngineRuntimeOperations({ context } = {}) {
   }
   context.processUserDataEvent = ({ event, recoveryMode = false } = {}) =>
     context.runTransition({ task: async () => {
-      const symbol = event?.executedOrder?.market?.symbol ??
-        event?.order?.market?.symbol ??
-        event?.fill?.market?.symbol ??
-        event?.market?.symbol ??
-        event?.symbol ??
-        event?.s
+      const symbol = getUserDataEventSymbol(event)
       if (context.state.shutdownBuyGate === true) {
         context.invalidateShutdownSafety({
           ...(typeof symbol === "string" ? { symbol } : {}),
@@ -3530,21 +3534,22 @@ async function collectAndApplyOwnedOrderSnapshots({ context, ownedOrders, symbol
   })
 }
 
-function matchesRequestedReconciliationMarket(order, requestedSymbols) {
+function matchesRequestedReconciliationMarket({ order, requestedSymbols } = {}) {
   return requestedSymbols === null || requestedSymbols.has(order.market.symbol)
 }
 
 async function reconcileOwnedOrdersTransition({ context, options }) {
-  const requestedSymbols = Array.isArray(options.symbols)
-    ? new Set(options.symbols)
-    : typeof options.symbol === "string"
-      ? new Set([options.symbol])
-      : null
+  let requestedSymbols = null
+  if (Array.isArray(options.symbols)) {
+    requestedSymbols = new Set(options.symbols)
+  } else if (typeof options.symbol === "string") {
+    requestedSymbols = new Set([options.symbol])
+  }
   const initialOrdersResult = await context.runTransition({
     task: async () => toResult({
       data: {
         ownedOrders: context.state.registry.orders.filter((order) =>
-          matchesRequestedReconciliationMarket(order, requestedSymbols)),
+          matchesRequestedReconciliationMarket({ order, requestedSymbols })),
       },
     }),
   })
