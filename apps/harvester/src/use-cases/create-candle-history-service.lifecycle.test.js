@@ -12,7 +12,7 @@ import {
   getSnapshot,
 } from "../../test-support/candle-history-service-fixture.js"
 
-const test = (name, ...args) => nodeTest(`[create-candle-history-service.lifecycle.test.js] ${  name}`, ...args)
+const test = (...[name, ...args]) => nodeTest(`[create-candle-history-service.lifecycle.test.js] ${  name}`, ...args)
 
 test("requires a successful candle subscription before reporting data readiness", async () => {
   const fixture = createFixture({
