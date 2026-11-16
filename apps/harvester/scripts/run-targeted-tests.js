@@ -29,12 +29,30 @@ const colorEnabled =
 const color = ({ code, value }) =>
   colorEnabled ? `\u001B[${  code  }m${  value  }\u001B[0m` : value
 
-const green = (value) => color({ code: "32", value })
-const red = (value) => color({ code: "31", value })
-const yellow = (value) => color({ code: "33", value })
-const cyan = (value) => color({ code: "36", value })
-const gray = (value) => color({ code: "90", value })
-const bold = (value) => color({ code: "1", value })
+const green = (value) => color({
+  code: "32",
+  value,
+})
+const red = (value) => color({
+  code: "31",
+  value,
+})
+const yellow = (value) => color({
+  code: "33",
+  value,
+})
+const cyan = (value) => color({
+  code: "36",
+  value,
+})
+const gray = (value) => color({
+  code: "90",
+  value,
+})
+const bold = (value) => color({
+  code: "1",
+  value,
+})
 
 function logSection(title) {
   cliConsole.log(`\n${  cyan(bold(`  ${  title}`))}`)
