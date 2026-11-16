@@ -81,13 +81,19 @@ async function readExistingCoverage({ operationalStateStore, symbol, evidence })
     return undefined
   }
 
-  const currentResult = await readMarketHistoryCoverage({ operationalStateStore, symbol })
+  const currentResult = await readMarketHistoryCoverage({
+    operationalStateStore,
+    symbol,
+  })
   if (currentResult?.ok !== true) {
     return toResult({
       errors: currentResult?.errors ?? [new Error("Existing market-history coverage could not be verified")],
     })
   }
-  if (matchesCoverage({ coverage: currentResult.data, evidence })) {
+  if (matchesCoverage({
+    coverage: currentResult.data,
+    evidence,
+  })) {
     return toResult({
       data: Object.freeze({
         confirmed: true,
@@ -116,7 +122,10 @@ function createHistoryRetentionEvidence({ evidence }) {
   }
 }
 
-function validateMarketReconciliationReadiness({ reconciliation, evidence }) {
+function validateMarketReconciliationReadiness({
+    reconciliation,
+    evidence,
+  }) {
   if (reconciliation?.ok !== true) {
     return {
       result: toResult({
@@ -173,7 +182,10 @@ async function appendAndVerifyCoverage({ operationalStateStore, evidence, audit 
       errors: readback?.errors ?? [new Error("Committed market-history coverage could not be read back")],
     })
   }
-  if (!matchesCoverage({ coverage: readback.data, evidence })) {
+  if (!matchesCoverage({
+    coverage: readback.data,
+    evidence,
+  })) {
     throw new Error("Committed market-history coverage does not match the reviewed evidence")
   }
   return toResult({
