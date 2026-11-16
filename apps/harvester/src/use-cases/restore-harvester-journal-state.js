@@ -59,8 +59,10 @@ function restoreFill({ data, market }) {
       if (item.asset === market.baseAsset.code || item.asset === market.quoteAsset.code) {
         throw new Error(`Recovered commission asset ID contradicts a market asset code for ${market.symbol}`)
       }
-      asset = new Asset({ id: item.assetId, code: item.asset })
-      if (item.quoteValue === undefined && compareDecimal({ left: item.amount, right: "0" }) > 0) {
+      asset = new Asset({ id: item.assetId, 
+        code: item.asset })
+      if (item.quoteValue === undefined && compareDecimal({ left: item.amount, 
+        right: "0" }) > 0) {
         throw new Error(`Recovered third-asset commission is missing its historical quote valuation for ${market.symbol}`)
       }
     }
@@ -70,14 +72,18 @@ function restoreFill({ data, market }) {
           item.quoteValue.asset !== market.quoteAsset.code) {
         throw new Error(`Recovered commission quote valuation does not match the market quote asset for ${market.symbol}`)
       }
-      if (isThirdAsset && compareDecimal({ left: item.amount, right: "0" }) > 0 &&
-          compareDecimal({ left: item.quoteValue.amount, right: "0" }) <= 0) {
+      if (isThirdAsset && compareDecimal({ left: item.amount, 
+        right: "0" }) > 0 &&
+          compareDecimal({ left: item.quoteValue.amount, 
+            right: "0" }) <= 0) {
         throw new Error(`Recovered third-asset commission quote valuation must be greater than zero for ${market.symbol}`)
       }
-      quoteValue = new Money({ amount: item.quoteValue.amount, asset: market.quoteAsset })
+      quoteValue = new Money({ amount: item.quoteValue.amount, 
+        asset: market.quoteAsset })
     }
     return new Commission({
-      amount: new Money({ amount: item.amount, asset }),
+      amount: new Money({ amount: item.amount, 
+        asset }),
       ...(quoteValue === undefined ? {} : { quoteValue }),
     })
   })
@@ -87,9 +93,12 @@ function restoreFill({ data, market }) {
     clientOrderId: data.clientOrderId,
     market,
     side: data.side,
-    price: new Money({ amount: data.price, asset: market.quoteAsset }),
-    quantity: new Quantity({ amount: data.quantity, asset: market.baseAsset }),
-    quoteQuantity: new Money({ amount: data.quoteQuantity, asset: market.quoteAsset }),
+    price: new Money({ amount: data.price, 
+      asset: market.quoteAsset }),
+    quantity: new Quantity({ amount: data.quantity, 
+      asset: market.baseAsset }),
+    quoteQuantity: new Money({ amount: data.quoteQuantity, 
+      asset: market.quoteAsset }),
     liquidityRole: data.liquidityRole,
     executedAt: data.executedAt,
     commissions,
@@ -124,7 +133,8 @@ function restoreOrder({ order, market }) {
   }
   let limitPrice
   if (order.type !== "MARKET") {
-    limitPrice = new Money({ amount: order.price, asset: market.quoteAsset })
+    limitPrice = new Money({ amount: order.price, 
+      asset: market.quoteAsset })
   }
   return new CanonicalOrder({
     clientOrderId: order.clientOrderId,
@@ -133,8 +143,10 @@ function restoreOrder({ order, market }) {
     side: order.side,
     type: order.type,
     limitPrice,
-    originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
-    executedQuantity: new Quantity({ amount: order.cumulativeFillQuantity, asset: market.baseAsset }),
+    originalQuantity: new Quantity({ amount: order.quantity, 
+      asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: order.cumulativeFillQuantity, 
+      asset: market.baseAsset }),
     status,
   })
 }
@@ -169,9 +181,11 @@ function validateRecoveryCycleEvaluations({ recoveryCycleEvaluations, marketMeta
       throw new TypeError("Recovery projection contains an invalid recovery-cycle evaluation")
     }
     for (const field of ["realizedNetProfit", "activeQuantity", "keepQuantity", "minProfit"]) {
-      assertDecimalString({ value: evaluation[field], field: `recoveryCycleEvaluation.${field}` })
+      assertDecimalString({ value: evaluation[field], 
+        field: `recoveryCycleEvaluation.${field}` })
     }
-    const market = requireMarket({ marketMetadata, symbol: evaluation.symbol })
+    const market = requireMarket({ marketMetadata, 
+      symbol: evaluation.symbol })
     if (market.id !== evaluation.marketId) {
       throw new Error(`Recovery-cycle evaluation market identity conflicts with canonical exchange metadata for ${evaluation.symbol}`)
     }
@@ -191,14 +205,21 @@ function validateProjectionData({ projection, marketMetadata }) {
   const stickySafetyBlockers = data.stickySafetyBlockers ?? []
   validateStickySafetyBlockers({ stickySafetyBlockers })
   const recoveryCycleEvaluations = data.recoveryCycleEvaluations ?? []
-  validateRecoveryCycleEvaluations({ recoveryCycleEvaluations, marketMetadata })
-  return { data, stickySafetyBlockers, recoveryCycleEvaluations }
+  validateRecoveryCycleEvaluations({ recoveryCycleEvaluations, 
+    marketMetadata })
+  return { data, 
+    stickySafetyBlockers, 
+    recoveryCycleEvaluations }
 }
 
 function createPortfolioEvents({ data }) {
   const portfolioEvents = [
-    ...data.fills.map((fill) => ({ type: "fill", sequence: fill.sequence, value: fill })),
-    ...data.recoveryCycles.map((cycle) => ({ type: "cycle", sequence: cycle.sequence, value: cycle })),
+    ...data.fills.map((fill) => ({ type: "fill", 
+      sequence: fill.sequence, 
+      value: fill })),
+    ...data.recoveryCycles.map((cycle) => ({ type: "cycle", 
+      sequence: cycle.sequence, 
+      value: cycle })),
   ]
   if (portfolioEvents.some((event) => !Number.isSafeInteger(event.sequence) || event.sequence < 0)) {
     throw new TypeError("Recovery projection must retain a valid Journal sequence for every fill and cycle")
@@ -211,7 +232,8 @@ function createPortfolioEvents({ data }) {
 }
 
 function replayFillEvent({ item, sequence, market, state }) {
-  const fill = restoreFill({ data: item, market })
+  const fill = restoreFill({ data: item, 
+    market })
   const recoveryLedger = state.recoveryLedgers.get(market.id) ?? RecoveryLedger.empty({ market })
   const result = updateTradingAccounting({
     portfolio: state.portfolio,
@@ -233,7 +255,8 @@ function replayRecoveryCycleEvent({ item, sequence, market, state }) {
     throw new Error(`Recovery-cycle market identity conflicts with canonical exchange metadata for ${item.symbol}`)
   }
   const recoveryLedger = state.recoveryLedgers.get(market.id)
-  const position = state.portfolio.getPosition({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER })
+  const position = state.portfolio.getPosition({ marketId: market.id, 
+    strategyId: StrategyId.COIN_GRABBER })
   if (!recoveryLedger || !position) {
     throw new Error(`Recovery-cycle completion has no replayed Position and RecoveryLedger for ${item.symbol}`)
   }
@@ -241,23 +264,28 @@ function replayRecoveryCycleEvent({ item, sequence, market, state }) {
     left: recoveryLedger.netSellProceeds,
     right: position.spent.amount,
   })
-  if (compareDecimal({ left: realizedNetProfit, right: item.realizedNetProfit }) !== 0) {
+  if (compareDecimal({ left: realizedNetProfit, 
+    right: item.realizedNetProfit }) !== 0) {
     throw new Error(`Recovery-cycle realized profit conflicts with replayed fills for ${item.symbol}`)
   }
-  if (compareDecimal({ left: position.baseQuantity.amount, right: item.freeQuantity }) !== 0) {
+  if (compareDecimal({ left: position.baseQuantity.amount, 
+    right: item.freeQuantity }) !== 0) {
     throw new Error(`Recovery-cycle completion must allocate all replayed active inventory (keepQuantity plus validated dust) for ${item.symbol}`)
   }
 
   let nextPortfolio = state.portfolio
-  if (compareDecimal({ left: item.freeQuantity, right: "0" }) > 0) {
+  if (compareDecimal({ left: item.freeQuantity, 
+    right: "0" }) > 0) {
     nextPortfolio = nextPortfolio.allocateFreeQuantity({
       marketId: market.id,
       strategyId: StrategyId.COIN_GRABBER,
       quantity: item.freeQuantity,
     })
   }
-  nextPortfolio = nextPortfolio.resetRecoveryBasis({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER })
-  const resetLedger = recoveryLedger.resetCycle({ minProfit: item.minProfit, spent: position.spent })
+  nextPortfolio = nextPortfolio.resetRecoveryBasis({ marketId: market.id, 
+    strategyId: StrategyId.COIN_GRABBER })
+  const resetLedger = recoveryLedger.resetCycle({ minProfit: item.minProfit, 
+    spent: position.spent })
   state.portfolio = nextPortfolio
   state.recoveryLedgers.set(market.id, resetLedger)
   state.completedOrderClientIds.add(item.completedOrderClientId)
@@ -274,12 +302,19 @@ function replayPortfolioEvents({ events, marketMetadata }) {
   }
   for (const event of events) {
     const { value: item, sequence, type } = event
-    const market = requireMarket({ marketMetadata, symbol: item.symbol })
+    const market = requireMarket({ marketMetadata, 
+      symbol: item.symbol })
     if (type === "fill") {
-      replayFillEvent({ item, sequence, market, state })
+      replayFillEvent({ item, 
+        sequence, 
+        market, 
+        state })
       continue
     }
-    replayRecoveryCycleEvent({ item, sequence, market, state })
+    replayRecoveryCycleEvent({ item, 
+      sequence, 
+      market, 
+      state })
   }
   return state
 }
@@ -298,7 +333,8 @@ function createPausedMarketState({ data, stickySafetyBlockers, recoveryCycleEval
     ...accountBlockedSymbols,
     ...recoveryCycleEvaluations.filter(({ outcome }) => outcome === "BLOCKED").map(({ symbol }) => symbol),
   ])
-  return { durablePausedMarkets, pausedMarkets: new Set(durablePausedMarkets) }
+  return { durablePausedMarkets, 
+    pausedMarkets: new Set(durablePausedMarkets) }
 }
 
 function createLatestSubmissionSequenceBySymbolSide({ orders }) {
@@ -316,7 +352,8 @@ function markRecoveryManagedCancellation({ order, state, latestSubmissionSequenc
     state.unrequestedTerminalOrderClientIds.add(order.clientOrderId)
   }
   if (order.cancellationState === "CANCELED" &&
-      compareDecimal({ left: order.cumulativeFillQuantity, right: "0" }) > 0) {
+      compareDecimal({ left: order.cumulativeFillQuantity, 
+        right: "0" }) > 0) {
     durablePausedMarkets.add(order.symbol)
     pausedMarkets.add(order.symbol)
   }
@@ -337,7 +374,8 @@ function markRecoveryManagedCancellation({ order, state, latestSubmissionSequenc
     return
   }
   if (order.cancellationState !== "CANCELED" ||
-      compareDecimal({ left: order.cumulativeFillQuantity, right: "0" }) !== 0) {
+      compareDecimal({ left: order.cumulativeFillQuantity, 
+        right: "0" }) !== 0) {
     return
   }
   let replacementSide
@@ -384,8 +422,10 @@ function restoreOrderState({ data, marketMetadata, durablePausedMarkets, pausedM
     if (order.submissionOutcome === "REJECTED") {
       continue
     }
-    const market = requireMarket({ marketMetadata, symbol: order.symbol })
-    state.restoredOrders.push(restoreOrder({ order, market }))
+    const market = requireMarket({ marketMetadata, 
+      symbol: order.symbol })
+    state.restoredOrders.push(restoreOrder({ order, 
+      market }))
     markRecoveryManagedCancellation({
       order,
       state,
@@ -415,10 +455,12 @@ function createTrailingBuySymbols({ completedCycleSequenceBySymbol, trailingBuyS
  */
 export function restoreHarvesterJournalState({ projection, marketMetadata } = {}) {
   try {
-    const validated = validateProjectionData({ projection, marketMetadata })
+    const validated = validateProjectionData({ projection, 
+      marketMetadata })
     const { data, stickySafetyBlockers, recoveryCycleEvaluations } = validated
     const events = createPortfolioEvents({ data })
-    const replayState = replayPortfolioEvents({ events, marketMetadata })
+    const replayState = replayPortfolioEvents({ events, 
+      marketMetadata })
     const { durablePausedMarkets, pausedMarkets } = createPausedMarketState({
       data,
       stickySafetyBlockers,
