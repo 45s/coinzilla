@@ -54,8 +54,21 @@ test("does not create or inject durable recovery facts while recovery is disable
   let startupInput
   await runMain({
     loadConfig: async () => ({
-      operatorControl: { telegram: { enabled: false, allowedUserIds: [] } },
-      strategies: { CG_coinGrabber: { settings: { recovery: { enabled: false } } } },
+      operatorControl: {
+        telegram: {
+          enabled: false,
+          allowedUserIds: [],
+        },
+      },
+      strategies: {
+        CG_coinGrabber: {
+          settings: {
+            recovery: {
+              enabled: false,
+            },
+          },
+        },
+      },
     }),
     createOperationalStateStore: () => {
       storeCreated = true
