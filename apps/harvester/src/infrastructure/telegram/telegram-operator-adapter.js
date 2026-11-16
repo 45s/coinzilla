@@ -144,6 +144,7 @@ export function parseTelegramOperatorCommand(text, { botUsername } = {}) {
  * @param {number} [options.retryDelayMs=1000] - Initial transport retry delay.
  * @returns {{start: Function, stop: Function}} Adapter lifecycle.
  */
+// eslint-disable-next-line max-lines-per-function -- Existing adapter lifecycle composition; extraction is a separate refactor.
 export function createTelegramOperatorAdapter({
   botToken,
   allowedUserIds,
@@ -552,6 +553,7 @@ export function createTelegramOperatorAdapter({
   }
 
   return Object.freeze({
+    // eslint-disable-next-line max-lines-per-function -- Preserve the existing serialized startup sequence.
     async start() {
       if (stopPromise) {await stopPromise}
       if (startPromise) {return startPromise}
