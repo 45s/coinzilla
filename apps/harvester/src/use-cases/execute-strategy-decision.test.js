@@ -602,7 +602,10 @@ test("rechecks the shutdown gate after durable intent and before broker placemen
     broker: {
       placeOrder: async () => {
         calls.push("broker")
-        return { ok: true, data: makeAcknowledgement(decision.actions[0]) }
+        return {
+          ok: true,
+          data: makeAcknowledgement(decision.actions[0]),
+        }
       },
     },
     canSubmit: () => {
@@ -618,7 +621,10 @@ test("rechecks the shutdown gate after durable intent and before broker placemen
     onPendingOrder: async () => calls.push("pending"),
     onDurableSubmissionIntent: async () => {
       calls.push("durable-intent")
-      return { ok: true, data: { durable: true } }
+      return {
+        ok: true,
+        data: { durable: true },
+      }
     },
     onDurableSubmissionOutcome: async ({ outcome }) => {
       calls.push(`durable-outcome:${outcome}`)
