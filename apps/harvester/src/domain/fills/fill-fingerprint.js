@@ -24,8 +24,8 @@ export function createFillFingerprint({ fill } = {}) {
       quoteValueAmount: commission.quoteValue?.amount ?? null,
     }))
     .sort((left, right) => {
-      const leftKey = left.assetId + ":" + left.amount + ":" + left.quoteValueAmount
-      const rightKey = right.assetId + ":" + right.amount + ":" + right.quoteValueAmount
+      const leftKey = `${left.assetId  }:${  left.amount  }:${  left.quoteValueAmount}`
+      const rightKey = `${right.assetId  }:${  right.amount  }:${  right.quoteValueAmount}`
       return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
     })
 

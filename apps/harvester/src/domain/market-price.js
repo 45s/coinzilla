@@ -29,5 +29,7 @@ export function createMarketPrice({ priceEvent } = {}) {
     throw new TypeError("Market price timestamp must be a non-negative safe integer other than negative zero")
   }
 
-  return Object.freeze({ symbol, price, timestamp })
+  return Object.freeze({ symbol,
+price,
+timestamp })
 }

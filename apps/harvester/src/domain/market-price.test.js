@@ -20,17 +20,27 @@ test("creates an immutable market price without converting decimal precision", (
 })
 
 test("rejects malformed symbols, non-positive prices, and invalid timestamps", () => {
-  const valid = { symbol: "BTCUSDT", price: "1.25", timestamp: 123 }
+  const valid = { symbol: "BTCUSDT",
+price: "1.25",
+timestamp: 123 }
 
   for (const priceEvent of [
-    { ...valid, symbol: "btcusdt" },
-    { ...valid, price: "0" },
-    { ...valid, price: "0.000" },
-    { ...valid, price: "-1" },
-    { ...valid, price: 1.25 },
-    { ...valid, timestamp: -1 },
-    { ...valid, timestamp: -0 },
-    { ...valid, timestamp: 1.5 },
+    { ...valid,
+symbol: "btcusdt" },
+    { ...valid,
+price: "0" },
+    { ...valid,
+price: "0.000" },
+    { ...valid,
+price: "-1" },
+    { ...valid,
+price: 1.25 },
+    { ...valid,
+timestamp: -1 },
+    { ...valid,
+timestamp: -0 },
+    { ...valid,
+timestamp: 1.5 },
   ]) {
     assert.throws(() => createMarketPrice({ priceEvent }), undefined, `Invalid market-price input ${JSON.stringify(priceEvent)} must be rejected, including non-canonical timestamps.`)
   }

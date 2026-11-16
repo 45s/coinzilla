@@ -1,5 +1,5 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest("[recovery-sell-plan-accounting.test.js] " + name, ...args)
+const test = (name, ...args) => nodeTest(`[recovery-sell-plan-accounting.test.js] ${  name}`, ...args)
 import assert from "node:assert/strict"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../../portfolio/portfolio.js"
@@ -8,9 +8,14 @@ import { calculateRecoverySellPlan } from "./recovery-sell-plan.js"
 import { evaluateRecoveryCompletion } from "./recovery-completion.js"
 import { updateTradingAccounting } from "../../../use-cases/update-trading-accounting.js"
 
-const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
-const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({ id: "asset:DOGE",
+code: "DOGE" })
+const quoteAsset = new Asset({ id: "asset:USDT",
+code: "USDT" })
+const market = new Market({ venue: "binance",
+symbol: "DOGEUSDT",
+baseAsset,
+quoteAsset })
 
 function createInitialAccounting(tradeId, { baseCommission = "0" } = {}) {
   const result = updateTradingAccounting({
@@ -18,15 +23,19 @@ function createInitialAccounting(tradeId, { baseCommission = "0" } = {}) {
     recoveryLedger: RecoveryLedger.empty({ market }),
     fill: new Fill({
       tradeId,
-      brokerOrderId: "buy-order-" + tradeId,
-      clientOrderId: "buy-client-" + tradeId,
+      brokerOrderId: `buy-order-${  tradeId}`,
+      clientOrderId: `buy-client-${  tradeId}`,
       market,
       side: "BUY",
-      price: new Money({ amount: "0.8", asset: quoteAsset }),
-      quantity: new Quantity({ amount: "11.1", asset: baseAsset }),
-      quoteQuantity: new Money({ amount: "8.88", asset: quoteAsset }),
+      price: new Money({ amount: "0.8",
+asset: quoteAsset }),
+      quantity: new Quantity({ amount: "11.1",
+asset: baseAsset }),
+      quoteQuantity: new Money({ amount: "8.88",
+asset: quoteAsset }),
       commissions: baseCommission === "0" ? [] : [
-        new Commission({ amount: new Money({ amount: baseCommission, asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: baseCommission,
+asset: baseAsset }) }),
       ],
       commissionStatus: "COMPLETE",
       executedAt: 1,
@@ -59,16 +68,20 @@ function applySellFill(state, {
 }) {
   const fill = new Fill({
     tradeId,
-    brokerOrderId: "sell-order-" + tradeId,
-    clientOrderId: "sell-client-" + tradeId,
+    brokerOrderId: `sell-order-${  tradeId}`,
+    clientOrderId: `sell-client-${  tradeId}`,
     market,
     side: "SELL",
-    price: new Money({ amount: price, asset: quoteAsset }),
-    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
-    quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+    price: new Money({ amount: price,
+asset: quoteAsset }),
+    quantity: new Quantity({ amount: quantity,
+asset: baseAsset }),
+    quoteQuantity: new Money({ amount: quoteQuantity,
+asset: quoteAsset }),
     commissions: commissionAmount === "0" ? [] : [
       new Commission({
-        amount: new Money({ amount: commissionAmount, asset: commissionAsset }),
+        amount: new Money({ amount: commissionAmount,
+asset: commissionAsset }),
       }),
     ],
     commissionStatus: "COMPLETE",

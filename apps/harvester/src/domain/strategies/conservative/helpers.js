@@ -28,19 +28,22 @@ export function hasActiveOrder({ activeOrders = [], symbol, side } = {}) {
  * Whether the strategy currently owns a positive active position.
  */
 export function hasActivePosition({ activeQuantity } = {}) {
-  return compareDecimal({ left: activeQuantity, right: "0" }) > 0
+  return compareDecimal({ left: activeQuantity,
+right: "0" }) > 0
 }
 
 /**
  * Whether strategy-owned inventory exists above the exact retained keep quantity.
  */
 export function hasSellableInventory({ activeQuantity, keepQuantity } = {}) {
-  return compareDecimal({ left: activeQuantity, right: keepQuantity }) > 0
+  return compareDecimal({ left: activeQuantity,
+right: keepQuantity }) > 0
 }
 
 /**
  * Whether cumulative confirmed net SELL proceeds have not recovered full BUY cost.
  */
 export function hasOutstandingRecovery({ positionSpent, netSellProceeds } = {}) {
-  return compareDecimal({ left: positionSpent, right: netSellProceeds }) > 0
+  return compareDecimal({ left: positionSpent,
+right: netSellProceeds }) > 0
 }
