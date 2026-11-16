@@ -13,7 +13,8 @@ describe("subtractDecimalStrings", () => {
       ["100000000000000000000.0001", "0.0001", "100000000000000000000"],
       ["-1.25", "-0.25", "-1"],
     ]) {
-      assert.deepEqual(subtractDecimalStrings({ left, right }), {
+      assert.deepEqual(subtractDecimalStrings({ left,
+right }), {
         value: expected,
         ok: true,
       })
@@ -22,19 +23,24 @@ describe("subtractDecimalStrings", () => {
 
   it("rejects invalid decimal operands", () => {
     for (const input of [
-      { left: 1, right: "1" },
-      { left: "1", right: "1e2" },
-      { left: "NaN", right: "0" },
+      { left: 1,
+right: "1" },
+      { left: "1",
+right: "1e2" },
+      { left: "NaN",
+right: "0" },
     ]) {
       assert.equal(subtractDecimalStrings(input).ok, false)
     }
   })
 
   it("does not mutate its input", () => {
-    const input = { left: "10.00", right: "0.25" }
+    const input = { left: "10.00",
+right: "0.25" }
 
     subtractDecimalStrings(input)
 
-    assert.deepEqual(input, { left: "10.00", right: "0.25" })
+    assert.deepEqual(input, { left: "10.00",
+right: "0.25" })
   })
 })
