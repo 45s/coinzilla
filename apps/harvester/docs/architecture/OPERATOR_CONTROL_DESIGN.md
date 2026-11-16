@@ -64,12 +64,14 @@ flowchart TB
     OP["HarvesterOperator facade"]
     PAUSE["pauseMarket use case"]
     RESUME["resumeMarket use case"]
+    BUYCONTROLS["pause/resume BUY controls"]
     FACTS["Operational State Store port"]
   end
   subgraph ENGINE["Harvester trading application"]
     SERIAL["Serialized engine transition"]
-    STATE["Operator pause state"]
+    STATE["Independent market/global operator gates"]
     POLICY["Conservative strategy policy"]
+    CANCEL["Owned BUY cancellation + fill reconciliation"]
     EXEC["Existing order execution workflow"]
   end
   TG --> AUTH
@@ -78,12 +80,16 @@ flowchart TB
   AUTH --> OP
   OP --> PAUSE
   OP --> RESUME
+  OP --> BUYCONTROLS
   PAUSE --> SERIAL
   RESUME --> SERIAL
+  BUYCONTROLS --> SERIAL
   SERIAL --> FACTS
   FACTS --> STATE
   STATE --> POLICY
+  STATE --> CANCEL
   POLICY --> EXEC
+  CANCEL --> EXEC
 ```
 
 A pause transition commits its fact from inside the engine's serialized transition before applying the operator state:
