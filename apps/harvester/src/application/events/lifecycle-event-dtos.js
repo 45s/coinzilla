@@ -58,6 +58,12 @@ const requireConfigurationFingerprint = ({ value }) => {
   return value
 }
 
+const mapArrayWithIndex = ({ values, mapper }) =>
+  values.map((...args) => mapper({
+    value: args[0],
+    index: args[1],
+  }))
+
 const requireMarkets = ({ value }) => {
   if (!Array.isArray(value)) {
     throw new TypeError("enabledMarkets must be an array")
@@ -107,12 +113,6 @@ const mapData = ({ input, operation, mapper }) => {
     return toResult({ error })
   }
 }
-
-const mapArrayWithIndex = ({ values, mapper }) =>
-  values.map((...args) => mapper({
-    value: args[0],
-    index: args[1],
-  }))
 
 const BUILD_METADATA_SOURCES = Object.freeze(["git", "environment", "unavailable"])
 const WORKING_TREE_STATES = Object.freeze(["clean", "dirty", "unknown"])
@@ -665,25 +665,46 @@ export const mapOrderCancelFailedData = (input = {}) =>
 
 
 /** Map a canonical Fill only after both accounting projections were committed. */
-const mapCommissionAssetData = ({ fill, commission, index }) => {
-  const amount = requireDecimalString({
+const mapCommissionAmountData = ({ commission, index }) => ({
+  amount: requireDecimalString({
     value: commission.amount?.amount,
     field: `commissions[${index}].amount`,
-  })
-  const assetId = requireString({
+  }),
+  assetId: requireString({
     value: commission.amount?.asset?.id,
     field: `commissions[${index}].assetId`,
-  })
-  const asset = requireString({
+  }),
+  asset: requireString({
     value: commission.amount?.asset?.code,
     field: `commissions[${index}].asset`,
+  }),
+})
+
+const hasValidMarketCommissionAssetIdentity = ({ fill, assetId, asset }) => {
+  const baseAsset = fill.market.baseAsset
+  const quoteAsset = fill.market.quoteAsset
+  const isBaseAsset = assetId === baseAsset?.id
+  const isQuoteAsset = assetId === quoteAsset?.id
+  return !(
+    (isBaseAsset && asset !== baseAsset?.code) ||
+    (isQuoteAsset && asset !== quoteAsset?.code) ||
+    (!isBaseAsset && !isQuoteAsset &&
+      (asset === baseAsset?.code || asset === quoteAsset?.code))
+  )
+}
+
+const mapCommissionAssetData = ({ fill, commission, index }) => {
+  const { amount, assetId, asset } = mapCommissionAmountData({
+    commission,
+    index,
   })
   const isBaseAsset = assetId === fill.market.baseAsset?.id
   const isQuoteAsset = assetId === fill.market.quoteAsset?.id
-  if ((isBaseAsset && asset !== fill.market.baseAsset?.code) ||
-      (isQuoteAsset && asset !== fill.market.quoteAsset?.code) ||
-      (!isBaseAsset && !isQuoteAsset &&
-        (asset === fill.market.baseAsset?.code || asset === fill.market.quoteAsset?.code))) {
+  if (!hasValidMarketCommissionAssetIdentity({
+    fill,
+    assetId,
+    asset,
+  })) {
     throw new TypeError("Commission asset ID and code do not match the market asset identity")
   }
   return {
@@ -693,6 +714,8 @@ const mapCommissionAssetData = ({ fill, commission, index }) => {
     isThirdAsset: !isBaseAsset && !isQuoteAsset,
   }
 }
+
+
 
 const mapCommissionQuoteValueData = ({
   fill,
@@ -1070,13 +1093,72 @@ export const mapRecoveryCycleNotCompletedData = (input = {}) =>
 
 
 /** Map the complete account-wide open-order snapshot; BLOCKED classifies audit ownership, not process startup readiness. */
+const mapAccountOpenOrder = ({ order, index }) => {
+  if (!order || typeof order !== "object") {
+    throw new TypeError(`orders[${index}] must be a normalized broker order`)
+  }
+  const symbol = order.market?.symbol ?? order.symbol
+  const brokerOrderId = order.brokerOrderId ?? order.id
+  const price = order.limitPrice?.amount ?? order.originalPrice
+  const quantity = order.originalQuantity?.amount ?? order.originalQuantity
+  const executedQuantity = order.executedQuantity?.amount ?? order.executedQuantity ?? "0"
+  return {
+    ...(typeof order.clientOrderId === "string" && order.clientOrderId.trim()
+      ? { clientOrderId: order.clientOrderId.trim() }
+      : {}),
+    brokerOrderId: requireString({
+      value: brokerOrderId,
+      field: `orders[${index}].brokerOrderId`,
+    }),
+    symbol: requireString({
+      value: symbol,
+      field: `orders[${index}].symbol`,
+    }),
+    side: order.side === "BUY" || order.side === "SELL"
+      ? order.side
+      : (() => { throw new TypeError(`orders[${index}].side must be BUY or SELL`) })(),
+    type: requireString({
+      value: order.type,
+      field: `orders[${index}].type`,
+    }),
+    ...(price === undefined ? {} : {
+      price: requireDecimalString({
+        value: price,
+        field: `orders[${index}].price`,
+      }),
+    }),
+    quantity: requireDecimalString({
+      value: quantity,
+      field: `orders[${index}].quantity`,
+    }),
+    executedQuantity: requireDecimalString({
+      value: executedQuantity,
+      field: `orders[${index}].executedQuantity`,
+    }),
+    status: requireString({
+      value: order.status,
+      field: `orders[${index}].status`,
+    }),
+  }
+}
+
+const assertAccountOpenOrdersReadiness = ({ readiness, mappedOrders, blockReasons }) => {
+  if (readiness === "READY" && (mappedOrders.length > 0 || blockReasons.length > 0)) {
+    throw new TypeError("READY open-order audit requires no open orders and no block reasons")
+  }
+  if (readiness === "RECONCILED" && (mappedOrders.length === 0 || blockReasons.length > 0)) {
+    throw new TypeError("RECONCILED open-order audit requires owned open orders and no block reasons")
+  }
+  if (readiness === "BLOCKED" && blockReasons.length === 0) {
+    throw new TypeError("BLOCKED open-order audit requires blockReasons")
+  }
+}
+
 export const mapAccountOpenOrdersCapturedData = (input = {}) =>
   mapData({
     input,
     operation: "Account-open-orders-captured event mapping",
-    mapper: ({
-      phase, observedAt, orders, readiness, blockReasons = [],
-    }) => {
+    mapper: ({ phase, observedAt, orders, readiness, blockReasons = [] }) => {
       if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(phase)) {
         throw new TypeError("phase must be OPENING, PREFLIGHT, or RECOVERY")
       }
@@ -1095,54 +1177,10 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
       }
       const mappedOrders = mapArrayWithIndex({
         values: orders,
-        mapper: ({ value: order, index }) => {
-          if (!order || typeof order !== "object") {
-            throw new TypeError(`orders[${index}] must be a normalized broker order`)
-          }
-          const symbol = order.market?.symbol ?? order.symbol
-          const brokerOrderId = order.brokerOrderId ?? order.id
-          const price = order.limitPrice?.amount ?? order.originalPrice
-          const quantity = order.originalQuantity?.amount ?? order.originalQuantity
-          const executedQuantity = order.executedQuantity?.amount ?? order.executedQuantity ?? "0"
-          return {
-            ...(typeof order.clientOrderId === "string" && order.clientOrderId.trim()
-              ? { clientOrderId: order.clientOrderId.trim() }
-              : {}),
-            brokerOrderId: requireString({
-              value: brokerOrderId,
-              field: `orders[${index}].brokerOrderId`,
-            }),
-            symbol: requireString({
-              value: symbol,
-              field: `orders[${index}].symbol`,
-            }),
-            side: order.side === "BUY" || order.side === "SELL"
-              ? order.side
-              : (() => { throw new TypeError(`orders[${index}].side must be BUY or SELL`) })(),
-            type: requireString({
-              value: order.type,
-              field: `orders[${index}].type`,
-            }),
-            ...(price === undefined ? {} : {
-              price: requireDecimalString({
-                value: price,
-                field: `orders[${index}].price`,
-              }),
-            }),
-            quantity: requireDecimalString({
-              value: quantity,
-              field: `orders[${index}].quantity`,
-            }),
-            executedQuantity: requireDecimalString({
-              value: executedQuantity,
-              field: `orders[${index}].executedQuantity`,
-            }),
-            status: requireString({
-              value: order.status,
-              field: `orders[${index}].status`,
-            }),
-          }
-        },
+        mapper: ({ value: order, index }) => mapAccountOpenOrder({
+          order,
+          index,
+        }),
       }).sort((...orderPair) => {
         const [left, right] = orderPair
         return left.symbol.localeCompare(right.symbol) ||
@@ -1152,15 +1190,11 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
       if (new Set(identities).size !== identities.length) {
         throw new TypeError("orders must not contain duplicate symbol/brokerOrderId identities")
       }
-      if (readiness === "READY" && (mappedOrders.length > 0 || blockReasons.length > 0)) {
-        throw new TypeError("READY open-order audit requires no open orders and no block reasons")
-      }
-      if (readiness === "RECONCILED" && (mappedOrders.length === 0 || blockReasons.length > 0)) {
-        throw new TypeError("RECONCILED open-order audit requires owned open orders and no block reasons")
-      }
-      if (readiness === "BLOCKED" && blockReasons.length === 0) {
-        throw new TypeError("BLOCKED open-order audit requires blockReasons")
-      }
+      assertAccountOpenOrdersReadiness({
+        readiness,
+        mappedOrders,
+        blockReasons,
+      })
       return {
         phase,
         observedAt: normalizedObservedAt,
