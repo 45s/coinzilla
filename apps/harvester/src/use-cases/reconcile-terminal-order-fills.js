@@ -2,7 +2,9 @@ import { Fill } from "@coinzilla/entities"
 import { addDecimal, compareDecimal, toResult } from "@coinzilla/utils"
 
 const failureResult = ({ error, errors, category, stage, retryable }) => {
-  const result = { failure: { category, stage, retryable } }
+  const result = { failure: { category, 
+    stage, 
+    retryable } }
   if (errors !== undefined) {
     result.errors = errors
   } else {
@@ -15,12 +17,18 @@ const withFailure = (result, failure) => {
   if (result?.failure) {
     return result
   }
-  return toResult({ ...result, failure })
+  return toResult({ ...result, 
+    failure })
 }
 
 async function pauseWithFailure({ pause, symbol, reason, error, category, stage, retryable }) {
-  await pause({ symbol, reason, error })
-  return failureResult({ error, category, stage, retryable })
+  await pause({ symbol, 
+    reason, 
+    error })
+  return failureResult({ error, 
+    category, 
+    stage, 
+    retryable })
 }
 
 function validateTerminalOrder({ order }) {
@@ -39,15 +47,19 @@ function validateTerminalOrder({ order }) {
 async function readTerminalFillHistory({ broker, order, pause, symbol }) {
   let fillsResult
   try {
-    fillsResult = await broker.getFills({ symbol, orderId: order.brokerOrderId })
+    fillsResult = await broker.getFills({ symbol, 
+      orderId: order.brokerOrderId })
   } catch (error) {
     const failure = error?.recoveryFailure ?? {
       category: "ACCOUNTING_INTEGRITY",
       stage: "TERMINAL_FILL_HISTORY_READ_EXCEPTION",
       retryable: false,
     }
-    await pause({ symbol, reason: "TERMINAL_ORDER_FILL_HISTORY_UNAVAILABLE", error })
-    return failureResult({ error, ...failure })
+    await pause({ symbol, 
+      reason: "TERMINAL_ORDER_FILL_HISTORY_UNAVAILABLE", 
+      error })
+    return failureResult({ error, 
+      ...failure })
   }
   if (fillsResult?.ok !== false && fillsResult?.ok !== true) {
     return pauseWithFailure({
@@ -103,7 +115,8 @@ async function collectStreamFills({ order, eventFill, processedFillsByOrder, pau
     ...(eventFill === undefined ? [] : [eventFill]),
   ]
   for (const fill of streamFills) {
-    if (!hasCanonicalOrderIdentity({ fill, order })) {
+    if (!hasCanonicalOrderIdentity({ fill, 
+      order })) {
       return pauseWithFailure({
         pause,
         symbol,
@@ -130,12 +143,14 @@ async function collectStreamFills({ order, eventFill, processedFillsByOrder, pau
       fillsById.set(fill.id, fill)
     }
   }
-  return { fillsById, streamFills }
+  return { fillsById, 
+    streamFills }
 }
 
 async function mergeRestFills({ fillsById, restFills, streamFills, order, pause, symbol }) {
   for (const fill of restFills) {
-    if (!hasCanonicalOrderIdentity({ fill, order })) {
+    if (!hasCanonicalOrderIdentity({ fill, 
+      order })) {
       if (streamFills.length > 0) {
         continue
       }
@@ -188,7 +203,8 @@ function getTerminalFillMismatchReason({ order }) {
   }
   const partiallyFilledTerminalBuy = order.side === "BUY" &&
     ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
-    compareDecimal({ left: order.executedQuantity.amount, right: "0" }) > 0
+    compareDecimal({ left: order.executedQuantity.amount, 
+      right: "0" }) > 0
   if (partiallyFilledTerminalBuy) {
     return "PARTIALLY_FILLED_ORDER_CANCELED_REQUIRES_REVIEW"
   }
@@ -199,11 +215,13 @@ async function verifyTerminalFillQuantities({ fills, order, pause, symbol }) {
   const reconciledQuantity = fills.reduce(
     (...entries) => {
       const [total, fill] = entries
-      return addDecimal({ left: total, right: fill.quantity.amount })
+      return addDecimal({ left: total, 
+        right: fill.quantity.amount })
     },
     "0",
   )
-  if (compareDecimal({ left: reconciledQuantity, right: order.executedQuantity.amount }) !== 0) {
+  if (compareDecimal({ left: reconciledQuantity, 
+    right: order.executedQuantity.amount }) !== 0) {
     return pauseWithFailure({
       pause,
       symbol,
@@ -234,10 +252,13 @@ async function verifyTerminalFillQuantities({ fills, order, pause, symbol }) {
 
 async function applyTerminalFills({ fills, order, processExecutionFillTransition, pause, symbol }) {
   for (const fill of fills) {
-    const applied = await processExecutionFillTransition({ order, fill })
+    const applied = await processExecutionFillTransition({ order, 
+      fill })
     if (!applied?.ok) {
       const error = applied?.errors?.[0] ?? new Error("Terminal order fill could not be applied")
-      await pause({ symbol, reason: "TERMINAL_ORDER_FILL_ACCOUNTING_FAILED", error })
+      await pause({ symbol, 
+        reason: "TERMINAL_ORDER_FILL_ACCOUNTING_FAILED", 
+        error })
       return withFailure(
         toResult({ errors: applied?.errors ?? [error] }),
         applied?.failure ?? {
@@ -277,7 +298,10 @@ export function makeReconcileTerminalOrderFills(options = {}) {
       })
     }
 
-    const restFills = await readTerminalFillHistory({ broker, order, pause, symbol })
+    const restFills = await readTerminalFillHistory({ broker, 
+      order, 
+      pause, 
+      symbol })
     if (!Array.isArray(restFills)) {
       return restFills
     }
@@ -304,7 +328,10 @@ export function makeReconcileTerminalOrderFills(options = {}) {
     }
 
     const fills = sortTerminalFills({ fillsById: streamResult.fillsById })
-    const quantityResult = await verifyTerminalFillQuantities({ fills, order, pause, symbol })
+    const quantityResult = await verifyTerminalFillQuantities({ fills, 
+      order, 
+      pause, 
+      symbol })
     if (quantityResult?.ok !== undefined && quantityResult.ok !== true) {
       return quantityResult
     }
