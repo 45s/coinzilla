@@ -1,5 +1,5 @@
 import { CanonicalOrder, Market } from "@coinzilla/entities"
-import { addDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
@@ -16,11 +16,50 @@ function assertLegacyPositionRecord(record) {
       !record.accounting || typeof record.accounting !== "object") {
     throw new TypeError("Recovery Seller initialLegacyPositions must contain market, position and accounting records")
   }
-  if (record.position.remainingQuantity === undefined ||
-      record.position.originalQuantity === undefined ||
-      record.position.averageCost === undefined ||
-      !Array.isArray(record.accounting.appliedFillIds)) {
-    throw new TypeError("Recovery Seller legacy position/accounting record is incomplete")
+  for (const field of ["invested", "originalQuantity", "averageCost", "remainingQuantity"]) {
+    assertDecimalString({
+      value: record.position[field],
+      field: `legacyPosition.${field}`,
+    })
+  }
+  for (const field of ["invested", "originalQuantity", "averageCost"]) {
+    if (compareDecimal({
+      left: record.position[field],
+      right: "0",
+    }) <= 0) {
+      throw new RangeError(`legacyPosition.${field} must be greater than zero`)
+    }
+  }
+  if (compareDecimal({
+    left: record.position.remainingQuantity,
+    right: "0",
+  }) < 0 || compareDecimal({
+    left: record.position.remainingQuantity,
+    right: record.position.originalQuantity,
+  }) > 0) {
+    throw new RangeError("Recovery Seller legacy remaining quantity must be within its original authorized quantity")
+  }
+
+  for (const field of ["realizedQuoteProceeds", "realizedCostBasis", "realizedProfit"]) {
+    assertDecimalString({
+      value: record.accounting[field],
+      field: `legacyAccounting.${field}`,
+    })
+  }
+  if (!Array.isArray(record.accounting.appliedFillIds) ||
+      !Array.isArray(record.accounting.appliedFillFingerprints) ||
+      record.accounting.appliedFillIds.length !== record.accounting.appliedFillFingerprints.length) {
+    throw new TypeError("Recovery Seller legacy Fill identity history is invalid")
+  }
+  const expectedProfit = subtractDecimal({
+    left: record.accounting.realizedQuoteProceeds,
+    right: record.accounting.realizedCostBasis,
+  })
+  if (compareDecimal({
+    left: record.accounting.realizedProfit,
+    right: expectedProfit,
+  }) !== 0) {
+    throw new RangeError("Recovery Seller legacy realized profit does not match its proceeds and cost basis")
   }
 }
 
