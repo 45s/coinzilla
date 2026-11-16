@@ -18,6 +18,11 @@ test("keeps every application-layer JavaScript file free of ESLint errors and wa
     message: message.message,
   })))
 
+  if (findings.length > 0) {
+    process.stderr.write(`Application ESLint findings (${findings.length}):\\n`)
+    process.stderr.write(`${JSON.stringify(findings, null, 2)}\\n`)
+  }
+
   assert.deepEqual(
     findings,
     [],
