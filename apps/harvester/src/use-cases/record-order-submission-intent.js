@@ -3,6 +3,32 @@ import { toResult } from "@coinzilla/utils"
 
 const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_SELL"])
 
+function validateCanonicalMarketIdentity({ market }) {
+  const requiredMarketValues = [
+    market?.id,
+    market?.venue,
+    market?.symbol,
+    market?.baseAsset?.id,
+    market?.quoteAsset?.id,
+  ]
+  if (requiredMarketValues.some((value) => typeof value !== "string" || !value.trim())) {
+    throw new TypeError("Order-submission intent requires complete canonical market and asset identities")
+  }
+}
+
+function validateSubmissionOrderFields({ order }) {
+  if ((order.side !== "BUY" && order.side !== "SELL") ||
+      (order.type !== "LIMIT" && order.type !== "LIMIT_MAKER")) {
+    throw new TypeError("Order-submission intent has an unsupported side or order type")
+  }
+  const price = order.limitPrice?.amount
+  const quantity = order.originalQuantity?.amount
+  if (typeof price !== "string" || typeof quantity !== "string") {
+    throw new TypeError("Order-submission intent requires exact decimal price and quantity strings")
+  }
+  return { price, quantity }
+}
+
 function validateSubmissionIntent({ operationalStateStore, order, purpose }) {
   if (typeof operationalStateStore?.append !== "function") {
     throw new TypeError("recordOrderSubmissionIntent requires a Operational State Store append capability")
@@ -16,31 +42,15 @@ function validateSubmissionIntent({ operationalStateStore, order, purpose }) {
   if (!SUPPORTED_PURPOSES.has(purpose)) {
     throw new TypeError("Order-submission intent purpose must be null or RECOVERY_SELL")
   }
-
   const { market } = order
-  const requiredMarketValues = [
-    market?.id,
-    market?.venue,
-    market?.symbol,
-    market?.baseAsset?.id,
-    market?.quoteAsset?.id,
-  ]
-  if (requiredMarketValues.some((value) => typeof value !== "string" || !value.trim())) {
-    throw new TypeError("Order-submission intent requires complete canonical market and asset identities")
+  validateCanonicalMarketIdentity({ market })
+  const { price, quantity } = validateSubmissionOrderFields({ order })
+  return {
+    market,
+    clientOrderId: order.clientOrderId,
+    price,
+    quantity,
   }
-  if ((order.side !== "BUY" && order.side !== "SELL") ||
-      (order.type !== "LIMIT" && order.type !== "LIMIT_MAKER")) {
-    throw new TypeError("Order-submission intent has an unsupported side or order type")
-  }
-  const price = order.limitPrice?.amount
-  const quantity = order.originalQuantity?.amount
-  if (typeof price !== "string" || typeof quantity !== "string") {
-    throw new TypeError("Order-submission intent requires exact decimal price and quantity strings")
-  }
-  return { market, 
-    clientOrderId: order.clientOrderId, 
-    price, 
-    quantity }
 }
 
 /**
