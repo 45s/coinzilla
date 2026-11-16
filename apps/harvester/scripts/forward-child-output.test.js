@@ -7,7 +7,9 @@ test("forwards each chunk to every durable destination", async () => {
   const source = new PassThrough()
   const received = []
   const destination = new Writable({
-    write(chunk, encoding, callback) {
+    write(...args) {
+
+      const [chunk, , callback] = args
       received.push(chunk.toString())
       callback()
     },
@@ -31,12 +33,16 @@ test("waits for every durable destination to drain before reading more output", 
   let finished = false
   const slowDestination = new Writable({
     highWaterMark: 1,
-    write(chunk, encoding, callback) {
+    write(...args) {
+
+      const [chunk, , callback] = args
       releaseWrite = callback
     },
   })
   const fastDestination = new Writable({
-    write(chunk, encoding, callback) {
+    write(...args) {
+
+      const [chunk, , callback] = args
       received.push(chunk.toString())
       callback()
     },
@@ -69,14 +75,18 @@ test("keeps durable capture moving when a best-effort terminal is stalled", asyn
   const terminalChunks = []
   let releaseTerminalWrite
   const durableDestination = new Writable({
-    write(chunk, encoding, callback) {
+    write(...args) {
+
+      const [chunk, , callback] = args
       durableChunks.push(chunk.toString())
       callback()
     },
   })
   const stalledTerminal = new Writable({
     highWaterMark: 1,
-    write(chunk, encoding, callback) {
+    write(...args) {
+
+      const [chunk, , callback] = args
       terminalChunks.push(chunk.toString())
       releaseTerminalWrite = callback
     },
@@ -111,7 +121,9 @@ test("resolves durable destinations for each chunk", async () => {
   const second = []
   let activeDestinations = [
     new Writable({
-      write(chunk, encoding, callback) {
+      write(...args) {
+
+        const [chunk, , callback] = args
         first.push(chunk.toString())
         callback()
       },
@@ -127,7 +139,9 @@ test("resolves durable destinations for each chunk", async () => {
   await new Promise((resolve) => setImmediate(resolve))
   activeDestinations = [
     new Writable({
-      write(chunk, encoding, callback) {
+      write(...args) {
+
+        const [chunk, , callback] = args
         second.push(chunk.toString())
         callback()
       },
@@ -145,7 +159,9 @@ test("duplicates raw child output into cumulative and timestamped terminal desti
   const cumulativeOutput = [];
   const sessionOutput = [];
   const createDestination = (received) => new Writable({
-    write(chunk, encoding, callback) {
+    write(...args) {
+
+      const [chunk, , callback] = args
       received.push(chunk.toString());
       callback();
     },
