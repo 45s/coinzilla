@@ -506,31 +506,67 @@ test("rejects an unauthorized persistent-keyboard action before reading market s
 test("parses the global and market-scoped emergency BUY pause commands", () => {
   assert.deepEqual(parseTelegramOperatorCommand("/pauseallbuys"), { type: "PAUSE_ALL_BUYS" }, "The global BUY pause command must be recognized using Telegram's lowercase command syntax.")
   assert.deepEqual(parseTelegramOperatorCommand("/resumeallbuys"), { type: "RESUME_ALL_BUYS" }, "The global BUY resume command must be recognized using Telegram's lowercase command syntax.")
-  assert.deepEqual(parseTelegramOperatorCommand("/pausebuys linkusdt"), { type: "PAUSE_BUYS", symbol: "LINKUSDT" }, "The market BUY pause command must normalize its symbol to uppercase.")
-  assert.deepEqual(parseTelegramOperatorCommand("/resumebuys LINKUSDT"), { type: "RESUME_BUYS", symbol: "LINKUSDT" }, "The market BUY resume command must preserve the exact market scope.")
-  assert.deepEqual(parseTelegramOperatorCommand("/pausebuys"), { type: "INVALID", command: "PAUSEBUYS" }, "A market BUY pause without a symbol must be rejected rather than becoming a global pause.")
+  assert.deepEqual(parseTelegramOperatorCommand("/pausebuys linkusdt"), {
+    type: "PAUSE_BUYS",
+    symbol: "LINKUSDT",
+  }, "The market BUY pause command must normalize its symbol to uppercase.")
+  assert.deepEqual(parseTelegramOperatorCommand("/resumebuys LINKUSDT"), {
+    type: "RESUME_BUYS",
+    symbol: "LINKUSDT",
+  }, "The market BUY resume command must preserve the exact market scope.")
+  assert.deepEqual(parseTelegramOperatorCommand("/pausebuys"), {
+    type: "INVALID",
+    command: "PAUSEBUYS",
+  }, "A market BUY pause without a symbol must be rejected rather than becoming a global pause.")
 })
 
 test("dispatches emergency BUY pause commands through the authenticated operator facade", async () => {
   const updates = [
-    makeUpdate({ updateId: 401, text: "/pauseallbuys" }),
-    makeUpdate({ updateId: 402, text: "/pausebuys LINKUSDT" }),
-    makeUpdate({ updateId: 403, text: "/resumebuys LINKUSDT" }),
-    makeUpdate({ updateId: 404, text: "/resumeallbuys" }),
+    makeUpdate({
+      updateId: 401,
+      text: "/pauseallbuys",
+    }),
+    makeUpdate({
+      updateId: 402,
+      text: "/pausebuys LINKUSDT",
+    }),
+    makeUpdate({
+      updateId: 403,
+      text: "/resumebuys LINKUSDT",
+    }),
+    makeUpdate({
+      updateId: 404,
+      text: "/resumeallbuys",
+    }),
   ]
   const calls = []
   const { sentMessages, registeredCommands } = await runAdapter({
     updates,
     operator: {
       pauseMarket: async () => assert.fail("Emergency BUY commands must not invoke the legacy market pause."),
-      pauseAllBuys: async (request) => { calls.push({ method: "pauseAllBuys", request }); return { ok: true, data: { paused: true } } },
-      pauseBuys: async (request) => { calls.push({ method: "pauseBuys", request }); return { ok: true, data: { paused: true, symbol: request.symbol } } },
-      resumeBuys: async (request) => { calls.push({ method: "resumeBuys", request }); return { ok: true, data: { resumed: true, symbol: request.symbol } } },
-      resumeAllBuys: async (request) => { calls.push({ method: "resumeAllBuys", request }); return { ok: true, data: { resumed: true } } },
+      pauseAllBuys: async (request) => {
+        calls.push({ method: "pauseAllBuys", request })
+        return { ok: true, data: { paused: true } }
+      },
+      pauseBuys: async (request) => {
+        calls.push({ method: "pauseBuys", request })
+        return { ok: true, data: { paused: true, symbol: request.symbol } }
+      },
+      resumeBuys: async (request) => {
+        calls.push({ method: "resumeBuys", request })
+        return { ok: true, data: { resumed: true, symbol: request.symbol } }
+      },
+      resumeAllBuys: async (request) => {
+        calls.push({ method: "resumeAllBuys", request })
+        return { ok: true, data: { resumed: true } }
+      },
     },
   })
 
-  assert.deepEqual(calls.map(({ method, request }) => ({ method, symbol: request.symbol })), [
+  assert.deepEqual(calls.map(({ method, request }) => ({
+      method,
+      symbol: request.symbol,
+    })), [
     { method: "pauseAllBuys", symbol: undefined },
     { method: "pauseBuys", symbol: "LINKUSDT" },
     { method: "resumeBuys", symbol: "LINKUSDT" },
@@ -545,7 +581,10 @@ test("dispatches emergency BUY pause commands through the authenticated operator
 
 test("reports an active emergency BUY gate when owned-order cancellation is unresolved", async () => {
   const { sentMessages } = await runAdapter({
-    updates: [makeUpdate({ updateId: 405, text: "/pauseallbuys" })],
+    updates: [makeUpdate({
+      updateId: 405,
+      text: "/pauseallbuys",
+    })],
     operator: {
       pauseMarket: async () => assert.fail("Global BUY pause must not invoke the legacy market pause."),
       pauseAllBuys: async () => ({
