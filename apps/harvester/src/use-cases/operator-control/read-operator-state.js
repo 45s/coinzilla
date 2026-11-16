@@ -45,7 +45,8 @@ function createMarketReadModels({ markets, runtime }) {
         message: "Harvester operator market snapshot is invalid",
         code: "HARVESTER_OPERATOR_MARKET_SNAPSHOT_INVALID",
         cause,
-        context: { operation: "READ_MARKETS", symbol: market?.symbol ?? "unknown" },
+        context: { operation: "READ_MARKETS", 
+          symbol: market?.symbol ?? "unknown" },
       })
     }
     const blockers = [...market.blockers]
@@ -87,7 +88,8 @@ async function readOperatorSnapshot({ engine, getRuntimeSnapshot, actor, operati
         context: { operation },
       })
     }
-    const runtime = validateRuntimeSnapshot({ snapshot: runtimeSource, operation })
+    const runtime = validateRuntimeSnapshot({ snapshot: runtimeSource, 
+      operation })
     let marketResult
     try {
       marketResult = await engine.getOperatorMarketSnapshots()
@@ -124,7 +126,8 @@ async function readOperatorSnapshot({ engine, getRuntimeSnapshot, actor, operati
     return toResult({
       data: Object.freeze({
         runtime,
-        markets: createMarketReadModels({ markets: sourceMarkets, runtime }),
+        markets: createMarketReadModels({ markets: sourceMarkets, 
+          runtime }),
       }),
     })
   } catch (error) {
@@ -170,7 +173,8 @@ function createOperatorStatus({ runtime, markets }) {
       strategyMode: runtime.strategyMode,
       stopping: runtime.stopping,
       userData: runtime.userData,
-      readiness: Object.freeze({ state, blockers: Object.freeze(blockers) }),
+      readiness: Object.freeze({ state, 
+        blockers: Object.freeze(blockers) }),
       markets: Object.freeze({
         configured: markets.length,
         enabled: markets.filter(({ enabled }) => enabled).length,
@@ -238,5 +242,6 @@ export function createReadOperatorState({ engine, getRuntimeSnapshot } = {}) {
     return createOperatorMarkets(snapshotResult.data)
   }
 
-  return Object.freeze({ getStatus, getMarkets })
+  return Object.freeze({ getStatus, 
+    getMarkets })
 }
