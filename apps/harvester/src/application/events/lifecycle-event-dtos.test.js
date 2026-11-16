@@ -111,7 +111,8 @@ test("maps validated configuration without copying full configuration or credent
     tradingMode: "testnet",
     configurationFingerprint: "a".repeat(64),
     tradingEnabled: true,
-    config: { apiKey: "private", pairs: { ZROUSDT: { investment: 100 } } },
+    config: { apiKey: "private",
+      pairs: { ZROUSDT: { investment: 100 } } },
   })
 
   assert.deepEqual(result, {
@@ -166,13 +167,16 @@ test("maps broker connection success and sanitizes sensitive error values", () =
 
 test("maps broker disconnection outcome without retaining an Error instance", () => {
   const error = new Error("socket closed")
-  const result = mapBrokerDisconnectedData({ broker: "binance", outcome: "failed", error })
+  const result = mapBrokerDisconnectedData({ broker: "binance",
+    outcome: "failed",
+    error })
   assert.deepEqual(result, {
     ok: true,
     data: {
       broker: "binance",
       outcome: "failed",
-      error: { name: "Error", message: "socket closed" },
+      error: { name: "Error",
+        message: "socket closed" },
     },
   })
   assert.equal(result.data.error instanceof Error, false)
@@ -187,33 +191,47 @@ test("maps process startup failure with a bounded, sanitized error DTO", () => {
     ok: true,
     data: {
       stage: "bootstrap",
-      error: { name: "Error", message: "startup failed password=[REDACTED]" },
+      error: { name: "Error",
+        message: "startup failed password=[REDACTED]" },
     },
   })
 })
 
 test("maps process shutdown reason and outcome", () => {
-  assert.deepEqual(mapHarvesterStoppedData({ reason: "SIGTERM", outcome: "success" }), {
+  assert.deepEqual(mapHarvesterStoppedData({ reason: "SIGTERM",
+    outcome: "success" }), {
     ok: true,
-    data: { reason: "SIGTERM", outcome: "success" },
+    data: { reason: "SIGTERM",
+      outcome: "success" },
   })
 })
 
 test("rejects missing identifiers, invalid modes, duplicate markets, and invalid values", () => {
-  assert.equal(mapHarvesterStartedData({ ...validLifecycle, broker: " " }).ok, false)
-  assert.equal(mapHarvesterStartedData({ ...validLifecycle, strategyMode: "unknown" }).ok, false)
-  assert.equal(mapHarvesterStartedData({ ...validLifecycle, enabledMarkets: ["BTCUSDT", "BTCUSDT"] }).ok, false)
-  assert.equal(mapHarvesterStartedData({ ...validLifecycle, tradingEnabled: "false" }).ok, false)
-  assert.equal(mapConfigValidatedData({ enabledMarkets: "ZROUSDT", strategyMode: "read-only", tradingEnabled: false }).ok, false)
+  assert.equal(mapHarvesterStartedData({ ...validLifecycle,
+    broker: " " }).ok, false)
+  assert.equal(mapHarvesterStartedData({ ...validLifecycle,
+    strategyMode: "unknown" }).ok, false)
+  assert.equal(mapHarvesterStartedData({ ...validLifecycle,
+    enabledMarkets: ["BTCUSDT", "BTCUSDT"] }).ok, false)
+  assert.equal(mapHarvesterStartedData({ ...validLifecycle,
+    tradingEnabled: "false" }).ok, false)
+  assert.equal(mapConfigValidatedData({ enabledMarkets: "ZROUSDT",
+    strategyMode: "read-only",
+    tradingEnabled: false }).ok, false)
   assert.equal(mapBrokerConnectedData({ broker: "" }).ok, false)
-  assert.equal(mapHarvesterStoppedData({ reason: "SIGTERM", outcome: "unknown" }).ok, false)
-  assert.equal(mapHarvesterStartupFailedData({ stage: "bootstrap", error: "failure" }).ok, false)
+  assert.equal(mapHarvesterStoppedData({ reason: "SIGTERM",
+    outcome: "unknown" }).ok, false)
+  assert.equal(mapHarvesterStartupFailedData({ stage: "bootstrap",
+    error: "failure" }).ok, false)
 })
 
 test("rejects non-object mapper inputs and non-Error failure details safely", () => {
   assert.equal(mapHarvesterStartedData(null).ok, false)
-  assert.equal(mapBrokerConnectionFailedData({ broker: "binance", error: { message: "bad" } }).ok, false)
-  assert.equal(mapBrokerDisconnectedData({ broker: "binance", outcome: "success", error: new Date() }).ok, false)
+  assert.equal(mapBrokerConnectionFailedData({ broker: "binance",
+    error: { message: "bad" } }).ok, false)
+  assert.equal(mapBrokerDisconnectedData({ broker: "binance",
+    outcome: "success",
+    error: new Date() }).ok, false)
 })
 
 test("EventBus accepts mapped lifecycle DTOs and rejects unsupported payload objects", () => {
@@ -256,7 +274,9 @@ test("maps subscription lifecycle facts without SDK objects", () => {
     subscription: { id: "private-sdk-object" },
   }), {
     ok: true,
-    data: { broker: "binance", stream: "market-price", market: "BTCUSDT" },
+    data: { broker: "binance",
+      stream: "market-price",
+      market: "BTCUSDT" },
   })
 
   const failed = mapBrokerSubscriptionFailedData({
@@ -268,7 +288,8 @@ test("maps subscription lifecycle facts without SDK objects", () => {
   assert.deepEqual(failed.data, {
     broker: "binance",
     stream: "user-data",
-    error: { name: "Error", message: "subscription failed token=[REDACTED]" },
+    error: { name: "Error",
+      message: "subscription failed token=[REDACTED]" },
   })
 })
 
@@ -302,11 +323,22 @@ test("maps meaningful broker stream transitions and recovery metadata", () => {
 })
 
 test("rejects invalid subscription and stream status DTOs", () => {
-  assert.equal(mapBrokerSubscriptionEstablishedData({ broker: "binance", stream: "unknown" }).ok, false)
-  assert.equal(mapBrokerSubscriptionEstablishedData({ broker: "binance", stream: "market-price" }).ok, false)
-  assert.equal(mapBrokerSubscriptionFailedData({ broker: "binance", stream: "user-data", error: "failure" }).ok, false)
-  assert.equal(mapBrokerStatusChangedData({ broker: "binance", stream: "user-data", status: "recovered", recoveryRequired: "true" }).ok, false)
-  assert.equal(mapBrokerStatusChangedData({ broker: "binance", stream: "user-data", status: "recovered", recoveryRequired: true, attempt: -1 }).ok, false)
+  assert.equal(mapBrokerSubscriptionEstablishedData({ broker: "binance",
+    stream: "unknown" }).ok, false)
+  assert.equal(mapBrokerSubscriptionEstablishedData({ broker: "binance",
+    stream: "market-price" }).ok, false)
+  assert.equal(mapBrokerSubscriptionFailedData({ broker: "binance",
+    stream: "user-data",
+    error: "failure" }).ok, false)
+  assert.equal(mapBrokerStatusChangedData({ broker: "binance",
+    stream: "user-data",
+    status: "recovered",
+    recoveryRequired: "true" }).ok, false)
+  assert.equal(mapBrokerStatusChangedData({ broker: "binance",
+    stream: "user-data",
+    status: "recovered",
+    recoveryRequired: true,
+    attempt: -1 }).ok, false)
 })
 
 
@@ -352,18 +384,29 @@ test("maps actionable strategy decisions using exact decimal strings and allowli
     },
   })
   assert.equal(mapStrategyDecisionData({
-    strategy: "CONSERVATIVE", symbol: "DOGEUSDT", referencePrice: "100", actions: [],
+    strategy: "CONSERVATIVE",
+    symbol: "DOGEUSDT",
+    referencePrice: "100",
+    actions: [],
   }).ok, false)
   assert.equal(mapStrategyDecisionData({
-    strategy: "CONSERVATIVE", symbol: "DOGEUSDT", referencePrice: "100", actions: [{
-      side: "BUY", type: "LIMIT", price: "not-a-decimal", quantity: "1",
+    strategy: "CONSERVATIVE",
+    symbol: "DOGEUSDT",
+    referencePrice: "100",
+    actions: [{
+      side: "BUY",
+      type: "LIMIT",
+      price: "not-a-decimal",
+      quantity: "1",
     }],
   }).ok, false)
 })
 
 test("maps order request and acknowledgement without leaking extra order properties", () => {
   assert.deepEqual(mapOrderSubmissionRequestedData({
-    order: { ...canonicalOrderFacts, apiSecret: "private", account: { balance: "private" } },
+    order: { ...canonicalOrderFacts,
+      apiSecret: "private",
+      account: { balance: "private" } },
   }), {
     ok: true,
     data: {
@@ -429,11 +472,14 @@ test("maps rejected and unknown order outcomes with sanitized errors only", () =
       symbol: "DOGEUSDT",
       side: "BUY",
       outcome: "UNKNOWN",
-      error: { name: "Error", message: "request failed apiKey=[REDACTED]" },
+      error: { name: "Error",
+        message: "request failed apiKey=[REDACTED]" },
     },
   })
   assert.equal(mapOrderSubmissionFailedData({
-    order: canonicalOrderFacts, outcome: "INVALID", error: new Error("no"),
+    order: canonicalOrderFacts,
+    outcome: "INVALID",
+    error: new Error("no"),
   }).ok, false)
 })
 
@@ -463,7 +509,8 @@ test("maps cancellation intent before broker I/O with exact order identity", () 
     },
   })
   assert.equal(mapOrderCancellationRequestedData({
-    order: { ...canonicalOrderFacts, status: "PENDING" },
+    order: { ...canonicalOrderFacts,
+      status: "PENDING" },
     reason: "TRAILING_BUY_REPRICE",
   }).ok, false)
 })
@@ -480,7 +527,8 @@ test("maps strategy pause and cancellation outcomes as safe DTOs", () => {
     data: {
       symbol: "DOGEUSDT",
       reason: "ORDER_REJECTED",
-      error: { name: "Error", message: "password=[REDACTED]" },
+      error: { name: "Error",
+        message: "password=[REDACTED]" },
     },
   })
 
@@ -518,7 +566,8 @@ test("maps strategy pause and cancellation outcomes as safe DTOs", () => {
       brokerOrderId: "broker-1",
       status: "OPEN",
       outcome: "UNCONFIRMED",
-      error: { name: "Error", message: "apiSecret=[REDACTED]" },
+      error: { name: "Error",
+        message: "apiSecret=[REDACTED]" },
     },
   })
   assert.equal(mapOrderCancelledData({ order: canonicalOrderFacts }).ok, false)
@@ -538,28 +587,40 @@ test("maps an unknown recovery SELL cancellation state safely", () => {
 
 
 test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", () => {
-  const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
-  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-  const feeAsset = new Asset({ id: "asset:BNB", code: "BNB" })
-  const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+  const baseAsset = new Asset({ id: "asset:DOGE",
+    code: "DOGE" })
+  const quoteAsset = new Asset({ id: "asset:USDT",
+    code: "USDT" })
+  const feeAsset = new Asset({ id: "asset:BNB",
+    code: "BNB" })
+  const market = new Market({ venue: "binance",
+    symbol: "DOGEUSDT",
+    baseAsset,
+    quoteAsset })
   const fill = new Fill({
     tradeId: "trade-42",
     brokerOrderId: "broker-order-42",
     clientOrderId: "harvester-order-42",
     market,
     side: "BUY",
-    price: new Money({ amount: "99.9500", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "0.500", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "49.97500", asset: quoteAsset }),
+    price: new Money({ amount: "99.9500",
+      asset: quoteAsset }),
+    quantity: new Quantity({ amount: "0.500",
+      asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "49.97500",
+      asset: quoteAsset }),
     liquidityRole: "MAKER",
     executedAt: 123,
     commissions: [
       new Commission({
-        amount: new Money({ amount: "0.0005", asset: baseAsset }),
+        amount: new Money({ amount: "0.0005",
+          asset: baseAsset }),
       }),
       new Commission({
-        amount: new Money({ amount: "0.0001", asset: feeAsset }),
-        quoteValue: new Money({ amount: "0.123456789012345678", asset: quoteAsset }),
+        amount: new Money({ amount: "0.0001",
+          asset: feeAsset }),
+        quoteValue: new Money({ amount: "0.123456789012345678",
+          asset: quoteAsset }),
       }),
     ],
     commissionStatus: "COMPLETE",
@@ -613,12 +674,16 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
       clientOrderId: "harvester-order-43",
       market,
       side: "BUY",
-      price: new Money({ amount: "100", asset: quoteAsset }),
-      quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
-      quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+      price: new Money({ amount: "100",
+        asset: quoteAsset }),
+      quantity: new Quantity({ amount: "0.1",
+        asset: baseAsset }),
+      quoteQuantity: new Money({ amount: "10",
+        asset: quoteAsset }),
       liquidityRole: "MAKER",
       executedAt: 124,
-      commissions: [new Commission({ amount: new Money({ amount: "0.0001", asset: feeAsset }) })],
+      commissions: [new Commission({ amount: new Money({ amount: "0.0001",
+        asset: feeAsset }) })],
       commissionStatus: "COMPLETE",
     }),
   })
@@ -632,14 +697,20 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
       clientOrderId: "harvester-order-44",
       market,
       side: "BUY",
-      price: new Money({ amount: "100", asset: quoteAsset }),
-      quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
-      quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+      price: new Money({ amount: "100",
+        asset: quoteAsset }),
+      quantity: new Quantity({ amount: "0.1",
+        asset: baseAsset }),
+      quoteQuantity: new Money({ amount: "10",
+        asset: quoteAsset }),
       liquidityRole: "MAKER",
       executedAt: 125,
       commissions: [new Commission({
-        amount: new Money({ amount: "0.0001", asset: new Asset({ id: baseAsset.id, code: "WRONG" }) }),
-        quoteValue: new Money({ amount: "0.01", asset: quoteAsset }),
+        amount: new Money({ amount: "0.0001",
+          asset: new Asset({ id: baseAsset.id,
+            code: "WRONG" }) }),
+        quoteValue: new Money({ amount: "0.01",
+          asset: quoteAsset }),
       })],
       commissionStatus: "COMPLETE",
     }),
@@ -654,22 +725,28 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
       clientOrderId: "harvester-order-45",
       market,
       side: "BUY",
-      price: new Money({ amount: "100", asset: quoteAsset }),
-      quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
-      quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+      price: new Money({ amount: "100",
+        asset: quoteAsset }),
+      quantity: new Quantity({ amount: "0.1",
+        asset: baseAsset }),
+      quoteQuantity: new Money({ amount: "10",
+        asset: quoteAsset }),
       liquidityRole: "MAKER",
       executedAt: 126,
       commissions: [new Commission({
-        amount: new Money({ amount: "0.0001", asset: feeAsset }),
+        amount: new Money({ amount: "0.0001",
+          asset: feeAsset }),
         quoteValue,
       })],
       commissionStatus: "COMPLETE",
     }),
   })
-  assert.equal(invalidQuoteValuation(new Money({ amount: "0", asset: quoteAsset })).ok, false)
+  assert.equal(invalidQuoteValuation(new Money({ amount: "0",
+    asset: quoteAsset })).ok, false)
   assert.equal(invalidQuoteValuation(new Money({
     amount: "0.01",
-    asset: new Asset({ id: "asset:USDC", code: "USDC" }),
+    asset: new Asset({ id: "asset:USDC",
+      code: "USDC" }),
   })).ok, false)
 
   const zeroThirdAssetFee = mapFillAppliedData({
@@ -679,12 +756,16 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
       clientOrderId: "harvester-order-46",
       market,
       side: "BUY",
-      price: new Money({ amount: "100", asset: quoteAsset }),
-      quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
-      quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+      price: new Money({ amount: "100",
+        asset: quoteAsset }),
+      quantity: new Quantity({ amount: "0.1",
+        asset: baseAsset }),
+      quoteQuantity: new Money({ amount: "10",
+        asset: quoteAsset }),
       liquidityRole: "MAKER",
       executedAt: 127,
-      commissions: [new Commission({ amount: new Money({ amount: "0", asset: feeAsset }) })],
+      commissions: [new Commission({ amount: new Money({ amount: "0",
+        asset: feeAsset }) })],
       commissionStatus: "COMPLETE",
     }),
   })
@@ -693,18 +774,26 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
 
 
 test("maps invalid, unowned, and accounting-failed execution facts safely", () => {
-  const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
-  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-  const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+  const baseAsset = new Asset({ id: "asset:DOGE",
+    code: "DOGE" })
+  const quoteAsset = new Asset({ id: "asset:USDT",
+    code: "USDT" })
+  const market = new Market({ venue: "binance",
+    symbol: "DOGEUSDT",
+    baseAsset,
+    quoteAsset })
   const order = new CanonicalOrder({
     clientOrderId: "harvester-client-1",
     brokerOrderId: "broker-order-1",
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "99.95", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0.5", asset: baseAsset }),
+    limitPrice: new Money({ amount: "99.95",
+      asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1",
+      asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0.5",
+      asset: baseAsset }),
     status: "PARTIALLY_FILLED",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -716,18 +805,25 @@ test("maps invalid, unowned, and accounting-failed execution facts safely", () =
     clientOrderId: "harvester-client-1",
     market,
     side: "BUY",
-    price: new Money({ amount: "99.95", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "0.5", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "49.975", asset: quoteAsset }),
+    price: new Money({ amount: "99.95",
+      asset: quoteAsset }),
+    quantity: new Quantity({ amount: "0.5",
+      asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "49.975",
+      asset: quoteAsset }),
     liquidityRole: "MAKER",
     executedAt: 2,
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  assert.equal(mapExecutionUnownedOrderData({ order, apiSecret: "private" }).data.reason,
-    "UNKNOWN_OR_EXTERNAL_ORDER_EVENT")
+  assert.equal(mapExecutionUnownedOrderData({ order,
+    apiSecret: "private" }).data.reason,
+  "UNKNOWN_OR_EXTERNAL_ORDER_EVENT")
   assert.deepEqual(mapExecutionInvalidFillData({
-    order, fill, reason: "IDENTITY_MISMATCH", error: new Error("token=private"),
+    order,
+    fill,
+    reason: "IDENTITY_MISMATCH",
+    error: new Error("token=private"),
   }).data, {
     clientOrderId: "harvester-client-1",
     brokerOrderId: "broker-order-1",
@@ -739,30 +835,56 @@ test("maps invalid, unowned, and accounting-failed execution facts safely", () =
     fillBrokerOrderId: "broker-order-1",
     fillSymbol: "DOGEUSDT",
     fillSide: "BUY",
-    error: { name: "Error", message: "token=[REDACTED]" },
+    error: { name: "Error",
+      message: "token=[REDACTED]" },
   })
   assert.equal(mapExecutionAccountingFailedData({
-    order, fill, error: new Error("commission rejected"),
+    order,
+    fill,
+    error: new Error("commission rejected"),
   }).data.fillId, fill.id)
 })
 
 
 test("maps exact dust quantity and limiting filter into the durable completion event", () => {
   const result = mapRecoveryCycleCompletedData({
-    symbol: "DOGEUSDT", marketId: "market:binance:DOGEUSDT", freeQuantity: "1.8", keepQuantity: "1", minProfit: "0.01", realizedNetProfit: "0.01",
-    dust: { status: "EXCHANGE_CONSTRAINED_DUST", quantity: "0.8", reason: "MIN_NOTIONAL",
-      minimumQuantity: "1", minimumNotional: "5", evaluatedQuantity: "1", evaluatedNotional: "0.07185" },
+    symbol: "DOGEUSDT",
+    marketId: "market:binance:DOGEUSDT",
+    freeQuantity: "1.8",
+    keepQuantity: "1",
+    minProfit: "0.01",
+    realizedNetProfit: "0.01",
+    dust: { status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.8",
+      reason: "MIN_NOTIONAL",
+      minimumQuantity: "1",
+      minimumNotional: "5",
+      evaluatedQuantity: "1",
+      evaluatedNotional: "0.07185" },
   })
   assert.equal(result.ok, true)
-  assert.deepEqual(result.data.dust, { status: "EXCHANGE_CONSTRAINED_DUST", quantity: "0.8", reason: "MIN_NOTIONAL",
-    minimumQuantity: "1", minimumNotional: "5", evaluatedQuantity: "1", evaluatedNotional: "0.07185" })
+  assert.deepEqual(result.data.dust, { status: "EXCHANGE_CONSTRAINED_DUST",
+    quantity: "0.8",
+    reason: "MIN_NOTIONAL",
+    minimumQuantity: "1",
+    minimumNotional: "5",
+    evaluatedQuantity: "1",
+    evaluatedNotional: "0.07185" })
 })
 
 test("maps quantity-step dust with its rounded candidate", () => {
   const result = mapRecoveryCycleCompletedData({
-    symbol: "DOGEUSDT", marketId: "market:binance:DOGEUSDT", freeQuantity: "1.04", keepQuantity: "1", minProfit: "0.01", realizedNetProfit: "0.01",
-    dust: { status: "EXCHANGE_CONSTRAINED_DUST", quantity: "0.04", reason: "QUANTITY_INCREMENT",
-      quantityStepSize: "0.1", evaluatedQuantity: "0" },
+    symbol: "DOGEUSDT",
+    marketId: "market:binance:DOGEUSDT",
+    freeQuantity: "1.04",
+    keepQuantity: "1",
+    minProfit: "0.01",
+    realizedNetProfit: "0.01",
+    dust: { status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.04",
+      reason: "QUANTITY_INCREMENT",
+      quantityStepSize: "0.1",
+      evaluatedQuantity: "0" },
   })
   assert.equal(result.ok, true)
   assert.equal(result.data.dust.evaluatedQuantity, "0")
@@ -770,8 +892,15 @@ test("maps quantity-step dust with its rounded candidate", () => {
 
 test("rejects a durable dust record without limiting-filter values", () => {
   const result = mapRecoveryCycleCompletedData({
-    symbol: "DOGEUSDT", marketId: "market:binance:DOGEUSDT", freeQuantity: "1.8", keepQuantity: "1", minProfit: "0.01", realizedNetProfit: "0.01",
-    dust: { status: "EXCHANGE_CONSTRAINED_DUST", quantity: "0.8", reason: "MIN_NOTIONAL" },
+    symbol: "DOGEUSDT",
+    marketId: "market:binance:DOGEUSDT",
+    freeQuantity: "1.8",
+    keepQuantity: "1",
+    minProfit: "0.01",
+    realizedNetProfit: "0.01",
+    dust: { status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.8",
+      reason: "MIN_NOTIONAL" },
   })
   assert.equal(result.ok, false)
 })
@@ -784,27 +913,41 @@ test("rejects completion events when retained quantity or profit proof is incons
     keepQuantity: "1",
     minProfit: "0.02",
     realizedNetProfit: "0.02",
-    dust: { status: "EXCHANGE_CONSTRAINED_DUST", quantity: "0.04", reason: "QUANTITY_INCREMENT",
-      quantityStepSize: "0.1", evaluatedQuantity: "0" },
+    dust: { status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.04",
+      reason: "QUANTITY_INCREMENT",
+      quantityStepSize: "0.1",
+      evaluatedQuantity: "0" },
   }
-  assert.equal(mapRecoveryCycleCompletedData({ ...base, freeQuantity: "1.03" }).ok, false)
-  assert.equal(mapRecoveryCycleCompletedData({ ...base, realizedNetProfit: "0.019" }).ok, false)
-  assert.equal(mapRecoveryCycleCompletedData({ ...base, minProfit: "0.009" }).ok, false)
+  assert.equal(mapRecoveryCycleCompletedData({ ...base,
+    freeQuantity: "1.03" }).ok, false)
+  assert.equal(mapRecoveryCycleCompletedData({ ...base,
+    realizedNetProfit: "0.019" }).ok, false)
+  assert.equal(mapRecoveryCycleCompletedData({ ...base,
+    minProfit: "0.009" }).ok, false)
 })
 
 test("maps duplicate Fill and recovery-cycle completion DTOs", () => {
-  const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
-  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-  const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+  const baseAsset = new Asset({ id: "asset:DOGE",
+    code: "DOGE" })
+  const quoteAsset = new Asset({ id: "asset:USDT",
+    code: "USDT" })
+  const market = new Market({ venue: "binance",
+    symbol: "DOGEUSDT",
+    baseAsset,
+    quoteAsset })
   const fill = new Fill({
     tradeId: "duplicate-trade",
     brokerOrderId: "broker-order",
     clientOrderId: "harvester-order",
     market,
     side: "SELL",
-    price: new Money({ amount: "101.25", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "0.25", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "25.3125", asset: quoteAsset }),
+    price: new Money({ amount: "101.25",
+      asset: quoteAsset }),
+    quantity: new Quantity({ amount: "0.25",
+      asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "25.3125",
+      asset: quoteAsset }),
     liquidityRole: "TAKER",
     executedAt: 124,
     commissions: [],
@@ -836,28 +979,56 @@ test("maps duplicate Fill and recovery-cycle completion DTOs", () => {
 })
 
 test("maps all account assets into sorted exact-decimal snapshot facts", () => {
-  const balance = (code, free, locked) => ({ asset: { code }, free: { amount: free }, locked: { amount: locked } })
+  const balance = (code, free, locked) => ({ asset: { code },
+    free: { amount: free },
+    locked: { amount: locked } })
   const result = mapAccountSnapshotCapturedData({
     phase: "OPENING",
-    snapshot: { sourceTime: 1730740000000, balances: [balance("USDT", "12.3400", "1.66"), balance("DOGE", "12321", "0"), balance("BNB", "0.2", "0.01")] },
+    snapshot: { sourceTime: 1730740000000,
+      balances: [balance("USDT", "12.3400", "1.66"), balance("DOGE", "12321", "0"), balance("BNB", "0.2", "0.01")] },
   })
   assert.equal(result.ok, true)
   assert.deepEqual(result.data.balances, [
-    { asset: "BNB", free: "0.2", locked: "0.01", total: "0.21" },
-    { asset: "DOGE", free: "12321", locked: "0", total: "12321" },
-    { asset: "USDT", free: "12.3400", locked: "1.66", total: "14" },
+    { asset: "BNB",
+      free: "0.2",
+      locked: "0.01",
+      total: "0.21" },
+    { asset: "DOGE",
+      free: "12321",
+      locked: "0",
+      total: "12321" },
+    { asset: "USDT",
+      free: "12.3400",
+      locked: "1.66",
+      total: "14" },
   ])
   assert.equal(result.data.assetCount, 3)
   assert.equal(result.data.auditStatus, "COMPLETE")
 })
 
 test("rejects invalid account snapshot phase, decimals, duplicate assets and incomplete reasons", () => {
-  const balance = { asset: { code: "USDT" }, free: { amount: "1" }, locked: { amount: "0" } }
-  assert.equal(mapAccountSnapshotCapturedData({ phase: "MID", snapshot: { sourceTime: 1, balances: [balance] } }).ok, false)
-  assert.equal(mapAccountSnapshotCapturedData({ phase: "OPENING", snapshot: { sourceTime: 1, balances: [{ ...balance, free: { amount: "NaN" } }] } }).ok, false)
-  assert.equal(mapAccountSnapshotCapturedData({ phase: "CLOSING", auditStatus: "INCOMPLETE", snapshot: { sourceTime: 1, balances: [balance] } }).ok, false)
-  assert.equal(mapAccountSnapshotCapturedData({ phase: "CLOSING", snapshot: { sourceTime: 1, balances: [balance, balance] } }).ok, false)
-  assert.equal(mapAccountSnapshotCapturedData({ phase: "CLOSING", auditStatus: "INCOMPLETE", auditReasons: ["OPEN_ORDERS"], snapshot: { sourceTime: 1, balances: [balance] } }).ok, true)
+  const balance = { asset: { code: "USDT" },
+    free: { amount: "1" },
+    locked: { amount: "0" } }
+  assert.equal(mapAccountSnapshotCapturedData({ phase: "MID",
+    snapshot: { sourceTime: 1,
+      balances: [balance] } }).ok, false)
+  assert.equal(mapAccountSnapshotCapturedData({ phase: "OPENING",
+    snapshot: { sourceTime: 1,
+      balances: [{ ...balance,
+        free: { amount: "NaN" } }] } }).ok, false)
+  assert.equal(mapAccountSnapshotCapturedData({ phase: "CLOSING",
+    auditStatus: "INCOMPLETE",
+    snapshot: { sourceTime: 1,
+      balances: [balance] } }).ok, false)
+  assert.equal(mapAccountSnapshotCapturedData({ phase: "CLOSING",
+    snapshot: { sourceTime: 1,
+      balances: [balance, balance] } }).ok, false)
+  assert.equal(mapAccountSnapshotCapturedData({ phase: "CLOSING",
+    auditStatus: "INCOMPLETE",
+    auditReasons: ["OPEN_ORDERS"],
+    snapshot: { sourceTime: 1,
+      balances: [balance] } }).ok, true)
 })
 
 
@@ -902,30 +1073,55 @@ test("maps complete account-wide open orders and classifies unowned orders witho
     },
   })
   assert.equal(mapAccountOpenOrdersCapturedData({
-    phase: "OPENING", observedAt: 1, orders: [], readiness: "READY",
+    phase: "OPENING",
+    observedAt: 1,
+    orders: [],
+    readiness: "READY",
   }).ok, true)
   assert.equal(mapAccountOpenOrdersCapturedData({
-    phase: "OPENING", observedAt: 1, orders: [order], readiness: "READY",
+    phase: "OPENING",
+    observedAt: 1,
+    orders: [order],
+    readiness: "READY",
   }).ok, false)
   assert.equal(mapAccountOpenOrdersCapturedData({
-    phase: "OPENING", observedAt: 1, orders: [order], readiness: "RECONCILED",
+    phase: "OPENING",
+    observedAt: 1,
+    orders: [order],
+    readiness: "RECONCILED",
   }).ok, true)
   assert.equal(mapAccountOpenOrdersCapturedData({
-    phase: "OPENING", observedAt: 1, orders: [], readiness: "RECONCILED",
+    phase: "OPENING",
+    observedAt: 1,
+    orders: [],
+    readiness: "RECONCILED",
   }).ok, false)
 })
 
 
 test("maps versioned broker execution evidence and rejects untrusted payloads", () => {
   const result = mapBrokerExecutionReportData({ evidence: {
-    schemaVersion: 1, source: "binance.spot.userData.executionReport",
-    eventTime: 1730000000000, transactionTime: 1730000000001,
-    symbol: "DOGEUSDT", clientOrderId: "h-DOGEUSDT-8", side: "SELL",
-    executionType: "TRADE", orderStatus: "PARTIALLY_FILLED", orderId: 12345,
-    executionId: 987654, orderCreationTime: 1729999999000,
-    orderQuantity: "10", lastExecutedQuantity: "4", cumulativeExecutedQuantity: "4",
-    commissionAmount: "0.0006", commissionAsset: "USDT", tradeId: 98765,
-    cumulativeQuoteQuantity: "0.6", isMaker: true, apiKey: "not-copied",
+    schemaVersion: 1,
+    source: "binance.spot.userData.executionReport",
+    eventTime: 1730000000000,
+    transactionTime: 1730000000001,
+    symbol: "DOGEUSDT",
+    clientOrderId: "h-DOGEUSDT-8",
+    side: "SELL",
+    executionType: "TRADE",
+    orderStatus: "PARTIALLY_FILLED",
+    orderId: 12345,
+    executionId: 987654,
+    orderCreationTime: 1729999999000,
+    orderQuantity: "10",
+    lastExecutedQuantity: "4",
+    cumulativeExecutedQuantity: "4",
+    commissionAmount: "0.0006",
+    commissionAsset: "USDT",
+    tradeId: 98765,
+    cumulativeQuoteQuantity: "0.6",
+    isMaker: true,
+    apiKey: "not-copied",
   } })
   assert.equal(result.ok, true)
   assert.equal(result.data.cumulativeQuoteQuantity, "0.6")
@@ -934,26 +1130,48 @@ test("maps versioned broker execution evidence and rejects untrusted payloads", 
   assert.equal(result.data.executionId, "987654")
   assert.equal(result.data.orderCreationTime, 1729999999000)
   assert.equal("apiKey" in result.data, false)
-  assert.equal(mapBrokerExecutionReportData({ evidence: { schemaVersion: 1, source: "wrong" } }).ok, false)
+  assert.equal(mapBrokerExecutionReportData({ evidence: { schemaVersion: 1,
+    source: "wrong" } }).ok, false)
   assert.equal(mapBrokerExecutionReportData({ evidence: {
-    schemaVersion: 1, source: "binance.spot.userData.executionReport", orderQuantity: "NaN",
+    schemaVersion: 1,
+    source: "binance.spot.userData.executionReport",
+    orderQuantity: "NaN",
   } }).ok, false)
 })
 
 test("strategy decision event retains reason and exact decision inputs", () => {
   const result = mapStrategyDecisionData({
-    strategy: "CONSERVATIVE", symbol: "DOGEUSDT", referencePrice: "100",
+    strategy: "CONSERVATIVE",
+    symbol: "DOGEUSDT",
+    referencePrice: "100",
     reason: "INITIAL_BUY",
     inputs: {
-      lastBuyPrice: null, activeOrderCount: 0, activeBuyCount: 0, activeSellCount: 0,
-      activeBaseQuantity: "0", activeBaseBalance: "0",
-      freeQuoteBalance: "1000", freeBaseBalance: "0", quoteCashFlow: "0",
-      committedQuote: "0", committedQuoteBalance: "0", committedBase: "0",
-      committedBaseBalance: "0", outstandingRecoveryAmount: "0", investmentLimit: "1000",
-      orderQuantity: "1", keepQuantity: "0.1", priceStepPercent: "0.05",
-      makerPercent: "0", takerPercent: "0.075", minProfit: "0.01",
+      lastBuyPrice: null,
+      activeOrderCount: 0,
+      activeBuyCount: 0,
+      activeSellCount: 0,
+      activeBaseQuantity: "0",
+      activeBaseBalance: "0",
+      freeQuoteBalance: "1000",
+      freeBaseBalance: "0",
+      quoteCashFlow: "0",
+      committedQuote: "0",
+      committedQuoteBalance: "0",
+      committedBase: "0",
+      committedBaseBalance: "0",
+      outstandingRecoveryAmount: "0",
+      investmentLimit: "1000",
+      orderQuantity: "1",
+      keepQuantity: "0.1",
+      priceStepPercent: "0.05",
+      makerPercent: "0",
+      takerPercent: "0.075",
+      minProfit: "0.01",
     },
-    actions: [{ side: "BUY", type: "LIMIT_MAKER", price: "99.95", quantity: "1" }],
+    actions: [{ side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "99.95",
+      quantity: "1" }],
   })
   assert.equal(result.ok, true)
   assert.equal(result.data.reason, "INITIAL_BUY")
@@ -967,7 +1185,9 @@ test("retains a safe structured broker error code", () => {
     error: Object.assign(new Error("order rejected"), { code: -1013 }),
   })
   assert.equal(result.ok, true)
-  assert.deepEqual(result.data.error, { name: "Error", message: "order rejected", code: -1013 })
+  assert.deepEqual(result.data.error, { name: "Error",
+    message: "order rejected",
+    code: -1013 })
 })
 
 
@@ -975,14 +1195,20 @@ test("maps the exact validated exchange trading rules as a bounded plain DTO", (
   const result = mapMarketTradingRulesCapturedData({
     metadata: {
       market: {
-        venue: "binance", symbol: "DOGEUSDT",
-        baseAsset: { code: "DOGE" }, quoteAsset: { code: "USDT" },
+        venue: "binance",
+        symbol: "DOGEUSDT",
+        baseAsset: { code: "DOGE" },
+        quoteAsset: { code: "USDT" },
       },
       orderType: "LIMIT_MAKER",
       supportedOrderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
       tradingRules: { constraints: [
-        { type: "PRICE_INCREMENT", status: "SUPPORTED", value: { amount: "0.00001", asset: { code: "USDT" } } },
-        { type: "MAX_NOTIONAL", status: "UNSUPPORTED" },
+        { type: "PRICE_INCREMENT",
+          status: "SUPPORTED",
+          value: { amount: "0.00001",
+            asset: { code: "USDT" } } },
+        { type: "MAX_NOTIONAL",
+          status: "UNSUPPORTED" },
       ] },
     },
   })
@@ -1071,27 +1297,42 @@ test("keeps missing build provenance explicit and rejects malformed process iden
 
   assert.equal(unavailable.ok, true, "a process-start event must remain valid when Git provenance is unavailable")
   assert.deepEqual(unavailable.data.source, unavailableSource, "unavailable provenance must be represented with explicit null and unknown values")
-  assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity, processId: "12345" }).ok, false, "process IDs must be numeric safe integers")
-  assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity, startedAt: "not-a-timestamp" }).ok, false, "process-start timestamps must be valid ISO date strings")
-  assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity, startedAt: "2026-11-09" }).ok, false, "process-start timestamps must be canonical UTC ISO values, not date-only strings")
-  assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity, source: { ...validProcessIdentity.source, commit: "not-a-sha" } }).ok, false, "Git commit identities must be validated before Journal publication")
-  assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity, source: { ...validProcessIdentity.source, metadataSource: "guessed" } }).ok, false, "provenance source must use one of the documented capture outcomes")
+  assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity,
+    processId: "12345" }).ok, false, "process IDs must be numeric safe integers")
+  assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity,
+    startedAt: "not-a-timestamp" }).ok, false, "process-start timestamps must be valid ISO date strings")
+  assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity,
+    startedAt: "2026-11-09" }).ok, false, "process-start timestamps must be canonical UTC ISO values, not date-only strings")
+  assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity,
+    source: { ...validProcessIdentity.source,
+      commit: "not-a-sha" } }).ok, false, "Git commit identities must be validated before Journal publication")
+  assert.equal(mapHarvesterProcessStartedData({ ...validProcessIdentity,
+    source: { ...validProcessIdentity.source,
+      metadataSource: "guessed" } }).ok, false, "provenance source must use one of the documented capture outcomes")
 })
 
 
 test("rejects lossy numeric timestamps at the Journal DTO boundary", () => {
-  const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
-  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-  const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+  const baseAsset = new Asset({ id: "asset:DOGE",
+    code: "DOGE" })
+  const quoteAsset = new Asset({ id: "asset:USDT",
+    code: "USDT" })
+  const market = new Market({ venue: "binance",
+    symbol: "DOGEUSDT",
+    baseAsset,
+    quoteAsset })
   const makeOrder = (updatedAt) => new CanonicalOrder({
     clientOrderId: "harvester-client-timestamp",
     brokerOrderId: "broker-order-timestamp",
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "99.95", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    limitPrice: new Money({ amount: "99.95",
+      asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1",
+      asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+      asset: baseAsset }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -1103,9 +1344,12 @@ test("rejects lossy numeric timestamps at the Journal DTO boundary", () => {
     clientOrderId: "harvester-client-timestamp",
     market,
     side: "BUY",
-    price: new Money({ amount: "99.95", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "1", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "99.95", asset: quoteAsset }),
+    price: new Money({ amount: "99.95",
+      asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1",
+      asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "99.95",
+      asset: quoteAsset }),
     liquidityRole: "MAKER",
     executedAt,
     commissions: [],
@@ -1165,7 +1409,8 @@ test("rejects lossy numeric timestamps at the Journal DTO boundary", () => {
   assert.equal(
     mapAccountSnapshotCapturedData({
       phase: "OPENING",
-      snapshot: { sourceTime: -0, balances: [] },
+      snapshot: { sourceTime: -0,
+        balances: [] },
     }).ok,
     false,
     "Account snapshot sourceTime must reject negative zero.",
@@ -1173,7 +1418,8 @@ test("rejects lossy numeric timestamps at the Journal DTO boundary", () => {
   assert.equal(
     mapAccountSnapshotCapturedData({
       phase: "OPENING",
-      snapshot: { sourceTime: -1, balances: [] },
+      snapshot: { sourceTime: -1,
+        balances: [] },
     }).ok,
     false,
     "Account snapshot sourceTime must reject negative timestamps.",
@@ -1182,7 +1428,8 @@ test("rejects lossy numeric timestamps at the Journal DTO boundary", () => {
     assert.equal(
       mapAccountSnapshotCapturedData({
         phase: "OPENING",
-        snapshot: { sourceTime: invalidTimestamp, balances: [] },
+        snapshot: { sourceTime: invalidTimestamp,
+          balances: [] },
       }).ok,
       false,
       `Account snapshot sourceTime must reject ${String(invalidTimestamp)}.`,
@@ -1201,18 +1448,26 @@ test("rejects lossy numeric timestamps at the Journal DTO boundary", () => {
 })
 
 test("preserves valid zero timestamps and omits negative-zero optional diagnostics", () => {
-  const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
-  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-  const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+  const baseAsset = new Asset({ id: "asset:DOGE",
+    code: "DOGE" })
+  const quoteAsset = new Asset({ id: "asset:USDT",
+    code: "USDT" })
+  const market = new Market({ venue: "binance",
+    symbol: "DOGEUSDT",
+    baseAsset,
+    quoteAsset })
   const order = new CanonicalOrder({
     clientOrderId: "harvester-client-zero",
     brokerOrderId: "broker-order-zero",
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "99.95", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    limitPrice: new Money({ amount: "99.95",
+      asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1",
+      asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+      asset: baseAsset }),
     status: "OPEN",
     createdAt: 0,
     acknowledgedAt: 0,
@@ -1229,7 +1484,8 @@ test("preserves valid zero timestamps and omits negative-zero optional diagnosti
   assert.equal(
     mapAccountSnapshotCapturedData({
       phase: "OPENING",
-      snapshot: { sourceTime: 0, balances: [] },
+      snapshot: { sourceTime: 0,
+        balances: [] },
     }).ok,
     true,
     "Account snapshot sourceTime zero must remain valid.",
@@ -1293,7 +1549,10 @@ test("preserves valid zero timestamps and omits negative-zero optional diagnosti
       activeSellCount: 0,
       freeQuoteBalance: "1000",
     },
-    actions: [{ side: "BUY", type: "LIMIT_MAKER", price: "99.95", quantity: "1" }],
+    actions: [{ side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "99.95",
+      quantity: "1" }],
   })
   assert.equal(decision.ok, true, "An optional negative-zero count must not invalidate the decision event.")
   assert.equal(
@@ -1364,7 +1623,14 @@ test("maps explicit residual sell-through and blocked recovery-cycle outcomes", 
   assert.equal(blocked.ok, true)
   assert.equal(blocked.data.outcome, "BLOCKED")
 
-  assert.equal(mapRecoveryCycleNotCompletedData({ ...base, outcome: "CONTINUE_SELL_THROUGH", reason: "RECOVERY_SELL_FAILED_MIN_PROFIT" }).ok, false)
-  assert.equal(mapRecoveryCycleNotCompletedData({ ...base, outcome: "CONTINUE_SELL_THROUGH", reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY", activeQuantity: "0.01" }).ok, false)
-  assert.equal(mapRecoveryCycleNotCompletedData({ ...base, outcome: "BLOCKED", reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" }).ok, false)
+  assert.equal(mapRecoveryCycleNotCompletedData({ ...base,
+    outcome: "CONTINUE_SELL_THROUGH",
+    reason: "RECOVERY_SELL_FAILED_MIN_PROFIT" }).ok, false)
+  assert.equal(mapRecoveryCycleNotCompletedData({ ...base,
+    outcome: "CONTINUE_SELL_THROUGH",
+    reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+    activeQuantity: "0.01" }).ok, false)
+  assert.equal(mapRecoveryCycleNotCompletedData({ ...base,
+    outcome: "BLOCKED",
+    reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" }).ok, false)
 })
