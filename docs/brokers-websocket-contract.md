@@ -109,7 +109,7 @@ The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The curren
 | `getOpenOrders({ symbol })` | `POST /api/spot/v1/order/pending/list` | Symbol required. |
 | `getOrderHistory({ symbol, status?, side?, type?, startTime?, endTime?, page?, limit? })` | `POST /api/spot/v1/order/history/page` | Symbol required; no exact order-ID filter. Canonical statuses (`OPEN`, `FILLED`, `PARTIALLY_FILLED`, `CANCELED`, `PARTIALLY_FILLED_CANCELED`), sides (`BUY`, `SELL`) and types (`LIMIT`, `MARKET`) are translated to Bitunix numeric codes inside the adapter. Validates non-negative safe-integer `total`, positive integer `pageNum` (string or number) matching the requested page, and the `data[]` shape; omitted `data` is accepted only when `total` is zero. Returns the requested page only; no automatic pagination or sorting is claimed. |
 | `getOrder({ symbol, orderId })` | `GET /api/spot/v1/order/detail` | Response identity is validated. |
-| `getPrices({ symbol })` | `GET /api/spot/v1/market/last_price` | Request/response lookup only; maps the returned price string to `{ symbol, price }`. |
+| `getPrices({ symbol })` | `GET /api/spot/v1/market/last_price` | Request/response lookup only; requires a strictly positive decimal string and preserves it exactly in `{ symbol, price }`. No source timestamp is provided. |
 | `getFills({ symbol, orderId })` | Blocked; no request is sent | The documented matching-order response does not define quantity denomination, complete partial-execution coverage, or stable/unique execution identity. No canonical `Fill` is emitted until Bitunix clarifies these semantics. |
 
 Mutations and lifecycle-dependent methods are deliberately unavailable:

@@ -1,4 +1,4 @@
-import { assertDecimalString, handleErr, toResult } from "@coinzilla/utils"
+import { assertDecimalString, compareDecimal, handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { BitunixRestClient } from "./api/rest-client.js"
 import { adaptAssets } from "./adapters/adapt-assets.js"
@@ -423,6 +423,12 @@ export class BitunixSpotBroker extends CoreBroker {
         value: response.data,
         field: "Bitunix Spot last price",
       })
+      if (compareDecimal({
+        left: response.data,
+        right: "0",
+      }) <= 0) {
+        throw new RangeError("Bitunix Spot last price must be positive")
+      }
       return toResult({
         data: {
           symbol: normalizedSymbol,
