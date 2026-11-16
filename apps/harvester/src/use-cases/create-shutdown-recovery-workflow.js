@@ -356,12 +356,23 @@ async function cancelStaleShutdownRecoverySells({ dependencies, symbol, assessme
 }
 
 function getShutdownRecoveryReplacementBlocker({ dependencies, symbol } = {}) {
-  if (!dependencies.state.paused.has(symbol) &&
-      !dependencies.hasBlockingOpenOrdersForSymbol({ symbol })) {return null}
-  return shutdownRecoveryError({
+  const { state } = dependencies
+  const recoveryManagedPause = state.recoveryManagedPausedMarkets?.has(symbol) === true &&
+    state.durablePausedMarkets?.has(symbol) !== true &&
+    state.operatorPausedMarkets?.has(symbol) !== true &&
+    state.replacementIntents?.has(symbol) !== true &&
+    state.trailingBuyRepriceIntents?.has(symbol) !== true &&
+    ![...(state.recoveryManagedCancellationClientOrderIds ?? [])].some((clientOrderId) =>
+      state.registry.getOrder({ clientOrderId })?.market.symbol === symbol)
+  if (
+    (state.paused.has(symbol) && !recoveryManagedPause) ||
+    hasBlockingOpenOrdersForSymbol({ symbol })
+  ) {
+    return shutdownRecoveryError({
     code: "SHUTDOWN_RECOVERY_REPLACEMENT_BLOCKED",
-    message: `Shutdown recovery SELL replacement is blocked for ${symbol}`,
-  })
+      message: `Shutdown recovery SELL replacement is blocked for ${symbol}`,
+    })
+  }
 }
 
 function getShutdownRecoveryReplacementDeferredFailure({ replacement, symbol } = {}) {
