@@ -4,7 +4,7 @@ import { toResult } from "@coinzilla/utils"
 const OUTCOMES = new Set(["ACKNOWLEDGED", "REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"])
 const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_SELL"])
 
-function validateSubmissionOutcome({ operationalStateStore, order, outcome, purpose }) {
+function validateSubmissionStoreAndOrder({ operationalStateStore, order, outcome, purpose }) {
   if (typeof operationalStateStore?.append !== "function") {
     throw new TypeError("recordOrderSubmissionOutcome requires a Operational State Store append capability")
   }
@@ -17,7 +17,9 @@ function validateSubmissionOutcome({ operationalStateStore, order, outcome, purp
   if (!SUPPORTED_PURPOSES.has(purpose)) {
     throw new TypeError("Order-submission outcome purpose must be null or RECOVERY_SELL")
   }
+}
 
+function validateSubmissionAcknowledgement({ order, outcome }) {
   const acknowledged = outcome === "ACKNOWLEDGED"
   if (acknowledged !== (typeof order.brokerOrderId === "string" && order.status !== "PENDING")) {
     throw new TypeError("Submission outcome classification contradicts canonical broker acknowledgement state")
@@ -25,8 +27,10 @@ function validateSubmissionOutcome({ operationalStateStore, order, outcome, purp
   if (!acknowledged && order.executedQuantity.amount !== "0") {
     throw new TypeError("Unacknowledged submission outcome cannot contain an execution")
   }
+  return acknowledged
+}
 
-  const { market } = order
+function validateSubmissionMarket({ market }) {
   const requiredMarketValues = [
     market?.id,
     market?.venue,
@@ -37,14 +41,27 @@ function validateSubmissionOutcome({ operationalStateStore, order, outcome, purp
   if (requiredMarketValues.some((value) => typeof value !== "string" || !value.trim())) {
     throw new TypeError("Order-submission outcome requires complete canonical market and asset identities")
   }
+}
+
+function validateSubmissionOrderType({ order }) {
   if ((order.side !== "BUY" && order.side !== "SELL") ||
       (order.type !== "LIMIT" && order.type !== "LIMIT_MAKER")) {
     throw new TypeError("Order-submission outcome has an unsupported side or order type")
   }
-  return { market, 
-    clientOrderId: order.clientOrderId, 
-    acknowledged }
 }
+
+function validateSubmissionOutcome(options) {
+  const { operationalStateStore, order, outcome, purpose } = options
+  validateSubmissionStoreAndOrder({ operationalStateStore, order, outcome, purpose })
+  const acknowledged = validateSubmissionAcknowledgement({ order, outcome })
+  const { market } = order
+  validateSubmissionMarket({ market })
+  validateSubmissionOrderType({ order })
+  return {
+    market,
+    clientOrderId: order.clientOrderId,
+    acknowledged,
+  }
 
 /**
  * Persist the broker's classified submission outcome before local order state advances.
