@@ -52,7 +52,9 @@ export class Portfolio {
         typeof item.strategyId !== "string" ||
         !item.strategyId.trim() ||
         (item.allocationFingerprint !== undefined &&
-          (typeof item.allocationFingerprint !== "string" || !item.allocationFingerprint.trim()))
+          (typeof item.allocationFingerprint !== "string" || !item.allocationFingerprint.trim())) ||
+        (item.allocationSideFingerprint !== undefined &&
+          (typeof item.allocationSideFingerprint !== "string" || !item.allocationSideFingerprint.trim()))
       )
     ) {
       throw new TypeError("Portfolio.appliedFillFingerprints must contain fill identity and ownership records")
@@ -219,6 +221,7 @@ export class Portfolio {
     }) > 0) {
       throw new RangeError("Allocated SELL quantity exceeds canonical Fill quantity")
     }
+    const allocationSideFingerprint = JSON.stringify(allocationSide)
     const fingerprint = createFillFingerprint({ fill })
     const existingFingerprint = this.#appliedFillFingerprints.find((item) => item.id === fill.id)
     if (existingFingerprint) {
@@ -230,6 +233,9 @@ export class Portfolio {
       }
       if (existingFingerprint.allocationFingerprint !== allocationFingerprint) {
         throw new Error(`Conflicting allocation facts reused Fill ID ${fill.id}`)
+      }
+      if (existingFingerprint.allocationSideFingerprint !== allocationSideFingerprint) {
+        throw new Error(`Conflicting allocation side reused Fill ID ${fill.id}`)
       }
       return Object.freeze({
         portfolio: this,
@@ -252,6 +258,7 @@ export class Portfolio {
             positionId: id,
             strategyId: owner,
             allocationFingerprint,
+            allocationSideFingerprint,
           },
         ],
       }),
