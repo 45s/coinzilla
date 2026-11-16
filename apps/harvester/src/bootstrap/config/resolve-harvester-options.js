@@ -21,15 +21,18 @@ function assertSupportedStrategyConfig(strategyConfig) {
 }
 export async function resolveHarvesterOptions({ configSource, appConfig: suppliedAppConfig, loadConfig, env = process.env, eventPublisher, logger } = {}) {
   const loadedAppConfig = suppliedAppConfig ?? await loadConfig(configSource)
-  const configuredAppConfig = resolveTelegramOperatorConfig({ appConfig: loadedAppConfig, env })
+  const configuredAppConfig = resolveTelegramOperatorConfig({ appConfig: loadedAppConfig,
+env })
   const strategyConfig = configuredAppConfig.strategies?.CG_coinGrabber
   assertSupportedStrategyConfig(strategyConfig)
-  const runtime = resolveRuntimeConfig({ tradingMode: env.TRADING_MODE, environment: env.NODE_ENV })
+  const runtime = resolveRuntimeConfig({ tradingMode: env.TRADING_MODE,
+environment: env.NODE_ENV })
   const { environment, brokerName, tradingMode, tradingEnabled } = runtime
   if (Object.keys(strategyConfig.pairs ?? {}).length === 0) {
     throw new Error("Conservative trading requires at least one enabled pair")
   }
-  const pairs = selectPairsForTradingMode({ pairs: strategyConfig.pairs, tradingMode })
+  const pairs = selectPairsForTradingMode({ pairs: strategyConfig.pairs,
+tradingMode })
   if (Object.keys(pairs).length === 0) {
     throw new Error(`No CG_coinGrabber pairs configured for TRADING_MODE=${tradingMode}; configure a pair with tradingEnvironment="${tradingMode}" or "both"`)
   }
@@ -38,7 +41,8 @@ export async function resolveHarvesterOptions({ configSource, appConfig: supplie
     ...configuredAppConfig,
     strategies: {
       ...configuredAppConfig.strategies,
-      CG_coinGrabber: { ...strategyConfig, pairs },
+      CG_coinGrabber: { ...strategyConfig,
+pairs },
     },
   }
   const effectiveConfiguration = createEffectiveStrategyConfigurationFingerprint({
@@ -64,7 +68,12 @@ export async function resolveHarvesterOptions({ configSource, appConfig: supplie
     eventName: HARVESTER_EVENT_NAMES.CONFIG_VALIDATED,
     dataResult: validatedConfigurationData,
   })
-  const log = { message: "App configuration validated", environment, broker: brokerName, tradingMode, enabledSymbols, strategyMode: `conservative-${tradingMode}` }
+  const log = { message: "App configuration validated",
+environment,
+broker: brokerName,
+tradingMode,
+enabledSymbols,
+strategyMode: `conservative-${tradingMode}` }
   if (typeof logger?.system === "function") {
     logger.system(log)
   } else {

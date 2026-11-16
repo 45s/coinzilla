@@ -2,7 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { createUserDataRecoveryHandler } from "./create-user-data-recovery-handler.js"
 
-const test = (name, ...args) => nodeTest("[create-user-data-recovery-handler.test.js] " + name, ...args)
+const test = (...args) => nodeTest(`[create-user-data-recovery-handler.test.js] ${args[0]}`, ...args.slice(1))
 
 const createState = (overrides = {}) => ({
   ready: false,
@@ -21,8 +21,15 @@ const createState = (overrides = {}) => ({
 })
 
 const createRecovery = ({ state = createState(), reconcileOwnedOrders, getOpenOrders, refreshAccountSnapshot, publishAccountSnapshot, publishOpenOrdersSnapshot, acknowledgeRecovery, acknowledgeRecoveryResult, drainUserDataEvents, setCanonicalOwnershipReconciled } = {}) => {
-  const calls = { acknowledgements: 0, acknowledgementResults: 0, brokerRecoveryGenerations: [], accountAudits: [], orderAudits: [], drains: 0, ownershipReconciled: false }
-  const logs = { info: [], error: [] }
+  const calls = { acknowledgements: 0,
+acknowledgementResults: 0,
+brokerRecoveryGenerations: [],
+accountAudits: [],
+orderAudits: [],
+drains: 0,
+ownershipReconciled: false }
+  const logs = { info: [],
+error: [] }
   const userDataSubscription = {
     acknowledgeRecovery: () => {
       calls.acknowledgements += 1
@@ -37,18 +44,20 @@ const createRecovery = ({ state = createState(), reconcileOwnedOrders, getOpenOr
     } : {}),
   }
   const broker = {
-    getOpenOrders: async () => getOpenOrders ? getOpenOrders(calls, state) : ({ ok: true, data: [] }),
+    getOpenOrders: async () => getOpenOrders ? getOpenOrders(calls, state) : ({ ok: true,
+data: [] }),
   }
   const start = createUserDataRecoveryHandler({
     state,
     isStopped: () => false,
     getUserDataSubscription: () => userDataSubscription,
-    getTradingEngine: () => ({ reconcileOwnedOrders: reconcileOwnedOrders ?? (async () => ({ ok: true, data: { reconciled: 2 } })) }),
+    getTradingEngine: () => ({ reconcileOwnedOrders: reconcileOwnedOrders ?? (async () => ({ ok: true,
+data: { reconciled: 2 } })) }),
     tradingEnabled: true,
     broker,
     drainUserDataEvents: async () => {
       calls.drains += 1
-      if (drainUserDataEvents) await drainUserDataEvents(calls, state)
+      if (drainUserDataEvents) {await drainUserDataEvents(calls, state)}
     },
     setCanonicalOwnershipReconciled: (value) => {
       calls.ownershipReconciled = value
@@ -57,18 +66,21 @@ const createRecovery = ({ state = createState(), reconcileOwnedOrders, getOpenOr
     refreshAccountSnapshot: async () => refreshAccountSnapshot ? refreshAccountSnapshot(calls) : ({ sourceTime: 100 }),
     publishAccountSnapshot: async (input) => {
       calls.accountAudits.push(input)
-      if (publishAccountSnapshot) await publishAccountSnapshot(input, calls)
+      if (publishAccountSnapshot) {await publishAccountSnapshot(input, calls)}
     },
     publishOpenOrdersSnapshot: async (input) => {
       calls.orderAudits.push(input)
-      if (publishOpenOrdersSnapshot) await publishOpenOrdersSnapshot(input, calls)
+      if (publishOpenOrdersSnapshot) {await publishOpenOrdersSnapshot(input, calls)}
     },
     logger: {
       info: (entry) => { logs.info.push(entry) },
       error: (entry) => { logs.error.push(entry) },
     },
   })
-  return { start, state, calls, logs }
+  return { start,
+state,
+calls,
+logs }
 }
 
 test("waits for user-data startup completion before beginning recovery", () => {
@@ -100,7 +112,8 @@ test("acknowledges recovery only after owned-order reconciliation and durable ac
 
 test("records local acknowledgement but keeps readiness blocked until global reconciliation completes", async () => {
   const fixture = createRecovery({
-    acknowledgeRecoveryResult: () => ({ accepted: true, completed: false }),
+    acknowledgeRecoveryResult: () => ({ accepted: true,
+completed: false }),
   })
   fixture.start()
   await fixture.state.recoveryTask
@@ -117,7 +130,9 @@ test("records local acknowledgement but keeps readiness blocked until global rec
 test("does not call the result acknowledgement API when the broker generation token is missing", async () => {
   const fixture = createRecovery({
     state: createState({ recoveryBrokerGeneration: null }),
-    acknowledgeRecoveryResult: () => ({ accepted: false, completed: false, reason: "stale-recovery-generation" }),
+    acknowledgeRecoveryResult: () => ({ accepted: false,
+completed: false,
+reason: "stale-recovery-generation" }),
   })
   fixture.start()
   await fixture.state.recoveryTask
@@ -162,7 +177,8 @@ test("does not acknowledge a recovery generation superseded during order reconci
   const fixture = createRecovery({ reconcileOwnedOrders: () => reconciliation })
   fixture.start()
   fixture.state.recoveryGeneration += 1
-  resolveReconciliation({ ok: true, data: { reconciled: 2 } })
+  resolveReconciliation({ ok: true,
+data: { reconciled: 2 } })
   await fixture.state.recoveryTask
 
   assert.equal(fixture.state.requiresReconciliation, true, "A superseded generation must remain blocked.")
@@ -181,7 +197,8 @@ test("does not certify canonical ownership when accounting fails during owned-or
   const fixture = createRecovery({ reconcileOwnedOrders: () => reconciliation })
   fixture.start()
   fixture.state.accountingFailed = true
-  resolveReconciliation({ ok: true, data: { reconciled: 2 } })
+  resolveReconciliation({ ok: true,
+data: { reconciled: 2 } })
   await fixture.state.recoveryTask
 
   assert.equal(
@@ -229,10 +246,12 @@ test("does not certify canonical ownership when accounting fails during owned-or
 test("repeats REST snapshots when a user-data event arrives during the audit window", async () => {
   let openOrderReads = 0
   const fixture = createRecovery({
-    getOpenOrders: async (_calls, state) => {
+    getOpenOrders: async (...args) => {
+      const [, state] = args
       openOrderReads += 1
-      if (openOrderReads === 1) state.eventSequence += 1
-      return { ok: true, data: [] }
+      if (openOrderReads === 1) {state.eventSequence += 1}
+      return { ok: true,
+data: [] }
     },
   })
   fixture.start()
@@ -379,7 +398,8 @@ test("does not mark another recovery request pending while reconciliation is alr
     "A reminder received during an active recovery task must not be mislabeled as a pre-startup pending request.",
   )
 
-  resolveReconciliation({ ok: true, data: { reconciled: 2 } })
+  resolveReconciliation({ ok: true,
+data: { reconciled: 2 } })
   await inFlightRecovery
 
   assert.equal(
@@ -441,7 +461,8 @@ test("does not leave recovery pending when startup is complete but recovery is b
 test("does not acknowledge after a queued retryable event failure and retries on a later recovery reminder", async () => {
   let failFirstDrain = true
   const fixture = createRecovery({
-    drainUserDataEvents: async (calls, state) => {
+    drainUserDataEvents: async (...args) => {
+      const [, state] = args
       if (failFirstDrain) {
         failFirstDrain = false
         state.retryableRecoveryFailure = {
@@ -533,7 +554,9 @@ test("keeps recovery blocked when owned-order reconciliation returns a failed re
     reconcileOwnedOrders: async () => ({
       ok: false,
       errors: [new Error("canonical owned-order history unavailable")],
-      failure: { category: "REST_RECONCILIATION", stage: "OWNED_ORDER_HISTORY_READ", retryable: true },
+      failure: { category: "REST_RECONCILIATION",
+stage: "OWNED_ORDER_HISTORY_READ",
+retryable: true },
     }),
   })
   fixture.start()
@@ -667,12 +690,15 @@ test("keeps recovery blocked when the canonical account balance snapshot cannot 
   const fixture = createRecovery({
     refreshAccountSnapshot: async () => {
       throw Object.assign(new Error("canonical account balance snapshot unavailable"), {
-        recoveryFailure: { category: "REST_RECONCILIATION", stage: "ACCOUNT_SNAPSHOT_READ", retryable: true },
+        recoveryFailure: { category: "REST_RECONCILIATION",
+stage: "ACCOUNT_SNAPSHOT_READ",
+retryable: true },
       })
     },
     getOpenOrders: async () => {
       openOrderReads += 1
-      return { ok: true, data: [] }
+      return { ok: true,
+data: [] }
     },
   })
   fixture.start()
@@ -729,7 +755,9 @@ test("keeps recovery blocked when the durable account open-orders audit fails", 
   const fixture = createRecovery({
     publishOpenOrdersSnapshot: async () => {
       throw Object.assign(new Error("durable account open-orders audit flush failed"), {
-        recoveryFailure: { category: "DURABILITY", stage: "RECOVERY_OPEN_ORDERS_AUDIT_FLUSH", retryable: true },
+        recoveryFailure: { category: "DURABILITY",
+stage: "RECOVERY_OPEN_ORDERS_AUDIT_FLUSH",
+retryable: true },
       })
     },
   })
@@ -779,8 +807,7 @@ test("keeps recovery blocked when the durable account open-orders audit fails", 
 })
 
 test("does not publish the open-orders audit after recovery is superseded during the account audit", async () => {
-  let fixture
-  fixture = createRecovery({
+  const fixture = createRecovery({
     publishAccountSnapshot: async () => {
       fixture.state.recoveryGeneration += 1
     },
@@ -826,21 +853,23 @@ test("does not publish the open-orders audit after recovery is superseded during
 })
 
 test("repeats account snapshot baseline capture when a user-data event crosses the REST audit window", async () => {
-  let fixture
   let snapshotReads = 0
   const snapshots = [
-    { sourceTime: 100, baselineVersion: "before-user-data-event" },
-    { sourceTime: 101, baselineVersion: "after-user-data-event" },
+    { sourceTime: 100,
+baselineVersion: "before-user-data-event" },
+    { sourceTime: 101,
+baselineVersion: "after-user-data-event" },
   ]
   const publishedSnapshots = []
   let accountAuditAttempts = 0
-  fixture = createRecovery({
+  const fixture = createRecovery({
     refreshAccountSnapshot: async () => snapshots[snapshotReads++],
-    getOpenOrders: async () => ({ ok: true, data: [] }),
+    getOpenOrders: async () => ({ ok: true,
+data: [] }),
     publishAccountSnapshot: async ({ snapshot }) => {
       accountAuditAttempts += 1
       publishedSnapshots.push(snapshot)
-      if (accountAuditAttempts === 1) fixture.state.eventSequence += 1
+      if (accountAuditAttempts === 1) {fixture.state.eventSequence += 1}
     },
   })
   fixture.start()
@@ -855,8 +884,7 @@ test("repeats account snapshot baseline capture when a user-data event crosses t
 })
 
 test("does not drain queued user-data events after recovery is superseded during the open-orders audit", async () => {
-  let fixture
-  fixture = createRecovery({
+  const fixture = createRecovery({
     publishOpenOrdersSnapshot: async () => {
       fixture.state.recoveryGeneration += 1
     },
@@ -906,6 +934,28 @@ test("does not drain queued user-data events after recovery is superseded during
   )
 })
 
+function assertFirstRecoveryFailureReleased({ fixture }) {
+  assert.equal(fixture.state.recoveryTask, null, "A failed first attempt must release its task slot so a broker reminder can retry the same generation.")
+  assert.equal(fixture.calls.acknowledgements, 0, "A failed first attempt must not acknowledge the broker.")
+}
+
+function assertSupersededRetryBlocked({ fixture }) {
+  assert.equal(fixture.calls.ownershipReconciled, false, "The second disconnect must prevent the superseded retry from certifying canonical ownership.")
+  assert.equal(fixture.calls.acknowledgements, 0, "The superseded retry must not acknowledge either the old or new recovery generation.")
+  assert.equal(fixture.state.requiresReconciliation, true, "A second disconnect during retry must leave application reconciliation required.")
+  assert.equal(fixture.state.recoveryTask, null, "The superseded retry must release its task slot so the new generation can recover.")
+}
+
+function assertLatestRetryCompleted({ fixture, reconciliationCalls }) {
+  assert.equal(reconciliationCalls, 3, "The new generation must start its own owned-order reconciliation after the stale retry exits.")
+  assert.equal(fixture.calls.ownershipReconciled, true, "Only the current recovery generation may certify canonical ownership.")
+  assert.equal(fixture.calls.accountAudits.length, 1, "Only the current recovery generation may publish the recovery account audit.")
+  assert.equal(fixture.calls.orderAudits.length, 1, "Only the current recovery generation may publish the recovery open-orders audit.")
+  assert.equal(fixture.calls.acknowledgements, 1, "Only the current recovery generation may acknowledge the broker.")
+  assert.equal(fixture.state.lastAcknowledgedRecoveryGeneration, 2, "The final acknowledgement must be recorded against the latest recovery generation.")
+  assert.equal(fixture.state.requiresReconciliation, false, "Successful reconciliation of the latest generation must clear the application reconciliation requirement.")
+}
+
 test("recovers safely when a second disconnect supersedes a later retry", async () => {
   let resolveSecondReconciliation
   const secondReconciliation = new Promise((resolve) => { resolveSecondReconciliation = resolve })
@@ -917,108 +967,64 @@ test("recovers safely when a second disconnect supersedes a later retry", async 
         return {
           ok: false,
           errors: [new Error("temporary owned-order history failure")],
-          failure: { category: "REST_RECONCILIATION", stage: "OWNED_ORDER_HISTORY_READ", retryable: true },
+          failure: {
+            category: "REST_RECONCILIATION",
+            stage: "OWNED_ORDER_HISTORY_READ",
+            retryable: true,
+          },
         }
       }
-      if (reconciliationCalls === 2) return secondReconciliation
-      return { ok: true, data: { reconciled: 2 } }
+      if (reconciliationCalls === 2) {
+        return secondReconciliation
+      }
+      return { ok: true,
+data: { reconciled: 2 } }
     },
   })
 
   fixture.start()
-  const firstAttempt = fixture.state.recoveryTask
-  await firstAttempt
-
-  assert.equal(
-    fixture.state.recoveryTask,
-    null,
-    "A failed first attempt must release its task slot so a broker reminder can retry the same generation.",
-  )
-  assert.equal(
-    fixture.calls.acknowledgements,
-    0,
-    "A failed first attempt must not acknowledge the broker.",
-  )
+  await fixture.state.recoveryTask
+  assertFirstRecoveryFailureReleased({ fixture })
 
   fixture.start()
   const secondAttempt = fixture.state.recoveryTask
-
-  assert.notEqual(
-    secondAttempt,
-    null,
-    "A later recovered reminder must start a retry after the first attempt has failed.",
-  )
-  assert.equal(
-    reconciliationCalls,
-    2,
-    "The retry must begin a new owned-order reconciliation after the prior task has released its slot.",
-  )
+  assert.notEqual(secondAttempt, null, "A later recovered reminder must start a retry after the first attempt has failed.")
+  assert.equal(reconciliationCalls, 2, "The retry must begin a new owned-order reconciliation after the prior task has released its slot.")
 
   fixture.state.recoveryGeneration = 2
-  resolveSecondReconciliation({ ok: true, data: { reconciled: 2 } })
+  resolveSecondReconciliation({ ok: true,
+data: { reconciled: 2 } })
   await secondAttempt
-
-  assert.equal(
-    fixture.calls.ownershipReconciled,
-    false,
-    "The second disconnect must prevent the superseded retry from certifying canonical ownership.",
-  )
-  assert.equal(
-    fixture.calls.acknowledgements,
-    0,
-    "The superseded retry must not acknowledge either the old or new recovery generation.",
-  )
-  assert.equal(
-    fixture.state.requiresReconciliation,
-    true,
-    "A second disconnect during retry must leave application reconciliation required.",
-  )
-  assert.equal(
-    fixture.state.recoveryTask,
-    null,
-    "The superseded retry must release its task slot so the new generation can recover.",
-  )
+  assertSupersededRetryBlocked({ fixture })
 
   fixture.start()
   await fixture.state.recoveryTask
-
-  assert.equal(
-    reconciliationCalls,
-    3,
-    "The new generation must start its own owned-order reconciliation after the stale retry exits.",
-  )
-  assert.equal(
-    fixture.calls.ownershipReconciled,
-    true,
-    "Only the current recovery generation may certify canonical ownership.",
-  )
-  assert.equal(
-    fixture.calls.accountAudits.length,
-    1,
-    "Only the current recovery generation may publish the recovery account audit.",
-  )
-  assert.equal(
-    fixture.calls.orderAudits.length,
-    1,
-    "Only the current recovery generation may publish the recovery open-orders audit.",
-  )
-  assert.equal(
-    fixture.calls.acknowledgements,
-    1,
-    "Only the current recovery generation may acknowledge the broker.",
-  )
-  assert.equal(
-    fixture.state.lastAcknowledgedRecoveryGeneration,
-    2,
-    "The final acknowledgement must be recorded against the latest recovery generation.",
-  )
-  assert.equal(
-    fixture.state.requiresReconciliation,
-    false,
-    "Successful reconciliation of the latest generation must clear the application reconciliation requirement.",
-  )
+  assertLatestRetryCompleted({ fixture,
+reconciliationCalls })
 })
 
+function assertAccountSnapshotTimeoutBlocked({ fixture, openOrderReads }) {
+  assert.equal(fixture.state.ready, false, "An account snapshot REST timeout must keep the application trading-readiness gate closed.")
+  assert.equal(fixture.state.requiresReconciliation, true, "An account snapshot REST timeout must preserve the requirement for authoritative reconciliation.")
+  assert.equal(fixture.calls.acknowledgements, 0, "The broker must not be acknowledged after the account snapshot REST request times out.")
+  assert.equal(fixture.calls.accountAudits.length, 0, "The recovery account audit must not be published without a successful authoritative account snapshot.")
+  assert.equal(fixture.calls.orderAudits.length, 0, "The account-wide open-orders audit must not begin after its prerequisite account snapshot REST request times out.")
+  assert.equal(openOrderReads, 0, "The account-wide open-orders REST request must not run after the account snapshot REST request fails.")
+  assert.equal(fixture.state.recoveryTask, null, "The failed account snapshot REST attempt must release the in-flight recovery task slot for a later reminder.")
+  assert.equal(fixture.logs.error[0]?.errorName, "RpcTimeoutError", "The application recovery diagnostic must preserve the original typed account snapshot timeout.")
+  assert.equal(fixture.logs.error[0]?.errorMessage, "canonical account snapshot REST request timed out", "The application recovery diagnostic must retain the original account snapshot timeout message.")
+}
+
+function assertAccountSnapshotRetryCompleted({ fixture, accountSnapshotReads, openOrderReads }) {
+  assert.equal(accountSnapshotReads, 2, "A later recovered reminder must repeat the account snapshot REST request after the transient timeout.")
+  assert.equal(openOrderReads, 1, "The retry may read account-wide open orders only after the account snapshot succeeds.")
+  assert.equal(fixture.calls.accountAudits.length, 1, "Only the successful account snapshot retry may publish a recovery account audit.")
+  assert.equal(fixture.calls.orderAudits.length, 1, "The successful retry must continue through the account-wide open-orders audit.")
+  assert.equal(fixture.calls.acknowledgements, 1, "The broker may be acknowledged exactly once after the successful retry completes both durable audits.")
+  assert.equal(fixture.state.requiresReconciliation, false, "A successful retry of the same recovery generation must clear the application reconciliation requirement.")
+  assert.equal(fixture.state.lastAcknowledgedRecoveryGeneration, 1, "The successful retry must acknowledge the original still-current recovery generation.")
+  assert.equal(fixture.state.recoveryTask, null, "The successful recovery retry must release its task slot after acknowledgement.")
+}
 
 test("retries application recovery after an account snapshot REST timeout releases the task slot", async () => {
   const timeout = Object.assign(
@@ -1026,7 +1032,11 @@ test("retries application recovery after an account snapshot REST timeout releas
     {
       name: "RpcTimeoutError",
       code: "RPC_TIMEOUT",
-      recoveryFailure: { category: "REST_RECONCILIATION", stage: "ACCOUNT_SNAPSHOT_READ", retryable: true },
+      recoveryFailure: {
+        category: "REST_RECONCILIATION",
+        stage: "ACCOUNT_SNAPSHOT_READ",
+        retryable: true,
+      },
     },
   )
   let accountSnapshotReads = 0
@@ -1034,217 +1044,104 @@ test("retries application recovery after an account snapshot REST timeout releas
   const fixture = createRecovery({
     refreshAccountSnapshot: async () => {
       accountSnapshotReads += 1
-      if (accountSnapshotReads === 1) throw timeout
+      if (accountSnapshotReads === 1) {
+        throw timeout
+      }
       return { sourceTime: 101 }
     },
     getOpenOrders: async () => {
       openOrderReads += 1
-      return { ok: true, data: [] }
+      return { ok: true,
+data: [] }
     },
   })
 
   fixture.start()
-  const failedAttempt = fixture.state.recoveryTask
-  await failedAttempt
-
-  assert.equal(
-    fixture.state.ready,
-    false,
-    "An account snapshot REST timeout must keep the application trading-readiness gate closed.",
-  )
-  assert.equal(
-    fixture.state.requiresReconciliation,
-    true,
-    "An account snapshot REST timeout must preserve the requirement for authoritative reconciliation.",
-  )
-  assert.equal(
-    fixture.calls.acknowledgements,
-    0,
-    "The broker must not be acknowledged after the account snapshot REST request times out.",
-  )
-  assert.equal(
-    fixture.calls.accountAudits.length,
-    0,
-    "The recovery account audit must not be published without a successful authoritative account snapshot.",
-  )
-  assert.equal(
-    fixture.calls.orderAudits.length,
-    0,
-    "The account-wide open-orders audit must not begin after its prerequisite account snapshot REST request times out.",
-  )
-  assert.equal(
-    openOrderReads,
-    0,
-    "The account-wide open-orders REST request must not run after the account snapshot REST request fails.",
-  )
-  assert.equal(
-    fixture.state.recoveryTask,
-    null,
-    "The failed account snapshot REST attempt must release the in-flight recovery task slot for a later reminder.",
-  )
-  assert.equal(
-    fixture.logs.error[0]?.errorName,
-    "RpcTimeoutError",
-    "The application recovery diagnostic must preserve the original typed account snapshot timeout.",
-  )
-  assert.equal(
-    fixture.logs.error[0]?.errorMessage,
-    "canonical account snapshot REST request timed out",
-    "The application recovery diagnostic must retain the original account snapshot timeout message.",
-  )
+  await fixture.state.recoveryTask
+  assertAccountSnapshotTimeoutBlocked({ fixture,
+openOrderReads })
 
   fixture.start()
   await fixture.state.recoveryTask
-
-  assert.equal(
-    accountSnapshotReads,
-    2,
-    "A later recovered reminder must repeat the account snapshot REST request after the transient timeout.",
-  )
-  assert.equal(
-    openOrderReads,
-    1,
-    "The retry may read account-wide open orders only after the account snapshot succeeds.",
-  )
-  assert.equal(
-    fixture.calls.accountAudits.length,
-    1,
-    "Only the successful account snapshot retry may publish a recovery account audit.",
-  )
-  assert.equal(
-    fixture.calls.orderAudits.length,
-    1,
-    "The successful retry must continue through the account-wide open-orders audit.",
-  )
-  assert.equal(
-    fixture.calls.acknowledgements,
-    1,
-    "The broker may be acknowledged exactly once after the successful retry completes both durable audits.",
-  )
-  assert.equal(
-    fixture.state.requiresReconciliation,
-    false,
-    "A successful retry of the same recovery generation must clear the application reconciliation requirement.",
-  )
-  assert.equal(
-    fixture.state.lastAcknowledgedRecoveryGeneration,
-    1,
-    "The successful retry must acknowledge the original still-current recovery generation.",
-  )
-  assert.equal(
-    fixture.state.recoveryTask,
-    null,
-    "The successful recovery retry must release its task slot after acknowledgement.",
-  )
+  assertAccountSnapshotRetryCompleted({ fixture,
+accountSnapshotReads,
+openOrderReads })
 })
 
+function assertOpenOrdersTimeoutBlocked({ fixture, timeout }) {
+  assert.equal(fixture.state.ready, false, "An account-wide open-orders RPC timeout must never reopen the Harvester trading-readiness gate.")
+  assert.equal(fixture.state.requiresReconciliation, true, "An account-wide open-orders RPC timeout must preserve the application reconciliation requirement.")
+  assert.equal(fixture.calls.accountAudits.length, 0, "The recovery account audit must not be published after the open-orders REST request times out.")
+  assert.equal(fixture.calls.orderAudits.length, 0, "The recovery open-orders audit must not be published after its authoritative REST request times out.")
+  assert.equal(fixture.calls.acknowledgements, 0, "The broker must not be acknowledged after an account-wide open-orders RPC timeout.")
+  assert.equal(fixture.state.recoveryTask, null, "The timed-out recovery attempt must release its task slot so a later broker reminder can retry.")
+  assert.equal(fixture.logs.error[0]?.errorName, "Error", "The recovery coordinator wraps failed broker results in its own application-level Error.")
+  assert.equal(fixture.logs.error[0]?.error?.cause, timeout, "The structured recovery failure log must retain the exact original broker timeout as the wrapper Error's cause.")
+  assert.equal(fixture.logs.error[0]?.error?.name, "Error", "The structured recovery failure log must include the native contextual Error object, not only flattened fields.")
+  assert.equal(fixture.logs.error[0]?.errorMessage, "Unable to load authoritative account-wide open orders: account-wide open-orders RPC timed out", "The recovery failure diagnostic must retain the broker RPC timeout detail when wrapping the failed result.")
+}
+
+function assertOpenOrdersTimeoutRetryCompleted({ fixture, openOrderReads }) {
+  assert.equal(openOrderReads, 2, "A later broker reminder must retry the authoritative open-orders request after the timeout.")
+  assert.equal(fixture.calls.accountAudits.length, 1, "The successful retry must publish the recovery account audit.")
+  assert.equal(fixture.calls.orderAudits.length, 1, "The successful retry must publish the recovery open-orders audit.")
+  assert.equal(fixture.calls.acknowledgements, 1, "Only the successful retry may acknowledge the broker.")
+  assert.equal(fixture.state.lastAcknowledgedRecoveryGeneration, 1, "The successful retry must acknowledge the original still-current recovery generation.")
+  assert.equal(fixture.state.requiresReconciliation, false, "The successful retry must clear the application reconciliation requirement.")
+}
 
 test("keeps recovery blocked and retries after an account-wide open-orders RPC timeout", async () => {
   let openOrderReads = 0
   const timeout = Object.assign(
     new Error("account-wide open-orders RPC timed out"),
-    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
+    { name: "RpcTimeoutError",
+code: "RPC_TIMEOUT" },
   )
   const fixture = createRecovery({
     getOpenOrders: async () => {
       openOrderReads += 1
       if (openOrderReads === 1) {
-        return { ok: false, errors: [timeout] }
+        return { ok: false,
+errors: [timeout] }
       }
-      return { ok: true, data: [] }
+      return { ok: true,
+data: [] }
     },
   })
 
   fixture.start()
-  const timedOutAttempt = fixture.state.recoveryTask
-  await timedOutAttempt
-
-  assert.equal(
-    fixture.state.ready,
-    false,
-    "An account-wide open-orders RPC timeout must never reopen the Harvester trading-readiness gate.",
-  )
-  assert.equal(
-    fixture.state.requiresReconciliation,
-    true,
-    "An account-wide open-orders RPC timeout must preserve the application reconciliation requirement.",
-  )
-  assert.equal(
-    fixture.calls.accountAudits.length,
-    0,
-    "The recovery account audit must not be published after the open-orders REST request times out.",
-  )
-  assert.equal(
-    fixture.calls.orderAudits.length,
-    0,
-    "The recovery open-orders audit must not be published after its authoritative REST request times out.",
-  )
-  assert.equal(
-    fixture.calls.acknowledgements,
-    0,
-    "The broker must not be acknowledged after an account-wide open-orders RPC timeout.",
-  )
-  assert.equal(
-    fixture.state.recoveryTask,
-    null,
-    "The timed-out recovery attempt must release its task slot so a later broker reminder can retry.",
-  )
-  assert.equal(
-    fixture.logs.error[0]?.errorName,
-    "Error",
-    "The recovery coordinator wraps failed broker results in its own application-level Error.",
-  )
-  assert.equal(
-    fixture.logs.error[0]?.error?.cause,
-    timeout,
-    "The structured recovery failure log must retain the exact original broker timeout as the wrapper Error's cause.",
-  )
-  assert.equal(
-    fixture.logs.error[0]?.error?.name,
-    "Error",
-    "The structured recovery failure log must include the native contextual Error object, not only flattened fields.",
-  )
-  assert.equal(
-    fixture.logs.error[0]?.errorMessage,
-    "Unable to load authoritative account-wide open orders: account-wide open-orders RPC timed out",
-    "The recovery failure diagnostic must retain the broker RPC timeout detail when wrapping the failed result.",
-  )
+  await fixture.state.recoveryTask
+  assertOpenOrdersTimeoutBlocked({ fixture,
+timeout })
 
   fixture.start()
   await fixture.state.recoveryTask
-
-  assert.equal(
-    openOrderReads,
-    2,
-    "A later broker reminder must retry the authoritative open-orders request after the timeout.",
-  )
-  assert.equal(
-    fixture.calls.accountAudits.length,
-    1,
-    "The successful retry must publish the recovery account audit.",
-  )
-  assert.equal(
-    fixture.calls.orderAudits.length,
-    1,
-    "The successful retry must publish the recovery open-orders audit.",
-  )
-  assert.equal(
-    fixture.calls.acknowledgements,
-    1,
-    "Only the successful retry may acknowledge the broker.",
-  )
-  assert.equal(
-    fixture.state.lastAcknowledgedRecoveryGeneration,
-    1,
-    "The successful retry must acknowledge the original still-current recovery generation.",
-  )
-  assert.equal(
-    fixture.state.requiresReconciliation,
-    false,
-    "The successful retry must clear the application reconciliation requirement.",
-  )
+  assertOpenOrdersTimeoutRetryCompleted({ fixture,
+openOrderReads })
 })
 
+function assertAccountAuditFlushFailureBlocked({ fixture }) {
+  assert.equal(fixture.state.ready, false, "A transient account audit flush failure must never reopen the Harvester trading-readiness gate.")
+  assert.equal(fixture.state.requiresReconciliation, true, "A transient account audit flush failure must preserve the application reconciliation requirement.")
+  assert.equal(fixture.calls.accountAudits.length, 1, "The first account audit publication must remain recorded even though its flush did not confirm durability.")
+  assert.equal(fixture.calls.orderAudits.length, 0, "The account-wide open-orders audit must not start until the account snapshot audit is durably flushed.")
+  assert.equal(fixture.calls.acknowledgements, 0, "The broker must not be acknowledged after an account audit flush fails.")
+  assert.equal(fixture.state.recoveryTask, null, "The failed account audit flush must release the single-flight task slot for a later reminder.")
+  assert.equal(fixture.logs.error[0]?.errorMessage, "Unable to durably persist RECOVERY account snapshot: simulated Journal file sync failure", "The transient Journal sync failure must remain visible in the recovery diagnostic.")
+}
+
+function assertAccountAuditFlushRetryCompleted({ fixture, accountFlushAttempts, firstAuditPublication }) {
+  assert.equal(accountFlushAttempts, 2, "A later broker reminder must retry the account audit flush on the same recovery generation.")
+  assert.equal(fixture.calls.accountAudits.length, 2, "The retry must publish a second account audit while preserving the first uncertain publication.")
+  assert.notEqual(firstAuditPublication, fixture.calls.accountAudits[1], "The second recovery audit publication must be a distinct event input rather than a rewrite of the first.")
+  assert.deepEqual(fixture.calls.accountAudits.map((audit) => audit.phase), ["RECOVERY", "RECOVERY"], "Both account audit publications must retain the RECOVERY phase for the same recovery generation.")
+  assert.equal(fixture.calls.orderAudits.length, 1, "The successful retry must proceed to publish exactly one account-wide open-orders audit.")
+  assert.equal(fixture.calls.acknowledgements, 1, "The broker may be acknowledged exactly once after both durable recovery audits succeed.")
+  assert.equal(fixture.state.requiresReconciliation, false, "The successful retry must clear the application reconciliation requirement.")
+  assert.equal(fixture.state.recoveryGeneration, 1, "A transient audit flush failure must retry the original recovery generation rather than creating a new one.")
+  assert.equal(fixture.state.lastAcknowledgedRecoveryGeneration, 1, "The successful retry must acknowledge the original still-current recovery generation.")
+  assert.equal(fixture.state.recoveryTask, null, "The successful retry must release the in-flight recovery task slot after acknowledgement.")
+}
 
 test("keeps recovery blocked and retries the same generation after a transient account audit flush failure", async () => {
   let accountFlushAttempts = 0
@@ -1254,109 +1151,31 @@ test("keeps recovery blocked and retries the same generation after a transient a
       if (accountFlushAttempts === 1) {
         throw Object.assign(
           new Error("Unable to durably persist RECOVERY account snapshot: simulated Journal file sync failure"),
-          { recoveryFailure: { category: "DURABILITY", stage: "RECOVERY_ACCOUNT_AUDIT_FLUSH", retryable: true } },
+          {
+            recoveryFailure: {
+              category: "DURABILITY",
+              stage: "RECOVERY_ACCOUNT_AUDIT_FLUSH",
+              retryable: true,
+            },
+          },
         )
       }
     },
   })
 
   fixture.start()
-  const failedAttempt = fixture.state.recoveryTask
-  await failedAttempt
+  await fixture.state.recoveryTask
+  assertAccountAuditFlushFailureBlocked({ fixture })
 
-  assert.equal(
-    fixture.state.ready,
-    false,
-    "A transient account audit flush failure must never reopen the Harvester trading-readiness gate.",
-  )
-  assert.equal(
-    fixture.state.requiresReconciliation,
-    true,
-    "A transient account audit flush failure must preserve the application reconciliation requirement.",
-  )
-  assert.equal(
-    fixture.calls.accountAudits.length,
-    1,
-    "The first account audit publication must remain recorded even though its flush did not confirm durability.",
-  )
-  assert.equal(
-    fixture.calls.orderAudits.length,
-    0,
-    "The account-wide open-orders audit must not start until the account snapshot audit is durably flushed.",
-  )
-  assert.equal(
-    fixture.calls.acknowledgements,
-    0,
-    "The broker must not be acknowledged after an account audit flush fails.",
-  )
-  assert.equal(
-    fixture.state.recoveryTask,
-    null,
-    "The failed account audit flush must release the single-flight task slot for a later reminder.",
-  )
-  assert.equal(
-    fixture.logs.error[0]?.errorMessage,
-    "Unable to durably persist RECOVERY account snapshot: simulated Journal file sync failure",
-    "The transient Journal sync failure must remain visible in the recovery diagnostic.",
-  )
-
-  const firstAuditPublication = fixture.calls.accountAudits[0]
+  const [firstAuditPublication] = fixture.calls.accountAudits
   fixture.start()
-  const retryAttempt = fixture.state.recoveryTask
-  await retryAttempt
-
-  assert.equal(
+  await fixture.state.recoveryTask
+  assertAccountAuditFlushRetryCompleted({
+    fixture,
     accountFlushAttempts,
-    2,
-    "A later broker reminder must retry the account audit flush on the same recovery generation.",
-  )
-  assert.equal(
-    fixture.calls.accountAudits.length,
-    2,
-    "The retry must publish a second account audit while preserving the first uncertain publication.",
-  )
-  assert.notEqual(
     firstAuditPublication,
-    fixture.calls.accountAudits[1],
-    "The second recovery audit publication must be a distinct event input rather than a rewrite of the first.",
-  )
-  assert.deepEqual(
-    fixture.calls.accountAudits.map((audit) => audit.phase),
-    ["RECOVERY", "RECOVERY"],
-    "Both account audit publications must retain the RECOVERY phase for the same recovery generation.",
-  )
-  assert.equal(
-    fixture.calls.orderAudits.length,
-    1,
-    "The successful retry must proceed to publish exactly one account-wide open-orders audit.",
-  )
-  assert.equal(
-    fixture.calls.acknowledgements,
-    1,
-    "The broker may be acknowledged exactly once after both durable recovery audits succeed.",
-  )
-  assert.equal(
-    fixture.state.requiresReconciliation,
-    false,
-    "The successful retry must clear the application reconciliation requirement.",
-  )
-  assert.equal(
-    fixture.state.recoveryGeneration,
-    1,
-    "A transient audit flush failure must retry the original recovery generation rather than creating a new one.",
-  )
-  assert.equal(
-    fixture.state.lastAcknowledgedRecoveryGeneration,
-    1,
-    "The successful retry must acknowledge the original still-current recovery generation.",
-  )
-  assert.equal(
-    fixture.state.recoveryTask,
-    null,
-    "The successful retry must release the in-flight recovery task slot after acknowledgement.",
-  )
+  })
 })
-
 
 test("does not retry application recovery after a permanent Journal write failure", async () => {
   let reconciliationCalls = 0
@@ -1373,7 +1192,8 @@ test("does not retry application recovery after a permanent Journal write failur
   const fixture = createRecovery({
     reconcileOwnedOrders: async () => {
       reconciliationCalls += 1
-      return { ok: true, data: { reconciled: 2 } }
+      return { ok: true,
+data: { reconciled: 2 } }
     },
     publishAccountSnapshot: async () => { throw permanentWriteFailure },
   })
@@ -1390,7 +1210,9 @@ test("does not retry application recovery after a permanent Journal write failur
   assert.equal(reconciliationCalls, 1, "The first attempt must perform one authoritative reconciliation.")
   assert.deepEqual(
     fixture.logs.error[0]?.error?.recoveryFailure,
-    { category: "DURABILITY", stage: "JOURNAL_WRITE_FAILURE", retryable: false },
+    { category: "DURABILITY",
+stage: "JOURNAL_WRITE_FAILURE",
+retryable: false },
     "The terminal Journal write-failure classification must survive recovery error handling.",
   )
 
@@ -1401,13 +1223,30 @@ test("does not retry application recovery after a permanent Journal write failur
 })
 
 
+function assertStaleSnapshotFailureIsIsolated({ fixture }) {
+  assert.equal(fixture.state.accountingFailed, false, "A terminal account-snapshot failure returned after its recovery generation was superseded must not poison accounting for the newer generation.")
+  assert.equal(fixture.state.retryableRecoveryFailure, null, "A stale terminal account-snapshot failure must not leave retry metadata attached to the current recovery state.")
+  assert.equal(fixture.state.status, "AUTHORITATIVE_RECONCILIATION_REQUIRED", "A superseded account-snapshot failure must preserve the current generation's reconciliation-required status.")
+  assert.equal(fixture.state.requiresReconciliation, true, "A stale account-snapshot failure must leave the newer recovery generation blocked until its own reconciliation succeeds.")
+  assert.equal(fixture.calls.acknowledgements, 0, "An obsolete recovery generation must never acknowledge the broker after its account-snapshot failure.")
+}
+
+function assertCurrentSnapshotRecoveryCompleted({ fixture, snapshotReads }) {
+  assert.equal(snapshotReads, 2, "The current recovery generation must be allowed to fetch its own authoritative account snapshot after stale work exits.")
+  assert.equal(fixture.state.accountingFailed, false, "Successful recovery of the current generation must not inherit a terminal account-snapshot failure from obsolete work.")
+  assert.equal(fixture.state.requiresReconciliation, false, "The current generation may clear its gate only after its own reconciliation and durable audits succeed.")
+  assert.equal(fixture.state.lastAcknowledgedRecoveryGeneration, 2, "Only the successfully reconciled current application generation may be recorded as acknowledged.")
+  assert.equal(fixture.calls.acknowledgements, 1, "The broker must receive exactly one acknowledgement after the current generation completes its required audits.")
+}
+
 test("does not let a terminal account-snapshot failure from a superseded recovery generation poison the current generation", async () => {
   let rejectFirstSnapshot
   let markFirstSnapshotStarted
   const firstSnapshotStarted = new Promise((resolve) => {
     markFirstSnapshotStarted = resolve
   })
-  const firstSnapshot = new Promise((_resolve, reject) => {
+  const firstSnapshot = new Promise((...executorArgs) => {
+    const [, reject] = executorArgs
     rejectFirstSnapshot = reject
   })
   let snapshotReads = 0
@@ -1438,59 +1277,10 @@ test("does not let a terminal account-snapshot failure from a superseded recover
     },
   ))
   await staleAttempt
-
-  assert.equal(
-    fixture.state.accountingFailed,
-    false,
-    "A terminal account-snapshot failure returned after its recovery generation was superseded must not poison accounting for the newer generation.",
-  )
-  assert.equal(
-    fixture.state.retryableRecoveryFailure,
-    null,
-    "A stale terminal account-snapshot failure must not leave retry metadata attached to the current recovery state.",
-  )
-  assert.equal(
-    fixture.state.status,
-    "AUTHORITATIVE_RECONCILIATION_REQUIRED",
-    "A superseded account-snapshot failure must preserve the current generation's reconciliation-required status.",
-  )
-  assert.equal(
-    fixture.state.requiresReconciliation,
-    true,
-    "A stale account-snapshot failure must leave the newer recovery generation blocked until its own reconciliation succeeds.",
-  )
-  assert.equal(
-    fixture.calls.acknowledgements,
-    0,
-    "An obsolete recovery generation must never acknowledge the broker after its account-snapshot failure.",
-  )
+  assertStaleSnapshotFailureIsIsolated({ fixture })
 
   fixture.start()
   await fixture.state.recoveryTask
-
-  assert.equal(
-    snapshotReads,
-    2,
-    "The current recovery generation must be allowed to fetch its own authoritative account snapshot after stale work exits.",
-  )
-  assert.equal(
-    fixture.state.accountingFailed,
-    false,
-    "Successful recovery of the current generation must not inherit a terminal account-snapshot failure from obsolete work.",
-  )
-  assert.equal(
-    fixture.state.requiresReconciliation,
-    false,
-    "The current generation may clear its gate only after its own reconciliation and durable audits succeed.",
-  )
-  assert.equal(
-    fixture.state.lastAcknowledgedRecoveryGeneration,
-    2,
-    "Only the successfully reconciled current application generation may be recorded as acknowledged.",
-  )
-  assert.equal(
-    fixture.calls.acknowledgements,
-    1,
-    "The broker must receive exactly one acknowledgement after the current generation completes its required audits.",
-  )
+  assertCurrentSnapshotRecoveryCompleted({ fixture,
+snapshotReads })
 })
