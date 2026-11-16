@@ -520,6 +520,58 @@ test("parses the global and market-scoped emergency BUY pause commands", () => {
   }, "A market BUY pause without a symbol must be rejected rather than becoming a global pause.")
 })
 
+function createEmergencyBuyOperatorStub({ calls }) {
+  return {
+    pauseMarket: async () => assert.fail("Emergency BUY commands must not invoke the legacy market pause."),
+    pauseAllBuys: async (request) => {
+      calls.push({
+        method: "pauseAllBuys",
+        request,
+      })
+      return {
+        ok: true,
+        data: { paused: true },
+      }
+    },
+    pauseBuys: async (request) => {
+      calls.push({
+        method: "pauseBuys",
+        request,
+      })
+      return {
+        ok: true,
+        data: {
+          paused: true,
+          symbol: request.symbol,
+        },
+      }
+    },
+    resumeBuys: async (request) => {
+      calls.push({
+        method: "resumeBuys",
+        request,
+      })
+      return {
+        ok: true,
+        data: {
+          resumed: true,
+          symbol: request.symbol,
+        },
+      }
+    },
+    resumeAllBuys: async (request) => {
+      calls.push({
+        method: "resumeAllBuys",
+        request,
+      })
+      return {
+        ok: true,
+        data: { resumed: true },
+      }
+    },
+  }
+}
+
 test("dispatches emergency BUY pause commands through the authenticated operator facade", async () => {
   const updates = [
     makeUpdate({
@@ -542,65 +594,29 @@ test("dispatches emergency BUY pause commands through the authenticated operator
   const calls = []
   const { sentMessages, registeredCommands } = await runAdapter({
     updates,
-    operator: {
-      pauseMarket: async () => assert.fail("Emergency BUY commands must not invoke the legacy market pause."),
-      pauseAllBuys: async (request) => {
-        calls.push({
-          method: "pauseAllBuys",
-          request,
-        })
-        return {
-          ok: true,
-          data: { paused: true },
-        }
-      },
-      pauseBuys: async (request) => {
-        calls.push({
-          method: "pauseBuys",
-          request,
-        })
-        return {
-          ok: true,
-          data: {
-            paused: true,
-            symbol: request.symbol,
-          },
-        }
-      },
-      resumeBuys: async (request) => {
-        calls.push({
-          method: "resumeBuys",
-          request,
-        })
-        return {
-          ok: true,
-          data: {
-            resumed: true,
-            symbol: request.symbol,
-          },
-        }
-      },
-      resumeAllBuys: async (request) => {
-        calls.push({
-          method: "resumeAllBuys",
-          request,
-        })
-        return {
-          ok: true,
-          data: { resumed: true },
-        }
-      },
-    },
+    operator: createEmergencyBuyOperatorStub({ calls }),
   })
 
   assert.deepEqual(calls.map(({ method, request }) => ({
-      method,
-      symbol: request.symbol,
-    })), [
-    { method: "pauseAllBuys", symbol: undefined },
-    { method: "pauseBuys", symbol: "LINKUSDT" },
-    { method: "resumeBuys", symbol: "LINKUSDT" },
-    { method: "resumeAllBuys", symbol: undefined },
+    method,
+    symbol: request.symbol,
+  })), [
+    {
+      method: "pauseAllBuys",
+      symbol: undefined,
+    },
+    {
+      method: "pauseBuys",
+      symbol: "LINKUSDT",
+    },
+    {
+      method: "resumeBuys",
+      symbol: "LINKUSDT",
+    },
+    {
+      method: "resumeAllBuys",
+      symbol: undefined,
+    },
   ], "Each Telegram BUY command must dispatch to its matching authorized application operation.")
   assert.ok(registeredCommands[0].commands.some((command) => command.command === "pauseallbuys"), "Telegram's registered command list must expose the global BUY pause.")
   assert.ok(registeredCommands[0].commands.some((command) => command.command === "pausebuys"), "Telegram's registered command list must expose the market BUY pause.")
