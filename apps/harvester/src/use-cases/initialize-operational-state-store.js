@@ -46,7 +46,8 @@ export async function initializeHarvesterOperationalStateStore({
       })
     }
     processLock = lock
-    const store = createStore({ directory, runtimeSessionId })
+    const store = createStore({ directory,
+runtimeSessionId })
     if (typeof store?.initialize !== "function") {
       throw new TypeError("Operational State Store initializer requires the explicit store.initialize capability")
     }
