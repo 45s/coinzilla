@@ -63,3 +63,38 @@ test("keeps identical terminal summaries deduplicable when diagnostic metadata o
     "The deduplication identity must represent the concise terminal summary, not timestamp or omitted diagnostic details.",
   )
 })
+
+test("keeps Telegram interaction lifecycle details visible in the INFO console summary", () => {
+  const record = createConsoleRecordPresentation({
+    timestamp: TIMESTAMP,
+    level: "info",
+    method: "info",
+    data: {
+      message: "Telegram interaction FAILED",
+      correlationId: "telegram:1201",
+      interactionType: "callback",
+      action: "PAUSE",
+      symbol: "LINKUSDT",
+      operation: "pauseMarket",
+      stage: "RESPONSE_DELIVERY",
+      applicationOperationInvoked: true,
+      applicationOperationCompleted: true,
+      stateChanged: true,
+      failureClassification: "TELEGRAM_SEND_FAILED",
+    },
+  })
+
+  assert.equal(record.summary.message, "Telegram interaction FAILED")
+  assert.deepEqual(record.summary.details, {
+    correlationId: "telegram:1201",
+    interactionType: "callback",
+    symbol: "LINKUSDT",
+    operation: "pauseMarket",
+    stage: "RESPONSE_DELIVERY",
+    applicationOperationInvoked: true,
+    applicationOperationCompleted: true,
+    stateChanged: true,
+    action: "PAUSE",
+    failureClassification: "TELEGRAM_SEND_FAILED",
+  })
+})
