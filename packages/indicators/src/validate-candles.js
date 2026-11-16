@@ -1,5 +1,67 @@
 import { assertDecimalString, compareDecimal } from "@coinzilla/utils"
 
+function validateCandlePrices({ candle }) {
+  const prices = [
+    ["high", candle.high],
+    ["low", candle.low],
+    ["close", candle.close],
+  ]
+  for (const [field, value] of prices) {
+    assertDecimalString({
+      value,
+      field: `candle ${field}`,
+    })
+    if (compareDecimal({
+      left: value,
+      right: "0",
+    }) <= 0) {
+      throw new RangeError(`candle ${field} must be positive`)
+    }
+  }
+}
+
+function validateCandlePriceRange({ candle }) {
+  if (compareDecimal({
+    left: candle.high,
+    right: candle.low,
+  }) < 0) {
+    throw new RangeError("candle high must not be below candle low")
+  }
+  if (
+    compareDecimal({
+      left: candle.close,
+      right: candle.low,
+    }) < 0 ||
+    compareDecimal({
+      left: candle.close,
+      right: candle.high,
+    }) > 0
+  ) {
+    throw new RangeError("candle close must be within its high-low range")
+  }
+}
+
+function validateCandle({ candle, previousOpenTime, intervalMs }) {
+  if (!candle || typeof candle !== "object" || Array.isArray(candle)) {
+    throw new TypeError("each candle must be an object")
+  }
+  if (candle.isClosed !== true) {
+    throw new RangeError("indicator calculations require completed candles only")
+  }
+  if (!Number.isSafeInteger(candle.openTime) || candle.openTime < 0) {
+    throw new RangeError("candle openTime must be a non-negative safe integer")
+  }
+  if (previousOpenTime !== null) {
+    const expectedOpenTime = previousOpenTime + intervalMs
+    if (!Number.isSafeInteger(expectedOpenTime) || candle.openTime !== expectedOpenTime) {
+      throw new RangeError("candles must be strictly ordered, unique and contiguous at intervalMs")
+    }
+  }
+
+  validateCandlePrices({ candle })
+  validateCandlePriceRange({ candle })
+}
+
 /**
  * Validate the candle series and return its normalized input unchanged.
  *
@@ -24,59 +86,11 @@ export function validateCandles({ candles, intervalMs, period } = {}) {
   let previousOpenTime = null
   for (let index = 0; index < candles.length; index += 1) {
     const candle = candles[index]
-    if (!candle || typeof candle !== "object" || Array.isArray(candle)) {
-      throw new TypeError("each candle must be an object")
-    }
-    if (candle.isClosed !== true) {
-      throw new RangeError("indicator calculations require completed candles only")
-    }
-    if (!Number.isSafeInteger(candle.openTime) || candle.openTime < 0) {
-      throw new RangeError("candle openTime must be a non-negative safe integer")
-    }
-    if (previousOpenTime !== null) {
-      const expectedOpenTime = previousOpenTime + intervalMs
-      if (!Number.isSafeInteger(expectedOpenTime) || candle.openTime !== expectedOpenTime) {
-        throw new RangeError("candles must be strictly ordered, unique and contiguous at intervalMs")
-      }
-    }
-
-    const prices = [
-      ["high", candle.high],
-      ["low", candle.low],
-      ["close", candle.close],
-    ]
-    for (const [field, value] of prices) {
-      assertDecimalString({
-        value,
-        field: `candle ${field}`,
-      })
-      if (compareDecimal({
-        left: value,
-        right: "0",
-      }) <= 0) {
-        throw new RangeError(`candle ${field} must be positive`)
-      }
-    }
-
-    if (compareDecimal({
-        left: candle.high,
-        right: candle.low,
-      }) < 0) {
-      throw new RangeError("candle high must not be below candle low")
-    }
-    if (
-      compareDecimal({
-        left: candle.close,
-        right: candle.low,
-      }) < 0 ||
-      compareDecimal({
-        left: candle.close,
-        right: candle.high,
-      }) > 0
-    ) {
-      throw new RangeError("candle close must be within its high-low range")
-    }
-
+    validateCandle({
+      candle,
+      previousOpenTime,
+      intervalMs,
+    })
     previousOpenTime = candle.openTime
   }
 
