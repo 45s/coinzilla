@@ -19,6 +19,10 @@ const ACTIONS = Object.freeze({
 })
 
 function createBuyControl({ engine, operationalStateStore, action, requireSymbol } = {}) {
+  if (operationalStateStore !== undefined && operationalStateStore !== null &&
+      typeof operationalStateStore.append !== "function") {
+    throw new TypeError("createBuyControl requires an Operational State Store append boundary when a store is supplied")
+  }
   const configuration = ACTIONS[action]
   if (typeof engine?.[configuration.engineMethod] !== "function") {
     throw new TypeError(`createBuyControl requires the trading engine ${configuration.engineMethod} boundary`)
