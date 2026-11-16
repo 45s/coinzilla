@@ -249,3 +249,36 @@ test("fails closed when the legacy Spot base asset is missing from the authorita
     "A missing account balance must not be treated as zero or as verified legacy custody.",
   )
 })
+
+test("treats a repeated terminal RS accounting event as an exact no-op", async () => {
+  const context = makeContext()
+  const workflow = makeWorkflow(context)
+  const input = {
+    reconciliation: context.reconciliation,
+    terminalOrder: context.terminalOrder,
+    canonicalFills: [context.fill],
+    canonicalFillAllocations: [context.allocation],
+    minProfit: "0.2",
+  }
+
+  const first = await workflow.reconcileTerminalMixedSell(input)
+  assert.equal(first.ok, true, first.errors?.[0]?.message)
+  const portfolioAfterFirst = workflow.getPortfolio()
+  const legacyPositionAfterFirst = workflow.getLegacyPosition({ marketId: market.id })
+  const legacyAccountingAfterFirst = workflow.getLegacyAccounting({ marketId: market.id })
+  const registryAfterFirst = workflow.getOrderRegistry()
+
+  const replay = await workflow.reconcileTerminalMixedSell(input)
+
+  assert.equal(replay.ok, true, replay.errors?.[0]?.message)
+  assert.equal(replay.data.duplicate, true,
+    "An identical terminal fill replay must be classified as a duplicate.")
+  assert.equal(workflow.getPortfolio(), portfolioAfterFirst,
+    "A replay must preserve the exact shared Portfolio snapshot.")
+  assert.equal(workflow.getLegacyPosition({ marketId: market.id }), legacyPositionAfterFirst,
+    "A replay must preserve the exact legacy Position snapshot.")
+  assert.equal(workflow.getLegacyAccounting({ marketId: market.id }), legacyAccountingAfterFirst,
+    "A replay must preserve the exact legacy P&L snapshot.")
+  assert.equal(workflow.getOrderRegistry(), registryAfterFirst,
+    "A replay must not release or recreate the terminal order reservation a second time.")
+})
