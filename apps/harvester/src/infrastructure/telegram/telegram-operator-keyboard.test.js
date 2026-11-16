@@ -504,10 +504,8 @@ test("rejects an unauthorized persistent-keyboard action before reading market s
 })
 
 
-test("temporary ESLint autofix preview", async () => {
-  const { ESLint } = await import("eslint");
-  const eslint = new ESLint({ fix: true });
-  const results = await eslint.lintFiles([
+
+const infrastructureJavaScriptFiles = [
   "src/infrastructure/brokers/binance-broker-adapter.js",
   "src/infrastructure/brokers/binance-broker-adapter.test.js",
   "src/infrastructure/brokers/binance-market-metadata.js",
@@ -561,13 +559,47 @@ test("temporary ESLint autofix preview", async () => {
   "src/infrastructure/telegram/telegram-operator-adapter.test.js",
   "src/infrastructure/telegram/telegram-operator-diagnostics.js",
   "src/infrastructure/telegram/telegram-operator-diagnostics.test.js"
-]);
-  const changed = results
-    .filter((result) => typeof result.output === "string")
-    .map((result) => ({
-      path: result.filePath.split("/apps/harvester/").pop(),
-      content: result.output,
-    }));
-  process.stdout.write("ESLINT_AUTOFIX_OUTPUT=" + JSON.stringify({ files: changed }) + "\\n");
-  assert.ok(true);
-});
+];
+const infrastructureDirectories = ["brokers","config","journal","logging","operational-state","process-lock","process","telegram"];
+
+for (const directory of infrastructureDirectories) {
+  test(`temporary ESLint remaining findings for ${directory}`, async () => {
+    const { ESLint } = await import("eslint");
+    const eslint = new ESLint();
+    const directoryFiles = infrastructureJavaScriptFiles.filter((filePath) => filePath.includes(`/${directory}/`));
+    const results = await eslint.lintFiles(directoryFiles);
+    const findings = [];
+
+    for (const result of results) {
+      if (result.errorCount === 0 && result.warningCount === 0) {
+        continue;
+      }
+      const rules = {};
+      for (const message of result.messages) {
+        const rule = message.ruleId ?? "fatal";
+        rules[rule] = (rules[rule] ?? 0) + 1;
+      }
+      findings.push({
+        file: result.filePath.split("/apps/harvester/").pop(),
+        errors: result.errorCount,
+        warnings: result.warningCount,
+        rules,
+      });
+    }
+
+    let errorCount = 0;
+    let warningCount = 0;
+    for (const finding of findings) {
+      errorCount += finding.errors;
+      warningCount += finding.warnings;
+    }
+    process.stdout.write("ESLINT_REMAINING=" + JSON.stringify({
+      directory,
+      filesWithFindings: findings.length,
+      errorCount,
+      warningCount,
+      findings,
+    }) + "\\n");
+    assert.ok(true);
+  });
+}
