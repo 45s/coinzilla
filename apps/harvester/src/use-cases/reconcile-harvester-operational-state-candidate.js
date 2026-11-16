@@ -67,14 +67,15 @@ export async function reconcileHarvesterOperationalStateCandidate({
     }
     const projection = projectHarvesterOperationalState({ records: read.data.records })
     if (projection?.ok !== true) { return projection }
-    const candidate = restoreHarvesterJournalState({ projection, marketMetadata })
+    const candidate = restoreHarvesterJournalState({ projection,
+marketMetadata })
     if (candidate?.ok !== true) { return candidate }
 
     const coverage = [...projection.data.marketHistoryCoverage].reverse().find(({ symbol }) =>
       symbol === targetMarket?.symbol
     )
     if (!coverage) {
-      throw new Error("No committed market-history coverage fact exists for " + (targetMarket?.symbol ?? "the target market"))
+      throw new Error(`No committed market-history coverage fact exists for ${  targetMarket?.symbol ?? "the target market"}`)
     }
     const historyRetentionEvidence = Object.freeze({
       ...coverage,
@@ -120,14 +121,14 @@ export async function reconcileHarvesterOperationalStateCandidate({
           const resolution = await recordSafetyBlockerResolved({
             operationalStateStore,
             blockerId: blocker.blockerId,
-            resolvedBy: "reconciliation:market-audit:" + targetMarket.symbol,
+            resolvedBy: `reconciliation:market-audit:${  targetMarket.symbol}`,
             resolution: "AUTHORITATIVE_RECONCILIATION",
             evidenceDigest,
           })
           if (resolution?.ok !== true || resolution.data?.durable !== true) {
             return resolution?.ok === false
               ? resolution
-              : toResult({ error: new Error("Authoritative market reconciliation did not durably resolve safety blocker " + blocker.blockerId) })
+              : toResult({ error: new Error(`Authoritative market reconciliation did not durably resolve safety blocker ${  blocker.blockerId}`) })
           }
           resolvedSafetyBlockerIds.push(blocker.blockerId)
         }
