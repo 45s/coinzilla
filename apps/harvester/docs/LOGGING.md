@@ -48,7 +48,7 @@ summary, not a second diagnostic dump: it removes a redundant leading
 a small allowlist of actionable fields (including the stable `diagnosticId`
 for catalogued startup failures). When a `symbol` is present, its value is
 shown first; remaining fields are rendered as `key value` pairs separated by
-commas. Arrays of scalar values are comma-separated, and nested objects are
+commas. When no symbol is present, every displayed detail retains its key. Arrays of scalar values are comma-separated, and nested objects are
 flattened into dotted field names, such as `readiness.state BLOCKED`. For example:
 
 ```text
