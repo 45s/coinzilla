@@ -100,7 +100,7 @@ function prepareOfflineRecoveryEvidence({ context, canonical }) {
 }
 
 function createOfflineMarketReconciler({ evidence }) {
-  let recoveredState = evidence.recoveredState
+  let { recoveredState } = evidence
 
   return async ({ historyRetentionEvidence: candidateEvidence }) => {
     return reconcileRecoveredMarketState({
@@ -197,7 +197,10 @@ export async function runOfflineMarketRecovery({
     if (canonical?.ok !== true) {
       return canonical
     }
-    const evidence = prepareOfflineRecoveryEvidence({ context, canonical })
+    const evidence = prepareOfflineRecoveryEvidence({
+      context,
+      canonical,
+    })
     const reconcileMarketState = createOfflineMarketReconciler({ evidence })
 
     if (confirm) {
