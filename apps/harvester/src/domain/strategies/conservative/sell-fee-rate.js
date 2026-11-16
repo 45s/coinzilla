@@ -32,16 +32,20 @@ right: "100" }) >= 0
     }
   }
 
-  const reservedRole = orderType === "LIMIT_MAKER"
-    ? "MAKER"
-    : compareDecimal({ left: makerPercent,
-right: takerPercent }) >= 0
-      ? "MAKER"
-      : "TAKER"
-  const reservedPercent = orderType === "LIMIT_MAKER"
-    ? makerPercent
-    : maxDecimal({ left: makerPercent,
+  let reservedRole
+  let reservedPercent
+  if (orderType === "LIMIT_MAKER") {
+    reservedRole = "MAKER"
+    reservedPercent = makerPercent
+  } else if (compareDecimal({ left: makerPercent,
+right: takerPercent }) >= 0) {
+    reservedRole = "MAKER"
+    reservedPercent = makerPercent
+  } else {
+    reservedRole = "TAKER"
+    reservedPercent = maxDecimal({ left: makerPercent,
 right: takerPercent })
+  }
 
   return Object.freeze({
     feeRate: percentageToRate({ percent: reservedPercent }),

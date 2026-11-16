@@ -1,7 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { Asset, Balance, Quantity } from "@coinzilla/entities"
-import { Market } from "@coinzilla/entities"
+import { Asset, Balance, Market, Quantity } from "@coinzilla/entities"
 import { AccountSnapshot } from "./account-snapshot.js"
 import { assertAccountSnapshotCoversMarkets } from "./assert-account-snapshot-covers-markets.js"
 

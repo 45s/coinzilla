@@ -1,6 +1,5 @@
 import { CanonicalOrder } from "@coinzilla/entities"
-import { toResult } from "@coinzilla/utils"
-import { compareDecimal } from "@coinzilla/utils"
+import { compareDecimal, toResult } from "@coinzilla/utils"
 import {
   attachBrokerOrderIdToOwnership,
   createOrderOwnership,

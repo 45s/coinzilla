@@ -16,18 +16,23 @@ export function createFillFingerprint({ fill } = {}) {
     throw new TypeError("createFillFingerprint requires a canonical Fill")
   }
 
-  const commissions = fill.commissions
-    .map((commission) => ({
+  const commissionEntriesBySortKey = new Map()
+  for (const commission of fill.commissions) {
+    const entry = {
       assetId: commission.amount.asset.id,
       amount: commission.amount.amount,
       quoteValueAssetId: commission.quoteValue?.asset.id ?? null,
       quoteValueAmount: commission.quoteValue?.amount ?? null,
-    }))
-    .sort((left, right) => {
-      const leftKey = `${left.assetId  }:${  left.amount  }:${  left.quoteValueAmount}`
-      const rightKey = `${right.assetId  }:${  right.amount  }:${  right.quoteValueAmount}`
-      return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
-    })
+    }
+    const sortKey = `${entry.assetId}:${entry.amount}:${entry.quoteValueAmount}`
+    const entries = commissionEntriesBySortKey.get(sortKey) ?? []
+    entries.push(entry)
+    commissionEntriesBySortKey.set(sortKey, entries)
+  }
+  const commissions = []
+  for (const sortKey of [...commissionEntriesBySortKey.keys()].sort()) {
+    commissions.push(...commissionEntriesBySortKey.get(sortKey))
+  }
 
   return JSON.stringify({
     id: fill.id,
