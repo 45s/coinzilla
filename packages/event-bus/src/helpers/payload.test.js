@@ -14,15 +14,19 @@ test("accepts supported primitive values", () => {
 
 test("accepts plain objects, arrays, null-prototype objects, cycles, and shared references", () => {
   const shared = { count: 1 }
-  const cyclic = { shared,
-list: [shared] }
+  const sparse = []
+  sparse[1] = "present"
+  const cyclic = {
+    shared,
+    list: [shared],
+  }
   cyclic.self = cyclic
   const nullPrototype = Object.assign(Object.create(null), { safe: true })
 
   assert.doesNotThrow(() => assertSupportedPayload({
     cyclic,
     nullPrototype,
-    sparse: [, "present"],
+    sparse,
   }))
 })
 
@@ -159,8 +163,10 @@ test("clones payloads without retaining source references and freezes nested val
 
 test("clones and freezes cyclic graphs while preserving cycles and shared identity", () => {
   const shared = { value: 1 }
-  const original = { first: shared,
-second: shared }
+  const original = {
+    first: shared,
+    second: shared,
+  }
   original.self = original
 
   const clone = cloneAndFreezePayload(original)
