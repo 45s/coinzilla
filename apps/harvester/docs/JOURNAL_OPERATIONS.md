@@ -193,6 +193,14 @@ A placement request can have an uncertain local outcome even when Binance accept
 
 Shutdown starts cancellation of known Harvester-owned BUYs immediately. Pending or UNKNOWN identities are reconciled while market-price, user-data and broker services remain connected; cancel an order only after canonical ownership is proven. Never guess an exchange order ID or cancel an external/manual order. The broker requests Binance `newOrderRespType: "RESULT"` for canonical placement so `LIMIT_MAKER` acknowledgements contain the order facts required by the canonical adapter instead of Binance's minimal default ACK.
 
+### Shutdown-only recovery and safety pauses
+
+The shutdown-only recovery SELL path is a narrowly authorized exception, not a general pause override. The final submission gate permits it only while stopping, for a SELL with purpose `RECOVERY_SELL`, and while the explicit shutdown-recovery submission scope is active. That does not prove that every market pause is safe to bypass.
+
+The current implementation has two earlier guards that must be reconciled with this boundary: the latest-transition evaluator rejects `state.paused` before considering `shutdownRecoveryOnly`, and the shutdown recovery workflow rejects replacement whenever `state.paused` contains the symbol. A blanket removal of either guard would be unsafe because `state.paused` also represents strategy safety pauses. Before changing them, trace and classify the actual pause reason; permit only the narrowly justified recovery-only SELL case, while keeping accounting, ownership, reconciliation and other safety pauses fail-closed. Add deterministic tests for both the permitted shutdown recovery case and a hard safety-pause rejection.
+
+The current regression on PR #1190, `invalidates and rechecks a safe market after a late owned SELL execution`, fails when the late execution requires a replacement: recovery SELL replacement is blocked for `DOGEUSDT`. This remains an implementation defect, not a reason to weaken the safety-pause boundary. Do not treat PR #1190 as verified until this regression and exact-head CI pass.
+
 ### Safety and lifecycle invariants
 
 - The strategy shutdown gate is activated before shutdown context construction or shared-service cleanup. It rejects initial BUYs, trailing-BUY replacements, retries, delayed evaluations and every final broker-boundary BUY submission.
