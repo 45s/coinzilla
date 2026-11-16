@@ -2279,7 +2279,7 @@ function publishRecoverySellCancellationOutcome({ context, canceledOrder }) {
   })
 }
 
-async function applyRecoverySellCancellation({ context, order, canceledOrder, symbol }) {
+async function resolveRecoverySellCancellationOrder({ context, order, canceledOrder, symbol }) {
   const update = context.state.registry.applyUpdate({
     order: canceledOrder,
   })
@@ -2301,7 +2301,9 @@ async function applyRecoverySellCancellation({ context, order, canceledOrder, sy
       retryable: false,
     })
   }
+
   const terminalStatuses = new Set(["CANCELED", "FILLED", "EXPIRED", "REJECTED"])
+  let effectiveCanceledOrder = canceledOrder
   if (update.stale) {
     const latestOrder = context.state.registry.getOrder({
       clientOrderId: canceledOrder.clientOrderId,
@@ -2325,12 +2327,31 @@ async function applyRecoverySellCancellation({ context, order, canceledOrder, sy
         retryable: true,
       })
     }
-    canceledOrder = latestOrder
+    effectiveCanceledOrder = latestOrder
   }
   context.state.registry = update.registry
-  if (!terminalStatuses.has(canceledOrder.status)) {
+  return toResult({
+    data: {
+      canceledOrder: effectiveCanceledOrder,
+    },
+  })
+}
+
+async function applyRecoverySellCancellation({ context, order, canceledOrder, symbol }) {
+  const resolution = await resolveRecoverySellCancellationOrder({
+    context,
+    order,
+    canceledOrder,
+    symbol,
+  })
+  if (!resolution?.ok) {
+    return resolution
+  }
+  const effectiveCanceledOrder = resolution.data.canceledOrder
+  const terminalStatuses = new Set(["CANCELED", "FILLED", "EXPIRED", "REJECTED"])
+  if (!terminalStatuses.has(effectiveCanceledOrder.status)) {
     context.publishOrderCancelFailed({
-      order: canceledOrder,
+      order: effectiveCanceledOrder,
       outcome: "CANCELLATION_UNCONFIRMED",
       error: new Error("Recovery SELL did not reach an authoritative terminal state"),
     })
@@ -2344,28 +2365,28 @@ async function applyRecoverySellCancellation({ context, order, canceledOrder, sy
   }
   publishRecoverySellCancellationOutcome({
     context,
-    canceledOrder,
+    canceledOrder: effectiveCanceledOrder,
   })
   const terminalReconciliation = await context.reconcileTerminalOrderFills({
-    order: canceledOrder,
+    order: effectiveCanceledOrder,
   })
   if (!terminalReconciliation?.ok) {
     return terminalReconciliation
   }
-  context.state.reconciledTerminalOrderClientIds.add(canceledOrder.clientOrderId)
-  if (canceledOrder.status === "FILLED") {
-    context.state.completedOrderTransitions.add(canceledOrder.clientOrderId)
+  context.state.reconciledTerminalOrderClientIds.add(effectiveCanceledOrder.clientOrderId)
+  if (effectiveCanceledOrder.status === "FILLED") {
+    context.state.completedOrderTransitions.add(effectiveCanceledOrder.clientOrderId)
     context.state.completedRecoverySellSymbols.add(symbol)
-    context.state.completedRecoverySellOrdersBySymbol.set(symbol, canceledOrder)
+    context.state.completedRecoverySellOrdersBySymbol.set(symbol, effectiveCanceledOrder)
     return finishFilledRecoverySell({
       context,
-      order: canceledOrder,
+      order: effectiveCanceledOrder,
       symbol,
     })
   }
   if (compareDecimal({
-    left: canceledOrder.executedQuantity.amount,
-    right: canceledOrder.originalQuantity.amount,
+    left: effectiveCanceledOrder.executedQuantity.amount,
+    right: effectiveCanceledOrder.originalQuantity.amount,
   }) === 0) {
     await context.pause({
       symbol,
