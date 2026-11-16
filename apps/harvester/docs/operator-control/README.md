@@ -4,7 +4,7 @@ This is the entry point for Harvester's operator-control capability.
 
 ## Current status
 
-The engine/application foundation is implemented in [PR #1045](https://github.com/45s/coinzilla/pull/1045). Disabled-by-default runtime configuration, Telegram adapter startup/shutdown, and fail-closed bootstrap validation are implemented in [PR #1067](https://github.com/45s/coinzilla/pull/1067).
+The engine/application foundation is implemented in [PR #1045](https://github.com/45s/coinzilla/pull/1045). Enabled-by-default runtime configuration, Telegram adapter startup/shutdown, and fail-closed bootstrap validation are implemented in [PR #1067](https://github.com/45s/coinzilla/pull/1067).
 
 The Telegram Command Center exposes `/start`, `/help`, `/status`, `/markets`, `/positions`, `/orders`, `/balances`, `/pause <SYMBOL>`, and `/resume <SYMBOL>`. CC-1 is merged in PRs #1079 and #1081. CC-2 adds authorized read-only trading visibility queries: canonical Portfolio positions keep active and retained inventory separate; open orders label Harvester registry orders versus unmatched exchange orders as external; balances report the exchange snapshot source timestamp and age. CC-2 is merged in PR #1086; all seven exact-head GitHub Actions workflows passed. CC-3 proactive alerts are merged in PR #1087. CC-4 usability and hardening is merged in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`; exact-head CI and external documentation-link validation passed. See the [Telegram operator runbook](../operations/telegram-command-center.md) for command-menu, inline-navigation and confirmation behavior.
 
@@ -48,7 +48,7 @@ The operator facade and use cases belong to `apps/harvester`. Do not create a sh
 ## Runtime and persistence
 
 - Runtime configuration belongs under `operatorControl.telegram`, independent from `notifications.telegram`.
-- Inbound control defaults disabled. Enabling it requires a non-empty allowlist of Telegram user IDs and `TELEGRAM_BOT_TOKEN`. Bootstrap adds the validated numeric `TELEGRAM_USER_ID` environment value to `allowedUserIds`, preserving configured IDs; this variable does not enable control by itself.
+- Inbound control defaults enabled in `config/operator-control.js`. `TELEGRAM_USER_ID` seeds `allowedUserIds` from the runtime environment when the config module loads; bootstrap validates the numeric value and merges it with any configured IDs. Startup fails closed if the allowlist is empty or invalid, or if `TELEGRAM_BOT_TOKEN` is missing. The bot token remains environment-only.
 - **Operational State Store** is the application-facing name for the ADR-0001 append-only ledger. Its default directory is `apps/harvester/recovery-facts/`, resolved relative to the Harvester package and ignored by Git because it contains private runtime data.
 - Harvester bootstrap composes the same Operational State Store whenever either `recovery.enabled` or `operatorControl.telegram.enabled` is true. Enabling Telegram alone does not enable restart recovery. `OPERATIONAL_STATE_DIRECTORY` is the only supported optional absolute-path override. Runtime, the one-time initializer and the offline confirmation CLI use the same package-anchored directory resolver. There is no home-directory fallback or legacy directory-variable alias. This path cleanup does not migrate, delete, initialize, overwrite or repair existing runtime data.
 - The ledger must already be initialized; normal startup never creates or repairs it. When Telegram operator control alone requires the store, bootstrap verifies it before broker-capable runtime startup. See the [Operational State Store setup](../../README.md#operational-state-store-adr-0001-step-8).
@@ -65,7 +65,7 @@ The operator facade and use cases belong to `apps/harvester`. Do not create a sh
 | Engine pause/resume boundary and market-scoped behavior | Implemented in PR #1045; regression-tested |
 | Actor authorization and durable-before-apply application use cases | Implemented in PR #1045; port-tested |
 | Telegram parser, private-chat allowlist and serial polling | Implemented in PR #1045; mocked-transport tested |
-| Disabled-by-default runtime configuration and lifecycle wiring | Implemented in PR #1067; regression-tested |
+| Enabled-by-default runtime configuration and lifecycle wiring | Implemented in PR #1067; regression-tested |
 | Telegram `/start`, `/help`, `/pause`, and safe `/resume` | Implemented in PR #1079; merged |
 | Read-only `/status` and `/markets` application queries and Telegram formatting | Implemented in PR #1081; regression-tested |
 | Read-only `/positions`, `/orders`, and `/balances` application queries and Telegram formatting | Merged in PR #1086; offline contract tests and all seven exact-head workflows passed |

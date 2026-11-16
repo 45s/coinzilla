@@ -2,14 +2,14 @@
 
 ## Scope and safety
 
-The Harvester Telegram Command Center is an optional operator interface. Inbound control remains disabled by default and is enabled only through the reviewed `operatorControl.telegram` configuration and a private-chat user-ID allowlist. The bot token remains in `TELEGRAM_BOT_TOKEN`.
+The Harvester Telegram Command Center is an inbound operator interface, enabled by default in `operatorControl.telegram`. Startup remains fail-closed and requires a valid private-chat user-ID allowlist and `TELEGRAM_BOT_TOKEN` in the runtime environment.
 
 The Command Center is not an exchange kill switch. It cannot place, cancel, adopt or modify exchange orders; change strategies or configuration; bypass safety/recovery/volatility blockers; or execute arbitrary commands. A market pause suppresses new strategy BUYs and trailing-BUY replacements for that market only. Existing orders remain open and may still fill; fill accounting and recovery SELLs continue. User-data disconnect/reconnect and reconciliation do not clear an active operator pause. Operator pauses last only for the current process and are not restored after restart.
 
-## Enabling the Command Center
+## Configuring the Command Center
 
-1. Set `operatorControl.telegram.enabled: true` in `config/operator-control.js`.
-2. Set `TELEGRAM_USER_ID` in the runtime environment to your numeric Telegram sender user ID. Bootstrap validates it and adds it to `operatorControl.telegram.allowedUserIds`, preserving configured IDs. Invalid values stop startup with a specific error. This variable does not enable operator control by itself.
+1. `operatorControl.telegram.enabled` is `true` by default in `config/operator-control.js`.
+2. Set `TELEGRAM_USER_ID` in the runtime environment to your numeric Telegram sender user ID. The config module seeds `operatorControl.telegram.allowedUserIds` from this value; bootstrap validates it and merges it with any explicitly configured IDs. Invalid or missing values leave no usable allowlist and stop startup with a specific error.
 3. Set `TELEGRAM_BOT_TOKEN` in the runtime environment. Do not put the token in application configuration or commit it.
 4. Initialize the ADR-0001 Operational State Store once while Harvester is stopped, following the [Operational State Store setup](../../README.md#operational-state-store-adr-0001-step-8). The default directory is `apps/harvester/recovery-facts/` inside the Harvester application package; the initializer and runtime resolve this same path, so no directory variable is required. For a custom absolute path, set `OPERATIONAL_STATE_DIRECTORY` in both environments. The former home-directory recovery-data location is not a supported default or fallback. This cleanup does not move, delete, initialize, overwrite, or repair existing runtime data.
 5. Start only with a verified Operational State Store that contains no prior `PROCESS_STARTED` record. The current ADR-0001 gate blocks every second process start, even after clean shutdown, until Steps 8–9 are accepted. Do not delete or reinitialize an existing ledger to bypass this restriction.

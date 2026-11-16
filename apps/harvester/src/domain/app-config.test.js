@@ -355,7 +355,7 @@ test("uses one named immutable source for supported external-order policy values
   )
 })
 
-test("composes the named operator-control defaults into the single application config", () => {
+test("composes enabled Telegram operator control and the environment-backed allowlist", () => {
   assert.equal(
     appConfig.operatorControl,
     OPERATOR_CONTROL_CONFIG,
@@ -363,12 +363,12 @@ test("composes the named operator-control defaults into the single application c
   )
   assert.equal(
     OPERATOR_CONTROL_CONFIG.telegram.enabled,
-    false,
-    "Inbound Telegram operator control must remain disabled by default.",
+    true,
+    "Inbound Telegram operator control must be enabled by default.",
   )
   assert.deepEqual(
     OPERATOR_CONTROL_CONFIG.telegram.allowedUserIds,
-    [],
-    "The operator allowlist must remain empty until explicitly configured.",
+    process.env.TELEGRAM_USER_ID ? [process.env.TELEGRAM_USER_ID] : [],
+    "The operator allowlist must be seeded from TELEGRAM_USER_ID without adding an undefined entry.",
   )
 })
