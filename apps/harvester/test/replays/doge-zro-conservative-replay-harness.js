@@ -150,10 +150,10 @@ function waitForRecoveryCycleCompletion(state) {
     const [resolve, reject] = settlers;
     const timeoutRef = { current: undefined };
     const resolveCycle = (data) => {
-      clearTimeout(timeout);
+      clearTimeout(timeoutRef.current);
       resolve(data);
     };
-    timeout = setTimeout(() => {
+    timeoutRef.current = setTimeout(() => {
       if (state.recoveryCycleCompletionWaiter === resolveCycle) {
         state.recoveryCycleCompletionWaiter = undefined;
       }
