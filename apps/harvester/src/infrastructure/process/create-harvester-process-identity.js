@@ -15,6 +15,38 @@ const UNAVAILABLE_SOURCE = Object.freeze({
   metadataSource: "unavailable",
 })
 
+function resolveStartedAt({ env, now }) {
+  const startedAtDate = env.COINZILLA_PROCESS_STARTED_AT === undefined
+    ? now()
+    : new Date(env.COINZILLA_PROCESS_STARTED_AT)
+  if (!(startedAtDate instanceof Date) || Number.isNaN(startedAtDate.getTime())) {
+    throw new TypeError("Process-entry timestamp must be a valid Date")
+  }
+  return startedAtDate
+}
+
+function resolveRuntimeSessionId({ env, generateRuntimeSessionId }) {
+  const runtimeSessionId = env.COINZILLA_RUNTIME_SESSION_ID ?? generateRuntimeSessionId()
+  if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
+    throw new TypeError("Runtime session ID must be a non-empty string")
+  }
+  return runtimeSessionId
+}
+
+function captureSource({ captureBuildMetadata, cwd, env }) {
+  try {
+    const metadata = captureBuildMetadata({
+      application: APPLICATION,
+      version: packageMetadata.version,
+      cwd,
+      env,
+    })
+    return metadata?.source ?? UNAVAILABLE_SOURCE
+  } catch {
+    return UNAVAILABLE_SOURCE
+  }
+}
+
 /**
  * Capture the immutable identity for one Harvester OS process.
  *
@@ -45,29 +77,10 @@ export function createHarvesterProcessIdentity({
     throw new TypeError("processId must be a positive safe integer")
   }
 
-  const startedAtDate = env.COINZILLA_PROCESS_STARTED_AT === undefined ? now() : new Date(env.COINZILLA_PROCESS_STARTED_AT)
-  if (!(startedAtDate instanceof Date) || Number.isNaN(startedAtDate.getTime())) {
-    throw new TypeError("Process-entry timestamp must be a valid Date")
-  }
+  const startedAtDate = resolveStartedAt({ env, now })
+  const runtimeSessionId = resolveRuntimeSessionId({ env, generateRuntimeSessionId })
+  const source = captureSource({ captureBuildMetadata, cwd, env })
 
-  const runtimeSessionId = env.COINZILLA_RUNTIME_SESSION_ID ?? generateRuntimeSessionId()
-  if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
-    throw new TypeError("Runtime session ID must be a non-empty string")
-  }
-
-  let buildMetadata
-  try {
-    buildMetadata = captureBuildMetadata({
-      application: APPLICATION,
-      version: packageMetadata.version,
-      cwd,
-      env,
-    })
-  } catch {
-    buildMetadata = null
-  }
-
-  const source = buildMetadata?.source ?? UNAVAILABLE_SOURCE
   return Object.freeze({
     application: APPLICATION,
     version: packageMetadata.version,
