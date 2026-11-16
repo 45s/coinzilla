@@ -95,7 +95,7 @@ aggressive: { enabled: false } },
   }
 }
 
-function createHarnessBroker({ orders } = {}) {
+function createHarnessBroker({ orders, cancelledOrderIds } = {}) {
   return {
     placeOrder: async ({ order }) => {
       orders.push(order)
@@ -121,7 +121,9 @@ asset: market.baseAsset }),
         }),
       }
     },
-    cancelOrder: async ({ order }) => ({
+    cancelOrder: async ({ order }) => {
+      cancelledOrderIds?.push(order.brokerOrderId)
+      return {
       ok: true,
       data: new CanonicalOrder({
         clientOrderId: order.clientOrderId,
@@ -138,7 +140,8 @@ asset: market.baseAsset }),
         updatedAt: 2,
         completedAt: 2,
       }),
-    }),
+    }
+    },
     getFills: async () => ({ ok: true,
 data: [] }),
   }
@@ -239,13 +242,14 @@ async function createHarness({
   eventPublisher,
 } = {}) {
   const orders = []
+  const cancelledOrderIds = []
   const pauses = []
   const accountedFillIds = new Set()
   const accountedFills = []
   const portfolio = initialPortfolio ?? new Portfolio()
   const metadataBySymbol = new Map(markets.map((market) => [market.symbol, makeMarketMetadata(market)]))
   const appConfig = createHarnessAppConfig({ externalOrdersPolicyBySymbol })
-  const broker = createHarnessBroker({ orders })
+  const broker = createHarnessBroker({ orders, cancelledOrderIds })
   const engine = createHarnessEngine({
     broker,
     portfolio,
@@ -266,7 +270,8 @@ async function createHarness({
   return { engine,
 orders,
 pauses,
-accountedFills }
+accountedFills,
+cancelledOrderIds }
 }
 
 async function startBothMarkets(engine) {
@@ -1178,4 +1183,59 @@ test("emergency BUY pause preserves recovery SELL submission while blocking the 
     [{ symbol: "DOGEUSDT", side: "SELL" }, { symbol: "SOLUSDT", side: "BUY" }],
     "The market emergency BUY pause must preserve the selected market recovery SELL, suppress that market BUY, and leave another market eligible.",
   )
+})
+
+test("global emergency BUY pause never cancels an unowned external order", async () => {
+  const externalOrderObservations = []
+  const { engine, cancelledOrderIds } = await createHarness({
+    externalOrdersPolicyBySymbol: { SOLUSDT: "block" },
+    onUnownedExternalOrderObserved: ({ order }) => {
+      externalOrderObservations.push(order.brokerOrderId)
+    },
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => ({ ok: true, durable: true }),
+    },
+  })
+  await startBothMarkets(engine)
+  const solMarket = marketsBySymbol.get("SOLUSDT")
+  const externalOrder = new CanonicalOrder({
+    clientOrderId: "manual-sol-client",
+    brokerOrderId: "manual-sol-order",
+    market: solMarket,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "99.95", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: solAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: solAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const observed = await engine.processUserDataEvent({
+    event: { eventType: "executionReport", executedOrder: externalOrder },
+  })
+  assert.equal(observed.ok, true, "An unowned external order report must be accepted without adopting it into Harvester ownership.")
+  assert.deepEqual(externalOrderObservations, ["manual-sol-order"], "The test must establish that the external order was observed as unowned.")
+
+  const paused = await engine.pauseBuys()
+
+  assert.equal(paused.ok, true, "The global BUY pause must still cancel the current process's owned BUYs.")
+  assert.equal(cancelledOrderIds.length, 2, "Only the two current-process-owned BUYs may be sent to the broker cancellation port.")
+  assert.equal(cancelledOrderIds.includes("manual-sol-order"), false, "The unowned external BUY must never be canceled by emergency BUY pause.")
+})
+
+test("emergency BUY pause state is not restored from a previous process snapshot", async () => {
+  const { engine } = await createHarness({
+    initialState: {
+      operatorAllBuysPaused: true,
+      operatorBuyPausedMarkets: ["DOGEUSDT"],
+    },
+  })
+
+  assert.deepEqual(engine.getOperatorBuyPauseState(), {
+    allBuysPaused: false,
+    pausedMarkets: [],
+  }, "Emergency BUY pause state must remain process-lifetime only and must not be restored from prior process state.")
 })
