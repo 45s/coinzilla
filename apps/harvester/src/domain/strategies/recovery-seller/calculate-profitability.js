@@ -5,7 +5,10 @@ import {
   subtractDecimal,
 } from "@coinzilla/utils"
 
-function assertNonNegative({ value, field }) {
+function assertNonNegative({
+  value,
+  field,
+}) {
   assertDecimalString({
     value,
     field,
@@ -18,7 +21,11 @@ function assertNonNegative({ value, field }) {
   }
 }
 
-function assertPositive({ value, field, message = `${field} must be positive` }) {
+function assertPositive({
+  value,
+  field,
+  message = `${field} must be positive`,
+}) {
   assertNonNegative({
     value,
     field,
@@ -39,11 +46,11 @@ function validateProfitabilityInputs({
   legacyBaseDebit,
   legacyNetQuoteProceeds,
 }) {
-  assertDecimalString({
+  assertNonNegative({
     value: recoveryNetQuoteProceeds,
     field: "recoveryNetQuoteProceeds",
   })
-  assertDecimalString({
+  assertNonNegative({
     value: legacyNetQuoteProceeds,
     field: "legacyNetQuoteProceeds",
   })
