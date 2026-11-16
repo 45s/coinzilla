@@ -812,8 +812,7 @@ test("operator pause preserves recovery SELL execution while suppressing the sam
   assert.equal(
     typeof engine.pauseMarket,
     "function",
-    "The engine must expose operator pause
-   before recovery-Sell coexistence can be verified.",
+    "The engine must expose operator pause before recovery-Sell coexistence can be verified.",
   )
   const paused = await engine.pauseMarket({
     symbol: "DOGEUSDT",
