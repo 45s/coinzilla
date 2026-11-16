@@ -326,7 +326,10 @@ test("pauseAllBuys and resumeAllBuys use distinct global facts and remain proces
 
 test("resumeBuys rejects an unauthorized actor before touching the engine or Operational State Store", async () => {
   const { calls, operationalStateStore, engine } = createHarness()
-  const operator = createHarvesterOperator({ operationalStateStore, engine })
+  const operator = createHarvesterOperator({
+    operationalStateStore,
+    engine,
+  })
 
   const result = await operator.resumeBuys({
     actor: {
