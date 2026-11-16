@@ -5,7 +5,8 @@ import { createTelegramOperatorAdapter } from "../../infrastructure/telegram/tel
 
 export class OperatorControlStartupError extends Error {
   constructor(message, code, cause) {
-    super(message, { cause })
+    const detail = cause?.message
+    super(detail ? `${message}: ${detail}` : message, { cause })
     this.name = "OperatorControlStartupError"
     this.code = code
   }
