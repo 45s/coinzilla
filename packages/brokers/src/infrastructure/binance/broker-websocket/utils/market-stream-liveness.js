@@ -134,12 +134,20 @@ class MarketStreamLivenessMonitor {
       return
     }
 
-    if (this.#lastTickerTradeId === null || tradeId > this.#lastTickerTradeId) {
-      this.#lastTickerTradeId = tradeId
+    if (this.#lastTickerTradeId !== null && tradeId <= this.#lastTickerTradeId) {return}
+    if (this.#state === "exhausted") {
+      this.#pruneRecoveryAttempts(this.#now())
+      if (this.#recoveryAttemptTimes.length >= this.#maxRecoveryAttempts) {return}
+      this.#state = "healthy"
     }
+    this.#lastTickerTradeId = tradeId
     if (this.#lastAggTradeId !== null && tradeId <= this.#lastAggTradeId) {return}
     if (this.#pendingTradeId === null || tradeId > this.#pendingTradeId) {
       this.#pendingTradeId = tradeId
+    }
+    if (this.#recoveryAttemptTimes.length >= this.#maxRecoveryAttempts) {
+      this.#exhaustRecovery()
+      return
     }
     if (this.#state === "healthy") {
       this.#state = "suspected"
@@ -243,6 +251,7 @@ class MarketStreamLivenessMonitor {
     this.#recovering = true
     this.#state = "recovering"
     this.#reportStatus("recovering")
+    const pendingTradeIdAtStart = this.#pendingTradeId
     const recoveryGeneration = ++this.#generation
     let recoveryError = null
     try {
@@ -271,6 +280,9 @@ class MarketStreamLivenessMonitor {
     }
     this.#state = "awaiting-aggTrade"
     this.#reportStatus("awaiting-aggTrade")
+    if (this.#pendingTradeId > pendingTradeIdAtStart) {
+      this.#scheduleCheck()
+    }
   }
 }
 
