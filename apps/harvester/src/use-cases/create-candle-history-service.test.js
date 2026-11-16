@@ -22,11 +22,11 @@ test("subscribes every enabled market before requesting approximately 100 comple
 
   await fixture.start()
 
-  const subscriptionIndexes = fixture.calls
-    .entries().map(([index, call]) => call.method === "subscribeForCandles" ? index : -1)
+  const subscriptionIndexes = [...fixture.calls.entries()]
+    .map(([index, call]) => call.method === "subscribeForCandles" ? index : -1)
     .filter((index) => index >= 0)
-  const historyIndexes = fixture.calls
-    .entries().map(([index, call]) => call.method === "getCandles" ? index : -1)
+  const historyIndexes = [...fixture.calls.entries()]
+    .map(([index, call]) => call.method === "getCandles" ? index : -1)
     .filter((index) => index >= 0)
 
   assert.equal(subscriptionIndexes.length, 2, "Only enabled markets must receive a live candle subscription.")
