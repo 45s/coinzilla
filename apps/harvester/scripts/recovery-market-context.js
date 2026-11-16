@@ -89,7 +89,11 @@ function prepareOfflineRecoveryEvidence({ context, canonical }) {
   const exchangeFills = requireArray({
     value: tradeHistory.fills,
     field: "exchange.tradeHistory.fills",
-  }).map((fill) => createCanonicalFill({ input: fill, marketsBySymbol, assetsByLookup }))
+  }).map((fill) => createCanonicalFill({
+    input: fill,
+    marketsBySymbol,
+    assetsByLookup,
+  }))
 
   return {
     projection,
