@@ -75,6 +75,188 @@ strategyId: StrategyId.COIN_GRABBER }).ledger
 recoveryLedger }
 }
 
+function withExchangeRuleOverrides({ rule, quantityIncrement, minimumNotional, includeMinQuantity = true }) {
+  if (rule.type === "QUANTITY_INCREMENT" ||
+      (includeMinQuantity && rule.type === "MIN_QUANTITY")) {
+    return { ...rule,
+value: { amount: quantityIncrement } }
+  }
+  if (rule.type === "MIN_NOTIONAL") {
+    return { ...rule,
+value: { amount: minimumNotional } }
+  }
+  return rule
+}
+
+function createDustMarketMetadata({ market, priceIncrement, quantityIncrement, minQuantity, minNotional }) {
+  return {
+    market,
+    orderType: "LIMIT",
+    tradingRules: {
+      constraints: [
+        { type: "PRICE_INCREMENT",
+status: "SUPPORTED",
+value: { amount: priceIncrement } },
+        { type: "QUANTITY_INCREMENT",
+status: "SUPPORTED",
+value: { amount: quantityIncrement } },
+        { type: "MIN_QUANTITY",
+status: "SUPPORTED",
+value: { amount: minQuantity } },
+        { type: "MIN_NOTIONAL",
+status: "SUPPORTED",
+value: { amount: minNotional } },
+      ],
+    },
+  }
+}
+
+function applyDustFill({ state, market, baseAsset, side, tradeId, brokerOrderId, price, quantity, quoteQuantity, commissionAmount, commissionAsset }) {
+  const fill = new Fill({
+    tradeId,
+    brokerOrderId,
+    market,
+    side,
+    price: new Money({ amount: price,
+asset: quoteAsset }),
+    quantity: new Quantity({ amount: quantity,
+asset: baseAsset }),
+    quoteQuantity: new Money({ amount: quoteQuantity,
+asset: quoteAsset }),
+    commissions: commissionAmount === "0" ? [] : [
+      new Commission({ amount: new Money({ amount: commissionAmount,
+asset: commissionAsset }) }),
+    ],
+    commissionStatus: "COMPLETE",
+  })
+  return {
+    portfolio: state.portfolio.applyFill({
+      fill,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).portfolio,
+    recoveryLedger: state.recoveryLedger.applyFill({
+      fill,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).ledger,
+  }
+}
+
+function createDogeDustScenario() {
+  const baseAsset = new Asset({ id: "asset:DOGE",
+code: "DOGE" })
+  const market = new Market({ venue: "binance",
+symbol: "DOGEUSDT",
+baseAsset,
+quoteAsset })
+  const metadata = createDustMarketMetadata({
+    market,
+    priceIncrement: "0.00001",
+    quantityIncrement: "1",
+    minQuantity: "1",
+    minNotional: "5",
+  })
+  let state = {
+    portfolio: new Portfolio(),
+    recoveryLedger: RecoveryLedger.empty({ market }),
+  }
+  for (const [tradeId, price, quote] of [
+    ["221733", "0.07157", "28.628"],
+    ["221736", "0.07153", "28.612"],
+    ["221738", "0.07149", "28.596"],
+  ]) {
+    state = applyDustFill({
+      state,
+      market,
+      baseAsset,
+      side: "BUY",
+      tradeId,
+      brokerOrderId: `DOGE-BUY-${tradeId}`,
+      price,
+      quantity: "400",
+      quoteQuantity: quote,
+      commissionAmount: "0.4",
+      commissionAsset: baseAsset,
+    })
+  }
+  for (const [tradeId, quantity, quote, commission] of [
+    ["221990", "278", "19.9743", "0.0199743"],
+    ["221991", "918", "65.9583", "0.0659583"],
+  ]) {
+    state = applyDustFill({
+      state,
+      market,
+      baseAsset,
+      side: "SELL",
+      tradeId,
+      brokerOrderId: "1276698",
+      price: "0.07185",
+      quantity,
+      quoteQuantity: quote,
+      commissionAmount: commission,
+      commissionAsset: quoteAsset,
+    })
+  }
+  return { ...state, metadata }
+}
+
+function createZroDustScenario() {
+  const baseAsset = new Asset({ id: "asset:ZRO",
+code: "ZRO" })
+  const market = new Market({ venue: "binance",
+symbol: "ZROUSDT",
+baseAsset,
+quoteAsset })
+  const metadata = createDustMarketMetadata({
+    market,
+    priceIncrement: "0.001",
+    quantityIncrement: "0.01",
+    minQuantity: "0.01",
+    minNotional: "5",
+  })
+  let state = {
+    portfolio: new Portfolio(),
+    recoveryLedger: RecoveryLedger.empty({ market }),
+  }
+  for (const [tradeId, price, quote] of [
+    ["11658", "1.604", "8.02"],
+    ["11659", "1.603", "8.015"],
+    ["11660", "1.602", "8.01"],
+    ["11661", "1.601", "8.005"],
+    ["11662", "1.6", "8"],
+    ["11663", "1.599", "7.995"],
+    ["11664", "1.598", "7.99"],
+    ["11665", "1.597", "7.985"],
+  ]) {
+    state = applyDustFill({
+      state,
+      market,
+      baseAsset,
+      side: "BUY",
+      tradeId,
+      brokerOrderId: `ZRO-BUY-${tradeId}`,
+      price,
+      quantity: "5",
+      quoteQuantity: quote,
+      commissionAmount: "0.005",
+      commissionAsset: baseAsset,
+    })
+  }
+  state = applyDustFill({
+    state,
+    market,
+    baseAsset,
+    side: "SELL",
+    tradeId: "11666",
+    brokerOrderId: "727904",
+    price: "1.606",
+    quantity: "39.91",
+    quoteQuantity: "64.09546",
+    commissionAmount: "0.06409546",
+    commissionAsset: quoteAsset,
+  })
+  return { ...state, metadata, market }
+}
+
 test("creates the initial BUY below last traded price and rounds down to tick", () => {
   const decision = evaluateConservativeStrategy({
     marketPrice,
@@ -412,13 +594,11 @@ test("continues selling residual inventory after cumulative recovery profit is a
       ...marketMetadata,
       tradingRules: {
         constraints: marketMetadata.tradingRules.constraints.map((rule) =>
-          rule.type === "QUANTITY_INCREMENT" || rule.type === "MIN_QUANTITY"
-            ? { ...rule,
-value: { amount: "0.1" } }
-            : rule.type === "MIN_NOTIONAL"
-              ? { ...rule,
-value: { amount: "0.05" } }
-              : rule,
+          withExchangeRuleOverrides({
+            rule,
+            quantityIncrement: "0.1",
+            minimumNotional: "0.05",
+          })
         ),
       },
     },
@@ -556,13 +736,12 @@ test("does not create a duplicate residual SELL while one is active", () => {
       ...marketMetadata,
       tradingRules: {
         constraints: marketMetadata.tradingRules.constraints.map((rule) =>
-          rule.type === "QUANTITY_INCREMENT"
-            ? { ...rule,
-value: { amount: "0.1" } }
-            : rule.type === "MIN_NOTIONAL"
-              ? { ...rule,
-value: { amount: "0.05" } }
-              : rule,
+          withExchangeRuleOverrides({
+            rule,
+            quantityIncrement: "0.1",
+            minimumNotional: "0.05",
+            includeMinQuantity: false,
+          })
         ),
       },
     },
@@ -723,13 +902,11 @@ test("caps residual SELL quantity at MAX_QUANTITY and leaves the rest for sell-t
       tradingRules: {
         constraints: [
           ...marketMetadata.tradingRules.constraints.map((rule) =>
-            rule.type === "QUANTITY_INCREMENT" || rule.type === "MIN_QUANTITY"
-              ? { ...rule,
-value: { amount: "0.1" } }
-              : rule.type === "MIN_NOTIONAL"
-                ? { ...rule,
-value: { amount: "0.05" } }
-                : rule,
+            withExchangeRuleOverrides({
+              rule,
+              quantityIncrement: "0.1",
+              minimumNotional: "0.05",
+            })
           ),
           { type: "MAX_QUANTITY",
 status: "SUPPORTED",
@@ -868,90 +1045,7 @@ test("fails closed rather than inventing a next BUY reference while active inven
 
 
 test("reconciles actual DOGE fills and keeps the 1.8 DOGE excess as MIN_NOTIONAL dust", () => {
-  const dogeBase = new Asset({ id: "asset:DOGE",
-code: "DOGE" })
-  const dogeMarket = new Market({
-    venue: "binance",
-    symbol: "DOGEUSDT",
-    baseAsset: dogeBase,
-    quoteAsset,
-  })
-  const metadata = {
-    market: dogeMarket,
-    orderType: "LIMIT",
-    tradingRules: {
-      constraints: [
-        { type: "PRICE_INCREMENT",
-status: "SUPPORTED",
-value: { amount: "0.00001" } },
-        { type: "QUANTITY_INCREMENT",
-status: "SUPPORTED",
-value: { amount: "1" } },
-        { type: "MIN_QUANTITY",
-status: "SUPPORTED",
-value: { amount: "1" } },
-        { type: "MIN_NOTIONAL",
-status: "SUPPORTED",
-value: { amount: "5" } },
-      ],
-    },
-  }
-  let portfolio = new Portfolio()
-  let recoveryLedger = RecoveryLedger.empty({ market: dogeMarket })
-  const apply = (fill) => {
-    portfolio = portfolio.applyFill({ fill,
-strategyId: StrategyId.COIN_GRABBER }).portfolio
-    recoveryLedger = recoveryLedger.applyFill({ fill,
-strategyId: StrategyId.COIN_GRABBER }).ledger
-  }
-
-  for (const [tradeId, price, quote] of [
-    ["221733", "0.07157", "28.628"],
-    ["221736", "0.07153", "28.612"],
-    ["221738", "0.07149", "28.596"],
-  ]) {
-    apply(new Fill({
-      tradeId,
-      brokerOrderId: `DOGE-BUY-${  tradeId}`,
-      market: dogeMarket,
-      side: "BUY",
-      price: new Money({ amount: price,
-asset: quoteAsset }),
-      quantity: new Quantity({ amount: "400",
-asset: dogeBase }),
-      quoteQuantity: new Money({ amount: quote,
-asset: quoteAsset }),
-      commissions: [
-        new Commission({ amount: new Money({ amount: "0.4",
-asset: dogeBase }) }),
-      ],
-      commissionStatus: "COMPLETE",
-    }))
-  }
-
-  for (const [tradeId, quantity, quote, commission] of [
-    ["221990", "278", "19.9743", "0.0199743"],
-    ["221991", "918", "65.9583", "0.0659583"],
-  ]) {
-    apply(new Fill({
-      tradeId,
-      brokerOrderId: "1276698",
-      market: dogeMarket,
-      side: "SELL",
-      price: new Money({ amount: "0.07185",
-asset: quoteAsset }),
-      quantity: new Quantity({ amount: quantity,
-asset: dogeBase }),
-      quoteQuantity: new Money({ amount: quote,
-asset: quoteAsset }),
-      commissions: [
-        new Commission({ amount: new Money({ amount: commission,
-asset: quoteAsset }) }),
-      ],
-      commissionStatus: "COMPLETE",
-    }))
-  }
-
+  const { portfolio, recoveryLedger, metadata } = createDogeDustScenario()
   const position = portfolio.getPosition({ symbol: "DOGEUSDT" })
   assert.equal(position.quantity.amount, "2.8", "After the three DOGE BUY fills and SELL recovery, active quantity must match the retained strategy position.")
   assert.equal(position.spent.amount, "85.836", "The three DOGE BUY fills must accumulate their exact quote notional in Position cost basis.")
@@ -997,90 +1091,7 @@ timestamp: 100 },
 })
 
 test("reconciles actual ZRO fills and keeps the 0.04 excess as MIN_NOTIONAL dust", () => {
-  const zroBase = new Asset({ id: "asset:ZRO",
-code: "ZRO" })
-  const zroMarket = new Market({
-    venue: "binance",
-    symbol: "ZROUSDT",
-    baseAsset: zroBase,
-    quoteAsset,
-  })
-  const metadata = {
-    market: zroMarket,
-    orderType: "LIMIT",
-    tradingRules: {
-      constraints: [
-        { type: "PRICE_INCREMENT",
-status: "SUPPORTED",
-value: { amount: "0.001" } },
-        { type: "QUANTITY_INCREMENT",
-status: "SUPPORTED",
-value: { amount: "0.01" } },
-        { type: "MIN_QUANTITY",
-status: "SUPPORTED",
-value: { amount: "0.01" } },
-        { type: "MIN_NOTIONAL",
-status: "SUPPORTED",
-value: { amount: "5" } },
-      ],
-    },
-  }
-  let portfolio = new Portfolio()
-  let recoveryLedger = RecoveryLedger.empty({ market: zroMarket })
-  const apply = (fill) => {
-    portfolio = portfolio.applyFill({ fill,
-strategyId: StrategyId.COIN_GRABBER }).portfolio
-    recoveryLedger = recoveryLedger.applyFill({ fill,
-strategyId: StrategyId.COIN_GRABBER }).ledger
-  }
-
-  for (const [tradeId, price, quote] of [
-    ["11658", "1.604", "8.02"],
-    ["11659", "1.603", "8.015"],
-    ["11660", "1.602", "8.01"],
-    ["11661", "1.601", "8.005"],
-    ["11662", "1.6", "8"],
-    ["11663", "1.599", "7.995"],
-    ["11664", "1.598", "7.99"],
-    ["11665", "1.597", "7.985"],
-  ]) {
-    apply(new Fill({
-      tradeId,
-      brokerOrderId: `ZRO-BUY-${  tradeId}`,
-      market: zroMarket,
-      side: "BUY",
-      price: new Money({ amount: price,
-asset: quoteAsset }),
-      quantity: new Quantity({ amount: "5",
-asset: zroBase }),
-      quoteQuantity: new Money({ amount: quote,
-asset: quoteAsset }),
-      commissions: [
-        new Commission({ amount: new Money({ amount: "0.005",
-asset: zroBase }) }),
-      ],
-      commissionStatus: "COMPLETE",
-    }))
-  }
-
-  apply(new Fill({
-    tradeId: "11666",
-    brokerOrderId: "727904",
-    market: zroMarket,
-    side: "SELL",
-    price: new Money({ amount: "1.606",
-asset: quoteAsset }),
-    quantity: new Quantity({ amount: "39.91",
-asset: zroBase }),
-    quoteQuantity: new Money({ amount: "64.09546",
-asset: quoteAsset }),
-    commissions: [
-      new Commission({ amount: new Money({ amount: "0.06409546",
-asset: quoteAsset }) }),
-    ],
-    commissionStatus: "COMPLETE",
-  }))
-
+  const { portfolio, recoveryLedger, metadata, market } = createZroDustScenario()
   const position = portfolio.getPosition({ symbol: "ZROUSDT" })
   assert.equal(position.quantity.amount, "0.05", "After the eight ZRO BUY fills and SELL recovery, active quantity must match the retained strategy position.")
   assert.equal(position.spent.amount, "64.02", "The eight ZRO BUY fills must accumulate their exact quote notional in Position cost basis.")
@@ -1115,7 +1126,7 @@ timestamp: 100 },
     portfolio,
     recoveryLedger,
     marketMetadata: metadata,
-    activeOrders: [{ market: zroMarket,
+    activeOrders: [{ market,
 side: "BUY",
 status: "OPEN" }],
   })
