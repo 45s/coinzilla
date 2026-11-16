@@ -768,7 +768,10 @@ test("refuses TESTNET trading when Journal startup fails", async () => {
       acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: false, errors: [new Error("disk unavailable")] }),
-        flush: async () => ({ ok: true, durable: true }),
+        flush: async () => ({
+          ok: true,
+          durable: true,
+        }),
         close: async () => ({ ok: true, closed: true }),
       }),
       start: async () => { started = true; return { connected: false } },
@@ -1890,7 +1893,10 @@ test("releases the process lock after operator-control preflight failure while p
         ok: true,
         release: async () => {
           processLockReleaseCalls += 1
-          return { ok: true, released: true }
+          return {
+            ok: true,
+            released: true,
+          }
         },
       }),
       start: async () => { throw startupError },
