@@ -87,6 +87,36 @@ function getRestoredTransition({ status }) {
   }
 }
 
+function getCauseKeyMessage({ cause }) {
+  if (typeof cause?.message === "string") {
+    return cause.message
+  }
+  if (cause === undefined) {
+    return ""
+  }
+  return String(cause)
+}
+
+function getCauseDiagnosticMessage({ cause }) {
+  if (cause instanceof Error) {
+    return cause.message || "(empty cause message)"
+  }
+  if (cause === undefined) {
+    return undefined
+  }
+  return String(cause)
+}
+
+function resolveUnsafeReadinessStatus({ state, status }) {
+  if (status.type === "executionNormalizationFailed") {
+    return "EXECUTION_NORMALIZATION_FAILED"
+  }
+  if (state.accountingFailed) {
+    return "EXECUTION_ACCOUNTING_FAILED"
+  }
+  return "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+}
+
 function getStreamErrorTransition({ status, error, cause }) {
   const key = [
     "error",
@@ -97,9 +127,7 @@ function getStreamErrorTransition({ status, error, cause }) {
     typeof error?.stack === "string" ? error.stack.slice(0, 1024) : "",
     cause?.code ?? "",
     cause?.name ?? "",
-    typeof cause?.message === "string"
-      ? cause.message
-      : cause === undefined ? "" : String(cause),
+    getCauseKeyMessage({ cause }),
     typeof cause?.stack === "string" ? cause.stack.slice(0, 1024) : "",
     status.recoveryRequired === true,
     status.recoveryRequired === false,
@@ -128,9 +156,7 @@ function getStreamErrorTransition({ status, error, cause }) {
         : "(empty error message)",
       errorStack: error?.stack,
       causeName: cause instanceof Error ? cause.name : undefined,
-      causeMessage: cause instanceof Error
-        ? (cause.message || "(empty cause message)")
-        : cause === undefined ? undefined : String(cause),
+      causeMessage: getCauseDiagnosticMessage({ cause }),
       causeStack: cause instanceof Error ? cause.stack : undefined,
     },
   }
@@ -297,11 +323,7 @@ function updateUserDataReadiness({
     state.streamUnsafe = true
     state.requiresReconciliation = true
     state.ready = false
-    state.status = status.type === "executionNormalizationFailed"
-      ? "EXECUTION_NORMALIZATION_FAILED"
-      : state.accountingFailed
-        ? "EXECUTION_ACCOUNTING_FAILED"
-        : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+    state.status = resolveUnsafeReadinessStatus({ state, status })
     return
   }
   if (state.requiresReconciliation) {
