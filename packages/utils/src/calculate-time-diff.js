@@ -9,4 +9,6 @@ import { calculateTimeDiffBetween } from './calculate-time-diff-between.js'
  * @throws {TypeError|RangeError} If either date or the unit is invalid.
  */
 export const calculateTimeDiff = ({ start, end = new Date(), unit = 'hour' } = {}) =>
-  calculateTimeDiffBetween({ start, end, unit })
+  calculateTimeDiffBetween({ start,
+    end,
+    unit })

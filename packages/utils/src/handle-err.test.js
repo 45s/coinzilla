@@ -12,7 +12,9 @@ describe('handleErr', () => {
     }
     const error = new Error('Something failed')
 
-    handleErr({ logger, where: 'unit test', error })
+    handleErr({ logger,
+      where: 'unit test',
+      error })
 
     assert.deepEqual(calls, [{
       where: 'unit test',
@@ -25,7 +27,9 @@ describe('handleErr', () => {
     const calls = []
     const logger = { error: (payload) => calls.push(payload) }
 
-    handleErr({ logger, where: 'unit test', error: null })
+    handleErr({ logger,
+      where: 'unit test',
+      error: null })
 
     assert.deepEqual(calls, [{
       where: 'unit test',
