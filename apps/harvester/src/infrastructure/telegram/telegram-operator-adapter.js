@@ -200,15 +200,18 @@ function buildControlFailureReply({ action, symbol, result, method, interaction,
   return `${action.startsWith("RESUME") ? "Resume" : "Pause"} was not acknowledged; check Harvester logs and retry.`
 }
 
-function buildBuyControlSuccessReply({ action, symbol, result, interaction } = {}) {
-  const buyScope = symbol ? `for ${symbol}` : "across all markets"
-  if ((action === "PAUSE_BUYS" || action === "PAUSE_ALL_BUYS") && result.data?.paused === true) {
-    interaction.applicationOperationCompleted = true
-    interaction.stateChanged = result.data.alreadyPaused !== true || result.data.canceled > 0
-    const prefix = result.data.alreadyPaused === true ? "BUY pause remains active" : "BUY pause activated"
-    return `${prefix} ${buyScope}. Cancelled ${result.data.canceled ?? 0} Harvester-owned BUY order(s); reconciled ${result.data.reconciled ?? 0} fill(s). Recovery SELLs and accounting continue. External/manual and prior-process orders are untouched; check /orders. This pause is process-local and is not restored after restart.`
+function buildPauseBuySuccessReply({ buyScope, result, interaction }) {
+  if (result.data?.paused !== true) {
+    return undefined
   }
-  if ((action === "RESUME_BUYS" || action === "RESUME_ALL_BUYS") && result.data?.resumed === true) {
+  interaction.applicationOperationCompleted = true
+  interaction.stateChanged = result.data.alreadyPaused !== true || result.data.canceled > 0
+  const prefix = result.data.alreadyPaused === true ? "BUY pause remains active" : "BUY pause activated"
+  return `${prefix} ${buyScope}. Cancelled ${result.data.canceled ?? 0} Harvester-owned BUY order(s); reconciled ${result.data.reconciled ?? 0} fill(s). Recovery SELLs and accounting continue. External/manual and prior-process orders are untouched; check /orders. This pause is process-local and is not restored after restart.`
+}
+
+function buildResumeBuySuccessReply({ buyScope, result, interaction }) {
+  if (result.data?.resumed === true) {
     interaction.applicationOperationCompleted = true
     interaction.stateChanged = true
     const remaining = result.data.stillPaused === true
@@ -216,13 +219,24 @@ function buildBuyControlSuccessReply({ action, symbol, result, interaction } = {
       : " New BUYs may resume when all other safety gates allow."
     return `BUY pause removed ${buyScope}.${remaining}`
   }
-  if ((action === "RESUME_BUYS" || action === "RESUME_ALL_BUYS") && result.data?.resumed === false) {
+  if (result.data?.resumed === false) {
     interaction.applicationOperationCompleted = true
     interaction.stateChanged = false
     const remaining = result.data.stillPaused === true
       ? " Another BUY pause scope remains active."
       : ""
     return `No BUY pause was active ${buyScope}.${remaining}`
+  }
+  return undefined
+}
+
+function buildBuyControlSuccessReply({ action, symbol, result, interaction } = {}) {
+  const buyScope = symbol ? `for ${symbol}` : "across all markets"
+  if (action === "PAUSE_BUYS" || action === "PAUSE_ALL_BUYS") {
+    return buildPauseBuySuccessReply({ buyScope, result, interaction })
+  }
+  if (action === "RESUME_BUYS" || action === "RESUME_ALL_BUYS") {
+    return buildResumeBuySuccessReply({ buyScope, result, interaction })
   }
   return undefined
 }
