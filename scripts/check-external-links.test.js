@@ -543,7 +543,7 @@ test('revalidates DNS for every redirect and blocks a redirect to a private addr
         return { on() { return this; },
 end() {} };
       },
-      }),
+      });
     },
     sleep: noDelay,
     minHostIntervalMs: 0,
@@ -570,7 +570,7 @@ family: 4 },
         openedConnections += 1;
         throw new Error('An unsafe DNS answer must be rejected before the request implementation is called.');
       },
-      }),
+      });
     },
     sleep: noDelay,
     minHostIntervalMs: 0,
