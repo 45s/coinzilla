@@ -32,14 +32,22 @@ The current market-price path is:
 
 The market-price handler itself publishes no lifecycle event, performs no broker I/O, and adds no durability wait. The public engine queue, volatility refresh order, state ownership and downstream safety gates remain unchanged.
 
-### Step 1 — characterization coverage before decomposition
+### Step 1 — explicit market-price stages
 
-- [ ] Add direct offline tests for receipt/freshness ordering, stale-cache preservation, accepted-price commit before dispatch, existing trailing-BUY eligibility gates, and symbol-mismatch failure.
-- [ ] Refactor only the handler's local orchestration into explicit named stages after the characterization tests pass.
-- [ ] Re-run the direct handler tests and existing Conservative engine tests after each extraction.
-- [ ] Reconcile the architecture guide with the final source-backed stage sequence.
+- [x] Add direct offline characterization tests for receipt/freshness ordering, stale-cache preservation, accepted-price commit before dispatch, existing trailing-BUY eligibility gates, and symbol-mismatch failure.
+- [x] Refactor only the handler's local orchestration into three explicit named stages: prepare/log, freshness acceptance/state commit, and accepted-price dispatch.
+- [ ] Re-run the direct handler tests and existing Conservative engine tests after the extraction on the implementation head.
+- [x] Reconcile the architecture guide with the source-backed stage sequence.
 
-This checkpoint records the verified baseline and intended first slice. It does not change Conservative behavior or the status of the wider migration plan.
+Test-first evidence on commit `da359a83fabf6eeb80b577073cd60ba9abdff96a`:
+
+- Harvester unit suite: 1,658 passed, 0 failed (including all eight new direct handler characterization cases).
+- Harvester coverage: 80.73% lines, 81.65% branches, 82.02% functions.
+- Configured Harvester targeted regressions: 5/5 files passed.
+- Utils Unit Tests, Dependency Audit, and External Documentation Links passed.
+- Full workspace unit tests, workspace coverage and JavaScript Syntax were still running at this checkpoint; their final results are not inferred here.
+
+The extraction adds no new runtime state, dependency, queue, broker call, event publication, persistence operation or domain rule. It does not change Conservative behavior or the status of the wider migration plan.
 
 ## Goals
 

@@ -80,6 +80,16 @@ function createHarness({
     }),
     canTrade: () => canTrade,
     maybeReplaceTrailingBuy: async () => {
+      assert.equal(
+        state.prices.get("DOGEUSDT")?.price,
+        "100.25",
+        "The accepted market price must be committed before trailing replacement is invoked.",
+      )
+      assert.equal(
+        state.marketPriceEventIds.get("DOGEUSDT"),
+        8,
+        "The accepted event identity must be committed before trailing replacement is invoked.",
+      )
       trace.push("trailing-buy")
       return {
         ok: true,
@@ -89,6 +99,16 @@ function createHarness({
       }
     },
     evaluateLatestTransition: async () => {
+      assert.equal(
+        state.prices.get("DOGEUSDT")?.price,
+        "100.25",
+        "The accepted market price must be committed before normal strategy evaluation is invoked.",
+      )
+      assert.equal(
+        state.marketPriceEventIds.get("DOGEUSDT"),
+        8,
+        "The accepted event identity must be committed before normal strategy evaluation is invoked.",
+      )
       trace.push("evaluate")
       return {
         ok: true,

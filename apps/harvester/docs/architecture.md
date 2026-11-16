@@ -502,14 +502,22 @@ P3 has introduced four cohesive use-case boundaries on the current branch:
   state and does not bypass the engine's durable fill barriers.
 
 - `createMarketPriceTransitionHandler` in
-  `src/use-cases/create-market-price-transition-handler.js` validates normalized
-  price events, rejects stale data before updating the latest-price cache, logs
-  accepted market context, and routes fresh events to the existing trailing-BUY
-  replacement or latest-strategy evaluation callbacks. The engine composes it
-  with its own state and callbacks and invokes it only through the existing
-  serialized transition queue; volatility refresh and the public engine API
-  remain in the engine. The handler does not own a queue or Portfolio/
-  RecoveryLedger accounting.
+  `src/use-cases/create-market-price-transition-handler.js` composes three
+  explicit local stages: `prepareMarketPriceTransition` validates normalized
+  price and subscription identity, allocates the diagnostic event ID and logs
+  the received market context; `acceptFreshMarketPriceTransition` applies the
+  freshness gate, returns the existing terminal stale-price skip, or commits
+  the accepted event ID and immutable price; and
+  `dispatchAcceptedMarketPriceTransition` applies the existing readiness,
+  strategy-pause, active-BUY, trailing-setting and operator-pause gates before
+  delegating to trailing replacement or latest-strategy evaluation. The stages
+  exchange an explicit local transition context and terminal acceptance result;
+  this is ordinary application composition, not a reusable pipeline framework.
+  The engine composes the handler with its own state and callbacks and invokes
+  it only through the existing serialized transition queue; volatility refresh
+  and the public engine API remain in the engine. The handler does not own a
+  queue, broker I/O, lifecycle-event publication or Portfolio/RecoveryLedger
+  accounting.
 
 The engine was reduced from 3,335 lines at the verified pre-P3 `develop`
 baseline to 2,266 lines by the incremental extraction merged in [PR #1075](https://github.com/45s/coinzilla/pull/1075). This is not a completed
