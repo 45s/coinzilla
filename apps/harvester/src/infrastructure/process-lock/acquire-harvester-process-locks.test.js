@@ -40,7 +40,8 @@ test("rejects a second trading process using a different Journal directory on th
     assert.notEqual(afterRelease.lockPath, first.lockPath)
     assert.equal((await afterRelease.release({})).ok, true)
   } finally {
-    await rm(root, { recursive: true, force: true })
+    await rm(root, { recursive: true,
+force: true })
   }
 })
 
@@ -67,7 +68,8 @@ test("releases the host lock when Journal-lock acquisition fails", async () => {
     assert.equal((await hostLockCanBeAcquired.release({})).ok, true)
     assert.equal((await existingJournalLock.release({})).ok, true)
   } finally {
-    await rm(root, { recursive: true, force: true })
+    await rm(root, { recursive: true,
+force: true })
   }
 })
 
@@ -79,7 +81,7 @@ test("retains the host lock when Journal-lock release is uncertain and retries i
 
   const acquireLock = async (input = {}) => {
     const result = await acquireHarvesterProcessLock(input)
-    if (input.directory !== journalDirectory || result?.ok !== true) return result
+    if (input.directory !== journalDirectory || result?.ok !== true) {return result}
     return {
       ...result,
       release: async ({} = {}) => {
@@ -124,6 +126,7 @@ test("retains the host lock when Journal-lock release is uncertain and retries i
     assert.equal(afterRelease.ok, true)
     assert.equal((await afterRelease.release({})).ok, true)
   } finally {
-    await rm(root, { recursive: true, force: true })
+    await rm(root, { recursive: true,
+force: true })
   }
 })

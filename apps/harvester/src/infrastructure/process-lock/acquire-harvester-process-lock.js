@@ -54,14 +54,17 @@ export async function acquireHarvesterProcessLock({
 
     const resolvedDirectory = path.resolve(directory)
     const lockPath = path.join(resolvedDirectory, lockFileName)
-    const owner = Object.freeze({ pid, hostname, startedAt, token })
+    const owner = Object.freeze({ pid,
+hostname,
+startedAt,
+token })
     await mkdir(resolvedDirectory, { recursive: true })
 
     let handle
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         handle = await open(lockPath, "wx", 0o600)
-        await handle.writeFile(JSON.stringify(owner) + "\n", "utf8")
+        await handle.writeFile(`${JSON.stringify(owner)  }\n`, "utf8")
         await handle.sync()
         await handle.close()
         handle = undefined
@@ -100,14 +103,16 @@ export async function acquireHarvesterProcessLock({
 
         const conflict = new Error("Another Harvester trading process already owns the process lock")
         conflict.code = "HARVESTER_PROCESS_LOCK_EXISTS"
-        conflict.details = { lockPath, existingOwner }
+        conflict.details = { lockPath,
+existingOwner }
         return toResult({ error: conflict })
       }
     }
 
     let released = false
     const release = async () => {
-      if (released) return toResult({ released: false, alreadyReleased: true })
+      if (released) {return toResult({ released: false,
+alreadyReleased: true })}
       try {
         const existingOwner = JSON.parse(await readFile(lockPath, "utf8"))
         if (existingOwner?.token !== token) {
@@ -122,13 +127,16 @@ export async function acquireHarvesterProcessLock({
       } catch (error) {
         if (error?.code === "ENOENT") {
           released = true
-          return toResult({ released: false, alreadyReleased: true })
+          return toResult({ released: false,
+alreadyReleased: true })
         }
         return toResult({ error })
       }
     }
 
-    return toResult({ lockPath, owner, release })
+    return toResult({ lockPath,
+owner,
+release })
   } catch (error) {
     return toResult({ error })
   }

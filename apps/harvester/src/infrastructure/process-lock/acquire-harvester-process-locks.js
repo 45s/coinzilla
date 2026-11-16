@@ -2,7 +2,7 @@ import { toResult } from "@coinzilla/utils"
 import { acquireHarvesterProcessLock } from "./acquire-harvester-process-lock.js"
 
 function getErrors({ result, fallbackMessage }) {
-  if (Array.isArray(result?.errors) && result.errors.length > 0) return result.errors
+  if (Array.isArray(result?.errors) && result.errors.length > 0) {return result.errors}
   return [new Error(fallbackMessage)]
 }
 
@@ -32,7 +32,7 @@ export async function acquireHarvesterProcessLocks({
 
     const hostLock = await acquireLock({
       directory: globalDirectory,
-      lockFileName: "." + broker.toLowerCase() + "-harvester-trading.lock",
+      lockFileName: `.${  broker.toLowerCase()  }-harvester-trading.lock`,
     })
     if (hostLock?.ok !== true || typeof hostLock.release !== "function") {
       return toResult({
@@ -68,7 +68,8 @@ export async function acquireHarvesterProcessLocks({
     let hostReleased = false
     const release = async ({} = {}) => {
       if (journalReleased && hostReleased) {
-        return toResult({ released: false, alreadyReleased: true })
+        return toResult({ released: false,
+alreadyReleased: true })
       }
 
       if (!journalReleased) {
