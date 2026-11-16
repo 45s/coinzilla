@@ -245,6 +245,9 @@ async function captureConsistentRecoverySnapshots({
       orders,
       hasCanonicalOwnershipReconciliation,
     })
+    assertCurrentRecoveryGeneration({ context })
+    assertNoRecoveryAccountingFailure({ state })
+    assertNoRetryableRecoveryFailure({ state, generation: context.generation })
     await drainAndValidateRecoveryEvents({ context })
     if (eventSequence === state.eventSequence) {
       return
