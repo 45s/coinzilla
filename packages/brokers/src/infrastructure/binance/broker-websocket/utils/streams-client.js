@@ -10,7 +10,22 @@ const CONTROL_MESSAGE_INTERVAL = 300
 const MAX_STREAMS_PER_CONNECTION = 1_024
 const MAX_STREAMS_PER_SUBSCRIBE = 200
 
-function matchesRawStream(stream, message) {
+function validateClientOptions({ url, transportFactory, ackTimeout, reconnectDelay, maxReconnectDelay, rotationDelay, onError }) {
+  if (typeof url !== "string" || !url.startsWith("wss://") && !url.startsWith("ws://")) {
+    throw new TypeError("A valid WebSocket Streams URL is required")
+  }
+  if (typeof transportFactory !== "function") {throw new TypeError("transportFactory must be a function")}
+  if (!Number.isInteger(ackTimeout) || ackTimeout < 1) {throw new RangeError("ackTimeout must be a positive integer")}
+  if (!Number.isInteger(reconnectDelay) || reconnectDelay < 1) {throw new RangeError("reconnectDelay must be a positive integer")}
+  if (!Number.isInteger(maxReconnectDelay) || maxReconnectDelay < reconnectDelay) {
+    throw new RangeError("maxReconnectDelay must be greater than or equal to reconnectDelay")
+  }
+  if (!Number.isInteger(rotationDelay) || rotationDelay < 1) {throw new RangeError("rotationDelay must be a positive integer")}
+  if (typeof onError !== "function") {throw new TypeError("onError must be a function")}
+}
+
+function matchesRawStream(...args) {
+  const [stream, message] = args
   if (Array.isArray(message)) {return message.some((item) => matchesRawStream(stream, item))}
 
   const symbol = typeof message.s === "string" ? message.s.toLowerCase() : null
@@ -62,7 +77,8 @@ export class BinanceStreamsClient {
    * @param {{url?: string, transportFactory?: (options: {url: string}) => object, ackTimeout?: number, reconnectDelay?: number, maxReconnectDelay?: number, rotationDelay?: number, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void, nowFn?: () => number, onError?: (error: Error) => void}} [options]
    * @throws {TypeError|RangeError} If a URL, callback, or timing option is invalid.
    */
-  constructor({
+  constructor(...args) {
+    const [{
     url = DEFAULT_URL,
     transportFactory = (options) => new NativeWebSocketTransport(options),
     ackTimeout = DEFAULT_ACK_TIMEOUT,
@@ -73,18 +89,9 @@ export class BinanceStreamsClient {
     clearTimeoutFn = clearTimeout,
     nowFn = Date.now,
     onError = () => {},
-  } = {}) {
-    if (typeof url !== "string" || !url.startsWith("wss://") && !url.startsWith("ws://")) {
-      throw new TypeError("A valid WebSocket Streams URL is required")
-    }
-    if (typeof transportFactory !== "function") {throw new TypeError("transportFactory must be a function")}
-    if (!Number.isInteger(ackTimeout) || ackTimeout < 1) {throw new RangeError("ackTimeout must be a positive integer")}
-    if (!Number.isInteger(reconnectDelay) || reconnectDelay < 1) {throw new RangeError("reconnectDelay must be a positive integer")}
-    if (!Number.isInteger(maxReconnectDelay) || maxReconnectDelay < reconnectDelay) {
-      throw new RangeError("maxReconnectDelay must be greater than or equal to reconnectDelay")
-    }
-    if (!Number.isInteger(rotationDelay) || rotationDelay < 1) {throw new RangeError("rotationDelay must be a positive integer")}
-    if (typeof onError !== "function") {throw new TypeError("onError must be a function")}
+  } = {}] = args
+    validateClientOptions({ url, transportFactory, ackTimeout, reconnectDelay, maxReconnectDelay, rotationDelay, onError })
+
 
     this.url = url
     this.transportFactory = transportFactory
@@ -121,7 +128,8 @@ export class BinanceStreamsClient {
    * @param {(message: object) => void} listener
    * @returns {Promise<string[]>} The normalized stream names subscribed.
    */
-  async subscribe(streamNames, listener) {
+  async subscribe(...args) {
+    const [streamNames, listener] = args
     if (typeof listener !== "function") {throw new TypeError("A stream listener function is required")}
     const streams = [...new Set((Array.isArray(streamNames) ? streamNames : [streamNames]).map(validateStreamName))]
     if (streams.length === 0) {throw new TypeError("At least one stream is required")}
@@ -142,7 +150,7 @@ export class BinanceStreamsClient {
 
       const desiredStreams = [...this.#listeners.keys()]
       if (desiredStreams.length > MAX_STREAMS_PER_CONNECTION) {
-        this.#removeListenerFromStreams(addedListeners, listener)
+        this.#removeListenerFromStreams({ streams: addedListeners, listener })
         throw new RangeError(`Binance allows at most ${MAX_STREAMS_PER_CONNECTION} streams per connection`)
       }
 
@@ -155,7 +163,7 @@ export class BinanceStreamsClient {
         const activatedStreams = []
         try {
           for (const batch of this.#chunk([...new Set(missingStreams)], MAX_STREAMS_PER_SUBSCRIBE)) {
-            await this.#request("SUBSCRIBE", batch)
+            await this.#request({ method: "SUBSCRIBE", streams: batch })
             for (const stream of batch) {
               this.#activeStreams.add(stream)
               activatedStreams.push(stream)
@@ -164,7 +172,7 @@ export class BinanceStreamsClient {
         } catch (error) {
           if (activatedStreams.length > 0) {
             for (const stream of activatedStreams) {this.#activeStreams.delete(stream)}
-            this.#request("UNSUBSCRIBE", activatedStreams)
+            this.#request({ method: "UNSUBSCRIBE", streams: activatedStreams })
               .catch((cleanupError) => this.#reportError(cleanupError))
           }
           throw error
@@ -185,7 +193,8 @@ export class BinanceStreamsClient {
    * @param {(message: object) => void} [listener]
    * @returns {Promise<string[]>} The normalized stream names processed.
    */
-  async unsubscribe(streamNames, listener) {
+  async unsubscribe(...args) {
+    const [streamNames, listener] = args
     const streams = [...new Set((Array.isArray(streamNames) ? streamNames : [streamNames]).map(validateStreamName))]
     if (streams.length === 0) {throw new TypeError("At least one stream is required")}
     if (listener !== undefined && typeof listener !== "function") {
@@ -201,7 +210,7 @@ export class BinanceStreamsClient {
 
       if (removals.length > 0 && this.#state === "open") {
         for (const batch of this.#chunk(removals, MAX_STREAMS_PER_SUBSCRIBE)) {
-          await this.#request("UNSUBSCRIBE", batch)
+          await this.#request({ method: "UNSUBSCRIBE", streams: batch })
         }
       }
 
@@ -246,7 +255,8 @@ export class BinanceStreamsClient {
     return result
   }
 
-  async #connect(isReconnect, initialStreams = []) {
+  async #connect(...args) {
+    const [isReconnect, initialStreams = []] = args
     if (isReconnect && this.#listeners.size === 0) {return this}
     if (this.#state === "open") {return this}
     if (this.#state === "connecting") {return this.#connectPromise}
@@ -301,7 +311,7 @@ export class BinanceStreamsClient {
       this.#scheduleRotation()
 
       const initialBatch = connectionStreams.slice(0, MAX_STREAMS_PER_SUBSCRIBE)
-      const listedStreams = await this.#request("LIST_SUBSCRIPTIONS")
+      const listedStreams = await this.#request({ method: "LIST_SUBSCRIPTIONS" })
       if (this.#transport !== transport || this.#manualDisconnect || this.#state !== "open") {
         throw new Error("Binance Streams connection was superseded")
       }
@@ -312,7 +322,7 @@ export class BinanceStreamsClient {
       const desiredStreams = new Set(this.#listeners.keys())
       const obsoleteInitialStreams = initialBatch.filter((stream) => !desiredStreams.has(stream))
       if (obsoleteInitialStreams.length > 0) {
-        await this.#request("UNSUBSCRIBE", obsoleteInitialStreams)
+        await this.#request({ method: "UNSUBSCRIBE", streams: obsoleteInitialStreams })
         if (this.#transport !== transport || this.#manualDisconnect || this.#state !== "open") {
           throw new Error("Binance Streams connection was superseded")
         }
@@ -325,7 +335,7 @@ export class BinanceStreamsClient {
         .slice(MAX_STREAMS_PER_SUBSCRIBE)
         .filter((stream) => desiredStreams.has(stream))
       for (const batch of this.#chunk(remainingStreams, MAX_STREAMS_PER_SUBSCRIBE)) {
-        await this.#request("SUBSCRIBE", batch)
+        await this.#request({ method: "SUBSCRIBE", streams: batch })
         if (this.#transport !== transport || this.#manualDisconnect || this.#state !== "open") {
           throw new Error("Binance Streams connection was superseded")
         }
@@ -368,7 +378,7 @@ export class BinanceStreamsClient {
     return url.toString()
   }
 
-  #removeListenerFromStreams(streams, listener) {
+   #removeListenerFromStreams({ streams, listener }) {
     for (const stream of streams) {
       const listeners = this.#listeners.get(stream)
       listeners?.delete(listener)
@@ -377,13 +387,14 @@ export class BinanceStreamsClient {
     if (this.#listeners.size === 0) {this.#clearReconnectTimer()}
   }
 
-  #request(method, streams) {
+   #request({ method, streams }) {
     if (this.#state !== "open" || !this.#transport) {
       return Promise.reject(new Error(`Cannot ${method} streams while disconnected`))
     }
 
     const id = this.#nextRequestId++
-    return new Promise((resolve, reject) => {
+    return new Promise((...args) => {
+      const [resolve, reject] = args
       const timeout = this.setTimeout(() => {
         this.#pending.delete(id)
         this.#ackTimeouts.delete(timeout)
@@ -438,7 +449,8 @@ payload: JSON.stringify(request) })
     }
   }
 
-  #handleMessage(rawMessage, transport) {
+   #handleMessage(...args) {
+    const [rawMessage, transport] = args
     if (this.#transport !== transport) {return}
 
     let parsed
@@ -450,34 +462,44 @@ payload: JSON.stringify(request) })
     }
 
     if (parsed.acknowledgement) {
-      const { id, result, code, msg } = parsed.acknowledgement
-      const pending = this.#pending.get(id)
-      if (!pending) {return}
-      this.#pending.delete(id)
-      this.#clearAckTimeout(pending.timeout)
-      if (code !== undefined) {
-        pending.reject(new Error(`Binance Streams ${pending.method} failed (${code}): ${msg || "unknown error"}`))
-      } else if (pending.method === "LIST_SUBSCRIPTIONS" && !Array.isArray(result)) {
-        pending.reject(new Error("Malformed Binance Streams LIST_SUBSCRIPTIONS acknowledgement"))
-      } else if (pending.method !== "LIST_SUBSCRIPTIONS" && result !== null) {
-        pending.reject(new Error(`Malformed Binance Streams ${pending.method} acknowledgement`))
-      } else {
-        pending.resolve(result)
-      }
+      this.#handleAcknowledgement(parsed.acknowledgement)
       return
     }
-
     if (parsed.serverShutdown) {
-      this.#reportError(new Error("Binance Streams server is shutting down"))
-      this.#transport?.close(1000, "Binance server shutdown").catch((error) => this.#reportError(error))
+      this.#closeForServerShutdown(1000)
       return
     }
+    this.#handleDataMessages(parsed)
+  }
 
+  #handleAcknowledgement(acknowledgement) {
+    const { id, result, code, msg } = acknowledgement
+    const pending = this.#pending.get(id)
+    if (!pending) {return}
+    this.#pending.delete(id)
+    this.#clearAckTimeout(pending.timeout)
+    if (code !== undefined) {
+      pending.reject(new Error(`Binance Streams ${pending.method} failed (${code}): ${msg || "unknown error"}`))
+    } else if (pending.method === "LIST_SUBSCRIPTIONS" && !Array.isArray(result)) {
+      pending.reject(new Error("Malformed Binance Streams LIST_SUBSCRIPTIONS acknowledgement"))
+    } else if (pending.method !== "LIST_SUBSCRIPTIONS" && result !== null) {
+      pending.reject(new Error(`Malformed Binance Streams ${pending.method} acknowledgement`))
+    } else {
+      pending.resolve(result)
+    }
+  }
+
+  #closeForServerShutdown(code) {
+    this.#reportError(new Error("Binance Streams server is shutting down"))
+    const reason = code === 1000 ? "Binance server shutdown" : "Binance server shutdown"
+    this.#transport?.close(code, reason).catch((error) => this.#reportError(error))
+  }
+
+  #handleDataMessages(parsed) {
     const messages = Array.isArray(parsed.data) ? parsed.data : [parsed.data]
     for (const message of messages) {
       if (message.e === "serverShutdown") {
-        this.#reportError(new Error("Binance Streams server is shutting down"))
-        this.#transport?.close(1012, "Binance server shutdown").catch((error) => this.#reportError(error))
+        this.#closeForServerShutdown(1012)
         return
       }
       for (const [stream, listeners] of this.#listeners) {
@@ -494,7 +516,8 @@ payload: JSON.stringify(request) })
     }
   }
 
-  #handleClose(event, transport) {
+   #handleClose(...args) {
+    const [event, transport] = args
     if (this.#transport !== transport) {return}
     this.#detachTransportListeners()
     const wasReady = this.#ready
@@ -579,7 +602,8 @@ payload: JSON.stringify(request) })
     }
   }
 
-  #chunk(values, size) {
+   #chunk(...args) {
+    const [values, size] = args
     const chunks = []
     for (let index = 0; index < values.length; index += size) {
       chunks.push(values.slice(index, index + size))
