@@ -144,7 +144,7 @@ test("renders Portfolio Stats as a concise readable summary instead of JSON", ()
   )
   assert.match(
     line,
-    /🪙 CG PORTFOLIO DOGEUSDT: amount: 3\.4 \| earned: 3\.4 \| spent: 0 USDT \| net: 0\.020/,
+    /🪙 CG PORTFOLIO DOGEUSDT: amount: 3\.4 \| earned: 3\.4 \| spent: 0 USDT \| net: 0\.020$/,
     "The operator console must show total coins, retained coins earned from completed cycles, current-cycle spent quote, and cumulative net quote cash flow.",
   )
   assert.doesNotMatch(
@@ -158,7 +158,6 @@ test("renders Portfolio Stats as a concise readable summary instead of JSON", ()
   )
   output.destroy()
 })
-
 
 test("prints every enabled market symbol in the subscriptions-ready summary", () => {
   const output = new PassThrough()

@@ -348,17 +348,17 @@ function formatPortfolioNet(value) {
 function createPortfolioStatsConsoleLine({ time, strategyPrefix, details } = {}) {
   const portfolioLine = [
     time,
-    strategyPrefix + "PORTFOLIO " + String(details.symbol ?? "-") + ":",
-    "amount: " + formatPortfolioBaseQuantity(details.inventory?.totalBaseQuantity),
+    [strategyPrefix, "PORTFOLIO ", String(details.symbol ?? "-"), ":"].join(""),
+    ["amount: ", formatPortfolioBaseQuantity(details.inventory?.totalBaseQuantity)].join(""),
     "|",
-    "earned: " + formatPortfolioBaseQuantity(details.inventory?.freeBaseQuantity),
+    ["earned: ", formatPortfolioBaseQuantity(details.inventory?.freeBaseQuantity)].join(""),
     "|",
-    "spent: " + String(details.accounting?.spent ?? "-"),
+    ["spent: ", String(details.accounting?.spent ?? "-")].join(""),
     "|",
-    "net: " + formatPortfolioNet(details.accounting?.quoteNetCashFlow),
+    ["net: ", formatPortfolioNet(details.accounting?.quoteNetCashFlow)].join(""),
   ].join(" ")
   return portfolioLine.length > MAX_CONSOLE_LINE_LENGTH
-    ? portfolioLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3) + "..."
+    ? portfolioLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3).concat("...")
     : portfolioLine
 }
 function formatStartupConsoleMessage(message) {
