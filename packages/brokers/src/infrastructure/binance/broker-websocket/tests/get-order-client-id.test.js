@@ -21,11 +21,15 @@ function createBroker(handlers) {
     tradingMode: "testnet",
     apiKey: "test-key",
     apiSecret: "test-secret",
-    logger: { error() {}, info() {}, debug() {}, warn() {} },
+    logger: { error() {},
+info() {},
+debug() {},
+warn() {} },
   })
   const rpc = createFakeRpcClient(handlers)
   broker.tradingConnection = rpc
-  return { broker, rpc }
+  return { broker,
+rpc }
 }
 
 describe("BinanceSdkBroker.getOrder client-order-ID lookup", () => {
@@ -59,9 +63,13 @@ describe("BinanceSdkBroker.getOrder client-order-ID lookup", () => {
     const { broker, rpc } = createBroker({})
     for (const input of [
       { symbol: "ETHUSDT" },
-      { symbol: "ETHUSDT", orderId: 17, clientOrderId: "harvester-client-123" },
-      { symbol: "ETHUSDT", clientOrderId: " " },
-      { symbol: " ", clientOrderId: "harvester-client-123" },
+      { symbol: "ETHUSDT",
+orderId: 17,
+clientOrderId: "harvester-client-123" },
+      { symbol: "ETHUSDT",
+clientOrderId: " " },
+      { symbol: " ",
+clientOrderId: "harvester-client-123" },
     ]) {
       const result = await broker.getOrder(input)
       assert.equal(result.ok, false)
