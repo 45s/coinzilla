@@ -706,7 +706,7 @@ strategyId: StrategyId.COIN_GRABBER }).ledger
 })
 
 
-test("serializes recovery completion behind an in-flight durable fill", async () => {
+function createSerializedRecoveryCompletionFixture() {
   const buyFill = createFill({
     tradeId: "serialized-cycle-buy",
     quantity: "2",
@@ -726,15 +726,11 @@ test("serializes recovery completion behind an in-flight durable fill", async ()
     price: "130000",
   })
   const initialPortfolio = new Portfolio()
-    .applyFill({ fill: buyFill,
-strategyId: StrategyId.COIN_GRABBER }).portfolio
-    .applyFill({ fill: sellFill,
-strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const initialLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill,
-strategyId: StrategyId.COIN_GRABBER }).ledger
-    .applyFill({ fill: sellFill,
-strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
   let releaseDurableFill
   let markDurableFillStarted
   const durableFillStarted = new Promise((resolve) => { markDurableFillStarted = resolve })
@@ -749,16 +745,24 @@ strategyId: StrategyId.COIN_GRABBER }).ledger
       assert.equal(received, additionalBuyFill, "The serialization test must hold the durable barrier for the exact concurrent BUY fill.")
       markDurableFillStarted()
       await durableFillGate
-      return { ok: true,
-data: { durable: true } }
+      return { ok: true, data: { durable: true } }
     },
     onOperationalStateRecoveryCycleCompleted: async (input) => {
       completionCalls.push(input)
-      return { ok: true,
-data: { durable: true } }
+      return { ok: true, data: { durable: true } }
     },
   })
+  return { workflow, additionalBuyFill, durableFillStarted, releaseDurableFill, completionCalls }
+}
 
+test("serializes recovery completion behind an in-flight durable fill", async () => {
+  const {
+    workflow,
+    additionalBuyFill,
+    durableFillStarted,
+    releaseDurableFill,
+    completionCalls,
+  } = createSerializedRecoveryCompletionFixture()
   const fillPromise = workflow.updateTradingAccounting({ fill: additionalBuyFill })
   await durableFillStarted
   const completionPromise = workflow.completeRecoveryCycle({
