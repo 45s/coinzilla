@@ -35,6 +35,58 @@ function addAdditionalTrackedBaseQuantity({ values, item } = {}) {
   })
 }
 
+function addAdditionalTrackedQuoteCashFlow({ values, item } = {}) {
+  if (!item || typeof item !== "object" || Array.isArray(item)) {
+    throw new TypeError("additionalTrackedQuoteCashFlow records must be objects")
+  }
+  if (typeof item.assetId !== "string" || !item.assetId.trim()) {
+    throw new TypeError("additionalTrackedQuoteCashFlow requires a non-empty asset ID")
+  }
+  assertDecimalString({
+    value: item.amount,
+    field: "additionalTrackedQuoteCashFlow.amount",
+  })
+  addAmount({
+    values,
+    assetId: item.assetId,
+    amount: item.amount,
+    field: "additional tracked quote cash flow",
+  })
+}
+
+function addActiveOrderCommitments({
+  activeOrders,
+  committedQuoteBalance,
+  committedBaseBalance,
+}) {
+  for (const order of activeOrders) {
+    if (!["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status)) {
+      throw new TypeError("calculateAccountSnapshotBaselines activeOrders must contain only active orders")
+    }
+    if (order.side === "BUY") {
+      if (!order.limitPrice) {
+        throw new Error(`Cannot capture an active BUY commitment without a canonical limit price: ${order.clientOrderId}`)
+      }
+      addAmount({
+        values: committedQuoteBalance,
+        assetId: order.market.quoteAsset.id,
+        amount: multiplyDecimal({
+          left: order.remainingQuantity.amount,
+          right: order.limitPrice.amount,
+        }),
+        field: "Active BUY quote commitment",
+      })
+      continue
+    }
+    addAmount({
+      values: committedBaseBalance,
+      assetId: order.market.baseAsset.id,
+      amount: order.remainingQuantity.amount,
+      field: "Active SELL base commitment",
+    })
+  }
+}
+
 function toRecords(values) {
   const assetIds = []
   for (const assetId of values.keys()) {
@@ -61,8 +113,14 @@ function toRecords(values) {
  * @param {Portfolio} options.portfolio Current Portfolio.
  * @param {CanonicalOrder[]} options.activeOrders Current active orders.
  * @param {Array<{assetId: string, amount: string}>} [options.additionalTrackedBaseQuantity] Verified Spot inventory tracked outside Portfolio.
+ * @param {Array<{assetId: string, amount: string}>} [options.additionalTrackedQuoteCashFlow] Signed quote cash flow tracked outside Portfolio, such as net legacy SELL proceeds.
  */
-export function calculateAccountSnapshotBaselines({ portfolio, activeOrders, additionalTrackedBaseQuantity = [] } = {}) {
+export function calculateAccountSnapshotBaselines({
+  portfolio,
+  activeOrders,
+  additionalTrackedBaseQuantity = [],
+  additionalTrackedQuoteCashFlow = [],
+} = {}) {
   try {
     if (!(portfolio instanceof Portfolio)) {
       throw new TypeError("calculateAccountSnapshotBaselines requires a Portfolio")
@@ -72,6 +130,9 @@ export function calculateAccountSnapshotBaselines({ portfolio, activeOrders, add
     }
     if (!Array.isArray(additionalTrackedBaseQuantity)) {
       throw new TypeError("calculateAccountSnapshotBaselines additionalTrackedBaseQuantity must be an array")
+    }
+    if (!Array.isArray(additionalTrackedQuoteCashFlow)) {
+      throw new TypeError("calculateAccountSnapshotBaselines additionalTrackedQuoteCashFlow must be an array")
     }
 
     const quoteCashFlow = new Map()
@@ -95,6 +156,13 @@ export function calculateAccountSnapshotBaselines({ portfolio, activeOrders, add
       })
     }
 
+    for (const item of additionalTrackedQuoteCashFlow) {
+      addAdditionalTrackedQuoteCashFlow({
+        values: quoteCashFlow,
+        item,
+      })
+    }
+
     for (const item of additionalTrackedBaseQuantity) {
       addAdditionalTrackedBaseQuantity({
         values: additionalTrackedBaseQuantityBaseline,
@@ -102,32 +170,11 @@ export function calculateAccountSnapshotBaselines({ portfolio, activeOrders, add
       })
     }
 
-    for (const order of activeOrders) {
-      if (!["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status)) {
-        throw new TypeError("calculateAccountSnapshotBaselines activeOrders must contain only active orders")
-      }
-      if (order.side === "BUY") {
-        if (!order.limitPrice) {
-          throw new Error(`Cannot capture an active BUY commitment without a canonical limit price: ${  order.clientOrderId}`)
-        }
-        addAmount({
-          values: committedQuoteBalance,
-          assetId: order.market.quoteAsset.id,
-          amount: multiplyDecimal({
-            left: order.remainingQuantity.amount,
-            right: order.limitPrice.amount,
-          }),
-          field: "Active BUY quote commitment",
-        })
-        continue
-      }
-      addAmount({
-        values: committedBaseBalance,
-        assetId: order.market.baseAsset.id,
-        amount: order.remainingQuantity.amount,
-        field: "Active SELL base commitment",
-      })
-    }
+    addActiveOrderCommitments({
+      activeOrders,
+      committedQuoteBalance,
+      committedBaseBalance,
+    })
 
     return toResult({
       data: Object.freeze({

@@ -197,6 +197,7 @@ function createHarnessAccountSnapshot({
   quoteFreeBalance,
   quoteCashFlowBaseline,
   portfolioBaseQuantityBaseline,
+  additionalTrackedBaseQuantityBaseline,
   committedQuoteBalanceBaseline,
   committedBaseBalanceBaseline,
 } = {}) {
@@ -208,6 +209,7 @@ function createHarnessAccountSnapshot({
         asset: baseAsset }),
     getQuoteCashFlowBaseline: ({ assetId }) => assetId === quoteAsset.id ? quoteCashFlowBaseline : "0",
     getPortfolioBaseQuantityBaseline: ({ assetId }) => assetId === baseAsset.id ? portfolioBaseQuantityBaseline : "0",
+    getAdditionalTrackedBaseQuantityBaseline: ({ assetId }) => assetId === baseAsset.id ? additionalTrackedBaseQuantityBaseline : "0",
     getCommittedQuoteBalanceBaseline: ({ assetId }) => assetId === quoteAsset.id ? committedQuoteBalanceBaseline : "0",
     getCommittedBaseBalanceBaseline: ({ assetId }) => assetId === baseAsset.id ? committedBaseBalanceBaseline : "0",
   }

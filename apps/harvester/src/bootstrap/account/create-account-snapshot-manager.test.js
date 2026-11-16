@@ -8,6 +8,42 @@ import { calculateVerifiedLegacySpotAllocation } from "../../domain/strategies/r
 
 const test = (...args) => nodeTest(`[create-account-snapshot-manager.test.js] ${args[0]}`, ...args.slice(1))
 
+function createFixtureBroker({ state }) {
+  return {
+    getAccountSnapshot: async () => {
+      if (state.accountSnapshotError) {
+        throw state.accountSnapshotError
+      }
+      return state.accountSnapshots[Math.min(state.snapshotIndex++, state.accountSnapshots.length - 1)]
+    },
+    getOpenOrders: async () => {
+      if (state.openOrdersError) {
+        throw state.openOrdersError
+      }
+      return state.openOrdersResult ?? {
+        ok: true,
+        data: state.openOrders,
+      }
+    },
+  }
+}
+
+function createFixtureEventPublisher({ state }) {
+  return {
+    publish: (event) => {
+      state.publishedEvents.push(event)
+      return { ok: true }
+    },
+    flush: async () => {
+      state.flushCount += 1
+      return state.flushResults[state.flushCount - 1] ?? {
+        ok: true,
+        durable: true,
+      }
+    },
+  }
+}
+
 const createFixture = ({
   accountSnapshots = [],
   accountSnapshotError,
@@ -19,57 +55,44 @@ const createFixture = ({
   activeOrders = [],
   additionalTrackedBaseQuantity = [],
   additionalTrackedBaseQuantityProvider,
+  additionalTrackedQuoteCashFlow = [],
+  additionalTrackedQuoteCashFlowProvider,
   operationalStateStore,
   logger = {},
-  monotonicNow
+  monotonicNow,
 } = {}) => {
   const baseAsset = new Asset({
     id: "asset:BTC",
-    code: "BTC"
+    code: "BTC",
   })
   const quoteAsset = new Asset({
     id: "asset:USDT",
-    code: "USDT"
+    code: "USDT",
   })
   const market = new Market({
     venue: "binance",
     symbol: "BTCUSDT",
     baseAsset,
-    quoteAsset
+    quoteAsset,
   })
-  let snapshotIndex = 0
-  const publishedEvents = []
-  let flushCount = 0
+  const state = {
+    accountSnapshots,
+    accountSnapshotError,
+    openOrders,
+    openOrdersResult,
+    openOrdersError,
+    flushResults,
+    snapshotIndex: 0,
+    publishedEvents: [],
+    flushCount: 0,
+  }
   const manager = createAccountSnapshotManager({
-    broker: {
-      getAccountSnapshot: async () => {
-        if (accountSnapshotError) { throw accountSnapshotError }
-        return accountSnapshots[Math.min(snapshotIndex++, accountSnapshots.length - 1)]
-      },
-      getOpenOrders: async () => {
-        if (openOrdersError) { throw openOrdersError }
-        return openOrdersResult ?? ({
-          ok: true,
-          data: openOrders
-        })
-      },
-    },
-    eventPublisher: {
-      publish: (event) => {
-        publishedEvents.push(event)
-        return { ok: true }
-      },
-      flush: async () => {
-        flushCount += 1
-        return flushResults[flushCount - 1] ?? {
-          ok: true,
-          durable: true
-        }
-      },
-    },
+    broker: createFixtureBroker({ state }),
+    eventPublisher: createFixtureEventPublisher({ state }),
     marketMetadata: new Map([[market.symbol, { market }]]),
     getPortfolio: () => portfolio,
     getAdditionalTrackedBaseQuantity: additionalTrackedBaseQuantityProvider ?? (() => additionalTrackedBaseQuantity),
+    getAdditionalTrackedQuoteCashFlow: additionalTrackedQuoteCashFlowProvider ?? (() => additionalTrackedQuoteCashFlow),
     getTradingEngine: () => ({ getActiveOrders: () => activeOrders }),
     getRecoveredState: () => ({ orderRegistry: { orders: [] } }),
     getHasCanonicalOwnershipReconciliation: () => false,
@@ -83,8 +106,8 @@ const createFixture = ({
     market,
     baseAsset,
     quoteAsset,
-    publishedEvents,
-    getFlushCount: () => flushCount,
+    publishedEvents: state.publishedEvents,
+    getFlushCount: () => state.flushCount,
   }
 }
 
@@ -1206,4 +1229,29 @@ test("captures additional tracked Spot allocation separately from Portfolio in a
 
   assert.equal(snapshot.getAdditionalTrackedBaseQuantityBaseline({ assetId: market.baseAsset.id }), "0.01")
   assert.equal(snapshot.getPortfolioBaseQuantityBaseline({ assetId: market.baseAsset.id }), "0")
+})
+
+test("captures separately tracked legacy quote proceeds in the shared snapshot cash-flow baseline", async () => {
+  const fixture = createFixture({
+    accountSnapshots: [
+      createAccountSnapshot({
+        market: createFixture().market,
+        sourceTime: 104,
+      }),
+    ],
+    additionalTrackedQuoteCashFlow: [
+      {
+        assetId: "asset:USDT",
+        amount: "12.5",
+      },
+    ],
+  })
+
+  const snapshot = await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
+
+  assert.equal(
+    snapshot.getQuoteCashFlowBaseline({ assetId: fixture.quoteAsset.id }),
+    "12.5",
+    "The shared account snapshot must include net quote proceeds from tracked legacy inventory outside Portfolio.",
+  )
 })

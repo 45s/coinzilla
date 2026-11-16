@@ -1,4 +1,4 @@
-import { addDecimal, subtractDecimal, multiplyDecimal, maxDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal, multiplyDecimal, maxDecimal, toResult } from "@coinzilla/utils"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { mapRecoveryCycleCompletedData, mapStrategyDecisionData } from "../application/events/lifecycle-event-dtos.js"
@@ -228,29 +228,86 @@ function sumDecimalValues({ items, getValue } = {}) {
   return total
 }
 
-function getPortfolioBalanceContext({ dependencies, context } = {}) {
-  const { getAccountSnapshot } = dependencies
-  const { metadata, portfolioBefore, activeOrdersBefore, excludedActiveOrderClientId } = context
-  const accountSnapshot = getAccountSnapshot()
-  if (!accountSnapshot) {throw new Error("Current account snapshot is unavailable")}
-  const position = portfolioBefore.getPosition({
-    strategyId: StrategyId.COIN_GRABBER,
-    marketId: metadata.market.id,
+function sumAdditionalTrackedAmount({
+  records,
+  assetId,
+  field,
+  allowNegative,
+} = {}) {
+  if (!Array.isArray(records)) {
+    throw new TypeError(`${field} provider must return an array`)
+  }
+  let total = "0"
+  for (const item of records) {
+    if (!item || typeof item.assetId !== "string" || !item.assetId.trim()) {
+      throw new TypeError(`${field} requires a canonical asset ID`)
+    }
+    assertDecimalString({
+      value: item.amount,
+      field: `${field}.amount`,
+    })
+    if (!allowNegative && compareDecimal({
+      left: item.amount,
+      right: "0",
+    }) < 0) {
+      throw new RangeError(`${field}.amount must be non-negative`)
+    }
+    if (item.assetId === assetId) {
+      total = addDecimal({
+        left: total,
+        right: item.amount,
+      })
+    }
+  }
+  return total
+}
+
+function getAdditionalTrackedBaseBalance({
+  dependencies,
+  accountSnapshot,
+  portfolio,
+  assetId,
+} = {}) {
+  const records = typeof dependencies.getAdditionalTrackedBaseQuantity === "function"
+    ? dependencies.getAdditionalTrackedBaseQuantity({
+      balances: accountSnapshot.balances ?? [],
+      portfolio,
+    })
+    : []
+  return sumAdditionalTrackedAmount({
+    records,
+    assetId,
+    field: "additionalTrackedBaseQuantity",
+    allowNegative: false,
   })
-  const allPositions = portfolioBefore.positions
-  const portfolioQuoteCashFlow = sumDecimalValues({
-    items: allPositions.filter((item) => item.market.quoteAsset.id === metadata.market.quoteAsset.id),
-    getValue: (item) => item.quoteNetCashFlow.amount,
+}
+
+function getAdditionalTrackedQuoteCashFlow({
+  dependencies,
+  accountSnapshot,
+  portfolio,
+  assetId,
+} = {}) {
+  const records = typeof dependencies.getAdditionalTrackedQuoteCashFlow === "function"
+    ? dependencies.getAdditionalTrackedQuoteCashFlow({
+      balances: accountSnapshot.balances ?? [],
+      portfolio,
+    })
+    : []
+  return sumAdditionalTrackedAmount({
+    records,
+    assetId,
+    field: "additionalTrackedQuoteCashFlow",
+    allowNegative: true,
   })
-  const quoteCashFlowBaseline = accountSnapshot.getQuoteCashFlowBaseline?.({
-    assetId: metadata.market.quoteAsset.id,
-  }) ?? "0"
-  const quoteCashFlow = subtractDecimal({ left: portfolioQuoteCashFlow,
-    right: quoteCashFlowBaseline })
-  const portfolioBaseBalance = sumDecimalValues({
-    items: allPositions.filter((item) => item.market.baseAsset.id === metadata.market.baseAsset.id),
-    getValue: (item) => item.totalBaseQuantity.amount,
-  })
+}
+
+function getActiveOrderCommitments({
+  dependencies,
+  activeOrdersBefore,
+  excludedActiveOrderClientId,
+  metadata,
+} = {}) {
   const allActiveOrders = dependencies.state.registry.getActiveOrders()
     .filter((order) => order.clientOrderId !== excludedActiveOrderClientId)
   const committedQuote = sumDecimalValues({
@@ -261,7 +318,9 @@ function getPortfolioBalanceContext({ dependencies, context } = {}) {
     }),
   })
   const committedQuoteBalance = sumDecimalValues({
-    items: allActiveOrders.filter((order) => order.side === "BUY" && order.market.quoteAsset.id === metadata.market.quoteAsset.id),
+    items: allActiveOrders.filter((order) =>
+      order.side === "BUY" &&
+      order.market.quoteAsset.id === metadata.market.quoteAsset.id),
     getValue: (order) => multiplyDecimal({
       left: order.remainingQuantity.amount,
       right: order.limitPrice.amount,
@@ -272,11 +331,78 @@ function getPortfolioBalanceContext({ dependencies, context } = {}) {
     getValue: (order) => order.remainingQuantity.amount,
   })
   const committedBaseBalance = sumDecimalValues({
-    items: allActiveOrders.filter((order) => order.side === "SELL" && order.market.baseAsset.id === metadata.market.baseAsset.id),
+    items: allActiveOrders.filter((order) =>
+      order.side === "SELL" &&
+      order.market.baseAsset.id === metadata.market.baseAsset.id),
     getValue: (order) => order.remainingQuantity.amount,
   })
-  const quoteBalance = accountSnapshot.getFreeBalance({ assetId: metadata.market.quoteAsset.id })
-  const baseBalance = accountSnapshot.getFreeBalance({ assetId: metadata.market.baseAsset.id })
+  return {
+    committedQuote,
+    committedQuoteBalance,
+    committedBase,
+    committedBaseBalance,
+  }
+}
+
+function getPortfolioBalanceContext({ dependencies, context } = {}) {
+  const { getAccountSnapshot } = dependencies
+  const { metadata, portfolioBefore, activeOrdersBefore, excludedActiveOrderClientId } = context
+  const accountSnapshot = getAccountSnapshot()
+  if (!accountSnapshot) {
+    throw new Error("Current account snapshot is unavailable")
+  }
+  const position = portfolioBefore.getPosition({
+    strategyId: StrategyId.COIN_GRABBER,
+    marketId: metadata.market.id,
+  })
+  const allPositions = portfolioBefore.positions
+  const portfolioQuoteCashFlow = sumDecimalValues({
+    items: allPositions.filter((item) =>
+      item.market.quoteAsset.id === metadata.market.quoteAsset.id),
+    getValue: (item) => item.quoteNetCashFlow.amount,
+  })
+  const additionalQuoteCashFlow = getAdditionalTrackedQuoteCashFlow({
+    dependencies,
+    accountSnapshot,
+    portfolio: portfolioBefore,
+    assetId: metadata.market.quoteAsset.id,
+  })
+  const quoteCashFlowBaseline = accountSnapshot.getQuoteCashFlowBaseline?.({
+    assetId: metadata.market.quoteAsset.id,
+  }) ?? "0"
+  const quoteCashFlow = subtractDecimal({
+    left: addDecimal({
+      left: portfolioQuoteCashFlow,
+      right: additionalQuoteCashFlow,
+    }),
+    right: quoteCashFlowBaseline,
+  })
+  const portfolioBaseBalance = sumDecimalValues({
+    items: allPositions.filter((item) =>
+      item.market.baseAsset.id === metadata.market.baseAsset.id),
+    getValue: (item) => item.totalBaseQuantity.amount,
+  })
+  const additionalTrackedBaseBalance = getAdditionalTrackedBaseBalance({
+    dependencies,
+    accountSnapshot,
+    portfolio: portfolioBefore,
+    assetId: metadata.market.baseAsset.id,
+  })
+  const additionalTrackedBaseBalanceBaseline = accountSnapshot.getAdditionalTrackedBaseQuantityBaseline?.({
+    assetId: metadata.market.baseAsset.id,
+  }) ?? "0"
+  const commitments = getActiveOrderCommitments({
+    dependencies,
+    activeOrdersBefore,
+    excludedActiveOrderClientId,
+    metadata,
+  })
+  const quoteBalance = accountSnapshot.getFreeBalance({
+    assetId: metadata.market.quoteAsset.id,
+  })
+  const baseBalance = accountSnapshot.getFreeBalance({
+    assetId: metadata.market.baseAsset.id,
+  })
   if (!quoteBalance || !baseBalance) {
     throw new Error("Current account snapshot is missing an enabled market asset balance")
   }
@@ -284,13 +410,13 @@ function getPortfolioBalanceContext({ dependencies, context } = {}) {
     accountSnapshot,
     position,
     portfolioQuoteCashFlow,
+    additionalQuoteCashFlow,
     quoteCashFlowBaseline,
     quoteCashFlow,
     portfolioBaseBalance,
-    committedQuote,
-    committedQuoteBalance,
-    committedBase,
-    committedBaseBalance,
+    additionalTrackedBaseBalance,
+    additionalTrackedBaseBalanceBaseline,
+    ...commitments,
     quoteBalance,
     baseBalance,
   }
@@ -304,6 +430,8 @@ function allocateEvaluationActions({ dependencies, context, balances } = {}) {
     accountSnapshot,
     quoteCashFlow,
     portfolioBaseBalance,
+    additionalTrackedBaseBalance,
+    additionalTrackedBaseBalanceBaseline,
     committedQuote,
     committedQuoteBalance,
     committedBase,
@@ -319,6 +447,8 @@ function allocateEvaluationActions({ dependencies, context, balances } = {}) {
     activeBaseQuantity: position?.baseQuantity.amount ?? "0",
     portfolioBaseBalance,
     portfolioBaseBalanceBaseline: accountSnapshot.getPortfolioBaseQuantityBaseline({ assetId: metadata.market.baseAsset.id }),
+    additionalTrackedBaseBalance,
+    additionalTrackedBaseBalanceBaseline,
     outstandingRecoveryAmount: maxDecimal({
       left: "0",
       right: subtractDecimal({
@@ -353,12 +483,15 @@ function logOrderAllocation({ dependencies, context, balances, allocation } = {}
   } = allocation
   const {
     portfolioBaseBalance,
+    additionalTrackedBaseBalance,
+    additionalTrackedBaseBalanceBaseline,
     committedQuote,
     committedQuoteBalance,
     committedBase,
     committedBaseBalance,
     quoteCashFlow,
     portfolioQuoteCashFlow,
+    additionalQuoteCashFlow,
     quoteCashFlowBaseline,
     accountSnapshot,
   } = balances
@@ -374,6 +507,8 @@ function logOrderAllocation({ dependencies, context, balances, allocation } = {}
     remainingInvestment,
     portfolioBaseBalance,
     portfolioBaseBalanceBaseline: accountSnapshot.getPortfolioBaseQuantityBaseline({ assetId: metadata.market.baseAsset.id }),
+    additionalTrackedBaseBalance,
+    additionalTrackedBaseBalanceBaseline,
     committedQuote,
     committedQuoteBalance,
     committedQuoteBalanceBaseline: accountSnapshot.getCommittedQuoteBalanceBaseline({ assetId: metadata.market.quoteAsset.id }),
@@ -382,6 +517,7 @@ function logOrderAllocation({ dependencies, context, balances, allocation } = {}
     committedBaseBalanceBaseline: accountSnapshot.getCommittedBaseBalanceBaseline({ assetId: metadata.market.baseAsset.id }),
     quoteCashFlow,
     portfolioQuoteCashFlow,
+    additionalQuoteCashFlow,
     quoteCashFlowBaseline,
   })
 }

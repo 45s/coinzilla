@@ -1,4 +1,5 @@
 import test from "node:test"
+import { SystemCustomError } from "@coinzilla/utils"
 import assert from "node:assert/strict"
 import { Asset, CanonicalOrder, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { StrategyId } from "../strategy-ids.js"
@@ -141,7 +142,10 @@ function makeAllocation({ fill, orderRegistry, recoveryQuantity, legacyQuantity 
   })
 }
 
-const hasCode = (expectedCode) => (error) => error instanceof MixedSellFillReconciliationError && error.code === expectedCode
+const hasCode = (expectedCode) => (error) =>
+  error instanceof SystemCustomError &&
+  error instanceof MixedSellFillReconciliationError &&
+  error.code === expectedCode
 
 test("creates an empty immutable reconciliation from registered Recovery Seller order ownership", () => {
   const { order, orderRegistry } = makeOrderContext()
@@ -622,3 +626,19 @@ if (typeof reconcileMixedSellFillOrder !== "function") {
     )
   })
 }
+
+
+test("uses the shared structured error base and preserves its original cause", () => {
+  const cause = new RangeError("invalid mixed SELL allocation")
+  const error = new MixedSellFillReconciliationError({
+    code: "RS_MIXED_SELL_RECONCILIATION_INVALID_ALLOCATION",
+    message: "Mixed SELL reconciliation rejected an invalid allocation.",
+    cause,
+  })
+
+  assert.equal(error instanceof SystemCustomError, true, "RS reconciliation errors must extend the repository shared error base.")
+  assert.equal(error.name, "MixedSellFillReconciliationError", "The shared base must preserve the concrete domain error name.")
+  assert.equal(error.code, "RS_MIXED_SELL_RECONCILIATION_INVALID_ALLOCATION", "The domain error must retain its stable machine-readable code.")
+  assert.equal(error.cause, cause, "The domain error must preserve the original failure by identity.")
+  assert.equal(error.retryable, false, "Accounting reconciliation invariant failures must be classified as non-retryable.")
+})

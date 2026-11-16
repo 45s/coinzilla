@@ -162,7 +162,7 @@ right: "0" }) < 0
     return this.#committedBaseBalanceBaselineByAssetId.get(assetId) ?? "0"
   }
 
-  /** Return Portfolio quote cash flow already reflected by this snapshot. */
+  /** Return combined Portfolio and separately tracked quote cash flow already reflected by this snapshot. */
   getQuoteCashFlowBaseline({ assetId } = {}) {
     if (typeof assetId !== "string" || !assetId.trim()) {
       throw new TypeError("AccountSnapshot.getQuoteCashFlowBaseline requires assetId")
