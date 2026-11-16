@@ -4,7 +4,7 @@ import { validateCancellationEligibility } from "../../domain/orders/validate-ca
 import { assertBrokerPort } from "../../application/ports/broker.port.js"
 import { createBinanceMarketMetadata } from "./binance-market-metadata.js"
 
-const normalizePlaceOrderResult = (result, { order } = {}) => {
+const normalizePlaceOrderResult = ({ result, order } = {}) => {
   if (result?.ok !== false || !Array.isArray(result.errors) || result.errors.length !== 1) {return result}
   const [error] = result.errors
   // Binance Spot's exact -2010 matching-engine response is a definite LIMIT_MAKER rejection.
@@ -39,6 +39,90 @@ const createBroker = ({ config, logger }) =>
     logger,
   })
 
+async function getCanonicalMarketMetadata({ client, symbol }) {
+    const result = await client.getSymbolFilters({ symbol })
+    if (!result?.ok || !result.data) {
+      const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+      throw new Error(
+        `Unable to load Binance market metadata for ${  symbol  }${details ? `: ${  details}` : ""}`,
+      )
+    }
+    if (result.data.symbol !== symbol) {
+      throw new TypeError(`Binance market metadata symbol does not match ${  symbol}`)
+    }
+    return createBinanceMarketMetadata({ symbolFilters: result.data })
+}
+
+function assertRequiredBrokerMethods({ client }) {
+  const requiredMethods = [
+    "connect",
+    "disconnect",
+    "createOrder",
+    "cancelOrder",
+    "getOpenOrders",
+    "getFills",
+    "getCanonicalOrderHistory",
+    "getCanonicalOrder",
+    "getAccountSnapshot",
+    "getSymbolFilters",
+    "getExchangeMarkets",
+    "getPrices",
+    "getCandles",
+    "subscribeForPrices",
+    "subscribeForCandles",
+    "subscribeForBookTicker",
+    "subscribeForUserData",
+  ]
+  const missingMethods = requiredMethods.filter(
+    (method) => typeof client?.[method] !== "function",
+  )
+  if (missingMethods.length > 0) {
+    throw new TypeError(`Binance broker implementation is missing methods: ${missingMethods.join(", ")}`)
+  }
+}
+
+function createCancelOrderHandler({ client }) {
+  return async function cancelOrder({ order, symbol, orderId } = {}) {
+    const targetSymbol = order?.market?.symbol ?? symbol
+    if (order) {
+      const eligibility = validateCancellationEligibility({ order })
+      if (!eligibility.ok) {return eligibility}
+    }
+    let targetOrderId
+    try {
+      targetOrderId = normalizeBinanceId(order?.brokerOrderId ?? orderId, "orderId")
+    } catch (error) {
+      return toResult({ error })
+    }
+    const cancelResult = await client.cancelOrder({
+      symbol: targetSymbol,
+      orderId: targetOrderId,
+    })
+    if (!order) {return cancelResult}
+    if (!cancelResult?.ok) {return cancelResult}
+    if (typeof client.getCanonicalOrderHistory !== "function") {
+      return toResult({ error: new Error("Canonical order history is required to confirm a cancellation") })
+    }
+    const historyResult = await client.getCanonicalOrderHistory({
+      symbol: targetSymbol,
+      orderId: targetOrderId,
+    })
+    if (!historyResult?.ok || !Array.isArray(historyResult.data)) {
+      return toResult({
+        errors: historyResult?.errors ?? [new Error("Unable to verify canceled order status")],
+      })
+    }
+    const canonicalOrder = historyResult.data.find((item) =>
+      item.clientOrderId === order.clientOrderId &&
+      item.brokerOrderId === order.brokerOrderId
+    )
+    if (!canonicalOrder) {
+      return toResult({ error: new Error("Canceled order was not found in canonical order history") })
+    }
+    return toResult({ data: canonicalOrder })
+  }
+}
+
 /**
  * Adapt the shared Binance broker API to Harvester's application-owned port.
  * Exchange-specific method names and request shapes stay inside this module.
@@ -67,49 +151,10 @@ export function createBinanceBrokerAdapter({
   const client = brokerFactory({ config,
 logger })
 
-  // Exchange filters are dynamic exchange facts, not process-lifetime cache
-  // entries. Each request must fetch current exchangeInfo before a replacement
-  // order can be considered admissible.
-  const getCanonicalMarketMetadata = async ({ symbol } = {}) => {
-    const result = await client.getSymbolFilters({ symbol })
-    if (!result?.ok || !result.data) {
-      const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-      throw new Error(
-        `Unable to load Binance market metadata for ${  symbol  }${details ? `: ${  details}` : ""}`,
-      )
-    }
-    if (result.data.symbol !== symbol) {
-      throw new TypeError(`Binance market metadata symbol does not match ${  symbol}`)
-    }
-    return createBinanceMarketMetadata({ symbolFilters: result.data })
-  }
 
 
-  const requiredMethods = [
-    "connect",
-    "disconnect",
-    "createOrder",
-    "cancelOrder",
-    "getOpenOrders",
-    "getFills",
-    "getCanonicalOrderHistory",
-    "getCanonicalOrder",
-    "getAccountSnapshot",
-    "getSymbolFilters",
-    "getExchangeMarkets",
-    "getPrices",
-    "getCandles",
-    "subscribeForPrices",
-    "subscribeForCandles",
-    "subscribeForBookTicker",
-    "subscribeForUserData",
-  ]
-  const missingMethods = requiredMethods.filter(
-    (method) => typeof client?.[method] !== "function",
-  )
-  if (missingMethods.length > 0) {
-    throw new TypeError(`Binance broker implementation is missing methods: ${missingMethods.join(", ")}`)
-  }
+
+  assertRequiredBrokerMethods({ client })
 
   const broker = Object.freeze({
     connect: () => client.connect(),
@@ -118,47 +163,9 @@ logger })
       const result = typeof client.createCanonicalOrder === "function"
         ? await client.createCanonicalOrder(order)
         : await client.createOrder(order)
-      return normalizePlaceOrderResult(result, { order })
+      return normalizePlaceOrderResult({ result, order })
     },
-    cancelOrder: async ({ order, symbol, orderId } = {}) => {
-      const targetSymbol = order?.market?.symbol ?? symbol
-      if (order) {
-        const eligibility = validateCancellationEligibility({ order })
-        if (!eligibility.ok) {return eligibility}
-      }
-      let targetOrderId
-      try {
-        targetOrderId = normalizeBinanceId(order?.brokerOrderId ?? orderId, "orderId")
-      } catch (error) {
-        return toResult({ error })
-      }
-      const cancelResult = await client.cancelOrder({
-        symbol: targetSymbol,
-        orderId: targetOrderId,
-      })
-      if (!order) {return cancelResult}
-      if (!cancelResult?.ok) {return cancelResult}
-      if (typeof client.getCanonicalOrderHistory !== "function") {
-        return toResult({ error: new Error("Canonical order history is required to confirm a cancellation") })
-      }
-      const historyResult = await client.getCanonicalOrderHistory({
-        symbol: targetSymbol,
-        orderId: targetOrderId,
-      })
-      if (!historyResult?.ok || !Array.isArray(historyResult.data)) {
-        return toResult({
-          errors: historyResult?.errors ?? [new Error("Unable to verify canceled order status")],
-        })
-      }
-      const canonicalOrder = historyResult.data.find((item) =>
-        item.clientOrderId === order.clientOrderId &&
-        item.brokerOrderId === order.brokerOrderId
-      )
-      if (!canonicalOrder) {
-        return toResult({ error: new Error("Canceled order was not found in canonical order history") })
-      }
-      return toResult({ data: canonicalOrder })
-    },
+    cancelOrder: createCancelOrderHandler({ client }),
     getOpenOrders: ({ symbol }) => client.getOpenOrders({ symbol }),
     getFills: (input) => client.getFills(input),
     getCanonicalOrderHistory: (input) => client.getCanonicalOrderHistory(input),
@@ -168,7 +175,7 @@ logger })
     getSymbolFilters: async ({ symbol }) => {
       try {
         return toResult({
-          data: await getCanonicalMarketMetadata({ symbol }),
+          data: await getCanonicalMarketMetadata({ client, symbol }),
         })
       } catch (error) {
         return toResult({ error })
