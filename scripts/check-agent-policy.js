@@ -205,111 +205,121 @@ export function findMissingLocalLinks(...args) {
  * @param {string} content Markdown/MDX source.
  * @returns {Set<string>} Anchor identifiers present in the document.
  */
-function collectMarkdownHeadingAnchors(content) {
-  const anchors = new Set();
-  const lines = content.split(/\r?\n/);
-  const codeCharacter = String.fromCharCode(96);
-  const fencePattern = new RegExp(`^ {0,3}(${  codeCharacter  }{3,}|~{3,})(.*)$`);
-  const inlineCodePattern = new RegExp(`${codeCharacter  }+([^${  codeCharacter  }]*?)${  codeCharacter  }+`, 'g');
-  const explicitIdPattern = /\b(?:id|name)\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/gi;
-  let activeFence = null;
-  let inHtmlComment = false;
-  let inFrontMatter = lines[0]?.trim() === '---';
+function addMarkdownHeadingAnchor({ rawHeading, anchors, inlineCodePattern }) {
+  if (/[{}]/.test(rawHeading)) {return}
 
-  function addHeading(rawHeading) {
-    if (/[{}]/.test(rawHeading)) {return;}
+  const plainText = rawHeading
+    .replace(/<!--.*?-->/g, '')
+    .replace(/<((?:https?:\/\/|mailto:)[^>]+)>/gi, '$1')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
+    .replace(inlineCodePattern, '$1')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\\([#.+!?()[\]{}])/g, '$1')
+    .replace(/[*~]/g, '')
+    .replace(/(^|\s)_([^_]+)_($|\s)/g, '$1$2$3')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&nbsp;/gi, ' ')
 
-    const plainText = rawHeading
-      .replace(/<!--.*?-->/g, '')
-      .replace(/<((?:https?:\/\/|mailto:)[^>]+)>/gi, '$1')
-      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-      .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
-      .replace(inlineCodePattern, '$1')
-      .replace(/<[^>]*>/g, '')
-      .replace(/\\([#.+!?()[\]{}])/g, '$1')
-      .replace(/[*~]/g, '')
-      .replace(/(^|\s)_([^_]+)_($|\s)/g, '$1$2$3')
-      .replace(/&amp;/gi, '&')
-      .replace(/&lt;/gi, '<')
-      .replace(/&gt;/gi, '>')
-      .replace(/&quot;/gi, '"')
-      .replace(/&#39;|&apos;/gi, "'")
-      .replace(/&nbsp;/gi, ' ');
+  const baseSlug = plainText
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\p{M}\-_ ]/gu, '')
+    .trim()
+    .replace(/ /g, '-')
+  if (!baseSlug) {return}
 
-    const baseSlug = plainText
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}\p{M}\-_ ]/gu, '')
-      .trim()
-      .replace(/ /g, '-');
-    if (!baseSlug) {return;}
-
-    let slug = baseSlug;
-    let suffix = 0;
-    while (anchors.has(slug)) {
-      suffix += 1;
-      slug = `${baseSlug  }-${  suffix}`;
-    }
-    anchors.add(slug);
+  let slug = baseSlug
+  let suffix = 0
+  while (anchors.has(slug)) {
+    suffix += 1
+    slug = baseSlug + "-" + suffix
   }
+  anchors.add(slug)
+}
+
+function collectMarkdownHeadingAnchors(content) {
+  const anchors = new Set()
+  const lines = content.split(/\r?\n/)
+  const codeCharacter = String.fromCharCode(96)
+  const fencePattern = new RegExp("^ {0,3}(" + codeCharacter + "{3,}|~{3,})(.*)$")
+  const inlineCodePattern = new RegExp(codeCharacter + "+([^" + codeCharacter + "]*?)" + codeCharacter + "+", 'g')
+  const explicitIdPattern = /\b(?:id|name)\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/gi
+  let activeFence = null
+  let inHtmlComment = false
+  let inFrontMatter = lines[0]?.trim() === '---'
 
   for (let index = 0; index < lines.length; index += 1) {
-    let line = lines[index];
+    let line = lines[index]
 
     if (inFrontMatter) {
-      if (index > 0 && line.trim() === '---') {inFrontMatter = false;}
-      continue;
+      if (index > 0 && line.trim() === '---') {inFrontMatter = false}
+      continue
     }
 
     if (inHtmlComment) {
-      if (line.includes('-->')) {inHtmlComment = false;}
-      continue;
+      if (line.includes('-->')) {inHtmlComment = false}
+      continue
     }
 
     if (line.includes('<!--')) {
       if (!line.includes('-->')) {
-        inHtmlComment = true;
-        continue;
+        inHtmlComment = true
+        continue
       }
-      line = line.replace(/<!--.*?-->/g, '');
+      line = line.replace(/<!--.*?-->/g, '')
     }
 
-    const fenceMatch = line.match(fencePattern);
+    const fenceMatch = line.match(fencePattern)
     if (activeFence) {
       const isClosingFence = fenceMatch &&
         fenceMatch[1][0] === activeFence.character &&
         fenceMatch[1].length >= activeFence.length &&
-        /^[ \t]*$/.test(fenceMatch[2]);
-      if (isClosingFence) {activeFence = null;}
-      continue;
+        /^[ \t]*$/.test(fenceMatch[2])
+      if (isClosingFence) {activeFence = null}
+      continue
     }
 
     if (fenceMatch) {
-      activeFence = { character: fenceMatch[1][0],
-length: fenceMatch[1].length };
-      continue;
+      activeFence = {
+        character: fenceMatch[1][0],
+        length: fenceMatch[1].length,
+      }
+      continue
     }
 
     for (const match of line.matchAll(explicitIdPattern)) {
-      const identifier = match[1] ?? match[2] ?? match[3];
-      if (identifier) {anchors.add(identifier);}
+      const identifier = match[1] ?? match[2] ?? match[3]
+      if (identifier) {anchors.add(identifier)}
     }
 
-    const atxHeading = line.match(/^ {0,3}#{1,6}(?:[ \t]+|$)(.*)$/);
+    const atxHeading = line.match(/^ {0,3}#{1,6}(?:[ \t]+|$)(.*)$/)
     if (atxHeading) {
-      addHeading(atxHeading[1].replace(/[ \t]+#+[ \t]*$/, ''));
-      continue;
+      addMarkdownHeadingAnchor({
+        rawHeading: atxHeading[1].replace(/[ \t]+#+[ \t]*$/, ''),
+        anchors,
+        inlineCodePattern,
+      })
+      continue
     }
 
     if (/^ {0,3}(=+|-+)[ \t]*$/.test(line) && index > 0) {
-      const setextHeading = lines[index - 1].trim();
+      const setextHeading = lines[index - 1].trim()
       if (setextHeading && !setextHeading.startsWith('>') && !setextHeading.startsWith('|')) {
-        addHeading(setextHeading);
+        addMarkdownHeadingAnchor({
+          rawHeading: setextHeading,
+          anchors,
+          inlineCodePattern,
+        })
       }
     }
   }
 
-  return anchors;
+  return anchors
 }
 
 /**
