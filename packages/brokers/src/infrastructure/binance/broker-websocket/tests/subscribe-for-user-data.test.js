@@ -4,7 +4,8 @@ import { CanonicalOrder, Fill } from "@coinzilla/entities"
 import { BinanceSdkBroker } from "../broker.js"
 import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 
-function createBroker(handler, exchangeInfoHandler = () => ({ symbols: [] })) {
+function createBroker(...args) {
+  const [handler, exchangeInfoHandler = () => ({ symbols: [] })] = args
   const rpc = createFakeRpcClient({
     "userDataStream.subscribe.signature": handler,
     "userDataStream.unsubscribe": () => ({}),
