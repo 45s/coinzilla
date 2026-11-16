@@ -79,7 +79,8 @@ function assertFillParity({ journalFill, exchangeFill }) {
     ["quantity", exchangeFill.quantity.amount, journalFill.quantity],
     ["quoteQuantity", exchangeFill.quoteQuantity.amount, journalFill.quoteQuantity],
   ]) {
-    if (compareDecimal({ left: actual, right: expected }) !== 0) {
+    if (compareDecimal({ left: actual, 
+      right: expected }) !== 0) {
       mismatch(field)
     }
   }
@@ -150,12 +151,16 @@ function validateScopeEvidence({
 }
 
 function selectScopeRecords({ journalFills, exchangeFills, ownedOrders, scope, market }) {
-  const allJournalRecords = requireArray({ value: journalFills, field: "journalFills" })
-  const allExchangeRecords = requireArray({ value: exchangeFills, field: "exchangeFills" })
-  const allOwnedOrderRecords = requireArray({ value: ownedOrders, field: "ownedOrders" })
+  const allJournalRecords = requireArray({ value: journalFills, 
+    field: "journalFills" })
+  const allExchangeRecords = requireArray({ value: exchangeFills, 
+    field: "exchangeFills" })
+  const allOwnedOrderRecords = requireArray({ value: ownedOrders, 
+    field: "ownedOrders" })
   if (scope === "MARKET") {
     for (const [index, fill] of allJournalRecords.entries()) {
-      requireString({ value: fill?.symbol, field: `journalFills[${index}].symbol` })
+      requireString({ value: fill?.symbol, 
+        field: `journalFills[${index}].symbol` })
     }
     for (const [index, fill] of allExchangeRecords.entries()) {
       if (!(fill instanceof Fill)) {
@@ -204,8 +209,10 @@ function createJournalFillIndexes({ journalRecords }) {
   const journalById = new Map()
   const journalTradeIds = new Map()
   for (const [index, fill] of journalRecords.entries()) {
-    const fillId = requireString({ value: fill?.fillId, field: `journalFills[${index}].fillId` })
-    const tradeId = requireString({ value: fill?.tradeId, field: `journalFills[${index}].tradeId` })
+    const fillId = requireString({ value: fill?.fillId, 
+      field: `journalFills[${index}].fillId` })
+    const tradeId = requireString({ value: fill?.tradeId, 
+      field: `journalFills[${index}].tradeId` })
     const tradeKey = `${fill.symbol}:${tradeId}`
     if (journalById.has(fillId)) {
       throw new Error(`Journal contains duplicate execution identity ${fillId}`)
@@ -216,7 +223,8 @@ function createJournalFillIndexes({ journalRecords }) {
     journalById.set(fillId, fill)
     journalTradeIds.set(tradeKey, fillId)
   }
-  return { journalById, journalTradeIds }
+  return { journalById, 
+    journalTradeIds }
 }
 
 function createExchangeFillIndexes({ exchangeRecords }) {
@@ -236,7 +244,8 @@ function createExchangeFillIndexes({ exchangeRecords }) {
     exchangeById.set(fill.id, fill)
     exchangeTradeIds.set(tradeKey, fill.id)
   }
-  return { exchangeById, exchangeTradeIds }
+  return { exchangeById, 
+    exchangeTradeIds }
 }
 
 function reconcileExchangeFills({ exchangeById, journalById, ownedOrdersByBrokerId }) {
@@ -257,7 +266,8 @@ function reconcileExchangeFills({ exchangeById, journalById, ownedOrdersByBroker
       reconciledOwnedOrderFills += 1
       continue
     }
-    assertFillParity({ journalFill, exchangeFill })
+    assertFillParity({ journalFill, 
+      exchangeFill })
   }
   for (const fillId of journalById.keys()) {
     if (!exchangeById.has(fillId)) {
