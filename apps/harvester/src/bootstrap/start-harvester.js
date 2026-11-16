@@ -55,7 +55,7 @@ async function verifyOperationalStateStoreDurability({ operationalStateStore } =
       verification.data?.valid !== true ||
       verification.data?.durableWriteSupported !== true) {
     const cause = verification?.errors?.[0] ?? new Error("Operational State Store verification was not confirmed")
-    const error = new Error("Harvester cannot connect to the broker with an unverified ADR-0001 Operational State Store: " + (cause.message ?? String(cause)), { cause })
+    const error = new Error(`Harvester cannot connect to the broker with an unverified ADR-0001 Operational State Store: ${  cause.message ?? String(cause)}`, { cause })
     error.code = cause.code ?? "DURABLE_FACTS_VERIFICATION_FAILED"
     throw error
   }
@@ -67,12 +67,12 @@ async function readVerifiedOperationalStateHistory({ operationalStateStore } = {
       existingFacts.data?.durableWriteSupported !== true ||
       !Array.isArray(existingFacts.data.records)) {
     const cause = existingFacts?.errors?.[0] ?? new Error("Operational State Store history could not be read and verified")
-    throw new Error("Harvester cannot connect to the broker without verified Operational State Store history: " + (cause.message ?? String(cause)), { cause })
+    throw new Error(`Harvester cannot connect to the broker without verified Operational State Store history: ${  cause.message ?? String(cause)}`, { cause })
   }
   const existingProjection = projectHarvesterOperationalState({ records: existingFacts.data.records })
   if (existingProjection?.ok !== true) {
     const cause = existingProjection?.errors?.[0] ?? new Error("Operational State Store history projection failed")
-    throw new Error("Harvester cannot restart from an unprojectable Operational State Store history: " + (cause.message ?? String(cause)), { cause })
+    throw new Error(`Harvester cannot restart from an unprojectable Operational State Store history: ${  cause.message ?? String(cause)}`, { cause })
   }
   return existingProjection
 }
@@ -130,12 +130,15 @@ async function persistHarvesterProcessStart({
   if (!operationalStateStore) {
     return
   }
-  const baseline = await recordConfigurationBaseline({ operationalStateStore, appConfig })
+  const baseline = await recordConfigurationBaseline({ operationalStateStore,
+appConfig })
   if (baseline?.ok !== true || baseline.data?.durable !== true) {
-    throw new Error("Harvester cannot connect to the broker without a durable configuration baseline: " +
-      (baseline?.errors?.[0]?.message ?? "durable acknowledgement missing"))
+    throw new Error(`Harvester cannot connect to the broker without a durable configuration baseline: ${ 
+      baseline?.errors?.[0]?.message ?? "durable acknowledgement missing"}`)
   }
-  assertConfigurationBaselineMatchesRuntime({ baseline, configurationFingerprint, enabledMarkets })
+  assertConfigurationBaselineMatchesRuntime({ baseline,
+configurationFingerprint,
+enabledMarkets })
   const started = await recordProcessStarted({
     operationalStateStore,
     configurationFingerprint: baseline.data.fingerprint,
@@ -144,8 +147,8 @@ async function persistHarvesterProcessStart({
     tradingEnabled,
   })
   if (started?.ok !== true || started.data?.durable !== true) {
-    throw new Error("Harvester cannot connect to the broker without a durable process-start boundary: " +
-      (started?.errors?.[0]?.message ?? "durable acknowledgement missing"))
+    throw new Error(`Harvester cannot connect to the broker without a durable process-start boundary: ${ 
+      started?.errors?.[0]?.message ?? "durable acknowledgement missing"}`)
   }
 }
 
@@ -218,7 +221,8 @@ async function resolveStartupOptionsForProcessRecovery({ resolved, operationalSt
   const tradingEnabled = resolved.tradingEnabled && operationalState.previousProcessStarted !== true
   const startupOptions = tradingEnabled === resolved.tradingEnabled
     ? resolved
-    : Object.freeze({ ...resolved, tradingEnabled })
+    : Object.freeze({ ...resolved,
+tradingEnabled })
   if (resolved.tradingEnabled && !tradingEnabled) {
     logger.info?.({
       message: "Trading disabled because process-restart recovery is disabled and prior process history exists",
@@ -227,6 +231,16 @@ async function resolveStartupOptionsForProcessRecovery({ resolved, operationalSt
     })
   }
   return startupOptions
+}
+
+function createCommissionAssetPublisher({ accountSnapshotManagerRef }) {
+  return ({ assetId, assetCode } = {}) => {
+    if (!accountSnapshotManagerRef.current) {
+      throw new Error("Commission asset baseline manager is not ready")
+    }
+    return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({ assetId,
+assetCode })
+  }
 }
 
 async function createHarvesterStartupContext({ options } = {}) {
@@ -283,12 +297,7 @@ async function createHarvesterStartupContext({ options } = {}) {
   })
   const operationalStateCallbacks = createHarvesterOperationalStateCallbacks({ operationalStateStore })
   const accountSnapshotManagerRef = { current: null }
-  const onCommissionAsset = ({ assetId, assetCode } = {}) => {
-    if (!accountSnapshotManagerRef.current) {
-      throw new Error("Commission asset baseline manager is not ready")
-    }
-    return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({ assetId, assetCode })
-  }
+  const onCommissionAsset = createCommissionAssetPublisher({ accountSnapshotManagerRef })
   return {
     ...startupOptions,
     env,
@@ -342,7 +351,8 @@ function createHarvesterPortfolioContext({ startup } = {}) {
     marketMetadata: new Map(),
   }
   context.processMarketPrice = (...args) => context.portfolioWorkflow.processMarketPrice(...args)
-  context.processMarketBook = () => toResult({ data: { skipped: true, reason: "TRADING_ENGINE_NOT_READY" } })
+  context.processMarketBook = () => toResult({ data: { skipped: true,
+reason: "TRADING_ENGINE_NOT_READY" } })
   context.updatePortfolio = (...args) => context.portfolioWorkflow.updatePortfolio(...args)
   context.updateTradingAccounting = (...args) => context.portfolioWorkflow.updateTradingAccounting(...args)
   context.getPortfolio = (...args) => context.portfolioWorkflow.getPortfolio(...args)
@@ -496,7 +506,8 @@ function createHarvesterUserDataRecoveryRuntime({ startup, resources, accountSna
     mapUserDataReadinessChangedData,
     publishLifecycleEvent,
   })
-  return { startUserDataRecovery, handleUserDataStatus }
+  return { startUserDataRecovery,
+handleUserDataStatus }
 }
 
 function createHarvesterMarketDataFreshness({ startup } = {}) {
@@ -657,7 +668,8 @@ async function cleanupFailedHarvesterStartup({ error, startup, resources } = {})
     userDataSubscription: resources.userDataSubscription,
   })
   const cleanupErrors = [...operatorCleanupErrors, ...brokerCleanupErrors]
-  throwIfStartupCleanupFailed({ error, cleanupErrors })
+  throwIfStartupCleanupFailed({ error,
+cleanupErrors })
   throw error
 }
 
@@ -672,9 +684,14 @@ async function startHarvesterServices({ startup, portfolio, resources, accountSn
       recoveryRuntime,
       activateTradingEngine,
     })
-    await startHarvesterMarketServices({ startup, portfolio, resources, freshness })
+    await startHarvesterMarketServices({ startup,
+portfolio,
+resources,
+freshness })
   } catch (error) {
-    await cleanupFailedHarvesterStartup({ error, startup, resources })
+    await cleanupFailedHarvesterStartup({ error,
+startup,
+resources })
   }
 }
 
@@ -736,15 +753,36 @@ export async function startHarvester(options = {}) {
   const startup = await createHarvesterStartupContext({ options })
   const portfolio = createHarvesterPortfolioContext({ startup })
   const resources = await createHarvesterRuntimeResources({ startup })
-  const accountSnapshots = createHarvesterAccountSnapshotRuntime({ startup, portfolio, resources })
-  const userDataEvents = createHarvesterUserDataEventRuntime({ startup, portfolio, resources, accountSnapshots })
-  const recoveryRuntime = createHarvesterUserDataRecoveryRuntime({ startup, resources, accountSnapshots, userDataEvents })
+  const accountSnapshots = createHarvesterAccountSnapshotRuntime({ startup,
+portfolio,
+resources })
+  const userDataEvents = createHarvesterUserDataEventRuntime({ startup,
+portfolio,
+resources,
+accountSnapshots })
+  const recoveryRuntime = createHarvesterUserDataRecoveryRuntime({ startup,
+resources,
+accountSnapshots,
+userDataEvents })
   const freshness = createHarvesterMarketDataFreshness({ startup })
-  const activateTradingEngine = createHarvesterTradingEngineActivator({ startup, portfolio, resources, freshness })
-  await startHarvesterServices({ startup, portfolio, resources, accountSnapshots, userDataEvents, recoveryRuntime, activateTradingEngine, freshness })
+  const activateTradingEngine = createHarvesterTradingEngineActivator({ startup,
+portfolio,
+resources,
+freshness })
+  await startHarvesterServices({ startup,
+portfolio,
+resources,
+accountSnapshots,
+userDataEvents,
+recoveryRuntime,
+activateTradingEngine,
+freshness })
   resources.userDataState.startupComplete = true
-  startPendingUserDataRecovery({ userDataState: resources.userDataState, startUserDataRecovery: recoveryRuntime.startUserDataRecovery })
-  const stop = createHarvesterRuntimeStop({ startup, resources, accountSnapshots })
+  startPendingUserDataRecovery({ userDataState: resources.userDataState,
+startUserDataRecovery: recoveryRuntime.startUserDataRecovery })
+  const stop = createHarvesterRuntimeStop({ startup,
+resources,
+accountSnapshots })
   return createHarvesterRuntimeResult({
     startup,
     portfolio,

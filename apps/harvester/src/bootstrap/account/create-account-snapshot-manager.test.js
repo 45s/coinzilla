@@ -6,7 +6,7 @@ import { Portfolio } from "../../domain/portfolio/portfolio.js"
 import { createAccountSnapshotManager } from "./create-account-snapshot-manager.js"
 import { calculateVerifiedLegacySpotAllocation } from "../../domain/strategies/recovery-seller/legacy-spot-allocation.js"
 
-const test = (name, ...args) => nodeTest("[create-account-snapshot-manager.test.js] " + name, ...args)
+const test = (...args) => nodeTest(`[create-account-snapshot-manager.test.js] ${args[0]}`, ...args.slice(1))
 
 const createFixture = ({
   accountSnapshots = [],
@@ -123,7 +123,7 @@ const createAccountSnapshot = ({
 })
 
 test("captures configured-asset balances and durably publishes the account audit", async () => {
-  const market = createFixture().market
+  const {market} = createFixture()
   const fixture = createFixture({
     accountSnapshots: [createAccountSnapshot({
       market,
@@ -143,7 +143,7 @@ test("captures configured-asset balances and durably publishes the account audit
 
 
 function createThirdAssetCommissionFixture() {
-  const market = createFixture().market
+  const {market} = createFixture()
   const bnb = new Asset({
     id: "asset:BNB",
     code: "BNB",
@@ -267,7 +267,7 @@ test("publishes only the actual third-asset commission baseline and excludes unr
 })
 
 test("fails closed when an actual commission asset has no PREFLIGHT balance", async () => {
-  const market = createFixture().market
+  const {market} = createFixture()
   const fixture = createFixture({
     accountSnapshots: [createAccountSnapshot({
       market,
@@ -308,7 +308,8 @@ test("captures Portfolio and active-order baselines at the account snapshot boun
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  const portfolio = new Portfolio().applyFill({ fill: portfolioFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+  const {portfolio} = new Portfolio().applyFill({ fill: portfolioFill,
+strategyId: StrategyId.COIN_GRABBER })
   const activeBuyOrder = new CanonicalOrder({
     clientOrderId: "snapshot-baseline-active-buy",
     brokerOrderId: "snapshot-baseline-active-buy-broker",
@@ -664,7 +665,7 @@ async function assertAccountSnapshotRetrySucceeded({ fixture }) {
 
 
 test("retries an account snapshot after a REST timeout without publishing a premature audit", async () => {
-  const market = createFixture().market
+  const {market} = createFixture()
   const timeout = Object.assign(
     new Error("account.status request timed out"),
     {
@@ -754,7 +755,7 @@ test("preserves the original broker error as cause when the account-wide open-or
 
 
 test("classifies a permanent Journal write failure as terminal during the recovery account audit", async () => {
-  const market = createFixture().market
+  const {market} = createFixture()
   const writeError = new Error("Journal session is failed after a previous write error")
   const recoveryFailure = {
     category: "DURABILITY",
@@ -793,7 +794,7 @@ test("classifies a permanent Journal write failure as terminal during the recove
 })
 
 test("treats a failed flush with unclassified Journal health as terminal", async () => {
-  const market = createFixture().market
+  const {market} = createFixture()
   const writeError = new Error("Journal flush failed without writer-health metadata")
   const fixture = createFixture({
     accountSnapshots: [createAccountSnapshot({
@@ -855,7 +856,7 @@ async function assertRecoveryAuditRetryPublished({ fixture }) {
 
 
 test("retains the first recovery account audit publication after a transient flush failure and retry", async () => {
-  const market = createFixture().market
+  const {market} = createFixture()
   const syncFailure = new Error("simulated Journal file sync failure")
   const fixture = createFixture({
     accountSnapshots: [
@@ -908,7 +909,7 @@ test("commits account balance and open-order facts before publishing their Journ
       }
     },
   }
-  const market = createFixture().market
+  const {market} = createFixture()
   const fixture = createFixture({
     accountSnapshots: [createAccountSnapshot({
       market,
