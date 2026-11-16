@@ -1702,7 +1702,7 @@ async function writeOperationalStateGenesisFact({ store, genesisRecord, writeSta
   const logHandle = await store.fileSystem.open(store.logPath, "wx", 0o600)
   try {
     writeState.factWriteStarted = true
-    await logHandle.writeFile(`${canonicalStringifyOperationalStateValue(genesisRecord)}\\n`, "utf8")
+    await logHandle.writeFile(`${canonicalStringifyOperationalStateValue(genesisRecord)}\n`, "utf8")
     await logHandle.sync()
   } finally {
     await logHandle.close()
@@ -1713,7 +1713,7 @@ async function writeOperationalStateGenesisManifest({ store, genesisCheckpointBo
   const manifestHandle = await store.fileSystem.open(store.manifestPath, "wx", 0o600)
   try {
     writeState.manifestWriteStarted = true
-    await manifestHandle.writeFile(`${canonicalStringifyOperationalStateValue(genesisCheckpointBody)}\\n`, "utf8")
+    await manifestHandle.writeFile(`${canonicalStringifyOperationalStateValue(genesisCheckpointBody)}\n`, "utf8")
     await manifestHandle.sync()
   } finally {
     await manifestHandle.close()
