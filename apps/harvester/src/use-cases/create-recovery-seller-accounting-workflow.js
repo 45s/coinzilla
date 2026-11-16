@@ -2,6 +2,7 @@ import { CanonicalOrder, Market } from "@coinzilla/entities"
 import { addDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { calculateVerifiedLegacySpotAllocation } from "../domain/strategies/recovery-seller/legacy-spot-allocation.js"
 import { applyReconciledMixedSellOrder } from "../domain/strategies/recovery-seller/mixed-sell-fill-accounting.js"
 import { calculateRecoverySellerProfitability } from "../domain/strategies/recovery-seller/calculate-profitability.js"
@@ -194,7 +195,7 @@ function reconcileTerminalMixedSellTransition({
     clientOrderId: terminalRegisteredOrder.clientOrderId,
     brokerOrderId: terminalRegisteredOrder.brokerOrderId,
   })
-  if (!ownership || ownership.strategyId !== "RECOVERY_SELLER" ||
+  if (!ownership || ownership.strategyId !== StrategyId.RECOVERY_SELLER ||
       ownership.purpose !== "RECOVERY_SELL") {
     throw new Error("Recovery Seller terminal mixed SELL requires registered RS order ownership")
   }
