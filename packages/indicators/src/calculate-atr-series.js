@@ -11,23 +11,35 @@ import {
 import { validateCandles } from "./validate-candles.js"
 
 function calculateTrueRange({ candle, previousClose }) {
-  const candleRange = subtractDecimal({ left: candle.high, right: candle.low })
+  const candleRange = subtractDecimal({
+    left: candle.high,
+    right: candle.low,
+  })
   if (previousClose === null) {
     return candleRange
   }
 
   const highToPreviousClose = absoluteDecimal({
-    value: subtractDecimal({ left: candle.high, right: previousClose }),
+    value: subtractDecimal({
+      left: candle.high,
+      right: previousClose,
+    }),
   })
   const lowToPreviousClose = absoluteDecimal({
-    value: subtractDecimal({ left: candle.low, right: previousClose }),
+    value: subtractDecimal({
+      left: candle.low,
+      right: previousClose,
+    }),
   })
   const gapRange = maxDecimal({
     left: highToPreviousClose,
     right: lowToPreviousClose,
   })
 
-  return maxDecimal({ left: candleRange, right: gapRange })
+  return maxDecimal({
+    left: candleRange,
+    right: gapRange,
+  })
 }
 
 /**
@@ -54,7 +66,11 @@ export function calculateAtrSeries({
   rounding = "half-up",
 } = {}) {
   validateDecimalScale({ scale: outputScale })
-  validateCandles({ candles, intervalMs, period })
+  validateCandles({
+    candles,
+    intervalMs,
+    period,
+  })
 
   const trueRanges = []
   for (let index = 0; index < candles.length; index += 1) {
@@ -65,7 +81,10 @@ export function calculateAtrSeries({
 
   const initialRangeTotal = trueRanges
     .slice(0, period)
-    .reduce((total, trueRange) => addDecimal({ left: total, right: trueRange }), "0")
+    .reduce((total, trueRange) => addDecimal({
+      left: total,
+      right: trueRange,
+    }), "0")
   let previousAtr = divideDecimal({
     left: initialRangeTotal,
     right: String(period),
