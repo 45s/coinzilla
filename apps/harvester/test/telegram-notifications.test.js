@@ -393,7 +393,10 @@ test("Telegram delivery failure is logged but does not fail runtime shutdown", a
         subscriptions: [],
         stop: async () => ({ ok: true }),
       }),
-      registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
+      registerSignalHandler: (...signalHandlerArguments) => {
+        const [signal, handler] = signalHandlerArguments;
+        signalHandlers.set(signal, handler);
+      },
       logger: {
         info(entry) { loggerInfos.push(entry) },
         error(entry) { loggerErrors.push(entry) },
@@ -454,7 +457,10 @@ test("applies custom Telegram event overrides and market filters while preservin
         stop: async () => ({ ok: true }),
       };
     },
-    registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
+    registerSignalHandler: (...signalHandlerArguments) => {
+        const [signal, handler] = signalHandlerArguments;
+        signalHandlers.set(signal, handler);
+      },
     logger: { info() {},
 error() {} },
   })
@@ -560,7 +566,10 @@ profile: scenario.profile } } }),
           stop: async () => ({ ok: true }),
         };
       },
-      registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
+      registerSignalHandler: (...signalHandlerArguments) => {
+        const [signal, handler] = signalHandlerArguments;
+        signalHandlers.set(signal, handler);
+      },
       logger: { info() {},
 error() {} },
     })
@@ -618,7 +627,10 @@ TELEGRAM_CHAT_ID: "test-chat" },
         stop: async () => ({ ok: true }),
       };
     },
-    registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
+    registerSignalHandler: (...signalHandlerArguments) => {
+        const [signal, handler] = signalHandlerArguments;
+        signalHandlers.set(signal, handler);
+      },
     logger: { info() {},
 error() {} },
   })
@@ -680,7 +692,10 @@ events: { accountSafetyAlert: false } } } }),
         stop: async () => ({ ok: true }),
       };
     },
-    registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
+    registerSignalHandler: (...signalHandlerArguments) => {
+        const [signal, handler] = signalHandlerArguments;
+        signalHandlers.set(signal, handler);
+      },
     logger: { info() {},
 error() {} },
   })
