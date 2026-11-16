@@ -57,7 +57,13 @@ const compareDecimalStrings = ({ left, right }) => {
   const leftValue = BigInt(`${leftWhole}${leftFraction}`) * 10n ** BigInt(scale - leftFraction.length)
   const rightValue = BigInt(`${rightWhole}${rightFraction}`) * 10n ** BigInt(scale - rightFraction.length)
 
-  return leftValue < rightValue ? -1 : leftValue > rightValue ? 1 : 0
+  if (leftValue < rightValue) {
+    return -1
+  }
+  if (leftValue > rightValue) {
+    return 1
+  }
+  return 0
 }
 
 const normalizeConstraint = ({ constraint, market }) => {
