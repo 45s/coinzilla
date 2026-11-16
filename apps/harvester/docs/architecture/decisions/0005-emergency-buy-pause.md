@@ -28,7 +28,7 @@ The emergency BUY gate suppresses initial BUY decisions, BUY replacements/repric
 
 If any owned BUY cancellation is unconfirmed or an active owned BUY remains unresolved, the BUY gate stays active and the operation returns `OPERATOR_BUY_CANCELLATION_INCOMPLETE`. The operator response must state that new BUY submissions remain blocked but cancellation is unresolved. It must never imply that all resting BUYs are gone.
 
-The controls are process-lifetime only. They are not replayed or restored after restart. When an Operational State Store is supplied, pause/resume facts use the same process-owned ADR-0001 store and durable-before-apply contract; no separate ledger or restart-restoration mechanism is introduced.
+The controls are process-lifetime only. They are not replayed or restored after restart. Orders from a previous process are not current-process-owned under ADR-0004; this emergency command will not cancel them after restart. The operator must reconcile those orders explicitly through the exchange/operator recovery procedure rather than assuming a repeated pause command will cancel them. When an Operational State Store is supplied, pause/resume facts use the same process-owned ADR-0001 store and durable-before-apply contract; no separate ledger or restart-restoration mechanism is introduced.
 
 ## Consequences
 
