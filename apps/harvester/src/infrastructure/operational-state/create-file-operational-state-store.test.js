@@ -167,16 +167,20 @@ force: true }))
   const store = createStore(directory)
   const secondStore = createStore(directory, { runtimeSessionId: "runtime-session-2" })
   await store.initialize()
-  const results = await Promise.all(Array.from({ length: 8 }, (_, index) => {
+  const appendOperations = []
+  for (let index = 0; index < 8; index += 1) {
     const writer = index % 2 === 0 ? store : secondStore
-    return writer.append({
-      factId: `operator-control:concurrent-${  index}`,
+    appendOperations.push(writer.append({
+      factId: `operator-control:concurrent-${index}`,
       factType: "OPERATOR_MARKET_PAUSED",
-      data: { requestId: `concurrent-${  index}`,
-actorId: "actor-1",
-symbol: "BTCUSDT" },
-    })
-  }))
+      data: {
+        requestId: `concurrent-${index}`,
+        actorId: "actor-1",
+        symbol: "BTCUSDT",
+      },
+    }))
+  }
+  const results = await Promise.all(appendOperations)
   assert.equal(results.every(({ ok, data }) => ok && data.durable), true)
   const read = await store.readAll()
   assert.deepEqual(read.data.records.map(({ sequence }) => sequence), ["0", "1", "2", "3", "4", "5", "6", "7", "8"])
