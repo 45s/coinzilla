@@ -39,6 +39,7 @@ function summarizeConsoleData({ data, shutdownPresentation } = {}) {
 
   const message = String(data.message ?? "Harvester event")
     .replace(/[\r\n]+/g, " ")
+    .replace(/^Harvester\s+/, "")
   const details = Object.fromEntries(
     CONSOLE_DETAIL_KEYS
       .filter((key) => data[key] !== undefined && data[key] !== null)
