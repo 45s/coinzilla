@@ -642,8 +642,10 @@ test("logs structured operator query failures without exposing diagnostics to Te
   assert.equal(loggedErrors.length, 1, "A failed operator query must emit one actionable structured diagnostic.")
   assert.equal(loggedErrors[0].component, "harvester.operator", "The diagnostic must identify the owning operator component.")
   assert.equal(loggedErrors[0].operation, "getStatus", "The diagnostic must identify the failed query operation.")
-  assert.equal(loggedErrors[0].error[0], queryError, "The logger must receive the original typed error object without stringification.")
-  assert.equal(loggedErrors[0].error[0].cause, internalCause, "The diagnostic must preserve the original lower-level cause.")
+  assert.equal(loggedErrors[0].errorName, "OperatorQueryError", "The diagnostic must retain the original typed error name.")
+  assert.equal(loggedErrors[0].errorCode, "HARVESTER_OPERATOR_RUNTIME_SNAPSHOT_READ_FAILED", "The diagnostic must retain the stable application error code.")
+  assert.equal(loggedErrors[0].errorCause.message, internalCause.message, "The diagnostic must preserve the original lower-level cause.")
+  assert.equal(loggedErrors[0].correlationId, "telegram:114", "The diagnostic must correlate the failure with its update.")
   assert.equal(sentMessages.length, 1, "The operator must receive one safe failure response for the failed query.")
   assert.doesNotMatch(sentMessages[0].text, /private internal snapshot failure/, "Telegram must not expose internal error messages or causes.")
 })
@@ -760,7 +762,7 @@ test("accepts an authorized one-time inline confirmation and executes the existi
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token", allowedUserIds: ["12345"],
-    operator: { pauseMarket: async request => { operatorCalls.push(request); return { ok: true, data: { symbol: request.symbol, alreadyPaused: false } } } },
+    operator: { pauseMarket: async request => { operatorCalls.push(request); return { ok: true, data: { symbol: request.symbol, paused: true, alreadyPaused: false } } } },
     fetchImpl, retryDelayMs: 1,
   })
   await adapter.start()
@@ -774,11 +776,12 @@ test("accepts an authorized one-time inline confirmation and executes the existi
 })
 
 test("rejects inline callbacks from users outside the allowlist without invoking the application", async () => {
-  const update = makeCallbackUpdate({ updateId: 504, userId: 99999, data: "cc:nav:status" })
+  const update = makeCallbackUpdate({ updateId: 504, userId: 99999, chatId: 99999, data: "cc:nav:status" })
   let pollCount = 0
   let finishSecondPoll
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
   const calls = []
+  const diagnosticEntries = []
   const fetchImpl = async (url, options = {}) => {
     const method = url.split("/").pop()
     if (method === "getMe") { return makeResponse({ ok: true, result: { username: "coinzilla_bot" } }) }
@@ -792,10 +795,12 @@ test("rejects inline callbacks from users outside the allowlist without invoking
     if (method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
     throw new Error("Unexpected Telegram API method: " + method)
   }
-  const adapter = createTelegramOperatorAdapter({ botToken: "test-token", allowedUserIds: ["12345"], operator: { pauseMarket: async () => assert.fail("Unauthorized callback must not reach the operator."), getStatus: async () => assert.fail("Unauthorized callback must not read operator state.") }, fetchImpl, retryDelayMs: 1 })
+  const adapter = createTelegramOperatorAdapter({ botToken: "test-token", allowedUserIds: ["12345"], operator: { pauseMarket: async () => assert.fail("Unauthorized callback must not reach the operator."), getStatus: async () => assert.fail("Unauthorized callback must not read operator state.") }, logger: { debug: entry => diagnosticEntries.push(entry), info: entry => diagnosticEntries.push(entry), warn: entry => diagnosticEntries.push(entry), error: entry => diagnosticEntries.push(entry) }, fetchImpl, retryDelayMs: 1 })
   await adapter.start()
   await secondPoll
   await adapter.stop()
+  const interactionFailures = diagnosticEntries.filter(entry => entry.message === "Telegram interaction FAILED")
+  assert.deepEqual(interactionFailures, [], "Unauthorized callback handling must not fail internally: " + JSON.stringify(interactionFailures))
   assert.equal(calls.length, 1, "An unauthorized callback must be acknowledged so Telegram can dismiss its loading indicator.")
   assert.equal(calls[0].callback_query_id, "callback-504", "The acknowledgement must target the received callback only.")
   assert.equal(calls[0].text, "Not authorized.", "The acknowledgement must reveal no private diagnostic details.")
@@ -805,6 +810,7 @@ test("renders an inline status navigation callback using the read-only applicati
   const update = makeCallbackUpdate({ updateId: 505, data: "cc:nav:status", messageId: 705 })
   const queries = []
   const edits = []
+  const diagnosticEntries = []
   let pollCount = 0
   let finishSecondPoll
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
@@ -828,11 +834,14 @@ test("renders an inline status navigation callback using the read-only applicati
       pauseMarket: async () => assert.fail("Navigation must remain read-only."),
       getStatus: async request => { queries.push(request); return { ok: true, data: { runtimeState: "RUNNING", tradingEnabled: false, userData: { ready: false }, readiness: { state: "TRADING_DISABLED", blockers: [] }, markets: { enabled: 1, configured: 1, blocked: 0 }, observedAt: 1700000000000 } } },
     },
+    logger: { debug: entry => diagnosticEntries.push(entry), info: entry => diagnosticEntries.push(entry), warn: entry => diagnosticEntries.push(entry), error: entry => diagnosticEntries.push(entry) },
     fetchImpl, retryDelayMs: 1,
   })
   await adapter.start()
   await secondPoll
   await adapter.stop()
+  const interactionFailures = diagnosticEntries.filter(entry => entry.message === "Telegram interaction FAILED")
+  assert.deepEqual(interactionFailures, [], "Inline status navigation must not fail internally: " + JSON.stringify(interactionFailures))
   assert.equal(queries.length, 1, "Inline status navigation must call only the authorized read-only query.")
   assert.equal(queries[0].actor.id, "telegram-user:12345")
   assert.match(edits[0].text, /Harvester status/)
@@ -910,6 +919,7 @@ test("cancels an inline pause confirmation without invoking the operator", async
   ]
   const operatorCalls = []
   const edits = []
+  const diagnosticEntries = []
   let pollCount = 0
   let finishThirdPoll
   const thirdPoll = new Promise(resolve => { finishThirdPoll = resolve })
@@ -1047,11 +1057,14 @@ test("shows only enabled configured markets as inline pause or resume controls",
         { symbol: "ETHUSDT", enabled: false, readiness: "DISABLED", latestPrice: null, priceFresh: false, operatorPaused: false, blockers: [] },
       ] } }),
     },
+    logger: { debug: entry => diagnosticEntries.push(entry), info: entry => diagnosticEntries.push(entry), warn: entry => diagnosticEntries.push(entry), error: entry => diagnosticEntries.push(entry) },
     fetchImpl, retryDelayMs: 1,
   })
   await adapter.start()
   await secondPoll
   await adapter.stop()
+  const interactionFailures = diagnosticEntries.filter(entry => entry.message === "Telegram interaction FAILED")
+  assert.deepEqual(interactionFailures, [], "Market navigation must not fail internally: " + JSON.stringify(interactionFailures))
   const buttons = edits[0].reply_markup.inline_keyboard.flat()
   assert.ok(buttons.some(button => button.callback_data === "cc:ask:PAUSE:LINKUSDT"), "An enabled unpaused market must offer only a pause request.")
   assert.ok(buttons.some(button => button.callback_data === "cc:ask:RESUME:BTCUSDT"), "An enabled operator-paused market must offer only a resume request.")
@@ -1176,6 +1189,7 @@ test("does not report a resume when the application confirms no operator pause e
   const result = await runTelegramUpdatesForDiagnostics({
     updates: [makeUpdate({ updateId: 1204, text: "/resume LINKUSDT" })],
     operator: {
+      pauseMarket: async () => assert.fail("A resume interaction must not invoke pauseMarket."),
       resumeMarket: async () => ({
         ok: true,
         data: { symbol: "LINKUSDT", resumed: false, reason: "NOT_OPERATOR_PAUSED" },
