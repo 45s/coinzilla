@@ -97,6 +97,26 @@ errors })
   })
 }
 
+function validateProcessLockOptions({
+  journalDirectory,
+  globalDirectory,
+  broker,
+  acquireLock,
+}) {
+  if (typeof journalDirectory !== "string" || !journalDirectory.trim()) {
+    throw new TypeError("Harvester trading locks require a non-empty Journal directory")
+  }
+  if (typeof globalDirectory !== "string" || !globalDirectory.trim()) {
+    throw new TypeError("Harvester trading locks require a non-empty host lock directory")
+  }
+  if (typeof broker !== "string" || !/^[a-z0-9-]+$/i.test(broker)) {
+    throw new TypeError("Harvester trading lock broker must be a simple broker identifier")
+  }
+  if (typeof acquireLock !== "function") {
+    throw new TypeError("Harvester trading lock acquireLock must be a function")
+  }
+}
+
 /**
  * Acquire the broker-wide host lock before the configured Journal lock.
  * The host lock remains held whenever Journal-lock release is uncertain.
@@ -108,18 +128,7 @@ export async function acquireHarvesterProcessLocks({
   acquireLock = acquireHarvesterProcessLock,
 } = {}) {
   try {
-    if (typeof journalDirectory !== "string" || !journalDirectory.trim()) {
-      throw new TypeError("Harvester trading locks require a non-empty Journal directory")
-    }
-    if (typeof globalDirectory !== "string" || !globalDirectory.trim()) {
-      throw new TypeError("Harvester trading locks require a non-empty host lock directory")
-    }
-    if (typeof broker !== "string" || !/^[a-z0-9-]+$/i.test(broker)) {
-      throw new TypeError("Harvester trading lock broker must be a simple broker identifier")
-    }
-    if (typeof acquireLock !== "function") {
-      throw new TypeError("Harvester trading lock acquireLock must be a function")
-    }
+    validateProcessLockOptions({ journalDirectory, globalDirectory, broker, acquireLock })
 
     const hostLock = await acquireLock({
       directory: globalDirectory,
