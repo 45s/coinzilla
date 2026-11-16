@@ -312,7 +312,10 @@ function createFirstCycleBuyRecords({ clientOrderId, fillId }) {
       orders: [],
       blockReasons: [],
     }),
-    ...createFirstCycleBuyExecutionRecords({ clientOrderId, fillId }),
+    ...createFirstCycleBuyExecutionRecords({
+      clientOrderId,
+      fillId,
+    }),
   ]
 }
 
