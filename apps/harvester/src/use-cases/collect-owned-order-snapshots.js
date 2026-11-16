@@ -227,10 +227,8 @@ function readMatchingOpenOrder({ openOrdersBySymbol, symbol, ownedOrder, history
   
   if (openOrder && (
   
-    !["NEW", "PARTIALLY_FILLED"].includes(openOrder.sta
-  tus) ||
-    (openOrder.status === "NEW" && compareDecimal({ lef
-      t: openOrder.executedQuantity, 
+    !["NEW", "PARTIALLY_FILLED"].includes(openOrder.status) ||
+    (openOrder.status === "NEW" && compareDecimal({ left: openOrder.executedQuantity, 
       right: "0" }) !== 0) ||
     (openOrder.status === "PARTIALLY_FILLED" && compareDecimal({ left: openOrder.executedQuantity, 
       right: "0" }) === 0) ||
@@ -340,8 +338,7 @@ function advanceOwnedFillCursor({ fills, lastTradeId, ownedOrder }) {
       throw new Error(`REST fill pagination did not advance strictly by trade ID for owned order ${ownedOrder.brokerOrderId}`)
     }
     lastTradeId = tradeId
-    pageLastTradeId = tr
-    adeId
+    pageLastTradeId = tradeId
   }
   if (pageLastTradeId === undefined) {
     throw new Error(`REST fill pagination returned a full empty page for owned order ${ownedOrder.brokerOrderId}`)
