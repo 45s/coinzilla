@@ -1,4 +1,4 @@
-import { assertDecimalString, handleErr, toResult } from "@coinzilla/utils"
+import { assertDecimalString, compareDecimal, handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { BitunixRestClient } from "./api/rest-client.js"
 import { adaptBalances } from "./adapters/adapt-balances.js"
@@ -455,6 +455,17 @@ export class BitunixSpotBroker extends CoreBroker {
           String(order.symbol).toUpperCase() !== normalizedSymbol) {
         throw new TypeError("Bitunix Spot fill lookup order identity does not match the request")
       }
+      const executedQuantity = assertDecimalString({
+        value: order.dealVolume,
+        field: "Bitunix Spot order detail dealVolume",
+      })
+      const executedQuantityComparison = compareDecimal({
+        left: executedQuantity,
+        right: "0",
+      })
+      if (executedQuantityComparison < 0) {
+        throw new TypeError("Bitunix Spot order detail dealVolume must be non-negative")
+      }
       const marketResponse = await this.restClient.request({
         method: "GET",
         path: API.markets,
@@ -485,6 +496,12 @@ export class BitunixSpotBroker extends CoreBroker {
         },
       })
       const deals = normalizeDeals({ value: dealsResponse.data })
+      if (executedQuantityComparison > 0 && deals.length === 0) {
+        throw new Error("Bitunix Spot order reports positive dealVolume but matching-order response is empty")
+      }
+      if (executedQuantityComparison === 0 && deals.length > 0) {
+        throw new Error("Bitunix Spot order reports zero executed quantity but matching-order response contains data")
+      }
       return toResult({
         data: deals.map((trade) => adaptCanonicalFill({
           trade: {
