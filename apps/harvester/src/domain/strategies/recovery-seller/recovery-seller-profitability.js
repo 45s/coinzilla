@@ -6,8 +6,14 @@ import {
 } from "@coinzilla/utils"
 
 function assertNonNegative({ value, field }) {
-  assertDecimalString({ value, field })
-  if (compareDecimal({ left: value, right: "0" }) < 0) {
+  assertDecimalString({
+    value,
+    field,
+  })
+  if (compareDecimal({
+    left: value,
+    right: "0",
+  }) < 0) {
     throw new RangeError(field + " must be non-negative")
   }
 }
@@ -54,7 +60,10 @@ export function calculateRecoverySellerProfitability({
     value: recoveryCostBasis,
     field: "recoveryCostBasis",
   })
-  if (compareDecimal({ left: recoveryCostBasis, right: "0" }) <= 0) {
+  if (compareDecimal({
+    left: recoveryCostBasis,
+    right: "0",
+  }) <= 0) {
     throw new RangeError("recoveryCostBasis must be positive")
   }
   assertNonNegative({
@@ -70,7 +79,10 @@ export function calculateRecoverySellerProfitability({
     field: "legacyBaseDebit",
   })
 
-  if (compareDecimal({ left: minProfit, right: "0" }) <= 0) {
+  if (compareDecimal({
+    left: minProfit,
+    right: "0",
+  }) <= 0) {
     throw new RangeError("minProfit must be greater than zero")
   }
 
@@ -80,11 +92,17 @@ export function calculateRecoverySellerProfitability({
   }) > 0
 
   if (!legacyApplicable &&
-      compareDecimal({ left: legacyNetQuoteProceeds, right: "0" }) !== 0) {
+      compareDecimal({
+        left: legacyNetQuoteProceeds,
+        right: "0",
+      }) !== 0) {
     throw new RangeError("Legacy quote proceeds require a positive legacy base debit")
   }
   if (legacyApplicable &&
-      compareDecimal({ left: legacyAverageCost, right: "0" }) <= 0) {
+      compareDecimal({
+        left: legacyAverageCost,
+        right: "0",
+      }) <= 0) {
     throw new RangeError("legacyAverageCost must be positive when legacy base is debited")
   }
 
