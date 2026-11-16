@@ -6,7 +6,7 @@ import {
   mapBrokerConnectionFailedData,
 } from "../../application/events/lifecycle-event-dtos.js"
 
-function logSystem(logger, data) {
+function logSystem({ logger, ...data }) {
   if (typeof logger?.system === "function") {
     logger.system(data)
     return
@@ -37,7 +37,7 @@ export async function connectBroker({
   })
 
   try {
-    logSystem(logger, { message: "Connecting to Binance broker" })
+    logSystem({ logger, message: "Connecting to Binance broker" })
 
     await broker.connect()
     publishLifecycleEvent({
