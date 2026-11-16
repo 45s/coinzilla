@@ -1,5 +1,6 @@
 export class TelegramUserIdConfigurationError extends Error {
-  constructor(message, code, cause) {
+  constructor(...args) {
+    const [message, code, cause] = args
     super(message, { cause })
     this.name = "TelegramUserIdConfigurationError"
     this.code = code
