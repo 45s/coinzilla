@@ -5288,7 +5288,7 @@ test("fails closed when the effective configuration has no enabled markets", asy
 })
 
 
-async function createPriorProcessHistory({ directory, runtimeSessionId, appConfig, clean = false } = {}) {
+async function createPriorProcessHistory({ directory, runtimeSessionId, priorAppConfig, clean = false } = {}) {
   const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId,
@@ -5297,7 +5297,7 @@ async function createPriorProcessHistory({ directory, runtimeSessionId, appConfi
   assert.equal(initialization.ok, true, "the prior process history fixture must start from a valid durable ledger")
   const baseline = await recordConfigurationBaseline({
     operationalStateStore: store,
-    appConfig,
+    appConfig: priorAppConfig,
   })
   assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
   const started = await recordProcessStarted({
@@ -5316,6 +5316,25 @@ async function createPriorProcessHistory({ directory, runtimeSessionId, appConfi
     })
     assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
   }
+}
+
+async function assertTelegramPauseCommandIsDurable({ operator, operationalStateStore } = {}) {
+  const pauseResult = await operator.pauseMarket({
+    actor: {
+      id: "telegram-user:12345",
+      roles: ["trading-operator"],
+    },
+    requestId: "telegram-after-unrecovered-restart",
+    symbol: "BTCUSDT",
+  })
+  assert.equal(pauseResult.ok, true, "authorized Telegram pause commands must remain usable in observation-only mode")
+  const persistedFacts = await operationalStateStore.readAll()
+  assert.equal(persistedFacts.ok, true)
+  assert.equal(
+    persistedFacts.data.records.some((record) => record.factType === "OPERATOR_MARKET_PAUSED"),
+    true,
+    "the observation-only Telegram pause command must still be durably recorded before it is applied",
+  )
 }
 
 test("starts in observation-only mode after a clean prior process when restart recovery is disabled", async (t) => {
@@ -6007,22 +6026,10 @@ test("starts Telegram operator control without running process-restart recovery 
     assert.equal(operatorAdapterStarted, true, "Telegram polling must start even when the shared ledger contains an earlier process session and restart recovery is disabled")
     assert.equal(runtime.connected, true, "disabling process-restart restoration must not bypass normal broker/runtime startup")
     assert.equal(runtime.tradingEnabled, false, "trading must remain disabled because the prior in-memory trading state was not restored")
-    const pauseResult = await operator.pauseMarket({
-      actor: {
-        id: "telegram-user:12345",
-        roles: ["trading-operator"],
-      },
-      requestId: "telegram-after-unrecovered-restart",
-      symbol: "BTCUSDT",
+    await assertTelegramPauseCommandIsDurable({
+      operator,
+      operationalStateStore: currentStore,
     })
-    assert.equal(pauseResult.ok, true, "authorized Telegram pause commands must remain usable in observation-only mode")
-    const persistedFacts = await currentStore.readAll()
-    assert.equal(persistedFacts.ok, true)
-    assert.equal(
-      persistedFacts.data.records.some((record) => record.factType === "OPERATOR_MARKET_PAUSED"),
-      true,
-      "the observation-only Telegram pause command must still be durably recorded before it is applied",
-    )
   } finally {
     await runtime?.stop?.()
     await rm(directory, { recursive: true, force: true })
