@@ -14,8 +14,9 @@ export async function prepareProcessOperationalStateStore({
   appConfig, env = process.env, runtimeSessionId, createOperationalStateStore = createFileOperationalStateStore,
 } = {}) {
   const recoveryEnabled = appConfig?.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
-  const operatorControlEnabled = appConfig?.operatorControl?.telegram?.enabled === true
-  if (!recoveryEnabled && !operatorControlEnabled) {
+  // TEMPORARY: Telegram CC must not create or require the ADR-0001 store.
+  // Process-restart recovery remains disabled; re-enable this dependency only after the recovery design is accepted.
+  if (!recoveryEnabled) {
     return undefined
   }
   if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
