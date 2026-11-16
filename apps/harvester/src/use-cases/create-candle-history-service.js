@@ -281,7 +281,7 @@ error })
       intervalMs: CANDLE_INTERVAL_MS,
     })
     const latest = state.candles.at(-1)
-    const oldest = state.candles[0]
+    const [oldest] = state.candles
     const existing = state.candles.find((item) => item.openTime === validated.openTime)
 
     if (!validated.isClosed) {
