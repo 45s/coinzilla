@@ -32,16 +32,16 @@ describe(Balance.name, () => {
     assert.strictEqual(balance.total.asset, btc)
     assert.deepEqual(balance.value, {
       asset: { id: "bitcoin",
-code: "BTC" },
+        code: "BTC" },
       free: { amount: "1.25",
-asset: { id: "bitcoin",
-code: "BTC" } },
+        asset: { id: "bitcoin",
+          code: "BTC" } },
       locked: { amount: "0.75",
-asset: { id: "bitcoin",
-code: "BTC" } },
+        asset: { id: "bitcoin",
+          code: "BTC" } },
       total: { amount: "2",
-asset: { id: "bitcoin",
-code: "BTC" } },
+        asset: { id: "bitcoin",
+          code: "BTC" } },
     })
   })
 
@@ -65,9 +65,9 @@ code: "BTC" } },
 
   it("rejects missing or invalid free quantities", () => {
     for (const free of [undefined, null, "1", { amount: "1",
-asset: btc }]) {
+      asset: btc }]) {
       assert.throws(() => new Balance({ free,
-locked: quantity("0") }), {
+        locked: quantity("0") }), {
         message: balanceErrMsgs.free,
       })
     }
@@ -75,7 +75,7 @@ locked: quantity("0") }), {
 
   it("rejects missing or invalid locked quantities", () => {
     for (const locked of [undefined, null, "1", { amount: "1",
-asset: btc }]) {
+      asset: btc }]) {
       assert.throws(() => new Balance({ free: quantity("0"),
 locked }), {
         message: balanceErrMsgs.locked,
@@ -88,7 +88,7 @@ locked }), {
       () => new Balance({
         free: quantity("1"),
         locked: new Quantity({ amount: "1",
-asset: otherBtc }),
+          asset: otherBtc }),
       }),
       { message: balanceErrMsgs.asset },
     )
@@ -112,16 +112,16 @@ describe(`${Balance.name} snapshots`, () => {
 
     assert.deepEqual(balance.value, {
       asset: { id: "bitcoin",
-code: "BTC" },
+        code: "BTC" },
       free: { amount: "1",
-asset: { id: "bitcoin",
-code: "BTC" } },
+        asset: { id: "bitcoin",
+          code: "BTC" } },
       locked: { amount: "2",
-asset: { id: "bitcoin",
-code: "BTC" } },
+        asset: { id: "bitcoin",
+          code: "BTC" } },
       total: { amount: "3",
-asset: { id: "bitcoin",
-code: "BTC" } },
+        asset: { id: "bitcoin",
+          code: "BTC" } },
     })
   })
 
