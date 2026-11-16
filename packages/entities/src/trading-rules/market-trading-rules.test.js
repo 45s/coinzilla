@@ -11,24 +11,34 @@ import {
   TRADING_RULE_STATUSES,
 } from "./market-trading-rules.js"
 
-describe(TradingRules.name, () => {
-  const btc = new Asset({ id: "bitcoin",
-code: "BTC" })
-  const usd = new Asset({ id: "usd",
-code: "USD" })
-  const otherBtc = new Asset({ id: "wrapped-bitcoin",
-code: "BTC" })
-  const market = new Market({
-    venue: "binance",
-    symbol: "BTCUSDT",
-    baseAsset: btc,
-    quoteAsset: usd,
-  })
-  const money = (amount) => new Money({ amount,
-asset: usd })
-  const quantity = (amount) => new Quantity({ amount,
-asset: btc })
+const btc = new Asset({
+  id: "bitcoin",
+  code: "BTC",
+})
+const usd = new Asset({
+  id: "usd",
+  code: "USD",
+})
+const otherBtc = new Asset({
+  id: "wrapped-bitcoin",
+  code: "BTC",
+})
+const market = new Market({
+  venue: "binance",
+  symbol: "BTCUSDT",
+  baseAsset: btc,
+  quoteAsset: usd,
+})
+const money = (amount) => new Money({
+  amount,
+  asset: usd,
+})
+const quantity = (amount) => new Quantity({
+  amount,
+  asset: btc,
+})
 
+describe(`${TradingRules.name} constraints`, () => {
   it("stores supported price, quantity, and notional constraints", () => {
     const rules = new TradingRules({
       market,
@@ -126,6 +136,9 @@ status: "DYNAMIC" },
     assert.deepEqual(rules.value.constraints, [])
   })
 
+})
+
+describe(`${TradingRules.name} input validation`, () => {
   it("rejects invalid market and constraint collections", () => {
     for (const invalidMarket of [undefined, null, "BTCUSDT"]) {
       assert.throws(() => new TradingRules({ market: invalidMarket }), {
@@ -192,6 +205,9 @@ asset: otherBtc }) }],
     )
   })
 
+})
+
+describe(`${TradingRules.name} value validation`, () => {
   it("rejects values on unsupported, dynamic, or unknown constraints", () => {
     for (const status of ["UNSUPPORTED", "DYNAMIC", "UNKNOWN"]) {
       assert.throws(
@@ -281,6 +297,9 @@ value: money("5") },
     assert.equal(rules.constraints.length, 2)
   })
 
+})
+
+describe(`${TradingRules.name} snapshots`, () => {
   it("returns independent snapshots and immutable constraint collections", () => {
     const rules = new TradingRules({
       market,
