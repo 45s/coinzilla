@@ -271,10 +271,24 @@ test("re-arms a bounded recovery window after fresh ticker activity following ex
     "the monitor must exhaust the current recovery window after three attempts",
   )
 
+  monitor.onTicker({
+    s: "BTCUSDT",
+    L: 15,
+  })
   clock.advanceBy(1_000)
   monitor.onTicker({
     s: "BTCUSDT",
     L: 15,
+  })
+  assert.equal(
+    recoveries.length,
+    3,
+    "the same trade ID observed during exhaustion must not re-arm recovery after the window",
+  )
+
+  monitor.onTicker({
+    s: "BTCUSDT",
+    L: 16,
   })
   clock.advanceBy(50)
   await flush()
@@ -282,7 +296,7 @@ test("re-arms a bounded recovery window after fresh ticker activity following ex
   assert.equal(
     recoveries.length,
     4,
-    "new trade activity after the recovery window must permit a fresh bounded attempt",
+    "a genuinely newer trade after the recovery window must permit a fresh bounded attempt",
   )
   assert.equal(
     errors.length,
