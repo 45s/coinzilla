@@ -48,23 +48,15 @@ export function createHistory(...args) {
   return createHistoryFrom(symbol, 0, count, includeForming)
 }
 
-export function createFixture({
-  pairs = {
-    BTCUSDT: { enabled: true },
-    DOGEUSDT: { enabled: false },
-  },
-  historyBySymbol = {},
+function createTestBroker({
+  calls,
+  candleHandlers,
+  historyBySymbol,
   onSubscribe,
   getCandles,
   subscribeForCandles,
-  onSnapshot,
-  logger = {},
-} = {}) {
-  const calls = []
-  const candleHandlers = new Map()
-  const subscriptions = []
-  const clock = { now: 10_000 }
-  const broker = {
+}) {
+  return {
     subscribeForCandles: async ({ symbol, interval, onCandle }) => {
       calls.push({
         method: "subscribeForCandles",
@@ -111,6 +103,32 @@ export function createFixture({
       }
     },
   }
+}
+
+export function createFixture({
+  pairs = {
+    BTCUSDT: { enabled: true },
+    DOGEUSDT: { enabled: false },
+  },
+  historyBySymbol = {},
+  onSubscribe,
+  getCandles,
+  subscribeForCandles,
+  onSnapshot,
+  logger = {},
+} = {}) {
+  const calls = []
+  const candleHandlers = new Map()
+  const subscriptions = []
+  const clock = { now: 10_000 }
+  const broker = createTestBroker({
+    calls,
+    candleHandlers,
+    historyBySymbol,
+    onSubscribe,
+    getCandles,
+    subscribeForCandles,
+  })
   const service = createCandleHistoryService({
     broker,
     logger,
