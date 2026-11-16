@@ -76,7 +76,10 @@ export function calculateAtrSeries({
   for (let index = 0; index < candles.length; index += 1) {
     const candle = candles[index]
     const previousClose = index === 0 ? null : candles[index - 1].close
-    trueRanges.push(calculateTrueRange({ candle, previousClose }))
+    trueRanges.push(calculateTrueRange({
+      candle,
+      previousClose,
+    }))
   }
 
   const initialRangeTotal = trueRanges
