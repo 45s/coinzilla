@@ -307,3 +307,12 @@ test("normalizes only definite Binance filter rejections and preserves uncertain
   const unrelated = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT" } })
   assert.equal(unrelated.errors[0], unrelatedError, "An unrelated -1013 response must not be assumed to be a filter rejection.");
 });
+
+
+test("supports account-wide open-order reads without symbol options", async () => {
+  const { calls, client, result } = createClient()
+  const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
+
+  assert.equal(await broker.getOpenOrders(), result)
+  assert.deepEqual(calls, [["getOpenOrders", {}]])
+})
