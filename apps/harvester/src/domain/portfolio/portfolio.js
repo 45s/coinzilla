@@ -1,4 +1,4 @@
-import { addDecimal } from "@coinzilla/utils"
+import { addDecimal, compareDecimal } from "@coinzilla/utils"
 import { Fill, Market, Quantity } from "@coinzilla/entities"
 import { createFillFingerprint } from "../fills/fill-fingerprint.js"
 import { createPositionId, Position } from "./position.js"
@@ -50,7 +50,9 @@ export class Portfolio {
         typeof item.positionId !== "string" ||
         !item.positionId.trim() ||
         typeof item.strategyId !== "string" ||
-        !item.strategyId.trim()
+        !item.strategyId.trim() ||
+        (item.allocationFingerprint !== undefined &&
+          (typeof item.allocationFingerprint !== "string" || !item.allocationFingerprint.trim()))
       )
     ) {
       throw new TypeError("Portfolio.appliedFillFingerprints must contain fill identity and ownership records")
@@ -148,6 +150,9 @@ export class Portfolio {
       if (existingFingerprint.fingerprint !== fingerprint) {
         throw new Error(`Conflicting execution facts reused Fill ID ${fill.id}`)
       }
+      if (existingFingerprint.allocationFingerprint !== undefined) {
+        throw new Error(`Fill ID ${fill.id} was already applied with allocation metadata`)
+      }
       return Object.freeze({ portfolio: this, applied: false, duplicate: true })
     }
 
@@ -177,6 +182,84 @@ export class Portfolio {
       duplicate: false,
     })
   }
+
+
+  applySellAllocation({
+    fill,
+    allocationFingerprint,
+    allocationSide,
+    positionId,
+    strategyId,
+  } = {}) {
+    if (!(fill instanceof Fill) || fill.side !== "SELL") {
+      throw new TypeError("Portfolio.applySellAllocation requires a canonical SELL Fill")
+    }
+    if (typeof allocationFingerprint !== "string" || !allocationFingerprint.trim()) {
+      throw new TypeError("Portfolio.applySellAllocation requires a non-empty allocationFingerprint")
+    }
+    if (!allocationSide || typeof allocationSide !== "object") {
+      throw new TypeError("Portfolio.applySellAllocation requires an allocated SELL side")
+    }
+    const owner = normalizeStrategyId({ strategyId })
+    const id = resolvePositionId({
+      positionId,
+      marketId: fill.market.id,
+      strategyId: owner,
+    })
+    const current = this.#positions.find((position) => position.positionId === id)
+    if (!current) {
+      throw new RangeError(`Portfolio has no Position ${id} for allocated SELL`)
+    }
+    if (current.market.id !== fill.market.id || current.strategyId !== owner) {
+      throw new Error(`Allocated SELL market or strategy owner conflicts with Position ${id}`)
+    }
+    if (compareDecimal({
+      left: allocationSide.grossBaseQuantity,
+      right: fill.quantity.amount,
+    }) > 0) {
+      throw new RangeError("Allocated SELL quantity exceeds canonical Fill quantity")
+    }
+    const fingerprint = createFillFingerprint({ fill })
+    const existingFingerprint = this.#appliedFillFingerprints.find((item) => item.id === fill.id)
+    if (existingFingerprint) {
+      if (existingFingerprint.positionId !== id || existingFingerprint.strategyId !== owner) {
+        throw new Error(`Conflicting strategy attribution reused Fill ID ${fill.id}`)
+      }
+      if (existingFingerprint.fingerprint !== fingerprint) {
+        throw new Error(`Conflicting execution facts reused Fill ID ${fill.id}`)
+      }
+      if (existingFingerprint.allocationFingerprint !== allocationFingerprint) {
+        throw new Error(`Conflicting allocation facts reused Fill ID ${fill.id}`)
+      }
+      return Object.freeze({
+        portfolio: this,
+        applied: false,
+        duplicate: true,
+      })
+    }
+    const position = current.applySellAllocation({
+      allocation: allocationSide,
+    })
+    return Object.freeze({
+      portfolio: new Portfolio({
+        positions: this.#positions.map((item) => item.positionId === id ? position : item),
+        appliedFillIds: [...this.#appliedFillIds, fill.id],
+        appliedFillFingerprints: [
+          ...this.#appliedFillFingerprints,
+          {
+            id: fill.id,
+            fingerprint,
+            positionId: id,
+            strategyId: owner,
+            allocationFingerprint,
+          },
+        ],
+      }),
+      applied: true,
+      duplicate: false,
+    })
+  }
+
 
   allocateFreeQuantity({ marketId, positionId, strategyId, quantity } = {}) {
     const owner = normalizeStrategyId({ strategyId })
