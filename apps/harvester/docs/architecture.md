@@ -557,47 +557,28 @@ unreconciled quantities. This covers the ordinary cancel/replace path without
 claiming durable restart or stream-recovery reconciliation.
 
 During graceful shutdown, BUY fills do not invoke the ordinary strategy
-evaluator. The event workflow records a per-market recovery-replan request, and
-the shutdown coordinator processes it only after BUY cancellation, user-data
-intake stop and final fill reconciliation. The final owned SELL is compared
-with the policy plan using authoritative `Position.spent` (accumulated BUY
-cost, including actual commissions) and `RecoveryLedger.netSellProceeds`
-(confirmed net SELL proceeds), plus retained quantity, minimum profit and
-existing owned SELL commitments. The legacy `RecoveryLedger.buyCost` mirror is checked for consistency
-with `Position.spent`, but is never used to calculate the recovery plan. A stale SELL is canceled and its terminal fills reconciled before
-a SELL-only replacement is submitted. If the pair is paused, market data is
-stale, cancellation/submission is unresolved, or the replacement cannot be
-verified, the final coverage audit fails and CLOSING cannot report COMPLETE.
-External orders remain unowned and untouched; `EXTERNAL_ORDERS_POLICIES.IGNORE`
-is preserved.
-
-
-During graceful shutdown, BUY fills do not invoke the ordinary strategy
-evaluator. The event workflow records a per-market recovery-replan request, and
-the shutdown coordinator processes it only after BUY cancellation, user-data
-intake stop and final fill reconciliation. The final owned SELL is compared
-with the policy plan using authoritative `Position.spent` (accumulated BUY
-cost, including actual commissions) and `RecoveryLedger.netSellProceeds`
-(confirmed net SELL proceeds), plus retained quantity, minimum profit and
-existing owned SELL commitments. The legacy `RecoveryLedger.buyCost` mirror is checked for consistency
-with `Position.spent`, but is never used to calculate the recovery plan. A stale SELL is canceled and its terminal fills reconciled before
-a SELL-only replacement is submitted. If the pair is paused, market data is
-stale, cancellation/submission is unresolved, or the replacement cannot be
-verified, the final coverage audit fails and CLOSING cannot report COMPLETE.
-External/manual orders remain unowned and untouched; their presence alone does not block shutdown safety. Actual unowned executions or unresolved account-wide ownership/balance discrepancies remain fail-closed. `EXTERNAL_ORDERS_POLICIES.IGNORE` is preserved.
-
-
-During graceful shutdown, BUY fills do not invoke the ordinary strategy
 evaluator. The event workflow records a per-market recovery-replan request. The
 Conservative participant keeps user-data intake alive while it cancels owned
 BUYs and reconciles pending identities, cancellation outcomes, racing fills and
 actual commissions. It then recalculates and verifies recovery SELL coverage
-from the resulting Position and RecoveryLedger. The application coordinator
-stops user-data intake only after every strategy participant is safe, then
-drains accepted events. Any late evidence invalidates the affected market's
-safety marker and triggers reconciliation and recovery SELL replanning before
-the shared shutdown barrier can pass. External orders remain unowned and
-untouched; `EXTERNAL_ORDERS_POLICIES.IGNORE` is preserved.
+from the resulting Position and RecoveryLedger. The final owned SELL is compared
+with the policy plan using authoritative `Position.spent` (accumulated BUY
+cost, including actual commissions) and `RecoveryLedger.netSellProceeds`
+(confirmed net SELL proceeds), plus retained quantity, minimum profit and
+existing owned SELL commitments. The legacy `RecoveryLedger.buyCost` mirror is
+checked for consistency with `Position.spent`, but is never used to calculate
+the recovery plan. A stale SELL is canceled and its terminal fills reconciled
+before a SELL-only replacement is submitted. If the pair is paused, market data
+is stale, cancellation/submission is unresolved, or the replacement cannot be
+verified, the final coverage audit fails and CLOSING cannot report COMPLETE.
+The application coordinator stops user-data intake only after every strategy
+participant is safe, then drains accepted events. Any late evidence invalidates
+the affected market's safety marker and triggers reconciliation and recovery
+SELL replanning before the shared shutdown barrier can pass. External/manual
+orders remain unowned and untouched; their presence alone does not block
+shutdown safety. Actual unowned executions or unresolved account-wide
+ownership/balance discrepancies remain fail-closed.
+`EXTERNAL_ORDERS_POLICIES.IGNORE` is preserved.
 
 ## Trailing BUY lifecycle
 
@@ -833,7 +814,7 @@ process-global state.
 
 The source-verified shutdown sequence, cancellation/fill-race handling,
 CLOSING account audit, resource cleanup, and process-lock retention are defined
-in [Journal Operations — Normal shutdown](./JOURNAL_OPERATIONS.md#normal-shutdown).
+in [Journal Operations — Normal shutdown](./JOURNAL_OPERATIONS.md#strategy-owned-normal-shutdown).
 
 ## Runtime API and process boundary
 
