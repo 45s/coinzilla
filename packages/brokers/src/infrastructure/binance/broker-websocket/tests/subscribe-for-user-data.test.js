@@ -10,22 +10,15 @@ function createBroker(...args) {
     "userDataStream.subscribe.signature": handler,
     "userDataStream.unsubscribe": () => ({}),
     exchangeInfo: exchangeInfoHandler,
-    myFilters: () => ({ symbolFilters: [],
-exchangeFilters: [],
-assetFilters: [] }),
+    myFilters: () => ({ symbolFilters: [], exchangeFilters: [], assetFilters: [] }),
   })
   rpc.state = "open"
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
-    apiSecret: "test-secret",
-tradingMode: "testnet",
-    logger: { error() {},
-info() {},
-debug() {},
-warn() {} },
+    apiSecret: "test-secret", tradingMode: "testnet",
+    logger: { error() {}, info() {}, debug() {}, warn() {} },
   }, { apiClientFactory: () => rpc })
-  return { broker,
-rpc }
+  return { broker, rpc }
 }
 
 
@@ -36,11 +29,8 @@ it("requires an open API socket before starting a user-data subscription", async
   })
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
-    apiSecret: "test-secret",
-tradingMode: "testnet",
-    logger: { error() {},
-info() {},
-warn() {} },
+    apiSecret: "test-secret", tradingMode: "testnet",
+    logger: { error() {}, info() {}, warn() {} },
   }, { apiClientFactory: () => rpc })
   broker.connected = true
 
@@ -93,11 +83,7 @@ it("uses the signature subscription method and forwards adapted events", async (
 
   rpc.emitEvent({
     subscriptionId: 7,
-    event: { e: "balanceUpdate",
-a: "USDT",
-d: "12.50",
-T: 200,
-E: 201 },
+    event: { e: "balanceUpdate", a: "USDT", d: "12.50", T: 200, E: 201 },
   })
 
   assert.deepEqual(received, [{
@@ -131,10 +117,8 @@ it("filters stale subscriptions and deduplicates repeated execution reports", as
         quoteAsset: "USDT",
         orderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
         filters: [
-          { filterType: "PRICE_FILTER",
-tickSize: "0.01" },
-          { filterType: "LOT_SIZE",
-stepSize: "0.00001" },
+          { filterType: "PRICE_FILTER", tickSize: "0.01" },
+          { filterType: "LOT_SIZE", stepSize: "0.00001" },
         ],
       }],
     }),
@@ -166,15 +150,10 @@ stepSize: "0.00001" },
     Y: "100",
   }
 
-  rpc.emitEvent({ subscriptionId: 20,
-event: report })
-  rpc.emitEvent({ subscriptionId: 21,
-event: report })
-  rpc.emitEvent({ subscriptionId: 21,
-event: structuredClone(report) })
-  rpc.emitEvent({ subscriptionId: 21,
-event: { ...report,
-I: 201 } })
+  rpc.emitEvent({ subscriptionId: 20, event: report })
+  rpc.emitEvent({ subscriptionId: 21, event: report })
+  rpc.emitEvent({ subscriptionId: 21, event: structuredClone(report) })
+  rpc.emitEvent({ subscriptionId: 21, event: { ...report, I: 201 } })
 
   await new Promise((resolve) => setImmediate(resolve))
   assert.equal(received.length, 2)
@@ -191,16 +170,9 @@ it("forwards canonical order states and canonical fills for TRADE reports", asyn
         quoteAsset: "USDT",
         orderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
         filters: [
-          { filterType: "PRICE_FILTER",
-tickSize: "0.01",
-minPrice: "0.01",
-maxPrice: "1000000" },
-          { filterType: "LOT_SIZE",
-stepSize: "0.00001",
-minQty: "0.00001",
-maxQty: "1000" },
-          { filterType: "MIN_NOTIONAL",
-minNotional: "5" },
+          { filterType: "PRICE_FILTER", tickSize: "0.01", minPrice: "0.01", maxPrice: "1000000" },
+          { filterType: "LOT_SIZE", stepSize: "0.00001", minQty: "0.00001", maxQty: "1000" },
+          { filterType: "MIN_NOTIONAL", minNotional: "5" },
         ],
       }],
     }),
@@ -263,10 +235,8 @@ it("normalizes non-trade order reports without fabricating fills", async () => {
         quoteAsset: "USDT",
         orderTypes: ["LIMIT", "LIMIT_MAKER"],
         filters: [
-          { filterType: "PRICE_FILTER",
-tickSize: "0.01" },
-          { filterType: "LOT_SIZE",
-stepSize: "0.00001" },
+          { filterType: "PRICE_FILTER", tickSize: "0.01" },
+          { filterType: "LOT_SIZE", stepSize: "0.00001" },
         ],
       }],
     }),
@@ -377,8 +347,7 @@ it("reports explicit stream termination as a recovery gap", async () => {
 
   rpc.emitEvent({
     subscriptionId: 22,
-    event: { e: "eventStreamTerminated",
-E: 123456 },
+    event: { e: "eventStreamTerminated", E: 123456 },
   })
 
   assert.deepEqual(statuses, [{
@@ -388,8 +357,7 @@ E: 123456 },
     recoveryRequired: true,
   }])
   assert.deepEqual(received, [{
-    event: { e: "eventStreamTerminated",
-E: 123456 },
+    event: { e: "eventStreamTerminated", E: 123456 },
   }])
   await result.data.disconnect()
 })
@@ -404,9 +372,7 @@ it("reports an unexpected API socket close as a recovery gap", async () => {
     onStatus: (status) => statuses.push(status),
   })
 
-  rpc.emitClose({ code: 1006,
-reason: "network lost",
-wasClean: false })
+  rpc.emitClose({ code: 1006, reason: "network lost", wasClean: false })
 
   assert.deepEqual(statuses, [
     {
@@ -447,8 +413,7 @@ it("blocks new orders after the user-data stream terminates", async () => {
 
   rpc.emitEvent({
     subscriptionId: 25,
-    event: { e: "eventStreamTerminated",
-E: 123457 },
+    event: { e: "eventStreamTerminated", E: 123457 },
   })
 
   const order = await broker.createOrder({
@@ -497,28 +462,26 @@ it("returns a local unsubscribe function and stops forwarding after cleanup", as
   const received = []
   const result = await broker.subscribeForUserData({ onEvent: (event) => received.push(event) })
   await result.data.disconnect()
-  rpc.emitEvent({ e: "futureEvent",
-value: 1 })
+  rpc.emitEvent({ e: "futureEvent", value: 1 })
   assert.deepEqual(received, [])
   assert.equal(rpc.listenerCount, 0)
 })
-})
 
 it("removes local observers when remote unsubscribe fails and does not replay it", async () => {
-const rpc = createFakeRpcClient({
-  "userDataStream.subscribe.signature": () => ({ subscriptionId: 12 }),
-  "userDataStream.unsubscribe": async () => { throw new Error("unsubscribe unavailable") },
-})
-rpc.state = "open"
-const broker = new BinanceSdkBroker({
-  apiKey: "test-key",
-  apiSecret: "test-secret",
-tradingMode: "testnet",
-}, { apiClientFactory: () => rpc })
-broker.connected = true
+  const rpc = createFakeRpcClient({
+    "userDataStream.subscribe.signature": () => ({ subscriptionId: 12 }),
+    "userDataStream.unsubscribe": async () => { throw new Error("unsubscribe unavailable") },
+  })
+  rpc.state = "open"
+  const broker = new BinanceSdkBroker({
+    apiKey: "test-key",
+    apiSecret: "test-secret", tradingMode: "testnet",
+  }, { apiClientFactory: () => rpc })
+  broker.connected = true
 
-const result = await broker.subscribeForUserData({ onEvent: () => {} })
-await assert.rejects(() => result.data.disconnect(), /unsubscribe unavailable/)
-assert.equal(rpc.listenerCount, 0)
-await result.data.disconnect()
-assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.unsubscribe").length, 1)
+  const result = await broker.subscribeForUserData({ onEvent: () => {} })
+  await assert.rejects(() => result.data.disconnect(), /unsubscribe unavailable/)
+  assert.equal(rpc.listenerCount, 0)
+  await result.data.disconnect()
+  assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.unsubscribe").length, 1)
+})
