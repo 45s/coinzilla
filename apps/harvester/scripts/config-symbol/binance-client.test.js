@@ -31,7 +31,7 @@ minNotional: "5.00000000" },
   }],
 })
 
-const createResponse = (body, { ok = true, status = 200 } = {}) => ({
+const createResponse = ({ body, ok = true, status = 200 }) => ({
   ok,
   status,
   json: async () => body,
@@ -40,13 +40,18 @@ const createResponse = (body, { ok = true, status = 200 } = {}) => ({
 test("fetches public Spot exchange filters and current ticker price without credentials", async () => {
   const requests = []
   const responses = [
-    createResponse(createExchangeInfo()),
-    createResponse({ symbol: "ADAFDUSD",
-price: "0.50000000" }),
+    createResponse({
+    body: createExchangeInfo(),
+  }),
+    createResponse({
+    body: { symbol: "ADAFDUSD",
+price: "0.50000000" },
+  }),
   ]
   const metadata = await fetchBinanceSpotMetadata({
     symbol: "ADAFDUSD",
-    fetchImpl: async (url, options) => {
+    fetchImpl: async (...args) => {
+      const [url, options] = args
       requests.push({ url: String(url),
 options })
       return responses.shift()
@@ -77,9 +82,13 @@ options })
 test("uses the LIVE public API only when the operator selects live", async () => {
   const urls = []
   const responses = [
-    createResponse(createExchangeInfo()),
-    createResponse({ symbol: "ADAFDUSD",
-price: "0.50000000" }),
+    createResponse({
+    body: createExchangeInfo(),
+  }),
+    createResponse({
+    body: { symbol: "ADAFDUSD",
+price: "0.50000000" },
+  }),
   ]
   const metadata = await fetchBinanceSpotMetadata({
     symbol: "ADAFDUSD",
@@ -101,7 +110,9 @@ test("rejects an unsupported environment before making a network request", async
       environment: "paper",
       fetchImpl: async () => {
         requests += 1
-        return createResponse(createExchangeInfo())
+        return createResponse({
+    body: createExchangeInfo(),
+  })
       },
     }),
     /environment.*testnet or live/i,
@@ -114,7 +125,9 @@ test("rejects an unknown symbol returned by Binance", async () => {
   await assert.rejects(
     fetchBinanceSpotMetadata({
       symbol: "ADAFDUSD",
-      fetchImpl: async () => createResponse({ symbols: [] }),
+      fetchImpl: async () => createResponse({
+    body: { symbols: [] },
+  }),
     }),
     /not found/i,
     "An unknown symbol must not be used to generate a configuration.",
@@ -129,7 +142,9 @@ test("rejects symbols that are not actively tradable on Spot", async () => {
     await assert.rejects(
       fetchBinanceSpotMetadata({
         symbol: "ADAFDUSD",
-        fetchImpl: async () => createResponse(body),
+        fetchImpl: async () => createResponse({
+    body,
+  }),
       }),
       /not.*(trading|spot)/i,
       "A non-trading or non-Spot symbol must be rejected.",
@@ -139,9 +154,13 @@ test("rejects symbols that are not actively tradable on Spot", async () => {
 
 test("returns the available order types for pair-level commission-policy validation", async () => {
   const responses = [
-    createResponse(createExchangeInfo({ orderTypes: ["LIMIT"] })),
-    createResponse({ symbol: "ADAFDUSD",
-price: "0.5" }),
+    createResponse({
+    body: createExchangeInfo({ orderTypes: ["LIMIT"] }),
+  }),
+    createResponse({
+    body: { symbol: "ADAFDUSD",
+price: "0.5" },
+  }),
   ]
   const metadata = await fetchBinanceSpotMetadata({
     symbol: "ADAFDUSD",
@@ -174,7 +193,9 @@ maxNotional: "NaN" }],
     await assert.rejects(
       fetchBinanceSpotMetadata({
         symbol: "ADAFDUSD",
-        fetchImpl: async () => createResponse(createExchangeInfo({ filters })),
+        fetchImpl: async () => createResponse({
+    body: createExchangeInfo({ filters }),
+  }),
       }),
       /filter|increment|notional|decimal|positive/i,
       "Incomplete or malformed exchange filters must fail closed.",
@@ -191,9 +212,13 @@ maxNotional: "50.00000000",
 applyMinToMarket: true,
 applyMaxToMarket: true },
   ]
-  const [exchangeResponse] = [createResponse(createExchangeInfo({ filters }))]
-  const responses = [exchangeResponse, createResponse({ symbol: "ADAFDUSD",
-price: "0.5" })]
+  const [exchangeResponse] = [createResponse({
+    body: createExchangeInfo({ filters }),
+  })]
+  const responses = [exchangeResponse, createResponse({
+    body: { symbol: "ADAFDUSD",
+price: "0.5" },
+  })]
   const metadata = await fetchBinanceSpotMetadata({
     symbol: "ADAFDUSD",
     fetchImpl: async () => responses.shift(),
@@ -204,8 +229,11 @@ price: "0.5" })]
 test("reports Binance HTTP, malformed JSON, and network failures clearly", async () => {
   await assert.rejects(
     fetchBinanceSpotMetadata({ symbol: "ADAFDUSD",
-fetchImpl: async () => createResponse({}, { ok: false,
-status: 429 }) }),
+fetchImpl: async () => createResponse({
+    body: {},
+    ...{ ok: false,
+status: 429 },
+  }) }),
     /429/,
     "HTTP failures must include the status code.",
   )
@@ -229,6 +257,7 @@ test("preserves unsupported active filters as non-blocking diagnostics and ignor
   const base = createExchangeInfo()
   const responses = [
     createResponse({
+    body: {
       ...base,
       symbols: [{
         ...base.symbols[0],
@@ -252,9 +281,12 @@ stepSize: "0" },
       }],
       exchangeFilters: [{ filterType: "EXCHANGE_MAX_NUM_ORDERS",
 maxNumOrders: 200 }],
-    }),
-    createResponse({ symbol: "ADAFDUSD",
-price: "0.5" }),
+    },
+  }),
+    createResponse({
+    body: { symbol: "ADAFDUSD",
+price: "0.5" },
+  }),
   ]
   const metadata = await fetchBinanceSpotMetadata({
     symbol: "ADAFDUSD",
@@ -279,7 +311,8 @@ sourceFilterType: "EXCHANGE_MAX_NUM_ORDERS" },
 })
 test("accepts omitted optional price and maximum-notional bounds without inventing values", async () => {
   const responses = [
-    createResponse(createExchangeInfo({
+    createResponse({
+    body: createExchangeInfo({
       filters: [
         { filterType: "PRICE_FILTER",
 tickSize: "0.0001" },
@@ -290,9 +323,12 @@ stepSize: "0.1" },
         { filterType: "NOTIONAL",
 minNotional: "5" },
       ],
-    })),
-    createResponse({ symbol: "ADAFDUSD",
-price: "0.5" }),
+    }),
+  }),
+    createResponse({
+    body: { symbol: "ADAFDUSD",
+price: "0.5" },
+  }),
   ]
   const metadata = await fetchBinanceSpotMetadata({
     symbol: "ADAFDUSD",
@@ -315,7 +351,8 @@ maxPrice: "0.1",
 tickSize: "0.0001" },
   ]) {
     const responses = [
-      createResponse(createExchangeInfo({
+      createResponse({
+    body: createExchangeInfo({
         filters: [
           priceFilter,
           { filterType: "LOT_SIZE",
@@ -325,9 +362,12 @@ stepSize: "0.1" },
           { filterType: "MIN_NOTIONAL",
 minNotional: "5" },
         ],
-      })),
-      createResponse({ symbol: "ADAFDUSD",
-price: "0.5" }),
+      }),
+  }),
+      createResponse({
+    body: { symbol: "ADAFDUSD",
+price: "0.5" },
+  }),
     ]
     await assert.rejects(
       fetchBinanceSpotMetadata({ symbol: "ADAFDUSD",
@@ -354,8 +394,12 @@ price: "NaN" },
         fetchImpl: async () => {
           requestIndex += 1
           return requestIndex === 1
-            ? createResponse(createExchangeInfo())
-            : createResponse(ticker)
+            ? createResponse({
+    body: createExchangeInfo(),
+  })
+            : createResponse({
+    body: ticker,
+  })
         },
       }),
       /ticker|price|symbol/i,
@@ -374,8 +418,14 @@ test("rejects malformed and duplicate exchange-wide filter metadata", async () =
     {
       ...valid,
       exchangeFilters: [
-        { filterType: "EXCHANGE_MAX_NUM_ORDERS", maxNumOrders: 200 },
-        { filterType: "EXCHANGE_MAX_NUM_ORDERS", maxNumOrders: 300 },
+        {
+          filterType: "EXCHANGE_MAX_NUM_ORDERS",
+          maxNumOrders: 200,
+        },
+        {
+          filterType: "EXCHANGE_MAX_NUM_ORDERS",
+          maxNumOrders: 300,
+        },
       ],
     },
   ]
@@ -384,7 +434,9 @@ test("rejects malformed and duplicate exchange-wide filter metadata", async () =
     await assert.rejects(
       fetchBinanceSpotMetadata({
         symbol: "ADAFDUSD",
-        fetchImpl: async () => createResponse(exchangeInfo),
+        fetchImpl: async () => createResponse({
+    body: exchangeInfo,
+  }),
       }),
       /malformed exchangeFilters|duplicate EXCHANGE_MAX_NUM_ORDERS filters/i,
       "Malformed or duplicate exchange-wide filters must fail closed.",

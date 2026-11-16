@@ -117,7 +117,8 @@ test("CLI runs an audit-only offline context without requiring exchange credenti
     args: ["--context", "evidence.json"],
     cwd: "/offline",
     env: {},
-    readContext: async (filePath, encoding) => {
+    readContext: async (...readArguments) => {
+      const [filePath, encoding] = readArguments
       assert.equal(filePath, "/offline/evidence.json")
       assert.equal(encoding, "utf8")
       return JSON.stringify(context)

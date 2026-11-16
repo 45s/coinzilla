@@ -125,8 +125,10 @@ test("offline context adapter rejects history that starts after the reviewed cov
 })
 
 test("offline context adapter refuses confirmation without a Operational State Store", async () => {
-  const result = await runOfflineMarketRecovery({ context,
-confirm: true })
+  const result = await runOfflineMarketRecovery({
+    context,
+    confirm: true,
+  })
 
   assert.equal(result.ok, false, "Coverage confirmation must require the existing Operational State Store.")
   assert.match(result.errors[0].message, /Operational State Store/i, "The missing Operational State Store record dependency must be actionable.")
@@ -134,8 +136,10 @@ confirm: true })
 
 test("offline context adapter rejects malformed evidence before reconciliation", async () => {
   const result = await runOfflineMarketRecovery({
-    context: { ...context,
-journalRecords: {} },
+    context: {
+      ...context,
+      journalRecords: {},
+    },
   })
 
   assert.equal(result.ok, false, "Malformed Journal evidence must fail closed.")
@@ -169,7 +173,10 @@ data: { durable: true } }
 })
 
 test("offline context adapter rejects a non-boolean confirmation flag before evidence processing", async () => {
-  const result = await runOfflineMarketRecovery({ context, confirm: "true" })
+  const result = await runOfflineMarketRecovery({
+    context,
+    confirm: "true",
+  })
 
   assert.equal(result.ok, false, "Confirmation must require an explicit boolean rather than a truthy operator value.")
   assert.match(result.errors[0].message, /confirm must be a boolean/i, "The invalid confirmation flag must be reported before recovery processing.")
@@ -179,7 +186,10 @@ test("offline context adapter rejects contradictory canonical asset identities",
   const result = await runOfflineMarketRecovery({
     context: {
       ...context,
-      assets: [{ id: "binance:LINK", code: "WRONG" }],
+      assets: [{
+        id: "binance:LINK",
+        code: "WRONG",
+      }],
     },
   })
 

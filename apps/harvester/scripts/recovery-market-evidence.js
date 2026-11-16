@@ -42,17 +42,29 @@ function requireDecimal({ value, field }) {
 function createCanonicalAssetRegistry({ assetInputs }) {
   const assetsById = new Map()
   const assetsByCode = new Map()
-  const registerAsset = (input, field) => {
-    requireObject({ value: input, field })
-    const id = requireString({ value: input.id, field: field + ".id" })
-    const code = requireString({ value: input.code, field: field + ".code" })
+  const registerAsset = ({ input, field }) => {
+    requireObject({
+      value: input,
+      field,
+    })
+    const id = requireString({
+      value: input.id,
+      field: `${field}.id`,
+    })
+    const code = requireString({
+      value: input.code,
+      field: `${field}.code`,
+    })
     const existingById = assetsById.get(id)
     const existingByCode = assetsByCode.get(code)
     if ((existingById && existingById.code !== code) ||
         (existingByCode && existingByCode.id !== id)) {
-      throw new Error("Offline evidence contains contradictory canonical asset identity for " + code)
+      throw new Error(`Offline evidence contains contradictory canonical asset identity for ${code}`)
     }
-    const asset = existingById ?? existingByCode ?? new Asset({ id, code })
+    const asset = existingById ?? existingByCode ?? new Asset({
+      id,
+      code,
+    })
     assetsById.set(id, asset)
     assetsByCode.set(code, asset)
     return asset
@@ -62,28 +74,51 @@ function createCanonicalAssetRegistry({ assetInputs }) {
     value: assetInputs,
     field: "context.assets",
   }).entries()) {
-    registerAsset(input, "context.assets[" + index + "]")
+    registerAsset({
+      input,
+      field: `context.assets[${index}]`,
+    })
   }
 
-  return { assetsById, assetsByCode, registerAsset }
+  return {
+    assetsById,
+    assetsByCode,
+    registerAsset,
+  }
 }
 
 function createCanonicalMarkets({ marketInputs, registerAsset }) {
-  const markets = marketInputs.map((input, index) => {
-    requireObject({ value: input, field: "context.markets[" + index + "]" })
-    const venue = requireString({ value: input.venue, field: "markets[" + index + "].venue" })
-    const symbol = requireString({ value: input.symbol, field: "markets[" + index + "].symbol" })
+  const markets = []
+  for (const [index, input] of marketInputs.entries()) {
+    requireObject({
+      value: input,
+      field: `context.markets[${index}]`,
+    })
+    const venue = requireString({
+      value: input.venue,
+      field: `markets[${index}].venue`,
+    })
+    const symbol = requireString({
+      value: input.symbol,
+      field: `markets[${index}].symbol`,
+    })
     const market = new Market({
       venue,
       symbol,
-      baseAsset: registerAsset(input.baseAsset, "markets[" + index + "].baseAsset"),
-      quoteAsset: registerAsset(input.quoteAsset, "markets[" + index + "].quoteAsset"),
+      baseAsset: registerAsset({
+        input: input.baseAsset,
+        field: `markets[${index}].baseAsset`,
+      }),
+      quoteAsset: registerAsset({
+        input: input.quoteAsset,
+        field: `markets[${index}].quoteAsset`,
+      }),
     })
     if (input.id !== undefined && input.id !== market.id) {
-      throw new Error("Offline market ID does not match canonical venue/symbol identity for " + symbol)
+      throw new Error(`Offline market ID does not match canonical venue/symbol identity for ${symbol}`)
     }
-    return market
-  })
+    markets.push(market)
+  }
   if (markets.length === 0 || new Set(markets.map((market) => market.symbol)).size !== markets.length) {
     throw new Error("Offline market metadata must contain unique canonical markets")
   }
@@ -101,7 +136,7 @@ function createCanonicalAssetLookup({ assetsById, assetsByCode }) {
     require({ id, code, field }) {
       const asset = assetsById.get(id)
       if (!asset || asset.code !== code) {
-        throw new Error(field + " has no matching canonical asset ID/code in context.assets or context.markets")
+        throw new Error(`${field} has no matching canonical asset ID/code in context.assets or context.markets`)
       }
       return asset
     },
@@ -130,9 +165,18 @@ function restoreCanonicalJournalState({ records, markets }) {
 }
 
 function createCanonicalEvidence({ context }) {
-  requireObject({ value: context, field: "context" })
-  const records = requireArray({ value: context.journalRecords, field: "context.journalRecords" })
-  const marketInputs = requireArray({ value: context.markets, field: "context.markets" })
+  requireObject({
+    value: context,
+    field: "context",
+  })
+  const records = requireArray({
+    value: context.journalRecords,
+    field: "context.journalRecords",
+  })
+  const marketInputs = requireArray({
+    value: context.markets,
+    field: "context.markets",
+  })
   const assetRegistry = createCanonicalAssetRegistry({ assetInputs: context.assets ?? [] })
   const { markets, marketsBySymbol } = createCanonicalMarkets({
     marketInputs,
@@ -142,7 +186,10 @@ function createCanonicalEvidence({ context }) {
     assetsById: assetRegistry.assetsById,
     assetsByCode: assetRegistry.assetsByCode,
   })
-  const restored = restoreCanonicalJournalState({ records, markets })
+  const restored = restoreCanonicalJournalState({
+    records,
+    markets,
+  })
   if (restored?.ok !== true) {
     return restored
   }
@@ -158,34 +205,46 @@ function createCanonicalEvidence({ context }) {
 }
 
 function createAccountSnapshot({ input, assetsByLookup }) {
-  requireObject({ value: input,
-field: "exchange.currentAccountSnapshot" })
-  const balances = requireArray({
+  requireObject({
+    value: input,
+    field: "exchange.currentAccountSnapshot",
+  })
+  const balanceInputs = requireArray({
     value: input.balances,
     field: "exchange.currentAccountSnapshot.balances",
-  }).map((balance, index) => {
-    requireObject({ value: balance,
-field: `currentAccountSnapshot.balances[${  index  }]` })
+  })
+  const balances = []
+  for (const [index, balance] of balanceInputs.entries()) {
+    requireObject({
+      value: balance,
+      field: `currentAccountSnapshot.balances[${index}]`,
+    })
     const asset = assetsByLookup.require({
       id: balance.assetId,
       code: balance.asset,
-      field: `currentAccountSnapshot.balances[${  index  }]`,
+      field: `currentAccountSnapshot.balances[${index}]`,
     })
-    return new Balance({
+    balances.push(new Balance({
       free: new Quantity({
-        amount: requireDecimal({ value: balance.free,
-field: "balance.free" }),
+        amount: requireDecimal({
+          value: balance.free,
+          field: "balance.free",
+        }),
         asset,
       }),
       locked: new Quantity({
-        amount: requireDecimal({ value: balance.locked,
-field: "balance.locked" }),
+        amount: requireDecimal({
+          value: balance.locked,
+          field: "balance.locked",
+        }),
         asset,
       }),
-    })
+    }))
+  }
+  return new AccountSnapshot({
+    balances,
+    sourceTime: input.sourceTime,
   })
-  return new AccountSnapshot({ balances,
-sourceTime: input.sourceTime })
 }
 
 function createCanonicalOrder({ input, marketsBySymbol }) {
@@ -241,14 +300,16 @@ field: "tradeHistory fill" })
 field: "tradeHistory.fill.symbol" })
   const market = marketsBySymbol.get(symbol)
   if (!market) {throw new Error(`Canonical Market metadata is missing for trade-history fill ${  symbol}`)}
-  const commissions = requireArray({
+  const commissionInputs = requireArray({
     value: input.commissions ?? [],
     field: "tradeHistory.fill.commissions",
-  }).map((commission, index) => {
+  })
+  const commissions = []
+  for (const [index, commission] of commissionInputs.entries()) {
     const asset = assetsByLookup.require({
       id: commission.assetId,
       code: commission.asset,
-      field: `tradeHistory.fill.commissions[${  index  }]`,
+      field: `tradeHistory.fill.commissions[${index}]`,
     })
     const quoteValue = commission.quoteValue === undefined
       ? undefined
@@ -263,15 +324,17 @@ field: "tradeHistory.fill.symbol" })
             field: "commission.quoteValue",
           }),
         })
-    return new Commission({
+    commissions.push(new Commission({
       amount: new Money({
-        amount: requireDecimal({ value: commission.amount,
-field: "commission.amount" }),
+        amount: requireDecimal({
+          value: commission.amount,
+          field: "commission.amount",
+        }),
         asset,
       }),
       ...(quoteValue === undefined ? {} : { quoteValue }),
-    })
-  })
+    }))
+  }
   return new Fill({
     tradeId: requireString({ value: input.tradeId,
 field: "tradeHistory.fill.tradeId" }),
