@@ -44,6 +44,11 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
    - **Completed:** prevalidate every tuple and rule against the exported `VR` values; reject malformed rule entries and require a boolean `isSoft` when provided. Repository code search found no production callers of `Validator.validate` or `validateItems`; existing production predicate-helper consumers are unaffected.
    - **Verify:** 198/198 dedicated Utils tests and 198/198 workspace Utils tests passed. Utils coverage is 98.53% lines, 96.33% branches, and 99.19% functions. All six required exact-head contexts passed; the dedicated Utils workflow now runs `src/*.test.js` rather than treating the package directory as one test module.
 
+6. **Implement the shared `SystemCustomError` base ([cross-domain request #1208](https://github.com/45s/coinzilla/issues/1208), under [repository error initiative #1028](https://github.com/45s/coinzilla/issues/1028)).**
+   - **Why:** Harvester, Brokers and Journal have concrete package-owned errors that need one consistent native-`Error` base without introducing a domain dependency or a competing framework.
+   - **Do:** provide a small base that preserves native `cause`, sets the concrete subclass name, and optionally exposes a stable `code`, detached safe scalar `context`, and boolean `retryable`. Keep subclasses and error policy in their owning domains; do not migrate unrelated errors.
+   - **Verify:** class identity/name, native cause identity, optional fields, immutable context snapshot, invalid option rejection, public export, README/JSDoc and Utils package coverage.
+
 ### DEFERRED
 
 6. **Do not introduce new runtime dependencies, broad utility frameworks or speculative logger adapters.**
@@ -51,7 +56,7 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
    - **Do:** require a concrete repeated use case and a compatibility plan before expanding the public API.
    - **Verify:** dependency audit, package coverage and full workspace CI pass on the exact PR head.
 
-> Status: core shared-helper hardening, build-provenance/Logger consumer rollout, and Validator configuration hardening ([PR #918](https://github.com/45s/coinzilla/pull/918), issue [#892](https://github.com/45s/coinzilla/issues/892)) are complete. The direct console/application-logger audit is complete on `develop` at `f4fd2ab8f2cd40b497aa3b931c12f0bb9513f015`; the broader reuse inventory and automated guard remain open. Optional consolidation remains demand-driven.
+> Status: core shared-helper hardening, build-provenance/Logger consumer rollout, and Validator configuration hardening ([PR #918](https://github.com/45s/coinzilla/pull/918), issue [#892](https://github.com/45s/coinzilla/issues/892)) are complete. The shared `SystemCustomError` base is accepted as a focused Utilities-owned capability under [request #1208](https://github.com/45s/coinzilla/issues/1208) and is now in implementation. The direct console/application-logger audit is complete on `develop` at `f4fd2ab8f2cd40b497aa3b931c12f0bb9513f015`; the broader reuse inventory and automated guard remain open. Optional consolidation remains demand-driven.
 
 **Owner:** `packages/utils/`
 
@@ -87,6 +92,7 @@ Compatibility constraints: retain existing public exports and the legacy `NH` / 
 
 - [x] Maintain deterministic unit tests and meaningful coverage for all exported helpers.
 - [x] Review helper APIs for consistent input validation, error semantics, and immutable behavior.
+- [ ] Add the single shared `SystemCustomError` base for package-owned subclasses; keep all domain-specific codes and subclasses in their owning packages (request [#1208](https://github.com/45s/coinzilla/issues/1208)).
 - [x] Keep logging utilities structured, safe, and free of common credential fields in structured payloads; free-form log strings remain caller-owned.
 - [x] Capture build provenance and structured Logger context (issue #763): shared capability merged in PR #767; Harvester process-start consumer integration merged in PR #770. PR #765 was an abandoned test-first draft and is not the delivery reference.
 - [ ] Remove or consolidate genuinely duplicated generic helpers when doing so does not couple unrelated domains.
