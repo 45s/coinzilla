@@ -204,6 +204,156 @@ function percentile({ sortedValues, percent }) {
  * Replay the production volatility metric and state-transition functions over
  * validated history. This is a threshold diagnostic, not an execution backtest.
  */
+function createVolatilityObservation({ calculated, thresholds }) {
+  const metrics = calculated.metrics ?? null
+  if (!metrics) {
+    return {
+      ratio: null,
+      thresholdCounts: null,
+      snapshot: {
+        ok: true,
+        data: {
+          status: {
+            isReady: false,
+            reason: calculated.reason ?? "VOLATILITY_METRICS_UNAVAILABLE",
+          },
+          metrics: null,
+        },
+      },
+    }
+  }
+
+  const ratio = metrics.volatilityRatio
+  return {
+    ratio,
+    thresholdCounts: {
+      warning: compareDecimal({ left: ratio, right: thresholds.warningRatio }) >= 0 ? 1 : 0,
+      protection: compareDecimal({ left: ratio, right: thresholds.protectRatio }) >= 0 ? 1 : 0,
+      recovery: compareDecimal({ left: ratio, right: thresholds.recoverRatio }) <= 0 ? 1 : 0,
+    },
+    snapshot: {
+      ok: true,
+      data: {
+        status: {
+          isReady: true,
+          isFresh: true,
+          reason: null,
+          lastClosedCandleOpenTime: metrics.openTime,
+        },
+        metrics,
+      },
+    },
+  }
+}
+
+function createVolatilityReplay({ symbol }) {
+  return {
+    state: createVolatilityProtectionState({ symbol }),
+    stateCounts: {
+      [VOLATILITY_PROTECTION_MODES.NORMAL]: 0,
+      [VOLATILITY_PROTECTION_MODES.PROTECTED]: 0,
+      [VOLATILITY_PROTECTION_MODES.RECOVERING]: 0,
+    },
+    thresholdCounts: {
+      warning: 0,
+      protection: 0,
+      recovery: 0,
+    },
+    ratios: [],
+    unavailableObservations: 0,
+    protectionEntries: 0,
+    recoveryTransitions: 0,
+    protectionRuns: 0,
+    currentProtectedRun: 0,
+    longestProtectedRunMinutes: 0,
+  }
+}
+
+function recordVolatilityObservation({ observation, replay }) {
+  if (observation.ratio === null) {
+    replay.unavailableObservations += 1
+    return
+  }
+
+  replay.ratios.push(observation.ratio)
+  replay.thresholdCounts.warning += observation.thresholdCounts.warning
+  replay.thresholdCounts.protection += observation.thresholdCounts.protection
+  replay.thresholdCounts.recovery += observation.thresholdCounts.recovery
+}
+
+function recordVolatilityTransition({ transition, replay }) {
+  replay.state = transition.state
+  replay.stateCounts[replay.state.mode] += 1
+  if (transition.enteredProtected) {
+    replay.protectionEntries += 1
+  }
+  if (transition.recovered) {
+    replay.recoveryTransitions += 1
+  }
+
+  if (replay.state.mode !== VOLATILITY_PROTECTION_MODES.NORMAL) {
+    if (replay.currentProtectedRun === 0) {
+      replay.protectionRuns += 1
+    }
+    replay.currentProtectedRun += 1
+    replay.longestProtectedRunMinutes = Math.max(
+      replay.longestProtectedRunMinutes,
+      replay.currentProtectedRun,
+    )
+  } else {
+    replay.currentProtectedRun = 0
+  }
+}
+
+function createVolatilityHistoryReport({ symbol, history, thresholds, replay, latestMetrics }) {
+  const sortedRatios = [...replay.ratios].sort((left, right) => compareDecimal({ left, right }))
+  const protectedObservations =
+    replay.stateCounts[VOLATILITY_PROTECTION_MODES.PROTECTED] +
+    replay.stateCounts[VOLATILITY_PROTECTION_MODES.RECOVERING]
+  const observationCount = history.length - STARTUP_HISTORY_CANDLES + 1
+
+  return Object.freeze({
+    symbol,
+    interval: CANDLE_INTERVAL,
+    candleCount: history.length,
+    historyStartTime: history[0].openTime,
+    historyEndTime: history.at(-1).openTime,
+    analyzedStartTime: history[STARTUP_HISTORY_CANDLES - 1].openTime,
+    analyzedEndTime: history.at(-1).openTime,
+    observationCount,
+    ratioObservations: replay.ratios.length,
+    unavailableObservations: replay.unavailableObservations,
+    thresholds,
+    thresholdCounts: Object.freeze(replay.thresholdCounts),
+    ratioPercentiles: Object.freeze({
+      p50: percentile({ sortedValues: sortedRatios, percent: 50 }),
+      p90: percentile({ sortedValues: sortedRatios, percent: 90 }),
+      p95: percentile({ sortedValues: sortedRatios, percent: 95 }),
+      p99: percentile({ sortedValues: sortedRatios, percent: 99 }),
+    }),
+    maximumRatio: sortedRatios.at(-1),
+    stateCounts: Object.freeze(replay.stateCounts),
+    protectionEntries: replay.protectionEntries,
+    recoveryTransitions: replay.recoveryTransitions,
+    protectionRuns: replay.protectionRuns,
+    longestProtectedRunMinutes: replay.longestProtectedRunMinutes,
+    protectedPercent: Number(((protectedObservations / observationCount) * 100).toFixed(2)),
+    latestMetrics,
+    assumptions: Object.freeze({
+      startupHistoryCandles: STARTUP_HISTORY_CANDLES,
+      protectionRunsIncludeStartupWarmup: true,
+      activeBuyOrderCount: 0,
+      exchangeOrderExecutionSimulated: false,
+      streamFreshnessSimulated: false,
+      strategyProfitabilityEvaluated: false,
+    }),
+  })
+}
+
+/**
+ * Replay the production volatility metric and state-transition functions over
+ * validated history. This is a threshold diagnostic, not an execution backtest.
+ */
 export function analyzeVolatilityHistory({ symbol, candles, thresholds: thresholdOverrides } = {}) {
   const thresholds = validateCalibrationThresholds(thresholdOverrides)
   const history = validateCandleSeries({
@@ -213,27 +363,10 @@ export function analyzeVolatilityHistory({ symbol, candles, thresholds: threshol
     intervalMs: CANDLE_INTERVAL_MS,
   })
   if (history.length < STARTUP_HISTORY_CANDLES) {
-    throw new RangeError(`historical calibration requires at least ${STARTUP_HISTORY_CANDLES} contiguous completed candles`)
+    throw new RangeError("historical calibration requires at least " + STARTUP_HISTORY_CANDLES + " contiguous completed candles")
   }
 
-  let state = createVolatilityProtectionState({ symbol })
-  const stateCounts = {
-    [VOLATILITY_PROTECTION_MODES.NORMAL]: 0,
-    [VOLATILITY_PROTECTION_MODES.PROTECTED]: 0,
-    [VOLATILITY_PROTECTION_MODES.RECOVERING]: 0,
-  }
-  const thresholdCounts = {
-    warning: 0,
-    protection: 0,
-    recovery: 0,
-  }
-  const ratios = []
-  let unavailableObservations = 0
-  let protectionEntries = 0
-  let recoveryTransitions = 0
-  let protectionRuns = 0
-  let currentProtectedRun = 0
-  let longestProtectedRunMinutes = 0
+  const replay = createVolatilityReplay({ symbol })
   let latestMetrics = null
 
   for (let index = STARTUP_HISTORY_CANDLES - 1; index < history.length; index += 1) {
@@ -248,109 +381,27 @@ export function analyzeVolatilityHistory({ symbol, candles, thresholds: threshol
     })
     latestMetrics = calculated.metrics ?? null
 
-    let snapshot
-    if (!calculated.metrics) {
-      unavailableObservations += 1
-      snapshot = {
-        ok: true,
-        data: {
-          status: { isReady: false,
-reason: calculated.reason ?? "VOLATILITY_METRICS_UNAVAILABLE" },
-          metrics: null,
-        },
-      }
-    } else {
-      const ratio = calculated.metrics.volatilityRatio
-      ratios.push(ratio)
-      if (compareDecimal({ left: ratio,
-right: thresholds.warningRatio }) >= 0) {thresholdCounts.warning += 1}
-      if (compareDecimal({ left: ratio,
-right: thresholds.protectRatio }) >= 0) {thresholdCounts.protection += 1}
-      if (compareDecimal({ left: ratio,
-right: thresholds.recoverRatio }) <= 0) {thresholdCounts.recovery += 1}
-      snapshot = {
-        ok: true,
-        data: {
-          status: {
-            isReady: true,
-            isFresh: true,
-            reason: null,
-            lastClosedCandleOpenTime: calculated.metrics.openTime,
-          },
-          metrics: calculated.metrics,
-        },
-      }
-    }
-
+    const observation = createVolatilityObservation({ calculated, thresholds })
+    recordVolatilityObservation({ observation, replay })
     const transition = transitionVolatilityProtection({
-      state,
-      snapshot,
+      state: replay.state,
+      snapshot: observation.snapshot,
       activeBuyOrderCount: 0,
       thresholds,
     })
-    state = transition.state
-    stateCounts[state.mode] += 1
-    if (transition.enteredProtected) {protectionEntries += 1}
-    if (transition.recovered) {recoveryTransitions += 1}
-
-    if (state.mode !== VOLATILITY_PROTECTION_MODES.NORMAL) {
-      if (currentProtectedRun === 0) {protectionRuns += 1}
-      currentProtectedRun += 1
-      longestProtectedRunMinutes = Math.max(longestProtectedRunMinutes, currentProtectedRun)
-    } else {
-      currentProtectedRun = 0
-    }
+    recordVolatilityTransition({ transition, replay })
   }
 
-  if (ratios.length === 0 || !latestMetrics) {
+  if (replay.ratios.length === 0 || !latestMetrics) {
     throw new RangeError("historical calibration produced no valid volatility-ratio observations")
   }
-  const sortedRatios = [...ratios].sort((left, right) => compareDecimal({ left,
-right }))
-  const protectedObservations =
-    stateCounts[VOLATILITY_PROTECTION_MODES.PROTECTED] +
-    stateCounts[VOLATILITY_PROTECTION_MODES.RECOVERING]
-  const observationCount = history.length - STARTUP_HISTORY_CANDLES + 1
 
-  return Object.freeze({
+  return createVolatilityHistoryReport({
     symbol,
-    interval: CANDLE_INTERVAL,
-    candleCount: history.length,
-    historyStartTime: history[0].openTime,
-    historyEndTime: history.at(-1).openTime,
-    analyzedStartTime: history[STARTUP_HISTORY_CANDLES - 1].openTime,
-    analyzedEndTime: history.at(-1).openTime,
-    observationCount,
-    ratioObservations: ratios.length,
-    unavailableObservations,
+    history,
     thresholds,
-    thresholdCounts: Object.freeze(thresholdCounts),
-    ratioPercentiles: Object.freeze({
-      p50: percentile({ sortedValues: sortedRatios,
-percent: 50 }),
-      p90: percentile({ sortedValues: sortedRatios,
-percent: 90 }),
-      p95: percentile({ sortedValues: sortedRatios,
-percent: 95 }),
-      p99: percentile({ sortedValues: sortedRatios,
-percent: 99 }),
-    }),
-    maximumRatio: sortedRatios.at(-1),
-    stateCounts: Object.freeze(stateCounts),
-    protectionEntries,
-    recoveryTransitions,
-    protectionRuns,
-    longestProtectedRunMinutes,
-    protectedPercent: Number(((protectedObservations / observationCount) * 100).toFixed(2)),
+    replay,
     latestMetrics,
-    assumptions: Object.freeze({
-      startupHistoryCandles: STARTUP_HISTORY_CANDLES,
-      protectionRunsIncludeStartupWarmup: true,
-      activeBuyOrderCount: 0,
-      exchangeOrderExecutionSimulated: false,
-      streamFreshnessSimulated: false,
-      strategyProfitabilityEvaluated: false,
-    }),
   })
 }
 
