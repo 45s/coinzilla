@@ -133,13 +133,13 @@ durable: true },
   }
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") {
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") {
       return makeResponse({ ok: true,
 result: { id: 99,
 username: "coinzilla_bot" } })
     }
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       const params = JSON.parse(requestOptions.body)
       pollRequests.push(params)
       pollCount += 1
@@ -153,12 +153,12 @@ result: [update] })}
         }, { once: true })
       })
     }
-    if (method === "sendMessage") {
+    if (requestMethod === "sendMessage") {
       sentMessages.push(JSON.parse(requestOptions.body))
       return makeResponse({ ok: true,
 result: { message_id: 200 } })
     }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -204,10 +204,10 @@ updateId: 101 })
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") {return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) {return makeResponse({ ok: true,
 result: [update] })}
@@ -219,12 +219,12 @@ result: [update] })}
         }, { once: true })
       })
     }
-    if (method === "sendMessage") {
+    if (requestMethod === "sendMessage") {
       sentMessages.push(JSON.parse(requestOptions.body))
       return makeResponse({ ok: true,
 result: { message_id: 201 } })
     }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -252,10 +252,10 @@ chatType: "group" })
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") {return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) {return makeResponse({ ok: true,
 result: [update] })}
@@ -267,12 +267,12 @@ result: [update] })}
         }, { once: true })
       })
     }
-    if (method === "sendMessage") {
+    if (requestMethod === "sendMessage") {
       sentMessages.push(JSON.parse(requestOptions.body))
       return makeResponse({ ok: true,
 result: { message_id: 202 } })
     }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -299,10 +299,10 @@ text: "/resume LINKUSDT" })
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") {return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) {return makeResponse({ ok: true,
 result: [update] })}
@@ -312,12 +312,12 @@ result: [update] })}
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "sendMessage") {
+    if (requestMethod === "sendMessage") {
       sentMessages.push(JSON.parse(requestOptions.body))
       return makeResponse({ ok: true,
 result: { message_id: 210 } })
     }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -351,10 +351,10 @@ text: "/help" })
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") {return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) {return makeResponse({ ok: true,
 result: [update] })}
@@ -364,12 +364,12 @@ result: [update] })}
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "sendMessage") {
+    if (requestMethod === "sendMessage") {
       sentMessages.push(JSON.parse(requestOptions.body))
       return makeResponse({ ok: true,
 result: { message_id: 211 } })
     }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -409,10 +409,10 @@ test("retries an unacknowledged Telegram update with the same application reques
   const thirdPoll = new Promise((resolve) => { finishThirdPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") {return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       updatePollCount += 1
       if (updatePollCount <= 2) {return makeResponse({ ok: true,
 result: [update] })}
@@ -422,13 +422,13 @@ result: [update] })}
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "sendMessage") {
+    if (requestMethod === "sendMessage") {
       sendCount += 1
       if (sendCount === 1) {throw new Error("temporary reply delivery failure")}
       return makeResponse({ ok: true,
 result: { message_id: 303 } })
     }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -473,14 +473,14 @@ test("concurrent start calls share one Telegram identity check and one poller", 
   const pollStarted = new Promise((resolve) => { finishPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") {
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") {
       getMeCalls += 1
       const result = await identity
       return makeResponse({ ok: true,
 result })
     }
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCalls += 1
       finishPoll()
       return new Promise((...args) => {
@@ -488,7 +488,7 @@ result })
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -521,10 +521,10 @@ chatId: 54321 })
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") {return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) {return makeResponse({ ok: true,
 result: [update] })}
@@ -534,12 +534,12 @@ result: [update] })}
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "sendMessage") {
+    if (requestMethod === "sendMessage") {
       sentMessages.push(JSON.parse(requestOptions.body))
       return makeResponse({ ok: true,
 result: { message_id: 304 } })
     }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -587,10 +587,10 @@ text: "/markets" }),
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") {return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) {return makeResponse({ ok: true,
 result: updates })}
@@ -604,12 +604,12 @@ result: [] })
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "sendMessage") {
+    if (requestMethod === "sendMessage") {
       sentMessages.push(JSON.parse(requestOptions.body))
       return makeResponse({ ok: true,
 result: { message_id: 212 } })
     }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const operator = {
     pauseMarket: async () => assert.fail("Read-only queries must never invoke pauseMarket."),
@@ -703,10 +703,10 @@ operation: "READ_STATUS" },
   })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") {return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) {return makeResponse({ ok: true,
 result: updates })}
@@ -720,12 +720,12 @@ result: [] })
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "sendMessage") {
+    if (requestMethod === "sendMessage") {
       sentMessages.push(JSON.parse(requestOptions.body))
       return makeResponse({ ok: true,
 result: { message_id: 213 } })
     }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -786,21 +786,21 @@ test("registers the supported command menu and requests callback updates", async
   const pollStarted = new Promise(resolve => { finishPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    calls.push({ method,
+    const requestMethod = requestUrl.split("/").pop()
+    calls.push({ method: requestMethod,
 payload: requestOptions.body ? JSON.parse(requestOptions.body) : {} })
-    if (method === "getMe") { return makeResponse({ ok: true,
+    if (requestMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
-    if (method === "setMyCommands") { return makeResponse({ ok: true,
+    if (requestMethod === "setMyCommands") { return makeResponse({ ok: true,
 result: true }) }
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       finishPoll()
       return new Promise((...args) => {
         const [, reject] = args
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({ botToken: "test-token",
 allowedUserIds: ["12345"],
@@ -829,10 +829,10 @@ messageId: 701 })
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") { return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) { return makeResponse({ ok: true,
 result: [update] }) }
@@ -842,13 +842,13 @@ result: [update] }) }
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "answerCallbackQuery") { return makeResponse({ ok: true,
+    if (requestMethod === "answerCallbackQuery") { return makeResponse({ ok: true,
 result: true }) }
-    if (method === "editMessageText") { editedMessages.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
+    if (requestMethod === "editMessageText") { editedMessages.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: true }) }
-    if (method === "setMyCommands") { return makeResponse({ ok: true,
+    if (requestMethod === "setMyCommands") { return makeResponse({ ok: true,
 result: true }) }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -886,10 +886,10 @@ data: "cc:confirm:PAUSE:LINKUSDT:502" }),
   const thirdPoll = new Promise(resolve => { finishThirdPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") { return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) { return makeResponse({ ok: true,
 result: [updates[0]] }) }
@@ -901,15 +901,15 @@ result: [updates[1]] }) }
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "sendMessage") { return makeResponse({ ok: true,
+    if (requestMethod === "sendMessage") { return makeResponse({ ok: true,
 result: { message_id: 702 } }) }
-    if (method === "answerCallbackQuery") { callbackAnswers.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
+    if (requestMethod === "answerCallbackQuery") { callbackAnswers.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: true }) }
-    if (method === "editMessageText") { editedMessages.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
+    if (requestMethod === "editMessageText") { editedMessages.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: true }) }
-    if (method === "setMyCommands") { return makeResponse({ ok: true,
+    if (requestMethod === "setMyCommands") { return makeResponse({ ok: true,
 result: true }) }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -943,10 +943,10 @@ data: "cc:nav:status" })
   const diagnosticEntries = []
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") { return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) { return makeResponse({ ok: true,
 result: [update] }) }
@@ -956,11 +956,11 @@ result: [update] }) }
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "answerCallbackQuery") { calls.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
+    if (requestMethod === "answerCallbackQuery") { calls.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: true }) }
-    if (method === "setMyCommands") { return makeResponse({ ok: true,
+    if (requestMethod === "setMyCommands") { return makeResponse({ ok: true,
 result: true }) }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({ botToken: "test-token",
 allowedUserIds: ["12345"],
@@ -994,10 +994,10 @@ messageId: 705 })
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") { return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) { return makeResponse({ ok: true,
 result: [update] }) }
@@ -1007,13 +1007,13 @@ result: [update] }) }
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "answerCallbackQuery") { return makeResponse({ ok: true,
+    if (requestMethod === "answerCallbackQuery") { return makeResponse({ ok: true,
 result: true }) }
-    if (method === "editMessageText") { edits.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
+    if (requestMethod === "editMessageText") { edits.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: true }) }
-    if (method === "setMyCommands") { return makeResponse({ ok: true,
+    if (requestMethod === "setMyCommands") { return makeResponse({ ok: true,
 result: true }) }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -1073,10 +1073,10 @@ data: "cc:confirm:PAUSE:LINKUSDT:601" }),
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") { return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) { return makeResponse({ ok: true,
 result: updates }) }
@@ -1086,9 +1086,9 @@ result: updates }) }
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "answerCallbackQuery" || method === "editMessageText" || method === "setMyCommands") { return makeResponse({ ok: true,
+    if (requestMethod === "answerCallbackQuery" || method === "editMessageText" || method === "setMyCommands") { return makeResponse({ ok: true,
 result: true }) }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -1113,10 +1113,10 @@ messageId: 804 })
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") { return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) { return makeResponse({ ok: true,
 result: [update] }) }
@@ -1126,11 +1126,11 @@ result: [update] }) }
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "answerCallbackQuery" || method === "setMyCommands") { return makeResponse({ ok: true,
+    if (requestMethod === "answerCallbackQuery" || method === "setMyCommands") { return makeResponse({ ok: true,
 result: true }) }
-    if (method === "editMessageText") { return makeResponse({ ok: false,
+    if (requestMethod === "editMessageText") { return makeResponse({ ok: false,
 description: "Bad Request: message is not modified" }, 400) }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -1174,10 +1174,10 @@ data: "cc:cancel:701" }),
   const thirdPoll = new Promise(resolve => { finishThirdPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") { return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) { return makeResponse({ ok: true,
 result: [updates[0]] }) }
@@ -1189,13 +1189,13 @@ result: [updates[1]] }) }
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "answerCallbackQuery") { return makeResponse({ ok: true,
+    if (requestMethod === "answerCallbackQuery") { return makeResponse({ ok: true,
 result: true }) }
-    if (method === "editMessageText") { edits.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
+    if (requestMethod === "editMessageText") { edits.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: true }) }
-    if (method === "setMyCommands") { return makeResponse({ ok: true,
+    if (requestMethod === "setMyCommands") { return makeResponse({ ok: true,
 result: true }) }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -1231,10 +1231,10 @@ data: "cc:nav:status" }),
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") { return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) { return makeResponse({ ok: true,
 result: updates }) }
@@ -1244,11 +1244,11 @@ result: updates }) }
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "answerCallbackQuery") { callbackAnswers.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
+    if (requestMethod === "answerCallbackQuery") { callbackAnswers.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: true }) }
-    if (method === "setMyCommands") { return makeResponse({ ok: true,
+    if (requestMethod === "setMyCommands") { return makeResponse({ ok: true,
 result: true }) }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -1281,12 +1281,12 @@ text: "/help" })
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") { return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
-    if (method === "setMyCommands") { return makeResponse({ ok: false,
+    if (requestMethod === "setMyCommands") { return makeResponse({ ok: false,
 description: "Forbidden" }, 403) }
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) { return makeResponse({ ok: true,
 result: [update] }) }
@@ -1296,9 +1296,9 @@ result: [update] }) }
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "sendMessage") { sentMessages.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
+    if (requestMethod === "sendMessage") { sentMessages.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: { message_id: 901 } }) }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -1329,10 +1329,10 @@ messageId: 1001 })
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") { return makeResponse({ ok: true,
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) { return makeResponse({ ok: true,
 result: [update] }) }
@@ -1342,13 +1342,13 @@ result: [update] }) }
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "answerCallbackQuery") { return makeResponse({ ok: true,
+    if (requestMethod === "answerCallbackQuery") { return makeResponse({ ok: true,
 result: true }) }
-    if (method === "editMessageText") { edits.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
+    if (requestMethod === "editMessageText") { edits.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: true }) }
-    if (method === "setMyCommands") { return makeResponse({ ok: true,
+    if (requestMethod === "setMyCommands") { return makeResponse({ ok: true,
 result: true }) }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -1421,20 +1421,20 @@ async function runTelegramUpdatesForDiagnostics({ updates, operator, logger, sen
   })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") {
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") {
       return makeResponse({
         ok: true,
         result: { username: "coinzilla_bot" },
       })
     }
-    if (method === "setMyCommands" || method === "editMessageText") {
+    if (requestMethod === "setMyCommands" || method === "editMessageText") {
       return makeResponse({
         ok: true,
         result: true,
       })
     }
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) {
         return makeResponse({
@@ -1448,7 +1448,7 @@ async function runTelegramUpdatesForDiagnostics({ updates, operator, logger, sen
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "sendMessage") {
+    if (requestMethod === "sendMessage") {
       if (sendMessageError) {
         throw sendMessageError
       }
@@ -1458,14 +1458,14 @@ async function runTelegramUpdatesForDiagnostics({ updates, operator, logger, sen
         result: { message_id: 1200 },
       })
     }
-    if (method === "answerCallbackQuery") {
+    if (requestMethod === "answerCallbackQuery") {
       callbackAnswers.push(JSON.parse(requestOptions.body))
       return makeResponse({
         ok: true,
         result: true,
       })
     }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -1824,20 +1824,20 @@ function createCallbackAckRetryFetch({ askUpdate, confirmUpdate }) {
   })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") {
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") {
       return makeResponse({
         ok: true,
         result: { username: "coinzilla_bot" },
       })
     }
-    if (method === "setMyCommands" || method === "editMessageText") {
+    if (requestMethod === "setMyCommands" || method === "editMessageText") {
       return makeResponse({
         ok: true,
         result: true,
       })
     }
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       updateOffsets.push(JSON.parse(requestOptions.body).offset)
       if (pollCount === 1) {
@@ -1858,7 +1858,7 @@ function createCallbackAckRetryFetch({ askUpdate, confirmUpdate }) {
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "answerCallbackQuery") {
+    if (requestMethod === "answerCallbackQuery") {
       callbackAckCount += 1
       if (callbackAckCount === 2) {
         return makeResponse({
@@ -1871,7 +1871,7 @@ function createCallbackAckRetryFetch({ askUpdate, confirmUpdate }) {
         result: true,
       })
     }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   return {
     fetchImpl,
@@ -1955,20 +1955,20 @@ function createExpiredCallbackAcknowledgementFetch({ updates }) {
   })
   const fetchImpl = async (...args) => {
     const [requestUrl, requestOptions = {}] = args
-    const method = requestUrl.split("/").pop()
-    if (method === "getMe") {
+    const requestMethod = requestUrl.split("/").pop()
+    if (requestMethod === "getMe") {
       return makeResponse({
         ok: true,
         result: { username: "coinzilla_bot" },
       })
     }
-    if (method === "setMyCommands" || method === "editMessageText") {
+    if (requestMethod === "setMyCommands" || method === "editMessageText") {
       return makeResponse({
         ok: true,
         result: true,
       })
     }
-    if (method === "getUpdates") {
+    if (requestMethod === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) {
         return makeResponse({
@@ -1982,7 +1982,7 @@ function createExpiredCallbackAcknowledgementFetch({ updates }) {
         requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "answerCallbackQuery") {
+    if (requestMethod === "answerCallbackQuery") {
       callbackAckCount += 1
       if (callbackAckCount === 2) {
         return makeResponse({
@@ -1995,7 +1995,7 @@ function createExpiredCallbackAcknowledgementFetch({ updates }) {
         result: true,
       })
     }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(`Unexpected Telegram API method: ${requestMethod}`)
   }
   return {
     fetchImpl,
