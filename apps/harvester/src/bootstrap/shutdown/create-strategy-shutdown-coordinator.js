@@ -18,7 +18,13 @@ function createStrategyShutdownError({ blockers, errors = [] } = {}) {
   const causes = errors.length > 0
     ? errors
     : blockers.map((blocker) => new Error(blocker.strategyId + ": " + blocker.message))
-  const error = new AggregateError(causes, "Strategy shutdown safety could not be proven")
+  const blockerSummary = blockers.map(({ strategyId, reason, message }) =>
+    strategyId + " [" + reason + "]: " + message).join("; ")
+  const error = new AggregateError(
+    causes,
+    "Harvester shutdown was incomplete: strategy shutdown safety could not be proven" +
+      (blockerSummary ? ": " + blockerSummary : ""),
+  )
   error.code = "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN"
   error.shutdownDiagnostics = Object.freeze({
     strategyBlockers: Object.freeze(blockers),

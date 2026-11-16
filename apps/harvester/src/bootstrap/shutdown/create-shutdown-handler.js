@@ -395,7 +395,7 @@ async function publishClosingAudit(context) {
     auditReason: "CLOSING_ACCOUNT_SNAPSHOT_FAILED",
     isFailure: (snapshotResult) => snapshotResult?.ok === false,
   })
-  if (result?.ok !== true) {
+  if (result?.ok === false) {
     context.snapshotError = result?.errors?.[0] ?? new Error("Closing account snapshot durability was not proven")
   }
   return result

@@ -260,10 +260,12 @@ export function createConservativeShutdownParticipant({
         .filter(Boolean)
       snapshot = engine.getShutdownSafetySnapshot()
       if (failedMarkets.length > 0) {
+        const blockerSummary = failedMarkets.map(({ symbol, blockers }) =>
+          symbol + ": " + blockers.join(", ")).join("; ")
         const error = new AggregateError(
           failedMarkets.map(({ symbol, blockers }) =>
             createMarketSafetyError({ symbol, blockers })),
-          "Conservative shutdown safety could not be proven for every market",
+          "Conservative shutdown safety could not be proven for every market: " + blockerSummary,
         )
         error.code = "CONSERVATIVE_SHUTDOWN_SAFETY_UNPROVEN"
         error.shutdownDiagnostics = Object.freeze({
