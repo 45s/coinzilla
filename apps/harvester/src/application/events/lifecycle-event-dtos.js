@@ -62,10 +62,13 @@ const requireMarkets = ({ value }) => {
   if (!Array.isArray(value)) {
     throw new TypeError("enabledMarkets must be an array")
   }
-  const markets = value.map((symbol, index) =>
-    requireString({ value: symbol,
-      field: `enabledMarkets[${index}]` })
-  )
+  const markets = mapArrayWithIndex({
+    values: value,
+    mapper: ({ value: symbol, index }) => requireString({
+      value: symbol,
+      field: `enabledMarkets[${index}]`,
+    }),
+  })
   if (new Set(markets).size !== markets.length) {
     throw new TypeError("enabledMarkets must not contain duplicates")
   }
@@ -104,6 +107,12 @@ const mapData = ({ input, operation, mapper }) => {
     return toResult({ error })
   }
 }
+
+const mapArrayWithIndex = ({ values, mapper }) =>
+  values.map((...args) => mapper({
+    value: args[0],
+    index: args[1],
+  }))
 
 const BUILD_METADATA_SOURCES = Object.freeze(["git", "environment", "unavailable"])
 const WORKING_TREE_STATES = Object.freeze(["clean", "dirty", "unknown"])
@@ -426,9 +435,6 @@ const requireOrderFacts = ({ order }) => {
   }
 }
 
-const requireCount = ({ value, field }) => requireNonNegativeSafeInteger({ value,
-  field })
-
 const mapStrategyDecisionInputs = (inputs) => {
   if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) {
     throw new TypeError("inputs must be an object")
@@ -471,33 +477,50 @@ export const mapStrategyDecisionData = (input = {}) =>
     input,
     operation: "Strategy-decision event mapping",
     mapper: ({ strategy, symbol, referencePrice, reason, inputs, actions }) => {
-      if (strategy !== "CONSERVATIVE") {throw new TypeError("strategy must be CONSERVATIVE")}
+      if (strategy !== "CONSERVATIVE") {
+        throw new TypeError("strategy must be CONSERVATIVE")
+      }
       if (!Array.isArray(actions) || actions.length === 0) {
         throw new TypeError("strategy decision must contain at least one actionable order")
       }
       return {
         strategy,
-        symbol: requireString({ value: symbol,
-          field: "symbol" }),
-        referencePrice: requireDecimalString({ value: referencePrice,
-          field: "referencePrice" }),
+        symbol: requireString({
+          value: symbol,
+          field: "symbol",
+        }),
+        referencePrice: requireDecimalString({
+          value: referencePrice,
+          field: "referencePrice",
+        }),
         ...(typeof reason === "string" && reason.trim() ? { reason: reason.trim().slice(0, 160) } : {}),
         ...(inputs === undefined ? {} : { inputs: mapStrategyDecisionInputs(inputs) }),
-        actions: actions.map((action, index) => ({
-          side: action?.side === "BUY" || action?.side === "SELL"
-            ? action.side
-            : (() => { throw new TypeError(`actions[${index}].side must be BUY or SELL`) })(),
-          type: requireString({ value: action?.type,
-            field: `actions[${index}].type` }),
-          price: requireDecimalString({ value: action?.price,
-            field: `actions[${index}].price` }),
-          quantity: requireDecimalString({ value: action?.quantity,
-            field: `actions[${index}].quantity` }),
-          ...(action?.reason === undefined ? {} : {
-            reason: requireString({ value: action.reason,
-              field: `actions[${index}].reason` }),
+        actions: mapArrayWithIndex({
+          values: actions,
+          mapper: ({ value: action, index }) => ({
+            side: action?.side === "BUY" || action?.side === "SELL"
+              ? action.side
+              : (() => { throw new TypeError(`actions[${index}].side must be BUY or SELL`) })(),
+            type: requireString({
+              value: action?.type,
+              field: `actions[${index}].type`,
+            }),
+            price: requireDecimalString({
+              value: action?.price,
+              field: `actions[${index}].price`,
+            }),
+            quantity: requireDecimalString({
+              value: action?.quantity,
+              field: `actions[${index}].quantity`,
+            }),
+            ...(action?.reason === undefined ? {} : {
+              reason: requireString({
+                value: action.reason,
+                field: `actions[${index}].reason`,
+              }),
+            }),
           }),
-        })),
+        }),
       }
     },
   })
@@ -642,107 +665,178 @@ export const mapOrderCancelFailedData = (input = {}) =>
 
 
 /** Map a canonical Fill only after both accounting projections were committed. */
+const mapCommissionAssetData = ({ fill, commission, index }) => {
+  const amount = requireDecimalString({
+    value: commission.amount?.amount,
+    field: `commissions[${index}].amount`,
+  })
+  const assetId = requireString({
+    value: commission.amount?.asset?.id,
+    field: `commissions[${index}].assetId`,
+  })
+  const asset = requireString({
+    value: commission.amount?.asset?.code,
+    field: `commissions[${index}].asset`,
+  })
+  const isBaseAsset = assetId === fill.market.baseAsset?.id
+  const isQuoteAsset = assetId === fill.market.quoteAsset?.id
+  if ((isBaseAsset && asset !== fill.market.baseAsset?.code) ||
+      (isQuoteAsset && asset !== fill.market.quoteAsset?.code) ||
+      (!isBaseAsset && !isQuoteAsset &&
+        (asset === fill.market.baseAsset?.code || asset === fill.market.quoteAsset?.code))) {
+    throw new TypeError("Commission asset ID and code do not match the market asset identity")
+  }
+  return {
+    amount,
+    assetId,
+    asset,
+    isThirdAsset: !isBaseAsset && !isQuoteAsset,
+  }
+}
+
+const mapCommissionQuoteValueData = ({
+  fill,
+  commission,
+  index,
+  isThirdAsset,
+  hasPositiveCommission,
+}) => {
+  if (commission.quoteValue === undefined) {
+    return undefined
+  }
+  const amount = requireDecimalString({
+    value: commission.quoteValue?.amount,
+    field: `commissions[${index}].quoteValue.amount`,
+  })
+  const assetId = requireString({
+    value: commission.quoteValue?.asset?.id,
+    field: `commissions[${index}].quoteValue.assetId`,
+  })
+  const asset = requireString({
+    value: commission.quoteValue?.asset?.code,
+    field: `commissions[${index}].quoteValue.asset`,
+  })
+  if (assetId !== fill.market.quoteAsset?.id || asset !== fill.market.quoteAsset?.code) {
+    throw new TypeError("Commission quote valuation must use the market quote asset")
+  }
+  const comparison = compareDecimal({
+    left: amount,
+    right: "0",
+  })
+  if (comparison < 0 || (isThirdAsset && hasPositiveCommission && comparison === 0)) {
+    throw new RangeError("Commission quote valuation must be positive for a non-zero third-asset fee")
+  }
+  return {
+    amount,
+    assetId,
+    asset,
+  }
+}
+
+const mapFillCommissionData = ({ fill, commission, index }) => {
+  const {
+    amount,
+    assetId,
+    asset,
+    isThirdAsset,
+  } = mapCommissionAssetData({
+    fill,
+    commission,
+    index,
+  })
+  const hasPositiveCommission = compareDecimal({
+    left: amount,
+    right: "0",
+  }) > 0
+  if (isThirdAsset && hasPositiveCommission && commission.quoteValue === undefined) {
+    throw new TypeError("Third-asset commission requires historical quote valuation")
+  }
+  const quoteValue = mapCommissionQuoteValueData({
+    fill,
+    commission,
+    index,
+    isThirdAsset,
+    hasPositiveCommission,
+  })
+  return {
+    amount,
+    assetId,
+    asset,
+    ...(quoteValue === undefined ? {} : { quoteValue }),
+  }
+}
+
 export const mapFillAppliedData = (input = {}) =>
   mapData({
     input,
     operation: "Fill-applied event mapping",
     mapper: ({ fill }) => {
-      if (!(fill instanceof Fill)) {throw new TypeError("fill must be a canonical Fill")}
+      if (!(fill instanceof Fill)) {
+        throw new TypeError("fill must be a canonical Fill")
+      }
       return {
-        fillId: requireString({ value: fill.id,
-          field: "fillId" }),
-        tradeId: requireString({ value: fill.tradeId,
-          field: "tradeId" }),
-        brokerOrderId: requireString({ value: fill.brokerOrderId,
-          field: "brokerOrderId" }),
-        ...(fill.clientOrderId === undefined ? {} : {
-          clientOrderId: requireString({ value: fill.clientOrderId,
-            field: "clientOrderId" }),
+        fillId: requireString({
+          value: fill.id,
+          field: "fillId",
         }),
-        symbol: requireString({ value: fill.market.symbol,
-          field: "symbol" }),
+        tradeId: requireString({
+          value: fill.tradeId,
+          field: "tradeId",
+        }),
+        brokerOrderId: requireString({
+          value: fill.brokerOrderId,
+          field: "brokerOrderId",
+        }),
+        ...(fill.clientOrderId === undefined ? {} : {
+          clientOrderId: requireString({
+            value: fill.clientOrderId,
+            field: "clientOrderId",
+          }),
+        }),
+        symbol: requireString({
+          value: fill.market.symbol,
+          field: "symbol",
+        }),
         side: fill.side === "BUY" || fill.side === "SELL"
           ? fill.side
           : (() => { throw new TypeError("fill.side must be BUY or SELL") })(),
-        price: requireDecimalString({ value: fill.price?.amount,
-          field: "price" }),
-        quantity: requireDecimalString({ value: fill.quantity?.amount,
-          field: "quantity" }),
-        quoteQuantity: requireDecimalString({ value: fill.quoteQuantity?.amount,
-          field: "quoteQuantity" }),
-        liquidityRole: requireString({ value: fill.liquidityRole,
-          field: "liquidityRole" }),
+        price: requireDecimalString({
+          value: fill.price?.amount,
+          field: "price",
+        }),
+        quantity: requireDecimalString({
+          value: fill.quantity?.amount,
+          field: "quantity",
+        }),
+        quoteQuantity: requireDecimalString({
+          value: fill.quoteQuantity?.amount,
+          field: "quoteQuantity",
+        }),
+        liquidityRole: requireString({
+          value: fill.liquidityRole,
+          field: "liquidityRole",
+        }),
         ...(fill.executedAt === undefined ? {} : {
-          executedAt: requireNonNegativeSafeInteger({ value: fill.executedAt,
-            field: "fill.executedAt" }),
+          executedAt: requireNonNegativeSafeInteger({
+            value: fill.executedAt,
+            field: "fill.executedAt",
+          }),
         }),
-        commissions: fill.commissions.map((commission, index) => {
-          const amount = requireDecimalString({
-            value: commission.amount?.amount,
-            field: `commissions[${index}].amount`,
-          })
-          const assetId = requireString({
-            value: commission.amount?.asset?.id,
-            field: `commissions[${index}].assetId`,
-          })
-          const asset = requireString({
-            value: commission.amount?.asset?.code,
-            field: `commissions[${index}].asset`,
-          })
-          const isBaseAsset = assetId === fill.market.baseAsset?.id
-          const isQuoteAsset = assetId === fill.market.quoteAsset?.id
-          if ((isBaseAsset && asset !== fill.market.baseAsset?.code) ||
-              (isQuoteAsset && asset !== fill.market.quoteAsset?.code) ||
-              (!isBaseAsset && !isQuoteAsset &&
-                (asset === fill.market.baseAsset?.code || asset === fill.market.quoteAsset?.code))) {
-            throw new TypeError("Commission asset ID and code do not match the market asset identity")
-          }
-          const isThirdAsset = !isBaseAsset && !isQuoteAsset
-          const hasPositiveCommission = compareDecimal({ left: amount,
-            right: "0" }) > 0
-          if (isThirdAsset && hasPositiveCommission && commission.quoteValue === undefined) {
-            throw new TypeError("Third-asset commission requires historical quote valuation")
-          }
-          let quoteValue
-          if (commission.quoteValue !== undefined) {
-            const quoteAmount = requireDecimalString({
-              value: commission.quoteValue?.amount,
-              field: `commissions[${index}].quoteValue.amount`,
-            })
-            const quoteAssetId = requireString({
-              value: commission.quoteValue?.asset?.id,
-              field: `commissions[${index}].quoteValue.assetId`,
-            })
-            const quoteAsset = requireString({
-              value: commission.quoteValue?.asset?.code,
-              field: `commissions[${index}].quoteValue.asset`,
-            })
-            if (quoteAssetId !== fill.market.quoteAsset?.id || quoteAsset !== fill.market.quoteAsset?.code) {
-              throw new TypeError("Commission quote valuation must use the market quote asset")
-            }
-            if (compareDecimal({ left: quoteAmount,
-              right: "0" }) < 0 ||
-                (isThirdAsset && hasPositiveCommission && compareDecimal({ left: quoteAmount,
-                  right: "0" }) === 0)) {
-              throw new RangeError("Commission quote valuation must be positive for a non-zero third-asset fee")
-            }
-            quoteValue = { amount: quoteAmount,
-              assetId: quoteAssetId,
-              asset: quoteAsset }
-          }
-          return {
-            amount,
-            assetId,
-            asset,
-            ...(quoteValue === undefined ? {} : { quoteValue }),
-          }
+        commissions: mapArrayWithIndex({
+          values: fill.commissions,
+          mapper: ({ value: commission, index }) => mapFillCommissionData({
+            fill,
+            commission,
+            index,
+          }),
         }),
-        commissionStatus: requireString({ value: fill.commissionStatus,
-          field: "commissionStatus" }),
+        commissionStatus: requireString({
+          value: fill.commissionStatus,
+          field: "commissionStatus",
+        }),
       }
     },
   })
-
 
 const requireExecutionOrderFacts = ({ order }) => {
   if (!(order instanceof CanonicalOrder)) {throw new TypeError("order must be a canonical Harvester order")}
@@ -983,55 +1077,77 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
     mapper: ({
       phase, observedAt, orders, readiness, blockReasons = [],
     }) => {
-      if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(phase)) {throw new TypeError("phase must be OPENING, PREFLIGHT, or RECOVERY")}
-      const normalizedObservedAt = requireNonNegativeSafeInteger({ value: observedAt,
-        field: "observedAt" })
-      if (!Array.isArray(orders)) {throw new TypeError("orders must be an array")}
+      if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(phase)) {
+        throw new TypeError("phase must be OPENING, PREFLIGHT, or RECOVERY")
+      }
+      const normalizedObservedAt = requireNonNegativeSafeInteger({
+        value: observedAt,
+        field: "observedAt",
+      })
+      if (!Array.isArray(orders)) {
+        throw new TypeError("orders must be an array")
+      }
       if (!["READY", "RECONCILED", "BLOCKED"].includes(readiness)) {
         throw new TypeError("readiness must be READY or BLOCKED")
       }
       if (!Array.isArray(blockReasons) || blockReasons.some((reason) => typeof reason !== "string" || !reason.trim())) {
         throw new TypeError("blockReasons must contain non-empty strings")
       }
-      const mappedOrders = orders.map((order, index) => {
-        if (!order || typeof order !== "object") {
-          throw new TypeError(`orders[${index}] must be a normalized broker order`)
-        }
-        const symbol = order.market?.symbol ?? order.symbol
-        const brokerOrderId = order.brokerOrderId ?? order.id
-        const price = order.limitPrice?.amount ?? order.originalPrice
-        const quantity = order.originalQuantity?.amount ?? order.originalQuantity
-        const executedQuantity = order.executedQuantity?.amount ?? order.executedQuantity ?? "0"
-        return {
-          ...(typeof order.clientOrderId === "string" && order.clientOrderId.trim()
-            ? { clientOrderId: order.clientOrderId.trim() }
-            : {}),
-          brokerOrderId: requireString({ value: brokerOrderId,
-            field: `orders[${index}].brokerOrderId` }),
-          symbol: requireString({ value: symbol,
-            field: `orders[${index}].symbol` }),
-          side: order.side === "BUY" || order.side === "SELL"
-            ? order.side
-            : (() => { throw new TypeError(`orders[${index}].side must be BUY or SELL`) })(),
-          type: requireString({ value: order.type,
-            field: `orders[${index}].type` }),
-          ...(price === undefined ? {} : {
-            price: requireDecimalString({ value: price,
-              field: `orders[${index}].price` }),
-          }),
-          quantity: requireDecimalString({ value: quantity,
-            field: `orders[${index}].quantity` }),
-          executedQuantity: requireDecimalString({
-            value: executedQuantity,
-            field: `orders[${index}].executedQuantity`,
-          }),
-          status: requireString({ value: order.status,
-            field: `orders[${index}].status` }),
-        }
-      }).sort((left, right) =>
-        left.symbol.localeCompare(right.symbol) ||
-        left.brokerOrderId.localeCompare(right.brokerOrderId)
-      )
+      const mappedOrders = mapArrayWithIndex({
+        values: orders,
+        mapper: ({ value: order, index }) => {
+          if (!order || typeof order !== "object") {
+            throw new TypeError(`orders[${index}] must be a normalized broker order`)
+          }
+          const symbol = order.market?.symbol ?? order.symbol
+          const brokerOrderId = order.brokerOrderId ?? order.id
+          const price = order.limitPrice?.amount ?? order.originalPrice
+          const quantity = order.originalQuantity?.amount ?? order.originalQuantity
+          const executedQuantity = order.executedQuantity?.amount ?? order.executedQuantity ?? "0"
+          return {
+            ...(typeof order.clientOrderId === "string" && order.clientOrderId.trim()
+              ? { clientOrderId: order.clientOrderId.trim() }
+              : {}),
+            brokerOrderId: requireString({
+              value: brokerOrderId,
+              field: `orders[${index}].brokerOrderId`,
+            }),
+            symbol: requireString({
+              value: symbol,
+              field: `orders[${index}].symbol`,
+            }),
+            side: order.side === "BUY" || order.side === "SELL"
+              ? order.side
+              : (() => { throw new TypeError(`orders[${index}].side must be BUY or SELL`) })(),
+            type: requireString({
+              value: order.type,
+              field: `orders[${index}].type`,
+            }),
+            ...(price === undefined ? {} : {
+              price: requireDecimalString({
+                value: price,
+                field: `orders[${index}].price`,
+              }),
+            }),
+            quantity: requireDecimalString({
+              value: quantity,
+              field: `orders[${index}].quantity`,
+            }),
+            executedQuantity: requireDecimalString({
+              value: executedQuantity,
+              field: `orders[${index}].executedQuantity`,
+            }),
+            status: requireString({
+              value: order.status,
+              field: `orders[${index}].status`,
+            }),
+          }
+        },
+      }).sort((...orderPair) => {
+        const [left, right] = orderPair
+        return left.symbol.localeCompare(right.symbol) ||
+          left.brokerOrderId.localeCompare(right.brokerOrderId)
+      })
       const identities = mappedOrders.map(({ symbol, brokerOrderId }) => `${symbol}:${brokerOrderId}`)
       if (new Set(identities).size !== identities.length) {
         throw new TypeError("orders must not contain duplicate symbol/brokerOrderId identities")
@@ -1057,6 +1173,79 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
   })
 
 /** Map configured trading-pair balances into an exact-decimal account audit event. */
+const requireAccountSnapshotPhase = ({ phase }) => {
+  if (!["OPENING", "CLOSING", "PREFLIGHT", "RECOVERY", "COMMISSION_BASELINE"].includes(phase)) {
+    throw new TypeError("phase must be OPENING, CLOSING, PREFLIGHT, RECOVERY, or COMMISSION_BASELINE")
+  }
+}
+
+const requireAccountSnapshotAuditStatus = ({ auditStatus }) => {
+  if (!["COMPLETE", "INCOMPLETE"].includes(auditStatus)) {
+    throw new TypeError("auditStatus must be COMPLETE or INCOMPLETE")
+  }
+}
+
+const requireAccountSnapshotAuditReasons = ({ auditReasons }) => {
+  if (!Array.isArray(auditReasons) || auditReasons.some((reason) => typeof reason !== "string" || !reason.trim())) {
+    throw new TypeError("auditReasons must contain non-empty strings")
+  }
+}
+
+const selectAccountSnapshotBalances = ({ snapshot, allowedAssetCodes }) => {
+  if (allowedAssetCodes !== undefined && (!Array.isArray(allowedAssetCodes) || allowedAssetCodes.some((code) => typeof code !== "string" || !code.trim()))) {
+    throw new TypeError("allowedAssetCodes must contain non-empty asset codes")
+  }
+  const allowedAssets = allowedAssetCodes === undefined ? undefined : new Set(allowedAssetCodes)
+  const selectedBalances = allowedAssets === undefined
+    ? snapshot.balances
+    : snapshot.balances.filter((balance) => allowedAssets.has(balance?.asset?.code))
+  if (allowedAssets !== undefined && selectedBalances.length !== allowedAssets.size) {
+    const found = new Set(selectedBalances.map((balance) => balance.asset.code))
+    const missing = [...allowedAssets].filter((code) => !found.has(code))
+    throw new TypeError(`snapshot is missing configured assets: ${missing.join(", ")}`)
+  }
+  return selectedBalances
+}
+
+const mapAccountSnapshotBalance = ({ balance, index }) => {
+  const asset = requireString({
+    value: balance?.asset?.code,
+    field: `balances[${index}].asset.code`,
+  })
+  const free = requireDecimalString({
+    value: balance?.free?.amount,
+    field: `balances[${index}].free`,
+  })
+  const locked = requireDecimalString({
+    value: balance?.locked?.amount,
+    field: `balances[${index}].locked`,
+  })
+  return {
+    asset,
+    free,
+    locked,
+    total: addDecimal({
+      left: free,
+      right: locked,
+    }),
+  }
+}
+
+const assertUniqueAccountSnapshotBalances = ({ balances }) => {
+  if (new Set(balances.map(({ asset }) => asset)).size !== balances.length) {
+    throw new TypeError("snapshot must not contain duplicate asset codes")
+  }
+}
+
+const assertAccountSnapshotAuditStatus = ({ auditStatus, auditReasons }) => {
+  if (auditStatus === "COMPLETE" && auditReasons.length > 0) {
+    throw new TypeError("COMPLETE snapshot cannot contain auditReasons")
+  }
+  if (auditStatus === "INCOMPLETE" && auditReasons.length === 0) {
+    throw new TypeError("INCOMPLETE snapshot requires auditReasons")
+  }
+}
+
 export const mapAccountSnapshotCapturedData = (input = {}) =>
   mapData({
     input,
@@ -1064,57 +1253,45 @@ export const mapAccountSnapshotCapturedData = (input = {}) =>
     mapper: ({
       phase, snapshot, allowedAssetCodes, auditStatus = "COMPLETE", auditReasons = [],
     }) => {
-      if (!["OPENING", "CLOSING", "PREFLIGHT", "RECOVERY", "COMMISSION_BASELINE"].includes(phase)) {
-        throw new TypeError("phase must be OPENING, CLOSING, PREFLIGHT, RECOVERY, or COMMISSION_BASELINE")
-      }
-      if (!["COMPLETE", "INCOMPLETE"].includes(auditStatus)) {throw new TypeError("auditStatus must be COMPLETE or INCOMPLETE")}
+      requireAccountSnapshotPhase({ phase })
+      requireAccountSnapshotAuditStatus({ auditStatus })
       if (!snapshot || !Array.isArray(snapshot.balances)) {
         throw new TypeError("snapshot must contain sourceTime and canonical balances")
       }
-      const sourceTime = requireNonNegativeSafeInteger({ value: snapshot.sourceTime,
-        field: "snapshot.sourceTime" })
-      if (!Array.isArray(auditReasons) || auditReasons.some((reason) => typeof reason !== "string" || !reason.trim())) {
-        throw new TypeError("auditReasons must contain non-empty strings")
-      }
-      if (allowedAssetCodes !== undefined && (!Array.isArray(allowedAssetCodes) || allowedAssetCodes.some((code) => typeof code !== "string" || !code.trim()))) {
-        throw new TypeError("allowedAssetCodes must contain non-empty asset codes")
-      }
-      const allowedAssets = allowedAssetCodes === undefined ? undefined : new Set(allowedAssetCodes)
-      const selectedBalances = allowedAssets === undefined
-        ? snapshot.balances
-        : snapshot.balances.filter((balance) => allowedAssets.has(balance?.asset?.code))
-      if (allowedAssets !== undefined && selectedBalances.length !== allowedAssets.size) {
-        const found = new Set(selectedBalances.map((balance) => balance.asset.code))
-        const missing = [...allowedAssets].filter((code) => !found.has(code))
-        throw new TypeError(`snapshot is missing configured assets: ${missing.join(", ")}`)
-      }
-      const balances = selectedBalances.map((balance, index) => {
-        const asset = requireString({ value: balance?.asset?.code,
-          field: `balances[${index}].asset.code` })
-        const free = requireDecimalString({ value: balance?.free?.amount,
-          field: `balances[${index}].free` })
-        const locked = requireDecimalString({ value: balance?.locked?.amount,
-          field: `balances[${index}].locked` })
-        return { asset,
-          free,
-          locked,
-          total: addDecimal({ left: free,
-            right: locked }) }
-      }).sort((left, right) => left.asset.localeCompare(right.asset))
-      if (new Set(balances.map(({ asset }) => asset)).size !== balances.length) {
-        throw new TypeError("snapshot must not contain duplicate asset codes")
-      }
-      if (auditStatus === "COMPLETE" && auditReasons.length > 0) {throw new TypeError("COMPLETE snapshot cannot contain auditReasons")}
-      if (auditStatus === "INCOMPLETE" && auditReasons.length === 0) {throw new TypeError("INCOMPLETE snapshot requires auditReasons")}
-      return { phase,
+      const sourceTime = requireNonNegativeSafeInteger({
+        value: snapshot.sourceTime,
+        field: "snapshot.sourceTime",
+      })
+      requireAccountSnapshotAuditReasons({ auditReasons })
+      const selectedBalances = selectAccountSnapshotBalances({
+        snapshot,
+        allowedAssetCodes,
+      })
+      const balances = mapArrayWithIndex({
+        values: selectedBalances,
+        mapper: ({ value: balance, index }) => mapAccountSnapshotBalance({
+          balance,
+          index,
+        }),
+      }).sort((...balancePair) => {
+        const [left, right] = balancePair
+        return left.asset.localeCompare(right.asset)
+      })
+      assertUniqueAccountSnapshotBalances({ balances })
+      assertAccountSnapshotAuditStatus({
+        auditStatus,
+        auditReasons,
+      })
+      return {
+        phase,
         auditStatus,
         sourceTime,
         assetCount: balances.length,
         balances,
-        auditReasons: [...auditReasons] }
+        auditReasons: [...auditReasons],
+      }
     },
   })
-
 
 /** Preserve versioned, allowlisted Binance executionReport facts separately from normalized events. */
 export const mapBrokerExecutionReportData = (input = {}) =>
@@ -1208,31 +1385,56 @@ export const mapMarketTradingRulesCapturedData = (input = {}) =>
         throw new TypeError("metadata.supportedOrderTypes must be a non-empty array")
       }
       return {
-        venue: requireString({ value: market.venue,
-          field: "market.venue" }),
-        symbol: requireString({ value: market.symbol,
-          field: "market.symbol" }),
-        baseAsset: requireString({ value: market.baseAsset?.code,
-          field: "market.baseAsset.code" }),
-        quoteAsset: requireString({ value: market.quoteAsset?.code,
-          field: "market.quoteAsset.code" }),
-        orderType: requireString({ value: metadata.orderType,
-          field: "metadata.orderType" }),
-        supportedOrderTypes: metadata.supportedOrderTypes.map((type, index) =>
-          requireString({ value: type,
-            field: `supportedOrderTypes[${index}]` })),
-        constraints: tradingRules.constraints.map((constraint, index) => ({
-          type: requireString({ value: constraint?.type,
-            field: `constraints[${index}].type` }),
-          status: requireString({ value: constraint?.status,
-            field: `constraints[${index}].status` }),
-          ...(constraint?.value === undefined ? {} : {
-            amount: requireDecimalString({ value: constraint.value.amount,
-              field: `constraints[${index}].amount` }),
-            asset: requireString({ value: constraint.value.asset?.code,
-              field: `constraints[${index}].asset` }),
+        venue: requireString({
+          value: market.venue,
+          field: "market.venue",
+        }),
+        symbol: requireString({
+          value: market.symbol,
+          field: "market.symbol",
+        }),
+        baseAsset: requireString({
+          value: market.baseAsset?.code,
+          field: "market.baseAsset.code",
+        }),
+        quoteAsset: requireString({
+          value: market.quoteAsset?.code,
+          field: "market.quoteAsset.code",
+        }),
+        orderType: requireString({
+          value: metadata.orderType,
+          field: "metadata.orderType",
+        }),
+        supportedOrderTypes: mapArrayWithIndex({
+          values: metadata.supportedOrderTypes,
+          mapper: ({ value: type, index }) => requireString({
+            value: type,
+            field: `supportedOrderTypes[${index}]`,
           }),
-        })),
+        }),
+        constraints: mapArrayWithIndex({
+          values: tradingRules.constraints,
+          mapper: ({ value: constraint, index }) => ({
+            type: requireString({
+              value: constraint?.type,
+              field: `constraints[${index}].type`,
+            }),
+            status: requireString({
+              value: constraint?.status,
+              field: `constraints[${index}].status`,
+            }),
+            ...(constraint?.value === undefined ? {} : {
+              amount: requireDecimalString({
+                value: constraint.value.amount,
+                field: `constraints[${index}].amount`,
+              }),
+              asset: requireString({
+                value: constraint.value.asset?.code,
+                field: `constraints[${index}].asset`,
+              }),
+            }),
+          }),
+        }),
       }
     },
   })
