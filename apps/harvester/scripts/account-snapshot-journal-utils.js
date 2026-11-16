@@ -4,7 +4,10 @@ import { reconcileAccountSnapshotDeltas } from "../src/domain/account/reconcile-
 const SNAPSHOT_EVENT = "account.snapshot_captured"
 const RECOVERY_CYCLE_EVENT = "recovery.cycle_completed"
 
-function addRecordToSession({ sessions, record }) {
+function addRecordToSession({
+      sessions,
+      record,
+    }) {
   const event = record?.payload
   if (![SNAPSHOT_EVENT, RECOVERY_CYCLE_EVENT].includes(event?.name)) {
     return
@@ -47,7 +50,10 @@ function addRecordToSession({ sessions, record }) {
 function collectSessions({ records }) {
   const sessions = new Map()
   for (const record of records) {
-    addRecordToSession({ sessions, record })
+    addRecordToSession({
+      sessions,
+      record,
+    })
   }
   if (sessions.size === 0) {
     throw new Error("No account.snapshot_captured events were found in Journal sessions")
@@ -70,7 +76,10 @@ function createRecoverySummary({ recoveryCycleProfits }) {
   }
 }
 
-function createSessionReport({ session, pair }) {
+function createSessionReport({
+        session,
+        pair,
+      }) {
   const blockers = []
   if (pair.opening.length !== 1) {
     blockers.push(`PREFLIGHT_SNAPSHOT_COUNT:${pair.opening.length}`)
@@ -120,7 +129,11 @@ function createSessionReport({ session, pair }) {
     ? []
     : [new Error(`${session} closing account snapshot is marked INCOMPLETE`)]
   return {
-    report: { session, ...result.data, ...recoverySummary },
+    report: {
+      session,
+      ...result.data,
+      ...recoverySummary,
+    },
     errors,
   }
 }
@@ -145,7 +158,10 @@ export function reconcileJournalAccountSnapshotRecords({ records } = {}) {
     const errors = []
 
     for (const [session, pair] of orderedEntries) {
-      const result = createSessionReport({ session, pair })
+      const result = createSessionReport({
+        session,
+        pair,
+      })
       reports.push(result.report)
       errors.push(...result.errors)
     }

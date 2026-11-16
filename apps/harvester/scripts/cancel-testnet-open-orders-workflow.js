@@ -1,21 +1,7 @@
-/**
- * Cancel all open Spot TESTNET orders, grouped by symbol, and verify the
- * account-wide result. The caller must explicitly invoke this destructive
- * operator workflow.
- *
- * @param {object} dependencies
- * @param {() => Promise<{ orders: object[] }>} dependencies.getOpenOrders
- * @param {(input: { symbol: string }) => Promise<{ result: unknown }>} dependencies.cancelOpenOrdersForSymbol
- * @param {{ info: Function, warn: Function, error: Function, success: Function }} dependencies.logger
- * @returns {Promise<{ exitCode: 0 | 1 }>}
- */
-export const cancelAllOpenOrders = async ({
-  getOpenOrders,
-  cancelOpenOrdersForSymbol,
-  logger,
-}) => {
-  const { orders } = await getOpenOrders()
-
+function logInitialOpenOrders({
+    logger,
+    orders,
+  }) {
   logger.info({
     message: "Binance Spot TESTNET — Cancel All Open Orders",
     orders: orders.map((order) => ({
@@ -28,17 +14,12 @@ export const cancelAllOpenOrders = async ({
       status: order.status,
     })),
   })
+}
 
-  if (orders.length === 0) {
-    logger.info({ message: "No open orders found. Nothing to cancel." })
-    return { exitCode: 0 }
-  }
-
-  const symbols = [...new Set(orders.map((order) => order.symbol))]
-
+function logCancellationWarning({ logger, orderCount, symbols }) {
   logger.warn({
     message: "WARNING: This cancels every open order on every listed symbol.",
-    orderCount: orders.length,
+    orderCount,
     symbols,
     warning: "Orders created manually or by other applications are included.",
     instruction: "Stop Harvester and any other trading process before continuing.",
@@ -46,7 +27,9 @@ export const cancelAllOpenOrders = async ({
   logger.warn({
     message: "Proceeding automatically on Binance Spot TESTNET...",
   })
+}
 
+async function cancelOrdersBySymbol({ symbols, cancelOpenOrdersForSymbol, logger }) {
   let cancellationFailed = false
 
   for (const symbol of symbols) {
@@ -67,9 +50,13 @@ export const cancelAllOpenOrders = async ({
     }
   }
 
-  // Verify exchange state; a successful cancel response alone is not proof.
-  const { orders: remainingOrders } = await getOpenOrders()
+  return cancellationFailed
+}
 
+function logFinalOpenOrders({
+    logger,
+    remainingOrders,
+  }) {
   logger.info({
     message: "Final TESTNET open-orders check",
     remainingOrders: remainingOrders.map((order) => ({
@@ -81,7 +68,9 @@ export const cancelAllOpenOrders = async ({
       status: order.status,
     })),
   })
+}
 
+function logCancellationOutcome({ logger, cancellationFailed, remainingOrders }) {
   if (remainingOrders.length === 0) {
     logger.success({
       message: "SUCCESS: No open orders remain.",
@@ -110,4 +99,58 @@ export const cancelAllOpenOrders = async ({
   }
 
   return { exitCode: 0 }
+}
+
+/**
+ * Cancel all open Spot TESTNET orders, grouped by symbol, and verify the
+ * account-wide result. The caller must explicitly invoke this destructive
+ * operator workflow.
+ *
+ * @param {object} dependencies
+ * @param {() => Promise<{ orders: object[] }>} dependencies.getOpenOrders
+ * @param {(input: { symbol: string }) => Promise<{ result: unknown }>} dependencies.cancelOpenOrdersForSymbol
+ * @param {{ info: Function, warn: Function, error: Function, success: Function }} dependencies.logger
+ * @returns {Promise<{ exitCode: 0 | 1 }>}
+ */
+export const cancelAllOpenOrders = async ({
+  getOpenOrders,
+  cancelOpenOrdersForSymbol,
+  logger,
+}) => {
+  const { orders } = await getOpenOrders()
+  logInitialOpenOrders({
+    logger,
+    orders,
+  })
+
+  if (orders.length === 0) {
+    logger.info({ message: "No open orders found. Nothing to cancel." })
+    return { exitCode: 0 }
+  }
+
+  const symbols = [...new Set(orders.map((order) => order.symbol))]
+  logCancellationWarning({
+    logger,
+    orderCount: orders.length,
+    symbols,
+  })
+
+  const cancellationFailed = await cancelOrdersBySymbol({
+    symbols,
+    cancelOpenOrdersForSymbol,
+    logger,
+  })
+
+  // Verify exchange state; a successful cancel response alone is not proof.
+  const { orders: remainingOrders } = await getOpenOrders()
+  logFinalOpenOrders({
+    logger,
+    remainingOrders,
+  })
+
+  return logCancellationOutcome({
+    logger,
+    cancellationFailed,
+    remainingOrders,
+  })
 }

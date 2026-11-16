@@ -10,7 +10,10 @@ import {
 } from "./binance-testnet-api.js"
 import { getMarketSellQuantity } from "./testnet-sell-utils.js"
 
-const cliConsole = new Console({ stdout: process.stdout, stderr: process.stderr })
+const cliConsole = new Console({
+  stdout: process.stdout,
+  stderr: process.stderr,
+})
 
 const SYMBOL = "ZROUSDT"
 const ASSET = "ZRO"
