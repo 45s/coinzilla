@@ -162,7 +162,7 @@ keep the console allowlist in sync with any new fields intended for INFO.
 Portfolio Stats remains a structured event in DEBUG/TRACE. The operator
 console renders one compact line:
 
-`🪙 CG PORTFOLIO DOGEUSDT: amount: 3.4 | earned: 3.4 | spent: 0 USDT | net: 0.020`
+`🪙 CG PORTFOLIO DOGEUSDT: amount: 3.4 | earned: 3.4 | spent: 0 | net: 0.020`
 
 - `amount` — total base quantity: active trading inventory plus retained coins.
 - `earned` — retained/free base quantity accumulated from completed recovery cycles.
