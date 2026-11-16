@@ -22,9 +22,12 @@ export async function recordProcessStarted({
       throw new TypeError("recordProcessStarted requires a strategy name and canonical configured markets")
     }
     const result = await operationalStateStore.append({
-      factId: "process-started:" + sessionId,
+      factId: `process-started:${  sessionId}`,
       factType: "PROCESS_STARTED",
-      data: { configurationFingerprint, strategyName, markets: [...markets].sort(), tradingEnabled },
+      data: { configurationFingerprint,
+strategyName,
+markets: [...markets].sort(),
+tradingEnabled },
     })
     if (result?.ok !== true || result.data?.durable !== true) {
       return toResult({ errors: result?.errors?.length ? result.errors : [new Error("Process-start append did not confirm durable commitment")] })
