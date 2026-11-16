@@ -35,7 +35,9 @@ describe("Binance user-data subscription setup", () => {
       apiSecret: "test-secret",
       tradingMode: "testnet",
       reconnectDelay: 10,
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => {
         const index = clients.length
@@ -65,13 +67,17 @@ describe("Binance user-data subscription setup", () => {
     })
 
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
     const recovery = scheduler.runNext()
     await delayedSubscribeStarted
     assert.equal(typeof resolveDelayedSubscribe, "function")
 
     clients[1].state = "closed"
-    clients[1].emitClose({ code: 1006, reason: "closed during subscribe", wasClean: false })
+    clients[1].emitClose({ code: 1006,
+reason: "closed during subscribe",
+wasClean: false })
     resolveDelayedSubscribe({ subscriptionId: 110 })
     await recovery
 
@@ -96,7 +102,9 @@ describe("Binance user-data subscription setup", () => {
       apiKey: "test-key",
       apiSecret: "test-secret",
       tradingMode: "testnet",
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => rpc,
       marketClientFactory: () => createFakeStreamsClient(),
@@ -127,7 +135,9 @@ describe("Binance user-data subscription setup", () => {
       apiKey: "test-key",
       apiSecret: "test-secret",
       tradingMode: "testnet",
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => rpc,
       marketClientFactory: () => createFakeStreamsClient(),
@@ -161,7 +171,9 @@ describe("Binance user-data subscription setup", () => {
       apiKey: "test-key",
       apiSecret: "test-secret",
       tradingMode: "testnet",
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => rpc,
       marketClientFactory: () => createFakeStreamsClient(),
@@ -191,7 +203,9 @@ describe("Binance user-data subscription setup", () => {
       apiKey: "test-key",
       apiSecret: "test-secret",
       tradingMode: "testnet",
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => rpc,
       marketClientFactory: () => createFakeStreamsClient(),
@@ -219,7 +233,9 @@ describe("Binance user-data subscription setup", () => {
       apiKey: "test-key",
       apiSecret: "test-secret",
       tradingMode: "testnet",
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => rpc,
       marketClientFactory: () => createFakeStreamsClient(),
@@ -249,7 +265,9 @@ describe("Binance user-data subscription setup", () => {
       apiKey: "test-key",
       apiSecret: "test-secret",
       tradingMode: "testnet",
-      logger: { error: (...args) => logs.push(args), info() {}, warn() {} },
+      logger: { error: (...args) => logs.push(args),
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => rpc,
       marketClientFactory: () => createFakeStreamsClient(),
@@ -261,7 +279,9 @@ describe("Binance user-data subscription setup", () => {
     })
 
     rpc.state = "closed"
-    rpc.emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    rpc.emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
 
     assert.ok(logs.some(([message]) => message === "Binance user-data status callback failed"))
     await subscription.data.disconnect()
