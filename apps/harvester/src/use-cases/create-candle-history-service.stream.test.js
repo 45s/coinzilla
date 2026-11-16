@@ -10,7 +10,7 @@ import {
   getSnapshot,
 } from "../../test-support/candle-history-service-fixture.js"
 
-const test = (name, ...args) => nodeTest("[create-candle-history-service.stream.test.js] " + name, ...args)
+const test = (name, ...args) => nodeTest(`[create-candle-history-service.stream.test.js] ${  name}`, ...args)
 
 test("appends a completed live candle but never stores a still-forming candle", async () => {
   const fixture = createFixture()
@@ -18,13 +18,15 @@ test("appends a completed live candle but never stores a still-forming candle", 
   const handler = fixture.candleHandlers.get("BTCUSDT")
   const before = getSnapshot(fixture)
 
-  await handler(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
+  await handler(createCandle({ openTime: 100 * INTERVAL_MS,
+isClosed: false }))
   const afterForming = getSnapshot(fixture)
 
   assert.equal(afterForming.candles.length, 100, "A live forming candle must refresh stream freshness without entering completed indicator history.")
   assert.equal(afterForming.candles.at(-1).openTime, before.candles.at(-1).openTime, "A forming candle must not advance the completed-candle cursor.")
 
-  await handler(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: true }))
+  await handler(createCandle({ openTime: 100 * INTERVAL_MS,
+isClosed: true }))
   const afterClose = getSnapshot(fixture)
 
   assert.equal(afterClose.candles.length, 100, "The bounded history must retain only the latest 100 completed candles.")
@@ -36,7 +38,8 @@ test("backfills missing closed candles before accepting a live candle after a st
   const backfillCalls = []
   const fixture = createFixture({
     getCandles: async (input) => {
-      if (input.startTime === undefined) return { ok: true, data: createHistory(input.symbol, 100, true) }
+      if (input.startTime === undefined) {return { ok: true,
+data: createHistory(input.symbol, 100, true) }}
       backfillCalls.push(input)
       return {
         ok: true,
@@ -77,8 +80,10 @@ test("backfills missing closed candles before accepting a live candle after a st
 test("keeps a market unavailable when a candle gap cannot be backfilled", async () => {
   const fixture = createFixture({
     getCandles: async (input) => input.startTime === undefined
-      ? { ok: true, data: createHistory(input.symbol, 100, true) }
-      : { ok: false, errors: [new Error("history endpoint unavailable")] },
+      ? { ok: true,
+data: createHistory(input.symbol, 100, true) }
+      : { ok: false,
+errors: [new Error("history endpoint unavailable")] },
   })
   await fixture.start()
 
@@ -93,7 +98,8 @@ test("keeps a market unavailable when a candle gap cannot be backfilled", async 
 test("keeps a quiet one-minute candle fresh for one interval and marks it stale after the interval plus grace", async () => {
   const fixture = createFixture({
     onSubscribe: async ({ onCandle }) => {
-      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
+      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS,
+isClosed: false }))
     },
   })
   await fixture.start()
@@ -116,20 +122,34 @@ test("keeps a quiet one-minute candle fresh for one interval and marks it stale 
 test("rejects malformed live candle fields and keeps the market fail-closed", async () => {
   const invalidCases = [
     ["missing candle", () => null],
-    ["wrong symbol", (candle) => ({ ...candle, symbol: "DOGEUSDT" })],
-    ["wrong interval", (candle) => ({ ...candle, interval: "5m" })],
-    ["unaligned open time", (candle) => ({ ...candle, openTime: candle.openTime + 1 })],
-    ["invalid close time", (candle) => ({ ...candle, closeTime: candle.closeTime + 1 })],
-    ["non-boolean closed flag", (candle) => ({ ...candle, isClosed: "true" })],
-    ["invalid OHLCV decimal", (candle) => ({ ...candle, high: "not-a-price" })],
-    ["non-positive open", (candle) => ({ ...candle, open: "0" })],
-    ["non-positive high", (candle) => ({ ...candle, high: "0" })],
-    ["non-positive low", (candle) => ({ ...candle, low: "0" })],
-    ["non-positive close", (candle) => ({ ...candle, close: "0" })],
-    ["negative volume", (candle) => ({ ...candle, volume: "-1" })],
-    ["high below low", (candle) => ({ ...candle, high: "8" })],
-    ["open outside range", (candle) => ({ ...candle, open: "12" })],
-    ["close outside range", (candle) => ({ ...candle, close: "12" })],
+    ["wrong symbol", (candle) => ({ ...candle,
+symbol: "DOGEUSDT" })],
+    ["wrong interval", (candle) => ({ ...candle,
+interval: "5m" })],
+    ["unaligned open time", (candle) => ({ ...candle,
+openTime: candle.openTime + 1 })],
+    ["invalid close time", (candle) => ({ ...candle,
+closeTime: candle.closeTime + 1 })],
+    ["non-boolean closed flag", (candle) => ({ ...candle,
+isClosed: "true" })],
+    ["invalid OHLCV decimal", (candle) => ({ ...candle,
+high: "not-a-price" })],
+    ["non-positive open", (candle) => ({ ...candle,
+open: "0" })],
+    ["non-positive high", (candle) => ({ ...candle,
+high: "0" })],
+    ["non-positive low", (candle) => ({ ...candle,
+low: "0" })],
+    ["non-positive close", (candle) => ({ ...candle,
+close: "0" })],
+    ["negative volume", (candle) => ({ ...candle,
+volume: "-1" })],
+    ["high below low", (candle) => ({ ...candle,
+high: "8" })],
+    ["open outside range", (candle) => ({ ...candle,
+open: "12" })],
+    ["close outside range", (candle) => ({ ...candle,
+close: "12" })],
   ]
 
   for (const [label, mutate] of invalidCases) {
@@ -139,9 +159,9 @@ test("rejects malformed live candle fields and keeps the market fail-closed", as
     await fixture.candleHandlers.get("BTCUSDT")(candle)
     const snapshot = getSnapshot(fixture)
 
-    assert.equal(snapshot.status.isReady, false, label + " must not be accepted as valid live market data.")
-    assert.equal(snapshot.status.reason, "INVALID_CANDLE", label + " must produce an explicit invalid-candle blocker.")
-    assert.equal(snapshot.metrics, null, label + " must invalidate the metrics exposed to the future order gate.")
+    assert.equal(snapshot.status.isReady, false, `${label  } must not be accepted as valid live market data.`)
+    assert.equal(snapshot.status.reason, "INVALID_CANDLE", `${label  } must produce an explicit invalid-candle blocker.`)
+    assert.equal(snapshot.metrics, null, `${label  } must invalidate the metrics exposed to the future order gate.`)
   }
 })
 
@@ -150,7 +170,8 @@ test("keeps conflicting closed-candle facts invalid even after later valid candl
   await fixture.start()
   const handler = fixture.candleHandlers.get("BTCUSDT")
 
-  await handler(createCandle({ openTime: 99 * INTERVAL_MS, close: "10.5" }))
+  await handler(createCandle({ openTime: 99 * INTERVAL_MS,
+close: "10.5" }))
   const conflict = getSnapshot(fixture)
   assert.equal(conflict.status.reason, "CANDLE_CONFLICT", "A second, conflicting fact for a closed candle must invalidate the series.")
 
@@ -177,7 +198,8 @@ test("ignores valid live candle events older than the retained 100-candle window
   const fixture = createFixture({
     historyBySymbol: { BTCUSDT: createHistoryFrom("BTCUSDT", 100, 100) },
     onSubscribe: async ({ onCandle }) => {
-      await onCandle(createCandle({ openTime: 200 * INTERVAL_MS, isClosed: false }))
+      await onCandle(createCandle({ openTime: 200 * INTERVAL_MS,
+isClosed: false }))
     },
   })
   await fixture.start()
@@ -209,14 +231,17 @@ test("rejects oversized candle gaps without issuing an unbounded historical requ
 test("keeps a market unavailable when backfill throws or returns an incomplete range", async () => {
   const backfillFailures = [
     async () => { throw new Error("backfill transport failed") },
-    async () => ({ ok: true, data: [] }),
-    async () => ({ ok: true, data: [createCandle({ openTime: 100 * INTERVAL_MS })] }),
+    async () => ({ ok: true,
+data: [] }),
+    async () => ({ ok: true,
+data: [createCandle({ openTime: 100 * INTERVAL_MS })] }),
   ]
 
   for (const backfill of backfillFailures) {
     const fixture = createFixture({
       getCandles: async (input) => input.startTime === undefined
-        ? { ok: true, data: createHistory(input.symbol, 100, true) }
+        ? { ok: true,
+data: createHistory(input.symbol, 100, true) }
         : backfill(),
     })
     await fixture.start()
@@ -241,7 +266,8 @@ test("reports one warning per repeated unavailable state and logs successful ind
   await fixture.start()
   assert.equal(systems.length, 1, "The first successful indicator calculation must produce one system-level record.")
 
-  const invalid = { ...createCandle({ openTime: 100 * INTERVAL_MS }), volume: "-1" }
+  const invalid = { ...createCandle({ openTime: 100 * INTERVAL_MS }),
+volume: "-1" }
   await fixture.candleHandlers.get("BTCUSDT")(invalid)
   await fixture.candleHandlers.get("BTCUSDT")(invalid)
 
@@ -254,7 +280,8 @@ test("uses the ordinary info logger when no system-level logger method is availa
   const fixture = createFixture({
     logger: { info: (entry) => infos.push(entry) },
     onSubscribe: async ({ onCandle }) => {
-      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
+      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS,
+isClosed: false }))
     },
   })
   await fixture.start()
@@ -271,11 +298,13 @@ test("backfills a gap and blocks readiness when the first post-reconnect update 
   const backfillGate = new Promise((resolve) => { resolveBackfill = resolve })
   const fixture = createFixture({
     onSubscribe: async ({ onCandle }) => {
-      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
+      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS,
+isClosed: false }))
     },
     getCandles: async (input) => {
       if (input.startTime === undefined) {
-        return { ok: true, data: createHistory(input.symbol, 100, true) }
+        return { ok: true,
+data: createHistory(input.symbol, 100, true) }
       }
       backfillCalls.push(input)
       signalBackfillStarted()
@@ -292,7 +321,8 @@ test("backfills a gap and blocks readiness when the first post-reconnect update 
 
   await fixture.start()
   const handler = fixture.candleHandlers.get("BTCUSDT")
-  const acceptedCandleTask = handler(createCandle({ openTime: 102 * INTERVAL_MS, isClosed: false }))
+  const acceptedCandleTask = handler(createCandle({ openTime: 102 * INTERVAL_MS,
+isClosed: false }))
 
   await Promise.resolve()
   await Promise.resolve()
@@ -351,11 +381,13 @@ test("blocks a market while a closed-candle reconnect gap is being backfilled", 
   const backfillGate = new Promise((resolve) => { resolveBackfill = resolve })
   const fixture = createFixture({
     onSubscribe: async ({ onCandle }) => {
-      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
+      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS,
+isClosed: false }))
     },
     getCandles: async (input) => {
       if (input.startTime === undefined) {
-        return { ok: true, data: createHistory(input.symbol, 100, true) }
+        return { ok: true,
+data: createHistory(input.symbol, 100, true) }
       }
       signalBackfillStarted()
       await backfillGate
@@ -401,10 +433,12 @@ test("notifies the protection consumer after warm-up and each accepted live cand
   const observed = []
   const fixture = createFixture({
     onSnapshot: async ({ symbol, snapshot }) => {
-      observed.push({ symbol, snapshot })
+      observed.push({ symbol,
+snapshot })
     },
     onSubscribe: async ({ onCandle }) => {
-      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
+      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS,
+isClosed: false }))
     },
   })
 
@@ -416,7 +450,8 @@ test("notifies the protection consumer after warm-up and each accepted live cand
   assert.equal(observed.at(-1).snapshot.data.metrics.openTime, 99 * INTERVAL_MS)
 
   await fixture.candleHandlers.get("BTCUSDT")(
-    createCandle({ openTime: 100 * INTERVAL_MS, isClosed: true }),
+    createCandle({ openTime: 100 * INTERVAL_MS,
+isClosed: true }),
   )
   assert.equal(observed.at(-1).snapshot.data.metrics.openTime, 100 * INTERVAL_MS)
   await fixture.subscriptions[0].unsubscribe()
@@ -428,7 +463,8 @@ test("notifies the protection consumer when the live Kline stream is silent for 
   const fixture = createFixture({
     onSnapshot: async ({ snapshot }) => observed.push(snapshot),
     onSubscribe: async ({ onCandle }) => {
-      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
+      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS,
+isClosed: false }))
     },
   })
   await fixture.start()
