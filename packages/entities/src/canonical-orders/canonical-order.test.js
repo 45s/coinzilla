@@ -59,13 +59,13 @@ describe(`${CanonicalOrder.name} lifecycle`, () => {
       side: "BUY",
       type: "LIMIT",
       limitPrice: { amount: "0.1",
-asset: quoteAsset.value },
+        asset: quoteAsset.value },
       originalQuantity: { amount: "100",
-asset: baseAsset.value },
+        asset: baseAsset.value },
       executedQuantity: { amount: "0",
-asset: baseAsset.value },
+        asset: baseAsset.value },
       remainingQuantity: { amount: "100",
-asset: baseAsset.value },
+        asset: baseAsset.value },
       status: "PENDING",
     })
   })
@@ -102,13 +102,13 @@ asset: baseAsset.value },
       brokerOrderId: "123456",
       status: "FILLED",
       executedQuantity: new Quantity({ amount: "100",
-asset: baseAsset }),
+        asset: baseAsset }),
     })
 
     assert.equal(order.remainingQuantity.amount, "0")
     assert.throws(
       () => createOrder({ brokerOrderId: "123456",
-status: "FILLED" }),
+        status: "FILLED" }),
       { message: canonicalOrderErrMsgs.filledExecution },
     )
   })
@@ -163,7 +163,7 @@ describe(`${CanonicalOrder.name} price validation`, () => {
       assert.throws(
         () => createOrder({
           limitPrice: new Money({ amount,
-asset: quoteAsset }),
+            asset: quoteAsset }),
         }),
         { message: canonicalOrderErrMsgs.limitPricePositive },
       )
@@ -207,7 +207,7 @@ describe(`${CanonicalOrder.name} quantity validation`, () => {
         brokerOrderId: "123456",
         status: "OPEN",
         executedQuantity: new Quantity({ amount: "1",
-asset: baseAsset }),
+          asset: baseAsset }),
       }),
       { message: canonicalOrderErrMsgs.openExecution },
     )
@@ -222,7 +222,7 @@ asset: baseAsset }),
       () => createOrder({
         status: "PENDING",
         executedQuantity: new Quantity({ amount: "1",
-asset: baseAsset }),
+          asset: baseAsset }),
       }),
       { message: canonicalOrderErrMsgs.pendingExecution },
     )
