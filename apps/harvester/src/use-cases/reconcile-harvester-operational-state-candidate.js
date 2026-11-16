@@ -104,6 +104,7 @@ async function resolveMarketSafetyBlockers({
   operationalStateStore,
   projection,
   targetMarket,
+  historyRetentionEvidence,
   reconciliation,
 }) {
   const resolvedSafetyBlockerIds = []
@@ -118,7 +119,7 @@ async function resolveMarketSafetyBlockers({
     if (blockersToResolve.length > 0) {
       const evidenceDigest = createReconciliationEvidenceDigest({
         targetMarket,
-        historyRetentionEvidence: createHistoryRetentionEvidence({ projection, targetMarket }),
+        historyRetentionEvidence,
         reconciliation: reconciliation.data,
       })
       for (const blocker of blockersToResolve) {
@@ -215,6 +216,7 @@ export async function reconcileHarvesterOperationalStateCandidate(options = {}) 
       operationalStateStore,
       projection,
       targetMarket,
+      historyRetentionEvidence,
       reconciliation,
     })
     if (safetyBlockers?.ok === false) {
