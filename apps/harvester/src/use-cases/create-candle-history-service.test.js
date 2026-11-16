@@ -135,7 +135,7 @@ isClosed: false }))
 })
 
 test("keeps metrics unavailable when the reference NATR is zero", async () => {
-  const flatHistory = Array.from({ length: 100 }, (_, index) => createCandle({
+  const flatHistory = Array.from({ length: 100 }, (...[, index]) => createCandle({
     openTime: index * INTERVAL_MS,
     high: "10",
     low: "10",
