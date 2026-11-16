@@ -83,7 +83,9 @@ function probeHttpReachability(...args) {
         "Sec-WebSocket-Key": key,
         "Sec-WebSocket-Version": "13",
       },
-    }, (response) => handleHttpUpgradeResponse({ name, response, finish }))
+    }, (response) => handleHttpUpgradeResponse({ name,
+      response,
+      finish }))
 
     request.on("upgrade", (...args) => {
       const [response, socket] = args
@@ -154,7 +156,9 @@ function probeEndpoint(...args) {
   const [name, url] = args
   return new Promise((resolve) => {
     let socket
-    const state = { opened: false, settled: false, timer: undefined }
+    const state = { opened: false,
+      settled: false,
+      timer: undefined }
     const details = createProbeDetails(name)
 
     const finish = () => {

@@ -21,7 +21,8 @@ function assertReplacementClientReady({ broker, clients, subscription, cycle }) 
   assert.equal(broker.userDataUnavailable, true,
     `recovery cycle ${cycle + 1} must keep order mutations gated until reconciliation acknowledgement`)
 
-  return { replacementClient, currentSubscriptionId }
+  return { replacementClient,
+    currentSubscriptionId }
 }
 
 async function assertOrderPlacementBlocked({ broker, replacementClient, cycle }) {
@@ -125,9 +126,14 @@ async function runRecoveryCycle({ broker, scheduler, clients, subscription, rece
     `recovery cycle ${cycle + 1} must create exactly one replacement API client`)
 
   const { replacementClient, currentSubscriptionId } = assertReplacementClientReady({
-    broker, clients, subscription, cycle,
+    broker,
+      clients,
+      subscription,
+      cycle,
   })
-  await assertOrderPlacementBlocked({ broker, replacementClient, cycle })
+  await assertOrderPlacementBlocked({ broker,
+    replacementClient,
+    cycle })
   assertStaleEventsIgnored({
     previousClient,
     replacementClient,
@@ -143,7 +149,10 @@ async function runRecoveryCycle({ broker, scheduler, clients, subscription, rece
     receivedEvents,
     cycle,
   })
-  assertRecoveryAcknowledged({ broker, scheduler, subscription, cycle })
+  assertRecoveryAcknowledged({ broker,
+    scheduler,
+    subscription,
+    cycle })
   assert.equal(
     previousClient.listenerCount + previousClient.errorListenerCount + previousClient.closeListenerCount,
     0,
@@ -160,7 +169,12 @@ it("survives repeated disconnects without stale events, unsafe orders, or leaked
   })
 
   for (let cycle = 0; cycle < RECOVERY_CYCLE_COUNT; cycle += 1) {
-    await runRecoveryCycle({ broker, scheduler, clients, subscription, receivedEvents, cycle })
+    await runRecoveryCycle({ broker,
+      scheduler,
+      clients,
+      subscription,
+      receivedEvents,
+      cycle })
   }
 
   await subscription.data.disconnect()

@@ -99,7 +99,8 @@ function createCanonicalOrderDetails({ order, market }) {
   const { originalQuantity, executedQuantity } = normalizeOrderQuantities(order)
   const brokerOrderId = normalizeBinanceId(order.orderId, "order ID")
   const { createdAt, updatedAt } = normalizeOrderTimestamps(order)
-  const limitPrice = createOrderLimitPrice({ type, order, market })
+  const limitPrice = createOrderLimitPrice({ type, order,
+    market })
 
   return {
     clientOrderId,
@@ -108,8 +109,10 @@ function createCanonicalOrderDetails({ order, market }) {
     side,
     type,
     ...(limitPrice ? { limitPrice } : {}),
-    originalQuantity: new Quantity({ amount: originalQuantity, asset: market.baseAsset }),
-    executedQuantity: new Quantity({ amount: executedQuantity, asset: market.baseAsset }),
+    originalQuantity: new Quantity({ amount: originalQuantity,
+      asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: executedQuantity,
+      asset: market.baseAsset }),
     status,
     ...(createdAt === undefined ? {} : { createdAt }),
     ...(updatedAt === undefined ? {} : { updatedAt }),
@@ -127,7 +130,8 @@ function createCanonicalOrderDetails({ order, market }) {
  * @throws {TypeError} If the order, market, identifiers, side, type, or decimal quantities are invalid.
  */
 export function adaptCanonicalOrder({ order, market } = {}) {
-  return new CanonicalOrder(createCanonicalOrderDetails({ order, market }))
+  return new CanonicalOrder(createCanonicalOrderDetails({ order,
+    market }))
 }
 
 /**

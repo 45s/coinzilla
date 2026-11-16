@@ -298,7 +298,8 @@ recoveryRequired: true })
       try {
         activeIds = await port.listSubscriptions()
       } catch (lookupError) {
-        logSafely({ logger: this.logger, level: "warn", args: ["Unable to verify Binance user-data unsubscribe outcome", lookupError] })
+        logSafely({ logger: this.logger, level: "warn",
+          args: ["Unable to verify Binance user-data unsubscribe outcome", lookupError] })
         throw originalError
       }
 
@@ -364,7 +365,9 @@ recoveryRequired: true })
         try {
           remove()
         } catch (cleanupError) {
-          logSafely({ logger: this.logger, level: "warn", args: ["Unable to roll back Binance user-data listener setup", cleanupError] })
+          logSafely({ logger: this.logger,
+            level: "warn",
+            args: ["Unable to roll back Binance user-data listener setup", cleanupError] })
         }
       }
       this.#removeEventListener = null
@@ -421,13 +424,17 @@ recoveryRequired: true })
       try {
         subscriber.onEvent({ event })
       } catch (error) {
-        logSafely({ logger: this.logger, level: "error", args: ["Binance user-data event callback failed", error] })
+        logSafely({ logger: this.logger,
+          level: "error",
+          args: ["Binance user-data event callback failed", error] })
       }
     }
   }
 
   #handleError(error) {
-    logSafely({ logger: this.logger, level: "error", args: ["Binance user data stream error", error] })
+    logSafely({ logger: this.logger,
+      level: "error",
+      args: ["Binance user data stream error", error] })
     this.#notify({ type: "rpcError",
 error,
 recoveryRequired: false })
@@ -479,13 +486,16 @@ recoveryRequired: true })
     try {
       subscriber.onStatus(status)
     } catch (error) {
-      logSafely({ logger: this.logger, level: "error", args: ["Binance user-data status callback failed", error] })
+      logSafely({ logger: this.logger,
+        level: "error",
+        args: ["Binance user-data status callback failed", error] })
     }
   }
 
   #notify(status) {
     for (const subscriber of [...this.#subscribers.values()]) {
-      this.#notifySubscriber({ subscriber, status })
+      this.#notifySubscriber({ subscriber,
+        status })
     }
   }
 
@@ -537,7 +547,8 @@ recoveryRequired: true })
         logSafely({
           logger: this.logger,
           level: "error",
-          args: ["Binance user-data recovery attempt failed", { attempt, error }],
+          args: ["Binance user-data recovery attempt failed", { attempt,
+            error }],
         })
         this.#notify({ type: "recovering",
 attempt,
@@ -580,7 +591,8 @@ recoveryRequired: true })
       recoveryGeneration: this.#recoveryGeneration,
     }
     for (const subscriber of [...this.#subscribers.values()]) {
-      if (!subscriber.recoveryAcknowledged) {this.#notifySubscriber({ subscriber, status })}
+      if (!subscriber.recoveryAcknowledged) {this.#notifySubscriber({ subscriber,
+        status })}
     }
     this.#scheduleAcknowledgementReminder()
   }
@@ -600,7 +612,8 @@ recoveryRequired: true })
   }
 
   #acknowledgeRecovery(id) {
-    const result = this.#acknowledgeRecoveryResult({ id, recoveryGeneration: this.#recoveryGeneration })
+    const result = this.#acknowledgeRecoveryResult({ id,
+      recoveryGeneration: this.#recoveryGeneration })
     return result.accepted && result.completed
   }
 
@@ -678,7 +691,8 @@ recoveryRequired: true })
     const port = client ? this.#portFor(client) : null
     try {
       if (subscriptionId !== null && port?.state === "open") {
-        await this.#unsubscribeRemoteSubscription({ port, subscriptionId })
+        await this.#unsubscribeRemoteSubscription({ port,
+          subscriptionId })
       }
     } finally {
       this.#detachUserDataListeners()
@@ -695,7 +709,9 @@ recoveryRequired: true })
       try {
         remove?.()
       } catch (error) {
-        logSafely({ logger: this.logger, level: "warn", args: ["Unable to detach Binance user-data listener", error] })
+        logSafely({ logger: this.logger,
+          level: "warn",
+          args: ["Unable to detach Binance user-data listener", error] })
       }
     }
   }
@@ -707,7 +723,9 @@ recoveryRequired: true })
     try {
       removeCloseListener?.()
     } catch (error) {
-      logSafely({ logger: this.logger, level: "warn", args: ["Unable to detach Binance user-data close listener", error] })
+      logSafely({ logger: this.logger,
+        level: "warn",
+        args: ["Unable to detach Binance user-data close listener", error] })
     }
   }
 
