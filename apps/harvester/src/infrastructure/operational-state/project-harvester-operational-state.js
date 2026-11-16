@@ -98,172 +98,209 @@ function assertIntentMatches({ intent, data, fields, context }) {
   }
 }
 
-function mapFact({ record, orderIntents, cancellationIntents }) {
-  const { factType, data } = record
-  if (factType === "ACCOUNT_SNAPSHOT_CAPTURED") {
-    return [{ name: EVENT.ACCOUNT_SNAPSHOT,
-data }]
-  }
-  if (factType === "ACCOUNT_OPEN_ORDERS_CAPTURED") {
-    return [{ name: EVENT.ACCOUNT_OPEN_ORDERS,
-data }]
-  }
-  if (factType === "ORDER_SUBMISSION_INTENT") {
-    orderIntents.set(data.clientOrderId, data)
-    return [{
-      name: EVENT.SUBMISSION_REQUESTED,
-      data: {
-        clientOrderId: data.clientOrderId,
-        symbol: data.symbol,
-        side: data.side,
-        type: data.type,
-        price: data.price,
-        quantity: data.quantity,
-        status: "PENDING",
-      },
-    }]
-  }
-  if (factType === "ORDER_SUBMISSION_OUTCOME") {
-    const intent = orderIntents.get(data.clientOrderId)
-    if (!intent) { throw new Error(`Durable submission outcome has no preceding intent: ${  data.clientOrderId}`) }
-    assertIntentMatches({
-      intent,
-      data,
-      fields: ["marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity", "purpose"],
-      context: "Durable submission outcome",
-    })
-    const immutableIntent = {
+function mapAccountSnapshotFact({ data }) {
+  return [{ name: EVENT.ACCOUNT_SNAPSHOT, data }]
+}
+
+function mapAccountOpenOrdersFact({ data }) {
+  return [{ name: EVENT.ACCOUNT_OPEN_ORDERS, data }]
+}
+
+function mapOrderSubmissionIntentFact({ data, orderIntents }) {
+  orderIntents.set(data.clientOrderId, data)
+  return [{
+    name: EVENT.SUBMISSION_REQUESTED,
+    data: {
       clientOrderId: data.clientOrderId,
       symbol: data.symbol,
       side: data.side,
       type: data.type,
       price: data.price,
       quantity: data.quantity,
-    }
-    if (data.outcome === "ACKNOWLEDGED") {
-      return [{
-        name: EVENT.SUBMITTED,
-        data: { ...immutableIntent,
-brokerOrderId: data.brokerOrderId,
-status: data.status },
-      }]
-    }
-    return [{
-      name: EVENT.SUBMISSION_FAILED,
-      data: { ...immutableIntent,
-outcome: data.outcome },
-    }]
+      status: "PENDING",
+    },
+  }]
+}
+
+function mapOrderSubmissionOutcomeFact({ data, orderIntents }) {
+  const intent = orderIntents.get(data.clientOrderId)
+  if (!intent) {
+    throw new Error(`Durable submission outcome has no preceding intent: ${data.clientOrderId}`)
   }
-  if (factType === "ORDER_CANCELLATION_INTENT") {
-    const intent = orderIntents.get(data.clientOrderId)
-    if (!intent) { throw new Error(`Durable cancellation intent has no preceding submission intent: ${  data.clientOrderId}`) }
-    assertIntentMatches({
-      intent,
-      data,
-      fields: ["marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity"],
-      context: "Durable cancellation intent",
-    })
-    if (cancellationIntents.has(data.clientOrderId)) {
-      throw new Error(`Durable cancellation intent was repeated before its prior outcome: ${  data.clientOrderId}`)
-    }
-    cancellationIntents.set(data.clientOrderId, data)
+  assertIntentMatches({
+    intent,
+    data,
+    fields: ["marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity", "purpose"],
+    context: "Durable submission outcome",
+  })
+  const immutableIntent = {
+    clientOrderId: data.clientOrderId,
+    symbol: data.symbol,
+    side: data.side,
+    type: data.type,
+    price: data.price,
+    quantity: data.quantity,
+  }
+  if (data.outcome === "ACKNOWLEDGED") {
     return [{
-      name: EVENT.CANCEL_REQUESTED,
+      name: EVENT.SUBMITTED,
       data: {
-        clientOrderId: data.clientOrderId,
+        ...immutableIntent,
         brokerOrderId: data.brokerOrderId,
-        symbol: data.symbol,
-        side: data.side,
-        type: data.type,
-        price: data.price,
-        quantity: data.quantity,
-        executedQuantity: data.executedQuantity,
-        reason: data.reason,
         status: data.status,
       },
     }]
   }
-  if (factType === "ORDER_CANCELLATION_OUTCOME") {
-    const intent = orderIntents.get(data.clientOrderId)
-    const cancellationIntent = cancellationIntents.get(data.clientOrderId)
-    if (!intent || !cancellationIntent) { throw new Error(`Durable cancellation outcome has no preceding submission and cancellation intent: ${  data.clientOrderId}`) }
-    assertIntentMatches({
-      intent,
-      data,
-      fields: ["marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side"],
-      context: "Durable cancellation outcome",
-    })
-    if (cancellationIntent.reason !== data.reason || cancellationIntent.brokerOrderId !== data.brokerOrderId) {
-      throw new Error("Durable cancellation outcome conflicts with its exact cancellation intent")
-    }
-    cancellationIntents.delete(data.clientOrderId)
-    if (data.outcome === "CANCELED") {
-      return [{
-        name: EVENT.CANCELLED,
-        data: {
-          clientOrderId: data.clientOrderId,
-          brokerOrderId: data.brokerOrderId,
-          symbol: data.symbol,
-          side: data.side,
-          type: intent.type,
-          price: intent.price,
-          quantity: intent.quantity,
-          status: "CANCELED",
-          executedQuantity: data.executedQuantity,
-        },
-      }]
-    }
-    const outcome = CANCELLATION_FAILURE_OUTCOMES.get(data.outcome)
-    if (!outcome) { throw new Error(`Unsupported durable cancellation outcome: ${  data.outcome}`) }
+  return [{
+    name: EVENT.SUBMISSION_FAILED,
+    data: {
+      ...immutableIntent,
+      outcome: data.outcome,
+    },
+  }]
+}
+
+function mapOrderCancellationIntentFact({ data, orderIntents, cancellationIntents }) {
+  const intent = orderIntents.get(data.clientOrderId)
+  if (!intent) {
+    throw new Error(`Durable cancellation intent has no preceding submission intent: ${data.clientOrderId}`)
+  }
+  assertIntentMatches({
+    intent,
+    data,
+    fields: ["marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity"],
+    context: "Durable cancellation intent",
+  })
+  if (cancellationIntents.has(data.clientOrderId)) {
+    throw new Error(`Durable cancellation intent was repeated before its prior outcome: ${data.clientOrderId}`)
+  }
+  cancellationIntents.set(data.clientOrderId, data)
+  return [{
+    name: EVENT.CANCEL_REQUESTED,
+    data: {
+      clientOrderId: data.clientOrderId,
+      brokerOrderId: data.brokerOrderId,
+      symbol: data.symbol,
+      side: data.side,
+      type: data.type,
+      price: data.price,
+      quantity: data.quantity,
+      executedQuantity: data.executedQuantity,
+      reason: data.reason,
+      status: data.status,
+    },
+  }]
+}
+
+function mapOrderCancellationOutcomeFact({ data, orderIntents, cancellationIntents }) {
+  const intent = orderIntents.get(data.clientOrderId)
+  const cancellationIntent = cancellationIntents.get(data.clientOrderId)
+  if (!intent || !cancellationIntent) {
+    throw new Error(`Durable cancellation outcome has no preceding submission and cancellation intent: ${data.clientOrderId}`)
+  }
+  assertIntentMatches({
+    intent,
+    data,
+    fields: ["marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side"],
+    context: "Durable cancellation outcome",
+  })
+  if (cancellationIntent.reason !== data.reason || cancellationIntent.brokerOrderId !== data.brokerOrderId) {
+    throw new Error("Durable cancellation outcome conflicts with its exact cancellation intent")
+  }
+  cancellationIntents.delete(data.clientOrderId)
+  if (data.outcome === "CANCELED") {
     return [{
-      name: EVENT.CANCEL_FAILED,
+      name: EVENT.CANCELLED,
       data: {
         clientOrderId: data.clientOrderId,
         brokerOrderId: data.brokerOrderId,
         symbol: data.symbol,
         side: data.side,
-        outcome,
+        type: intent.type,
+        price: intent.price,
+        quantity: intent.quantity,
+        status: "CANCELED",
+        executedQuantity: data.executedQuantity,
       },
     }]
   }
-  if (factType === "EXECUTION_FILL_APPLIED") {
-    return [{ name: EVENT.FILL_APPLIED,
-data: mapFill({ data }) }]
+  const outcome = CANCELLATION_FAILURE_OUTCOMES.get(data.outcome)
+  if (!outcome) {
+    throw new Error(`Unsupported durable cancellation outcome: ${data.outcome}`)
   }
-  if (factType === "RECOVERY_CYCLE_COMPLETED") {
-    return [{
-      name: EVENT.RECOVERY_COMPLETED,
-      data: {
-        symbol: data.symbol,
-        marketId: data.marketId,
-        freeQuantity: data.freeQuantity,
-        keepQuantity: data.keepQuantity,
-        minProfit: data.minProfit,
-        realizedNetProfit: data.realizedNetProfit,
-        sellOrderClientId: data.sellOrderClientId,
-        sellOrderBrokerOrderId: data.sellOrderBrokerOrderId,
-        ...(data.inventoryDisposition == null ? {} : { dust: data.inventoryDisposition }),
-      },
-    }]
+  return [{
+    name: EVENT.CANCEL_FAILED,
+    data: {
+      clientOrderId: data.clientOrderId,
+      brokerOrderId: data.brokerOrderId,
+      symbol: data.symbol,
+      side: data.side,
+      outcome,
+    },
+  }]
+}
+
+function mapExecutionFillFact({ data }) {
+  return [{ name: EVENT.FILL_APPLIED, data: mapFill({ data }) }]
+}
+
+function mapRecoveryCycleCompletedFact({ data }) {
+  return [{
+    name: EVENT.RECOVERY_COMPLETED,
+    data: {
+      symbol: data.symbol,
+      marketId: data.marketId,
+      freeQuantity: data.freeQuantity,
+      keepQuantity: data.keepQuantity,
+      minProfit: data.minProfit,
+      realizedNetProfit: data.realizedNetProfit,
+      sellOrderClientId: data.sellOrderClientId,
+      sellOrderBrokerOrderId: data.sellOrderBrokerOrderId,
+      ...(data.inventoryDisposition == null ? {} : { dust: data.inventoryDisposition }),
+    },
+  }]
+}
+
+function mapRecoveryCycleNotCompletedFact({ data }) {
+  return [{
+    name: EVENT.RECOVERY_NOT_COMPLETED,
+    data: {
+      symbol: data.symbol,
+      marketId: data.marketId,
+      sellOrderClientId: data.sellOrderClientId,
+      sellOrderBrokerOrderId: data.sellOrderBrokerOrderId,
+      outcome: data.outcome,
+      reason: data.reason,
+      realizedNetProfit: data.realizedNetProfit,
+      activeQuantity: data.activeQuantity,
+      keepQuantity: data.keepQuantity,
+      minProfit: data.minProfit,
+    },
+  }]
+}
+
+const FACT_EVENT_MAPPERS = Object.freeze({
+  ACCOUNT_SNAPSHOT_CAPTURED: mapAccountSnapshotFact,
+  ACCOUNT_OPEN_ORDERS_CAPTURED: mapAccountOpenOrdersFact,
+  ORDER_SUBMISSION_INTENT: mapOrderSubmissionIntentFact,
+  ORDER_SUBMISSION_OUTCOME: mapOrderSubmissionOutcomeFact,
+  ORDER_CANCELLATION_INTENT: mapOrderCancellationIntentFact,
+  ORDER_CANCELLATION_OUTCOME: mapOrderCancellationOutcomeFact,
+  EXECUTION_FILL_APPLIED: mapExecutionFillFact,
+  RECOVERY_CYCLE_COMPLETED: mapRecoveryCycleCompletedFact,
+  RECOVERY_CYCLE_NOT_COMPLETED: mapRecoveryCycleNotCompletedFact,
+})
+
+function mapFact({ record, orderIntents, cancellationIntents }) {
+  const mapper = FACT_EVENT_MAPPERS[record.factType]
+  if (!mapper) {
+    return []
   }
-  if (factType === "RECOVERY_CYCLE_NOT_COMPLETED") {
-    return [{
-      name: EVENT.RECOVERY_NOT_COMPLETED,
-      data: {
-        symbol: data.symbol,
-        marketId: data.marketId,
-        sellOrderClientId: data.sellOrderClientId,
-        sellOrderBrokerOrderId: data.sellOrderBrokerOrderId,
-        outcome: data.outcome,
-        reason: data.reason,
-        realizedNetProfit: data.realizedNetProfit,
-        activeQuantity: data.activeQuantity,
-        keepQuantity: data.keepQuantity,
-        minProfit: data.minProfit,
-      },
-    }]
-  }
-  return []
+  return mapper({
+    data: record.data,
+    orderIntents,
+    cancellationIntents,
+  })
 }
 
 /**
