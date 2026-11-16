@@ -247,8 +247,14 @@ test("includes separately tracked legacy quote proceeds in the shared quote cash
   assert.deepEqual(
     result.data.quoteCashFlowBaseline,
     [
-      { assetId: fdusd.id, amount: "-0.25" },
-      { assetId: usdt.id, amount: "-96" },
+      {
+        assetId: fdusd.id,
+        amount: "-0.25",
+      },
+      {
+        assetId: usdt.id,
+        amount: "-96",
+      },
     ],
     "Legacy realized proceeds must be added to Portfolio quote cash flow exactly once, aggregated by canonical quote asset.",
   )
