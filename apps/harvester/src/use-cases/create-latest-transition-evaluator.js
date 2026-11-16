@@ -154,7 +154,7 @@ function prepareEvaluationContext({ dependencies, options } = {}) {
   const decision = dependencies.strategyPolicy.evaluate(inputs.evaluationInput)
   const operatorPaused = dependencies.state.operatorPausedMarkets.has(inputs.symbol)
   const operatorBuyPaused = dependencies.state.operatorAllBuysPaused === true ||
-    dependencies.state.operatorBuyPausedMarkets.has(inputs.symbol)
+    dependencies.state.operatorBuyPausedMarkets?.has(inputs.symbol) === true
   const suppressBuyActions = options.shutdownRecoveryOnly || operatorPaused || operatorBuyPaused
   const operatorSuppressedActions = suppressBuyActions
     ? decision.actions.filter((action) => action.side === "BUY")
