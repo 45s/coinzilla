@@ -235,7 +235,10 @@ test("accepts an explicitly blocked open-order snapshot without treating it as a
 
 test("requires a targeted COMMISSION_BASELINE snapshot to contain exactly one asset", async (t) => {
   const store = await createStore(t)
-  const baseline = (factId, balances, auditStatus = "COMPLETE", auditReasons = []) => ({
+  const baseline = (...parameters) => {
+  const [factId, balances, auditStatus = "COMPLETE", auditReasons = []] = parameters
+  return ({
+
     factId,
     factType: "ACCOUNT_SNAPSHOT_CAPTURED",
     data: {
@@ -303,4 +306,5 @@ total: "10" },
     false,
     "A targeted commission baseline must not broaden into an unrelated multi-asset wallet snapshot.",
   )
-})
+  })
+}
