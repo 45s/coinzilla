@@ -27,7 +27,9 @@ describe("adaptSpotBalance", () => {
 
   it("preserves zero balances instead of silently omitting them", () => {
     const [balance] = adaptSpotBalance([
-      { asset: "USDT", free: "0", locked: "0" },
+      { asset: "USDT",
+free: "0",
+locked: "0" },
     ])
 
     assert.ok(balance instanceof Balance)
@@ -38,7 +40,9 @@ describe("adaptSpotBalance", () => {
 
   it("keeps prefixed asset codes distinct instead of rewriting identity", () => {
     const [balance] = adaptSpotBalance([
-      { asset: "LDUSDT", free: "1", locked: "0" },
+      { asset: "LDUSDT",
+free: "1",
+locked: "0" },
     ])
 
     assert.equal(balance.asset.id, "ldusdt")
@@ -47,7 +51,9 @@ describe("adaptSpotBalance", () => {
 
   it("normalizes asset code case without changing identity semantics", () => {
     const [balance] = adaptSpotBalance([
-      { asset: "btc", free: "1", locked: "0" },
+      { asset: "btc",
+free: "1",
+locked: "0" },
     ])
 
     assert.equal(balance.asset.id, "btc")
@@ -65,11 +71,19 @@ describe("adaptSpotBalance", () => {
 
   it("rejects missing asset codes and invalid quantities", () => {
     for (const balance of [
-      { free: "1", locked: "0" },
-      { asset: "", free: "1", locked: "0" },
-      { asset: "BTC", free: "invalid", locked: "0" },
-      { asset: "BTC", free: "1", locked: "-1" },
-      { asset: "BTC", free: "1" },
+      { free: "1",
+locked: "0" },
+      { asset: "",
+free: "1",
+locked: "0" },
+      { asset: "BTC",
+free: "invalid",
+locked: "0" },
+      { asset: "BTC",
+free: "1",
+locked: "-1" },
+      { asset: "BTC",
+free: "1" },
     ]) {
       assert.throws(() => adaptSpotBalance([balance]))
     }
