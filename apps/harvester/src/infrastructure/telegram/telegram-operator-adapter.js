@@ -72,6 +72,21 @@ function normalizeTelegramUserId(value) {
 }
 
 
+function createTelegramInteraction({ update }) {
+  return {
+    correlationId: `telegram:${update.update_id}`,
+    interactionType: update.callback_query ? "callback" : "message",
+    action: "UNKNOWN",
+    stage: "UPDATE_RECEIVED",
+    applicationOperationInvoked: false,
+    applicationOperationCompleted: false,
+    stateChanged: false,
+    failed: false,
+    rejected: false,
+    loggedErrors: new Set(),
+  }
+}
+
 function resolveCallbackAction(data) {
   const control = /^cc:(?:ask|confirm):(PAUSE|RESUME):([A-Z0-9]{2,30})(?::\d+)?$/.exec(data ?? "")
   if (control) {
@@ -323,18 +338,6 @@ export function createTelegramOperatorAdapter({
   const PAGE_METHODS = Object.freeze({ status: "getStatus", markets: "getMarkets", positions: "getPositions", orders: "getOrders", balances: "getBalances" })
   const PAGE_TITLES = Object.freeze({ status: "runtime status", markets: "market snapshot", positions: "position snapshot", orders: "order snapshot", balances: "balance snapshot" })
   const diagnostics = createTelegramOperatorDiagnostics({ logger, botToken })
-  const createInteraction = ({ update }) => ({
-    correlationId: `telegram:${update.update_id}`,
-    interactionType: update.callback_query ? "callback" : "message",
-    action: "UNKNOWN",
-    stage: "UPDATE_RECEIVED",
-    applicationOperationInvoked: false,
-    applicationOperationCompleted: false,
-    stateChanged: false,
-    failed: false,
-    rejected: false,
-    loggedErrors: new Set(),
-  })
 
   const sendMessage = async ({ chatId, text, replyMarkup, signal, interaction }) => {
     if (interaction) {
@@ -1273,13 +1276,11 @@ export function createTelegramOperatorAdapter({
           if (!Number.isSafeInteger(update?.update_id) || update.update_id < 0) {
             throw new TypeError("Telegram update has no valid update_id")
           }
-          const interaction = createInteraction({ update })
+          const interaction = createTelegramInteraction({ update })
           diagnostics.log({
             interaction,
             message: "Telegram update RECEIVED",
-            fields: {
-              stage: "UPDATE_RECEIVED",
-            },
+            fields: { stage: "UPDATE_RECEIVED" },
           })
           try {
             await respondToUpdate({
@@ -1309,9 +1310,7 @@ export function createTelegramOperatorAdapter({
             diagnostics.log({
               interaction,
               message: "Telegram interaction COMPLETED",
-              fields: {
-                stage: "COMPLETED",
-              },
+              fields: { stage: "COMPLETED" },
             })
           }
           offset = update.update_id + 1

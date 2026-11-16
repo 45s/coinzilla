@@ -56,7 +56,6 @@ function describeErrorValue({ error, botToken, seen, depth }) {
   if (depth >= 5) {
     return { message: "[Error cause depth limit reached]" }
   }
-
   seen.add(error)
   const name = readProperty({ value: error, key: "name" })
   const code = readProperty({ value: error, key: "code" })
