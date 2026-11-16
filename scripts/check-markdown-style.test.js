@@ -125,7 +125,7 @@ test("checks new files fully while preserving historical, superseded and GitHub 
       [".github/ISSUE_TEMPLATE/cross-domain-request.md", { lines: new Set([1, 2, 3, 4, 5]),
         isNewFile: true }],
     ]),
-  }})
+  })
 
   assert.equal(result.scannedFiles, 3, 'only maintained documents and GitHub templates should be scanned')
   assert.equal(result.skippedHistorical, 3, 'historical and superseded documents should be excluded from changed-line enforcement')
