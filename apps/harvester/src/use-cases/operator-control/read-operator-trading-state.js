@@ -37,8 +37,10 @@ function createOperatorQueryExecutor({ getObservedAt }) {
         if (!data || typeof data !== "object") {
           throw new TypeError(`${operation} provider returned an invalid snapshot`)
         }
-        return toResult({ data: freezeValue({ observedAt, ...data }) })
-      }).catch((cause) => toResult({ error: readFailure({ operation, cause }) }))
+        return toResult({ data: freezeValue({ observedAt, 
+          ...data }) })
+      }).catch((cause) => toResult({ error: readFailure({ operation, 
+        cause }) }))
     } catch (error) {
       return Promise.resolve(toResult({ error }))
     }
@@ -149,7 +151,8 @@ function createBalancesQuery({ execute, getAccountSnapshot, getObservedAt }) {
           asset: balance.asset?.code,
           free: balance.free?.amount ?? balance.free,
           locked: balance.locked?.amount ?? balance.locked,
-          total: addDecimal({ left: balance.free.amount, right: balance.locked.amount }),
+          total: addDecimal({ left: balance.free.amount, 
+            right: balance.locked.amount }),
         })),
       }
     },
@@ -197,8 +200,16 @@ export function createReadOperatorTradingState({
   }
 
   const execute = createOperatorQueryExecutor({ getObservedAt })
-  const getPositions = createPositionsQuery({ execute, getPortfolio, getRecoveryLedger })
-  const getOrders = createOrdersQuery({ execute, engine, getOpenOrders })
-  const getBalances = createBalancesQuery({ execute, getAccountSnapshot, getObservedAt })
-  return Object.freeze({ getPositions, getOrders, getBalances })
+  const getPositions = createPositionsQuery({ execute, 
+    getPortfolio, 
+    getRecoveryLedger })
+  const getOrders = createOrdersQuery({ execute, 
+    engine, 
+    getOpenOrders })
+  const getBalances = createBalancesQuery({ execute, 
+    getAccountSnapshot, 
+    getObservedAt })
+  return Object.freeze({ getPositions, 
+    getOrders, 
+    getBalances })
 }
