@@ -47,7 +47,7 @@ function createAuditFlushError({
   return withRecoveryFailure(error, failure.category, failure.stage, failure.retryable)
 }
 
-function logSystem(logger, data) {
+function logSystem({ logger, ...data }) {
   if (typeof logger?.system === "function") {
     logger.system(data)
     return
@@ -117,7 +117,7 @@ function logClosingJournalBarrier({
   phaseStatus,
   failureReason,
 }) {
-  logSystem(logger, {
+  logSystem({ logger,
     message: `Harvester shutdown phase ${  phaseStatus.toLowerCase()}`,
     shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
     phaseStatus,
@@ -130,7 +130,7 @@ function logClosingJournalBarrier({
 
 function throwMissingAccountSnapshotFlushCapability({ phase, logger, runtimeSessionId }) {
   if (phase === "CLOSING") {
-    logSystem(logger, {
+    logSystem({ logger,
       message: "Harvester shutdown phase failed",
       shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
       phaseStatus: "FAILED",
@@ -196,7 +196,7 @@ runtimeSessionId })
   const startedAt = monotonicNow()
   const isClosing = phase === "CLOSING"
   if (isClosing) {
-    logSystem(logger, {
+    logSystem({ logger,
       message: "Harvester shutdown phase started",
       shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
       phaseStatus: "STARTED",
@@ -413,7 +413,7 @@ async function refreshAccountSnapshot({ context, capturePreflightBaseline = fals
     throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_VALIDATION", false)
   }
   context.state.accountSnapshot = nextSnapshot
-  logSystem(context.logger, {
+  logSystem({ logger: context.logger,
     message: "Exchange account snapshot loaded",
     balanceCount: nextSnapshot.balances.length,
     sourceTime: nextSnapshot.sourceTime,
@@ -799,7 +799,7 @@ async function publishAccountSnapshot({ context, options }) {
     runtimeSessionId: context.runtimeSessionId,
     monotonicNow: context.monotonicNow,
   })
-  logSystem(context.logger, {
+  logSystem({ logger: context.logger,
     message: "Account snapshot captured and durably journaled",
     phase: options.phase,
     auditStatus: options.auditStatus,
