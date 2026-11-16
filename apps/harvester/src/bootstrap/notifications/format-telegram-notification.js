@@ -47,7 +47,7 @@ SELL: "💸" }),
 
 function symbol(value) {
   const normalized = text({
-    value: value,
+    value,
     fallback: "n/a",
     maxLength: 64,
   }).toUpperCase()
@@ -60,7 +60,7 @@ function symbol(value) {
 
 function side(value) {
   const normalized = text({
-    value: value,
+    value,
     fallback: "UNKNOWN",
     maxLength: 24,
   }).toUpperCase()
@@ -76,7 +76,7 @@ icon }
 
 function legacyFilledOrderIcon(value) {
   const normalized = text({
-    value: value,
+    value,
     fallback: "",
     maxLength: 24,
   }).toUpperCase()
@@ -88,7 +88,7 @@ function legacyFilledOrderIcon(value) {
 
 function fillIcon(value) {
   const normalized = text({
-    value: value,
+    value,
     fallback: "",
     maxLength: 24,
   }).toUpperCase()
@@ -141,7 +141,7 @@ function compactOrder({ data, icon, status = "" }) {
 
 const formatters = Object.freeze({
   "order.filled": ({ data }) => compactOrder({
-    data: data,
+    data,
     icon: legacyFilledOrderIcon(data.side),
     status: "ORDER FILLED",
   }),
@@ -209,7 +209,7 @@ const formatters = Object.freeze({
     value: data.error?.message ?? data.reason ?? data.outcome,
   })}`,
   "order.submitted": ({ data }) => compactOrder({
-    data: data,
+    data,
     icon: null,
     status: "ORDER SUBMITTED",
   }),
