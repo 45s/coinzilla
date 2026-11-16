@@ -41,8 +41,8 @@ function validateOptions(options) {
     }
 
     const descriptor = descriptors[key]
-    if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
-      throw new TypeError("SystemCustomError option " + key + " must be an enumerable data property")
+    if (!Object.hasOwn(descriptor, "value")) {
+      throw new TypeError("SystemCustomError option " + key + " must be a data property")
     }
   }
 
