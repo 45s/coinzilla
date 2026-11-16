@@ -18,6 +18,7 @@ Add a distinct, BUY-only emergency operator capability at the Harvester applicat
 - `pauseAllBuys()` and `resumeAllBuys()` control the global BUY gate.
 - `pauseBuys({ symbol })` and `resumeBuys({ symbol })` control one configured market's BUY gate.
 - Telegram exposes the lowercase commands `/pauseallbuys`, `/resumeallbuys`, `/pausebuys SYMBOL`, and `/resumebuys SYMBOL`. Telegram's command names are lowercase; application method names retain camelCase.
+- Emergency BUY slash commands execute immediately after the existing private-chat authorization checks; they do not use the inline market-button confirmation flow.
 - Existing `pauseMarket` / `resumeMarket`, `/pause SYMBOL`, and `/resume SYMBOL` semantics remain unchanged.
 
 Activating an emergency BUY pause first commits its optional Operational State Store fact (when a store is supplied) and applies the BUY gate inside the serialized engine transition. After the gate is active, the engine invokes its existing owned-BUY cancellation workflow for the selected market or all markets. That workflow owns cancellation intent durability, broker cancellation, authoritative terminal-state validation, cancellation-racing fill reconciliation and accounting. A successful response is allowed only when no current-process-owned active BUY remains in the requested scope.
