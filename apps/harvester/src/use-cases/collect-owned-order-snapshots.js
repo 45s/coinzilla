@@ -89,9 +89,22 @@ function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
   const mismatch = (field) => {
     throw new Error(`Canonical REST fill conflicts with durable Journal ${field} for execution ${fill.id}`)
   }
-  assertJournalFillIdentityParity({ fill, ownedOrder, journalFill, mismatch })
-  assertJournalFillAmountParity({ fill, journalFill, mismatch })
-  assertJournalFillCommissionParity({ fill, journalFill, mismatch })
+  assertJournalFillIdentityParity({
+    fill,
+    ownedOrder,
+    journalFill,
+    mismatch,
+  })
+  assertJournalFillAmountParity({
+    fill,
+    journalFill,
+    mismatch,
+  })
+  assertJournalFillCommissionParity({
+    fill,
+    journalFill,
+    mismatch,
+  })
 }
 
 async function readOpenOrders({ broker, symbol }) {
