@@ -67,7 +67,10 @@ function matchesAny({ path, patterns }) {
  * @returns {boolean}
  */
 export function isHistoricalPath(path) {
-  return typeof path === "string" && matchesAny({ path, patterns: HISTORICAL_PATHS })
+  return typeof path === "string" && matchesAny({
+    path,
+    patterns: HISTORICAL_PATHS,
+  })
 }
 
 /**
@@ -193,7 +196,10 @@ export function analyzeMarkdownStyleDocuments({ documents, changesByPath }) {
 
       if (
         HEADING_FINDINGS.has(name) &&
-        matchesAny({ path: entry.path, patterns: TEMPLATE_HEADING_EXEMPTIONS })
+        matchesAny({
+          path: entry.path,
+          patterns: TEMPLATE_HEADING_EXEMPTIONS,
+        })
       ) {
         continue
       }
@@ -279,7 +285,10 @@ export function checkChangedMarkdownStyle(baseSha) {
     changesByPath.has(path),
   )
   const ignoredPaths = changesByPath.size - changedDocuments.length
-  const result = analyzeMarkdownStyleDocuments({ documents: changedDocuments, changesByPath })
+  const result = analyzeMarkdownStyleDocuments({
+    documents: changedDocuments,
+    changesByPath,
+  })
 
   process.stdout.write(
     `Changed Markdown style: scanned ${result.scannedFiles} maintained files; skipped ${result.skippedHistorical} historical files and ${ignoredPaths} generated/vendor paths.\n`,
