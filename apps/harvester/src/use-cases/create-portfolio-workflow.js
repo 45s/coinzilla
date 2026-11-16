@@ -185,7 +185,7 @@ message: error?.message ?? String(error) }],
       }
     }
     if (result.ok) {
-      portfolio = result.data.portfolio
+      ({ portfolio } = result.data)
       recoveryLedgers.set(fill.market.id, result.data.recoveryLedger)
       const nextPosition = portfolio.getPosition({ marketId: fill.market.id,
 strategyId: StrategyId.COIN_GRABBER })
