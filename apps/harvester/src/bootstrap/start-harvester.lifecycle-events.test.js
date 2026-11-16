@@ -1,19 +1,22 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest("[start-harvester.lifecycle-events.test.js] " + name, ...args)
+const test = (...args) => nodeTest(`[start-harvester.lifecycle-events.test.js] ${args[0]}`, ...args.slice(1))
 import assert from "node:assert/strict"
 import { Asset, Balance, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { startHarvester } from "./start-harvester.js"
 const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
-  flush: async () => ({ ok: true, durable: true }),
+  flush: async () => ({ ok: true,
+durable: true }),
 })
 const startHarvesterForTest = (input = {}) => {
   let eventPublisher = input.eventPublisher ?? testEventPublisher
   if (input.eventPublisher && typeof input.eventPublisher.flush !== "function") {
-    eventPublisher = { ...input.eventPublisher, flush: testEventPublisher.flush }
+    eventPublisher = { ...input.eventPublisher,
+flush: testEventPublisher.flush }
   }
-  return startHarvester({ ...input, eventPublisher })
+  return startHarvester({ ...input,
+eventPublisher })
 }
 
 
@@ -21,9 +24,16 @@ const config = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
-      settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
+      settings: { conservative: { enabled: true },
+aggressive: { enabled: false } },
       pairs: {
-        BTCUSDT: { enabled: true, tradingEnvironment: "both", enableVolatilityProtection: true, investment: 100, orderQuantity: 0.01, makerPercent: 0, takerPercent: 0 },
+        BTCUSDT: { enabled: true,
+tradingEnvironment: "both",
+enableVolatilityProtection: true,
+investment: 100,
+orderQuantity: 0.01,
+makerPercent: 0,
+takerPercent: 0 },
       },
     },
   },
@@ -34,72 +44,110 @@ const env = {
   BINANCE_API_KEY: "fake-key",
   BINANCE_API_SECRET_KEY: "fake-secret",
 }
-const silentLogger = { debug() {}, info() {}, error() {} }
+const silentLogger = { debug() {},
+info() {},
+error() {} }
 
 function createMarketMetadata() {
-  const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
-  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-  const market = new Market({ venue: "binance", symbol: "BTCUSDT", baseAsset, quoteAsset })
+  const baseAsset = new Asset({ id: "asset:BTC",
+code: "BTC" })
+  const quoteAsset = new Asset({ id: "asset:USDT",
+code: "USDT" })
+  const market = new Market({ venue: "binance",
+symbol: "BTCUSDT",
+baseAsset,
+quoteAsset })
   const tradingRules = new TradingRules({
     market,
     constraints: [
-      { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.01", asset: quoteAsset }) },
-      { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.001", asset: baseAsset }) },
-      { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "0.001", asset: baseAsset }) },
-      { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
+      { type: "PRICE_INCREMENT",
+status: "SUPPORTED",
+value: new Money({ amount: "0.01",
+asset: quoteAsset }) },
+      { type: "QUANTITY_INCREMENT",
+status: "SUPPORTED",
+value: new Quantity({ amount: "0.001",
+asset: baseAsset }) },
+      { type: "MIN_QUANTITY",
+status: "SUPPORTED",
+value: new Quantity({ amount: "0.001",
+asset: baseAsset }) },
+      { type: "MIN_NOTIONAL",
+status: "SUPPORTED",
+value: new Money({ amount: "5",
+asset: quoteAsset }) },
     ],
   })
-  return { market, tradingRules, supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"], unvalidatedConstraints: [] }
+  return { market,
+tradingRules,
+supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+unvalidatedConstraints: [] }
 }
 
-function createBroker({
-  connectError,
-  userDataResult,
-  priceResult,
-  userDataError,
-  priceError,
-  onRecoveryAcknowledged,
-} = {}) {
-  let handlers
-  let priceHandler
+function createBrokerConnectionPorts({ connectError }) {
   return {
     connect: async () => {
-      if (connectError) {throw connectError}
+      if (connectError) {
+        throw connectError
+      }
     },
     disconnect: async () => {},
     placeOrder: async () => ({ ok: true }),
     cancelOrder: async () => ({ ok: true }),
-    getOpenOrders: async () => ({ ok: true, data: [] }),
-    getFills: async () => ({ ok: true, data: [] }),
-    getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
-    getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
+  }
+}
+
+function createBrokerAccountPorts() {
+  return {
+    getOpenOrders: async () => ({ ok: true,
+data: [] }),
+    getFills: async () => ({ ok: true,
+data: [] }),
+    getCanonicalOrderHistory: async () => ({ ok: true,
+data: [] }),
+    getCanonicalOrder: async () => ({ ok: false,
+errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => ({
       ok: true,
       data: {
         balances: ["BTC", "USDT"].map((code) => {
-          const asset = new Asset({ id: "asset:" + code, code })
+          const asset = new Asset({ id: `asset:${code}`,
+code })
           return new Balance({
-            free: new Quantity({ amount: "1000", asset }),
-            locked: new Quantity({ amount: "0", asset }),
+            free: new Quantity({ amount: "1000",
+asset }),
+            locked: new Quantity({ amount: "0",
+asset }),
           })
         }),
         sourceTime: 1,
       },
     }),
-    getSymbolFilters: async () => ({ ok: true, data: createMarketMetadata() }),
-    getExchangeMarkets: async () => ({ ok: true, data: [createMarketMetadata().market] }),
-    getPrices: async ({ symbol }) => ({ ok: true, data: { symbol, price: "65000" } }),
-    getCandles: async () => ({ ok: true, data: [] }),
-    subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
+    getSymbolFilters: async () => ({ ok: true,
+data: createMarketMetadata() }),
+    getExchangeMarkets: async () => ({ ok: true,
+data: [createMarketMetadata().market] }),
+  }
+}
+
+function createBrokerUserDataPorts({
+  state,
+  userDataResult,
+  userDataError,
+  onRecoveryAcknowledged,
+}) {
+  return {
     subscribeForUserData: async (input) => {
-      handlers = input
-      if (userDataError) {throw userDataError}
+      state.handlers = input
+      if (userDataError) {
+        throw userDataError
+      }
       return userDataResult ?? {
         ok: true,
         data: {
           disconnect: async () => {},
           acknowledgeRecoveryResult: (recoveryGeneration) => {
-            handlers.onStatus({
+            state.handlers.onStatus({
               type: "reconciled",
               subscriptionId: 17,
               recoveryGeneration,
@@ -107,22 +155,53 @@ function createBroker({
               reconciliationRequired: false,
             })
             onRecoveryAcknowledged?.()
-            return { accepted: true, completed: true }
+            return { accepted: true,
+completed: true }
           },
         },
       }
     },
-    subscribeForBookTicker: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
+    emitStatus: (status) => state.handlers?.onStatus(status),
+  }
+}
+
+function createBrokerMarketDataPorts({ state, priceResult, priceError }) {
+  return {
+    getPrices: async ({ symbol }) => ({ ok: true,
+data: { symbol,
+price: "65000" } }),
+    getCandles: async () => ({ ok: true,
+data: [] }),
+    subscribeForCandles: async () => ({ ok: true,
+data: { unsubscribe: async () => {} } }),
+    subscribeForBookTicker: async () => ({ ok: true,
+data: { unsubscribe: async () => {} } }),
     subscribeForPrices: async ({ onPrice }) => {
-      priceHandler = onPrice
-      if (priceError) {throw priceError}
+      state.priceHandler = onPrice
+      if (priceError) {
+        throw priceError
+      }
       return priceResult ?? {
         ok: true,
         data: { unsubscribe: async () => {} },
       }
     },
-    emitStatus: (status) => handlers?.onStatus(status),
-    emitPrice: (priceEvent) => priceHandler?.(priceEvent),
+    emitPrice: (priceEvent) => state.priceHandler?.(priceEvent),
+  }
+}
+
+function createBroker(options = {}) {
+  const state = {
+    handlers: null,
+    priceHandler: null,
+  }
+  return {
+    ...createBrokerConnectionPorts(options),
+    ...createBrokerAccountPorts(),
+    ...createBrokerUserDataPorts({ ...options,
+state }),
+    ...createBrokerMarketDataPorts({ ...options,
+state }),
   }
 }
 
@@ -132,7 +211,8 @@ function createPublisher() {
     events,
     publish(event) {
       events.push(event)
-      return { ok: true, event }
+      return { ok: true,
+event }
     },
   }
 }
@@ -177,9 +257,15 @@ async function assertReconnectLifecycle({ broker, eventPublisher, runtime, recov
       trigger: data.trigger,
     }))
   assert.deepEqual(readinessTransitions, [
-    { ready: true, status: "READY", trigger: "startup-preflight-completed" },
-    { ready: false, status: "AUTHORITATIVE_RECONCILIATION_REQUIRED", trigger: "connectionClosed" },
-    { ready: true, status: "READY", trigger: "reconciled" },
+    { ready: true,
+status: "READY",
+trigger: "startup-preflight-completed" },
+    { ready: false,
+status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+trigger: "connectionClosed" },
+    { ready: true,
+status: "READY",
+trigger: "reconciled" },
   ], "Startup readiness and subsequent reconnect transitions must each publish exactly once.")
 
   const beforePrice = eventPublisher.events.length
@@ -243,7 +329,10 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
   assert.equal(runtime.tradingMode, "testnet")
   assert.equal(runtime.tradingEnabled, true)
 
-  await assertReconnectLifecycle({ broker, eventPublisher, runtime, recoveryAcknowledged })
+  await assertReconnectLifecycle({ broker,
+eventPublisher,
+runtime,
+recoveryAcknowledged })
 
   await runtime.stop()
   assert.equal(eventPublisher.events.at(-1).name, HARVESTER_EVENT_NAMES.BROKER_DISCONNECTED)
