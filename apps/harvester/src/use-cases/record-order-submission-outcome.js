@@ -41,7 +41,9 @@ function validateSubmissionOutcome({ operationalStateStore, order, outcome, purp
       (order.type !== "LIMIT" && order.type !== "LIMIT_MAKER")) {
     throw new TypeError("Order-submission outcome has an unsupported side or order type")
   }
-  return { market, clientOrderId: order.clientOrderId, acknowledged }
+  return { market, 
+    clientOrderId: order.clientOrderId, 
+    acknowledged }
 }
 
 /**
