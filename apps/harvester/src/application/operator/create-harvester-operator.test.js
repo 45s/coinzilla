@@ -389,3 +389,17 @@ test("BUY controls reject missing market scope and reject symbols on global comm
   assert.equal(globalWithSymbol.errors[0].code, "INVALID_OPERATOR_SCOPE")
   assert.deepEqual(calls, [], "Invalid BUY control scope must be rejected before touching the engine.")
 })
+
+test("rejects a supplied Operational State Store without an append boundary before creating emergency BUY controls", () => {
+  const { calls, engine } = createHarness()
+
+  assert.throws(
+    () => createHarvesterOperator({
+      engine,
+      operationalStateStore: {},
+    }),
+    /Operational State Store.*append/i,
+    "A supplied but invalid store must fail closed instead of silently downgrading to process-local pause semantics.",
+  )
+  assert.deepEqual(calls, [], "Invalid persistence configuration must not reach the trading engine.")
+})
