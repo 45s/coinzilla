@@ -669,6 +669,7 @@ function createOperatorBuyPauseHandler({ state, pairs, runTransition, cancelOwne
     const cancellation = await cancelOwnedBuyOrders({
       ...(symbol === undefined ? {} : { symbol }),
       reason: "OPERATOR_BUY_PAUSE",
+      pauseOnFailure: false,
     })
     const unresolvedOrders = getActiveOwnedBuyOrders({
       state,
