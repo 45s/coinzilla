@@ -41,7 +41,10 @@ function summarizeResults(results) {
 
   const byRule = [];
   for (const [ruleId, count] of ruleCounts) {
-    byRule.push({ ruleId, count });
+    byRule.push({
+      ruleId,
+      count,
+    });
   }
 
   return {
