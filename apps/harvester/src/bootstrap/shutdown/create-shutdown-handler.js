@@ -642,6 +642,127 @@ async function runShutdownLifecycle(context) {
  * reconciliation and recovery SELL coverage; other strategies keep separate
  * shutdown policies.
  */
+function createShutdownRequestContext({
+  options,
+  state,
+  now,
+  runtimeSessionId,
+  strategyShutdownCoordinator,
+  stopOptions,
+} = {}) {
+  const {
+    requestedAt,
+    requestLogged = false,
+    stopStateEstablishedLogged = false,
+    preShutdownErrors = [],
+    beforeSharedServicesStop,
+  } = stopOptions
+  const shutdownRequestedAt = requestedAt ?? now()
+  const shutdownCorrelationId = runtimeSessionId ?? null
+  const phaseRunner = createPhaseRunner({
+    logger: options.logger,
+    now,
+    shutdownRequestedAt,
+    shutdownCorrelationId,
+  })
+  if (!requestLogged) {
+    phaseRunner.logPhase({
+      phase: "SHUTDOWN_REQUESTED",
+      status: "COMPLETED",
+      durationMs: 0,
+    })
+  }
+
+  const shutdownStartedFromStatus = state.status
+  const stateEstablishedAt = now()
+  state.stopped = true
+  state.ready = false
+  state.status = "STOPPING"
+  if (!stopStateEstablishedLogged) {
+    phaseRunner.logPhase({
+      phase: "STOP_STATE_ESTABLISHED",
+      status: "COMPLETED",
+      durationMs: Math.max(0, stateEstablishedAt - shutdownRequestedAt),
+    })
+  }
+
+  const context = createShutdownContext({
+    options: {
+      ...options,
+      now,
+      runtimeSessionId,
+      strategyShutdownCoordinator,
+    },
+    stopOptions: {
+      preShutdownErrors,
+      shutdownStartedFromStatus,
+      beforeSharedServicesStop,
+    },
+    shutdownRequestedAt,
+  })
+  context.phaseRunner = phaseRunner
+  context.failureRecorder = createFailureRecorder({
+    context,
+    phaseRunner,
+  })
+  return { context, phaseRunner, shutdownRequestedAt }
+}
+
+function reportShutdownFailure({ error, context, state, options, phaseRunner, shutdownRequestedAt, now } = {}) {
+  context.strategyShutdownError = error
+  state.status = "SHUTDOWN_INCOMPLETE"
+  const diagnostics = createShutdownDiagnostics({
+    context,
+    cleanupErrors: [error],
+  })
+  error.shutdownDiagnostics = {
+    ...diagnostics,
+    ...(error.shutdownDiagnostics ?? {}),
+    strategyBlockers: error.shutdownDiagnostics?.strategyBlockers ?? diagnostics.strategyBlockers,
+  }
+  options.logger?.error?.({
+    message: "Shutdown safety or durability was not proven; required runtime services remain connected",
+    ...error.shutdownDiagnostics,
+  })
+  phaseRunner.logPhase({
+    phase: "SHUTDOWN_FAILED",
+    status: "FAILED",
+    durationMs: Math.max(0, now() - shutdownRequestedAt),
+    failureReason: error.code ?? error.name ?? "SHUTDOWN_INCOMPLETE",
+  })
+  throw error
+}
+
+function createStopHandler({ options, state, now, runtimeSessionId, strategyShutdownCoordinator } = {}) {
+  let shutdownPromise
+  return function stop(stopOptions = {}) {
+    if (shutdownPromise) {
+      return shutdownPromise
+    }
+    const { context, phaseRunner, shutdownRequestedAt } = createShutdownRequestContext({
+      options,
+      state,
+      now,
+      runtimeSessionId,
+      strategyShutdownCoordinator,
+      stopOptions,
+    })
+    shutdownPromise = runShutdownLifecycle(context).catch((error) => {
+      shutdownPromise = undefined
+      return reportShutdownFailure({
+        error,
+        context,
+        state,
+        options,
+        phaseRunner,
+        shutdownRequestedAt,
+        now,
+      })
+    })
+    return shutdownPromise
+  }
+}
+
 export function createShutdownHandler(options = {}) {
   const {
     state,
@@ -651,90 +772,11 @@ export function createShutdownHandler(options = {}) {
   const strategyShutdownCoordinator = createStrategyShutdownCoordinator({
     participants: options.strategyShutdownParticipants ?? [],
   })
-  let shutdownPromise
-  return function stop({
-    requestedAt,
-    requestLogged = false,
-    stopStateEstablishedLogged = false,
-    preShutdownErrors = [],
-    beforeSharedServicesStop,
-  } = {}) {
-    if (shutdownPromise) {
-      return shutdownPromise
-    }
-
-    const shutdownRequestedAt = requestedAt ?? now()
-    const shutdownCorrelationId = runtimeSessionId ?? null
-    const phaseRunner = createPhaseRunner({
-      logger: options.logger,
-      now,
-      shutdownRequestedAt,
-      shutdownCorrelationId,
-    })
-    if (!requestLogged) {
-      phaseRunner.logPhase({
-        phase: "SHUTDOWN_REQUESTED",
-        status: "COMPLETED",
-        durationMs: 0,
-      })
-    }
-    const shutdownStartedFromStatus = state.status
-    const stateEstablishedAt = now()
-    state.stopped = true
-    state.ready = false
-    state.status = "STOPPING"
-    if (!stopStateEstablishedLogged) {
-      phaseRunner.logPhase({
-        phase: "STOP_STATE_ESTABLISHED",
-        status: "COMPLETED",
-        durationMs: Math.max(0, stateEstablishedAt - shutdownRequestedAt),
-      })
-    }
-
-    const context = createShutdownContext({
-      options: {
-        ...options,
-        now,
-        runtimeSessionId,
-        strategyShutdownCoordinator,
-      },
-      stopOptions: {
-        preShutdownErrors,
-        shutdownStartedFromStatus,
-        beforeSharedServicesStop,
-      },
-      shutdownRequestedAt,
-    })
-    context.phaseRunner = phaseRunner
-    context.failureRecorder = createFailureRecorder({
-      context,
-      phaseRunner,
-    })
-    shutdownPromise = runShutdownLifecycle(context).catch((error) => {
-      context.strategyShutdownError = error
-      state.status = "SHUTDOWN_INCOMPLETE"
-      const diagnostics = createShutdownDiagnostics({
-        context,
-        cleanupErrors: [error],
-      })
-      error.shutdownDiagnostics = {
-        ...diagnostics,
-        ...(error.shutdownDiagnostics ?? {}),
-        strategyBlockers: error.shutdownDiagnostics?.strategyBlockers ?? diagnostics.strategyBlockers,
-      }
-      options.logger?.error?.({
-        message: "Shutdown safety or durability was not proven; required runtime services remain connected",
-        ...error.shutdownDiagnostics,
-      })
-      phaseRunner.logPhase({
-        phase: "SHUTDOWN_FAILED",
-        status: "FAILED",
-        durationMs: Math.max(0, now() - shutdownRequestedAt),
-        failureReason: error.code ?? error.name ?? "SHUTDOWN_INCOMPLETE",
-      })
-      shutdownPromise = undefined
-      throw error
-    })
-    return shutdownPromise
-  }
+  return createStopHandler({
+    options,
+    state,
+    now,
+    runtimeSessionId,
+    strategyShutdownCoordinator,
+  })
 }
