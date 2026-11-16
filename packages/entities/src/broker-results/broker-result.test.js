@@ -73,6 +73,9 @@ errors: [error] })
     ])
   })
 
+})
+
+describe(`${BrokerResult.name} validation`, () => {
   it("rejects invalid input, status, and error collections", () => {
     for (const input of [null, "result", []]) {
       assert.throws(() => new BrokerResult(input), {
@@ -135,6 +138,9 @@ data: [] }),
     )
   })
 
+})
+
+describe(`${BrokerResult.name} immutability`, () => {
   it("returns an immutable error collection without mutating caller data", () => {
     const errors = [new Error("first")]
     const result = new BrokerResult({ status: "FAILURE",
