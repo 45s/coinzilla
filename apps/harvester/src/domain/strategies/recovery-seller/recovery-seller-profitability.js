@@ -54,6 +54,9 @@ export function calculateRecoverySellerProfitability({
     value: recoveryCostBasis,
     field: "recoveryCostBasis",
   })
+  if (compareDecimal({ left: recoveryCostBasis, right: "0" }) <= 0) {
+    throw new RangeError("recoveryCostBasis must be positive")
+  }
   assertNonNegative({
     value: minProfit,
     field: "minProfit",
