@@ -32,7 +32,7 @@ export function validateMarketTradingReadiness({
     throw new TypeError("Market metadata must contain a canonical Market")
   }
   if (market.symbol !== symbol.trim().toUpperCase()) {
-    throw new Error("Market metadata symbol does not match configured pair " + symbol)
+    throw new Error(`Market metadata symbol does not match configured pair ${  symbol}`)
   }
   if (!(tradingRules instanceof TradingRules) || tradingRules.market.id !== market.id) {
     throw new TypeError("Market metadata must contain TradingRules for the same Market")
@@ -47,7 +47,7 @@ export function validateMarketTradingReadiness({
   for (const type of REQUIRED_RULE_TYPES) {
     const constraint = tradingRules.constraints.find((item) => item.type === type)
     if (!constraint || constraint.status !== "SUPPORTED") {
-      throw new Error("Required exchange trading rule is unavailable: " + type + " for " + symbol)
+      throw new Error(`Required exchange trading rule is unavailable: ${  type  } for ${  symbol}`)
     }
   }
 
@@ -74,8 +74,8 @@ export function validateMarketTradingReadiness({
     right: constraints.get("MIN_QUANTITY").value.amount,
   }) < 0) {
     throw new RangeError(
-      "Configured orderQuantity for " + symbol + " (" + market.baseAsset.code +
-      ") is below exchange MIN_QUANTITY after step rounding",
+      `Configured orderQuantity for ${  symbol  } (${  market.baseAsset.code 
+      }) is below exchange MIN_QUANTITY after step rounding`,
     )
   }
 
@@ -86,8 +86,8 @@ export function validateMarketTradingReadiness({
         right: maxQuantity.value.amount,
       }) > 0) {
     throw new RangeError(
-      "Configured orderQuantity for " + symbol + " (" + market.baseAsset.code +
-      ") exceeds exchange MAX_QUANTITY after step rounding",
+      `Configured orderQuantity for ${  symbol  } (${  market.baseAsset.code 
+      }) exceeds exchange MAX_QUANTITY after step rounding`,
     )
   }
 
@@ -96,8 +96,8 @@ export function validateMarketTradingReadiness({
     right: constraints.get("MIN_NOTIONAL").value.amount,
   }) < 0) {
     throw new RangeError(
-      "Configured investment for " + symbol + " (" + market.quoteAsset.code +
-      ") is below exchange MIN_NOTIONAL",
+      `Configured investment for ${  symbol  } (${  market.quoteAsset.code 
+      }) is below exchange MIN_NOTIONAL`,
     )
   }
 
@@ -107,12 +107,12 @@ export function validateMarketTradingReadiness({
         !Number.isFinite(percent) ||
         percent < 0 ||
         percent >= 100) {
-      throw new TypeError("pairConfig." + field + " must be a finite percentage from 0 inclusive to 100 exclusive")
+      throw new TypeError(`pairConfig.${  field  } must be a finite percentage from 0 inclusive to 100 exclusive`)
     }
   }
   const orderType = pairConfig.makerPercent === 0 ? "LIMIT_MAKER" : "LIMIT"
   if (!supportedOrderTypes.includes(orderType)) {
-    throw new Error("Exchange does not support required " + orderType + " orders for " + symbol)
+    throw new Error(`Exchange does not support required ${  orderType  } orders for ${  symbol}`)
   }
 
   return Object.freeze({

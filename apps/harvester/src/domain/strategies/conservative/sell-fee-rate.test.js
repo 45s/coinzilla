@@ -1,33 +1,45 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest("[sell-fee-rate.test.js] " + name, ...args)
+const test = (name, ...args) => nodeTest(`[sell-fee-rate.test.js] ${  name}`, ...args)
 import assert from "node:assert/strict"
 import { calculateSellFeeRate } from "./sell-fee-rate.js"
 
 test("reserves zero when both configured execution fees are zero", () => {
   assert.deepEqual(
-    calculateSellFeeRate({ makerPercent: "0", takerPercent: "0" }),
-    { feeRate: "0", reservedPercent: "0", reservedRole: "MAKER" },
+    calculateSellFeeRate({ makerPercent: "0",
+takerPercent: "0" }),
+    { feeRate: "0",
+reservedPercent: "0",
+reservedRole: "MAKER" },
   )
 })
 
 test("reserves the higher taker fee when taker is more expensive", () => {
   assert.deepEqual(
-    calculateSellFeeRate({ makerPercent: "0.075", takerPercent: "0.1" }),
-    { feeRate: "0.001", reservedPercent: "0.1", reservedRole: "TAKER" },
+    calculateSellFeeRate({ makerPercent: "0.075",
+takerPercent: "0.1" }),
+    { feeRate: "0.001",
+reservedPercent: "0.1",
+reservedRole: "TAKER" },
   )
 })
 
 test("reserves the higher maker fee when maker is more expensive", () => {
   assert.deepEqual(
-    calculateSellFeeRate({ makerPercent: "0.2", takerPercent: "0.1" }),
-    { feeRate: "0.002", reservedPercent: "0.2", reservedRole: "MAKER" },
+    calculateSellFeeRate({ makerPercent: "0.2",
+takerPercent: "0.1" }),
+    { feeRate: "0.002",
+reservedPercent: "0.2",
+reservedRole: "MAKER" },
   )
 })
 
 test("reserves equal maker and taker fees", () => {
   assert.deepEqual(
-    calculateSellFeeRate({ makerPercent: "0.1", takerPercent: "0.1" }),
-    { feeRate: "0.001", reservedPercent: "0.1", reservedRole: "MAKER" },
+    calculateSellFeeRate({ makerPercent: "0.1",
+takerPercent: "0.1" }),
+    { feeRate: "0.001",
+reservedPercent: "0.1",
+reservedRole: "MAKER" },
   )
 })
 
@@ -38,7 +50,9 @@ test("uses maker fee for LIMIT_MAKER even when taker fee is higher", () => {
       takerPercent: "0.075",
       orderType: "LIMIT_MAKER",
     }),
-    { feeRate: "0", reservedPercent: "0", reservedRole: "MAKER" },
+    { feeRate: "0",
+reservedPercent: "0",
+reservedRole: "MAKER" },
   )
 })
 
@@ -49,15 +63,19 @@ test("continues to reserve the higher possible fee for ordinary LIMIT orders", (
       takerPercent: "0.075",
       orderType: "LIMIT",
     }),
-    { feeRate: "0.00075", reservedPercent: "0.075", reservedRole: "TAKER" },
+    { feeRate: "0.00075",
+reservedPercent: "0.075",
+reservedRole: "TAKER" },
   )
 })
 
 test("rejects invalid maker or taker percentages", () => {
   for (const makerPercent of ["-0.1", "100", "not-a-number", undefined]) {
-    assert.throws(() => calculateSellFeeRate({ makerPercent, takerPercent: "0.1" }))
+    assert.throws(() => calculateSellFeeRate({ makerPercent,
+takerPercent: "0.1" }))
   }
   for (const takerPercent of ["-0.1", "100", "not-a-number", undefined]) {
-    assert.throws(() => calculateSellFeeRate({ makerPercent: "0.1", takerPercent }))
+    assert.throws(() => calculateSellFeeRate({ makerPercent: "0.1",
+takerPercent }))
   }
 })

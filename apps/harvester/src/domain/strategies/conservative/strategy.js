@@ -14,7 +14,7 @@ import { hasActiveOrder, hasActivePosition, hasOutstandingRecovery, hasSellableI
  * either side. This function creates intents only; it never performs I/O.
  */
 function getNoActionReason({ actions, inventoryDisposition, buyDisposition }) {
-  if (actions.length > 0) return null
+  if (actions.length > 0) {return null}
 
   if (inventoryDisposition) {
     if (inventoryDisposition.status === "PRICE_FILTER_BLOCKED") {
@@ -66,11 +66,13 @@ export function evaluateConservativeStrategy({
     const rule = marketMetadata.tradingRules.constraints.find((item) =>
       item.type === type && item.status === "SUPPORTED")
     if (!rule?.value || typeof rule.value.amount !== "string") {
-      throw new Error("Required exchange trading rule is unavailable: " + type)
+      throw new Error(`Required exchange trading rule is unavailable: ${  type}`)
     }
-    assertDecimalString({ value: rule.value.amount, field: type })
-    if (compareDecimal({ left: rule.value.amount, right: "0" }) <= 0) {
-      throw new RangeError("Exchange trading rule must be positive: " + type)
+    assertDecimalString({ value: rule.value.amount,
+field: type })
+    if (compareDecimal({ left: rule.value.amount,
+right: "0" }) <= 0) {
+      throw new RangeError(`Exchange trading rule must be positive: ${  type}`)
     }
     return rule.value.amount
   }
@@ -78,12 +80,14 @@ export function evaluateConservativeStrategy({
   const getOptionalRuleAmount = ({ type }) => {
     const rule = marketMetadata.tradingRules.constraints.find((item) =>
       item.type === type && item.status === "SUPPORTED")
-    if (!rule) return undefined
+    if (!rule) {return undefined}
     if (!rule.value || typeof rule.value.amount !== "string") {
-      throw new Error("Supported exchange trading rule has no amount: " + type)
+      throw new Error(`Supported exchange trading rule has no amount: ${  type}`)
     }
-    assertDecimalString({ value: rule.value.amount, field: type })
-    return compareDecimal({ left: rule.value.amount, right: "0" }) > 0
+    assertDecimalString({ value: rule.value.amount,
+field: type })
+    return compareDecimal({ left: rule.value.amount,
+right: "0" }) > 0
       ? rule.value.amount
       : undefined
   }
@@ -96,7 +100,8 @@ export function evaluateConservativeStrategy({
   const maxPrice = getOptionalRuleAmount({ type: "MAX_PRICE" })
   const maxQuantity = getOptionalRuleAmount({ type: "MAX_QUANTITY" })
   const maxNotional = getOptionalRuleAmount({ type: "MAX_NOTIONAL" })
-  const position = portfolio.getPosition({ symbol: marketPrice.symbol, strategyId: StrategyId.COIN_GRABBER })
+  const position = portfolio.getPosition({ symbol: marketPrice.symbol,
+strategyId: StrategyId.COIN_GRABBER })
   const activeQuantity = position?.quantity.amount ?? "0"
   const positionSpent = position?.spent.amount ?? "0"
   const ledger = recoveryLedger ?? {
@@ -107,20 +112,25 @@ export function evaluateConservativeStrategy({
     throw new Error("Conservative RecoveryLedger market does not match strategy market")
   }
   if ((hasActivePosition({ activeQuantity }) ||
-       compareDecimal({ left: positionSpent, right: "0" }) > 0) && !recoveryLedger) {
+       compareDecimal({ left: positionSpent,
+right: "0" }) > 0) && !recoveryLedger) {
     throw new Error("Conservative active Position requires its recovery proceeds ledger")
   }
   if (recoveryLedger && position &&
-      compareDecimal({ left: ledger.buyCost, right: positionSpent }) !== 0) {
+      compareDecimal({ left: ledger.buyCost,
+right: positionSpent }) !== 0) {
     throw new Error("Conservative Position.spent and legacy RecoveryLedger cost mirror diverged")
   }
   if (hasActivePosition({ activeQuantity }) &&
-      compareDecimal({ left: positionSpent, right: "0" }) <= 0) {
+      compareDecimal({ left: positionSpent,
+right: "0" }) <= 0) {
     throw new Error("Conservative active inventory has no Position.spent recovery basis")
   }
   if (!position &&
-      (compareDecimal({ left: ledger.buyCost, right: "0" }) > 0 ||
-       compareDecimal({ left: ledger.netSellProceeds, right: "0" }) > 0)) {
+      (compareDecimal({ left: ledger.buyCost,
+right: "0" }) > 0 ||
+       compareDecimal({ left: ledger.netSellProceeds,
+right: "0" }) > 0)) {
     throw new Error("Conservative RecoveryLedger has cycle accounting without an active Position")
   }
   const hasActiveBuy = hasActiveOrder({
@@ -146,7 +156,8 @@ export function evaluateConservativeStrategy({
   // cycle has already reached its minimum net-profit target.
   const outstandingRecovery = maxDecimal({
     left: "0",
-    right: subtractDecimal({ left: positionSpent, right: ledger.netSellProceeds }),
+    right: subtractDecimal({ left: positionSpent,
+right: ledger.netSellProceeds }),
   })
   let inventoryDisposition
   let buyDisposition
@@ -155,11 +166,11 @@ export function evaluateConservativeStrategy({
     activeQuantity,
     keepQuantity: String(pairConfig.keepQuantity),
   })) {
-    const feeRate = calculateSellFeeRate({
+    const {feeRate} = calculateSellFeeRate({
       makerPercent: String(pairConfig.makerPercent),
       takerPercent: String(pairConfig.takerPercent),
       orderType: marketMetadata.orderType,
-    }).feeRate
+    })
     const sellPlan = calculateRecoverySellPlan({
       activeQuantity,
       keepQuantity: String(pairConfig.keepQuantity),
@@ -170,7 +181,8 @@ export function evaluateConservativeStrategy({
       priceTickSize,
       quantityStepSize,
     })
-    if (compareDecimal({ left: sellPlan.quantity, right: "0" }) > 0) {
+    if (compareDecimal({ left: sellPlan.quantity,
+right: "0" }) > 0) {
       // Once cumulative proceeds already cover cost + minProfit, price the
       // residual at the current market reference, never at an artificial
       // one-tick floor. The cycle's actual cumulative net profit remains the
@@ -185,7 +197,8 @@ export function evaluateConservativeStrategy({
           direction: "up",
         })
         : sellPlan.price
-      if (minPrice && compareDecimal({ left: residualPrice, right: minPrice }) < 0) {
+      if (minPrice && compareDecimal({ left: residualPrice,
+right: minPrice }) < 0) {
         residualPrice = roundDecimalToIncrement({
           value: minPrice,
           increment: priceTickSize,
@@ -193,10 +206,12 @@ export function evaluateConservativeStrategy({
         })
       }
 
-      if (maxPrice && compareDecimal({ left: residualPrice, right: maxPrice }) > 0) {
+      if (maxPrice && compareDecimal({ left: residualPrice,
+right: maxPrice }) > 0) {
         inventoryDisposition = Object.freeze({
           status: "PRICE_FILTER_BLOCKED",
-          quantity: subtractDecimal({ left: activeQuantity, right: String(pairConfig.keepQuantity) }),
+          quantity: subtractDecimal({ left: activeQuantity,
+right: String(pairConfig.keepQuantity) }),
           reason: "MAX_PRICE",
           requiredPrice: residualPrice,
           maximumPrice: maxPrice,
@@ -204,7 +219,8 @@ export function evaluateConservativeStrategy({
       } else {
         let sellQuantity = sellPlan.quantity
         let quantityCapReason
-        if (maxQuantity && compareDecimal({ left: sellQuantity, right: maxQuantity }) > 0) {
+        if (maxQuantity && compareDecimal({ left: sellQuantity,
+right: maxQuantity }) > 0) {
           sellQuantity = roundDecimalToIncrement({
             value: maxQuantity,
             increment: quantityStepSize,
@@ -213,7 +229,8 @@ export function evaluateConservativeStrategy({
           quantityCapReason = "MAX_QUANTITY"
         }
         if (maxNotional && compareDecimal({
-          left: multiplyDecimal({ left: residualPrice, right: sellQuantity }),
+          left: multiplyDecimal({ left: residualPrice,
+right: sellQuantity }),
           right: maxNotional,
         }) > 0) {
           const maxNotionalQuantity = roundDecimalToIncrement({
@@ -226,7 +243,8 @@ export function evaluateConservativeStrategy({
             increment: quantityStepSize,
             direction: "down",
           })
-          if (compareDecimal({ left: maxNotionalQuantity, right: sellQuantity }) < 0) {
+          if (compareDecimal({ left: maxNotionalQuantity,
+right: sellQuantity }) < 0) {
             sellQuantity = maxNotionalQuantity
             quantityCapReason = "MAX_NOTIONAL"
           }
@@ -296,7 +314,8 @@ export function evaluateConservativeStrategy({
       throw new Error("Conservative active Position requires the reconciled completed-BUY VWAP before placing the next standing BUY")
     }
     const referencePrice = lastBuyPrice ?? marketPrice.price
-    assertDecimalString({ value: referencePrice, field: "lastBuyPrice" })
+    assertDecimalString({ value: referencePrice,
+field: "lastBuyPrice" })
     const buyPrice = calculateInitialBuyPrice({
       lastTradePrice: referencePrice,
       priceStepPercent: String(pairConfig.priceStepPercent),
@@ -308,7 +327,8 @@ export function evaluateConservativeStrategy({
       direction: "down",
     })
     const investmentLimit = pairConfig.investment === undefined ? undefined : String(pairConfig.investment)
-    if (compareDecimal({ left: buyQuantity, right: "0" }) <= 0) {
+    if (compareDecimal({ left: buyQuantity,
+right: "0" }) <= 0) {
       buyDisposition = Object.freeze({
         status: "EXCHANGE_CONSTRAINED_BUY",
         reason: "QUANTITY_INCREMENT",
@@ -316,16 +336,24 @@ export function evaluateConservativeStrategy({
         quantityStepSize,
       })
     } else {
-      const buyNotional = multiplyDecimal({ left: buyPrice, right: buyQuantity })
-      const quantityMeetsMinimum = compareDecimal({ left: buyQuantity, right: minQuantity }) >= 0
-      const notionalMeetsMinimum = compareDecimal({ left: buyNotional, right: minNotional }) >= 0
-      const quantityWithinMaximum = !maxQuantity || compareDecimal({ left: buyQuantity, right: maxQuantity }) <= 0
-      const notionalWithinMaximum = !maxNotional || compareDecimal({ left: buyNotional, right: maxNotional }) <= 0
+      const buyNotional = multiplyDecimal({ left: buyPrice,
+right: buyQuantity })
+      const quantityMeetsMinimum = compareDecimal({ left: buyQuantity,
+right: minQuantity }) >= 0
+      const notionalMeetsMinimum = compareDecimal({ left: buyNotional,
+right: minNotional }) >= 0
+      const quantityWithinMaximum = !maxQuantity || compareDecimal({ left: buyQuantity,
+right: maxQuantity }) <= 0
+      const notionalWithinMaximum = !maxNotional || compareDecimal({ left: buyNotional,
+right: maxNotional }) <= 0
       const priceWithinFilters =
-        (!minPrice || compareDecimal({ left: buyPrice, right: minPrice }) >= 0) &&
-        (!maxPrice || compareDecimal({ left: buyPrice, right: maxPrice }) <= 0)
+        (!minPrice || compareDecimal({ left: buyPrice,
+right: minPrice }) >= 0) &&
+        (!maxPrice || compareDecimal({ left: buyPrice,
+right: maxPrice }) <= 0)
       const withinInvestmentLimit = investmentLimit === undefined || compareDecimal({
-        left: addDecimal({ left: outstandingRecovery, right: buyNotional }),
+        left: addDecimal({ left: outstandingRecovery,
+right: buyNotional }),
         right: investmentLimit,
       }) <= 0
       if (!quantityMeetsMinimum || !notionalMeetsMinimum || !quantityWithinMaximum ||
@@ -339,7 +367,8 @@ export function evaluateConservativeStrategy({
           filterReason = "MAX_QUANTITY"
         } else if (!notionalWithinMaximum) {
           filterReason = "MAX_NOTIONAL"
-        } else if (minPrice && compareDecimal({ left: buyPrice, right: minPrice }) < 0) {
+        } else if (minPrice && compareDecimal({ left: buyPrice,
+right: minPrice }) < 0) {
           filterReason = "MIN_PRICE"
         } else {
           filterReason = "MAX_PRICE"

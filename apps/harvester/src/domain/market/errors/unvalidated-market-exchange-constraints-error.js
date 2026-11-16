@@ -19,15 +19,17 @@ export class UnvalidatedMarketExchangeConstraintsError extends Error {
       if ([type, scope, sourceFilterType].some((field) => typeof field !== "string" || !field.trim())) {
         throw new TypeError("Unvalidated exchange constraint descriptors require type, scope, and sourceFilterType")
       }
-      return Object.freeze({ type, scope, sourceFilterType })
+      return Object.freeze({ type,
+scope,
+sourceFilterType })
     }))
     const blockers = normalizedConstraints.map(({ type, scope, sourceFilterType }) =>
       [type, scope, sourceFilterType].join("/")
     )
     const normalizedSymbol = symbol.trim().toUpperCase()
-    const message = "Market " + normalizedSymbol +
-      " cannot start because " + normalizedConstraints.length +
-      " exchange constraint(s) are not validated: " + blockers.join(", ") + "."
+    const message = `Market ${  normalizedSymbol 
+      } cannot start because ${  normalizedConstraints.length 
+      } exchange constraint(s) are not validated: ${  blockers.join(", ")  }.`
 
     super(message)
     this.name = "UnvalidatedMarketExchangeConstraintsError"

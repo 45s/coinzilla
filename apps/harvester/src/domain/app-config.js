@@ -37,7 +37,7 @@ export const TELEGRAM_NOTIFICATION_EVENT_KEYS = Object.freeze([
 function validateTelegramNotificationConfig(config) {
   if (config.notifications === undefined) {return}
   requireRecord(config.notifications, "notifications")
-  const telegram = config.notifications.telegram
+  const {telegram} = config.notifications
   if (telegram === undefined) {return}
   requireRecord(telegram, "notifications.telegram")
   const path = "notifications.telegram"
@@ -76,27 +76,27 @@ function validateTelegramOperatorControlConfig(appConfig) {
   requireRecord(appConfig.operatorControl, path)
   for (const key of Object.keys(appConfig.operatorControl)) {
     if (key !== "telegram") {
-      fail(path + "." + key, "a supported operator-control configuration field")
+      fail(`${path  }.${  key}`, "a supported operator-control configuration field")
     }
   }
-  const telegram = appConfig.operatorControl.telegram
-  requireRecord(telegram, path + ".telegram")
+  const {telegram} = appConfig.operatorControl
+  requireRecord(telegram, `${path  }.telegram`)
   for (const key of Object.keys(telegram)) {
     if (key !== "enabled" && key !== "allowedUserIds") {
-      fail(path + ".telegram." + key, "a supported Telegram operator configuration field")
+      fail(`${path  }.telegram.${  key}`, "a supported Telegram operator configuration field")
     }
   }
-  requireBoolean(telegram.enabled, path + ".telegram.enabled")
+  requireBoolean(telegram.enabled, `${path  }.telegram.enabled`)
   if (!Array.isArray(telegram.allowedUserIds)) {
-    fail(path + ".telegram.allowedUserIds", "an array of unique positive decimal Telegram user IDs")
+    fail(`${path  }.telegram.allowedUserIds`, "an array of unique positive decimal Telegram user IDs")
   }
   const seenUserIds = new Set()
   for (const userId of telegram.allowedUserIds) {
     if (typeof userId !== "string" || !/^[1-9][0-9]*$/.test(userId) || !Number.isSafeInteger(Number(userId))) {
-      fail(path + ".telegram.allowedUserIds", "canonical positive decimal Telegram user ID strings")
+      fail(`${path  }.telegram.allowedUserIds`, "canonical positive decimal Telegram user ID strings")
     }
     if (seenUserIds.has(userId)) {
-      fail(path + ".telegram.allowedUserIds", "unique positive decimal Telegram user IDs")
+      fail(`${path  }.telegram.allowedUserIds`, "unique positive decimal Telegram user IDs")
     }
     seenUserIds.add(userId)
   }
@@ -143,15 +143,24 @@ function validateStrategyPairs(strategy) {
         Object.values(EXTERNAL_ORDERS_POLICIES).join(" or "),
       )
     }
-    requireNumber(pair.investment, `${pairPath}.investment`, { min: 0, exclusiveMin: true })
-    requireNumber(pair.orderQuantity, `${pairPath}.orderQuantity`, { min: 0, exclusiveMin: true })
+    requireNumber(pair.investment, `${pairPath}.investment`, { min: 0,
+exclusiveMin: true })
+    requireNumber(pair.orderQuantity, `${pairPath}.orderQuantity`, { min: 0,
+exclusiveMin: true })
     requireNumber(pair.keepQuantity, `${pairPath}.keepQuantity`, { min: 0 })
     requireNumber(pair.minProfit, `${pairPath}.minProfit`, { min: 0.01 })
-    requireNumber(pair.priceStepPercent, `${pairPath}.priceStepPercent`, { min: 0, exclusiveMin: true, max: 100, exclusiveMax: true })
+    requireNumber(pair.priceStepPercent, `${pairPath}.priceStepPercent`, { min: 0,
+exclusiveMin: true,
+max: 100,
+exclusiveMax: true })
     requirePrecision(pair.pricePrecision, `${pairPath}.pricePrecision`)
     requirePrecision(pair.quantityPrecision, `${pairPath}.quantityPrecision`)
-    requireNumber(pair.makerPercent, `${pairPath}.makerPercent`, { min: 0, max: 100, exclusiveMax: true })
-    requireNumber(pair.takerPercent, `${pairPath}.takerPercent`, { min: 0, max: 100, exclusiveMax: true })
+    requireNumber(pair.makerPercent, `${pairPath}.makerPercent`, { min: 0,
+max: 100,
+exclusiveMax: true })
+    requireNumber(pair.takerPercent, `${pairPath}.takerPercent`, { min: 0,
+max: 100,
+exclusiveMax: true })
   }
 }
 /** Validate Harvester's application-wide configuration, including strategy and notification settings. */
@@ -204,5 +213,8 @@ export function selectPairsForTradingMode({ pairs, tradingMode } = {}) {
 /** Resolve the fixed Binance broker and mandatory exchange mode from the process environment. */
 export function resolveRuntimeConfig({ tradingMode, environment } = {}) {
   if (tradingMode !== TRADING_ENVIRONMENTS.TESTNET && tradingMode !== TRADING_ENVIRONMENTS.LIVE) {throw new Error('TRADING_MODE must be set to "testnet" or "live"')}
-  return Object.freeze({ environment: environment ?? "unspecified", brokerName: "binance", tradingMode, tradingEnabled: true })
+  return Object.freeze({ environment: environment ?? "unspecified",
+brokerName: "binance",
+tradingMode,
+tradingEnabled: true })
 }

@@ -28,21 +28,25 @@ export function calculateRecoveryFillAccounting({ market, fill } = {}) {
     throw new TypeError("Fill side must be BUY or SELL")
   }
 
-  const quoteQuantity = fill.quoteQuantity
-  assertDecimalString({ value: quoteQuantity?.amount, field: "fill.quoteQuantity.amount" })
+  const {quoteQuantity} = fill
+  assertDecimalString({ value: quoteQuantity?.amount,
+field: "fill.quoteQuantity.amount" })
   if (quoteQuantity.asset?.id !== market.quoteAsset.id) {
     throw new TypeError("Fill quote quantity must use the market quote asset")
   }
-  if (compareDecimal({ left: quoteQuantity.amount, right: "0" }) <= 0) {
+  if (compareDecimal({ left: quoteQuantity.amount,
+right: "0" }) <= 0) {
     throw new RangeError("Fill quote quantity must be greater than zero")
   }
-  const { quoteCommission, thirdAssetQuoteValue } = validateFillCommissions({ market, fill })
+  const { quoteCommission, thirdAssetQuoteValue } = validateFillCommissions({ market,
+fill })
 
   if (fill.side === "BUY") {
     return Object.freeze({
       buyCost: addDecimal({
         left: quoteQuantity.amount,
-        right: addDecimal({ left: quoteCommission, right: thirdAssetQuoteValue }),
+        right: addDecimal({ left: quoteCommission,
+right: thirdAssetQuoteValue }),
       }),
       netSellProceeds: "0",
     })
@@ -50,9 +54,11 @@ export function calculateRecoveryFillAccounting({ market, fill } = {}) {
 
   const netSellProceeds = subtractDecimal({
     left: quoteQuantity.amount,
-    right: addDecimal({ left: quoteCommission, right: thirdAssetQuoteValue }),
+    right: addDecimal({ left: quoteCommission,
+right: thirdAssetQuoteValue }),
   })
-  if (compareDecimal({ left: netSellProceeds, right: "0" }) < 0) {
+  if (compareDecimal({ left: netSellProceeds,
+right: "0" }) < 0) {
     throw new RangeError("Quote commission exceeds SELL quote proceeds")
   }
 
