@@ -78,6 +78,7 @@ test("polls serially, maps an allowlisted private sender to an actor, and acknow
   const calls = []
   const sentMessages = []
   const pollRequests = []
+  const diagnosticEntries = []
   let pollCount = 0
   let finishSecondPoll
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
@@ -118,6 +119,12 @@ test("polls serially, maps an allowlisted private sender to an actor, and acknow
     botToken: "test-token",
     allowedUserIds: ["12345"],
     operator,
+    logger: {
+      debug: (entry) => diagnosticEntries.push(entry),
+      info: (entry) => diagnosticEntries.push(entry),
+      warn: (entry) => diagnosticEntries.push(entry),
+      error: (entry) => diagnosticEntries.push(entry),
+    },
     fetchImpl,
     retryDelayMs: 1,
   })
@@ -137,6 +144,18 @@ test("polls serially, maps an allowlisted private sender to an actor, and acknow
   assert.match(sentMessages[0].text, /Paused LINKUSDT/)
   assert.match(sentMessages[0].text, /Existing exchange orders remain open and may still fill/)
   assert.equal(pollRequests[1].offset, 101, "The update offset must advance only after the command and reply are handled.")
+  const interactionEntries = diagnosticEntries.filter((entry) => entry.correlationId === "telegram:100")
+  for (const message of [
+    "Telegram update RECEIVED",
+    "Telegram interaction AUTHORIZED",
+    "Telegram command STARTED",
+    "Telegram application operation STARTED",
+    "Telegram application operation COMPLETED",
+    "Telegram response SENT",
+  ]) {
+    assert.equal(interactionEntries.some((entry) => entry.message === message), true, message + " must be logged for an allowlisted pause command.")
+  }
+  assert.equal(interactionEntries.every((entry) => entry.action === "PAUSE"), true, "Every diagnostic for the pause command must carry its action name.")
 })
 
 test("does not invoke the application for a user outside the private-chat allowlist", async () => {
@@ -777,7 +796,9 @@ test("rejects inline callbacks from users outside the allowlist without invoking
   await adapter.start()
   await secondPoll
   await adapter.stop()
-  assert.equal(calls.length, 0, "An unauthorized callback must not be acknowledged as a valid operator action.")
+  assert.equal(calls.length, 1, "An unauthorized callback must be acknowledged so Telegram can dismiss its loading indicator.")
+  assert.equal(calls[0].callback_query_id, "callback-504", "The acknowledgement must target the received callback only.")
+  assert.equal(calls[0].text, "Not authorized.", "The acknowledgement must reveal no private diagnostic details.")
 })
 
 test("renders an inline status navigation callback using the read-only application query", async () => {
@@ -1035,4 +1056,115 @@ test("shows only enabled configured markets as inline pause or resume controls",
   assert.ok(buttons.some(button => button.callback_data === "cc:ask:PAUSE:LINKUSDT"), "An enabled unpaused market must offer only a pause request.")
   assert.ok(buttons.some(button => button.callback_data === "cc:ask:RESUME:BTCUSDT"), "An enabled operator-paused market must offer only a resume request.")
   assert.equal(buttons.some(button => button.callback_data?.includes("ETHUSDT")), false, "Disabled markets must not expose operator controls.")
+})
+
+
+async function runTelegramUpdatesForDiagnostics({ updates, operator, logger, sendMessageError } = {}) {
+  const sentMessages = []
+  const callbackAnswers = []
+  let pollCount = 0
+  let finishSecondPoll
+  const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
+  const fetchImpl = async (url, options = {}) => {
+    const method = url.split("/").pop()
+    if (method === "getMe") { return makeResponse({ ok: true, result: { username: "coinzilla_bot" } }) }
+    if (method === "setMyCommands" || method === "editMessageText") { return makeResponse({ ok: true, result: true }) }
+    if (method === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) { return makeResponse({ ok: true, result: updates }) }
+      finishSecondPoll()
+      return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true }))
+    }
+    if (method === "sendMessage") {
+      if (sendMessageError) { throw sendMessageError }
+      sentMessages.push(JSON.parse(options.body))
+      return makeResponse({ ok: true, result: { message_id: 1200 } })
+    }
+    if (method === "answerCallbackQuery") {
+      callbackAnswers.push(JSON.parse(options.body))
+      return makeResponse({ ok: true, result: true })
+    }
+    throw new Error("Unexpected Telegram API method: " + method)
+  }
+  const adapter = createTelegramOperatorAdapter({
+    botToken: "test-token",
+    allowedUserIds: ["12345"],
+    operator,
+    logger,
+    fetchImpl,
+    retryDelayMs: 1,
+  })
+  await adapter.start()
+  await secondPoll
+  await adapter.stop()
+  return { sentMessages, callbackAnswers }
+}
+
+test("preserves a thrown market-query failure in one correlated diagnostic", async () => {
+  const internalCause = new TypeError("engine market snapshot unavailable")
+  const queryError = Object.assign(new Error("Market snapshot read failed", { cause: internalCause }), {
+    name: "OperatorQueryError",
+    code: "HARVESTER_OPERATOR_MARKET_SNAPSHOT_READ_FAILED",
+    context: { component: "harvester.operator", operation: "READ_MARKETS", symbol: "LINKUSDT" },
+  })
+  const loggedErrors = []
+  await runTelegramUpdatesForDiagnostics({
+    updates: [makeUpdate({ updateId: 1201, text: "Pause" })],
+    operator: {
+      pauseMarket: async () => assert.fail("A failed market-selection query must never invoke pauseMarket."),
+      getMarkets: async () => { throw queryError },
+    },
+    logger: { error: (entry) => loggedErrors.push(entry) },
+  })
+  assert.equal(loggedErrors.length, 1, "A thrown read-query failure must be logged once, not once for the throw and again for a synthetic failure result.")
+  assert.equal(loggedErrors[0].message, "Telegram interaction FAILED", "The failure log must use the stable interaction lifecycle event.")
+  assert.equal(loggedErrors[0].correlationId, "telegram:1201", "The query failure must retain its Telegram update correlation ID.")
+  assert.equal(loggedErrors[0].operation, "getMarkets", "The diagnostic must identify the exact read-only application query.")
+  assert.equal(loggedErrors[0].errorName, "OperatorQueryError", "The diagnostic must retain the original typed error name.")
+  assert.equal(loggedErrors[0].errorCode, "HARVESTER_OPERATOR_MARKET_SNAPSHOT_READ_FAILED", "The diagnostic must retain the stable application error code.")
+  assert.equal(loggedErrors[0].errorMessage, "Market snapshot read failed", "The diagnostic must retain the original failure message.")
+  assert.equal(loggedErrors[0].errorCause.message, internalCause.message, "The diagnostic must retain the nested lower-level cause.")
+})
+
+test("logs an application-returned pause failure with operation and market context", async () => {
+  const controlError = Object.assign(new Error("operator pause transition rejected"), {
+    name: "OperatorControlError",
+    code: "OPERATOR_PAUSE_TRANSITION_FAILED",
+    context: { component: "harvester.operator", operation: "PAUSE_MARKET", symbol: "LINKUSDT" },
+  })
+  const loggedErrors = []
+  await runTelegramUpdatesForDiagnostics({
+    updates: [makeUpdate({ updateId: 1202, text: "/pause LINKUSDT" })],
+    operator: {
+      pauseMarket: async () => ({ ok: false, errors: [controlError] }),
+    },
+    logger: { error: (entry) => loggedErrors.push(entry) },
+  })
+  assert.equal(loggedErrors.length, 1, "A failed application result must produce one actionable diagnostic.")
+  assert.equal(loggedErrors[0].message, "Telegram interaction FAILED", "Application failures must use the interaction failure event.")
+  assert.equal(loggedErrors[0].correlationId, "telegram:1202", "The application failure must be correlated to its Telegram update.")
+  assert.equal(loggedErrors[0].operation, "pauseMarket", "The diagnostic must identify the invoked application use case.")
+  assert.equal(loggedErrors[0].symbol, "LINKUSDT", "The diagnostic must identify the affected market.")
+  assert.equal(loggedErrors[0].applicationOperationInvoked, true, "The log must prove that the application use case was invoked.")
+  assert.equal(loggedErrors[0].applicationOperationCompleted, false, "A failed result must not be described as a completed operation.")
+  assert.equal(loggedErrors[0].stateChanged, false, "A failed application result must never be reported as a successful pause.")
+  assert.equal(loggedErrors[0].errorCode, "OPERATOR_PAUSE_TRANSITION_FAILED", "The original application error code must remain searchable.")
+})
+
+test("distinguishes a completed pause from a failed Telegram response", async () => {
+  const loggedErrors = []
+  await runTelegramUpdatesForDiagnostics({
+    updates: [makeUpdate({ updateId: 1203, text: "/pause LINKUSDT" })],
+    operator: {
+      pauseMarket: async () => ({ ok: true, data: { symbol: "LINKUSDT", paused: true, alreadyPaused: false, durable: false } }),
+    },
+    logger: { error: (entry) => loggedErrors.push(entry) },
+    sendMessageError: new Error("simulated Telegram send failure"),
+  })
+  assert.equal(loggedErrors.length, 1, "A failed Telegram response must produce one interaction-level diagnostic.")
+  assert.equal(loggedErrors[0].correlationId, "telegram:1203", "The delivery failure must retain the original update correlation ID.")
+  assert.equal(loggedErrors[0].stage, "RESPONSE_DELIVERY", "The failure must identify Telegram response delivery as the failing stage.")
+  assert.equal(loggedErrors[0].applicationOperationInvoked, true, "The diagnostic must record that pauseMarket was invoked.")
+  assert.equal(loggedErrors[0].applicationOperationCompleted, true, "The diagnostic must distinguish a completed application operation from a failed reply.")
+  assert.equal(loggedErrors[0].stateChanged, true, "The diagnostic must preserve the confirmed application state change.")
 })
