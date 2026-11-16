@@ -50,22 +50,16 @@ function validateConfirmationInput({
   if (typeof reconcileMarketState !== "function") {
     throw new TypeError("confirmMarketHistoryCoverage requires a one-market reconciliation callback")
   }
-
   const factId = `market-history-coverage:${symbol}:baseline`
-  return {
+  const evidence = {
     factId,
-    evidence: { factId, 
-      
-      
-
-            
-      
-      symbol, 
-      coveredFromTime, 
-      verifiedAt, 
-      evidenceDigest, 
-      verifiedBy },
+    symbol,
+    coveredFromTime,
+    verifiedAt,
+    evidenceDigest,
+    verifiedBy,
   }
+  return { evidence }
 }
 
 async function readExistingCoverage({ operationalStateStore, symbol, evidence }) {
@@ -83,21 +77,17 @@ async function readExistingCoverage({ operationalStateStore, symbol, evidence })
     record?.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED" &&
     record.data?.symbol === symbol
   )
-  
   if (existingCoverage.length === 0) {
     return undefined
   }
 
-  const currentResult = await readMarketHistoryCoverage({ operationalStateStore, 
-    symbol })
-  
+  const currentResult = await readMarketHistoryCoverage({ operationalStateStore, symbol })
   if (currentResult?.ok !== true) {
     return toResult({
       errors: currentResult?.errors ?? [new Error("Existing market-history coverage could not be verified")],
     })
   }
-  if (matchesCoverage({ coverage: currentResult.data, 
-    evidence })) {
+  if (matchesCoverage({ coverage: currentResult.data, evidence })) {
     return toResult({
       data: Object.freeze({
         confirmed: true,
@@ -114,12 +104,8 @@ async function readExistingCoverage({ operationalStateStore, symbol, evidence })
   })
 }
 
-async function reconcileAndCommitCoverage({
-  operationalStateStore,
-  reconcileMarketState,
-  evidence,
-}) {
-  const historyRetentionEvidence = {
+function createHistoryRetentionEvidence({ evidence }) {
+  return {
     factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
     baselineFactId: evidence.factId,
     symbol: evidence.symbol,
@@ -128,7 +114,9 @@ async function reconcileAndCommitCoverage({
     evidenceDigest: evidence.evidenceDigest,
     verifiedBy: evidence.verifiedBy,
   }
-  const reconciliation = await reconcileMarketState({ historyRetentionEvidence })
+}
+
+function validateMarketReconciliationReadiness({ reconciliation, evidence }) {
   if (reconciliation?.ok !== true) {
     return toResult({
       errors: reconciliation?.errors ?? [new Error("One-market recovery reconciliation failed")],
@@ -155,32 +143,35 @@ async function reconcileAndCommitCoverage({
       }),
     })
   }
+  return { audit }
+}
 
+async function appendAndVerifyCoverage({ operationalStateStore, evidence, audit }) {
   const appendResult = await recordMarketHistoryCoverage({
     operationalStateStore,
     ...evidence,
   })
   if (appendResult?.ok !== true || appendResult.data?.durable !== true) {
-    return appendResult?.ok === false
-      ? appendResult
-      : toResult({ error: new Error("Market-history coverage fact was not durably committed") })
+    if (appendResult?.ok === false) {
+      return appendResult
+    }
+    return toResult({
+      error: new Error("Market-history coverage fact was not durably committed"),
+    })
   }
 
   const readback = await readMarketHistoryCoverage({
     operationalStateStore,
     symbol: evidence.symbol,
-    
   })
   if (readback?.ok !== true) {
     return toResult({
       errors: readback?.errors ?? [new Error("Committed market-history coverage could not be read back")],
     })
   }
-  if (!matchesCoverage({ coverage: readback.data, 
-    evidence })) {
+  if (!matchesCoverage({ coverage: readback.data, evidence })) {
     throw new Error("Committed market-history coverage does not match the reviewed evidence")
   }
-
   return toResult({
     data: Object.freeze({
       confirmed: true,
@@ -188,6 +179,20 @@ async function reconcileAndCommitCoverage({
       audit,
       coverage: readback.data,
     }),
+  })
+}
+
+async function reconcileAndCommitCoverage({ operationalStateStore, reconcileMarketState, evidence }) {
+  const historyRetentionEvidence = createHistoryRetentionEvidence({ evidence })
+  const reconciliation = await reconcileMarketState({ historyRetentionEvidence })
+  const readiness = validateMarketReconciliationReadiness({ reconciliation, evidence })
+  if (readiness?.ok === false) {
+    return readiness
+  }
+  return appendAndVerifyCoverage({
+    operationalStateStore,
+    evidence,
+    audit: readiness.audit,
   })
 }
 
