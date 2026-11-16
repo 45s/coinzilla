@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { cleanupBroker } from "./cleanup-broker.js"
 
-const test = (name, ...args) => nodeTest("[cleanup-broker.test.js] " + name, ...args)
+const test = (name, ...args) => nodeTest(`[cleanup-broker.test.js] ${  name}`, ...args)
 
 test("stops every intake before disconnecting the broker and publishes a successful outcome", async () => {
   const calls = []
