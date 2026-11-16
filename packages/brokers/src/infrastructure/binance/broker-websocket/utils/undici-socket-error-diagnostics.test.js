@@ -62,7 +62,8 @@ test("Undici does not emit a socket_error diagnostic for every abnormal 1006 clo
     await new Promise((resolve) => server.close(resolve))
   })
 
-  await new Promise((resolve, reject) => {
+  await new Promise((...args) => {
+    const [resolve, reject] = args
     websocket.addEventListener("open", resolve, { once: true })
     websocket.addEventListener("error", (event) => {
       reject(event.error ?? new Error(event.message || "WebSocket failed before opening"))

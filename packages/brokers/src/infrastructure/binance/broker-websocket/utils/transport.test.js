@@ -482,7 +482,8 @@ test("finalizes close and attempts every socket listener removal when one remove
       socket = this
     }
 
-    removeEventListener(type, listener, options) {
+    removeEventListener(...args) {
+      const [type, listener, options] = args
       removed.push(type)
       super.removeEventListener(...args)
       if (type === "open") throw new Error("open listener removal failed")
