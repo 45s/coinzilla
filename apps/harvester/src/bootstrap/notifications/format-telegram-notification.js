@@ -25,8 +25,10 @@ const NOTIFICATION_ICONS = Object.freeze({
   userDataReady: "🔗",
   recoveryCompleted: "💰",
   orderSubmissionFailed: "❌",
-  orderCancellationFailed: Object.freeze({ BUY: "🚫", SELL: "⛔" }),
-  fillReceived: Object.freeze({ BUY: "✔️", SELL: "💸" }),
+  orderCancellationFailed: Object.freeze({ BUY: "🚫",
+SELL: "⛔" }),
+  fillReceived: Object.freeze({ BUY: "✔️",
+SELL: "💸" }),
   accountSafety: Object.freeze({
     "broker-subscription-failed": "🚨",
     "user-data-readiness-blocked": "🚨",
@@ -59,7 +61,8 @@ function side(value) {
   } else if (normalized === "SELL") {
     icon = "🔴"
   }
-  return { label: normalized, icon }
+  return { label: normalized,
+icon }
 }
 
 function legacyFilledOrderIcon(value) {
@@ -170,6 +173,7 @@ export function formatHarvesterTelegramNotification(event) {
     ? event.data
     : {}
 
-  return formatters[event.name]({ ...event, data })
+  return formatters[event.name]({ ...event,
+data })
 }
 
