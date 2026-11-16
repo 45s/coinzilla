@@ -50,7 +50,10 @@ function addRecordToSession({
 function collectSessions({ records }) {
   const sessions = new Map()
   for (const record of records) {
-    addRecordToSession({ sessions, record })
+    addRecordToSession({
+      sessions,
+      record,
+    })
   }
   if (sessions.size === 0) {
     throw new Error("No account.snapshot_captured events were found in Journal sessions")
@@ -155,7 +158,10 @@ export function reconcileJournalAccountSnapshotRecords({ records } = {}) {
     const errors = []
 
     for (const [session, pair] of orderedEntries) {
-      const result = createSessionReport({ session, pair })
+      const result = createSessionReport({
+        session,
+        pair,
+      })
       reports.push(result.report)
       errors.push(...result.errors)
     }
