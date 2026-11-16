@@ -115,6 +115,45 @@ function applyHistoryFilters({ body, status, side, type }) {
   }
 }
 
+function normalizeOrderHistoryPage({ value, requestedPage }) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("Bitunix Spot order history response must be an object")
+  }
+  if (!Number.isSafeInteger(value.total) || value.total < 0) {
+    throw new TypeError("Bitunix Spot order history total must be a non-negative safe integer")
+  }
+  const pageNumIsNumber = typeof value.pageNum === "number" && Number.isSafeInteger(value.pageNum)
+  const pageNumIsString = typeof value.pageNum === "string" && /^[0-9]+$/.test(value.pageNum)
+  if (!pageNumIsNumber && !pageNumIsString) {
+    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
+  }
+
+  const returnedPage = Number(value.pageNum)
+  if (!Number.isSafeInteger(returnedPage) || returnedPage < 1) {
+    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
+  }
+  if (returnedPage !== requestedPage) {
+    throw new TypeError("Bitunix Spot order history returned pageNum does not match the requested page")
+  }
+
+  let rows
+  if (value.data === undefined) {
+    if (value.total !== 0) {
+      throw new TypeError("Bitunix Spot order history data is required when total is positive")
+    }
+    rows = []
+  } else {
+    rows = requireArray({
+      value: value.data,
+      operation: "order history",
+    })
+  }
+  if (rows.length > value.total) {
+    throw new TypeError("Bitunix Spot order history data row count exceeds total")
+  }
+  return rows
+}
+
 function createHistoryRequest({ input }) {
   const {
     symbol,
@@ -320,13 +359,11 @@ export class BitunixSpotBroker extends CoreBroker {
         path: API.orderHistory,
         body,
       })
-      const rows = response.data?.data
-      return toResult({
-        data: requireArray({
-          value: rows,
-          operation: "order history",
-        }).map(adaptOrder),
+      const rows = normalizeOrderHistoryPage({
+        value: response.data,
+        requestedPage: body.page,
       })
+      return toResult({ data: rows.map(adaptOrder) })
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.getOrderHistory()",

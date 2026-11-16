@@ -930,6 +930,105 @@ This work is in an open task PR targeting `develop`; do not mark it complete unt
 
 **Remaining work before any trading use:** obtain written Bitunix clarification of the single-order versus batch-order quantity units; establish a stable exchange-supported client order identity or authoritative race-safe reconciliation; prove complete per-execution history semantics; establish a documented Spot private order/execution stream or source-timestamp-preserving polling/recovery contract; verify Spot TESTNET or another isolated mutation environment; and add canonical order/account lifecycle support only after the exchange supplies the required facts. Other read-only mappings remain blocked where the API omits canonical facts (OHLCV volume) or leaves required parameters undefined (depth precision selection).
 
+## Bitunix Spot — Binance broker parity audit (2026-11-16)
+
+**Audit baseline:** `develop` at `65cec77b9f0c182c5f506654a7e33df2909b6a67`, after PRs [#1182](https://github.com/45s/coinzilla/pull/1182), [#1183](https://github.com/45s/coinzilla/pull/1183), [#1188](https://github.com/45s/coinzilla/pull/1188), [#1195](https://github.com/45s/coinzilla/pull/1195), and repository workflow PR #1200. The latter changed agent handoff documentation only; the broker source baseline is unchanged. This is a source/API parity inventory, not a claim that every Binance capability is appropriate or available on Bitunix.
+
+### Implemented Bitunix surface
+
+| Capability / method | Current status | Implementation / limitation |
+|---|---|---|
+| `connect()` / `disconnect()` | Implemented | Stateless REST adapter readiness flag; no persistent socket lifecycle. |
+| `getBalances()` | Implemented, read-only | `GET /api/spot/v1/user/account`; raw balance numeric tokens are preserved as decimal strings. |
+| `getExchangeMarkets()` | Implemented, read-only | `GET /api/spot/v1/common/coin_pair/list`; only explicitly open pairs are returned; symbol is derived from base + quote. |
+| `getSymbolFilters({ symbol })` | Partial | Returns raw Bitunix pair metadata. It does not yet map a validated, exchange-neutral trading-rule/filter contract. |
+| `getOpenOrders({ symbol })` | Implemented, read-only | `POST /api/spot/v1/order/pending/list`; symbol is mandatory; no account-wide query. |
+| `getOrderHistory({ symbol, ...filters })` | Implemented, read-only | `POST /api/spot/v1/order/history/page`; canonical status/side/type filters mapped to Bitunix codes; symbol mandatory; no exact order-ID filter. |
+| `getOrder({ symbol, orderId })` | Implemented, read-only | `GET /api/spot/v1/order/detail`; validates returned order ID and symbol. No client-order-ID lookup. |
+| `getPrices({ symbol })` / `getPrice()` | Implemented, read-only | `GET /api/spot/v1/market/last_price`; one-shot price lookup; response has no source timestamp. |
+| `getFills({ symbol, orderId })` | Partial / completeness unproven | `POST /api/spot/v1/order/deal/list`; maps the documented matching-order object to canonical fills. API docs do not establish per-execution multiplicity, pagination, or completeness for partially filled orders. |
+| REST signing / transport | Implemented | Double-SHA256 signing, bounded request timeout, response/error validation, no automatic retry. No live exchange acceptance is claimed. |
+
+### Binance public broker methods — parity inventory
+
+The method names below are the concrete Binance broker surface compared with `BitunixSpotBroker`. “Blocked” means the method is present but deliberately returns an unsupported result or throws; do not remove that guard until the listed prerequisites are satisfied.
+
+| Binance capability / method | Bitunix status | What is missing to reach equivalent behavior |
+|---|---|---|
+| `getAssets()` | Blocked | Define a supported legacy Coin/Asset representation or formally retire this compatibility method after consumer audit. Canonical `getBalances()` is available. |
+| `getBalances()` | Implemented | No major read capability gap; retain exact decimal parsing and validate all asset rows. |
+| `getAccountSnapshot()` | Blocked | Source timestamp/version and a coherent account snapshot contract. Balance response has no source timestamp. |
+| `getServerTime()` | Blocked | Documented Spot server-time endpoint or another authoritative time source with defined precision/units. |
+| `getOpenOrders({ symbol? })` | Partial | Account-wide open-order retrieval; current Bitunix endpoint requires symbol. Need bounded all-market enumeration only if completeness and race semantics can be guaranteed. |
+| `getOrder({ symbol, orderId })` | Partial | Existing broker-ID lookup works; add client-order-ID lookup only if Bitunix documents/supports that identifier. |
+| `getCanonicalOrder({ symbol, orderId | clientOrderId })` | Blocked | Canonical identity requires a stable client order ID (or formally approved alternative) plus complete canonical order facts. |
+| `getOrderHistory({ ... })` | Partial | Existing filters/page support; confirm pagination termination, ordering, maximum page size, time boundaries, and history completeness. Exact order-ID filtering is not documented. |
+| `getCanonicalOrderHistory({ ... })` | Blocked | Stable client identity and a proven history query contract capable of resolving canonical orders. |
+| `getMyTrades({ ... })` | Blocked | Account-wide trade history endpoint, documented pagination, stable per-execution IDs and time/cursor semantics. |
+| `getFills({ symbol, orderId })` | Partial | Prove every execution for an order is returned, with unique execution identity, exact quantities/fees and stable ordering; document pagination if applicable. |
+| `createOrder()` | Blocked | Written clarification of single-order REST quantity units; client-supplied idempotency identity or authoritative unknown-outcome reconciliation; verified mutation environment. |
+| `createCanonicalOrder()` | Blocked | All placement prerequisites plus canonical response facts and a stable client order ID. |
+| `cancelOrder()` | Blocked | Documented cancellation semantics and a safe way to reconcile timeout/unknown outcomes; private lifecycle evidence or an approved polling contract. |
+| `cancelAllOpenOrders()` | Blocked | Same cancellation guarantees plus complete account-wide open-order enumeration and safe partial-failure reporting. |
+| `subscribeForPrices()` | Blocked | Continuous public Spot price push subscription with event identity/timestamp, subscription confirmation, heartbeat and reconnect/resubscribe contract. Existing public Spot WS methods are RPC request/response. |
+| `subscribeForBookTicker()` | Blocked | Continuous Spot order-book push subscription and documented depth/precision semantics. Current depth RPC precision selection is unclear; no continuous subscription is documented. |
+| `getCandles()` | Blocked | Historical Spot candle endpoint/response with all canonical OHLCV fields, including volume, timestamp units and interval boundaries. Documented Spot kline payload omits volume. |
+| `subscribeForCandles()` | Blocked | Continuous public Spot candle push subscription with complete canonical OHLCV fields and lifecycle semantics. |
+| `subscribeForUserData()` | Blocked | Documented Spot private push stream for order/execution/account events, authentication, subscription lifecycle, stable event/execution IDs, timestamps, reconnect and gap-recovery semantics. Spot user/order WS RPC methods are not push subscriptions. |
+
+### Missing canonical fields, keys and guarantees
+
+These are the concrete data/contract gaps to close—not a request to invent local substitutes.
+
+| Missing field / guarantee | Why Binance/Harvester needs it | Required Bitunix evidence or decision |
+|---|---|---|
+| Client order ID (client-supplied, exchange-persisted, queryable) | Idempotent placement and resolving an unknown submission outcome | Official request/response/detail/history support and uniqueness/retention semantics; otherwise an explicitly approved safe alternative. |
+| Stable per-execution ID and complete execution list | Fill deduplication, accounting, replay and recovery | Prove `order/deal/list` returns every execution; define pagination, ordering and uniqueness. Existing `trade.id` mapping alone does not prove completeness. |
+| Account snapshot source timestamp/version | Establish freshness and compare snapshots safely | Exchange-provided source timestamp or approved snapshot consistency contract; never substitute local receipt time as source time. |
+| Order/event source timestamps and ordering/cursor | Detect stale updates, order events and recover gaps | Document timestamp units, precision, monotonicity, event sequence/cursor and replay semantics. |
+| Account-wide open-order snapshot | Startup/reconnect reconciliation and cancel-all safety | Endpoint or documented exhaustive per-symbol enumeration with catalog coverage, pagination and race handling. |
+| Order quantity semantics | Exact placement and canonical original/executed quantities | Written resolution of the contradictory single-order REST versus batch/WS `volume` units for LIMIT and MARKET. |
+| Complete order identity/status fields | Canonical order adaptation and lifecycle transitions | Confirm broker order ID, symbol, side, type, status, original/executed quantity, price, create/update time and their units/semantics on every relevant endpoint. |
+| Fill fee semantics | Correct base/quote/third-asset commission accounting | Confirm `fee` denomination, `feeCoin`, sign, precision and whether fee is final/per execution. The current adapter does not default to quote asset: missing `fee` yields `UNKNOWN`; zero fee yields `COMPLETE`; non-zero fee requires `feeCoin`. Official docs mark both fields required but do not define per-execution/finality semantics. |
+| Market trading constraints | Safe order preflight and quantity/price rounding | Define the meaning and selection of `precisions`, price/quantity precision, min/max quantity/notional, tick/step and any dynamic/account filters. `getSymbolFilters()` currently returns raw metadata, not validated canonical rules. |
+| Depth precision selector | Correct book snapshot and market depth | Explain how pair `precisions` maps to the depth endpoint's numeric `precision` parameter and what each value means. |
+| Candle volume | Existing canonical OHLCV contract | A Spot candle source that provides real base/quote volume; never synthesize volume. |
+| Server time | Timestamp validation and freshness calculations | Documented Spot server clock or approved authoritative alternative. |
+| Isolated mutation environment | Safe place/cancel and lifecycle integration tests | Bitunix currently confirms no TESTNET. No live mutation tests are authorized; a separately isolated environment or explicit future safety decision is required. |
+
+### Phase 1 evidence — execution and order history
+
+The following comparison resolves what the references actually implement; it does not upgrade undocumented exchange guarantees into supported behavior.
+
+- **Official Spot contract:** [Query matching orders](https://www.bitunix.com/api-docs/spots/en_us/order/#4-query-matching-orders) accepts `orderId` and `symbol`, and documents one `data` object with `volume`, `price`, `fee`, `feeCoin`, `role`, `ctime`, and `id` (“Matching Order id”). It documents no page, cursor, total count, or array of executions. The docs do not state whether this object aggregates every match for a partially filled order, whether one order can produce multiple returned records, or whether `id` is guaranteed unique/stable across time. Treat per-execution completeness and identity as **unproven**.
+- **Current Coinzilla fill mapping:** `getFills()` first reads order detail, derives BUY/SELL from the order, then requests `order/deal/list`. It maps `id` to canonical `Fill.tradeId` and supplies the requested broker `orderId`, because the documented deal object has no `orderId` field. `normalizeDeals()` accepts an object or array and converts null/undefined to an empty list; the API only documents an object. The current path does not prove that a successful empty list is consistent with a positive order `dealVolume`, nor that an array is complete. The deal object's `volume` is described only as “Amount”; its base/quote unit is not explicit on this endpoint.
+- **Fee mapping:** the adapter preserves the denomination from `feeCoin`; it does not assume quote asset. Missing `fee` is represented as commission status `UNKNOWN`; a zero fee is `COMPLETE` with no commission; a non-zero fee requires `feeCoin` and rejects negative amounts. The official endpoint marks `fee` and `feeCoin` required, but does not specify fee sign conventions, precision/finality, or whether fees are per execution versus aggregated.
+- **Official order-history contract:** [Query order history](https://www.bitunix.com/api-docs/spots/en_us/order/#5-query-order-history) accepts `page`, `pageSize`, ISO-8601 `startTime`/`endTime`, `status`, `side`, `type`, and required `symbol`. The response documents `total`, `pageNum`, `pageSize`, and `data[]`. Order rows expose status 3 for partially filled orders and cumulative `dealVolume` (base quantity), but the docs do not define result ordering, page-snapshot consistency, a cursor, a maximum page size, or inclusive/exclusive time boundaries. The REST schema types `pageNum` as a string and `pageSize` as an object; the official [Spot WebSocket order-history example](https://www.bitunix.com/api-docs/spots/en_us/order-ws/) shows both as numbers. The .NET page model also uses integers. Coinzilla accepts a positive safe-integer `pageNum` in either string or number form and leaves response `pageSize` unvalidated until the REST/WS schema conflict is clarified. A process can issue the same symbol/time/page query after restart, but retention and exhaustive recovery semantics are not guaranteed.
+- **Current Coinzilla history mapping:** `getOrderHistory()` sends one requested page and maps `response.data.data` to orders. [PR #1202](https://github.com/45s/coinzilla/pull/1202) validates non-negative safe-integer `total`, positive safe-integer `pageNum` (string or number) matching the requested page, and the `data[]` shape; omitted `data` is normalized to `[]` only when `total === 0`. It discards pagination metadata after validation and preserves the legacy one-page `Order[]` result. It still does not automatically paginate or sort; ordering, snapshot consistency, maximum page size, time-bound inclusivity, and completion semantics remain undocumented.
+- **Primary .NET reference:** [Spot trading implementation](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Clients/SpotApi/Rest/BitunixRestClientSpotApiTrading.cs) calls `/order/history/page` for history, but its `GetUserTradesAsync` implementation calls `/order/pending/list` even though [the interface](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Interfaces/Clients/SpotApi/IBitunixRestClientSpotApiTrading.cs) documents `/order/deal/list`. Do not copy this implementation defect. Its [BitunixPage model](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Objects/Models/BitunixPage.cs) types `pageNum` and `pageSize` as integers, while the current official docs describe `pageNum` as a string and `pageSize` as an object. The inspected [history fixture](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net.UnitTests/Endpoints/Spot/Trading/GetOrderHistory.txt) contains only `data: {}`, not a representative paginated response; no matching `GetUserTrades` fixture/test was found. Its [BitunixUserTrade model](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Objects/Models/BitunixUserTrade.cs) contains `id`, `price`, `volume`, `ctime`, `fee`, `feeCoin`, and `role`, but no broker `orderId`.
+- **Secondary TypeScript reference:** [bitunix-mcp Spot tools](https://github.com/samanzamani/bitunix-mcp/blob/main/src/tools/spot.ts) sends one `spot_get_order_history` request with page/pageSize defaults of 1/20 and a local maximum of 100. It does not iterate pages and exposes no per-order fill-history tool. Its local page-size limit is not an official Bitunix guarantee.
+
+**First safe implementation slice:** response-envelope and requested-page validation is implemented in [PR #1202](https://github.com/45s/coinzilla/pull/1202), preserving the existing one-page result contract. Exact exchange rows are retained; no sorting or auto-pagination is invented. Next, address independently provable fill-response inconsistencies; complete multi-execution semantics still require Bitunix clarification or representative official examples.
+
+### Phase 1 implementation progress
+
+- [x] Validate the order-history response envelope and returned page identity, accepting the documented REST string and official Spot WebSocket numeric `pageNum` forms — [PR #1202](https://github.com/45s/coinzilla/pull/1202).
+- [ ] Establish ordering, snapshot consistency, maximum page size, time-bound inclusivity, and reliable completion semantics before adding automatic pagination.
+- [ ] Resolve per-order fill completeness, execution-ID guarantees, and the unit of deal `volume`; only add fail-closed checks where the exchange contract makes the inconsistency unambiguous.
+
+### Recommended implementation order
+
+1. **Close safe read-contract gaps first:** order-history page-envelope and requested-page validation is implemented in PR #1202; next establish history completeness semantics and verify fill-list behavior with official clarification/examples; normalize documented market trading rules and depth precision only after their semantics are established.
+2. **Complete canonical read/reconciliation primitives:** add canonical order mapping by broker ID, account-wide open-order coverage, account snapshot freshness and account-wide trade history only when the API supplies the required facts.
+3. **Implement public WebSocket market data:** only if the Spot reference implementation and official Spot docs prove real push subscriptions, not RPC calls. Start with the smallest useful public stream and cover connect/auth (if any), subscription ack, heartbeat, close, reconnect, unsubscribe and cleanup.
+4. **Resolve order lifecycle contracts externally:** quantity units, client identity, execution completeness, cancellation/unknown-outcome recovery and isolated mutation environment. Keep placement/cancellation disabled until all are resolved.
+5. **Implement private user-data lifecycle and Harvester integration:** only after a real Spot private event stream or a rigorously specified timestamped polling/reconciliation alternative exists. Match Binance's recovery safety, not merely its method names.
+6. **Parity acceptance:** add a shared broker contract suite for every capability Bitunix claims to support; compare result shapes, exact decimal strings, errors, unsupported behavior and cleanup against Binance without weakening Binance contracts.
+
+**Hard safety boundary:** Bitunix Spot remains read-only and not Harvester-ready. No order placement, cancellation, private user-data subscription, or live trading may be enabled while [issue #1185](https://github.com/45s/coinzilla/issues/1185) remains unresolved. A method being present on `CoreBroker` or on the Bitunix class is not evidence that the exchange supports it.
+
+---
+
 ## Bitunix Spot reference-driven development rule
 
 **Status: mandatory for every future Bitunix Spot capability task.** Before implementing a requested feature, agents must first audit the matching implementation and tests in [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net) (primary C# Spot reference), cross-check the available JavaScript/TypeScript implementation in [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp), and verify the wire contract against the [official Bitunix Spot API documentation](https://www.bitunix.com/api-docs/spots/en_us/) and [official Open API repository](https://github.com/BitunixOfficial/open-api).
