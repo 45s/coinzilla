@@ -744,8 +744,11 @@ function createOperatorPauseRecoveryPosition({ market }) {
     market,
     side: "BUY",
     price: new Money({ amount: "100", 
+      
       asset: quoteAsset }),
+    
     quantity: new Quantity({ amount: "1", 
+      
       asset: dogeAsset }),
     quoteQuantity: new Money({ amount: "100", 
       asset: quoteAsset }),
@@ -758,7 +761,8 @@ function createOperatorPauseRecoveryPosition({ market }) {
     strategyId: StrategyId.COIN_GRABBER,
   })
   const recoveryLedger = RecoveryLedger.empty({ market }).applyFill({
-    fill: recoveryFill,
+    fill: recoveryFill
+    ,
     strategyId: StrategyId.COIN_GRABBER,
   }).ledger
   return { portfolio, 
@@ -808,7 +812,8 @@ test("operator pause preserves recovery SELL execution while suppressing the sam
   assert.equal(
     typeof engine.pauseMarket,
     "function",
-    "The engine must expose operator pause before recovery-Sell coexistence can be verified.",
+    "The engine must expose operator pause
+   before recovery-Sell coexistence can be verified.",
   )
   const paused = await engine.pauseMarket({
     symbol: "DOGEUSDT",
@@ -820,9 +825,12 @@ test("operator pause preserves recovery SELL execution while suppressing the sam
     true,
     "The operator pause must be established before evaluating the market's recovery and entry intents.",
   )
+  
 
-  await startBothMarkets(engine)
+  await startBothMarkets(eng
+  ine)
 
+  
   assert.deepEqual(
     orders.map(({ symbol, side }) => ({ symbol, 
       side })),
