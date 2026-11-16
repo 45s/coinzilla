@@ -1,5 +1,5 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest("[read-operator-state.test.js] " + name, ...args)
+const test = (name, ...args) => nodeTest(`[read-operator-state.test.js] ${  name}`, ...args)
 import assert from "node:assert/strict"
 import { createReadOperatorState } from "./read-operator-state.js"
 
@@ -40,7 +40,8 @@ function createHarness({
       replacementPending: false,
       trailingBuyRepricePending: false,
       openOrderBlockerActive: false,
-      volatilityProtection: { mode: "PROTECTED", reason: "HIGH_VOLATILITY" },
+      volatilityProtection: { mode: "PROTECTED",
+reason: "HIGH_VOLATILITY" },
       blockers: ["MARKET_PRICE_STALE", "VOLATILITY_PROTECTION_ACTIVE"],
     },
     {
@@ -62,7 +63,8 @@ function createHarness({
       blockers: ["MARKET_DISABLED"],
     },
   ],
-  marketResult = { ok: true, data: { markets } },
+  marketResult = { ok: true,
+data: { markets } },
 } = {}) {
   const calls = []
   const engine = {
@@ -78,7 +80,8 @@ function createHarness({
       return runtimeSnapshot
     },
   })
-  return { calls, readState }
+  return { calls,
+readState }
 }
 
 test("returns an authorized immutable runtime status with explicit readiness and market counts", async () => {
@@ -95,7 +98,9 @@ test("returns an authorized immutable runtime status with explicit readiness and
   )
   assert.deepEqual(
     result.data.markets,
-    { configured: 2, enabled: 1, blocked: 1 },
+    { configured: 2,
+enabled: 1,
+blocked: 1 },
     "The status summary must count configured, enabled, and blocked markets from the same snapshot.",
   )
   assert.equal(result.data.userData.ageMs, 500, "The status must preserve the age of the last user-data status event.")
@@ -135,7 +140,10 @@ test("reports observation-only readiness when trading is explicitly disabled", a
       tradingMode: "testnet",
       strategyMode: "conservative",
       stopping: false,
-      userData: { ready: false, status: "NOT_SUBSCRIBED", lastEventAt: null, ageMs: null },
+      userData: { ready: false,
+status: "NOT_SUBSCRIBED",
+lastEventAt: null,
+ageMs: null },
     },
   })
 
@@ -153,7 +161,8 @@ test("reports observation-only readiness when trading is explicitly disabled", a
 test("rejects an unauthorized query before reading runtime or engine state", async () => {
   const { calls, readState } = createHarness()
 
-  const result = await readState.getStatus({ actor: { id: "untrusted", roles: [] } })
+  const result = await readState.getStatus({ actor: { id: "untrusted",
+roles: [] } })
 
   assert.equal(result.ok, false, "A caller without the trading-operator role must not read operator status.")
   assert.equal(result.errors[0].code, "OPERATOR_UNAUTHORIZED", "Unauthorized query failures must use the stable operator authorization code.")
@@ -163,7 +172,8 @@ test("rejects an unauthorized query before reading runtime or engine state", asy
 test("wraps an untyped engine snapshot failure with a stable operator code and preserves its cause", async () => {
   const engineFailure = new Error("account snapshot unavailable")
   const { readState } = createHarness({
-    marketResult: { ok: false, errors: [engineFailure] },
+    marketResult: { ok: false,
+errors: [engineFailure] },
   })
 
   const result = await readState.getMarkets({ actor })
@@ -198,7 +208,9 @@ test("returns a typed market-snapshot validation failure with the affected symbo
   const { readState } = createHarness({
     marketResult: {
       ok: true,
-      data: { markets: [{ symbol: "DOGEUSDT", enabled: true, blockers: "invalid" }] },
+      data: { markets: [{ symbol: "DOGEUSDT",
+enabled: true,
+blockers: "invalid" }] },
     },
   })
 
