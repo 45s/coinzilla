@@ -4,7 +4,7 @@ import { toResult } from "@coinzilla/utils"
 const requireStore = ({ operationalStateStore, operation, needsRead = false }) => {
   if (typeof operationalStateStore?.append !== "function" ||
       (needsRead && typeof operationalStateStore?.readAll !== "function")) {
-    throw new TypeError(operation + " requires the initialized Operational State Store append/read capability")
+    throw new TypeError(`${operation  } requires the initialized Operational State Store append/read capability`)
   }
 }
 
@@ -14,7 +14,7 @@ const appendDurably = async ({ operationalStateStore, fact, operation }) => {
     return toResult({
       errors: result?.errors?.length
         ? result.errors
-        : [new Error(operation + " append did not confirm durable commitment")],
+        : [new Error(`${operation  } append did not confirm durable commitment`)],
     })
   }
   return result
@@ -29,7 +29,8 @@ export async function recordStrategyMarketControl({
   reason,
 } = {}) {
   try {
-    requireStore({ operationalStateStore, operation: "recordStrategyMarketControl" })
+    requireStore({ operationalStateStore,
+operation: "recordStrategyMarketControl" })
     if (action !== "PAUSE" && action !== "RESUME") {
       throw new TypeError("Strategy market-control action must be PAUSE or RESUME")
     }
@@ -45,7 +46,8 @@ export async function recordStrategyMarketControl({
       fact: {
         factId: prefix + transitionId,
         factType: action === "PAUSE" ? "STRATEGY_MARKET_PAUSED" : "STRATEGY_MARKET_RESUMED",
-        data: { symbol, reason },
+        data: { symbol,
+reason },
       },
     })
   } catch (error) {
@@ -66,7 +68,8 @@ export async function recordSafetyBlockerRaised({
   evidenceDigest,
 } = {}) {
   try {
-    requireStore({ operationalStateStore, operation: "recordSafetyBlockerRaised" })
+    requireStore({ operationalStateStore,
+operation: "recordSafetyBlockerRaised" })
     if (scope !== "ACCOUNT" && scope !== "MARKET") {
       throw new TypeError("Safety blocker scope must be ACCOUNT or MARKET")
     }
@@ -85,9 +88,13 @@ export async function recordSafetyBlockerRaised({
       operationalStateStore,
       operation: "Safety blocker",
       fact: {
-        factId: "safety-blocker-raised:" + blockerId,
+        factId: `safety-blocker-raised:${  blockerId}`,
         factType: "SAFETY_BLOCKER_RAISED",
-        data: { blockerId, scope, symbol, reason, evidenceDigest },
+        data: { blockerId,
+scope,
+symbol,
+reason,
+evidenceDigest },
       },
     })
   } catch (error) {
@@ -107,7 +114,9 @@ export async function recordSafetyBlockerResolved({
   evidenceDigest,
 } = {}) {
   try {
-    requireStore({ operationalStateStore, operation: "recordSafetyBlockerResolved", needsRead: true })
+    requireStore({ operationalStateStore,
+operation: "recordSafetyBlockerResolved",
+needsRead: true })
     if (typeof blockerId !== "string" || !/^[a-f0-9]{64}$/.test(blockerId) ||
         typeof resolvedBy !== "string" || !resolvedBy.trim() || resolvedBy !== resolvedBy.trim() ||
         !["AUTHORITATIVE_RECONCILIATION", "OPERATOR_ACTION"].includes(resolution) ||
@@ -136,9 +145,12 @@ export async function recordSafetyBlockerResolved({
       operationalStateStore,
       operation: "Safety blocker resolution",
       fact: {
-        factId: "safety-blocker-resolved:" + blockerId,
+        factId: `safety-blocker-resolved:${  blockerId}`,
         factType: "SAFETY_BLOCKER_RESOLVED",
-        data: { blockerId, resolvedBy, resolution, evidenceDigest },
+        data: { blockerId,
+resolvedBy,
+resolution,
+evidenceDigest },
       },
     })
   } catch (error) {
