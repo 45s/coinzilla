@@ -2652,6 +2652,31 @@ async function replaceTrailingBuy({ context, symbol, activeBuy, marketPrice, tri
   })
 }
 
+async function prepareTrailingBuyReplacement({ context, symbol, pairConfig, metadata, activeBuy, marketPrice } = {}) {
+  const refreshed = await refreshTrailingBuyMarketMetadata({
+    context,
+    symbol,
+    pairConfig,
+    metadata,
+  })
+  if (!refreshed.ok) {
+    return refreshed
+  }
+  const preflight = await preflightTrailingBuyReplacement({
+    context,
+    symbol,
+    activeBuy,
+    marketPrice,
+  })
+  if (!preflight.ok) {
+    return preflight
+  }
+  return getTrailingBuyPreflightSkip({
+    preflight,
+    activeBuy,
+  })
+}
+
 async function maybeReplaceTrailingBuyTransition({ context, symbol, marketPrice }) {
   if (context.state.shutdownBuyGate === true) {
     return toResult({
@@ -2702,30 +2727,16 @@ async function maybeReplaceTrailingBuyTransition({ context, symbol, marketPrice 
       },
     })
   }
-  const refreshed = await refreshTrailingBuyMarketMetadata({
+  const preparationFailure = await prepareTrailingBuyReplacement({
     context,
     symbol,
     pairConfig,
     metadata,
-  })
-  if (!refreshed.ok) {
-    return refreshed
-  }
-  const preflight = await preflightTrailingBuyReplacement({
-    context,
-    symbol,
     activeBuy,
     marketPrice,
   })
-  if (!preflight.ok) {
-    return preflight
-  }
-  const preflightSkip = getTrailingBuyPreflightSkip({
-    preflight,
-    activeBuy,
-  })
-  if (preflightSkip) {
-    return preflightSkip
+  if (preparationFailure) {
+    return preparationFailure
   }
   return replaceTrailingBuy({
     context,
