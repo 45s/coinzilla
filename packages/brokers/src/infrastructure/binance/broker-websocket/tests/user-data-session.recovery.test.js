@@ -5,6 +5,48 @@ import { createBroker, createScheduler } from "../test-helpers/user-data-session
 import { createFakeRpcClient, createFakeStreamsClient } from "../test-helpers/fake-broker-clients.js"
 
 
+function assertRecoveryClientReady({ broker, scheduler, clients, first, second, firstStatuses, secondStatuses }) {
+  assertRecoveryClientReady({ broker, scheduler, clients, first, second, firstStatuses, secondStatuses })
+}
+
+function assertRecoveryStillPending({ broker, scheduler, firstStatuses, secondStatuses }) {
+  assertRecoveryStillPending({ broker, scheduler, firstStatuses, secondStatuses })
+}
+
+async function assertOrderMutationsBlocked({ broker, client, first }) {
+  assert.equal(first.data.acknowledgeRecovery(), false)
+  const blocked = await broker.createOrder({ symbol: "BTCUSDT", quantity: "0.01", price: "50000" })
+  assert.equal(blocked.ok, false)
+  assert.equal(client.calls.some((call) => call.method === "order.place"), false)
+  const blockedCancel = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: 77 })
+  const blockedCancelAll = await broker.cancelAllOpenOrders({ symbol: "BTCUSDT" })
+  assert.equal(blockedCancel.ok, false)
+  assert.equal(blockedCancelAll.ok, false)
+  assert.equal(client.calls.some((call) => call.method === "order.cancel"), false)
+  assert.equal(client.calls.some((call) => call.method === "openOrders.cancelAll"), false)
+}
+
+function assertRecoveryAcknowledged({ broker, scheduler, first, second, firstStatuses, secondStatuses }) {
+  assert.equal(second.data.acknowledgeRecovery(), true)
+  assert.equal(broker.userDataUnavailable, false)
+  assert.equal(scheduler.pendingCount, 0)
+  assert.deepEqual(firstStatuses.filter((status) => status.type === "reconciled"), [{
+    type: "reconciled",
+    subscriptionId: 110,
+    recoveryGeneration: 1,
+    recoveryRequired: false,
+  }])
+  assert.deepEqual(secondStatuses.filter((status) => status.type === "reconciled"), [{
+    type: "reconciled",
+    subscriptionId: 110,
+    recoveryGeneration: 1,
+    recoveryRequired: false,
+  }])
+  assert.equal(second.data.acknowledgeRecovery(), false)
+  assert.equal(firstStatuses.filter((status) => status.type === "reconciled").length, 1)
+  assert.equal(secondStatuses.filter((status) => status.type === "reconciled").length, 1)
+}
+
 it("tracks API socket loss even when no user-data handle is active", async () => {
   const { broker, clients } = createBroker()
   await broker.connect()
@@ -106,43 +148,12 @@ wasClean: false })
   assert.equal(broker.userDataUnavailable, true)
   assert.equal(scheduler.pendingCount, 1)
 
-  assert.equal(first.data.acknowledgeRecovery(), false)
-  const blocked = await broker.createOrder({ symbol: "BTCUSDT",
-quantity: "0.01",
-price: "50000" })
-  assert.equal(blocked.ok, false)
-  assert.equal(clients[1].calls.some((call) => call.method === "order.place"), false)
-  const blockedCancel = await broker.cancelOrder({ symbol: "BTCUSDT",
-orderId: 77 })
-  const blockedCancelAll = await broker.cancelAllOpenOrders({ symbol: "BTCUSDT" })
-  assert.equal(blockedCancel.ok, false)
-  assert.equal(blockedCancelAll.ok, false)
-  assert.equal(clients[1].calls.some((call) => call.method === "order.cancel"), false)
-  assert.equal(clients[1].calls.some((call) => call.method === "openOrders.cancelAll"), false)
+  await assertOrderMutationsBlocked({ broker, client: clients[1], first })
 
   assert.equal(firstStatuses.filter((status) => status.type === "reconciled").length, 0)
   assert.equal(secondStatuses.filter((status) => status.type === "reconciled").length, 0)
 
-  assert.equal(second.data.acknowledgeRecovery(), true)
-  assert.equal(broker.userDataUnavailable, false)
-  assert.equal(scheduler.pendingCount, 0)
-  assert.deepEqual(
-    firstStatuses.filter((status) => status.type === "reconciled"),
-    [{ type: "reconciled",
-subscriptionId: 110,
-recoveryGeneration: 1,
-recoveryRequired: false }],
-  )
-  assert.deepEqual(
-    secondStatuses.filter((status) => status.type === "reconciled"),
-    [{ type: "reconciled",
-subscriptionId: 110,
-recoveryGeneration: 1,
-recoveryRequired: false }],
-  )
-  assert.equal(second.data.acknowledgeRecovery(), false)
-  assert.equal(firstStatuses.filter((status) => status.type === "reconciled").length, 1)
-  assert.equal(secondStatuses.filter((status) => status.type === "reconciled").length, 1)
+  assertRecoveryAcknowledged({ broker, scheduler, first, second, firstStatuses, secondStatuses })
   const placed = await broker.createOrder({ symbol: "BTCUSDT",
 quantity: "0.01",
 price: "50000" })
