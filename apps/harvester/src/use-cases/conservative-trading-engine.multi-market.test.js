@@ -1171,7 +1171,7 @@ test("emergency BUY pause preserves recovery SELL submission while blocking the 
 
   assert.deepEqual(
     orders.map(({ symbol, side }) => ({ symbol, side })),
-    [{ symbol: "DOGEUSDT", side: "SELL" }],
-    "The emergency BUY pause must preserve the risk-reducing recovery SELL while suppressing BUYs in the selected market and elsewhere only when scoped.",
+    [{ symbol: "DOGEUSDT", side: "SELL" }, { symbol: "SOLUSDT", side: "BUY" }],
+    "The market emergency BUY pause must preserve the selected market recovery SELL, suppress that market BUY, and leave another market eligible.",
   )
 })
