@@ -17,9 +17,16 @@ const createExchangeInfo = ({
     isSpotTradingAllowed,
     orderTypes,
     filters: filters ?? [
-      { filterType: "PRICE_FILTER", minPrice: "0.00000000", maxPrice: "100000.00000000", tickSize: "0.00010000" },
-      { filterType: "LOT_SIZE", minQty: "0.10000000", maxQty: "100000.00000000", stepSize: "0.10000000" },
-      { filterType: "MIN_NOTIONAL", minNotional: "5.00000000" },
+      { filterType: "PRICE_FILTER",
+minPrice: "0.00000000",
+maxPrice: "100000.00000000",
+tickSize: "0.00010000" },
+      { filterType: "LOT_SIZE",
+minQty: "0.10000000",
+maxQty: "100000.00000000",
+stepSize: "0.10000000" },
+      { filterType: "MIN_NOTIONAL",
+minNotional: "5.00000000" },
     ],
   }],
 })
@@ -34,12 +41,14 @@ test("fetches public Spot exchange filters and current ticker price without cred
   const requests = []
   const responses = [
     createResponse(createExchangeInfo()),
-    createResponse({ symbol: "ADAFDUSD", price: "0.50000000" }),
+    createResponse({ symbol: "ADAFDUSD",
+price: "0.50000000" }),
   ]
   const metadata = await fetchBinanceSpotMetadata({
     symbol: "ADAFDUSD",
     fetchImpl: async (url, options) => {
-      requests.push({ url: String(url), options })
+      requests.push({ url: String(url),
+options })
       return responses.shift()
     },
   })
@@ -69,7 +78,8 @@ test("uses the LIVE public API only when the operator selects live", async () =>
   const urls = []
   const responses = [
     createResponse(createExchangeInfo()),
-    createResponse({ symbol: "ADAFDUSD", price: "0.50000000" }),
+    createResponse({ symbol: "ADAFDUSD",
+price: "0.50000000" }),
   ]
   const metadata = await fetchBinanceSpotMetadata({
     symbol: "ADAFDUSD",
@@ -130,7 +140,8 @@ test("rejects symbols that are not actively tradable on Spot", async () => {
 test("returns the available order types for pair-level commission-policy validation", async () => {
   const responses = [
     createResponse(createExchangeInfo({ orderTypes: ["LIMIT"] })),
-    createResponse({ symbol: "ADAFDUSD", price: "0.5" }),
+    createResponse({ symbol: "ADAFDUSD",
+price: "0.5" }),
   ]
   const metadata = await fetchBinanceSpotMetadata({
     symbol: "ADAFDUSD",
@@ -150,9 +161,13 @@ test("rejects missing, duplicate, malformed, and zero exchange filters", async (
     valid.filter((filter) => filter.filterType !== "PRICE_FILTER"),
     [...valid, valid[0]],
     [...valid, valid[2]],
-    valid.map((filter) => filter.filterType === "LOT_SIZE" ? { ...filter, stepSize: "0" } : filter),
-    valid.map((filter) => filter.filterType === "MIN_NOTIONAL" ? { ...filter, minNotional: "NaN" } : filter),
-    [...valid, { filterType: "NOTIONAL", minNotional: "5", maxNotional: "NaN" }],
+    valid.map((filter) => filter.filterType === "LOT_SIZE" ? { ...filter,
+stepSize: "0" } : filter),
+    valid.map((filter) => filter.filterType === "MIN_NOTIONAL" ? { ...filter,
+minNotional: "NaN" } : filter),
+    [...valid, { filterType: "NOTIONAL",
+minNotional: "5",
+maxNotional: "NaN" }],
   ]
 
   for (const filters of invalidFilters) {
@@ -170,10 +185,15 @@ test("rejects missing, duplicate, malformed, and zero exchange filters", async (
 test("uses the stricter minimum when Binance returns both MIN_NOTIONAL and NOTIONAL filters", async () => {
   const filters = [
     ...createExchangeInfo().symbols[0].filters,
-    { filterType: "NOTIONAL", minNotional: "10.00000000", maxNotional: "50.00000000", applyMinToMarket: true, applyMaxToMarket: true },
+    { filterType: "NOTIONAL",
+minNotional: "10.00000000",
+maxNotional: "50.00000000",
+applyMinToMarket: true,
+applyMaxToMarket: true },
   ]
   const [exchangeResponse] = [createResponse(createExchangeInfo({ filters }))]
-  const responses = [exchangeResponse, createResponse({ symbol: "ADAFDUSD", price: "0.5" })]
+  const responses = [exchangeResponse, createResponse({ symbol: "ADAFDUSD",
+price: "0.5" })]
   const metadata = await fetchBinanceSpotMetadata({
     symbol: "ADAFDUSD",
     fetchImpl: async () => responses.shift(),
@@ -183,17 +203,23 @@ test("uses the stricter minimum when Binance returns both MIN_NOTIONAL and NOTIO
 
 test("reports Binance HTTP, malformed JSON, and network failures clearly", async () => {
   await assert.rejects(
-    fetchBinanceSpotMetadata({ symbol: "ADAFDUSD", fetchImpl: async () => createResponse({}, { ok: false, status: 429 }) }),
+    fetchBinanceSpotMetadata({ symbol: "ADAFDUSD",
+fetchImpl: async () => createResponse({}, { ok: false,
+status: 429 }) }),
     /429/,
     "HTTP failures must include the status code.",
   )
   await assert.rejects(
-    fetchBinanceSpotMetadata({ symbol: "ADAFDUSD", fetchImpl: async () => ({ ok: true, status: 200, json: async () => { throw new Error("invalid JSON") } }) }),
+    fetchBinanceSpotMetadata({ symbol: "ADAFDUSD",
+fetchImpl: async () => ({ ok: true,
+status: 200,
+json: async () => { throw new Error("invalid JSON") } }) }),
     /invalid JSON/i,
     "Malformed JSON responses must be surfaced as metadata failures.",
   )
   await assert.rejects(
-    fetchBinanceSpotMetadata({ symbol: "ADAFDUSD", fetchImpl: async () => { throw new Error("network down") } }),
+    fetchBinanceSpotMetadata({ symbol: "ADAFDUSD",
+fetchImpl: async () => { throw new Error("network down") } }),
     /network down/i,
     "Network failures must retain their original diagnostic.",
   )
@@ -208,15 +234,27 @@ test("preserves unsupported active filters as non-blocking diagnostics and ignor
         ...base.symbols[0],
         filters: [
           ...base.symbols[0].filters,
-          { filterType: "PERCENT_PRICE_BY_SIDE", bidMultiplierUp: "1.2", bidMultiplierDown: "0.8", askMultiplierUp: "1.2", askMultiplierDown: "0.8", avgPriceMins: 5 },
-          { filterType: "MAX_NUM_ORDERS", maxNumOrders: 25 },
-          { filterType: "FUTURE_ACTIVE_FILTER", enabled: true },
-          { filterType: "MARKET_LOT_SIZE", minQty: "0", maxQty: "0", stepSize: "0" },
+          { filterType: "PERCENT_PRICE_BY_SIDE",
+bidMultiplierUp: "1.2",
+bidMultiplierDown: "0.8",
+askMultiplierUp: "1.2",
+askMultiplierDown: "0.8",
+avgPriceMins: 5 },
+          { filterType: "MAX_NUM_ORDERS",
+maxNumOrders: 25 },
+          { filterType: "FUTURE_ACTIVE_FILTER",
+enabled: true },
+          { filterType: "MARKET_LOT_SIZE",
+minQty: "0",
+maxQty: "0",
+stepSize: "0" },
         ],
       }],
-      exchangeFilters: [{ filterType: "EXCHANGE_MAX_NUM_ORDERS", maxNumOrders: 200 }],
+      exchangeFilters: [{ filterType: "EXCHANGE_MAX_NUM_ORDERS",
+maxNumOrders: 200 }],
     }),
-    createResponse({ symbol: "ADAFDUSD", price: "0.5" }),
+    createResponse({ symbol: "ADAFDUSD",
+price: "0.5" }),
   ]
   const metadata = await fetchBinanceSpotMetadata({
     symbol: "ADAFDUSD",
@@ -225,22 +263,36 @@ test("preserves unsupported active filters as non-blocking diagnostics and ignor
 
   assert.equal(metadata.symbol, "ADAFDUSD", "Unsupported active filters must not block generating a pair configuration.")
   assert.deepEqual(metadata.unvalidatedConstraints, [
-    { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
-    { type: "OPEN_ORDER_COUNT_PER_MARKET", scope: "ACCOUNT", sourceFilterType: "MAX_NUM_ORDERS" },
-    { type: "UNMODELED_EXCHANGE_CONSTRAINT", scope: "SYMBOL", sourceFilterType: "FUTURE_ACTIVE_FILTER" },
-    { type: "OPEN_ORDER_COUNT_EXCHANGE_WIDE", scope: "EXCHANGE", sourceFilterType: "EXCHANGE_MAX_NUM_ORDERS" },
+    { type: "DYNAMIC_PRICE_BAND",
+scope: "SYMBOL",
+sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
+    { type: "OPEN_ORDER_COUNT_PER_MARKET",
+scope: "ACCOUNT",
+sourceFilterType: "MAX_NUM_ORDERS" },
+    { type: "UNMODELED_EXCHANGE_CONSTRAINT",
+scope: "SYMBOL",
+sourceFilterType: "FUTURE_ACTIVE_FILTER" },
+    { type: "OPEN_ORDER_COUNT_EXCHANGE_WIDE",
+scope: "EXCHANGE",
+sourceFilterType: "EXCHANGE_MAX_NUM_ORDERS" },
   ], "Unsupported active filters must remain visible as canonical diagnostics without being treated as locally validated.")
 })
 test("accepts omitted optional price and maximum-notional bounds without inventing values", async () => {
   const responses = [
     createResponse(createExchangeInfo({
       filters: [
-        { filterType: "PRICE_FILTER", tickSize: "0.0001" },
-        { filterType: "LOT_SIZE", minQty: "0.1", maxQty: "100000", stepSize: "0.1" },
-        { filterType: "NOTIONAL", minNotional: "5" },
+        { filterType: "PRICE_FILTER",
+tickSize: "0.0001" },
+        { filterType: "LOT_SIZE",
+minQty: "0.1",
+maxQty: "100000",
+stepSize: "0.1" },
+        { filterType: "NOTIONAL",
+minNotional: "5" },
       ],
     })),
-    createResponse({ symbol: "ADAFDUSD", price: "0.5" }),
+    createResponse({ symbol: "ADAFDUSD",
+price: "0.5" }),
   ]
   const metadata = await fetchBinanceSpotMetadata({
     symbol: "ADAFDUSD",
@@ -253,21 +305,33 @@ test("accepts omitted optional price and maximum-notional bounds without inventi
 
 test("validates current reference price against active PRICE_FILTER bounds", async () => {
   for (const priceFilter of [
-    { filterType: "PRICE_FILTER", minPrice: "1", maxPrice: "100", tickSize: "0.0001" },
-    { filterType: "PRICE_FILTER", minPrice: "0", maxPrice: "0.1", tickSize: "0.0001" },
+    { filterType: "PRICE_FILTER",
+minPrice: "1",
+maxPrice: "100",
+tickSize: "0.0001" },
+    { filterType: "PRICE_FILTER",
+minPrice: "0",
+maxPrice: "0.1",
+tickSize: "0.0001" },
   ]) {
     const responses = [
       createResponse(createExchangeInfo({
         filters: [
           priceFilter,
-          { filterType: "LOT_SIZE", minQty: "0.1", maxQty: "100000", stepSize: "0.1" },
-          { filterType: "MIN_NOTIONAL", minNotional: "5" },
+          { filterType: "LOT_SIZE",
+minQty: "0.1",
+maxQty: "100000",
+stepSize: "0.1" },
+          { filterType: "MIN_NOTIONAL",
+minNotional: "5" },
         ],
       })),
-      createResponse({ symbol: "ADAFDUSD", price: "0.5" }),
+      createResponse({ symbol: "ADAFDUSD",
+price: "0.5" }),
     ]
     await assert.rejects(
-      fetchBinanceSpotMetadata({ symbol: "ADAFDUSD", fetchImpl: async () => responses.shift() }),
+      fetchBinanceSpotMetadata({ symbol: "ADAFDUSD",
+fetchImpl: async () => responses.shift() }),
       /ticker price is (below|above) PRICE_FILTER/i,
       "A reference price outside active Binance price bounds must not be used for order sizing.",
     )
@@ -276,9 +340,12 @@ test("validates current reference price against active PRICE_FILTER bounds", asy
 
 test("rejects a ticker response for a different symbol or invalid price", async () => {
   for (const ticker of [
-    { symbol: "OTHER", price: "0.5" },
-    { symbol: "ADAFDUSD", price: "0" },
-    { symbol: "ADAFDUSD", price: "NaN" },
+    { symbol: "OTHER",
+price: "0.5" },
+    { symbol: "ADAFDUSD",
+price: "0" },
+    { symbol: "ADAFDUSD",
+price: "NaN" },
   ]) {
     let requestIndex = 0
     await assert.rejects(

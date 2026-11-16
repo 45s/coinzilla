@@ -28,7 +28,9 @@ export async function runConfigSymbol({
   const environment = normalizeTradingEnvironment(defaultEnvironment)
   writeLine(`Fetching public Binance Spot exchange information from ${environment}...`)
 
-  const metadata = await metadataFetcher({ symbol, environment, fetchImpl })
+  const metadata = await metadataFetcher({ symbol,
+environment,
+fetchImpl })
   if (metadata?.symbol !== symbol || metadata?.environment !== environment) {
     throw new Error("Binance metadata symbol/environment does not match the operator selection")
   }
@@ -52,20 +54,29 @@ export async function runConfigSymbol({
   const confirmation = (await ask("Add or refresh this market in the shared token specification? [Y/n]: ")).trim().toLowerCase()
   if (confirmation !== "" && confirmation !== "y" && confirmation !== "yes") {
     writeLine("Cancelled. No token specification file was changed.")
-    return Object.freeze({ written: false, symbol, baseAsset, marketSpecification: market })
+    return Object.freeze({ written: false,
+symbol,
+baseAsset,
+marketSpecification: market })
   }
 
-  const writtenPath = await writeSpecification({ specificationPath, metadata })
+  const writtenPath = await writeSpecification({ specificationPath,
+metadata })
   writeLine(`Token specification updated successfully: ${writtenPath}`)
   writeLine("Strategy pair configuration was not changed.")
-  return Object.freeze({ written: true, symbol, baseAsset, marketSpecification: market, path: writtenPath })
+  return Object.freeze({ written: true,
+symbol,
+baseAsset,
+marketSpecification: market,
+path: writtenPath })
 }
 
 async function main() {
   if (!stdin.isTTY || !stdout.isTTY) {
     throw new Error("config:symbol requires an interactive terminal; run it from Git Bash or a terminal window")
   }
-  const terminal = createInterface({ input: stdin, output: stdout })
+  const terminal = createInterface({ input: stdin,
+output: stdout })
   try {
     await runConfigSymbol({
       ask: (question) => terminal.question(question),
