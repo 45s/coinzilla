@@ -177,6 +177,8 @@ function buildControlFailureReply({ action, symbol, result, method, interaction,
     return `Cannot resume ${symbol}: a safety, recovery, or volatility blocker is still active. The blocker was not changed.`
   }
   if (code === "OPERATOR_BUY_CANCELLATION_INCOMPLETE") {
+    interaction.applicationOperationCompleted = true
+    interaction.stateChanged = true
     const scope = symbol ? `for ${symbol}` : "across all markets"
     return `BUY pause is active ${scope}, but cancellation of one or more Harvester-owned BUY orders is unresolved. New BUY submissions remain blocked. Check /orders and Harvester diagnostics before assuming the market is clear.`
   }
