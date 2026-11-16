@@ -11,9 +11,14 @@ import {
 } from "@coinzilla/entities"
 import { makeCollectOwnedOrderSnapshots } from "./collect-owned-order-snapshots.js"
 
-const baseAsset = new Asset({ id: "doge", code: "DOGE" })
-const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({ id: "doge",
+code: "DOGE" })
+const quoteAsset = new Asset({ id: "usdt",
+code: "USDT" })
+const market = new Market({ venue: "binance",
+symbol: "DOGEUSDT",
+baseAsset,
+quoteAsset })
 
 function makeCanonicalOrder({
   status = "OPEN",
@@ -27,9 +32,12 @@ function makeCanonicalOrder({
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+    limitPrice: new Money({ amount: "100",
+asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1",
+asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: executedQuantity,
+asset: baseAsset }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
@@ -61,9 +69,12 @@ function makeFill({ tradeId = "1", price = "100" } = {}) {
     clientOrderId: "h-dogeusdt-order-1",
     market,
     side: "BUY",
-    price: new Money({ amount: price, asset: quoteAsset }),
-    quantity: new Quantity({ amount: "1", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "100", asset: quoteAsset }),
+    price: new Money({ amount: price,
+asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1",
+asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "100",
+asset: quoteAsset }),
     executedAt: 10,
     commissions: [],
     commissionStatus: "COMPLETE",
@@ -80,20 +91,24 @@ function makeCollector({
   const broker = {
     getOpenOrders: async ({ symbol }) => {
       calls.push(["open-orders", symbol])
-      return { ok: true, data: openOrders }
+      return { ok: true,
+data: openOrders }
     },
     getCanonicalOrderHistory: async ({ symbol, orderId }) => {
       calls.push(["order-history", symbol, orderId])
-      return { ok: true, data: [historyOrder] }
+      return { ok: true,
+data: [historyOrder] }
     },
     getFills: async ({ symbol, orderId, fromId, limit }) => {
       calls.push(["fills", symbol, orderId, fromId, limit])
-      return { ok: true, data: fills }
+      return { ok: true,
+data: fills }
     },
   }
   return {
     calls,
-    collect: makeCollectOwnedOrderSnapshots({ broker, journalFillsById }),
+    collect: makeCollectOwnedOrderSnapshots({ broker,
+journalFillsById }),
   }
 }
 
@@ -142,8 +157,10 @@ test("fails closed when canonical history says an owned order is active but it i
 })
 
 test("rejects canonical REST fills that conflict with durable Journal execution facts", async () => {
-  const ownedOrder = makeCanonicalOrder({ status: "FILLED", executedQuantity: "1" })
-  const historyOrder = makeCanonicalOrder({ status: "FILLED", executedQuantity: "1" })
+  const ownedOrder = makeCanonicalOrder({ status: "FILLED",
+executedQuantity: "1" })
+  const historyOrder = makeCanonicalOrder({ status: "FILLED",
+executedQuantity: "1" })
   const fill = makeFill()
   const journalFill = {
     fillId: fill.id,
@@ -177,8 +194,10 @@ test("rejects canonical REST fills that conflict with durable Journal execution 
 })
 
 test("rejects a full fill-history page that cannot be paginated by numeric trade ID", async () => {
-  const ownedOrder = makeCanonicalOrder({ status: "FILLED", executedQuantity: "1" })
-  const historyOrder = makeCanonicalOrder({ status: "FILLED", executedQuantity: "1" })
+  const ownedOrder = makeCanonicalOrder({ status: "FILLED",
+executedQuantity: "1" })
+  const historyOrder = makeCanonicalOrder({ status: "FILLED",
+executedQuantity: "1" })
   const nonNumericFill = makeFill({ tradeId: "non-numeric" })
   const { collect } = makeCollector({
     historyOrder,
@@ -200,6 +219,7 @@ test("returns an empty snapshot set without broker reads when no owned orders ex
 
   const result = await collect({ ownedOrders: [] })
 
-  assert.deepEqual(result, { snapshots: [], symbols: [] }, "An empty registry must produce an empty, successful reconciliation input.")
+  assert.deepEqual(result, { snapshots: [],
+symbols: [] }, "An empty registry must produce an empty, successful reconciliation input.")
   assert.deepEqual(calls, [], "No exchange reads are needed when there are no owned orders.")
 })

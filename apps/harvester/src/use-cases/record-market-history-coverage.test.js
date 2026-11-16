@@ -8,7 +8,8 @@ import { recordMarketHistoryCoverage } from "./record-market-history-coverage.js
 
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-history-coverage-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "history-coverage-test",
@@ -30,7 +31,8 @@ const evidence = (overrides = {}) => ({
 
 test("records a market-history coverage confirmation only after verifying the existing ledger", async (t) => {
   const operationalStateStore = await createStore(t)
-  const result = await recordMarketHistoryCoverage({ operationalStateStore, ...evidence() })
+  const result = await recordMarketHistoryCoverage({ operationalStateStore,
+...evidence() })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
   assert.equal(result.data.durable, true)
@@ -41,7 +43,8 @@ test("records a market-history coverage confirmation only after verifying the ex
 
 test("rejects a later coverage fact that narrows the previously verified history window", async (t) => {
   const operationalStateStore = await createStore(t)
-  assert.equal((await recordMarketHistoryCoverage({ operationalStateStore, ...evidence() })).ok, true)
+  assert.equal((await recordMarketHistoryCoverage({ operationalStateStore,
+...evidence() })).ok, true)
   const result = await recordMarketHistoryCoverage({
     operationalStateStore,
     ...evidence({
@@ -58,7 +61,8 @@ test("rejects a later coverage fact that narrows the previously verified history
 
 test("rejects a coverage verification timestamp that moves backwards", async (t) => {
   const operationalStateStore = await createStore(t)
-  assert.equal((await recordMarketHistoryCoverage({ operationalStateStore, ...evidence() })).ok, true)
+  assert.equal((await recordMarketHistoryCoverage({ operationalStateStore,
+...evidence() })).ok, true)
   const result = await recordMarketHistoryCoverage({
     operationalStateStore,
     ...evidence({
@@ -74,13 +78,15 @@ test("rejects a coverage verification timestamp that moves backwards", async (t)
 })
 
 test("does not initialize a missing Operational State Store", async (t) => {
-  const directory = path.join(os.tmpdir(), "harvester-history-coverage-missing-" + process.pid + "-" + Date.now())
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  const directory = path.join(os.tmpdir(), `harvester-history-coverage-missing-${  process.pid  }-${  Date.now()}`)
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const operationalStateStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "history-coverage-test",
   })
-  const result = await recordMarketHistoryCoverage({ operationalStateStore, ...evidence() })
+  const result = await recordMarketHistoryCoverage({ operationalStateStore,
+...evidence() })
 
   assert.equal(result.ok, false)
 })
@@ -91,7 +97,8 @@ test("rejects malformed coverage evidence before calling the durable append port
   const operationalStateStore = {
     append: async (fact) => {
       appendCalls.push(fact)
-      return { ok: true, data: { durable: true } }
+      return { ok: true,
+data: { durable: true } }
     },
   }
   const invalidCases = [
@@ -117,13 +124,16 @@ test("rejects malformed coverage evidence before calling the durable append port
 
 test("returns durable append failures and converts thrown append errors into results", async () => {
   const appendError = new Error("append unavailable")
-  const rejectedStore = { append: async () => ({ ok: false, errors: [appendError] }) }
-  const rejected = await recordMarketHistoryCoverage({ operationalStateStore: rejectedStore, ...evidence() })
+  const rejectedStore = { append: async () => ({ ok: false,
+errors: [appendError] }) }
+  const rejected = await recordMarketHistoryCoverage({ operationalStateStore: rejectedStore,
+...evidence() })
   assert.equal(rejected.ok, false, "A rejected durable append result must remain a failed coverage-recording outcome.")
   assert.equal(rejected.errors[0], appendError, "The recorder must preserve the original durable append error identity.")
 
   const thrownStore = { append: async () => { throw appendError } }
-  const thrown = await recordMarketHistoryCoverage({ operationalStateStore: thrownStore, ...evidence() })
+  const thrown = await recordMarketHistoryCoverage({ operationalStateStore: thrownStore,
+...evidence() })
   assert.equal(thrown.ok, false, "A thrown durable append error must be normalized into a failed result.")
   assert.equal(thrown.errors[0], appendError, "The recorder must preserve the original thrown append error identity.")
 })

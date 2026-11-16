@@ -9,9 +9,11 @@ import { Portfolio } from "../domain/portfolio/portfolio.js"
  */
 export function updatePortfolio({ portfolio, fill, positionId, strategyId } = {}) {
   try {
-    if (!(portfolio instanceof Portfolio)) throw new TypeError("updatePortfolio requires a Portfolio")
-    if (!(fill instanceof Fill)) throw new TypeError("updatePortfolio requires a canonical Fill")
-    const result = portfolio.applyFill({ fill, positionId, strategyId })
+    if (!(portfolio instanceof Portfolio)) {throw new TypeError("updatePortfolio requires a Portfolio")}
+    if (!(fill instanceof Fill)) {throw new TypeError("updatePortfolio requires a canonical Fill")}
+    const result = portfolio.applyFill({ fill,
+positionId,
+strategyId })
     return toResult({
       data: {
         portfolio: result.portfolio,

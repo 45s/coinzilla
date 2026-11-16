@@ -14,17 +14,19 @@ export async function recordExecutionFill({ operationalStateStore, fill } = {}) 
   try {
     if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordExecutionFill requires a Operational State Store append capability") }
     if (!(fill instanceof Fill)) { throw new TypeError("recordExecutionFill requires a canonical Fill") }
-    const market = fill.market
+    const {market} = fill
     const commissions = fill.commissions.map((commission) => ({
       amount: commission.amount.amount,
       assetId: commission.amount.asset.id,
       assetCode: commission.amount.asset.code,
       quoteValue: commission.quoteValue
-        ? { amount: commission.quoteValue.amount, assetId: commission.quoteValue.asset.id, assetCode: commission.quoteValue.asset.code }
+        ? { amount: commission.quoteValue.amount,
+assetId: commission.quoteValue.asset.id,
+assetCode: commission.quoteValue.asset.code }
         : null,
     }))
     const result = await operationalStateStore.append({
-      factId: "execution-fill-applied:" + fill.id,
+      factId: `execution-fill-applied:${  fill.id}`,
       factType: "EXECUTION_FILL_APPLIED",
       data: {
         fillId: fill.id,

@@ -5,10 +5,10 @@ function validateCoverageSequence({ records, symbol }) {
   for (const record of records) {
     if (record.factType !== "MARKET_HISTORY_COVERAGE_CONFIRMED" || record.data?.symbol !== symbol) { continue }
     if (previous && record.data.coveredFromTime > previous.data.coveredFromTime) {
-      throw new Error("Durable market-history coverage narrows the verified history window for " + symbol)
+      throw new Error(`Durable market-history coverage narrows the verified history window for ${  symbol}`)
     }
     if (previous && record.data.verifiedAt < previous.data.verifiedAt) {
-      throw new Error("Durable market-history coverage verification timestamp regresses for " + symbol)
+      throw new Error(`Durable market-history coverage verification timestamp regresses for ${  symbol}`)
     }
     previous = record
   }
@@ -43,9 +43,10 @@ export async function readMarketHistoryCoverage({ operationalStateStore, symbol 
     if (!Array.isArray(records)) {
       throw new TypeError("Operational State Store record read result must contain a records array")
     }
-    const latest = validateCoverageSequence({ records, symbol })
+    const latest = validateCoverageSequence({ records,
+symbol })
     if (!latest) {
-      throw new Error("No durable history-coverage fact exists for " + symbol)
+      throw new Error(`No durable history-coverage fact exists for ${  symbol}`)
     }
     return toResult({
       data: Object.freeze({

@@ -1,6 +1,6 @@
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest("[conservative-trading-engine.multi-market.test.js] " + name, ...args)
+const test = (...[name, ...args]) => nodeTest(`[conservative-trading-engine.multi-market.test.js] ${  name}`, ...args)
 import assert from "node:assert/strict"
 import {
   Asset,
@@ -16,12 +16,21 @@ import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledge
 import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 
-const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-const dogeAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
-const solAsset = new Asset({ id: "asset:SOL", code: "SOL" })
+const quoteAsset = new Asset({ id: "asset:USDT",
+code: "USDT" })
+const dogeAsset = new Asset({ id: "asset:DOGE",
+code: "DOGE" })
+const solAsset = new Asset({ id: "asset:SOL",
+code: "SOL" })
 const markets = [
-  new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset: dogeAsset, quoteAsset }),
-  new Market({ venue: "binance", symbol: "SOLUSDT", baseAsset: solAsset, quoteAsset }),
+  new Market({ venue: "binance",
+symbol: "DOGEUSDT",
+baseAsset: dogeAsset,
+quoteAsset }),
+  new Market({ venue: "binance",
+symbol: "SOLUSDT",
+baseAsset: solAsset,
+quoteAsset }),
 ]
 const marketsBySymbol = new Map(markets.map((market) => [market.symbol, market]))
 const marketsById = new Map(markets.map((market) => [market.id, market]))
@@ -40,10 +49,22 @@ function makeMarketMetadata(market) {
     tradingRules: new TradingRules({
       market,
       constraints: [
-        { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.01", asset: quoteAsset }) },
-        { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.1", asset: market.baseAsset }) },
-        { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "0.1", asset: market.baseAsset }) },
-        { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
+        { type: "PRICE_INCREMENT",
+status: "SUPPORTED",
+value: new Money({ amount: "0.01",
+asset: quoteAsset }) },
+        { type: "QUANTITY_INCREMENT",
+status: "SUPPORTED",
+value: new Quantity({ amount: "0.1",
+asset: market.baseAsset }) },
+        { type: "MIN_QUANTITY",
+status: "SUPPORTED",
+value: new Quantity({ amount: "0.1",
+asset: market.baseAsset }) },
+        { type: "MIN_NOTIONAL",
+status: "SUPPORTED",
+value: new Money({ amount: "5",
+asset: quoteAsset }) },
       ],
     }),
   }
@@ -54,7 +75,8 @@ function createHarnessAppConfig({ externalOrdersPolicyBySymbol = {} } = {}) {
     strategies: {
       [StrategyId.COIN_GRABBER]: {
         enabled: true,
-        settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
+        settings: { conservative: { enabled: true },
+aggressive: { enabled: false } },
         pairs: Object.fromEntries(markets.map((market) => [market.symbol, {
           enabled: true,
           ...(externalOrdersPolicyBySymbol[market.symbol] === undefined
@@ -82,13 +104,16 @@ function createHarnessBroker({ orders } = {}) {
         ok: true,
         data: new CanonicalOrder({
           clientOrderId: order.clientOrderId,
-          brokerOrderId: "broker-" + order.clientOrderId,
+          brokerOrderId: `broker-${  order.clientOrderId}`,
           market,
           side: order.side,
           type: order.type,
-          limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
-          originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
-          executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+          limitPrice: new Money({ amount: order.price,
+asset: market.quoteAsset }),
+          originalQuantity: new Quantity({ amount: order.quantity,
+asset: market.baseAsset }),
+          executedQuantity: new Quantity({ amount: "0",
+asset: market.baseAsset }),
           status: "OPEN",
           createdAt: 1,
           acknowledgedAt: 1,
@@ -114,7 +139,8 @@ function createHarnessBroker({ orders } = {}) {
         completedAt: 2,
       }),
     }),
-    getFills: async () => ({ ok: true, data: [] }),
+    getFills: async () => ({ ok: true,
+data: [] }),
   }
 }
 
@@ -152,24 +178,32 @@ function createHarnessEngine({
     }),
     updateTradingAccounting: async ({ fill }) => {
       if (accountedFillIds.has(fill.id)) {
-        return { ok: true, data: { applied: false, duplicate: true } }
+        return { ok: true,
+data: { applied: false,
+duplicate: true } }
       }
       accountedFillIds.add(fill.id)
       accountedFills.push(fill)
-      return { ok: true, data: { applied: true, duplicate: false } }
+      return { ok: true,
+data: { applied: true,
+duplicate: false } }
     },
     completeRecoveryCycle: async () => ({
       ok: true,
-      data: { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1" },
+      data: { eligible: true,
+freeQuantity: "0.1",
+realizedNetProfit: "1" },
     }),
     canTrade: () => true,
     isMarketPriceFresh: () => true,
     isMarketBookFresh: () => true,
     onUnownedExternalOrderObserved,
     isStopping: () => false,
-    onPause: async ({ symbol, reason }) => pauses.push({ symbol, reason }),
+    onPause: async ({ symbol, reason }) => pauses.push({ symbol,
+reason }),
     getVolatilityData: volatilityProtectionEnabled
-      ? () => ({ ok: false, error: new Error("test volatility snapshot unavailable") })
+      ? () => ({ ok: false,
+error: new Error("test volatility snapshot unavailable") })
       : undefined,
     initialState,
   })
@@ -225,14 +259,19 @@ async function createHarness({
     initialState,
   })
   await initializeHarnessBooks({ engine })
-  return { engine, orders, pauses, accountedFills }
+  return { engine,
+orders,
+pauses,
+accountedFills }
 }
 
 async function startBothMarkets(engine) {
   for (const market of markets) {
     const result = await engine.processMarketPrice({
       symbol: market.symbol,
-      priceEvent: { symbol: market.symbol, price: "100", timestamp: 1 },
+      priceEvent: { symbol: market.symbol,
+price: "100",
+timestamp: 1 },
     })
     assert.equal(result.ok, true, result.errors?.map((error) => error.message).join("; ") ?? "Market evaluation failed")
   }
@@ -247,7 +286,8 @@ function makePartialFillEvent({ order, tradeId, quantity, quoteQuantity }) {
     type: order.type,
     limitPrice: order.limitPrice,
     originalQuantity: order.originalQuantity,
-    executedQuantity: new Quantity({ amount: quantity, asset: order.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: quantity,
+asset: order.market.baseAsset }),
     status: "PARTIALLY_FILLED",
     createdAt: order.createdAt,
     acknowledgedAt: order.acknowledgedAt,
@@ -260,13 +300,17 @@ function makePartialFillEvent({ order, tradeId, quantity, quoteQuantity }) {
     market: order.market,
     side: order.side,
     price: order.limitPrice,
-    quantity: new Quantity({ amount: quantity, asset: order.market.baseAsset }),
-    quoteQuantity: new Money({ amount: quoteQuantity, asset: order.market.quoteAsset }),
+    quantity: new Quantity({ amount: quantity,
+asset: order.market.baseAsset }),
+    quoteQuantity: new Money({ amount: quoteQuantity,
+asset: order.market.quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
     executedAt: 2,
   })
-  return { executionType: "TRADE", executedOrder, fill }
+  return { executionType: "TRADE",
+executedOrder,
+fill }
 }
 
 test("shared quote-asset BUY commitments are reserved across markets", async () => {
@@ -274,11 +318,15 @@ test("shared quote-asset BUY commitments are reserved across markets", async () 
   const [dogeResult, solResult] = await Promise.all([
     engine.processMarketPrice({
       symbol: "DOGEUSDT",
-      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+      priceEvent: { symbol: "DOGEUSDT",
+price: "100",
+timestamp: 1 },
     }),
     engine.processMarketPrice({
       symbol: "SOLUSDT",
-      priceEvent: { symbol: "SOLUSDT", price: "100", timestamp: 1 },
+      priceEvent: { symbol: "SOLUSDT",
+price: "100",
+timestamp: 1 },
     }),
   ])
 
@@ -300,14 +348,18 @@ test("shared quote cash flow from another market reduces the account-wide BUY bu
     clientOrderId: "prior-doge-client",
     market: marketsBySymbol.get("DOGEUSDT"),
     side: "BUY",
-    price: new Money({ amount: "99.95", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "1", asset: dogeAsset }),
-    quoteQuantity: new Money({ amount: "99.95", asset: quoteAsset }),
+    price: new Money({ amount: "99.95",
+asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1",
+asset: dogeAsset }),
+    quoteQuantity: new Money({ amount: "99.95",
+asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
     executedAt: 1,
   })
-  const portfolio = new Portfolio().applyFill({ fill: priorDogeBuy, strategyId: StrategyId.COIN_GRABBER }).portfolio
+  const {portfolio} = new Portfolio().applyFill({ fill: priorDogeBuy,
+strategyId: StrategyId.COIN_GRABBER })
   const { engine, orders } = await createHarness({
     quoteFreeBalance: "150",
     portfolio,
@@ -315,7 +367,9 @@ test("shared quote cash flow from another market reduces the account-wide BUY bu
 
   const result = await engine.processMarketPrice({
     symbol: "SOLUSDT",
-    priceEvent: { symbol: "SOLUSDT", price: "100", timestamp: 1 },
+    priceEvent: { symbol: "SOLUSDT",
+price: "100",
+timestamp: 1 },
   })
 
   assert.equal(result.ok, true)
@@ -344,9 +398,12 @@ test("a newly observed external order triggers symbol-scoped reconciliation with
     market: solMarket,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "99.95", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: solAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: solAsset }),
+    limitPrice: new Money({ amount: "99.95",
+asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1",
+asset: solAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: solAsset }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -354,7 +411,8 @@ test("a newly observed external order triggers symbol-scoped reconciliation with
   })
 
   const unowned = await engine.processUserDataEvent({
-    event: { eventType: "executionReport", executedOrder: unownedSolOrder },
+    event: { eventType: "executionReport",
+executedOrder: unownedSolOrder },
   })
   assert.equal(unowned.ok, true,
     "A manual external order under BLOCK policy must be isolated to its symbol instead of failing the shared user-data stream.")
@@ -426,10 +484,13 @@ test("accounts the same broker trade ID independently for different markets", as
     "The SOLUSDT execution must be accepted independently even though its trade ID matches the DOGEUSDT execution.",
   )
   assert.deepEqual(
-    accountedFills.map((fill) => ({ symbol: fill.market.symbol, tradeId: fill.tradeId })),
+    accountedFills.map((fill) => ({ symbol: fill.market.symbol,
+tradeId: fill.tradeId })),
     [
-      { symbol: "DOGEUSDT", tradeId: "shared-trade-id" },
-      { symbol: "SOLUSDT", tradeId: "shared-trade-id" },
+      { symbol: "DOGEUSDT",
+tradeId: "shared-trade-id" },
+      { symbol: "SOLUSDT",
+tradeId: "shared-trade-id" },
     ],
     "Both executions must reach accounting; deduplication by raw tradeId alone must not suppress the second market's fill.",
   )
@@ -469,7 +530,8 @@ test("duplicate fills and stale order updates do not double-account across marke
     type: dogeOrder.type,
     limitPrice: dogeOrder.limitPrice,
     originalQuantity: dogeOrder.originalQuantity,
-    executedQuantity: new Quantity({ amount: "0", asset: dogeAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: dogeAsset }),
     status: "OPEN",
     createdAt: dogeOrder.createdAt,
     acknowledgedAt: dogeOrder.acknowledgedAt,
@@ -504,7 +566,8 @@ test("operator pause blocks new BUY exposure only for the selected market", asyn
 
   const pauseResult = await engine.pauseMarket({
     symbol: "DOGEUSDT",
-    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+    beforeApply: async () => ({ ok: true,
+data: { durable: true } }),
   })
 
   assert.equal(
@@ -526,8 +589,10 @@ test("operator pause blocks new BUY exposure only for the selected market", asyn
   await startBothMarkets(engine)
 
   assert.deepEqual(
-    orders.map(({ symbol, side }) => ({ symbol, side })),
-    [{ symbol: "SOLUSDT", side: "BUY" }],
+    orders.map(({ symbol, side }) => ({ symbol,
+side })),
+    [{ symbol: "SOLUSDT",
+side: "BUY" }],
     "Pausing DOGEUSDT must suppress its new BUY while leaving SOLUSDT eligible for normal strategy evaluation.",
   )
 })
@@ -577,10 +642,13 @@ test("operator pause does not change in-memory state when the durable fact commi
   await startBothMarkets(engine)
 
   assert.deepEqual(
-    orders.map(({ symbol, side }) => ({ symbol, side })),
+    orders.map(({ symbol, side }) => ({ symbol,
+side })),
     [
-      { symbol: "DOGEUSDT", side: "BUY" },
-      { symbol: "SOLUSDT", side: "BUY" },
+      { symbol: "DOGEUSDT",
+side: "BUY" },
+      { symbol: "SOLUSDT",
+side: "BUY" },
     ],
     "A rejected pause must not partially block either market's ordinary BUY evaluation.",
   )
@@ -603,7 +671,8 @@ test("operator pause leaves existing exchange orders untouched and suppresses tr
 
   const pauseResult = await engine.pauseMarket({
     symbol: "DOGEUSDT",
-    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+    beforeApply: async () => ({ ok: true,
+data: { durable: true } }),
   })
   assert.equal(
     pauseResult.ok,
@@ -613,7 +682,9 @@ test("operator pause leaves existing exchange orders untouched and suppresses tr
 
   const priceResult = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: { symbol: "DOGEUSDT", price: "100.1", timestamp: 2 },
+    priceEvent: { symbol: "DOGEUSDT",
+price: "100.1",
+timestamp: 2 },
   })
 
   assert.equal(
@@ -656,31 +727,50 @@ test("operator pause restored from durable facts is active before the first mark
   await startBothMarkets(engine)
 
   assert.deepEqual(
-    orders.map(({ symbol, side }) => ({ symbol, side })),
-    [{ symbol: "SOLUSDT", side: "BUY" }],
+    orders.map(({ symbol, side }) => ({ symbol,
+side })),
+    [{ symbol: "SOLUSDT",
+side: "BUY" }],
     "The first DOGEUSDT strategy evaluation must observe the restored pause and submit no BUY.",
   )
 })
 
 
-test("operator pause preserves recovery SELL execution while suppressing the same market's BUY", async () => {
-  const dogeMarket = marketsBySymbol.get("DOGEUSDT")
+function createOperatorPauseRecoveryPosition({ market }) {
   const recoveryFill = new Fill({
     tradeId: "operator-pause-recovery-buy",
     brokerOrderId: "operator-pause-recovery-order",
     clientOrderId: "operator-pause-recovery-client",
-    market: dogeMarket,
+    market,
     side: "BUY",
-    price: new Money({ amount: "100", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "1", asset: dogeAsset }),
-    quoteQuantity: new Money({ amount: "100", asset: quoteAsset }),
+    price: new Money({ amount: "100", 
+      
+      asset: quoteAsset }),
+    
+    quantity: new Quantity({ amount: "1", 
+      
+      asset: dogeAsset }),
+    quoteQuantity: new Money({ amount: "100", 
+      asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
     executedAt: 1,
   })
-  const portfolio = new Portfolio().applyFill({ fill: recoveryFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
-  const recoveryLedger = RecoveryLedger.empty({ market: dogeMarket }).applyFill({ fill: recoveryFill, strategyId: StrategyId.COIN_GRABBER }).ledger
-  const strategyPolicy = {
+  const { portfolio } = new Portfolio().applyFill({
+    fill: recoveryFill,
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  const recoveryLedger = RecoveryLedger.empty({ market }).applyFill({
+    fill: recoveryFill
+    ,
+    strategyId: StrategyId.COIN_GRABBER,
+  }).ledger
+  return { portfolio, 
+    recoveryLedger }
+}
+
+function createOperatorPauseStrategyPolicy() {
+  return {
     evaluate: ({ marketPrice }) => {
       const buy = {
         side: "BUY",
@@ -707,6 +797,12 @@ test("operator pause preserves recovery SELL execution while suppressing the sam
     },
     evaluateTrailingBuyRepricing: conservativeStrategyPolicy.evaluateTrailingBuyRepricing,
   }
+}
+
+test("operator pause preserves recovery SELL execution while suppressing the same market's BUY", async () => {
+  const dogeMarket = marketsBySymbol.get("DOGEUSDT")
+  const { portfolio, recoveryLedger } = createOperatorPauseRecoveryPosition({ market: dogeMarket })
+  const strategyPolicy = createOperatorPauseStrategyPolicy()
   const { engine, orders } = await createHarness({
     portfolio,
     strategyPolicy,
@@ -720,21 +816,27 @@ test("operator pause preserves recovery SELL execution while suppressing the sam
   )
   const paused = await engine.pauseMarket({
     symbol: "DOGEUSDT",
-    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+    beforeApply: async () => ({ ok: true, 
+      data: { durable: true } }),
   })
   assert.equal(
     paused.ok,
     true,
     "The operator pause must be established before evaluating the market's recovery and entry intents.",
   )
+  
 
   await startBothMarkets(engine)
 
+  
   assert.deepEqual(
-    orders.map(({ symbol, side }) => ({ symbol, side })),
+    orders.map(({ symbol, side }) => ({ symbol, 
+      side })),
     [
-      { symbol: "DOGEUSDT", side: "SELL" },
-      { symbol: "SOLUSDT", side: "BUY" },
+      { symbol: "DOGEUSDT", 
+        side: "SELL" },
+      { symbol: "SOLUSDT", 
+        side: "BUY" },
     ],
     "The paused market must retain its risk-reducing recovery SELL while suppressing only its new BUY; another market remains active.",
   )
@@ -758,7 +860,8 @@ test("resume refuses to clear operator pause while a safety pause is active", as
     symbol: "DOGEUSDT",
     beforeApply: async () => {
       durableCommits += 1
-      return { ok: true, data: { durable: true } }
+      return { ok: true,
+data: { durable: true } }
     },
   })
 
@@ -794,11 +897,14 @@ test("repeated operator pause is idempotent and does not append another durable 
   let durableCommits = 0
   const beforeApply = async () => {
     durableCommits += 1
-    return { ok: true, data: { durable: true } }
+    return { ok: true,
+data: { durable: true } }
   }
 
-  const first = await engine.pauseMarket({ symbol: "DOGEUSDT", beforeApply })
-  const second = await engine.pauseMarket({ symbol: "DOGEUSDT", beforeApply })
+  const first = await engine.pauseMarket({ symbol: "DOGEUSDT",
+beforeApply })
+  const second = await engine.pauseMarket({ symbol: "DOGEUSDT",
+beforeApply })
 
   assert.equal(first.ok, true, "The first durable operator pause must succeed.")
   assert.equal(second.ok, true, "Repeating an already-active operator pause must be harmless.")
@@ -830,7 +936,8 @@ test("resume removes only the operator pause after its durable fact commits", as
         ["DOGEUSDT"],
         "The operator pause must remain active while the durable resume fact is being committed.",
       )
-      return { ok: true, data: { durable: true } }
+      return { ok: true,
+data: { durable: true } }
     },
   })
 
@@ -845,10 +952,13 @@ test("resume removes only the operator pause after its durable fact commits", as
   await startBothMarkets(engine)
 
   assert.deepEqual(
-    orders.map(({ symbol, side }) => ({ symbol, side })),
+    orders.map(({ symbol, side }) => ({ symbol,
+side })),
     [
-      { symbol: "DOGEUSDT", side: "BUY" },
-      { symbol: "SOLUSDT", side: "BUY" },
+      { symbol: "DOGEUSDT",
+side: "BUY" },
+      { symbol: "SOLUSDT",
+side: "BUY" },
     ],
     "A durably resumed market must return to normal strategy evaluation without changing other markets.",
   )
@@ -885,7 +995,8 @@ test("resume remains blocked while enabled high-volatility protection is in star
     symbol: "DOGEUSDT",
     beforeApply: async () => {
       durableCommits += 1
-      return { ok: true, data: { durable: true } }
+      return { ok: true,
+data: { durable: true } }
     },
   })
 

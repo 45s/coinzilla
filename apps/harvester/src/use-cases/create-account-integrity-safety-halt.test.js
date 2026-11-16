@@ -2,7 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { createAccountIntegritySafetyHalt } from "./create-account-integrity-safety-halt.js"
 
-const test = (name, ...args) => nodeTest("[create-account-integrity-safety-halt.test.js] " + name, ...args)
+const test = (...[name, ...args]) => nodeTest(`[create-account-integrity-safety-halt.test.js] ${  name}`, ...args)
 
 test("reconciles owned order identities before cancelling BUYs", async () => {
   const calls = []
@@ -61,7 +61,8 @@ test("logs reconciliation and cancellation failures without skipping the safety 
   const logs = []
   const cancel = createAccountIntegritySafetyHalt({
     getTradingEngine: () => ({
-      reconcileOwnedOrders: async () => ({ ok: false, errors: [new Error("reconcile failed")] }),
+      reconcileOwnedOrders: async () => ({ ok: false,
+errors: [new Error("reconcile failed")] }),
       cancelOwnedBuyOrdersForSafetyHalt: async () => { throw new Error("cancel failed") },
     }),
     logger: { error: (entry) => logs.push(entry.message) },

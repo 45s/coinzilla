@@ -1,9 +1,10 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest("[read-operator-trading-state.test.js] " + name, ...args)
+const test = (...[name, ...args]) => nodeTest(`[read-operator-trading-state.test.js] ${  name}`, ...args)
 import assert from "node:assert/strict"
 import { createReadOperatorTradingState } from "./read-operator-trading-state.js"
 
-const actor = Object.freeze({ id: "telegram-user:12345", roles: Object.freeze(["trading-operator"]) })
+const actor = Object.freeze({ id: "telegram-user:12345",
+roles: Object.freeze(["trading-operator"]) })
 
 function createHarness(overrides = {}) {
   const ownedOrder = {
@@ -20,7 +21,10 @@ function createHarness(overrides = {}) {
     getPortfolio: () => ({
       positions: [{
         value: {
-          market: { id: "doge", symbol: "DOGEUSDT", baseAsset: { code: "DOGE" }, quoteAsset: { code: "USDT" } },
+          market: { id: "doge",
+symbol: "DOGEUSDT",
+baseAsset: { code: "DOGE" },
+quoteAsset: { code: "USDT" } },
           baseQuantity: { amount: "8" },
           freeBaseQuantity: { amount: "1" },
           totalBaseQuantity: { amount: "9" },
@@ -41,8 +45,22 @@ function createHarness(overrides = {}) {
     getOpenOrders: async () => ({
       ok: true,
       data: [
-        { id: "101", symbol: "DOGEUSDT", side: "BUY", status: "NEW", clientOrderId: "h-buy-1", originalPrice: "0.12", originalQuantity: "10", executedQuantity: "2" },
-        { id: "202", symbol: "BTCUSDT", side: "SELL", status: "NEW", clientOrderId: "manual-1", originalPrice: "50000", originalQuantity: "0.1", executedQuantity: "0" },
+        { id: "101",
+symbol: "DOGEUSDT",
+side: "BUY",
+status: "NEW",
+clientOrderId: "h-buy-1",
+originalPrice: "0.12",
+originalQuantity: "10",
+executedQuantity: "2" },
+        { id: "202",
+symbol: "BTCUSDT",
+side: "SELL",
+status: "NEW",
+clientOrderId: "manual-1",
+originalPrice: "50000",
+originalQuantity: "0.1",
+executedQuantity: "0" },
       ],
     }),
     engine: { getActiveOrders: () => [ownedOrder] },
@@ -86,7 +104,8 @@ test("rejects unauthorized reads before invoking any provider", async () => {
   const queries = createHarness({
     getPortfolio: () => { reads += 1; return { positions: [] } },
   })
-  const result = await queries.getPositions({ actor: { id: "intruder", roles: [] } })
+  const result = await queries.getPositions({ actor: { id: "intruder",
+roles: [] } })
   assert.equal(result.ok, false)
   assert.equal(result.errors[0].code, "OPERATOR_UNAUTHORIZED")
   assert.equal(reads, 0)
@@ -94,7 +113,8 @@ test("rejects unauthorized reads before invoking any provider", async () => {
 
 test("fails closed when the account-wide order snapshot is unavailable", async () => {
   const failure = new Error("exchange snapshot unavailable")
-  const queries = createHarness({ getOpenOrders: async () => ({ ok: false, errors: [failure] }) })
+  const queries = createHarness({ getOpenOrders: async () => ({ ok: false,
+errors: [failure] }) })
   const result = await queries.getOrders({ actor })
   assert.equal(result.ok, false)
   assert.equal(result.errors[0].code, "HARVESTER_OPERATOR_ORDERS_READ_FAILED")
