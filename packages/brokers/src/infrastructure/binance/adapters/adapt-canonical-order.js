@@ -15,7 +15,7 @@ const ORDER_TYPES = new Set(["LIMIT", "LIMIT_MAKER", "MARKET"])
 const TERMINAL_STATUSES = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED"])
 
 function normalizeTimestamp({ value, name }) {
-  if (value === undefined || value === null) return undefined
+  if (value === undefined || value === null) {return undefined}
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new TypeError(`Binance order ${name} must be a non-negative safe integer`)
   }
@@ -27,7 +27,8 @@ function createAsset({ code }) {
     throw new TypeError("Binance order market asset code is missing")
   }
   const normalizedCode = code.trim().toUpperCase()
-  return new Asset({ id: normalizedCode.toLowerCase(), code: normalizedCode })
+  return new Asset({ id: normalizedCode.toLowerCase(),
+code: normalizedCode })
 }
 
 /**
@@ -45,7 +46,7 @@ export function adaptCanonicalOrder({ order, market } = {}) {
     throw new TypeError("Binance order requires a canonical Market")
   }
 
-  const clientOrderId = order.clientOrderId
+  const {clientOrderId} = order
   if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
     throw new TypeError("Binance order is missing client order ID")
   }
@@ -69,11 +70,14 @@ export function adaptCanonicalOrder({ order, market } = {}) {
   }
 
   const brokerOrderId = normalizeBinanceId(order.orderId, "order ID")
-  const createdAt = normalizeTimestamp({ value: order.time, name: "time" })
-  const updatedAt = normalizeTimestamp({ value: order.updateTime, name: "updateTime" })
+  const createdAt = normalizeTimestamp({ value: order.time,
+name: "time" })
+  const updatedAt = normalizeTimestamp({ value: order.updateTime,
+name: "updateTime" })
   const limitPrice = type === "MARKET"
     ? undefined
-    : new Money({ amount: order.price, asset: market.quoteAsset })
+    : new Money({ amount: order.price,
+asset: market.quoteAsset })
 
   return new CanonicalOrder({
     clientOrderId,
@@ -82,8 +86,10 @@ export function adaptCanonicalOrder({ order, market } = {}) {
     side,
     type,
     ...(limitPrice ? { limitPrice } : {}),
-    originalQuantity: new Quantity({ amount: originalQuantity, asset: market.baseAsset }),
-    executedQuantity: new Quantity({ amount: executedQuantity, asset: market.baseAsset }),
+    originalQuantity: new Quantity({ amount: originalQuantity,
+asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: executedQuantity,
+asset: market.baseAsset }),
     status,
     ...(createdAt === undefined ? {} : { createdAt }),
     ...(updatedAt === undefined ? {} : { updatedAt }),
