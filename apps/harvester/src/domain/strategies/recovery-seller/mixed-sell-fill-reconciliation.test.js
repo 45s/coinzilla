@@ -357,7 +357,7 @@ test("rejects an order without registered Recovery Seller ownership", () => {
 
 
 const terminalModule = await import("./mixed-sell-fill-reconciliation.js")
-const reconcileMixedSellFillOrder = terminalModule.reconcileMixedSellFillOrder
+const { reconcileMixedSellFillOrder } = terminalModule
 
 if (typeof reconcileMixedSellFillOrder !== "function") {
   test("Recovery Seller exposes exact-once terminal mixed SELL reconciliation", () => {
