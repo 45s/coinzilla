@@ -228,6 +228,18 @@ export function applyReconciledMixedSellOrder({
     canonicalFills,
     canonicalFillAllocations,
   })
+
+  if (canonicalFillAllocations.length === 0) {
+    return Object.freeze({
+      portfolio,
+      legacyPosition,
+      legacyAccounting,
+      reconciliation: terminalResult.reconciliation,
+      applied: false,
+      duplicate: false,
+    })
+  }
+
   const duplicate = assertProjectionHistoryParity({
     portfolio,
     legacyAccounting,
