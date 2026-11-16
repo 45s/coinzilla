@@ -70,7 +70,7 @@ function createShutdown({
     logger,
     tradingEnabled,
     strategyShutdownParticipants: participants,
-    getTradingEngine: () => undefined,
+    getTradingEngine = () => undefined,
     subscriptions,
     bookSubscriptions,
     marketPriceIntake,
@@ -107,6 +107,34 @@ function createShutdown({
     calls,
   }
 }
+
+test("activates strategy gates before shutdown context creation can fail", async () => {
+  const calls = []
+  const failure = new Error("Trading engine context is unavailable")
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+  })
+  const fixture = createShutdown({
+    participants: [participant],
+    calls,
+    getTradingEngine: () => {
+      calls.push("get-trading-engine")
+      throw failure
+    },
+  })
+
+  await assert.rejects(async () => fixture.stop(), (error) => error === failure)
+  assert.deepEqual(
+    calls.slice(0, 2),
+    ["gate:CONSERVATIVE", "get-trading-engine"],
+    "Every strategy BUY gate must activate before shutdown context creation can fail.",
+  )
+  assert.equal(calls.includes("user-data-stop"), false, "A context creation failure must not stop user-data intake.")
+  assert.equal(calls.includes("market-intake-stop"), false, "A context creation failure must not stop market intake.")
+  assert.equal(calls.includes("broker-disconnect"), false, "A context creation failure must not disconnect the broker.")
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE", "A failed shutdown context must be reported as incomplete, never STOPPED.")
+})
 
 test("activates every strategy gate before any shared service can stop", async () => {
   const calls = []
