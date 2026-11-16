@@ -735,7 +735,7 @@ export function parseTelegramOperatorCommand(...args) {
     return KEYBOARD_ACTIONS[normalizedText.toLowerCase()] ?? Object.freeze({ type: "IGNORE" })
   }
 
-  const [commandToken, ...argumentsList] = normalizedText.split(/\\s+/)
+  const [commandToken, ...argumentsList] = normalizedText.split(/\s+/)
   const commandParts = commandToken.split("@")
   if (commandParts.length > 2) {
     return Object.freeze({ type: "INVALID" })
