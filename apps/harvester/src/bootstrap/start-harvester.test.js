@@ -6017,6 +6017,7 @@ test("starts Telegram operator control without running process-restart recovery 
 
     assert.equal(operatorAdapterStarted, true, "Telegram polling must start even when the shared ledger contains an earlier process session and restart recovery is disabled")
     assert.equal(runtime.connected, true, "disabling process-restart restoration must not bypass normal broker/runtime startup")
+    assert.equal(runtime.tradingEnabled, false, "trading must remain disabled because the prior in-memory trading state was not restored")
   } finally {
     await runtime?.stop?.()
     await rm(directory, { recursive: true, force: true })
