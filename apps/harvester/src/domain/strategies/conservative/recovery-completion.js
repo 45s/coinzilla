@@ -1,6 +1,6 @@
 import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal } from "@coinzilla/utils"
 
-const normalizeDustDisposition = ({ inventoryDisposition, activeQuantity, keepQuantity }) => {
+function validateDustDispositionEvidence({ inventoryDisposition, activeQuantity, keepQuantity }) {
   if (inventoryDisposition === undefined) {
     return undefined
   }
@@ -27,7 +27,7 @@ right: expectedQuantity }) !== 0) {
       continue
     }
     assertDecimalString({ value,
-field: `inventoryDisposition.${  field}` })
+field: `inventoryDisposition.${field}` })
     const comparison = compareDecimal({ left: value,
 right: "0" })
     if (positiveFields.includes(field) && comparison <= 0) {
@@ -37,73 +37,93 @@ right: "0" })
       return undefined
     }
   }
+  return { quantity, reason }
+}
 
-  if (reason === "MIN_QUANTITY") {
-    if (inventoryDisposition.minimumQuantity === undefined ||
-        inventoryDisposition.evaluatedQuantity === undefined ||
-        compareDecimal({ left: inventoryDisposition.evaluatedQuantity,
+function normalizeMinimumQuantityDust({ inventoryDisposition, quantity, reason }) {
+  if (inventoryDisposition.minimumQuantity === undefined ||
+      inventoryDisposition.evaluatedQuantity === undefined ||
+      compareDecimal({ left: inventoryDisposition.evaluatedQuantity,
 right: "0" }) < 0 ||
-        compareDecimal({
-          left: inventoryDisposition.evaluatedQuantity,
-          right: inventoryDisposition.minimumQuantity,
-        }) >= 0) {
-      return undefined
-    }
-    return Object.freeze({
-      status: "EXCHANGE_CONSTRAINED_DUST",
-      quantity,
-      reason,
-      minimumQuantity: inventoryDisposition.minimumQuantity,
-      evaluatedQuantity: inventoryDisposition.evaluatedQuantity,
-    })
+      compareDecimal({
+        left: inventoryDisposition.evaluatedQuantity,
+        right: inventoryDisposition.minimumQuantity,
+      }) >= 0) {
+    return undefined
   }
+  return Object.freeze({
+    status: "EXCHANGE_CONSTRAINED_DUST",
+    quantity,
+    reason,
+    minimumQuantity: inventoryDisposition.minimumQuantity,
+    evaluatedQuantity: inventoryDisposition.evaluatedQuantity,
+  })
+}
 
-  if (reason === "MIN_NOTIONAL") {
-    if (inventoryDisposition.minimumQuantity === undefined ||
-        inventoryDisposition.minimumNotional === undefined ||
-        inventoryDisposition.evaluatedQuantity === undefined ||
-        inventoryDisposition.evaluatedNotional === undefined ||
-        compareDecimal({ left: inventoryDisposition.evaluatedQuantity,
+function normalizeMinimumNotionalDust({ inventoryDisposition, quantity, reason }) {
+  if (inventoryDisposition.minimumQuantity === undefined ||
+      inventoryDisposition.minimumNotional === undefined ||
+      inventoryDisposition.evaluatedQuantity === undefined ||
+      inventoryDisposition.evaluatedNotional === undefined ||
+      compareDecimal({ left: inventoryDisposition.evaluatedQuantity,
 right: "0" }) <= 0 ||
-        compareDecimal({ left: inventoryDisposition.evaluatedNotional,
+      compareDecimal({ left: inventoryDisposition.evaluatedNotional,
 right: "0" }) <= 0 ||
-        compareDecimal({
-          left: inventoryDisposition.evaluatedQuantity,
-          right: inventoryDisposition.minimumQuantity,
-        }) < 0 ||
-        compareDecimal({
-          left: inventoryDisposition.evaluatedNotional,
-          right: inventoryDisposition.minimumNotional,
-        }) >= 0) {
-      return undefined
-    }
-    return Object.freeze({
-      status: "EXCHANGE_CONSTRAINED_DUST",
-      quantity,
-      reason,
-      minimumQuantity: inventoryDisposition.minimumQuantity,
-      minimumNotional: inventoryDisposition.minimumNotional,
-      evaluatedQuantity: inventoryDisposition.evaluatedQuantity,
-      evaluatedNotional: inventoryDisposition.evaluatedNotional,
-    })
+      compareDecimal({
+        left: inventoryDisposition.evaluatedQuantity,
+        right: inventoryDisposition.minimumQuantity,
+      }) < 0 ||
+      compareDecimal({
+        left: inventoryDisposition.evaluatedNotional,
+        right: inventoryDisposition.minimumNotional,
+      }) >= 0) {
+    return undefined
   }
+  return Object.freeze({
+    status: "EXCHANGE_CONSTRAINED_DUST",
+    quantity,
+    reason,
+    minimumQuantity: inventoryDisposition.minimumQuantity,
+    minimumNotional: inventoryDisposition.minimumNotional,
+    evaluatedQuantity: inventoryDisposition.evaluatedQuantity,
+    evaluatedNotional: inventoryDisposition.evaluatedNotional,
+  })
+}
 
-  if (reason === "QUANTITY_INCREMENT") {
-    if (inventoryDisposition.quantityStepSize === undefined ||
-        inventoryDisposition.evaluatedQuantity !== "0" ||
-        compareDecimal({ left: quantity,
+function normalizeQuantityIncrementDust({ inventoryDisposition, quantity, reason }) {
+  if (inventoryDisposition.quantityStepSize === undefined ||
+      inventoryDisposition.evaluatedQuantity !== "0" ||
+      compareDecimal({ left: quantity,
 right: inventoryDisposition.quantityStepSize }) >= 0) {
-      return undefined
-    }
-    return Object.freeze({
-      status: "EXCHANGE_CONSTRAINED_DUST",
-      quantity,
-      reason,
-      quantityStepSize: inventoryDisposition.quantityStepSize,
-      evaluatedQuantity: inventoryDisposition.evaluatedQuantity,
-    })
+    return undefined
   }
+  return Object.freeze({
+    status: "EXCHANGE_CONSTRAINED_DUST",
+    quantity,
+    reason,
+    quantityStepSize: inventoryDisposition.quantityStepSize,
+    evaluatedQuantity: inventoryDisposition.evaluatedQuantity,
+  })
+}
 
+function normalizeDustDisposition({ inventoryDisposition, activeQuantity, keepQuantity }) {
+  const evidence = validateDustDispositionEvidence({
+    inventoryDisposition,
+    activeQuantity,
+    keepQuantity,
+  })
+  if (!evidence) {
+    return undefined
+  }
+  if (evidence.reason === "MIN_QUANTITY") {
+    return normalizeMinimumQuantityDust({ inventoryDisposition, ...evidence })
+  }
+  if (evidence.reason === "MIN_NOTIONAL") {
+    return normalizeMinimumNotionalDust({ inventoryDisposition, ...evidence })
+  }
+  if (evidence.reason === "QUANTITY_INCREMENT") {
+    return normalizeQuantityIncrementDust({ inventoryDisposition, ...evidence })
+  }
   return undefined
 }
 
