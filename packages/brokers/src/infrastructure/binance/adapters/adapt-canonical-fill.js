@@ -7,8 +7,10 @@ function createAsset(code) {
   }
 
   const normalizedCode = code.trim().toUpperCase()
-  return new Asset({ id: normalizedCode.toLowerCase(),
-code: normalizedCode })
+  return new Asset({
+    id: normalizedCode.toLowerCase(),
+    code: normalizedCode,
+  })
 }
 
 function commissionAssetFor({ code, market }) {
@@ -38,8 +40,10 @@ function adaptCommission({ trade, market }) {
     return { commissions, commissionStatus }
   }
 
-  const commission = new Money({ amount: trade.commission,
-asset: market.quoteAsset })
+  const commission = new Money({
+    amount: trade.commission,
+    asset: market.quoteAsset,
+  })
   if (commission.amount.startsWith("-")) {
     throw new TypeError("Binance commission amount should be non-negative")
   }
@@ -50,8 +54,7 @@ asset: market.quoteAsset })
   if (typeof trade.commissionAsset === "string" && trade.commissionAsset.trim()) {
     const asset = commissionAssetFor({ code: trade.commissionAsset, market })
     commissions.push(new Commission({
-      amount: new Money({ amount: commission.amount,
-asset }),
+      amount: new Money({ amount: commission.amount, asset }),
     }))
     commissionStatus = "COMPLETE"
   }
@@ -87,12 +90,9 @@ export function adaptCanonicalFill({ trade, market } = {}) {
     brokerOrderId: normalizeBinanceId(trade.orderId, "order ID"),
     market,
     side: trade.isBuyer ? "BUY" : "SELL",
-    price: new Money({ amount: trade.price,
-asset: market.quoteAsset }),
-    quantity: new Quantity({ amount: trade.qty,
-asset: market.baseAsset }),
-    quoteQuantity: new Money({ amount: trade.quoteQty,
-asset: market.quoteAsset }),
+    price: new Money({ amount: trade.price, asset: market.quoteAsset }),
+    quantity: new Quantity({ amount: trade.qty, asset: market.baseAsset }),
+    quoteQuantity: new Money({ amount: trade.quoteQty, asset: market.quoteAsset }),
     liquidityRole: resolveLiquidityRole(trade.isMaker),
     ...(trade.time === undefined || trade.time === null ? {} : { executedAt: trade.time }),
     commissions,
