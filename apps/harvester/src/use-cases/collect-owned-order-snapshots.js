@@ -40,10 +40,11 @@ right: expected }) !== 0) {mismatch(field)}
     (`${left.assetId  }:${  left.asset  }:${  left.amount}`)
       .localeCompare(`${right.assetId  }:${  right.asset  }:${  right.amount}`)
   )
-  const expectedCommissions = [...journalFill.commissions].sort((left, right) =>
-    (`${left.assetId  }:${  left.asset  }:${  left.amount}`)
+  const expectedCommissions = [...journalFill.commissions].sort((...commissions) => {
+    const [left, right] = commissions
+    return `${left.assetId  }:${  left.asset  }:${  left.amount}`
       .localeCompare(`${right.assetId  }:${  right.asset  }:${  right.amount}`)
-  )
+  })
   if (actualCommissions.length !== expectedCommissions.length) {mismatch("commission count")}
   for (let index = 0; index < actualCommissions.length; index += 1) {
     const actual = actualCommissions[index]
@@ -64,7 +65,8 @@ right: expected.amount }) !== 0
 export function makeCollectOwnedOrderSnapshots({ broker, journalFillsById } = {}) {
   return async function collectOwnedOrderSnapshots({ ownedOrders } = {}) {
     const symbols = [...new Set(ownedOrders.map((order) => order.market.symbol))]
-    let affectedSymbol = symbols[0]
+    const [firstSymbol] = symbols
+    let affectedSymbol = firstSymbol
     try {
       const openOrdersBySymbol = new Map()
       for (const symbol of symbols) {
@@ -128,7 +130,7 @@ orderId: ownedOrder.brokerOrderId }) }
             "ACCOUNTING_INTEGRITY", "OWNED_ORDER_HISTORY_SHAPE", false,
           )
         }
-        const historyOrder = historyResult.data[0]
+        const [historyOrder] = historyResult.data
         const limitPriceMatches = historyOrder.limitPrice === undefined
           ? ownedOrder.limitPrice === undefined
           : ownedOrder.limitPrice !== undefined &&
@@ -160,7 +162,7 @@ orderId: ownedOrder.brokerOrderId }) }
         if (matchingOpenOrders.length > 1) {
           throw recoveryFailureError(new Error(`Open-order snapshot contains duplicate owned order ${  ownedOrder.brokerOrderId}`), "OWNERSHIP_INTEGRITY", "OWNED_OPEN_ORDER_DUPLICATE", false)
         }
-        const openOrder = matchingOpenOrders[0]
+        const [openOrder] = matchingOpenOrders
         if (openOrder && (
           openOrder.symbol.toUpperCase() !== symbol.toUpperCase() ||
           openOrder.side !== ownedOrder.side ||
@@ -268,7 +270,8 @@ journalFill })
         if (!fillsComplete) {
           throw new Error(`REST fill history could not be proven complete for owned order ${  ownedOrder.brokerOrderId}`)
         }
-        const fills = [...fillsById.values()].sort((left, right) => {
+        const fills = [...fillsById.values()].sort((...entries) => {
+          const [left, right] = entries
           if (left.executedAt !== undefined && right.executedAt !== undefined &&
               left.executedAt !== right.executedAt) {
             return left.executedAt - right.executedAt
@@ -284,8 +287,10 @@ journalFill })
           }
         }
         const reconciledQuantity = fills.reduce(
-          (total, fill) => addDecimal({ left: total,
-right: fill.quantity.amount }),
+          (...entries) => {
+            const [total, fill] = entries
+            return addDecimal({ left: total, right: fill.quantity.amount })
+          },
           "0",
         )
         if (compareDecimal({
