@@ -19,7 +19,8 @@ const ignoredMarkdownDirectories = new Set([
 export function findMarkdownDocuments(root) {
   const documents = [];
 
-  function visit(directory, relativeDirectory) {
+  function visit(...args) {
+    const [directory, relativeDirectory] = args;
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       if (entry.isDirectory()) {
         if (ignoredMarkdownDirectories.has(entry.name)) {continue;}
@@ -38,7 +39,10 @@ content: readFileSync(join(directory, entry.name), 'utf8') });
   }
 
   visit(root, '');
-  return documents.sort((left, right) => left.path.localeCompare(right.path));
+  return documents.sort((...args) => {
+    const [left, right] = args;
+    return left.path.localeCompare(right.path);
+  });
 }
 
 /**
@@ -48,7 +52,8 @@ content: readFileSync(join(directory, entry.name), 'utf8') });
  * @param {string[]} requiredPaths Required relative paths.
  * @returns {string[]} Missing-document errors.
  */
-export function findMissingRequiredDocuments(root, requiredPaths) {
+export function findMissingRequiredDocuments(...args) {
+  const [root, requiredPaths] = args;
   return requiredPaths
     .filter((path) => !existsSync(join(root, path)))
     .map((path) => `Required documentation file is missing: ${path}`);
@@ -107,7 +112,8 @@ function extractMarkdownLinkDestinations(content) {
 export function findInstructionDirectories(root) {
   const directories = [];
 
-  function visit(directory, relativeDirectory) {
+  function visit(...args) {
+    const [directory, relativeDirectory] = args;
     const entries = readdirSync(directory, { withFileTypes: true });
     if (entries.some((entry) => entry.isFile() && entry.name === 'AGENTS.md')) {
       directories.push(relativeDirectory);
@@ -123,12 +129,14 @@ export function findInstructionDirectories(root) {
   return directories.sort();
 }
 
-function extractMappedPaths(document, suffix) {
+function extractMappedPaths(...args) {
+  const [document, suffix] = args;
   const expression = new RegExp(`\`((?:apps|packages)/[^ \`]+?)${  suffix  }\``, 'g');
   return [...document.matchAll(expression)].map((match) => match[1]).sort();
 }
 
-function comparePathMaps(actualDirectories, mappedDirectories, documentName) {
+function comparePathMaps(...args) {
+  const [actualDirectories, mappedDirectories, documentName] = args;
   const gaps = [];
   const actual = new Set(actualDirectories);
   const counts = new Map();
@@ -147,7 +155,8 @@ function comparePathMaps(actualDirectories, mappedDirectories, documentName) {
   return gaps;
 }
 
-export function findOwnershipGaps(directories, ownershipDocument) {
+export function findOwnershipGaps(...args) {
+  const [directories, ownershipDocument] = args;
   return comparePathMaps(directories, extractMappedPaths(ownershipDocument, '/'), 'DOMAIN_OWNERSHIP.md');
 }
 
@@ -161,14 +170,15 @@ export function findOwnershipGaps(directories, ownershipDocument) {
  * @param {{ path: string, content: string }[]} documents Documents to inspect.
  * @returns {string[]} Human-readable link errors.
  */
-export function findMissingLocalLinks(root, documents) {
+export function findMissingLocalLinks(...args) {
+  const [root, documents] = args;
   const gaps = [];
 
   for (const document of documents) {
     for (const target of extractMarkdownLinkDestinations(document.content)) {
       if (/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(target)) {continue;}
 
-      const rawPath = target.split(/[?#]/, 1)[0];
+      const [rawPath] = target.split(/[?#]/, 1);
       if (!rawPath) {continue;}
 
       let relativeTarget;
@@ -313,7 +323,8 @@ length: fenceMatch[1].length };
  * @param {{ path: string, content: string }[]} documents Documents to inspect.
  * @returns {string[]} Human-readable heading-anchor errors.
  */
-export function findMissingLocalAnchors(root, documents) {
+export function findMissingLocalAnchors(...args) {
+  const [root, documents] = args;
   const gaps = [];
   const documentsByAbsolutePath = new Map(
     documents.map((document) => [resolve(root, document.path), document]),
@@ -330,7 +341,7 @@ export function findMissingLocalAnchors(root, documents) {
       if (!rawFragment || rawFragment.startsWith(':~:text=')) {continue;}
 
       const pathAndQuery = target.slice(0, hashIndex);
-      const rawPath = pathAndQuery.split('?', 1)[0];
+      const [rawPath] = pathAndQuery.split('?', 1);
       let decodedPath;
       try {
         decodedPath = decodeURIComponent(rawPath);
@@ -419,7 +430,8 @@ export function findUnbalancedMarkdownFences(documents) {
  * @param {string} ownershipDocument Domain ownership Markdown.
  * @returns {string[]} Missing roadmap errors.
  */
-export function findMissingRoadmaps(root, ownershipDocument) {
+export function findMissingRoadmaps(...args) {
+  const [root, ownershipDocument] = args;
   return extractMappedPaths(ownershipDocument, '/')
     .filter((directory) => !existsSync(join(root, directory, 'ROADMAP.md')))
     .map((directory) => `${directory} is missing ROADMAP.md`);
@@ -451,13 +463,15 @@ const approvedConsoleFiles = new Set([
  */
 function maskJavaScriptNonCode(source) {
   const output = source.split('');
-  const blank = (start, end) => {
+  const blank = (...args) => {
+    const [start, end] = args;
     for (let index = start; index < end; index += 1) {
       if (output[index] !== '\n' && output[index] !== '\r') {output[index] = ' ';}
     }
   };
 
-  function skipQuoted(index, quote) {
+  function skipQuoted(...args) {
+    let [index, quote] = args;
     const start = index;
     index += 1;
     while (index < source.length) {
@@ -475,7 +489,8 @@ function maskJavaScriptNonCode(source) {
     return index;
   }
 
-  function skipRegex(index) {
+  function skipRegex(...args) {
+    let index = args[0];
     const start = index;
     index += 1;
     let inCharacterClass = false;
@@ -499,7 +514,8 @@ function maskJavaScriptNonCode(source) {
     return index;
   }
 
-  function scanTemplate(index) {
+  function scanTemplate(...args) {
+    let index = args[0];
     let segmentStart = index - 1;
     blank(segmentStart, index);
     while (index < source.length) {
@@ -523,7 +539,8 @@ function maskJavaScriptNonCode(source) {
     return index;
   }
 
-  function scanCode(index, stopAtTemplateBrace = false) {
+  function scanCode(...args) {
+    let [index, stopAtTemplateBrace = false] = args;
     let nestedBraces = 0;
     let previousToken = '';
     while (index < source.length) {
@@ -610,7 +627,8 @@ function maskJavaScriptNonCode(source) {
 export function findJavaScriptFiles(root) {
   const files = [];
 
-  function visit(directory, relativeDirectory) {
+  function visit(...args) {
+    const [directory, relativeDirectory] = args;
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       if (entry.isDirectory()) {
         if (ignoredJavaScriptDirectories.has(entry.name)) {continue;}
@@ -673,11 +691,13 @@ function main() {
   ];
   const markdownDocuments = findMarkdownDocuments(repositoryRoot);
   const anchorGaps = findMissingLocalAnchors(repositoryRoot, markdownDocuments);
-  console.log(
+  process.stdout.write(
     `Markdown heading-anchor baseline (report-only): ${  anchorGaps.length 
-    } unresolved local anchors across ${  markdownDocuments.length  } Markdown/MDX files.`,
+    } unresolved local anchors across ${  markdownDocuments.length  } Markdown/MDX files.\n`,
   );
-  for (const gap of anchorGaps) {console.log(`- ${  gap}`);}
+  for (const gap of anchorGaps) {
+    process.stdout.write(`- ${  gap}\n`);
+  }
 
   const gaps = [...new Set([
     ...findOwnershipGaps(directories, ownershipDocument),
@@ -689,13 +709,14 @@ function main() {
   ])];
 
   if (gaps.length > 0) {
-    console.error('Agent policy check failed:');
-    for (const gap of gaps) {console.error(`- ${gap}`);}
+    process.stderr.write('Agent policy check failed:\n');
+    for (const gap of gaps) {
+      process.stderr.write(`- ${  gap}\n`);
+    }
     process.exitCode = 1;
     return;
   }
 
-  console.log(`Agent policy check passed (${directories.length} domain instruction files; ${markdownDocuments.length} Markdown/MDX files; ownership maps, roadmaps, required entry points, balanced Markdown fences, inline/reference-style local paths, and application/package console boundaries are valid; heading anchors are report-only).`);
+  process.stdout.write(`Agent policy check passed (${directories.length} domain instruction files; ${markdownDocuments.length} Markdown/MDX files; ownership maps, roadmaps, required entry points, balanced Markdown fences, inline/reference-style local paths, and application/package console boundaries are valid; heading anchors are report-only).\n`);
 }
-
 if (process.argv[1] === fileURLToPath(import.meta.url)) {main();}
