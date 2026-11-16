@@ -50,7 +50,10 @@ function assertSupportedItemRules({ items }) {
   }
 }
 
-function getValidationMessage({ value, rule }) {
+function getValidationMessage({
+        value,
+        rule,
+      }) {
   switch (rule) {
     case VR.required:
       return value ? undefined : EM.required()

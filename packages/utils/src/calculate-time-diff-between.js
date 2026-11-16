@@ -25,8 +25,14 @@ export const calculateTimeDiffBetween = ({ start, end, unit = 'hour' } = {}) => 
     throw new RangeError(`Unsupported time unit: ${unit}`)
   }
 
-  assertValidDate({ value: start, name: 'start' })
-  assertValidDate({ value: end, name: 'end' })
+  assertValidDate({
+    value: start,
+    name: 'start',
+  })
+  assertValidDate({
+    value: end,
+    name: 'end',
+  })
 
   return (end.getTime() - start.getTime()) / unitsMap[unit]
 }

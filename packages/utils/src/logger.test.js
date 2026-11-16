@@ -120,7 +120,7 @@ describe('Logger transports and severity levels', () => {
   it('filters every standard severity at its configured threshold', () => {
     const entries = []
     const logger = new Logger({
-      transports: [createTransport({ name: 'capture', level: 'trace', entries: entries })],
+      transports: [createTransport({ name: 'capture', level: 'trace', entries })],
     })
 
     for (const level of ['trace', 'debug', 'info', 'warn', 'error']) {
@@ -157,7 +157,7 @@ describe('Logger transports and severity levels', () => {
   it('assigns INFO severity to success and system semantic methods', () => {
     const entries = []
     const logger = new Logger({
-      transports: [createTransport({ name: 'capture', level: 'info', entries: entries })],
+      transports: [createTransport({ name: 'capture', level: 'info', entries })],
     })
 
     logger.success({ message: 'completed' })
@@ -240,7 +240,7 @@ describe('Logger transport configuration', () => {
     const closed = []
     const logger = new Logger({ transports: [] })
     const transport = {
-      ...createTransport({ name: 'temporary', level: 'trace', entries: entries }),
+      ...createTransport({ name: 'temporary', level: 'trace', entries }),
       close() {
         closed.push('temporary')
       },
@@ -262,7 +262,7 @@ describe('Logger transport delivery', () => {
   it('provides consistent timestamp, severity, and redacted structured data to transports', () => {
     const entries = []
     const logger = new Logger({
-      transports: [createTransport({ name: 'capture', level: 'trace', entries: entries })],
+      transports: [createTransport({ name: 'capture', level: 'trace', entries })],
     })
     const error = new TypeError('request failed', {
       cause: { message: 'nested failure',

@@ -9,7 +9,7 @@ const SENSITIVE_FIELD_PATTERN = /(?:password|passphrase|secret|token|authorizati
  * @returns {unknown} '[REDACTED]' for sensitive keys; otherwise the original value.
  */
 export function redactSensitiveLogField(key) {
-  const value = arguments[1]
+  const [, value] = arguments
   if (typeof key === 'string' && SENSITIVE_FIELD_PATTERN.test(key)) {
     return '[REDACTED]'
   }

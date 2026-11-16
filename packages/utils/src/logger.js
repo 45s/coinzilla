@@ -333,37 +333,58 @@ export class Logger {
 
   /** @param {unknown} data @returns {void} Log at TRACE severity. */
   trace(data) {
-    this.#log({ data, method: 'trace' })
+    this.#log({
+      data,
+      method: 'trace',
+    })
   }
 
   /** @param {unknown} data @returns {void} Log at DEBUG severity. */
   debug(data) {
-    this.#log({ data, method: 'debug' })
+    this.#log({
+      data,
+      method: 'debug',
+    })
   }
 
   /** @param {unknown} data @returns {void} Log at INFO severity. */
   info(data) {
-    this.#log({ data, method: 'info' })
+    this.#log({
+      data,
+      method: 'info',
+    })
   }
 
   /** @param {unknown} data @returns {void} Log at WARN severity. */
   warn(data) {
-    this.#log({ data, method: 'warn' })
+    this.#log({
+      data,
+      method: 'warn',
+    })
   }
 
   /** @param {unknown} data @returns {void} Log at ERROR severity. */
   error(data) {
-    this.#log({ data, method: 'error' })
+    this.#log({
+      data,
+      method: 'error',
+    })
   }
 
   /** @param {unknown} data @returns {void} Semantic success method mapped to INFO severity. */
   success(data) {
-    this.#log({ data, method: 'success' })
+    this.#log({
+      data,
+      method: 'success',
+    })
   }
 
   /** @param {unknown} data @returns {void} Semantic system method mapped to INFO severity. */
   system(data) {
-    this.#log({ data, method: 'system' })
+    this.#log({
+      data,
+      method: 'system',
+    })
   }
 }
 
