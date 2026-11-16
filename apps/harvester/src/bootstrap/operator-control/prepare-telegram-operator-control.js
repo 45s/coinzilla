@@ -2,7 +2,8 @@ import { createHarvesterOperator } from "../../application/operator/create-harve
 import { createTelegramOperatorAdapter } from "../../infrastructure/telegram/telegram-operator-adapter.js"
 
 export class OperatorControlStartupError extends Error {
-  constructor(message, code, cause) {
+  constructor(...args) {
+    const [message, code, cause] = args
     const detail = cause?.message
     super(detail ? `${message}: ${detail}` : message, { cause })
     this.name = "OperatorControlStartupError"
