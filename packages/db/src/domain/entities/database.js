@@ -4,6 +4,115 @@ const REQUIRED_PROVIDER_METHODS = Object.freeze([
   "withTransaction",
 ])
 
+function createConnectionOperation({ provider, lifecycle }) {
+  return async function connect() {
+    if (lifecycle.state === "connected") {
+      return undefined
+    }
+    if (lifecycle.state === "connecting") {
+      return lifecycle.connectPromise
+    }
+    if (lifecycle.state === "closing" || lifecycle.state === "closed") {
+      throw new Error(`Cannot connect database while it is ${lifecycle.state}`)
+    }
+
+    lifecycle.state = "connecting"
+    let connection
+    try {
+      connection = Promise.resolve(provider.connect())
+    } catch (error) {
+      connection = Promise.reject(error)
+    }
+
+    lifecycle.connectPromise = connection
+      .then(() => {
+        lifecycle.state = "connected"
+      })
+      .catch((error) => {
+        lifecycle.state = "disconnected"
+        throw error
+      })
+      .finally(() => {
+        lifecycle.connectPromise = null
+      })
+
+    return lifecycle.connectPromise
+  }
+}
+
+function createTransactionOperation({ provider, lifecycle }) {
+  return function transaction(work) {
+    if (typeof work !== "function") {
+      throw new TypeError("A transaction callback is required")
+    }
+    if (lifecycle.state !== "connected") {
+      throw new Error(
+        `Database must be connected to start a transaction (state: ${lifecycle.state})`,
+      )
+    }
+
+    let operation
+    try {
+      operation = Promise.resolve(provider.withTransaction(work))
+    } catch (error) {
+      operation = Promise.reject(error)
+    }
+    lifecycle.activeTransactions.add(operation)
+    operation.then(
+      () => lifecycle.activeTransactions.delete(operation),
+      () => lifecycle.activeTransactions.delete(operation),
+    )
+
+    return operation
+  }
+}
+
+function createCloseOperation({ provider, lifecycle }) {
+  return async function close() {
+    if (lifecycle.state === "closed") {
+      return undefined
+    }
+    if (lifecycle.closePromise) {
+      return lifecycle.closePromise
+    }
+
+    lifecycle.closePromise = (async () => {
+      if (lifecycle.connectPromise) {
+        try {
+          await lifecycle.connectPromise
+        } catch {
+          lifecycle.state = "closed"
+          return
+        }
+      }
+
+      if (lifecycle.state === "closed") {
+        return
+      }
+      if (lifecycle.state === "disconnected") {
+        lifecycle.state = "closed"
+        return
+      }
+
+      lifecycle.state = "closing"
+      while (lifecycle.activeTransactions.size > 0) {
+        await Promise.allSettled([...lifecycle.activeTransactions])
+      }
+
+      await provider.close()
+      lifecycle.state = "closed"
+    })()
+
+    try {
+      await lifecycle.closePromise
+    } finally {
+      lifecycle.closePromise = null
+    }
+
+    return undefined
+  }
+}
+
 /**
  * Database is the lifecycle aggregate for a provider-backed database resource.
  * It owns the lifecycle state and guarantees that shutdown drains transactions.
@@ -26,108 +135,19 @@ export function createDatabaseEntity({ provider } = {}) {
     )
   }
 
-  let state = "disconnected"
-  let connectPromise = null
-  let closePromise = null
-  const activeTransactions = new Set()
-
-  async function connect() {
-    if (state === "connected") return
-    if (state === "connecting") return connectPromise
-    if (state === "closing" || state === "closed") {
-      throw new Error(`Cannot connect database while it is ${state}`)
-    }
-
-    state = "connecting"
-    let connection
-    try {
-      connection = Promise.resolve(provider.connect())
-    } catch (error) {
-      connection = Promise.reject(error)
-    }
-
-    connectPromise = connection
-      .then(() => {
-        state = "connected"
-      })
-      .catch((error) => {
-        state = "disconnected"
-        throw error
-      })
-      .finally(() => {
-        connectPromise = null
-      })
-
-    return connectPromise
-  }
-
-  function transaction(work) {
-    if (typeof work !== "function") {
-      throw new TypeError("A transaction callback is required")
-    }
-    if (state !== "connected") {
-      throw new Error(
-        `Database must be connected to start a transaction (state: ${state})`,
-      )
-    }
-
-    let operation
-    try {
-      operation = Promise.resolve(provider.withTransaction(work))
-    } catch (error) {
-      operation = Promise.reject(error)
-    }
-    activeTransactions.add(operation)
-    operation.then(
-      () => activeTransactions.delete(operation),
-      () => activeTransactions.delete(operation),
-    )
-
-    return operation
-  }
-
-  async function close() {
-    if (state === "closed") return
-    if (closePromise) return closePromise
-
-    closePromise = (async () => {
-      if (connectPromise) {
-        try {
-          await connectPromise
-        } catch {
-          state = "closed"
-          return
-        }
-      }
-
-      if (state === "closed") return
-      if (state === "disconnected") {
-        state = "closed"
-        return
-      }
-
-      state = "closing"
-      while (activeTransactions.size > 0) {
-        await Promise.allSettled([...activeTransactions])
-      }
-
-      await provider.close()
-      state = "closed"
-    })()
-
-    try {
-      await closePromise
-    } finally {
-      closePromise = null
-    }
+  const lifecycle = {
+    state: "disconnected",
+    connectPromise: null,
+    closePromise: null,
+    activeTransactions: new Set(),
   }
 
   return Object.freeze({
-    connect,
-    transaction,
-    close,
+    connect: createConnectionOperation({ provider, lifecycle }),
+    transaction: createTransactionOperation({ provider, lifecycle }),
+    close: createCloseOperation({ provider, lifecycle }),
     get state() {
-      return state
+      return lifecycle.state
     },
   })
 }

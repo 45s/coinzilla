@@ -2,11 +2,11 @@
  * Resolve pending migrations while enforcing the immutability of applied
  * migration identity (version + name).
  *
- * @param {Array<{version: number, name: string}>} registeredMigrations
- * @param {Array<{version: number, name: string}>} appliedMigrations
+ * @param {...Array<{version: number, name: string}>} migrationLists
  * @returns {Array<object>}
  */
-export function findPendingMigrations(registeredMigrations, appliedMigrations) {
+export function findPendingMigrations(...migrationLists) {
+  const [registeredMigrations, appliedMigrations] = migrationLists
   const migrationByVersion = new Map(
     registeredMigrations.map((migration) => [migration.version, migration]),
   )
