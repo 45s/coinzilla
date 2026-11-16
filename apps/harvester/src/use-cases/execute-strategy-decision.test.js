@@ -612,19 +612,23 @@ test("persists a definite post-only rejection as REJECTED rather than an ambiguo
   })
   const execute = makeExecuteStrategyDecision({
     broker: {
-      placeOrder: async () => ({ ok: false, errors: [postOnlyRejection] }),
+      placeOrder: async () => ({ ok: false,
+        errors: [postOnlyRejection] }),
     },
-    onDurableSubmissionIntent: async () => ({ ok: true, data: { durable: true } }),
+    onDurableSubmissionIntent: async () => ({ ok: true,
+      data: { durable: true } }),
     onDurableSubmissionOutcome: async ({ outcome }) => {
       durableOutcomes.push(outcome)
-      return { ok: true, data: { durable: true } }
+      return { ok: true,
+        data: { durable: true } }
     },
     onPendingOrder: async () => {},
     onAcknowledgedOrder: async () => {},
     onSubmissionFailure: async ({ outcome }) => failureOutcomes.push(outcome),
   })
 
-  const result = await execute({ decision, marketMetadata })
+  const result = await execute({ decision,
+    marketMetadata })
 
   assert.equal(result.ok, false, "A definite post-only rejection must remain a failed submission.")
   assert.deepEqual(durableOutcomes, ["REJECTED"], "The durable outcome must preserve a broker-confirmed definite rejection.")

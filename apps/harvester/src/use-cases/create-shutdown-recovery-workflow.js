@@ -561,7 +561,9 @@ async function auditShutdownRecoverySellCoverage({ dependencies, symbols: reques
 
 export function createShutdownRecoveryWorkflow(dependencies = {}) {
   return Object.freeze({
-    reconcileRecoverySellsForShutdown: (options = {}) => reconcileRecoverySellsForShutdown({ ...options, dependencies }),
-    auditShutdownRecoverySellCoverage: (options = {}) => auditShutdownRecoverySellCoverage({ ...options, dependencies }),
+    reconcileRecoverySellsForShutdown: (options = {}) => reconcileRecoverySellsForShutdown({ ...options,
+      dependencies }),
+    auditShutdownRecoverySellCoverage: (options = {}) => auditShutdownRecoverySellCoverage({ ...options,
+      dependencies }),
   })
 }

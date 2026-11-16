@@ -29,49 +29,61 @@ function getMarketOrderBlockers({ state, symbol, blockers } = {}) {
   const hasActiveOwnedBuy = activeOrders.some((order) => order.side === "BUY")
 
   if (hasUnresolvedOwnedBuy || hasActiveOwnedBuy) {
-    addBlocker({ blockers, reason: "OWNED_BUY_ORDER_UNRESOLVED" })
+    addBlocker({ blockers,
+      reason: "OWNED_BUY_ORDER_UNRESOLVED" })
   }
   if (ownedOrders.some((order) =>
     order.side === "SELL" && UNRESOLVED_SELL_STATUSES.has(order.status))) {
-    addBlocker({ blockers, reason: "OWNED_SELL_ORDER_UNRESOLVED" })
+    addBlocker({ blockers,
+      reason: "OWNED_SELL_ORDER_UNRESOLVED" })
   }
   if (state.replacementIntents.has(symbol)) {
-    addBlocker({ blockers, reason: "ORDER_REPLACEMENT_UNRESOLVED" })
+    addBlocker({ blockers,
+      reason: "ORDER_REPLACEMENT_UNRESOLVED" })
   }
   if (state.trailingBuyRepriceIntents.has(symbol)) {
-    addBlocker({ blockers, reason: "TRAILING_BUY_TRANSITION_UNRESOLVED" })
+    addBlocker({ blockers,
+      reason: "TRAILING_BUY_TRANSITION_UNRESOLVED" })
   }
   if (state.shutdownRecoveryReplanSymbols.has(symbol)) {
-    addBlocker({ blockers, reason: "RECOVERY_SELL_REPLAN_UNRESOLVED" })
+    addBlocker({ blockers,
+      reason: "RECOVERY_SELL_REPLAN_UNRESOLVED" })
   }
   if (state.recoveryManagedPausedMarkets.has(symbol)) {
-    addBlocker({ blockers, reason: "RECOVERY_MANAGED_MARKET_PAUSED" })
+    addBlocker({ blockers,
+      reason: "RECOVERY_MANAGED_MARKET_PAUSED" })
   }
   if (state.completedRecoverySellSymbols.has(symbol)) {
-    addBlocker({ blockers, reason: "RECOVERY_SELL_COMPLETION_UNRESOLVED" })
+    addBlocker({ blockers,
+      reason: "RECOVERY_SELL_COMPLETION_UNRESOLVED" })
   }
   if (ownedOrders.some((order) =>
     state.recoveryManagedCancellationClientOrderIds.has(order.clientOrderId))) {
-    addBlocker({ blockers, reason: "RECOVERY_SELL_CANCELLATION_UNRESOLVED" })
+    addBlocker({ blockers,
+      reason: "RECOVERY_SELL_CANCELLATION_UNRESOLVED" })
   }
   if (ownedOrders.some((order) =>
     state.unrequestedTerminalOrderClientIds.has(order.clientOrderId))) {
-    addBlocker({ blockers, reason: "UNREQUESTED_TERMINAL_ORDER_UNRECONCILED" })
+    addBlocker({ blockers,
+      reason: "UNREQUESTED_TERMINAL_ORDER_UNRECONCILED" })
   }
   if (state.deferredEvaluations.has(symbol)) {
-    addBlocker({ blockers, reason: "DEFERRED_EVALUATION_PENDING" })
+    addBlocker({ blockers,
+      reason: "DEFERRED_EVALUATION_PENDING" })
   }
 }
 
 function getCoverageBlockers({ coverageResult, symbol, blockers } = {}) {
   if (coverageResult?.ok !== true) {
-    addBlocker({ blockers, reason: "RECOVERY_SELL_COVERAGE_UNVERIFIED" })
+    addBlocker({ blockers,
+      reason: "RECOVERY_SELL_COVERAGE_UNVERIFIED" })
     return
   }
 
   const requestedSymbols = coverageResult.data?.symbols
   if (Array.isArray(requestedSymbols) && !requestedSymbols.includes(symbol)) {
-    addBlocker({ blockers, reason: "RECOVERY_SELL_COVERAGE_NOT_CHECKED" })
+    addBlocker({ blockers,
+      reason: "RECOVERY_SELL_COVERAGE_NOT_CHECKED" })
     return
   }
   if (coverageResult.data?.covered === true) {
@@ -80,7 +92,8 @@ function getCoverageBlockers({ coverageResult, symbol, blockers } = {}) {
 
   const allFindings = coverageResult.data?.findings
   if (!Array.isArray(allFindings)) {
-    addBlocker({ blockers, reason: "RECOVERY_SELL_COVERAGE_INCOMPLETE" })
+    addBlocker({ blockers,
+      reason: "RECOVERY_SELL_COVERAGE_INCOMPLETE" })
     return
   }
 
@@ -88,7 +101,8 @@ function getCoverageBlockers({ coverageResult, symbol, blockers } = {}) {
   if (findings.length === 0 && (
     !Array.isArray(requestedSymbols) || requestedSymbols.length <= 1
   )) {
-    addBlocker({ blockers, reason: "RECOVERY_SELL_COVERAGE_INCOMPLETE" })
+    addBlocker({ blockers,
+      reason: "RECOVERY_SELL_COVERAGE_INCOMPLETE" })
     return
   }
 
@@ -111,17 +125,24 @@ function getMarketSafetyBlockers({
   const blockers = []
 
   if (state.shutdownBuyGate !== true) {
-    addBlocker({ blockers, reason: "CONSERVATIVE_BUY_GATE_INACTIVE" })
+    addBlocker({ blockers,
+      reason: "CONSERVATIVE_BUY_GATE_INACTIVE" })
   }
   if (reconciliationComplete !== true) {
-    addBlocker({ blockers, reason: "ORDER_OR_FILL_RECONCILIATION_INCOMPLETE" })
+    addBlocker({ blockers,
+      reason: "ORDER_OR_FILL_RECONCILIATION_INCOMPLETE" })
   }
   if (journalDurable !== true) {
-    addBlocker({ blockers, reason: "JOURNAL_NOT_DURABLE" })
+    addBlocker({ blockers,
+      reason: "JOURNAL_NOT_DURABLE" })
   }
 
-  getCoverageBlockers({ coverageResult, symbol, blockers })
-  getMarketOrderBlockers({ state, symbol, blockers })
+  getCoverageBlockers({ coverageResult,
+    symbol,
+    blockers })
+  getMarketOrderBlockers({ state,
+    symbol,
+    blockers })
 
   for (const blocker of externalBlockers ?? []) {
     addBlocker({
@@ -253,7 +274,8 @@ export function createConservativeShutdownSafety({
 
       return {
         ok: true,
-        data: createSafetySnapshot({ state, pairs }),
+        data: createSafetySnapshot({ state,
+          pairs }),
       }
     },
   })
@@ -262,6 +284,7 @@ export function createConservativeShutdownSafety({
     beginShutdown,
     auditShutdownSafety,
     invalidateShutdownSafety,
-    getShutdownSafetySnapshot: () => createSafetySnapshot({ state, pairs }),
+    getShutdownSafetySnapshot: () => createSafetySnapshot({ state,
+      pairs }),
   })
 }
