@@ -211,43 +211,49 @@ function normalizeCandleRows({ rows, symbol, interval, serverTime }) {
   return Object.freeze(candles)
 }
 
+function createExecutedOrderInput({ sourceOrder }) {
+  return {
+    orderId: sourceOrder?.id,
+    clientOrderId: sourceOrder?.clientOrderId,
+    type: sourceOrder?.type,
+    side: sourceOrder?.side,
+    origQty: sourceOrder?.quantity,
+    executedQty: sourceOrder?.executedQuantity,
+    price: sourceOrder?.price,
+    status: sourceOrder?.status,
+    time: sourceOrder?.createdAt,
+    updateTime: sourceOrder?.updatedAt,
+  }
+}
+
+function createExecutedFillInput({ sourceFill }) {
+  return {
+    id: sourceFill?.id,
+    orderId: sourceFill?.orderId,
+    isBuyer: sourceFill?.side === "BUY",
+    commission: sourceFill?.commissionAmount,
+    commissionAsset: sourceFill?.commissionAsset,
+    isMaker: sourceFill?.isMaker,
+    price: sourceFill?.price,
+    qty: sourceFill?.quantity,
+    quoteQty: sourceFill?.quoteQuantity,
+    time: sourceFill?.time,
+  }
+}
+
 async function normalizeUserDataExecution({ broker, event, isTrade }) {
   const symbol = event.executedOrder?.symbol ?? event.fill?.symbol
   const market = await getCanonicalMarket({ broker, symbol })
-  const sourceOrder = event.executedOrder
   const executedOrder = adaptCanonicalOrder({
     market,
-    order: {
-      orderId: sourceOrder?.id,
-      clientOrderId: sourceOrder?.clientOrderId,
-      type: sourceOrder?.type,
-      side: sourceOrder?.side,
-      origQty: sourceOrder?.quantity,
-      executedQty: sourceOrder?.executedQuantity,
-      price: sourceOrder?.price,
-      status: sourceOrder?.status,
-      time: sourceOrder?.createdAt,
-      updateTime: sourceOrder?.updatedAt,
-    },
+    order: createExecutedOrderInput({ sourceOrder: event.executedOrder }),
   })
 
   if (!isTrade) return { ...event, executedOrder }
 
-  const sourceFill = event.fill
   const fill = adaptCanonicalFill({
     market,
-    trade: {
-      id: sourceFill?.id,
-      orderId: sourceFill?.orderId,
-      isBuyer: sourceFill?.side === "BUY",
-      commission: sourceFill?.commissionAmount,
-      commissionAsset: sourceFill?.commissionAsset,
-      isMaker: sourceFill?.isMaker,
-      price: sourceFill?.price,
-      qty: sourceFill?.quantity,
-      quoteQty: sourceFill?.quoteQuantity,
-      time: sourceFill?.time,
-    },
+    trade: createExecutedFillInput({ sourceFill: event.fill }),
   })
   return { ...event, executedOrder, fill }
 }

@@ -142,7 +142,9 @@ describe("Application user-data session dependency validation", () => {
       setUnavailable() {},
     }), /client port factory/)
   })
+})
 
+describe("Application user-data session callback validation", () => {
   it("rejects invalid event and status callbacks before accessing the client port", async () => {
     let portFactoryCalls = 0
     const session = new UserDataSession({
@@ -326,6 +328,19 @@ describe("Application user-data session recovery acknowledgements", () => {
   })
 })
 
+function assertReconciledGenerationStatus({ statuses, recoveryGeneration, subscriberLabel }) {
+  assert.deepEqual(
+    statuses.filter((status) => status.type === "reconciled"),
+    [{
+      type: "reconciled",
+      subscriptionId: 18,
+      recoveryGeneration,
+      recoveryRequired: false,
+    }],
+    `${subscriberLabel} must receive one terminal status for the completed current generation.`,
+  )
+}
+
 describe("Application user-data session recovery generations", () => {
   it("rejects an acknowledgement from an older recovery generation without counting it toward the newer generation", async () => {
     const firstStatuses = []
@@ -390,26 +405,16 @@ completed: false },
 completed: true },
       "Only the final current-generation acknowledgement may complete shared recovery.",
     )
-    assert.deepEqual(
-      firstStatuses.filter((status) => status.type === "reconciled"),
-      [{
-        type: "reconciled",
-        subscriptionId: 18,
-        recoveryGeneration: secondRecoveryGeneration,
-        recoveryRequired: false,
-      }],
-      "Each active subscriber must receive one terminal status for the completed current generation.",
-    )
-    assert.deepEqual(
-      secondStatuses.filter((status) => status.type === "reconciled"),
-      [{
-        type: "reconciled",
-        subscriptionId: 18,
-        recoveryGeneration: secondRecoveryGeneration,
-        recoveryRequired: false,
-      }],
-      "The second active subscriber must receive the same single current-generation terminal status.",
-    )
+    assertReconciledGenerationStatus({
+      statuses: firstStatuses,
+      recoveryGeneration: secondRecoveryGeneration,
+      subscriberLabel: "First subscriber",
+    })
+    assertReconciledGenerationStatus({
+      statuses: secondStatuses,
+      recoveryGeneration: secondRecoveryGeneration,
+      subscriberLabel: "Second subscriber",
+    })
 
     await fixture.session.stop()
   })

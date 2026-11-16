@@ -134,7 +134,7 @@ function readOptionalFilters({ priceFilter, lotSizeFilter, notionalFilter, symbo
 }
 
 function collectAccountSymbolFilters({ accountFilters, symbol }) {
-  if (!Array.isArray(accountFilters.symbolFilters)) return []
+  if (!Array.isArray(accountFilters.symbolFilters)) {return []}
   return accountFilters.symbolFilters.filter((filter) =>
     (!filter.symbol || filter.symbol === symbol) && !STATIC_FILTER_TYPES.has(filter.filterType)
   )

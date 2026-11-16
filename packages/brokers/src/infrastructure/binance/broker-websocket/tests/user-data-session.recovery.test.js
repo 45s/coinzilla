@@ -5,14 +5,6 @@ import { createBroker, createScheduler } from "../test-helpers/user-data-session
 import { createFakeRpcClient, createFakeStreamsClient } from "../test-helpers/fake-broker-clients.js"
 
 
-function assertRecoveryClientReady({ broker, scheduler, clients, first, second, firstStatuses, secondStatuses }) {
-  assertRecoveryClientReady({ broker, scheduler, clients, first, second, firstStatuses, secondStatuses })
-}
-
-function assertRecoveryStillPending({ broker, scheduler, firstStatuses, secondStatuses }) {
-  assertRecoveryStillPending({ broker, scheduler, firstStatuses, secondStatuses })
-}
-
 async function assertOrderMutationsBlocked({ broker, client, first }) {
   assert.equal(first.data.acknowledgeRecovery(), false)
   const blocked = await broker.createOrder({ symbol: "BTCUSDT", quantity: "0.01", price: "50000" })
@@ -26,7 +18,7 @@ async function assertOrderMutationsBlocked({ broker, client, first }) {
   assert.equal(client.calls.some((call) => call.method === "openOrders.cancelAll"), false)
 }
 
-function assertRecoveryAcknowledged({ broker, scheduler, first, second, firstStatuses, secondStatuses }) {
+function assertRecoveryAcknowledged({ broker, scheduler, second, firstStatuses, secondStatuses }) {
   assert.equal(second.data.acknowledgeRecovery(), true)
   assert.equal(broker.userDataUnavailable, false)
   assert.equal(scheduler.pendingCount, 0)
@@ -153,7 +145,7 @@ wasClean: false })
   assert.equal(firstStatuses.filter((status) => status.type === "reconciled").length, 0)
   assert.equal(secondStatuses.filter((status) => status.type === "reconciled").length, 0)
 
-  assertRecoveryAcknowledged({ broker, scheduler, first, second, firstStatuses, secondStatuses })
+  assertRecoveryAcknowledged({ broker, scheduler, second, firstStatuses, secondStatuses })
   const placed = await broker.createOrder({ symbol: "BTCUSDT",
 quantity: "0.01",
 price: "50000" })

@@ -167,30 +167,32 @@ close: 0 }
 })
 
 
-describe("Binance user-data unsubscribe outcome", () => {
-  function createUnsubscribeBroker({ unsubscribe, subscriptions }) {
-    let client
-    const broker = new BinanceSdkBroker({
-      tradingMode: "testnet",
-      apiKey: "test-key",
-      apiSecret: "test-secret",
-      logger: { error() {},
+function createUnsubscribeBroker({ unsubscribe, subscriptions }) {
+  let client
+  const broker = new BinanceSdkBroker({
+    tradingMode: "testnet",
+    apiKey: "test-key",
+    apiSecret: "test-secret",
+    logger: { error() {},
 info() {},
 warn() {} },
-    }, {
-      apiClientFactory: () => {
-        client = createFakeRpcClient({
-          "userDataStream.subscribe.signature": () => ({ subscriptionId: 81 }),
-          "userDataStream.unsubscribe": unsubscribe,
-          "session.subscriptions": subscriptions,
-        })
-        return client
-      },
-      marketClientFactory: () => createFakeStreamsClient(),
-    })
-    return { broker,
+  }, {
+    apiClientFactory: () => {
+      client = createFakeRpcClient({
+        "userDataStream.subscribe.signature": () => ({ subscriptionId: 81 }),
+        "userDataStream.unsubscribe": unsubscribe,
+        "session.subscriptions": subscriptions,
+      })
+      return client
+    },
+    marketClientFactory: () => createFakeStreamsClient(),
+  })
+  return { broker,
 get client() { return client } }
-  }
+}
+
+describe("Binance user-data unsubscribe outcome", () => {
+
 
   it("does not retry unsubscribe when the first response is lost but the remote state confirms removal", async () => {
     let activeSubscriptionId = null
@@ -363,42 +365,44 @@ wasClean: false })
 })
 
 
-describe("Binance stale user-data subscription cleanup", () => {
-  function createDelayedSubscriptionBroker({ unsubscribe, subscriptions }) {
-    let resolveSubscribe
-    let markSubscribeStarted
-    const subscribeStarted = new Promise((resolve) => {
-      markSubscribeStarted = resolve
-    })
-    let client
-    const broker = new BinanceSdkBroker({
-      tradingMode: "testnet",
-      apiKey: "test-key",
-      apiSecret: "test-secret",
-      logger: { error() {},
+function createDelayedSubscriptionBroker({ unsubscribe, subscriptions }) {
+  let resolveSubscribe
+  let markSubscribeStarted
+  const subscribeStarted = new Promise((resolve) => {
+    markSubscribeStarted = resolve
+  })
+  let client
+  const broker = new BinanceSdkBroker({
+    tradingMode: "testnet",
+    apiKey: "test-key",
+    apiSecret: "test-secret",
+    logger: { error() {},
 info() {},
 warn() {} },
-    }, {
-      apiClientFactory: () => {
-        client = createFakeRpcClient({
-          "userDataStream.subscribe.signature": () => new Promise((resolve) => {
-            resolveSubscribe = resolve
-            markSubscribeStarted()
-          }),
-          "userDataStream.unsubscribe": unsubscribe,
-          "session.subscriptions": subscriptions,
-        })
-        return client
-      },
-      marketClientFactory: () => createFakeStreamsClient(),
-    })
-    return {
-      broker,
-      client: () => client,
-      subscribeStarted,
-      resolveSubscribe: (value) => resolveSubscribe(value),
-    }
+  }, {
+    apiClientFactory: () => {
+      client = createFakeRpcClient({
+        "userDataStream.subscribe.signature": () => new Promise((resolve) => {
+          resolveSubscribe = resolve
+          markSubscribeStarted()
+        }),
+        "userDataStream.unsubscribe": unsubscribe,
+        "session.subscriptions": subscriptions,
+      })
+      return client
+    },
+    marketClientFactory: () => createFakeStreamsClient(),
+  })
+  return {
+    broker,
+    client: () => client,
+    subscribeStarted,
+    resolveSubscribe: (value) => resolveSubscribe(value),
   }
+}
+
+describe("Binance stale user-data subscription cleanup", () => {
+
 
   it("does not retry stale-subscription cleanup when lookup confirms the first unsubscribe succeeded", async () => {
     let activeSubscriptionId = null

@@ -439,14 +439,14 @@ test("listener registration failure closes the socket and removes previously att
     }
 
     addEventListener(...args) {
-      const [type, listener, options] = args
+      const [type] = args
       if (type === "message") throw new Error("message listener registration failed")
       registered.push(type)
       return super.addEventListener(...args)
     }
 
     removeEventListener(...args) {
-      const [type, listener, options] = args
+      const [type] = args
       removed.push(type)
       return super.removeEventListener(...args)
     }
@@ -483,7 +483,7 @@ test("finalizes close and attempts every socket listener removal when one remove
     }
 
     removeEventListener(...args) {
-      const [type, listener, options] = args
+      const [type] = args
       removed.push(type)
       super.removeEventListener(...args)
       if (type === "open") throw new Error("open listener removal failed")
