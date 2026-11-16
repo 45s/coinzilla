@@ -328,7 +328,7 @@ function assertTerminalOrder({ reconciliation, terminalOrder, orderRegistry }) {
     field: "terminalOrder.executedQuantity",
     allowZero: true,
   })
-  const executedQuantity = terminalOrder.executedQuantity.amount
+  const { amount: executedQuantity } = terminalOrder.executedQuantity
   const originalQuantity = reconciliation.order.originalQuantity
   if (compareDecimal({
     left: executedQuantity,
