@@ -225,7 +225,6 @@ function publishBrokerStatusChanged({ state, status, eventPublisher, brokerName 
       }),
     })
   }
-  return repeatedRecoveredReminder
 }
 
 function isDiagnosticOnlyRpcError({ status }) {
@@ -234,7 +233,7 @@ function isDiagnosticOnlyRpcError({ status }) {
     (status.reconciliationRequired === undefined || status.reconciliationRequired === false)
 }
 
-function markAccountingFailure({ state, status, logger, cancelOwnedBuysAfterAccountingFailure }) {
+function markAccountingFailure({ state, status, cancelOwnedBuysAfterAccountingFailure }) {
   if (status.type !== "executionNormalizationFailed") {
     return
   }
@@ -381,7 +380,7 @@ export function createUserDataStatusHandler({
     if (shouldSkipAcknowledgedRecovery({ state, status })) {
       return
     }
-    const repeatedRecoveredReminder = publishBrokerStatusChanged({
+    publishBrokerStatusChanged({
       state,
       status,
       eventPublisher,
@@ -397,7 +396,6 @@ export function createUserDataStatusHandler({
       markAccountingFailure({
         state,
         status,
-        logger,
         cancelOwnedBuysAfterAccountingFailure,
       })
     }
