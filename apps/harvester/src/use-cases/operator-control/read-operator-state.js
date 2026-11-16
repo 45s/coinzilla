@@ -56,8 +56,10 @@ function createMarketReadModels({ markets, runtime }) {
         message: "Harvester operator market snapshot is invalid",
         code: "HARVESTER_OPERATOR_MARKET_SNAPSHOT_INVALID",
         cause,
-        context: { operation: "READ_MARKETS", 
-          symbol: market?.symbol ?? "unknown" },
+        context: {
+          operation: "READ_MARKETS",
+          symbol: market?.symbol ?? "unknown",
+        },
       })
     }
     const blockers = [...market.blockers]
