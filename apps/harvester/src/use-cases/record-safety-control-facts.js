@@ -106,6 +106,47 @@ evidenceDigest },
  * Resolve an existing sticky blocker only with explicit actor/action and
  * independent reconciliation evidence. Restart alone is never a resolution.
  */
+function validateSafetyBlockerResolution({ blockerId, resolvedBy, resolution, evidenceDigest }) {
+  if (typeof blockerId !== "string" || !/^[a-f0-9]{64}$/.test(blockerId) ||
+      typeof resolvedBy !== "string" || !resolvedBy.trim() || resolvedBy !== resolvedBy.trim() ||
+      !["AUTHORITATIVE_RECONCILIATION", "OPERATOR_ACTION"].includes(resolution) ||
+      typeof evidenceDigest !== "string" || !/^[a-f0-9]{64}$/.test(evidenceDigest)) {
+    throw new TypeError("Safety blocker resolution requires blocker identity, actor, explicit resolution, and SHA-256 evidence")
+  }
+}
+
+async function verifyRaisedSafetyBlocker({ operationalStateStore, blockerId, evidenceDigest }) {
+  const read = await operationalStateStore.readAll()
+  if (read?.ok !== true || !Array.isArray(read.data?.records)) {
+    return toResult({
+      errors: read?.errors?.length
+        ? read.errors
+        : [new Error("Safety blocker resolution requires a verified Operational State Store record stream")],
+    })
+  }
+  const raised = read.data.records.find((record) =>
+    record.factType === "SAFETY_BLOCKER_RAISED" && record.data?.blockerId === blockerId
+  )
+  if (!raised) {
+    throw new Error("Cannot resolve a safety blocker without its committed raised fact")
+  }
+  if (raised.data.evidenceDigest === evidenceDigest) {
+    throw new Error("Safety-blocker resolution requires evidence independent from the triggering evidence")
+  }
+  return undefined
+}
+
+function validateSafetyBlockerResolver({ resolvedBy, resolution }) {
+  if ((resolution === "AUTHORITATIVE_RECONCILIATION" && !resolvedBy.startsWith("reconciliation:")) ||
+      (resolution === "OPERATOR_ACTION" && !resolvedBy.startsWith("operator:"))) {
+    throw new TypeError("Safety-blocker resolver identity must match the explicit reconciliation or operator action")
+  }
+}
+
+/**
+ * Resolve an existing sticky blocker only with explicit actor/action and
+ * independent reconciliation evidence. Restart alone is never a resolution.
+ */
 export async function recordSafetyBlockerResolved({
   operationalStateStore,
   blockerId,
@@ -114,43 +155,28 @@ export async function recordSafetyBlockerResolved({
   evidenceDigest,
 } = {}) {
   try {
-    requireStore({ operationalStateStore,
-operation: "recordSafetyBlockerResolved",
-needsRead: true })
-    if (typeof blockerId !== "string" || !/^[a-f0-9]{64}$/.test(blockerId) ||
-        typeof resolvedBy !== "string" || !resolvedBy.trim() || resolvedBy !== resolvedBy.trim() ||
-        !["AUTHORITATIVE_RECONCILIATION", "OPERATOR_ACTION"].includes(resolution) ||
-        typeof evidenceDigest !== "string" || !/^[a-f0-9]{64}$/.test(evidenceDigest)) {
-      throw new TypeError("Safety blocker resolution requires blocker identity, actor, explicit resolution, and SHA-256 evidence")
+    requireStore({
+      operationalStateStore,
+      operation: "recordSafetyBlockerResolved",
+      needsRead: true,
+    })
+    validateSafetyBlockerResolution({ blockerId, resolvedBy, resolution, evidenceDigest })
+    const readResult = await verifyRaisedSafetyBlocker({
+      operationalStateStore,
+      blockerId,
+      evidenceDigest,
+    })
+    if (readResult) {
+      return readResult
     }
-    const read = await operationalStateStore.readAll()
-    if (read?.ok !== true || !Array.isArray(read.data?.records)) {
-      return toResult({
-        errors: read?.errors?.length ? read.errors : [new Error("Safety blocker resolution requires a verified Operational State Store record stream")],
-      })
-    }
-    const raised = read.data.records.find((record) =>
-      record.factType === "SAFETY_BLOCKER_RAISED" && record.data?.blockerId === blockerId)
-    if (!raised) {
-      throw new Error("Cannot resolve a safety blocker without its committed raised fact")
-    }
-    if (raised.data.evidenceDigest === evidenceDigest) {
-      throw new Error("Safety-blocker resolution requires evidence independent from the triggering evidence")
-    }
-    if ((resolution === "AUTHORITATIVE_RECONCILIATION" && !resolvedBy.startsWith("reconciliation:")) ||
-        (resolution === "OPERATOR_ACTION" && !resolvedBy.startsWith("operator:"))) {
-      throw new TypeError("Safety-blocker resolver identity must match the explicit reconciliation or operator action")
-    }
+    validateSafetyBlockerResolver({ resolvedBy, resolution })
     return await appendDurably({
       operationalStateStore,
       operation: "Safety blocker resolution",
       fact: {
-        factId: `safety-blocker-resolved:${  blockerId}`,
+        factId: `safety-blocker-resolved:${blockerId}`,
         factType: "SAFETY_BLOCKER_RESOLVED",
-        data: { blockerId,
-resolvedBy,
-resolution,
-evidenceDigest },
+        data: { blockerId, resolvedBy, resolution, evidenceDigest },
       },
     })
   } catch (error) {
