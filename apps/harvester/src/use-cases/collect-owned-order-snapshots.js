@@ -2,10 +2,7 @@ import { CanonicalOrder, Fill, Order } from "@coinzilla/entities"
 import { addDecimal, compareDecimal } from "@coinzilla/utils"
 import { recoveryFailureError } from "./recovery-failure.js"
 
-function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
-  const mismatch = (field) => {
-    throw new Error(`Canonical REST fill conflicts with durable Journal ${field} for execution ${fill.id}`)
-  }
+function assertJournalFillIdentityParity({ fill, ownedOrder, journalFill, mismatch }) {
   const expectedClientOrderId = journalFill.clientOrderId ?? ownedOrder.clientOrderId
   const actualClientOrderId = fill.clientOrderId ?? ownedOrder.clientOrderId
   if (
@@ -21,22 +18,27 @@ function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
   ) {
     mismatch("identity or execution metadata")
   }
+}
 
+function assertJournalFillAmountParity({ fill, journalFill, mismatch }) {
   for (const [field, actual, expected] of [
     ["price", fill.price.amount, journalFill.price],
     ["quantity", fill.quantity.amount, journalFill.quantity],
     ["quoteQuantity", fill.quoteQuantity.amount, journalFill.quoteQuantity],
   ]) {
-    if (compareDecimal({ left: actual, 
-      
-      right: expected }) !== 0) {
+    if (compareDecimal({
+      left: actual,
+      right: expected,
+    }) !== 0) {
       mismatch(field)
     }
   }
   if (journalFill.executedAt !== undefined && fill.executedAt !== journalFill.executedAt) {
     mismatch("transaction timestamp")
   }
+}
 
+function assertJournalFillCommissionParity({ fill, journalFill, mismatch }) {
   const actualCommissions = fill.commissions.map((commission) => ({
     amount: commission.amount.amount,
     assetId: commission.amount.asset.id,
@@ -60,13 +62,23 @@ function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
     if (
       actual.assetId !== expected.assetId ||
       actual.asset !== expected.asset ||
-    
-      compareDecimal({ left: actual.amount, 
-        right: expected.amount }) !== 0
+      compareDecimal({
+        left: actual.amount,
+        right: expected.amount,
+      }) !== 0
     ) {
       mismatch("commission facts")
     }
   }
+}
+
+function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
+  const mismatch = (field) => {
+    throw new Error(`Canonical REST fill conflicts with durable Journal ${field} for execution ${fill.id}`)
+  }
+  assertJournalFillIdentityParity({ fill, ownedOrder, journalFill, mismatch })
+  assertJournalFillAmountParity({ fill, journalFill, mismatch })
+  assertJournalFillCommissionParity({ fill, journalFill, mismatch })
 }
 
 async function readOpenOrders({ broker, symbol }) {
@@ -422,11 +434,11 @@ async function readOwnedOrderFills({ broker, ownedOrder, journalFillsById }) {
       lastTradeId, 
       ownedOrder })
     
-    lastTradeId = cursor.lastTradeId
-    
-    
-    
-    const { fromId: nextFromId } = cursor
+    const {
+      lastTradeId: nextLastTradeId,
+      fromId: nextFromId,
+    } = cursor
+    lastTradeId = nextLastTradeId
     fromId = nextFromId
     if (page === 9999) {
       throw new Error(`REST fill history exceeded the maximum supported pagination depth for owned order ${ownedOrder.brokerOrderId}`)
