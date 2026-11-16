@@ -9,20 +9,13 @@ export class ProcessOperationalStateStartupError extends Error {
   }
 }
 
-/**
- * Compose the process-owned ADR-0001 store only when process-restart recovery is enabled.
- *
- * TEMPORARY: Telegram CC alone must not create or require this store. When recovery is
- * disabled, operator commands run process-locally unless another caller explicitly
- * supplies an Operational State Store.
- */
+/** Compose the one process-owned ADR-0001 store shared by recovery and operator control. */
 export async function prepareProcessOperationalStateStore({
   appConfig, env = process.env, runtimeSessionId, createOperationalStateStore = createFileOperationalStateStore,
 } = {}) {
   const recoveryEnabled = appConfig?.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
-  // TEMPORARY: Telegram CC must not create or require the ADR-0001 store.
-  // Process-restart recovery remains disabled; re-enable this dependency only after the recovery design is accepted.
-  if (!recoveryEnabled) {
+  const operatorControlEnabled = appConfig?.operatorControl?.telegram?.enabled === true
+  if (!recoveryEnabled && !operatorControlEnabled) {
     return undefined
   }
   if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
