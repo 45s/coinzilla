@@ -220,7 +220,7 @@ The first adapter uses Telegram Bot API Long Polling and is optional; its module
 - Reuse the existing `TELEGRAM_BOT_TOKEN` environment secret. Never commit credentials.
 - Keep outbound notification delivery independent and best-effort.
 
-The target configuration is intentionally separate from outbound notification policy and remains disabled by default:
+The target configuration is intentionally separate from outbound notification policy and defaults enabled:
 
 ```json
 {
@@ -233,7 +233,7 @@ The target configuration is intentionally separate from outbound notification po
 }
 ```
 
-When enabled, `allowedUserIds` contains decimal Telegram user-ID strings. The existing bot token remains in `TELEGRAM_BOT_TOKEN`. Runtime configuration validation and lifecycle wiring are implemented in PR #1067; the feature remains disabled by default.
+When enabled, `allowedUserIds` contains decimal Telegram user-ID strings. The existing bot token remains in `TELEGRAM_BOT_TOKEN`. Runtime configuration validation and lifecycle wiring are implemented in PR #1067; the feature defaults enabled and fails closed without its required environment-backed identity and token.
 
 ## Telegram Command Center expansion
 
@@ -276,7 +276,7 @@ Typed `/pause SYMBOL` and `/resume SYMBOL` remain explicit command invocations a
 3. **Durable append — implemented foundation:** use the existing ADR-0001 append-only stream and committed-head contract for pause/resume acknowledgements. Do not create an operator-specific store.
 4. **Restart restoration — explicitly out of scope:** the initial operator pause is process-lifetime only. Do not add projection, recovery replay or a startup-readiness dependency to this operator-control task. Track full restart recovery separately under ADR-0001 / issue #654.
 5. **Telegram adapter — implemented in PR #1045:** parser, private-chat allowlist, serial polling, update idempotency, replies, retry/backoff and graceful stop, with mocked transport tests.
-6. **Configuration/bootstrap — implemented in PR #1067:** disabled-by-default `operatorControl.telegram` validation, fail-closed durable-store verification before broker connection, poller startup before trading subscriptions, and poller shutdown before broker disconnect. This remains independent of outbound notifications and full ADR-0001 restart recovery.
+6. **Configuration/bootstrap — implemented in PR #1067:** enabled-by-default `operatorControl.telegram` configuration, fail-closed durable-store verification before broker connection, poller startup before trading subscriptions, and poller shutdown before broker disconnect. This remains independent of outbound notifications and full ADR-0001 restart recovery.
 7. **Verification — completed for the initial process-lifetime rollout in PR #1067:** the runtime/config/lifecycle integration passed its exact-head required CI and merged. The read-only TESTNET integration was skipped; no exchange operations were performed.
 8. **CC-1 read-only visibility — implemented in PR #1081:** engine market snapshots are serialized and immutable; application queries enforce actor authorization and combine runtime readiness with market-local blockers; Telegram formats `/status` and `/markets` without broker access or trading-state mutation.
 9. **CC-2/CC-3 — implemented in PRs #1086 and #1087:** read-only positions/orders/balances queries and proactive readiness/recovery/delivery-health alerts reuse existing application/notifier boundaries.
