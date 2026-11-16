@@ -49,9 +49,20 @@ function getMarketOrderBlockers({ state, symbol, blockers } = {}) {
     addBlocker({ blockers,
       reason: "RECOVERY_SELL_REPLAN_UNRESOLVED" })
   }
+  if (
+    state.durablePausedMarkets?.has(symbol) ||
+    (state.paused?.has(symbol) && !state.recoveryManagedPausedMarkets.has(symbol))
+  ) {
+    addBlocker({
+      blockers,
+      reason: "STRATEGY_SAFETY_PAUSED",
+    })
+  }
   if (state.recoveryManagedPausedMarkets.has(symbol)) {
-    addBlocker({ blockers,
-      reason: "RECOVERY_MANAGED_MARKET_PAUSED" })
+    addBlocker({
+      blockers,
+      reason: "RECOVERY_MANAGED_MARKET_PAUSED",
+    })
   }
   if (state.completedRecoverySellSymbols.has(symbol)) {
     addBlocker({ blockers,
