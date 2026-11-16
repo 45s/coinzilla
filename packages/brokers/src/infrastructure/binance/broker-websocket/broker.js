@@ -41,7 +41,8 @@ function createMarketClient(config, logger) {
     url: config.websocketStreamsUrl,
     reconnectDelay: Math.max(1, config.reconnectDelay),
     maxReconnectDelay: Math.max(30_000, config.reconnectDelay),
-    onError: (error) => logger.error?.({ message: "Binance market stream error", error }),
+    onError: (error) => logger.error?.({ message: "Binance market stream error",
+error }),
   })
 }
 
@@ -52,16 +53,16 @@ function createMarketClient(config, logger) {
  * @returns {Promise<import("@coinzilla/entities").Market>}
  */
 async function getCanonicalMarket({ broker, symbol }) {
-  if (broker.canonicalMarkets.has(symbol)) return broker.canonicalMarkets.get(symbol)
+  if (broker.canonicalMarkets.has(symbol)) {return broker.canonicalMarkets.get(symbol)}
   const pending = broker.canonicalMarketRequests.get(symbol)
-  if (pending) return pending
+  if (pending) {return pending}
 
   const request = Promise.resolve().then(async () => {
     const result = await broker.getSymbolFilters({ symbol })
     if (!result?.ok || !result.data) {
       const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
       throw new Error(
-        "Unable to load Binance market metadata for " + symbol + (details ? ": " + details : ""),
+        `Unable to load Binance market metadata for ${  symbol  }${details ? `: ${  details}` : ""}`,
       )
     }
     const market = broker.canonicalMarkets.get(symbol) ??
@@ -90,7 +91,7 @@ function logSafely(logger, level, ...args) {
 }
 
 function notifySafely(onStatus, status, logger) {
-  if (typeof onStatus !== "function") return
+  if (typeof onStatus !== "function") {return}
   try {
     onStatus(status)
   } catch (error) {
@@ -193,7 +194,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
       await Promise.allSettled([
         Promise.resolve().then(() => this.tradingConnection.disconnect()),
       ])
-      handleErr({ where: "BinanceWebSocketBroker.connect()", error })
+      handleErr({ where: "BinanceWebSocketBroker.connect()",
+error })
       throw error
     }
   }
@@ -211,7 +213,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
 
     for (const result of results) {
       if (result.status === "rejected") {
-        handleErr({ where: "BinanceWebSocketBroker.disconnect()", error: result.reason })
+        handleErr({ where: "BinanceWebSocketBroker.disconnect()",
+error: result.reason })
       }
     }
   }
@@ -226,7 +229,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
       )
       return toResult({ data: adaptSpotAsset(response.data.balances) })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getAssets()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getAssets()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -241,7 +245,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
       )
       return toResult({ data: adaptSpotBalance(response.data?.balances) })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getBalances()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getBalances()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -266,7 +271,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
         },
       })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getAccountSnapshot()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getAccountSnapshot()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -282,7 +288,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
 
       return toResult({ data: { serverTime } })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getServerTime()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getServerTime()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -297,7 +304,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
       )
       return toResult({ data: response.data.map(adaptOrder) })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getOpenOrders()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getOpenOrders()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -337,7 +345,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
       if (error?.code === -2013 && error?.method === "order.status") {
         return toResult({ data: null })
       }
-      handleErr({ where: "BinanceWebSocketBroker.getOrder()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getOrder()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -387,9 +396,11 @@ export class BinanceWebSocketBroker extends CoreBroker {
         symbol: normalizedSymbol,
         exchangeInfo: metadataResponse.data,
       })
-      return toResult({ data: adaptCanonicalOrder({ order, market }) })
+      return toResult({ data: adaptCanonicalOrder({ order,
+market }) })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getCanonicalOrder()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getCanonicalOrder()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -402,7 +413,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
       validateOrderHistoryCursorItems({ orders })
       return toResult({ data: orders })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getOrderHistory()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getOrderHistory()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -432,10 +444,12 @@ export class BinanceWebSocketBroker extends CoreBroker {
         exchangeInfo: metadataResponse.data,
       })
       return toResult({
-        data: adaptCanonicalOrderHistory({ orders: matchingOrders, market }),
+        data: adaptCanonicalOrderHistory({ orders: matchingOrders,
+market }),
       })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getCanonicalOrderHistory()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getCanonicalOrderHistory()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -450,7 +464,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
       }
       return toResult({ data: response.data.map(adaptTrade) })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getMyTrades()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getMyTrades()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -462,14 +477,17 @@ export class BinanceWebSocketBroker extends CoreBroker {
       const { symbol } = params
 
       const metadataResponse = await this.tradingConnection.request("exchangeInfo", { symbol })
-      const market = createCanonicalFillMarket({ symbol, exchangeInfo: metadataResponse.data })
+      const market = createCanonicalFillMarket({ symbol,
+exchangeInfo: metadataResponse.data })
 
       const tradesResponse = await this.tradingConnection.request("myTrades", params, { signed: true })
       return toResult({
-        data: adaptCanonicalFills({ trades: tradesResponse.data, market }),
+        data: adaptCanonicalFills({ trades: tradesResponse.data,
+market }),
       })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getFills()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getFills()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -486,11 +504,13 @@ export class BinanceWebSocketBroker extends CoreBroker {
       const response = await this.tradingConnection.request(
         "order.place",
         params,
-        { signed: true, stateChanging: true },
+        { signed: true,
+stateChanging: true },
       )
       return toResult({ data: adaptOrder(response.data) })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.createOrder()", error })
+      handleErr({ where: "BinanceWebSocketBroker.createOrder()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -523,9 +543,11 @@ export class BinanceWebSocketBroker extends CoreBroker {
       const response = await this.tradingConnection.request(
         "order.place",
         params,
-        { signed: true, stateChanging: true },
+        { signed: true,
+stateChanging: true },
       )
-      const market = await getCanonicalMarket({ broker: this, symbol })
+      const market = await getCanonicalMarket({ broker: this,
+symbol })
       return toResult({
         data: adaptCanonicalOrder({
           order: response.data,
@@ -533,7 +555,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
         }),
       })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.createCanonicalOrder()", error })
+      handleErr({ where: "BinanceWebSocketBroker.createCanonicalOrder()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -545,7 +568,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
   async cancelOrder({ symbol, orderId }) {
     if (this.userDataUnavailable) {
       const error = new Error("Cannot change Binance orders while the user-data stream is unavailable")
-      handleErr({ where: "BinanceWebSocketBroker.cancelOrder()", error })
+      handleErr({ where: "BinanceWebSocketBroker.cancelOrder()",
+error })
       return {
         ...toResult({ errors: [error] }),
         cancellationOutcome: "NOT_SENT",
@@ -554,12 +578,15 @@ export class BinanceWebSocketBroker extends CoreBroker {
     try {
       const response = await this.tradingConnection.request(
         "order.cancel",
-        { symbol, orderId },
-        { signed: true, stateChanging: true },
+        { symbol,
+orderId },
+        { signed: true,
+stateChanging: true },
       )
       return toResult({ data: adaptOrder(response.data) })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.cancelOrder()", error })
+      handleErr({ where: "BinanceWebSocketBroker.cancelOrder()",
+error })
       return {
         ...toResult({ errors: [error] }),
         cancellationOutcome: "OUTCOME_UNKNOWN",
@@ -576,11 +603,13 @@ export class BinanceWebSocketBroker extends CoreBroker {
       const response = await this.tradingConnection.request(
         "openOrders.cancelAll",
         { symbol },
-        { signed: true, stateChanging: true },
+        { signed: true,
+stateChanging: true },
       )
       return toResult({ data: response.data.map(adaptOrder) })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.cancelAllOpenOrders()", error })
+      handleErr({ where: "BinanceWebSocketBroker.cancelAllOpenOrders()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -591,7 +620,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
       const response = await this.tradingConnection.request("ticker.price", { symbol })
       return toResult({ data: response.data })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getPrices()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getPrices()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -606,23 +636,26 @@ export class BinanceWebSocketBroker extends CoreBroker {
         throw new TypeError("getCandles requires a non-empty symbol")
       }
       const normalizedSymbol = symbol.trim().toUpperCase()
-      createStreamName("kline", { symbol: normalizedSymbol, interval })
+      createStreamName("kline", { symbol: normalizedSymbol,
+interval })
 
       if (!Number.isInteger(limit) || limit < 1 || limit > 1_000) {
         throw new RangeError("getCandles limit must be an integer from 1 to 1000")
       }
       for (const [field, value] of [["startTime", startTime], ["endTime", endTime]]) {
         if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
-          throw new RangeError("getCandles " + field + " must be a non-negative safe integer")
+          throw new RangeError(`getCandles ${  field  } must be a non-negative safe integer`)
         }
       }
       if (startTime !== undefined && endTime !== undefined && startTime > endTime) {
         throw new RangeError("getCandles startTime must not be after endTime")
       }
 
-      const params = { symbol: normalizedSymbol, interval, limit }
-      if (startTime !== undefined) params.startTime = startTime
-      if (endTime !== undefined) params.endTime = endTime
+      const params = { symbol: normalizedSymbol,
+interval,
+limit }
+      if (startTime !== undefined) {params.startTime = startTime}
+      if (endTime !== undefined) {params.endTime = endTime}
 
       const timeResponse = await this.tradingConnection.request("time")
       const serverTime = timeResponse.data?.serverTime
@@ -651,7 +684,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
 
       return toResult({ data: Object.freeze(candles) })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getCandles()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getCandles()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -670,7 +704,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
       for (const symbolInfo of symbolInfos) {
         const market = createCanonicalMarket({ symbolInfo })
         if (seenSymbols.has(market.symbol)) {
-          throw new Error("Binance exchangeInfo contains duplicate market symbol " + market.symbol)
+          throw new Error(`Binance exchangeInfo contains duplicate market symbol ${  market.symbol}`)
         }
         seenSymbols.add(market.symbol)
         this.canonicalMarkets.set(market.symbol, market)
@@ -678,7 +712,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
       }
       return toResult({ data: Object.freeze(markets) })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getExchangeMarkets()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getExchangeMarkets()",
+error })
       return toResult({ error })
     }
   }
@@ -709,7 +744,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
       this.canonicalMarkets.set(symbol, createCanonicalMarket({ symbolInfo: data }))
       return toResult({ data })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getSymbolFilters()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getSymbolFilters()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -722,7 +758,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     let stream
     try {
       validateCallback(onPrice, "onPrice")
-      if (!this.connected) throw new Error("Binance broker must be connected before subscribing to prices")
+      if (!this.connected) {throw new Error("Binance broker must be connected before subscribing to prices")}
       stream = createStreamName("aggTrade", { symbol })
       const listener = (message) => onPrice(adaptPublicStreamMessage(message))
       await this.marketConnection.subscribe(stream, listener)
@@ -734,7 +770,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
         },
       })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.subscribeForPrices()", error })
+      handleErr({ where: "BinanceWebSocketBroker.subscribeForPrices()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -747,12 +784,13 @@ export class BinanceWebSocketBroker extends CoreBroker {
     let stream
     try {
       validateCallback(onCandle, "onCandle")
-      if (!this.connected) throw new Error("Binance broker must be connected before subscribing to candles")
+      if (!this.connected) {throw new Error("Binance broker must be connected before subscribing to candles")}
       if (typeof symbol !== "string" || !symbol.trim()) {
         throw new TypeError("subscribeForCandles requires a non-empty symbol")
       }
       const normalizedSymbol = symbol.trim().toUpperCase()
-      stream = createStreamName("kline", { symbol: normalizedSymbol, interval })
+      stream = createStreamName("kline", { symbol: normalizedSymbol,
+interval })
       const listener = (message) => {
         const candle = adaptPublicStreamMessage(message)
         if (candle.symbol !== normalizedSymbol || candle.interval !== interval) {
@@ -769,7 +807,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
         },
       })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.subscribeForCandles()", error })
+      handleErr({ where: "BinanceWebSocketBroker.subscribeForCandles()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -782,14 +821,16 @@ export class BinanceWebSocketBroker extends CoreBroker {
     let stream
     try {
       validateCallback(onBookTicker, "onBookTicker")
-      if (!this.connected) throw new Error("Binance broker must be connected before subscribing to book ticker")
+      if (!this.connected) {throw new Error("Binance broker must be connected before subscribing to book ticker")}
       if (typeof symbol !== "string" || !symbol.trim()) {
         throw new TypeError("subscribeForBookTicker requires a symbol")
       }
       const normalizedSymbol = symbol.trim().toUpperCase()
       stream = createStreamName("bookTicker", { symbol: normalizedSymbol })
       const listener = (message) => {
-        onBookTicker(adaptBookTickerMessage({ message, symbol: normalizedSymbol, timestamp: Date.now() }))
+        onBookTicker(adaptBookTickerMessage({ message,
+symbol: normalizedSymbol,
+timestamp: Date.now() }))
       }
       await this.marketConnection.subscribe(stream, listener)
 
@@ -800,7 +841,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
         },
       })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.subscribeForBookTicker()", error })
+      handleErr({ where: "BinanceWebSocketBroker.subscribeForBookTicker()",
+error })
       return toResult({ errors: [error] })
     }
   }
@@ -811,9 +853,9 @@ export class BinanceWebSocketBroker extends CoreBroker {
    */
   async subscribeForUserData({ onEvent, onStatus }) {
     try {
-      if (!this.connected) throw new Error("Binance broker must be connected before subscribing to user data")
+      if (!this.connected) {throw new Error("Binance broker must be connected before subscribing to user data")}
       validateCallback(onEvent, "onEvent")
-      if (onStatus !== undefined) validateCallback(onStatus, "onStatus")
+      if (onStatus !== undefined) {validateCallback(onStatus, "onStatus")}
 
       const forwardEvent = ({ event } = {}) => {
         if (event?.eventType !== "executionReport") {
@@ -831,7 +873,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
         Promise.resolve()
           .then(async () => {
             const symbol = event.executedOrder?.symbol ?? event.fill?.symbol
-            const market = await getCanonicalMarket({ broker: this, symbol })
+            const market = await getCanonicalMarket({ broker: this,
+symbol })
             const sourceOrder = event.executedOrder
             const executedOrder = adaptCanonicalOrder({
               market,
@@ -898,7 +941,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
       })
       return toResult(result)
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.subscribeForUserData()", error })
+      handleErr({ where: "BinanceWebSocketBroker.subscribeForUserData()",
+error })
       return toResult({ errors: [error] })
     }
   }
