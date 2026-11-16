@@ -56,7 +56,7 @@ test("does not force cleanup of unrelated pre-existing findings in an edited doc
     }],
     changesByPath: new Map([["docs/existing.md", { lines: new Set([8]),
     isNewFile: false }]]),
-  )
+  })
 
   assert.equal(result.scannedFiles, 1)
   assert.deepEqual(Object.values(result.violations).flat(), [])
@@ -70,7 +70,7 @@ test("enforces whitespace and heading rules when the affected lines change", () 
     }],
     changesByPath: new Map([["docs/changed.md", { lines: new Set([3, 4, 5, 6]),
     isNewFile: false }]]),
-  )
+  })
 
   assert.deepEqual(result.violations.trailingWhitespace.map(({ path }) => path), [
     "docs/changed.md",
@@ -125,7 +125,7 @@ test("checks new files fully while preserving historical, superseded and GitHub 
       [".github/ISSUE_TEMPLATE/cross-domain-request.md", { lines: new Set([1, 2, 3, 4, 5]),
         isNewFile: true }],
     ]),
-  })
+  }})
 
   assert.equal(result.scannedFiles, 3, 'only maintained documents and GitHub templates should be scanned')
   assert.equal(result.skippedHistorical, 3, 'historical and superseded documents should be excluded from changed-line enforcement')
@@ -156,7 +156,7 @@ test("accepts a clean changed document", () => {
     }],
     changesByPath: new Map([["docs/clean.md", { lines: new Set([1, 3]),
     isNewFile: false }]]),
-  )
+  })
 
   assert.equal(result.scannedFiles, 1)
   assert.deepEqual(Object.values(result.violations).flat(), [])
@@ -190,7 +190,7 @@ test("enforces every existing style rule for new maintained documents", () => {
     { lines: new Set(getLineNumbers(content)),
       isNewFile: true },
   ]))
-  const result = analyzeMarkdownStyleDocuments({ documents, changesByPath: changes })
+  const result = analyzeMarkdownStyleDocuments({ documents, changesByPath: changes }})
 
   const expected = {
     trailingWhitespace: "docs/trailing.md",
@@ -230,7 +230,7 @@ content }],
       lines: new Set(getLineNumbers(content)),
       isNewFile: true,
     }]]),
-  )
+  })
 
   for (const rule of [
     "unorderedListMarkers",
@@ -252,7 +252,7 @@ content }],
       lines: new Set(getLineNumbers(content)),
       isNewFile: true,
     }]]),
-  )
+  })
 
   assert.deepEqual(result.violations.listSpacing, [
     { path: "docs/list-spacing.md",
@@ -270,7 +270,7 @@ content }],
       lines: new Set(getLineNumbers(content)),
       isNewFile: true,
     }]]),
-  )
+  })
 
   assert.deepEqual(result.violations.listSpacing, [])
 })
@@ -282,7 +282,7 @@ test("does not require unrelated pre-existing list spacing to be cleaned in an e
 content }],
     changesByPath: new Map([["docs/existing.md", { lines: new Set([6]),
     isNewFile: false }]]),
-  )
+  })
 
   assert.deepEqual(result.violations.listSpacing, [])
 })
@@ -297,7 +297,7 @@ content }],
       lines: new Set(getLineNumbers(content)),
       isNewFile: true,
     }]]),
-  )
+  })
 
   assert.equal(result.scannedFiles, 0)
   assert.equal(result.skippedHistorical, 1)
