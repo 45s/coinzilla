@@ -4,8 +4,12 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-15
+**Last reviewed:** 2026-11-16
 **Last source-verified develop checkpoint:** `70592ae7da28320d5173b2a12e3a2b91c14b6a12` (2026-11-15; includes merged PR #1166 for startup open-order ownership, documentation sync #1167 and shutdown-log documentation PR #1163).
+
+## Repository-wide agent workflow continuity
+
+- **Incremental commits and resumable handoffs — IN PROGRESS** ([issue #1199](https://github.com/45s/coinzilla/issues/1199)). Strengthen the existing agent workflow so task issues remain the live contract, commits form small meaningful checkpoints, and every pause/ownership transfer leaves a complete GitHub handoff. Canonical rules live in [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md); root [AGENTS.md](AGENTS.md), [task checklists](docs/engineering/TASK_WORKFLOWS.md) and the [PR template](.github/PULL_REQUEST_TEMPLATE.md) point contributors to the same contract. Documentation-only scope; no runtime or exchange operations.
 
 ## 2026-11-14 repository status audit
 
@@ -122,7 +126,7 @@
 
 ## Recently completed — do not reopen without new evidence
 
-- **Harvester process-lifetime operator control:** the engine/application/Telegram adapter foundation merged in [PR #1045](https://github.com/45s/coinzilla/pull/1045), process-lifetime scope/docs in [PR #1065](https://github.com/45s/coinzilla/pull/1065), and runtime/config/lifecycle integration in [PR #1067](https://github.com/45s/coinzilla/pull/1067) at `96293daa5ee3b831e55c49b56af22ce1857f936c`. Only allowlisted private-chat `/pause <SYMBOL>` is exposed; it is disabled by default, market-scoped, and does not cancel existing orders. Pause state is not restored after restart. Tracking issue [#1066](https://github.com/45s/coinzilla/issues/1066) is closed as completed. Restart restoration remains separately gated by #654.
+- **Harvester process-lifetime operator control:** the engine/application/Telegram adapter foundation merged in [PR #1045](https://github.com/45s/coinzilla/pull/1045), process-lifetime scope/docs in [PR #1065](https://github.com/45s/coinzilla/pull/1065), and runtime/config/lifecycle integration in [PR #1067](https://github.com/45s/coinzilla/pull/1067) at `96293daa5ee3b831e55c49b56af22ce1857f936c`. The existing Command Center provides allowlisted private-chat commands, inline navigation and confirmation-gated market pause/resume. The persistent six-button keyboard follow-up merged in [PR #1194](https://github.com/45s/coinzilla/pull/1194) at `5a094e67c285466a090b9f8eda4d71e950c8e1be`; all seven Actions workflows passed on exact head. Operator pause remains market-scoped and does not cancel existing orders; pause state is not restored after restart. Tracking issue [#1066](https://github.com/45s/coinzilla/issues/1066) is closed as completed. Restart restoration remains separately gated by #654.
 - **Conservative trailing-BUY replacement safety:** PRs [#751](https://github.com/45s/coinzilla/pull/751) and [#753](https://github.com/45s/coinzilla/pull/753) merged. Candidate validation and refreshed exchange filters now precede cancellation; uncertain outcomes pause for reconciliation. See the [Harvester roadmap](apps/harvester/ROADMAP.md).
 - **Journal persistence and lifecycle boundary (J-1 through J-6):** record contract, filesystem adapter, lifecycle ownership, cleanup/order hardening, recursive lossless JSONL validation and durability failure propagation are complete in the Journal package. PR [#920](https://github.com/45s/coinzilla/pull/920) implemented the Journal-owned boundary; Harvester DTO compatibility and mapper-failure diagnostics merged in [PR #925](https://github.com/45s/coinzilla/pull/925), closing issue [#923](https://github.com/45s/coinzilla/issues/923). Issue [#889](https://github.com/45s/coinzilla/issues/889) is closed after PR #934 reconciled the Journal README and roadmap. Do not treat EventBus delivery success as Journal durability acknowledgement. See the [Journal roadmap](packages/journal/ROADMAP.md).
 - **Harvester process provenance:** PR #770 merged; the process-start Journal event and Logger correlation are implemented. The shared Utils build-provenance capability remains separately tracked by the Utils roadmap.
@@ -150,3 +154,7 @@
 6. Preserve historical reports and provenance. Correct stale historical conclusions with a dated addendum or link to the current living source; never silently rewrite evidence.
 7. Run focused checks, repository agent-policy/link checks and applicable CI on the exact PR head. A skipped integration check is not a pass.
 8. Keep task branches short-lived and delete them after merge when repository permissions allow. Never bypass branch protection or release approval.
+
+## Bitunix Spot broker development
+
+Bitunix Spot remains a read-only broker foundation with unresolved lifecycle and exchange-contract blockers tracked in [issue #1185](https://github.com/45s/coinzilla/issues/1185) and the [Brokers roadmap](packages/brokers/ROADMAP.md). Future Bitunix Spot implementation tasks must follow the mandatory reference-first audit in [Brokers AGENTS.md](packages/brokers/AGENTS.md#bitunix-spot-development--mandatory-reference-audit): inspect [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net) as the primary C# Spot implementation and its tests, cross-check [bitunix-mcp](https://github.com/samanzamani/bitunix-mcp) for TypeScript examples, then verify against official Bitunix documentation. Reimplement the audited behavior in Coinzilla's JavaScript architecture; do not copy unverified assumptions or enable mutations while issue #1185 guarantees remain unresolved.

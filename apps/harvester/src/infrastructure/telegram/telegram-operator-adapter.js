@@ -10,6 +10,55 @@ const DEFAULT_POLL_TIMEOUT_SECONDS = 30
 const DEFAULT_RETRY_DELAY_MS = 1000
 const MAX_RETRY_DELAY_MS = 30000
 
+const KEYBOARD_ACTIONS = Object.freeze({
+  pause: Object.freeze({ type: "PAUSE_MENU" }),
+  resume: Object.freeze({ type: "RESUME_MENU" }),
+  status: Object.freeze({ type: "STATUS" }),
+  markets: Object.freeze({ type: "MARKETS" }),
+  portfolio: Object.freeze({ type: "POSITIONS" }),
+  "open orders": Object.freeze({ type: "ORDERS" }),
+})
+
+const ENTRY_COMMAND_TYPES = Object.freeze({
+  "/start": "START",
+  "/menu": "MENU",
+  "/help": "HELP",
+})
+
+function parseEntryCommand({ command, argumentsList }) {
+  const type = ENTRY_COMMAND_TYPES[command]
+  if (!type) { return undefined }
+  if (argumentsList.length !== 0) { return Object.freeze({ type: "INVALID" }) }
+  return Object.freeze({ type })
+}
+
+function resolveMarketAction(page) {
+  if (page === "pause") { return "PAUSE" }
+  if (page === "resume") { return "RESUME" }
+  return undefined
+}
+
+function selectMarketsForAction({ markets, action }) {
+  if (action === "PAUSE") {
+    return markets.filter((market) => market?.enabled === true && market.operatorPaused !== true)
+  }
+  if (action === "RESUME") {
+    return markets.filter((market) => market?.enabled === true && market.operatorPaused === true)
+  }
+  return []
+}
+
+function formatMarketActionPrompt({ action, eligibleMarkets, text }) {
+  const prompt = action === "PAUSE"
+    ? "Choose an enabled market to pause."
+    : "Choose an enabled market to resume."
+  if (eligibleMarkets.length > 0) { return `${prompt}\n\n${text}` }
+  const emptyMessage = action === "PAUSE"
+    ? "No enabled markets are currently available to pause."
+    : "No enabled operator-paused markets are currently available to resume."
+  return `${prompt}\n${emptyMessage}\n\n${text}`
+}
+
 function normalizeTelegramUserId(value) {
   if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
     return String(value)
@@ -47,11 +96,15 @@ function waitForRetry({ milliseconds, signal }) {
  * @returns {{type: string, symbol?: string}} Transport-neutral parse result.
  */
 export function parseTelegramOperatorCommand(text, { botUsername } = {}) {
-  if (typeof text !== "string" || text.trim() === "" || !text.trim().startsWith("/")) {
+  if (typeof text !== "string" || text.trim() === "") {
     return Object.freeze({ type: "IGNORE" })
   }
+  const normalizedText = text.trim()
+  if (!normalizedText.startsWith("/")) {
+    return KEYBOARD_ACTIONS[normalizedText.toLowerCase()] ?? Object.freeze({ type: "IGNORE" })
+  }
 
-  const [commandToken, ...argumentsList] = text.trim().split(/\s+/)
+  const [commandToken, ...argumentsList] = normalizedText.split(/\s+/)
   const commandParts = commandToken.split("@")
   if (commandParts.length > 2) {return Object.freeze({ type: "INVALID" })}
   const [command, targetUsername] = commandParts
@@ -59,11 +112,8 @@ export function parseTelegramOperatorCommand(text, { botUsername } = {}) {
       (typeof botUsername !== "string" || targetUsername.toLowerCase() !== botUsername.toLowerCase())) {
     return Object.freeze({ type: "IGNORE" })
   }
-  if (command === "/start" || command === "/help") {
-    return argumentsList.length === 0
-      ? Object.freeze({ type: "HELP" })
-      : Object.freeze({ type: "INVALID" })
-  }
+  const entryCommand = parseEntryCommand({ command, argumentsList })
+  if (entryCommand) { return entryCommand }
   if (["/status", "/markets", "/positions", "/orders", "/balances"].includes(command)) {
     if (argumentsList.length !== 0) {
       return Object.freeze({ type: "INVALID", command: command.slice(1).toUpperCase() })
@@ -192,26 +242,45 @@ export function createTelegramOperatorAdapter({
     }
   }
 
-  const navigationKeyboard = ({ page = "home", markets = [] } = {}) => {
+  const navigationKeyboard = ({ page = "home", markets = [], marketAction } = {}) => {
     const rows = [
       [{ text: "Status", callback_data: "cc:nav:status" }, { text: "Markets", callback_data: "cc:nav:markets" }],
       [{ text: "Positions", callback_data: "cc:nav:positions" }, { text: "Orders", callback_data: "cc:nav:orders" }],
       [{ text: "Balances", callback_data: "cc:nav:balances" }],
     ]
     if (page === "markets") {
-      for (const market of markets.slice(0, 20)) {
+      let actionCount = 0
+      for (const market of markets) {
+        if (actionCount >= 20) { break }
         if (typeof market?.symbol !== "string" || !/^[A-Z0-9]{2,30}$/.test(market.symbol) || market.enabled !== true) { continue }
+        if (marketAction === "PAUSE" && market.operatorPaused === true) { continue }
+        if (marketAction === "RESUME" && market.operatorPaused !== true) { continue }
         const action = market.operatorPaused === true ? "RESUME" : "PAUSE"
         rows.push([{ text: (action === "PAUSE" ? "Pause " : "Resume ") + market.symbol, callback_data: "cc:ask:" + action + ":" + market.symbol }])
+        actionCount += 1
       }
     }
-    rows.push([{ text: "Refresh", callback_data: "cc:refresh:" + (page === "home" ? "home" : page) }, { text: "Main menu", callback_data: "cc:nav:home" }])
+    const refreshPage = marketAction ? marketAction.toLowerCase() : page
+    rows.push([{ text: "Refresh", callback_data: "cc:refresh:" + refreshPage }, { text: "Main menu", callback_data: "cc:nav:home" }])
     return { inline_keyboard: rows }
   }
 
+  const mainMenuKeyboard = () => ({
+    keyboard: [
+      [{ text: "Pause" }, { text: "Resume" }],
+      [{ text: "Status" }, { text: "Markets" }],
+      [{ text: "Portfolio" }, { text: "Open Orders" }],
+    ],
+    is_persistent: true,
+    resize_keyboard: true,
+    one_time_keyboard: false,
+    input_field_placeholder: "Command Center",
+  })
+
   const helpText = () => [
     "Harvester Command Center",
-    "/start — show the command center",
+    "/start — open the persistent Command Center keyboard",
+    "/menu — restore the persistent keyboard",
     "/status — runtime readiness and blockers",
     "/markets — configured market prices, freshness and blockers",
     "/positions — canonical active and retained inventory with recovery accounting",
@@ -228,9 +297,11 @@ export function createTelegramOperatorAdapter({
 
   const readPage = async ({ page, userId }) => {
     if (page === "home") { return { text: helpText(), keyboard: navigationKeyboard() } }
-    const method = PAGE_METHODS[page]
+    const marketAction = resolveMarketAction(page)
+    const queryPage = marketAction ? "markets" : page
+    const method = PAGE_METHODS[queryPage]
     if (!method || typeof operator[method] !== "function") {
-      return { text: "This read-only query is not available in the current operator configuration.", keyboard: navigationKeyboard({ page }) }
+      return { text: "This read-only query is not available in the current operator configuration.", keyboard: navigationKeyboard({ page: queryPage }) }
     }
     let result
     try {
@@ -241,7 +312,7 @@ export function createTelegramOperatorAdapter({
     }
     if (result?.ok !== true) {
       logger?.error?.({ message: "Telegram operator read query returned a failure", component: "harvester.operator", operation: method, error: result?.errors ?? result?.error ?? "Unclassified query failure" })
-      return { text: "Unable to read the Harvester " + PAGE_TITLES[page] + ". No trading state was changed; check Harvester diagnostics.", keyboard: navigationKeyboard({ page }) }
+      return { text: "Unable to read the Harvester " + PAGE_TITLES[queryPage] + ". No trading state was changed; check Harvester diagnostics.", keyboard: navigationKeyboard({ page: queryPage }) }
     }
     const text = ({
       status: () => formatTelegramOperatorStatus({ status: result.data }),
@@ -249,8 +320,15 @@ export function createTelegramOperatorAdapter({
       positions: () => formatTelegramOperatorPositions({ snapshot: result.data }),
       orders: () => formatTelegramOperatorOrders({ snapshot: result.data }),
       balances: () => formatTelegramOperatorBalances({ snapshot: result.data }),
-    })[page]()
-    return { text, keyboard: navigationKeyboard({ page, markets: page === "markets" ? result.data.markets : [] }) }
+    })[queryPage]()
+    const markets = queryPage === "markets" ? result.data.markets : []
+    const keyboard = navigationKeyboard({ page: queryPage, markets, marketAction })
+    if (!marketAction) { return { text, keyboard } }
+    const eligibleMarkets = selectMarketsForAction({ markets, action: marketAction })
+    return {
+      text: formatMarketActionPrompt({ action: marketAction, eligibleMarkets, text }),
+      keyboard,
+    }
   }
 
   const editPage = async ({ page, chatId, messageId, userId, signal }) => {
@@ -305,7 +383,7 @@ export function createTelegramOperatorAdapter({
       return
     }
 
-    const navigation = /^cc:(nav|refresh):(home|status|markets|positions|orders|balances)$/.exec(callback.data)
+    const navigation = /^cc:(nav|refresh):(home|status|markets|pause|resume|positions|orders|balances)$/.exec(callback.data)
     if (navigation) {
       await answerCallback({ callbackId: callback.id, signal })
       await editPage({ page: navigation[2], chatId: chat.id, messageId, userId, signal })
@@ -362,6 +440,32 @@ export function createTelegramOperatorAdapter({
     await answerCallback({ callbackId: callback.id, text: "Unknown or expired action.", signal })
   }
 
+  const respondToMenuCommand = async ({ parsed, message, userId, signal }) => {
+    if (parsed.type === "START" || parsed.type === "MENU") {
+      await sendMessage({ chatId: message.chat.id, text: helpText(), replyMarkup: mainMenuKeyboard(), signal })
+      return true
+    }
+    if (parsed.type === "HELP") {
+      await sendMessage({ chatId: message.chat.id, text: helpText(), replyMarkup: navigationKeyboard(), signal })
+      return true
+    }
+    if (parsed.type === "PAUSE_MENU" || parsed.type === "RESUME_MENU") {
+      const page = parsed.type === "PAUSE_MENU" ? "pause" : "resume"
+      const rendered = await readPage({ page, userId })
+      await sendMessage({ chatId: message.chat.id, text: rendered.text, replyMarkup: rendered.keyboard, signal })
+      return true
+    }
+    return false
+  }
+
+  const respondToReadCommand = async ({ parsed, message, userId, signal }) => {
+    const page = parsed.type.toLowerCase()
+    if (!PAGE_METHODS[page]) { return false }
+    const rendered = await readPage({ page, userId })
+    await sendMessage({ chatId: message.chat.id, text: rendered.text, replyMarkup: rendered.keyboard, signal })
+    return true
+  }
+
   const respondToUpdate = async ({ update, signal }) => {
     if (update.callback_query) { await respondToCallback({ update, signal }); return }
     const message = update.message
@@ -373,13 +477,8 @@ export function createTelegramOperatorAdapter({
     const parsed = parseTelegramOperatorCommand(message.text, { botUsername })
     if (parsed.type === "IGNORE") { return }
     if (!allowedUsers.has(userId)) { await sendMessage({ chatId: message.chat.id, text: "Not authorized.", signal }); return }
-    if (parsed.type === "HELP") { await sendMessage({ chatId: message.chat.id, text: helpText(), replyMarkup: navigationKeyboard(), signal }); return }
-    if (PAGE_METHODS[parsed.type.toLowerCase()]) {
-      const page = parsed.type.toLowerCase()
-      const rendered = await readPage({ page, userId })
-      await sendMessage({ chatId: message.chat.id, text: rendered.text, replyMarkup: rendered.keyboard, signal })
-      return
-    }
+    if (await respondToMenuCommand({ parsed, message, userId, signal })) { return }
+    if (await respondToReadCommand({ parsed, message, userId, signal })) { return }
     if (parsed.type === "UNSUPPORTED") {
       await sendMessage({ chatId: message.chat.id, text: "Unknown command. Use /help to see available commands.", replyMarkup: navigationKeyboard(), signal })
       return
@@ -389,16 +488,19 @@ export function createTelegramOperatorAdapter({
         chatId: message.chat.id,
         text: parsed.command === "RESUME" || parsed.command === "PAUSE"
           ? "Usage: /" + parsed.command.toLowerCase() + " <SYMBOL>. Use /help for commands."
-          : "Usage: /" + String(parsed.command ?? "command").toLowerCase() + " with no arguments. Use /help for commands.",
+          : `Usage: /${String(parsed.command ?? "command").toLowerCase()} with no arguments. Use /help for commands.`,
         signal,
       })
       return
     }
     const action = parsed.type === "RESUME" ? "RESUME" : "PAUSE"
     await executeControl({
-      action, symbol: parsed.symbol, userId,
-      requestId: "telegram:" + update.update_id + ":" + (message.date ?? "0") + ":" + userId,
-      chatId: message.chat.id, signal,
+      action,
+      symbol: parsed.symbol,
+      userId,
+      requestId: `telegram:${update.update_id}:${message.date ?? "0"}:${userId}`,
+      chatId: message.chat.id,
+      signal,
     })
   }
 
@@ -424,7 +526,10 @@ export function createTelegramOperatorAdapter({
           if (!Number.isSafeInteger(update?.update_id) || update.update_id < 0) {
             throw new TypeError("Telegram update has no valid update_id")
           }
-          await respondToUpdate({ update, signal })
+          await respondToUpdate({
+            update,
+            signal,
+          })
           offset = update.update_id + 1
         }
         currentRetryDelay = retryDelayMs
@@ -437,7 +542,10 @@ export function createTelegramOperatorAdapter({
         const retryAfterMs = Number.isSafeInteger(error?.retryAfter)
           ? Math.min(error.retryAfter * 1000, MAX_RETRY_DELAY_MS)
           : currentRetryDelay
-        await waitForRetry({ milliseconds: retryAfterMs, signal })
+        await waitForRetry({
+          milliseconds: retryAfterMs,
+          signal,
+        })
         currentRetryDelay = Math.min(currentRetryDelay * 2, MAX_RETRY_DELAY_MS)
       }
     }
@@ -447,7 +555,12 @@ export function createTelegramOperatorAdapter({
     async start() {
       if (stopPromise) {await stopPromise}
       if (startPromise) {return startPromise}
-      if (controller) {return Object.freeze({ started: true, alreadyStarted: true })}
+      if (controller) {
+        return Object.freeze({
+          started: true,
+          alreadyStarted: true,
+        })
+      }
 
       const nextController = new AbortController()
       controller = nextController
@@ -469,15 +582,46 @@ export function createTelegramOperatorAdapter({
             await callApi({
               method: "setMyCommands",
               payload: { commands: [
-                { command: "start", description: "Open the Harvester Command Center" },
-                { command: "help", description: "Show commands and safety notes" },
-                { command: "status", description: "Read runtime readiness and blockers" },
-                { command: "markets", description: "Read configured market state" },
-                { command: "positions", description: "Read positions and recovery accounting" },
-                { command: "orders", description: "Read Harvester and external open orders" },
-                { command: "balances", description: "Read latest exchange balances" },
-                { command: "pause", description: "Request a market-scoped operator pause" },
-                { command: "resume", description: "Request removal of an operator pause" },
+                {
+                  command: "start",
+                  description: "Open the Harvester Command Center",
+                },
+                {
+                  command: "menu",
+                  description: "Restore the persistent Command Center keyboard",
+                },
+                {
+                  command: "help",
+                  description: "Show commands and safety notes",
+                },
+                {
+                  command: "status",
+                  description: "Read runtime readiness and blockers",
+                },
+                {
+                  command: "markets",
+                  description: "Read configured market state",
+                },
+                {
+                  command: "positions",
+                  description: "Read positions and recovery accounting",
+                },
+                {
+                  command: "orders",
+                  description: "Read Harvester and external open orders",
+                },
+                {
+                  command: "balances",
+                  description: "Read latest exchange balances",
+                },
+                {
+                  command: "pause",
+                  description: "Request a market-scoped operator pause",
+                },
+                {
+                  command: "resume",
+                  description: "Request removal of an operator pause",
+                },
               ] },
               signal: nextController.signal,
             })
@@ -491,7 +635,10 @@ export function createTelegramOperatorAdapter({
             })
           }
           pollPromise = poll({ signal: nextController.signal })
-          return Object.freeze({ started: true, alreadyStarted: false })
+          return Object.freeze({
+            started: true,
+            alreadyStarted: false,
+          })
         } catch (error) {
           nextController.abort()
           if (controller === nextController) {controller = undefined}
@@ -506,7 +653,12 @@ export function createTelegramOperatorAdapter({
       if (stopPromise) {return stopPromise}
       if (!controller) {
         if (startPromise) {await startPromise.catch(() => {})}
-        if (!controller) {return Object.freeze({ stopped: true, alreadyStopped: true })}
+        if (!controller) {
+          return Object.freeze({
+            stopped: true,
+            alreadyStopped: true,
+          })
+        }
       }
       const activeController = controller
       activeController.abort()
@@ -518,7 +670,10 @@ export function createTelegramOperatorAdapter({
         pendingConfirmations.clear()
         botUsername = undefined
         offset = undefined
-        return Object.freeze({ stopped: true, alreadyStopped: false })
+        return Object.freeze({
+          stopped: true,
+          alreadyStopped: false,
+        })
       })()
       try {
         return await stopPromise

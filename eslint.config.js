@@ -131,6 +131,20 @@ export default defineConfig([
     },
   },
   {
+    files: ["apps/harvester/src/infrastructure/telegram/telegram-operator-adapter.js"],
+    rules: {
+      // Keep the existing stateful Telegram transport orchestrator cohesive; extract it in a separate refactor.
+      "max-lines-per-function": [
+        "warn",
+        {
+          max: 520,
+          skipBlankLines: true,
+          skipComments: true,
+        },
+      ],
+    },
+  },
+  {
     files: ["eslint.config.js"],
     rules: {
       "no-restricted-syntax": "off",

@@ -2,14 +2,14 @@
 
 ## Scope and safety
 
-The Harvester Telegram Command Center is an optional operator interface. Inbound control remains disabled by default and is enabled only through the reviewed `operatorControl.telegram` configuration and a private-chat user-ID allowlist. The bot token remains in `TELEGRAM_BOT_TOKEN`.
+The Harvester Telegram Command Center is an inbound operator interface, enabled by default in `operatorControl.telegram`. Startup remains fail-closed and requires a valid private-chat user-ID allowlist and `TELEGRAM_BOT_TOKEN` in the runtime environment.
 
 The Command Center is not an exchange kill switch. It cannot place, cancel, adopt or modify exchange orders; change strategies or configuration; bypass safety/recovery/volatility blockers; or execute arbitrary commands. A market pause suppresses new strategy BUYs and trailing-BUY replacements for that market only. Existing orders remain open and may still fill; fill accounting and recovery SELLs continue. User-data disconnect/reconnect and reconciliation do not clear an active operator pause. Operator pauses last only for the current process and are not restored after restart.
 
-## Enabling the Command Center
+## Configuring the Command Center
 
-1. Set `operatorControl.telegram.enabled: true` in `config/operator-control.js`.
-2. Set `TELEGRAM_USER_ID` in the runtime environment to your numeric Telegram sender user ID. Bootstrap validates it and adds it to `operatorControl.telegram.allowedUserIds`, preserving configured IDs. Invalid values stop startup with a specific error. This variable does not enable operator control by itself.
+1. `operatorControl.telegram.enabled` is `true` by default in `config/operator-control.js`.
+2. Set `TELEGRAM_USER_ID` in the runtime environment to your numeric Telegram sender user ID. The config module seeds `operatorControl.telegram.allowedUserIds` from this value; bootstrap validates it and merges it with any explicitly configured IDs. Invalid or missing values leave no usable allowlist and stop startup with a specific error.
 3. Set `TELEGRAM_BOT_TOKEN` in the runtime environment. Do not put the token in application configuration or commit it.
 4. Initialize the ADR-0001 Operational State Store once while Harvester is stopped, following the [Operational State Store setup](../../README.md#operational-state-store-adr-0001-step-8). The default directory is `apps/harvester/recovery-facts/` inside the Harvester application package; the initializer and runtime resolve this same path, so no directory variable is required. For a custom absolute path, set `OPERATIONAL_STATE_DIRECTORY` in both environments. The former home-directory recovery-data location is not a supported default or fallback. This cleanup does not move, delete, initialize, overwrite, or repair existing runtime data.
 5. Start only with a verified Operational State Store that contains no prior `PROCESS_STARTED` record. The current ADR-0001 gate blocks every second process start, even after clean shutdown, until Steps 8–9 are accepted. Do not delete or reinitialize an existing ledger to bypass this restriction.
@@ -18,7 +18,18 @@ Telegram control can be enabled while `recovery.enabled` remains false. The prod
 
 ## Command menu and navigation
 
-Use `/start` or `/help` to display the supported command vocabulary. Telegram's command menu mirrors the text commands. Inline navigation opens read-only status, markets, positions, orders and balances pages. Enabled markets expose a pause request when not operator-paused and a resume request when the operator pause is active; disabled markets expose no inline control. Refresh re-runs the corresponding authorized application query; it does not reuse stale display data or perform a trading action. Return-to-menu controls only change the displayed page.
+Use `/start` to open the Command Center and display its persistent keyboard. Use `/menu` to restore the keyboard if it has been hidden. Telegram's built-in command menu remains available and mirrors the slash commands. The six persistent buttons are arranged in three rows:
+
+| Button | Behavior |
+| --- | --- |
+| Pause | Opens market selection with only enabled markets that are not operator-paused. |
+| Resume | Opens market selection with only enabled markets that currently have an operator pause. |
+| Status | Runs the existing read-only runtime status query. |
+| Markets | Runs the existing read-only market snapshot query and shows eligible inline controls. |
+| Portfolio | Runs the existing read-only positions/recovery-accounting query. |
+| Open Orders | Runs the existing read-only open-orders query. |
+
+The keyboard buttons are bounded text aliases, not a second command system. They use the same private-chat allowlist and application actor authorization as slash commands. Pause/Resume only display eligible market choices; selecting a market opens the existing one-time confirmation prompt, and only its authorized confirmation callback invokes the existing application use case. Disabled markets never expose controls. Inline navigation and refresh remain available for status, markets, positions, orders and balances. Refresh re-runs the corresponding authorized application query; it does not reuse stale display data or perform a trading action. Return-to-menu controls only change the displayed page.
 
 ## Status semantics
 
@@ -30,7 +41,9 @@ Text commands remain available:
 
 - `/status`, `/markets`, `/positions`, `/orders`, and `/balances` are read-only.
 - `/pause SYMBOL` and `/resume SYMBOL` are explicit text requests and call the existing application use case directly; inline market controls require a separate confirmation.
-- `/start` and `/help` show the command center entry point.
+- `/start` displays the persistent six-button keyboard.
+- `/menu` restores the persistent keyboard.
+- `/help` shows the command reference and safety notes.
 
 ## Confirming a control
 
@@ -47,7 +60,8 @@ The adapter processes updates serially and advances the Telegram update offset o
 ## Troubleshooting
 
 - **Not authorized:** verify the sender's numeric Telegram user ID is present in `operatorControl.telegram.allowedUserIds`; do not use usernames or display names.
-- **Command menu missing:** use `/help`; Telegram menu registration is best-effort and may be retried on a later adapter startup.
+- **Persistent keyboard hidden:** send `/menu` to display it again. The built-in command menu remains available separately.
+- **Slash-command menu missing:** use `/help`; Telegram command registration is best-effort and may be retried on a later adapter startup.
 - **Snapshot unavailable:** treat the page as unavailable, not healthy. Check Harvester structured logs and source readiness.
 - **Confirmation expired or invalid:** reopen the markets page and start a new inline control request; stale confirmation callbacks never execute.
 - **Pause/resume not acknowledged:** inspect the stable operator error code and operational-state diagnostics. Do not assume the state changed.
@@ -56,4 +70,4 @@ The adapter processes updates serially and advances the Telegram update offset o
 
 ## Acceptance evidence
 
-The CC-4 regression matrix is maintained in `telegram-operator-adapter.test.js`. It covers successful and failed command-menu registration, callback update polling, private-chat authorization and identity matching, confirmation-before-control, one-time callback handling, read-only navigation/refresh, enabled/disabled market controls, malformed callback rejection, retry identity and graceful shutdown. Merged in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`; exact PR head `afda070a565f42e546bfb0a76096939427451111` passed 1,479/1,479 Harvester tests, all required workspace unit/coverage/syntax/dependency/actionlint checks, and external documentation-link validation. The read-only Binance TESTNET integration was skipped and no exchange operations or live Telegram credentials were used.
+The CC-4 regression matrix is maintained in `telegram-operator-adapter.test.js`; the persistent-keyboard contract is covered in `telegram-operator-keyboard.test.js`. It covers successful and failed command-menu registration, callback update polling, private-chat authorization and identity matching, confirmation-before-control, one-time callback handling, read-only navigation/refresh, enabled/disabled market controls, malformed callback rejection, retry identity and graceful shutdown. Merged in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`; exact PR head `afda070a565f42e546bfb0a76096939427451111` passed 1,479/1,479 Harvester tests, all required workspace unit/coverage/syntax/dependency/actionlint checks, and external documentation-link validation. The read-only Binance TESTNET integration was skipped and no exchange operations or live Telegram credentials were used.

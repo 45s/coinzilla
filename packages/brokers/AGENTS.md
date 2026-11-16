@@ -79,3 +79,50 @@ These rules are mandatory for every AI agent working on the existing broker pack
 4. Documentation and this roadmap reflect the actual change.
 5. The PR is merged into `develop`, the merge is verified, and the task branch is cleaned up.
 6. The next DDD slice starts without requiring another user prompt.
+
+## Bitunix Spot development — mandatory reference audit
+
+**Before implementing or changing any Bitunix Spot capability, first inspect how the same capability is implemented in the reference projects below.** This applies to every task, including WebSocket connections/subscriptions, REST transport and signing, market data, account/balance reads, order placement/cancellation, order status, execution history, reconciliation, reconnect behavior, and error handling. Do not begin by inventing an implementation from memory or by reading only the official endpoint page.
+
+### Required reference projects
+
+1. **Primary behavioral reference — [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net).** A substantial C# Bitunix client built on CryptoExchange.Net with separate Spot and Futures REST/Socket surfaces. Study its relevant Spot interfaces, implementation, request definitions, models, endpoint fixtures, and unit tests. Especially useful locations:
+   - [Spot REST trading implementation](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Clients/SpotApi/Rest/BitunixRestClientSpotApiTrading.cs)
+   - [Spot REST trading contract/interface](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Interfaces/Clients/SpotApi/IBitunixRestClientSpotApiTrading.cs)
+   - [Spot account implementation](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Clients/SpotApi/Rest/BitunixRestClientSpotApiAccount.cs)
+   - [Spot Socket implementation](https://github.com/JKorf/Bitunix.Net/tree/main/Bitunix.Net/Clients/SpotApi/Socket)
+   - [Spot endpoint request fixtures and tests](https://github.com/JKorf/Bitunix.Net/tree/main/Bitunix.Net.UnitTests/Endpoints/Spot)
+   - [Spot capability tests](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net.UnitTests/BitunixRestClientTests.cs)
+
+   Treat this project as the first implementation to study and the primary behavioral reference when translating an existing Spot capability into JavaScript. Inspect the actual implementation and tests/fixtures, not only XML comments or generated documentation.
+
+2. **Secondary JavaScript/TypeScript reference — [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp).** An unofficial TypeScript MCP server covering Bitunix Spot and Futures REST. Use it to cross-check JavaScript/TypeScript request construction, authentication/signing, validation, response handling, and available Spot endpoint examples:
+   - [Spot tools](https://github.com/samanzamani/bitunix-mcp/blob/main/src/tools/spot.ts)
+   - [REST client and signing implementation](https://github.com/samanzamani/bitunix-mcp/tree/main/src)
+   - [Tests](https://github.com/samanzamani/bitunix-mcp/tree/main/src)
+   - [README and supported capability list](https://github.com/samanzamani/bitunix-mcp#readme)
+
+   This is an MCP integration, not a broker SDK. Do not assume it implements a complete broker lifecycle or continuous Spot private WebSocket subscriptions.
+
+3. **Protocol authority — [Bitunix official Open API repository](https://github.com/BitunixOfficial/open-api) and [official Spot API documentation](https://www.bitunix.com/api-docs/spots/en_us/).** Third-party implementations are evidence and implementation examples, not the final authority for current wire contracts. Verify endpoint paths, authentication, parameters, quantity units, response shapes, error codes, pagination, timestamps, and WebSocket message semantics against official documentation and current official examples wherever available.
+
+### Required workflow for each Bitunix feature
+
+1. Identify the exact capability being requested and the owning Coinzilla contract/port, current Bitunix adapter, consumers, tests, configuration, and relevant issue/roadmap item.
+2. Inspect the matching Spot implementation in **JKorf/Bitunix.Net first**. Follow the call path from public interface through request construction, signing/transport, response model/adapter, and tests/fixtures. For a WebSocket task, inspect the Spot Socket code and its capability tests; do not substitute Futures behavior.
+3. Inspect the corresponding TypeScript implementation in **bitunix-mcp** where one exists. Compare its signing, request/response handling, validation, and tests with the .NET implementation.
+4. Verify the behavior against the official Bitunix Spot documentation and official repository. Record the relevant source paths, endpoint names, request/response examples, and any differences found.
+5. Build a small comparison/audit before coding: reference behavior, official documented behavior, Coinzilla contract requirement, and proposed JavaScript mapping. Resolve discrepancies explicitly. If the official contract is ambiguous or references disagree, preserve fail-closed behavior and document the exact blocker; never guess.
+6. Implement Coinzilla's own JavaScript version using the existing broker contracts, package conventions, DDD boundaries, shared utilities, exact-decimal handling, and error/result patterns. **Reimplement the proven behavior; do not port C# syntax/framework abstractions, add the .NET library as a runtime dependency, or add the MCP server as a runtime dependency.**
+7. Follow strict TDD: add the smallest meaningful regression/contract test first, observe the expected RED result, then implement and verify GREEN. Reuse or adapt the reference project's test cases and captured fixtures as inspiration, while independently validating them against the official contract. Add boundary, malformed-response, error, timeout, cleanup, and lifecycle tests appropriate to the capability.
+8. Update the Bitunix capability contract, package README if user-facing capability changes, this package roadmap, affected issue/PR, and any other living docs in the same task/PR. Record source links and meaningful discrepancies so the next agent can reproduce the audit.
+
+### Reference quality and safety rules
+
+- The .NET project is a reference implementation, **not infallible specification**. Audit its actual request path and tests. A method name, interface comment, README, or passing fixture alone does not prove correctness or completeness.
+- Specifically verify that the implementation calls the endpoint documented by its own interface and that the fixture matches the real endpoint. Investigate apparent mismatches rather than copying them. For example, the inspected .NET Spot `GetUserTradesAsync` body appeared to request the pending-order endpoint while its interface documents `/order/deal/list`; re-check the current source before relying on that path.
+- Distinguish Spot from Futures throughout the audit. Never copy a Futures-only WebSocket subscription or endpoint into Spot without official Spot evidence.
+- A WebSocket RPC request/response method is not a continuous subscription. Do not claim a private order/execution stream exists unless official Spot documentation and implementation evidence demonstrate push events, subscription lifecycle, event identity, and reconnect/recovery semantics.
+- Third-party tests are useful examples, not proof that Bitunix guarantees the behavior. Confirm pagination/completeness, stable identifiers, source timestamps, quantity semantics, and unknown-outcome reconciliation independently.
+- Keep order placement/cancellation disabled when required identity, quantity, execution-history, lifecycle, or mutation-environment guarantees remain unresolved. No live order placement, cancellation, or account mutation as part of ordinary development or tests. Default tests remain offline and credential-free.
+- Keep [issue #1185](https://github.com/45s/coinzilla/issues/1185) and the [Bitunix capability contract](../../docs/brokers-websocket-contract.md#bitunix-spot-capability-contract) aligned with verified findings. Do not silently remove an existing blocker because a third-party SDK implements a method.
