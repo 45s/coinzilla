@@ -1794,7 +1794,7 @@ The current rationale, filter mapping, deliberately excluded order-type-specific
 - [ ] Binance remains authoritative for unsupported dynamic/account/exchange constraints. Definite exchange filter rejections must be surfaced as `DEFINITE_EXCHANGE_FILTER_REJECTED`, remove only the definitely rejected PENDING order, and never be confused with an ambiguous/UNKNOWN outcome.
 - [ ] Verify the readiness, bootstrap, and refreshed trailing-order paths with offline regression tests and exact-head CI. No TESTNET or LIVE exchange operations are part of this change.
 
-## 2026-11-16 — Bitunix Spot market metadata preparation (issue #1185)
+### P2 — Telegram Command Center read-query reliability\n\n- [~] **Fix account-wide `/orders` query argument handling** — [#1214](https://github.com/45s/coinzilla/issues/1214), implementation in [PR #1261](https://github.com/45s/coinzilla/pull/1261). Telegram intentionally calls `broker.getOpenOrders()` with no symbol filter. The Harvester Binance adapter previously destructured `symbol` from an undefined argument and failed before issuing the read. Add a default empty options object, a regression test, and align the broker-port and Telegram runbook contracts. Keep this read-only; external orders remain external and untouched. Await exact-head CI and owner review.\n\n## 2026-11-16 — Bitunix Spot market metadata preparation (issue #1185)
 
 - [x] Implement a pure Harvester mapping from raw Bitunix Spot pair metadata into canonical `Market` and `TradingRules`: `minVolume` to `MIN_QUANTITY`, `minPrice` to `MIN_NOTIONAL`.
 - [x] Keep price/quantity increments, maximum bounds, and depth precision UNKNOWN where the official API does not define their semantics; record reference-only maximum field names as unvalidated diagnostics.
