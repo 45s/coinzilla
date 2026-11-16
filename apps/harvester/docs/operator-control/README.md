@@ -73,5 +73,5 @@ The operator facade and use cases belong to `apps/harvester`. Do not create a sh
 | Read-only `/positions`, `/orders`, and `/balances` application queries and Telegram formatting | Merged in PR #1086; offline contract tests and all seven exact-head workflows passed |
 | Proactive readiness, recovery-blocker and Telegram delivery-health alerts | Implemented in PR #1087; all eight exact-head workflows passed |
 | Telegram command menu, inline read-only navigation/refresh and confirmed inline pause/resume controls | Merged in PR #1088; 1,479 Harvester tests and exact-head CI passed |
-| Persistent six-button reply keyboard, `/menu` restore command and filtered Pause/Resume market selection | Implemented in the current PR; exact-head CI pending |
+| Persistent six-button reply keyboard, `/menu` restore command and filtered Pause/Resume market selection | Merged in PR #1194; 1,657 Harvester tests passed and all seven Actions workflows passed on exact head |
 | Process-restart restoration of operator pause state | Explicitly out of scope under ADR-0003; separate ADR-0001 / #654 workstream |
