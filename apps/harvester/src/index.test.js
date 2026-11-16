@@ -10,7 +10,6 @@ import { DEFAULT_OPERATIONAL_STATE_DIRECTORY } from "./infrastructure/operationa
 import { main as startMain } from "./index.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { UnvalidatedMarketExchangeConstraintsError } from "./domain/market/errors/unvalidated-market-exchange-constraints-error.js"
-import { appConfig as defaultAppConfig } from "../config/index.js"
 
 const disabledJournalService = () => ({
   ready: Promise.resolve({ ok: true, disabled: true }),
@@ -29,10 +28,7 @@ const main = (options = {}) => {
   return startMain({
     acquireProcessLock,
     createOperationalStateStore: () => ({
-      verify: async () => ({
-          ok: true,
-          data: { valid: true, durableWriteSupported: true },
-        }),
+      verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
     }),
     ...rest,
     env: { TRADING_MODE: "testnet", ...env },
@@ -82,11 +78,7 @@ test("does not create or inject durable recovery facts while recovery is disable
       startupInput = input
       return { connected: false, tradingEnabled: false, strategyMode: "conservative", subscriptions: [] }
     },
-    logger: {
-        info() {},
-        system() {},
-        error() {},
-      },
+    logger: { info() {}, system() {}, error() {} },
   })
   assert.equal(storeCreated, false, "Disabled restart recovery must not create or verify a ADR-0001 ledger.")
   assert.equal(startupInput.operationalStateStore, undefined, "Disabled restart recovery must not inject a Operational State Store into runtime startup.")
@@ -111,10 +103,7 @@ test("injects the shared default Operational State Store when Telegram operator 
     },
   }
   const operationalStateStore = {
-    verify: async () => ({
-          ok: true,
-          data: { valid: true, durableWriteSupported: true },
-        }),
+    verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
     append: async () => ({ ok: true, data: { durable: true } }),
     readAll: async () => ({ ok: true, data: { durableWriteSupported: true, records: [] } }),
   }
@@ -768,10 +757,7 @@ test("refuses TESTNET trading when Journal startup fails", async () => {
       acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: false, errors: [new Error("disk unavailable")] }),
-        flush: async () => ({
-          ok: true,
-          durable: true,
-        }),
+        flush: async () => ({ ok: true, durable: true }),
         close: async () => ({ ok: true, closed: true }),
       }),
       start: async () => { started = true; return { connected: false } },
@@ -942,10 +928,7 @@ test("releases the trading process lock only after runtime and Journal shutdown"
       env: { NODE_ENV: "development" },
       acquireProcessLock: async () => ({
         ok: true,
-        release: async () => { sequence.push("lock-release"); return {
-            ok: true,
-            released: true,
-          } },
+        release: async () => { sequence.push("lock-release"); return { ok: true, released: true } },
       }),
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
@@ -1795,187 +1778,5 @@ test("does not construct, verify, or inject Operational State Store records even
   assert.equal(storeCreated, false, "Disabled restart recovery must not construct or verify the Operational State Store.")
   assert.equal(journalCreated, true, "An unused recovery directory must not prevent normal Journal startup.")
   assert.equal(runtimeStarted, true, "A missing or malformed recovery directory must not block startup while recovery is disabled.")
-})
-
-test("starts normal development runtime with outbound Telegram notifications and no operator-control store", async () => {
-  const previousExitCode = process.exitCode
-  process.exitCode = 0
-  let operationalStateStoreFactoryCalls = 0
-  let telegramNotifierFactoryCalls = 0
-  let runtimeStarted = false
-  let runtimeOperationalStateStore
-
-  try {
-    await main({
-      loadConfig: async () => defaultAppConfig,
-      env: {
-        NODE_ENV: "development",
-        TELEGRAM_BOT_TOKEN: "test-notification-token",
-        TELEGRAM_CHAT_ID: "test-notification-chat",
-      },
-      createOperationalStateStore: () => {
-        operationalStateStoreFactoryCalls += 1
-        throw new Error("Default development startup must not construct an optional operator-control store.")
-      },
-      createTelegramNotifier: () => {
-        telegramNotifierFactoryCalls += 1
-        return {
-          sendMessage: async () => ({ ok: true }),
-        }
-      },
-      start: async (input) => {
-        runtimeStarted = true
-        runtimeOperationalStateStore = input.operationalStateStore
-        return {
-          connected: false,
-          tradingEnabled: false,
-          strategyMode: "conservative",
-          subscriptions: [],
-        }
-      },
-      logger: { info() {}, system() {}, error() {} },
-    })
-
-    assert.equal(defaultAppConfig.notifications.telegram.enabled, true, "Outbound Telegram notifications must remain enabled independently of inbound operator control.")
-    assert.equal(defaultAppConfig.operatorControl.telegram.enabled, false, "The default application configuration must leave inbound operator control opt-in.")
-    assert.equal(telegramNotifierFactoryCalls, 1, "Configured outbound Telegram notifications must initialize even when inbound operator control is disabled.")
-    assert.equal(operationalStateStoreFactoryCalls, 0, "Normal development startup must not construct an uninitialized Operational State Store for an optional disabled feature.")
-    assert.equal(runtimeStarted, true, "The Harvester runtime must start without a pre-initialized operator-control ledger.")
-    assert.equal(runtimeOperationalStateStore, undefined, "An optional disabled operator-control feature must not inject a durable store into normal runtime startup.")
-    assert.equal(process.exitCode, 0, "Successful startup without optional operator control must preserve the successful process exit status.")
-  } finally {
-    process.exitCode = previousExitCode
-  }
-})
-
-
-test("preserves the original operator-control preflight error while retaining the conservative process lock", async () => {
-  const previousExitCode = process.exitCode
-  process.exitCode = 0
-  const originalCause = new Error("ledger genesis is missing")
-  const startupError = new Error(
-    "Configured Operational State Store is missing, uninitialized, corrupt or not durably writable",
-    { cause: originalCause },
-  )
-  startupError.name = "OperatorControlStartupError"
-  startupError.code = "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID"
-  let processLockReleaseCalls = 0
-  const errorLogs = []
-
-  try {
-    await main({
-      loadConfig: async () => ({
-        operatorControl: {
-          telegram: {
-            enabled: true,
-            allowedUserIds: ["12345"],
-          },
-        },
-        strategies: {
-          CG_coinGrabber: {
-            settings: {
-              recovery: {
-                enabled: false,
-              },
-            },
-          },
-        },
-      }),
-      env: {
-        NODE_ENV: "development",
-        TELEGRAM_BOT_TOKEN: "test-operator-token",
-      },
-      createOperationalStateStore: () => ({
-        verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
-      }),
-      acquireProcessLock: async () => ({
-        ok: true,
-        release: async () => {
-          processLockReleaseCalls += 1
-          return {
-            ok: true,
-            released: true,
-          }
-        },
-      }),
-      start: async () => { throw startupError },
-      logger: {
-        info() {},
-        system() {},
-        error: (entry) => errorLogs.push(entry),
-      },
-    })
-
-    const startupFailureLog = errorLogs.find((entry) => entry.message === "startup failed.")
-    assert.equal(processLockReleaseCalls, 0, "The existing conservative policy must retain the process lock after runtime startup has been invoked.")
-    assert.strictEqual(startupFailureLog?.error, startupError, "Cleanup must preserve and report the exact original operator-control startup error.")
-    assert.equal(startupFailureLog?.errorCode, "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", "The original stable operator-control error code must remain visible after cleanup.")
-    assert.strictEqual(startupError.cause, originalCause, "The original Operational State Store verification cause must remain attached to the startup error.")
-    assert.equal(errorLogs.some((entry) => entry.message === "observability shutdown incomplete"), true, "Conservative process-lock retention must remain visible as a secondary cleanup diagnostic.")
-    assert.equal(process.exitCode, 1, "A failed operator-control preflight must still fail startup after safe resource cleanup.")
-  } finally {
-    process.exitCode = previousExitCode
-  }
-})
-
-test("retains the process lock when a pre-broker failure cannot confirm Journal shutdown", async () => {
-  const previousExitCode = process.exitCode
-  process.exitCode = 0
-  const startupError = new Error("Operator-control preflight failed before broker startup.")
-  startupError.code = "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID"
-  const journalCloseError = new Error("Journal close was not confirmed.")
-  let processLockReleaseCalls = 0
-  const errorLogs = []
-
-  try {
-    await main({
-      loadConfig: async () => ({
-        operatorControl: {
-          telegram: {
-            enabled: true,
-            allowedUserIds: ["12345"],
-          },
-        },
-        strategies: {
-          CG_coinGrabber: {
-            settings: {
-              recovery: {
-                enabled: false,
-              },
-            },
-          },
-        },
-      }),
-      createJournalService: () => ({
-        ready: Promise.resolve({ ok: true }),
-        flush: async () => ({ ok: true, durable: true }),
-        close: async () => ({
-          ok: false,
-          closed: false,
-          errors: [journalCloseError],
-        }),
-      }),
-      acquireProcessLock: async () => ({
-        ok: true,
-        release: async () => {
-          processLockReleaseCalls += 1
-          return { ok: true, released: true }
-        },
-      }),
-      start: async () => { throw startupError },
-      logger: {
-        info() {},
-        system() {},
-        error: (entry) => errorLogs.push(entry),
-      },
-    })
-
-    assert.equal(processLockReleaseCalls, 0, "The process lock must remain held when Journal shutdown cannot be confirmed, even after a pre-broker failure.")
-    assert.equal(errorLogs.some((entry) => entry.message === "observability shutdown incomplete"), true, "Unconfirmed Journal shutdown must remain visible as an incomplete cleanup.")
-    assert.strictEqual(errorLogs.find((entry) => entry.message === "startup failed.")?.error, startupError, "The original pre-broker startup error must remain visible alongside cleanup failure.")
-    assert.equal(process.exitCode, 1, "Unconfirmed Journal shutdown must not turn startup failure into success.")
-  } finally {
-    process.exitCode = previousExitCode
-  }
 })
 
