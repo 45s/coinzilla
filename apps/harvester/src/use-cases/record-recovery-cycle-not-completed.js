@@ -29,10 +29,14 @@ function validateNonCompletionInput({ operationalStateStore, recoveryLedger, pos
 }
 
 function validateNonCompletionAccounting({ recoveryLedger, position, completion, minProfit }) {
-  if (compareDecimal({ left: position.spent.amount, right: recoveryLedger.buyCost }) !== 0 ||
-      compareDecimal({ left: completion.realizedNetProfit, right: recoveryLedger.realizedNetProfit }) !== 0 ||
-      compareDecimal({ left: completion.activeQuantity, right: position.baseQuantity.amount }) !== 0 ||
-      compareDecimal({ left: completion.minProfit, right: minProfit }) !== 0) {
+  if (compareDecimal({ left: position.spent.amount, 
+    right: recoveryLedger.buyCost }) !== 0 ||
+      compareDecimal({ left: completion.realizedNetProfit, 
+        right: recoveryLedger.realizedNetProfit }) !== 0 ||
+      compareDecimal({ left: completion.activeQuantity, 
+        right: position.baseQuantity.amount }) !== 0 ||
+      compareDecimal({ left: completion.minProfit, 
+        right: minProfit }) !== 0) {
     throw new TypeError("Recovery-cycle non-completion evidence must match canonical Position, RecoveryLedger, and minProfit")
   }
 }
@@ -42,15 +46,18 @@ function getNonCompletionOutcome({ completion, minProfit }) {
     ? "CONTINUE_SELL_THROUGH"
     : "BLOCKED"
   if (outcome === "CONTINUE_SELL_THROUGH") {
-    if (compareDecimal({ left: completion.activeQuantity, right: completion.keepQuantity }) <= 0) {
+    if (compareDecimal({ left: completion.activeQuantity, 
+      right: completion.keepQuantity }) <= 0) {
       throw new TypeError("CONTINUE_SELL_THROUGH requires residual active inventory above keepQuantity")
     }
     if (completion.reason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" &&
-        compareDecimal({ left: completion.realizedNetProfit, right: minProfit }) < 0) {
+        compareDecimal({ left: completion.realizedNetProfit, 
+          right: minProfit }) < 0) {
       throw new TypeError("Residual sell-through requires the minimum profit target to be met")
     }
     if (completion.reason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" &&
-        compareDecimal({ left: completion.realizedNetProfit, right: minProfit }) >= 0) {
+        compareDecimal({ left: completion.realizedNetProfit, 
+          right: minProfit }) >= 0) {
       throw new TypeError("Profit-target continuation requires realized profit below minProfit")
     }
   } else if (CONTINUE_REASONS.has(completion.reason)) {
@@ -80,7 +87,8 @@ function createNonCompletionIdentity({ market, sellOrder, recoveryLedger, positi
     completion.reason,
   ])
   const evaluationId = createHash("sha256").update(evaluationIdentity).digest("hex")
-  return { appliedFillIds, evaluationId }
+  return { appliedFillIds, 
+    evaluationId }
 }
 
 /** Persist the explicit non-completion outcome for a reconciled full recovery SELL. */
@@ -89,7 +97,8 @@ export async function recordRecoveryCycleNotCompleted(options = {}) {
     const { operationalStateStore, recoveryLedger, position, sellOrder, completion, minProfit } = options
     const market = validateNonCompletionInput(options)
     validateNonCompletionAccounting(options)
-    const outcome = getNonCompletionOutcome({ completion, minProfit })
+    const outcome = getNonCompletionOutcome({ completion, 
+      minProfit })
     const { appliedFillIds, evaluationId } = createNonCompletionIdentity({
       market,
       sellOrder,
