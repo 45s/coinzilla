@@ -1,71 +1,90 @@
 const MAX_ORDER_HISTORY_LIMIT = 1000
 
+function validateOrderId({ orderId, index }) {
+  const validStringId = typeof orderId === "string" && /^\d+$/.test(orderId)
+  const validNumericId = Number.isSafeInteger(orderId) && orderId >= 0
+  if ((!validStringId && !validNumericId) || !Number.isSafeInteger(Number(orderId))) {
+    throw new TypeError(`Binance order history item ${index} has an invalid orderId`)
+  }
+  return String(orderId)
+}
+
+function validateOrderFields({ order, index, fields }) {
+  for (const field of fields) {
+    if (typeof order[field] !== "string" || order[field].length === 0) {
+      throw new TypeError(`Binance order history item ${index} has an invalid ${field}`)
+    }
+  }
+}
+
+function validateOrder({
+      order,
+      index,
+    }) {
+  if (!order || typeof order !== "object" || Array.isArray(order)) {
+    throw new TypeError(`Binance order history item ${index} must be an object`)
+  }
+
+  const orderId = validateOrderId({
+    orderId: order.orderId,
+    index,
+  })
+  if (!Number.isSafeInteger(order.time) || order.time < 0) {
+    throw new TypeError(`Binance order history item ${index} has an invalid time`)
+  }
+
+  validateOrderFields({
+    order,
+    index,
+    fields: ["symbol", "side", "type", "status"],
+  })
+  validateOrderFields({
+    order,
+    index,
+    fields: ["price", "origQty", "executedQty", "cummulativeQuoteQty"],
+  })
+  if (order.clientOrderId !== undefined && typeof order.clientOrderId !== "string") {
+    throw new TypeError(`Binance order history item ${index} has an invalid clientOrderId`)
+  }
+
+  return {
+    time: order.time,
+    orderId,
+    symbol: order.symbol,
+    side: order.side,
+    type: order.type,
+    price: order.price,
+    quantity: order.origQty,
+    executed: order.executedQty,
+    quote: order.cummulativeQuoteQty,
+    status: order.status,
+    clientOrderId: order.clientOrderId ?? "",
+  }
+}
+
 export const normalizeOrderHistory = ({ orders, limit = 20 }) => {
   if (!Array.isArray(orders)) {
     throw new TypeError("Binance order history must be an array")
   }
-
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_ORDER_HISTORY_LIMIT) {
     throw new RangeError(`Order history limit must be an integer between 1 and ${MAX_ORDER_HISTORY_LIMIT}`)
   }
 
   const normalizedOrders = orders.map((order, index) => {
-    if (!order || typeof order !== "object" || Array.isArray(order)) {
-      throw new TypeError(`Binance order history item ${index} must be an object`)
-    }
-
-    const orderId = order.orderId
-    const validOrderId =
-      (typeof orderId === "string" && /^\d+$/.test(orderId)) ||
-      (Number.isSafeInteger(orderId) && orderId >= 0)
-
-    if (!validOrderId || !Number.isSafeInteger(Number(orderId))) {
-      throw new TypeError(`Binance order history item ${index} has an invalid orderId`)
-    }
-
-    if (!Number.isSafeInteger(order.time) || order.time < 0) {
-      throw new TypeError(`Binance order history item ${index} has an invalid time`)
-    }
-
-    for (const field of ["symbol", "side", "type", "status"]) {
-      if (typeof order[field] !== "string" || order[field].length === 0) {
-        throw new TypeError(`Binance order history item ${index} has an invalid ${field}`)
-      }
-    }
-
-    for (const field of ["price", "origQty", "executedQty", "cummulativeQuoteQty"]) {
-      if (typeof order[field] !== "string") {
-        throw new TypeError(`Binance order history item ${index} has an invalid ${field}`)
-      }
-    }
-
-    if (order.clientOrderId !== undefined && typeof order.clientOrderId !== "string") {
-      throw new TypeError(`Binance order history item ${index} has an invalid clientOrderId`)
-    }
-
-    return {
-      time: order.time,
-      orderId: String(orderId),
-      symbol: order.symbol,
-      side: order.side,
-      type: order.type,
-      price: order.price,
-      quantity: order.origQty,
-      executed: order.executedQty,
-      quote: order.cummulativeQuoteQty,
-      status: order.status,
-      clientOrderId: order.clientOrderId ?? "",
-    }
+    const normalized = validateOrder({ order, index })
+    const invertedTime = String(Number.MAX_SAFE_INTEGER - normalized.time).padStart(16, "0")
+    const normalizedId = BigInt(normalized.orderId).toString()
+    const invertedId = normalizedId.replace(/\d/g, (digit) => String(9 - Number(digit)))
+    const invertedIdLength = String(16 - normalizedId.length).padStart(2, "0")
+    const sortKey = `${invertedTime}:${invertedIdLength}:${invertedId}:${String(index).padStart(8, "0")}`
+    return `${sortKey}| ${JSON.stringify(normalized)}`
   })
-
-  normalizedOrders.sort((left, right) => {
-    if (left.time !== right.time) return right.time - left.time
-    const leftId = BigInt(left.orderId)
-    const rightId = BigInt(right.orderId)
-    return leftId === rightId ? 0 : leftId > rightId ? -1 : 1
-  })
-
-  return { orders: normalizedOrders.slice(0, limit) }
+  normalizedOrders.sort()
+  return {
+    orders: normalizedOrders
+      .slice(0, limit)
+      .map((entry) => JSON.parse(entry.slice(entry.indexOf("|") + 1))),
+  }
 }
 
 export const parseOrderHistoryArguments = ({ args = [] } = {}) => {
@@ -83,5 +102,8 @@ export const parseOrderHistoryArguments = ({ args = [] } = {}) => {
     throw new RangeError(`Limit must be an integer between 1 and ${MAX_ORDER_HISTORY_LIMIT}`)
   }
 
-  return { symbol, limit }
+  return {
+    symbol,
+    limit,
+  }
 }

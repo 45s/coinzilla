@@ -70,8 +70,10 @@ export async function writeTokenSpecificationAtomically({ specificationPath, met
       }
       throw error
     }
-    await lockHandle.writeFile(`${JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() })}\n`, "utf8")
-    await removeStaleTemporaryFiles({ directory, fileName })
+    await lockHandle.writeFile(`${JSON.stringify({ pid: process.pid,
+createdAt: new Date().toISOString() })}\n`, "utf8")
+    await removeStaleTemporaryFiles({ directory,
+fileName })
 
     const currentSpecifications = await readCurrentSpecifications(absolutePath)
     const updatedSpecifications = mergeTokenSpecifications({

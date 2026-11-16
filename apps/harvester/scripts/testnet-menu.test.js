@@ -33,7 +33,8 @@ test("builds order-history arguments with defaults and supplied values", () => {
   assert.deepEqual(
     buildTestnetMenuArguments({
       actionId: "history",
-      answers: { symbol: "DOGEUSDT", limit: "50" },
+      answers: { symbol: "DOGEUSDT",
+limit: "50" },
     }),
     ["DOGEUSDT", "50"],
   )
@@ -44,7 +45,9 @@ test("builds trade-history arguments and omits an optional fromId", () => {
   assert.deepEqual(
     buildTestnetMenuArguments({
       actionId: "trades",
-      answers: { symbol: "ZROUSDT", limit: "25", fromId: "123" },
+      answers: { symbol: "ZROUSDT",
+limit: "25",
+fromId: "123" },
     }),
     ["ZROUSDT", "25", "123"],
   )
@@ -62,9 +65,10 @@ test("passes an optional journal directory only when supplied", () => {
 })
 
 test("normalizes prompt answers safely when input is missing or blank", () => {
-  assert.equal(normalizePromptAnswer(undefined), "")
-  assert.equal(normalizePromptAnswer(null), "")
-  assert.equal(normalizePromptAnswer("  "), "")
-  assert.equal(normalizePromptAnswer("  DOGEUSDT  "), "DOGEUSDT")
-  assert.equal(normalizePromptAnswer(undefined, "DOGEUSDT"), "DOGEUSDT")
+  assert.equal(normalizePromptAnswer({ answer: undefined }), "")
+  assert.equal(normalizePromptAnswer({ answer: null }), "")
+  assert.equal(normalizePromptAnswer({ answer: "  " }), "")
+  assert.equal(normalizePromptAnswer({ answer: "  DOGEUSDT  " }), "DOGEUSDT")
+  assert.equal(normalizePromptAnswer({ answer: undefined,
+fallback: "DOGEUSDT" }), "DOGEUSDT")
 })

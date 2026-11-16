@@ -22,7 +22,9 @@ OPERATIONAL_STATE_DIRECTORY and a runtimeSessionId in the evidence bundle.
 
 export function parseRecoveryMarketArguments(args = []) {
   if (!Array.isArray(args)) { throw new TypeError("CLI arguments must be an array") }
-  const parsed = { confirm: false, help: false, contextPath: undefined }
+  const parsed = { confirm: false,
+help: false,
+contextPath: undefined }
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index]
     if (argument === "--help") {
@@ -42,7 +44,7 @@ export function parseRecoveryMarketArguments(args = []) {
       index += 1
       continue
     }
-    throw new Error("Unknown recovery CLI argument: " + argument)
+    throw new Error(`Unknown recovery CLI argument: ${  argument}`)
   }
   if (!parsed.help && !parsed.contextPath) { throw new Error("--context is required") }
   return Object.freeze(parsed)
@@ -58,7 +60,8 @@ function summarizeResult({ result }) {
       })),
     }
   }
-  return { ok: true, data: result.data }
+  return { ok: true,
+data: result.data }
 }
 
 /**
@@ -69,8 +72,9 @@ export async function runRecoveryMarketCommand({
   env = process.env,
   cwd = process.cwd(),
   readContext = readFile,
-  writeOutput = (value) => process.stdout.write(value + "\n"),
-  writeError = (value) => defaultLogger.error({ message: "Offline market recovery CLI failed", error: value }),
+  writeOutput = (value) => process.stdout.write(`${value  }\n`),
+  writeError = (value) => defaultLogger.error({ message: "Offline market recovery CLI failed",
+error: value }),
 } = {}) {
   let parsed
   try {

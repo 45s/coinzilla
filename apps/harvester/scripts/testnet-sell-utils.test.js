@@ -82,7 +82,8 @@ test("rejects a quantity above the exchange market maximum", () => {
 
 test("rejects malformed balances and missing quantity filters", () => {
   assert.throws(
-    () => getMarketSellQuantity({ freeBalance: "NaN", symbolInfo }),
+    () => getMarketSellQuantity({ freeBalance: "NaN",
+symbolInfo }),
     /freeBalance must be a non-negative decimal string/,
   )
   assert.throws(
@@ -127,11 +128,13 @@ test("accepts exact inclusive minimum and maximum quantity boundaries", () => {
   }
 
   assert.equal(
-    getMarketSellQuantity({ freeBalance: "0.1", symbolInfo: filters }).quantity,
+    getMarketSellQuantity({ freeBalance: "0.1",
+symbolInfo: filters }).quantity,
     "0.1",
   )
   assert.equal(
-    getMarketSellQuantity({ freeBalance: "1.00", symbolInfo: filters }).quantity,
+    getMarketSellQuantity({ freeBalance: "1.00",
+symbolInfo: filters }).quantity,
     "1.00",
   )
 })
@@ -159,7 +162,8 @@ test("rejects a zero LOT_SIZE fallback instead of treating it as disabled roundi
 test("retains the strict non-negative plain-decimal input contract", () => {
   for (const freeBalance of ["-0", "-1", "01", "1e2", " 1", "1 "]) {
     assert.throws(
-      () => getMarketSellQuantity({ freeBalance, symbolInfo }),
+      () => getMarketSellQuantity({ freeBalance,
+symbolInfo }),
       /freeBalance must be a non-negative decimal string/,
       freeBalance,
     )

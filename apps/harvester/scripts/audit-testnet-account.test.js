@@ -12,10 +12,13 @@ const env = {
 }
 
 const createBalance = ({ code, free, locked = "0" }) => {
-  const asset = new Asset({ id: "asset:" + code, code })
+  const asset = new Asset({ id: `asset:${  code}`,
+code })
   return new Balance({
-    free: new Quantity({ amount: free, asset }),
-    locked: new Quantity({ amount: locked, asset }),
+    free: new Quantity({ amount: free,
+asset }),
+    locked: new Quantity({ amount: locked,
+asset }),
   })
 }
 
@@ -31,16 +34,21 @@ const createDependencies = ({ orders = [], accountResult, ordersResult } = {}) =
         ok: true,
         data: {
           balances: [
-            createBalance({ code: "ZRO", free: "50", locked: "0" }),
-            createBalance({ code: "USDT", free: "100", locked: "5" }),
+            createBalance({ code: "ZRO",
+free: "50",
+locked: "0" }),
+            createBalance({ code: "USDT",
+free: "100",
+locked: "5" }),
           ],
           sourceTime: 123456,
         },
       }
     },
     getOpenOrders: async (input = {}) => {
-      calls.push("broker:open-orders:" + String(input.symbol))
-      return ordersResult ?? { ok: true, data: orders }
+      calls.push(`broker:open-orders:${  String(input.symbol)}`)
+      return ordersResult ?? { ok: true,
+data: orders }
     },
     placeOrder: async () => { calls.push("broker:place-order"); throw new Error("must not place orders") },
     cancelOrder: async () => { calls.push("broker:cancel-order"); throw new Error("must not cancel orders") },
@@ -51,8 +59,10 @@ const createDependencies = ({ orders = [], accountResult, ordersResult } = {}) =
   }
   const journalService = {
     ready: Promise.resolve({ ok: true }),
-    flush: async () => { calls.push("journal:flush"); return { ok: true, durable: true } },
-    close: async () => { calls.push("journal:close"); return { ok: true, durable: true } },
+    flush: async () => { calls.push("journal:flush"); return { ok: true,
+durable: true } },
+    close: async () => { calls.push("journal:close"); return { ok: true,
+durable: true } },
   }
   return {
     calls,
@@ -86,7 +96,8 @@ test("journals full balances and account-wide open orders without starting or mu
     createEventBus: dependencies.createEventBus,
     createJournalService: dependencies.createJournalService,
     brokerAdapterFactory: dependencies.brokerAdapterFactory,
-    logger: { info() {}, error() {} },
+    logger: { info() {},
+error() {} },
   })
 
   assert.equal(result.ok, true)
@@ -99,8 +110,14 @@ test("journals full balances and account-wide open orders without starting or mu
   ])
   assert.equal(dependencies.events[0].data.phase, "PREFLIGHT")
   assert.deepEqual(dependencies.events[0].data.balances, [
-    { asset: "USDT", free: "100", locked: "5", total: "105" },
-    { asset: "ZRO", free: "50", locked: "0", total: "50" },
+    { asset: "USDT",
+free: "100",
+locked: "5",
+total: "105" },
+    { asset: "ZRO",
+free: "50",
+locked: "0",
+total: "50" },
   ])
   assert.equal(dependencies.events[1].data.phase, "PREFLIGHT")
   assert.equal(dependencies.events[1].data.readiness, "BLOCKED")
@@ -122,7 +139,8 @@ test("reports READY when the read-only account audit finds no open orders", asyn
     createEventBus: dependencies.createEventBus,
     createJournalService: dependencies.createJournalService,
     brokerAdapterFactory: dependencies.brokerAdapterFactory,
-    logger: { info() {}, error() {} },
+    logger: { info() {},
+error() {} },
   })
 
   assert.equal(result.ok, true)
@@ -135,12 +153,14 @@ test("reports READY when the read-only account audit finds no open orders", asyn
 test("refuses non-TESTNET environment before connecting to a broker", async () => {
   let brokerFactoryCalled = false
   const result = await runTestnetAccountAudit({
-    env: { ...env, HARVESTER_TRADING_MODE: "live" },
+    env: { ...env,
+HARVESTER_TRADING_MODE: "live" },
     brokerAdapterFactory: () => {
       brokerFactoryCalled = true
       throw new Error("broker must not be created")
     },
-    logger: { info() {}, error() {} },
+    logger: { info() {},
+error() {} },
   })
 
   assert.equal(result.ok, false)
@@ -150,14 +170,16 @@ test("refuses non-TESTNET environment before connecting to a broker", async () =
 
 test("fails when account-wide open-order retrieval fails and still closes read-only resources", async () => {
   const dependencies = createDependencies({
-    ordersResult: { ok: false, errors: [new Error("openOrders.status failed")] },
+    ordersResult: { ok: false,
+errors: [new Error("openOrders.status failed")] },
   })
   const result = await runTestnetAccountAudit({
     env,
     createEventBus: dependencies.createEventBus,
     createJournalService: dependencies.createJournalService,
     brokerAdapterFactory: dependencies.brokerAdapterFactory,
-    logger: { info() {}, error() {} },
+    logger: { info() {},
+error() {} },
   })
 
   assert.equal(result.ok, false)
