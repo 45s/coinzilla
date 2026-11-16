@@ -272,17 +272,6 @@ export function applyReconciledMixedSellOrder({
     reconciliation: terminalResult.reconciliation,
   })
 
-  if (duplicate) {
-    return Object.freeze({
-      portfolio,
-      legacyPosition,
-      legacyAccounting,
-      reconciliation: terminalResult.reconciliation,
-      applied: false,
-      duplicate: true,
-    })
-  }
-
   const projections = applyProjections({
     portfolio,
     legacyPosition,
@@ -292,10 +281,20 @@ export function applyReconciledMixedSellOrder({
     fillsById,
   })
 
+  if (duplicate &&
+      (projections.portfolio !== portfolio ||
+       projections.legacyPosition !== legacyPosition ||
+       projections.legacyAccounting !== legacyAccounting)) {
+    fail({
+      code: "RS_MIXED_SELL_RECONCILIATION_PROJECTION_HISTORY_MISMATCH",
+      message: "A duplicate terminal SELL replay must remain an exact no-op in both accounting projections.",
+    })
+  }
+
   return Object.freeze({
     ...projections,
     reconciliation: terminalResult.reconciliation,
-    applied: true,
-    duplicate: false,
+    applied: !duplicate,
+    duplicate,
   })
 }
