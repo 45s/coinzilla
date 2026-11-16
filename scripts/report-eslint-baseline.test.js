@@ -9,7 +9,7 @@ test("summarizeResults counts file findings and rule occurrences", () => {
       errorCount: 2,
       warningCount: 1,
       messages: [
-          {
+        {
           ruleId: "no-undef",
         },
         {
@@ -40,9 +40,18 @@ test("summarizeResults counts file findings and rule occurrences", () => {
       errorCount: 2,
       warningCount: 2,
       topRules: [
-        { ruleId: "no-undef", count: 2 },
-        { ruleId: "curly", count: 1 },
-        { ruleId: "eqeqeq", count: 1 },
+        {
+          ruleId: "no-undef",
+          count: 2,
+        },
+        {
+          ruleId: "curly",
+          count: 1,
+        },
+        {
+          ruleId: "eqeqeq",
+          count: 1,
+        },
       ],
     },
     "The ESLint inventory must report file totals, severity totals and frequent rules.",
