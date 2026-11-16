@@ -640,59 +640,34 @@ export function parseTelegramOperatorCommand(text, { botUsername } = {}) {
  * @param {number} [options.retryDelayMs=1000] - Initial transport retry delay.
  * @returns {{start: Function, stop: Function}} Adapter lifecycle.
  */
-// eslint-disable-next-line max-lines-per-function -- This adapter owns the single serial polling lifecycle and process-local confirmation state; application behavior remains delegated to existing queries and use cases.
-export function createTelegramOperatorAdapter({
-  botToken,
-  allowedUserIds,
-  operator,
-  fetchImpl = globalThis.fetch,
-  logger,
-  pollTimeoutSeconds = DEFAULT_POLL_TIMEOUT_SECONDS,
-  retryDelayMs = DEFAULT_RETRY_DELAY_MS,
-} = {}) {
-  if (typeof botToken !== "string" || botToken.trim() === "") {
-    throw new TypeError("Telegram operator adapter requires a bot token")
-  }
-  if (!Array.isArray(allowedUserIds) || allowedUserIds.length === 0 ||
-      allowedUserIds.some((value) => {
-        if (typeof value !== "string" || !/^\d+$/.test(value)) {return true}
-        const numericValue = Number(value)
-        return !Number.isSafeInteger(numericValue) || numericValue <= 0
-      })) {
-    throw new TypeError("Telegram operator adapter requires a non-empty decimal user-ID allowlist")
-  }
-  if (typeof operator?.pauseMarket !== "function") {
-    throw new TypeError("Telegram operator adapter requires the Harvester pauseMarket use case")
-  }
-  if (typeof fetchImpl !== "function") {
-    throw new TypeError("Telegram operator adapter requires a fetch implementation")
-  }
-  if (!Number.isSafeInteger(pollTimeoutSeconds) || pollTimeoutSeconds < 1 || pollTimeoutSeconds > 50) {
-    throw new RangeError("Telegram operator poll timeout must be an integer from 1 to 50 seconds")
-  }
-  if (!Number.isSafeInteger(retryDelayMs) || retryDelayMs < 1) {
-    throw new RangeError("Telegram operator retry delay must be a positive integer")
-  }
+const PAGE_METHODS = Object.freeze({
+  status: "getStatus",
+  markets: "getMarkets",
+  positions: "getPositions",
+  orders: "getOrders",
+  balances: "getBalances",
+})
 
-  const allowedUsers = new Set(allowedUserIds.map((value) => String(Number(value))))
-  let botUsername
-  let offset
-  let controller
-  let pollPromise
-  let startPromise
-  let stopPromise
+const PAGE_TITLES = Object.freeze({
+  status: "runtime status",
+  markets: "market snapshot",
+  positions: "position snapshot",
+  orders: "order snapshot",
+  balances: "balance snapshot",
+})
 
-  const callApi = async ({ method, payload, signal }) => {
+function createTelegramCallApi({ botToken, fetchImpl }) {
+  return async ({ method, payload, signal }) => {
     let response
     try {
-      response = await fetchImpl("https://api.telegram.org/bot" + botToken + "/" + method, {
+      response = await fetchImpl(`https://api.telegram.org/bot${botToken}/${method}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
         signal,
       })
     } catch (cause) {
-      const error = new Error("Telegram API request failed: " + method, { cause })
+      const error = new Error(`Telegram API request failed: ${method}`, { cause })
       throw error
     }
 
@@ -700,11 +675,11 @@ export function createTelegramOperatorAdapter({
     try {
       body = await response.json()
     } catch (cause) {
-      throw new Error("Telegram API returned invalid JSON: " + method, { cause })
+      throw new Error(`Telegram API returned invalid JSON: ${method}`, { cause })
     }
     if (!response.ok || body?.ok !== true) {
       const description = typeof body?.description === "string" ? body.description : undefined
-      const error = new Error("Telegram API " + method + " failed (HTTP " + response.status + ")" + (description ? ": " + description : ""))
+      const error = new Error(`Telegram API ${method} failed (HTTP ${response.status})${description ? `: ${description}` : ""}`)
       if (Number.isSafeInteger(body?.parameters?.retry_after) && body.parameters.retry_after > 0) {
         error.retryAfter = body.parameters.retry_after
       }
@@ -712,22 +687,9 @@ export function createTelegramOperatorAdapter({
     }
     return body.result
   }
+}
 
-  const pendingConfirmations = new Map()
-  const CONFIRMATION_TTL_MS = 5 * 60 * 1000
-  const PAGE_METHODS = Object.freeze({ status: "getStatus", markets: "getMarkets", positions: "getPositions", orders: "getOrders", balances: "getBalances" })
-  const PAGE_TITLES = Object.freeze({ status: "runtime status", markets: "market snapshot", positions: "position snapshot", orders: "order snapshot", balances: "balance snapshot" })
-  const diagnostics = createTelegramOperatorDiagnostics({ logger, botToken })
-  const logStage = ({ interaction, message, stage, level = "debug", fields = {} }) => {
-    interaction.stage = stage
-    diagnostics.log({
-      interaction,
-      message,
-      level,
-      fields: { stage, ...fields },
-    })
-  }
-
+function createTelegramMessageApi({ callApi, logStage }) {
   const sendMessage = async ({ chatId, text, replyMarkup, signal, interaction }) => {
     if (interaction) { interaction.stage = "RESPONSE_DELIVERY" }
     const startedAt = Date.now()
@@ -839,61 +801,14 @@ export function createTelegramOperatorAdapter({
       throw error
     }
   }
-
-  const navigationKeyboard = ({ page = "home", markets = [], marketAction } = {}) => {
-    const rows = [
-      [{ text: "Status", callback_data: "cc:nav:status" }, { text: "Markets", callback_data: "cc:nav:markets" }],
-      [{ text: "Positions", callback_data: "cc:nav:positions" }, { text: "Orders", callback_data: "cc:nav:orders" }],
-      [{ text: "Balances", callback_data: "cc:nav:balances" }],
-    ]
-    if (page === "markets") {
-      let actionCount = 0
-      for (const market of markets) {
-        if (actionCount >= 20) { break }
-        if (typeof market?.symbol !== "string" || !/^[A-Z0-9]{2,30}$/.test(market.symbol) || market.enabled !== true) { continue }
-        if (marketAction === "PAUSE" && market.operatorPaused === true) { continue }
-        if (marketAction === "RESUME" && market.operatorPaused !== true) { continue }
-        const action = market.operatorPaused === true ? "RESUME" : "PAUSE"
-        rows.push([{ text: (action === "PAUSE" ? "Pause " : "Resume ") + market.symbol, callback_data: "cc:ask:" + action + ":" + market.symbol }])
-        actionCount += 1
-      }
-    }
-    const refreshPage = marketAction ? marketAction.toLowerCase() : page
-    rows.push([{ text: "Refresh", callback_data: "cc:refresh:" + refreshPage }, { text: "Main menu", callback_data: "cc:nav:home" }])
-    return { inline_keyboard: rows }
+  return {
+    sendMessage,
+    editMessage,
+    answerCallback,
   }
+}
 
-  const mainMenuKeyboard = () => ({
-    keyboard: [
-      [{ text: "Pause" }, { text: "Resume" }],
-      [{ text: "Status" }, { text: "Markets" }],
-      [{ text: "Portfolio" }, { text: "Open Orders" }],
-    ],
-    is_persistent: true,
-    resize_keyboard: true,
-    one_time_keyboard: false,
-    input_field_placeholder: "Command Center",
-  })
-
-  const helpText = () => [
-    "Harvester Command Center",
-    "/start — open the persistent Command Center keyboard",
-    "/menu — restore the persistent keyboard",
-    "/status — runtime readiness and blockers",
-    "/markets — configured market prices, freshness and blockers",
-    "/positions — canonical active and retained inventory with recovery accounting",
-    "/orders — Harvester-owned and external open orders",
-    "/balances — latest exchange free and locked balances with snapshot age",
-    "/pause SYMBOL — request a market-scoped operator pause",
-    "/resume SYMBOL — request removal of the operator-owned pause",
-    "/help — show this help",
-    "",
-    "Inline pause/resume buttons always require confirmation. Text control commands are explicit requests.",
-    "Operator pause does not cancel existing orders. Existing orders may still fill; accounting and recovery SELLs continue.",
-    "Operator pause lasts only for this process and is not restored after restart.",
-  ].join("\n")
-
-  const readPage = async ({ page, userId, interaction }) => {
+async function readTelegramOperatorPage({ page, userId, interaction, operator, diagnostics, logStage, navigationKeyboard }) {
     if (page === "home") { return { text: helpText(), keyboard: navigationKeyboard() } }
     const marketAction = resolveMarketAction(page)
     const queryPage = marketAction ? "markets" : page
@@ -981,14 +896,9 @@ export function createTelegramOperatorAdapter({
       text: formatMarketActionPrompt({ action: marketAction, eligibleMarkets, text }),
       keyboard,
     }
-  }
+}
 
-  const editPage = async ({ page, chatId, messageId, userId, signal, interaction }) => {
-    const rendered = await readPage({ page, userId, interaction })
-    await editMessage({ chatId, messageId, text: rendered.text, replyMarkup: rendered.keyboard, signal, interaction })
-  }
-
-  const executeControl = async ({ action, symbol, userId, requestId, chatId, messageId, signal, interaction }) => {
+async function executeTelegramOperatorControl({ action, symbol, userId, requestId, chatId, messageId, signal, interaction, operator, diagnostics, logStage, sendMessage, editMessage, navigationKeyboard }) {
     const method = action === "RESUME" ? "resumeMarket" : "pauseMarket"
     interaction.action = action
     interaction.symbol = symbol
@@ -1065,7 +975,215 @@ export function createTelegramOperatorAdapter({
         interaction,
       })
     }
+}
+
+async function pollTelegramOperatorUpdates({ signal, offsetState, botUsername, callApi, respondToUpdate, diagnostics, logger, retryDelayMs, pollTimeoutSeconds, logStage }) {
+    let currentRetryDelay = retryDelayMs
+    while (!signal.aborted) {
+      let failedInteraction
+      try {
+        const payload = {
+          timeout: pollTimeoutSeconds,
+          allowed_updates: ["message", "callback_query"],
+        }
+        if (offsetState.value !== undefined) {payload.offset = offsetState.value}
+        const updates = await callApi({
+          method: "getUpdates",
+          payload,
+          signal,
+        })
+        if (!Array.isArray(updates)) {
+          throw new TypeError("Telegram getUpdates did not return an update array")
+        }
+        for (const update of updates) {
+          if (signal.aborted) {break}
+          if (!Number.isSafeInteger(update?.update_id) || update.update_id < 0) {
+            throw new TypeError("Telegram update has no valid update_id")
+          }
+          const processed = await processTelegramUpdate({
+            update,
+            botUsername,
+            signal,
+            respondToUpdate,
+            diagnostics,
+            logStage,
+          })
+          if (processed.error) {
+            failedInteraction = processed.interaction
+            throw processed.error
+          }
+          offsetState.value = update.update_id + 1
+        }
+        currentRetryDelay = retryDelayMs
+      } catch (error) {
+        if (signal.aborted) {break}
+        if (failedInteraction) {
+          logStage({
+            interaction: failedInteraction,
+            message: "Telegram polling retry scheduled",
+            stage: "RETRY_SCHEDULED",
+            fields: {
+              retryDelayMs: Number.isSafeInteger(error?.retryAfter)
+                ? Math.min(error.retryAfter * 1000, MAX_RETRY_DELAY_MS)
+                : currentRetryDelay,
+            },
+          })
+        } else {
+          const errorDetails = diagnostics.describeError(error)
+          logger?.warn?.({
+            message: "Telegram polling FAILED; retrying",
+            component: "harvester.operator",
+            operation: "getUpdates",
+            failureClassification: errorDetails.code ?? errorDetails.name,
+            errorDetails,
+          })
+        }
+        const retryAfterMs = Number.isSafeInteger(error?.retryAfter)
+          ? Math.min(error.retryAfter * 1000, MAX_RETRY_DELAY_MS)
+          : currentRetryDelay
+        await waitForRetry({
+          milliseconds: retryAfterMs,
+          signal,
+        })
+        currentRetryDelay = Math.min(currentRetryDelay * 2, MAX_RETRY_DELAY_MS)
+      }
+    }
+}
+
+export function createTelegramOperatorAdapter({
+  botToken,
+  allowedUserIds,
+  operator,
+  fetchImpl = globalThis.fetch,
+  logger,
+  pollTimeoutSeconds = DEFAULT_POLL_TIMEOUT_SECONDS,
+  retryDelayMs = DEFAULT_RETRY_DELAY_MS,
+} = {}) {
+  if (typeof botToken !== "string" || botToken.trim() === "") {
+    throw new TypeError("Telegram operator adapter requires a bot token")
   }
+  if (!Array.isArray(allowedUserIds) || allowedUserIds.length === 0 ||
+      allowedUserIds.some((value) => {
+        if (typeof value !== "string" || !/^\d+$/.test(value)) {return true}
+        const numericValue = Number(value)
+        return !Number.isSafeInteger(numericValue) || numericValue <= 0
+      })) {
+    throw new TypeError("Telegram operator adapter requires a non-empty decimal user-ID allowlist")
+  }
+  if (typeof operator?.pauseMarket !== "function") {
+    throw new TypeError("Telegram operator adapter requires the Harvester pauseMarket use case")
+  }
+  if (typeof fetchImpl !== "function") {
+    throw new TypeError("Telegram operator adapter requires a fetch implementation")
+  }
+  if (!Number.isSafeInteger(pollTimeoutSeconds) || pollTimeoutSeconds < 1 || pollTimeoutSeconds > 50) {
+    throw new RangeError("Telegram operator poll timeout must be an integer from 1 to 50 seconds")
+  }
+  if (!Number.isSafeInteger(retryDelayMs) || retryDelayMs < 1) {
+    throw new RangeError("Telegram operator retry delay must be a positive integer")
+  }
+
+  const allowedUsers = new Set(allowedUserIds.map((value) => String(Number(value))))
+  let botUsername
+  const offsetState = { value: undefined }
+  let controller
+  let pollPromise
+  let startPromise
+  let stopPromise
+
+    const callApi = createTelegramCallApi({ botToken, fetchImpl })
+  const pendingConfirmations = new Map()
+  const CONFIRMATION_TTL_MS = 5 * 60 * 1000
+  const diagnostics = createTelegramOperatorDiagnostics({ logger, botToken })
+  const logStage = ({ interaction, message, stage, level = "debug", fields = {} }) => {
+    interaction.stage = stage
+    diagnostics.log({
+      interaction,
+      message,
+      level,
+      fields: { stage, ...fields },
+    })
+  }
+
+  const { sendMessage, editMessage, answerCallback } = createTelegramMessageApi({ callApi, logStage })
+
+  const navigationKeyboard = ({ page = "home", markets = [], marketAction } = {}) => {
+    const rows = [
+      [{ text: "Status", callback_data: "cc:nav:status" }, { text: "Markets", callback_data: "cc:nav:markets" }],
+      [{ text: "Positions", callback_data: "cc:nav:positions" }, { text: "Orders", callback_data: "cc:nav:orders" }],
+      [{ text: "Balances", callback_data: "cc:nav:balances" }],
+    ]
+    if (page === "markets") {
+      let actionCount = 0
+      for (const market of markets) {
+        if (actionCount >= 20) { break }
+        if (typeof market?.symbol !== "string" || !/^[A-Z0-9]{2,30}$/.test(market.symbol) || market.enabled !== true) { continue }
+        if (marketAction === "PAUSE" && market.operatorPaused === true) { continue }
+        if (marketAction === "RESUME" && market.operatorPaused !== true) { continue }
+        const action = market.operatorPaused === true ? "RESUME" : "PAUSE"
+        rows.push([{ text: (action === "PAUSE" ? "Pause " : "Resume ") + market.symbol, callback_data: "cc:ask:" + action + ":" + market.symbol }])
+        actionCount += 1
+      }
+    }
+    const refreshPage = marketAction ? marketAction.toLowerCase() : page
+    rows.push([{ text: "Refresh", callback_data: "cc:refresh:" + refreshPage }, { text: "Main menu", callback_data: "cc:nav:home" }])
+    return { inline_keyboard: rows }
+  }
+
+  const mainMenuKeyboard = () => ({
+    keyboard: [
+      [{ text: "Pause" }, { text: "Resume" }],
+      [{ text: "Status" }, { text: "Markets" }],
+      [{ text: "Portfolio" }, { text: "Open Orders" }],
+    ],
+    is_persistent: true,
+    resize_keyboard: true,
+    one_time_keyboard: false,
+    input_field_placeholder: "Command Center",
+  })
+
+  const helpText = () => [
+    "Harvester Command Center",
+    "/start — open the persistent Command Center keyboard",
+    "/menu — restore the persistent keyboard",
+    "/status — runtime readiness and blockers",
+    "/markets — configured market prices, freshness and blockers",
+    "/positions — canonical active and retained inventory with recovery accounting",
+    "/orders — Harvester-owned and external open orders",
+    "/balances — latest exchange free and locked balances with snapshot age",
+    "/pause SYMBOL — request a market-scoped operator pause",
+    "/resume SYMBOL — request removal of the operator-owned pause",
+    "/help — show this help",
+    "",
+    "Inline pause/resume buttons always require confirmation. Text control commands are explicit requests.",
+    "Operator pause does not cancel existing orders. Existing orders may still fill; accounting and recovery SELLs continue.",
+    "Operator pause lasts only for this process and is not restored after restart.",
+  ].join("\n")
+
+  const readPage = ({ page, userId, interaction }) => readTelegramOperatorPage({
+    page,
+    userId,
+    interaction,
+    operator,
+    diagnostics,
+    logStage,
+    navigationKeyboard,
+  })
+
+  const editPage = async ({ page, chatId, messageId, userId, signal, interaction }) => {
+    const rendered = await readPage({ page, userId, interaction })
+    await editMessage({ chatId, messageId, text: rendered.text, replyMarkup: rendered.keyboard, signal, interaction })
+  }
+
+  const executeControl = request => executeTelegramOperatorControl({
+    ...request,
+    operator,
+    diagnostics,
+    logStage,
+    sendMessage,
+    editMessage,
+    navigationKeyboard,
+  })
 
   const respondToCallback = async ({ update, signal, interaction }) => {
     const callback = update.callback_query
@@ -1307,78 +1425,18 @@ export function createTelegramOperatorAdapter({
     })
   }
 
-  const poll = async ({ signal }) => {
-    let currentRetryDelay = retryDelayMs
-    while (!signal.aborted) {
-      let failedInteraction
-      try {
-        const payload = {
-          timeout: pollTimeoutSeconds,
-          allowed_updates: ["message", "callback_query"],
-        }
-        if (offset !== undefined) {payload.offset = offset}
-        const updates = await callApi({
-          method: "getUpdates",
-          payload,
-          signal,
-        })
-        if (!Array.isArray(updates)) {
-          throw new TypeError("Telegram getUpdates did not return an update array")
-        }
-        for (const update of updates) {
-          if (signal.aborted) {break}
-          if (!Number.isSafeInteger(update?.update_id) || update.update_id < 0) {
-            throw new TypeError("Telegram update has no valid update_id")
-          }
-          const processed = await processTelegramUpdate({
-            update,
-            botUsername,
-            signal,
-            respondToUpdate,
-            diagnostics,
-            logStage,
-          })
-          if (processed.error) {
-            failedInteraction = processed.interaction
-            throw processed.error
-          }
-          offset = update.update_id + 1
-        }
-        currentRetryDelay = retryDelayMs
-      } catch (error) {
-        if (signal.aborted) {break}
-        if (failedInteraction) {
-          logStage({
-            interaction: failedInteraction,
-            message: "Telegram polling retry scheduled",
-            stage: "RETRY_SCHEDULED",
-            fields: {
-              retryDelayMs: Number.isSafeInteger(error?.retryAfter)
-                ? Math.min(error.retryAfter * 1000, MAX_RETRY_DELAY_MS)
-                : currentRetryDelay,
-            },
-          })
-        } else {
-          const errorDetails = diagnostics.describeError(error)
-          logger?.warn?.({
-            message: "Telegram polling FAILED; retrying",
-            component: "harvester.operator",
-            operation: "getUpdates",
-            failureClassification: errorDetails.code ?? errorDetails.name,
-            errorDetails,
-          })
-        }
-        const retryAfterMs = Number.isSafeInteger(error?.retryAfter)
-          ? Math.min(error.retryAfter * 1000, MAX_RETRY_DELAY_MS)
-          : currentRetryDelay
-        await waitForRetry({
-          milliseconds: retryAfterMs,
-          signal,
-        })
-        currentRetryDelay = Math.min(currentRetryDelay * 2, MAX_RETRY_DELAY_MS)
-      }
-    }
-  }
+  const poll = ({ signal }) => pollTelegramOperatorUpdates({
+    signal,
+    offsetState,
+    botUsername,
+    callApi,
+    respondToUpdate,
+    diagnostics,
+    logger,
+    retryDelayMs,
+    pollTimeoutSeconds,
+    logStage,
+  })
 
   return Object.freeze({
     async start() {
@@ -1498,7 +1556,7 @@ export function createTelegramOperatorAdapter({
         pollPromise = undefined
         pendingConfirmations.clear()
         botUsername = undefined
-        offset = undefined
+        offsetState.value = undefined
         return Object.freeze({
           stopped: true,
           alreadyStopped: false,
