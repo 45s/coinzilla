@@ -22,10 +22,19 @@ test("passes ESLint for every JavaScript file in the Harvester use-cases directo
       message,
     })),
   )
+  const findingCounts = new Map()
+  for (const finding of findings) {
+    const key = `${finding.file} :: ${finding.rule}`
+    findingCounts.set(key, (findingCounts.get(key) ?? 0) + 1)
+  }
+  const findingSummary = [...findingCounts]
+    .map(([key, count]) => `${count} ${key}`)
+    .sort()
+    .join("\n")
 
-  assert.deepEqual(
-    findings,
-    [],
-    "Every JavaScript file in apps/harvester/src/use-cases/ must pass the repository ESLint rules without errors or warnings.",
+  assert.equal(
+    findings.length,
+    0,
+    `Found ${findings.length} ESLint findings in apps/harvester/src/use-cases/:\n${findingSummary}`,
   )
 })
