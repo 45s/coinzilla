@@ -201,7 +201,7 @@ marketMetadata })
   assert.ok(secondId.length <= 36)
 })
 
-test("preserves explicit strategy purpose through both submission-gate checks without sending it to the broker", async () => {
+test("preserves explicit strategy purpose through every submission-gate check without sending it to the broker", async () => {
   const gatePurposes = []
   const pendingPurposes = []
   let brokerOrder
@@ -242,7 +242,7 @@ marketMetadata })
   const result = await execute({ decision: sellDecision,
 marketMetadata })
   assert.equal(result.ok, true)
-  assert.deepEqual(gatePurposes, ["RECOVERY_SELL", "RECOVERY_SELL"])
+  assert.deepEqual(gatePurposes, ["RECOVERY_SELL", "RECOVERY_SELL", "RECOVERY_SELL"])
   assert.deepEqual(pendingPurposes, ["RECOVERY_SELL"])
   assert.equal(Object.hasOwn(brokerOrder, "purpose"), false, "Application-only recovery purpose must not leak into the broker order request.")
 })
@@ -443,7 +443,7 @@ data: makeAcknowledgement(order) }
     },
     canSubmit: () => {
       readinessChecks += 1
-      if (readinessChecks <= 2) {return { allowed: true }}
+      if (readinessChecks <= 3) {return { allowed: true }}
       return {
         allowed: false,
         reason: "MARKET_BOOK_STALE",
@@ -593,6 +593,64 @@ marketMetadata })
   assert.equal(calls[0].price, "0.099", "The durable intent must preserve the exact decimal limit price.")
   assert.equal(calls[0].quantity, "100", "The durable intent must preserve the exact decimal base quantity.")
   assert.equal(calls[0].purpose, null, "An order without an explicit strategy purpose must persist a canonical null purpose.")
+})
+
+test("rechecks the shutdown gate after durable intent and before broker placement", async () => {
+  const calls = []
+  let gateChecks = 0
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async () => {
+        calls.push("broker")
+        return {
+          ok: true,
+          data: makeAcknowledgement(decision.actions[0]),
+        }
+      },
+    },
+    canSubmit: () => {
+      gateChecks += 1
+      calls.push(`gate:${gateChecks}`)
+      return gateChecks <= 2
+        ? true
+        : {
+          allowed: false,
+          reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
+        }
+    },
+    onPendingOrder: async () => calls.push("pending"),
+    onDurableSubmissionIntent: async () => {
+      calls.push("durable-intent")
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
+    onDurableSubmissionOutcome: async ({ outcome }) => {
+      calls.push(`durable-outcome:${outcome}`)
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
+    onSubmissionDeferred: async ({ reason }) => {
+      calls.push(`deferred:${reason}`)
+    },
+    onAcknowledgedOrder: async () => assert.fail("A blocked order must not be acknowledged."),
+    onSubmissionFailure: async () => assert.fail("A locally deferred order is not a broker failure."),
+  })
+
+  const result = await execute({
+    decision,
+    marketMetadata,
+  })
+
+  assert.equal(result.ok, true, "Expected result.ok to equal true in \"rechecks the shutdown gate after durable intent and before broker placement\".")
+  assert.equal(result.data.deferred, true, "Expected result.data.deferred to equal true in \"rechecks the shutdown gate after durable intent and before broker placement\".")
+  assert.equal(result.data.reason, "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE", "Expected result.data.reason to equal \"CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE\" in \"rechecks the shutdown gate after durable intent and before broker placement\".")
+  assert.equal(calls.includes("broker"), false, "The broker must never receive a BUY after the shutdown gate activates.")
+  assert.ok(calls.indexOf("durable-intent") < calls.indexOf("durable-outcome:REJECTED"), "Expected condition (calls.indexOf(\"durable-intent\") < calls.indexOf(\"durable-outcome:) to be true in \"rechecks the shutdown gate after durable intent and before broker placement\".")
+  assert.ok(calls.indexOf("durable-outcome:REJECTED") < calls.indexOf("deferred:CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE"), "Expected condition (calls.indexOf(\"durable-outcome:REJECTED\") < calls.indexOf(\"deferr) to be true in \"rechecks the shutdown gate after durable intent and before broker placement\".")
 })
 
 test("does not call the broker and removes PENDING registration when durable order-intent acknowledgement fails", async () => {

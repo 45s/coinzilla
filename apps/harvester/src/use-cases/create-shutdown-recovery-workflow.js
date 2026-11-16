@@ -122,10 +122,10 @@ function buildShutdownRecoveryInventory({
     activeSellCount: activeSells.length,
     committedQuantity,
   }
+  // A recovery SELL is only required while inventory remains above keepQuantity.
+  // An outstanding cost balance cannot justify selling the retained keep quantity.
   const requiresSell = compareDecimal({ left: sellableQuantity,
-    right: "0" }) > 0 ||
-    compareDecimal({ left: outstandingRecoveryAmount,
-      right: "0" }) > 0
+    right: "0" }) > 0
   return {
     symbol,
     metadata,
@@ -271,15 +271,21 @@ function assessShutdownRecoverySellCoverage({ dependencies, symbol } = {}) {
     }
   }
   if (inventory.noRecoveryRequired) {
-    return {
-      covered: true,
-      symbol,
+    const common = inventory.common ?? {
       activeQuantity: inventory.position?.quantity.amount ?? "0",
-      keepQuantity: String(pairs[symbol].keepQuantity),
+      keepQuantity: String(pairs[symbol]?.keepQuantity ?? "0"),
       sellableQuantity: "0",
       outstandingRecoveryAmount: "0",
       activeSellCount: 0,
       committedQuantity: "0",
+    }
+    return {
+      covered: true,
+      symbol,
+      ...common,
+      reason: common.outstandingRecoveryAmount !== "0"
+        ? "KEEP_QUANTITY_RETAINED"
+        : null,
     }
   }
   if (!inventory.metadata?.market) {
@@ -350,12 +356,27 @@ async function cancelStaleShutdownRecoverySells({ dependencies, symbol, assessme
 }
 
 function getShutdownRecoveryReplacementBlocker({ dependencies, symbol } = {}) {
-  if (!dependencies.state.paused.has(symbol) &&
-      !dependencies.hasBlockingOpenOrdersForSymbol({ symbol })) {return null}
-  return shutdownRecoveryError({
-    code: "SHUTDOWN_RECOVERY_REPLACEMENT_BLOCKED",
-    message: `Shutdown recovery SELL replacement is blocked for ${symbol}`,
-  })
+  const { state } = dependencies
+  const recoveryManagedPause = state.recoveryManagedPausedMarkets?.has(symbol) === true &&
+    state.durablePausedMarkets?.has(symbol) !== true &&
+    state.operatorPausedMarkets?.has(symbol) !== true &&
+    state.replacementIntents?.has(symbol) !== true &&
+    state.trailingBuyRepriceIntents?.has(symbol) !== true &&
+    state.safetyHaltRequired !== true &&
+    state.accountingFailed !== true &&
+    state.requiresReconciliation !== true &&
+    ![...(state.recoveryManagedCancellationClientOrderIds ?? [])].some((clientOrderId) =>
+      state.registry.getOrder({ clientOrderId })?.market.symbol === symbol)
+  if (
+    (state.paused.has(symbol) && !recoveryManagedPause) ||
+    dependencies.hasBlockingOpenOrdersForSymbol({ symbol })
+  ) {
+    return shutdownRecoveryError({
+      code: "SHUTDOWN_RECOVERY_REPLACEMENT_BLOCKED",
+      message: `Shutdown recovery SELL replacement is blocked for ${symbol}`,
+    })
+  }
+  return null
 }
 
 function getShutdownRecoveryReplacementDeferredFailure({ replacement, symbol } = {}) {
@@ -383,10 +404,24 @@ function getShutdownRecoveryReplacementNotSubmittedFailure({ replacement, symbol
     ?.map((action) => action.reason)
     .filter(Boolean)
     .join(", ")
-  const reason = replacement.data?.decision?.reason || deferredReasons || "NO_SELL_SUBMITTED"
+  const decision = replacement.data?.decision
+  const decisionSummary = decision
+    ? {
+      action: decision.action,
+      reason: decision.reason,
+      actions: decision.actions?.map(({ side, quantity, price, reason: actionReason }) => ({
+        side,
+        quantity,
+        price,
+        reason: actionReason,
+      })),
+      inventoryDisposition: decision.inventoryDisposition,
+    }
+    : null
+  const reason = decision?.reason || deferredReasons || "NO_SELL_SUBMITTED"
   return shutdownRecoveryError({
     code: "SHUTDOWN_RECOVERY_REPLACEMENT_NOT_SUBMITTED",
-    message: `Shutdown recovery SELL replacement was not submitted for ${symbol}: ${reason}`,
+    message: `Shutdown recovery SELL replacement was not submitted for ${symbol}: ${reason}. Decision: ${JSON.stringify(decisionSummary)}. Deferred actions: ${JSON.stringify(replacement.data?.deferredActions ?? [])}`,
   })
 }
 
@@ -484,8 +519,11 @@ async function reconcileRecoverySellForShutdownSymbol({ dependencies, symbol } =
   }
 }
 
-async function reconcileRecoverySellsForShutdown(dependencies) {
+async function reconcileRecoverySellsForShutdown({ dependencies, symbols: requestedSymbols } = {}) {
   const { runTransition, isStopping, pairs, state } = dependencies
+  const symbols = Array.isArray(requestedSymbols)
+    ? requestedSymbols
+    : Object.entries(pairs).filter(([, pairConfig]) => pairConfig.enabled === true).map(([symbol]) => symbol)
   return runTransition({
     task: async () => {
       if (isStopping?.() !== true) {
@@ -496,7 +534,7 @@ async function reconcileRecoverySellsForShutdown(dependencies) {
       }
       const reconciledSymbols = []
       const failures = []
-      for (const symbol of Object.keys(pairs)) {
+      for (const symbol of symbols) {
         const result = await reconcileRecoverySellForShutdownSymbol({ dependencies,
           symbol })
         if (!result.ok) {
@@ -521,12 +559,15 @@ async function reconcileRecoverySellsForShutdown(dependencies) {
   })
 }
 
-async function auditShutdownRecoverySellCoverage(dependencies) {
+async function auditShutdownRecoverySellCoverage({ dependencies, symbols: requestedSymbols } = {}) {
   const { runTransition, pairs } = dependencies
+  const symbols = Array.isArray(requestedSymbols)
+    ? requestedSymbols
+    : Object.entries(pairs).filter(([, pairConfig]) => pairConfig.enabled === true).map(([symbol]) => symbol)
   return runTransition({
     task: async () => {
       const findings = []
-      for (const symbol of Object.keys(pairs)) {
+      for (const symbol of symbols) {
         const assessment = assessShutdownRecoverySellCoverage({ dependencies,
           symbol })
         if (!assessment.covered) {
@@ -546,6 +587,7 @@ async function auditShutdownRecoverySellCoverage(dependencies) {
         data: Object.freeze({
           covered: findings.length === 0,
           findings: Object.freeze(findings),
+          symbols: Object.freeze([...symbols]),
         }),
       })
     },
@@ -554,7 +596,9 @@ async function auditShutdownRecoverySellCoverage(dependencies) {
 
 export function createShutdownRecoveryWorkflow(dependencies = {}) {
   return Object.freeze({
-    reconcileRecoverySellsForShutdown: () => reconcileRecoverySellsForShutdown(dependencies),
-    auditShutdownRecoverySellCoverage: () => auditShutdownRecoverySellCoverage(dependencies),
+    reconcileRecoverySellsForShutdown: (options = {}) => reconcileRecoverySellsForShutdown({ ...options,
+      dependencies }),
+    auditShutdownRecoverySellCoverage: (options = {}) => auditShutdownRecoverySellCoverage({ ...options,
+      dependencies }),
   })
 }
