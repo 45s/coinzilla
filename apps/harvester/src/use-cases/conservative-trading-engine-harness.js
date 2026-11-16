@@ -130,7 +130,7 @@ function createCancelOrderHandler({
         status: resolvedStatus,
         createdAt: order.createdAt,
         acknowledgedAt: order.acknowledgedAt,
-        updatedAt: 2,
+        updatedAt: Math.max(order.updatedAt ?? 0, 2) + 1,
         completedAt: 2,
       }),
     }
