@@ -2,7 +2,10 @@ import { Console } from "node:console"
 import { getAccountBalances } from "./binance-testnet-api.js"
 import { getNonZeroBalances, normalizeAccountBalances } from "./testnet-balance-utils.js"
 
-const cliConsole = new Console({ stdout: process.stdout, stderr: process.stderr })
+const cliConsole = new Console({
+  stdout: process.stdout,
+  stderr: process.stderr,
+})
 
 const main = async () => {
   const { balances: accountBalances } = await getAccountBalances()
