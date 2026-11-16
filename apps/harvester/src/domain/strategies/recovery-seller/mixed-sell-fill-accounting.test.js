@@ -133,11 +133,11 @@ function makeBuyFill() {
 
 function makeAccountingContext({ legacyQuantity = "50" } = {}) {
   const buyFill = makeBuyFill()
-  const portfolio = new Portfolio().applyFill({
+  const { portfolio } = new Portfolio().applyFill({
     fill: buyFill,
     positionId,
     strategyId,
-  }).portfolio
+  })
   const legacyPosition = createLegacyPosition({
     invested: "100",
     quantity: legacyQuantity,
@@ -279,7 +279,7 @@ test("reconciles a rejected zero-fill SELL without claiming an accounting commit
 
 test("rejects changed allocation-side facts even when a caller reuses the staged fingerprint", () => {
   const context = makeAccountingContext()
-  const original = context.canonicalFillAllocations[0]
+  const [original] = context.canonicalFillAllocations
   const forged = {
     ...original,
     recovery: {
