@@ -246,7 +246,8 @@ data: { reconciled: 2 } })
 test("repeats REST snapshots when a user-data event arrives during the audit window", async () => {
   let openOrderReads = 0
   const fixture = createRecovery({
-    getOpenOrders: async (_calls, state) => {
+    getOpenOrders: async (...args) => {
+      const [, state] = args
       openOrderReads += 1
       if (openOrderReads === 1) {state.eventSequence += 1}
       return { ok: true,
