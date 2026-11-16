@@ -1743,8 +1743,21 @@ test("does not construct, verify, or inject Operational State Store records even
   let runtimeStarted = false
   await runMain({
     loadConfig: async () => ({
-      operatorControl: { telegram: { enabled: false, allowedUserIds: [] } },
-      strategies: { CG_coinGrabber: { settings: { recovery: { enabled: false } } } },
+      operatorControl: {
+        telegram: {
+          enabled: false,
+          allowedUserIds: [],
+        },
+      },
+      strategies: {
+        CG_coinGrabber: {
+          settings: {
+            recovery: {
+              enabled: false,
+            },
+          },
+        },
+      },
     }),
     env: { OPERATIONAL_STATE_DIRECTORY: "relative/recovery-facts" },
     createOperationalStateStore: () => {
