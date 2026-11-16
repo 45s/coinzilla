@@ -308,3 +308,25 @@ flowchart TD
 \`\`\`
 
 **Change control:** Amend this document only when the owner explicitly changes a rule. Update implementation, tests, reference documents, and GitHub records to conform. Never create a competing Conservative rule definition.
+
+
+## 9. Conservative graceful shutdown — protect trading before stopping services
+
+This contract applies to the Conservative strategy only. Every other strategy must own a separate shutdown policy and safety participant. The application-level shutdown coordinator must not contain Conservative-specific order or accounting rules.
+
+On SIGINT or SIGTERM:
+
+1. Activate the Conservative BUY shutdown gate before stopping any shared service. Reject every new BUY, replacement BUY, retry, trailing-BUY reprice and delayed BUY evaluation. Only the explicitly authorized shutdown recovery SELL path may submit a SELL.
+2. Immediately begin cancellation of every Harvester-owned active Conservative BUY order. Never cancel, adopt or modify external/manual orders. An external open order alone is not a Harvester-owned shutdown blocker; an actual unowned execution or unresolved account-wide ownership/balance discrepancy remains a separate integrity blocker. Keep market-price intake, Binance user-data intake, broker connectivity and operator/runtime services alive.
+3. Reconcile pending client-order identities and every cancellation outcome. Process cancellation-racing fills exactly once and apply actual broker commissions through the existing Portfolio and RecoveryLedger accounting. An UNKNOWN order or incomplete terminal-fill history is not safe.
+4. Recalculate recovery SELL coverage from the final reconciled position and RecoveryLedger. If an old recovery SELL must be replaced, first confirm its terminal state and reconcile all fills and commissions. Never submit a replacement after an ambiguous cancellation or placement response; resolve the canonical order by its original client order ID first.
+5. Verify the final owned recovery SELL against authoritative Binance state: remaining quantity and net proceeds must cover the final recovery obligation and configured profit target. If no recovery obligation remains, prove that fact and that no stale recovery SELL remains.
+6. Mark each market SAFE_TO_SHUTDOWN as soon as its evidence is complete and Journal-durable. The marker is independent per market. Late execution/order evidence invalidates the affected marker immediately; re-reconcile and re-verify before marking it safe again.
+7. Once every enabled Conservative market and every other registered strategy participant is safe, publish and durably flush the CLOSING account snapshot. Then stop user-data intake and drain accepted events. If late accepted evidence invalidates a market marker, re-reconcile/re-verify and publish an updated CLOSING snapshot before shared cleanup.
+8. Stop operator control and market-price/book intake, drain accepted market work, then disconnect Binance and complete process cleanup only while all safety markers remain valid.
+
+There are no arbitrary sleeps, 20-second delays, quiet periods or time-based guesses. A market already meeting every condition is safe immediately. If safety cannot be proven, fail closed: retain the connections and services needed for reconciliation/recovery, report the exact strategy, market and blockers, and do not report STOPPED.
+
+The SAFE_TO_SHUTDOWN marker is a process-local projection, not a durable fact across restarts. On restart, rebuild safety from Journal evidence and authoritative exchange state; never trust a previous process's marker. The Journal must durably flush its published lifecycle/audit evidence before cleanup. Applied fills and order facts remain governed by [ADR-0001](../architecture/decisions/0001-application-owned-recovery-facts.md) and must be persisted before in-memory Portfolio/RecoveryLedger projections change.
+
+The implementation and deterministic regression tests are tracked by [issue #1186](https://github.com/45s/coinzilla/issues/1186) and [PR #1190](https://github.com/45s/coinzilla/pull/1190).

@@ -6,6 +6,14 @@ import { publishLifecycleEvent } from "../application/events/publish-lifecycle-e
 
 function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } = {}) {
   const { state, hasBlockingOpenOrdersForSymbol, isStopping, canTrade, isMarketPriceFresh } = dependencies
+  if (state.shutdownBuyGate === true && !shutdownRecoveryOnly) {
+    return toResult({
+      data: {
+        skipped: true,
+        reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
+      },
+    })
+  }
   if (state.paused.has(symbol)) {
     return toResult({ data: { skipped: true,
       reason: "PAIR_PAUSED" } })

@@ -3,6 +3,7 @@ export function createHarvesterUserDataState() {
   return {
     stopped: false,
     shutdownRequested: false,
+    marketIntakeStopped: false,
     ready: false,
     initialAccountSnapshotReady: false,
     requiresReconciliation: false,
