@@ -130,8 +130,14 @@ const forwardOutput = async ({ stream, output }) => {
 }
 
 const outputForwarding = [
-  forwardOutput({ stream: childProcess.current.stdout, output: process.stdout }),
-  forwardOutput({ stream: childProcess.current.stderr, output: process.stderr }),
+  forwardOutput({
+    stream: childProcess.current.stdout,
+    output: process.stdout,
+  }),
+  forwardOutput({
+    stream: childProcess.current.stderr,
+    output: process.stderr,
+  }),
 ]
 
 childProcess.current.on("error", (error) => {
