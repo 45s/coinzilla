@@ -2,7 +2,7 @@ import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { publishLifecycleEvent } from "../../application/events/publish-lifecycle-event.js"
 import { mapHarvesterStoppedData } from "../../application/events/lifecycle-event-dtos.js"
 
-const logSystem = (logger, message) => {
+const logSystem = ({ logger, message } = {}) => {
   if (typeof logger?.system === "function") {
     logger.system(message)
     return
@@ -22,9 +22,12 @@ async function stopRuntimeForShutdown({ runtime, logger } = {}) {
         message: "Shutdown was not confirmed; required runtime services remain connected.",
         error,
       })
-      return { runtimeStopped: false, error }
+      return {
+        runtimeStopped: false,
+        error,
+      }
     }
-    logSystem(logger, "Shutdown completed.")
+    logSystem({ logger, message: "Shutdown completed." })
     return { runtimeStopped: true }
   } catch (error) {
     process.exitCode = 1
@@ -37,12 +40,17 @@ async function stopRuntimeForShutdown({ runtime, logger } = {}) {
     } catch {
       // Logging failure must not prevent the shutdown event attempt.
     }
-    return { runtimeStopped: false, error }
+    return {
+      runtimeStopped: false,
+      error,
+    }
   }
 }
 
 async function flushShutdownEventBus({ eventBus } = {}) {
-  if (typeof eventBus?.flush !== "function") return []
+  if (typeof eventBus?.flush !== "function") {
+    return []
+  }
   try {
     const result = await eventBus.flush()
     if (result?.ok === false) {
@@ -54,8 +62,14 @@ async function flushShutdownEventBus({ eventBus } = {}) {
   }
 }
 
-async function closeTelegramNotifications({ notifications, logger, logTelegramNotificationSummary } = {}) {
-  if (!notifications) return []
+async function closeTelegramNotifications({
+  notifications,
+  logger,
+  logTelegramNotificationSummary,
+} = {}) {
+  if (!notifications) {
+    return []
+  }
   const errors = []
   try {
     await notifications.close()
@@ -100,7 +114,9 @@ async function runRuntimeShutdown({
   logTelegramNotificationSummary,
 } = {}) {
   const stopResult = await stopRuntimeForShutdown({ runtime, logger })
-  if (!stopResult.runtimeStopped) return { runtimeStopped: false }
+  if (!stopResult.runtimeStopped) {
+    return { runtimeStopped: false }
+  }
 
   publishLifecycleEvent({
     eventPublisher,
@@ -133,7 +149,9 @@ async function runRuntimeShutdown({
     })
     process.exitCode = 1
   }
-  if (cleanupErrors.length > 0) process.exitCode = 1
+  if (cleanupErrors.length > 0) {
+    process.exitCode = 1
+  }
 
   await closeProcessLogger({ closeLogger, logger })
   return { runtimeStopped: true }
@@ -148,10 +166,14 @@ async function runRuntimeShutdown({
 export function createRuntimeShutdownHandler(dependencies = {}) {
   let shutdownPromise
   return (reason) => {
-    if (shutdownPromise) return shutdownPromise
+    if (shutdownPromise) {
+      return shutdownPromise
+    }
     shutdownPromise = runRuntimeShutdown({ ...dependencies, reason })
       .then(({ runtimeStopped }) => {
-        if (!runtimeStopped) shutdownPromise = undefined
+        if (!runtimeStopped) {
+          shutdownPromise = undefined
+        }
       })
       .catch((error) => {
         process.exitCode = 1
