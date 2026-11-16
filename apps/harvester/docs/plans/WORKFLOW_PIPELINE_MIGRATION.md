@@ -14,6 +14,33 @@ This is a **proposed, incremental implementation plan**, not an accepted runtime
 
 The goal is to improve cohesion and readability in application workflows while preserving DDD dependency direction and the existing trading lifecycle. Start with one narrow workflow and evaluate the result before generalizing anything.
 
+## Implementation checkpoints
+
+### Step 0 — source map completed on 2026-11-16
+
+Reviewed against \`develop\` at \`5a5cfb8a779d4809663c022b8870863be50d56a5\`, after merged [PR #1159](https://github.com/45s/coinzilla/pull/1159).
+
+The current market-price path is:
+
+1. Bootstrap injects the caller-supplied market-data freshness policy and composes \`makeConservativeTradingEngine\`.
+2. The public \`processMarketPrice\` operation refreshes volatility protection before entering the engine transition queue.
+3. The existing serialized queue invokes \`createMarketPriceTransitionHandler\`; this internal handler does not enqueue another transition.
+4. The handler validates the normalized immutable \`MarketPrice\`, checks subscription-symbol identity, allocates the diagnostic event ID, reads the previous accepted price and market metadata, and logs the received event with the current portfolio, recovery ledger, order and readiness context.
+5. The handler checks freshness. A stale event is logged and returns the existing successful \`STALE_MARKET_PRICE\` skip without changing the accepted event ID or cached price.
+6. A fresh event commits \`marketPriceEventIds\` and \`prices\`, then delegates either to \`maybeReplaceTrailingBuy\` or \`evaluateLatestTransition\` according to the existing readiness, pause, active-BUY and trailing settings.
+7. The evaluator and trailing replacement workflow retain their existing responsibilities. Submission/cancellation durability, broker I/O, fill reconciliation and Portfolio/RecoveryLedger accounting remain downstream and outside this handler.
+
+The market-price handler itself publishes no lifecycle event, performs no broker I/O, and adds no durability wait. The public engine queue, volatility refresh order, state ownership and downstream safety gates remain unchanged.
+
+### Step 1 — characterization coverage before decomposition
+
+- [ ] Add direct offline tests for receipt/freshness ordering, stale-cache preservation, accepted-price commit before dispatch, existing trailing-BUY eligibility gates, and symbol-mismatch failure.
+- [ ] Refactor only the handler's local orchestration into explicit named stages after the characterization tests pass.
+- [ ] Re-run the direct handler tests and existing Conservative engine tests after each extraction.
+- [ ] Reconcile the architecture guide with the final source-backed stage sequence.
+
+This checkpoint records the verified baseline and intended first slice. It does not change Conservative behavior or the status of the wider migration plan.
+
 ## Goals
 
 - Split large application workflows by meaningful responsibility.
