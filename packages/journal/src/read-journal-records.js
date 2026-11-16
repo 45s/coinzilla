@@ -10,18 +10,183 @@ const DEFAULT_LIMITS = Object.freeze({
 const SESSION_FILE_PATTERN = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:-[a-zA-Z0-9_-]+)?\.jsonl$/
 
 function validateReadOptions({ store, directory, maxRecords, maxSessions, maxBytes, maxRecordBytes }) {
-  if (!store || typeof store.listSessions !== "function" || typeof store.statSession !== "function" || typeof store.readSession !== "function") {
-    return toResult({ error: new TypeError("A valid journal persistence store is required") })
+  if (
+    !store ||
+    typeof store.listSessions !== "function" ||
+    typeof store.statSession !== "function" ||
+    typeof store.readSession !== "function"
+  ) {
+    return toResult({
+      error: new TypeError("A valid journal persistence store is required"),
+    })
   }
   if (typeof directory !== "string" || directory.trim() === "") {
-    return toResult({ error: new TypeError("A journal directory is required") })
+    return toResult({
+      error: new TypeError("A journal directory is required"),
+    })
   }
-  for (const [name, value] of Object.entries({ maxRecords, maxSessions, maxBytes, maxRecordBytes })) {
+
+  const limits = {
+    maxRecords,
+    maxSessions,
+    maxBytes,
+    maxRecordBytes,
+  }
+  for (const [name, value] of Object.entries(limits)) {
     if (!Number.isSafeInteger(value) || value < 1) {
-      return toResult({ error: new TypeError(`${name} must be a positive safe integer`) })
+      return toResult({
+        error: new TypeError(`${name} must be a positive safe integer`),
+      })
     }
   }
   return toResult({ valid: true })
+}
+
+function createRecoveryError({ code, message, details }) {
+  const error = new Error(message)
+  error.code = code
+  if (details !== undefined) {
+    error.details = details
+  }
+  return error
+}
+
+async function listValidSessionEntries({ store, directory, maxSessions }) {
+  let sessionEntries
+  try {
+    sessionEntries = await store.listSessions()
+  } catch (cause) {
+    if (cause.code !== "ENOENT") {
+      throw cause
+    }
+
+    throw createRecoveryError({
+      code: "JOURNAL_DIRECTORY_NOT_FOUND",
+      message: `Journal directory does not exist: ${directory}`,
+      details: {
+        directory,
+        cause,
+      },
+    })
+  }
+
+  const validSessionEntries = []
+  for (const entry of sessionEntries) {
+    if (!entry.name.endsWith(".jsonl")) {
+      continue
+    }
+    if (!entry.isFile || !SESSION_FILE_PATTERN.test(entry.name)) {
+      throw createRecoveryError({
+        code: "JOURNAL_INVALID_SESSION_FILE",
+        message: `Invalid journal session file entry: ${entry.name}`,
+      })
+    }
+    if (validSessionEntries.length >= maxSessions) {
+      throw createRecoveryError({
+        code: "JOURNAL_RECOVERY_LIMIT_EXCEEDED",
+        message: `Journal recovery exceeds maxSessions while scanning ${directory}`,
+        details: { maxSessions },
+      })
+    }
+    validSessionEntries.push(entry)
+  }
+
+  validSessionEntries.sort((...sortArguments) => {
+    const [left, right] = sortArguments
+    return compareSessionEntries({
+      left,
+      right,
+    })
+  })
+  return validSessionEntries
+}
+
+function compareSessionEntries({ left, right }) {
+  const timestampOrder = left.name.slice(0, 19).localeCompare(right.name.slice(0, 19))
+  if (timestampOrder !== 0) {
+    return timestampOrder
+  }
+
+  const leftSuffix = left.name.slice(19, -6)
+  const rightSuffix = right.name.slice(19, -6)
+  if (leftSuffix === rightSuffix) {
+    return 0
+  }
+  if (leftSuffix === "") {
+    return -1
+  }
+  if (rightSuffix === "") {
+    return 1
+  }
+
+  const leftNumericSuffix = /^-(\d+)$/.exec(leftSuffix)
+  const rightNumericSuffix = /^-(\d+)$/.exec(rightSuffix)
+  if (leftNumericSuffix && rightNumericSuffix) {
+    const leftIndex = BigInt(leftNumericSuffix[1])
+    const rightIndex = BigInt(rightNumericSuffix[1])
+    if (leftIndex !== rightIndex) {
+      return leftIndex < rightIndex ? -1 : 1
+    }
+  } else if (leftNumericSuffix) {
+    return -1
+  } else if (rightNumericSuffix) {
+    return 1
+  }
+
+  return leftSuffix < rightSuffix ? -1 : 1
+}
+
+async function readSessionRecords({ store, entry, maxBytes, bytesRead, maxRecordBytes }) {
+  const fileStats = await store.statSession(entry.name)
+  if (bytesRead + fileStats.size > maxBytes) {
+    throw createRecoveryError({
+      code: "JOURNAL_RECOVERY_LIMIT_EXCEEDED",
+      message: `Journal recovery exceeds maxBytes while reading ${entry.name}`,
+      details: {
+        maxBytes,
+        bytesRead,
+        nextFileBytes: fileStats.size,
+      },
+    })
+  }
+
+  const contentBuffer = await store.readSession(entry.name)
+  const { byteLength: fileBytes } = contentBuffer
+  let content
+  try {
+    content = new TextDecoder("utf-8", { fatal: true }).decode(contentBuffer)
+  } catch (cause) {
+    throw createRecoveryError({
+      code: "JOURNAL_INVALID_ENCODING",
+      message: `Journal session ${entry.name} is not valid UTF-8`,
+      details: {
+        fileName: entry.name,
+        cause,
+      },
+    })
+  }
+
+  const nextBytesRead = bytesRead + fileBytes
+  if (nextBytesRead > maxBytes) {
+    throw createRecoveryError({
+      code: "JOURNAL_RECOVERY_LIMIT_EXCEEDED",
+      message: `Journal recovery exceeds maxBytes while reading ${entry.name}`,
+      details: {
+        maxBytes,
+        bytesRead: nextBytesRead,
+      },
+    })
+  }
+
+  const records = parseJournalSession({
+    content,
+    fileName: entry.name,
+    maxRecordBytes,
+  })
+  return {
+    records,
+    bytesRead: nextBytesRead,
+  }
 }
 
 /**
@@ -38,116 +203,62 @@ export async function readJournalRecords({
   maxBytes = DEFAULT_LIMITS.maxBytes,
   maxRecordBytes = DEFAULT_LIMITS.maxRecordBytes,
 } = {}) {
-  const optionsResult = validateReadOptions({ store, directory, maxRecords, maxSessions, maxBytes, maxRecordBytes })
-  if (!optionsResult.ok) return optionsResult
+  const optionsResult = validateReadOptions({
+    store,
+    directory,
+    maxRecords,
+    maxSessions,
+    maxBytes,
+    maxRecordBytes,
+  })
+  if (!optionsResult.ok) {
+    return optionsResult
+  }
 
   try {
-    let sessionEntries
-    try {
-      sessionEntries = await store.listSessions()
-    } catch (cause) {
-      if (cause.code === "ENOENT") {
-        const error = new Error(`Journal directory does not exist: ${directory}`)
-        error.code = "JOURNAL_DIRECTORY_NOT_FOUND"
-        error.details = { directory, cause }
-        throw error
-      }
-      throw cause
-    }
-
-    const validSessionEntries = []
-    for (const entry of sessionEntries) {
-      if (!entry.name.endsWith(".jsonl")) continue
-      if (!entry.isFile || !SESSION_FILE_PATTERN.test(entry.name)) {
-        const error = new Error(`Invalid journal session file entry: ${entry.name}`)
-        error.code = "JOURNAL_INVALID_SESSION_FILE"
-        throw error
-      }
-      if (validSessionEntries.length >= maxSessions) {
-        const error = new Error(`Journal recovery exceeds maxSessions while scanning ${directory}`)
-        error.code = "JOURNAL_RECOVERY_LIMIT_EXCEEDED"
-        error.details = { maxSessions }
-        throw error
-      }
-      validSessionEntries.push(entry)
-    }
-
-    validSessionEntries.sort((left, right) => {
-      const timestampOrder = left.name.slice(0, 19).localeCompare(right.name.slice(0, 19))
-      if (timestampOrder !== 0) return timestampOrder
-
-      const leftSuffix = left.name.slice(19, -6)
-      const rightSuffix = right.name.slice(19, -6)
-      if (leftSuffix === rightSuffix) return 0
-      if (leftSuffix === "") return -1
-      if (rightSuffix === "") return 1
-
-      const leftNumericSuffix = /^-(\d+)$/.exec(leftSuffix)
-      const rightNumericSuffix = /^-(\d+)$/.exec(rightSuffix)
-      if (leftNumericSuffix && rightNumericSuffix) {
-        const leftIndex = BigInt(leftNumericSuffix[1])
-        const rightIndex = BigInt(rightNumericSuffix[1])
-        if (leftIndex !== rightIndex) return leftIndex < rightIndex ? -1 : 1
-      } else if (leftNumericSuffix) {
-        return -1
-      } else if (rightNumericSuffix) {
-        return 1
-      }
-
-      return leftSuffix < rightSuffix ? -1 : 1
+    const sessionEntries = await listValidSessionEntries({
+      store,
+      directory,
+      maxSessions,
     })
-
     const records = []
     const recordIds = new Set()
     const sessions = []
     let bytesRead = 0
-    for (const entry of validSessionEntries) {
-      const fileStats = await store.statSession(entry.name)
-      if (bytesRead + fileStats.size > maxBytes) {
-        const error = new Error(`Journal recovery exceeds maxBytes while reading ${entry.name}`)
-        error.code = "JOURNAL_RECOVERY_LIMIT_EXCEEDED"
-        error.details = { maxBytes, bytesRead, nextFileBytes: fileStats.size }
-        throw error
-      }
 
-      const contentBuffer = await store.readSession(entry.name)
-      const fileBytes = contentBuffer.byteLength
-      let content
-      try {
-        content = new TextDecoder("utf-8", { fatal: true }).decode(contentBuffer)
-      } catch (cause) {
-        const error = new Error(`Journal session ${entry.name} is not valid UTF-8`)
-        error.code = "JOURNAL_INVALID_ENCODING"
-        error.details = { fileName: entry.name, cause }
-        throw error
-      }
-      bytesRead += fileBytes
-      if (bytesRead > maxBytes) {
-        const error = new Error(`Journal recovery exceeds maxBytes while reading ${entry.name}`)
-        error.code = "JOURNAL_RECOVERY_LIMIT_EXCEEDED"
-        error.details = { maxBytes, bytesRead }
-        throw error
-      }
-
-      const sessionRecords = parseJournalSession({
-        content,
-        fileName: entry.name,
+    for (const entry of sessionEntries) {
+      const sessionResult = await readSessionRecords({
+        store,
+        entry,
+        maxBytes,
+        bytesRead,
         maxRecordBytes,
       })
+      const { records: sessionRecords, bytesRead: nextBytesRead } = sessionResult
+      bytesRead = nextBytesRead
 
       if (records.length + sessionRecords.length > maxRecords) {
-        const error = new Error(`Journal recovery exceeds maxRecords while reading ${entry.name}`)
-        error.code = "JOURNAL_RECOVERY_LIMIT_EXCEEDED"
-        error.details = { maxRecords, recordsRead: records.length, nextSessionRecords: sessionRecords.length }
-        throw error
+        throw createRecoveryError({
+          code: "JOURNAL_RECOVERY_LIMIT_EXCEEDED",
+          message: `Journal recovery exceeds maxRecords while reading ${entry.name}`,
+          details: {
+            maxRecords,
+            recordsRead: records.length,
+            nextSessionRecords: sessionRecords.length,
+          },
+        })
       }
 
       for (const record of sessionRecords) {
         if (recordIds.has(record.id)) {
-          const error = new Error(`Duplicate journal record id ${record.id} at ${entry.name}:${record.position.lineNumber}`)
-          error.code = "JOURNAL_DUPLICATE_RECORD_ID"
-          error.details = { ...record.position, recordId: record.id }
-          throw error
+          throw createRecoveryError({
+            code: "JOURNAL_DUPLICATE_RECORD_ID",
+            message: `Duplicate journal record id ${record.id} at ${entry.name}:${record.position.lineNumber}`,
+            details: {
+              ...record.position,
+              recordId: record.id,
+            },
+          })
         }
         recordIds.add(record.id)
         records.push(record)
@@ -155,7 +266,12 @@ export async function readJournalRecords({
       sessions.push(entry.name)
     }
 
-    return toResult({ records, count: records.length, sessions, bytesRead })
+    return toResult({
+      records,
+      count: records.length,
+      sessions,
+      bytesRead,
+    })
   } catch (error) {
     return toResult({ error })
   }

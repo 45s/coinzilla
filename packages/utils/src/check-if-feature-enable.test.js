@@ -61,7 +61,8 @@ describe('checkIfFeatureEnable', () => {
       error(payload) { errors.push(payload) },
     }
 
-    assert.equal(checkIfFeatureEnable({ envVarName: 'UTILS_TEST_FEATURE_FLAG', logger: failingLogger }), false)
+    assert.equal(checkIfFeatureEnable({ envVarName: 'UTILS_TEST_FEATURE_FLAG',
+      logger: failingLogger }), false)
     assert.equal(errors.length, 1)
     assert.equal(errors[0].message, 'warning sink failed')
   })

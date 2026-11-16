@@ -1,19 +1,28 @@
 import { createShutdownPhaseConsolePresentation } from "./create-shutdown-phase-console-presentation.js"
 
 const CONSOLE_DETAIL_KEYS = Object.freeze([
-  "errorCode",
+  "correlationId",
+  "interactionType",
+  "action",
   "symbol",
+  "sourceFilterTypes",
+  "operation",
+  "stage",
+  "failureClassification",
+  "errorCode",
+  "errorName",
+  "applicationOperationInvoked",
+  "applicationOperationCompleted",
+  "stateChanged",
+  "durationMs",
+  "reason",
+  "errorMessage",
   "inventory",
   "accounting",
-  "sourceFilterTypes",
-  "errorName",
-  "errorMessage",
   "orderCount",
   "readiness",
-  "symbol",
   "symbols",
   "enabledSymbols",
-  "action",
   "side",
   "price",
   "quantity",
@@ -23,7 +32,6 @@ const CONSOLE_DETAIL_KEYS = Object.freeze([
   "assetCount",
   "strategyMode",
   "broker",
-  "reason",
 ])
 
 function summarizeConsoleData({ data, shutdownPresentation } = {}) {
