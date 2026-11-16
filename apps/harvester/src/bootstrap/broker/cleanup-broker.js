@@ -41,7 +41,7 @@ export async function disconnectBroker({ broker, brokerName, eventPublisher }) {
       return broker.disconnect()
     }),
   ])
-  const brokerDisconnect = results[0]
+  const [brokerDisconnect] = results
   publishLifecycleEvent({
     eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.BROKER_DISCONNECTED,
