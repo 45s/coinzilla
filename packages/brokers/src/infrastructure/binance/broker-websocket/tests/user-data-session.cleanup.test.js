@@ -11,7 +11,9 @@ describe("Binance user-data listener setup cleanup", () => {
       tradingMode: "testnet",
       apiKey: "test-key",
       apiSecret: "test-secret",
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => {
         client = createFakeRpcClient({
@@ -44,7 +46,9 @@ describe("Binance user-data listener setup cleanup", () => {
       tradingMode: "testnet",
       apiKey: "test-key",
       apiSecret: "test-secret",
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => {
         client = createFakeRpcClient({
@@ -81,7 +85,9 @@ describe("Binance user-data listener setup cleanup", () => {
 
 describe("Binance user-data listener detach resilience", () => {
   it("attempts every listener cleanup even when an earlier remover throws", async () => {
-    const removals = { event: 0, error: 0, close: 0 }
+    const removals = { event: 0,
+error: 0,
+close: 0 }
     const logs = []
     let client
     const broker = new BinanceSdkBroker({
@@ -147,7 +153,9 @@ describe("Binance user-data listener detach resilience", () => {
     assert.ok(logs.some(([message]) => message === "Unable to detach Binance user-data close listener"))
 
     await assert.doesNotReject(broker.disconnect())
-    assert.deepEqual(removals, { event: 1, error: 1, close: 2 })
+    assert.deepEqual(removals, { event: 1,
+error: 1,
+close: 2 })
   })
 })
 
@@ -159,7 +167,9 @@ describe("Binance user-data unsubscribe outcome", () => {
       tradingMode: "testnet",
       apiKey: "test-key",
       apiSecret: "test-secret",
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => {
         client = createFakeRpcClient({
@@ -171,7 +181,8 @@ describe("Binance user-data unsubscribe outcome", () => {
       },
       marketClientFactory: () => createFakeStreamsClient(),
     })
-    return { broker, get client() { return client } }
+    return { broker,
+get client() { return client } }
   }
 
   it("does not retry unsubscribe when the first response is lost but the remote state confirms removal", async () => {
@@ -203,7 +214,7 @@ describe("Binance user-data unsubscribe outcome", () => {
     const setup = createUnsubscribeBroker({
       unsubscribe: () => {
         unsubscribeAttempts += 1
-        if (unsubscribeAttempts === 1) throw new Error("unsubscribe response timed out")
+        if (unsubscribeAttempts === 1) {throw new Error("unsubscribe response timed out")}
         activeSubscriptionId = null
         return {}
       },
@@ -253,7 +264,9 @@ describe("Binance user-data unsubscribe retry failure", () => {
       tradingMode: "testnet",
       apiKey: "test-key",
       apiSecret: "test-secret",
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => {
         client = createFakeRpcClient({
@@ -299,7 +312,9 @@ describe("Binance user-data failed reconnect cleanup", () => {
       apiKey: "test-key",
       apiSecret: "test-secret",
       reconnectDelay: 10,
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => {
         const index = clients.length
@@ -307,9 +322,9 @@ describe("Binance user-data failed reconnect cleanup", () => {
           "userDataStream.subscribe.signature": () => ({ subscriptionId: index * 100 + 10 }),
           "userDataStream.unsubscribe": () => ({}),
         })
-        const connect = client.connect
+        const {connect} = client
         client.connect = async function connectClient() {
-          if (index === 1) throw new Error("replacement RPC connection failed")
+          if (index === 1) {throw new Error("replacement RPC connection failed")}
           return connect.call(this)
         }
         clients.push(client)
@@ -323,7 +338,9 @@ describe("Binance user-data failed reconnect cleanup", () => {
     await broker.connect()
     const subscription = await broker.subscribeForUserData({ onEvent() {} })
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
 
     await scheduler.runNext()
 
@@ -353,7 +370,9 @@ describe("Binance stale user-data subscription cleanup", () => {
       tradingMode: "testnet",
       apiKey: "test-key",
       apiSecret: "test-secret",
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => {
         client = createFakeRpcClient({
@@ -407,7 +426,7 @@ describe("Binance stale user-data subscription cleanup", () => {
     const setup = createDelayedSubscriptionBroker({
       unsubscribe: () => {
         unsubscribeAttempts += 1
-        if (unsubscribeAttempts === 1) throw new Error("unsubscribe response timed out")
+        if (unsubscribeAttempts === 1) {throw new Error("unsubscribe response timed out")}
         activeSubscriptionId = null
         return {}
       },
