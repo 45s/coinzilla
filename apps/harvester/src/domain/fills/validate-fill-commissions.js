@@ -49,7 +49,7 @@ right: amount.amount })
   const quoteValue = commission?.quoteValue
   if (!quoteValue) {
     throw new TypeError(
-      \`Third-asset commission requires reliable quote-currency valuation: \${String(amount.asset?.code ?? "unknown")}\`,
+      `Third-asset commission requires reliable quote-currency valuation: ${String(amount.asset?.code ?? "unknown")}`,
     )
   }
   assertDecimalString({ value: quoteValue.amount,
@@ -86,7 +86,7 @@ right: fill.quantity.amount }) > 0) {
   if (compareDecimal({ left: totals.quoteCommission,
 right: fill.quoteQuantity.amount }) > 0) {
     const limit = fill.side === "SELL" ? "SELL quote proceeds" : "executed quote notional"
-    throw new RangeError(\`Quote commission exceeds \${limit}\`)
+    throw new RangeError(`Quote commission exceeds ${limit}`)
   }
 }
 
