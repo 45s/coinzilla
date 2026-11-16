@@ -2,7 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { subscribeToMarketData } from "./subscribe-to-market-data.js"
 
-const test = (name, ...args) => nodeTest(`[subscribe-to-market-data.test.js] ${  name}`, ...args)
+const test = (...args) => nodeTest(`[subscribe-to-market-data.test.js] ${args[0]}`, ...args.slice(1))
 
 const createFixture = ({
   tradingEnabled = false,
