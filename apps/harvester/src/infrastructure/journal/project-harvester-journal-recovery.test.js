@@ -17,8 +17,11 @@ const record = (...args) => {
   const [name, data, id = name] = args
   return {
     id,
-    payload: { id, name, data },
-    position: { fileName: "session.jsonl", lineNumber: 1 },
+    payload: { id,
+name,
+data },
+    position: { fileName: "session.jsonl",
+lineNumber: 1 },
   }
 }
 

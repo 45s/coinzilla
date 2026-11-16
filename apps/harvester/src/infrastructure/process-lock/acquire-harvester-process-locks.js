@@ -128,7 +128,10 @@ export async function acquireHarvesterProcessLocks({
   acquireLock = acquireHarvesterProcessLock,
 } = {}) {
   try {
-    validateProcessLockOptions({ journalDirectory, globalDirectory, broker, acquireLock })
+    validateProcessLockOptions({ journalDirectory,
+globalDirectory,
+broker,
+acquireLock })
 
     const hostLock = await acquireLock({
       directory: globalDirectory,

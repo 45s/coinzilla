@@ -382,7 +382,8 @@ total })
         }
         const auditReasons = data.auditReasons.map((...args) => {
           const [reason, index] = args
-          return requireString({ value: reason, field: `auditReasons[${  index  }]` })
+          return requireString({ value: reason,
+field: `auditReasons[${  index  }]` })
         })
         if (data.auditStatus === "COMPLETE" && auditReasons.length > 0) {
           throw new Error("COMPLETE account snapshot cannot contain audit reasons")
@@ -465,7 +466,8 @@ field: `orders[${  index  }].status` }),
         if (new Set(identities).size !== identities.length) {throw new Error("Open-order snapshot contains duplicate order identities")}
         const blockReasons = data.blockReasons.map((...args) => {
           const [reason, index] = args
-          return requireString({ value: reason, field: `blockReasons[${  index  }]` })
+          return requireString({ value: reason,
+field: `blockReasons[${  index  }]` })
         })
         if (data.readiness === "READY" && (orders.length > 0 || blockReasons.length > 0)) {
           throw new Error("READY open-order snapshot requires no orders and no block reasons")
