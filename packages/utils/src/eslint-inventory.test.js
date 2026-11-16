@@ -24,6 +24,12 @@ test("reports the complete packages/utils ESLint baseline", {
       errors: result.errorCount,
       warnings: result.warningCount,
       rules,
+      messages: result.messages.map((message) => ({
+        line: message.line,
+        column: message.column,
+        rule: message.ruleId ?? "fatal",
+        message: message.message,
+      })),
     }
   })
   const findings = files.filter((file) => file.errors > 0 || file.warnings > 0)
