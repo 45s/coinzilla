@@ -13,7 +13,7 @@ const failureResult = ({ error, errors, category, stage, retryable }) => {
   return toResult(result)
 }
 
-const withFailure = (result, failure) => {
+const withFailure = ({ result, failure }) => {
   if (result?.failure) {
     return result
   }
@@ -259,14 +259,14 @@ async function applyTerminalFills({ fills, order, processExecutionFillTransition
       await pause({ symbol, 
         reason: "TERMINAL_ORDER_FILL_ACCOUNTING_FAILED", 
         error })
-      return withFailure(
-        toResult({ errors: applied?.errors ?? [error] }),
-        applied?.failure ?? {
+      return withFailure({
+        result: toResult({ errors: applied?.errors ?? [error] }),
+        failure: applied?.failure ?? {
           category: "ACCOUNTING_INTEGRITY",
           stage: "TERMINAL_FILL_ACCOUNTING",
           retryable: false,
         },
-      )
+      })
     }
   }
   return undefined
