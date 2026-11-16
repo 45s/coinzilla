@@ -7,14 +7,17 @@ const fingerprint = "f".repeat(64)
 const blockerDigest = "a".repeat(64)
 const blockerId = "b".repeat(64)
 
-const record = (sequence, factType, data, factId = `${factType  }:${  sequence}`, runtimeSessionId = sessionId) => ({
+const record = (...parameters) => {
+  const [sequence, factType, data, factId = `${factType  }:${  sequence}`, runtimeSessionId = sessionId] = parameters
+  return ({
+
   sequence: String(sequence),
   factId,
   factType,
   runtimeSessionId,
   data,
-})
-
+  })
+}
 const baseline = () => record(1, "CONFIGURATION_BASELINE", {
   schemaVersion: 1,
   strategyName: "conservative",
