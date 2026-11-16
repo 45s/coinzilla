@@ -22,8 +22,14 @@ import {
 export const recoveryTestMarket = new Market({
   venue: "binance",
   symbol: "BTCUSDT",
-  baseAsset: new Asset({ id: "binance:BTC", code: "BTC" }),
-  quoteAsset: new Asset({ id: "binance:USDT", code: "USDT" }),
+  baseAsset: new Asset({
+    id: "binance:BTC",
+    code: "BTC",
+  }),
+  quoteAsset: new Asset({
+    id: "binance:USDT",
+    code: "USDT",
+  }),
 })
 
 const firstSession = "process-001.jsonl"
@@ -44,13 +50,22 @@ function requireMapped({ mapper, input, eventName, session, lineNumber }) {
       source: "harvester",
       data: result.data,
     }),
-    position: Object.freeze({ fileName: session, lineNumber }),
+    position: Object.freeze({
+      fileName: session,
+      lineNumber,
+    }),
   })
 }
 
 function pendingOrder({ clientOrderId, side, price, quantity }) {
   return createPendingCanonicalOrder({
-    order: { symbol: recoveryTestMarket.symbol, side, type: "LIMIT", price, quantity },
+    order: {
+      symbol: recoveryTestMarket.symbol,
+      side,
+      type: "LIMIT",
+      price,
+      quantity,
+    },
     market: recoveryTestMarket,
     clientOrderId,
     supportedOrderTypes: ["LIMIT"],
@@ -72,9 +87,18 @@ function acknowledgedOrder({
     market: recoveryTestMarket,
     side,
     type: "LIMIT",
-    limitPrice: new Money({ amount: price, asset: recoveryTestMarket.quoteAsset }),
-    originalQuantity: new Quantity({ amount: quantity, asset: recoveryTestMarket.baseAsset }),
-    executedQuantity: new Quantity({ amount: executedQuantity, asset: recoveryTestMarket.baseAsset }),
+    limitPrice: new Money({
+      amount: price,
+      asset: recoveryTestMarket.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: quantity,
+      asset: recoveryTestMarket.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: executedQuantity,
+      asset: recoveryTestMarket.baseAsset,
+    }),
     status,
   })
 }
@@ -92,7 +116,10 @@ function canonicalFill({
   const commissions = baseCommission === "0"
     ? []
     : [new Commission({
-      amount: new Money({ amount: baseCommission, asset: recoveryTestMarket.baseAsset }),
+      amount: new Money({
+        amount: baseCommission,
+        asset: recoveryTestMarket.baseAsset,
+      }),
     })]
   return new Fill({
     tradeId,
@@ -100,9 +127,18 @@ function canonicalFill({
     clientOrderId,
     market: recoveryTestMarket,
     side,
-    price: new Money({ amount: side === "BUY" ? "100" : "103.112", asset: recoveryTestMarket.quoteAsset }),
-    quantity: new Quantity({ amount: quantity, asset: recoveryTestMarket.baseAsset }),
-    quoteQuantity: new Money({ amount: quoteQuantity, asset: recoveryTestMarket.quoteAsset }),
+    price: new Money({
+      amount: side === "BUY" ? "100" : "103.112",
+      asset: recoveryTestMarket.quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: quantity,
+      asset: recoveryTestMarket.baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: quoteQuantity,
+      asset: recoveryTestMarket.quoteAsset,
+    }),
     liquidityRole: "MAKER",
     executedAt,
     commissions,
@@ -278,9 +314,18 @@ function appendUnownedOrder({ append }) {
     market: recoveryTestMarket,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "99", asset: recoveryTestMarket.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: recoveryTestMarket.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: recoveryTestMarket.baseAsset }),
+    limitPrice: new Money({
+      amount: "99",
+      asset: recoveryTestMarket.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: recoveryTestMarket.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: recoveryTestMarket.baseAsset,
+    }),
     status: "OPEN",
   })
   append({
@@ -315,7 +360,13 @@ export function createRecoveryCrashFixture() {
   const records = []
   const append = ({ session, mapper, input, eventName }) => {
     const lineNumber = records.filter((record) => record.position.fileName === session).length + 1
-    records.push(requireMapped({ mapper, input, eventName, session, lineNumber }))
+    records.push(requireMapped({
+      mapper,
+      input,
+      eventName,
+      session,
+      lineNumber,
+    }))
     return records.length
   }
 
