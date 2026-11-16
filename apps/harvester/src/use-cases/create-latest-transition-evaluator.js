@@ -1,4 +1,4 @@
-import { addDecimal, assertDecimalString, subtractDecimal, multiplyDecimal, maxDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal, multiplyDecimal, maxDecimal, toResult } from "@coinzilla/utils"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { mapRecoveryCycleCompletedData, mapStrategyDecisionData } from "../application/events/lifecycle-event-dtos.js"
@@ -279,6 +279,35 @@ function getPortfolioBalanceContext({ dependencies, context } = {}) {
     items: allPositions.filter((item) => item.market.baseAsset.id === metadata.market.baseAsset.id),
     getValue: (item) => item.totalBaseQuantity.amount,
   })
+  const additionalTrackedBaseQuantity = dependencies.getAdditionalTrackedBaseQuantity?.({
+    balances: accountSnapshot.balances ?? [],
+    portfolio: portfolioBefore,
+  }) ?? []
+  if (!Array.isArray(additionalTrackedBaseQuantity)) {
+    throw new TypeError("getAdditionalTrackedBaseQuantity must return an array")
+  }
+  let additionalTrackedBaseBalance = "0"
+  for (const item of additionalTrackedBaseQuantity) {
+    if (!item || typeof item.assetId !== "string" || !item.assetId.trim()) {
+      throw new TypeError("Additional tracked base quantity requires a canonical asset ID")
+    }
+    assertDecimalString({
+      value: item.amount,
+      field: "additionalTrackedBaseQuantity.amount",
+    })
+    if (compareDecimal({ left: item.amount, right: "0" }) < 0) {
+      throw new RangeError("additionalTrackedBaseQuantity.amount must be non-negative")
+    }
+    if (item.assetId === metadata.market.baseAsset.id) {
+      additionalTrackedBaseBalance = addDecimal({
+        left: additionalTrackedBaseBalance,
+        right: item.amount,
+      })
+    }
+  }
+  const additionalTrackedBaseBalanceBaseline = accountSnapshot.getAdditionalTrackedBaseQuantityBaseline?.({
+    assetId: metadata.market.baseAsset.id,
+  }) ?? "0"
   const allActiveOrders = dependencies.state.registry.getActiveOrders()
     .filter((order) => order.clientOrderId !== excludedActiveOrderClientId)
   const committedQuote = sumDecimalValues({
@@ -316,6 +345,8 @@ function getPortfolioBalanceContext({ dependencies, context } = {}) {
     quoteCashFlowBaseline,
     quoteCashFlow,
     portfolioBaseBalance,
+    additionalTrackedBaseBalance,
+    additionalTrackedBaseBalanceBaseline,
     committedQuote,
     committedQuoteBalance,
     committedBase,
@@ -333,6 +364,8 @@ function allocateEvaluationActions({ dependencies, context, balances } = {}) {
     accountSnapshot,
     quoteCashFlow,
     portfolioBaseBalance,
+    additionalTrackedBaseBalance,
+    additionalTrackedBaseBalanceBaseline,
     committedQuote,
     committedQuoteBalance,
     committedBase,
@@ -404,6 +437,8 @@ function logOrderAllocation({ dependencies, context, balances, allocation } = {}
     remainingInvestment,
     portfolioBaseBalance,
     portfolioBaseBalanceBaseline: accountSnapshot.getPortfolioBaseQuantityBaseline({ assetId: metadata.market.baseAsset.id }),
+    additionalTrackedBaseBalance,
+    additionalTrackedBaseBalanceBaseline,
     committedQuote,
     committedQuoteBalance,
     committedQuoteBalanceBaseline: accountSnapshot.getCommittedQuoteBalanceBaseline({ assetId: metadata.market.quoteAsset.id }),
