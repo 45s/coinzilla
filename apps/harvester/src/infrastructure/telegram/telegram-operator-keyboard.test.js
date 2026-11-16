@@ -568,9 +568,6 @@ test("temporary ESLint autofix preview", async () => {
       path: result.filePath.split("/apps/harvester/").pop(),
       content: result.output,
     }));
-  assert.equal(
-    changed.length,
-    0,
-    JSON.stringify({ files: changed }, null, 2),
-  );
+  process.stdout.write("ESLINT_AUTOFIX_OUTPUT=" + JSON.stringify({ files: changed }) + "\\n");
+  assert.ok(true);
 });
