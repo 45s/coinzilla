@@ -17,16 +17,23 @@ import { createReadOperatorTradingState } from "../../use-cases/operator-control
  */
 export function createHarvesterOperator({ engine, operationalStateStore, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders } = {}) {
   const operator = {
-    pauseMarket: createPauseMarket({ engine, operationalStateStore }),
-    resumeMarket: createResumeMarket({ engine, operationalStateStore }),
+    pauseMarket: createPauseMarket({ engine,
+      operationalStateStore }),
+    resumeMarket: createResumeMarket({ engine,
+      operationalStateStore }),
   }
   if (getRuntimeSnapshot !== undefined) {
-    const readState = createReadOperatorState({ engine, getRuntimeSnapshot })
+    const readState = createReadOperatorState({ engine,
+      getRuntimeSnapshot })
     operator.getStatus = readState.getStatus
     operator.getMarkets = readState.getMarkets
   }
   if ([getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders].some((provider) => provider !== undefined)) {
-    const readTradingState = createReadOperatorTradingState({ engine, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders })
+    const readTradingState = createReadOperatorTradingState({ engine,
+      getPortfolio,
+      getRecoveryLedger,
+      getAccountSnapshot,
+      getOpenOrders })
     operator.getPositions = readTradingState.getPositions
     operator.getOrders = readTradingState.getOrders
     operator.getBalances = readTradingState.getBalances

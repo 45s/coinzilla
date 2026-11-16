@@ -39,7 +39,8 @@ describe('adaptOrder', () => {
   })
 
   it('leaves clientOrderId undefined when Binance omits it', () => {
-    const { clientOrderId, ...orderWithoutClientId } = mockedBinanceOrder
+    const orderWithoutClientId = { ...mockedBinanceOrder }
+    delete orderWithoutClientId.clientOrderId
     const result = adaptOrder(orderWithoutClientId)
     assert.equal(result.clientOrderId, undefined)
     assert.equal('clientOrderId' in result.value, false)
@@ -83,10 +84,12 @@ describe('adaptOrder', () => {
 
   it('rejects non-numeric exchange quantities', () => {
     assert.throws(() =>
-      adaptOrder({ ...mockedBinanceOrder, origQty: 'not-a-number' }),
+      adaptOrder({ ...mockedBinanceOrder,
+origQty: 'not-a-number' }),
     )
     assert.throws(() =>
-      adaptOrder({ ...mockedBinanceOrder, executedQty: 'not-a-number' }),
+      adaptOrder({ ...mockedBinanceOrder,
+executedQty: 'not-a-number' }),
     )
   })
 })

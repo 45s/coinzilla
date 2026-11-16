@@ -57,7 +57,13 @@ const compareDecimalStrings = ({ left, right }) => {
   const leftValue = BigInt(`${leftWhole}${leftFraction}`) * 10n ** BigInt(scale - leftFraction.length)
   const rightValue = BigInt(`${rightWhole}${rightFraction}`) * 10n ** BigInt(scale - rightFraction.length)
 
-  return leftValue < rightValue ? -1 : leftValue > rightValue ? 1 : 0
+  if (leftValue < rightValue) {
+    return -1
+  }
+  if (leftValue > rightValue) {
+    return 1
+  }
+  return 0
 }
 
 const normalizeConstraint = ({ constraint, market }) => {
@@ -77,7 +83,8 @@ const normalizeConstraint = ({ constraint, market }) => {
     if (value !== undefined) {
       throw new Error(tradingRulesErrMsgs.unsupportedValue)
     }
-    return Object.freeze({ type, status })
+    return Object.freeze({ type,
+status })
   }
 
   const expectedType = moneyConstraintTypes.has(type) ? Money : Quantity
@@ -98,7 +105,9 @@ const normalizeConstraint = ({ constraint, market }) => {
     throw new Error(tradingRulesErrMsgs.positiveIncrement)
   }
 
-  return Object.freeze({ type, status, value })
+  return Object.freeze({ type,
+status,
+value })
 }
 
 export class TradingRules {
@@ -117,7 +126,8 @@ export class TradingRules {
     }
 
     const normalizedConstraints = constraints.map((constraint) =>
-      normalizeConstraint({ constraint, market }),
+      normalizeConstraint({ constraint,
+market }),
     )
     const types = normalizedConstraints.map(({ type }) => type)
     if (new Set(types).size !== types.length) {

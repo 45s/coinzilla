@@ -50,7 +50,7 @@ function createExecutionContext({ options } = {}) {
     onSubmissionDeferred,
   }
   for (const [name, callback] of Object.entries(callbacks)) {
-    if (typeof callback !== "function") {throw new TypeError(name + " must be a function")}
+    if (typeof callback !== "function") {throw new TypeError(`${name  } must be a function`)}
   }
   if (onDurableSubmissionIntent !== undefined && typeof onDurableSubmissionIntent !== "function") {
     throw new TypeError("onDurableSubmissionIntent must be a function")
@@ -74,7 +74,7 @@ function createExecutionContext({ options } = {}) {
     onSubmissionDeferred,
     getSubmissionDeferral: createSubmissionDeferralResolver({ canSubmit }),
     orderIdNamespace,
-    nextClientOrderId: () => "h-" + orderIdNamespace + "-" + (++orderSequence),
+    nextClientOrderId: () => `h-${  orderIdNamespace  }-${  ++orderSequence}`,
   }
 }
 
@@ -113,7 +113,7 @@ async function validateDecision({ context, decision, marketMetadata, notifyValid
       const candidate = createPendingOrderCandidate({
         action,
         marketMetadata,
-        clientOrderId: "h-" + context.orderIdNamespace + "-preflight-" + index,
+        clientOrderId: `h-${  context.orderIdNamespace  }-preflight-${  index}`,
       })
       try {
         validateOrderAgainstTradingRules({
@@ -349,7 +349,7 @@ function classifyBrokerSubmissionFailure({ pendingOrder, brokerResult } = {}) {
   const errors = brokerResult?.errors ?? [
     new TypeError("Broker did not return an acknowledged canonical order"),
   ]
-  const submissionError = errors[0]
+  const [submissionError] = errors
   const definitePostOnlyRejection = pendingOrder.type === "LIMIT_MAKER" &&
     submissionError?.code === "POST_ONLY_WOULD_TAKE"
   const definiteFilterRejection = submissionError?.code === "DEFINITE_EXCHANGE_FILTER_REJECTED" &&

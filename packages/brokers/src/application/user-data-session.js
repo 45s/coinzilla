@@ -7,7 +7,7 @@ import { assertUserDataClientPort } from "./ports/user-data-client-port.js"
  * @typedef {{accepted: true, completed: boolean}|{accepted: false, completed: false, reason: "stale-or-inactive"|"recovery-not-pending"|"stale-recovery-generation"}} UserDataRecoveryAcknowledgementResult
  */
 
-function logSafely(logger, level, ...args) {
+function logSafely({ logger, level, args }) {
   try {
     logger?.[level]?.(...args)
   } catch {
@@ -15,7 +15,7 @@ function logSafely(logger, level, ...args) {
   }
 }
 
-function validateCallback(callback, name) {
+function validateCallback({ callback, name }) {
   if (typeof callback !== "function") {
     throw new TypeError(`${name} callback must be a function`)
   }
@@ -101,28 +101,35 @@ export class UserDataSession {
 
   /** @returns {Promise<void>} Resolves when the current recovery attempt settles. */
   async waitForRecovery() {
-    if (this.#reconnectPromise) await this.#reconnectPromise
+    if (this.#reconnectPromise) {await this.#reconnectPromise}
   }
 
   /** Bind connection lifecycle listeners after the underlying client opens. */
   onConnected() {
     const client = this.getClient()
     if (!this.#stopped && client && this.#portFor(client).state === "open") {
-      this.#bindClient(client, { includeUserData: false })
+      this.#bindClient({ client,
+        includeUserData: false })
     }
   }
 
   /** Resume or establish the shared remote subscription for active subscribers. */
   async resume() {
-    if (this.#stopped || this.#subscribers.size === 0) return
+    if (this.#stopped || this.#subscribers.size === 0) {return}
     this.#clearReconnectTimer()
-    if (this.#reconnectPromise) return this.#reconnectPromise
+    if (this.#reconnectPromise) {
+      await this.#reconnectPromise
+      return
+    }
     try {
       await this.#ensureRemoteSubscription()
     } catch (error) {
       this.setUnavailable(true)
       this.#reconnectAttempts = 0
-      this.#notify({ type: "recovering", attempt: 0, error, recoveryRequired: true })
+      this.#notify({ type: "recovering",
+attempt: 0,
+error,
+recoveryRequired: true })
       this.#scheduleRecovery()
     }
   }
@@ -134,9 +141,11 @@ export class UserDataSession {
    * @returns {Promise<{data: {acknowledgeRecovery: () => boolean, acknowledgeRecoveryResult: (recoveryGeneration: number) => UserDataRecoveryAcknowledgementResult, disconnect: () => Promise<void>, subscriptionId: number|null}} >}
    */
   async subscribe({ onEvent, onStatus }) {
-    validateCallback(onEvent, "onEvent")
-    if (onStatus !== undefined) validateCallback(onStatus, "onStatus")
-    if (this.#stopped) throw new Error("User-data session is stopped")
+    validateCallback({ callback: onEvent,
+      name: "onEvent" })
+    if (onStatus !== undefined) {validateCallback({ callback: onStatus,
+      name: "onStatus" })}
+    if (this.#stopped) {throw new Error("User-data session is stopped")}
 
     const id = ++this.#nextSubscriberId
     const subscriber = {
@@ -168,7 +177,8 @@ export class UserDataSession {
 
     const data = {
       acknowledgeRecovery: () => this.#acknowledgeRecovery(id),
-      acknowledgeRecoveryResult: (recoveryGeneration) => this.#acknowledgeRecoveryResult(id, recoveryGeneration),
+      acknowledgeRecoveryResult: (recoveryGeneration) => this.#acknowledgeRecoveryResult({ id,
+        recoveryGeneration }),
       disconnect: () => this.#removeSubscriber(id),
     }
     Object.defineProperty(data, "subscriptionId", {
@@ -202,11 +212,11 @@ export class UserDataSession {
   }
 
   async #ensureRemoteSubscription() {
-    if (this.#subscriptionId !== null) return this.#subscriptionId
+    if (this.#subscriptionId !== null) {return this.#subscriptionId}
     if (this.#subscribePromise) {
       await this.#subscribePromise
-      if (this.#stopped) throw new Error("User-data session is stopped")
-      if (this.#subscriptionId !== null) return this.#subscriptionId
+      if (this.#stopped) {throw new Error("User-data session is stopped")}
+      if (this.#subscriptionId !== null) {return this.#subscriptionId}
       return this.#ensureRemoteSubscription()
     }
 
@@ -221,27 +231,31 @@ export class UserDataSession {
     }
 
     this.setUnavailable(true)
-    this.#bindClient(client)
+    this.#bindClient({ client })
     this.#subscribePromise = (async () => {
       let subscriptionId
       try {
         subscriptionId = await port.subscribe()
       } catch (error) {
-        subscriptionId = await this.#findExistingSubscription(port, error)
+        subscriptionId = await this.#findExistingSubscription({ port,
+          originalError: error })
       }
 
       if (!Number.isSafeInteger(subscriptionId) || subscriptionId < 0) {
-        subscriptionId = await this.#findExistingSubscription(
+        subscriptionId = await this.#findExistingSubscription({
           port,
-          new Error("Binance user-data subscription response did not include a valid subscriptionId"),
-        )
+          originalError: new Error("Binance user-data subscription response did not include a valid subscriptionId"),
+        })
       }
       if (this.#stopped || generation !== this.#generation || this.#subscribers.size === 0 ||
           this.getClient() !== client || port.state !== "open") {
         try {
-          await this.#unsubscribeRemoteSubscription(port, subscriptionId)
+          await this.#unsubscribeRemoteSubscription({ port,
+            subscriptionId })
         } catch (error) {
-          logSafely(this.logger, "warn", "Unable to clean up an unused Binance user-data subscription", error)
+          logSafely({ logger: this.logger,
+            level: "warn",
+            args: ["Unable to clean up an unused Binance user-data subscription", error] })
         }
         return subscriptionId
       }
@@ -250,7 +264,7 @@ export class UserDataSession {
       this.#clearReconnectTimer()
       this.#reconnectAttempts = 0
       this.setUnavailable(this.#recoveryRequired)
-      if (this.#recoveryRequired) this.#notifyRecoveryReady()
+      if (this.#recoveryRequired) {this.#notifyRecoveryReady()}
       return subscriptionId
     })().finally(() => {
       this.#subscribePromise = null
@@ -259,16 +273,18 @@ export class UserDataSession {
     return this.#subscribePromise
   }
 
-  async #findExistingSubscription(port, originalError) {
+  async #findExistingSubscription({ port, originalError }) {
     let ids
     try {
       ids = await port.listSubscriptions()
     } catch (lookupError) {
-      logSafely(this.logger, "warn", "Unable to verify Binance user-data subscription after an uncertain response", lookupError)
+      logSafely({ logger: this.logger,
+        level: "warn",
+        args: ["Unable to verify Binance user-data subscription after an uncertain response", lookupError] })
       throw originalError
     }
 
-    if (!Array.isArray(ids)) throw originalError
+    if (!Array.isArray(ids)) {throw originalError}
     if (ids.some((id) => !Number.isSafeInteger(id) || id < 0)) {
       throw new Error("Cannot safely identify the user-data subscription: malformed subscription state", {
         cause: originalError,
@@ -279,11 +295,11 @@ export class UserDataSession {
         cause: originalError,
       })
     }
-    if (ids.length === 1) return ids[0]
+    if (ids.length === 1) {return ids[0]}
     throw originalError
   }
 
-  async #unsubscribeRemoteSubscription(port, subscriptionId) {
+  async #unsubscribeRemoteSubscription({ port, subscriptionId }) {
     try {
       await port.unsubscribe(subscriptionId)
       return
@@ -292,7 +308,9 @@ export class UserDataSession {
       try {
         activeIds = await port.listSubscriptions()
       } catch (lookupError) {
-        logSafely(this.logger, "warn", "Unable to verify Binance user-data unsubscribe outcome", lookupError)
+        logSafely({ logger: this.logger,
+          level: "warn",
+          args: ["Unable to verify Binance user-data unsubscribe outcome", lookupError] })
         throw originalError
       }
 
@@ -306,24 +324,29 @@ export class UserDataSession {
           cause: originalError,
         })
       }
-      if (!activeIds.includes(subscriptionId)) return
+      if (!activeIds.includes(subscriptionId)) {return}
 
       try {
         await port.unsubscribe(subscriptionId)
       } catch (retryError) {
-        logSafely(this.logger, "warn", "Binance user-data subscription remains active after verified unsubscribe retry", {
-          subscriptionId,
-          error: retryError,
+        logSafely({
+          logger: this.logger,
+          level: "warn",
+          args: ["Binance user-data subscription remains active after verified unsubscribe retry", {
+            subscriptionId,
+            error: retryError,
+          }],
         })
         throw new AggregateError(
           [originalError, retryError],
           "Unable to unsubscribe the verified active Binance user-data subscription",
+          { cause: retryError },
         )
       }
     }
   }
 
-  #bindClient(client, { includeUserData = true } = {}) {
+  #bindClient({ client, includeUserData = true } = {}) {
     this.#detachClientListeners()
     const removers = []
     const port = this.#portFor(client)
@@ -331,29 +354,31 @@ export class UserDataSession {
     try {
       if (includeUserData) {
         const removeEventListener = port.onEvent((message) => {
-          if (this.getClient() === client) this.#handleEvent(message)
+          if (this.getClient() === client) {this.#handleEvent(message)}
         })
-        if (typeof removeEventListener === "function") removers.push(removeEventListener)
+        if (typeof removeEventListener === "function") {removers.push(removeEventListener)}
         this.#removeEventListener = removeEventListener ?? null
 
         const removeErrorListener = port.onError((error) => {
-          if (this.getClient() === client) this.#handleError(error)
+          if (this.getClient() === client) {this.#handleError(error)}
         })
-        if (typeof removeErrorListener === "function") removers.push(removeErrorListener)
+        if (typeof removeErrorListener === "function") {removers.push(removeErrorListener)}
         this.#removeErrorListener = removeErrorListener ?? null
       }
 
       const removeCloseListener = port.onClose((event) => {
-        if (this.getClient() === client) this.#handleClose(event)
+        if (this.getClient() === client) {this.#handleClose(event)}
       })
-      if (typeof removeCloseListener === "function") removers.push(removeCloseListener)
+      if (typeof removeCloseListener === "function") {removers.push(removeCloseListener)}
       this.#removeCloseListener = removeCloseListener ?? null
     } catch (error) {
       for (const remove of removers.reverse()) {
         try {
           remove()
         } catch (cleanupError) {
-          logSafely(this.logger, "warn", "Unable to roll back Binance user-data listener setup", cleanupError)
+          logSafely({ logger: this.logger,
+            level: "warn",
+            args: ["Unable to roll back Binance user-data listener setup", cleanupError] })
         }
       }
       this.#removeEventListener = null
@@ -365,11 +390,15 @@ export class UserDataSession {
 
   #handleEvent(message) {
     if (this.#stopped || this.#subscribers.size === 0 ||
-        message?.subscriptionId !== this.#subscriptionId) return
+        message?.subscriptionId !== this.#subscriptionId) {return}
 
     if (message.type === "terminated") {
-      logSafely(this.logger, "warn", "Binance user-data subscription terminated", {
-        subscriptionId: message.subscriptionId,
+      logSafely({
+        logger: this.logger,
+        level: "warn",
+        args: ["Binance user-data subscription terminated", {
+          subscriptionId: message.subscriptionId,
+        }],
       })
       this.#subscriptionId = null
       this.#markRecoveryRequired()
@@ -390,8 +419,8 @@ export class UserDataSession {
   }
 
   #isDuplicateEvent(identity) {
-    if (typeof identity !== "string" || identity.length === 0) return false
-    if (this.#eventIdentities.has(identity)) return true
+    if (typeof identity !== "string" || identity.length === 0) {return false}
+    if (this.#eventIdentities.has(identity)) {return true}
 
     this.#eventIdentities.add(identity)
     if (this.#eventIdentities.size > 2048) {
@@ -402,22 +431,28 @@ export class UserDataSession {
 
   #forwardEvent(event) {
     for (const subscriber of [...this.#subscribers.values()]) {
-      if (!subscriber.active) continue
+      if (!subscriber.active) {continue}
       try {
         subscriber.onEvent({ event })
       } catch (error) {
-        logSafely(this.logger, "error", "Binance user-data event callback failed", error)
+        logSafely({ logger: this.logger,
+          level: "error",
+          args: ["Binance user-data event callback failed", error] })
       }
     }
   }
 
   #handleError(error) {
-    logSafely(this.logger, "error", "Binance user data stream error", error)
-    this.#notify({ type: "rpcError", error, recoveryRequired: false })
+    logSafely({ logger: this.logger,
+      level: "error",
+      args: ["Binance user data stream error", error] })
+    this.#notify({ type: "rpcError",
+error,
+recoveryRequired: false })
   }
 
   #handleClose(event) {
-    if (this.#stopped) return
+    if (this.#stopped) {return}
     this.#detachClientListeners()
     this.setConnected(false)
     if (this.#subscribers.size === 0) {
@@ -426,9 +461,13 @@ export class UserDataSession {
     }
     this.#subscriptionId = null
     this.#markRecoveryRequired()
-    logSafely(this.logger, "error", "Binance user-data API connection closed", {
-      code: event?.code ?? null,
-      reason: event?.reason ?? "",
+    logSafely({
+      logger: this.logger,
+      level: "error",
+      args: ["Binance user-data API connection closed", {
+        code: event?.code ?? null,
+        reason: event?.reason ?? "",
+      }],
     })
     this.#notify({
       type: "connectionClosed",
@@ -436,7 +475,9 @@ export class UserDataSession {
       reason: event?.reason ?? "",
       recoveryRequired: true,
     })
-    this.#notify({ type: "recovering", attempt: 0, recoveryRequired: true })
+    this.#notify({ type: "recovering",
+attempt: 0,
+recoveryRequired: true })
     this.#scheduleRecovery()
   }
 
@@ -451,24 +492,27 @@ export class UserDataSession {
     }
   }
 
-  #notifySubscriber(subscriber, status) {
-    if (!subscriber.active || typeof subscriber.onStatus !== "function") return
+  #notifySubscriber({ subscriber, status }) {
+    if (!subscriber.active || typeof subscriber.onStatus !== "function") {return}
     try {
       subscriber.onStatus(status)
     } catch (error) {
-      logSafely(this.logger, "error", "Binance user-data status callback failed", error)
+      logSafely({ logger: this.logger,
+        level: "error",
+        args: ["Binance user-data status callback failed", error] })
     }
   }
 
   #notify(status) {
     for (const subscriber of [...this.#subscribers.values()]) {
-      this.#notifySubscriber(subscriber, status)
+      this.#notifySubscriber({ subscriber,
+        status })
     }
   }
 
   #scheduleRecovery(delay) {
     if (this.#stopped || this.#subscribers.size === 0 || this.#subscriptionId !== null ||
-        this.#reconnectTimer !== null || this.#reconnectPromise) return
+        this.#reconnectTimer !== null || this.#reconnectPromise) {return}
     const exponent = Math.min(this.#reconnectAttempts, 10)
     const wait = delay ?? Math.min(this.reconnectDelay * (2 ** exponent), 30_000)
     this.#reconnectTimer = this.setTimeout(() => {
@@ -479,7 +523,7 @@ export class UserDataSession {
 
   async #recover() {
     if (this.#stopped || this.#subscribers.size === 0 || this.#subscriptionId !== null ||
-        this.#reconnectPromise) return
+        this.#reconnectPromise) {return}
 
     const generation = this.#generation
     let retryDelay = null
@@ -492,11 +536,11 @@ export class UserDataSession {
           client = this.createClient()
           this.setClient(client)
           port = this.#portFor(client)
-          this.#bindClient(client)
+          this.#bindClient({ client })
           try {
             await port.connect()
           } catch (error) {
-            if (this.getClient() === client) this.#detachClientListeners()
+            if (this.getClient() === client) {this.#detachClientListeners()}
             throw error
           }
           if (this.#stopped || generation !== this.#generation || this.#subscribers.size === 0 ||
@@ -506,13 +550,21 @@ export class UserDataSession {
           }
           this.setConnected(true)
         }
-        if (this.#stopped || generation !== this.#generation) return
+        if (this.#stopped || generation !== this.#generation) {return}
         await this.#ensureRemoteSubscription()
       } catch (error) {
-        if (this.#stopped || generation !== this.#generation) return
+        if (this.#stopped || generation !== this.#generation) {return}
         this.setUnavailable(true)
-        logSafely(this.logger, "error", "Binance user-data recovery attempt failed", { attempt, error })
-        this.#notify({ type: "recovering", attempt, error, recoveryRequired: true })
+        logSafely({
+          logger: this.logger,
+          level: "error",
+          args: ["Binance user-data recovery attempt failed", { attempt,
+            error }],
+        })
+        this.#notify({ type: "recovering",
+attempt,
+error,
+recoveryRequired: true })
         if (attempt === this.recoveryWarningThreshold) {
           this.#notify({
             type: "recoveryFailed",
@@ -532,7 +584,7 @@ export class UserDataSession {
       this.#reconnectPromise = null
     }
 
-    if (generation !== this.#generation) return
+    if (generation !== this.#generation) {return}
     if (retryDelay !== null) {
       this.#scheduleRecovery(retryDelay)
     } else if (this.#subscriptionId === null && this.#recoveryRequired &&
@@ -550,31 +602,33 @@ export class UserDataSession {
       recoveryGeneration: this.#recoveryGeneration,
     }
     for (const subscriber of [...this.#subscribers.values()]) {
-      if (!subscriber.recoveryAcknowledged) this.#notifySubscriber(subscriber, status)
+      if (!subscriber.recoveryAcknowledged) {this.#notifySubscriber({ subscriber,
+        status })}
     }
     this.#scheduleAcknowledgementReminder()
   }
 
   #scheduleAcknowledgementReminder() {
     if (this.#stopped || !this.#recoveryRequired || this.#subscriptionId === null ||
-        this.#acknowledgementTimer !== null || this.#subscribers.size === 0) return
+        this.#acknowledgementTimer !== null || this.#subscribers.size === 0) {return}
 
     const exponent = Math.min(this.#acknowledgementAttempts, 10)
     const delay = Math.min(Math.max(1, this.reconnectDelay) * (2 ** exponent), 30_000)
     this.#acknowledgementTimer = this.setTimeout(() => {
       this.#acknowledgementTimer = null
-      if (this.#stopped || !this.#recoveryRequired || this.#subscriptionId === null) return
+      if (this.#stopped || !this.#recoveryRequired || this.#subscriptionId === null) {return}
       this.#acknowledgementAttempts += 1
       this.#notifyRecoveryReady()
     }, delay)
   }
 
   #acknowledgeRecovery(id) {
-    const result = this.#acknowledgeRecoveryResult(id, this.#recoveryGeneration)
+    const result = this.#acknowledgeRecoveryResult({ id,
+      recoveryGeneration: this.#recoveryGeneration })
     return result.accepted && result.completed
   }
 
-  #acknowledgeRecoveryResult(id, recoveryGeneration) {
+  #acknowledgeRecoveryResult({ id, recoveryGeneration }) {
     const subscriber = this.#subscribers.get(id)
     if (!subscriber || !subscriber.active) {
       return {
@@ -612,7 +666,7 @@ export class UserDataSession {
       subscriberAcknowledgements: [...this.#subscribers.values()]
         .map((subscriber) => subscriber.recoveryAcknowledged),
     })
-    if (!canComplete) return false
+    if (!canComplete) {return false}
 
     this.#clearAcknowledgementTimer()
     this.#acknowledgementAttempts = 0
@@ -629,7 +683,7 @@ export class UserDataSession {
 
   async #removeSubscriber(id) {
     const subscriber = this.#subscribers.get(id)
-    if (!subscriber) return
+    if (!subscriber) {return}
     subscriber.active = false
     this.#subscribers.delete(id)
 
@@ -648,7 +702,8 @@ export class UserDataSession {
     const port = client ? this.#portFor(client) : null
     try {
       if (subscriptionId !== null && port?.state === "open") {
-        await this.#unsubscribeRemoteSubscription(port, subscriptionId)
+        await this.#unsubscribeRemoteSubscription({ port,
+          subscriptionId })
       }
     } finally {
       this.#detachUserDataListeners()
@@ -665,7 +720,9 @@ export class UserDataSession {
       try {
         remove?.()
       } catch (error) {
-        logSafely(this.logger, "warn", "Unable to detach Binance user-data listener", error)
+        logSafely({ logger: this.logger,
+          level: "warn",
+          args: ["Unable to detach Binance user-data listener", error] })
       }
     }
   }
@@ -677,7 +734,9 @@ export class UserDataSession {
     try {
       removeCloseListener?.()
     } catch (error) {
-      logSafely(this.logger, "warn", "Unable to detach Binance user-data close listener", error)
+      logSafely({ logger: this.logger,
+        level: "warn",
+        args: ["Unable to detach Binance user-data close listener", error] })
     }
   }
 

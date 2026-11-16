@@ -3,18 +3,26 @@ import test from "node:test"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { createPortfolioWorkflow } from "./create-portfolio-workflow.js"
 
-const baseAsset = new Asset({ id: "doge", code: "DOGE" })
-const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({ id: "doge",
+code: "DOGE" })
+const quoteAsset = new Asset({ id: "usdt",
+code: "USDT" })
+const market = new Market({ venue: "binance",
+symbol: "DOGEUSDT",
+baseAsset,
+quoteAsset })
 const fill = new Fill({
   tradeId: "durable-before-accounting",
   brokerOrderId: "broker-order-1",
   clientOrderId: "client-order-1",
   market,
   side: "BUY",
-  price: new Money({ amount: "0.1", asset: quoteAsset }),
-  quantity: new Quantity({ amount: "100", asset: baseAsset }),
-  quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+  price: new Money({ amount: "0.1",
+asset: quoteAsset }),
+  quantity: new Quantity({ amount: "100",
+asset: baseAsset }),
+  quoteQuantity: new Money({ amount: "10",
+asset: quoteAsset }),
   commissions: [],
   commissionStatus: "COMPLETE",
 })
@@ -28,7 +36,8 @@ test("commits the durable fill before publishing the new Portfolio and RecoveryL
       order.push("durable")
       assert.equal(received, fill)
       assert.equal(workflow.getPortfolio().positions.length, 0, "In-memory accounting must remain unchanged during the durability barrier.")
-      return { ok: true, data: { durable: true } }
+      return { ok: true,
+data: { durable: true } }
     },
   })
 
@@ -59,19 +68,25 @@ test("does not mutate Portfolio or RecoveryLedger when the durable fill append f
 
 
 test("persists a third-asset commission baseline before its durable execution fill", async () => {
-  const feeAsset = new Asset({ id: "bnb", code: "BNB" })
+  const feeAsset = new Asset({ id: "bnb",
+code: "BNB" })
   const feeFill = new Fill({
     tradeId: "durable-third-asset-order",
     brokerOrderId: "broker-order-third-asset",
     clientOrderId: "client-order-third-asset",
     market,
     side: "BUY",
-    price: new Money({ amount: "0.1", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "100", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+    price: new Money({ amount: "0.1",
+asset: quoteAsset }),
+    quantity: new Quantity({ amount: "100",
+asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "10",
+asset: quoteAsset }),
     commissions: [new Commission({
-      amount: new Money({ amount: "0.001", asset: feeAsset }),
-      quoteValue: new Money({ amount: "0.1", asset: quoteAsset }),
+      amount: new Money({ amount: "0.001",
+asset: feeAsset }),
+      quoteValue: new Money({ amount: "0.1",
+asset: quoteAsset }),
     })],
     commissionStatus: "COMPLETE",
   })
@@ -81,13 +96,17 @@ test("persists a third-asset commission baseline before its durable execution fi
     logger: {},
     onCommissionAsset: async ({ assetId, assetCode }) => {
       order.push("baseline")
-      assert.deepEqual({ assetId, assetCode }, { assetId: feeAsset.id, assetCode: feeAsset.code }, "The targeted baseline must identify the exact third-asset commission charged by the fill.")
+      assert.deepEqual({ assetId,
+assetCode }, { assetId: feeAsset.id,
+assetCode: feeAsset.code }, "The targeted baseline must identify the exact third-asset commission charged by the fill.")
       assert.equal(
         workflow.getPortfolio().positions.length,
         0,
         "The fee-asset baseline must be durable before the fill changes in-memory accounting.",
       )
-      return { ok: true, data: { sourceTime: 100, durable: true } }
+      return { ok: true,
+data: { sourceTime: 100,
+durable: true } }
     },
     onOperationalStateExecutionFill: async ({ fill: received }) => {
       order.push("fill")
@@ -97,7 +116,8 @@ test("persists a third-asset commission baseline before its durable execution fi
         0,
         "The durable fill must still precede the in-memory accounting commit.",
       )
-      return { ok: true, data: { durable: true } }
+      return { ok: true,
+data: { durable: true } }
     },
   })
 

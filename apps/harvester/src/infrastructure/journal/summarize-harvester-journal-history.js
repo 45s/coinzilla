@@ -28,13 +28,16 @@ export function summarizeHarvesterJournalHistory({ records } = {}) {
   const counts = Object.fromEntries([...TRADING_EVENT_NAMES].map((name) => [name, 0]))
   for (const record of records) {
     const payload = record?.payload
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) continue
-    if (typeof payload.name !== "string" || !TRADING_EVENT_NAMES.has(payload.name)) continue
-    if (payload.name === "harvester.started" && payload.data?.tradingEnabled !== true) continue
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {continue}
+    if (typeof payload.name !== "string" || !TRADING_EVENT_NAMES.has(payload.name)) {continue}
+    if (payload.name === "harvester.started" && payload.data?.tradingEnabled !== true) {continue}
     counts[payload.name] += 1
   }
 
-  const total = Object.values(counts).reduce((sum, count) => sum + count, 0)
+  let total = 0
+  for (const count of Object.values(counts)) {
+    total += count
+  }
   return toResult({
     hasPriorTradingHistory: total > 0,
     totalTradingEvents: total,

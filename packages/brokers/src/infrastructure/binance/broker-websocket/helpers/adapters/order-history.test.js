@@ -24,7 +24,9 @@ const order = {
 }
 
 const exchangeInfo = {
-  symbols: [{ symbol: "DOGEFDUSD", baseAsset: "DOGE", quoteAsset: "FDUSD" }],
+  symbols: [{ symbol: "DOGEFDUSD",
+baseAsset: "DOGE",
+quoteAsset: "FDUSD" }],
 }
 
 test("requires an array for Binance allOrders responses", () => {
@@ -37,7 +39,8 @@ test("requires an array for Binance allOrders responses", () => {
 })
 
 test("validates cursor order objects and normalizable order IDs without mutating them", () => {
-  const orders = [order, { ...order, orderId: "456" }]
+  const orders = [order, { ...order,
+orderId: "456" }]
   assert.strictEqual(validateOrderHistoryCursorItems({ orders }), orders)
   assert.equal(orders[0].orderId, 123)
   assert.equal(orders[1].orderId, "456")
@@ -45,9 +48,12 @@ test("validates cursor order objects and normalizable order IDs without mutating
   for (const invalid of [
     [null],
     [[]],
-    [{ ...order, orderId: null }],
-    [{ ...order, orderId: "" }],
-    [{ ...order, orderId: "not-numeric" }],
+    [{ ...order,
+orderId: null }],
+    [{ ...order,
+orderId: "" }],
+    [{ ...order,
+orderId: "not-numeric" }],
   ]) {
     assert.throws(() => validateOrderHistoryCursorItems({ orders: invalid }))
   }
@@ -83,7 +89,8 @@ test("adapts canonical order history using the supplied market identity", () => 
     symbol: "DOGEFDUSD",
     exchangeInfo,
   })
-  const orders = adaptCanonicalOrderHistory({ orders: [order], market })
+  const orders = adaptCanonicalOrderHistory({ orders: [order],
+market })
 
   assert.equal(orders.length, 1)
   assert.ok(orders[0] instanceof CanonicalOrder)

@@ -23,9 +23,9 @@ export function createBinanceUserDataClientPort(client) {
     connect: (...args) => client.connect(...args),
     disconnect: (...args) => client.disconnect(...args),
     onEvent: (listener) => client.onEvent((message) => {
-      if (!message || typeof message !== "object") return
-      const subscriptionId = message.subscriptionId
-      if (!Number.isSafeInteger(subscriptionId) || subscriptionId < 0) return
+      if (!message || typeof message !== "object") {return}
+      const { subscriptionId } = message
+      if (!Number.isSafeInteger(subscriptionId) || subscriptionId < 0) {return}
       const event = message.event && typeof message.event === "object"
         ? message.event
         : message
@@ -59,7 +59,7 @@ export function createBinanceUserDataClientPort(client) {
     },
     listSubscriptions: async () => {
       const response = await client.request("session.subscriptions")
-      if (!Array.isArray(response.data)) return null
+      if (!Array.isArray(response.data)) {return null}
       return response.data.map((subscription) => subscription?.subscriptionId)
     },
     unsubscribe: async (subscriptionId) => {

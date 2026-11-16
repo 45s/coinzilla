@@ -30,8 +30,10 @@ export function createCanonicalFillMarket({ symbol, exchangeInfo }) {
   return new Market({
     venue: "binance",
     symbol: symbolInfo.symbol,
-    baseAsset: new Asset({ id: baseCode.toLowerCase(), code: baseCode }),
-    quoteAsset: new Asset({ id: quoteCode.toLowerCase(), code: quoteCode }),
+    baseAsset: new Asset({ id: baseCode.toLowerCase(),
+code: baseCode }),
+    quoteAsset: new Asset({ id: quoteCode.toLowerCase(),
+code: quoteCode }),
   })
 }
 
@@ -45,5 +47,6 @@ export function adaptCanonicalFills({ trades, market }) {
   if (!Array.isArray(trades)) {
     throw new TypeError("Binance myTrades response should be an array")
   }
-  return trades.map((trade) => adaptCanonicalFill({ trade, market }))
+  return trades.map((trade) => adaptCanonicalFill({ trade,
+market }))
 }

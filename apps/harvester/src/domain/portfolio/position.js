@@ -55,7 +55,8 @@ export class Position {
     if (!(quoteNetCashFlow instanceof Money) || quoteNetCashFlow.asset.id !== market.quoteAsset.id) {
       throw new TypeError("Position.quoteNetCashFlow must use the market quote Asset")
     }
-    const normalizedSpent = spent ?? new Money({ amount: "0", asset: market.quoteAsset })
+    const normalizedSpent = spent ?? new Money({ amount: "0",
+asset: market.quoteAsset })
     if (!(normalizedSpent instanceof Money) || normalizedSpent.asset.id !== market.quoteAsset.id) {
       throw new TypeError("Position.spent must use the market quote Asset")
     }
@@ -169,11 +170,14 @@ export class Position {
   }
 
   allocateFreeQuantity({ quantity } = {}) {
-    assertDecimalString({ value: quantity, field: "quantity" })
-    if (compareDecimal({ left: quantity, right: "0" }) <= 0) {
+    assertDecimalString({ value: quantity,
+field: "quantity" })
+    if (compareDecimal({ left: quantity,
+right: "0" }) <= 0) {
       throw new RangeError("Free inventory allocation quantity must be greater than zero")
     }
-    if (compareDecimal({ left: this.#baseQuantity.amount, right: quantity }) < 0) {
+    if (compareDecimal({ left: this.#baseQuantity.amount,
+right: quantity }) < 0) {
       throw new RangeError("Free inventory allocation exceeds active strategy inventory")
     }
 
@@ -238,13 +242,18 @@ export class Position {
       throw new TypeError("Position.empty requires a non-empty strategyId")
     }
     return new Position({
-      positionId: positionId ?? createPositionId({ marketId: market.id, strategyId }),
+      positionId: positionId ?? createPositionId({ marketId: market.id,
+strategyId }),
       strategyId,
       market,
-      baseQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
-      freeBaseQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
-      quoteNetCashFlow: new Money({ amount: "0", asset: market.quoteAsset }),
-      spent: new Money({ amount: "0", asset: market.quoteAsset }),
+      baseQuantity: new Quantity({ amount: "0",
+asset: market.baseAsset }),
+      freeBaseQuantity: new Quantity({ amount: "0",
+asset: market.baseAsset }),
+      quoteNetCashFlow: new Money({ amount: "0",
+asset: market.quoteAsset }),
+      spent: new Money({ amount: "0",
+asset: market.quoteAsset }),
     })
   }
 }

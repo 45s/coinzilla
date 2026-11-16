@@ -32,9 +32,11 @@ export class RecoveryLedger {
       buyCost,
       netSellProceeds,
     })) {
-      assertDecimalString({ value, field })
-      if (compareDecimal({ left: value, right: "0" }) < 0) {
-        throw new RangeError("RecoveryLedger " + field + " must be non-negative")
+      assertDecimalString({ value,
+field })
+      if (compareDecimal({ left: value,
+right: "0" }) < 0) {
+        throw new RangeError(`RecoveryLedger ${  field  } must be non-negative`)
       }
     }
     if (
@@ -100,7 +102,7 @@ export class RecoveryLedger {
     const existingFingerprint = this.#appliedFillFingerprints.find((item) => item.id === fill.id)
     if (existingFingerprint) {
       if (existingFingerprint.fingerprint !== fingerprint) {
-        throw new Error("Conflicting execution facts reused Fill ID " + fill.id)
+        throw new Error(`Conflicting execution facts reused Fill ID ${  fill.id}`)
       }
       return Object.freeze({
         ledger: this,
@@ -115,7 +117,8 @@ export class RecoveryLedger {
     })
     const ledger = new RecoveryLedger({
       market: this.#market,
-      buyCost: addDecimal({ left: this.#buyCost, right: accounting.buyCost }),
+      buyCost: addDecimal({ left: this.#buyCost,
+right: accounting.buyCost }),
       netSellProceeds: addDecimal({
         left: this.#netSellProceeds,
         right: accounting.netSellProceeds,
@@ -123,7 +126,8 @@ export class RecoveryLedger {
       appliedFillIds: [...this.#appliedFillIds, fill.id],
       appliedFillFingerprints: [
         ...this.#appliedFillFingerprints,
-        { id: fill.id, fingerprint },
+        { id: fill.id,
+fingerprint },
       ],
     })
 
@@ -140,8 +144,10 @@ export class RecoveryLedger {
    * already included in cycle totals and are not converted into fee history.
    */
   resetCycle({ minProfit, spent } = {}) {
-    assertDecimalString({ value: minProfit, field: "minProfit" })
-    if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) {
+    assertDecimalString({ value: minProfit,
+field: "minProfit" })
+    if (compareDecimal({ left: minProfit,
+right: "0.01" }) < 0) {
       throw new RangeError("RecoveryLedger.resetCycle minProfit must be at least 0.01")
     }
     if (!(spent instanceof Money)) {
@@ -153,10 +159,12 @@ export class RecoveryLedger {
     ) {
       throw new TypeError("RecoveryLedger.resetCycle Position.spent must use the market quote asset")
     }
-    if (compareDecimal({ left: spent.amount, right: "0" }) < 0) {
+    if (compareDecimal({ left: spent.amount,
+right: "0" }) < 0) {
       throw new RangeError("RecoveryLedger.resetCycle Position.spent must be non-negative")
     }
-    if (compareDecimal({ left: spent.amount, right: this.#buyCost }) !== 0) {
+    if (compareDecimal({ left: spent.amount,
+right: this.#buyCost }) !== 0) {
       throw new Error("RecoveryLedger buyCost compatibility mirror does not match authoritative Position.spent")
     }
 
@@ -164,7 +172,8 @@ export class RecoveryLedger {
       left: this.#netSellProceeds,
       right: spent.amount,
     })
-    if (compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0) {
+    if (compareDecimal({ left: realizedNetProfit,
+right: minProfit }) < 0) {
       throw new RangeError("RecoveryLedger cannot reset before the configured minimum profit is reached")
     }
 

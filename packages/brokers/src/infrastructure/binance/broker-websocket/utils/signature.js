@@ -1,9 +1,9 @@
 import { createHmac } from "node:crypto"
 
-function normalizeValue(key, value) {
-  if (typeof value === "string") return value
-  if (typeof value === "boolean") return String(value)
-  if (typeof value === "number" && Number.isFinite(value)) return String(value)
+function normalizeValue({ key, value }) {
+  if (typeof value === "string") {return value}
+  if (typeof value === "boolean") {return String(value)}
+  if (typeof value === "number" && Number.isFinite(value)) {return String(value)}
 
   throw new TypeError(
     `Binance signed parameter "${key}" must be a string, finite number, or boolean`,
@@ -24,8 +24,14 @@ export function buildBinanceSignaturePayload(params) {
 
   return Object.keys(params)
     .filter((key) => key !== "signature")
-    .sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
-    .map((key) => `${key}=${normalizeValue(key, params[key])}`)
+    .sort((...args) => {
+      const [left, right] = args
+      if (left < right) {return -1}
+      if (left > right) {return 1}
+      return 0
+    })
+    .map((key) => `${key}=${normalizeValue({ key,
+      value: params[key] })}`)
     .join("&")
 }
 
@@ -36,7 +42,8 @@ export function buildBinanceSignaturePayload(params) {
  * @param {string} apiSecret
  * @returns {string} Lowercase hexadecimal signature.
  */
-export function signBinanceParams(params, apiSecret) {
+export function signBinanceParams(...args) {
+  const [params, apiSecret] = args
   if (typeof apiSecret !== "string" || apiSecret.length === 0) {
     throw new TypeError("Binance API secret is required for signed requests")
   }
@@ -52,12 +59,13 @@ export function signBinanceParams(params, apiSecret) {
  * @param {{apiKey: string, apiSecret: string, timestamp?: number, recvWindow?: number}} [options]
  * @returns {Record<string, string|number|boolean> & {signature: string}}
  */
-export function createSignedBinanceParams(params, {
-  apiKey,
-  apiSecret,
-  timestamp = Date.now(),
-  recvWindow,
-} = {}) {
+export function createSignedBinanceParams(...args) {
+  const [params, {
+    apiKey,
+    apiSecret,
+    timestamp = Date.now(),
+    recvWindow,
+  } = {}] = args
   if (!params || typeof params !== "object" || Array.isArray(params)) {
     throw new TypeError("Binance signed params must be an object")
   }

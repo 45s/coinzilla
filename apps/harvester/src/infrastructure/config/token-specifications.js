@@ -19,11 +19,14 @@ function requirePrecision({ value, field }) {
 export function decimalPlaces(value) {
   let normalized
   try {
-    normalized = normalizeDecimalString({ value, allowNegative: false, field: "exchange increment" })
+    normalized = normalizeDecimalString({ value,
+allowNegative: false,
+field: "exchange increment" })
   } catch (cause) {
     throw new TypeError("Exchange increment must be a positive decimal string", { cause })
   }
-  if (compareDecimal({ left: normalized, right: "0" }) <= 0) {
+  if (compareDecimal({ left: normalized,
+right: "0" }) <= 0) {
     throw new RangeError("Exchange increment must be positive")
   }
   const fraction = normalized.split(".")[1] ?? ""
@@ -87,8 +90,10 @@ export function validateTokenSpecifications(tokenSpecifications) {
       if (symbol !== `${baseAsset}${market.quoteAsset}`) {
         throw new Error(`Token specification market ${symbol} does not match base asset ${baseAsset} and quote asset ${market.quoteAsset}`)
       }
-      requirePrecision({ value: market.pricePrecision, field: `${baseAsset}.${symbol}.pricePrecision` })
-      requirePrecision({ value: market.quantityPrecision, field: `${baseAsset}.${symbol}.quantityPrecision` })
+      requirePrecision({ value: market.pricePrecision,
+field: `${baseAsset}.${symbol}.pricePrecision` })
+      requirePrecision({ value: market.quantityPrecision,
+field: `${baseAsset}.${symbol}.quantityPrecision` })
       if (marketOwners.has(symbol)) {
         throw new Error(`Market ${symbol} is assigned to multiple token entries`)
       }
@@ -143,7 +148,8 @@ export function resolvePairSpecifications({ pairs, tokenSpecifications } = {}) {
   const markets = new Map()
   for (const [baseAsset, token] of Object.entries(tokenSpecifications)) {
     for (const [symbol, market] of Object.entries(token.markets)) {
-      markets.set(symbol, { baseAsset, ...market })
+      markets.set(symbol, { baseAsset,
+...market })
     }
   }
 

@@ -9,28 +9,40 @@ import { Journal } from "./index.js"
 
 async function createStoppedJournal() {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-recovery-"))
-  const journal = new Journal({ directory, eventBus: new EventBus() })
-  return { directory, journal }
+  const journal = new Journal({ directory,
+eventBus: new EventBus() })
+  return { directory,
+journal }
 }
 
-function legacyEvent(id, name = "order.created") {
-  return { id, timestamp: "2026-01-01T00:00:00.000Z", name, source: "test", data: {} }
+function legacyEvent({ id, name = "order.created" }) {
+  return {
+    id,
+    timestamp: "2026-01-01T00:00:00.000Z",
+    name,
+    source: "test",
+    data: {},
+  }
 }
 
 test("reads new versioned records after restart and preserves their payload", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-restart-"))
   const writerBus = new EventBus()
-  const writer = new Journal({ eventBus: writerBus, directory })
+  const writer = new Journal({ eventBus: writerBus,
+directory })
   try {
     assert.equal((await writer.start()).ok, true)
-    const published = writerBus.publish({ name: "order.filled", source: "test", data: { orderId: "42" } })
+    const published = writerBus.publish({ name: "order.filled",
+source: "test",
+data: { orderId: "42" } })
     assert.equal(published.ok, true)
     const flush = await writer.flush()
     assert.equal(flush.ok, true)
     assert.equal(flush.durable, true)
     assert.equal((await writer.close()).ok, true)
 
-    const reader = new Journal({ directory, eventBus: new EventBus() })
+    const reader = new Journal({ directory,
+eventBus: new EventBus() })
     const result = await reader.read()
     assert.equal(result.ok, true)
     assert.equal(result.count, 1)
@@ -46,15 +58,16 @@ test("reads new versioned records after restart and preserves their payload", as
     await reader.eventBus.close()
   } finally {
     await writerBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
 test("reads legacy raw event sessions and sorts sessions deterministically", async () => {
   const { directory, journal } = await createStoppedJournal()
   try {
-    await writeFile(path.join(directory, "2026-01-02_00-00-00.jsonl"), `${JSON.stringify(legacyEvent("second"))}\n`)
-    await writeFile(path.join(directory, "2026-01-01_00-00-00.jsonl"), `${JSON.stringify(legacyEvent("first"))}\n`)
+    await writeFile(path.join(directory, "2026-01-02_00-00-00.jsonl"), `${JSON.stringify(legacyEvent({ id: "second" }))}\n`)
+    await writeFile(path.join(directory, "2026-01-01_00-00-00.jsonl"), `${JSON.stringify(legacyEvent({ id: "first" }))}\n`)
     const result = await journal.read()
     assert.equal(result.ok, true)
     assert.deepEqual(result.records.map((record) => record.id), ["first", "second"])
@@ -64,29 +77,31 @@ test("reads legacy raw event sessions and sorts sessions deterministically", asy
     ])
   } finally {
     await journal.eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
 test("orders same-timestamp session suffixes after the base session", async () => {
   const { directory, journal } = await createStoppedJournal()
   try {
-    await writeFile(path.join(directory, "2026-01-01_00-00-00-002.jsonl"), `${JSON.stringify(legacyEvent("third"))}\n`)
-    await writeFile(path.join(directory, "2026-01-01_00-00-00.jsonl"), `${JSON.stringify(legacyEvent("first"))}\n`)
-    await writeFile(path.join(directory, "2026-01-01_00-00-00-001.jsonl"), `${JSON.stringify(legacyEvent("second"))}\n`)
+    await writeFile(path.join(directory, "2026-01-01_00-00-00-002.jsonl"), `${JSON.stringify(legacyEvent({ id: "third" }))}\n`)
+    await writeFile(path.join(directory, "2026-01-01_00-00-00.jsonl"), `${JSON.stringify(legacyEvent({ id: "first" }))}\n`)
+    await writeFile(path.join(directory, "2026-01-01_00-00-00-001.jsonl"), `${JSON.stringify(legacyEvent({ id: "second" }))}\n`)
     const result = await journal.read()
     assert.equal(result.ok, true)
     assert.deepEqual(result.records.map((record) => record.id), ["first", "second", "third"])
   } finally {
     await journal.eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
 test("rejects duplicate stable identities across session files", async () => {
   const { directory, journal } = await createStoppedJournal()
   try {
-    const line = `${JSON.stringify(legacyEvent("duplicate"))}\n`
+    const line = `${JSON.stringify(legacyEvent({ id: "duplicate" }))}\n`
     await writeFile(path.join(directory, "2026-01-01_00-00-00.jsonl"), line)
     await writeFile(path.join(directory, "2026-01-02_00-00-00.jsonl"), line)
     const result = await journal.read()
@@ -94,14 +109,15 @@ test("rejects duplicate stable identities across session files", async () => {
     assert.equal(result.errors[0].code, "JOURNAL_DUPLICATE_RECORD_ID")
   } finally {
     await journal.eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
 test("rejects an incomplete final line without silently truncating it", async () => {
   const { directory, journal } = await createStoppedJournal()
   const filePath = path.join(directory, "2026-01-01_00-00-00.jsonl")
-  const partial = JSON.stringify(legacyEvent("partial")).slice(0, -4)
+  const partial = JSON.stringify(legacyEvent({ id: "partial" })).slice(0, -4)
   try {
     await writeFile(filePath, partial)
     const result = await journal.read()
@@ -110,7 +126,8 @@ test("rejects an incomplete final line without silently truncating it", async ()
     assert.equal(await readFile(filePath, "utf8"), partial)
   } finally {
     await journal.eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -126,7 +143,8 @@ test("rejects invalid UTF-8 without replacing historical bytes", async () => {
     assert.deepEqual(await readFile(filePath), invalidBytes)
   } finally {
     await journal.eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -144,7 +162,8 @@ test("rejects malformed JSON and empty records with source positions", async () 
     })
   } finally {
     await journal.eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -152,8 +171,9 @@ test("rejects unsupported schema versions", async () => {
   const { directory, journal } = await createStoppedJournal()
   try {
     const envelope = {
-      __coinzillaJournal: { schemaVersion: 99, id: "future" },
-      payload: legacyEvent("future"),
+      __coinzillaJournal: { schemaVersion: 99,
+id: "future" },
+      payload: legacyEvent({ id: "future" }),
     }
     await writeFile(path.join(directory, "2026-01-01_00-00-00.jsonl"), `${JSON.stringify(envelope)}\n`)
     const result = await journal.read()
@@ -161,7 +181,8 @@ test("rejects unsupported schema versions", async () => {
     assert.equal(result.errors[0].code, "JOURNAL_UNSUPPORTED_SCHEMA_VERSION")
   } finally {
     await journal.eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -175,15 +196,16 @@ test("bounds the number of session files", async () => {
     assert.equal(result.errors[0].code, "JOURNAL_RECOVERY_LIMIT_EXCEEDED")
   } finally {
     await journal.eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
 test("bounds record count, total bytes, and individual record size", async () => {
   const { directory, journal } = await createStoppedJournal()
   try {
-    const first = legacyEvent("one")
-    const second = legacyEvent("two")
+    const first = legacyEvent({ id: "one" })
+    const second = legacyEvent({ id: "two" })
     const content = `${JSON.stringify(first)}\n${JSON.stringify(second)}\n`
     const filePath = path.join(directory, "2026-01-01_00-00-00.jsonl")
     await writeFile(filePath, content)
@@ -201,7 +223,8 @@ test("bounds record count, total bytes, and individual record size", async () =>
     assert.equal(recordSizeLimit.errors[0].code, "JOURNAL_RECORD_TOO_LARGE")
   } finally {
     await journal.eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -211,7 +234,7 @@ test("replays only after the complete journal validates and preserves record ord
   try {
     await writeFile(
       path.join(directory, "2026-01-01_00-00-00.jsonl"),
-      `${JSON.stringify(legacyEvent("one"))}\n${JSON.stringify(legacyEvent("two"))}\n`,
+      `${JSON.stringify(legacyEvent({ id: "one" }))}\n${JSON.stringify(legacyEvent({ id: "two" }))}\n`,
     )
     const result = await journal.replay({
       handler: async ({ record }) => seen.push(record.id),
@@ -221,7 +244,8 @@ test("replays only after the complete journal validates and preserves record ord
     assert.deepEqual(seen, ["one", "two"])
   } finally {
     await journal.eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -231,7 +255,7 @@ test("does not invoke replay handlers when any later record is malformed", async
   try {
     await writeFile(
       path.join(directory, "2026-01-01_00-00-00.jsonl"),
-      `${JSON.stringify(legacyEvent("valid"))}\n{invalid}\n`,
+      `${JSON.stringify(legacyEvent({ id: "valid" }))}\n{invalid}\n`,
     )
     const result = await journal.replay({
       handler: async ({ record }) => seen.push(record.id),
@@ -240,7 +264,8 @@ test("does not invoke replay handlers when any later record is malformed", async
     assert.deepEqual(seen, [])
   } finally {
     await journal.eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -250,21 +275,28 @@ test("stops replay on handler failure and reports the last successful record", a
   try {
     await writeFile(
       path.join(directory, "2026-01-01_00-00-00.jsonl"),
-      `${JSON.stringify(legacyEvent("one"))}\n${JSON.stringify(legacyEvent("two"))}\n`,
+      `${JSON.stringify(legacyEvent({ id: "one" }))}\n${JSON.stringify(legacyEvent({ id: "two" }))}\n`,
     )
     const result = await journal.replay({
       handler: async ({ record }) => {
         seen.push(record.id)
-        if (record.id === "two") return { ok: false, errors: [new Error("consumer failed")] }
+        if (record.id === "two") {
+          return {
+            ok: false,
+            errors: [new Error("consumer failed")],
+          }
+        }
+        return { ok: true }
       },
     })
-    assert.equal(result.ok, false)
-    assert.equal(result.replayed, 1)
-    assert.equal(result.failedRecordId, "two")
-    assert.deepEqual(seen, ["one", "two"])
+    assert.equal(result.ok, false, "Replay must stop when the second record's handler rejects it.")
+    assert.equal(result.replayed, 1, "Replay progress must count only the first record accepted by the handler.")
+    assert.equal(result.failedRecordId, "two", "The rejected second record must be reported as the failed record.")
+    assert.deepEqual(seen, ["one", "two"], "Replay must invoke the handler in order and stop at its first rejection.")
   } finally {
     await journal.eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -284,24 +316,27 @@ test("treats a failed replay result without errors as a failure", async () => {
   try {
     await writeFile(
       path.join(directory, "2026-01-01_00-00-00.jsonl"),
-      `${JSON.stringify(legacyEvent("failed"))}\n`,
+      `${JSON.stringify(legacyEvent({ id: "failed" }))}\n`,
     )
     const result = await journal.replay({
-      handler: async () => ({ ok: false, errors: [] }),
+      handler: async () => ({ ok: false,
+errors: [] }),
     })
     assert.equal(result.ok, false)
     assert.equal(result.failedRecordId, "failed")
     assert.equal(result.errors.length, 1)
   } finally {
     await journal.eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
 test("rejects read and replay while the writer is active", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-active-read-"))
   const eventBus = new EventBus()
-  const journal = new Journal({ directory, eventBus })
+  const journal = new Journal({ directory,
+eventBus })
   try {
     assert.equal((await journal.start()).ok, true)
     assert.equal((await journal.read()).ok, false)
@@ -309,21 +344,23 @@ test("rejects read and replay while the writer is active", async () => {
   } finally {
     await journal.close()
     await eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
 test("poisons the writer after a write failure and rejects subsequent records", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-write-failure-"))
   const eventBus = new EventBus()
-  const journal = new Journal({ directory, eventBus })
+  const journal = new Journal({ directory,
+eventBus })
   try {
     assert.equal((await journal.start()).ok, true)
     journal.store.append = async () => {
       throw new Error("simulated partial write")
     }
-    const first = await journal.record({ event: legacyEvent("one") })
-    const second = await journal.record({ event: legacyEvent("two") })
+    const first = await journal.record({ event: legacyEvent({ id: "one" }) })
+    const second = await journal.record({ event: legacyEvent({ id: "two" }) })
     assert.equal(first.ok, false)
     assert.equal(second.ok, false)
     assert.equal(journal.writeFailed, true)
@@ -331,14 +368,16 @@ test("poisons the writer after a write failure and rejects subsequent records", 
   } finally {
     await journal.close()
     await eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
 test("requires stable event identity when appending records", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-record-id-"))
   const eventBus = new EventBus()
-  const journal = new Journal({ directory, eventBus })
+  const journal = new Journal({ directory,
+eventBus })
   try {
     assert.equal((await journal.start()).ok, true)
     const result = await journal.record({ event: { name: "missing.id" } })
@@ -347,7 +386,8 @@ test("requires stable event identity when appending records", async () => {
   } finally {
     await journal.close()
     await eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -355,14 +395,16 @@ test("requires stable event identity when appending records", async () => {
 test("fails explicitly when the journal directory is missing", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-missing-"))
   const missingDirectory = path.join(root, "not-created")
-  const journal = new Journal({ directory: missingDirectory, eventBus: new EventBus() })
+  const journal = new Journal({ directory: missingDirectory,
+eventBus: new EventBus() })
   try {
     const result = await journal.read()
     assert.equal(result.ok, false)
     assert.equal(result.errors[0].code, "JOURNAL_DIRECTORY_NOT_FOUND")
   } finally {
     await journal.eventBus.close()
-    await rm(root, { recursive: true, force: true })
+    await rm(root, { recursive: true,
+force: true })
   }
 })
 
@@ -370,7 +412,8 @@ test("returns an explicit error when the journal directory cannot be read", asyn
   const root = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-io-error-"))
   const notDirectory = path.join(root, "not-a-directory")
   const eventBus = new EventBus()
-  const journal = new Journal({ directory: notDirectory, eventBus })
+  const journal = new Journal({ directory: notDirectory,
+eventBus })
   try {
     await writeFile(notDirectory, "not a directory")
     const result = await journal.read()
@@ -378,7 +421,8 @@ test("returns an explicit error when the journal directory cannot be read", asyn
     assert.match(result.errors[0].message, /ENOTDIR/)
   } finally {
     await eventBus.close()
-    await rm(root, { recursive: true, force: true })
+    await rm(root, { recursive: true,
+force: true })
   }
 })
 
@@ -396,7 +440,7 @@ test("orders very large and zero-padded collision suffixes deterministically", a
 
   try {
     for (const fileName of [...sessionNames].reverse()) {
-      await writeFile(path.join(directory, fileName), `${JSON.stringify(legacyEvent(fileName))}\n`)
+      await writeFile(path.join(directory, fileName), `${JSON.stringify(legacyEvent({ id: fileName }))}\n`)
     }
 
     const result = await journal.read()
@@ -416,7 +460,8 @@ test("orders very large and zero-padded collision suffixes deterministically", a
     assert.deepEqual(result.records.map((record) => record.id), result.sessions, "Recovered record order must follow the exact deterministic session ordering.")
   } finally {
     await journal.eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -429,8 +474,11 @@ test("reads a session filename produced by the Journal sessionIdentity writer op
     startedAt: "2026-11-09T12:34:56.789Z",
     runtimeSessionId: "runtime-session-abc-123",
   }
-  const writer = new Journal({ directory, eventBus: writerBus, sessionIdentity: identity })
-  const reader = new Journal({ directory, eventBus: readerBus })
+  const writer = new Journal({ directory,
+eventBus: writerBus,
+sessionIdentity: identity })
+  const reader = new Journal({ directory,
+eventBus: readerBus })
 
   try {
     assert.equal((await writer.start()).ok, true, "The writer must create a session using the public sessionIdentity option")
@@ -452,7 +500,8 @@ test("reads a session filename produced by the Journal sessionIdentity writer op
     await writer.close()
     await writerBus.close()
     await readerBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -468,7 +517,7 @@ test("orders timestamp-only, numeric collision, and identity-suffixed sessions d
 
   try {
     for (const [fileName, id] of entries) {
-      await writeFile(path.join(directory, fileName), `${JSON.stringify(legacyEvent(id))}\n`)
+      await writeFile(path.join(directory, fileName), `${JSON.stringify(legacyEvent({ id }))}\n`)
     }
     const result = await journal.read()
     assert.equal(result.ok, true, "Every filename emitted by the supported Journal writers must be readable")
@@ -479,6 +528,7 @@ test("orders timestamp-only, numeric collision, and identity-suffixed sessions d
     )
   } finally {
     await journal.eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })

@@ -15,9 +15,12 @@ import {
   reconcileOfflineOwnedOrders,
 } from "./recovery-market-evidence.js"
 
-const baseAsset = new Asset({ id: "binance:LINK", code: "LINK" })
-const quoteAsset = new Asset({ id: "binance:USDT", code: "USDT" })
-const feeAsset = new Asset({ id: "binance:BNB", code: "BNB" })
+const baseAsset = new Asset({ id: "binance:LINK",
+code: "LINK" })
+const quoteAsset = new Asset({ id: "binance:USDT",
+code: "USDT" })
+const feeAsset = new Asset({ id: "binance:BNB",
+code: "BNB" })
 const market = new Market({
   venue: "BINANCE",
   symbol: "LINKUSDT",
@@ -33,7 +36,7 @@ const assetsByLookup = {
       [feeAsset.id, feeAsset],
     ]).get(id)
     if (!asset || asset.code !== code) {
-      throw new Error(field + " has no matching canonical asset ID/code")
+      throw new Error(`${field  } has no matching canonical asset ID/code`)
     }
     return asset
   },
@@ -73,9 +76,12 @@ test("offline owned-order reconciliation updates only an exact recovered client 
       market,
       side: "BUY",
       type: "LIMIT_MAKER",
-      limitPrice: new Money({ amount: "10", asset: quoteAsset }),
-      originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
-      executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+      limitPrice: new Money({ amount: "10",
+asset: quoteAsset }),
+      originalQuantity: new Quantity({ amount: "1",
+asset: baseAsset }),
+      executedQuantity: new Quantity({ amount: "0",
+asset: baseAsset }),
       status: "UNKNOWN",
     },
   })
@@ -121,9 +127,12 @@ test("offline owned-order reconciliation rejects missing, extra and duplicate ow
             market,
             side: "BUY",
             type: "LIMIT_MAKER",
-            limitPrice: new Money({ amount: "10", asset: quoteAsset }),
-            originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
-            executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+            limitPrice: new Money({ amount: "10",
+asset: quoteAsset }),
+            originalQuantity: new Quantity({ amount: "1",
+asset: baseAsset }),
+            executedQuantity: new Quantity({ amount: "0",
+asset: baseAsset }),
             status: "UNKNOWN",
           })],
         }),
@@ -144,7 +153,8 @@ test("offline owned-order reconciliation rejects missing, extra and duplicate ow
 })
 
 test("offline owned-order reconciliation rejects unresolved and mismatched order evidence", () => {
-  const unknownEvidence = { ...orderEvidence, status: "UNKNOWN" }
+  const unknownEvidence = { ...orderEvidence,
+status: "UNKNOWN" }
   const makeState = () => ({
     portfolio: {},
     journalFills: [],
@@ -155,9 +165,12 @@ test("offline owned-order reconciliation rejects unresolved and mismatched order
         market,
         side: "BUY",
         type: "LIMIT_MAKER",
-        limitPrice: new Money({ amount: "10", asset: quoteAsset }),
-        originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
-        executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+        limitPrice: new Money({ amount: "10",
+asset: quoteAsset }),
+        originalQuantity: new Quantity({ amount: "1",
+asset: baseAsset }),
+        executedQuantity: new Quantity({ amount: "0",
+asset: baseAsset }),
         status: "UNKNOWN",
       })],
     }),
@@ -174,7 +187,8 @@ test("offline owned-order reconciliation rejects unresolved and mismatched order
   assert.throws(
     () => reconcileOfflineOwnedOrders({
       recoveredState: makeState(),
-      orderHistory: [{ ...orderEvidence, side: "SELL" }],
+      orderHistory: [{ ...orderEvidence,
+side: "SELL" }],
       marketsBySymbol,
     }),
     /immutable order intent/i,
@@ -235,12 +249,16 @@ test("offline canonical fill mapper rejects unknown commission assets and malfor
     }],
   }
   assert.throws(
-    () => createCanonicalFill({ input, marketsBySymbol, assetsByLookup }),
+    () => createCanonicalFill({ input,
+marketsBySymbol,
+assetsByLookup }),
     /no matching canonical asset/i,
   )
   assert.throws(
     () => createCanonicalFill({
-      input: { ...input, commissions: [], price: "1e-3" },
+      input: { ...input,
+commissions: [],
+price: "1e-3" },
       marketsBySymbol,
       assetsByLookup,
     }),

@@ -32,11 +32,11 @@ let child
 let childClosed = false
 let logStreamFailed = false
 const onLogStreamError = (error) => {
-  if (logStreamFailed) return
+  if (logStreamFailed) {return}
   logStreamFailed = true
   process.stderr.write(`Failed to write Harvester terminal log: ${error.message}\n`)
   process.exitCode = 1
-  if (child && !childClosed && !child.killed) child.kill("SIGTERM")
+  if (child && !childClosed && !child.killed) {child.kill("SIGTERM")}
 }
 logStreams.forEach((stream) => stream.on("error", onLogStreamError))
 
@@ -49,8 +49,8 @@ const streamOpenErrors = streamOpenResults
   .map((result) => result.reason)
 if (streamOpenErrors.length > 0) {
   await Promise.allSettled(logStreams.map(async (stream) => {
-    if (!stream.destroyed) stream.destroy()
-    if (!stream.closed) await once(stream, "close")
+    if (!stream.destroyed) {stream.destroy()}
+    if (!stream.closed) {await once(stream, "close")}
   }))
   throw streamOpenErrors[0]
 }
@@ -75,11 +75,11 @@ child = spawn(
     },
   },
 )
-if (logStreamFailed) child.kill("SIGTERM")
+if (logStreamFailed) {child.kill("SIGTERM")}
 
 const closeLogStreams = async () => {
   const results = await Promise.allSettled(logStreams.map(async (stream) => {
-    if (stream.closed) return
+    if (stream.closed) {return}
     if (stream.destroyed) {
       await once(stream, "close")
       return
@@ -118,7 +118,7 @@ const forwardOutput = async (stream, output) => {
     if (!logStreamFailed) {
       process.stderr.write(`Failed to forward Harvester output: ${error.message}\n`)
       process.exitCode = 1
-      if (!childClosed && !child.killed) child.kill("SIGTERM")
+      if (!childClosed && !child.killed) {child.kill("SIGTERM")}
     }
     return 0
   }

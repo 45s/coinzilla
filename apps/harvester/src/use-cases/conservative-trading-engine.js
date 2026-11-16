@@ -51,19 +51,34 @@ export function createMarketBook({ bookTicker } = {}) {
   if (!isCanonicalNonNegativeSafeInteger(timestamp)) {
     throw new TypeError("Market book timestamp must be a non-negative safe integer other than negative zero")
   }
-  const positive = (value, field) => {
-    assertDecimalString({ value, field })
-    if (compareDecimal({ left: value, right: "0" }) <= 0) {throw new RangeError(field + " must be positive")}
+  const positive = ({ value, field }) => {
+    assertDecimalString({ value,
+field })
+    if (compareDecimal({ left: value,
+right: "0" }) <= 0) {throw new RangeError(`${field  } must be positive`)}
     return value
   }
-  const bestBidPrice = positive(bookTicker.bestBidPrice, "bestBidPrice")
-  const bestBidQuantity = positive(bookTicker.bestBidQuantity, "bestBidQuantity")
-  const bestAskPrice = positive(bookTicker.bestAskPrice, "bestAskPrice")
-  const bestAskQuantity = positive(bookTicker.bestAskQuantity, "bestAskQuantity")
-  if (compareDecimal({ left: bestBidPrice, right: bestAskPrice }) >= 0) {
+  const bestBidPrice = positive({ value: bookTicker.bestBidPrice, 
+    
+    field: "bestBidPrice" })
+  
+  const bestBidQuantity = positive({ value: bookTicker.bestBidQuantity, 
+    field: "bestBidQuantity" })
+  
+  const bestAskPrice = positive({ value: bookTicker.bestAskPrice, 
+    field: "bestAskPrice" })
+  const bestAskQuantity = positive({ value: bookTicker.bestAskQuantity, 
+    field: "bestAskQuantity" })
+  if (compareDecimal({ left: bestBidPrice,
+right: bestAskPrice }) >= 0) {
     throw new RangeError("Market book best bid must be below best ask")
   }
-  return Object.freeze({ symbol, bestBidPrice, bestBidQuantity, bestAskPrice, bestAskQuantity, timestamp })
+  return Object.freeze({ symbol,
+bestBidPrice,
+bestBidQuantity,
+bestAskPrice,
+bestAskQuantity,
+timestamp })
 }
 
 export function isPostOnlyOrderCrossing({ order, marketBook } = {}) {
@@ -72,9 +87,12 @@ export function isPostOnlyOrderCrossing({ order, marketBook } = {}) {
     throw new TypeError("Post-only order and market book must refer to the same symbol")
   }
   const price = order.limitPrice?.amount
-  assertDecimalString({ value: price, field: "post-only limit price" })
-  if (order.side === "BUY") {return compareDecimal({ left: price, right: marketBook.bestAskPrice }) >= 0}
-  if (order.side === "SELL") {return compareDecimal({ left: price, right: marketBook.bestBidPrice }) <= 0}
+  assertDecimalString({ value: price,
+field: "post-only limit price" })
+  if (order.side === "BUY") {return compareDecimal({ left: price,
+right: marketBook.bestAskPrice }) >= 0}
+  if (order.side === "SELL") {return compareDecimal({ left: price,
+right: marketBook.bestBidPrice }) <= 0}
   throw new TypeError("Post-only order side must be BUY or SELL")
 }
 
@@ -105,11 +123,13 @@ function createRecoveryManagedCancellationState({ state } = {}) {
     }
     const { market: { symbol } } = order
     if (order.side === "SELL" &&
-        !hasPendingRecoveryManagedCancellation({ symbol, side: "SELL" })) {
+        !hasPendingRecoveryManagedCancellation({ symbol,
+side: "SELL" })) {
       state.replacementIntents.delete(symbol)
     }
     if (order.side === "BUY" &&
-        !hasPendingRecoveryManagedCancellation({ symbol, side: "BUY" })) {
+        !hasPendingRecoveryManagedCancellation({ symbol,
+side: "BUY" })) {
       state.trailingBuyRepriceIntents.delete(symbol)
     }
     releaseRecoveryManagedPause({ symbol })
@@ -147,16 +167,20 @@ function createExecutionFillAccounting({ state, rememberProcessedFill } = {}) {
       quoteQuantity: "0",
       fillIds: new Set(),
     }
-    current.quantity = addDecimal({ left: current.quantity, right: fill.quantity.amount })
-    current.quoteQuantity = addDecimal({ left: current.quoteQuantity, right: fill.quoteQuantity.amount })
+    current.quantity = addDecimal({ left: current.quantity,
+right: fill.quantity.amount })
+    current.quoteQuantity = addDecimal({ left: current.quoteQuantity,
+right: fill.quoteQuantity.amount })
     current.fillIds.add(fill.id)
     state.buyExecutionTotals.set(fill.brokerOrderId, current)
   }
   const getReconciledBuyExecutionPrice = ({ order }) => {
     const totals = state.buyExecutionTotals.get(order.brokerOrderId)
     if (!totals ||
-        compareDecimal({ left: totals.quantity, right: order.executedQuantity.amount }) !== 0 ||
-        compareDecimal({ left: order.executedQuantity.amount, right: order.originalQuantity.amount }) !== 0) {
+        compareDecimal({ left: totals.quantity,
+right: order.executedQuantity.amount }) !== 0 ||
+        compareDecimal({ left: order.executedQuantity.amount,
+right: order.originalQuantity.amount }) !== 0) {
       throw new Error("Completed BUY execution history does not reconcile with the filled order quantity")
     }
     return divideDecimal({
@@ -174,15 +198,18 @@ function createExecutionFillAccounting({ state, rememberProcessedFill } = {}) {
       quantity: "0",
       fillIds: new Set(),
     }
-    current.quantity = addDecimal({ left: current.quantity, right: fill.quantity.amount })
+    current.quantity = addDecimal({ left: current.quantity,
+right: fill.quantity.amount })
     current.fillIds.add(fill.id)
     state.sellExecutionTotals.set(fill.brokerOrderId, current)
   }
   const assertReconciledSellExecution = ({ order }) => {
     const totals = state.sellExecutionTotals.get(order.brokerOrderId)
     if (!totals ||
-        compareDecimal({ left: totals.quantity, right: order.executedQuantity.amount }) !== 0 ||
-        compareDecimal({ left: order.executedQuantity.amount, right: order.originalQuantity.amount }) !== 0) {
+        compareDecimal({ left: totals.quantity,
+right: order.executedQuantity.amount }) !== 0 ||
+        compareDecimal({ left: order.executedQuantity.amount,
+right: order.originalQuantity.amount }) !== 0) {
       throw new Error("Completed recovery SELL execution history does not reconcile with the filled order quantity")
     }
   }
@@ -196,7 +223,9 @@ function createExecutionFillAccounting({ state, rememberProcessedFill } = {}) {
 
 function createDurableIntentPublisher({ eventPublisher, logger } = {}) {
   return async ({ eventName, dataResult } = {}) => {
-    const published = publishLifecycleEvent({ eventPublisher, eventName, dataResult })
+    const published = publishLifecycleEvent({ eventPublisher,
+eventName,
+dataResult })
     if (published && typeof published.then === "function") {
       Promise.resolve(published).then(
         (result) => {
@@ -248,11 +277,12 @@ function createRecoveryCycleNotCompletedPublisher({
   return ({ order, completion }) => {
     const data = completion?.data
     if (!data) {
-      return
+      return undefined
     }
     const marketId = order.market.id
     const portfolio = typeof getPortfolio === "function" ? getPortfolio() : undefined
-    const position = portfolio?.getPosition({ strategyId: StrategyId.COIN_GRABBER, marketId })
+    const position = portfolio?.getPosition({ strategyId: StrategyId.COIN_GRABBER,
+marketId })
     const recoveryLedger = typeof getRecoveryLedger === "function" ? getRecoveryLedger({ marketId }) : undefined
     const realizedNetProfit = data.realizedNetProfit ??
       (position && recoveryLedger
@@ -265,7 +295,7 @@ function createRecoveryCycleNotCompletedPublisher({
     const keepQuantity = data.keepQuantity ?? String(pairs[order.market.symbol].keepQuantity)
     const minProfit = data.minProfit ?? String(pairs[order.market.symbol].minProfit)
     if ([realizedNetProfit, activeQuantity, keepQuantity, minProfit].some((value) => value === undefined)) {
-      return
+      return undefined
     }
     const continueReasons = [
       "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
@@ -303,7 +333,8 @@ function createPauseHandler({
   return async ({ symbol, reason, error }) => {
     const wasDurablyPaused = state.durablePausedMarkets.has(symbol)
     if (!wasDurablyPaused && onOperationalStateStrategyMarketPaused) {
-      const durable = await onOperationalStateStrategyMarketPaused({ symbol, reason })
+      const durable = await onOperationalStateStrategyMarketPaused({ symbol,
+reason })
       if (durable?.ok !== true || durable.data?.durable !== true) {
         logger?.error?.({
           message: "strategy pause could not be committed to the Operational State Store",
@@ -319,10 +350,14 @@ function createPauseHandler({
       publishLifecycleEvent({
         eventPublisher,
         eventName: HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
-        dataResult: mapStrategyPausedData({ symbol, reason, error }),
+        dataResult: mapStrategyPausedData({ symbol,
+reason,
+error }),
       })
     }
-    await onPause({ symbol, reason, error })
+    await onPause({ symbol,
+reason,
+error })
   }
 }
 
@@ -351,11 +386,16 @@ function createOrderCancellationEventPublishers({ eventPublisher, logger, state 
       const ownership = state?.registry?.getOwnership?.({
         clientOrderId: order.clientOrderId,
       })
-      logOrderLifecycle({ logger, order, ownership, status: lifecycleStatus })
+      logOrderLifecycle({ logger,
+order,
+ownership,
+status: lifecycleStatus })
       return publishLifecycleEvent({
         eventPublisher,
         eventName: HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED,
-        dataResult: mapOrderCancelFailedData({ order, outcome, error }),
+        dataResult: mapOrderCancelFailedData({ order,
+outcome,
+error }),
       })
     },
   }
@@ -372,13 +412,19 @@ function createCancellationFailureHandlers({ state, pause, publishOrderCancelFai
     const result = state.registry.markCancellationUnknown({ clientOrderId: order.clientOrderId })
     if (!result.ok) {
       const registryError = result.errors?.[0] ?? new Error("Unable to retain an unconfirmed cancellation as UNKNOWN")
-      await pause({ symbol, reason: reason + "_REGISTRY_FAILED", error: registryError })
+      await pause({ symbol,
+reason: `${reason  }_REGISTRY_FAILED`,
+error: registryError })
       return toResult({ errors: result.errors ?? [registryError] })
     }
     state.registry = result.data.registry
-    publishOrderCancelFailed({ order: result.data.order, outcome: "UNCONFIRMED", error })
+    publishOrderCancelFailed({ order: result.data.order,
+outcome: "UNCONFIRMED",
+error })
     if (pauseOnFailure) {
-      await pause({ symbol, reason, error })
+      await pause({ symbol,
+reason,
+error })
     }
     return toResult({ error: error ?? new Error("Broker cancellation outcome is unconfirmed") })
   }
@@ -389,10 +435,14 @@ function createCancellationFailureHandlers({ state, pause, publishOrderCancelFai
     error,
     pauseOnFailure = true,
   } = {}) => {
-    publishOrderCancelFailed({ order, outcome: "NOT_SENT", error })
+    publishOrderCancelFailed({ order,
+outcome: "NOT_SENT",
+error })
     const notSentReason = reason.replace(/_UNCONFIRMED$/, "_NOT_SENT")
     if (pauseOnFailure) {
-      await pause({ symbol, reason: notSentReason, error })
+      await pause({ symbol,
+reason: notSentReason,
+error })
     }
     return toResult({ error: error ?? new Error("Broker cancellation request was not sent") })
   }
@@ -406,11 +456,21 @@ function createCancellationFailureHandlers({ state, pause, publishOrderCancelFai
     pauseOnFailure = true,
   } = {}) => {
     if (cancellationResultOk === false && cancellationOutcome === "NOT_SENT") {
-      return markCancellationNotSent({ symbol, order, reason, error, pauseOnFailure })
+      return markCancellationNotSent({ symbol,
+order,
+reason,
+error,
+pauseOnFailure })
     }
-    return markCancellationUnknown({ symbol, order, reason, error, pauseOnFailure })
+    return markCancellationUnknown({ symbol,
+order,
+reason,
+error,
+pauseOnFailure })
   }
-  return { markCancellationUnknown, markCancellationNotSent, markCancellationFailure }
+  return { markCancellationUnknown,
+markCancellationNotSent,
+markCancellationFailure }
 }
 
 function createMarketBookTransitionHandler({ state, isMarketBookFresh, evaluateLatestTransition } = {}) {
@@ -421,7 +481,8 @@ function createMarketBookTransitionHandler({ state, isMarketBookFresh, evaluateL
         throw new Error("Market book symbol does not match subscription")
       }
       if (!isMarketBookFresh(marketBook)) {
-        return toResult({ data: { skipped: true, reason: "STALE_MARKET_BOOK" } })
+        return toResult({ data: { skipped: true,
+reason: "STALE_MARKET_BOOK" } })
       }
       state.books.set(symbol, marketBook)
       if (state.deferredEvaluations.has(symbol) && !state.paused.has(symbol)) {
@@ -444,13 +505,17 @@ function createOperatorMarketPauseHandler({ state, pairs, runTransition } = {}) 
         return toResult({ error })
       }
       if (state.operatorPausedMarkets.has(symbol)) {
-        return toResult({ data: { symbol, paused: true, alreadyPaused: true, durable: typeof beforeApply === "function" } })
+        return toResult({ data: { symbol,
+paused: true,
+alreadyPaused: true,
+durable: typeof beforeApply === "function" } })
       }
       let durable = false
       if (typeof beforeApply === "function") {
         let committed
         try {
-          committed = await beforeApply({ symbol, action: "PAUSE" })
+          committed = await beforeApply({ symbol,
+action: "PAUSE" })
         } catch (error) {
           return toResult({ error })
         }
@@ -464,9 +529,26 @@ function createOperatorMarketPauseHandler({ state, pairs, runTransition } = {}) 
         // TEMPORARY: with restart recovery disabled, CC pause is process-local only.
       }
       state.operatorPausedMarkets.add(symbol)
-      return toResult({ data: { symbol, paused: true, alreadyPaused: false, durable } })
+      return toResult({ data: { symbol,
+paused: true,
+alreadyPaused: false,
+durable } })
     },
   })
+}
+
+function isOperatorResumeBlocked({ state, symbol, volatilityProtectionEnabled, hasPendingRecoveryManagedCancellation }) {
+  const volatilityState = state.volatilityProtection.get(symbol)
+  const volatilityBlocked = volatilityProtectionEnabled &&
+    volatilityState !== undefined &&
+    volatilityState.mode !== VOLATILITY_PROTECTION_MODES.NORMAL
+  return state.paused.has(symbol) ||
+    state.durablePausedMarkets.has(symbol) ||
+    state.recoveryManagedPausedMarkets.has(symbol) ||
+    state.replacementIntents.has(symbol) ||
+    state.trailingBuyRepriceIntents.has(symbol) ||
+    hasPendingRecoveryManagedCancellation({ symbol }) ||
+    volatilityBlocked
 }
 
 function createOperatorMarketResumeHandler({
@@ -483,31 +565,27 @@ function createOperatorMarketResumeHandler({
         error.code = "INVALID_OPERATOR_MARKET"
         return toResult({ error })
       }
-      const volatilityState = state.volatilityProtection.get(symbol)
-      const volatilityBlocked = volatilityProtectionEnabled &&
-        volatilityState !== undefined &&
-        volatilityState.mode !== VOLATILITY_PROTECTION_MODES.NORMAL
-      const safetyBlocked =
-        state.paused.has(symbol) ||
-        state.durablePausedMarkets.has(symbol) ||
-        state.recoveryManagedPausedMarkets.has(symbol) ||
-        state.replacementIntents.has(symbol) ||
-        state.trailingBuyRepriceIntents.has(symbol) ||
-        hasPendingRecoveryManagedCancellation({ symbol }) ||
-        volatilityBlocked
-      if (safetyBlocked) {
+      if (isOperatorResumeBlocked({
+        state,
+        symbol,
+        volatilityProtectionEnabled,
+        hasPendingRecoveryManagedCancellation,
+      })) {
         const error = new Error("Market cannot be resumed while a safety or recovery blocker is active")
         error.code = "SAFETY_BLOCKER_ACTIVE"
         return toResult({ error })
       }
       if (!state.operatorPausedMarkets.has(symbol)) {
-        return toResult({ data: { symbol, resumed: false, reason: "NOT_OPERATOR_PAUSED" } })
+        return toResult({ data: { symbol,
+resumed: false,
+reason: "NOT_OPERATOR_PAUSED" } })
       }
       let durable = false
       if (typeof beforeApply === "function") {
         let committed
         try {
-          committed = await beforeApply({ symbol, action: "RESUME" })
+          committed = await beforeApply({ symbol,
+action: "RESUME" })
         } catch (error) {
           return toResult({ error })
         }
@@ -521,7 +599,9 @@ function createOperatorMarketResumeHandler({
         // TEMPORARY: with restart recovery disabled, CC resume is process-local only.
       }
       state.operatorPausedMarkets.delete(symbol)
-      return toResult({ data: { symbol, resumed: true, durable } })
+      return toResult({ data: { symbol,
+resumed: true,
+durable } })
     },
   })
 }
@@ -540,7 +620,8 @@ function createPendingOrderLifecycleHandler({ state, publishDurableIntent, pause
       }),
       purpose: purpose ?? (order.side === "BUY" ? "CONSERVATIVE_BUY" : "CONSERVATIVE_SELL"),
     }
-    state.registry = state.registry.registerPending({ order, ownership }).registry
+    state.registry = state.registry.registerPending({ order,
+ownership }).registry
     const persisted = await publishDurableIntent({
       eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_REQUESTED,
       dataResult: mapOrderSubmissionRequestedData({ order }),
@@ -551,7 +632,9 @@ function createPendingOrderLifecycleHandler({ state, publishDurableIntent, pause
         state.registry = removal.registry
       }
       const error = persisted.errors?.[0] ?? new Error("Order intent was not durably journaled; broker submission was not attempted")
-      await pause({ symbol: order.market.symbol, reason: "ORDER_INTENT_NOT_DURABLE", error })
+      await pause({ symbol: order.market.symbol,
+reason: "ORDER_INTENT_NOT_DURABLE",
+error })
       throw error
     }
     logOrderLifecycle({
@@ -683,7 +766,10 @@ function createSubmissionFailureCallbacks({ state, pause, eventPublisher, logger
           throw new Error("Cannot remove a definitively rejected pending order")
         }
         state.registry = removal.registry
-        logOrderLifecycle({ logger, order, ownership, status: "REJECTED" })
+        logOrderLifecycle({ logger,
+order,
+ownership,
+status: "REJECTED" })
         if (definitePostOnlyRejection) {
           state.books.delete(order.market.symbol)
         }
@@ -723,12 +809,12 @@ function validateInitialEngineState({ initialState, pairs } = {}) {
       !(Array.isArray(values) || values instanceof Set) ||
       [...values].some((value) => typeof value !== "string" || !value.trim())
     )) {
-      throw new TypeError("initialState." + field + " must contain non-empty strings")
+      throw new TypeError(`initialState.${  field  } must contain non-empty strings`)
     }
   }
   for (const symbol of initialState.operatorPausedMarkets ?? []) {
     if (!Object.hasOwn(pairs, symbol)) {
-      throw new TypeError("initialState.operatorPausedMarkets contains an unconfigured market: " + symbol)
+      throw new TypeError(`initialState.operatorPausedMarkets contains an unconfigured market: ${  symbol}`)
     }
   }
   if (initialState.journalFills !== undefined && !Array.isArray(initialState.journalFills)) {
@@ -780,7 +866,8 @@ function createInitialEngineState({ initialState, pairs, initialRegistry } = {})
     volatilityCancellationAttemptBySymbol: new Map(),
     volatilitySnapshotSignatureBySymbol: new Map(),
   }
-  return { journalFillsById, state }
+  return { journalFillsById,
+state }
 }
 
 function createMarketMetadataCache({ getMarketMetadata } = {}) {
@@ -871,6 +958,124 @@ function createOwnedOrderManagementHandlers({
   }
 }
 
+function createOperatorMarketBlockers({
+  pairConfig,
+  metadata,
+  marketPrice,
+  priceFresh,
+  safetyPaused,
+  operatorPaused,
+  recoveryManagedPaused,
+  replacementPending,
+  trailingBuyRepricePending,
+  volatilityState,
+  openOrderBlockerActive,
+}) {
+  const blockers = []
+  if (pairConfig.enabled !== true) {
+    blockers.push("MARKET_DISABLED")
+    return blockers
+  }
+  if (!metadata?.market) {
+    blockers.push("MARKET_METADATA_UNAVAILABLE")
+  }
+  if (!marketPrice) {
+    blockers.push("MARKET_PRICE_UNAVAILABLE")
+  } else if (!priceFresh) {
+    blockers.push("MARKET_PRICE_STALE")
+  }
+  if (safetyPaused) {
+    blockers.push("STRATEGY_SAFETY_PAUSED")
+  }
+  if (operatorPaused) {
+    blockers.push("OPERATOR_PAUSED")
+  }
+  if (recoveryManagedPaused) {
+    blockers.push("RECOVERY_MANAGED_PAUSED")
+  }
+  if (replacementPending) {
+    blockers.push("ORDER_REPLACEMENT_PENDING")
+  }
+  if (trailingBuyRepricePending) {
+    blockers.push("TRAILING_BUY_REPRICE_PENDING")
+  }
+  if (volatilityState && volatilityState.mode !== VOLATILITY_PROTECTION_MODES.NORMAL) {
+    blockers.push("VOLATILITY_PROTECTION_ACTIVE")
+  }
+  if (openOrderBlockerActive) {
+    blockers.push("OPEN_ORDER_OWNERSHIP_BLOCKER")
+  }
+  return blockers
+}
+
+function createOperatorMarketSnapshot({
+  state,
+  symbol,
+  pairConfig,
+  getCurrentMarketMetadata,
+  isMarketPriceFresh,
+  hasBlockingOpenOrdersForSymbol,
+  isVolatilityProtectionEnabledForSymbol,
+}) {
+  const metadata = getCurrentMarketMetadata({ symbol })
+  const marketPrice = state.prices.get(symbol)
+  const priceFresh = marketPrice ? isMarketPriceFresh(marketPrice) : false
+  const operatorPaused = state.operatorPausedMarkets.has(symbol)
+  const safetyPaused = state.durablePausedMarkets.has(symbol) ||
+    (state.paused.has(symbol) && !state.recoveryManagedPausedMarkets.has(symbol))
+  const recoveryManagedPaused = state.recoveryManagedPausedMarkets.has(symbol)
+  const replacementPending = state.replacementIntents.has(symbol)
+  const trailingBuyRepricePending = state.trailingBuyRepriceIntents.has(symbol)
+  const openOrderBlockerActive = pairConfig.enabled === true &&
+    hasBlockingOpenOrdersForSymbol({ symbol })
+  const volatilityState = isVolatilityProtectionEnabledForSymbol(symbol)
+    ? state.volatilityProtection.get(symbol)
+    : undefined
+  const blockers = createOperatorMarketBlockers({
+    pairConfig,
+    metadata,
+    marketPrice,
+    priceFresh,
+    safetyPaused,
+    operatorPaused,
+    recoveryManagedPaused,
+    replacementPending,
+    trailingBuyRepricePending,
+    volatilityState,
+    openOrderBlockerActive,
+  })
+  const market = metadata?.market
+  const volatilityProtection = volatilityState
+    ? Object.freeze({
+      mode: volatilityState.mode,
+      reason: volatilityState.reason,
+      stableCandleCount: volatilityState.stableCandleCount,
+      volatilityRatio: volatilityState.volatilityRatio,
+      natr: volatilityState.natr,
+      referenceNatr: volatilityState.referenceNatr,
+      atr: volatilityState.atr,
+    })
+    : null
+  return Object.freeze({
+    symbol,
+    enabled: pairConfig.enabled === true,
+    baseAsset: market?.baseAsset?.code ?? null,
+    quoteAsset: market?.quoteAsset?.code ?? null,
+    marketMetadataReady: Boolean(market),
+    latestPrice: marketPrice?.price ?? null,
+    priceTimestamp: marketPrice?.timestamp ?? null,
+    priceFresh,
+    operatorPaused,
+    safetyPaused,
+    recoveryManagedPaused,
+    replacementPending,
+    trailingBuyRepricePending,
+    openOrderBlockerActive,
+    volatilityProtection,
+    blockers: Object.freeze(blockers),
+  })
+}
+
 function createOperatorMarketSnapshotsGetter({
   state,
   pairs,
@@ -882,71 +1087,17 @@ function createOperatorMarketSnapshotsGetter({
 } = {}) {
   return () => runTransition({
     task: async () => {
-      const markets = Object.entries(pairs).map(([symbol, pairConfig]) => {
-        const metadata = getCurrentMarketMetadata({ symbol })
-        const marketPrice = state.prices.get(symbol)
-        const priceFresh = marketPrice ? isMarketPriceFresh(marketPrice) : false
-        const operatorPaused = state.operatorPausedMarkets.has(symbol)
-        const safetyPaused = state.durablePausedMarkets.has(symbol) ||
-          (state.paused.has(symbol) && !state.recoveryManagedPausedMarkets.has(symbol))
-        const recoveryManagedPaused = state.recoveryManagedPausedMarkets.has(symbol)
-        const replacementPending = state.replacementIntents.has(symbol)
-        const trailingBuyRepricePending = state.trailingBuyRepriceIntents.has(symbol)
-        const openOrderBlockerActive = pairConfig.enabled === true && hasBlockingOpenOrdersForSymbol({ symbol })
-        const volatilityState = isVolatilityProtectionEnabledForSymbol(symbol)
-          ? state.volatilityProtection.get(symbol)
-          : undefined
-        const blockers = []
-        if (pairConfig.enabled !== true) {
-          blockers.push("MARKET_DISABLED")
-        } else {
-          if (!metadata?.market) {blockers.push("MARKET_METADATA_UNAVAILABLE")}
-          if (!marketPrice) {
-            blockers.push("MARKET_PRICE_UNAVAILABLE")
-          } else if (!priceFresh) {
-            blockers.push("MARKET_PRICE_STALE")
-          }
-          if (safetyPaused) {blockers.push("STRATEGY_SAFETY_PAUSED")}
-          if (operatorPaused) {blockers.push("OPERATOR_PAUSED")}
-          if (recoveryManagedPaused) {blockers.push("RECOVERY_MANAGED_PAUSED")}
-          if (replacementPending) {blockers.push("ORDER_REPLACEMENT_PENDING")}
-          if (trailingBuyRepricePending) {blockers.push("TRAILING_BUY_REPRICE_PENDING")}
-          if (volatilityState && volatilityState.mode !== VOLATILITY_PROTECTION_MODES.NORMAL) {
-            blockers.push("VOLATILITY_PROTECTION_ACTIVE")
-          }
-          if (openOrderBlockerActive) {blockers.push("OPEN_ORDER_OWNERSHIP_BLOCKER")}
-        }
-        const market = metadata?.market
-        const volatilityProtection = volatilityState
-          ? Object.freeze({
-              mode: volatilityState.mode,
-              reason: volatilityState.reason,
-              stableCandleCount: volatilityState.stableCandleCount,
-              volatilityRatio: volatilityState.volatilityRatio,
-              natr: volatilityState.natr,
-              referenceNatr: volatilityState.referenceNatr,
-              atr: volatilityState.atr,
-            })
-          : null
-        return Object.freeze({
+      const markets = Object.entries(pairs).map(([symbol, pairConfig]) =>
+        createOperatorMarketSnapshot({
+          state,
           symbol,
-          enabled: pairConfig.enabled === true,
-          baseAsset: market?.baseAsset?.code ?? null,
-          quoteAsset: market?.quoteAsset?.code ?? null,
-          marketMetadataReady: Boolean(market),
-          latestPrice: marketPrice?.price ?? null,
-          priceTimestamp: marketPrice?.timestamp ?? null,
-          priceFresh,
-          operatorPaused,
-          safetyPaused,
-          recoveryManagedPaused,
-          replacementPending,
-          trailingBuyRepricePending,
-          openOrderBlockerActive,
-          volatilityProtection,
-          blockers: Object.freeze(blockers),
+          pairConfig,
+          getCurrentMarketMetadata,
+          isMarketPriceFresh,
+          hasBlockingOpenOrdersForSymbol,
+          isVolatilityProtectionEnabledForSymbol,
         })
-      })
+      )
       return toResult({ data: Object.freeze({ markets: Object.freeze(markets) }) })
     },
   })
@@ -968,10 +1119,13 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
   const hasBlockingOpenOrdersForSymbol = ({ symbol } = {}) =>
     pairs[symbol]?.externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK &&
     hasUnownedOpenOrdersForSymbol({ symbol })
-  const initialRegistry = validateInitialEngineState({ initialState, pairs })
+  const initialRegistry = validateInitialEngineState({ initialState,
+pairs })
   const marketMetadataCache = createMarketMetadataCache({ getMarketMetadata })
   const { refreshedMarketMetadata, getCurrentMarketMetadata } = marketMetadataCache
-  const { state } = createInitialEngineState({ initialState, pairs, initialRegistry })
+  const { state } = createInitialEngineState({ initialState,
+pairs,
+initialRegistry })
   const runTransition = createSerializedTransitionQueue()
   const shutdownSafety = createConservativeShutdownSafety({
     state,
@@ -982,7 +1136,8 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
   let marketPriceEventSequence = 0
   const recoveryCancellationState = createRecoveryManagedCancellationState({ state })
   const rememberProcessedFill = createProcessedFillTracker({ state })
-  const executionFillAccounting = createExecutionFillAccounting({ state, rememberProcessedFill })
+  const executionFillAccounting = createExecutionFillAccounting({ state,
+rememberProcessedFill })
   return {
     dependencies,
     settings,
@@ -1006,7 +1161,8 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
 function createConservativeEnginePublishingContext({ context } = {}) {
   const { eventPublisher, getPortfolio, getRecoveryLedger, logger, onPause,
     onOperationalStateStrategyMarketPaused } = context.dependencies
-  context.publishDurableIntent = createDurableIntentPublisher({ eventPublisher, logger })
+  context.publishDurableIntent = createDurableIntentPublisher({ eventPublisher,
+logger })
   context.publishRecoveryCycleNotCompleted = createRecoveryCycleNotCompletedPublisher({
     eventPublisher,
     getPortfolio,
@@ -1053,13 +1209,15 @@ function createConservativeEngineCancellationContext({ context } = {}) {
   }) => {
     const result = validateCancellationEligibility({ order })
     if (result.ok) {return result}
-    const error = result.errors[0]
+    const [error] = result.errors
     context.publishOrderCancelFailed({
       order,
       outcome: "INVALID_CANCELLATION_REQUEST",
       error,
     })
-    if (pauseOnFailure) {await context.pause({ symbol, reason, error })}
+    if (pauseOnFailure) {await context.pause({ symbol,
+reason,
+error })}
     return result
   }
   context.cancelOrderWithOperationalState = (options = {}) => cancelOrderWithOperationalStateTransition({
@@ -1400,7 +1558,8 @@ function createShutdownSafetyOperations({ context } = {}) {
       const results = []
       for (const symbol of [...context.state.deferredEvaluations]) {
         const result = await context.evaluateLatestTransition({ symbol })
-        results.push({ symbol, result })
+        results.push({ symbol,
+result })
       }
       return toResult({ data: { results } })
     },
@@ -1557,17 +1716,19 @@ function inspectAcknowledgedFillHistory({ order, fills }) {
       fillsById.set(fill.id, fill)
     }
   }
-  const uniqueFills = [...fillsById.values()].sort((left, right) => {
+  const uniqueFills = [...fillsById.values()].sort((...entries) => {
+    const [left, right] = entries
     if (left.executedAt !== undefined && right.executedAt !== undefined &&
         left.executedAt !== right.executedAt) {
       return left.executedAt - right.executedAt
     }
     return left.tradeId.localeCompare(right.tradeId)
   })
-  const reconciledQuantity = uniqueFills.reduce((total, fill) => addDecimal({
-    left: total,
-    right: fill.quantity.amount,
-  }), "0")
+  const reconciledQuantity = uniqueFills.reduce((...entries) => {
+    const [total, fill] = entries
+    return addDecimal({ left: total, 
+      right: fill.quantity.amount })
+  }, "0")
   const fillQuantityMatches = compareDecimal({
     left: reconciledQuantity,
     right: order.executedQuantity.amount,
@@ -2108,7 +2269,7 @@ function publishRecoverySellCancellationOutcome({ context, canceledOrder }) {
   context.publishOrderCancelFailed({
     order: canceledOrder,
     outcome: canceledOrder.status === "FILLED" ? "ALREADY_FILLED" : "TERMINAL_STATE_CHANGED",
-    error: new Error("Recovery SELL reached terminal status " + canceledOrder.status + " while cancellation was in flight"),
+    error: new Error(`Recovery SELL reached terminal status ${  canceledOrder.status  } while cancellation was in flight`),
   })
 }
 
@@ -2578,7 +2739,7 @@ async function refreshTrailingBuyMarketMetadata({ context, symbol, pairConfig, m
       symbol,
     })
     if (!result?.ok || !result.data) {
-      throw result?.errors?.[0] ?? new Error("Fresh Binance exchange metadata is unavailable for " + symbol)
+      throw result?.errors?.[0] ?? new Error(`Fresh Binance exchange metadata is unavailable for ${  symbol}`)
     }
     const refreshed = validateMarketTradingReadiness({
       symbol,
@@ -2586,7 +2747,7 @@ async function refreshTrailingBuyMarketMetadata({ context, symbol, pairConfig, m
       marketMetadata: result.data,
     })
     if (refreshed.market.id !== metadata.market.id || refreshed.market.symbol !== symbol) {
-      throw new Error("Fresh exchange metadata does not match the active market " + symbol)
+      throw new Error(`Fresh exchange metadata does not match the active market ${  symbol}`)
     }
     context.refreshedMarketMetadata.set(symbol, refreshed)
     return {
@@ -2777,7 +2938,7 @@ function validateOwnedOrderSnapshotParity({ context, snapshots }) {
     )
     if (!currentOrder) {
       throw recoveryFailureError(
-        new Error("Owned order disappeared from the registry during REST reconciliation: " + ownedOrder.brokerOrderId),
+        new Error(`Owned order disappeared from the registry during REST reconciliation: ${  ownedOrder.brokerOrderId}`),
         "OWNERSHIP_INTEGRITY",
         "REST_STREAM_ORDER_OWNERSHIP",
         false,
@@ -2788,7 +2949,7 @@ function validateOwnedOrderSnapshotParity({ context, snapshots }) {
       right: currentOrder.executedQuantity.amount,
     }) < 0) {
       throw recoveryFailureError(
-        new Error("REST order history is behind the registered cumulative execution quantity for " + ownedOrder.brokerOrderId),
+        new Error(`REST order history is behind the registered cumulative execution quantity for ${  ownedOrder.brokerOrderId}`),
         "REST_RECONCILIATION",
         "REST_STREAM_EXECUTION_LAG",
         true,
@@ -2798,7 +2959,7 @@ function validateOwnedOrderSnapshotParity({ context, snapshots }) {
     for (const fillId of processedFillIds) {
       if (!fillIds.has(fillId)) {
         throw recoveryFailureError(
-          new Error("REST fill history is missing previously processed execution ID " + fillId),
+          new Error(`REST fill history is missing previously processed execution ID ${  fillId}`),
           "ACCOUNTING_INTEGRITY",
           "REST_STREAM_JOURNAL_FILL_PARITY",
           false,
@@ -2821,7 +2982,7 @@ async function applyOwnedOrderSnapshotTransitions({ context, snapshots, recovery
     })
     if (!currentOrder) {
       throw recoveryFailureError(
-        new Error("Owned order disappeared before REST fill accounting: " + ownedOrder.brokerOrderId),
+        new Error(`Owned order disappeared before REST fill accounting: ${  ownedOrder.brokerOrderId}`),
         "OWNERSHIP_INTEGRITY",
         "REST_FILL_ORDER_OWNERSHIP",
         false,
@@ -2881,7 +3042,8 @@ async function applyOwnedOrderSnapshotTransitions({ context, snapshots, recovery
 }
 
 async function applyOwnedOrderSnapshots({ context, snapshots, symbols, recoveryMode }) {
-  context.affectedSymbol = symbols[0]
+  const [firstSymbol] = symbols
+  context.affectedSymbol = firstSymbol
   try {
     validateOwnedOrderSnapshotParity({
       context,
@@ -2945,7 +3107,7 @@ async function prepareOwnedBuyCancellation({ context, order, reason, reasonPrefi
   const eligibility = await context.ensureCancellationEligible({
     symbol,
     order,
-    reason: reasonPrefix + "_BUY_CANCELLATION_INELIGIBLE",
+    reason: `${reasonPrefix  }_BUY_CANCELLATION_INELIGIBLE`,
     pauseOnFailure,
   })
   if (!eligibility.ok) {
@@ -2961,11 +3123,11 @@ async function prepareOwnedBuyCancellation({ context, order, reason, reasonPrefi
   if (intent.ok) {
     return undefined
   }
-  const error = intent.errors?.[0] ?? new Error("BUY cancellation intent was not durably journaled during " + reasonPrefix)
+  const error = intent.errors?.[0] ?? new Error(`BUY cancellation intent was not durably journaled during ${  reasonPrefix}`)
   if (pauseOnFailure) {
     await context.pause({
       symbol,
-      reason: reasonPrefix + "_BUY_CANCEL_INTENT_NOT_DURABLE",
+      reason: `${reasonPrefix  }_BUY_CANCEL_INTENT_NOT_DURABLE`,
       error,
     })
   }
@@ -2985,7 +3147,7 @@ async function invokeOwnedBuyCancellation({ context, order, reason, reasonPrefix
     return context.markCancellationUnknown({
       symbol: order.market.symbol,
       order,
-      reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
+      reason: `${reasonPrefix  }_BUY_CANCELLATION_UNCONFIRMED`,
       error,
       pauseOnFailure,
     })
@@ -2995,11 +3157,11 @@ async function invokeOwnedBuyCancellation({ context, order, reason, reasonPrefix
 async function validateOwnedBuyCancellationResponse({ context, order, result, reasonPrefix, pauseOnFailure }) {
   const { market: { symbol } } = order
   if (!result?.ok || !(result.data instanceof CanonicalOrder)) {
-    const error = result?.errors?.[0] ?? new Error("Broker did not confirm a canonical BUY cancellation during " + reasonPrefix)
+    const error = result?.errors?.[0] ?? new Error(`Broker did not confirm a canonical BUY cancellation during ${  reasonPrefix}`)
     return context.markCancellationFailure({
       symbol,
       order,
-      reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
+      reason: `${reasonPrefix  }_BUY_CANCELLATION_UNCONFIRMED`,
       error,
       cancellationResultOk: result?.ok,
       cancellationOutcome: result?.cancellationOutcome,
@@ -3012,21 +3174,21 @@ async function validateOwnedBuyCancellationResponse({ context, order, result, re
     cancellation.market.id === order.market.id &&
     cancellation.side === "BUY"
   if (!identityMatches) {
-    const error = new Error("BUY cancellation response does not match the owned order during " + reasonPrefix)
+    const error = new Error(`BUY cancellation response does not match the owned order during ${  reasonPrefix}`)
     return context.markCancellationUnknown({
       symbol,
       order,
-      reason: reasonPrefix + "_BUY_CANCELLATION_IDENTITY_MISMATCH",
+      reason: `${reasonPrefix  }_BUY_CANCELLATION_IDENTITY_MISMATCH`,
       error,
       pauseOnFailure,
     })
   }
   if (!["CANCELED", "FILLED", "REJECTED", "EXPIRED"].includes(cancellation.status)) {
-    const error = new Error("BUY cancellation did not return a terminal order state during " + reasonPrefix)
+    const error = new Error(`BUY cancellation did not return a terminal order state during ${  reasonPrefix}`)
     return context.markCancellationUnknown({
       symbol,
       order,
-      reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
+      reason: `${reasonPrefix  }_BUY_CANCELLATION_UNCONFIRMED`,
       error,
       pauseOnFailure,
     })
@@ -3047,7 +3209,7 @@ async function applyOwnedBuyCancellationToRegistry({ context, order, cancellatio
     return context.markCancellationUnknown({
       symbol: order.market.symbol,
       order,
-      reason: reasonPrefix + "_BUY_CANCELLATION_RECONCILIATION_FAILED",
+      reason: `${reasonPrefix  }_BUY_CANCELLATION_RECONCILIATION_FAILED`,
       error,
       pauseOnFailure,
     })
@@ -3057,7 +3219,7 @@ async function applyOwnedBuyCancellationToRegistry({ context, order, cancellatio
     return context.markCancellationUnknown({
       symbol: order.market.symbol,
       order,
-      reason: reasonPrefix + "_BUY_CANCELLATION_NOT_REGISTERED",
+      reason: `${reasonPrefix  }_BUY_CANCELLATION_NOT_REGISTERED`,
       error,
       pauseOnFailure,
     })
@@ -3071,7 +3233,7 @@ async function applyOwnedBuyCancellationToRegistry({ context, order, cancellatio
     return context.markCancellationUnknown({
       symbol: order.market.symbol,
       order: reconciledOrder,
-      reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
+      reason: `${reasonPrefix  }_BUY_CANCELLATION_UNCONFIRMED`,
       error,
     })
   }
@@ -3100,7 +3262,7 @@ function validateOwnedBuyExecutionHistory({ order, fillsResult, reasonPrefix }) 
   if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
     return {
       ok: false,
-      error: fillsResult?.errors?.[0] ?? new Error("Unable to reconcile BUY execution history during " + reasonPrefix),
+      error: fillsResult?.errors?.[0] ?? new Error(`Unable to reconcile BUY execution history during ${  reasonPrefix}`),
     }
   }
   const fillsById = new Map()
@@ -3113,23 +3275,24 @@ function validateOwnedBuyExecutionHistory({ order, fillsResult, reasonPrefix }) 
     if (!identityMatches) {
       return {
         ok: false,
-        error: new Error("BUY execution history contains a fill for a different order during " + reasonPrefix),
-        reason: reasonPrefix + "_BUY_FILL_IDENTITY_MISMATCH",
+        error: new Error(`BUY execution history contains a fill for a different order during ${  reasonPrefix}`),
+        reason: `${reasonPrefix  }_BUY_FILL_IDENTITY_MISMATCH`,
       }
     }
     const previous = fillsById.get(fill.id)
     if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
       return {
         ok: false,
-        error: new Error("BUY execution history contains conflicting duplicate fill facts during " + reasonPrefix),
-        reason: reasonPrefix + "_BUY_FILL_IDENTITY_MISMATCH",
+        error: new Error(`BUY execution history contains conflicting duplicate fill facts during ${  reasonPrefix}`),
+        reason: `${reasonPrefix  }_BUY_FILL_IDENTITY_MISMATCH`,
       }
     }
     if (!previous) {
       fillsById.set(fill.id, fill)
     }
   }
-  const fills = [...fillsById.values()].sort((left, right) => {
+  const fills = [...fillsById.values()].sort((...entries) => {
+    const [left, right] = entries
     if (left.executedAt !== undefined && right.executedAt !== undefined &&
         left.executedAt !== right.executedAt) {
       return left.executedAt - right.executedAt
@@ -3141,12 +3304,14 @@ function validateOwnedBuyExecutionHistory({ order, fillsResult, reasonPrefix }) 
     fills,
   }
 }
+  
 
 function getOwnedBuyReconciledQuantity({ fills }) {
-  return fills.reduce((total, fill) => addDecimal({
-    left: total,
-    right: fill.quantity.amount,
-  }), "0")
+  return fills.reduce((...entries) => {
+    const [total, fill] = entries
+    return addDecimal({ left: total, 
+      right: fill.quantity.amount })
+  }, "0")
 }
 
 async function applyOwnedBuyExecutionFills({ context, order, fills, reasonPrefix }) {
@@ -3157,7 +3322,7 @@ async function applyOwnedBuyExecutionFills({ context, order, fills, reasonPrefix
       fill,
     })
     if (!processed.ok) {
-      const errors = processed.errors ?? [new Error("BUY fill accounting failed during " + reasonPrefix)]
+      const errors = processed.errors ?? [new Error(`BUY fill accounting failed during ${  reasonPrefix}`)]
       return {
         ok: false,
         errors,
@@ -3187,7 +3352,7 @@ async function reconcileOwnedBuyCancellationFills({ context, order, reconciledOr
   if (!validation.ok) {
     await context.pause({
       symbol: order.market.symbol,
-      reason: validation.reason ?? reasonPrefix + "_BUY_FILL_RECONCILIATION_FAILED",
+      reason: validation.reason ?? `${reasonPrefix  }_BUY_FILL_RECONCILIATION_FAILED`,
       error: validation.error,
     })
     return createBuyCancellationFailure({
@@ -3201,10 +3366,10 @@ async function reconcileOwnedBuyCancellationFills({ context, order, reconciledOr
     left: reconciledQuantity,
     right: reconciledOrder.executedQuantity.amount,
   }) !== 0) {
-    const error = new Error("BUY execution history does not match the terminal order executed quantity during " + reasonPrefix)
+    const error = new Error(`BUY execution history does not match the terminal order executed quantity during ${  reasonPrefix}`)
     await context.pause({
       symbol: order.market.symbol,
-      reason: reasonPrefix + "_BUY_EXECUTED_QUANTITY_MISMATCH",
+      reason: `${reasonPrefix  }_BUY_EXECUTED_QUANTITY_MISMATCH`,
       error,
     })
     return createBuyCancellationFailure({
@@ -3280,8 +3445,8 @@ async function cancelSingleOwnedBuyOrder({ context, order, reason, reasonPrefix,
   }
   context.publishOrderCancelFailed({
     order: reconciledOrder,
-    outcome: reconciledOrder.status + "_DURING_" + reasonPrefix,
-    error: new Error("The BUY order reached " + reconciledOrder.status + " before " + reasonPrefix + " cancellation completed"),
+    outcome: `${reconciledOrder.status  }_DURING_${  reasonPrefix}`,
+    error: new Error(`The BUY order reached ${  reconciledOrder.status  } before ${  reasonPrefix  } cancellation completed`),
   })
   return toResult({
     data: {

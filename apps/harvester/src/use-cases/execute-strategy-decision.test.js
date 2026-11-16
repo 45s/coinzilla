@@ -3,42 +3,76 @@ import assert from "node:assert/strict"
 import { Asset, CanonicalOrder, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
 
-const baseAsset = new Asset({ id: "doge", code: "DOGE" })
-const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({ id: "doge",
+code: "DOGE" })
+const quoteAsset = new Asset({ id: "usdt",
+code: "USDT" })
+const market = new Market({ venue: "binance",
+symbol: "DOGEUSDT",
+baseAsset,
+quoteAsset })
 const tradingRules = new TradingRules({
   market,
   constraints: [
-    { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.001", asset: quoteAsset }) },
-    { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "1", asset: baseAsset }) },
-    { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "1", asset: baseAsset }) },
-    { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
+    { type: "PRICE_INCREMENT",
+status: "SUPPORTED",
+value: new Money({ amount: "0.001",
+asset: quoteAsset }) },
+    { type: "QUANTITY_INCREMENT",
+status: "SUPPORTED",
+value: new Quantity({ amount: "1",
+asset: baseAsset }) },
+    { type: "MIN_QUANTITY",
+status: "SUPPORTED",
+value: new Quantity({ amount: "1",
+asset: baseAsset }) },
+    { type: "MIN_NOTIONAL",
+status: "SUPPORTED",
+value: new Money({ amount: "5",
+asset: quoteAsset }) },
   ],
 })
-const marketMetadata = { market, tradingRules, supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"] }
+const marketMetadata = { market,
+tradingRules,
+supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"] }
 const decision = {
   strategy: "CONSERVATIVE",
-  actions: [{ side: "BUY", type: "LIMIT_MAKER", price: "0.099", quantity: "100" }],
+  actions: [{ side: "BUY",
+type: "LIMIT_MAKER",
+price: "0.099",
+quantity: "100" }],
 }
 const makeAcknowledgement = ({ clientOrderId, side = "BUY", price = "0.099", quantity = "100" }) =>
   new CanonicalOrder({
-    clientOrderId, brokerOrderId: "broker-1", market, side, type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: price, asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: quantity, asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
-    status: "OPEN", createdAt: 1, acknowledgedAt: 1, updatedAt: 1,
+    clientOrderId,
+brokerOrderId: "broker-1",
+market,
+side,
+type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: price,
+asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: quantity,
+asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: baseAsset }),
+    status: "OPEN",
+createdAt: 1,
+acknowledgedAt: 1,
+updatedAt: 1,
   })
 
 test("validates, registers, and submits each strategy intent through the broker port", async () => {
   const calls = []
   const submitted = []
   const execute = makeExecuteStrategyDecision({
-    broker: { placeOrder: async ({ order }) => { calls.push(order); return { ok: true, data: makeAcknowledgement(order) } } },
-    onPendingOrder: async ({ order }) => calls.push("pending:" + order.clientOrderId),
+    broker: { placeOrder: async ({ order }) => { calls.push(order); return { ok: true,
+data: makeAcknowledgement(order) } } },
+    onPendingOrder: async ({ order }) => calls.push(`pending:${  order.clientOrderId}`),
     onAcknowledgedOrder: async ({ order }) => submitted.push(order),
     onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
   })
-  const result = await execute({ decision, marketMetadata })
+  const result = await execute({ decision,
+marketMetadata })
   assert.equal(result.ok, true)
   assert.equal(submitted.length, 1)
   assert.equal(submitted[0].status, "OPEN")
@@ -55,7 +89,8 @@ test("validates the complete exchange order before calling the broker", async ()
     onSubmissionFailure: async () => {},
   })
   const result = await execute({
-    decision: { actions: [{ ...decision.actions[0], price: "0.0991" }] },
+    decision: { actions: [{ ...decision.actions[0],
+price: "0.0991" }] },
     marketMetadata,
   })
   assert.equal(result.ok, false)
@@ -71,7 +106,8 @@ test("registers a pending order before reporting a thrown submission as unknown"
     onAcknowledgedOrder: async () => {},
     onSubmissionFailure: async ({ outcome }) => calls.push(outcome),
   })
-  const result = await execute({ decision, marketMetadata })
+  const result = await execute({ decision,
+marketMetadata })
   assert.equal(result.ok, false)
   assert.match(calls[0], /^h-[0-9a-f]{22}-1$/)
   assert.equal(calls[1], "UNKNOWN")
@@ -80,12 +116,14 @@ test("registers a pending order before reporting a thrown submission as unknown"
 test("does not silently accept a non-canonical broker acknowledgement", async () => {
   const failures = []
   const execute = makeExecuteStrategyDecision({
-    broker: { placeOrder: async () => ({ ok: true, data: {} }) },
+    broker: { placeOrder: async () => ({ ok: true,
+data: {} }) },
     onPendingOrder: async () => {},
     onAcknowledgedOrder: async () => {},
     onSubmissionFailure: async ({ outcome }) => failures.push(outcome),
   })
-  const result = await execute({ decision, marketMetadata })
+  const result = await execute({ decision,
+marketMetadata })
   assert.equal(result.ok, false)
   assert.deepEqual(failures, ["UNKNOWN"])
 })
@@ -102,7 +140,10 @@ test("validates every action before submitting the first order", async () => {
     decision: {
       actions: [
         decision.actions[0],
-        { side: "SELL", type: "LIMIT_MAKER", price: "0.0991", quantity: "1" },
+        { side: "SELL",
+type: "LIMIT_MAKER",
+price: "0.0991",
+quantity: "1" },
       ],
     },
     marketMetadata,
@@ -114,12 +155,14 @@ test("validates every action before submitting the first order", async () => {
 test("pauses an unknown order outcome when local acknowledgement registration fails", async () => {
   const outcomes = []
   const execute = makeExecuteStrategyDecision({
-    broker: { placeOrder: async ({ order }) => ({ ok: true, data: makeAcknowledgement(order) }) },
+    broker: { placeOrder: async ({ order }) => ({ ok: true,
+data: makeAcknowledgement(order) }) },
     onPendingOrder: async () => {},
     onAcknowledgedOrder: async () => { throw new Error("registry conflict") },
     onSubmissionFailure: async ({ outcome }) => outcomes.push(outcome),
   })
-  const result = await execute({ decision, marketMetadata })
+  const result = await execute({ decision,
+marketMetadata })
   assert.equal(result.ok, false)
   assert.deepEqual(outcomes, ["UNKNOWN"])
 })
@@ -131,7 +174,8 @@ test("uses different client order ID namespaces for separate executor instances"
     const execute = makeExecuteStrategyDecision({
       broker: { placeOrder: async ({ order }) => {
         submittedOrder = order
-        return { ok: true, data: makeAcknowledgement(order) }
+        return { ok: true,
+data: makeAcknowledgement(order) }
       } },
       onPendingOrder: async () => {},
       onAcknowledgedOrder: async () => {},
@@ -139,7 +183,8 @@ test("uses different client order ID namespaces for separate executor instances"
     })
     return {
       run: async () => {
-        const result = await execute({ decision, marketMetadata })
+        const result = await execute({ decision,
+marketMetadata })
         assert.equal(result.ok, true)
         return submittedOrder.clientOrderId
       },
@@ -173,7 +218,10 @@ test("preserves explicit strategy purpose through every submission-gate check wi
     broker: {
       placeOrder: async ({ order }) => {
         brokerOrder = order
-        return { ok: true, data: makeAcknowledgement({ ...order, side: "SELL", price: "0.101" }) }
+        return { ok: true,
+data: makeAcknowledgement({ ...order,
+side: "SELL",
+price: "0.101" }) }
       },
     },
     canSubmit: ({ purpose }) => {
@@ -185,15 +233,17 @@ test("preserves explicit strategy purpose through every submission-gate check wi
     onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
   })
 
-  const validation = await execute.validate({ decision: sellDecision, marketMetadata })
-  assert.equal(validation.ok, true, "The recovery SELL must pass canonical preflight validation.")
-  assert.deepEqual(gatePurposes, ["RECOVERY_SELL"], "Preflight validation must preserve the recovery SELL purpose at its submission gate.")
+  const validation = await execute.validate({ decision: sellDecision,
+marketMetadata })
+  assert.equal(validation.ok, true)
+  assert.deepEqual(gatePurposes, ["RECOVERY_SELL"])
   gatePurposes.length = 0
 
-  const result = await execute({ decision: sellDecision, marketMetadata })
-  assert.equal(result.ok, true, "A valid recovery SELL must complete its broker submission.")
-  assert.deepEqual(gatePurposes, ["RECOVERY_SELL", "RECOVERY_SELL", "RECOVERY_SELL"], "Initial, post-registration and final broker-boundary checks must all receive the recovery SELL purpose.")
-  assert.deepEqual(pendingPurposes, ["RECOVERY_SELL"], "The pending-order lifecycle must retain the recovery SELL purpose.")
+  const result = await execute({ decision: sellDecision,
+marketMetadata })
+  assert.equal(result.ok, true)
+  assert.deepEqual(gatePurposes, ["RECOVERY_SELL", "RECOVERY_SELL", "RECOVERY_SELL"])
+  assert.deepEqual(pendingPurposes, ["RECOVERY_SELL"])
   assert.equal(Object.hasOwn(brokerOrder, "purpose"), false, "Application-only recovery purpose must not leak into the broker order request.")
 })
 
@@ -227,7 +277,8 @@ test("returns a structured submission deferral reason and details without regist
     onSubmissionDeferred: async (context) => deferredCallbacks.push(context),
   })
 
-  const result = await execute({ decision, marketMetadata })
+  const result = await execute({ decision,
+marketMetadata })
 
   assert.equal(result.ok, true, "A valid safety deferral is a successful execution result, not a broker failure.")
   assert.equal(result.data.deferred, true, "The result must explicitly identify that broker submission was deferred.")
@@ -242,7 +293,8 @@ test("returns a structured submission deferral reason and details without regist
 test("removes a registered PENDING order when the final readiness check returns a structured deferral", async () => {
   const pendingClientOrderIds = new Set()
   const deferredCallbacks = []
-  const deferralDetails = { symbol: "DOGEUSDT", bookTimestamp: 456 }
+  const deferralDetails = { symbol: "DOGEUSDT",
+bookTimestamp: 456 }
   let readinessChecks = 0
   let brokerCalls = 0
   const execute = makeExecuteStrategyDecision({
@@ -267,12 +319,15 @@ test("removes a registered PENDING order when the final readiness check returns 
     onAcknowledgedOrder: async () => {},
     onSubmissionFailure: async () => {},
     onSubmissionDeferred: async ({ order, registered, reason, details }) => {
-      deferredCallbacks.push({ registered, reason, details })
+      deferredCallbacks.push({ registered,
+reason,
+details })
       if (registered) {pendingClientOrderIds.delete(order.clientOrderId)}
     },
   })
 
-  const result = await execute({ decision, marketMetadata })
+  const result = await execute({ decision,
+marketMetadata })
 
   assert.equal(result.ok, true, "A final readiness deferral must remain a successful, explicitly classified result.")
   assert.equal(result.data.deferred, true, "The final readiness check must report a deferred submission.")
@@ -285,7 +340,9 @@ test("removes a registered PENDING order when the final readiness check returns 
 
 test("preserves structured deferral context during recovery-order preflight validation", async () => {
   const gatePurposes = []
-  const deferralDetails = { symbol: "DOGEUSDT", protectionMode: "PROTECTED", volatilityRatio: "2" }
+  const deferralDetails = { symbol: "DOGEUSDT",
+protectionMode: "PROTECTED",
+volatilityRatio: "2" }
   const recoverySellDecision = {
     actions: [{
       side: "SELL",
@@ -299,7 +356,9 @@ test("preserves structured deferral context during recovery-order preflight vali
     broker: {
       placeOrder: async ({ order }) => ({
         ok: true,
-        data: makeAcknowledgement({ ...order, side: "SELL", price: "0.101" }),
+        data: makeAcknowledgement({ ...order,
+side: "SELL",
+price: "0.101" }),
       }),
     },
     canSubmit: ({ purpose }) => {
@@ -315,7 +374,8 @@ test("preserves structured deferral context during recovery-order preflight vali
     onSubmissionFailure: async () => {},
   })
 
-  const validation = await execute.validate({ decision: recoverySellDecision, marketMetadata })
+  const validation = await execute.validate({ decision: recoverySellDecision,
+marketMetadata })
 
   assert.equal(validation.ok, true, "A structured preflight deferral must not be reported as an execution error.")
   assert.equal(validation.data.deferred, true, "The validation result must identify the withheld preflight intent.")
@@ -349,7 +409,8 @@ test("cleans up PENDING when the final submission gate returns an invalid struct
     onSubmissionFailure: async () => {},
   })
 
-  const result = await execute({ decision, marketMetadata })
+  const result = await execute({ decision,
+marketMetadata })
 
   assert.equal(result.ok, false, "A malformed structured gate response must remain an explicit execution error.")
   assert.match(result.errors[0].message, /non-empty reason/, "The error must identify the invalid structured gate contract.")
@@ -359,20 +420,25 @@ test("cleans up PENDING when the final submission gate returns an invalid struct
 
 test("preserves earlier acknowledged orders when a later action is deferred", async () => {
   const submittedClientOrderIds = []
-  const deferredDetails = { symbol: "DOGEUSDT", bookTimestamp: 789 }
+  const deferredDetails = { symbol: "DOGEUSDT",
+bookTimestamp: 789 }
   let readinessChecks = 0
   let brokerCalls = 0
   const twoActionDecision = {
     actions: [
       decision.actions[0],
-      { side: "BUY", type: "LIMIT_MAKER", price: "0.098", quantity: "100" },
+      { side: "BUY",
+type: "LIMIT_MAKER",
+price: "0.098",
+quantity: "100" },
     ],
   }
   const execute = makeExecuteStrategyDecision({
     broker: {
       placeOrder: async ({ order }) => {
         brokerCalls += 1
-        return { ok: true, data: makeAcknowledgement(order) }
+        return { ok: true,
+data: makeAcknowledgement(order) }
       },
     },
     canSubmit: () => {
@@ -389,7 +455,8 @@ test("preserves earlier acknowledged orders when a later action is deferred", as
     onSubmissionFailure: async () => {},
   })
 
-  const result = await execute({ decision: twoActionDecision, marketMetadata })
+  const result = await execute({ decision: twoActionDecision,
+marketMetadata })
 
   assert.equal(result.ok, true, "A later action deferral must not turn an earlier valid acknowledgement into an execution error.")
   assert.equal(result.data.deferred, true, "The result must report that the later action was deferred.")
@@ -403,17 +470,33 @@ test("preserves earlier acknowledged orders when a later action is deferred", as
 
 test("preserves every stable submission-gate reason and its details without broker I/O", async () => {
   const deferrals = [
-    { reason: "MARKET_PAUSED", details: { symbol: "DOGEUSDT" } },
-    { reason: "OPERATOR_MARKET_PAUSED", details: { symbol: "DOGEUSDT" } },
-    { reason: "UNOWNED_OPEN_ORDERS_PRESENT", details: { symbol: "DOGEUSDT" } },
-    { reason: "TRADING_DISABLED", details: { symbol: "DOGEUSDT" } },
-    { reason: "MARKET_PRICE_UNAVAILABLE", details: { symbol: "DOGEUSDT" } },
-    { reason: "MARKET_PRICE_STALE", details: { symbol: "DOGEUSDT", priceTimestamp: 10 } },
-    { reason: "VOLATILITY_DATA_UNAVAILABLE", details: { symbol: "DOGEUSDT", protectionMode: "PROTECTED" } },
-    { reason: "VOLATILITY_PROTECTION_ACTIVE", details: { symbol: "DOGEUSDT", volatilityRatio: "2" } },
-    { reason: "MARKET_BOOK_UNAVAILABLE", details: { symbol: "DOGEUSDT" } },
-    { reason: "MARKET_BOOK_STALE", details: { symbol: "DOGEUSDT", bookTimestamp: 20 } },
-    { reason: "POST_ONLY_WOULD_CROSS", details: { symbol: "DOGEUSDT", bestAskPrice: "0.101" } },
+    { reason: "MARKET_PAUSED",
+details: { symbol: "DOGEUSDT" } },
+    { reason: "OPERATOR_MARKET_PAUSED",
+details: { symbol: "DOGEUSDT" } },
+    { reason: "UNOWNED_OPEN_ORDERS_PRESENT",
+details: { symbol: "DOGEUSDT" } },
+    { reason: "TRADING_DISABLED",
+details: { symbol: "DOGEUSDT" } },
+    { reason: "MARKET_PRICE_UNAVAILABLE",
+details: { symbol: "DOGEUSDT" } },
+    { reason: "MARKET_PRICE_STALE",
+details: { symbol: "DOGEUSDT",
+priceTimestamp: 10 } },
+    { reason: "VOLATILITY_DATA_UNAVAILABLE",
+details: { symbol: "DOGEUSDT",
+protectionMode: "PROTECTED" } },
+    { reason: "VOLATILITY_PROTECTION_ACTIVE",
+details: { symbol: "DOGEUSDT",
+volatilityRatio: "2" } },
+    { reason: "MARKET_BOOK_UNAVAILABLE",
+details: { symbol: "DOGEUSDT" } },
+    { reason: "MARKET_BOOK_STALE",
+details: { symbol: "DOGEUSDT",
+bookTimestamp: 20 } },
+    { reason: "POST_ONLY_WOULD_CROSS",
+details: { symbol: "DOGEUSDT",
+bestAskPrice: "0.101" } },
   ]
 
   for (const deferral of deferrals) {
@@ -427,7 +510,9 @@ test("preserves every stable submission-gate reason and its details without brok
           return { ok: false }
         },
       },
-      canSubmit: () => ({ allowed: false, reason: deferral.reason, details: deferral.details }),
+      canSubmit: () => ({ allowed: false,
+reason: deferral.reason,
+details: deferral.details }),
       onPendingOrder: async () => {
         pendingRegistrations += 1
       },
@@ -438,17 +523,18 @@ test("preserves every stable submission-gate reason and its details without brok
       },
     })
 
-    const result = await execute({ decision, marketMetadata })
+    const result = await execute({ decision,
+marketMetadata })
 
-    assert.equal(result.ok, true, deferral.reason + " must be a successful, explicitly classified deferral.")
-    assert.equal(result.data.deferred, true, deferral.reason + " must mark the strategy intent as deferred.")
-    assert.equal(result.data.reason, deferral.reason, deferral.reason + " must survive unchanged in the result.")
-    assert.deepEqual(result.data.details, deferral.details, deferral.reason + " must preserve its safe diagnostic details.")
-    assert.equal(deferredContext.reason, deferral.reason, deferral.reason + " must reach the lifecycle callback.")
-    assert.deepEqual(deferredContext.details, deferral.details, deferral.reason + " must reach the lifecycle callback with its details.")
-    assert.equal(deferredContext.registered, false, deferral.reason + " must not claim PENDING registration before the first gate passes.")
-    assert.equal(pendingRegistrations, 0, deferral.reason + " must not register a local PENDING order.")
-    assert.equal(brokerCalls, 0, deferral.reason + " must never call broker.placeOrder.")
+    assert.equal(result.ok, true, `${deferral.reason  } must be a successful, explicitly classified deferral.`)
+    assert.equal(result.data.deferred, true, `${deferral.reason  } must mark the strategy intent as deferred.`)
+    assert.equal(result.data.reason, deferral.reason, `${deferral.reason  } must survive unchanged in the result.`)
+    assert.deepEqual(result.data.details, deferral.details, `${deferral.reason  } must preserve its safe diagnostic details.`)
+    assert.equal(deferredContext.reason, deferral.reason, `${deferral.reason  } must reach the lifecycle callback.`)
+    assert.deepEqual(deferredContext.details, deferral.details, `${deferral.reason  } must reach the lifecycle callback with its details.`)
+    assert.equal(deferredContext.registered, false, `${deferral.reason  } must not claim PENDING registration before the first gate passes.`)
+    assert.equal(pendingRegistrations, 0, `${deferral.reason  } must not register a local PENDING order.`)
+    assert.equal(brokerCalls, 0, `${deferral.reason  } must never call broker.placeOrder.`)
   }
 })
 
@@ -457,8 +543,10 @@ test("durably records the exact order submission intent before calling the broke
   const execute = makeExecuteStrategyDecision({
     broker: {
       placeOrder: async ({ order }) => {
-        calls.push({ stage: "broker", clientOrderId: order.clientOrderId })
-        return { ok: true, data: makeAcknowledgement(order) }
+        calls.push({ stage: "broker",
+clientOrderId: order.clientOrderId })
+        return { ok: true,
+data: makeAcknowledgement(order) }
       },
     },
     onDurableSubmissionIntent: async ({ order, purpose }) => {
@@ -473,18 +561,23 @@ test("durably records the exact order submission intent before calling the broke
         quantity: order.originalQuantity.amount,
         purpose,
       })
-      return { ok: true, data: { durable: true } }
+      return { ok: true,
+data: { durable: true } }
     },
     onDurableSubmissionOutcome: async ({ order, outcome }) => {
-      calls.push({ stage: "durable-outcome", clientOrderId: order.clientOrderId, outcome })
-      return { ok: true, data: { durable: true } }
+      calls.push({ stage: "durable-outcome",
+clientOrderId: order.clientOrderId,
+outcome })
+      return { ok: true,
+data: { durable: true } }
     },
     onPendingOrder: async () => {},
     onAcknowledgedOrder: async () => calls.push({ stage: "acknowledged" }),
     onSubmissionFailure: async () => assert.fail("unexpected submission failure while recording a durable order intent"),
   })
 
-  const result = await execute({ decision, marketMetadata })
+  const result = await execute({ decision,
+marketMetadata })
 
   assert.equal(result.ok, true, "A strategy order with a durably recorded intent should proceed to broker submission.")
   assert.equal(calls[0].stage, "durable-intent", "The durable order intent must be acknowledged before the broker can receive a placement request.")
@@ -555,7 +648,8 @@ test("does not call the broker and removes PENDING registration when durable ord
     broker: {
       placeOrder: async ({ order }) => {
         brokerCalls += 1
-        return { ok: true, data: makeAcknowledgement(order) }
+        return { ok: true,
+data: makeAcknowledgement(order) }
       },
     },
     onDurableSubmissionIntent: async () => ({
@@ -569,7 +663,8 @@ test("does not call the broker and removes PENDING registration when durable ord
     onSubmissionFailure: async () => {},
   })
 
-  const result = await execute({ decision, marketMetadata })
+  const result = await execute({ decision,
+marketMetadata })
 
   assert.equal(result.ok, false, "A failed durable intent append must fail the strategy submission workflow.")
   assert.equal(brokerCalls, 0, "No broker placement may occur unless the immutable order intent was durably acknowledged first.")
@@ -583,9 +678,11 @@ test("does not apply a broker acknowledgement when its durable outcome append fa
   const failureOutcomes = []
   const execute = makeExecuteStrategyDecision({
     broker: {
-      placeOrder: async ({ order }) => ({ ok: true, data: makeAcknowledgement(order) }),
+      placeOrder: async ({ order }) => ({ ok: true,
+data: makeAcknowledgement(order) }),
     },
-    onDurableSubmissionIntent: async () => ({ ok: true, data: { durable: true } }),
+    onDurableSubmissionIntent: async () => ({ ok: true,
+data: { durable: true } }),
     onDurableSubmissionOutcome: async () => ({
       ok: false,
       errors: [new Error("outcome checkpoint unavailable")],
@@ -595,7 +692,8 @@ test("does not apply a broker acknowledgement when its durable outcome append fa
     onSubmissionFailure: async ({ outcome }) => failureOutcomes.push(outcome),
   })
 
-  const result = await execute({ decision, marketMetadata })
+  const result = await execute({ decision,
+marketMetadata })
 
   assert.equal(result.ok, false, "A broker acknowledgement without a durable outcome must fail the submission workflow.")
   assert.equal(acknowledged, false, "In-memory order acknowledgement must not advance before its durable outcome.")
@@ -613,14 +711,14 @@ test("persists a definite post-only rejection as REJECTED rather than an ambiguo
   const execute = makeExecuteStrategyDecision({
     broker: {
       placeOrder: async () => ({ ok: false,
-        errors: [postOnlyRejection] }),
+errors: [postOnlyRejection] }),
     },
     onDurableSubmissionIntent: async () => ({ ok: true,
-      data: { durable: true } }),
+data: { durable: true } }),
     onDurableSubmissionOutcome: async ({ outcome }) => {
       durableOutcomes.push(outcome)
       return { ok: true,
-        data: { durable: true } }
+data: { durable: true } }
     },
     onPendingOrder: async () => {},
     onAcknowledgedOrder: async () => {},
@@ -628,7 +726,7 @@ test("persists a definite post-only rejection as REJECTED rather than an ambiguo
   })
 
   const result = await execute({ decision,
-    marketMetadata })
+marketMetadata })
 
   assert.equal(result.ok, false, "A definite post-only rejection must remain a failed submission.")
   assert.deepEqual(durableOutcomes, ["REJECTED"], "The durable outcome must preserve a broker-confirmed definite rejection.")

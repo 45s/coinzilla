@@ -3,10 +3,10 @@ import assert from "node:assert/strict"
 import { createUserDataRecoveryHandler } from "./create-user-data-recovery-handler.js"
 import { createUserDataStatusHandler } from "./create-user-data-status-handler.js"
 
-const test = (name, ...args) => nodeTest("[create-user-data-recovery-lifecycle.test.js] " + name, ...args)
+const test = (...args) => nodeTest(`[create-user-data-recovery-lifecycle.test.js] ${args[0]}`, ...args.slice(1))
 
-test("a second disconnect during an in-flight recovery invalidates stale work and reconciles only the latest generation", async () => {
-  const state = {
+function createLifecycleState() {
+  return {
     ready: true,
     requiresReconciliation: false,
     streamUnsafe: false,
@@ -22,57 +22,63 @@ test("a second disconnect during an in-flight recovery invalidates stale work an
     eventSequence: 0,
     recoveryTask: null,
   }
-  const logs = { info: [], error: [] }
-  const accountAudits = []
-  const openOrdersAudits = []
-  const acknowledgements = []
-  const ownershipReconciliations = []
-  const observedStatuses = []
-  const lifecycleEvents = []
-  let reconciliationCalls = 0
-  let resolveFirstReconciliation
-  const firstReconciliation = new Promise((resolve) => {
-    resolveFirstReconciliation = resolve
-  })
-  let statusHandler
+}
 
-  const tradingEngine = {
+function createLifecycleTradingEngine({ reconciliationState, firstReconciliation }) {
+  return {
     reconcileOwnedOrders: async () => {
-      reconciliationCalls += 1
-      if (reconciliationCalls === 1) return firstReconciliation
-      return { ok: true, data: { reconciled: 2, symbols: ["DOGEUSDT"] } }
+      reconciliationState.calls += 1
+      if (reconciliationState.calls === 1) {
+        return firstReconciliation
+      }
+      return { ok: true,
+data: { reconciled: 2,
+symbols: ["DOGEUSDT"] } }
     },
   }
+}
 
-  const subscription = {
+function createLifecycleSubscription({ state, acknowledgements, handlers }) {
+  return {
     acknowledgeRecoveryResult: (brokerRecoveryGeneration) => {
       acknowledgements.push({
         applicationGeneration: state.recoveryGeneration,
         brokerGeneration: brokerRecoveryGeneration,
       })
-      statusHandler({
+      handlers.statusHandler({
         type: "reconciled",
         subscriptionId: 42,
         recoveryGeneration: brokerRecoveryGeneration,
         recoveryRequired: false,
         reconciliationRequired: false,
       })
-      return { accepted: true, completed: true }
+      return { accepted: true,
+completed: true }
     },
   }
+}
 
-  const startRecovery = createUserDataRecoveryHandler({
+function createLifecycleRecoveryCoordinator({
+  state,
+  subscription,
+  tradingEngine,
+  logs,
+  accountAudits,
+  openOrdersAudits,
+  ownershipReconciliations,
+}) {
+  return createUserDataRecoveryHandler({
     state,
     isStopped: () => false,
     getUserDataSubscription: () => subscription,
     getTradingEngine: () => tradingEngine,
     tradingEnabled: true,
-    broker: {
-      getOpenOrders: async () => ({ ok: true, data: [] }),
-    },
+    broker: { getOpenOrders: async () => ({ ok: true,
+data: [] }) },
     drainUserDataEvents: async () => {},
     setCanonicalOwnershipReconciled: (value) => ownershipReconciliations.push(value),
-    refreshAccountSnapshot: async () => ({ ok: true, data: { sourceTime: 100 } }),
+    refreshAccountSnapshot: async () => ({ ok: true,
+data: { sourceTime: 100 } }),
     publishAccountSnapshot: async (input) => {
       accountAudits.push(input)
       return { ok: true }
@@ -86,8 +92,16 @@ test("a second disconnect during an in-flight recovery invalidates stale work an
       error: (entry) => logs.error.push(entry),
     },
   })
+}
 
-  statusHandler = createUserDataStatusHandler({
+function createLifecycleStatusHandler({
+  state,
+  startRecovery,
+  logs,
+  observedStatuses,
+  lifecycleEvents,
+}) {
+  return createUserDataStatusHandler({
     state,
     isStopped: () => false,
     eventPublisher: {
@@ -102,16 +116,74 @@ test("a second disconnect during an in-flight recovery invalidates stale work an
       error: (entry) => logs.error.push(entry),
     },
     tradingEnabled: true,
-    startUserDataRecovery: () => startRecovery(),
+    startUserDataRecovery: startRecovery,
     cancelOwnedBuysAfterAccountingFailure: async () => {},
     resumeDeferredStrategyEvaluations: () => {},
     onUserDataStatus: (entry) => observedStatuses.push(entry),
   })
+}
 
-  statusHandler({ type: "connectionClosed", recoveryRequired: true })
-  statusHandler({ type: "recovered", subscriptionId: 42, recoveryGeneration: 100, recoveryRequired: true })
-  const staleTask = state.recoveryTask
+function createRecoveryLifecycleFixture() {
+  const state = createLifecycleState()
+  const logs = { info: [],
+error: [] }
+  const accountAudits = []
+  const openOrdersAudits = []
+  const acknowledgements = []
+  const ownershipReconciliations = []
+  const observedStatuses = []
+  const lifecycleEvents = []
+  const reconciliationState = { calls: 0 }
+  const handlers = { statusHandler: null }
+  let resolveFirstReconciliation
+  const firstReconciliation = new Promise((resolve) => {
+    resolveFirstReconciliation = resolve
+  })
+  const tradingEngine = createLifecycleTradingEngine({
+    reconciliationState,
+    firstReconciliation,
+  })
+  const subscription = createLifecycleSubscription({
+    state,
+    acknowledgements,
+    handlers,
+  })
+  const startRecovery = createLifecycleRecoveryCoordinator({
+    state,
+    subscription,
+    tradingEngine,
+    logs,
+    accountAudits,
+    openOrdersAudits,
+    ownershipReconciliations,
+  })
+  const statusHandler = createLifecycleStatusHandler({
+    state,
+    startRecovery,
+    logs,
+    observedStatuses,
+    lifecycleEvents,
+  })
+  handlers.statusHandler = statusHandler
 
+  return {
+    state,
+    logs,
+    accountAudits,
+    openOrdersAudits,
+    acknowledgements,
+    ownershipReconciliations,
+    observedStatuses,
+    lifecycleEvents,
+    get reconciliationCalls() {
+      return reconciliationState.calls
+    },
+    resolveFirstReconciliation,
+    statusHandler,
+  }
+}
+
+function assertFirstRecoveryStarted({ state, reconciliationCalls, staleTask }) {
   assert.equal(
     state.recoveryGeneration,
     1,
@@ -126,34 +198,10 @@ test("a second disconnect during an in-flight recovery invalidates stale work an
     1,
     "The first recovery generation must enter owned-order reconciliation exactly once before the second disconnect.",
   )
+}
 
-  statusHandler({ type: "connectionClosed", recoveryRequired: true })
-  statusHandler({ type: "recovered", subscriptionId: 42, recoveryGeneration: 101, recoveryRequired: true })
-
-  assert.equal(
-    state.recoveryGeneration,
-    2,
-    "The second transport disconnect must supersede the in-flight recovery with a new generation.",
-  )
-  assert.equal(
-    state.ready,
-    false,
-    "The second disconnect must keep the trading-readiness gate closed while the old recovery task is still pending.",
-  )
-  assert.equal(
-    state.requiresReconciliation,
-    true,
-    "The second disconnect must preserve the application reconciliation requirement for the new generation.",
-  )
-  assert.equal(
-    reconciliationCalls,
-    1,
-    "A recovered reminder received while stale work is in flight must not start a concurrent recovery task.",
-  )
-
-  resolveFirstReconciliation({ ok: true, data: { reconciled: 2, symbols: ["DOGEUSDT"] } })
-  await staleTask
-
+function assertSupersededRecovery({ fixture }) {
+  const { state, accountAudits, openOrdersAudits, acknowledgements, logs } = fixture
   assert.equal(
     state.recoveryTask,
     null,
@@ -184,29 +232,26 @@ test("a second disconnect during an in-flight recovery invalidates stale work an
     "User-data recovery generation was superseded",
     "The stale recovery task must leave an actionable generation-superseded diagnostic.",
   )
+}
 
-  statusHandler({ type: "recovered", subscriptionId: 42, recoveryGeneration: 101, recoveryRequired: true })
-  const currentTask = state.recoveryTask
-  await currentTask
-
-  assert.equal(
+function assertLatestRecoveryCompleted({ fixture }) {
+  const {
+    state,
     reconciliationCalls,
-    2,
-    "A later recovered reminder must start exactly one fresh owned-order reconciliation for generation two.",
-  )
-  assert.equal(
-    accountAudits.length,
-    1,
-    "Only the latest recovery generation may publish the account snapshot audit.",
-  )
-  assert.equal(
-    openOrdersAudits.length,
-    1,
-    "Only the latest recovery generation may publish the account-wide open-orders audit.",
-  )
+    accountAudits,
+    openOrdersAudits,
+    acknowledgements,
+    ownershipReconciliations,
+    observedStatuses,
+    lifecycleEvents,
+  } = fixture
+  assert.equal(reconciliationCalls, 2, "A later recovered reminder must start exactly one fresh owned-order reconciliation for generation two.")
+  assert.equal(accountAudits.length, 1, "Only the latest recovery generation may publish the account snapshot audit.")
+  assert.equal(openOrdersAudits.length, 1, "Only the latest recovery generation may publish the account-wide open-orders audit.")
   assert.deepEqual(
     acknowledgements,
-    [{ applicationGeneration: 2, brokerGeneration: 101 }],
+    [{ applicationGeneration: 2,
+brokerGeneration: 101 }],
     "Only the latest application and broker recovery generations may be acknowledged after both audits succeed.",
   )
   assert.deepEqual(
@@ -214,36 +259,12 @@ test("a second disconnect during an in-flight recovery invalidates stale work an
     [true],
     "Only the latest recovery generation may certify canonical ownership after order reconciliation.",
   )
-  assert.equal(
-    state.lastAcknowledgedRecoveryGeneration,
-    2,
-    "The acknowledged generation must be the second disconnect's current recovery generation.",
-  )
-  assert.equal(
-    state.requiresReconciliation,
-    false,
-    "Successful reconciliation and acknowledgement of the latest generation must clear the application gate.",
-  )
-  assert.equal(
-    state.streamUnsafe,
-    false,
-    "The terminal reconciled status for the latest generation must clear the transport-unsafe marker.",
-  )
-  assert.equal(
-    state.ready,
-    true,
-    "Trading readiness may reopen only after the latest generation's audits and broker acknowledgement complete.",
-  )
-  assert.equal(
-    state.status,
-    "READY",
-    "The successful latest-generation reconciliation must restore the READY application status.",
-  )
-  assert.equal(
-    state.recoveryTask,
-    null,
-    "The successful latest-generation recovery task must release the single-flight slot.",
-  )
+  assert.equal(state.lastAcknowledgedRecoveryGeneration, 2, "The acknowledged generation must be the second disconnect's current recovery generation.")
+  assert.equal(state.requiresReconciliation, false, "Successful reconciliation and acknowledgement of the latest generation must clear the application gate.")
+  assert.equal(state.streamUnsafe, false, "The terminal reconciled status for the latest generation must clear the transport-unsafe marker.")
+  assert.equal(state.ready, true, "Trading readiness may reopen only after the latest generation's audits and broker acknowledgement complete.")
+  assert.equal(state.status, "READY", "The successful latest-generation reconciliation must restore the READY application status.")
+  assert.equal(state.recoveryTask, null, "The successful latest-generation recovery task must release the single-flight slot.")
   assert.equal(
     observedStatuses.filter((entry) => entry.status.type === "reconciled").length,
     1,
@@ -254,4 +275,52 @@ test("a second disconnect during an in-flight recovery invalidates stale work an
     1,
     "The Harvester lifecycle publisher must emit one reconciled status transition for the successful current generation.",
   )
+}
+
+test("a second disconnect during an in-flight recovery invalidates stale work and reconciles only the latest generation", async () => {
+  const fixture = createRecoveryLifecycleFixture()
+  const { state, statusHandler } = fixture
+  statusHandler({ type: "connectionClosed",
+recoveryRequired: true })
+  statusHandler({
+    type: "recovered",
+    subscriptionId: 42,
+    recoveryGeneration: 100,
+    recoveryRequired: true,
+  })
+  const staleTask = state.recoveryTask
+  assertFirstRecoveryStarted({
+    state,
+    reconciliationCalls: fixture.reconciliationCalls,
+    staleTask,
+  })
+
+  statusHandler({ type: "connectionClosed",
+recoveryRequired: true })
+  statusHandler({
+    type: "recovered",
+    subscriptionId: 42,
+    recoveryGeneration: 101,
+    recoveryRequired: true,
+  })
+  assert.equal(state.recoveryGeneration, 2, "The second transport disconnect must supersede the in-flight recovery with a new generation.")
+  assert.equal(state.ready, false, "The second disconnect must keep the trading-readiness gate closed while the old recovery task is still pending.")
+  assert.equal(state.requiresReconciliation, true, "The second disconnect must preserve the application reconciliation requirement for the new generation.")
+  assert.equal(fixture.reconciliationCalls, 1, "A recovered reminder received while stale work is in flight must not start a concurrent recovery task.")
+
+  fixture.resolveFirstReconciliation({ ok: true,
+data: { reconciled: 2,
+symbols: ["DOGEUSDT"] } })
+  await staleTask
+  assertSupersededRecovery({ fixture })
+
+  statusHandler({
+    type: "recovered",
+    subscriptionId: 42,
+    recoveryGeneration: 101,
+    recoveryRequired: true,
+  })
+  const currentTask = state.recoveryTask
+  await currentTask
+  assertLatestRecoveryCompleted({ fixture })
 })

@@ -187,7 +187,7 @@ async function handleExecutionAccountingFailure({ accounting, order, fill, pause
 }
 
 function recordExecutionFillIdentity({ state, order, fill, recordBuyExecutionFill, recordSellExecutionFill }) {
-  const symbol = order.market.symbol
+  const {symbol} = order.market
   if (fill.side === "BUY") {
     recordBuyExecutionFill({
       fill,

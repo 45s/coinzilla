@@ -13,7 +13,7 @@ export function validateCancellationEligibility({ order } = {}) {
 
   if (!CANCELLABLE_STATUSES.has(order.status)) {
     return toResult({
-      error: new Error("Order in " + String(order.status) + " state is not cancellable"),
+      error: new Error(`Order in ${  String(order.status)  } state is not cancellable`),
     })
   }
 

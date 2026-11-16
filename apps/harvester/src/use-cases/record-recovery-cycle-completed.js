@@ -4,62 +4,94 @@ import { Position } from "../domain/portfolio/position.js"
 import { assertTerminalRecoverySellOrder } from "../domain/orders/assert-terminal-recovery-sell-order.js"
 import { compareDecimal, toResult } from "@coinzilla/utils"
 
+function validateRecoveryCycleCompletion({ operationalStateStore, recoveryLedger, position, sellOrder, completion }) {
+  if (typeof operationalStateStore?.append !== "function") {
+    throw new TypeError("recordRecoveryCycleCompleted requires a Operational State Store append capability")
+  }
+  if (!(recoveryLedger instanceof RecoveryLedger) || !(position instanceof Position)) {
+    throw new TypeError("recordRecoveryCycleCompleted requires canonical RecoveryLedger and Position values")
+  }
+  assertTerminalRecoverySellOrder({ sellOrder })
+  if (completion?.eligible !== true) {
+    throw new TypeError("Only an eligible recovery cycle can be durably completed")
+  }
+  const { market } = recoveryLedger
+  if (position.market.id !== market.id || sellOrder.market.id !== market.id) {
+    throw new TypeError("Recovery-cycle Position, ledger, and terminal SELL markets must match")
+  }
+  return market
+}
+
+function validateRecoveryCycleAccounting({ recoveryLedger, position, completion, minProfit }) {
+  if (compareDecimal({ left: position.spent.amount, 
+    right: recoveryLedger.buyCost }) !== 0) {
+    throw new TypeError("Recovery-cycle authoritative Position.spent must match RecoveryLedger buyCost")
+  }
+  if (compareDecimal({ left: completion.realizedNetProfit, 
+    right: recoveryLedger.realizedNetProfit }) !== 0 ||
+      compareDecimal({ left: completion.realizedNetProfit, 
+        right: minProfit }) < 0) {
+    throw new TypeError("Recovery-cycle completion profit must match the ledger and satisfy minProfit")
+  }
+  if (compareDecimal({ left: completion.activeQuantity, 
+    right: position.baseQuantity.amount }) !== 0 ||
+      compareDecimal({ left: completion.freeQuantity, 
+        right: completion.activeQuantity }) !== 0 ||
+      compareDecimal({ left: completion.minProfit, 
+        right: minProfit }) !== 0) {
+    throw new TypeError("Recovery-cycle quantities and minProfit must match the canonical completion input")
+  }
+}
+
+function createRecoveryCycleIdentity({ market, sellOrder, recoveryLedger, position, completion, minProfit }) {
+  const appliedFillIds = [...recoveryLedger.appliedFillIds]
+  if (appliedFillIds.length === 0) {
+    throw new TypeError("Recovery-cycle completion requires at least one applied execution fill")
+  }
+  const inventoryDisposition = completion.dust ?? null
+  const canonicalInventoryDisposition = inventoryDisposition === null
+    ? null
+    : Object.fromEntries(Object.entries(inventoryDisposition).sort((...entries) => {
+      const [left, right] = entries
+      return left.localeCompare(right)
+    }))
+  const cycleIdentity = JSON.stringify([
+    market.id,
+    sellOrder.clientOrderId,
+    sellOrder.brokerOrderId,
+    appliedFillIds,
+    recoveryLedger.buyCost,
+    position.spent.amount,
+    recoveryLedger.netSellProceeds,
+    completion.realizedNetProfit,
+    minProfit,
+    completion.activeQuantity,
+    completion.keepQuantity,
+    completion.freeQuantity,
+    canonicalInventoryDisposition,
+  ])
+  const cycleId = createHash("sha256").update(cycleIdentity).digest("hex")
+  return { appliedFillIds, 
+    inventoryDisposition, 
+    cycleId }
+}
+
 /** Persist an eligible recovery-cycle boundary before Portfolio/RecoveryLedger reset is committed. */
-export async function recordRecoveryCycleCompleted({
-  operationalStateStore,
-  recoveryLedger,
-  position,
-  sellOrder,
-  completion,
-  minProfit,
-} = {}) {
+export async function recordRecoveryCycleCompleted(options = {}) {
   try {
-    if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordRecoveryCycleCompleted requires a Operational State Store append capability") }
-    if (!(recoveryLedger instanceof RecoveryLedger) || !(position instanceof Position)) {
-      throw new TypeError("recordRecoveryCycleCompleted requires canonical RecoveryLedger and Position values")
-    }
-    assertTerminalRecoverySellOrder({ sellOrder })
-    if (completion?.eligible !== true) { throw new TypeError("Only an eligible recovery cycle can be durably completed") }
-    const market = recoveryLedger.market
-    if (position.market.id !== market.id || sellOrder.market.id !== market.id) {
-      throw new TypeError("Recovery-cycle Position, ledger, and terminal SELL markets must match")
-    }
-    if (compareDecimal({ left: position.spent.amount, right: recoveryLedger.buyCost }) !== 0) {
-      throw new TypeError("Recovery-cycle authoritative Position.spent must match RecoveryLedger buyCost")
-    }
-    if (compareDecimal({ left: completion.realizedNetProfit, right: recoveryLedger.realizedNetProfit }) !== 0 ||
-        compareDecimal({ left: completion.realizedNetProfit, right: minProfit }) < 0) {
-      throw new TypeError("Recovery-cycle completion profit must match the ledger and satisfy minProfit")
-    }
-    if (compareDecimal({ left: completion.activeQuantity, right: position.baseQuantity.amount }) !== 0 ||
-        compareDecimal({ left: completion.freeQuantity, right: completion.activeQuantity }) !== 0 ||
-        compareDecimal({ left: completion.minProfit, right: minProfit }) !== 0) {
-      throw new TypeError("Recovery-cycle quantities and minProfit must match the canonical completion input")
-    }
-    const inventoryDisposition = completion.dust ?? null
-    const appliedFillIds = [...recoveryLedger.appliedFillIds]
-    if (appliedFillIds.length === 0) { throw new TypeError("Recovery-cycle completion requires at least one applied execution fill") }
-    const canonicalInventoryDisposition = inventoryDisposition === null
-      ? null
-      : Object.fromEntries(Object.entries(inventoryDisposition).sort(([left], [right]) => left.localeCompare(right)))
-    const cycleIdentity = JSON.stringify([
-      market.id,
-      sellOrder.clientOrderId,
-      sellOrder.brokerOrderId,
-      appliedFillIds,
-      recoveryLedger.buyCost,
-      position.spent.amount,
-      recoveryLedger.netSellProceeds,
-      completion.realizedNetProfit,
+    const { operationalStateStore, recoveryLedger, position, sellOrder, completion, minProfit } = options
+    const market = validateRecoveryCycleCompletion(options)
+    validateRecoveryCycleAccounting(options)
+    const { appliedFillIds, inventoryDisposition, cycleId } = createRecoveryCycleIdentity({
+      market,
+      sellOrder,
+      recoveryLedger,
+      position,
+      completion,
       minProfit,
-      completion.activeQuantity,
-      completion.keepQuantity,
-      completion.freeQuantity,
-      canonicalInventoryDisposition,
-    ])
-    const cycleId = createHash("sha256").update(cycleIdentity).digest("hex")
+    })
     const result = await operationalStateStore.append({
-      factId: "recovery-cycle-completed:" + market.id + ":" + cycleId,
+      factId: `recovery-cycle-completed:${market.id}:${cycleId}`,
       factType: "RECOVERY_CYCLE_COMPLETED",
       data: {
         cycleId,
@@ -83,7 +115,11 @@ export async function recordRecoveryCycleCompleted({
       },
     })
     if (result?.ok !== true || result.data?.durable !== true) {
-      return toResult({ errors: result?.errors?.length ? result.errors : [new Error("Recovery-cycle completion append did not confirm durable commitment")] })
+      return toResult({
+        errors: result?.errors?.length
+          ? result.errors
+          : [new Error("Recovery-cycle completion append did not confirm durable commitment")],
+      })
     }
     return result
   } catch (error) {
