@@ -617,29 +617,59 @@ function getActiveOwnedBuyOrders({ state, symbol } = {}) {
     (symbol === undefined || order.market.symbol === symbol))
 }
 
-async function applyOperatorBuyPauseTransition({ state, pairs, symbol, beforeApply } = {}) {
-  if (symbol !== undefined && (typeof symbol !== "string" || !Object.hasOwn(pairs, symbol))) {
-    const error = new TypeError("Operator BUY pause requires a configured market symbol")
-    error.code = "INVALID_OPERATOR_MARKET"
+function getOperatorBuyScopeError({ pairs, symbol, operation } = {}) {
+  if (symbol === undefined || (typeof symbol === "string" && Object.hasOwn(pairs, symbol))) {
+    return undefined
+  }
+  const error = new TypeError(`Operator BUY ${operation} requires a configured market symbol`)
+  error.code = "INVALID_OPERATOR_MARKET"
+  return error
+}
+
+async function commitOperatorBuyControlFact({ beforeApply, symbol, action, failureMessage } = {}) {
+  if (typeof beforeApply !== "function") {
+    return toResult({
+      data: { durable: false },
+    })
+  }
+  let committed
+  try {
+    committed = await beforeApply({
+      ...(symbol === undefined ? {} : { symbol }),
+      action,
+    })
+  } catch (error) {
     return toResult({ error })
+  }
+  if (committed?.ok !== true || committed?.data?.durable !== true) {
+    return committed?.ok === false
+      ? committed
+      : toResult({ error: new Error(failureMessage) })
+  }
+  return committed
+}
+
+async function applyOperatorBuyPauseTransition({ state, pairs, symbol, beforeApply } = {}) {
+  const scopeError = getOperatorBuyScopeError({
+    pairs,
+    symbol,
+    operation: "pause",
+  })
+  if (scopeError) {
+    return toResult({ error: scopeError })
   }
   const alreadyPaused = symbol === undefined
     ? state.operatorAllBuysPaused === true
     : state.operatorBuyPausedMarkets.has(symbol)
-  if (!alreadyPaused && typeof beforeApply === "function") {
-    let committed
-    try {
-      committed = await beforeApply({
-        ...(symbol === undefined ? {} : { symbol }),
-        action: symbol === undefined ? "PAUSE_ALL_BUYS" : "PAUSE_BUYS",
-      })
-    } catch (error) {
-      return toResult({ error })
-    }
-    if (committed?.ok !== true || committed?.data?.durable !== true) {
-      return committed?.ok === false
-        ? committed
-        : toResult({ error: new Error("Operator BUY pause fact was not durably committed") })
+  if (!alreadyPaused) {
+    const committed = await commitOperatorBuyControlFact({
+      beforeApply,
+      symbol,
+      action: symbol === undefined ? "PAUSE_ALL_BUYS" : "PAUSE_BUYS",
+      failureMessage: "Operator BUY pause fact was not durably committed",
+    })
+    if (!committed.ok) {
+      return committed
     }
   }
   if (symbol === undefined) {
@@ -705,67 +735,76 @@ function createOperatorBuyPauseHandler({ state, pairs, runTransition, cancelOwne
   }
 }
 
+function isOperatorBuyPauseStillActive({ state, symbol } = {}) {
+  if (symbol === undefined) {
+    return state.operatorAllBuysPaused === true || state.operatorBuyPausedMarkets.size > 0
+  }
+  return isOperatorBuyPauseActive({
+    state,
+    symbol,
+  })
+}
+
+async function applyOperatorBuyResumeTransition({ state, pairs, symbol, beforeApply } = {}) {
+  const scopeError = getOperatorBuyScopeError({
+    pairs,
+    symbol,
+    operation: "resume",
+  })
+  if (scopeError) {
+    return toResult({ error: scopeError })
+  }
+  const paused = symbol === undefined
+    ? state.operatorAllBuysPaused === true
+    : state.operatorBuyPausedMarkets.has(symbol)
+  if (!paused) {
+    return toResult({
+      data: {
+        ...(symbol === undefined ? {} : { symbol }),
+        resumed: false,
+        stillPaused: isOperatorBuyPauseStillActive({
+          state,
+          symbol,
+        }),
+        reason: "NOT_OPERATOR_BUY_PAUSED",
+      },
+    })
+  }
+  const committed = await commitOperatorBuyControlFact({
+    beforeApply,
+    symbol,
+    action: symbol === undefined ? "RESUME_ALL_BUYS" : "RESUME_BUYS",
+    failureMessage: "Operator BUY resume fact was not durably committed",
+  })
+  if (!committed.ok) {
+    return committed
+  }
+  if (symbol === undefined) {
+    state.operatorAllBuysPaused = false
+  } else {
+    state.operatorBuyPausedMarkets.delete(symbol)
+  }
+  return toResult({
+    data: {
+      ...(symbol === undefined ? {} : { symbol }),
+      resumed: true,
+      stillPaused: isOperatorBuyPauseStillActive({
+        state,
+        symbol,
+      }),
+      durable: typeof beforeApply === "function",
+    },
+  })
+}
+
 function createOperatorBuyResumeHandler({ state, pairs, runTransition } = {}) {
   return ({ symbol, beforeApply } = {}) => runTransition({
-    task: async () => {
-      if (symbol !== undefined && (typeof symbol !== "string" || !Object.hasOwn(pairs, symbol))) {
-        const error = new TypeError("Operator BUY resume requires a configured market symbol")
-        error.code = "INVALID_OPERATOR_MARKET"
-        return toResult({ error })
-      }
-      const paused = symbol === undefined
-        ? state.operatorAllBuysPaused === true
-        : state.operatorBuyPausedMarkets.has(symbol)
-      if (!paused) {
-        return toResult({
-          data: {
-            ...(symbol === undefined ? {} : { symbol }),
-            resumed: false,
-            stillPaused: symbol === undefined
-              ? state.operatorBuyPausedMarkets.size > 0
-              : isOperatorBuyPauseActive({
-                state,
-                symbol,
-              }),
-            reason: "NOT_OPERATOR_BUY_PAUSED",
-          },
-        })
-      }
-      if (typeof beforeApply === "function") {
-        let committed
-        try {
-          committed = await beforeApply({
-            ...(symbol === undefined ? {} : { symbol }),
-            action: symbol === undefined ? "RESUME_ALL_BUYS" : "RESUME_BUYS",
-          })
-        } catch (error) {
-          return toResult({ error })
-        }
-        if (committed?.ok !== true || committed?.data?.durable !== true) {
-          return committed?.ok === false
-            ? committed
-            : toResult({ error: new Error("Operator BUY resume fact was not durably committed") })
-        }
-      }
-      if (symbol === undefined) {
-        state.operatorAllBuysPaused = false
-      } else {
-        state.operatorBuyPausedMarkets.delete(symbol)
-      }
-      return toResult({
-        data: {
-          ...(symbol === undefined ? {} : { symbol }),
-          resumed: true,
-          stillPaused: symbol === undefined
-            ? state.operatorBuyPausedMarkets.size > 0
-            : isOperatorBuyPauseActive({
-                state,
-                symbol,
-              }),
-          durable: typeof beforeApply === "function",
-        },
-      })
-    },
+    task: () => applyOperatorBuyResumeTransition({
+      state,
+      pairs,
+      symbol,
+      beforeApply,
+    }),
   })
 }
 
