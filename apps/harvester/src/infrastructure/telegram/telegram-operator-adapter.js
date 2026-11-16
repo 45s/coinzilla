@@ -591,7 +591,7 @@ function waitForRetry({ milliseconds, signal }) {
       resolve()
       return
     }
-    let timer
+    let timer = null
     const finish = () => {
       clearTimeout(timer)
       signal.removeEventListener("abort", finish)
