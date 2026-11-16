@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { connectBroker } from "./connect-broker.js"
 
-const test = (name, ...args) => nodeTest("[connect-broker.test.js] " + name, ...args)
+const test = (name, ...args) => nodeTest(`[connect-broker.test.js] ${  name}`, ...args)
 
 const createFixture = ({ connect, disconnect } = {}) => {
   const calls = []
@@ -11,27 +11,42 @@ const createFixture = ({ connect, disconnect } = {}) => {
   const broker = {
     placeOrder: async () => ({ ok: true }),
     cancelOrder: async () => ({ ok: true }),
-    getFills: async () => ({ ok: true, data: [] }),
-    getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
-    getCanonicalOrder: async () => ({ ok: true, data: undefined }),
-    getExchangeMarkets: async () => ({ ok: true, data: [] }),
-    getPrices: async () => ({ ok: true, data: { symbol: "BTCUSDT", price: "65000" } }),
-    getCandles: async () => ({ ok: true, data: [] }),
-    subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
+    getFills: async () => ({ ok: true,
+data: [] }),
+    getCanonicalOrderHistory: async () => ({ ok: true,
+data: [] }),
+    getCanonicalOrder: async () => ({ ok: true,
+data: undefined }),
+    getExchangeMarkets: async () => ({ ok: true,
+data: [] }),
+    getPrices: async () => ({ ok: true,
+data: { symbol: "BTCUSDT",
+price: "65000" } }),
+    getCandles: async () => ({ ok: true,
+data: [] }),
+    subscribeForCandles: async () => ({ ok: true,
+data: { unsubscribe: async () => {} } }),
     connect: async () => {
       calls.push("connect")
-      if (connect) await connect()
+      if (connect) {await connect()}
     },
     disconnect: async () => {
       calls.push("disconnect")
-      if (disconnect) await disconnect()
+      if (disconnect) {await disconnect()}
     },
-    getAccountSnapshot: async () => ({ ok: true, data: { balances: [], sourceTime: 1 } }),
-    getOpenOrders: async () => ({ ok: true, data: [] }),
-    getSymbolFilters: async () => ({ ok: true, data: {} }),
-    subscribeForPrices: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
-    subscribeForBookTicker: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
-    subscribeForUserData: async () => ({ ok: true, data: { disconnect: async () => {} } }),
+    getAccountSnapshot: async () => ({ ok: true,
+data: { balances: [],
+sourceTime: 1 } }),
+    getOpenOrders: async () => ({ ok: true,
+data: [] }),
+    getSymbolFilters: async () => ({ ok: true,
+data: {} }),
+    subscribeForPrices: async () => ({ ok: true,
+data: { unsubscribe: async () => {} } }),
+    subscribeForBookTicker: async () => ({ ok: true,
+data: { unsubscribe: async () => {} } }),
+    subscribeForUserData: async () => ({ ok: true,
+data: { disconnect: async () => {} } }),
   }
   const eventPublisher = { publish: (event) => { events.push(event); return { ok: true } } }
   const brokerAdapterFactory = ({ config }) => {
@@ -42,14 +57,22 @@ const createFixture = ({ connect, disconnect } = {}) => {
     return broker
   }
   return {
-    calls, events, broker, brokerAdapterFactory, eventPublisher,
-    env: { BINANCE_API_KEY: "test-key", BINANCE_API_SECRET_KEY: "test-secret" },
+    calls,
+events,
+broker,
+brokerAdapterFactory,
+eventPublisher,
+    env: { BINANCE_API_KEY: "test-key",
+BINANCE_API_SECRET_KEY: "test-secret" },
   }
 }
 
 test("connects a validated broker and publishes the connected lifecycle event", async () => {
   const fixture = createFixture()
-  const broker = await connectBroker({ ...fixture, brokerName: "binance", tradingMode: "testnet", logger: {} })
+  const broker = await connectBroker({ ...fixture,
+brokerName: "binance",
+tradingMode: "testnet",
+logger: {} })
 
   assert.equal(broker, fixture.broker, "The connected broker port must be returned to bootstrap.")
   assert.deepEqual(fixture.calls, ["factory", "connect"], "Broker construction must precede the connection attempt.")
@@ -60,7 +83,10 @@ test("disconnects after connection failure and publishes failure evidence", asyn
   const fixture = createFixture({ connect: async () => { throw new Error("connect failed") } })
 
   await assert.rejects(
-    connectBroker({ ...fixture, brokerName: "binance", tradingMode: "testnet", logger: { error: () => {} } }),
+    connectBroker({ ...fixture,
+brokerName: "binance",
+tradingMode: "testnet",
+logger: { error: () => {} } }),
     /connect failed/,
     "The original connection error must remain the rejection when cleanup succeeds.",
   )
@@ -75,7 +101,10 @@ test("aggregates connection and disconnect failures without losing either cause"
   })
 
   await assert.rejects(
-    connectBroker({ ...fixture, brokerName: "binance", tradingMode: "testnet", logger: { error: () => {} } }),
+    connectBroker({ ...fixture,
+brokerName: "binance",
+tradingMode: "testnet",
+logger: { error: () => {} } }),
     (error) => error instanceof AggregateError && error.errors.length === 2,
     "Connection and cleanup failures must be reported together.",
   )
