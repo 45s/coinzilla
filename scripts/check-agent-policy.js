@@ -237,7 +237,7 @@ function addMarkdownHeadingAnchor({ rawHeading, anchors, inlineCodePattern }) {
   let suffix = 0
   while (anchors.has(slug)) {
     suffix += 1
-    slug = baseSlug + "-" + suffix
+    slug = `${baseSlug}-${suffix}`
   }
   anchors.add(slug)
 }
