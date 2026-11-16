@@ -127,6 +127,166 @@ function forwardSafely(...args) {
   }
 }
 
+function buildCanonicalOrderLookup({ symbol, orderId, clientOrderId }) {
+  if (typeof symbol !== "string" || !symbol.trim()) {
+    throw new TypeError("Binance canonical order lookup requires a symbol")
+  }
+  const normalizedSymbol = symbol.trim().toUpperCase()
+  const hasOrderId = orderId !== undefined && orderId !== null
+  const hasClientOrderId = clientOrderId !== undefined && clientOrderId !== null
+  if (hasOrderId === hasClientOrderId) {
+    throw new TypeError("Provide exactly one of orderId or clientOrderId")
+  }
+
+  const params = { symbol: normalizedSymbol }
+  if (hasOrderId) {
+    params.orderId = Number(normalizeBinanceId(orderId, "order ID"))
+  } else {
+    if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
+      throw new TypeError("Binance clientOrderId must be a non-empty string")
+    }
+    params.origClientOrderId = clientOrderId.trim()
+  }
+
+  return { normalizedSymbol, params, hasOrderId, hasClientOrderId }
+}
+
+function validateCanonicalOrderResponse({ order, normalizedSymbol, params, hasOrderId, hasClientOrderId }) {
+  if (!order || typeof order !== "object" || Array.isArray(order)) {
+    throw new TypeError("Binance order.status response must be an order object")
+  }
+  if (typeof order.symbol !== "string" || order.symbol.toUpperCase() !== normalizedSymbol) {
+    throw new Error("Binance canonical order response symbol does not match the requested symbol")
+  }
+  if (hasClientOrderId && order.clientOrderId !== params.origClientOrderId) {
+    throw new Error("Binance canonical order response clientOrderId does not match the requested clientOrderId")
+  }
+  if (hasOrderId && normalizeBinanceId(order.orderId, "response order ID") !== String(params.orderId)) {
+    throw new Error("Binance canonical order response orderId does not match the requested orderId")
+  }
+}
+
+function buildCandleQuery({ symbol, interval, limit, startTime, endTime }) {
+  if (typeof symbol !== "string" || !symbol.trim()) {
+    throw new TypeError("getCandles requires a non-empty symbol")
+  }
+  const normalizedSymbol = symbol.trim().toUpperCase()
+  createStreamName("kline", { symbol: normalizedSymbol, interval })
+
+  if (!Number.isInteger(limit) || limit < 1 || limit > 1_000) {
+    throw new RangeError("getCandles limit must be an integer from 1 to 1000")
+  }
+  for (const [field, value] of [["startTime", startTime], ["endTime", endTime]]) {
+    if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
+      throw new RangeError(`getCandles ${field} must be a non-negative safe integer`)
+    }
+  }
+  if (startTime !== undefined && endTime !== undefined && startTime > endTime) {
+    throw new RangeError("getCandles startTime must not be after endTime")
+  }
+
+  const params = { symbol: normalizedSymbol, interval, limit }
+  if (startTime !== undefined) params.startTime = startTime
+  if (endTime !== undefined) params.endTime = endTime
+  return { normalizedSymbol, params }
+}
+
+function normalizeCandleRows({ rows, symbol, interval, serverTime }) {
+  if (!Array.isArray(rows)) {
+    throw new TypeError("Binance klines response must be an array")
+  }
+  const candles = rows.map((row) => adaptKlineHistoryRow({
+    row,
+    symbol,
+    interval,
+    now: serverTime,
+  }))
+  let previousOpenTime = -1
+  for (const candle of candles) {
+    if (candle.openTime <= previousOpenTime) {
+      throw new TypeError("Binance klines response must be strictly ascending by openTime")
+    }
+    previousOpenTime = candle.openTime
+  }
+  return Object.freeze(candles)
+}
+
+async function normalizeUserDataExecution({ broker, event, isTrade }) {
+  const symbol = event.executedOrder?.symbol ?? event.fill?.symbol
+  const market = await getCanonicalMarket({ broker, symbol })
+  const sourceOrder = event.executedOrder
+  const executedOrder = adaptCanonicalOrder({
+    market,
+    order: {
+      orderId: sourceOrder?.id,
+      clientOrderId: sourceOrder?.clientOrderId,
+      type: sourceOrder?.type,
+      side: sourceOrder?.side,
+      origQty: sourceOrder?.quantity,
+      executedQty: sourceOrder?.executedQuantity,
+      price: sourceOrder?.price,
+      status: sourceOrder?.status,
+      time: sourceOrder?.createdAt,
+      updateTime: sourceOrder?.updatedAt,
+    },
+  })
+
+  if (!isTrade) return { ...event, executedOrder }
+
+  const sourceFill = event.fill
+  const fill = adaptCanonicalFill({
+    market,
+    trade: {
+      id: sourceFill?.id,
+      orderId: sourceFill?.orderId,
+      isBuyer: sourceFill?.side === "BUY",
+      commission: sourceFill?.commissionAmount,
+      commissionAsset: sourceFill?.commissionAsset,
+      isMaker: sourceFill?.isMaker,
+      price: sourceFill?.price,
+      qty: sourceFill?.quantity,
+      quoteQty: sourceFill?.quoteQuantity,
+      time: sourceFill?.time,
+    },
+  })
+  return { ...event, executedOrder, fill }
+}
+
+function createUserDataEventForwarder({ broker, onEvent, onStatus, logger }) {
+  return ({ event } = {}) => {
+    if (event?.eventType !== "executionReport") {
+      forwardSafely(onEvent, onStatus, event, logger)
+      return
+    }
+
+    const isTrade = event.executionType === "TRADE"
+    notifySafely(onStatus, {
+      type: isTrade ? "executionPending" : "orderUpdatePending",
+      executionPending: isTrade,
+      orderUpdatePending: !isTrade,
+    }, logger)
+
+    Promise.resolve()
+      .then(async () => {
+        const normalizedEvent = await normalizeUserDataExecution({ broker, event, isTrade })
+        await onEvent({ event: normalizedEvent })
+      })
+      .catch((error) => {
+        notifySafely(onStatus, {
+          type: "executionNormalizationFailed",
+          recoveryRequired: true,
+          symbol: event.executedOrder?.symbol ?? event.fill?.symbol,
+          brokerOrderId: event.executedOrder?.id ?? event.fill?.orderId,
+          clientOrderId: event.clientOrderId ?? event.executedOrder?.clientOrderId,
+          executionId: event.fill?.id ?? event.executionId,
+          brokerEvidence: event.brokerEvidence,
+          error,
+        }, logger)
+        logSafely(logger, "error", "Unable to normalize Binance user-data execution", error)
+      })
+  }
+}
+
 
 /**
  * @template T
@@ -364,54 +524,27 @@ error })
    */
   async getCanonicalOrder({ symbol, orderId, clientOrderId } = {}) {
     try {
-      if (typeof symbol !== "string" || !symbol.trim()) {
-        throw new TypeError("Binance canonical order lookup requires a symbol")
-      }
-      const normalizedSymbol = symbol.trim().toUpperCase()
-      const hasOrderId = orderId !== undefined && orderId !== null
-      const hasClientOrderId = clientOrderId !== undefined && clientOrderId !== null
-      if (hasOrderId === hasClientOrderId) {
-        throw new TypeError("Provide exactly one of orderId or clientOrderId")
-      }
-      const params = { symbol: normalizedSymbol }
-      if (hasOrderId) {
-        params.orderId = Number(normalizeBinanceId(orderId, "order ID"))
-      } else {
-        if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
-          throw new TypeError("Binance clientOrderId must be a non-empty string")
-        }
-        params.origClientOrderId = clientOrderId.trim()
-      }
+      const lookup = buildCanonicalOrderLookup({ symbol, orderId, clientOrderId })
+      const response = await this.tradingConnection.request("order.status", lookup.params, { signed: true })
+      validateCanonicalOrderResponse({
+        order: response?.data,
+        ...lookup,
+      })
 
-      const response = await this.tradingConnection.request("order.status", params, { signed: true })
-      const order = response?.data
-      if (!order || typeof order !== "object" || Array.isArray(order)) {
-        throw new TypeError("Binance order.status response must be an order object")
-      }
-      if (typeof order.symbol !== "string" || order.symbol.toUpperCase() !== normalizedSymbol) {
-        throw new Error("Binance canonical order response symbol does not match the requested symbol")
-      }
-      if (hasClientOrderId && order.clientOrderId !== params.origClientOrderId) {
-        throw new Error("Binance canonical order response clientOrderId does not match the requested clientOrderId")
-      }
-      if (hasOrderId && normalizeBinanceId(order.orderId, "response order ID") !== String(params.orderId)) {
-        throw new Error("Binance canonical order response orderId does not match the requested orderId")
-      }
-
-      const metadataResponse = await this.tradingConnection.request("exchangeInfo", { symbol: normalizedSymbol })
+      const metadataResponse = await this.tradingConnection.request("exchangeInfo", {
+        symbol: lookup.normalizedSymbol,
+      })
       const market = createCanonicalOrderHistoryMarket({
-        symbol: normalizedSymbol,
+        symbol: lookup.normalizedSymbol,
         exchangeInfo: metadataResponse.data,
       })
-      return toResult({ data: adaptCanonicalOrder({ order,
-market }) })
+      return toResult({ data: adaptCanonicalOrder({ order: response.data, market }) })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getCanonicalOrder()",
-error })
+      handleErr({ where: "BinanceWebSocketBroker.getCanonicalOrder()", error })
       return toResult({ errors: [error] })
     }
   }
-  /** @param {{symbol: string, orderId?: string|number, startTime?: number, endTime?: number, limit?: number}} [input] @returns {Promise<BrokerResult<object[]>>} */
+
   async getOrderHistory(input = {}) {
     try {
       const params = createOrderHistoryParams(input)
@@ -639,60 +772,23 @@ error })
    */
   async getCandles({ symbol, interval, limit = 500, startTime, endTime } = {}) {
     try {
-      if (typeof symbol !== "string" || !symbol.trim()) {
-        throw new TypeError("getCandles requires a non-empty symbol")
-      }
-      const normalizedSymbol = symbol.trim().toUpperCase()
-      createStreamName("kline", { symbol: normalizedSymbol,
-interval })
-
-      if (!Number.isInteger(limit) || limit < 1 || limit > 1_000) {
-        throw new RangeError("getCandles limit must be an integer from 1 to 1000")
-      }
-      for (const [field, value] of [["startTime", startTime], ["endTime", endTime]]) {
-        if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
-          throw new RangeError(`getCandles ${  field  } must be a non-negative safe integer`)
-        }
-      }
-      if (startTime !== undefined && endTime !== undefined && startTime > endTime) {
-        throw new RangeError("getCandles startTime must not be after endTime")
-      }
-
-      const params = { symbol: normalizedSymbol,
-interval,
-limit }
-      if (startTime !== undefined) {params.startTime = startTime}
-      if (endTime !== undefined) {params.endTime = endTime}
-
+      const query = buildCandleQuery({ symbol, interval, limit, startTime, endTime })
       const timeResponse = await this.tradingConnection.request("time")
       const serverTime = timeResponse.data?.serverTime
       if (!Number.isSafeInteger(serverTime) || serverTime < 0) {
         throw new TypeError("Binance time response is missing a valid serverTime")
       }
 
-      const response = await this.tradingConnection.request("klines", params)
-      if (!Array.isArray(response?.data)) {
-        throw new TypeError("Binance klines response must be an array")
-      }
-
-      const candles = response.data.map((row) => adaptKlineHistoryRow({
-        row,
-        symbol: normalizedSymbol,
+      const response = await this.tradingConnection.request("klines", query.params)
+      const candles = normalizeCandleRows({
+        rows: response?.data,
+        symbol: query.normalizedSymbol,
         interval,
-        now: serverTime,
-      }))
-      let previousOpenTime = -1
-      for (const candle of candles) {
-        if (candle.openTime <= previousOpenTime) {
-          throw new TypeError("Binance klines response must be strictly ascending by openTime")
-        }
-        previousOpenTime = candle.openTime
-      }
-
-      return toResult({ data: Object.freeze(candles) })
+        serverTime,
+      })
+      return toResult({ data: candles })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getCandles()",
-error })
+      handleErr({ where: "BinanceWebSocketBroker.getCandles()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -860,96 +956,22 @@ error })
    */
   async subscribeForUserData({ onEvent, onStatus }) {
     try {
-      if (!this.connected) {throw new Error("Binance broker must be connected before subscribing to user data")}
-      validateCallback(onEvent, "onEvent")
-      if (onStatus !== undefined) {validateCallback(onStatus, "onStatus")}
-
-      const forwardEvent = ({ event } = {}) => {
-        if (event?.eventType !== "executionReport") {
-          forwardSafely(onEvent, onStatus, event, this.logger)
-          return
-        }
-
-        const isTrade = event.executionType === "TRADE"
-        notifySafely(onStatus, {
-          type: isTrade ? "executionPending" : "orderUpdatePending",
-          executionPending: isTrade,
-          orderUpdatePending: !isTrade,
-        }, this.logger)
-
-        Promise.resolve()
-          .then(async () => {
-            const symbol = event.executedOrder?.symbol ?? event.fill?.symbol
-            const market = await getCanonicalMarket({ broker: this,
-symbol })
-            const sourceOrder = event.executedOrder
-            const executedOrder = adaptCanonicalOrder({
-              market,
-              order: {
-                orderId: sourceOrder?.id,
-                clientOrderId: sourceOrder?.clientOrderId,
-                type: sourceOrder?.type,
-                side: sourceOrder?.side,
-                origQty: sourceOrder?.quantity,
-                executedQty: sourceOrder?.executedQuantity,
-                price: sourceOrder?.price,
-                status: sourceOrder?.status,
-                time: sourceOrder?.createdAt,
-                updateTime: sourceOrder?.updatedAt,
-              },
-            })
-
-            let fill
-            if (isTrade) {
-              const sourceFill = event.fill
-              fill = adaptCanonicalFill({
-                market,
-                trade: {
-                  id: sourceFill?.id,
-                  orderId: sourceFill?.orderId,
-                  isBuyer: sourceFill?.side === "BUY",
-                  commission: sourceFill?.commissionAmount,
-                  commissionAsset: sourceFill?.commissionAsset,
-                  isMaker: sourceFill?.isMaker,
-                  price: sourceFill?.price,
-                  qty: sourceFill?.quantity,
-                  quoteQty: sourceFill?.quoteQuantity,
-                  time: sourceFill?.time,
-                },
-              })
-            }
-
-            await onEvent({
-              event: {
-                ...event,
-                executedOrder,
-                ...(isTrade ? { fill } : {}),
-              },
-            })
-          })
-          .catch((error) => {
-            notifySafely(onStatus, {
-              type: "executionNormalizationFailed",
-              recoveryRequired: true,
-              symbol: event.executedOrder?.symbol ?? event.fill?.symbol,
-              brokerOrderId: event.executedOrder?.id ?? event.fill?.orderId,
-              clientOrderId: event.clientOrderId ?? event.executedOrder?.clientOrderId,
-              executionId: event.fill?.id ?? event.executionId,
-              brokerEvidence: event.brokerEvidence,
-              error,
-            }, this.logger)
-            logSafely(this.logger, "error", "Unable to normalize Binance user-data execution", error)
-          })
+      if (!this.connected) {
+        throw new Error("Binance broker must be connected before subscribing to user data")
       }
+      validateCallback(onEvent, "onEvent")
+      if (onStatus !== undefined) validateCallback(onStatus, "onStatus")
 
-      const result = await this.userDataSession.subscribe({
-        onEvent: forwardEvent,
+      const forwardEvent = createUserDataEventForwarder({
+        broker: this,
+        onEvent,
         onStatus,
+        logger: this.logger,
       })
+      const result = await this.userDataSession.subscribe({ onEvent: forwardEvent, onStatus })
       return toResult(result)
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.subscribeForUserData()",
-error })
+      handleErr({ where: "BinanceWebSocketBroker.subscribeForUserData()", error })
       return toResult({ errors: [error] })
     }
   }
