@@ -47,8 +47,8 @@ async function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 15_
       new Promise((_, reject) => {
         timeout = setTimeout(() => {
           reject(new Error(
-            label + " was not observed within " + timeoutMs + "ms; diagnostics: " +
-            JSON.stringify(getDiagnostics()),
+            `${label  } was not observed within ${  timeoutMs  }ms; diagnostics: ${ 
+            JSON.stringify(getDiagnostics())}`,
           ))
         }, timeoutMs)
       }),
@@ -117,14 +117,14 @@ const withExternalOrdersPolicy = (symbol, externalOrdersPolicy) => ({
 })
 const createMarketMetadata = (symbol) => {
   const quoteCode = ["USDT", "FDUSD"].find((code) => symbol.endsWith(code))
-  if (!quoteCode) {throw new Error("Unsupported test market quote asset for " + symbol)}
+  if (!quoteCode) {throw new Error(`Unsupported test market quote asset for ${  symbol}`)}
   const baseCode = symbol.slice(0, -quoteCode.length)
   const baseAsset = new Asset({
-    id: "asset:" + baseCode,
+    id: `asset:${  baseCode}`,
     code: baseCode
   })
   const quoteAsset = new Asset({
-    id: "asset:" + quoteCode,
+    id: `asset:${  quoteCode}`,
     code: quoteCode
   })
   const market = new Market({
@@ -269,7 +269,7 @@ function createBrokerAccountPorts({ calls, state }) {
       state.accountSnapshotTime += 1
       const balances = ["BTC", "ETH", "USDT"].map((code) => {
         const asset = new Asset({
-          id: "asset:" + code,
+          id: `asset:${  code}`,
           code,
         })
         return new Balance({
@@ -296,7 +296,7 @@ function createBrokerAccountPorts({ calls, state }) {
       data: [],
     }),
     getSymbolFilters: async ({ symbol }) => {
-      calls.push("filters:" + symbol)
+      calls.push(`filters:${  symbol}`)
       return {
         ok: true,
         data: createMarketMetadata(symbol),
@@ -330,22 +330,22 @@ function createBrokerCandlePorts() {
 function createBrokerPriceStreamPorts({ calls, state, subscribeResult, subscribeResultBySymbol }) {
   return {
     subscribeForPrices: async ({ symbol, onPrice }) => {
-      calls.push("subscribe:" + symbol)
+      calls.push(`subscribe:${  symbol}`)
       state.subscriptions.set(symbol, onPrice)
       return subscribeResultBySymbol[symbol] ?? subscribeResult ?? {
         ok: true,
         data: {
-          unsubscribe: async () => calls.push("unsubscribe:" + symbol),
+          unsubscribe: async () => calls.push(`unsubscribe:${  symbol}`),
         },
       }
     },
     subscribeForBookTicker: async ({ symbol, onBookTicker }) => {
-      calls.push("subscribe:book:" + symbol)
+      calls.push(`subscribe:book:${  symbol}`)
       state.bookSubscriptions.set(symbol, onBookTicker)
       return {
         ok: true,
         data: {
-          unsubscribe: async () => calls.push("unsubscribe:book:" + symbol),
+          unsubscribe: async () => calls.push(`unsubscribe:book:${  symbol}`),
         },
       }
     },
@@ -476,7 +476,7 @@ const makeVolatilityReadyBroker = (broker, symbols = ["BTCUSDT"]) => {
     return {
       ok: true,
       data: {
-        stream: symbol.toLowerCase() + "@kline_" + interval,
+        stream: `${symbol.toLowerCase()  }@kline_${  interval}`,
         unsubscribe: async () => {}
       },
     }
@@ -509,7 +509,7 @@ const createFill = ({
   })
   return new Fill({
     tradeId,
-    brokerOrderId: "order-" + tradeId,
+    brokerOrderId: `order-${  tradeId}`,
     market,
     side: "BUY",
     price: new Money({
@@ -563,14 +563,16 @@ test("rejects enabled Telegram operator control without a bot token before conne
 test("starts Telegram CC without constructing or verifying the recovery store", async () => {
   const config = {
     ...appConfig,
-    operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } },
+    operatorControl: { telegram: { enabled: true,
+allowedUserIds: ["12345"] } },
   }
   let storeFactoryCalls = 0
   let adapterStarted = false
   const broker = createBroker()
   const runtime = await startHarvesterForTest({
     loadConfig: async () => config,
-    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token" },
+    env: { ...binanceEnv,
+TELEGRAM_BOT_TOKEN: "test-telegram-token" },
     createOperationalStateStore: () => {
       storeFactoryCalls += 1
       throw new Error("Telegram CC must not construct or verify ADR-0001 recovery storage.")
@@ -580,7 +582,8 @@ test("starts Telegram CC without constructing or verifying the recovery store", 
       stop: async () => ({ stopped: true }),
     }),
     brokerAdapterFactory: () => broker,
-    logger: { info() {}, error() {} },
+    logger: { info() {},
+error() {} },
   })
   try {
     assert.equal(storeFactoryCalls, 0, "Telegram CC must not construct the recovery store when restart recovery is disabled.")
@@ -931,7 +934,7 @@ test("subscribes only enabled pairs for Binance trading", async () => {
 })
 
 test("keeps external open orders audit-blocked but does not block startup or cancel them", async () => {
-  const market = createMarketMetadata("BTCUSDT").market
+  const {market} = createMarketMetadata("BTCUSDT")
   const externalCanonicalOrder = new CanonicalOrder({
     clientOrderId: "manual-client-order",
     brokerOrderId: "manual-broker-order",
@@ -958,7 +961,7 @@ test("keeps external open orders audit-blocked but does not block startup or can
   const externalOpenOrder = createOpenOrderSnapshot({ order: externalCanonicalOrder })
   const broker = createBroker([], { externalOpenOrders: [externalOpenOrder] })
   const cancellationRequests = []
-  const cancelOrder = broker.cancelOrder
+  const {cancelOrder} = broker
   broker.cancelOrder = async (input) => {
     cancellationRequests.push(input)
     return cancelOrder(input)
@@ -1021,7 +1024,7 @@ function createDelayedFirstTickerBroker({ broker, calls }) {
     resolveFirstTicker = resolve
   })
   broker.getPrices = async ({ symbol }) => {
-    calls.push("prices:" + symbol)
+    calls.push(`prices:${  symbol}`)
     if (symbol === "BTCUSDT") {
       return firstTicker
     }
@@ -1038,7 +1041,7 @@ function createDelayedFirstTickerBroker({ broker, calls }) {
     accountSnapshotTime += 1
     const balances = ["BTC", "ETH", "USDT"].map((code) => {
       const asset = new Asset({
-        id: "asset:" + code,
+        id: `asset:${  code}`,
         code,
       })
       return new Balance({
@@ -1071,7 +1074,7 @@ function createDelayedFirstTickerBroker({ broker, calls }) {
   const secondSubscription = new Promise((resolve) => {
     resolveSecondSubscription = resolve
   })
-  const subscribeForPrices = broker.subscribeForPrices
+  const {subscribeForPrices} = broker
   broker.subscribeForPrices = async (input) => {
     const result = await subscribeForPrices(input)
     if (input.symbol === "ETHUSDT") {
@@ -1352,7 +1355,7 @@ test("does not adopt unowned execution events into strategy accounting", async (
 
 test("does not clear a genuine startup stream-recovery gate with only the initial balance snapshot", async () => {
   const broker = createBroker()
-  const subscribeForUserData = broker.subscribeForUserData
+  const {subscribeForUserData} = broker
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
     handlers.onStatus({
@@ -1382,7 +1385,7 @@ test("does not clear a genuine startup stream-recovery gate with only the initia
 test("does not adopt an external order report received before the ownership registry is ready", async () => {
   const calls = []
   const broker = createBroker(calls)
-  const subscribeForUserData = broker.subscribeForUserData
+  const {subscribeForUserData} = broker
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
     handlers.onEvent({
@@ -1415,7 +1418,7 @@ test("does not adopt an external order report received before the ownership regi
 
 function createApplicationRecoveryAcknowledgementFixture({ broker }) {
   let openOrderReads = 0
-  const getOpenOrders = broker.getOpenOrders
+  const {getOpenOrders} = broker
   broker.getOpenOrders = async (input) => {
     openOrderReads += 1
     return getOpenOrders(input)
@@ -1438,7 +1441,7 @@ function createApplicationRecoveryAcknowledgementFixture({ broker }) {
   const acknowledged = new Promise((resolve) => {
     resolveAcknowledgement = resolve
   })
-  const subscribeForUserData = broker.subscribeForUserData
+  const {subscribeForUserData} = broker
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
     return {
@@ -1530,10 +1533,10 @@ test("starts application reconciliation on transport recovery and acknowledges o
 
 test("repeats recovery snapshots when a user-data event arrives during REST audit reads", async () => {
   const broker = createBroker()
-  const getAccountSnapshot = broker.getAccountSnapshot
+  const {getAccountSnapshot} = broker
   let accountReads = 0
   let openOrderReads = 0
-  const getOpenOrders = broker.getOpenOrders
+  const {getOpenOrders} = broker
   broker.getOpenOrders = async (input) => {
     openOrderReads += 1
     return getOpenOrders(input)
@@ -1548,7 +1551,7 @@ test("repeats recovery snapshots when a user-data event arrives during REST audi
   let acknowledgementCount = 0
   let resolveAcknowledgement
   const acknowledged = new Promise((resolve) => { resolveAcknowledgement = resolve })
-  const subscribeForUserData = broker.subscribeForUserData
+  const {subscribeForUserData} = broker
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
     return {
@@ -1635,7 +1638,7 @@ test("logs stack and cause details when a user-data RPC error has an empty messa
 
 test("keeps recovery blocked and does not acknowledge when the fresh account snapshot fails", async () => {
   const broker = createBroker()
-  const getAccountSnapshot = broker.getAccountSnapshot
+  const {getAccountSnapshot} = broker
   let accountReads = 0
   broker.getAccountSnapshot = async () => {
     accountReads += 1
@@ -1648,7 +1651,7 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
   let acknowledgementCount = 0
   let resolveFailure
   const failed = new Promise((resolve) => { resolveFailure = resolve })
-  const subscribeForUserData = broker.subscribeForUserData
+  const {subscribeForUserData} = broker
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
     return {
@@ -1697,7 +1700,7 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
 
 test("does not acknowledge a stale recovery after a newer disconnect", async () => {
   const broker = createBroker()
-  const getAccountSnapshot = broker.getAccountSnapshot
+  const {getAccountSnapshot} = broker
   let accountReads = 0
   let releaseRecoverySnapshot
   let resolveRecoverySnapshotStarted
@@ -1714,7 +1717,7 @@ test("does not acknowledge a stale recovery after a newer disconnect", async () 
   let acknowledgementCount = 0
   let resolveStaleFailure
   const staleFailure = new Promise((resolve) => { resolveStaleFailure = resolve })
-  const subscribeForUserData = broker.subscribeForUserData
+  const {subscribeForUserData} = broker
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
     return {
@@ -1769,7 +1772,7 @@ test("does not acknowledge a stale recovery after a newer disconnect", async () 
 
 test("fails startup when user-data recovery is required during subscription setup", async () => {
   const broker = createBroker()
-  const subscribeForUserData = broker.subscribeForUserData
+  const {subscribeForUserData} = broker
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
     handlers.onStatus({
@@ -1912,7 +1915,7 @@ test("fails startup before opening streams when required minimum notional is una
   const calls = []
   const broker = createBroker(calls)
   broker.getSymbolFilters = async ({ symbol }) => {
-    calls.push("filters:" + symbol)
+    calls.push(`filters:${  symbol}`)
     const metadata = createMarketMetadata(symbol)
     return {
       ok: true,
@@ -1947,7 +1950,7 @@ test("fails startup when the configured post-only order type is unsupported", as
   const calls = []
   const broker = createBroker(calls)
   broker.getSymbolFilters = async ({ symbol }) => {
-    calls.push("filters:" + symbol)
+    calls.push(`filters:${  symbol}`)
     return {
       ok: true,
       data: {
@@ -1974,7 +1977,7 @@ test("fails startup when the configured post-only order type is unsupported", as
 
 test("does not request another account snapshot after a TRADE when later snapshots would fail", async () => {
   const broker = createBroker()
-  const getAccountSnapshot = broker.getAccountSnapshot
+  const {getAccountSnapshot} = broker
   let calls = 0
   broker.getAccountSnapshot = async () => {
     calls += 1
@@ -2306,7 +2309,7 @@ class TestnetTradingRecoveryScenario {
         this.subscriptions.set(symbol, onPrice)
         return {
           ok: true,
-          data: { unsubscribe: async () => this.calls.push("unsubscribe:" + symbol) }
+          data: { unsubscribe: async () => this.calls.push(`unsubscribe:${  symbol}`) }
         }
       },
       subscribeForBookTicker: async ({
@@ -2316,7 +2319,7 @@ class TestnetTradingRecoveryScenario {
         this.bookSubscriptions.set(symbol, onBookTicker)
         return {
           ok: true,
-          data: { unsubscribe: async () => this.calls.push("unsubscribe:book:" + symbol) }
+          data: { unsubscribe: async () => this.calls.push(`unsubscribe:book:${  symbol}`) }
         }
       },
     }
@@ -2335,7 +2338,7 @@ class TestnetTradingRecoveryScenario {
         if (this.submittedOrders.length === 5) {this.resolveFiveOrders()}
         const acknowledgedOrder = new CanonicalOrder({
             clientOrderId: order.clientOrderId,
-            brokerOrderId: "broker-" + order.clientOrderId,
+            brokerOrderId: `broker-${  order.clientOrderId}`,
             market: this.marketMetadata.market,
             side: order.side,
             type: order.type,
@@ -2570,7 +2573,7 @@ class TestnetTradingRecoveryScenario {
   
     const acknowledgedBuy = new CanonicalOrder({
       clientOrderId: this.submittedOrders[0].clientOrderId,
-      brokerOrderId: "broker-" + this.submittedOrders[0].clientOrderId,
+      brokerOrderId: `broker-${  this.submittedOrders[0].clientOrderId}`,
       market: this.marketMetadata.market,
       side: "BUY",
       type: "LIMIT_MAKER",
@@ -2623,7 +2626,7 @@ class TestnetTradingRecoveryScenario {
   async runStep5() {
     this.canonicalBuy = new CanonicalOrder({
       clientOrderId: this.clientOrderId,
-      brokerOrderId: "broker-" + this.clientOrderId,
+      brokerOrderId: `broker-${  this.clientOrderId}`,
       market: this.marketMetadata.market,
       side: "BUY",
       type: "LIMIT_MAKER",
@@ -2944,7 +2947,7 @@ class TestnetTradingRecoveryScenario {
   
     this.canonicalSecondBuy = new CanonicalOrder({
       clientOrderId: this.secondBuyIntent.clientOrderId,
-      brokerOrderId: "broker-" + this.secondBuyIntent.clientOrderId,
+      brokerOrderId: `broker-${  this.secondBuyIntent.clientOrderId}`,
       market: this.marketMetadata.market,
       side: "BUY",
       type: "LIMIT_MAKER",
@@ -3029,7 +3032,7 @@ class TestnetTradingRecoveryScenario {
   async runStep12() {
     this.canonicalSell = new CanonicalOrder({
       clientOrderId: this.replacementSell.clientOrderId,
-      brokerOrderId: "broker-" + this.replacementSell.clientOrderId,
+      brokerOrderId: `broker-${  this.replacementSell.clientOrderId}`,
       market: this.marketMetadata.market,
       side: "SELL",
       type: "LIMIT_MAKER",
@@ -3517,7 +3520,7 @@ test("disconnects after a CLOSING snapshot durability failure and reports shutdo
       publish: (event) => { events.push(event); return { ok: true } },
       flush: async () => {
         flushCount += 1
-        calls.push("journal:flush:" + flushCount)
+        calls.push(`journal:flush:${  flushCount}`)
         return flushCount < 3
           ? {
             ok: true,
@@ -3579,12 +3582,12 @@ function blockSymbolOpenOrderQuery({ broker }) {
 
 function configureOwnedBuyBroker({ broker, calls, market }) {
   broker.placeOrder = async ({ order }) => {
-    calls.push("placeOrder:" + order.side)
+    calls.push(`placeOrder:${  order.side}`)
     return {
       ok: true,
       data: new CanonicalOrder({
         clientOrderId: order.clientOrderId,
-        brokerOrderId: "broker-" + order.clientOrderId,
+        brokerOrderId: `broker-${  order.clientOrderId}`,
         market,
         side: order.side,
         type: order.type,
@@ -3676,7 +3679,7 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
   const calls = []
   const broker = createBroker(calls)
   const events = []
-  const market = createMarketMetadata("BTCUSDT").market
+  const {market} = createMarketMetadata("BTCUSDT")
   const blockedQuery = blockSymbolOpenOrderQuery({
     broker,
   })
@@ -3723,7 +3726,7 @@ test("journals PREFLIGHT balances and open orders before trading and CLOSING bal
   const calls = []
   const broker = createBroker(calls)
   let openOrderReads = 0
-  const getOpenOrders = broker.getOpenOrders
+  const {getOpenOrders} = broker
   broker.getOpenOrders = async (input) => {
     openOrderReads += 1
     assert.deepEqual(input, {})
@@ -3733,7 +3736,7 @@ test("journals PREFLIGHT balances and open orders before trading and CLOSING bal
   const eventPublisher = {
     publish: (event) => {
       events.push(event)
-      calls.push("publish:" + event.name)
+      calls.push(`publish:${  event.name}`)
       return { ok: true }
     },
     flush: async () => {
@@ -3835,12 +3838,13 @@ function createPriorProcessOrderBroker({ calls, canceledClientOrderIds } = {}) {
     status: "NEW",
   }
   const broker = createBroker(calls, { externalOpenOrders: [startupOrder] })
-  const cancelOrder = broker.cancelOrder
+  const {cancelOrder} = broker
   broker.cancelOrder = async (input = {}) => {
     canceledClientOrderIds.push(input.order?.clientOrderId)
     return cancelOrder(input)
   }
-  return { broker, startupClientOrderId }
+  return { broker,
+startupClientOrderId }
 }
 
 test("treats a prior-process Harvester order as external under IGNORE and evaluates a real market-price event", async () => {
@@ -3968,7 +3972,7 @@ function createDurableStartupAuditFixture({ calls }) {
       data: {
         balances: ["BTC", "ETH", "USDT"].map((code) => {
           const asset = new Asset({
-            id: "asset:" + code,
+            id: `asset:${  code}`,
             code,
           })
           return new Balance({
@@ -4000,14 +4004,14 @@ function createDurableStartupAuditFixture({ calls }) {
   const eventPublisher = {
     publish: (event) => {
       events.push(event)
-      calls.push("publish:" + event.name)
+      calls.push(`publish:${  event.name}`)
       return {
         ok: true,
       }
     },
     flush: async () => {
       flushCount += 1
-      calls.push("journal:flush:" + flushCount)
+      calls.push(`journal:flush:${  flushCount}`)
       return {
         ok: true,
         durable: true,
@@ -4342,7 +4346,7 @@ function createShutdownBuyCancellationGates() {
 
 function createShutdownBuyCancellationBroker({ calls, gates }) {
   const broker = createBroker(calls)
-  const market = createMarketMetadata("BTCUSDT").market
+  const {market} = createMarketMetadata("BTCUSDT")
   let submittedOrder
   let canceledOrder
   broker.getOpenOrders = async () => ({
@@ -4359,10 +4363,10 @@ function createShutdownBuyCancellationBroker({ calls, gates }) {
       order?.brokerOrderId === orderId),
   })
   broker.placeOrder = async ({ order }) => {
-    calls.push("placeOrder:" + order.side)
+    calls.push(`placeOrder:${  order.side}`)
     submittedOrder = new CanonicalOrder({
       clientOrderId: order.clientOrderId,
-      brokerOrderId: "broker-" + order.clientOrderId,
+      brokerOrderId: `broker-${  order.clientOrderId}`,
       market,
       side: order.side,
       type: order.type,
@@ -4389,7 +4393,7 @@ function createShutdownBuyCancellationBroker({ calls, gates }) {
     }
   }
   broker.cancelOrder = async ({ order }) => {
-    calls.push("cancelOrder:" + order.side)
+    calls.push(`cancelOrder:${  order.side}`)
     gates.signalCancelStarted()
     await gates.cancelGate
     canceledOrder = new CanonicalOrder({
@@ -4589,7 +4593,7 @@ function createOwnedBuySafetyCancellationBroker({ calls, cancelledBrokerOrderIds
       data: acknowledgedOrder,
     }
   }
-  const cancelOrder = broker.cancelOrder
+  const {cancelOrder} = broker
   broker.cancelOrder = async ({ order } = {}) => {
     cancelledBrokerOrderIds.push(order.brokerOrderId)
     const result = await cancelOrder({
@@ -4897,11 +4901,11 @@ function assertConfiguredAssetPreflight({ events, runtime, calls, expectedAssetC
     "the in-memory account snapshot must use the same configured-asset allowlist rather than retaining unrelated wallet assets",
   )
   for (const symbol of ["ETHUSDT", "DOGEUSDT", "ZROFDUSD", "SOLFDUSD"]) {
-    assert.ok(calls.includes("filters:" + symbol))
+    assert.ok(calls.includes(`filters:${  symbol}`))
     assert.equal(
-      calls.includes("subscribe:" + symbol) || calls.includes("subscribe:book:" + symbol),
+      calls.includes(`subscribe:${  symbol}`) || calls.includes(`subscribe:book:${  symbol}`),
       false,
-      "resolving disabled configured pair " + symbol + " must not enable market subscriptions or trading",
+      `resolving disabled configured pair ${  symbol  } must not enable market subscriptions or trading`,
     )
   }
 }
@@ -4966,7 +4970,7 @@ test("account snapshots include every configured pair asset, including disabled 
 
 
 function createRecoveryModeEventFixture({ broker }) {
-  const getAccountSnapshot = broker.getAccountSnapshot
+  const {getAccountSnapshot} = broker
   let accountReads = 0
   let resolveRecoverySnapshotStarted
   let releaseRecoverySnapshot
@@ -4993,7 +4997,7 @@ function createRecoveryModeEventFixture({ broker }) {
   const recoveryAcknowledged = new Promise((resolve) => {
     resolveRecoveryAcknowledged = resolve
   })
-  const subscribeForUserData = broker.subscribeForUserData
+  const {subscribeForUserData} = broker
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
     return {
@@ -5332,7 +5336,7 @@ async function createSharedOperatorRuntimeFixture({ broker, operationalStateStor
   const recoveryAcknowledged = new Promise((resolve) => {
     resolveRecoveryAcknowledgement = resolve
   })
-  const subscribeForUserData = broker.subscribeForUserData
+  const {subscribeForUserData} = broker
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
     return {
@@ -5654,7 +5658,7 @@ function createShutdownDrainBroker({ calls } = {}) {
       data: {
         ...result.data,
         unsubscribe: async () => {
-          calls.push("unsubscribe:book:" + input.symbol)
+          calls.push(`unsubscribe:book:${  input.symbol}`)
           resolveBookUnsubscribe()
           return result.data.unsubscribe()
         },
@@ -5671,7 +5675,7 @@ function createShutdownDrainBroker({ calls } = {}) {
       data: {
         ...result.data,
         unsubscribe: async () => {
-          calls.push("unsubscribe:" + input.symbol)
+          calls.push(`unsubscribe:${  input.symbol}`)
           resolveMarketUnsubscribe()
           return result.data.unsubscribe()
         },
