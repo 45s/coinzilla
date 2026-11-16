@@ -166,7 +166,10 @@ function auditTradeHistory({
   return result
 }
 
-function createAccountBalanceContext({ projection, currentAccountSnapshot }) {
+function createAccountBalanceContext({
+    projection,
+    currentAccountSnapshot,
+  }) {
   const baseline = getInitialTradingSnapshot({ projection })
   if (!baseline) {
     throw new Error("Initial trading-session PREFLIGHT account snapshot is missing; account ownership cannot be proven")
@@ -220,7 +223,11 @@ function createAccountBalanceContext({ projection, currentAccountSnapshot }) {
     currentByAsset }
 }
 
-function createMarketContext({ recoveredState, markets, targetMarket }) {
+function createMarketContext({
+    recoveredState,
+    markets,
+    targetMarket,
+  }) {
   const expectedDeltas = new Map()
   const marketsById = new Map()
   const marketsBySymbol = new Map()
@@ -822,7 +829,13 @@ function prepareExpectedAccountBalances({
     currentByAsset: accountBalances.currentByAsset,
     expectedDeltas: marketContext.expectedDeltas,
   })
-  return { accountBalances, marketContext, thirdAssetCommissionCodes, assetCodes, marketAssetCodes }
+  return {
+    accountBalances,
+    marketContext,
+    thirdAssetCommissionCodes,
+    assetCodes,
+    marketAssetCodes,
+  }
 }
 
 function runRecoveredAccountAudit(options) {
