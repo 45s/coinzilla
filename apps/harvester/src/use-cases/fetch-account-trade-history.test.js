@@ -3,13 +3,19 @@ import test from "node:test"
 import { Asset, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { fetchAccountTradeHistory } from "./fetch-account-trade-history.js"
 
-const baseAsset = new Asset({ id: "btc", code: "BTC" })
-const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "BTCUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({ id: "btc",
+code: "BTC" })
+const quoteAsset = new Asset({ id: "usdt",
+code: "USDT" })
+const market = new Market({ venue: "binance",
+symbol: "BTCUSDT",
+baseAsset,
+quoteAsset })
 const otherMarket = new Market({
   venue: "binance",
   symbol: "ETHUSDT",
-  baseAsset: new Asset({ id: "eth", code: "ETH" }),
+  baseAsset: new Asset({ id: "eth",
+code: "ETH" }),
   quoteAsset,
 })
 
@@ -22,9 +28,12 @@ const makeFill = (input = {}) => {
   brokerOrderId: "9001",
   market: fillMarket,
   side: "BUY",
-  price: new Money({ amount: "100", asset: fillMarket.quoteAsset }),
-  quantity: new Quantity({ amount: "0.1", asset: fillMarket.baseAsset }),
-  quoteQuantity: new Money({ amount: "10", asset: fillMarket.quoteAsset }),
+  price: new Money({ amount: "100",
+asset: fillMarket.quoteAsset }),
+  quantity: new Quantity({ amount: "0.1",
+asset: fillMarket.baseAsset }),
+  quoteQuantity: new Money({ amount: "10",
+asset: fillMarket.quoteAsset }),
   liquidityRole: "MAKER",
   executedAt,
   commissions: [],
@@ -39,9 +48,12 @@ test("paginates each market from the durable baseline with strictly advancing tr
   const broker = {
     getFills: async (query) => {
       calls.push(query)
-      if (query.fromId === undefined) return { ok: true, data: fills.slice(0, 2) }
-      if (query.fromId === 3) return { ok: true, data: fills.slice(2) }
-      return { ok: true, data: [] }
+      if (query.fromId === undefined) {return { ok: true,
+data: fills.slice(0, 2) }}
+      if (query.fromId === 3) {return { ok: true,
+data: fills.slice(2) }}
+      return { ok: true,
+data: [] }
     },
   }
 
@@ -66,8 +78,12 @@ test("paginates each market from the durable baseline with strictly advancing tr
   assert.equal(result.data.marketUniverseComplete, false)
   assert.equal(result.data.complete, false)
   assert.deepEqual(calls, [
-    { symbol: "BTCUSDT", limit: 2, startTime: 50 },
-    { symbol: "BTCUSDT", limit: 2, fromId: 3 },
+    { symbol: "BTCUSDT",
+limit: 2,
+startTime: 50 },
+    { symbol: "BTCUSDT",
+limit: 2,
+fromId: 3 },
   ])
   assert.deepEqual(sleeps, [{ durationMs: 5 }])
 })
@@ -77,7 +93,8 @@ test("enumerates every supplied market and does not claim the universe is comple
   const broker = {
     getFills: async (query) => {
       calls.push(query)
-      return { ok: true, data: [] }
+      return { ok: true,
+data: [] }
     },
   }
   const result = await fetchAccountTradeHistory({
@@ -94,14 +111,19 @@ test("enumerates every supplied market and does not claim the universe is comple
   assert.equal(result.data.marketUniverseComplete, false)
   assert.equal(result.data.complete, false)
   assert.deepEqual(calls, [
-    { symbol: "BTCUSDT", limit: 1000, startTime: 50 },
-    { symbol: "ETHUSDT", limit: 1000, startTime: 50 },
+    { symbol: "BTCUSDT",
+limit: 1000,
+startTime: 50 },
+    { symbol: "ETHUSDT",
+limit: 1000,
+startTime: 50 },
   ])
 })
 
 test("fails closed when a history page request fails", async () => {
   const result = await fetchAccountTradeHistory({
-    broker: { getFills: async () => ({ ok: false, errors: [new Error("history unavailable")] }) },
+    broker: { getFills: async () => ({ ok: false,
+errors: [new Error("history unavailable")] }) },
     markets: [market],
     startTime: 50,
     requestDelayMs: 0,
@@ -113,7 +135,8 @@ test("fails closed when a history page request fails", async () => {
 
 test("rejects non-canonical, wrong-market, and duplicate fill records", async () => {
   const invalid = await fetchAccountTradeHistory({
-    broker: { getFills: async () => ({ ok: true, data: [{}] }) },
+    broker: { getFills: async () => ({ ok: true,
+data: [{}] }) },
     markets: [market],
     startTime: 50,
     requestDelayMs: 0,
@@ -122,7 +145,9 @@ test("rejects non-canonical, wrong-market, and duplicate fill records", async ()
   assert.match(invalid.errors[0].message, /non-canonical or wrong-market/)
 
   const wrongMarket = await fetchAccountTradeHistory({
-    broker: { getFills: async () => ({ ok: true, data: [makeFill({ market: otherMarket, tradeId: 1 })] }) },
+    broker: { getFills: async () => ({ ok: true,
+data: [makeFill({ market: otherMarket,
+tradeId: 1 })] }) },
     markets: [market],
     startTime: 50,
     requestDelayMs: 0,
@@ -131,7 +156,8 @@ test("rejects non-canonical, wrong-market, and duplicate fill records", async ()
 
   const duplicate = makeFill({ tradeId: 1 })
   const duplicateResult = await fetchAccountTradeHistory({
-    broker: { getFills: async () => ({ ok: true, data: [duplicate, duplicate] }) },
+    broker: { getFills: async () => ({ ok: true,
+data: [duplicate, duplicate] }) },
     markets: [market],
     startTime: 50,
     limit: 2,
@@ -161,7 +187,9 @@ test("rejects non-advancing cursors, backward timestamps, and unsafe pagination 
     broker: {
       getFills: async () => ({
         ok: true,
-        data: [makeFill({ tradeId: 1, executedAt: 200 }), makeFill({ tradeId: 2, executedAt: 100 })],
+        data: [makeFill({ tradeId: 1,
+executedAt: 200 }), makeFill({ tradeId: 2,
+executedAt: 100 })],
       }),
     },
     markets: [market],
@@ -190,7 +218,9 @@ test("rejects non-advancing cursors, backward timestamps, and unsafe pagination 
 
 test("rejects a baseline after an exchange execution timestamp", async () => {
   const result = await fetchAccountTradeHistory({
-    broker: { getFills: async () => ({ ok: true, data: [makeFill({ tradeId: 1, executedAt: 49 })] }) },
+    broker: { getFills: async () => ({ ok: true,
+data: [makeFill({ tradeId: 1,
+executedAt: 49 })] }) },
     markets: [market],
     startTime: 50,
     requestDelayMs: 0,
@@ -203,7 +233,9 @@ test("rejects a baseline after an exchange execution timestamp", async () => {
 
 test("rejects account trade fills without an exchange execution timestamp", async () => {
   const result = await fetchAccountTradeHistory({
-    broker: { getFills: async () => ({ ok: true, data: [makeFill({ tradeId: 1, executedAt: undefined })] }) },
+    broker: { getFills: async () => ({ ok: true,
+data: [makeFill({ tradeId: 1,
+executedAt: undefined })] }) },
     markets: [market],
     startTime: 50,
     requestDelayMs: 0,
@@ -216,7 +248,8 @@ test("rejects account trade fills without an exchange execution timestamp", asyn
 
 test("rejects an empty market catalog instead of treating an empty scan as complete history", async () => {
   const result = await fetchAccountTradeHistory({
-    broker: { getFills: async () => ({ ok: true, data: [] }) },
+    broker: { getFills: async () => ({ ok: true,
+data: [] }) },
     markets: [],
     startTime: 50,
     requestDelayMs: 0,
@@ -229,7 +262,8 @@ test("rejects an empty market catalog instead of treating an empty scan as compl
 
 test("rejects caller-supplied account-wide market-universe completeness", async () => {
   const result = await fetchAccountTradeHistory({
-    broker: { getFills: async () => ({ ok: true, data: [] }) },
+    broker: { getFills: async () => ({ ok: true,
+data: [] }) },
     markets: [market],
     startTime: 50,
     requestDelayMs: 0,
