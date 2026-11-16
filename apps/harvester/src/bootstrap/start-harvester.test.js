@@ -643,8 +643,13 @@ test("verifies the existing Operational State Store before connecting when Teleg
         throw new Error("Broker connection must not start when Operational State Store records verification fails.")
       },
     }),
-    (error) => error.code === "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID",
-    "An absent or invalid initialized ADR-0001 store must prevent inbound operator control and broker startup.",
+    (error) => {
+      assert.equal(error.code, "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID")
+      assert.match(error.message, /ledger genesis is missing/)
+      assert.match(error.cause?.message ?? "", /ledger genesis is missing/)
+      return true
+    },
+    "An absent or invalid initialized ADR-0001 store must prevent inbound operator control and broker startup while preserving the exact cause.",
   )
 
   assert.equal(calls.length, 1, "Enabled operator control must construct exactly one Operational State Store records adapter for verification.")
