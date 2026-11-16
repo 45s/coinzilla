@@ -22,14 +22,14 @@ function createHarness({ appendResult = { ok: true, data: { durable: true, dupli
       const committed = typeof beforeApply === "function" ? await beforeApply({ symbol, action: "PAUSE" }) : { ok: true, data: { durable: false } }
       if (!committed?.ok) {return committed}
       calls.push({ type: "pause-applied", symbol })
-      return { ok: true, data: { symbol, paused: true, durable: true } }
+      return { ok: true, data: { symbol, paused: true, durable: committed.data.durable } }
     },
     resumeMarket: async ({ symbol, beforeApply }) => {
       calls.push({ type: "resume-start", symbol })
       const committed = typeof beforeApply === "function" ? await beforeApply({ symbol, action: "RESUME" }) : { ok: true, data: { durable: false } }
       if (!committed?.ok) {return committed}
       calls.push({ type: "resume-applied", symbol })
-      return { ok: true, data: { symbol, resumed: true, durable: true } }
+      return { ok: true, data: { symbol, resumed: true, durable: committed.data.durable } }
     },
   }
   return { calls, operationalStateStore, engine }
@@ -193,7 +193,9 @@ test("pause and resume remain process-local when recovery storage is not supplie
   })
 
   assert.equal(pause.ok, true)
+  assert.equal(pause.data.durable, false)
   assert.equal(resume.ok, true)
+  assert.equal(resume.data.durable, false)
   assert.deepEqual(calls.map(({ type }) => type), [
     "pause-start",
     "pause-applied",
