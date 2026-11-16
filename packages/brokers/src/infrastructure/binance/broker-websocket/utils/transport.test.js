@@ -356,7 +356,8 @@ test("the supported Node WebSocket client automatically answers server ping fram
     try {
       const pong = await Promise.race([
         pongReceived,
-        new Promise((_, reject) => {
+        new Promise((...args) => {
+          const [, reject] = args
           timeout = setTimeout(() => reject(new Error("Server did not receive the WebSocket pong")), 1_000)
         }),
       ])
