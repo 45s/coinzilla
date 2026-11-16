@@ -71,7 +71,9 @@ export class BinanceRpcConnectionError extends BinanceRpcError {
 export class BinanceRpcProtocolError extends BinanceRpcError {
   /** @param {string} message @param {{requestId?: string|number, method?: string, details?: unknown}} [options] */
   constructor(message, { requestId, method, details } = {}) {
-    super(message, { requestId, method, details })
+    super(message, { requestId,
+method,
+details })
     this.name = "BinanceRpcProtocolError"
   }
 }
@@ -83,7 +85,7 @@ function validateMethod(method) {
 }
 
 function validateParams(params) {
-  if (params === undefined) return {}
+  if (params === undefined) {return {}}
   if (!params || typeof params !== "object" || Array.isArray(params)) {
     throw new TypeError("Binance WebSocket API params must be an object")
   }
@@ -91,8 +93,8 @@ function validateParams(params) {
 }
 
 function toText(data) {
-  if (typeof data === "string") return data
-  if (data instanceof ArrayBuffer) return new TextDecoder().decode(data)
+  if (typeof data === "string") {return data}
+  if (data instanceof ArrayBuffer) {return new TextDecoder().decode(data)}
   if (ArrayBuffer.isView(data)) {
     return new TextDecoder().decode(data)
   }
@@ -103,7 +105,7 @@ function toText(data) {
 }
 
 function hasOwn(value, key) {
-  return Object.prototype.hasOwnProperty.call(value, key)
+  return Object.hasOwn(value, key)
 }
 
 /**
@@ -184,7 +186,7 @@ export class BinanceWebSocketApiClient {
 
   /** @returns {Promise<BinanceWebSocketApiClient>} Resolves when the API socket is open. */
   async connect() {
-    if (this.#state === "open") return this
+    if (this.#state === "open") {return this}
     if (this.#state !== "idle") {
       throw new BinanceRpcConnectionError(`Cannot connect RPC client in state: ${this.#state}`)
     }
@@ -225,7 +227,8 @@ export class BinanceWebSocketApiClient {
     if (this.#state !== "open") {
       return Promise.reject(new BinanceRpcConnectionError(
         `Cannot send "${method}" while Binance WebSocket API is ${this.#state}`,
-        { method, stateChanging },
+        { method,
+stateChanging },
       ))
     }
     if (!Number.isInteger(timeout) || timeout < 1) {
@@ -261,13 +264,14 @@ export class BinanceWebSocketApiClient {
       return Promise.reject(error)
     }
 
-    const envelope = { id, method }
-    if (Object.keys(finalParams).length > 0) envelope.params = finalParams
+    const envelope = { id,
+method }
+    if (Object.keys(finalParams).length > 0) {envelope.params = finalParams}
 
     return new Promise((resolve, reject) => {
       const timer = this.setTimeout(() => {
         const pending = this.#pending.get(key)
-        if (!pending) return
+        if (!pending) {return}
         this.#pending.delete(key)
         this.clearTimeout(pending.timer)
         reject(new BinanceRpcTimeoutError({
@@ -297,7 +301,9 @@ export class BinanceWebSocketApiClient {
         }
         reject(new BinanceRpcConnectionError(
           `Failed to send Binance WebSocket API request "${method}": ${error.message}`,
-          { requestId: id, method, stateChanging },
+          { requestId: id,
+method,
+stateChanging },
         ))
       }
     })
@@ -320,7 +326,7 @@ export class BinanceWebSocketApiClient {
 
   /** @returns {Promise<void>} Rejects pending requests and closes the transport. */
   async disconnect() {
-    if (this.#state === "closed") return
+    if (this.#state === "closed") {return}
     this.#state = "closed"
     this.#rejectPending(new BinanceRpcConnectionError("Binance WebSocket API client disconnected"))
     try {
@@ -363,7 +369,7 @@ export class BinanceWebSocketApiClient {
 
     const key = String(payload.id)
     const pending = this.#pending.get(key)
-    if (!pending) return
+    if (!pending) {return}
 
     if (!Number.isInteger(payload.status) || payload.status < 100 || payload.status > 599) {
       this.#settleProtocolError(key, pending, "Binance response has an invalid status field", payload)
@@ -410,7 +416,7 @@ export class BinanceWebSocketApiClient {
 
   #settle(key, settle) {
     const pending = this.#pending.get(key)
-    if (!pending) return
+    if (!pending) {return}
     this.#pending.delete(key)
     this.clearTimeout(pending.timer)
     settle()
