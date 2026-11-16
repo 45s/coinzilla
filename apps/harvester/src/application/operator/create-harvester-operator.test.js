@@ -176,3 +176,28 @@ test("rejects a non-canonical actor identity before touching the engine or store
   assert.deepEqual(calls, [])
 })
 
+
+test("pause and resume remain process-local when recovery storage is not supplied", async () => {
+  const { calls, engine } = createHarness()
+  const operator = createHarvesterOperator({ engine })
+
+  const pause = await operator.pauseMarket({
+    actor,
+    requestId: "telegram:local-pause",
+    symbol: "LINKUSDT",
+  })
+  const resume = await operator.resumeMarket({
+    actor,
+    requestId: "telegram:local-resume",
+    symbol: "LINKUSDT",
+  })
+
+  assert.equal(pause.ok, true)
+  assert.equal(resume.ok, true)
+  assert.deepEqual(calls.map(({ type }) => type), [
+    "pause-start",
+    "pause-applied",
+    "resume-start",
+    "resume-applied",
+  ])
+})
