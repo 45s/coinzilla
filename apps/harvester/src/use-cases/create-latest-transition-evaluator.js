@@ -381,6 +381,8 @@ function allocateEvaluationActions({ dependencies, context, balances } = {}) {
     activeBaseQuantity: position?.baseQuantity.amount ?? "0",
     portfolioBaseBalance,
     portfolioBaseBalanceBaseline: accountSnapshot.getPortfolioBaseQuantityBaseline({ assetId: metadata.market.baseAsset.id }),
+    additionalTrackedBaseBalance,
+    additionalTrackedBaseBalanceBaseline,
     outstandingRecoveryAmount: maxDecimal({
       left: "0",
       right: subtractDecimal({
@@ -415,6 +417,8 @@ function logOrderAllocation({ dependencies, context, balances, allocation } = {}
   } = allocation
   const {
     portfolioBaseBalance,
+    additionalTrackedBaseBalance,
+    additionalTrackedBaseBalanceBaseline,
     committedQuote,
     committedQuoteBalance,
     committedBase,
