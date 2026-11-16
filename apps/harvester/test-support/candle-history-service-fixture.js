@@ -27,11 +27,15 @@ export function createCandle({
   })
 }
 
-export function createHistoryFrom(symbol, startIndex, count, includeForming = false) {
-  const candles = Array.from({ length: count }, (_, index) => createCandle({
-    symbol,
-    openTime: (startIndex + index) * INTERVAL_MS,
-  }))
+export function createHistoryFrom(...args) {
+  const [symbol, startIndex, count, includeForming = false] = args
+  const candles = []
+  for (let index = 0; index < count; index += 1) {
+    candles.push(createCandle({
+      symbol,
+      openTime: (startIndex + index) * INTERVAL_MS,
+    }))
+  }
   if (includeForming) {
     candles.push(createCandle({
       symbol,
@@ -42,12 +46,73 @@ export function createHistoryFrom(symbol, startIndex, count, includeForming = fa
   return candles
 }
 
-export function createHistory(symbol, count = 100, includeForming = false) {
+export function createHistory(...args) {
+  const [symbol, count = 100, includeForming = false] = args
   return createHistoryFrom(symbol, 0, count, includeForming)
 }
 
+function createTestBroker({
+  calls,
+  candleHandlers,
+  historyBySymbol,
+  onSubscribe,
+  getCandles,
+  subscribeForCandles,
+}) {
+  return {
+    subscribeForCandles: async ({ symbol, interval, onCandle }) => {
+      calls.push({
+        method: "subscribeForCandles",
+        symbol,
+        interval,
+      })
+      candleHandlers.set(symbol, onCandle)
+      await onSubscribe?.({
+        symbol,
+        interval,
+        onCandle,
+        calls,
+      })
+      if (subscribeForCandles) {
+        return subscribeForCandles({
+          symbol,
+          interval,
+          onCandle,
+          calls,
+        })
+      }
+      return {
+        ok: true,
+        data: {
+          stream: `${symbol.toLowerCase()}@kline_1m`,
+          unsubscribe: async () => calls.push({
+            method: "unsubscribe",
+            symbol,
+          }),
+        },
+      }
+    },
+    getCandles: async (input) => {
+      calls.push({
+        method: "getCandles",
+        ...input,
+      })
+      if (getCandles) {
+        return getCandles(input, calls)
+      }
+      return {
+        ok: true,
+        data: historyBySymbol[input.symbol] ?? createHistory(input.symbol, 100, true),
+      }
+    },
+  }
+}
+
 export function createFixture({
-  pairs = { BTCUSDT: { enabled: true }, DOGEUSDT: { enabled: false } },
+  pairs = {
+    BTCUSDT: { enabled: true },
+    DOGEUSDT: { enabled: false },
+  },
   historyBySymbol = {},
   onSubscribe,
   getCandles,
@@ -59,40 +124,37 @@ export function createFixture({
   const candleHandlers = new Map()
   const subscriptions = []
   const clock = { now: 10_000 }
-  const broker = {
-    subscribeForCandles: async ({ symbol, interval, onCandle }) => {
-      calls.push({ method: "subscribeForCandles", symbol, interval })
-      candleHandlers.set(symbol, onCandle)
-      await onSubscribe?.({ symbol, interval, onCandle, calls })
-      if (subscribeForCandles) return subscribeForCandles({ symbol, interval, onCandle, calls })
-      return {
-        ok: true,
-        data: {
-          stream: symbol.toLowerCase() + "@kline_1m",
-          unsubscribe: async () => calls.push({ method: "unsubscribe", symbol }),
-        },
-      }
-    },
-    getCandles: async (input) => {
-      calls.push({ method: "getCandles", ...input })
-      if (getCandles) return getCandles(input, calls)
-      return {
-        ok: true,
-        data: historyBySymbol[input.symbol] ?? createHistory(input.symbol, 100, true),
-      }
-    },
-  }
+  const broker = createTestBroker({
+    calls,
+    candleHandlers,
+    historyBySymbol,
+    onSubscribe,
+    getCandles,
+    subscribeForCandles,
+  })
   const service = createCandleHistoryService({
     broker,
     logger,
     now: () => clock.now,
     onSnapshot,
   })
-  const start = () => service.start({ pairs, subscriptions })
-  return { service, broker, calls, candleHandlers, subscriptions, clock, start }
+  const start = () => service.start({
+    pairs,
+    subscriptions,
+  })
+  return {
+    service,
+    broker,
+    calls,
+    candleHandlers,
+    subscriptions,
+    clock,
+    start,
+  }
 }
 
-export function getSnapshot(fixture, symbol = "BTCUSDT") {
+export function getSnapshot(...args) {
+  const [fixture, symbol = "BTCUSDT"] = args
   const result = fixture.service.getSnapshot({ symbol })
   assert.equal(result.ok, true, "A started market must return its candle-history snapshot.")
   return result.data
