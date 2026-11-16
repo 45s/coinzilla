@@ -82,12 +82,13 @@ export function calculateAtrSeries({
     }))
   }
 
-  const initialRangeTotal = trueRanges
-    .slice(0, period)
-    .reduce((total, trueRange) => addDecimal({
-      left: total,
-      right: trueRange,
-    }), "0")
+  let initialRangeTotal = "0"
+  for (let index = 0; index < period; index += 1) {
+    initialRangeTotal = addDecimal({
+      left: initialRangeTotal,
+      right: trueRanges[index],
+    })
+  }
   let previousAtr = divideDecimal({
     left: initialRangeTotal,
     right: String(period),

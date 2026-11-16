@@ -27,7 +27,9 @@ export function calculateNatrSeries({
     rounding,
   })
 
-  return Object.freeze(atrSeries.map((observation, index) => {
+  const observations = []
+  for (let index = 0; index < atrSeries.length; index += 1) {
+    const observation = atrSeries[index]
     const matchingClose = candles[period - 1 + index].close
     const atrAsPercent = multiplyDecimal({
       left: observation.value,
@@ -39,9 +41,11 @@ export function calculateNatrSeries({
       scale: outputScale,
       rounding,
     })
-    return Object.freeze({
+    observations.push(Object.freeze({
       openTime: observation.openTime,
       value,
-    })
-  }))
+    }))
+  }
+
+  return Object.freeze(observations)
 }
