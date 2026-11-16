@@ -101,6 +101,73 @@ async function reconcileCandidateMarket({
     readCandidateState }
 }
 
+async function resolveTargetMarketBlockers({
+  operationalStateStore,
+  targetMarket,
+  historyRetentionEvidence,
+  reconciliation,
+  unresolvedSafetyBlockers,
+}) {
+  const resolvedSafetyBlockerIds = []
+  if (reconciliation.data.ready !== true) {
+    return { resolvedSafetyBlockerIds }
+  }
+  const blockersToResolve = [...unresolvedSafetyBlockers]
+    .filter(({ scope, symbol }) => scope === "MARKET" && symbol === targetMarket.symbol)
+    .sort((...blockers) => {
+      const [left, right] = blockers
+      return left.blockerId.localeCompare(right.blockerId)
+    })
+  if (blockersToResolve.length === 0) {
+    return { resolvedSafetyBlockerIds }
+  }
+  const evidenceDigest = createReconciliationEvidenceDigest({
+    targetMarket,
+    historyRetentionEvidence,
+    reconciliation: reconciliation.data,
+  })
+  for (const blocker of blockersToResolve) {
+    const resolution = await recordSafetyBlockerResolved({
+      operationalStateStore,
+      blockerId: blocker.blockerId,
+      resolvedBy: `reconciliation:market-audit:${targetMarket.symbol}`,
+      resolution: "AUTHORITATIVE_RECONCILIATION",
+      evidenceDigest,
+    })
+    if (resolution?.ok !== true || resolution.data?.durable !== true) {
+      if (resolution?.ok === false) {
+        return resolution
+      }
+      return toResult({
+        error: new Error(`Authoritative market reconciliation did not durably resolve safety blocker ${blocker.blockerId}`),
+      })
+    }
+    resolvedSafetyBlockerIds.push(blocker.blockerId)
+  }
+  return { resolvedSafetyBlockerIds }
+}
+
+async function readUnresolvedSafetyBlockers({ operationalStateStore, resolvedSafetyBlockerIds, unresolvedSafetyBlockers }) {
+  if (resolvedSafetyBlockerIds.length === 0) {
+    return unresolvedSafetyBlockers
+  }
+  const readback = await operationalStateStore.readAll()
+  if (readback?.ok !== true ||
+      readback.data?.durableWriteSupported !== true ||
+      !Array.isArray(readback.data.records)) {
+    return toResult({
+      errors: readback?.errors?.length
+        ? readback.errors
+        : [new Error("Resolved safety blockers could not be verified in the Operational State Store")],
+    })
+  }
+  const verifiedProjection = projectHarvesterOperationalState({ records: readback.data.records })
+  if (verifiedProjection?.ok !== true) {
+    return verifiedProjection
+  }
+  return verifiedProjection.data.stickySafetyBlockers
+}
+
 async function resolveMarketSafetyBlockers({
   operationalStateStore,
   projection,
@@ -108,58 +175,29 @@ async function resolveMarketSafetyBlockers({
   historyRetentionEvidence,
   reconciliation,
 }) {
-  const resolvedSafetyBlockerIds = []
-  let unresolvedSafetyBlockers = projection.data.stickySafetyBlockers ?? []
-  if (reconciliation.data.ready === true) {
-    const blockersToResolve = [...unresolvedSafetyBlockers]
-      .filter(({ scope, symbol }) => scope === "MARKET" && symbol === targetMarket.symbol)
-      .sort((...blockers) => {
-        const [left, right] = blockers
-        return left.blockerId.localeCompare(right.blockerId)
-      })
-    if (blockersToResolve.length > 0) {
-      const evidenceDigest = createReconciliationEvidenceDigest({
-        targetMarket,
-        historyRetentionEvidence,
-        reconciliation: reconciliation.data,
-      })
-      for (const blocker of blockersToResolve) {
-        const resolution = await recordSafetyBlockerResolved({
-          operationalStateStore,
-          blockerId: blocker.blockerId,
-          resolvedBy: `reconciliation:market-audit:${targetMarket.symbol}`,
-          resolution: "AUTHORITATIVE_RECONCILIATION",
-          evidenceDigest,
-        })
-        if (resolution?.ok !== true || resolution.data?.durable !== true) {
-          return resolution?.ok === false
-            ? resolution
-            : toResult({
-              error: new Error(`Authoritative market reconciliation did not durably resolve safety blocker ${blocker.blockerId}`),
-            })
-        }
-        resolvedSafetyBlockerIds.push(blocker.blockerId)
-      }
-    }
+  const unresolvedSafetyBlockers = projection.data.stickySafetyBlockers ?? []
+  const resolution = await resolveTargetMarketBlockers({
+    operationalStateStore,
+    targetMarket,
+    historyRetentionEvidence,
+    reconciliation,
+    unresolvedSafetyBlockers,
+  })
+  if (resolution?.ok === false) {
+    return resolution
   }
-
-  if (resolvedSafetyBlockerIds.length > 0) {
-    const readback = await operationalStateStore.readAll()
-    if (readback?.ok !== true || readback.data?.durableWriteSupported !== true || !Array.isArray(readback.data.records)) {
-      return toResult({
-        errors: readback?.errors?.length
-          ? readback.errors
-          : [new Error("Resolved safety blockers could not be verified in the Operational State Store")],
-      })
-    }
-    const verifiedProjection = projectHarvesterOperationalState({ records: readback.data.records })
-    if (verifiedProjection?.ok !== true) {
-      return verifiedProjection
-    }
-    unresolvedSafetyBlockers = verifiedProjection.data.stickySafetyBlockers
+  const remainingBlockers = await readUnresolvedSafetyBlockers({
+    operationalStateStore,
+    resolvedSafetyBlockerIds: resolution.resolvedSafetyBlockerIds,
+    unresolvedSafetyBlockers,
+  })
+  if (remainingBlockers?.ok === false) {
+    return remainingBlockers
   }
-  return { resolvedSafetyBlockerIds, 
-    unresolvedSafetyBlockers }
+  return {
+    resolvedSafetyBlockerIds: resolution.resolvedSafetyBlockerIds,
+    unresolvedSafetyBlockers: remainingBlockers,
+  }
 }
 
 function validateCandidateReconciliationInput(options) {
