@@ -9,10 +9,14 @@ import { Quantity } from "../quantity/quantity.js"
 import { Fill, fillErrMsgs } from "./fill.js"
 
 describe(Fill.name, () => {
-  const baseAsset = new Asset({ id: "dogecoin", code: "DOGE" })
-  const quoteAsset = new Asset({ id: "fdusd", code: "FDUSD" })
-  const commissionAsset = new Asset({ id: "bnb", code: "BNB" })
-  const otherQuoteAsset = new Asset({ id: "usdt", code: "USDT" })
+  const baseAsset = new Asset({ id: "dogecoin",
+code: "DOGE" })
+  const quoteAsset = new Asset({ id: "fdusd",
+code: "FDUSD" })
+  const commissionAsset = new Asset({ id: "bnb",
+code: "BNB" })
+  const otherQuoteAsset = new Asset({ id: "usdt",
+code: "USDT" })
   const market = new Market({
     venue: "binance",
     symbol: "DOGEFDUSD",
@@ -26,15 +30,19 @@ describe(Fill.name, () => {
       clientOrderId: "client-42",
       market,
       side: "BUY",
-      price: new Money({ amount: "0.1", asset: quoteAsset }),
-      quantity: new Quantity({ amount: "100", asset: baseAsset }),
-      quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+      price: new Money({ amount: "0.1",
+asset: quoteAsset }),
+      quantity: new Quantity({ amount: "100",
+asset: baseAsset }),
+      quoteQuantity: new Money({ amount: "10",
+asset: quoteAsset }),
       liquidityRole: "MAKER",
       executedAt: 1_800_000_000_000,
       ...overrides,
     })
   const commission = new Commission({
-    amount: new Money({ amount: "0.01", asset: commissionAsset }),
+    amount: new Money({ amount: "0.01",
+asset: commissionAsset }),
   })
 
   it("stores exact execution facts with explicit asset identity", () => {
@@ -55,9 +63,12 @@ describe(Fill.name, () => {
       clientOrderId: "client-42",
       market: market.value,
       side: "BUY",
-      price: { amount: "0.1", asset: quoteAsset.value },
-      quantity: { amount: "100", asset: baseAsset.value },
-      quoteQuantity: { amount: "10", asset: quoteAsset.value },
+      price: { amount: "0.1",
+asset: quoteAsset.value },
+      quantity: { amount: "100",
+asset: baseAsset.value },
+      quoteQuantity: { amount: "10",
+asset: quoteAsset.value },
       liquidityRole: "MAKER",
       executedAt: 1_800_000_000_000,
       commissions: [],
@@ -90,7 +101,8 @@ describe(Fill.name, () => {
 
   it("stores one or multiple commissions in different assets", () => {
     const secondCommission = new Commission({
-      amount: new Money({ amount: "0.25", asset: quoteAsset }),
+      amount: new Money({ amount: "0.25",
+asset: quoteAsset }),
     })
     const commissions = [commission, secondCommission]
     const fill = createFill({
@@ -155,8 +167,10 @@ describe(Fill.name, () => {
     })
     const otherFill = createFill({
       market: otherMarket,
-      price: new Money({ amount: "0.1", asset: otherQuoteAsset }),
-      quoteQuantity: new Money({ amount: "10", asset: otherQuoteAsset }),
+      price: new Money({ amount: "0.1",
+asset: otherQuoteAsset }),
+      quoteQuantity: new Money({ amount: "10",
+asset: otherQuoteAsset }),
     })
 
     assert.notEqual(otherFill.id, createFill().id)
@@ -180,19 +194,22 @@ describe(Fill.name, () => {
   it("rejects amounts denominated in the wrong assets", () => {
     assert.throws(
       () => createFill({
-        price: new Money({ amount: "0.1", asset: baseAsset }),
+        price: new Money({ amount: "0.1",
+asset: baseAsset }),
       }),
       { message: fillErrMsgs.priceAsset },
     )
     assert.throws(
       () => createFill({
-        quantity: new Quantity({ amount: "100", asset: quoteAsset }),
+        quantity: new Quantity({ amount: "100",
+asset: quoteAsset }),
       }),
       { message: fillErrMsgs.quantityAsset },
     )
     assert.throws(
       () => createFill({
-        quoteQuantity: new Money({ amount: "10", asset: otherQuoteAsset }),
+        quoteQuantity: new Money({ amount: "10",
+asset: otherQuoteAsset }),
       }),
       { message: fillErrMsgs.quoteQuantityAsset },
     )
@@ -200,19 +217,23 @@ describe(Fill.name, () => {
 
   it("requires positive price and quantities", () => {
     assert.throws(
-      () => createFill({ price: new Money({ amount: "0", asset: quoteAsset }) }),
+      () => createFill({ price: new Money({ amount: "0",
+asset: quoteAsset }) }),
       { message: fillErrMsgs.positivePrice },
     )
     assert.throws(
-      () => createFill({ price: new Money({ amount: "-0.1", asset: quoteAsset }) }),
+      () => createFill({ price: new Money({ amount: "-0.1",
+asset: quoteAsset }) }),
       { message: fillErrMsgs.positivePrice },
     )
     assert.throws(
-      () => createFill({ quantity: new Quantity({ amount: "0", asset: baseAsset }) }),
+      () => createFill({ quantity: new Quantity({ amount: "0",
+asset: baseAsset }) }),
       { message: fillErrMsgs.positiveQuantity },
     )
     assert.throws(
-      () => createFill({ quoteQuantity: new Money({ amount: "0", asset: quoteAsset }) }),
+      () => createFill({ quoteQuantity: new Money({ amount: "0",
+asset: quoteAsset }) }),
       { message: fillErrMsgs.positiveQuoteQuantity },
     )
   })
