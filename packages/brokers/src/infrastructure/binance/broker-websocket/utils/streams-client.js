@@ -316,6 +316,7 @@ export class BinanceStreamsClient {
     this.#state = "connecting"
     this.#ready = false
     this.#lastPingAt = null
+    this.#lastControlSent = -Infinity
 
     let transport
     try {
