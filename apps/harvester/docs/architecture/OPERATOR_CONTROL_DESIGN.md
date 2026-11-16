@@ -34,7 +34,8 @@ apps/harvester/src/
       pause-market.js
       resume-market.js
       buy-controls.js
-      buy-controls.js
+    errors/
+      operator-buy-cancellation-incomplete-error.js
   infrastructure/
     telegram/
       telegram-operator-adapter.js       # implemented; optional runtime wiring is active
