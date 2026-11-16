@@ -4,7 +4,7 @@ import { auditRecoveredAccountState } from "./audit-recovered-account-state.js"
 
 function unwrapResult({ result, field }) {
   if (result?.ok === false) {
-    throw result.errors?.[0] ?? new Error(field + " failed without an error detail")
+    throw result.errors?.[0] ?? new Error(`${field  } failed without an error detail`)
   }
   return result?.ok === true ? result.data : result
 }
@@ -96,8 +96,10 @@ export async function reconcileRecoveredMarketState({
       result: currentAccountSnapshotResult,
       field: "Fresh account snapshot",
     })
-    const openOrders = unwrapResult({ result: openOrdersResult, field: "Fresh account-wide open orders" })
-    const history = unwrapResult({ result: historyResult, field: "Target-market trade history" })
+    const openOrders = unwrapResult({ result: openOrdersResult,
+field: "Fresh account-wide open orders" })
+    const history = unwrapResult({ result: historyResult,
+field: "Target-market trade history" })
     if (!Array.isArray(openOrders)) {
       throw new TypeError("Account-wide open-order read must return an array")
     }
