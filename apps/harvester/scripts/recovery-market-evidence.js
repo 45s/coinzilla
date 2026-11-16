@@ -39,77 +39,76 @@ function requireDecimal({ value, field }) {
   return value
 }
 
-function createCanonicalEvidence({ context }) {
-  requireObject({ value: context,
-field: "context" })
-  const records = requireArray({ value: context.journalRecords,
-field: "context.journalRecords" })
-  const marketInputs = requireArray({ value: context.markets,
-field: "context.markets" })
+function createCanonicalAssetRegistry({ assetInputs }) {
   const assetsById = new Map()
   const assetsByCode = new Map()
-
   const registerAsset = (input, field) => {
-    requireObject({ value: input,
-field })
-    const id = requireString({ value: input.id,
-field: `${field  }.id` })
-    const code = requireString({ value: input.code,
-field: `${field  }.code` })
+    requireObject({ value: input, field })
+    const id = requireString({ value: input.id, field: field + ".id" })
+    const code = requireString({ value: input.code, field: field + ".code" })
     const existingById = assetsById.get(id)
     const existingByCode = assetsByCode.get(code)
     if ((existingById && existingById.code !== code) ||
         (existingByCode && existingByCode.id !== id)) {
-      throw new Error(`Offline evidence contains contradictory canonical asset identity for ${  code}`)
+      throw new Error("Offline evidence contains contradictory canonical asset identity for " + code)
     }
-    const asset = existingById ?? existingByCode ?? new Asset({ id,
-code })
+    const asset = existingById ?? existingByCode ?? new Asset({ id, code })
     assetsById.set(id, asset)
     assetsByCode.set(code, asset)
     return asset
   }
 
   for (const [index, input] of requireArray({
-    value: context.assets ?? [],
+    value: assetInputs,
     field: "context.assets",
   }).entries()) {
-    registerAsset(input, `context.assets[${  index  }]`)
+    registerAsset(input, "context.assets[" + index + "]")
   }
 
+  return { assetsById, assetsByCode, registerAsset }
+}
+
+function createCanonicalMarkets({ marketInputs, registerAsset }) {
   const markets = marketInputs.map((input, index) => {
-    requireObject({ value: input,
-field: `context.markets[${  index  }]` })
-    const venue = requireString({ value: input.venue,
-field: `markets[${  index  }].venue` })
-    const symbol = requireString({ value: input.symbol,
-field: `markets[${  index  }].symbol` })
+    requireObject({ value: input, field: "context.markets[" + index + "]" })
+    const venue = requireString({ value: input.venue, field: "markets[" + index + "].venue" })
+    const symbol = requireString({ value: input.symbol, field: "markets[" + index + "].symbol" })
     const market = new Market({
       venue,
       symbol,
-      baseAsset: registerAsset(input.baseAsset, `markets[${  index  }].baseAsset`),
-      quoteAsset: registerAsset(input.quoteAsset, `markets[${  index  }].quoteAsset`),
+      baseAsset: registerAsset(input.baseAsset, "markets[" + index + "].baseAsset"),
+      quoteAsset: registerAsset(input.quoteAsset, "markets[" + index + "].quoteAsset"),
     })
     if (input.id !== undefined && input.id !== market.id) {
-      throw new Error(`Offline market ID does not match canonical venue/symbol identity for ${  symbol}`)
+      throw new Error("Offline market ID does not match canonical venue/symbol identity for " + symbol)
     }
     return market
   })
   if (markets.length === 0 || new Set(markets.map((market) => market.symbol)).size !== markets.length) {
     throw new Error("Offline market metadata must contain unique canonical markets")
   }
-  const marketsBySymbol = new Map(markets.map((market) => [market.symbol, market]))
-  const assetsByLookup = {
+
+  return {
+    markets,
+    marketsBySymbol: new Map(markets.map((market) => [market.symbol, market])),
+  }
+}
+
+function createCanonicalAssetLookup({ assetsById, assetsByCode }) {
+  return {
     byId: assetsById,
     byCode: assetsByCode,
     require({ id, code, field }) {
       const asset = assetsById.get(id)
       if (!asset || asset.code !== code) {
-        throw new Error(`${field  } has no matching canonical asset ID/code in context.assets or context.markets`)
+        throw new Error(field + " has no matching canonical asset ID/code in context.assets or context.markets")
       }
       return asset
     },
   }
+}
 
+function restoreCanonicalJournalState({ records, markets }) {
   const projection = projectHarvesterJournalRecovery({ records })
   if (projection?.ok !== true) {
     return toResult({ errors: projection?.errors ?? [new Error("Journal recovery projection failed")] })
@@ -126,6 +125,31 @@ field: `markets[${  index  }].symbol` })
     data: {
       projection,
       recoveredState: restored.data,
+    },
+  })
+}
+
+function createCanonicalEvidence({ context }) {
+  requireObject({ value: context, field: "context" })
+  const records = requireArray({ value: context.journalRecords, field: "context.journalRecords" })
+  const marketInputs = requireArray({ value: context.markets, field: "context.markets" })
+  const assetRegistry = createCanonicalAssetRegistry({ assetInputs: context.assets ?? [] })
+  const { markets, marketsBySymbol } = createCanonicalMarkets({
+    marketInputs,
+    registerAsset: assetRegistry.registerAsset,
+  })
+  const assetsByLookup = createCanonicalAssetLookup({
+    assetsById: assetRegistry.assetsById,
+    assetsByCode: assetRegistry.assetsByCode,
+  })
+  const restored = restoreCanonicalJournalState({ records, markets })
+  if (restored?.ok !== true) {
+    return restored
+  }
+
+  return toResult({
+    data: {
+      ...restored.data,
       markets,
       marketsBySymbol,
       assetsByLookup,
