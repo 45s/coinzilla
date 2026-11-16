@@ -16,7 +16,7 @@ const UNSAFE_USER_DATA_STARTUP_STATUSES = new Set([
   "INVALID_EVENT",
 ])
 
-function logSystem(logger, data) {
+function logSystem({ logger, ...data }) {
   if (typeof logger?.system === "function") {
     logger.system(data)
     return
@@ -47,7 +47,7 @@ export async function subscribeToUserData({
   resumeDeferredStrategyEvaluations,
 } = {}) {
   const tradingModeLabel = tradingMode === "live" ? "LIVE" : "TESTNET"
-  logSystem(logger, { message: "Subscribing to Binance user-data events" })
+  logSystem({ logger, message: "Subscribing to Binance user-data events" })
 
   let userDataResult
   try {
@@ -89,7 +89,7 @@ stream: "user-data" }),
   })
   const userDataSubscription = userDataResult.data
   onSubscriptionEstablished?.(userDataSubscription)
-  logSystem(logger, { message: "User-data stream connected" })
+  logSystem({ logger, message: "User-data stream connected" })
 
   state.ready = false
   state.status = state.accountingFailed
@@ -125,7 +125,7 @@ stream: "user-data" }),
     if (state.requiresReconciliation) {
       throw new Error(`Conservative ${  tradingModeLabel  } startup blocked: user-data stream reconciliation is required`)
     }
-    logSystem(logger, {
+    logSystem({ logger,
       message: `Conservative ${  tradingModeLabel  } startup checks passed; current account audit is complete`,
       enabledSymbols,
       accountSnapshotSourceTime: getAccountSnapshot().sourceTime,
@@ -134,7 +134,7 @@ stream: "user-data" }),
     state.ready = true
     state.status = "READY"
     resumeDeferredStrategyEvaluations()
-    logSystem(logger, { message: `Conservative ${  tradingModeLabel  } trading engine activated` })
+    logSystem({ logger, message: `Conservative ${  tradingModeLabel  } trading engine activated` })
   }
 
   return userDataSubscription
