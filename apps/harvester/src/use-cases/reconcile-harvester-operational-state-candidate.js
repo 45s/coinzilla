@@ -218,7 +218,6 @@ function createCandidateReconciliationResult({
 async function runCandidateMarketReconciliation({ input, projection, candidate }) {
   const {
     operationalStateStore,
-    marketMetadata,
     markets,
     targetMarket,
     reconcileOwnedOrders,
