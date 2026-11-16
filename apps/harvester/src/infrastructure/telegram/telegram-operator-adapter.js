@@ -250,6 +250,7 @@ async function handleMarketSelectionCallback({
   interaction,
   logStage,
   pendingConfirmations,
+  confirmationTtlMs,
   answerCallback,
   editMessage,
 }) {
@@ -276,7 +277,7 @@ async function handleMarketSelectionCallback({
     userId,
     chatId: String(chat.id),
     messageId,
-    expiresAt: now + CONFIRMATION_TTL_MS,
+    expiresAt: now + confirmationTtlMs,
   })
   await answerCallback({
     callbackId: callback.id,
@@ -289,7 +290,7 @@ async function handleMarketSelectionCallback({
     message: "Telegram confirmation REQUESTED",
     stage: "CONFIRMATION_REQUESTED",
     fields: {
-      confirmationExpiresInMs: CONFIRMATION_TTL_MS,
+      confirmationExpiresInMs: confirmationTtlMs,
     },
   })
   await editMessage({
@@ -1084,6 +1085,7 @@ export function createTelegramOperatorAdapter({
       executeControl,
       navigationKeyboard,
       pendingConfirmations,
+      confirmationTtlMs: CONFIRMATION_TTL_MS,
     }
     const navigation = /^cc:(nav|refresh):(home|status|markets|pause|resume|positions|orders|balances)$/.exec(callback.data)
     if (navigation) {

@@ -659,7 +659,7 @@ test("parses CC-2 trading visibility commands without arguments", () => {
 })
 
 
-function makeCallbackUpdate({ updateId = 500, callbackId = "callback-500", userId = 12345, chatId = 12345, messageId = 700, data = "cc:nav:status" } = {}) {
+function makeCallbackUpdate({ updateId = 500, callbackId = `callback-${updateId}`, userId = 12345, chatId = 12345, messageId = 700, data = "cc:nav:status" } = {}) {
   return {
     update_id: updateId,
     callback_query: {
