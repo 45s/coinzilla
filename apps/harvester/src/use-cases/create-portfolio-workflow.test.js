@@ -65,7 +65,10 @@ asset: market.baseAsset }),
   completedAt: 2,
 })
 
-const test = (...[name, ...args]) => nodeTest(`[create-portfolio-workflow.test.js] ${  name}`, ...args)
+const test = (...args) => {
+  const [name, ...testArgs] = args
+  return nodeTest(`[create-portfolio-workflow.test.js] ${  name}`, ...testArgs)
+}
 
 test("captures the third-asset baseline before applying the fill to Portfolio and RecoveryLedger", async () => {
   const baselineCalls = []
