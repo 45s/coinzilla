@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { createUserDataStatusHandler } from "./create-user-data-status-handler.js"
 
-const test = (name, ...args) => nodeTest("[create-user-data-status-handler.test.js] " + name, ...args)
+const test = (name, ...args) => nodeTest(`[create-user-data-status-handler.test.js] ${  name}`, ...args)
 
 const createState = (overrides = {}) => ({
   ready: false,
@@ -23,8 +23,11 @@ const createState = (overrides = {}) => ({
 
 const createHandler = ({ state = createState(), onUserDataStatus = () => {}, tradingEnabled = true } = {}) => {
   const events = []
-  const logs = { info: [], error: [] }
-  const actions = { recoveries: 0, cancellations: 0, resumptions: 0 }
+  const logs = { info: [],
+error: [] }
+  const actions = { recoveries: 0,
+cancellations: 0,
+resumptions: 0 }
   const handler = createUserDataStatusHandler({
     state,
     isStopped: () => false,
@@ -40,12 +43,17 @@ const createHandler = ({ state = createState(), onUserDataStatus = () => {}, tra
     resumeDeferredStrategyEvaluations: () => { actions.resumptions += 1 },
     onUserDataStatus,
   })
-  return { handler, state, events, logs, actions }
+  return { handler,
+state,
+events,
+logs,
+actions }
 }
 
 test("a transport disconnect invalidates recovery generation and closes readiness", () => {
   const { handler, state, events } = createHandler()
-  handler({ type: "connectionClosed", recoveryRequired: true })
+  handler({ type: "connectionClosed",
+recoveryRequired: true })
 
   assert.equal(state.recoveryGeneration, 1, "A disconnect must invalidate the previous recovery generation.")
   assert.equal(state.streamUnsafe, true, "A disconnected stream must be marked unsafe.")
@@ -57,9 +65,13 @@ test("a transport disconnect invalidates recovery generation and closes readines
 
 test("a stream reconciliation status cannot clear the application reconciliation gate", () => {
   const { handler, state } = createHandler({
-    state: createState({ requiresReconciliation: true, streamUnsafe: true, ready: false }),
+    state: createState({ requiresReconciliation: true,
+streamUnsafe: true,
+ready: false }),
   })
-  handler({ type: "reconciled", recoveryRequired: false, reconciliationRequired: false })
+  handler({ type: "reconciled",
+recoveryRequired: false,
+reconciliationRequired: false })
 
   assert.equal(state.streamUnsafe, false, "A reconciled stream may clear its transport-unsafe marker.")
   assert.equal(state.requiresReconciliation, true, "Only application reconciliation and acknowledgement may clear the application gate.")
@@ -70,12 +82,14 @@ test("a recovered stream requests application recovery only after startup is com
   const waiting = createHandler({
     state: createState({ startupComplete: false }),
   })
-  waiting.handler({ type: "recovered", recoveryRequired: true })
+  waiting.handler({ type: "recovered",
+recoveryRequired: true })
   assert.equal(waiting.state.pendingRecovery, true, "An early recovered status must be remembered until startup finishes.")
   assert.equal(waiting.actions.recoveries, 0, "Recovery must not start before user-data startup completes.")
 
   const ready = createHandler()
-  ready.handler({ type: "recovered", recoveryRequired: true })
+  ready.handler({ type: "recovered",
+recoveryRequired: true })
   assert.equal(ready.actions.recoveries, 1, "A recovered stream after startup must begin application reconciliation.")
 })
 
@@ -157,7 +171,8 @@ test("a new recovery generation publishes a fresh recovered status", () => {
   }
 
   handler(recoveredReminder)
-  handler({ type: "connectionClosed", recoveryRequired: true })
+  handler({ type: "connectionClosed",
+recoveryRequired: true })
   handler(recoveredReminder)
 
   assert.equal(
@@ -182,7 +197,8 @@ test("an already acknowledged recovery ignores later recovered reminders", () =>
     state: createState({ lastAcknowledgedRecoveryGeneration: 0 }),
   })
 
-  handler({ type: "recovered", recoveryRequired: true })
+  handler({ type: "recovered",
+recoveryRequired: true })
 
   assert.equal(
     events.length,
@@ -323,12 +339,20 @@ test("does not clear the application recovery gate for a different subscription 
 
 test("logs concise user-data stream lifecycle transitions once and suppresses duplicate notifications", () => {
   const { handler, state, logs } = createHandler()
-  const disconnected = { type: "connectionClosed", reason: "connection_lost", recoveryRequired: true }
+  const disconnected = { type: "connectionClosed",
+reason: "connection_lost",
+recoveryRequired: true }
   handler(disconnected)
   handler(disconnected)
-  handler({ type: "terminated", reason: "connection_lost", recoveryRequired: true })
-  handler({ type: "recovering", attempt: 1, recoveryRequired: true })
-  handler({ type: "recovering", attempt: 1, recoveryRequired: true })
+  handler({ type: "terminated",
+reason: "connection_lost",
+recoveryRequired: true })
+  handler({ type: "recovering",
+attempt: 1,
+recoveryRequired: true })
+  handler({ type: "recovering",
+attempt: 1,
+recoveryRequired: true })
   const reconnected = {
     type: "recovered",
     attempt: 1,
@@ -352,13 +376,33 @@ test("logs concise user-data stream lifecycle transitions once and suppresses du
 
   assert.deepEqual(
     logs.info.map(({ message, reason, attempt, subscriptionId, recoveryGeneration }) => ({
-      message, reason, attempt, subscriptionId, recoveryGeneration,
+      message,
+reason,
+attempt,
+subscriptionId,
+recoveryGeneration,
     })),
     [
-      { message: "User-data stream disconnected", reason: "connection_lost", attempt: undefined, subscriptionId: undefined, recoveryGeneration: undefined },
-      { message: "User-data stream reconnecting", reason: undefined, attempt: 1, subscriptionId: undefined, recoveryGeneration: undefined },
-      { message: "User-data stream reconnected", reason: undefined, attempt: 1, subscriptionId: 42, recoveryGeneration: 7 },
-      { message: "User-data stream subscription restored", reason: undefined, attempt: undefined, subscriptionId: 42, recoveryGeneration: 7 },
+      { message: "User-data stream disconnected",
+reason: "connection_lost",
+attempt: undefined,
+subscriptionId: undefined,
+recoveryGeneration: undefined },
+      { message: "User-data stream reconnecting",
+reason: undefined,
+attempt: 1,
+subscriptionId: undefined,
+recoveryGeneration: undefined },
+      { message: "User-data stream reconnected",
+reason: undefined,
+attempt: 1,
+subscriptionId: 42,
+recoveryGeneration: 7 },
+      { message: "User-data stream subscription restored",
+reason: undefined,
+attempt: undefined,
+subscriptionId: 42,
+recoveryGeneration: 7 },
     ],
     "Only genuine disconnect, reconnect, reconnected, and restored transitions must be logged; duplicate status deliveries must not repeat them.",
   )
@@ -368,8 +412,12 @@ test("logs user-data transport errors once with their original error context", (
   const { handler, logs } = createHandler()
   const transportError = Object.assign(new Error("socket request timed out"), { code: "ETIMEDOUT" })
 
-  handler({ type: "rpcError", error: transportError, attempt: 2 })
-  handler({ type: "rpcError", error: transportError, attempt: 2 })
+  handler({ type: "rpcError",
+error: transportError,
+attempt: 2 })
+  handler({ type: "rpcError",
+error: transportError,
+attempt: 2 })
 
   assert.equal(logs.error.length, 1, "The same repeated user-data transport error must produce one actionable error log.")
   assert.equal(logs.error[0].message, "User-data stream error", "Transport failures must use the concise user-data stream error heading.")
