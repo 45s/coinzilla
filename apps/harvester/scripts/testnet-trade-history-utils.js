@@ -74,5 +74,7 @@ export const parseTradeHistoryArguments = ({ args = [] } = {}) => {
     throw new RangeError("fromId must be a non-negative safe integer")
   }
 
-  return { symbol, limit, ...(fromId === undefined ? {} : { fromId }) }
+  return { symbol,
+limit,
+...(fromId === undefined ? {} : { fromId }) }
 }

@@ -15,7 +15,7 @@ export const normalizeOrderHistory = ({ orders, limit = 20 }) => {
       throw new TypeError(`Binance order history item ${index} must be an object`)
     }
 
-    const orderId = order.orderId
+    const {orderId} = order
     const validOrderId =
       (typeof orderId === "string" && /^\d+$/.test(orderId)) ||
       (Number.isSafeInteger(orderId) && orderId >= 0)
@@ -60,7 +60,7 @@ export const normalizeOrderHistory = ({ orders, limit = 20 }) => {
   }
 
   normalizedOrders.sort((left, right) => {
-    if (left.time !== right.time) return right.time - left.time
+    if (left.time !== right.time) {return right.time - left.time}
     const leftId = BigInt(left.orderId)
     const rightId = BigInt(right.orderId)
     return leftId === rightId ? 0 : leftId > rightId ? -1 : 1
@@ -84,5 +84,6 @@ export const parseOrderHistoryArguments = ({ args = [] } = {}) => {
     throw new RangeError(`Limit must be an integer between 1 and ${MAX_ORDER_HISTORY_LIMIT}`)
   }
 
-  return { symbol, limit }
+  return { symbol,
+limit }
 }

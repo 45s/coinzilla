@@ -12,7 +12,8 @@ import {
 } from "./testnet-menu-utils.js"
 
 const prompt = async (question) => {
-  const readline = createPromptInterface({ input: stdin, output: stdout })
+  const readline = createPromptInterface({ input: stdin,
+output: stdout })
   try {
     return await readline.question(question)
   } finally {
@@ -25,12 +26,15 @@ const collectArguments = async (action) => {
   for (const key of action.prompts ?? []) {
     const { label, value } = PROMPT_DEFAULTS[key]
     const actionDefault = action.id === "trades"
-      ? { symbol: "DOGEUSDT", limit: "1000" }[key] ?? value
+      ? { symbol: "DOGEUSDT",
+limit: "1000" }[key] ?? value
       : value
     const answer = await prompt(`${label}${actionDefault ? ` [${actionDefault}]` : ""}: `)
-    answers[key] = normalizePromptAnswer({ answer, fallback: actionDefault })
+    answers[key] = normalizePromptAnswer({ answer,
+fallback: actionDefault })
   }
-  return buildTestnetMenuArguments({ actionId: action.id, answers })
+  return buildTestnetMenuArguments({ actionId: action.id,
+answers })
 }
 
 const renderMenu = (selectedIndex) => {
@@ -48,7 +52,8 @@ const renderMenu = (selectedIndex) => {
 }
 
 const waitForKeypress = () => new Promise((resolve) => {
-  stdin.once("keypress", (character, key) => resolve({ character, key }))
+  stdin.once("keypress", (character, key) => resolve({ character,
+key }))
 })
 
 const runAction = async (action) => {
@@ -98,7 +103,7 @@ export const runTestnetMenu = async () => {
       renderMenu(selectedIndex)
       const { character, key = {} } = await waitForKeypress()
 
-      if (key.ctrl && key.name === "c") return
+      if (key.ctrl && key.name === "c") {return}
       if (key.name === "up") {
         selectedIndex = (selectedIndex - 1 + TESTNET_MENU_ACTIONS.length) % TESTNET_MENU_ACTIONS.length
         continue
@@ -107,11 +112,11 @@ export const runTestnetMenu = async () => {
         selectedIndex = (selectedIndex + 1) % TESTNET_MENU_ACTIONS.length
         continue
       }
-      if (key.name === "escape" || character?.toLowerCase() === "q") return
-      if (key.name !== "return" && key.name !== "enter") continue
+      if (key.name === "escape" || character?.toLowerCase() === "q") {return}
+      if (key.name !== "return" && key.name !== "enter") {continue}
 
       const action = TESTNET_MENU_ACTIONS[selectedIndex]
-      if (action.id === "exit") return
+      if (action.id === "exit") {return}
 
       stdin.setRawMode(false)
       hideMenu()
@@ -121,7 +126,7 @@ export const runTestnetMenu = async () => {
     }
   } finally {
     stdin.setRawMode(false)
-    if (menuVisible) hideMenu()
+    if (menuVisible) {hideMenu()}
     stdout.write("\n")
   }
 }

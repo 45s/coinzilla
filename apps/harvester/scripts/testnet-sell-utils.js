@@ -13,12 +13,14 @@ const parseNonNegativeDecimal = ({ value, name }) => {
 
   return {
     value,
-    ...parseDecimal({ value, field: name }),
+    ...parseDecimal({ value,
+field: name }),
   }
 }
 
 const isPositiveDecimal = ({ value, name }) =>
-  parseNonNegativeDecimal({ value, name }).coefficient > 0n
+  parseNonNegativeDecimal({ value,
+name }).coefficient > 0n
 
 const formatDecimalAtScale = ({ value, scale }) => {
   const decimal = parseDecimal({ value })
@@ -28,7 +30,7 @@ const formatDecimalAtScale = ({ value, scale }) => {
 
   return scale === 0
     ? digits
-    : digits.slice(0, -scale) + "." + digits.slice(-scale)
+    : `${digits.slice(0, -scale)  }.${  digits.slice(-scale)}`
 }
 
 export const getMarketSellQuantity = ({ freeBalance, symbolInfo }) => {
@@ -40,7 +42,8 @@ export const getMarketSellQuantity = ({ freeBalance, symbolInfo }) => {
     (filter) =>
       filter.filterType === "MARKET_LOT_SIZE" &&
       typeof filter.stepSize === "string" &&
-      isPositiveDecimal({ value: filter.stepSize, name: "stepSize" }),
+      isPositiveDecimal({ value: filter.stepSize,
+name: "stepSize" }),
   )
   const lotFilter = symbolInfo.filters.find(
     (filter) => filter.filterType === "LOT_SIZE",
@@ -82,20 +85,23 @@ export const getMarketSellQuantity = ({ freeBalance, symbolInfo }) => {
     direction: "down",
   })
 
-  if (compareDecimal({ left: quantity, right: min.value }) < 0) {
+  if (compareDecimal({ left: quantity,
+right: min.value }) < 0) {
     throw new Error(
       `Sell quantity is below the market minimum of ${quantityFilter.minQty}`,
     )
   }
 
-  if (compareDecimal({ left: quantity, right: max.value }) > 0) {
+  if (compareDecimal({ left: quantity,
+right: max.value }) > 0) {
     throw new Error(
       `Sell quantity exceeds the market maximum of ${quantityFilter.maxQty}; manual order splitting is required`,
     )
   }
 
   return {
-    quantity: formatDecimalAtScale({ value: quantity, scale }),
+    quantity: formatDecimalAtScale({ value: quantity,
+scale }),
     stepSize: step.value,
   }
 }
