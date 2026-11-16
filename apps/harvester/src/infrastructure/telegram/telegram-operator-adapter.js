@@ -591,12 +591,13 @@ function waitForRetry({ milliseconds, signal }) {
       resolve()
       return
     }
+    let timer
     const finish = () => {
       clearTimeout(timer)
       signal.removeEventListener("abort", finish)
       resolve()
     }
-    const timer = setTimeout(finish, milliseconds)
+    timer = setTimeout(finish, milliseconds)
     signal.addEventListener("abort", finish, { once: true })
     if (signal.aborted) {finish()}
   })
@@ -610,7 +611,8 @@ function waitForRetry({ milliseconds, signal }) {
  * @param {string} [options.botUsername] - Username returned by Telegram getMe.
  * @returns {{type: string, symbol?: string}} Transport-neutral parse result.
  */
-export function parseTelegramOperatorCommand(text, { botUsername } = {}) {
+export function parseTelegramOperatorCommand(...args) {
+  const [text, { botUsername } = {}] = args
   if (typeof text !== "string" || text.trim() === "") {
     return Object.freeze({ type: "IGNORE" })
   }
