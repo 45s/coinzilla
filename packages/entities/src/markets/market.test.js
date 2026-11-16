@@ -3,21 +3,24 @@ import { describe, it } from "node:test"
 import { Asset } from "../assets/asset.js"
 import { Market, marketErrMsgs } from "./market.js"
 
-describe(Market.name, () => {
-  const baseAsset = new Asset({ id: "dogecoin",
-code: "DOGE" })
-  const quoteAsset = new Asset({ id: "fdusd",
-code: "FDUSD" })
+const baseAsset = new Asset({
+  id: "dogecoin",
+  code: "DOGE",
+})
+const quoteAsset = new Asset({
+  id: "fdusd",
+  code: "FDUSD",
+})
+const createMarket = (overrides = {}) =>
+  new Market({
+    venue: " Binance ",
+    symbol: "DOGEFDUSD",
+    baseAsset,
+    quoteAsset,
+    ...overrides,
+  })
 
-  const createMarket = (overrides = {}) =>
-    new Market({
-      venue: " Binance ",
-      symbol: "DOGEFDUSD",
-      baseAsset,
-      quoteAsset,
-      ...overrides,
-    })
-
+describe(`${Market.name} identity`, () => {
   it("normalizes venue and exposes explicit base/quote assets", () => {
     const market = createMarket()
 
@@ -62,6 +65,9 @@ code: "FDUSD" },
     assert.equal(first.symbol, second.symbol)
   })
 
+})
+
+describe(`${Market.name} validation`, () => {
   it("rejects missing, non-string, blank, or ambiguous venue values", () => {
     for (const venue of [undefined, null, "", "  ", 1, "binance:spot"]) {
       assert.throws(() => createMarket({ venue }), {
@@ -99,6 +105,9 @@ quoteAsset: sameAsset }),
     )
   })
 
+})
+
+describe(`${Market.name} snapshots`, () => {
   it("returns an independent nested value snapshot", () => {
     const market = createMarket()
     const snapshot = market.value
