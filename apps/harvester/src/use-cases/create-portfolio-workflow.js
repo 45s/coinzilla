@@ -290,6 +290,40 @@ function logExecutionRejected({ logger, fill, result, previousPortfolio, current
   })
 }
 
+function prepareTradingAccounting({ state, fill, logger }) {
+  if (!(fill instanceof Fill)) {
+    logger.error?.({
+      message: "accounting rejected non-canonical fill",
+      fillType: fill?.constructor?.name ?? typeof fill,
+    })
+    return { result: toResult({ error: new TypeError("updateTradingAccounting requires a canonical Fill") }) }
+  }
+
+  const thirdAssetCommissions = collectThirdAssetCommissions({ fill })
+  if (thirdAssetCommissions?.ok === false) {
+    return { result: thirdAssetCommissions }
+  }
+  const previousPortfolio = state.portfolio
+  const currentLedger = state.recoveryLedgers.get(fill.market.id) ??
+    RecoveryLedger.empty({ market: fill.market })
+  const previousPosition = previousPortfolio.getPosition({
+    marketId: fill.market.id,
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  logExecutionReceived({
+    logger,
+    fill,
+    previousPosition,
+    currentLedger,
+  })
+  return {
+    previousPortfolio,
+    currentLedger,
+    previousPosition,
+    thirdAssetCommissions,
+  }
+}
+
 async function runUpdateTradingAccounting({
   state,
   fill,
@@ -300,29 +334,16 @@ async function runUpdateTradingAccounting({
   return enqueueAccountingTransition({
     state,
     transition: async () => {
-      if (!(fill instanceof Fill)) {
-        logger.error?.({
-          message: "accounting rejected non-canonical fill",
-          fillType: fill?.constructor?.name ?? typeof fill,
-        })
-        return toResult({ error: new TypeError("updateTradingAccounting requires a canonical Fill") })
+      const prepared = prepareTradingAccounting({ state, fill, logger })
+      if (prepared.result) {
+        return prepared.result
       }
-
-      const thirdAssetCommissions = collectThirdAssetCommissions({ fill })
-      if (thirdAssetCommissions?.ok === false) {
-        return thirdAssetCommissions
-      }
-      const previousPortfolio = state.portfolio
-      const currentLedger = state.recoveryLedgers.get(fill.market.id) ??
-        RecoveryLedger.empty({ market: fill.market })
-      const previousPosition = previousPortfolio.getPosition({
-        marketId: fill.market.id,
-        strategyId: StrategyId.COIN_GRABBER,
-      })
-      logExecutionReceived({ logger, 
-        fill, 
-        previousPosition, 
-        currentLedger })
+      const {
+        thirdAssetCommissions,
+        previousPortfolio,
+        currentLedger,
+        previousPosition,
+      } = prepared
 
       const result = applyTradingAccounting({
         portfolio: state.portfolio,
