@@ -254,8 +254,9 @@ async function handleMarketSelectionCallback({
   answerCallback,
   editMessage,
 }) {
-  interaction.action = ask[1]
-  interaction.symbol = ask[2]
+  const [, action, symbol] = ask
+  interaction.action = action
+  interaction.symbol = symbol
   logStage({
     interaction,
     message: "Telegram market selection RECEIVED",
@@ -372,8 +373,9 @@ async function handleConfirmationCallback({
     })
     return
   }
-  interaction.action = confirm[1]
-  interaction.symbol = confirm[2]
+  const [, action, symbol] = confirm
+  interaction.action = action
+  interaction.symbol = symbol
   logStage({
     interaction,
     message: "Telegram confirmation RECEIVED",
@@ -638,6 +640,7 @@ export function parseTelegramOperatorCommand(text, { botUsername } = {}) {
  * @param {number} [options.retryDelayMs=1000] - Initial transport retry delay.
  * @returns {{start: Function, stop: Function}} Adapter lifecycle.
  */
+// eslint-disable-next-line max-lines-per-function -- This adapter owns the single serial polling lifecycle and process-local confirmation state; application behavior remains delegated to existing queries and use cases.
 export function createTelegramOperatorAdapter({
   botToken,
   allowedUserIds,

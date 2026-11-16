@@ -46,6 +46,124 @@ function normalizeSafeContext({ context, botToken }) {
   return Object.keys(normalized).length > 0 ? normalized : undefined
 }
 
+function readErrorProperties({ error, botToken }) {
+  const name = readProperty({
+    value: error,
+    key: "name",
+  })
+  const code = readProperty({
+    value: error,
+    key: "code",
+  })
+  const message = readProperty({
+    value: error,
+    key: "message",
+  })
+  const stack = readProperty({
+    value: error,
+    key: "stack",
+  })
+  const cause = readProperty({
+    value: error,
+    key: "cause",
+  })
+  const errors = readProperty({
+    value: error,
+    key: "errors",
+  })
+  const context = normalizeSafeContext({
+    context: readProperty({
+      value: error,
+      key: "context",
+    }),
+    botToken,
+  })
+  return {
+    name,
+    code,
+    message,
+    stack,
+    cause,
+    errors,
+    context,
+  }
+}
+
+function describeNestedCause({ cause, botToken, seen, depth }) {
+  if (cause === undefined) {
+    return {}
+  }
+  return {
+    cause: describeErrorValue({
+      error: cause,
+      botToken,
+      seen,
+      depth: depth + 1,
+    }),
+  }
+}
+
+function describeNestedErrors({ errors, botToken, seen, depth }) {
+  if (!Array.isArray(errors)) {
+    return {}
+  }
+  return {
+    errors: errors.map(nestedError =>
+      describeErrorValue({
+        error: nestedError,
+        botToken,
+        seen,
+        depth: depth + 1,
+      }),
+    ),
+  }
+}
+
+function buildErrorDetails({ properties, error, botToken, seen, depth }) {
+  return {
+    name: typeof properties.name === "string"
+      ? sanitizeText({
+          value: properties.name,
+          botToken,
+        })
+      : "Error",
+    ...(typeof properties.code === "string" || typeof properties.code === "number"
+      ? {
+          code: String(properties.code),
+        }
+      : {}),
+    message: sanitizeText({
+      value: typeof properties.message === "string" ? properties.message : String(error),
+      botToken,
+    }),
+    ...(typeof properties.stack === "string"
+      ? {
+          stack: sanitizeText({
+            value: properties.stack,
+            botToken,
+          }),
+        }
+      : {}),
+    ...(properties.context
+      ? {
+          context: properties.context,
+        }
+      : {}),
+    ...describeNestedCause({
+      cause: properties.cause,
+      botToken,
+      seen,
+      depth,
+    }),
+    ...describeNestedErrors({
+      errors: properties.errors,
+      botToken,
+      seen,
+      depth,
+    }),
+  }
+}
+
 function describeErrorValue({ error, botToken, seen, depth }) {
   if (error === null || error === undefined) {
     return {
@@ -71,89 +189,17 @@ function describeErrorValue({ error, botToken, seen, depth }) {
     }
   }
   seen.add(error)
-  const name = readProperty({
-    value: error,
-    key: "name",
-  })
-  const code = readProperty({
-    value: error,
-    key: "code",
-  })
-  const message = readProperty({
-    value: error,
-    key: "message",
-  })
-  const stack = readProperty({
-    value: error,
-    key: "stack",
-  })
-  const cause = readProperty({
-    value: error,
-    key: "cause",
-  })
-  const nestedErrors = readProperty({
-    value: error,
-    key: "errors",
-  })
-  const context = normalizeSafeContext({
-    context: readProperty({
-      value: error,
-      key: "context",
-    }),
+  const properties = readErrorProperties({
+    error,
     botToken,
   })
-  const details = {
-    name: typeof name === "string"
-      ? sanitizeText({
-          value: name,
-          botToken,
-        })
-      : "Error",
-    ...(typeof code === "string" || typeof code === "number"
-      ? {
-          code: String(code),
-        }
-      : {}),
-    message: sanitizeText({
-      value: typeof message === "string" ? message : String(error),
-      botToken,
-    }),
-    ...(typeof stack === "string"
-      ? {
-          stack: sanitizeText({
-            value: stack,
-            botToken,
-          }),
-        }
-      : {}),
-    ...(context
-      ? {
-          context,
-        }
-      : {}),
-    ...(cause !== undefined
-      ? {
-          cause: describeErrorValue({
-            error: cause,
-            botToken,
-            seen,
-            depth: depth + 1,
-          }),
-        }
-      : {}),
-    ...(Array.isArray(nestedErrors)
-      ? {
-          errors: nestedErrors.map((nestedError) =>
-            describeErrorValue({
-              error: nestedError,
-              botToken,
-              seen,
-              depth: depth + 1,
-            }),
-          ),
-        }
-      : {}),
-  }
+  const details = buildErrorDetails({
+    properties,
+    error,
+    botToken,
+    seen,
+    depth,
+  })
   seen.delete(error)
   return details
 }

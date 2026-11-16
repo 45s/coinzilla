@@ -73,6 +73,7 @@ test("rejects malformed pause syntax and does not expose unimplemented commands"
   assert.deepEqual(parseTelegramOperatorCommand("/cancel LINKUSDT"), { type: "UNSUPPORTED" })
 })
 
+// eslint-disable-next-line max-lines-per-function -- Integration test verifies serialized polling, authorization, and application actor propagation in one lifecycle.
 test("polls serially, maps an allowlisted private sender to an actor, and acknowledges pause", async () => {
   const update = makeUpdate()
   const calls = []
@@ -1185,38 +1186,8 @@ async function runTelegramUpdatesForDiagnostics({ updates, operator, logger, sen
   }
 }
 
-test("routes all read-only keyboard actions and the balances command to their application queries", async () => {
-  const calls = []
-  const diagnostics = []
-  const updates = [
-    makeUpdate({
-      updateId: 1401,
-      text: "Status",
-    }),
-    makeUpdate({
-      updateId: 1402,
-      text: "Markets",
-    }),
-    makeUpdate({
-      updateId: 1403,
-      text: "Portfolio",
-    }),
-    makeUpdate({
-      updateId: 1404,
-      text: "Open Orders",
-    }),
-    makeUpdate({
-      updateId: 1405,
-      text: "/balances",
-    }),
-    makeCallbackUpdate({
-      updateId: 1406,
-      callbackId: "balance-nav-1406",
-      messageId: 1406,
-      data: "cc:nav:balances",
-    }),
-  ]
-  const operator = {
+function createReadOnlyOperator({ calls }) {
+  return {
     pauseMarket: async () => assert.fail("Read-only navigation must never pause a market."),
     resumeMarket: async () => assert.fail("Read-only navigation must never resume a market."),
     getStatus: async () => {
@@ -1273,9 +1244,27 @@ test("routes all read-only keyboard actions and the balances command to their ap
       }
     },
   }
+}
+
+test("routes all read-only keyboard actions and the balances command to their application queries", async () => {
+  const calls = []
+  const diagnostics = []
+  const updates = [
+    makeUpdate({ updateId: 1401, text: "Status" }),
+    makeUpdate({ updateId: 1402, text: "Markets" }),
+    makeUpdate({ updateId: 1403, text: "Portfolio" }),
+    makeUpdate({ updateId: 1404, text: "Open Orders" }),
+    makeUpdate({ updateId: 1405, text: "/balances" }),
+    makeCallbackUpdate({
+      updateId: 1406,
+      callbackId: "balance-nav-1406",
+      messageId: 1406,
+      data: "cc:nav:balances",
+    }),
+  ]
   const result = await runTelegramUpdatesForDiagnostics({
     updates,
-    operator,
+    operator: createReadOnlyOperator({ calls }),
     logger: {
       debug: entry => diagnostics.push(entry),
       info: entry => diagnostics.push(entry),
@@ -1498,21 +1487,7 @@ test("does not report a resume when the application confirms no operator pause e
   assert.equal(completion?.stateChanged, false)
 })
 
-test("retains a confirmation when callback acknowledgement fails and retries the same update", async () => {
-  const askUpdate = makeCallbackUpdate({
-    updateId: 1301,
-    callbackId: "ask-1301",
-    messageId: 1301,
-    data: "cc:ask:PAUSE:LINKUSDT",
-  })
-  const confirmUpdate = makeCallbackUpdate({
-    updateId: 1302,
-    callbackId: "confirm-1302",
-    messageId: 1301,
-    data: "cc:confirm:PAUSE:LINKUSDT:1301",
-  })
-  const operatorCalls = []
-  const diagnostics = []
+function createCallbackAckRetryFetch({ askUpdate, confirmUpdate }) {
   const updateOffsets = []
   let pollCount = 0
   let callbackAckCount = 0
@@ -1529,7 +1504,7 @@ test("retains a confirmation when callback acknowledgement fails and retries the
         result: { username: "coinzilla_bot" },
       })
     }
-    if (method === "setMyCommands") {
+    if (method === "setMyCommands" || method === "editMessageText") {
       return makeResponse({
         ok: true,
         result: true,
@@ -1569,14 +1544,37 @@ test("retains a confirmation when callback acknowledgement fails and retries the
         result: true,
       })
     }
-    if (method === "editMessageText") {
-      return makeResponse({
-        ok: true,
-        result: true,
-      })
-    }
     throw new Error(`Unexpected Telegram API method: ${method}`)
   }
+  return {
+    fetchImpl,
+    thirdPoll,
+    updateOffsets,
+    get callbackAckCount() {
+      return callbackAckCount
+    },
+  }
+}
+
+test("retains a confirmation when callback acknowledgement fails and retries the same update", async () => {
+  const askUpdate = makeCallbackUpdate({
+    updateId: 1301,
+    callbackId: "ask-1301",
+    messageId: 1301,
+    data: "cc:ask:PAUSE:LINKUSDT",
+  })
+  const confirmUpdate = makeCallbackUpdate({
+    updateId: 1302,
+    callbackId: "confirm-1302",
+    messageId: 1301,
+    data: "cc:confirm:PAUSE:LINKUSDT:1301",
+  })
+  const operatorCalls = []
+  const diagnostics = []
+  const mock = createCallbackAckRetryFetch({
+    askUpdate,
+    confirmUpdate,
+  })
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
     allowedUserIds: ["12345"],
@@ -1599,14 +1597,14 @@ test("retains a confirmation when callback acknowledgement fails and retries the
       warn: entry => diagnostics.push(entry),
       error: entry => diagnostics.push(entry),
     },
-    fetchImpl,
+    fetchImpl: mock.fetchImpl,
     retryDelayMs: 1,
   })
   await adapter.start()
-  await thirdPoll
+  await mock.thirdPoll
   await adapter.stop()
-  assert.equal(callbackAckCount, 3)
-  assert.deepEqual(updateOffsets, [undefined, 1302, 1303])
+  assert.equal(mock.callbackAckCount, 3)
+  assert.deepEqual(mock.updateOffsets, [undefined, 1302, 1303])
   assert.equal(operatorCalls.length, 1)
   const ackFailure = diagnostics.find(entry => entry.message === "Telegram interaction FAILED")
   assert.equal(ackFailure?.correlationId, "telegram:1302")
@@ -1618,3 +1616,4 @@ test("retains a confirmation when callback acknowledgement fails and retries the
   assert.equal(completion?.applicationOperationCompleted, true)
   assert.equal(completion?.stateChanged, true)
 })
+
