@@ -37,7 +37,8 @@ export async function connectBroker({
   })
 
   try {
-    logSystem({ logger, message: "Connecting to Binance broker" })
+    logSystem({ logger,
+message: "Connecting to Binance broker" })
 
     await broker.connect()
     publishLifecycleEvent({
