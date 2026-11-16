@@ -486,7 +486,9 @@ async function reconcileRecoverySellForShutdownSymbol({ dependencies, symbol } =
 
 async function reconcileRecoverySellsForShutdown(dependencies, { symbols: requestedSymbols } = {}) {
   const { runTransition, isStopping, pairs, state } = dependencies
-  const symbols = Array.isArray(requestedSymbols) ? requestedSymbols : Object.keys(pairs)
+  const symbols = Array.isArray(requestedSymbols)
+    ? requestedSymbols
+    : Object.entries(pairs).filter(([, pairConfig]) => pairConfig.enabled === true).map(([symbol]) => symbol)
   return runTransition({
     task: async () => {
       if (isStopping?.() !== true) {
@@ -524,7 +526,9 @@ async function reconcileRecoverySellsForShutdown(dependencies, { symbols: reques
 
 async function auditShutdownRecoverySellCoverage(dependencies, { symbols: requestedSymbols } = {}) {
   const { runTransition, pairs } = dependencies
-  const symbols = Array.isArray(requestedSymbols) ? requestedSymbols : Object.keys(pairs)
+  const symbols = Array.isArray(requestedSymbols)
+    ? requestedSymbols
+    : Object.entries(pairs).filter(([, pairConfig]) => pairConfig.enabled === true).map(([symbol]) => symbol)
   return runTransition({
     task: async () => {
       const findings = []
@@ -548,6 +552,7 @@ async function auditShutdownRecoverySellCoverage(dependencies, { symbols: reques
         data: Object.freeze({
           covered: findings.length === 0,
           findings: Object.freeze(findings),
+          symbols: Object.freeze([...symbols]),
         }),
       })
     },

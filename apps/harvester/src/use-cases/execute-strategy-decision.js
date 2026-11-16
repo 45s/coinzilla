@@ -342,32 +342,6 @@ async function preparePendingSubmission({ context, candidate } = {}) {
       })
     }
   }
-  let finalDeferral
-  try {
-    finalDeferral = context.getSubmissionDeferral({
-      order: pendingOrder,
-      purpose,
-    })
-  } catch (error) {
-    return deferAfterDurableSubmissionIntent({
-      context,
-      pendingOrder,
-      purpose,
-      deferral: {
-        reason: "SUBMISSION_GATE_ERROR",
-        details: { errorName: error.name },
-      },
-      error,
-    })
-  }
-  if (finalDeferral) {
-    return deferAfterDurableSubmissionIntent({
-      context,
-      pendingOrder,
-      purpose,
-      deferral: finalDeferral,
-    })
-  }
   return toResult({ data: { ready: true } })
 }
 
@@ -496,6 +470,32 @@ async function handleBrokerAcknowledgement({ context, pendingOrder, purpose, ack
 
 async function submitBrokerOrder({ context, candidate } = {}) {
   const { orderIntent, pendingOrder, purpose } = candidate
+  let finalDeferral
+  try {
+    finalDeferral = context.getSubmissionDeferral({
+      order: pendingOrder,
+      purpose,
+    })
+  } catch (error) {
+    return deferAfterDurableSubmissionIntent({
+      context,
+      pendingOrder,
+      purpose,
+      deferral: {
+        reason: "SUBMISSION_GATE_ERROR",
+        details: { errorName: error.name },
+      },
+      error,
+    })
+  }
+  if (finalDeferral) {
+    return deferAfterDurableSubmissionIntent({
+      context,
+      pendingOrder,
+      purpose,
+      deferral: finalDeferral,
+    })
+  }
   let brokerResult
   try {
     brokerResult = await context.broker.placeOrder({ order: orderIntent })

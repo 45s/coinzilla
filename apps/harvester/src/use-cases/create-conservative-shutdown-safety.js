@@ -50,6 +50,11 @@ function getCoverageBlockers({ coverageResult, symbol, blockers } = {}) {
     addBlocker(blockers, "RECOVERY_SELL_COVERAGE_UNVERIFIED")
     return
   }
+  const requestedSymbols = coverageResult.data?.symbols
+  if (Array.isArray(requestedSymbols) && !requestedSymbols.includes(symbol)) {
+    addBlocker(blockers, "RECOVERY_SELL_COVERAGE_NOT_CHECKED")
+    return
+  }
   if (coverageResult.data?.covered === true) return
   const allFindings = coverageResult.data?.findings
   if (!Array.isArray(allFindings)) {
@@ -57,6 +62,13 @@ function getCoverageBlockers({ coverageResult, symbol, blockers } = {}) {
     return
   }
   const findings = allFindings.filter((finding) => finding.symbol === symbol)
+  if (findings.length === 0 && (
+    !Array.isArray(requestedSymbols) ||
+    requestedSymbols.length <= 1
+  )) {
+    addBlocker(blockers, "RECOVERY_SELL_COVERAGE_INCOMPLETE")
+    return
+  }
   for (const finding of findings) {
     addBlocker(blockers, "RECOVERY_SELL_COVERAGE:" + finding.reason)
   }
