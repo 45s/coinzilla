@@ -1105,7 +1105,9 @@ test("per-market emergency BUY pause cancels only that market's owned BUY and le
 
   assert.equal(paused.ok, true, "The market BUY pause must be acknowledged after owned BUY cancellation is confirmed.")
   assert.equal(paused.data.canceled, 1, "Only the selected market's active owned BUY must be canceled.")
-  assert.equal(engine.getOperatorMarketSnapshots().find((market) => market.symbol === "DOGEUSDT").operatorBuysPaused, true, "The selected market snapshot must expose its emergency BUY gate.")
+  const marketSnapshots = await engine.getOperatorMarketSnapshots()
+  assert.equal(marketSnapshots.ok, true)
+  assert.equal(marketSnapshots.data.markets.find((market) => market.symbol === "DOGEUSDT").operatorBuysPaused, true, "The selected market snapshot must expose its emergency BUY gate.")
   assert.deepEqual(
     engine.getActiveOrders().filter((order) => order.side === "BUY").map((order) => order.market.symbol),
     ["SOLUSDT"],
@@ -1144,7 +1146,9 @@ test("global emergency BUY pause cancels all owned BUYs and suppresses new BUYs 
 
   assert.equal(orders.length, 2, "A global BUY pause must prevent both markets from submitting replacement BUY orders.")
   assert.equal(engine.getOperatorBuyPauseState().allBuysPaused, true, "The global BUY pause state must remain visible until explicitly resumed.")
-  assert.equal(engine.getOperatorMarketSnapshots().every((market) => market.operatorBuysPaused), true, "A global BUY pause must be visible in every configured market snapshot.")
+  const marketSnapshots = await engine.getOperatorMarketSnapshots()
+  assert.equal(marketSnapshots.ok, true)
+  assert.equal(marketSnapshots.data.markets.every((market) => market.operatorBuysPaused), true, "A global BUY pause must be visible in every configured market snapshot.")
 })
 
 test("global and market BUY pauses remain independent when either scope is resumed", async () => {
