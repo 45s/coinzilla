@@ -14,10 +14,10 @@ function freezeValue(value) {
 
 function readFailure(operation, cause) {
   return new OperatorQueryError({
-    message: "Harvester operator " + operation.toLowerCase() + " snapshot could not be read",
-    code: "HARVESTER_OPERATOR_" + operation + "_READ_FAILED",
+    message: `Harvester operator ${  operation.toLowerCase()  } snapshot could not be read`,
+    code: `HARVESTER_OPERATOR_${  operation  }_READ_FAILED`,
     cause,
-    context: { operation: "READ_" + operation },
+    context: { operation: `READ_${  operation}` },
   })
 }
 
@@ -39,8 +39,11 @@ function readFailure(operation, cause) {
 export function createReadOperatorTradingState({
   getPortfolio, getRecoveryLedger, getAccountSnapshot, engine, getOpenOrders, getObservedAt = Date.now,
 } = {}) {
-  for (const [name, provider] of Object.entries({ getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders })) {
-    if (typeof provider !== "function") { throw new TypeError("createReadOperatorTradingState requires " + name) }
+  for (const [name, provider] of Object.entries({ getPortfolio,
+getRecoveryLedger,
+getAccountSnapshot,
+getOpenOrders })) {
+    if (typeof provider !== "function") { throw new TypeError(`createReadOperatorTradingState requires ${  name}`) }
   }
   if (typeof engine?.getActiveOrders !== "function") {
     throw new TypeError("createReadOperatorTradingState requires engine.getActiveOrders")
@@ -55,8 +58,9 @@ export function createReadOperatorTradingState({
         throw new TypeError("Operator query clock must return a non-negative safe integer")
       }
       return Promise.resolve().then(read).then((data) => {
-        if (!data || typeof data !== "object") { throw new TypeError(operation + " provider returned an invalid snapshot") }
-        return toResult({ data: freezeValue({ observedAt, ...data }) })
+        if (!data || typeof data !== "object") { throw new TypeError(`${operation  } provider returned an invalid snapshot`) }
+        return toResult({ data: freezeValue({ observedAt,
+...data }) })
       }).catch((cause) => toResult({ error: readFailure(operation, cause) }))
     } catch (error) {
       return Promise.resolve(toResult({ error }))
@@ -64,7 +68,8 @@ export function createReadOperatorTradingState({
   }
 
   const getPositions = ({ actor } = {}) => execute({
-    actor, operation: "POSITIONS",
+    actor,
+operation: "POSITIONS",
     read: () => {
       const portfolio = getPortfolio()
       if (!portfolio || !Array.isArray(portfolio.positions)) { throw new TypeError("Canonical Portfolio is unavailable") }
@@ -97,7 +102,8 @@ export function createReadOperatorTradingState({
   })
 
   const getOrders = ({ actor } = {}) => execute({
-    actor, operation: "ORDERS",
+    actor,
+operation: "ORDERS",
     read: async () => {
       const owned = engine.getActiveOrders()
       if (!Array.isArray(owned)) { throw new TypeError("Engine order snapshot is invalid") }
@@ -136,7 +142,8 @@ export function createReadOperatorTradingState({
   })
 
   const getBalances = ({ actor } = {}) => execute({
-    actor, operation: "BALANCES",
+    actor,
+operation: "BALANCES",
     read: () => {
       const snapshot = getAccountSnapshot()
       if (!snapshot || !Number.isSafeInteger(snapshot.sourceTime) || !Array.isArray(snapshot.balances)) {
@@ -153,11 +160,14 @@ export function createReadOperatorTradingState({
           asset: balance.asset?.code,
           free: balance.free?.amount ?? balance.free,
           locked: balance.locked?.amount ?? balance.locked,
-          total: addDecimal({ left: balance.free.amount, right: balance.locked.amount }),
+          total: addDecimal({ left: balance.free.amount,
+right: balance.locked.amount }),
         })),
       }
     },
   })
 
-  return Object.freeze({ getPositions, getOrders, getBalances })
+  return Object.freeze({ getPositions,
+getOrders,
+getBalances })
 }
