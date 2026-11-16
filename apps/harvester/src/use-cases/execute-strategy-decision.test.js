@@ -640,7 +640,10 @@ test("rechecks the shutdown gate after durable intent and before broker placemen
     onSubmissionFailure: async () => assert.fail("A locally deferred order is not a broker failure."),
   })
 
-  const result = await execute({ decision, marketMetadata })
+  const result = await execute({
+    decision,
+    marketMetadata,
+  })
 
   assert.equal(result.ok, true, "Expected result.ok to equal true in \"rechecks the shutdown gate after durable intent and before broker placement\".")
   assert.equal(result.data.deferred, true, "Expected result.data.deferred to equal true in \"rechecks the shutdown gate after durable intent and before broker placement\".")
