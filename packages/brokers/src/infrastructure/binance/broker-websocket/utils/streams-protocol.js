@@ -25,7 +25,8 @@ function requireSymbol({ symbol, type }) {
 }
 
 function createTradeStream({ type, symbol }) {
-  return validateStreamName(`${requireSymbol({ symbol, type })}@${type}`)
+  return validateStreamName(`${requireSymbol({ symbol,
+    type })}@${type}`)
 }
 
 function createTickerStream({ type, symbol }) {
@@ -34,11 +35,13 @@ function createTickerStream({ type, symbol }) {
 }
 
 function createBookTickerStream({ symbol }) {
-  return validateStreamName(`${requireSymbol({ symbol, type: "bookTicker" })}@bookTicker`)
+  return validateStreamName(`${requireSymbol({ symbol,
+    type: "bookTicker" })}@bookTicker`)
 }
 
 function createKlineStream({ symbol, interval }) {
-  requireSymbol({ symbol, type: "kline" })
+  requireSymbol({ symbol,
+    type: "kline" })
   if (!INTERVALS.has(interval)) {
     throw new TypeError("interval is not a supported Binance kline interval")
   }
@@ -54,7 +57,8 @@ function createRollingWindowStream({ symbol, windowSize }) {
 }
 
 function createPartialBookDepthStream({ symbol, levels, speed }) {
-  requireSymbol({ symbol, type: "partialBookDepth" })
+  requireSymbol({ symbol,
+    type: "partialBookDepth" })
   if (!DEPTH_LEVELS.has(Number(levels))) {
     throw new TypeError("levels must be 5, 10, or 20")
   }
@@ -65,7 +69,8 @@ function createPartialBookDepthStream({ symbol, levels, speed }) {
 }
 
 function createDiffBookDepthStream({ symbol, speed }) {
-  requireSymbol({ symbol, type: "diffBookDepth" })
+  requireSymbol({ symbol,
+    type: "diffBookDepth" })
   if (!UPDATE_SPEEDS.has(speed)) {
     throw new TypeError("speed must be 100ms or 1000ms")
   }

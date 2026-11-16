@@ -238,7 +238,7 @@ E: 123 })
 
 test("enforces the 1024 stream connection limit before sending subscriptions", async () => {
   const { client, transports } = createClient()
-  const streams = Array.from({ length: 1_025 }, (_, index) => `s${String(index).padStart(4, "0")}@aggTrade`)
+  const streams = [...Array(1_025).keys()].map((index) => `s${String(index).padStart(4, "0")}@aggTrade`)
   await assert.rejects(client.subscribe(streams, () => {}), /at most 1024 streams/)
   assert.equal(transports.length, 0)
   await client.disconnect()

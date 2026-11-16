@@ -28,7 +28,9 @@ function createTransport(options = {}) {
     ...options.transport,
   })
 
-  return { transport, sockets, clock }
+  return { transport,
+    sockets,
+    clock }
 }
 
 test("connect is idempotent while connecting and resolves when the socket opens", async () => {
@@ -123,8 +125,10 @@ test("disconnect waits for close and resolves duplicate close events only once",
   assert.equal(first, second)
   assert.equal(sockets[0].closeCalls.length, 1)
 
-  sockets[0].serverClose({ code: 1000, reason: "done" })
-  sockets[0].serverClose({ code: 1000, reason: "duplicate" })
+  sockets[0].serverClose({ code: 1000,
+    reason: "done" })
+  sockets[0].serverClose({ code: 1000,
+    reason: "duplicate" })
   await first
 
   assert.equal(transport.state, "closed")
@@ -151,7 +155,9 @@ test("socket errors during connection reject and close the socket", async () => 
   const rejection = assert.rejects(connected, /Fake WebSocket error/)
 
   sockets[0].fail(new Error("Fake WebSocket error"))
-  sockets[0].serverClose({ code: 1006, reason: "", wasClean: false })
+  sockets[0].serverClose({ code: 1006,
+    reason: "",
+    wasClean: false })
   await rejection
 
   assert.equal(transport.state, "closed")
@@ -180,7 +186,9 @@ test("handshake failures retain safe cause, HTTP status, and close diagnostics",
   })
 
   sockets[0].fail(cause, "Received network error or non-101 status code.")
-  sockets[0].serverClose({ code: 1006, reason: "", wasClean: false })
+  sockets[0].serverClose({ code: 1006,
+    reason: "",
+    wasClean: false })
   await rejection
 
   assert.equal(transport.state, "closed")
@@ -202,7 +210,9 @@ test("handshake diagnostics redact credential-like text and URLs", async () => {
     new TypeError(),
     "Handshake failed apiKey=secret-value at https://private.example/path",
   )
-  sockets[0].serverClose({ code: 1006, reason: "", wasClean: false })
+  sockets[0].serverClose({ code: 1006,
+    reason: "",
+    wasClean: false })
   await rejection
 })
 
@@ -280,11 +290,11 @@ function attachWebSocketPingHandler({ server, payload, resolvePong, rejectPong }
         let length = second & 0x7f
         let offset = 2
         if (length === 126) {
-          if (received.length < 4) return
+          if (received.length < 4) {return}
           length = received.readUInt16BE(2)
           offset = 4
         } else if (length === 127) {
-          if (received.length < 10) return
+          if (received.length < 10) {return}
           const largeLength = received.readBigUInt64BE(2)
           if (largeLength > BigInt(Number.MAX_SAFE_INTEGER)) {
             rejectPong(new Error("Unexpected oversized WebSocket frame"))
@@ -295,7 +305,7 @@ function attachWebSocketPingHandler({ server, payload, resolvePong, rejectPong }
         }
 
         const maskLength = masked ? 4 : 0
-        if (received.length < offset + maskLength + length) return
+        if (received.length < offset + maskLength + length) {return}
         let framePayload = received.subarray(offset + maskLength, offset + maskLength + length)
         if (masked) {
           const mask = received.subarray(offset, offset + 4)
@@ -306,7 +316,7 @@ function attachWebSocketPingHandler({ server, payload, resolvePong, rejectPong }
         }
 
         received = received.subarray(offset + maskLength + length)
-        if (opcode === 0x0a) resolvePong(framePayload)
+        if (opcode === 0x0a) {resolvePong(framePayload)}
         if (opcode === 0x08) {
           socket.write(Buffer.concat([Buffer.from([0x88, framePayload.length]), framePayload]))
           socket.end()
@@ -340,7 +350,10 @@ test("the supported Node WebSocket client automatically answers server ping fram
     rejectPong = reject
   })
   const server = createServer()
-  attachWebSocketPingHandler({ server, payload, resolvePong, rejectPong })
+  attachWebSocketPingHandler({ server,
+    payload,
+    resolvePong,
+    rejectPong })
   await listen(server)
 
   const address = server.address()
@@ -415,7 +428,9 @@ test("socket close before opening rejects the connection and cleans listeners", 
   const connected = transport.connect()
   const rejection = assert.rejects(connected, /closed before opening/)
 
-  sockets[0].serverClose({ code: 1006, reason: "handshake failed", wasClean: false })
+  sockets[0].serverClose({ code: 1006,
+    reason: "handshake failed",
+    wasClean: false })
   sockets[0].receive("late message")
   await rejection
 
@@ -440,7 +455,7 @@ test("listener registration failure closes the socket and removes previously att
 
     addEventListener(...args) {
       const [type] = args
-      if (type === "message") throw new Error("message listener registration failed")
+      if (type === "message") {throw new Error("message listener registration failed")}
       registered.push(type)
       return super.addEventListener(...args)
     }
@@ -486,7 +501,7 @@ test("finalizes close and attempts every socket listener removal when one remove
       const [type] = args
       removed.push(type)
       super.removeEventListener(...args)
-      if (type === "open") throw new Error("open listener removal failed")
+      if (type === "open") {throw new Error("open listener removal failed")}
     }
   }
 
@@ -506,12 +521,15 @@ test("finalizes close and attempts every socket listener removal when one remove
   await connecting
 
   const closing = transport.close()
-  socket.serverClose({ code: 1000, reason: "finished", wasClean: true })
+  socket.serverClose({ code: 1000,
+    reason: "finished",
+    wasClean: true })
   await assert.doesNotReject(closing)
 
   assert.deepEqual(removed, ["open", "message", "error", "close"])
   assert.deepEqual(errors, ["open listener removal failed"])
-  assert.deepEqual(closes, [{ code: 1000, reason: "finished",
+  assert.deepEqual(closes, [{ code: 1000,
+    reason: "finished",
     wasClean: true }])
   assert.equal(transport.state, "closed")
   assert.equal(clock.pendingCount, 0)
