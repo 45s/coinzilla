@@ -19,6 +19,33 @@ const KEYBOARD_ACTIONS = Object.freeze({
   "open orders": Object.freeze({ type: "ORDERS" }),
 })
 
+function resolveMarketAction(page) {
+  if (page === "pause") { return "PAUSE" }
+  if (page === "resume") { return "RESUME" }
+  return undefined
+}
+
+function selectMarketsForAction({ markets, action }) {
+  if (action === "PAUSE") {
+    return markets.filter((market) => market?.enabled === true && market.operatorPaused !== true)
+  }
+  if (action === "RESUME") {
+    return markets.filter((market) => market?.enabled === true && market.operatorPaused === true)
+  }
+  return []
+}
+
+function formatMarketActionPrompt({ action, eligibleMarkets, text }) {
+  const prompt = action === "PAUSE"
+    ? "Choose an enabled market to pause."
+    : "Choose an enabled market to resume."
+  if (eligibleMarkets.length > 0) { return prompt + "\n\n" + text }
+  const emptyMessage = action === "PAUSE"
+    ? "No enabled markets are currently available to pause."
+    : "No enabled operator-paused markets are currently available to resume."
+  return prompt + "\n" + emptyMessage + "\n\n" + text
+}
+
 function normalizeTelegramUserId(value) {
   if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
     return String(value)
@@ -270,12 +297,7 @@ export function createTelegramOperatorAdapter({
 
   const readPage = async ({ page, userId }) => {
     if (page === "home") { return { text: helpText(), keyboard: navigationKeyboard() } }
-    let marketAction
-    if (page === "pause") {
-      marketAction = "PAUSE"
-    } else if (page === "resume") {
-      marketAction = "RESUME"
-    }
+    const marketAction = resolveMarketAction(page)
     const queryPage = marketAction ? "markets" : page
     const method = PAGE_METHODS[queryPage]
     if (!method || typeof operator[method] !== "function") {
@@ -302,17 +324,9 @@ export function createTelegramOperatorAdapter({
     const markets = queryPage === "markets" ? result.data.markets : []
     const keyboard = navigationKeyboard({ page: queryPage, markets, marketAction })
     if (!marketAction) { return { text, keyboard } }
-    const eligibleMarkets = markets.filter((market) =>
-      market?.enabled === true && (marketAction === "PAUSE" ? market.operatorPaused !== true : market.operatorPaused === true),
-    )
-    const prompt = marketAction === "PAUSE"
-      ? "Choose an enabled market to pause."
-      : "Choose an enabled market to resume."
-    const emptyMessage = marketAction === "PAUSE"
-      ? "No enabled markets are currently available to pause."
-      : "No enabled operator-paused markets are currently available to resume."
+    const eligibleMarkets = selectMarketsForAction({ markets, action: marketAction })
     return {
-      text: prompt + (eligibleMarkets.length === 0 ? "\n" + emptyMessage : "") + "\n\n" + text,
+      text: formatMarketActionPrompt({ action: marketAction, eligibleMarkets, text }),
       keyboard,
     }
   }
@@ -426,6 +440,32 @@ export function createTelegramOperatorAdapter({
     await answerCallback({ callbackId: callback.id, text: "Unknown or expired action.", signal })
   }
 
+  const respondToMenuCommand = async ({ parsed, message, userId, signal }) => {
+    if (parsed.type === "START" || parsed.type === "MENU") {
+      await sendMessage({ chatId: message.chat.id, text: helpText(), replyMarkup: mainMenuKeyboard(), signal })
+      return true
+    }
+    if (parsed.type === "HELP") {
+      await sendMessage({ chatId: message.chat.id, text: helpText(), replyMarkup: navigationKeyboard(), signal })
+      return true
+    }
+    if (parsed.type === "PAUSE_MENU" || parsed.type === "RESUME_MENU") {
+      const page = parsed.type === "PAUSE_MENU" ? "pause" : "resume"
+      const rendered = await readPage({ page, userId })
+      await sendMessage({ chatId: message.chat.id, text: rendered.text, replyMarkup: rendered.keyboard, signal })
+      return true
+    }
+    return false
+  }
+
+  const respondToReadCommand = async ({ parsed, message, userId, signal }) => {
+    const page = parsed.type.toLowerCase()
+    if (!PAGE_METHODS[page]) { return false }
+    const rendered = await readPage({ page, userId })
+    await sendMessage({ chatId: message.chat.id, text: rendered.text, replyMarkup: rendered.keyboard, signal })
+    return true
+  }
+
   const respondToUpdate = async ({ update, signal }) => {
     if (update.callback_query) { await respondToCallback({ update, signal }); return }
     const message = update.message
@@ -437,23 +477,8 @@ export function createTelegramOperatorAdapter({
     const parsed = parseTelegramOperatorCommand(message.text, { botUsername })
     if (parsed.type === "IGNORE") { return }
     if (!allowedUsers.has(userId)) { await sendMessage({ chatId: message.chat.id, text: "Not authorized.", signal }); return }
-    if (parsed.type === "START" || parsed.type === "MENU") {
-      await sendMessage({ chatId: message.chat.id, text: helpText(), replyMarkup: mainMenuKeyboard(), signal })
-      return
-    }
-    if (parsed.type === "HELP") { await sendMessage({ chatId: message.chat.id, text: helpText(), replyMarkup: navigationKeyboard(), signal }); return }
-    if (parsed.type === "PAUSE_MENU" || parsed.type === "RESUME_MENU") {
-      const page = parsed.type === "PAUSE_MENU" ? "pause" : "resume"
-      const rendered = await readPage({ page, userId })
-      await sendMessage({ chatId: message.chat.id, text: rendered.text, replyMarkup: rendered.keyboard, signal })
-      return
-    }
-    if (PAGE_METHODS[parsed.type.toLowerCase()]) {
-      const page = parsed.type.toLowerCase()
-      const rendered = await readPage({ page, userId })
-      await sendMessage({ chatId: message.chat.id, text: rendered.text, replyMarkup: rendered.keyboard, signal })
-      return
-    }
+    if (await respondToMenuCommand({ parsed, message, userId, signal })) { return }
+    if (await respondToReadCommand({ parsed, message, userId, signal })) { return }
     if (parsed.type === "UNSUPPORTED") {
       await sendMessage({ chatId: message.chat.id, text: "Unknown command. Use /help to see available commands.", replyMarkup: navigationKeyboard(), signal })
       return
@@ -463,7 +488,7 @@ export function createTelegramOperatorAdapter({
         chatId: message.chat.id,
         text: parsed.command === "RESUME" || parsed.command === "PAUSE"
           ? "Usage: /" + parsed.command.toLowerCase() + " <SYMBOL>. Use /help for commands."
-          : "Usage: /" + String(parsed.command ?? "command").toLowerCase() + " with no arguments. Use /help for commands.",
+          : `Usage: /${String(parsed.command ?? "command").toLowerCase()} with no arguments. Use /help for commands.`,
         signal,
       })
       return
@@ -471,7 +496,7 @@ export function createTelegramOperatorAdapter({
     const action = parsed.type === "RESUME" ? "RESUME" : "PAUSE"
     await executeControl({
       action, symbol: parsed.symbol, userId,
-      requestId: "telegram:" + update.update_id + ":" + (message.date ?? "0") + ":" + userId,
+      requestId: `telegram:${update.update_id}:${message.date ?? "0"}:${userId}`,
       chatId: message.chat.id, signal,
     })
   }
@@ -543,16 +568,46 @@ export function createTelegramOperatorAdapter({
             await callApi({
               method: "setMyCommands",
               payload: { commands: [
-                { command: "start", description: "Open the Harvester Command Center" },
-                { command: "menu", description: "Restore the persistent Command Center keyboard" },
-                { command: "help", description: "Show commands and safety notes" },
-                { command: "status", description: "Read runtime readiness and blockers" },
-                { command: "markets", description: "Read configured market state" },
-                { command: "positions", description: "Read positions and recovery accounting" },
-                { command: "orders", description: "Read Harvester and external open orders" },
-                { command: "balances", description: "Read latest exchange balances" },
-                { command: "pause", description: "Request a market-scoped operator pause" },
-                { command: "resume", description: "Request removal of an operator pause" },
+                {
+                  command: "start",
+                  description: "Open the Harvester Command Center",
+                },
+                {
+                  command: "menu",
+                  description: "Restore the persistent Command Center keyboard",
+                },
+                {
+                  command: "help",
+                  description: "Show commands and safety notes",
+                },
+                {
+                  command: "status",
+                  description: "Read runtime readiness and blockers",
+                },
+                {
+                  command: "markets",
+                  description: "Read configured market state",
+                },
+                {
+                  command: "positions",
+                  description: "Read positions and recovery accounting",
+                },
+                {
+                  command: "orders",
+                  description: "Read Harvester and external open orders",
+                },
+                {
+                  command: "balances",
+                  description: "Read latest exchange balances",
+                },
+                {
+                  command: "pause",
+                  description: "Request a market-scoped operator pause",
+                },
+                {
+                  command: "resume",
+                  description: "Request removal of an operator pause",
+                },
               ] },
               signal: nextController.signal,
             })
@@ -566,7 +621,10 @@ export function createTelegramOperatorAdapter({
             })
           }
           pollPromise = poll({ signal: nextController.signal })
-          return Object.freeze({ started: true, alreadyStarted: false })
+          return Object.freeze({
+            started: true,
+            alreadyStarted: false,
+          })
         } catch (error) {
           nextController.abort()
           if (controller === nextController) {controller = undefined}
@@ -581,7 +639,12 @@ export function createTelegramOperatorAdapter({
       if (stopPromise) {return stopPromise}
       if (!controller) {
         if (startPromise) {await startPromise.catch(() => {})}
-        if (!controller) {return Object.freeze({ stopped: true, alreadyStopped: true })}
+        if (!controller) {
+          return Object.freeze({
+            stopped: true,
+            alreadyStopped: true,
+          })
+        }
       }
       const activeController = controller
       activeController.abort()
@@ -593,7 +656,10 @@ export function createTelegramOperatorAdapter({
         pendingConfirmations.clear()
         botUsername = undefined
         offset = undefined
-        return Object.freeze({ stopped: true, alreadyStopped: false })
+        return Object.freeze({
+          stopped: true,
+          alreadyStopped: false,
+        })
       })()
       try {
         return await stopPromise
