@@ -162,7 +162,10 @@ test("rejects negative zero and oversized values at every canonical JSON depth",
   )
   assert.throws(
     () => canonicalizeOperationalStateValue(Object.fromEntries(
-      Array.from({ length: 129 }, (_, index) => [`key${  index}`, index]),
+      Array.from({ length: 129 }, (...parameters) => {
+        const [, index] = parameters
+        return [`key${  index}`, index]
+      }),
     )),
     RangeError,
     "The maximum object-key count must be enforced.",
