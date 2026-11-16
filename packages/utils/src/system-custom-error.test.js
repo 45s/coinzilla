@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { SystemCustomError } from "./system-custom-error.js"
+import { SystemCustomError } from "./index.js"
 
 test("uses the base name and preserves native Error behavior", () => {
   const error = new SystemCustomError("operation failed")
