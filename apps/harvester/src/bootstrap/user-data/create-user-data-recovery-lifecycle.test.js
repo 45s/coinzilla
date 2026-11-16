@@ -24,38 +24,26 @@ function createLifecycleState() {
   }
 }
 
-function createRecoveryLifecycleFixture() {
-  const state = createLifecycleState()
-  const logs = { info: [], error: [] }
-  const accountAudits = []
-  const openOrdersAudits = []
-  const acknowledgements = []
-  const ownershipReconciliations = []
-  const observedStatuses = []
-  const lifecycleEvents = []
-  let reconciliationCalls = 0
-  let resolveFirstReconciliation
-  const firstReconciliation = new Promise((resolve) => {
-    resolveFirstReconciliation = resolve
-  })
-  let statusHandler
-
-  const tradingEngine = {
+function createLifecycleTradingEngine({ reconciliationState, firstReconciliation }) {
+  return {
     reconcileOwnedOrders: async () => {
-      reconciliationCalls += 1
-      if (reconciliationCalls === 1) {
+      reconciliationState.calls += 1
+      if (reconciliationState.calls === 1) {
         return firstReconciliation
       }
       return { ok: true, data: { reconciled: 2, symbols: ["DOGEUSDT"] } }
     },
   }
-  const subscription = {
+}
+
+function createLifecycleSubscription({ state, acknowledgements, handlers }) {
+  return {
     acknowledgeRecoveryResult: (brokerRecoveryGeneration) => {
       acknowledgements.push({
         applicationGeneration: state.recoveryGeneration,
         brokerGeneration: brokerRecoveryGeneration,
       })
-      statusHandler({
+      handlers.statusHandler({
         type: "reconciled",
         subscriptionId: 42,
         recoveryGeneration: brokerRecoveryGeneration,
@@ -65,7 +53,18 @@ function createRecoveryLifecycleFixture() {
       return { accepted: true, completed: true }
     },
   }
-  const startRecovery = createUserDataRecoveryHandler({
+}
+
+function createLifecycleRecoveryCoordinator({
+  state,
+  subscription,
+  tradingEngine,
+  logs,
+  accountAudits,
+  openOrdersAudits,
+  ownershipReconciliations,
+}) {
+  return createUserDataRecoveryHandler({
     state,
     isStopped: () => false,
     getUserDataSubscription: () => subscription,
@@ -88,7 +87,16 @@ function createRecoveryLifecycleFixture() {
       error: (entry) => logs.error.push(entry),
     },
   })
-  statusHandler = createUserDataStatusHandler({
+}
+
+function createLifecycleStatusHandler({
+  state,
+  startRecovery,
+  logs,
+  observedStatuses,
+  lifecycleEvents,
+}) {
+  return createUserDataStatusHandler({
     state,
     isStopped: () => false,
     eventPublisher: {
@@ -103,11 +111,54 @@ function createRecoveryLifecycleFixture() {
       error: (entry) => logs.error.push(entry),
     },
     tradingEnabled: true,
-    startUserDataRecovery: () => startRecovery(),
+    startUserDataRecovery: startRecovery,
     cancelOwnedBuysAfterAccountingFailure: async () => {},
     resumeDeferredStrategyEvaluations: () => {},
     onUserDataStatus: (entry) => observedStatuses.push(entry),
   })
+}
+
+function createRecoveryLifecycleFixture() {
+  const state = createLifecycleState()
+  const logs = { info: [], error: [] }
+  const accountAudits = []
+  const openOrdersAudits = []
+  const acknowledgements = []
+  const ownershipReconciliations = []
+  const observedStatuses = []
+  const lifecycleEvents = []
+  const reconciliationState = { calls: 0 }
+  const handlers = { statusHandler: null }
+  let resolveFirstReconciliation
+  const firstReconciliation = new Promise((resolve) => {
+    resolveFirstReconciliation = resolve
+  })
+  const tradingEngine = createLifecycleTradingEngine({
+    reconciliationState,
+    firstReconciliation,
+  })
+  const subscription = createLifecycleSubscription({
+    state,
+    acknowledgements,
+    handlers,
+  })
+  const startRecovery = createLifecycleRecoveryCoordinator({
+    state,
+    subscription,
+    tradingEngine,
+    logs,
+    accountAudits,
+    openOrdersAudits,
+    ownershipReconciliations,
+  })
+  const statusHandler = createLifecycleStatusHandler({
+    state,
+    startRecovery,
+    logs,
+    observedStatuses,
+    lifecycleEvents,
+  })
+  handlers.statusHandler = statusHandler
 
   return {
     state,
@@ -119,7 +170,7 @@ function createRecoveryLifecycleFixture() {
     observedStatuses,
     lifecycleEvents,
     get reconciliationCalls() {
-      return reconciliationCalls
+      return reconciliationState.calls
     },
     resolveFirstReconciliation,
     statusHandler,
