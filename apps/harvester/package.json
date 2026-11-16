@@ -45,7 +45,11 @@
       "test/bootstrap/start-harvester.test.js",
       "test/recovery/operational-state-crash-matrix.test.js",
       "src/domain/strategies/recovery-seller/mixed-sell-fill-allocation.test.js",
-      "src/domain/strategies/recovery-seller/mixed-sell-fill-reconciliation.test.js"
+      "src/domain/strategies/recovery-seller/mixed-sell-fill-reconciliation.test.js",
+      "src/domain/strategies/recovery-seller/mixed-sell-fill-accounting.test.js",
+      "src/domain/account/calculate-account-snapshot-baselines.test.js",
+      "src/bootstrap/account/create-account-snapshot-manager.test.js",
+      "src/use-cases/conservative-trading-engine.test.js"
     ]
   }
 }

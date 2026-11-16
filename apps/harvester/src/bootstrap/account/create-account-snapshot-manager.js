@@ -320,16 +320,26 @@ function resolveAdditionalTrackedBaseQuantityGetter({ getter } = {}) {
   return getter
 }
 
+function resolveAdditionalTrackedQuoteCashFlowGetter({ getter } = {}) {
+  if (typeof getter !== "function") {
+    throw new TypeError("createAccountSnapshotManager requires getAdditionalTrackedQuoteCashFlow to be a function")
+  }
+  return getter
+}
+
 function getAccountSnapshotBaselines({ context, balances }) {
   const portfolio = context.getPortfolio()
   const activeOrders = context.getTradingEngine()?.getActiveOrders?.() ??
     context.getRecoveredState()?.orderRegistry?.getActiveOrders?.() ?? []
   let additionalTrackedBaseQuantity
+  let additionalTrackedQuoteCashFlow
   try {
-    additionalTrackedBaseQuantity = context.getAdditionalTrackedBaseQuantity({
+    const input = {
       balances: Object.freeze([...balances]),
       portfolio,
-    })
+    }
+    additionalTrackedBaseQuantity = context.getAdditionalTrackedBaseQuantity(input)
+    additionalTrackedQuoteCashFlow = context.getAdditionalTrackedQuoteCashFlow(input)
   } catch (error) {
     throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_BASELINE", false)
   }
@@ -337,6 +347,7 @@ function getAccountSnapshotBaselines({ context, balances }) {
     portfolio,
     activeOrders,
     additionalTrackedBaseQuantity,
+    additionalTrackedQuoteCashFlow,
   })
   if (!baselineResult.ok) {
     throw withRecoveryFailure(
@@ -1038,6 +1049,7 @@ function createExternalOrderReconciliation({
  * @param {Map<string, object>} options.marketMetadata Metadata for configured markets.
  * @param {Function} options.getPortfolio Current Portfolio accessor.
  * @param {Function} [options.getAdditionalTrackedBaseQuantity] Verified non-Portfolio Spot allocations by asset.
+ * @param {Function} [options.getAdditionalTrackedQuoteCashFlow] Signed quote cash flow from tracked inventory outside Portfolio.
  * @param {Function} options.getTradingEngine Current trading-engine accessor.
  * @param {Function} options.getRecoveredState Current in-memory recovered-state accessor.
  * @param {Function} options.getHasCanonicalOwnershipReconciliation Ownership reconciliation predicate.
@@ -1052,6 +1064,7 @@ export function createAccountSnapshotManager({
   marketMetadata,
   getPortfolio,
   getAdditionalTrackedBaseQuantity = () => [],
+  getAdditionalTrackedQuoteCashFlow = () => [],
   getTradingEngine,
   getRecoveredState,
   getHasCanonicalOwnershipReconciliation,
@@ -1064,6 +1077,9 @@ export function createAccountSnapshotManager({
   const additionalTrackedBaseQuantityGetter = resolveAdditionalTrackedBaseQuantityGetter({
     getter: getAdditionalTrackedBaseQuantity,
   })
+  const additionalTrackedQuoteCashFlowGetter = resolveAdditionalTrackedQuoteCashFlowGetter({
+    getter: getAdditionalTrackedQuoteCashFlow,
+  })
   const state = createInitialAccountSnapshotManagerState()
   const context = {
     broker,
@@ -1071,6 +1087,7 @@ export function createAccountSnapshotManager({
     marketMetadata,
     getPortfolio,
     getAdditionalTrackedBaseQuantity: additionalTrackedBaseQuantityGetter,
+    getAdditionalTrackedQuoteCashFlow: additionalTrackedQuoteCashFlowGetter,
     getTradingEngine,
     getRecoveredState,
     getHasCanonicalOwnershipReconciliation,
