@@ -24,12 +24,15 @@ export const adaptUser = {
     canDeposit: message.D,
     lastAccountUpdate: message.u,
     balances: message.B.reduce((out, item) => {
-      out[item.a] = { available: item.f, locked: item.l }
+      out[item.a] = { available: item.f,
+locked: item.l }
       return out
     }, {}),
   }),
   outboundAccountPosition: (message) => ({
-    balances: message.B.map(({ a, f, l }) => ({ asset: a, free: f, locked: l })),
+    balances: message.B.map(({ a, f, l }) => ({ asset: a,
+free: f,
+locked: l })),
     eventTime: message.E,
     eventType: "outboundAccountPosition",
     lastAccountUpdate: message.u,
