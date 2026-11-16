@@ -12,6 +12,7 @@ const balance = ({ asset, free, locked = "0" }) => ({
     right: locked,
   }),
 })
+
 const event = ({
   phase,
   sourceTime,
@@ -28,6 +29,7 @@ const event = ({
     auditReasons,
   },
 })
+
 const record = ({ fileName, payload }) => ({
   payload,
   position: {
@@ -36,81 +38,90 @@ const record = ({ fileName, payload }) => ({
   },
 })
 
-test("pairs snapshots by Journal session and computes exact asset deltas", () => {
-  const result = reconcileJournalAccountSnapshotRecords({
-    records: [
-      record({
+const snapshotRecord = ({
+  fileName,
+  phase,
+  sourceTime,
+  balances,
+  auditStatus,
+  auditReasons,
+}) => record({
+  fileName,
+  payload: event({
+    phase,
+    sourceTime,
+    balances,
+    auditStatus,
+    auditReasons,
+  }),
+})
+
+const multiSessionRecords = [
+  snapshotRecord({
     fileName: "session-a.jsonl",
-    payload: event({
     phase: "PREFLIGHT",
     sourceTime: 100,
-    balances: [balance({
-    asset: "DOGE",
-    free: "10.0001",
-  }), balance({
-    asset: "USDT",
-    free: "20",
-  })],
+    balances: [
+      balance({ asset: "DOGE", free: "10.0001" }),
+      balance({ asset: "USDT", free: "20" }),
+    ],
   }),
-  }),
-      record({
+  record({
     fileName: "session-a.jsonl",
-    payload: { name: "bot.started",
-data: {} },
+    payload: {
+      name: "bot.started",
+      data: {},
+    },
   }),
-      record({
+  record({
     fileName: "session-a.jsonl",
-    payload: { name: "recovery.cycle_completed",
-data: { realizedNetProfit: "0.07808" } },
+    payload: {
+      name: "recovery.cycle_completed",
+      data: { realizedNetProfit: "0.07808" },
+    },
   }),
-      record({
+  record({
     fileName: "session-a.jsonl",
-    payload: { name: "recovery.cycle_completed",
-data: { realizedNetProfit: "0.03285" } },
+    payload: {
+      name: "recovery.cycle_completed",
+      data: { realizedNetProfit: "0.03285" },
+    },
   }),
-      record({
+  snapshotRecord({
     fileName: "session-a.jsonl",
-    payload: event({
     phase: "CLOSING",
     sourceTime: 200,
-    balances: [balance({
-    asset: "DOGE",
-    free: "10.1251",
-  }), balance({
-    asset: "USDT",
-    free: "19.5",
-  })],
+    balances: [
+      balance({ asset: "DOGE", free: "10.1251" }),
+      balance({ asset: "USDT", free: "19.5" }),
+    ],
   }),
-  }),
-      record({
+  snapshotRecord({
     fileName: "session-b.jsonl",
-    payload: event({
     phase: "PREFLIGHT",
     sourceTime: 300,
-    balances: [balance({
-    asset: "ZRO",
-    free: "2",
-  })],
+    balances: [balance({ asset: "ZRO", free: "2" })],
   }),
-  }),
-      record({
+  record({
     fileName: "session-b.jsonl",
-    payload: { name: "recovery.cycle_completed",
-data: { realizedNetProfit: "0.36335" } },
+    payload: {
+      name: "recovery.cycle_completed",
+      data: { realizedNetProfit: "0.36335" },
+    },
   }),
-      record({
+  snapshotRecord({
     fileName: "session-b.jsonl",
-    payload: event({
     phase: "CLOSING",
     sourceTime: 400,
-    balances: [balance({
-    asset: "ZRO",
-    free: "2.1",
-  })],
+    balances: [balance({ asset: "ZRO", free: "2.1" })],
   }),
-  }),
-    ],
+]
+
+test("pairs snapshots by Journal session and computes exact asset deltas", () => {
+  const result = reconcileJournalAccountSnapshotRecords({
+    records: multiSessionRecords,
   })
+
   assert.equal(result.ok, true)
   assert.equal(result.data.sessionCount, 2)
   assert.deepEqual(result.data.reports[0].assetDeltas[0].delta.total, "0.125")
@@ -121,38 +132,27 @@ data: { realizedNetProfit: "0.36335" } },
   assert.equal(result.data.profitAssessment, "NOT_DETERMINABLE_FROM_BALANCE_DELTAS_ALONE")
 })
 
-
 test("pairs current PREFLIGHT/CLOSING snapshots by Journal session", () => {
   const result = reconcileJournalAccountSnapshotRecords({
     records: [
-      record({
-    fileName: "preflight-session.jsonl",
-    payload: event({
-    phase: "PREFLIGHT",
-    sourceTime: 100,
-    balances: [balance({
-    asset: "DOGE",
-    free: "10",
-  }), balance({
-    asset: "USDT",
-    free: "20",
-  })],
-  }),
-  }),
-      record({
-    fileName: "preflight-session.jsonl",
-    payload: event({
-    phase: "CLOSING",
-    sourceTime: 200,
-    balances: [balance({
-    asset: "DOGE",
-    free: "10.25",
-  }), balance({
-    asset: "USDT",
-    free: "19.5",
-  })],
-  }),
-  }),
+      snapshotRecord({
+        fileName: "preflight-session.jsonl",
+        phase: "PREFLIGHT",
+        sourceTime: 100,
+        balances: [
+          balance({ asset: "DOGE", free: "10" }),
+          balance({ asset: "USDT", free: "20" }),
+        ],
+      }),
+      snapshotRecord({
+        fileName: "preflight-session.jsonl",
+        phase: "CLOSING",
+        sourceTime: 200,
+        balances: [
+          balance({ asset: "DOGE", free: "10.25" }),
+          balance({ asset: "USDT", free: "19.5" }),
+        ],
+      }),
     ],
   })
 
@@ -162,32 +162,21 @@ test("pairs current PREFLIGHT/CLOSING snapshots by Journal session", () => {
   assert.deepEqual(result.data.reports[0].assetDeltas[1].delta.total, "-0.5")
 })
 
-
 test("continues to read legacy OPENING snapshots from historical Journal sessions", () => {
   const result = reconcileJournalAccountSnapshotRecords({
     records: [
-      record({
-    fileName: "legacy-session.jsonl",
-    payload: event({
-    phase: "OPENING",
-    sourceTime: 100,
-    balances: [balance({
-    asset: "DOGE",
-    free: "2",
-  })],
-  }),
-  }),
-      record({
-    fileName: "legacy-session.jsonl",
-    payload: event({
-    phase: "CLOSING",
-    sourceTime: 200,
-    balances: [balance({
-    asset: "DOGE",
-    free: "3",
-  })],
-  }),
-  }),
+      snapshotRecord({
+        fileName: "legacy-session.jsonl",
+        phase: "OPENING",
+        sourceTime: 100,
+        balances: [balance({ asset: "DOGE", free: "2" })],
+      }),
+      snapshotRecord({
+        fileName: "legacy-session.jsonl",
+        phase: "CLOSING",
+        sourceTime: 200,
+        balances: [balance({ asset: "DOGE", free: "3" })],
+      }),
     ],
   })
 
@@ -198,40 +187,33 @@ test("continues to read legacy OPENING snapshots from historical Journal session
 test("reports missing or duplicate snapshot endpoints as incomplete instead of inventing deltas", () => {
   const result = reconcileJournalAccountSnapshotRecords({
     records: [
-      record({
-    fileName: "missing-close.jsonl",
-    payload: event({
-    phase: "PREFLIGHT",
-    sourceTime: 100,
-    balances: [],
-  }),
-  }),
-      record({
-    fileName: "duplicate-open.jsonl",
-    payload: event({
-    phase: "PREFLIGHT",
-    sourceTime: 100,
-    balances: [],
-  }),
-  }),
-      record({
-    fileName: "duplicate-open.jsonl",
-    payload: event({
-    phase: "PREFLIGHT",
-    sourceTime: 101,
-    balances: [],
-  }),
-  }),
-      record({
-    fileName: "duplicate-open.jsonl",
-    payload: event({
-    phase: "CLOSING",
-    sourceTime: 200,
-    balances: [],
-  }),
-  }),
+      snapshotRecord({
+        fileName: "missing-close.jsonl",
+        phase: "PREFLIGHT",
+        sourceTime: 100,
+        balances: [],
+      }),
+      snapshotRecord({
+        fileName: "duplicate-open.jsonl",
+        phase: "PREFLIGHT",
+        sourceTime: 100,
+        balances: [],
+      }),
+      snapshotRecord({
+        fileName: "duplicate-open.jsonl",
+        phase: "PREFLIGHT",
+        sourceTime: 101,
+        balances: [],
+      }),
+      snapshotRecord({
+        fileName: "duplicate-open.jsonl",
+        phase: "CLOSING",
+        sourceTime: 200,
+        balances: [],
+      }),
     ],
   })
+
   assert.equal(result.ok, false)
   const reports = new Map(result.data.reports.map((report) => [report.session, report]))
   assert.equal(reports.get("missing-close.jsonl").auditStatus, "INCOMPLETE")
@@ -242,30 +224,24 @@ test("reports missing or duplicate snapshot endpoints as incomplete instead of i
 test("reports duplicate CLOSING endpoints as an incomplete session", () => {
   const result = reconcileJournalAccountSnapshotRecords({
     records: [
-      record({
-    fileName: "duplicate-close.jsonl",
-    payload: event({
-    phase: "PREFLIGHT",
-    sourceTime: 100,
-    balances: [],
-  }),
-  }),
-      record({
-    fileName: "duplicate-close.jsonl",
-    payload: event({
-    phase: "CLOSING",
-    sourceTime: 200,
-    balances: [],
-  }),
-  }),
-      record({
-    fileName: "duplicate-close.jsonl",
-    payload: event({
-    phase: "CLOSING",
-    sourceTime: 201,
-    balances: [],
-  }),
-  }),
+      snapshotRecord({
+        fileName: "duplicate-close.jsonl",
+        phase: "PREFLIGHT",
+        sourceTime: 100,
+        balances: [],
+      }),
+      snapshotRecord({
+        fileName: "duplicate-close.jsonl",
+        phase: "CLOSING",
+        sourceTime: 200,
+        balances: [],
+      }),
+      snapshotRecord({
+        fileName: "duplicate-close.jsonl",
+        phase: "CLOSING",
+        sourceTime: 201,
+        balances: [],
+      }),
     ],
   })
 
@@ -277,34 +253,34 @@ test("reports duplicate CLOSING endpoints as an incomplete session", () => {
 
 test("fails closed for malformed snapshot session, phase, and recovery profit records", () => {
   const missingSession = reconcileJournalAccountSnapshotRecords({
-    records: [{ payload: event({
-    phase: "PREFLIGHT",
-    sourceTime: 100,
-    balances: [],
-  }),
-position: { lineNumber: 1 } }],
+    records: [{
+      payload: event({
+        phase: "PREFLIGHT",
+        sourceTime: 100,
+        balances: [],
+      }),
+      position: { lineNumber: 1 },
+    }],
   })
   const invalidPhase = reconcileJournalAccountSnapshotRecords({
     records: [
-      record({
-    fileName: "invalid-phase.jsonl",
-    payload: event({
-    phase: "MIDDLE",
-    sourceTime: 100,
-    balances: [],
-  }),
-  }),
+      snapshotRecord({
+        fileName: "invalid-phase.jsonl",
+        phase: "MIDDLE",
+        sourceTime: 100,
+        balances: [],
+      }),
     ],
   })
   const malformedProfit = reconcileJournalAccountSnapshotRecords({
     records: [
       record({
-    fileName: "malformed-profit.jsonl",
-    payload: {
-        name: "recovery.cycle_completed",
-        data: { realizedNetProfit: "NaN" },
-      },
-  }),
+        fileName: "malformed-profit.jsonl",
+        payload: {
+          name: "recovery.cycle_completed",
+          data: { realizedNetProfit: "NaN" },
+        },
+      }),
     ],
   })
 
@@ -316,26 +292,23 @@ position: { lineNumber: 1 } }],
 test("preserves an INCOMPLETE closing audit and rejects missing snapshot events", () => {
   const incomplete = reconcileJournalAccountSnapshotRecords({
     records: [
-      record({
-    fileName: "incomplete.jsonl",
-    payload: event({
-    phase: "PREFLIGHT",
-    sourceTime: 100,
-    balances: [],
-  }),
-  }),
-      record({
-    fileName: "incomplete.jsonl",
-    payload: event({
-    phase: "CLOSING",
-    sourceTime: 200,
-    balances: [],
-    auditStatus: "INCOMPLETE",
-    auditReasons: ["UNRESOLVED_OWNED_ORDERS:1"],
-  }),
-  }),
+      snapshotRecord({
+        fileName: "incomplete.jsonl",
+        phase: "PREFLIGHT",
+        sourceTime: 100,
+        balances: [],
+      }),
+      snapshotRecord({
+        fileName: "incomplete.jsonl",
+        phase: "CLOSING",
+        sourceTime: 200,
+        balances: [],
+        auditStatus: "INCOMPLETE",
+        auditReasons: ["UNRESOLVED_OWNED_ORDERS:1"],
+      }),
     ],
   })
+
   assert.equal(incomplete.ok, false)
   assert.equal(incomplete.data.reports[0].auditStatus, "INCOMPLETE")
   assert.deepEqual(incomplete.data.reports[0].auditReasons, ["CLOSING:UNRESOLVED_OWNED_ORDERS:1"])
