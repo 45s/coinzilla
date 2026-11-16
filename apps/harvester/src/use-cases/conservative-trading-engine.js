@@ -3568,7 +3568,7 @@ async function reconcileOwnedOrdersTransition({ context, options }) {
     task: async () => toResult({
       data: {
         ownedOrders: context.state.registry.orders.filter((order) =>
-          matchesRequestedReconciliationMarket(order, requestedSymbols)),
+          matchesRequestedReconciliationMarket({ order, requestedSymbols })),
       },
     }),
   })
