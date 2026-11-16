@@ -8,7 +8,12 @@ export class TimeoutScheduler {
     this.clearTimeoutFn = clearTimeoutFn
   }
 
-  schedule(callback, delay) {
+  /**
+   * Keep the callback/delay call contract while accepting the pair as one rest parameter.
+   * @param {...[Function, number]} parameters
+   */
+  schedule(...parameters) {
+    const [callback, delay] = parameters
     return this.setTimeoutFn(callback, delay)
   }
 

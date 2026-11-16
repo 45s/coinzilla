@@ -7,21 +7,25 @@ describe(`${Coin.name}`, () => {
   const quantity = 3
 
   const createCoin = (overrides = {}) =>
-    new Coin({ ticker, quantity, ...overrides })
+    new Coin({ ticker,
+quantity,
+...overrides })
 
   it("normalizes the ticker and exposes the complete value", () => {
     const coin = createCoin({ ticker: "  btc  " })
 
     assert.equal(coin.ticker, "BTC")
     assert.equal(coin.quantity, quantity)
-    assert.deepEqual(coin.value, { ticker: "BTC", quantity })
+    assert.deepEqual(coin.value, { ticker: "BTC",
+quantity })
   })
 
   it("accepts zero quantity", () => {
     const coin = createCoin({ quantity: 0 })
 
     assert.equal(coin.quantity, 0)
-    assert.deepEqual(coin.value, { ticker: "BTC", quantity: 0 })
+    assert.deepEqual(coin.value, { ticker: "BTC",
+      quantity: 0 })
   })
 
   it("rejects missing, non-string, and blank tickers", () => {
@@ -59,16 +63,19 @@ describe(`${Coin.name}`, () => {
   })
 
   it("returns a fresh value snapshot on each access", () => {
-    const coin = new Coin({ ticker: "btc", quantity: 3 })
+    const coin = new Coin({ ticker: "btc",
+      quantity: 3 })
     const snapshot = coin.value
     snapshot.ticker = "ETH"
     snapshot.quantity = 99
-    assert.deepEqual(coin.value, { ticker: "BTC", quantity: 3 })
+    assert.deepEqual(coin.value, { ticker: "BTC",
+      quantity: 3 })
     assert.notStrictEqual(coin.value, snapshot)
   })
 
   it("normalizes mixed-case tickers after trimming", () => {
-    const coin = new Coin({ ticker: "  bTcUsDt  ", quantity: 3 })
+    const coin = new Coin({ ticker: "  bTcUsDt  ",
+      quantity: 3 })
     assert.equal(coin.ticker, "BTCUSDT")
     assert.equal(coin.value.ticker, "BTCUSDT")
   })

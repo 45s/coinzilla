@@ -77,7 +77,9 @@ test("a failed connection can be retried", async () => {
   const { adapter } = createAdapter({
     connect: async () => {
       attempts += 1
-      if (attempts === 1) throw new Error("connection refused")
+      if (attempts === 1) {
+        throw new Error("connection refused")
+      }
     },
   })
   const database = createDatabase({ adapter })
@@ -225,7 +227,9 @@ test("a failed close remains retryable without reopening transactions", async ()
   const { adapter } = createAdapter({
     close: async () => {
       attempts += 1
-      if (attempts === 1) throw new Error("close failed")
+      if (attempts === 1) {
+        throw new Error("close failed")
+      }
     },
   })
   const database = createDatabase({ adapter })

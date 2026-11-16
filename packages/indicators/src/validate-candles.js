@@ -46,18 +46,33 @@ export function validateCandles({ candles, intervalMs, period } = {}) {
       ["close", candle.close],
     ]
     for (const [field, value] of prices) {
-      assertDecimalString({ value, field: "candle " + field })
-      if (compareDecimal({ left: value, right: "0" }) <= 0) {
-        throw new RangeError("candle " + field + " must be positive")
+      assertDecimalString({
+        value,
+        field: `candle ${field}`,
+      })
+      if (compareDecimal({
+        left: value,
+        right: "0",
+      }) <= 0) {
+        throw new RangeError(`candle ${field} must be positive`)
       }
     }
 
-    if (compareDecimal({ left: candle.high, right: candle.low }) < 0) {
+    if (compareDecimal({
+        left: candle.high,
+        right: candle.low,
+      }) < 0) {
       throw new RangeError("candle high must not be below candle low")
     }
     if (
-      compareDecimal({ left: candle.close, right: candle.low }) < 0 ||
-      compareDecimal({ left: candle.close, right: candle.high }) > 0
+      compareDecimal({
+        left: candle.close,
+        right: candle.low,
+      }) < 0 ||
+      compareDecimal({
+        left: candle.close,
+        right: candle.high,
+      }) > 0
     ) {
       throw new RangeError("candle close must be within its high-low range")
     }

@@ -27,7 +27,7 @@ export function validateMarketHistory(input) {
   }
 
   let previousTimestamp = -1
-  const history = input.history.map((candle, index) => {
+  const history = [...input.history.entries()].map(([index, candle]) => {
     if (!candle || typeof candle !== "object" || Array.isArray(candle)) {
       throw new TypeError(`Candle ${index} must be an object`)
     }
@@ -35,7 +35,9 @@ export function validateMarketHistory(input) {
       throw new RangeError(`Candle ${index} has an invalid or non-ascending timestamp`)
     }
     for (const field of ["open", "high", "low", "close", "volume"]) {
-      if (!isDecimal(candle[field])) throw new TypeError(`Candle ${index} has an invalid ${field}`)
+      if (!isDecimal(candle[field])) {
+        throw new TypeError(`Candle ${index} has an invalid ${field}`)
+      }
     }
     if (!isPositiveDecimal(candle.close)) {
       throw new TypeError(`Candle ${index} close must be greater than zero`)
