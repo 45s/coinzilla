@@ -33,11 +33,12 @@ export class FakeWebSocket extends EventTarget {
     }
 
     this.readyState = FakeWebSocket.CLOSING
-    this.closeCalls.push({ code, reason })
+    this.closeCalls.push({ code,
+reason })
   }
 
   open() {
-    if (this.readyState !== FakeWebSocket.CONNECTING) return
+    if (this.readyState !== FakeWebSocket.CONNECTING) {return}
 
     this.readyState = FakeWebSocket.OPEN
     this.dispatchEvent(new Event("open"))
@@ -59,7 +60,7 @@ export class FakeWebSocket extends EventTarget {
   }
 
   serverClose({ code = 1000, reason = "", wasClean = true } = {}) {
-    if (this.readyState === FakeWebSocket.CLOSED) return
+    if (this.readyState === FakeWebSocket.CLOSED) {return}
 
     this.readyState = FakeWebSocket.CLOSED
     const event = new Event("close")
