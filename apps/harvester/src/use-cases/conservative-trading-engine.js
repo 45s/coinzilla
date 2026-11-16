@@ -1641,8 +1641,7 @@ function inspectAcknowledgedFillHistory({ order, fills }) {
         left.executedAt !== right.executedAt) {
       return left.executedAt - right.executedAt
     }
-    return left.tradeId.localeCompare
-    (right.tradeId)
+    return left.tradeId.localeCompare(right.tradeId)
   })
   const reconciledQuantity = uniqueFills.reduce((...entries) => {
     const [total, fill] = entries
