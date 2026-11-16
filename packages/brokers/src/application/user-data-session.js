@@ -318,6 +318,7 @@ export class UserDataSession {
         throw new AggregateError(
           [originalError, retryError],
           "Unable to unsubscribe the verified active Binance user-data subscription",
+          { cause: retryError },
         )
       }
     }
