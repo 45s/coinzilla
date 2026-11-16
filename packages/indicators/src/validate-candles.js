@@ -46,9 +46,12 @@ export function validateCandles({ candles, intervalMs, period } = {}) {
       ["close", candle.close],
     ]
     for (const [field, value] of prices) {
-      assertDecimalString({ value, field: "candle " + field })
+      assertDecimalString({
+        value,
+        field: `candle ${field}`,
+      })
       if (compareDecimal({ left: value, right: "0" }) <= 0) {
-        throw new RangeError("candle " + field + " must be positive")
+        throw new RangeError(`candle ${field} must be positive`)
       }
     }
 
