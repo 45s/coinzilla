@@ -11144,11 +11144,31 @@ async function prepareLateSellShutdownScenario({ fillFraction } = {}) {
   const seeded = makeSeededRecoveryState()
   let shutdownStarted = false
   let cancelSellExecutedQuantity = "0"
+  let currentPortfolio = seeded.portfolio
+  let currentRecoveryLedger = seeded.recoveryLedger
   const harness = await createHarness({
-    initialPortfolio: seeded.portfolio,
-    initialRecoveryLedger: seeded.recoveryLedger,
+    initialPortfolio: currentPortfolio,
+    initialRecoveryLedger: currentRecoveryLedger,
+    getPortfolioOverride: () => currentPortfolio,
+    getRecoveryLedgerOverride: () => currentRecoveryLedger,
+    updateTradingAccountingOverride: async ({ fill }) => {
+      const portfolioUpdate = currentPortfolio.applyFill({
+        fill,
+        strategyId: StrategyId.COIN_GRABBER,
+      })
+      const ledgerUpdate = currentRecoveryLedger.applyFill({ fill })
+      currentPortfolio = portfolioUpdate.portfolio
+      currentRecoveryLedger = ledgerUpdate.ledger
+      const applied = portfolioUpdate.applied || ledgerUpdate.applied
+      return {
+        ok: true,
+        data: {
+          applied,
+          duplicate: !applied,
+        },
+      }
+    },
     baseFreeBalance: "1",
-    accountingApplied: true,
     cancelExecutedQuantity: ({ order }) =>
       order.side === "SELL" ? cancelSellExecutedQuantity : "0",
     isStopping: () => shutdownStarted,

@@ -302,6 +302,13 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
     HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
   ])
+  const strategyPausedEvent = eventPublisher.events.find((event) =>
+    event.name === HARVESTER_EVENT_NAMES.STRATEGY_PAUSED)
+  assert.equal(
+    strategyPausedEvent?.data?.reason,
+    "__diagnostic__",
+    `Startup pause classification diagnostic: ${JSON.stringify(strategyPausedEvent?.data)}`,
+  )
   const configValidatedData = eventPublisher.events[0].data
   assert.deepEqual(configValidatedData.enabledMarkets, ["BTCUSDT"])
   assert.equal(configValidatedData.strategyMode, "conservative")
