@@ -19,14 +19,14 @@ function createHarness({ appendResult = { ok: true, data: { durable: true, dupli
   const engine = {
     pauseMarket: async ({ symbol, beforeApply }) => {
       calls.push({ type: "pause-start", symbol })
-      const committed = await beforeApply({ symbol, action: "PAUSE" })
+      const committed = typeof beforeApply === "function" ? await beforeApply({ symbol, action: "PAUSE" }) : { ok: true, data: { durable: false } }
       if (!committed?.ok) {return committed}
       calls.push({ type: "pause-applied", symbol })
       return { ok: true, data: { symbol, paused: true, durable: true } }
     },
     resumeMarket: async ({ symbol, beforeApply }) => {
       calls.push({ type: "resume-start", symbol })
-      const committed = await beforeApply({ symbol, action: "RESUME" })
+      const committed = typeof beforeApply === "function" ? await beforeApply({ symbol, action: "RESUME" }) : { ok: true, data: { durable: false } }
       if (!committed?.ok) {return committed}
       calls.push({ type: "resume-applied", symbol })
       return { ok: true, data: { symbol, resumed: true, durable: true } }
