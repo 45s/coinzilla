@@ -120,16 +120,16 @@ function waitForSubmittedOrder({ state, side, occurrence = 1 }) {
   }
   return new Promise((...settlers) => {
     const [resolve, reject] = settlers;
-    let timeout;
+    const timeoutRef = { current: undefined };
     const waiter = {
       matches,
       isReady: () => getOrders().length >= occurrence,
       resolve: () => {
-        clearTimeout(timeout);
+        clearTimeout(timeoutRef.current);
         resolve(getOrders()[occurrence - 1]);
       },
     };
-    timeout = setTimeout(() => {
+    timeoutRef.current = setTimeout(() => {
       const index = state.submittedOrderWaiters.indexOf(waiter);
       if (index >= 0) {
         state.submittedOrderWaiters.splice(index, 1);
@@ -148,7 +148,7 @@ function waitForRecoveryCycleCompletion(state) {
   }
   return new Promise((...settlers) => {
     const [resolve, reject] = settlers;
-    let timeout;
+    const timeoutRef = { current: undefined };
     const resolveCycle = (data) => {
       clearTimeout(timeout);
       resolve(data);
@@ -204,7 +204,7 @@ price: state.scenarioExpectations.initialPrice } };
   };
 }
 
-function createDogeReplayCanonicalOrderCreator(state, broker) {
+function createDogeReplayCanonicalOrderCreator({ state, broker }) {
   const createCanonicalOrder = broker.createCanonicalOrder.bind(broker);
   return async (order) => {
     const result = await createCanonicalOrder(order);
@@ -388,7 +388,7 @@ function createDogeReplayBrokerFactory(state) {
     broker.connect = async () => { broker.connected = true; };
     broker.disconnect = async () => { broker.connected = false; };
     broker.tradingConnection.request = createDogeReplayTradingRequest(state);
-    broker.createCanonicalOrder = createDogeReplayCanonicalOrderCreator(state, broker);
+    broker.createCanonicalOrder = createDogeReplayCanonicalOrderCreator({ state, broker });
     broker.getOpenOrders = async ({ symbol: requestedSymbol } = {}) => ({
       ok: true,
       data: [...state.exchangeOpenOrders.values()]
@@ -474,7 +474,7 @@ durable: true }),
   return runtime;
 }
 
-async function publishDogeReplayMarketPrice(state, price) {
+async function publishDogeReplayMarketPrice({ state, price }) {
   const marketPriceHandler = state.marketPriceEventHandlers.get(state.marketSymbol);
   assert.equal(
     typeof marketPriceHandler,
@@ -496,7 +496,7 @@ async function publishDogeReplayMarketPrice(state, price) {
   });
 }
 
-async function publishDogeReplayFullOrderFill(state, { order, price, tradeId }) {
+async function publishDogeReplayFullOrderFill({ state, order, price, tradeId }) {
   const executedBaseQuantity = order.originalQuantity.amount;
   const executedQuoteQuantity = multiplyDecimal({ left: price,
 right: executedBaseQuantity });
@@ -591,7 +591,7 @@ side,
 occurrence });
     },
     waitForRecoveryCycleCompletion: () => waitForRecoveryCycleCompletion(state),
-    publishMarketPrice: (price) => publishDogeReplayMarketPrice(state, price),
-    publishFullOrderFill: (fillOptions) => publishDogeReplayFullOrderFill(state, fillOptions),
+    publishMarketPrice: (price) => publishDogeReplayMarketPrice({ state, price }),
+    publishFullOrderFill: (fillOptions) => publishDogeReplayFullOrderFill({ state, ...fillOptions }),
   };
 }
