@@ -3,6 +3,43 @@ import { toResult } from "@coinzilla/utils"
 
 const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_SELL"])
 
+function validateSubmissionIntent({ operationalStateStore, order, purpose }) {
+  if (typeof operationalStateStore?.append !== "function") {
+    throw new TypeError("recordOrderSubmissionIntent requires a Operational State Store append capability")
+  }
+  if (!(order instanceof CanonicalOrder)) {
+    throw new TypeError("recordOrderSubmissionIntent requires a canonical order")
+  }
+  if (order.status !== "PENDING" || order.brokerOrderId != null) {
+    throw new TypeError("Order-submission intent must identify a PENDING order without broker acknowledgement")
+  }
+  if (!SUPPORTED_PURPOSES.has(purpose)) {
+    throw new TypeError("Order-submission intent purpose must be null or RECOVERY_SELL")
+  }
+
+  const { market } = order
+  const requiredMarketValues = [
+    market?.id,
+    market?.venue,
+    market?.symbol,
+    market?.baseAsset?.id,
+    market?.quoteAsset?.id,
+  ]
+  if (requiredMarketValues.some((value) => typeof value !== "string" || !value.trim())) {
+    throw new TypeError("Order-submission intent requires complete canonical market and asset identities")
+  }
+  if ((order.side !== "BUY" && order.side !== "SELL") ||
+      (order.type !== "LIMIT" && order.type !== "LIMIT_MAKER")) {
+    throw new TypeError("Order-submission intent has an unsupported side or order type")
+  }
+  const price = order.limitPrice?.amount
+  const quantity = order.originalQuantity?.amount
+  if (typeof price !== "string" || typeof quantity !== "string") {
+    throw new TypeError("Order-submission intent requires exact decimal price and quantity strings")
+  }
+  return { market, clientOrderId: order.clientOrderId, price, quantity }
+}
+
 /**
  * Persist the immutable canonical order intent before the broker placement side effect.
  *
@@ -12,44 +49,15 @@ const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_SELL"])
  * @param {string|null} options.purpose - Explicit application strategy purpose.
  * @returns {Promise<object>} Durable append result; success requires durable === true.
  */
-export async function recordOrderSubmissionIntent({ operationalStateStore, order, purpose = null } = {}) {
+export async function recordOrderSubmissionIntent(options = {}) {
   try {
-    if (typeof operationalStateStore?.append !== "function") {
-      throw new TypeError("recordOrderSubmissionIntent requires a Operational State Store append capability")
-    }
-    if (!(order instanceof CanonicalOrder)) {
-      throw new TypeError("recordOrderSubmissionIntent requires a canonical order")
-    }
-    if (order.status !== "PENDING" || order.brokerOrderId != null) {
-      throw new TypeError("Order-submission intent must identify a PENDING order without broker acknowledgement")
-    }
-    if (!SUPPORTED_PURPOSES.has(purpose)) {
-      throw new TypeError("Order-submission intent purpose must be null or RECOVERY_SELL")
-    }
-    const {market} = order
-    const requiredMarketValues = [
-      market?.id,
-      market?.venue,
-      market?.symbol,
-      market?.baseAsset?.id,
-      market?.quoteAsset?.id,
-    ]
-    if (requiredMarketValues.some((value) => typeof value !== "string" || !value.trim())) {
-      throw new TypeError("Order-submission intent requires complete canonical market and asset identities")
-    }
-    if ((order.side !== "BUY" && order.side !== "SELL") ||
-        (order.type !== "LIMIT" && order.type !== "LIMIT_MAKER")) {
-      throw new TypeError("Order-submission intent has an unsupported side or order type")
-    }
-    const price = order.limitPrice?.amount
-    const quantity = order.originalQuantity?.amount
-    if (typeof price !== "string" || typeof quantity !== "string") {
-      throw new TypeError("Order-submission intent requires exact decimal price and quantity strings")
-    }
-
-    const {clientOrderId} = order
+    const { operationalStateStore, order, purpose = null } = options
+    const { market, clientOrderId, price, quantity } = validateSubmissionIntent({
+      ...options,
+      purpose,
+    })
     const result = await operationalStateStore.append({
-      factId: `order-submission-intent:${  clientOrderId}`,
+      factId: `order-submission-intent:${clientOrderId}`,
       factType: "ORDER_SUBMISSION_INTENT",
       data: {
         clientOrderId,
