@@ -6,8 +6,12 @@ const cliConsole = new Console({ stdout: process.stdout, stderr: process.stderr 
 
 const main = async () => {
   const { balances: accountBalances } = await getAccountBalances()
-  const { balances } = normalizeAccountBalances({ balances: accountBalances })
-  const { balances: nonZeroBalances } = getNonZeroBalances({ balances: accountBalances })
+  const { balances } = normalizeAccountBalances({
+    balances: accountBalances,
+  })
+  const { balances: nonZeroBalances } = getNonZeroBalances({
+    balances: accountBalances,
+  })
 
   cliConsole.log("\nBinance Spot TESTNET — Complete Account Asset Balances\n")
 
