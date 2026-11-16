@@ -431,3 +431,23 @@ test("allocates quote, base and valued third-asset commissions before independen
     "The legacy accounting projection and profitability calculation must use the same allocated net quote proceeds.",
   )
 })
+
+test("rejects inconsistent restored legacy basis before exposing custody providers", () => {
+  const context = makeContext()
+  assert.throws(
+    () => createRecoverySellerAccountingWorkflow({
+      initialPortfolio: context.portfolio,
+      initialOrderRegistry: context.openRegistry,
+      initialLegacyPositions: [{
+        market,
+        position: Object.freeze({
+          ...context.legacyPosition,
+          averageCost: "3",
+        }),
+        accounting: context.legacyAccounting,
+      }],
+    }),
+    /original invested\/quantity basis/,
+    "Restored legacy state must preserve the original operator-declared average cost.",
+  )
+})
