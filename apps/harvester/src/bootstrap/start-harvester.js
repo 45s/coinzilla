@@ -783,7 +783,8 @@ export async function startHarvester(options = {}) {
   await startHarvesterServices({ startup, portfolio, resources, accountSnapshots, userDataEvents, recoveryRuntime, activateTradingEngine, freshness })
   resources.userDataState.startupComplete = true
   startPendingUserDataRecovery({ userDataState: resources.userDataState, startUserDataRecovery: recoveryRuntime.startUserDataRecovery })
-  const stop = createHarvesterRuntimeStop({ startup, resources, accountSnapshots, userDataEvents })
+  const stop = createHarvesterRuntimeStop({ startup, resources, accountSnapshots,
+    userDataEvents })
   return createHarvesterRuntimeResult({
     startup,
     portfolio,

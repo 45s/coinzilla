@@ -1793,7 +1793,8 @@ test("retains Journal, EventBus, process lock and logger when strategy shutdown 
     }),
     close: async () => {
       calls.push("journal-close")
-      return { ok: true, closed: true }
+      return { ok: true,
+        closed: true }
     },
   }
   const logger = {

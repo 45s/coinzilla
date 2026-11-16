@@ -947,10 +947,13 @@ test("tracks Conservative shutdown safety independently for every market", async
     "The second market must retain its own unresolved BUY blocker.",
   )
   assert.deepEqual(
-    harness.engine.getShutdownSafetySnapshot().markets.map(({ symbol, status }) => ({ symbol, status })),
+    harness.engine.getShutdownSafetySnapshot().markets.map(({ symbol, status }) => ({ symbol,
+      status })),
     [
-      { symbol: "DOGEUSDT", status: "SAFE_TO_SHUTDOWN" },
-      { symbol: "SOLUSDT", status: "UNSAFE" },
+      { symbol: "DOGEUSDT",
+        status: "SAFE_TO_SHUTDOWN" },
+      { symbol: "SOLUSDT",
+        status: "UNSAFE" },
     ],
     "A safe market must not overwrite or hide another market's unsafe marker.",
   )
