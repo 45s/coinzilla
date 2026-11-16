@@ -21,7 +21,7 @@ Pause and resume remain market-scoped application use cases:
 - Emergency BUY pause never cancels recovery SELLs or startup-snapshot/manual/external orders. It preserves fill accounting, reconciliation and risk-reducing recovery SELLs. Global and per-market pause scopes are independent; resuming one does not clear the other.
 - If any owned BUY cancellation is unconfirmed, the BUY gate remains active and the command reports `OPERATOR_BUY_CANCELLATION_INCOMPLETE`; inspect `/orders` and Harvester diagnostics before assuming the market is clear.
 - Fill accounting, reconciliation, and risk-reducing recovery SELL decisions continue.
-- Operator pause is process-lifetime only and is not restored after restart. Reissue `/pause SYMBOL` after restart if the market must remain paused.
+- Both the legacy market pause and emergency BUY pause are process-lifetime only and are not restored after restart. Reissue `/pause SYMBOL` or the relevant emergency BUY command after restart when required.
 
 ## Supported commands and buttons
 
@@ -51,6 +51,7 @@ Pause and resume remain market-scoped application use cases:
 | Inline Cancel/Main menu | Navigation | Cancels the pending confirmation or returns to the menu |
 
 The persistent keyboard has exactly six buttons: Pause, Resume, Status, Markets, Portfolio, and Open Orders. Balances remains available through inline navigation and `/balances`.
+
 Emergency BUY controls are explicit text commands and are not replacements for the existing confirmation-gated market Pause/Resume buttons. Telegram command names are lowercase; application methods are `pauseAllBuys`, `resumeAllBuys`, `pauseBuys({ symbol })`, and `resumeBuys({ symbol })`.
 
 ## Interaction diagnostics
