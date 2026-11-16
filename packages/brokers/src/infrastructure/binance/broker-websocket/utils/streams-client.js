@@ -454,7 +454,10 @@ export class BinanceStreamsClient {
     for (const stream of streams) {
       const listeners = this.#listeners.get(stream)
       listeners?.delete(listener)
-      if (listeners?.size === 0) {this.#listeners.delete(stream)}
+      if (listeners?.size === 0) {
+        this.#listeners.delete(stream)
+        this.#lastMessageAt.delete(stream)
+      }
     }
     if (this.#listeners.size === 0) {this.#clearReconnectTimer()}
   }
@@ -673,6 +676,7 @@ payload: JSON.stringify(request) })
         heartbeatAgeMs,
         heartbeatTimeoutMs: this.heartbeatTimeout,
         activeStreamCount: this.#activeStreams.size,
+        streams: this.diagnostics.streams,
       })
       this.#reportError(error)
       Promise.resolve(transport.close(4000, "Binance Streams heartbeat timed out"))
