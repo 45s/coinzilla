@@ -71,7 +71,8 @@ const assertNoOpenOrders = async () => {
 }
 
 const askForConfirmation = async () => {
-  const readline = createInterface({ input: stdin, output: stdout })
+  const readline = createInterface({ input: stdin,
+output: stdout })
 
   try {
     const answer = await readline.question(
