@@ -10,6 +10,8 @@ import { DEFAULT_OPERATIONAL_STATE_DIRECTORY } from "./infrastructure/operationa
 import { main as startMain } from "./index.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { UnvalidatedMarketExchangeConstraintsError } from "./domain/market/errors/unvalidated-market-exchange-constraints-error.js"
+import { appConfig } from "../config/index.js"
+import { OperatorControlStartupError } from "./bootstrap/operator-control/prepare-telegram-operator-control.js"
 
 const disabledJournalService = () => ({
   ready: Promise.resolve({ ok: true, disabled: true }),
@@ -1778,5 +1780,121 @@ test("does not construct, verify, or inject Operational State Store records even
   assert.equal(storeCreated, false, "Disabled restart recovery must not construct or verify the Operational State Store.")
   assert.equal(journalCreated, true, "An unused recovery directory must not prevent normal Journal startup.")
   assert.equal(runtimeStarted, true, "A missing or malformed recovery directory must not block startup while recovery is disabled.")
+})
+
+test("starts normal development runtime with outbound Telegram notifications and no operator-control store", async () => {
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  let operationalStateStoreFactoryCalls = 0
+  let telegramNotifierFactoryCalls = 0
+  let runtimeStarted = false
+  let runtimeOperationalStateStore
+
+  try {
+    await main({
+      loadConfig: async () => appConfig,
+      env: {
+        NODE_ENV: "development",
+        TELEGRAM_BOT_TOKEN: "test-notification-token",
+        TELEGRAM_CHAT_ID: "test-notification-chat",
+      },
+      createOperationalStateStore: () => {
+        operationalStateStoreFactoryCalls += 1
+        throw new Error("Default development startup must not construct an optional operator-control store.")
+      },
+      createTelegramNotifier: () => {
+        telegramNotifierFactoryCalls += 1
+        return { sendMessage: async () => ({ ok: true }) }
+      },
+      start: async (input) => {
+        runtimeStarted = true
+        runtimeOperationalStateStore = input.operationalStateStore
+        return {
+          connected: false,
+          tradingEnabled: false,
+          strategyMode: "conservative",
+          subscriptions: [],
+        }
+      },
+      logger: { info() {}, system() {}, error() {} },
+    })
+
+    assert.equal(appConfig.notifications.telegram.enabled, true, "Outbound Telegram notifications must remain enabled independently of inbound operator control.")
+    assert.equal(appConfig.operatorControl.telegram.enabled, false, "The default application configuration must leave inbound operator control opt-in.")
+    assert.equal(telegramNotifierFactoryCalls, 1, "Configured outbound Telegram notifications must initialize even when inbound operator control is disabled.")
+    assert.equal(operationalStateStoreFactoryCalls, 0, "Normal development startup must not construct an uninitialized Operational State Store for an optional disabled feature.")
+    assert.equal(runtimeStarted, true, "The Harvester runtime must start without a pre-initialized operator-control ledger.")
+    assert.equal(runtimeOperationalStateStore, undefined, "An optional disabled operator-control feature must not inject a durable store into normal runtime startup.")
+    assert.equal(process.exitCode, 0, "Successful startup without optional operator control must preserve the successful process exit status.")
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+
+test("releases the process lock after operator-control preflight failure while preserving the original startup error", async () => {
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  const originalCause = new Error("ledger genesis is missing")
+  const startupError = new OperatorControlStartupError(
+    "Configured Operational State Store is missing, uninitialized, corrupt or not durably writable",
+    "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID",
+    originalCause,
+  )
+  let processLockReleaseCalls = 0
+  const errorLogs = []
+
+  try {
+    await main({
+      loadConfig: async () => ({
+        operatorControl: {
+          telegram: {
+            enabled: true,
+            allowedUserIds: ["12345"],
+          },
+        },
+        strategies: {
+          CG_coinGrabber: {
+            settings: {
+              recovery: {
+                enabled: false,
+              },
+            },
+          },
+        },
+      }),
+      env: {
+        NODE_ENV: "development",
+        TELEGRAM_BOT_TOKEN: "test-operator-token",
+      },
+      createOperationalStateStore: () => ({
+        verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
+      }),
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => {
+          processLockReleaseCalls += 1
+          return { ok: true, released: true }
+        },
+      }),
+      start: async () => { throw startupError },
+      logger: {
+        info() {},
+        system() {},
+        error: (entry) => errorLogs.push(entry),
+      },
+    })
+
+    const startupFailureLog = errorLogs.find((entry) => entry.message === "startup failed.")
+    assert.equal(startupError.startupResourcesMayBeActive, false, "Operator-control preflight errors must explicitly state that broker resources were never activated.")
+    assert.equal(processLockReleaseCalls, 1, "A confirmed pre-broker operator-control failure must release the process lock after Journal shutdown.")
+    assert.strictEqual(startupFailureLog?.error, startupError, "Cleanup must preserve and report the exact original operator-control startup error.")
+    assert.equal(startupFailureLog?.errorCode, "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", "The original stable operator-control error code must remain visible after cleanup.")
+    assert.strictEqual(startupError.cause, originalCause, "The original Operational State Store verification cause must remain attached to the startup error.")
+    assert.equal(errorLogs.some((entry) => entry.message === "observability shutdown incomplete"), false, "A safely releasable pre-broker failure must not produce a misleading incomplete-shutdown diagnostic.")
+    assert.equal(process.exitCode, 1, "A failed operator-control preflight must still fail startup after safe resource cleanup.")
+  } finally {
+    process.exitCode = previousExitCode
+  }
 })
 
