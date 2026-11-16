@@ -717,7 +717,7 @@ test("keeps inbound operator control disabled without constructing its store or 
   } finally { await runtime.stop() }
 })
 
-test("verifies Operational State Store records before broker connect and starts/stops Telegram around the trading runtime", async () => {
+test("starts/stops Telegram CC and applies process-local pause without recovery storage", async () => {
   const config = {
     ...appConfig,
     operatorControl: { telegram: {
@@ -814,7 +814,8 @@ test("verifies Operational State Store records before broker connect and starts/
     },
   })
   try {
-    assert.ok(calls.indexOf("verify-Operational State Store records") < calls.indexOf("connect"), "Operational State Store records integrity must be verified before Binance broker connection.")
+    assert.equal(calls.includes("create-Operational State Store records-store"), false, "Telegram CC must not construct the recovery store.")
+    assert.equal(calls.includes("verify-Operational State Store records"), false, "Telegram CC startup must not verify the recovery store.")
     assert.ok(calls.indexOf("start-telegram-poller") < calls.indexOf("subscribe:user-data"), "The operator poller must be ready before the runtime begins accepting trading events.")
     const pauseResult = await operator.pauseMarket({
       actor: {
@@ -825,10 +826,8 @@ test("verifies Operational State Store records before broker connect and starts/
       symbol: "BTCUSDT"
     })
     assert.equal(pauseResult.ok, true, "An authorized market pause must complete through the existing application use case.")
-    const operatorPauseFacts = appendedFacts.filter(({ factType }) => factType === "OPERATOR_MARKET_PAUSED")
-    assert.equal(operatorPauseFacts.length, 1, "A successful operator pause must append exactly one Operational State Store record.")
-    assert.equal(operatorPauseFacts[0].data.symbol, "BTCUSDT", "The durable pause fact must identify the requested configured market.")
-    assert.ok(calls.indexOf("append-operator-fact") > calls.indexOf("start-telegram-poller"), "A pause fact is appended only after the adapter is running and a request is received.")
+    assert.equal(appendedFacts.some(({ factType }) => factType === "OPERATOR_MARKET_PAUSED"), false, "A process-local CC pause must not write a recovery fact.")
+    assert.equal(calls.includes("append-operator-fact"), false, "A process-local CC pause must not access durable recovery storage.")
     assert.equal(placeOrderCalls, 0, "An operator pause must not submit any exchange order.")
     assert.equal(cancelOrderCalls, 0, "An operator pause must not cancel any exchange order.")
   } finally { await runtime.stop() }
