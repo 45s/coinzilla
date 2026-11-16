@@ -332,3 +332,25 @@ test("does not apply Conservative policy to a different strategy participant", a
   assert.equal(calls.includes("gate:CONSERVATIVE"), false)
   assert.equal(fixture.state.status, "STOPPED")
 })
+
+test("accepts an AccountSnapshot return value after its CLOSING audit has been durably published", async () => {
+  const calls = []
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+  })
+  const fixture = createShutdown({
+    participants: [participant],
+    calls,
+    publishAccountSnapshot: async () => ({
+      sourceTime: 123,
+      balances: [],
+    }),
+  })
+
+  await fixture.stop()
+
+  assert.equal(fixture.state.status, "STOPPED")
+  assert.ok(calls.includes("closing-audit:COMPLETE"))
+  assert.ok(calls.includes("journal-flush"))
+})
