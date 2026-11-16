@@ -110,7 +110,10 @@ stream })
       for (const listener of listeners.get(stream) ?? []) {listener(event)}
     },
     get listenerCount() {
-      return [...listeners.values()].reduce((total, set) => total + set.size, 0)
+      return [...listeners.values()].reduce((...args) => {
+        const [total, set] = args
+        return total + set.size
+      }, 0)
     },
   }
 }
