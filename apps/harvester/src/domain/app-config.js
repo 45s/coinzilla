@@ -6,7 +6,7 @@ const isRecord = (value) => value !== null && typeof value === "object" && !Arra
 const TRADING_ENVIRONMENT_VALUES = Object.values(TRADING_ENVIRONMENTS)
 const TRADING_ENVIRONMENT_SET = new Set(TRADING_ENVIRONMENT_VALUES)
 export class ConfigValidationError extends TypeError {
-  constructor(path, expected) {
+  constructor({ path, expected }) {
     super(`Invalid app config at "${path}": expected ${expected}`)
     this.name = "ConfigValidationError"
     this.path = path
@@ -14,17 +14,17 @@ export class ConfigValidationError extends TypeError {
   }
 }
 
-const fail = (path, expectation) => { throw new ConfigValidationError(path, expectation) }
-const requireRecord = (value, path) => { if (!isRecord(value)) {fail(path, "an object")} }
-const requireBoolean = (value, path) => { if (typeof value !== "boolean") {fail(path, "a boolean")} }
-const requireNumber = (value, path, { min = -Infinity, exclusiveMin = false, max = Infinity, exclusiveMax = false } = {}) => {
-  if (typeof value !== "number" || !Number.isFinite(value)) {fail(path, "a finite number")}
+const fail = ({ path, expectation }) => { throw new ConfigValidationError({ path, expected: expectation }) }
+const requireRecord = ({ value, path }) => { if (!isRecord(value)) {fail({ path, expectation: "an object" })} }
+const requireBoolean = ({ value, path }) => { if (typeof value !== "boolean") {fail({ path, expectation: "a boolean" })} }
+const requireNumber = ({ value, path, min = -Infinity, exclusiveMin = false, max = Infinity, exclusiveMax = false }) => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {fail({ path: path, expectation: "a finite number" })}
   const validMinimum = exclusiveMin ? value > min : value >= min
-  if (!validMinimum) {fail(path, exclusiveMin ? `a finite number greater than ${min}` : `a finite number greater than or equal to ${min}`)}
+  if (!validMinimum) {fail({ path: path, expectation: exclusiveMin ? `a finite number greater than ${min}` : `a finite number greater than or equal to ${min}` })}
   const validMaximum = exclusiveMax ? value < max : value <= max
-  if (!validMaximum) {fail(path, exclusiveMax ? `a finite number less than ${max}` : `a finite number less than or equal to ${max}`)}
+  if (!validMaximum) {fail({ path: path, expectation: exclusiveMax ? `a finite number less than ${max}` : `a finite number less than or equal to ${max}` })}
 }
-const requirePrecision = (value, path) => { if (!Number.isInteger(value) || value < 0) {fail(path, "a non-negative integer")} }
+const requirePrecision = ({ value, path }) => { if (!Number.isInteger(value) || value < 0) {fail({ path, expectation: "a non-negative integer" })} }
 
 
 const TELEGRAM_NOTIFICATION_PROFILES = Object.freeze(Object.values(NOTIFICATIONS_TG_PROFILES))
@@ -36,34 +36,34 @@ export const TELEGRAM_NOTIFICATION_EVENT_KEYS = Object.freeze([
 
 function validateTelegramNotificationConfig(config) {
   if (config.notifications === undefined) {return}
-  requireRecord(config.notifications, "notifications")
+  requireRecord({ path: config.notifications, value: "notifications" })
   const {telegram} = config.notifications
   if (telegram === undefined) {return}
-  requireRecord(telegram, "notifications.telegram")
+  requireRecord({ path: telegram, value: "notifications.telegram" })
   const path = "notifications.telegram"
 
-  if (telegram.enabled !== undefined) {requireBoolean(telegram.enabled, `${path}.enabled`)}
+  if (telegram.enabled !== undefined) {requireBoolean({ path: telegram.enabled, value: `${path}.enabled` })}
   if (telegram.profile !== undefined && !TELEGRAM_NOTIFICATION_PROFILES.includes(telegram.profile)) {
-    fail(`${path}.profile`, "one of minimal, trader, verbose, or custom")
+    fail({ path: `${path}.profile`, expectation: "one of minimal, trader, verbose, or custom" })
   }
   if (telegram.markets !== undefined) {
-    if (!Array.isArray(telegram.markets)) {fail(`${path}.markets`, "an array of unique non-empty market symbols")}
+    if (!Array.isArray(telegram.markets)) {fail({ path: `${path}.markets`, expectation: "an array of unique non-empty market symbols" })}
     const seenMarkets = new Set()
     for (const [index, symbol] of telegram.markets.entries()) {
       if (typeof symbol !== "string" || !symbol.trim() || symbol !== symbol.trim()) {
-        fail(`${path}.markets[${index}]`, "a non-empty trimmed market symbol")
+        fail({ path: `${path}.markets[${index}]`, expectation: "a non-empty trimmed market symbol" })
       }
-      if (seenMarkets.has(symbol)) {fail(`${path}.markets`, "unique market symbols")}
+      if (seenMarkets.has(symbol)) {fail({ path: `${path}.markets`, expectation: "unique market symbols" })}
       seenMarkets.add(symbol)
     }
   }
   if (telegram.events !== undefined) {
-    requireRecord(telegram.events, `${path}.events`)
+    requireRecord({ path: telegram.events, value: `${path}.events` })
     for (const [eventKey, enabled] of Object.entries(telegram.events)) {
       if (!TELEGRAM_NOTIFICATION_EVENT_KEYS.includes(eventKey)) {
-        fail(`${path}.events.${eventKey}`, "a supported Telegram notification event key")
+        fail({ path: `${path}.events.${eventKey}`, expectation: "a supported Telegram notification event key" })
       }
-      requireBoolean(enabled, `${path}.events.${eventKey}`)
+      requireBoolean({ path: enabled, value: `${path}.events.${eventKey}` })
     }
   }
 }
@@ -73,30 +73,30 @@ function validateTelegramOperatorControlConfig(appConfig) {
     return
   }
   const path = "operatorControl"
-  requireRecord(appConfig.operatorControl, path)
+  requireRecord({ path: appConfig.operatorControl, value: path })
   for (const key of Object.keys(appConfig.operatorControl)) {
     if (key !== "telegram") {
-      fail(`${path  }.${  key}`, "a supported operator-control configuration field")
+      fail({ path: `${path  }.${  key}`, expectation: "a supported operator-control configuration field" })
     }
   }
   const {telegram} = appConfig.operatorControl
-  requireRecord(telegram, `${path  }.telegram`)
+  requireRecord({ path: telegram, value: `${path  }.telegram` })
   for (const key of Object.keys(telegram)) {
     if (key !== "enabled" && key !== "allowedUserIds") {
-      fail(`${path  }.telegram.${  key}`, "a supported Telegram operator configuration field")
+      fail({ path: `${path  }.telegram.${  key}`, expectation: "a supported Telegram operator configuration field" })
     }
   }
-  requireBoolean(telegram.enabled, `${path  }.telegram.enabled`)
+  requireBoolean({ path: telegram.enabled, value: `${path  }.telegram.enabled` })
   if (!Array.isArray(telegram.allowedUserIds)) {
-    fail(`${path  }.telegram.allowedUserIds`, "an array of unique positive decimal Telegram user IDs")
+    fail({ path: `${path  }.telegram.allowedUserIds`, expectation: "an array of unique positive decimal Telegram user IDs" })
   }
   const seenUserIds = new Set()
   for (const userId of telegram.allowedUserIds) {
     if (typeof userId !== "string" || !/^[1-9][0-9]*$/.test(userId) || !Number.isSafeInteger(Number(userId))) {
-      fail(`${path  }.telegram.allowedUserIds`, "canonical positive decimal Telegram user ID strings")
+      fail({ path: `${path  }.telegram.allowedUserIds`, expectation: "canonical positive decimal Telegram user ID strings" })
     }
     if (seenUserIds.has(userId)) {
-      fail(`${path  }.telegram.allowedUserIds`, "unique positive decimal Telegram user IDs")
+      fail({ path: `${path  }.telegram.allowedUserIds`, expectation: "unique positive decimal Telegram user IDs" })
     }
     seenUserIds.add(userId)
   }
@@ -104,77 +104,74 @@ function validateTelegramOperatorControlConfig(appConfig) {
 
 /** Validate CG coin-grabber strategy settings. */
 function validateStrategySettings(strategy) {
-  requireRecord(strategy.settings, "strategies.CG_coinGrabber.settings")
+  requireRecord({ path: strategy.settings, value: "strategies.CG_coinGrabber.settings" })
   const settingsPath = "strategies.CG_coinGrabber.settings"
   if (Object.hasOwn(strategy.settings, "minProfit")) {
-    fail(`${settingsPath}.minProfit`, "must be configured on each market pair")
+    fail({ path: `${settingsPath}.minProfit`, expectation: "must be configured on each market pair" })
   }
-  requireRecord(strategy.settings.conservative, `${settingsPath}.conservative`)
-  requireBoolean(strategy.settings.conservative.enabled, `${settingsPath}.conservative.enabled`)
-  if (!strategy.settings.conservative.enabled) {fail(`${settingsPath}.conservative.enabled`, "Conservative must remain enabled")}
-  requireRecord(strategy.settings.aggressive, `${settingsPath}.aggressive`)
-  requireBoolean(strategy.settings.aggressive.enabled, `${settingsPath}.aggressive.enabled`)
-  if (strategy.settings.aggressive.enabled) {fail(`${settingsPath}.aggressive.enabled`, "Aggressive strategy is deferred and must remain disabled")}
+  requireRecord({ path: strategy.settings.conservative, value: `${settingsPath}.conservative` })
+  requireBoolean({ path: strategy.settings.conservative.enabled, value: `${settingsPath}.conservative.enabled` })
+  if (!strategy.settings.conservative.enabled) {fail({ path: `${settingsPath}.conservative.enabled`, expectation: "Conservative must remain enabled" })}
+  requireRecord({ path: strategy.settings.aggressive, value: `${settingsPath}.aggressive` })
+  requireBoolean({ path: strategy.settings.aggressive.enabled, value: `${settingsPath}.aggressive.enabled` })
+  if (strategy.settings.aggressive.enabled) {fail({ path: `${settingsPath}.aggressive.enabled`, expectation: "Aggressive strategy is deferred and must remain disabled" })}
   if (strategy.settings.recovery !== undefined) {
-    requireRecord(strategy.settings.recovery, `${settingsPath}.recovery`)
-    requireBoolean(strategy.settings.recovery.enabled, `${settingsPath}.recovery.enabled`)
+    requireRecord({ path: strategy.settings.recovery, value: `${settingsPath}.recovery` })
+    requireBoolean({ path: strategy.settings.recovery.enabled, value: `${settingsPath}.recovery.enabled` })
     if (strategy.settings.recovery.enabled) {
-      fail(`${settingsPath}.recovery.enabled`, "process-restart recovery is deferred and must remain disabled")
+      fail({ path: `${settingsPath}.recovery.enabled`, expectation: "process-restart recovery is deferred and must remain disabled" })
     }
   }
 }
 
 function validateStrategyPairs(strategy) {
-  requireRecord(strategy.pairs, "strategies.CG_coinGrabber.pairs")
+  requireRecord({ path: strategy.pairs, value: "strategies.CG_coinGrabber.pairs" })
   const pairs = Object.entries(strategy.pairs)
-  if (pairs.length === 0) {fail("strategies.CG_coinGrabber.pairs", "at least one pair")}
+  if (pairs.length === 0) {fail({ path: "strategies.CG_coinGrabber.pairs", expectation: "at least one pair" })}
   for (const [symbol, pair] of pairs) {
     const pairPath = `strategies.CG_coinGrabber.pairs.${symbol}`
-    if (!symbol.trim()) {fail("strategies.CG_coinGrabber.pairs", "non-empty pair symbols")}
-    requireRecord(pair, pairPath)
-    requireBoolean(pair.enabled, `${pairPath}.enabled`)
+    if (!symbol.trim()) {fail({ path: "strategies.CG_coinGrabber.pairs", expectation: "non-empty pair symbols" })}
+    requireRecord({ path: pair, value: pairPath })
+    requireBoolean({ path: pair.enabled, value: `${pairPath}.enabled` })
     if (!TRADING_ENVIRONMENT_SET.has(pair.tradingEnvironment)) {
-      fail(`${pairPath}.tradingEnvironment`, "testnet, live, or both")
+      fail({ path: `${pairPath}.tradingEnvironment`, expectation: "testnet, live, or both" })
     }
-    requireBoolean(pair.enableVolatilityProtection, `${pairPath}.enableVolatilityProtection`)
+    requireBoolean({ path: pair.enableVolatilityProtection, value: `${pairPath}.enableVolatilityProtection` })
     if (pair.externalOrdersPolicy !== undefined && !Object.values(EXTERNAL_ORDERS_POLICIES).includes(pair.externalOrdersPolicy)) {
-      fail(
-        `${pairPath}.externalOrdersPolicy`,
-        Object.values(EXTERNAL_ORDERS_POLICIES).join(" or "),
-      )
+      fail({ path: `${pairPath}.externalOrdersPolicy`, expectation: Object.values(EXTERNAL_ORDERS_POLICIES).join(" or ") })
     }
-    requireNumber(pair.investment, `${pairPath}.investment`, { min: 0,
-exclusiveMin: true })
-    requireNumber(pair.orderQuantity, `${pairPath}.orderQuantity`, { min: 0,
-exclusiveMin: true })
-    requireNumber(pair.keepQuantity, `${pairPath}.keepQuantity`, { min: 0 })
-    requireNumber(pair.minProfit, `${pairPath}.minProfit`, { min: 0.01 })
-    requireNumber(pair.priceStepPercent, `${pairPath}.priceStepPercent`, { min: 0,
+    requireNumber({ value: pair.investment, path: `${pairPath}.investment`, ...{ min: 0,
+exclusiveMin: true } })
+    requireNumber({ value: pair.orderQuantity, path: `${pairPath}.orderQuantity`, ...{ min: 0,
+exclusiveMin: true } })
+    requireNumber({ value: pair.keepQuantity, path: `${pairPath}.keepQuantity`, ...{ min: 0 } })
+    requireNumber({ value: pair.minProfit, path: `${pairPath}.minProfit`, ...{ min: 0.01 } })
+    requireNumber({ value: pair.priceStepPercent, path: `${pairPath}.priceStepPercent`, ...{ min: 0,
 exclusiveMin: true,
 max: 100,
-exclusiveMax: true })
-    requirePrecision(pair.pricePrecision, `${pairPath}.pricePrecision`)
-    requirePrecision(pair.quantityPrecision, `${pairPath}.quantityPrecision`)
-    requireNumber(pair.makerPercent, `${pairPath}.makerPercent`, { min: 0,
+exclusiveMax: true } })
+    requirePrecision({ path: pair.pricePrecision, value: `${pairPath}.pricePrecision` })
+    requirePrecision({ path: pair.quantityPrecision, value: `${pairPath}.quantityPrecision` })
+    requireNumber({ value: pair.makerPercent, path: `${pairPath}.makerPercent`, ...{ min: 0,
 max: 100,
-exclusiveMax: true })
-    requireNumber(pair.takerPercent, `${pairPath}.takerPercent`, { min: 0,
+exclusiveMax: true } })
+    requireNumber({ value: pair.takerPercent, path: `${pairPath}.takerPercent`, ...{ min: 0,
 max: 100,
-exclusiveMax: true })
+exclusiveMax: true } })
   }
 }
 /** Validate Harvester's application-wide configuration, including strategy and notification settings. */
 export function validateAppConfig(config) {
-  requireRecord(config, "root")
+  requireRecord({ path: config, value: "root" })
 
   validateTelegramNotificationConfig(config)
   validateTelegramOperatorControlConfig(config)
-  if (config.runtime !== undefined) {fail("runtime", "must not be present; exchange mode is selected by TRADING_MODE")}
-  requireRecord(config.strategies, "strategies")
-  requireRecord(config.strategies.CG_coinGrabber, "strategies.CG_coinGrabber")
+  if (config.runtime !== undefined) {fail({ path: "runtime", expectation: "must not be present; exchange mode is selected by TRADING_MODE" })}
+  requireRecord({ path: config.strategies, value: "strategies" })
+  requireRecord({ path: config.strategies.CG_coinGrabber, value: "strategies.CG_coinGrabber" })
   const strategy = config.strategies.CG_coinGrabber
-  requireBoolean(strategy.enabled, "strategies.CG_coinGrabber.enabled")
-  if (!strategy.enabled) {fail("strategies.CG_coinGrabber.enabled", "CG_coinGrabber must remain enabled")}
+  requireBoolean({ path: strategy.enabled, value: "strategies.CG_coinGrabber.enabled" })
+  if (!strategy.enabled) {fail({ path: "strategies.CG_coinGrabber.enabled", expectation: "CG_coinGrabber must remain enabled" })}
   validateStrategySettings(strategy)
   validateStrategyPairs(strategy)
   return config
@@ -189,16 +186,16 @@ export function validateAppConfig(config) {
  */
 export function selectPairsForTradingMode({ pairs, tradingMode } = {}) {
   if (tradingMode !== TRADING_ENVIRONMENTS.TESTNET && tradingMode !== TRADING_ENVIRONMENTS.LIVE) {
-    fail("TRADING_MODE", "testnet or live")
+    fail({ path: "TRADING_MODE", expectation: "testnet or live" })
   }
-  requireRecord(pairs, "strategies.CG_coinGrabber.pairs")
+  requireRecord({ path: pairs, value: "strategies.CG_coinGrabber.pairs" })
   const selectedPairs = {}
   for (const [symbol, pair] of Object.entries(pairs)) {
     const pairPath = `strategies.CG_coinGrabber.pairs.${symbol}`
-    if (!symbol.trim()) {fail("strategies.CG_coinGrabber.pairs", "non-empty pair symbols")}
-    requireRecord(pair, pairPath)
+    if (!symbol.trim()) {fail({ path: "strategies.CG_coinGrabber.pairs", expectation: "non-empty pair symbols" })}
+    requireRecord({ path: pair, value: pairPath })
     if (!TRADING_ENVIRONMENT_SET.has(pair.tradingEnvironment)) {
-      fail(`${pairPath}.tradingEnvironment`, "testnet, live, or both")
+      fail({ path: `${pairPath}.tradingEnvironment`, expectation: "testnet, live, or both" })
     }
     if (pair.tradingEnvironment !== TRADING_ENVIRONMENTS.BOTH && pair.tradingEnvironment !== tradingMode) {
       continue
