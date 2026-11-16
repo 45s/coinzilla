@@ -18,7 +18,8 @@ export function publishLifecycleEvent({
       for (const error of errors) {
         try {
           eventPublisher.reportFailure({
-            event: { name: eventName, source: HARVESTER_EVENT_SOURCE },
+            event: { name: eventName,
+              source: HARVESTER_EVENT_SOURCE },
             error,
           })
         } catch {
