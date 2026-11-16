@@ -37,7 +37,6 @@ Remaining safety and observability follow-ups #1103 and #1105 remain open; #1104
 
 - [x] **Simplify Harvester terminal log presentation** — merged in [PR #1169](https://github.com/45s/coinzilla/pull/1169), merge commit `c66d83a8dcf1bdb19d4e5b571401aa854311b8f9`. Restored compact strategy markers without `⚪ SYS`, explicit Binance market-data connection wording, concise Portfolio Stats, pending client IDs and cancellation outcomes on their order lines, and compact lifecycle columns.
 - [~] **Complete the operator-facing portfolio summary** — follow-up in [PR #1184](https://github.com/45s/coinzilla/pull/1184). Render the single-line `amount`, `earned`, `spent`, and three-decimal `net` fields; retain every enabled symbol in the subscriptions-ready summary and remove a duplicate pending client-order-ID detail. Presentation-only; preserve structured DEBUG/TRACE evidence and all trading/order/accounting behavior. No exchange operations.
-- [~] **Render structured console details as readable inline text** — [#1204](https://github.com/45s/coinzilla/issues/1204), implementation in [PR #1206](https://github.com/45s/coinzilla/pull/1206). Remove the redundant leading application label and replace JSON detail suffixes with a positional symbol plus readable `key value` details. Presentation-only; preserve structured DEBUG/TRACE evidence and trading/order/accounting behavior.
 
 ## P2 — External trading-pair configuration
 
