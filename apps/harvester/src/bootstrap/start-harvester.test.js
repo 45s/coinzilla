@@ -5288,36 +5288,48 @@ test("fails closed when the effective configuration has no enabled markets", asy
 })
 
 
-test("starts in observation-only mode after a clean prior process when restart recovery is disabled", async (t) => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-restart-gate-"))
-  t.after(() => rm(directory, {
-    recursive: true,
-    force: true,
-  }))
-  const firstStore = createFileOperationalStateStore({
+async function createPriorProcessHistory({ directory, runtimeSessionId, appConfig, clean = false } = {}) {
+  const store = createFileOperationalStateStore({
     directory,
-    runtimeSessionId: "first-process-session",
+    runtimeSessionId,
   })
-  await firstStore.initialize()
+  const initialization = await store.initialize()
+  assert.equal(initialization.ok, true, "the prior process history fixture must start from a valid durable ledger")
   const baseline = await recordConfigurationBaseline({
-    operationalStateStore: firstStore,
+    operationalStateStore: store,
     appConfig,
   })
   assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
   const started = await recordProcessStarted({
-    operationalStateStore: firstStore,
+    operationalStateStore: store,
     configurationFingerprint: baseline.data.fingerprint,
     strategyName: baseline.data.strategyName,
     markets: baseline.data.markets,
     tradingEnabled: true,
   })
   assert.equal(started.ok, true, started.errors?.[0]?.message)
-  const stopped = await recordProcessStopped({
-    operationalStateStore: firstStore,
-    reason: "CLEAN_TEST_SHUTDOWN",
+  if (clean) {
+    const stopped = await recordProcessStopped({
+      operationalStateStore: store,
+      reason: "CLEAN_TEST_SHUTDOWN",
+      clean: true,
+    })
+    assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
+  }
+}
+
+test("starts in observation-only mode after a clean prior process when restart recovery is disabled", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-restart-gate-"))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+  await createPriorProcessHistory({
+    directory,
+    runtimeSessionId: "first-process-session",
+    appConfig,
     clean: true,
   })
-  assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
 
   const restartStore = createFileOperationalStateStore({
     directory,
@@ -5339,24 +5351,11 @@ test("starts in observation-only mode after an unclean prior process when restar
     recursive: true,
     force: true,
   }))
-  const firstStore = createFileOperationalStateStore({
+  await createPriorProcessHistory({
     directory,
     runtimeSessionId: "crashed-process-session",
-  })
-  await firstStore.initialize()
-  const baseline = await recordConfigurationBaseline({
-    operationalStateStore: firstStore,
     appConfig,
   })
-  assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
-  const started = await recordProcessStarted({
-    operationalStateStore: firstStore,
-    configurationFingerprint: baseline.data.fingerprint,
-    strategyName: baseline.data.strategyName,
-    markets: baseline.data.markets,
-    tradingEnabled: true,
-  })
-  assert.equal(started.ok, true, started.errors?.[0]?.message)
 
   const restartStore = createFileOperationalStateStore({
     directory,
@@ -5968,26 +5967,11 @@ test("starts Telegram operator control without running process-restart recovery 
   let runtime
 
   try {
-    const previousStore = createFileOperationalStateStore({
+    await createPriorProcessHistory({
       directory,
       runtimeSessionId: "previous-process-session",
-    })
-    const initialization = await previousStore.initialize()
-    assert.equal(initialization.ok, true, "the prior process history fixture must start from a valid durable ledger")
-
-    const baseline = await recordConfigurationBaseline({
-      operationalStateStore: previousStore,
       appConfig: config,
     })
-    assert.equal(baseline.ok, true, "the prior process must have a durable configuration baseline")
-    const started = await recordProcessStarted({
-      operationalStateStore: previousStore,
-      configurationFingerprint: baseline.data.fingerprint,
-      strategyName: baseline.data.strategyName,
-      markets: baseline.data.markets,
-      tradingEnabled: true,
-    })
-    assert.equal(started.ok, true, "the prior process must have a durable start boundary for the recovery-gate regression")
 
     const currentStore = createFileOperationalStateStore({
       directory,
