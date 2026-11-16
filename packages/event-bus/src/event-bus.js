@@ -156,8 +156,10 @@ export class EventBus {
     let handler
 
     try {
-      assertObjectInput({ input,
-operation: "Event subscription" })
+      assertObjectInput({
+        input,
+        operation: "Event subscription",
+      })
       ;({ name, handler } = input)
     } catch (error) {
       return toResult({ error })
