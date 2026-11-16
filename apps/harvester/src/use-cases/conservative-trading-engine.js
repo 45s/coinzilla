@@ -58,9 +58,13 @@ right: "0" }) <= 0) {throw new RangeError(`${field  } must be positive`)}
     return value
   }
   const bestBidPrice = positive({ value: bookTicker.bestBidPrice, 
+    
     field: "bestBidPrice" })
-  const bestBidQuantity = positive({ value: bookTicker.bestBidQuantity, 
+  
+  const bestBidQuantity = positive({ value: bookTicker.bestBidQuan
+    tity, 
     field: "bestBidQuantity" })
+  
   const bestAskPrice = positive({ value: bookTicker.bestAskPrice, 
     field: "bestAskPrice" })
   const bestAskQuantity = positive({ value: bookTicker.bestAskQuantity, 
@@ -1586,7 +1590,8 @@ function inspectAcknowledgedFillHistory({ order, fills }) {
         left.executedAt !== right.executedAt) {
       return left.executedAt - right.executedAt
     }
-    return left.tradeId.localeCompare(right.tradeId)
+    return left.tradeId.localeCompare
+    (right.tradeId)
   })
   const reconciledQuantity = uniqueFills.reduce((...entries) => {
     const [total, fill] = entries
@@ -3148,6 +3153,7 @@ function validateOwnedBuyExecutionHistory({ order, fillsResult, reasonPrefix }) 
     fills,
   }
 }
+  
 
 function getOwnedBuyReconciledQuantity({ fills }) {
   return fills.reduce((...entries) => {
