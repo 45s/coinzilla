@@ -11255,13 +11255,14 @@ async function prepareLateSellShutdownScenario({ fillFraction } = {}) {
   const seeded = makeSeededRecoveryState()
   let shutdownStarted = false
   let cancelSellExecutedQuantity = "0"
+  const accounting = createLateSellScenarioAccounting({
+    portfolio: seeded.portfolio,
+    recoveryLedger: seeded.recoveryLedger,
+  })
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
-    ...createLateSellScenarioAccounting({
-      portfolio: seeded.portfolio,
-      recoveryLedger: seeded.recoveryLedger,
-    }),
+    ...accounting,
     baseFreeBalance: "1",
     cancelExecutedQuantity: ({ order }) =>
       order.side === "SELL" ? cancelSellExecutedQuantity : "0",
@@ -11328,11 +11329,12 @@ async function prepareLateSellShutdownScenario({ fillFraction } = {}) {
     harness,
     sellOrder,
     quantity,
+    accounting,
   }
 }
 
 test("maintains recovery SELL coverage when a late owned SELL fill leaves sellable quantity", async () => {
-  const { harness } = await prepareLateSellShutdownScenario({
+  const { harness, accounting } = await prepareLateSellShutdownScenario({
     fillFraction: "0.5",
   })
   const recoveryReconciliation = await harness.engine.reconcileRecoverySellsForShutdown({
@@ -11341,7 +11343,7 @@ test("maintains recovery SELL coverage when a late owned SELL fill leaves sellab
   assert.equal(
     recoveryReconciliation.ok,
     true,
-    `Shutdown must replan remaining sellable quantity. Errors: ${recoveryReconciliation.errors?.map((error) => error.message).join("; ") ?? "none"}. Pause reasons: ${JSON.stringify(harness.pauses)}`,
+    `Shutdown must replan remaining sellable quantity. Errors: ${recoveryReconciliation.errors?.map((error) => error.message).join("; ") ?? "none"}. Pause reasons: ${JSON.stringify(harness.pauses)}. Active orders: ${JSON.stringify(harness.engine.getActiveOrders().map((order) => ({ side: order.side, status: order.status, executed: order.executedQuantity.amount, remaining: order.remainingQuantity.amount })))}. Position: ${JSON.stringify(accounting.getPortfolio().getPosition({ strategyId: StrategyId.COIN_GRABBER, marketId: market.id })?.value)}`,
   )
 
   const activeRecoverySells = harness.engine.getActiveOrders().filter((order) =>
