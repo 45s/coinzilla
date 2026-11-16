@@ -800,100 +800,144 @@ test("rejects a third-asset commission valued in an asset other than the market 
   assert.match(restored.errors[0].message, /does not match the market quote asset/)
 })
 
-test("matches live BUY/SELL accounting through DTO, projection, and restore for base, quote, and third-asset fees", () => {
-  const bnbAsset = new Asset({ id: "binance:BNB",
-code: "BNB" })
-  const fills = [
-    new Fill({
+function createAccountingParityFill({
+  bnbAsset,
+  tradeId,
+  brokerOrderId,
+  clientOrderId,
+  side,
+  price,
+  quantity,
+  quoteQuantity,
+  baseCommission,
+  quoteCommission,
+  thirdAssetQuoteValue,
+}) {
+  return new Fill({
+    tradeId,
+    brokerOrderId,
+    clientOrderId,
+    market: canonicalMarket,
+    side,
+    price: new Money({
+      amount: price,
+      asset: canonicalMarket.quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: quantity,
+      asset: canonicalMarket.baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: quoteQuantity,
+      asset: canonicalMarket.quoteAsset,
+    }),
+    liquidityRole: "MAKER",
+    commissions: [
+      new Commission({
+        amount: new Money({
+          amount: baseCommission,
+          asset: canonicalMarket.baseAsset,
+        }),
+      }),
+      new Commission({
+        amount: new Money({
+          amount: quoteCommission,
+          asset: canonicalMarket.quoteAsset,
+        }),
+      }),
+      new Commission({
+        amount: new Money({
+          amount: "0.001",
+          asset: bnbAsset,
+        }),
+        quoteValue: new Money({
+          amount: thirdAssetQuoteValue,
+          asset: canonicalMarket.quoteAsset,
+        }),
+      }),
+    ],
+    commissionStatus: "COMPLETE",
+  })
+}
+
+function createAccountingParityFills({ bnbAsset }) {
+  return [
+    createAccountingParityFill({
+      bnbAsset,
       tradeId: "parity-buy",
       brokerOrderId: "9101",
       clientOrderId: "h-BTCUSDT-parity-buy",
-      market: canonicalMarket,
       side: "BUY",
-      price: new Money({ amount: "0.1",
-asset: canonicalMarket.quoteAsset }),
-      quantity: new Quantity({ amount: "100",
-asset: canonicalMarket.baseAsset }),
-      quoteQuantity: new Money({ amount: "10",
-asset: canonicalMarket.quoteAsset }),
-      liquidityRole: "MAKER",
-      commissions: [
-        new Commission({ amount: new Money({ amount: "1",
-asset: canonicalMarket.baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.01",
-asset: canonicalMarket.quoteAsset }) }),
-        new Commission({
-          amount: new Money({ amount: "0.001",
-asset: bnbAsset }),
-          quoteValue: new Money({ amount: "0.02",
-asset: canonicalMarket.quoteAsset }),
-        }),
-      ],
-      commissionStatus: "COMPLETE",
+      price: "0.1",
+      quantity: "100",
+      quoteQuantity: "10",
+      baseCommission: "1",
+      quoteCommission: "0.01",
+      thirdAssetQuoteValue: "0.02",
     }),
-    new Fill({
+    createAccountingParityFill({
+      bnbAsset,
       tradeId: "parity-sell",
       brokerOrderId: "9102",
       clientOrderId: "h-BTCUSDT-parity-sell",
-      market: canonicalMarket,
       side: "SELL",
-      price: new Money({ amount: "0.12",
-asset: canonicalMarket.quoteAsset }),
-      quantity: new Quantity({ amount: "50",
-asset: canonicalMarket.baseAsset }),
-      quoteQuantity: new Money({ amount: "6",
-asset: canonicalMarket.quoteAsset }),
-      liquidityRole: "MAKER",
-      commissions: [
-        new Commission({ amount: new Money({ amount: "0.5",
-asset: canonicalMarket.baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.02",
-asset: canonicalMarket.quoteAsset }) }),
-        new Commission({
-          amount: new Money({ amount: "0.001",
-asset: bnbAsset }),
-          quoteValue: new Money({ amount: "0.03",
-asset: canonicalMarket.quoteAsset }),
-        }),
-      ],
-      commissionStatus: "COMPLETE",
+      price: "0.12",
+      quantity: "50",
+      quoteQuantity: "6",
+      baseCommission: "0.5",
+      quoteCommission: "0.02",
+      thirdAssetQuoteValue: "0.03",
     }),
   ]
+}
 
+function appendAccountingParityFillRecords({ records, fill }) {
+  const dto = mapFillAppliedData({ fill })
+  assert.equal(dto.ok, true, dto.errors?.map(({ message }) => message).join("; "))
+  const orderFacts = {
+    clientOrderId: fill.clientOrderId,
+    symbol: canonicalMarket.symbol,
+    side: fill.side,
+    type: "LIMIT",
+    price: fill.price.amount,
+    quantity: fill.side === "SELL" ? "100" : fill.quantity.amount,
+  }
+  records.push(record("order.submission_requested", {
+    ...orderFacts,
+    status: "PENDING",
+  }, `requested-${fill.tradeId}`))
+  records.push(record("order.submitted", {
+    ...orderFacts,
+    brokerOrderId: fill.brokerOrderId,
+    status: fill.side === "SELL" ? "PARTIALLY_FILLED" : "NEW",
+  }, `submitted-${fill.tradeId}`))
+  records.push(record("execution.fill_applied", dto.data, `fill-${fill.tradeId}`))
+}
+
+function assertAccountingParity({ livePortfolio, liveLedger, restored }) {
+  const livePosition = livePortfolio.getPosition({ marketId: canonicalMarket.id })
+  const restoredPosition = restored.data.portfolio.getPosition({ marketId: canonicalMarket.id })
+  const restoredLedger = restored.data.recoveryLedgers.get(canonicalMarket.id)
+  assert.deepEqual(restoredPosition.value, livePosition.value)
+  assert.deepEqual(restoredLedger.value, liveLedger.value)
+}
+
+test("matches live BUY/SELL accounting through DTO, projection, and restore for base, quote, and third-asset fees", () => {
+  const bnbAsset = new Asset({ id: "binance:BNB", code: "BNB" })
+  const fills = createAccountingParityFills({ bnbAsset })
   let livePortfolio = new Portfolio()
   let liveLedger = RecoveryLedger.empty({ market: canonicalMarket })
   const records = []
-  for (const fillValue of fills) {
+  for (const fill of fills) {
     const live = updateTradingAccounting({
       portfolio: livePortfolio,
       recoveryLedger: liveLedger,
-      fill: fillValue,
+      fill,
     })
     assert.equal(live.ok, true, live.errors?.map(({ message }) => message).join("; "))
     livePortfolio = live.data.portfolio
     liveLedger = live.data.recoveryLedger
-
-    const dto = mapFillAppliedData({ fill: fillValue })
-    assert.equal(dto.ok, true, dto.errors?.map(({ message }) => message).join("; "))
-    const {clientOrderId} = fillValue
-    const orderFacts = {
-      clientOrderId,
-      symbol: canonicalMarket.symbol,
-      side: fillValue.side,
-      type: "LIMIT",
-      price: fillValue.price.amount,
-      quantity: fillValue.side === "SELL" ? "100" : fillValue.quantity.amount,
-    }
-    records.push(record("order.submission_requested", {
-      ...orderFacts,
-      status: "PENDING",
-    }, `requested-${  fillValue.tradeId}`))
-    records.push(record("order.submitted", {
-      ...orderFacts,
-      brokerOrderId: fillValue.brokerOrderId,
-      status: fillValue.side === "SELL" ? "PARTIALLY_FILLED" : "NEW",
-    }, `submitted-${  fillValue.tradeId}`))
-    records.push(record("execution.fill_applied", dto.data, `fill-${  fillValue.tradeId}`))
+    appendAccountingParityFillRecords({ records, fill })
   }
 
   const projection = projectHarvesterJournalRecovery({ records })
@@ -903,12 +947,9 @@ asset: canonicalMarket.quoteAsset }),
     marketMetadata: new Map([[canonicalMarket.symbol, canonicalMarket]]),
   })
   assert.equal(restored.ok, true, restored.errors?.map(({ message }) => message).join("; "))
+  assertAccountingParity({ livePortfolio, liveLedger, restored })
 
   const livePosition = livePortfolio.getPosition({ marketId: canonicalMarket.id })
-  const restoredPosition = restored.data.portfolio.getPosition({ marketId: canonicalMarket.id })
-  const restoredLedger = restored.data.recoveryLedgers.get(canonicalMarket.id)
-  assert.deepEqual(restoredPosition.value, livePosition.value)
-  assert.deepEqual(restoredLedger.value, liveLedger.value)
   assert.equal(livePosition.baseQuantity.amount, "48.5")
   assert.equal(livePosition.spent.amount, "10.03")
   assert.equal(livePosition.quoteNetCashFlow.amount, "-4.08")
@@ -2079,95 +2120,112 @@ minProfit: "0.01",
   assert.equal(ledger.netSellProceeds, "41.1")
 })
 
-test("allows another fully filled SELL only after the prior SELL has an explicit continue-sell-through outcome", () => {
+function createFirstSellThroughRecords() {
   const records = completedCycleRecords().slice(0, 6)
   records[3] = record("order.submission_requested", {
     clientOrderId: "h-BTCUSDT-sell-1",
-symbol: "BTCUSDT",
-side: "SELL",
-type: "LIMIT",
+    symbol: "BTCUSDT",
+    side: "SELL",
+    type: "LIMIT",
     price: "102.75",
-quantity: "0.4",
-status: "PENDING",
+    quantity: "0.4",
+    status: "PENDING",
   })
   records[4] = record("order.submitted", {
     clientOrderId: "h-BTCUSDT-sell-1",
-brokerOrderId: "9002",
-symbol: "BTCUSDT",
-side: "SELL",
+    brokerOrderId: "9002",
+    symbol: "BTCUSDT",
+    side: "SELL",
     type: "LIMIT",
-price: "102.75",
-quantity: "0.4",
-status: "FILLED",
+    price: "102.75",
+    quantity: "0.4",
+    status: "FILLED",
   })
   records[5] = record("execution.fill_applied", {
     fillId: "binance:BTCUSDT:trade-2",
-tradeId: "trade-2",
-brokerOrderId: "9002",
+    tradeId: "trade-2",
+    brokerOrderId: "9002",
     clientOrderId: "h-BTCUSDT-sell-1",
-symbol: "BTCUSDT",
-side: "SELL",
+    symbol: "BTCUSDT",
+    side: "SELL",
     price: "102.75",
-quantity: "0.4",
-quoteQuantity: "41.1",
-liquidityRole: "MAKER",
+    quantity: "0.4",
+    quoteQuantity: "41.1",
+    liquidityRole: "MAKER",
     commissions: [],
-commissionStatus: "COMPLETE",
+    commissionStatus: "COMPLETE",
   })
+  return records
+}
+
+function appendSellThroughContinuation({ records }) {
   records.push(harvesterRecord("recovery.cycle_not_completed", {
     symbol: "BTCUSDT",
-marketId: "binance:BTCUSDT",
+    marketId: "binance:BTCUSDT",
     sellOrderClientId: "h-BTCUSDT-sell-1",
-sellOrderBrokerOrderId: "9002",
+    sellOrderBrokerOrderId: "9002",
     outcome: "CONTINUE_SELL_THROUGH",
-reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+    reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
     realizedNetProfit: "-8.9",
-activeQuantity: "0.0996",
-keepQuantity: "0.01",
-minProfit: "0.01",
+    activeQuantity: "0.0996",
+    keepQuantity: "0.01",
+    minProfit: "0.01",
   }))
+}
+
+function appendSecondSellThroughOrder({ records }) {
   records.push(record("order.submission_requested", {
     clientOrderId: "h-BTCUSDT-sell-2",
-symbol: "BTCUSDT",
-side: "SELL",
-type: "LIMIT",
+    symbol: "BTCUSDT",
+    side: "SELL",
+    type: "LIMIT",
     price: "102.75",
-quantity: "0.0896",
-status: "PENDING",
+    quantity: "0.0896",
+    status: "PENDING",
   }))
   records.push(record("order.submitted", {
     clientOrderId: "h-BTCUSDT-sell-2",
-brokerOrderId: "9003",
-symbol: "BTCUSDT",
-side: "SELL",
+    brokerOrderId: "9003",
+    symbol: "BTCUSDT",
+    side: "SELL",
     type: "LIMIT",
-price: "102.75",
-quantity: "0.0896",
-status: "FILLED",
+    price: "102.75",
+    quantity: "0.0896",
+    status: "FILLED",
   }))
   records.push(record("execution.fill_applied", {
     fillId: "binance:BTCUSDT:trade-3",
-tradeId: "trade-3",
-brokerOrderId: "9003",
+    tradeId: "trade-3",
+    brokerOrderId: "9003",
     clientOrderId: "h-BTCUSDT-sell-2",
-symbol: "BTCUSDT",
-side: "SELL",
+    symbol: "BTCUSDT",
+    side: "SELL",
     price: "102.75",
-quantity: "0.0896",
-quoteQuantity: "9.2088",
-liquidityRole: "MAKER",
+    quantity: "0.0896",
+    quoteQuantity: "9.2088",
+    liquidityRole: "MAKER",
     commissions: [],
-commissionStatus: "COMPLETE",
+    commissionStatus: "COMPLETE",
   }))
   records.push(record("recovery.cycle_completed", {
     symbol: "BTCUSDT",
-marketId: "binance:BTCUSDT",
-freeQuantity: "0.01",
+    marketId: "binance:BTCUSDT",
+    freeQuantity: "0.01",
     keepQuantity: "0.01",
-minProfit: "0.01",
-realizedNetProfit: "0.3088",
+    minProfit: "0.01",
+    realizedNetProfit: "0.3088",
   }))
+}
 
+function createSellThroughRecoveryRecords() {
+  const records = createFirstSellThroughRecords()
+  appendSellThroughContinuation({ records })
+  appendSecondSellThroughOrder({ records })
+  return records
+}
+
+test("allows another fully filled SELL only after the prior SELL has an explicit continue-sell-through outcome", () => {
+  const records = createSellThroughRecoveryRecords()
   const result = projectHarvesterJournalRecovery({ records })
   assert.equal(result.ok, true)
   assert.equal(result.data.recoveryCycleEvaluations.length, 1)
@@ -2175,7 +2233,6 @@ realizedNetProfit: "0.3088",
   assert.equal(result.data.recoveryCycles.length, 1)
   assert.equal(result.data.recoveryCycles[0].completedOrderClientId, "h-BTCUSDT-sell-2")
 })
-
 test("restores a BLOCKED cycle evaluation as a market pause", () => {
   const records = completedCycleRecords().slice(0, 6)
   records.push(harvesterRecord("recovery.cycle_not_completed", {
