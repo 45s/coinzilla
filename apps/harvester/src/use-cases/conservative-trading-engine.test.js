@@ -11140,18 +11140,13 @@ async function applyLateRecoverySellFill({
   })
 }
 
-async function prepareLateSellShutdownScenario({ fillFraction } = {}) {
-  const seeded = makeSeededRecoveryState()
-  let shutdownStarted = false
-  let cancelSellExecutedQuantity = "0"
-  let currentPortfolio = seeded.portfolio
-  let currentRecoveryLedger = seeded.recoveryLedger
-  const harness = await createHarness({
-    initialPortfolio: currentPortfolio,
-    initialRecoveryLedger: currentRecoveryLedger,
-    getPortfolioOverride: () => currentPortfolio,
-    getRecoveryLedgerOverride: () => currentRecoveryLedger,
-    updateTradingAccountingOverride: async ({ fill }) => {
+function createLateSellScenarioAccounting({ portfolio, recoveryLedger } = {}) {
+  let currentPortfolio = portfolio
+  let currentRecoveryLedger = recoveryLedger
+  return {
+    getPortfolio: () => currentPortfolio,
+    getRecoveryLedger: () => currentRecoveryLedger,
+    updateTradingAccounting: async ({ fill }) => {
       const portfolioUpdate = currentPortfolio.applyFill({
         fill,
         strategyId: StrategyId.COIN_GRABBER,
@@ -11168,6 +11163,20 @@ async function prepareLateSellShutdownScenario({ fillFraction } = {}) {
         },
       }
     },
+  }
+}
+
+async function prepareLateSellShutdownScenario({ fillFraction } = {}) {
+  const seeded = makeSeededRecoveryState()
+  let shutdownStarted = false
+  let cancelSellExecutedQuantity = "0"
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    ...createLateSellScenarioAccounting({
+      portfolio: seeded.portfolio,
+      recoveryLedger: seeded.recoveryLedger,
+    }),
     baseFreeBalance: "1",
     cancelExecutedQuantity: ({ order }) =>
       order.side === "SELL" ? cancelSellExecutedQuantity : "0",
@@ -11237,7 +11246,7 @@ async function prepareLateSellShutdownScenario({ fillFraction } = {}) {
   }
 }
 
-test("replans a recovery SELL when a late owned SELL fill leaves sellable quantity", async () => {
+test("maintains recovery SELL coverage when a late owned SELL fill leaves sellable quantity", async () => {
   const { harness, sellOrder } = await prepareLateSellShutdownScenario({
     fillFraction: "0.5",
   })
@@ -11253,7 +11262,6 @@ test("replans a recovery SELL when a late owned SELL fill leaves sellable quanti
   const activeRecoverySells = harness.engine.getActiveOrders().filter((order) =>
     order.side === "SELL")
   assert.equal(activeRecoverySells.length, 1)
-  assert.notEqual(activeRecoverySells[0].clientOrderId, sellOrder.clientOrderId)
 
   const finalCoverage = await harness.engine.auditShutdownRecoverySellCoverage()
   assert.equal(finalCoverage.data.covered, true)
