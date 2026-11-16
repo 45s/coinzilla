@@ -634,7 +634,7 @@ export function parseTelegramOperatorCommand(text, { botUsername } = {}) {
 }
 
 
-function buildNavigationKeyboard({ page = "home", markets = [], marketAction } = {}) {
+function createNavigationKeyboard({ page = "home", markets = [], marketAction } = {}) {
   const rows = [
     [{ text: "Status", callback_data: "cc:nav:status" }, { text: "Markets", callback_data: "cc:nav:markets" }],
     [{ text: "Positions", callback_data: "cc:nav:positions" }, { text: "Orders", callback_data: "cc:nav:orders" }],
@@ -1183,8 +1183,9 @@ export function createTelegramOperatorAdapter({
     const callApi = createTelegramCallApi({ botToken, fetchImpl })
   const pendingConfirmations = new Map()
   const CONFIRMATION_TTL_MS = 5 * 60 * 1000
+  const buildNavigationKeyboard = createNavigationKeyboard
   const diagnostics = createTelegramOperatorDiagnostics({ logger, botToken })
-  const logStage = ({ interaction, message, stage, level = "debug", fields = {} }) => {
+  const logStage = ({ interaction, message, stage, level = "info", fields = {} }) => {
     interaction.stage = stage
     diagnostics.log({
       interaction,

@@ -1511,6 +1511,7 @@ test("does not report a resume when the application confirms no operator pause e
     },
     logger: {
       debug: entry => entries.push(entry),
+      debug: entry => entries.push({ ...entry, loggedAtLevel: "debug" }),
       info: entry => entries.push({ ...entry, loggedAtLevel: "info" }),
       error: entry => entries.push(entry),
     },
@@ -1518,6 +1519,8 @@ test("does not report a resume when the application confirms no operator pause e
   assert.match(result.sentMessages[0].text, /is not operator-paused/)
   assert.match(result.sentMessages[0].text, /No state change/)
   assert.doesNotMatch(result.sentMessages[0].text, /^Resumed LINKUSDT/)
+  const updateReceived = entries.find(entry => entry.message === "Telegram update RECEIVED")
+  assert.equal(updateReceived?.loggedAtLevel, "info")
   const completion = entries.find(entry => entry.message === "Telegram application operation COMPLETED")
   assert.equal(completion?.applicationOperationCompleted, true)
   assert.equal(completion?.stateChanged, false)
