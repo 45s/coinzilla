@@ -1349,8 +1349,10 @@ function createMarketEventOperations({ context } = {}) {
         recoveryMode,
       })
     } })
-  context.evaluateLatest = ({ symbol } = {}) =>
-    context.runTransition({ task: () => context.evaluateLatestTransition({ symbol }) })
+  context.evaluateLatest = ({ symbol, shutdownRecoveryOnly = false } = {}) =>
+    context.runTransition({
+      task: () => context.evaluateLatestTransition({ symbol, shutdownRecoveryOnly }),
+    })
 }
 
 function createShutdownSafetyOperations({ context } = {}) {

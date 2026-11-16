@@ -133,11 +133,9 @@ function dispatchAcceptedMarketPriceTransition({
 } = {}) {
   const { symbol, price, metadata } = transition
   if (state.shutdownBuyGate === true) {
-    return toResult({
-      data: {
-        skipped: true,
-        reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
-      },
+    return evaluateLatestTransition({
+      symbol,
+      shutdownRecoveryOnly: true,
     })
   }
   if (!canTrade({ symbol }) || state.paused.has(symbol)) {
