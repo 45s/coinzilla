@@ -54,9 +54,6 @@ function normalizeOrderRows({ value }) {
   if (Array.isArray(value)) {
     return value
   }
-  if (value === null || value === undefined) {
-    return []
-  }
   if (typeof value === "object" && !Array.isArray(value) && value.orderId !== undefined) {
     return [value]
   }
