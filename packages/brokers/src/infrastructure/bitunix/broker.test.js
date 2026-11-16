@@ -328,6 +328,30 @@ test("Bitunix Spot fill lookup rejects undocumented array matching-order respons
   assert.match(result.errors[0].message, /matching-order response must be an object/i)
 })
 
+test("Bitunix Spot fill lookup stays unsupported until execution semantics are proven", async () => {
+  const { broker, calls } = createFillLookupBroker({
+    dealVolume: "0.5",
+    deals: {
+      id: "trade-1",
+      volume: "0.5",
+      price: "10",
+      fee: "0.001",
+      feeCoin: "BTC",
+      role: "1",
+      ctime: "2026-11-15T12:00:01Z",
+    },
+  })
+
+  const result = await broker.getFills({
+    symbol: "BTCUSDT",
+    orderId: "123",
+  })
+
+  assert.equal(result.ok, false, "unproven matching-order semantics cannot be exposed as canonical fills")
+  assert.match(result.errors[0].message, /not supported safely.*quantity denomination.*execution completeness/i)
+  assert.equal(calls.length, 0, "unsupported fill lookup must not issue partial or misleading reads")
+})
+
 test("Bitunix Spot broker never submits or cancels orders without safe identity and stream guarantees", async () => {
   const { broker, calls } = createBroker()
 
