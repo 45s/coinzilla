@@ -10,79 +10,75 @@ import { createLegacyPosition } from "../domain/strategies/recovery-seller/legac
 
 const TERMINAL_ORDER_STATUSES = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED"])
 
-function assertLegacyPositionRecord(record) {
-  if (!record || typeof record !== "object" || Array.isArray(record) ||
-      !(record.market instanceof Market) ||
-      !record.position || typeof record.position !== "object" ||
-      !record.accounting || typeof record.accounting !== "object") {
-    throw new TypeError("Recovery Seller initialLegacyPositions must contain market, position and accounting records")
-  }
+function assertLegacyPositionAmounts(position) {
   for (const field of ["invested", "originalQuantity", "averageCost", "remainingQuantity"]) {
     assertDecimalString({
-      value: record.position[field],
+      value: position[field],
       field: `legacyPosition.${field}`,
     })
   }
   for (const field of ["invested", "originalQuantity", "averageCost"]) {
     if (compareDecimal({
-      left: record.position[field],
+      left: position[field],
       right: "0",
     }) <= 0) {
       throw new RangeError(`legacyPosition.${field} must be greater than zero`)
     }
   }
   if (compareDecimal({
-    left: record.position.remainingQuantity,
+    left: position.remainingQuantity,
     right: "0",
   }) < 0 || compareDecimal({
-    left: record.position.remainingQuantity,
-    right: record.position.originalQuantity,
+    left: position.remainingQuantity,
+    right: position.originalQuantity,
   }) > 0) {
     throw new RangeError("Recovery Seller legacy remaining quantity must be within its original authorized quantity")
   }
   const originalPosition = createLegacyPosition({
-    invested: record.position.invested,
-    quantity: record.position.originalQuantity,
+    invested: position.invested,
+    quantity: position.originalQuantity,
   })
   if (compareDecimal({
-    left: record.position.averageCost,
+    left: position.averageCost,
     right: originalPosition.averageCost,
   }) !== 0) {
     throw new RangeError("Recovery Seller legacy average cost must remain the original invested/quantity basis")
   }
+}
 
+function assertLegacyAccountingState(accounting) {
   for (const field of ["realizedQuoteProceeds", "realizedCostBasis", "realizedProfit"]) {
     assertDecimalString({
-      value: record.accounting[field],
+      value: accounting[field],
       field: `legacyAccounting.${field}`,
     })
   }
-  if (!Array.isArray(record.accounting.appliedFillIds) ||
-      !Array.isArray(record.accounting.appliedFillFingerprints) ||
-      record.accounting.appliedFillIds.length !== record.accounting.appliedFillFingerprints.length) {
+  if (!Array.isArray(accounting.appliedFillIds) ||
+      !Array.isArray(accounting.appliedFillFingerprints) ||
+      accounting.appliedFillIds.length !== accounting.appliedFillFingerprints.length) {
     throw new TypeError("Recovery Seller legacy Fill identity history is invalid")
   }
   if (compareDecimal({
-    left: record.accounting.realizedQuoteProceeds,
+    left: accounting.realizedQuoteProceeds,
     right: "0",
   }) < 0 || compareDecimal({
-    left: record.accounting.realizedCostBasis,
+    left: accounting.realizedCostBasis,
     right: "0",
   }) < 0) {
     throw new RangeError("Recovery Seller legacy proceeds and cost basis must be non-negative")
   }
   const expectedProfit = subtractDecimal({
-    left: record.accounting.realizedQuoteProceeds,
-    right: record.accounting.realizedCostBasis,
+    left: accounting.realizedQuoteProceeds,
+    right: accounting.realizedCostBasis,
   })
   if (compareDecimal({
-    left: record.accounting.realizedProfit,
+    left: accounting.realizedProfit,
     right: expectedProfit,
   }) !== 0) {
     throw new RangeError("Recovery Seller legacy realized profit does not match its proceeds and cost basis")
   }
   const seenFillIds = new Set()
-  for (const [index, item] of record.accounting.appliedFillFingerprints.entries()) {
+  for (const [index, item] of accounting.appliedFillFingerprints.entries()) {
     if (!item ||
         typeof item.id !== "string" ||
         !item.id.trim() ||
@@ -90,12 +86,23 @@ function assertLegacyPositionRecord(record) {
         !item.fillFingerprint.trim() ||
         typeof item.allocationFingerprint !== "string" ||
         !item.allocationFingerprint.trim() ||
-        item.id !== record.accounting.appliedFillIds[index] ||
+        item.id !== accounting.appliedFillIds[index] ||
         seenFillIds.has(item.id)) {
       throw new TypeError("Recovery Seller legacy Fill identity history is invalid")
     }
     seenFillIds.add(item.id)
   }
+}
+
+function assertLegacyPositionRecord(record) {
+  if (!record || typeof record !== "object" || Array.isArray(record) ||
+      !(record.market instanceof Market) ||
+      !record.position || typeof record.position !== "object" ||
+      !record.accounting || typeof record.accounting !== "object") {
+    throw new TypeError("Recovery Seller initialLegacyPositions must contain market, position and accounting records")
+  }
+  assertLegacyPositionAmounts(record.position)
+  assertLegacyAccountingState(record.accounting)
 }
 
 function createLegacyPositionMap(records) {
