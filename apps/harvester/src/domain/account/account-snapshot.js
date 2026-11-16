@@ -6,16 +6,18 @@ function createBaselineMap({ records = [], field, allowNegative = false } = {}) 
   if (!Array.isArray(records) || records.some((item) =>
     !item || typeof item.assetId !== "string" || !item.assetId.trim()
   )) {
-    throw new TypeError("AccountSnapshot." + field + " must contain assetId/amount records")
+    throw new TypeError(`AccountSnapshot.${  field  } must contain assetId/amount records`)
   }
   const values = new Map()
   for (const item of records) {
-    assertDecimalString({ value: item.amount, field: field + ".amount" })
-    if (!allowNegative && compareDecimal({ left: item.amount, right: "0" }) < 0) {
-      throw new RangeError("AccountSnapshot." + field + ".amount must be non-negative")
+    assertDecimalString({ value: item.amount,
+field: `${field  }.amount` })
+    if (!allowNegative && compareDecimal({ left: item.amount,
+right: "0" }) < 0) {
+      throw new RangeError(`AccountSnapshot.${  field  }.amount must be non-negative`)
     }
     if (values.has(item.assetId)) {
-      throw new TypeError("AccountSnapshot " + field + " contains duplicate asset " + item.assetId)
+      throw new TypeError(`AccountSnapshot ${  field  } contains duplicate asset ${  item.assetId}`)
     }
     values.set(item.assetId, item.amount)
   }
@@ -58,11 +60,13 @@ export class AccountSnapshot {
     const balancesByAssetId = new Map()
     for (const balance of balances) {
       if (balancesByAssetId.has(balance.asset.id)) {
-        throw new TypeError("AccountSnapshot contains duplicate asset " + balance.asset.code)
+        throw new TypeError(`AccountSnapshot contains duplicate asset ${  balance.asset.code}`)
       }
       if (
-        compareDecimal({ left: balance.free.amount, right: "0" }) < 0 ||
-        compareDecimal({ left: balance.locked.amount, right: "0" }) < 0
+        compareDecimal({ left: balance.free.amount,
+right: "0" }) < 0 ||
+        compareDecimal({ left: balance.locked.amount,
+right: "0" }) < 0
       ) {
         throw new RangeError("AccountSnapshot balances cannot be negative")
       }

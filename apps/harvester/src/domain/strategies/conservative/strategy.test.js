@@ -1,6 +1,6 @@
 import { StrategyId } from "../strategy-ids.js"
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest("[strategy.test.js] " + name, ...args)
+const test = (...args) => nodeTest(`[strategy.test.js] ${  args[0]}`, ...args.slice(1))
 import assert from "node:assert/strict"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../../portfolio/portfolio.js"
@@ -8,18 +8,31 @@ import { RecoveryLedger } from "./recovery-ledger.js"
 import { evaluateConservativeStrategy } from "./strategy.js"
 import { evaluateRecoveryCompletion } from "./recovery-completion.js"
 
-const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
-const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({ id: "asset:DOGE",
+code: "DOGE" })
+const quoteAsset = new Asset({ id: "asset:USDT",
+code: "USDT" })
+const market = new Market({ venue: "binance",
+symbol: "DOGEUSDT",
+baseAsset,
+quoteAsset })
 const marketMetadata = {
   market,
   orderType: "LIMIT_MAKER",
   tradingRules: {
     constraints: [
-      { type: "PRICE_INCREMENT", status: "SUPPORTED", value: { amount: "0.001" } },
-      { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: { amount: "1" } },
-      { type: "MIN_QUANTITY", status: "SUPPORTED", value: { amount: "1" } },
-      { type: "MIN_NOTIONAL", status: "SUPPORTED", value: { amount: "5" } },
+      { type: "PRICE_INCREMENT",
+status: "SUPPORTED",
+value: { amount: "0.001" } },
+      { type: "QUANTITY_INCREMENT",
+status: "SUPPORTED",
+value: { amount: "1" } },
+      { type: "MIN_QUANTITY",
+status: "SUPPORTED",
+value: { amount: "1" } },
+      { type: "MIN_NOTIONAL",
+status: "SUPPORTED",
+value: { amount: "5" } },
     ],
   },
 }
@@ -32,7 +45,9 @@ const pairConfig = {
   takerPercent: 0.075,
 }
 const settings = {}
-const marketPrice = { symbol: "DOGEUSDT", price: "0.100", timestamp: 100 }
+const marketPrice = { symbol: "DOGEUSDT",
+price: "0.100",
+timestamp: 100 }
 
 function makeBoughtState({ quoteCommission = "0" } = {}) {
   const fill = new Fill({
@@ -40,17 +55,209 @@ function makeBoughtState({ quoteCommission = "0" } = {}) {
     brokerOrderId: "order-1",
     market,
     side: "BUY",
-    price: new Money({ amount: "0.1", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "100", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+    price: new Money({ amount: "0.1",
+asset: quoteAsset }),
+    quantity: new Quantity({ amount: "100",
+asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "10",
+asset: quoteAsset }),
     commissions: quoteCommission === "0" ? [] : [
-      new Commission({ amount: new Money({ amount: quoteCommission, asset: quoteAsset }) }),
+      new Commission({ amount: new Money({ amount: quoteCommission,
+asset: quoteAsset }) }),
     ],
     commissionStatus: "COMPLETE",
   })
-  const portfolio = new Portfolio().applyFill({ fill, strategyId: StrategyId.COIN_GRABBER }).portfolio
-  const recoveryLedger = RecoveryLedger.empty({ market }).applyFill({ fill, strategyId: StrategyId.COIN_GRABBER }).ledger
-  return { portfolio, recoveryLedger }
+  const {portfolio} = new Portfolio().applyFill({ fill,
+strategyId: StrategyId.COIN_GRABBER })
+  const recoveryLedger = RecoveryLedger.empty({ market }).applyFill({ fill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
+  return { portfolio,
+recoveryLedger }
+}
+
+function withExchangeRuleOverrides({ rule, quantityIncrement, minimumNotional, includeMinQuantity = true }) {
+  if (rule.type === "QUANTITY_INCREMENT" ||
+      (includeMinQuantity && rule.type === "MIN_QUANTITY")) {
+    return { ...rule,
+value: { amount: quantityIncrement } }
+  }
+  if (rule.type === "MIN_NOTIONAL") {
+    return { ...rule,
+value: { amount: minimumNotional } }
+  }
+  return rule
+}
+
+function createDustMarketMetadata({ market: dustMarket, priceIncrement, quantityIncrement, minQuantity, minNotional }) {
+  return {
+    market: dustMarket,
+    orderType: "LIMIT",
+    tradingRules: {
+      constraints: [
+        { type: "PRICE_INCREMENT",
+status: "SUPPORTED",
+value: { amount: priceIncrement } },
+        { type: "QUANTITY_INCREMENT",
+status: "SUPPORTED",
+value: { amount: quantityIncrement } },
+        { type: "MIN_QUANTITY",
+status: "SUPPORTED",
+value: { amount: minQuantity } },
+        { type: "MIN_NOTIONAL",
+status: "SUPPORTED",
+value: { amount: minNotional } },
+      ],
+    },
+  }
+}
+
+function applyDustFill({ state, market: dustMarket, baseAsset: dustBaseAsset, side, tradeId, brokerOrderId, price, quantity, quoteQuantity, commissionAmount, commissionAsset }) {
+  const fill = new Fill({
+    tradeId,
+    brokerOrderId,
+    market: dustMarket,
+    side,
+    price: new Money({ amount: price,
+asset: quoteAsset }),
+    quantity: new Quantity({ amount: quantity,
+asset: dustBaseAsset }),
+    quoteQuantity: new Money({ amount: quoteQuantity,
+asset: quoteAsset }),
+    commissions: commissionAmount === "0" ? [] : [
+      new Commission({ amount: new Money({ amount: commissionAmount,
+asset: commissionAsset }) }),
+    ],
+    commissionStatus: "COMPLETE",
+  })
+  return {
+    portfolio: state.portfolio.applyFill({
+      fill,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).portfolio,
+    recoveryLedger: state.recoveryLedger.applyFill({
+      fill,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).ledger,
+  }
+}
+
+function createDogeDustScenario() {
+  const dustBaseAsset = new Asset({ id: "asset:DOGE",
+code: "DOGE" })
+  const dustMarket = new Market({ venue: "binance",
+symbol: "DOGEUSDT",
+baseAsset: dustBaseAsset,
+quoteAsset })
+  const metadata = createDustMarketMetadata({
+    market: dustMarket,
+    priceIncrement: "0.00001",
+    quantityIncrement: "1",
+    minQuantity: "1",
+    minNotional: "5",
+  })
+  let state = {
+    portfolio: new Portfolio(),
+    recoveryLedger: RecoveryLedger.empty({ market: dustMarket }),
+  }
+  for (const [tradeId, price, quote] of [
+    ["221733", "0.07157", "28.628"],
+    ["221736", "0.07153", "28.612"],
+    ["221738", "0.07149", "28.596"],
+  ]) {
+    state = applyDustFill({
+      state,
+      market: dustMarket,
+      baseAsset: dustBaseAsset,
+      side: "BUY",
+      tradeId,
+      brokerOrderId: `DOGE-BUY-${tradeId}`,
+      price,
+      quantity: "400",
+      quoteQuantity: quote,
+      commissionAmount: "0.4",
+      commissionAsset: dustBaseAsset,
+    })
+  }
+  for (const [tradeId, quantity, quote, commission] of [
+    ["221990", "278", "19.9743", "0.0199743"],
+    ["221991", "918", "65.9583", "0.0659583"],
+  ]) {
+    state = applyDustFill({
+      state,
+      market: dustMarket,
+      baseAsset: dustBaseAsset,
+      side: "SELL",
+      tradeId,
+      brokerOrderId: "1276698",
+      price: "0.07185",
+      quantity,
+      quoteQuantity: quote,
+      commissionAmount: commission,
+      commissionAsset: quoteAsset,
+    })
+  }
+  return { ...state,
+metadata }
+}
+
+function createZroDustScenario() {
+  const dustBaseAsset = new Asset({ id: "asset:ZRO",
+code: "ZRO" })
+  const dustMarket = new Market({ venue: "binance",
+symbol: "ZROUSDT",
+baseAsset: dustBaseAsset,
+quoteAsset })
+  const metadata = createDustMarketMetadata({
+    market: dustMarket,
+    priceIncrement: "0.001",
+    quantityIncrement: "0.01",
+    minQuantity: "0.01",
+    minNotional: "5",
+  })
+  let state = {
+    portfolio: new Portfolio(),
+    recoveryLedger: RecoveryLedger.empty({ market: dustMarket }),
+  }
+  for (const [tradeId, price, quote] of [
+    ["11658", "1.604", "8.02"],
+    ["11659", "1.603", "8.015"],
+    ["11660", "1.602", "8.01"],
+    ["11661", "1.601", "8.005"],
+    ["11662", "1.6", "8"],
+    ["11663", "1.599", "7.995"],
+    ["11664", "1.598", "7.99"],
+    ["11665", "1.597", "7.985"],
+  ]) {
+    state = applyDustFill({
+      state,
+      market: dustMarket,
+      baseAsset: dustBaseAsset,
+      side: "BUY",
+      tradeId,
+      brokerOrderId: `ZRO-BUY-${tradeId}`,
+      price,
+      quantity: "5",
+      quoteQuantity: quote,
+      commissionAmount: "0.005",
+      commissionAsset: dustBaseAsset,
+    })
+  }
+  state = applyDustFill({
+    state,
+    market: dustMarket,
+    baseAsset: dustBaseAsset,
+    side: "SELL",
+    tradeId: "11666",
+    brokerOrderId: "727904",
+    price: "1.606",
+    quantity: "39.91",
+    quoteQuantity: "64.09546",
+    commissionAmount: "0.06409546",
+    commissionAsset: quoteAsset,
+  })
+  return { ...state,
+metadata,
+market: dustMarket }
 }
 
 test("creates the initial BUY below last traded price and rounds down to tick", () => {
@@ -77,7 +284,8 @@ test("uses the market-specific minimum profit when planning its recovery SELL", 
   const { portfolio, recoveryLedger } = makeBoughtState()
   const decision = evaluateConservativeStrategy({
     marketPrice,
-    pairConfig: { ...pairConfig, minProfit: 0.1 },
+    pairConfig: { ...pairConfig,
+minProfit: 0.1 },
     settings: {},
     portfolio,
     recoveryLedger,
@@ -123,10 +331,16 @@ test("creates a recovery SELL and the next standing BUY from actual filled inven
   assert.equal(decision.actions.length, 2)
   assert.equal(decision.actions.find((action) => action.side === "SELL").purpose, "RECOVERY_SELL")
   assert.deepEqual(decision.actions.map(({ side, price, quantity }) => ({
-    side, price, quantity,
+    side,
+price,
+quantity,
   })), [
-    { side: "SELL", price: "0.102", quantity: "99" },
-    { side: "BUY", price: "0.099", quantity: "100" },
+    { side: "SELL",
+price: "0.102",
+quantity: "99" },
+    { side: "BUY",
+price: "0.099",
+quantity: "100" },
   ])
 })
 
@@ -159,12 +373,12 @@ test("allows the next BUY only after the recovery SELL is acknowledged", () => {
         quantity: "100",
         reason: "NEXT_STANDING_BUY",
       }],
-      "An acknowledged " + status + " recovery SELL may coexist with exactly one next standing BUY.",
+      `An acknowledged ${  status  } recovery SELL may coexist with exactly one next standing BUY.`,
     )
     assert.equal(
       decision.action,
       "PLACE_ORDERS",
-      "The strategy must keep the next BUY eligible after recovery SELL acknowledgement: " + status,
+      `The strategy must keep the next BUY eligible after recovery SELL acknowledgement: ${  status}`,
     )
   }
 })
@@ -180,19 +394,21 @@ test("blocks the next BUY while the recovery SELL acknowledgement is pending or 
       portfolio,
       recoveryLedger,
       marketMetadata,
-      activeOrders: [{ market, side: "SELL", status }],
+      activeOrders: [{ market,
+side: "SELL",
+status }],
       lastBuyPrice: "0.1",
     })
 
     assert.deepEqual(
       decision.actions,
       [],
-      "A " + status + " recovery SELL must not be bypassed by submitting the next standing BUY.",
+      `A ${  status  } recovery SELL must not be bypassed by submitting the next standing BUY.`,
     )
     assert.equal(
       decision.action,
       "NO_ACTION",
-      "The strategy must wait for an acknowledged recovery SELL before enabling the next BUY; current SELL status: " + status,
+      `The strategy must wait for an acknowledged recovery SELL before enabling the next BUY; current SELL status: ${  status}`,
     )
   }
 })
@@ -203,7 +419,8 @@ test("rejects missing exchange increments and invalid strategy context", () => {
     pairConfig,
     settings,
     portfolio: new Portfolio(),
-    marketMetadata: { ...marketMetadata, tradingRules: { constraints: [] } },
+    marketMetadata: { ...marketMetadata,
+tradingRules: { constraints: [] } },
   }), /PRICE_INCREMENT/)
   assert.throws(() => evaluateConservativeStrategy({
     marketPrice,
@@ -217,8 +434,15 @@ test("rejects missing exchange increments and invalid strategy context", () => {
 test("keeps the partial BUY active while continuing recovery SELL planning", () => {
   const { portfolio, recoveryLedger } = makeBoughtState()
   const decision = evaluateConservativeStrategy({
-    marketPrice, pairConfig, settings, portfolio, recoveryLedger, marketMetadata,
-    activeOrders: [{ market, side: "BUY", status: "PARTIALLY_FILLED" }],
+    marketPrice,
+pairConfig,
+settings,
+portfolio,
+recoveryLedger,
+marketMetadata,
+    activeOrders: [{ market,
+side: "BUY",
+status: "PARTIALLY_FILLED" }],
     lastBuyPrice: "0.1",
   })
   assert.equal(decision.actions.some((action) => action.side === "SELL"), true)
@@ -264,7 +488,8 @@ test("respects exact investment-cap equality and blocks the next BUY immediately
   for (const scenario of scenarios) {
     const decision = evaluateConservativeStrategy({
       marketPrice,
-      pairConfig: { ...pairConfig, investment: scenario.investment },
+      pairConfig: { ...pairConfig,
+investment: scenario.investment },
       settings,
       portfolio,
       recoveryLedger,
@@ -275,12 +500,12 @@ test("respects exact investment-cap equality and blocks the next BUY immediately
     assert.deepEqual(
       decision.actions,
       scenario.expectedActions,
-      "The " + scenario.name + " scenario must preserve the recovery SELL and permit a next BUY only when the outstanding 10.00 recovery plus the 9.90 BUY notional fits the configured investment.",
+      `The ${  scenario.name  } scenario must preserve the recovery SELL and permit a next BUY only when the outstanding 10.00 recovery plus the 9.90 BUY notional fits the configured investment.`,
     )
     assert.equal(
       decision.action,
       "PLACE_ORDERS",
-      "The recovery SELL must remain executable even when the configured investment limit blocks the next BUY in the " + scenario.name + " scenario.",
+      `The recovery SELL must remain executable even when the configured investment limit blocks the next BUY in the ${  scenario.name  } scenario.`,
     )
   }
 })
@@ -289,7 +514,9 @@ test("reserves the higher takerPercent for recovery SELL planning when taker is 
   const { portfolio, recoveryLedger } = makeBoughtState()
   const decision = evaluateConservativeStrategy({
     marketPrice,
-    pairConfig: { ...pairConfig, makerPercent: 0.1, takerPercent: 0.2 },
+    pairConfig: { ...pairConfig,
+makerPercent: 0.1,
+takerPercent: 0.2 },
     settings,
     portfolio,
     recoveryLedger,
@@ -299,7 +526,8 @@ test("reserves the higher takerPercent for recovery SELL planning when taker is 
       tradingRules: {
         constraints: marketMetadata.tradingRules.constraints.map((rule) =>
           rule.type === "QUANTITY_INCREMENT"
-            ? { ...rule, value: { amount: "0.1" } }
+            ? { ...rule,
+value: { amount: "0.1" } }
             : rule,
         ),
       },
@@ -340,15 +568,20 @@ function makeProfitableResidualState({
     brokerOrderId: "sell-order-1",
     market,
     side: "SELL",
-    price: new Money({ amount: "0.11", asset: quoteAsset }),
-    quantity: new Quantity({ amount: soldQuantity, asset: baseAsset }),
-    quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+    price: new Money({ amount: "0.11",
+asset: quoteAsset }),
+    quantity: new Quantity({ amount: soldQuantity,
+asset: baseAsset }),
+    quoteQuantity: new Money({ amount: quoteQuantity,
+asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
   return {
-    portfolio: bought.portfolio.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER }).portfolio,
-    recoveryLedger: bought.recoveryLedger.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER }).ledger,
+    portfolio: bought.portfolio.applyFill({ fill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio,
+    recoveryLedger: bought.recoveryLedger.applyFill({ fill,
+strategyId: StrategyId.COIN_GRABBER }).ledger,
   }
 }
 
@@ -364,11 +597,11 @@ test("continues selling residual inventory after cumulative recovery profit is a
       ...marketMetadata,
       tradingRules: {
         constraints: marketMetadata.tradingRules.constraints.map((rule) =>
-          rule.type === "QUANTITY_INCREMENT" || rule.type === "MIN_QUANTITY"
-            ? { ...rule, value: { amount: "0.1" } }
-            : rule.type === "MIN_NOTIONAL"
-              ? { ...rule, value: { amount: "0.05" } }
-              : rule,
+          withExchangeRuleOverrides({
+            rule,
+            quantityIncrement: "0.1",
+            minimumNotional: "0.05",
+          })
         ),
       },
     },
@@ -379,7 +612,9 @@ test("continues selling residual inventory after cumulative recovery profit is a
   assert.equal(recoveryLedger.outstandingRecoveryAmount, "0")
   assert.equal(recoveryLedger.realizedNetProfit, "0.78")
   assert.equal(portfolio.getPosition({ symbol: market.symbol }).baseQuantity.amount, "2")
-  assert.deepEqual({ price: sell.price, quantity: sell.quantity, reason: sell.reason }, {
+  assert.deepEqual({ price: sell.price,
+quantity: sell.quantity,
+reason: sell.reason }, {
     price: "0.1",
     quantity: "1",
     reason: "SELL_RESIDUAL_INVENTORY_ABOVE_KEEP_QUANTITY",
@@ -387,7 +622,8 @@ test("continues selling residual inventory after cumulative recovery profit is a
 })
 
 test("classifies residual quantity below the exchange quantity step instead of submitting an invalid SELL", () => {
-  const { portfolio, recoveryLedger } = makeProfitableResidualState({ soldQuantity: "98.95", quoteQuantity: "10.8845" })
+  const { portfolio, recoveryLedger } = makeProfitableResidualState({ soldQuantity: "98.95",
+quoteQuantity: "10.8845" })
   const decision = evaluateConservativeStrategy({
     marketPrice,
     pairConfig,
@@ -399,7 +635,8 @@ test("classifies residual quantity below the exchange quantity step instead of s
       tradingRules: {
         constraints: marketMetadata.tradingRules.constraints.map((rule) =>
           rule.type === "QUANTITY_INCREMENT"
-            ? { ...rule, value: { amount: "0.1" } }
+            ? { ...rule,
+value: { amount: "0.1" } }
             : rule,
         ),
       },
@@ -418,20 +655,26 @@ test("classifies residual quantity below the exchange quantity step instead of s
 })
 
 test("combines exchange-constrained dust with a later BUY and preserves the full recovery basis", () => {
-  const dustState = makeProfitableResidualState({ soldQuantity: "98.95", quoteQuantity: "10.8845" })
+  const dustState = makeProfitableResidualState({ soldQuantity: "98.95",
+quoteQuantity: "10.8845" })
   const laterBuy = new Fill({
     tradeId: "later-buy-after-dust",
     brokerOrderId: "later-buy-order",
     market,
     side: "BUY",
-    price: new Money({ amount: "0.1", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "100", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+    price: new Money({ amount: "0.1",
+asset: quoteAsset }),
+    quantity: new Quantity({ amount: "100",
+asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "10",
+asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  const portfolio = dustState.portfolio.applyFill({ fill: laterBuy, strategyId: StrategyId.COIN_GRABBER }).portfolio
-  const recoveryLedger = dustState.recoveryLedger.applyFill({ fill: laterBuy, strategyId: StrategyId.COIN_GRABBER }).ledger
+  const {portfolio} = dustState.portfolio.applyFill({ fill: laterBuy,
+strategyId: StrategyId.COIN_GRABBER })
+  const recoveryLedger = dustState.recoveryLedger.applyFill({ fill: laterBuy,
+strategyId: StrategyId.COIN_GRABBER }).ledger
   const position = portfolio.getPosition({ symbol: market.symbol })
 
   assert.equal(position.quantity.amount, "101.05")
@@ -468,7 +711,8 @@ test("classifies residual quantity below MIN_NOTIONAL instead of submitting an i
       tradingRules: {
         constraints: marketMetadata.tradingRules.constraints.map((rule) =>
           rule.type === "QUANTITY_INCREMENT" || rule.type === "MIN_QUANTITY"
-            ? { ...rule, value: { amount: "0.1" } }
+            ? { ...rule,
+value: { amount: "0.1" } }
             : rule,
         ),
       },
@@ -495,15 +739,18 @@ test("does not create a duplicate residual SELL while one is active", () => {
       ...marketMetadata,
       tradingRules: {
         constraints: marketMetadata.tradingRules.constraints.map((rule) =>
-          rule.type === "QUANTITY_INCREMENT"
-            ? { ...rule, value: { amount: "0.1" } }
-            : rule.type === "MIN_NOTIONAL"
-              ? { ...rule, value: { amount: "0.05" } }
-              : rule,
+          withExchangeRuleOverrides({
+            rule,
+            quantityIncrement: "0.1",
+            minimumNotional: "0.05",
+            includeMinQuantity: false,
+          })
         ),
       },
     },
-    activeOrders: [{ market, side: "SELL", status: "OPEN" }],
+    activeOrders: [{ market,
+side: "SELL",
+status: "OPEN" }],
     lastBuyPrice: "0.1",
   })
 
@@ -549,7 +796,8 @@ test("defers a BUY below MIN_NOTIONAL without blocking a valid recovery SELL", (
   const { portfolio, recoveryLedger } = makeBoughtState()
   const decision = evaluateConservativeStrategy({
     marketPrice,
-    pairConfig: { ...pairConfig, orderQuantity: 1 },
+    pairConfig: { ...pairConfig,
+orderQuantity: 1 },
     settings,
     portfolio,
     recoveryLedger,
@@ -572,7 +820,8 @@ test("defers a BUY below MIN_NOTIONAL without blocking a valid recovery SELL", (
 test("defers a BUY below MIN_QUANTITY without emitting an invalid order", () => {
   const decision = evaluateConservativeStrategy({
     marketPrice,
-    pairConfig: { ...pairConfig, orderQuantity: 0.5 },
+    pairConfig: { ...pairConfig,
+orderQuantity: 0.5 },
     settings,
     portfolio: new Portfolio(),
     marketMetadata: {
@@ -580,7 +829,8 @@ test("defers a BUY below MIN_QUANTITY without emitting an invalid order", () => 
       tradingRules: {
         constraints: marketMetadata.tradingRules.constraints.map((rule) =>
           rule.type === "QUANTITY_INCREMENT"
-            ? { ...rule, value: { amount: "0.1" } }
+            ? { ...rule,
+value: { amount: "0.1" } }
             : rule,
         ),
       },
@@ -595,7 +845,8 @@ test("defers a BUY below MIN_QUANTITY without emitting an invalid order", () => 
 test("defers a BUY that rounds to zero at the exchange quantity step", () => {
   const decision = evaluateConservativeStrategy({
     marketPrice,
-    pairConfig: { ...pairConfig, orderQuantity: 0.5 },
+    pairConfig: { ...pairConfig,
+orderQuantity: 0.5 },
     settings,
     portfolio: new Portfolio(),
     marketMetadata,
@@ -615,7 +866,8 @@ test("rejects a RecoveryLedger belonging to a different market", () => {
     venue: "binance",
     symbol: "DOGEUSDC",
     baseAsset,
-    quoteAsset: new Asset({ id: "asset:USDC", code: "USDC" }),
+    quoteAsset: new Asset({ id: "asset:USDC",
+code: "USDC" }),
   })
   assert.throws(() => evaluateConservativeStrategy({
     marketPrice,
@@ -653,13 +905,15 @@ test("caps residual SELL quantity at MAX_QUANTITY and leaves the rest for sell-t
       tradingRules: {
         constraints: [
           ...marketMetadata.tradingRules.constraints.map((rule) =>
-            rule.type === "QUANTITY_INCREMENT" || rule.type === "MIN_QUANTITY"
-              ? { ...rule, value: { amount: "0.1" } }
-              : rule.type === "MIN_NOTIONAL"
-                ? { ...rule, value: { amount: "0.05" } }
-                : rule,
+            withExchangeRuleOverrides({
+              rule,
+              quantityIncrement: "0.1",
+              minimumNotional: "0.05",
+            })
           ),
-          { type: "MAX_QUANTITY", status: "SUPPORTED", value: { amount: "0.5" } },
+          { type: "MAX_QUANTITY",
+status: "SUPPORTED",
+value: { amount: "0.5" } },
         ],
       },
     },
@@ -684,13 +938,15 @@ test("caps residual SELL quantity at MAX_NOTIONAL and leaves the rest for sell-t
       tradingRules: {
         constraints: [
           ...marketMetadata.tradingRules.constraints.map((rule) =>
-            rule.type === "QUANTITY_INCREMENT" || rule.type === "MIN_QUANTITY"
-              ? { ...rule, value: { amount: "0.1" } }
-              : rule.type === "MIN_NOTIONAL"
-                ? { ...rule, value: { amount: "0.05" } }
-                : rule,
+            withExchangeRuleOverrides({
+              rule,
+              quantityIncrement: "0.1",
+              minimumNotional: "0.05",
+            })
           ),
-          { type: "MAX_NOTIONAL", status: "SUPPORTED", value: { amount: "0.06" } },
+          { type: "MAX_NOTIONAL",
+status: "SUPPORTED",
+value: { amount: "0.06" } },
         ],
       },
     },
@@ -716,7 +972,9 @@ test("blocks the next BUY when the required recovery SELL exceeds MAX_PRICE", ()
       tradingRules: {
         constraints: [
           ...marketMetadata.tradingRules.constraints,
-          { type: "MAX_PRICE", status: "SUPPORTED", value: { amount: "0.101" } },
+          { type: "MAX_PRICE",
+status: "SUPPORTED",
+value: { amount: "0.101" } },
         ],
       },
     },
@@ -750,7 +1008,8 @@ test("defers a configured BUY above MAX_QUANTITY without blocking a valid SELL",
   const { portfolio, recoveryLedger } = makeBoughtState()
   const decision = evaluateConservativeStrategy({
     marketPrice,
-    pairConfig: { ...pairConfig, orderQuantity: 100 },
+    pairConfig: { ...pairConfig,
+orderQuantity: 100 },
     settings,
     portfolio,
     recoveryLedger,
@@ -759,7 +1018,9 @@ test("defers a configured BUY above MAX_QUANTITY without blocking a valid SELL",
       tradingRules: {
         constraints: [
           ...marketMetadata.tradingRules.constraints,
-          { type: "MAX_QUANTITY", status: "SUPPORTED", value: { amount: "50" } },
+          { type: "MAX_QUANTITY",
+status: "SUPPORTED",
+value: { amount: "50" } },
         ],
       },
     },
@@ -785,71 +1046,7 @@ test("fails closed rather than inventing a next BUY reference while active inven
 
 
 test("reconciles actual DOGE fills and keeps the 1.8 DOGE excess as MIN_NOTIONAL dust", () => {
-  const dogeBase = new Asset({ id: "asset:DOGE", code: "DOGE" })
-  const dogeMarket = new Market({
-    venue: "binance",
-    symbol: "DOGEUSDT",
-    baseAsset: dogeBase,
-    quoteAsset,
-  })
-  const metadata = {
-    market: dogeMarket,
-    orderType: "LIMIT",
-    tradingRules: {
-      constraints: [
-        { type: "PRICE_INCREMENT", status: "SUPPORTED", value: { amount: "0.00001" } },
-        { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: { amount: "1" } },
-        { type: "MIN_QUANTITY", status: "SUPPORTED", value: { amount: "1" } },
-        { type: "MIN_NOTIONAL", status: "SUPPORTED", value: { amount: "5" } },
-      ],
-    },
-  }
-  let portfolio = new Portfolio()
-  let recoveryLedger = RecoveryLedger.empty({ market: dogeMarket })
-  const apply = (fill) => {
-    portfolio = portfolio.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER }).portfolio
-    recoveryLedger = recoveryLedger.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER }).ledger
-  }
-
-  for (const [tradeId, price, quote] of [
-    ["221733", "0.07157", "28.628"],
-    ["221736", "0.07153", "28.612"],
-    ["221738", "0.07149", "28.596"],
-  ]) {
-    apply(new Fill({
-      tradeId,
-      brokerOrderId: "DOGE-BUY-" + tradeId,
-      market: dogeMarket,
-      side: "BUY",
-      price: new Money({ amount: price, asset: quoteAsset }),
-      quantity: new Quantity({ amount: "400", asset: dogeBase }),
-      quoteQuantity: new Money({ amount: quote, asset: quoteAsset }),
-      commissions: [
-        new Commission({ amount: new Money({ amount: "0.4", asset: dogeBase }) }),
-      ],
-      commissionStatus: "COMPLETE",
-    }))
-  }
-
-  for (const [tradeId, quantity, quote, commission] of [
-    ["221990", "278", "19.9743", "0.0199743"],
-    ["221991", "918", "65.9583", "0.0659583"],
-  ]) {
-    apply(new Fill({
-      tradeId,
-      brokerOrderId: "1276698",
-      market: dogeMarket,
-      side: "SELL",
-      price: new Money({ amount: "0.07185", asset: quoteAsset }),
-      quantity: new Quantity({ amount: quantity, asset: dogeBase }),
-      quoteQuantity: new Money({ amount: quote, asset: quoteAsset }),
-      commissions: [
-        new Commission({ amount: new Money({ amount: commission, asset: quoteAsset }) }),
-      ],
-      commissionStatus: "COMPLETE",
-    }))
-  }
-
+  const { portfolio, recoveryLedger, metadata } = createDogeDustScenario()
   const position = portfolio.getPosition({ symbol: "DOGEUSDT" })
   assert.equal(position.quantity.amount, "2.8", "After the three DOGE BUY fills and SELL recovery, active quantity must match the retained strategy position.")
   assert.equal(position.spent.amount, "85.836", "The three DOGE BUY fills must accumulate their exact quote notional in Position cost basis.")
@@ -869,7 +1066,9 @@ test("reconciles actual DOGE fills and keeps the 1.8 DOGE excess as MIN_NOTIONAL
   assert.equal(completion.freeQuantity, "0", "No DOGE quantity may be allocated to free inventory before sell-through completes.")
 
   const decision = evaluateConservativeStrategy({
-    marketPrice: { symbol: "DOGEUSDT", price: "0.07185", timestamp: 100 },
+    marketPrice: { symbol: "DOGEUSDT",
+price: "0.07185",
+timestamp: 100 },
     pairConfig: {
       priceStepPercent: 0.05,
       orderQuantity: 400,
@@ -893,71 +1092,7 @@ test("reconciles actual DOGE fills and keeps the 1.8 DOGE excess as MIN_NOTIONAL
 })
 
 test("reconciles actual ZRO fills and keeps the 0.04 excess as MIN_NOTIONAL dust", () => {
-  const zroBase = new Asset({ id: "asset:ZRO", code: "ZRO" })
-  const zroMarket = new Market({
-    venue: "binance",
-    symbol: "ZROUSDT",
-    baseAsset: zroBase,
-    quoteAsset,
-  })
-  const metadata = {
-    market: zroMarket,
-    orderType: "LIMIT",
-    tradingRules: {
-      constraints: [
-        { type: "PRICE_INCREMENT", status: "SUPPORTED", value: { amount: "0.001" } },
-        { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: { amount: "0.01" } },
-        { type: "MIN_QUANTITY", status: "SUPPORTED", value: { amount: "0.01" } },
-        { type: "MIN_NOTIONAL", status: "SUPPORTED", value: { amount: "5" } },
-      ],
-    },
-  }
-  let portfolio = new Portfolio()
-  let recoveryLedger = RecoveryLedger.empty({ market: zroMarket })
-  const apply = (fill) => {
-    portfolio = portfolio.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER }).portfolio
-    recoveryLedger = recoveryLedger.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER }).ledger
-  }
-
-  for (const [tradeId, price, quote] of [
-    ["11658", "1.604", "8.02"],
-    ["11659", "1.603", "8.015"],
-    ["11660", "1.602", "8.01"],
-    ["11661", "1.601", "8.005"],
-    ["11662", "1.6", "8"],
-    ["11663", "1.599", "7.995"],
-    ["11664", "1.598", "7.99"],
-    ["11665", "1.597", "7.985"],
-  ]) {
-    apply(new Fill({
-      tradeId,
-      brokerOrderId: "ZRO-BUY-" + tradeId,
-      market: zroMarket,
-      side: "BUY",
-      price: new Money({ amount: price, asset: quoteAsset }),
-      quantity: new Quantity({ amount: "5", asset: zroBase }),
-      quoteQuantity: new Money({ amount: quote, asset: quoteAsset }),
-      commissions: [
-        new Commission({ amount: new Money({ amount: "0.005", asset: zroBase }) }),
-      ],
-      commissionStatus: "COMPLETE",
-    }))
-  }
-
-  apply(new Fill({
-    tradeId: "11666",
-    brokerOrderId: "727904",
-    market: zroMarket,
-    side: "SELL",
-    price: new Money({ amount: "1.606", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "39.91", asset: zroBase }),
-    quoteQuantity: new Money({ amount: "64.09546", asset: quoteAsset }),
-    commissions: [
-      new Commission({ amount: new Money({ amount: "0.06409546", asset: quoteAsset }) }),
-    ],
-    commissionStatus: "COMPLETE",
-  }))
-
+  const { portfolio, recoveryLedger, metadata, market: dustMarket } = createZroDustScenario()
   const position = portfolio.getPosition({ symbol: "ZROUSDT" })
   assert.equal(position.quantity.amount, "0.05", "After the eight ZRO BUY fills and SELL recovery, active quantity must match the retained strategy position.")
   assert.equal(position.spent.amount, "64.02", "The eight ZRO BUY fills must accumulate their exact quote notional in Position cost basis.")
@@ -977,7 +1112,9 @@ test("reconciles actual ZRO fills and keeps the 0.04 excess as MIN_NOTIONAL dust
   assert.equal(completion.freeQuantity, "0", "No ZRO quantity may be allocated to free inventory before sell-through completes.")
 
   const decision = evaluateConservativeStrategy({
-    marketPrice: { symbol: "ZROUSDT", price: "1.606", timestamp: 100 },
+    marketPrice: { symbol: "ZROUSDT",
+price: "1.606",
+timestamp: 100 },
     pairConfig: {
       priceStepPercent: 0.05,
       orderQuantity: 5,
@@ -990,7 +1127,9 @@ test("reconciles actual ZRO fills and keeps the 0.04 excess as MIN_NOTIONAL dust
     portfolio,
     recoveryLedger,
     marketMetadata: metadata,
-    activeOrders: [{ market: zroMarket, side: "BUY", status: "OPEN" }],
+    activeOrders: [{ market: dustMarket,
+side: "BUY",
+status: "OPEN" }],
   })
   assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
   assert.equal(decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST", "The ZRO residual must be classified as exchange-constrained dust.")

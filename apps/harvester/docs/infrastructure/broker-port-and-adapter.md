@@ -53,7 +53,7 @@ Do not mirror every `CoreBroker` method automatically. Add a capability only whe
 | Connect / disconnect | `connect()` / `disconnect()` |
 | Place order | `createOrder(orderInput)` |
 | Cancel order | `cancelOrder({ symbol, orderId })` |
-| Read open orders | `getOpenOrders({ symbol })` |
+| Read open orders | `getOpenOrders({ symbol? } = {})`; omit `symbol` for an account-wide snapshot |
 | Read fills | `getFills(input)` |
 | Read canonical order history | `getCanonicalOrderHistory({ symbol, orderId })` |
 | Account snapshot | `getAccountSnapshot()` |
@@ -65,7 +65,7 @@ Do not mirror every `CoreBroker` method automatically. Add a capability only whe
 
 Query/order methods generally return `{ ok, data }` or `{ ok: false, errors }` using the shared result convention. Connection lifecycle methods throw on failure. Consult the package source/tests for exact input/output contracts.
 
-`getOpenOrders({ symbol })` currently returns the shared legacy `Order[]` shape, not `CanonicalOrder[]`. Its numeric `quantity` and `price` fields are not suitable for exact financial comparisons. Reconciliation uses only its string broker `id`, symbol/side/type, and the exact string `originalQuantity` / `executedQuantity` metadata preserved by the broker adapter; canonical status and financial execution facts come from `getCanonicalOrderHistory()` and `getFills()`.
+`getOpenOrders({ symbol? } = {})` returns the shared legacy `Order[]` shape, not `CanonicalOrder[]`. An omitted options object and an explicit empty object both mean account-wide; a supplied `symbol` scopes the query to that market. The Harvester adapter must default its optional options argument to `{}` because bootstrap and read-only operator queries intentionally call `getOpenOrders()` for account-wide visibility. Its numeric `quantity` and `price` fields are not suitable for exact financial comparisons. Reconciliation uses only its string broker `id`, symbol/side/type, and the exact string `originalQuantity` / `executedQuantity` metadata preserved by the broker adapter; canonical status and financial execution facts come from `getCanonicalOrderHistory()` and `getFills()`.
 
 ## Candle market-data capability — issue #1016
 
@@ -99,7 +99,7 @@ export const createBinanceBrokerAdapter = ({ config, logger }) => {
     disconnect: () => client.disconnect(),
     placeOrder: ({ order }) => client.createOrder(order),
     cancelOrder: ({ symbol, orderId }) => client.cancelOrder({ symbol, orderId }),
-    getOpenOrders: ({ symbol }) => client.getOpenOrders({ symbol }),
+    getOpenOrders: (options = {}) => client.getOpenOrders(options),
     getFills: ({ symbol, ...query }) => client.getFills({ symbol, ...query }),
     getCanonicalOrderHistory: ({ symbol, orderId }) => client.getCanonicalOrderHistory({ symbol, orderId }),
     getAccountSnapshot: () => client.getAccountSnapshot(),

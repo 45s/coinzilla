@@ -23,26 +23,33 @@ export function calculateInitialBuyPrice({
   priceStepPercent,
   priceTickSize,
 } = {}) {
-  assertDecimalString({ value: lastTradePrice, field: "lastTradePrice" })
-  assertDecimalString({ value: priceStepPercent, field: "priceStepPercent" })
-  assertDecimalString({ value: priceTickSize, field: "priceTickSize" })
+  assertDecimalString({ value: lastTradePrice,
+field: "lastTradePrice" })
+  assertDecimalString({ value: priceStepPercent,
+field: "priceStepPercent" })
+  assertDecimalString({ value: priceTickSize,
+field: "priceTickSize" })
 
-  if (compareDecimal({ left: lastTradePrice, right: "0" }) <= 0) {
+  if (compareDecimal({ left: lastTradePrice,
+right: "0" }) <= 0) {
     throw new RangeError("lastTradePrice must be greater than zero")
   }
   if (
-    compareDecimal({ left: priceStepPercent, right: "0" }) <= 0 ||
-    compareDecimal({ left: priceStepPercent, right: "100" }) >= 0
+    compareDecimal({ left: priceStepPercent,
+right: "0" }) <= 0 ||
+    compareDecimal({ left: priceStepPercent,
+right: "100" }) >= 0
   ) {
     throw new RangeError("priceStepPercent must be greater than zero and less than 100")
   }
-  if (compareDecimal({ left: priceTickSize, right: "0" }) <= 0) {
+  if (compareDecimal({ left: priceTickSize,
+right: "0" }) <= 0) {
     throw new RangeError("priceTickSize must be greater than zero")
   }
 
   const unroundedPrice = applyPercentageChange({
     value: lastTradePrice,
-    percent: "-" + priceStepPercent,
+    percent: `-${  priceStepPercent}`,
   })
   const price = roundDecimalToIncrement({
     value: unroundedPrice,
@@ -50,7 +57,8 @@ export function calculateInitialBuyPrice({
     direction: "down",
   })
 
-  if (compareDecimal({ left: price, right: "0" }) <= 0) {
+  if (compareDecimal({ left: price,
+right: "0" }) <= 0) {
     throw new RangeError("Calculated initial BUY price is not positive after tick rounding")
   }
 
