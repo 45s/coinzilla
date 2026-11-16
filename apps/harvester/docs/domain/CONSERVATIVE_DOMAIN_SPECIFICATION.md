@@ -221,7 +221,7 @@ The shutdown sequence is:
    - all accepted user-data work and all BUY/SELL fills and actual commissions are reconciled, with no accounting or order-state ambiguity;
    - if recovery is required, the recovery SELL is calculated from the final Position and RecoveryLedger, including actual commissions and the full recovery target, and the final owned SELL is acknowledged and verified against canonical Binance order state for required quantity and financial coverage; and
    - any old recovery SELL that no longer matches the final plan has a confirmed terminal state and complete raced-fill reconciliation before a replacement is submitted.
-   
+
    If no recovery SELL is required, verify that there is no remaining sellable recovery obligation and no stale active recovery SELL.
 6. **Stop only after safety is proven.** A market's safe state is independent of other markets. The process must not stop the remaining services or disconnect the account-wide broker/user-data connection until every enabled Conservative market is `SAFE_TO_SHUTDOWN`. Then perform the existing closing audit and orderly resource cleanup.
 
