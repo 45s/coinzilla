@@ -23,7 +23,10 @@ export class SimulatedExecutionBroker extends HistoricalMarketBroker {
     if (!markets || typeof markets !== "object" || Array.isArray(markets)) {
       throw new TypeError("markets metadata is required")
     }
-    if (typeof feeRate !== "string" || compareDecimal({ left: feeRate, right: "0" }) < 0) {
+    if (typeof feeRate !== "string" || compareDecimal({
+      left: feeRate,
+      right: "0",
+    }) < 0) {
       throw new TypeError("feeRate must be a non-negative decimal string")
     }
     this.markets = new Map(Object.entries(markets))
@@ -31,10 +34,16 @@ export class SimulatedExecutionBroker extends HistoricalMarketBroker {
     this.onExecution = onExecution
     this.balances = new Map()
     for (const [asset, amount] of Object.entries(initialBalances)) {
-      if (typeof amount !== "string" || compareDecimal({ left: amount, right: "0" }) < 0) {
+      if (typeof amount !== "string" || compareDecimal({
+        left: amount,
+        right: "0",
+      }) < 0) {
         throw new TypeError(`Initial balance for ${asset} must be a non-negative decimal string`)
       }
-      this.balances.set(asset, { free: amount, locked: "0" })
+      this.balances.set(asset, {
+        free: amount,
+        locked: "0",
+      })
     }
     this.orders = new Map()
     this.fills = []
@@ -54,40 +63,7 @@ export class SimulatedExecutionBroker extends HistoricalMarketBroker {
 
   async createOrder(input = {}) {
     try {
-      if (!this.connected) throw new Error("Simulated broker is not connected")
-      const { symbol, side = "BUY", type = "LIMIT" } = input
-      const market = this.markets.get(symbol)
-      if (!market) throw new Error(`No market metadata configured for ${symbol ?? "unknown symbol"}`)
-      if (!["BUY", "SELL"].includes(side)) throw new TypeError("side must be BUY or SELL")
-      if (!["MARKET", "LIMIT", "LIMIT_MAKER"].includes(type)) throw new TypeError("Unsupported order type")
-
-      const quantity = input.quantity
-      if (typeof quantity !== "string" || compareDecimal({ left: quantity, right: "0" }) <= 0) {
-        throw new TypeError("quantity must be a positive decimal string")
-      }
-      const marketPrice = this.prices.get(symbol)
-      if (!marketPrice) throw new Error(`No current price available for ${symbol}`)
-      const price = type === "MARKET" ? marketPrice : input.price
-      if (typeof price !== "string" || compareDecimal({ left: price, right: "0" }) <= 0) {
-        throw new TypeError("A positive decimal price is required")
-      }
-      if (type === "LIMIT_MAKER" && isLimitMakerImmediatelyMarketable({ side, limitPrice: price, marketPrice })) {
-        throw new Error("LIMIT_MAKER order would immediately take liquidity")
-      }
-
-      const order = {
-        symbol, orderId: String(this.nextOrderId++), clientOrderId: input.clientOrderId ?? null,
-        side, type, price, origQty: quantity, executedQty: "0",
-        cummulativeQuoteQty: "0", status: "NEW", timeInForce: input.timeInForce ?? "GTC",
-        transactTime: Date.now(), updateTime: Date.now(), fills: [],
-      }
-      const reserve = this.#reserveFor({ side, quantity, price })
-      order.reservedAsset = side === "BUY" ? market.quoteAsset : market.baseAsset
-      order.reservedAmount = reserve
-      this.#moveBalance(order.reservedAsset, "free", "locked", reserve)
-      this.orders.set(order.orderId, order)
-
-      if (type === "MARKET") this.#fill(order, marketPrice, Date.now())
+      const order = this.#createOrder(input)
       return toResult({ data: this.#snapshotOrder(order) })
     } catch (error) {
       this.logger.error?.("SimulatedExecutionBroker.createOrder()", error)
@@ -95,12 +71,133 @@ export class SimulatedExecutionBroker extends HistoricalMarketBroker {
     }
   }
 
+  #createOrder(input) {
+    const validated = this.#validateOrderInput(input)
+    const order = this.#createPendingOrder({
+      input,
+      symbol: validated.symbol,
+      side: validated.side,
+      type: validated.type,
+      price: validated.price,
+      quantity: validated.quantity,
+    })
+    this.#reserveOrder({
+      order,
+      market: validated.market,
+    })
+    if (validated.type === "MARKET") {
+      this.#fill({
+        order,
+        executionPrice: validated.marketPrice,
+        timestamp: Date.now(),
+      })
+    }
+    return order
+  }
+
+  #validateOrderInput(input) {
+    if (!this.connected) {
+      throw new Error("Simulated broker is not connected")
+    }
+
+    const { symbol, side = "BUY", type = "LIMIT", quantity, price: requestedPrice } = input
+    const market = this.markets.get(symbol)
+    if (!market) {
+      throw new Error(`No market metadata configured for ${symbol ?? "unknown symbol"}`)
+    }
+    if (!["BUY", "SELL"].includes(side)) {
+      throw new TypeError("side must be BUY or SELL")
+    }
+    if (!["MARKET", "LIMIT", "LIMIT_MAKER"].includes(type)) {
+      throw new TypeError("Unsupported order type")
+    }
+    if (typeof quantity !== "string" || compareDecimal({
+      left: quantity,
+      right: "0",
+    }) <= 0) {
+      throw new TypeError("quantity must be a positive decimal string")
+    }
+
+    const marketPrice = this.prices.get(symbol)
+    if (!marketPrice) {
+      throw new Error(`No current price available for ${symbol}`)
+    }
+    const price = type === "MARKET" ? marketPrice : requestedPrice
+    if (typeof price !== "string" || compareDecimal({
+      left: price,
+      right: "0",
+    }) <= 0) {
+      throw new TypeError("A positive decimal price is required")
+    }
+    if (type === "LIMIT_MAKER" && isLimitMakerImmediatelyMarketable({
+      side,
+      limitPrice: price,
+      marketPrice,
+    })) {
+      throw new Error("LIMIT_MAKER order would immediately take liquidity")
+    }
+
+    return {
+      symbol,
+      side,
+      type,
+      quantity,
+      price,
+      marketPrice,
+      market,
+    }
+  }
+
+  #createPendingOrder({ input, symbol, side, type, price, quantity }) {
+    const { clientOrderId: requestedClientOrderId, timeInForce: requestedTimeInForce } = input
+    const clientOrderId = requestedClientOrderId ?? null
+    const timeInForce = requestedTimeInForce ?? "GTC"
+    return {
+      symbol,
+      orderId: String(this.nextOrderId++),
+      clientOrderId,
+      side,
+      type,
+      price,
+      origQty: quantity,
+      executedQty: "0",
+      cummulativeQuoteQty: "0",
+      status: "NEW",
+      timeInForce,
+      transactTime: Date.now(),
+      updateTime: Date.now(),
+      fills: [],
+    }
+  }
+
+  #reserveOrder({ order, market }) {
+    const reserve = this.#reserveFor({
+      side: order.side,
+      quantity: order.origQty,
+      price: order.price,
+    })
+    order.reservedAsset = order.side === "BUY" ? market.quoteAsset : market.baseAsset
+    order.reservedAmount = reserve
+    this.#moveBalance({
+      asset: order.reservedAsset,
+      from: "free",
+      to: "locked",
+      amount: reserve,
+    })
+    this.orders.set(order.orderId, order)
+  }
+
   async cancelOrder({ symbol, orderId } = {}) {
     const order = this.orders.get(String(orderId))
     if (!order || order.symbol !== symbol || order.status !== "NEW") {
       return toResult({ error: new Error("Open simulated order not found") })
     }
-    this.#moveBalance(order.reservedAsset, "locked", "free", order.reservedAmount)
+    this.#moveBalance({
+      asset: order.reservedAsset,
+      from: "locked",
+      to: "free",
+      amount: order.reservedAmount,
+    })
     order.status = "CANCELED"
     order.updateTime = Date.now()
     order.reservedAmount = "0"
@@ -108,19 +205,27 @@ export class SimulatedExecutionBroker extends HistoricalMarketBroker {
   }
 
   async getOpenOrders({ symbol } = {}) {
-    return toResult({ data: [...this.orders.values()]
-      .filter((order) => order.status === "NEW" && (!symbol || order.symbol === symbol))
-      .map((order) => this.#snapshotOrder(order)) })
+    return toResult({
+      data: [...this.orders.values()]
+        .filter((order) => order.status === "NEW" && (!symbol || order.symbol === symbol))
+        .map((order) => this.#snapshotOrder(order)),
+    })
   }
 
   async getOrderHistory({ symbol } = {}) {
-    return toResult({ data: [...this.orders.values()]
-      .filter((order) => !symbol || order.symbol === symbol)
-      .map((order) => this.#snapshotOrder(order)) })
+    return toResult({
+      data: [...this.orders.values()]
+        .filter((order) => !symbol || order.symbol === symbol)
+        .map((order) => this.#snapshotOrder(order)),
+    })
   }
 
   async getFills({ symbol } = {}) {
-    return toResult({ data: this.fills.filter((fill) => !symbol || fill.symbol === symbol).map((fill) => ({ ...fill })) })
+    return toResult({
+      data: this.fills
+        .filter((fill) => !symbol || fill.symbol === symbol)
+        .map((fill) => ({ ...fill })),
+    })
   }
 
   async getMyTrades(input = {}) {
@@ -128,10 +233,17 @@ export class SimulatedExecutionBroker extends HistoricalMarketBroker {
   }
 
   async getBalances() {
-    return toResult({ data: [...this.balances.entries()].map(([asset, balance]) => ({
-      asset, free: balance.free, locked: balance.locked,
-      total: addDecimal({ left: balance.free, right: balance.locked }),
-    })) })
+    return toResult({
+      data: [...this.balances.entries()].map(([asset, balance]) => ({
+        asset,
+        free: balance.free,
+        locked: balance.locked,
+        total: addDecimal({
+          left: balance.free,
+          right: balance.locked,
+        }),
+      })),
+    })
   }
 
   async getAssets() {
@@ -140,62 +252,141 @@ export class SimulatedExecutionBroker extends HistoricalMarketBroker {
 
   async getSymbolFilters({ symbol } = {}) {
     const market = this.markets.get(symbol)
-    if (!market) return toResult({ error: new Error(`No market metadata configured for ${symbol}`) })
+    if (!market) {
+      return toResult({ error: new Error(`No market metadata configured for ${symbol}`) })
+    }
     return toResult({ data: { ...market } })
   }
 
   #balance(asset) {
-    if (!this.balances.has(asset)) this.balances.set(asset, { free: "0", locked: "0" })
+    if (!this.balances.has(asset)) {
+      this.balances.set(asset, {
+        free: "0",
+        locked: "0",
+      })
+    }
     return this.balances.get(asset)
   }
 
-  #moveBalance(asset, from, to, amount) {
+  #moveBalance({ asset, from, to, amount }) {
     const balance = this.#balance(asset)
-    if (compareDecimal({ left: balance[from], right: amount }) < 0) throw new Error(`Insufficient ${asset} ${from} balance`)
-    balance[from] = subtractDecimal({ left: balance[from], right: amount })
-    balance[to] = addDecimal({ left: balance[to], right: amount })
+    if (compareDecimal({
+      left: balance[from],
+      right: amount,
+    }) < 0) {
+      throw new Error(`Insufficient ${asset} ${from} balance`)
+    }
+    balance[from] = subtractDecimal({
+      left: balance[from],
+      right: amount,
+    })
+    balance[to] = addDecimal({
+      left: balance[to],
+      right: amount,
+    })
   }
 
   #reserveFor({ side, quantity, price }) {
-    if (side === "SELL") return quantity
-    return multiplyDecimal({ left: multiplyDecimal({ left: quantity, right: price }), right: addDecimal({ left: "1", right: this.feeRate }) })
+    if (side === "SELL") {
+      return quantity
+    }
+    return multiplyDecimal({
+      left: multiplyDecimal({
+        left: quantity,
+        right: price,
+      }),
+      right: addDecimal({
+        left: "1",
+        right: this.feeRate,
+      }),
+    })
   }
 
   #matchRestingOrders(event) {
     for (const order of this.orders.values()) {
-      if (order.status !== "NEW" || order.symbol !== event.symbol) continue
-      if (isLimitOrderTriggered({ side: order.side, limitPrice: order.price, candle: event })) {
+      if (order.status !== "NEW" || order.symbol !== event.symbol) {
+        continue
+      }
+      if (isLimitOrderTriggered({
+        side: order.side,
+        limitPrice: order.price,
+        candle: event,
+      })) {
         try {
-          this.#fill(order, order.price, event.eventTime)
+          this.#fill({
+            order,
+            executionPrice: order.price,
+            timestamp: event.eventTime,
+          })
         } catch (error) {
-          this.logger.error?.("Simulated order fill failed", { orderId: order.orderId, error })
+          this.logger.error?.("Simulated order fill failed", {
+            orderId: order.orderId,
+            error,
+          })
         }
       }
     }
   }
 
-  #fill(order, executionPrice, timestamp) {
+  #fill({ order, executionPrice, timestamp }) {
     const market = this.markets.get(order.symbol)
-    const quoteQuantity = multiplyDecimal({ left: order.origQty, right: executionPrice })
-    const commission = multiplyDecimal({ left: quoteQuantity, right: this.feeRate })
+    const quoteQuantity = multiplyDecimal({
+      left: order.origQty,
+      right: executionPrice,
+    })
+    const commission = multiplyDecimal({
+      left: quoteQuantity,
+      right: this.feeRate,
+    })
     if (order.side === "BUY") {
-      const actualSpend = addDecimal({ left: quoteQuantity, right: commission })
-      const refund = subtractDecimal({ left: order.reservedAmount, right: actualSpend })
+      const actualSpend = addDecimal({
+        left: quoteQuantity,
+        right: commission,
+      })
+      const refund = subtractDecimal({
+        left: order.reservedAmount,
+        right: actualSpend,
+      })
       const quote = this.#balance(market.quoteAsset)
-      quote.locked = subtractDecimal({ left: quote.locked, right: order.reservedAmount })
-      quote.free = addDecimal({ left: quote.free, right: refund })
+      quote.locked = subtractDecimal({
+        left: quote.locked,
+        right: order.reservedAmount,
+      })
+      quote.free = addDecimal({
+        left: quote.free,
+        right: refund,
+      })
       const base = this.#balance(market.baseAsset)
-      base.free = addDecimal({ left: base.free, right: order.origQty })
+      base.free = addDecimal({
+        left: base.free,
+        right: order.origQty,
+      })
     } else {
       const base = this.#balance(market.baseAsset)
-      base.locked = subtractDecimal({ left: base.locked, right: order.reservedAmount })
+      base.locked = subtractDecimal({
+        left: base.locked,
+        right: order.reservedAmount,
+      })
       const quote = this.#balance(market.quoteAsset)
-      quote.free = addDecimal({ left: quote.free, right: subtractDecimal({ left: quoteQuantity, right: commission }) })
+      quote.free = addDecimal({
+        left: quote.free,
+        right: subtractDecimal({
+          left: quoteQuantity,
+          right: commission,
+        }),
+      })
     }
     const fill = {
-      tradeId: String(this.nextTradeId++), orderId: order.orderId, symbol: order.symbol,
-      side: order.side, price: executionPrice, qty: order.origQty,
-      quoteQty: quoteQuantity, commission, commissionAsset: market.quoteAsset, time: timestamp,
+      tradeId: String(this.nextTradeId++),
+      orderId: order.orderId,
+      symbol: order.symbol,
+      side: order.side,
+      price: executionPrice,
+      qty: order.origQty,
+      quoteQty: quoteQuantity,
+      commission,
+      commissionAsset: market.quoteAsset,
+      time: timestamp,
     }
     order.fills.push(fill)
     order.executedQty = order.origQty
@@ -204,11 +395,21 @@ export class SimulatedExecutionBroker extends HistoricalMarketBroker {
     order.updateTime = timestamp
     order.reservedAmount = "0"
     this.fills.push(fill)
-    try { this.onExecution?.({ type: "order.filled", order: this.#snapshotOrder(order), fill: { ...fill } }) }
-    catch (error) { this.logger.error?.("Simulated execution listener failed", error) }
+    try {
+      this.onExecution?.({
+        type: "order.filled",
+        order: this.#snapshotOrder(order),
+        fill: { ...fill },
+      })
+    } catch (error) {
+      this.logger.error?.("Simulated execution listener failed", error)
+    }
   }
 
   #snapshotOrder(order) {
-    return { ...order, fills: order.fills.map((fill) => ({ ...fill })) }
+    return {
+      ...order,
+      fills: order.fills.map((fill) => ({ ...fill })),
+    }
   }
 }
