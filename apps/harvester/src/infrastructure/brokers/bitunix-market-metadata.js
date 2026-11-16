@@ -30,14 +30,20 @@ function createMinimumConstraint({ type, value, asset, ValueType, field }) {
     value,
     field: `Bitunix Spot ${field}`,
   })
-  if (compareDecimal({ left: amount, right: "0" }) < 0) {
+  if (compareDecimal({
+    left: amount,
+    right: "0",
+  }) < 0) {
     throw new RangeError(`Bitunix Spot ${field} must be non-negative`)
   }
 
   return Object.freeze({
     type,
     status: "SUPPORTED",
-    value: new ValueType({ amount, asset }),
+    value: new ValueType({
+      amount,
+      asset,
+    }),
   })
 }
 
@@ -110,8 +116,14 @@ export function createBitunixMarketMetadata({ symbolFilters } = {}) {
     throw new TypeError("Bitunix market metadata symbol must match base and quote assets")
   }
 
-  const baseAsset = new Asset({ id: baseCode.toLowerCase(), code: baseCode })
-  const quoteAsset = new Asset({ id: quoteCode.toLowerCase(), code: quoteCode })
+  const baseAsset = new Asset({
+    id: baseCode.toLowerCase(),
+    code: baseCode,
+  })
+  const quoteAsset = new Asset({
+    id: quoteCode.toLowerCase(),
+    code: quoteCode,
+  })
   const market = new Market({
     venue: "bitunix",
     symbol,
@@ -152,7 +164,10 @@ export function createBitunixMarketMetadata({ symbolFilters } = {}) {
       type: "MAX_NOTIONAL",
     }),
   ]
-  const tradingRules = new TradingRules({ market, constraints })
+  const tradingRules = new TradingRules({
+    market,
+    constraints,
+  })
   const isOpen = symbolFilters.isOpen === "1" || symbolFilters.isOpen === 1
   const supportedOrderTypes = Object.freeze(isOpen ? ["LIMIT", "MARKET"] : [])
 
