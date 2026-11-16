@@ -78,8 +78,8 @@ function normalizeDeals({ value }) {
   if (value === null || value === undefined) {
     return []
   }
-  if (Array.isArray(value)) {
-    return value
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("Bitunix Spot matching-order response must be an object")
   }
   return [value]
 }
