@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url"
 const eslintModule = await import("eslint").catch(() => null)
 const ESLint = eslintModule?.ESLint
 
-test("reports the complete packages/utils ESLint baseline", {
+test("keeps the complete packages/utils package ESLint-clean", {
   skip: !ESLint,
 }, async () => {
   const repositoryRoot = fileURLToPath(new URL("../../../", import.meta.url))
@@ -47,6 +47,8 @@ test("reports the complete packages/utils ESLint baseline", {
     byFile: findings,
   }
 
-  process.stdout.write(`PACKAGES_UTILS_ESLINT_BASELINE ${JSON.stringify(report)}\\n`)
+  process.stdout.write(`PACKAGES_UTILS_ESLINT_RESULT ${JSON.stringify(report)}\\n`)
   assert.ok(results.length > 0, "ESLint must discover JavaScript files in packages/utils")
+  assert.equal(report.errorCount, 0, `Expected zero package ESLint errors: ${JSON.stringify(report.byFile)}`)
+  assert.equal(report.warningCount, 0, `Expected zero package ESLint warnings: ${JSON.stringify(report.byFile)}`)
 })
