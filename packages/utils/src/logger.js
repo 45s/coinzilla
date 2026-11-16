@@ -1,5 +1,8 @@
+import { Console } from 'node:console'
 import { isProdMode, isTestingMode } from './environment-mode.js'
 import { formatLogContent, normalizeLogData } from './format-log-content.js'
+
+const outputConsole = new Console({ stdout: process.stdout, stderr: process.stderr })
 
 const colors = {
   reset: '\x1b[0m',
@@ -17,7 +20,13 @@ const colors = {
 }
 
 const LEVELS = Object.freeze(['trace', 'debug', 'info', 'warn', 'error'])
-const LEVEL_RANK = Object.freeze(Object.fromEntries(LEVELS.map((level, index) => [level, index])))
+const LEVEL_RANK = Object.freeze({
+  trace: 0,
+  debug: 1,
+  info: 2,
+  warn: 3,
+  error: 4,
+})
 const METHOD_LEVEL = Object.freeze({
   trace: 'trace',
   debug: 'debug',
@@ -82,7 +91,7 @@ function createConsoleTransport() {
         logContent = { context,
           data }
       }
-      console.log(
+      outputConsole.log(
         colors.fg.gray,
         new Date(timestamp).toLocaleTimeString(),
         ...(LEVEL_COLORS[method] ?? LEVEL_COLORS[level]),
@@ -139,7 +148,7 @@ export class Logger {
     }
 
     this.#onTransportError = onTransportError ?? (({ transport, error }) => {
-      console.error('Logger transport failed', { transport,
+      outputConsole.error('Logger transport failed', { transport,
         error })
     })
 
@@ -270,7 +279,7 @@ export class Logger {
       if (result && typeof result.then === 'function') {
         Promise.resolve(result).catch((error) => {
           try {
-            console.error('Logger transport error handler failed', error)
+            outputConsole.error('Logger transport error handler failed', error)
           } catch {
             // There is no remaining diagnostic channel if stderr is unavailable.
           }
@@ -278,14 +287,14 @@ export class Logger {
       }
     } catch (error) {
       try {
-        console.error('Logger transport error handler failed', error)
+        outputConsole.error('Logger transport error handler failed', error)
       } catch {
         // There is no remaining diagnostic channel if stderr is unavailable.
       }
     }
   }
 
-  #log(data, method) {
+  #log({ data, method }) {
     const level = METHOD_LEVEL[method]
     const entryData = {
       timestamp: new Date().toISOString(),
@@ -324,37 +333,37 @@ export class Logger {
 
   /** @param {unknown} data @returns {void} Log at TRACE severity. */
   trace(data) {
-    this.#log(data, 'trace')
+    this.#log({ data, method: 'trace' })
   }
 
   /** @param {unknown} data @returns {void} Log at DEBUG severity. */
   debug(data) {
-    this.#log(data, 'debug')
+    this.#log({ data, method: 'debug' })
   }
 
   /** @param {unknown} data @returns {void} Log at INFO severity. */
   info(data) {
-    this.#log(data, 'info')
+    this.#log({ data, method: 'info' })
   }
 
   /** @param {unknown} data @returns {void} Log at WARN severity. */
   warn(data) {
-    this.#log(data, 'warn')
+    this.#log({ data, method: 'warn' })
   }
 
   /** @param {unknown} data @returns {void} Log at ERROR severity. */
   error(data) {
-    this.#log(data, 'error')
+    this.#log({ data, method: 'error' })
   }
 
   /** @param {unknown} data @returns {void} Semantic success method mapped to INFO severity. */
   success(data) {
-    this.#log(data, 'success')
+    this.#log({ data, method: 'success' })
   }
 
   /** @param {unknown} data @returns {void} Semantic system method mapped to INFO severity. */
   system(data) {
-    this.#log(data, 'system')
+    this.#log({ data, method: 'system' })
   }
 }
 
