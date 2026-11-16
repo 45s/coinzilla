@@ -33,7 +33,7 @@ function createSafeParticipant({ strategyId, calls, waitUntilSafe } = {}) {
       const result = waitUntilSafe
         ? await waitUntilSafe(options)
         : { ok: true }
-      if (result?.ok === true) safe = true
+      if (result?.ok === true) { safe = true }
       return result
     },
     isSafeToShutdown: () => safe,
@@ -341,7 +341,7 @@ test("allows a new shutdown attempt after an earlier safety failure", async () =
     beginShutdown: () => calls.push("gate:CONSERVATIVE"),
     waitUntilSafe: async () => {
       attempts += 1
-      if (attempts === 1) throw new Error("Owned BUY is UNKNOWN")
+      if (attempts === 1) { throw new Error("Owned BUY is UNKNOWN") }
       safe = true
       return { ok: true }
     },
