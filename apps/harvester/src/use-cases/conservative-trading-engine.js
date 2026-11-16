@@ -1180,9 +1180,9 @@ function createOperatorMarketSnapshot({
   const priceFresh = marketPrice ? isMarketPriceFresh(marketPrice) : false
   const operatorPaused = state.operatorPausedMarkets.has(symbol)
   const operatorBuyPaused = isOperatorBuyPauseActive({
-                state,
-                symbol,
-              })
+    state,
+    symbol,
+  })
   const safetyPaused = state.durablePausedMarkets.has(symbol) ||
     (state.paused.has(symbol) && !state.recoveryManagedPausedMarkets.has(symbol))
   const recoveryManagedPaused = state.recoveryManagedPausedMarkets.has(symbol)
