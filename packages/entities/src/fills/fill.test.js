@@ -8,43 +8,59 @@ import { Money } from "../money/money.js"
 import { Quantity } from "../quantity/quantity.js"
 import { Fill, fillErrMsgs } from "./fill.js"
 
-describe(Fill.name, () => {
-  const baseAsset = new Asset({ id: "dogecoin",
-code: "DOGE" })
-  const quoteAsset = new Asset({ id: "fdusd",
-code: "FDUSD" })
-  const commissionAsset = new Asset({ id: "bnb",
-code: "BNB" })
-  const otherQuoteAsset = new Asset({ id: "usdt",
-code: "USDT" })
-  const market = new Market({
-    venue: "binance",
-    symbol: "DOGEFDUSD",
-    baseAsset,
-    quoteAsset,
+const baseAsset = new Asset({
+  id: "dogecoin",
+  code: "DOGE",
+})
+const quoteAsset = new Asset({
+  id: "fdusd",
+  code: "FDUSD",
+})
+const commissionAsset = new Asset({
+  id: "bnb",
+  code: "BNB",
+})
+const otherQuoteAsset = new Asset({
+  id: "usdt",
+  code: "USDT",
+})
+const market = new Market({
+  venue: "binance",
+  symbol: "DOGEFDUSD",
+  baseAsset,
+  quoteAsset,
+})
+const createFill = (overrides = {}) =>
+  new Fill({
+    tradeId: "trade-1001",
+    brokerOrderId: "order-42",
+    clientOrderId: "client-42",
+    market,
+    side: "BUY",
+    price: new Money({
+      amount: "0.1",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "100",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "10",
+      asset: quoteAsset,
+    }),
+    liquidityRole: "MAKER",
+    executedAt: 1_800_000_000_000,
+    ...overrides,
   })
-  const createFill = (overrides = {}) =>
-    new Fill({
-      tradeId: "trade-1001",
-      brokerOrderId: "order-42",
-      clientOrderId: "client-42",
-      market,
-      side: "BUY",
-      price: new Money({ amount: "0.1",
-asset: quoteAsset }),
-      quantity: new Quantity({ amount: "100",
-asset: baseAsset }),
-      quoteQuantity: new Money({ amount: "10",
-asset: quoteAsset }),
-      liquidityRole: "MAKER",
-      executedAt: 1_800_000_000_000,
-      ...overrides,
-    })
-  const commission = new Commission({
-    amount: new Money({ amount: "0.01",
-asset: commissionAsset }),
-  })
+const commission = new Commission({
+  amount: new Money({
+    amount: "0.01",
+    asset: commissionAsset,
+  }),
+})
 
+describe(`${Fill.name} execution facts`, () => {
   it("stores exact execution facts with explicit asset identity", () => {
     const fill = createFill()
 
@@ -91,6 +107,9 @@ asset: quoteAsset.value },
     assert.equal("clientOrderId" in fill.value, false)
   })
 
+})
+
+describe(`${Fill.name} commission semantics`, () => {
   it("represents confirmed zero commission as COMPLETE with an empty list", () => {
     const fill = createFill({ commissionStatus: "COMPLETE" })
 
@@ -158,6 +177,9 @@ asset: quoteAsset }),
     )
   })
 
+})
+
+describe(`${Fill.name} identity`, () => {
   it("scopes stable trade identity by market", () => {
     const otherMarket = new Market({
       venue: "binance",
@@ -183,6 +205,9 @@ asset: otherQuoteAsset }),
     assert.throws(() => createFill({ clientOrderId: " " }), { message: fillErrMsgs.clientOrderId })
   })
 
+})
+
+describe(`${Fill.name} validation`, () => {
   it("rejects invalid market, side, and value types", () => {
     assert.throws(() => createFill({ market: {} }), { message: fillErrMsgs.market })
     assert.throws(() => createFill({ side: "buy" }), { message: fillErrMsgs.side })
@@ -253,6 +278,9 @@ asset: quoteAsset }) }),
     )
   })
 
+})
+
+describe(`${Fill.name} snapshots`, () => {
   it("returns independent snapshots and is immutable", () => {
     const fill = createFill({
       commissions: [commission],
