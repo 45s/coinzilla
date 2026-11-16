@@ -50,17 +50,66 @@ function parseTimestamp(value) {
   return Number.isFinite(timestamp) ? timestamp : undefined
 }
 
+function hasValidProcessStartedMetadata({
+  source,
+  eventTimestamp,
+  startedAt,
+  timestamp,
+  runtimeSessionId,
+  processId,
+}) {
+  return source === "harvester" &&
+    eventTimestamp !== undefined &&
+    timestamp !== undefined &&
+    eventTimestamp >= timestamp &&
+    new Date(timestamp).toISOString() === startedAt &&
+    typeof runtimeSessionId === "string" &&
+    runtimeSessionId.trim() !== "" &&
+    Number.isSafeInteger(processId) &&
+    processId >= 1
+}
+
+function assertProcessStartedDirectoryMatches({
+  directory,
+  startedAt,
+  runtimeSessionId,
+}) {
+  const directoryMatch = PROCESS_SESSION_DIRECTORY_PATTERN.exec(path.basename(directory))
+  if (!directoryMatch) {
+    return
+  }
+
+  const expectedTimestamp = startedAt.slice(0, 19)
+    .replace("T", "_")
+    .replaceAll(":", "-")
+  const expectedSessionId = runtimeSessionId.replace(/[^a-zA-Z0-9_-]/g, "-")
+  if (directoryMatch[1] !== expectedTimestamp || directoryMatch[2] !== expectedSessionId) {
+    throw createHistoryError({
+      code: "HARVESTER_JOURNAL_PROCESS_IDENTITY_MISMATCH",
+      message: `Process-start identity does not match its session directory: ${directory}`,
+      details: {
+        directory,
+        expectedTimestamp,
+        actualTimestamp: directoryMatch[1],
+        expectedSessionId,
+        actualSessionId: directoryMatch[2],
+      },
+    })
+  }
+}
+
 function parseProcessStarted({ records, directory }) {
   const startedRecords = records.filter((record) => record.payload?.name === "harvester.process_started")
   if (startedRecords.length > 1) {
     throw createHistoryError({
       code: "HARVESTER_JOURNAL_PROCESS_IDENTITY_INVALID",
-      message: `Journal session contains more than one harvester.process_started record: ${  directory}`,
-      details: { directory,
-count: startedRecords.length },
+      message: `Journal session contains more than one harvester.process_started record: ${directory}`,
+      details: { directory, count: startedRecords.length },
     })
   }
-  if (startedRecords.length === 0) { return undefined }
+  if (startedRecords.length === 0) {
+    return undefined
+  }
 
   const [firstStartedRecord] = startedRecords
   const processStartedEvent = firstStartedRecord.payload
@@ -69,50 +118,23 @@ count: startedRecords.length },
   const runtimeSessionId = data?.runtimeSessionId
   const processId = data?.processId
   const timestamp = parseTimestamp(startedAt)
-  const processStartedEventTimestamp = parseTimestamp(processStartedEvent?.timestamp)
-  if (
-    processStartedEvent?.source !== "harvester" ||
-    processStartedEventTimestamp === undefined ||
-    timestamp === undefined ||
-    processStartedEventTimestamp < timestamp ||
-    new Date(timestamp).toISOString() !== startedAt ||
-    typeof runtimeSessionId !== "string" ||
-    runtimeSessionId.trim() === "" ||
-    !Number.isSafeInteger(processId) ||
-    processId < 1
-  ) {
+  const eventTimestamp = parseTimestamp(processStartedEvent?.timestamp)
+  if (!hasValidProcessStartedMetadata({
+    source: processStartedEvent?.source,
+    eventTimestamp,
+    startedAt,
+    timestamp,
+    runtimeSessionId,
+    processId,
+  })) {
     throw createHistoryError({
       code: "HARVESTER_JOURNAL_PROCESS_IDENTITY_INVALID",
-      message: `Journal session has invalid process-start identity metadata: ${  directory}`,
-      details: { directory,
-startedAt,
-runtimeSessionId,
-processId },
+      message: `Journal session has invalid process-start identity metadata: ${directory}`,
+      details: { directory, startedAt, runtimeSessionId, processId },
     })
   }
 
-  const directoryName = path.basename(directory)
-  const directoryMatch = PROCESS_SESSION_DIRECTORY_PATTERN.exec(directoryName)
-  if (directoryMatch) {
-    const expectedTimestamp = startedAt.slice(0, 19)
-      .replace("T", "_")
-      .replaceAll(":", "-")
-    const expectedSessionId = runtimeSessionId.replace(/[^a-zA-Z0-9_-]/g, "-")
-    if (directoryMatch[1] !== expectedTimestamp || directoryMatch[2] !== expectedSessionId) {
-      throw createHistoryError({
-        code: "HARVESTER_JOURNAL_PROCESS_IDENTITY_MISMATCH",
-        message: `Process-start identity does not match its session directory: ${  directory}`,
-        details: {
-          directory,
-          expectedTimestamp,
-          actualTimestamp: directoryMatch[1],
-          expectedSessionId,
-          actualSessionId: directoryMatch[2],
-        },
-      })
-    }
-  }
-
+  assertProcessStartedDirectoryMatches({ directory, startedAt, runtimeSessionId })
   return Object.freeze({
     chronologySource: "PROCESS_STARTED",
     chronologyTimestamp: timestamp,
@@ -120,6 +142,15 @@ processId },
     runtimeSessionId,
     processId,
   })
+}
+function isTimestampSequenceMonotonic({ timestamps }) {
+  for (let index = 0; index < timestamps.length; index += 1) {
+    const timestamp = timestamps[index]
+    if (timestamp === undefined || (index > 0 && timestamp < timestamps[index - 1])) {
+      return false
+    }
+  }
+  return true
 }
 
 function resolveSessionChronology({ records, directory }) {
@@ -131,10 +162,7 @@ directory })
     ? records.filter((record) => record.payload?.name !== "harvester.process_started")
     : records
   const eventTimestamps = chronologyRecords.map((record) => parseTimestamp(record.payload?.timestamp))
-  const timestampsAreValid = eventTimestamps.every((timestamp) => timestamp !== undefined)
-  const timestampsAreMonotonic = timestampsAreValid && eventTimestamps.every(
-    (timestamp, index) => index === 0 || timestamp >= eventTimestamps[index - 1],
-  )
+  const timestampsAreMonotonic = isTimestampSequenceMonotonic({ timestamps: eventTimestamps })
 
   if (!timestampsAreMonotonic) {
     return Object.freeze({
@@ -189,6 +217,21 @@ startedAt: processStarted.startedAt },
   })
 }
 
+function orderSessionsByChronology({ sessions }) {
+  const orderedSessions = []
+  for (const session of sessions) {
+    let insertionIndex = orderedSessions.length
+    while (
+      insertionIndex > 0 &&
+      orderedSessions[insertionIndex - 1].chronologyTimestamp > session.chronologyTimestamp
+    ) {
+      insertionIndex -= 1
+    }
+    orderedSessions.splice(insertionIndex, 0, session)
+  }
+  return orderedSessions
+}
+
 function validateAndOrderSessions(sessions) {
   if (sessions.length <= 1) {
     if (sessions.length === 1) {
@@ -240,11 +283,11 @@ function validateAndOrderSessions(sessions) {
     }
   }
 
-  sessions.sort((left, right) => left.chronologyTimestamp - right.chronologyTimestamp)
+  const orderedSessions = orderSessionsByChronology({ sessions })
 
-  for (let index = 1; index < sessions.length; index += 1) {
-    const previous = sessions[index - 1]
-    const current = sessions[index]
+  for (let index = 1; index < orderedSessions.length; index += 1) {
+    const previous = orderedSessions[index - 1]
+    const current = orderedSessions[index]
     if (
       previous.lastRecordTimestamp === undefined ||
       current.chronologyTimestamp === undefined ||
@@ -263,7 +306,7 @@ function validateAndOrderSessions(sessions) {
     }
   }
 
-  return sessions
+  return orderedSessions
 }
 
 async function discoverSessionDirectories({
