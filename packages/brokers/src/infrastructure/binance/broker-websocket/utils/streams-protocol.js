@@ -111,19 +111,34 @@ export function createStreamName(...args) {
   switch (type) {
     case "trade":
     case "aggTrade":
-      return createTradeStream({ type, symbol: normalizedSymbol })
+      return createTradeStream({
+        type,
+        symbol: normalizedSymbol,
+      })
     case "miniTicker":
     case "ticker":
-      return createTickerStream({ type, symbol: normalizedSymbol })
+      return createTickerStream({
+        type,
+        symbol: normalizedSymbol,
+      })
     case "bookTicker":
       return createBookTickerStream({ symbol: normalizedSymbol })
     case "kline":
-      return createKlineStream({ symbol: normalizedSymbol, interval })
+      return createKlineStream({
+        symbol: normalizedSymbol,
+        interval,
+      })
     case "rollingWindowTicker":
-      return createRollingWindowStream({ symbol: normalizedSymbol, windowSize: normalizedWindowSize })
+      return createRollingWindowStream({
+        symbol: normalizedSymbol,
+        windowSize: normalizedWindowSize,
+      })
     case "partialBookDepth":
-      return createPartialBookDepthStream({ symbol: normalizedSymbol, levels,
-        speed })
+      return createPartialBookDepthStream({
+        symbol: normalizedSymbol,
+        levels,
+        speed,
+      })
     case "diffBookDepth":
       return createDiffBookDepthStream({ symbol: normalizedSymbol,
         speed })
