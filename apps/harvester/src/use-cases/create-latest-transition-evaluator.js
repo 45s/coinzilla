@@ -14,7 +14,15 @@ function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } 
       },
     })
   }
-  if (state.paused.has(symbol)) {
+  const recoveryManagedPause = shutdownRecoveryOnly &&
+    state.recoveryManagedPausedMarkets?.has(symbol) === true &&
+    state.durablePausedMarkets?.has(symbol) !== true &&
+    state.operatorPausedMarkets?.has(symbol) !== true &&
+    state.replacementIntents?.has(symbol) !== true &&
+    state.trailingBuyRepriceIntents?.has(symbol) !== true &&
+    ![...(state.recoveryManagedCancellationClientOrderIds ?? [])].some((clientOrderId) =>
+      state.registry.getOrder({ clientOrderId })?.market.symbol === symbol)
+  if (state.paused.has(symbol) && !recoveryManagedPause) {
     return toResult({ data: { skipped: true,
       reason: "PAIR_PAUSED" } })
   }
