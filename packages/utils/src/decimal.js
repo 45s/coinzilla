@@ -19,7 +19,7 @@ const INCREMENT_DIRECTIONS = new Set(["down", "up", "nearest"])
  */
 function validateScale(scale) {
   if (!Number.isInteger(scale) || scale < 0 || scale > MAX_DECIMAL_SCALE) {
-    throw new RangeError(`scale must be an integer from 0 to ${  MAX_DECIMAL_SCALE}`)
+    throw new RangeError(`scale must be an integer from 0 to ${MAX_DECIMAL_SCALE}`)
   }
 }
 
@@ -113,7 +113,7 @@ export function formatDecimalString({ coefficient, scale } = {}) {
   const digits = rawDigits.padStart(scale + 1, "0")
   const decimal = scale === 0
     ? digits
-    : `${digits.slice(0, -scale)}.${  digits.slice(-scale)}`
+    : `${digits.slice(0, -scale)}.${digits.slice(-scale)}`
   const normalized = decimal.includes(".")
     ? decimal.replace(/0+$/, "").replace(/\.$/, "")
     : decimal
@@ -150,12 +150,10 @@ export function addDecimal({ left, right } = {}) {
 
 /** @param {{ left: string|bigint, right: string|bigint }} options @returns {string} Exact difference. */
 export function subtractDecimal({ left, right } = {}) {
-  const aligned = alignDecimals(
-    parseDecimal({ value: left,
-      field: "left" }),
-    parseDecimal({ value: right,
-      field: "right" }),
-  )
+  const aligned = alignDecimals({
+    left: parseDecimal({ value: left, field: "left" }),
+    right: parseDecimal({ value: right, field: "right" }),
+  })
   return formatDecimalString({
     coefficient: aligned.left - aligned.right,
     scale: aligned.scale,
@@ -405,5 +403,6 @@ export function normalizeDecimalString({
   }
 
   const normalizedSign = sign === "-" && !isZero ? "-" : ""
-  return normalizedSign + whole + (fraction ? `.${  fraction}` : "")
+  const normalizedFraction = fraction ? `.${fraction}` : ""
+  return `${normalizedSign}${whole}${normalizedFraction}`
 }

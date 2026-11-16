@@ -291,7 +291,7 @@ test("arithmetic identities hold over a deterministic set of signed integer oper
         right: b }),
       right: b }), a)
       assert.equal(compareDecimal({ left: a,
-        right: b }), left < right ? -1 : left > right ? 1 : 0)
+        right: b }), Math.sign(left - right))
       assert.equal(addDecimal({ left: a,
         right: "0" }), a)
       assert.equal(multiplyDecimal({ left: a,
