@@ -20,7 +20,8 @@ test("serializes and recovers a schema-v1 record without mutating its source eve
     persisted,
     {
       ...event,
-      __coinzillaJournal: { schemaVersion: 1, id: event.id },
+      __coinzillaJournal: { schemaVersion: 1,
+id: event.id },
     },
     "Serialized Journal data must retain source fields and add only the reserved schema-v1 identity metadata.",
   )
@@ -41,8 +42,10 @@ test("serializes and recovers a schema-v1 record without mutating its source eve
     {
       id: event.id,
       schemaVersion: 1,
-      payload: { ...event, data: { orderId: "42" } },
-      position: { fileName: FILE_NAME, lineNumber: 1 },
+      payload: { ...event,
+data: { orderId: "42" } },
+      position: { fileName: FILE_NAME,
+lineNumber: 1 },
     },
     "A schema-v1 record must recover the original event payload, stable ID, and exact source position.",
   )
@@ -80,9 +83,12 @@ test("rejects a source event whose root toJSON hook could replace the Journal re
 test("rejects missing, blank, whitespace-only, and non-string source event IDs", () => {
   const invalidEvents = [
     { name: "missing-id" },
-    { id: "", name: "blank-id" },
-    { id: "   ", name: "whitespace-id" },
-    { id: 123, name: "numeric-id" },
+    { id: "",
+name: "blank-id" },
+    { id: "   ",
+name: "whitespace-id" },
+    { id: 123,
+name: "numeric-id" },
   ]
 
   for (const event of invalidEvents) {
@@ -98,7 +104,8 @@ test("rejects source events that collide with Journal-owned metadata", () => {
   const event = {
     id: "event-reserved",
     name: "order.filled",
-    __coinzillaJournal: { schemaVersion: 1, id: "forged" },
+    __coinzillaJournal: { schemaVersion: 1,
+id: "forged" },
   }
 
   assert.throws(
@@ -115,7 +122,8 @@ test("rejects persisted records when metadata identity does not match the source
   const persisted = {
     id: "source-id",
     name: "order.filled",
-    __coinzillaJournal: { schemaVersion: 1, id: "different-id" },
+    __coinzillaJournal: { schemaVersion: 1,
+id: "different-id" },
   }
 
   assert.throws(
@@ -133,7 +141,8 @@ test("rejects persisted records when metadata identity does not match the source
 
 test("accepts CRLF session lines while preserving the original record position", () => {
   const serialized = serializeJournalRecord({
-    event: { id: "event-crlf", name: "order.created" },
+    event: { id: "event-crlf",
+name: "order.created" },
   }).replace("\n", "\r\n")
 
   const [recovered] = parseJournalSession({
@@ -144,7 +153,8 @@ test("accepts CRLF session lines while preserving the original record position",
 
   assert.deepEqual(
     recovered.position,
-    { fileName: FILE_NAME, lineNumber: 1 },
+    { fileName: FILE_NAME,
+lineNumber: 1 },
     "CRLF normalization must preserve the original filename and one-based JSONL line position.",
   )
 })
@@ -199,7 +209,8 @@ test("recovers legacy raw event lines with the same stable record shape", () => 
       id: legacyPayload.id,
       schemaVersion: 1,
       payload: legacyPayload,
-      position: { fileName: FILE_NAME, lineNumber: 1 },
+      position: { fileName: FILE_NAME,
+lineNumber: 1 },
     },
     "Legacy raw event lines must recover into the same identity, schema, payload, and position contract as current records.",
   )
@@ -240,27 +251,44 @@ test("rejects nested values that JSONL would omit, coerce, or execute", () => {
   cyclicData.self = cyclicData
 
   const invalidValues = [
-    { label: "undefined object property", data: { nested: { value: undefined } } },
-    { label: "undefined array entry", data: { values: [undefined] } },
-    { label: "sparse array hole", data: { values: sparseArray } },
-    { label: "BigInt", data: { amount: 1n } },
-    { label: "NaN", data: { amount: NaN } },
-    { label: "positive infinity", data: { amount: Infinity } },
-    { label: "negative infinity", data: { amount: -Infinity } },
-    { label: "negative zero", data: { amount: -0 } },
-    { label: "cyclic graph", data: cyclicData },
-    { label: "nested toJSON hook", data: { nested: { toJSON() { return { rewritten: true } } } } },
-    { label: "symbol-keyed property", data: symbolKeyedData },
-    { label: "accessor property", data: accessorData },
-    { label: "non-enumerable property", data: nonEnumerableData },
-    { label: "custom array property", data: { values: arrayWithCustomProperty } },
-    { label: "custom prototype", data: customPrototypeData },
+    { label: "undefined object property",
+data: { nested: { value: undefined } } },
+    { label: "undefined array entry",
+data: { values: [undefined] } },
+    { label: "sparse array hole",
+data: { values: sparseArray } },
+    { label: "BigInt",
+data: { amount: 1n } },
+    { label: "NaN",
+data: { amount: NaN } },
+    { label: "positive infinity",
+data: { amount: Infinity } },
+    { label: "negative infinity",
+data: { amount: -Infinity } },
+    { label: "negative zero",
+data: { amount: -0 } },
+    { label: "cyclic graph",
+data: cyclicData },
+    { label: "nested toJSON hook",
+data: { nested: { toJSON() { return { rewritten: true } } } } },
+    { label: "symbol-keyed property",
+data: symbolKeyedData },
+    { label: "accessor property",
+data: accessorData },
+    { label: "non-enumerable property",
+data: nonEnumerableData },
+    { label: "custom array property",
+data: { values: arrayWithCustomProperty } },
+    { label: "custom prototype",
+data: customPrototypeData },
   ]
 
   for (const [index, invalid] of invalidValues.entries()) {
     assert.throws(
       () => serializeJournalRecord({
-        event: { id: "event-invalid-" + index, name: "journal.invalid_value", data: invalid.data },
+        event: { id: `event-invalid-${  index}`,
+name: "journal.invalid_value",
+data: invalid.data },
       }),
       { name: "TypeError" },
       `Journal must reject ${invalid.label} before JSON.stringify can omit, coerce, or execute it.`,
@@ -280,7 +308,8 @@ test("accepts shared references as repeated JSON subtrees without preserving ali
   const event = {
     id: "event-shared-reference",
     name: "order.filled",
-    data: { first: shared, second: shared },
+    data: { first: shared,
+second: shared },
   }
 
   const serialized = serializeJournalRecord({ event })
@@ -292,7 +321,8 @@ test("accepts shared references as repeated JSON subtrees without preserving ali
 
   assert.deepEqual(
     recovered.payload.data,
-    { first: { orderId: "42" }, second: { orderId: "42" } },
+    { first: { orderId: "42" },
+second: { orderId: "42" } },
     "Shared source references must persist as equivalent repeated JSON subtrees.",
   )
   assert.notStrictEqual(
