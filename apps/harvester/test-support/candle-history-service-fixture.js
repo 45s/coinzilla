@@ -29,10 +29,13 @@ export function createCandle({
 
 export function createHistoryFrom(...args) {
   const [symbol, startIndex, count, includeForming = false] = args
-  const candles = Array.from({ length: count }, (_, index) => createCandle({
-    symbol,
-    openTime: (startIndex + index) * INTERVAL_MS,
-  }))
+  const candles = []
+  for (let index = 0; index < count; index += 1) {
+    candles.push(createCandle({
+      symbol,
+      openTime: (startIndex + index) * INTERVAL_MS,
+    }))
+  }
   if (includeForming) {
     candles.push(createCandle({
       symbol,
