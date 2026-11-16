@@ -19,13 +19,15 @@ The standard is adopted incrementally. New functionality MUST follow it from its
 
 The common base class is named `SystemCustomError`. There must be one shared implementation; packages and applications must not create competing copies of the base class.
 
-The owning shared module/package for this base is selected during the initial implementation stage after checking dependency direction, package ownership, and the [Shared Utilities Policy](SHARED_UTILITIES_POLICY.md). The base must not introduce dependency cycles or make domain packages depend on application code.
+The Utilities domain owns the single shared implementation in `@coinzilla/utils`, selected after checking dependency direction, package ownership, and the [Shared Utilities Policy](SHARED_UTILITIES_POLICY.md). This is accepted as cross-domain request [#1208](https://github.com/45s/coinzilla/issues/1208) under repository error initiative [#1028](https://github.com/45s/coinzilla/issues/1028). The base must not introduce dependency cycles or make domain packages depend on application code.
 
 The base should extend the native `Error`, set `name` to the concrete subclass name, and support the standard native `cause` option. It may expose the following structured fields where applicable:
 
 - `code`: a stable, machine-readable, domain-scoped identifier.
 - `cause`: the original error or lower-level error, preserved without replacing its identity.
 - `context`: a small, safe object containing relevant diagnostic facts.
+
+The shared base stores `context` as a detached, frozen flat record of JSON-safe scalar values (`string`, finite `number`, `boolean`, or `null`); nested objects and mutable payload graphs are rejected.
 - `retryable`: an explicit boolean only when the operation can meaningfully be classified as retryable or permanent.
 
 Do not add speculative fields or a complex error framework. Keep the base small and independent of logging, transport, persistence, application services, and domain policy.
@@ -79,6 +81,7 @@ Error messages should be concise and actionable. Put machine-readable detail in 
 Log at the boundary that owns the operational decision or at the actionable failure point. Use structured fields including the error name, stable code, operation/component, safe context, and original cause when available.
 
 - Preserve the original error object for logger/telemetry integrations where supported.
+- The shared Logger intentionally allowlists standard Error diagnostics. Pass custom `code`, `context`, and `retryable` as explicit structured fields when they are needed in logs.
 - Avoid duplicate logs when an error is rethrown unchanged.
 - Do not log and then silently continue unless that is an explicitly tested recovery policy.
 - A logging or notification failure must not mask the original operational failure.
