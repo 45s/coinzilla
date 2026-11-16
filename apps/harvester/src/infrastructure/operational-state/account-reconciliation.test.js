@@ -155,7 +155,7 @@ total: "125" },
 
 test("rejects open-order snapshots whose count, identity, state, or readiness contradicts their contents", async (t) => {
   const store = await createStore(t)
-  const validOrder = openOrdersSnapshot().data.orders[0]
+  const [validOrder] = openOrdersSnapshot().data.orders
   const invalidFacts = [
     openOrdersSnapshot({ factId: "open-orders:wrong-count",
 data: {
