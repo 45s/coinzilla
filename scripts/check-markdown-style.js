@@ -281,7 +281,7 @@ export function checkChangedMarkdownStyle(baseSha) {
   const ignoredPaths = changesByPath.size - changedDocuments.length
   const result = analyzeMarkdownStyleDocuments({ documents: changedDocuments, changesByPath })
 
-  console.log(
+  process.stdout.write(
     `Changed Markdown style: scanned ${result.scannedFiles} maintained files; skipped ${result.skippedHistorical} historical files and ${ignoredPaths} generated/vendor paths.`,
   )
 
@@ -298,8 +298,8 @@ export function checkChangedMarkdownStyle(baseSha) {
       const lineDetail = entry.lines.length > 0
         ? ` (lines ${entry.lines.join(", ")})`
         : ""
-      console.error(
-        `- ${entry.path}: ${FINDING_LABELS[name]}${lineDetail}`,
+      process.stderr.write(
+        `- ${entry.path}: ${FINDING_LABELS[name]}${lineDetail}\n`,
       )
     }
   }
