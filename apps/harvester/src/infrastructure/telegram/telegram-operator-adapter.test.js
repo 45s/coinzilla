@@ -113,7 +113,7 @@ test("polls serially, maps an allowlisted private sender to an actor, and acknow
       sentMessages.push(JSON.parse(options.body))
       return makeResponse({ ok: true, result: { message_id: 200 } })
     }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -182,7 +182,7 @@ test("does not invoke the application for a user outside the private-chat allowl
       sentMessages.push(JSON.parse(options.body))
       return makeResponse({ ok: true, result: { message_id: 201 } })
     }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -224,7 +224,7 @@ test("ignores group messages even when their sender ID is allowlisted", async ()
       sentMessages.push(JSON.parse(options.body))
       return makeResponse({ ok: true, result: { message_id: 202 } })
     }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -263,7 +263,7 @@ test("dispatches resume through the application facade and preserves safety bloc
       sentMessages.push(JSON.parse(options.body))
       return makeResponse({ ok: true, result: { message_id: 210 } })
     }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -307,7 +307,7 @@ test("answers /help without invoking trading use cases", async () => {
       sentMessages.push(JSON.parse(options.body))
       return makeResponse({ ok: true, result: { message_id: 211 } })
     }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -360,7 +360,7 @@ test("retries an unacknowledged Telegram update with the same application reques
       if (sendCount === 1) {throw new Error("temporary reply delivery failure")}
       return makeResponse({ ok: true, result: { message_id: 303 } })
     }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -417,7 +417,7 @@ test("concurrent start calls share one Telegram identity check and one poller", 
         options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -462,7 +462,7 @@ test("ignores a private-chat update whose chat identity does not match its allow
       sentMessages.push(JSON.parse(options.body))
       return makeResponse({ ok: true, result: { message_id: 304 } })
     }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -521,7 +521,7 @@ test("dispatches authorized read-only status and market queries without invoking
       sentMessages.push(JSON.parse(options.body))
       return makeResponse({ ok: true, result: { message_id: 212 } })
     }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const operator = {
     pauseMarket: async () => assert.fail("Read-only queries must never invoke pauseMarket."),
@@ -621,7 +621,7 @@ test("logs structured operator query failures without exposing diagnostics to Te
       sentMessages.push(JSON.parse(options.body))
       return makeResponse({ ok: true, result: { message_id: 213 } })
     }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -684,7 +684,7 @@ test("registers the supported command menu and requests callback updates", async
       finishPoll()
       return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true }))
     }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({ botToken: "test-token", allowedUserIds: ["12345"], operator: { pauseMarket: async () => ({ ok: true }) }, fetchImpl, retryDelayMs: 1 })
   await adapter.start()
@@ -717,7 +717,7 @@ test("requires explicit confirmation before applying an inline pause control", a
     if (method === "answerCallbackQuery") { return makeResponse({ ok: true, result: true }) }
     if (method === "editMessageText") { editedMessages.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: true }) }
     if (method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token", allowedUserIds: ["12345"],
@@ -758,7 +758,7 @@ test("accepts an authorized one-time inline confirmation and executes the existi
     if (method === "answerCallbackQuery") { callbackAnswers.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: true }) }
     if (method === "editMessageText") { editedMessages.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: true }) }
     if (method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token", allowedUserIds: ["12345"],
@@ -793,7 +793,7 @@ test("rejects inline callbacks from users outside the allowlist without invoking
     }
     if (method === "answerCallbackQuery") { calls.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: true }) }
     if (method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({ botToken: "test-token", allowedUserIds: ["12345"], operator: { pauseMarket: async () => assert.fail("Unauthorized callback must not reach the operator."), getStatus: async () => assert.fail("Unauthorized callback must not read operator state.") }, logger: { debug: entry => diagnosticEntries.push(entry), info: entry => diagnosticEntries.push(entry), warn: entry => diagnosticEntries.push(entry), error: entry => diagnosticEntries.push(entry) }, fetchImpl, retryDelayMs: 1 })
   await adapter.start()
@@ -826,7 +826,7 @@ test("renders an inline status navigation callback using the read-only applicati
     if (method === "answerCallbackQuery") { return makeResponse({ ok: true, result: true }) }
     if (method === "editMessageText") { edits.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: true }) }
     if (method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token", allowedUserIds: ["12345"],
@@ -874,7 +874,7 @@ test("consumes an inline confirmation only once even when Telegram redelivers th
       return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true }))
     }
     if (method === "answerCallbackQuery" || method === "editMessageText" || method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token", allowedUserIds: ["12345"],
@@ -903,7 +903,7 @@ test("treats Telegram's unchanged-message refresh response as successful and con
     }
     if (method === "answerCallbackQuery" || method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
     if (method === "editMessageText") { return makeResponse({ ok: false, description: "Bad Request: message is not modified" }, 400) }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token", allowedUserIds: ["12345"],
@@ -940,7 +940,7 @@ test("cancels an inline pause confirmation without invoking the operator", async
     if (method === "answerCallbackQuery") { return makeResponse({ ok: true, result: true }) }
     if (method === "editMessageText") { edits.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: true }) }
     if (method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token", allowedUserIds: ["12345"],
@@ -976,7 +976,7 @@ test("rejects malformed callbacks and acknowledges private-chat identity mismatc
     }
     if (method === "answerCallbackQuery") { callbackAnswers.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: true }) }
     if (method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token", allowedUserIds: ["12345"],
@@ -1014,7 +1014,7 @@ test("keeps authorized text commands available when Telegram command-menu regist
       return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true }))
     }
     if (method === "sendMessage") { sentMessages.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: { message_id: 901 } }) }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token", allowedUserIds: ["12345"],
@@ -1051,26 +1051,60 @@ test("shows only enabled configured markets as inline pause or resume controls",
     if (method === "answerCallbackQuery") { return makeResponse({ ok: true, result: true }) }
     if (method === "editMessageText") { edits.push(JSON.parse(options.body)); return makeResponse({ ok: true, result: true }) }
     if (method === "setMyCommands") { return makeResponse({ ok: true, result: true }) }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token", allowedUserIds: ["12345"],
     operator: {
       pauseMarket: async () => assert.fail("Rendering market controls must not mutate trading state."),
-      getMarkets: async () => ({ ok: true, data: { markets: [
-        { symbol: "LINKUSDT", enabled: true, readiness: "READY", latestPrice: "10", priceFresh: true, operatorPaused: false, blockers: [] },
-        { symbol: "BTCUSDT", enabled: true, readiness: "READY", latestPrice: "20", priceFresh: true, operatorPaused: true, blockers: [] },
-        { symbol: "ETHUSDT", enabled: false, readiness: "DISABLED", latestPrice: null, priceFresh: false, operatorPaused: false, blockers: [] },
-      ] } }),
+      getMarkets: async () => ({
+        ok: true,
+        data: {
+          markets: [
+            {
+              symbol: "LINKUSDT",
+              enabled: true,
+              readiness: "READY",
+              latestPrice: "10",
+              priceFresh: true,
+              operatorPaused: false,
+              blockers: [],
+            },
+            {
+              symbol: "BTCUSDT",
+              enabled: true,
+              readiness: "READY",
+              latestPrice: "20",
+              priceFresh: true,
+              operatorPaused: true,
+              blockers: [],
+            },
+            {
+              symbol: "ETHUSDT",
+              enabled: false,
+              readiness: "DISABLED",
+              latestPrice: null,
+              priceFresh: false,
+              operatorPaused: false,
+              blockers: [],
+            },
+          ],
+        },
+      }),
     },
-    logger: { debug: entry => diagnosticEntries.push(entry), info: entry => diagnosticEntries.push(entry), warn: entry => diagnosticEntries.push(entry), error: entry => diagnosticEntries.push(entry) },
+    logger: {
+      debug: entry => diagnosticEntries.push(entry),
+      info: entry => diagnosticEntries.push(entry),
+      warn: entry => diagnosticEntries.push(entry),
+      error: entry => diagnosticEntries.push(entry),
+    },
     fetchImpl, retryDelayMs: 1,
   })
   await adapter.start()
   await secondPoll
   await adapter.stop()
   const interactionFailures = diagnosticEntries.filter(entry => entry.message === "Telegram interaction FAILED")
-  assert.deepEqual(interactionFailures, [], "Market navigation must not fail internally: " + JSON.stringify(interactionFailures))
+  assert.deepEqual(interactionFailures, [], `Market navigation must not fail internally: ${JSON.stringify(interactionFailures)}`)
   const buttons = edits[0].reply_markup.inline_keyboard.flat()
   assert.ok(buttons.some(button => button.callback_data === "cc:ask:PAUSE:LINKUSDT"), "An enabled unpaused market must offer only a pause request.")
   assert.ok(buttons.some(button => button.callback_data === "cc:ask:RESUME:BTCUSDT"), "An enabled operator-paused market must offer only a resume request.")
@@ -1111,7 +1145,7 @@ async function runTelegramUpdatesForDiagnostics({ updates, operator, logger, sen
       }
       finishSecondPoll()
       return new Promise((...promiseArgs) => {
-        const [resolve, reject] = promiseArgs
+        const [, reject] = promiseArgs
         options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
@@ -1167,7 +1201,12 @@ test("preserves a thrown market-query failure in one correlated diagnostic", asy
   )
   const loggedErrors = []
   await runTelegramUpdatesForDiagnostics({
-    updates: [makeUpdate({ updateId: 1201, text: "Pause" })],
+    updates: [
+      makeUpdate({
+        updateId: 1201,
+        text: "Pause",
+      }),
+    ],
     operator: {
       pauseMarket: async () => assert.fail("A failed market-selection query must never invoke pauseMarket."),
       getMarkets: async () => {
@@ -1203,7 +1242,12 @@ test("logs an application-returned pause failure with operation and market conte
   )
   const loggedErrors = []
   await runTelegramUpdatesForDiagnostics({
-    updates: [makeUpdate({ updateId: 1202, text: "/pause LINKUSDT" })],
+    updates: [
+      makeUpdate({
+        updateId: 1202,
+        text: "/pause LINKUSDT",
+      }),
+    ],
     operator: {
       pauseMarket: async () => ({
         ok: false,
@@ -1228,7 +1272,12 @@ test("logs an application-returned pause failure with operation and market conte
 test("distinguishes a completed pause from a failed Telegram response", async () => {
   const loggedErrors = []
   await runTelegramUpdatesForDiagnostics({
-    updates: [makeUpdate({ updateId: 1203, text: "/pause LINKUSDT" })],
+    updates: [
+      makeUpdate({
+        updateId: 1203,
+        text: "/pause LINKUSDT",
+      }),
+    ],
     operator: {
       pauseMarket: async () => ({
         ok: true,
@@ -1256,7 +1305,12 @@ test("distinguishes a completed pause from a failed Telegram response", async ()
 test("does not report a resume when the application confirms no operator pause existed", async () => {
   const entries = []
   const result = await runTelegramUpdatesForDiagnostics({
-    updates: [makeUpdate({ updateId: 1204, text: "/resume LINKUSDT" })],
+    updates: [
+      makeUpdate({
+        updateId: 1204,
+        text: "/resume LINKUSDT",
+      }),
+    ],
     operator: {
       pauseMarket: async () => assert.fail("A resume interaction must not invoke pauseMarket."),
       resumeMarket: async () => ({
@@ -1336,7 +1390,7 @@ test("retains a confirmation when callback acknowledgement fails and retries the
       }
       finishThirdPoll()
       return new Promise((...promiseArgs) => {
-        const [resolve, reject] = promiseArgs
+        const [, reject] = promiseArgs
         options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }

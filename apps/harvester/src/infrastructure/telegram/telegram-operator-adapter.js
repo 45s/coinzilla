@@ -508,6 +508,62 @@ async function respondToAuthorizedMessage({
 
 
 
+
+async function processTelegramUpdate({
+  update,
+  botUsername,
+  signal,
+  respondToUpdate,
+  diagnostics,
+  logStage,
+}) {
+  const interaction = createTelegramInteraction({
+    update,
+    botUsername,
+  })
+  logStage({
+    interaction,
+    message: "Telegram update RECEIVED",
+    stage: "UPDATE_RECEIVED",
+  })
+  try {
+    await respondToUpdate({
+      update,
+      signal,
+      interaction,
+    })
+  } catch (error) {
+    diagnostics.fail({
+      interaction,
+      error,
+      stage: interaction.stage,
+    })
+    return {
+      interaction,
+      error,
+    }
+  }
+  let outcome = "SUCCESS"
+  let completionMessage = "Telegram interaction COMPLETED"
+  let completionStage = "COMPLETED"
+  if (interaction.failed) {
+    outcome = "FAILURE_REPORTED"
+    completionMessage = "Telegram interaction HANDLED"
+    completionStage = "HANDLED"
+  } else if (interaction.rejected) {
+    outcome = "REJECTED"
+    completionMessage = "Telegram interaction HANDLED"
+    completionStage = "HANDLED"
+  }
+  logStage({
+    interaction,
+    message: completionMessage,
+    stage: completionStage,
+    fields: { outcome },
+  })
+  return { interaction }
+}
+
 function waitForRetry({ milliseconds, signal }) {
   return new Promise((resolve) => {
     if (signal.aborted) {
@@ -1271,37 +1327,18 @@ export function createTelegramOperatorAdapter({
           if (!Number.isSafeInteger(update?.update_id) || update.update_id < 0) {
             throw new TypeError("Telegram update has no valid update_id")
           }
-          const interaction = createTelegramInteraction({ update, botUsername })
-          logStage({ interaction, message: "Telegram update RECEIVED", stage: "UPDATE_RECEIVED" })
-          try {
-            await respondToUpdate({
-              update,
-              signal,
-              interaction,
-            })
-          } catch (error) {
-            diagnostics.fail({ interaction, error, stage: interaction.stage })
-            failedInteraction = interaction
-            throw error
-          }
-          let outcome = "SUCCESS"
-          let completionMessage = "Telegram interaction COMPLETED"
-          let completionStage = "COMPLETED"
-          if (interaction.failed) {
-            outcome = "FAILURE_REPORTED"
-            completionMessage = "Telegram interaction HANDLED"
-            completionStage = "HANDLED"
-          } else if (interaction.rejected) {
-            outcome = "REJECTED"
-            completionMessage = "Telegram interaction HANDLED"
-            completionStage = "HANDLED"
-          }
-          logStage({
-            interaction,
-            message: completionMessage,
-            stage: completionStage,
-            fields: { outcome },
+          const processed = await processTelegramUpdate({
+            update,
+            botUsername,
+            signal,
+            respondToUpdate,
+            diagnostics,
+            logStage,
           })
+          if (processed.error) {
+            failedInteraction = processed.interaction
+            throw processed.error
+          }
           offset = update.update_id + 1
         }
         currentRetryDelay = retryDelayMs
