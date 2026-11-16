@@ -70,20 +70,36 @@ function createBuyControl({ engine, operationalStateStore, action, requireSymbol
 
 /** Create the transport-independent control for one configured market's BUY side. */
 export function createPauseBuys(options = {}) {
-  return createBuyControl({ ...options, action: "pauseMarket", requireSymbol: true })
+  return createBuyControl({
+    ...options,
+    action: "pauseMarket",
+    requireSymbol: true,
+  })
 }
 
 /** Create the transport-independent control for all configured markets' BUY side. */
 export function createPauseAllBuys(options = {}) {
-  return createBuyControl({ ...options, action: "pauseMarket", requireSymbol: false })
+  return createBuyControl({
+    ...options,
+    action: "pauseMarket",
+    requireSymbol: false,
+  })
 }
 
 /** Remove only one market's emergency BUY pause. */
 export function createResumeBuys(options = {}) {
-  return createBuyControl({ ...options, action: "resumeMarket", requireSymbol: true })
+  return createBuyControl({
+    ...options,
+    action: "resumeMarket",
+    requireSymbol: true,
+  })
 }
 
 /** Remove only the global emergency BUY pause. */
 export function createResumeAllBuys(options = {}) {
-  return createBuyControl({ ...options, action: "resumeMarket", requireSymbol: false })
+  return createBuyControl({
+    ...options,
+    action: "resumeMarket",
+    requireSymbol: false,
+  })
 }
