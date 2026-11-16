@@ -522,15 +522,15 @@ test('revalidates DNS for every redirect and blocks a redirect to a private addr
 
   const requestedHosts = [];
   const result = await checkExternalLink(candidate('https://public.example.com/start'), {
-    fetchImpl: (...args) => {
-      const [url, init] = args;
+    fetchImpl: (...fetchArguments) => {
+      const [url, init] = fetchArguments;
       return fetchPinned(url, init, {
       resolveHost: async (hostname) => [{
         address: hostname === 'public.example.com' ? '8.8.8.8' : '127.0.0.1',
         family: 4,
       }],
-      requestImpl: (...args) => {
-        const [requestUrl, options, onResponse] = args;
+      requestImpl: (...requestArguments) => {
+        const [requestUrl, options, onResponse] = requestArguments;
         requestedHosts.push(requestUrl.hostname);
         options.lookup(requestUrl.hostname, {}, (error) => {
           assert.equal(error, null, 'Only the already-vetted public redirect source may reach the socket lookup.');
@@ -543,7 +543,8 @@ test('revalidates DNS for every redirect and blocks a redirect to a private addr
         return { on() { return this; },
 end() {} };
       },
-    }),
+      }),
+    },
     sleep: noDelay,
     minHostIntervalMs: 0,
   });
@@ -556,8 +557,8 @@ end() {} };
 test('blocks an initial public-looking hostname when any DNS answer is private before opening a socket', async () => {
   let openedConnections = 0;
   const result = await checkExternalLink(candidate('https://mixed-answer.example.com/start'), {
-    fetchImpl: (...args) => {
-      const [url, init] = args;
+    fetchImpl: (...fetchArguments) => {
+      const [url, init] = fetchArguments;
       return fetchPinned(url, init, {
       resolveHost: async () => [
         { address: '8.8.8.8',
@@ -569,7 +570,8 @@ family: 4 },
         openedConnections += 1;
         throw new Error('An unsafe DNS answer must be rejected before the request implementation is called.');
       },
-    }),
+      }),
+    },
     sleep: noDelay,
     minHostIntervalMs: 0,
   });
