@@ -131,8 +131,8 @@ durable: true },
       }
     },
   }
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") {
       return makeResponse({ ok: true,
@@ -202,8 +202,8 @@ updateId: 101 })
   let pollCount = 0
   let finishSecondPoll
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
@@ -250,8 +250,8 @@ chatType: "group" })
   let pollCount = 0
   let finishSecondPoll
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
@@ -297,8 +297,8 @@ text: "/resume LINKUSDT" })
   let pollCount = 0
   let finishSecondPoll
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
@@ -349,8 +349,8 @@ text: "/help" })
   let pollCount = 0
   let finishSecondPoll
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
@@ -407,8 +407,8 @@ test("retries an unacknowledged Telegram update with the same application reques
   let sendCount = 0
   let finishThirdPoll
   const thirdPoll = new Promise((resolve) => { finishThirdPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
@@ -471,8 +471,8 @@ test("concurrent start calls share one Telegram identity check and one poller", 
   const identity = new Promise((resolve) => { resolveIdentity = resolve })
   let finishPoll
   const pollStarted = new Promise((resolve) => { finishPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") {
       getMeCalls += 1
@@ -519,8 +519,8 @@ chatId: 54321 })
   let pollCount = 0
   let finishSecondPoll
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
@@ -585,8 +585,8 @@ text: "/markets" }),
   let pollCount = 0
   let finishSecondPoll
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
@@ -701,8 +701,8 @@ text: "/status" })]
     context: { component: "harvester.operator",
 operation: "READ_STATUS" },
   })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
@@ -784,8 +784,8 @@ test("registers the supported command menu and requests callback updates", async
   const calls = []
   let finishPoll
   const pollStarted = new Promise(resolve => { finishPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     calls.push({ method: telegramApiMethod,
 payload: telegramRequestOptions.body ? JSON.parse(telegramRequestOptions.body) : {} })
@@ -827,8 +827,8 @@ messageId: 701 })
   let pollCount = 0
   let finishSecondPoll
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
@@ -884,8 +884,8 @@ data: "cc:confirm:PAUSE:LINKUSDT:502" }),
   let pollCount = 0
   let finishThirdPoll
   const thirdPoll = new Promise(resolve => { finishThirdPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
@@ -941,8 +941,8 @@ data: "cc:nav:status" })
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
   const calls = []
   const diagnosticEntries = []
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
@@ -992,8 +992,8 @@ messageId: 705 })
   let pollCount = 0
   let finishSecondPoll
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
@@ -1071,8 +1071,8 @@ data: "cc:confirm:PAUSE:LINKUSDT:601" }),
   let pollCount = 0
   let finishSecondPoll
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
@@ -1111,8 +1111,8 @@ messageId: 804 })
   let pollCount = 0
   let finishSecondPoll
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
@@ -1172,8 +1172,8 @@ data: "cc:cancel:701" }),
   let pollCount = 0
   let finishThirdPoll
   const thirdPoll = new Promise(resolve => { finishThirdPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
@@ -1229,8 +1229,8 @@ data: "cc:nav:status" }),
   let pollCount = 0
   let finishSecondPoll
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
@@ -1279,8 +1279,8 @@ text: "/help" })
   let pollCount = 0
   let finishSecondPoll
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
@@ -1327,8 +1327,8 @@ messageId: 1001 })
   let pollCount = 0
   let finishSecondPoll
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
@@ -1419,8 +1419,8 @@ async function runTelegramUpdatesForDiagnostics({ updates, operator, logger, sen
   const secondPoll = new Promise(resolve => {
     finishSecondPoll = resolve
   })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") {
       return makeResponse({
@@ -1822,8 +1822,8 @@ function createCallbackAckRetryFetch({ askUpdate, confirmUpdate }) {
   const thirdPoll = new Promise(resolve => {
     finishThirdPoll = resolve
   })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") {
       return makeResponse({
@@ -1953,8 +1953,8 @@ function createExpiredCallbackAcknowledgementFetch({ updates }) {
   const secondPoll = new Promise(resolve => {
     finishSecondPoll = resolve
   })
-  const fetchImpl = async (...args) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = args
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") {
       return makeResponse({
