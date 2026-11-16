@@ -7,10 +7,13 @@ const market = new Market({
   venue: "BINANCE",
   id: "binance:LINKUSDT",
   symbol: "LINKUSDT",
-  baseAsset: new Asset({ id: "binance:LINK", code: "LINK" }),
-  quoteAsset: new Asset({ id: "binance:USDT", code: "USDT" }),
+  baseAsset: new Asset({ id: "binance:LINK",
+code: "LINK" }),
+  quoteAsset: new Asset({ id: "binance:USDT",
+code: "USDT" }),
 })
-const projection = { ok: true, data: { requiresExchangeReconciliation: true } }
+const projection = { ok: true,
+data: { requiresExchangeReconciliation: true } }
 const historyRetentionEvidence = {
   factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
   baselineFactId: "coverage:LINKUSDT:baseline",
@@ -26,22 +29,29 @@ function createDependencies(overrides = {}) {
   return {
     calls,
     projection,
-    recoveredState: { portfolio: {}, orderRegistry: {}, journalFills: [] },
+    recoveredState: { portfolio: {},
+orderRegistry: {},
+journalFills: [] },
     reconcileOwnedOrders: async (options) => {
       calls.push(["reconcileOwnedOrders", options])
-      return { ok: true, data: { reconciledOrders: 2 } }
+      return { ok: true,
+data: { reconciledOrders: 2 } }
     },
     getRecoveredState: async () => {
       calls.push(["getRecoveredState"])
-      return { portfolio: {}, orderRegistry: {}, journalFills: [] }
+      return { portfolio: {},
+orderRegistry: {},
+journalFills: [] }
     },
     refreshAccountSnapshot: async () => {
       calls.push(["refreshAccountSnapshot"])
-      return { ok: true, data: { sourceTime: 300 } }
+      return { ok: true,
+data: { sourceTime: 300 } }
     },
     refreshOpenOrders: async () => {
       calls.push(["refreshOpenOrders"])
-      return { ok: true, data: [] }
+      return { ok: true,
+data: [] }
     },
     fetchMarketTradeHistory: async (options) => {
       calls.push(["fetchMarketTradeHistory", options])
@@ -68,7 +78,8 @@ function createDependencies(overrides = {}) {
           skipped: false,
           targetMarketBlocked: false,
           blockedMarkets: [],
-          tradeHistory: { complete: true, scope: "MARKET" },
+          tradeHistory: { complete: true,
+scope: "MARKET" },
         },
       }
     },
@@ -96,7 +107,8 @@ test("reconciles owned orders before auditing account-wide state and target-mark
   const historyCall = dependencies.calls.find(([name]) => name === "fetchMarketTradeHistory")
   assert.deepEqual(
     historyCall[1],
-    { market, startTime: 100 },
+    { market,
+startTime: 100 },
     "Market history must be fetched only for the target market, from the operator-reviewed coverage boundary.",
   )
   const auditCall = dependencies.calls.find(([name]) => name === "auditAccountState")[1]
@@ -135,7 +147,8 @@ test("returns a blocked market result without claiming readiness when an unowned
         skipped: false,
         targetMarketBlocked: true,
         blockedMarkets: ["LINKUSDT"],
-        tradeHistory: { complete: true, scope: "MARKET" },
+        tradeHistory: { complete: true,
+scope: "MARKET" },
       },
     }),
   })
@@ -149,7 +162,9 @@ test("returns a blocked market result without claiming readiness when an unowned
 
 test("does not claim readiness when there is no prior trading state to reconcile", async () => {
   const dependencies = createDependencies({
-    auditAccountState: () => ({ ok: true, data: { skipped: true, reason: "NO_PRIOR_TRADING_STATE" } }),
+    auditAccountState: () => ({ ok: true,
+data: { skipped: true,
+reason: "NO_PRIOR_TRADING_STATE" } }),
   })
   const result = await reconcileRecoveredMarketState(dependencies)
 
@@ -160,7 +175,8 @@ test("does not claim readiness when there is no prior trading state to reconcile
 
 test("rejects history-retention evidence for a different market before querying dependencies", async () => {
   const dependencies = createDependencies({
-    historyRetentionEvidence: { ...historyRetentionEvidence, symbol: "SOLUSDT" },
+    historyRetentionEvidence: { ...historyRetentionEvidence,
+symbol: "SOLUSDT" },
   })
   const result = await reconcileRecoveredMarketState(dependencies)
 
