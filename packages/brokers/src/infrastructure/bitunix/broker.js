@@ -295,12 +295,16 @@ export class BitunixSpotBroker extends CoreBroker {
         value: response.data,
         operation: "market catalog",
       })
-      const symbolInfo = rows.find((row) =>
+      const matchingRows = rows.filter((row) =>
         getBitunixSymbol({ symbolInfo: row }) === normalizedSymbol,
       )
-      if (!symbolInfo) {
+      if (matchingRows.length === 0) {
         throw new Error(`Bitunix Spot market ${normalizedSymbol} was not found`)
       }
+      if (matchingRows.length > 1) {
+        throw new TypeError(`Bitunix Spot market catalog contains duplicate metadata for symbol ${normalizedSymbol}`)
+      }
+      const [symbolInfo] = matchingRows
       return toResult({
         data: {
           ...symbolInfo,
