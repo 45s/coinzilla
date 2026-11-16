@@ -249,208 +249,149 @@ runDogeTradingReplayTest("submits the recovery SELL before the next standing BUY
   assertBrokerOrderRequestSequence(dogeTradingReplay);
 });
 
-runDogeTradingReplayTest("combines four completed BUY fills into one profitable recovery SELL and retains the configured inventory", async (dogeTradingReplay) => {
-    let currentStandingBuyOrder = await submitInitialBuyOrder(dogeTradingReplay)
-    const completedBuyOrders = []
-    let latestRecoverySellOrder
+async function completeFourBuyOrders(dogeTradingReplay) {
+  let currentStandingBuyOrder = await submitInitialBuyOrder(dogeTradingReplay);
+  const completedBuyOrders = [];
+  let latestRecoverySellOrder;
 
-    for (
-      let buyFillNumber = 0;
-      buyFillNumber < COMPLETED_BUY_COUNT;
-      buyFillNumber += 1
-    ) {
-      const nextRecoverySellSubmission = dogeTradingReplay.waitForSubmittedOrder(
-        "SELL",
-        buyFillNumber + 1,
-      )
-      const nextStandingBuySubmission = dogeTradingReplay.waitForSubmittedOrder(
-        "BUY",
-        buyFillNumber + 2,
-      )
-
-      await dogeTradingReplay.publishMarketPrice(currentStandingBuyOrder.price)
-      await dogeTradingReplay.publishFullOrderFill({
-        order: currentStandingBuyOrder,
-        price: currentStandingBuyOrder.price,
-        tradeId: String(FIRST_BUY_TRADE_ID + buyFillNumber),
-      })
-
-      const [
-        submittedRecoverySellOrder,
-        submittedNextStandingBuyOrder,
-      ] = await Promise.all([
-        nextRecoverySellSubmission,
-        nextStandingBuySubmission,
-      ])
-
-      completedBuyOrders.push(currentStandingBuyOrder)
-      latestRecoverySellOrder = submittedRecoverySellOrder
-      currentStandingBuyOrder = submittedNextStandingBuyOrder
-    }
-
-    assert.equal(
-      completedBuyOrders.length,
-      COMPLETED_BUY_COUNT,
-      "the replay must complete exactly four distinct BUY orders before calculating the combined recovery SELL",
-    )
-
-    const actualBuyFillReports = dogeTradingReplay.receivedExecutionReports
-      .filter(({ executedOrder }) => executedOrder.side === "BUY")
-      .map(({ executedOrder, fill }) => ({
-        orderPrice: executedOrder.price,
-        executedQuantity: executedOrder.executedQuantity,
-        fillPrice: fill.price,
-        fillQuantity: fill.quantity,
-        quoteQuantity: fill.quoteQuantity,
-        commissionAmount: fill.commissionAmount,
-        commissionAsset: fill.commissionAsset,
-      }))
-    assert.deepEqual(
-      actualBuyFillReports,
-      expectedBuyFillReportsAfterFourBuys,
-      "each BUY execution must reconcile its exact price, quantity, quote notional, and DOGE commission",
-    )
-
-    assert.equal(
-      dogeTradingReplay.confirmedCanceledOrders.length,
-      CANCELED_RECOVERY_SELL_COUNT,
-      "the strategy must confirm cancellation of the three superseded recovery SELL orders before replacing them",
-    )
-    assert.ok(
-      dogeTradingReplay.confirmedCanceledOrders.every(
-        (canceledRecoverySellOrder) => canceledRecoverySellOrder.status === "CANCELED",
-      ),
-      "every superseded recovery SELL order must have an authoritative CANCELED status",
-    )
-
-    const completedBuyOrderSummaries = completedBuyOrders.map(
-      (completedBuyOrder) => ({
-        marketSymbol: completedBuyOrder.market.symbol,
-        side: completedBuyOrder.side,
-        orderType: completedBuyOrder.type,
-      }),
-    )
-    assert.deepEqual(
-      completedBuyOrderSummaries,
-      Array.from({ length: COMPLETED_BUY_COUNT }, () => ({
-        marketSymbol: MARKET_SYMBOL,
-        side: "BUY",
-        orderType: "LIMIT",
-      })),
-      "all four completed strategy orders must belong to DOGEUSDT and be LIMIT BUY orders",
-    )
-
-    const brokerOrderSides = dogeTradingReplay.brokerOrderPlacementRequests.map(
-      ({ params }) => params.side,
-    )
-    assert.deepEqual(
-      brokerOrderSides,
-      ["BUY", "SELL", "BUY", "SELL", "BUY", "SELL", "BUY", "SELL", "BUY"],
-      "four completed BUY fills must produce the initial BUY, four recovery SELLs, and four subsequent standing BUYs in this exact order",
-    )
-
-    assertOrderMatches(
-      latestRecoverySellOrder,
-      {
-        marketSymbol: MARKET_SYMBOL,
-        side: "SELL",
-        price: EXPECTED_RECOVERY_SELL_PRICE_AFTER_FOUR_BUYS,
-        quantity: EXPECTED_RECOVERY_SELL_QUANTITY_AFTER_FOUR_BUYS,
-        orderType: "LIMIT",
-      },
-      "after four completed BUY fills, the latest recovery SELL must combine the remaining sellable DOGE at the calculated price",
-    )
-    assert.ok(
-      Number(latestRecoverySellOrder.quantity) >
-        dogeTradingReplay.marketConfiguration.keepQuantity,
-      "the combined recovery SELL must sell more DOGE than the configured retained inventory quantity",
-    )
-
-    const recoveryCycleCompletion = dogeTradingReplay.waitForRecoveryCycleCompletion()
-    await dogeTradingReplay.publishMarketPrice(latestRecoverySellOrder.price)
+  for (let buyFillNumber = 0; buyFillNumber < COMPLETED_BUY_COUNT; buyFillNumber += 1) {
+    const nextRecoverySellSubmission = dogeTradingReplay.waitForSubmittedOrder("SELL", buyFillNumber + 1);
+    const nextStandingBuySubmission = dogeTradingReplay.waitForSubmittedOrder("BUY", buyFillNumber + 2);
+    await dogeTradingReplay.publishMarketPrice(currentStandingBuyOrder.price);
     await dogeTradingReplay.publishFullOrderFill({
-      order: latestRecoverySellOrder,
-      price: latestRecoverySellOrder.price,
-      tradeId: FINAL_RECOVERY_SELL_TRADE_ID,
-    })
-    const recoveryCycleResult = await recoveryCycleCompletion
+      order: currentStandingBuyOrder,
+      price: currentStandingBuyOrder.price,
+      tradeId: String(FIRST_BUY_TRADE_ID + buyFillNumber),
+    });
+    const [submittedRecoverySellOrder, submittedNextStandingBuyOrder] = await Promise.all([
+      nextRecoverySellSubmission,
+      nextStandingBuySubmission,
+    ]);
+    completedBuyOrders.push(currentStandingBuyOrder);
+    latestRecoverySellOrder = submittedRecoverySellOrder;
+    currentStandingBuyOrder = submittedNextStandingBuyOrder;
+  }
 
-    assert.equal(
-      recoveryCycleResult.freeQuantity,
-      EXPECTED_RETAINED_DOGE_QUANTITY,
-      "the completed recovery cycle must retain exactly 3.4 DOGE as free inventory",
-    )
-    assert.equal(
-      recoveryCycleResult.realizedNetProfit,
-      EXPECTED_REALIZED_PROFIT_AFTER_FOUR_BUYS,
-      "the four-BUY recovery cycle must report the exact realized net profit after actual commissions",
-    )
-    assert.ok(
-      Number(recoveryCycleResult.realizedNetProfit) >= Number(MINIMUM_RECOVERY_PROFIT),
-      "the recovery cycle must not complete until actual net profit meets the minimum 0.01 USDT requirement",
-    )
+  return { completedBuyOrders, latestRecoverySellOrder };
+}
 
-    const actualRecoverySellFillReports = dogeTradingReplay.receivedExecutionReports
-      .filter(({ executedOrder }) => executedOrder.side === "SELL")
-      .map(({ executedOrder, fill }) => ({
-        orderPrice: executedOrder.price,
-        executedQuantity: executedOrder.executedQuantity,
-        fillPrice: fill.price,
-        fillQuantity: fill.quantity,
-        quoteQuantity: fill.quoteQuantity,
-        commissionAmount: fill.commissionAmount,
-        commissionAsset: fill.commissionAsset,
-      }))
-    assert.deepEqual(
-      actualRecoverySellFillReports,
-      [{
-        orderPrice: EXPECTED_RECOVERY_SELL_PRICE_AFTER_FOUR_BUYS,
-        executedQuantity: EXPECTED_RECOVERY_SELL_QUANTITY_AFTER_FOUR_BUYS,
-        fillPrice: EXPECTED_RECOVERY_SELL_PRICE_AFTER_FOUR_BUYS,
-        fillQuantity: EXPECTED_RECOVERY_SELL_QUANTITY_AFTER_FOUR_BUYS,
-        quoteQuantity: "114.5529",
-        commissionAmount: "0.1145529",
-        commissionAsset: "USDT",
-      }],
-      "the final recovery SELL execution must reconcile its exact proceeds and quote-asset commission",
-    )
+function assertFourBuyExecutionHistory(dogeTradingReplay, completedBuyOrders, latestRecoverySellOrder) {
+  assert.equal(completedBuyOrders.length, COMPLETED_BUY_COUNT, "Exactly four distinct BUY orders must complete.");
+  const actualBuyFillReports = dogeTradingReplay.receivedExecutionReports
+    .filter(({ executedOrder }) => executedOrder.side === "BUY")
+    .map(({ executedOrder, fill }) => ({
+      orderPrice: executedOrder.price,
+      executedQuantity: executedOrder.executedQuantity,
+      fillPrice: fill.price,
+      fillQuantity: fill.quantity,
+      quoteQuantity: fill.quoteQuantity,
+      commissionAmount: fill.commissionAmount,
+      commissionAsset: fill.commissionAsset,
+    }));
+  assert.deepEqual(actualBuyFillReports, expectedBuyFillReportsAfterFourBuys, "Every BUY fill must preserve its exact price, quantity, notional, and DOGE commission.");
+  assert.equal(dogeTradingReplay.confirmedCanceledOrders.length, CANCELED_RECOVERY_SELL_COUNT, "The three superseded recovery SELL orders must be canceled.");
+  assert.ok(
+    dogeTradingReplay.confirmedCanceledOrders.every((order) => order.status === "CANCELED"),
+    "Every superseded recovery SELL must have an authoritative CANCELED status.",
+  );
+  const completedBuyOrderSummaries = completedBuyOrders.map((order) => ({
+    marketSymbol: order.market.symbol,
+    side: order.side,
+    orderType: order.type,
+  }));
+  assert.deepEqual(
+    completedBuyOrderSummaries,
+    Array.from({ length: COMPLETED_BUY_COUNT }, () => ({
+      marketSymbol: MARKET_SYMBOL,
+      side: "BUY",
+      orderType: "LIMIT",
+    })),
+    "All four completed strategy orders must be DOGEUSDT LIMIT BUY orders.",
+  );
+  const brokerOrderSides = dogeTradingReplay.brokerOrderPlacementRequests.map(({ params }) => params.side);
+  assert.deepEqual(
+    brokerOrderSides,
+    ["BUY", "SELL", "BUY", "SELL", "BUY", "SELL", "BUY", "SELL", "BUY"],
+    "Four completed BUY fills must produce the initial BUY, four recovery SELLs, and four subsequent BUYs in order.",
+  );
+  assertOrderMatches(
+    latestRecoverySellOrder,
+    {
+      marketSymbol: MARKET_SYMBOL,
+      side: "SELL",
+      price: EXPECTED_RECOVERY_SELL_PRICE_AFTER_FOUR_BUYS,
+      quantity: EXPECTED_RECOVERY_SELL_QUANTITY_AFTER_FOUR_BUYS,
+      orderType: "LIMIT",
+    },
+    "The latest recovery SELL must combine the remaining sellable DOGE at the calculated price.",
+  );
+  assert.ok(
+    Number(latestRecoverySellOrder.quantity) > dogeTradingReplay.marketConfiguration.keepQuantity,
+    "The combined recovery SELL must preserve the configured retained inventory.",
+  );
+}
 
-    const finalStrategyPosition = dogeTradingReplay.runtime.portfolio.getPosition({
-      symbol: MARKET_SYMBOL,
-    })
-    assert.equal(
-      finalStrategyPosition.baseQuantity.amount,
-      "0",
-      "a completed recovery cycle must leave no active DOGE position quantity",
-    )
-    assert.equal(
-      finalStrategyPosition.freeBaseQuantity.amount,
-      EXPECTED_RETAINED_DOGE_QUANTITY,
-      "a completed recovery cycle must move exactly 3.4 DOGE into free retained inventory",
-    )
-    assert.ok(
-      Number(finalStrategyPosition.freeBaseQuantity.amount) >=
-        dogeTradingReplay.marketConfiguration.keepQuantity,
-      "the retained free DOGE inventory must be at least the configured keepQuantity",
-    )
+async function completeFinalRecoveryCycle(dogeTradingReplay, latestRecoverySellOrder) {
+  const recoveryCycleCompletion = dogeTradingReplay.waitForRecoveryCycleCompletion();
+  await dogeTradingReplay.publishMarketPrice(latestRecoverySellOrder.price);
+  await dogeTradingReplay.publishFullOrderFill({
+    order: latestRecoverySellOrder,
+    price: latestRecoverySellOrder.price,
+    tradeId: FINAL_RECOVERY_SELL_TRADE_ID,
+  });
+  return recoveryCycleCompletion;
+}
 
-    const buyExecutionReportCount = dogeTradingReplay.receivedExecutionReports.filter(
-      ({ executedOrder }) => executedOrder.side === "BUY",
-    ).length
-    const sellExecutionReportCount = dogeTradingReplay.receivedExecutionReports.filter(
-      ({ executedOrder }) => executedOrder.side === "SELL",
-    ).length
-    assert.equal(
-      buyExecutionReportCount,
-      COMPLETED_BUY_COUNT,
-      "the completed recovery cycle must account for each of the four BUY executions exactly once",
-    )
-    assert.equal(
-      sellExecutionReportCount,
-      1,
-      "the completed recovery cycle must account for its final recovery SELL execution exactly once",
-    )
-  })
+function assertFinalRecoveryCycleResult(dogeTradingReplay, recoveryCycleCompletion) {
+  assert.equal(recoveryCycleCompletion.freeQuantity, EXPECTED_RETAINED_DOGE_QUANTITY, "The completed cycle must retain exactly 3.4 DOGE.");
+  assert.equal(recoveryCycleCompletion.realizedNetProfit, EXPECTED_REALIZED_PROFIT_AFTER_FOUR_BUYS, "The completed cycle must report exact realized net profit.");
+  assert.ok(
+    Number(recoveryCycleCompletion.realizedNetProfit) >= Number(MINIMUM_RECOVERY_PROFIT),
+    "The recovery cycle must meet the minimum net-profit requirement.",
+  );
+  const actualRecoverySellFillReports = dogeTradingReplay.receivedExecutionReports
+    .filter(({ executedOrder }) => executedOrder.side === "SELL")
+    .map(({ executedOrder, fill }) => ({
+      orderPrice: executedOrder.price,
+      executedQuantity: executedOrder.executedQuantity,
+      fillPrice: fill.price,
+      fillQuantity: fill.quantity,
+      quoteQuantity: fill.quoteQuantity,
+      commissionAmount: fill.commissionAmount,
+      commissionAsset: fill.commissionAsset,
+    }));
+  assert.deepEqual(
+    actualRecoverySellFillReports,
+    [{
+      orderPrice: EXPECTED_RECOVERY_SELL_PRICE_AFTER_FOUR_BUYS,
+      executedQuantity: EXPECTED_RECOVERY_SELL_QUANTITY_AFTER_FOUR_BUYS,
+      fillPrice: EXPECTED_RECOVERY_SELL_PRICE_AFTER_FOUR_BUYS,
+      fillQuantity: EXPECTED_RECOVERY_SELL_QUANTITY_AFTER_FOUR_BUYS,
+      quoteQuantity: "114.5529",
+      commissionAmount: "0.1145529",
+      commissionAsset: "USDT",
+    }],
+    "The final recovery SELL must reconcile exact proceeds and quote-asset commission.",
+  );
+  const finalStrategyPosition = dogeTradingReplay.runtime.portfolio.getPosition({ symbol: MARKET_SYMBOL });
+  assert.equal(finalStrategyPosition.baseQuantity.amount, "0", "A completed recovery cycle must leave no active DOGE position.");
+  assert.equal(finalStrategyPosition.freeBaseQuantity.amount, EXPECTED_RETAINED_DOGE_QUANTITY, "A completed recovery cycle must retain exactly 3.4 DOGE.");
+  assert.ok(
+    Number(finalStrategyPosition.freeBaseQuantity.amount) >= dogeTradingReplay.marketConfiguration.keepQuantity,
+    "The retained free DOGE inventory must meet the configured keepQuantity.",
+  );
+  const buyExecutionReportCount = dogeTradingReplay.receivedExecutionReports.filter(({ executedOrder }) => executedOrder.side === "BUY").length;
+  const sellExecutionReportCount = dogeTradingReplay.receivedExecutionReports.filter(({ executedOrder }) => executedOrder.side === "SELL").length;
+  assert.equal(buyExecutionReportCount, COMPLETED_BUY_COUNT, "The completed cycle must account for each BUY execution exactly once.");
+  assert.equal(sellExecutionReportCount, 1, "The completed cycle must account for the final recovery SELL exactly once.");
+}
+
+runDogeTradingReplayTest("combines four completed BUY fills into one profitable recovery SELL and retains the configured inventory", async (dogeTradingReplay) => {
+  const { completedBuyOrders, latestRecoverySellOrder } = await completeFourBuyOrders(dogeTradingReplay);
+  assertFourBuyExecutionHistory(dogeTradingReplay, completedBuyOrders, latestRecoverySellOrder);
+  const recoveryCycleCompletion = await completeFinalRecoveryCycle(dogeTradingReplay, latestRecoverySellOrder);
+  assertFinalRecoveryCycleResult(dogeTradingReplay, recoveryCycleCompletion);
+});
 
 runDogeTradingReplayTest("completes the recovery cycle only after the SELL fill report is received and reconciled", async (dogeTradingReplay) => {
     const { recoverySellOrder } =
