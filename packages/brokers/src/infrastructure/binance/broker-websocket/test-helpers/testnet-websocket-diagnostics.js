@@ -28,7 +28,7 @@ function readHttpUpgradeStatus(...sources) {
 }
 
 function blockedByHostFrom(response) {
-  const blockedByLink = response.headers.link?.match(/<([^>]+)>\s*;\s*rel=[\"']?blocked-by[\"']?/i)?.[1]
+  const blockedByLink = response.headers.link?.match(/<([^>]+)>\s*;\s*rel=["']?blocked-by["']?/i)?.[1]
   if (!blockedByLink) return null
   try {
     return new URL(blockedByLink).host
