@@ -9,7 +9,7 @@ test("forwards each chunk to every durable destination", async () => {
   const destination = new Writable({
     write(...args) {
 
-      const [chunk, , callback] = args
+      const [, , callback] = args
       received.push(chunk.toString())
       callback()
     },
