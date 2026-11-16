@@ -27,7 +27,10 @@ async function stopRuntimeForShutdown({ runtime, logger } = {}) {
         error,
       }
     }
-    logSystem({ logger, message: "Shutdown completed." })
+    logSystem({
+      logger,
+      message: "Shutdown completed.",
+    })
     return { runtimeStopped: true }
   } catch (error) {
     process.exitCode = 1
@@ -80,7 +83,10 @@ async function closeTelegramNotifications({
       error,
     })
   }
-  logTelegramNotificationSummary({ notifications, logger })
+  logTelegramNotificationSummary({
+    notifications,
+    logger,
+  })
   return errors
 }
 
@@ -113,7 +119,10 @@ async function runRuntimeShutdown({
   closeObservability,
   logTelegramNotificationSummary,
 } = {}) {
-  const stopResult = await stopRuntimeForShutdown({ runtime, logger })
+  const stopResult = await stopRuntimeForShutdown({
+    runtime,
+    logger,
+  })
   if (!stopResult.runtimeStopped) {
     return { runtimeStopped: false }
   }
@@ -153,7 +162,10 @@ async function runRuntimeShutdown({
     process.exitCode = 1
   }
 
-  await closeProcessLogger({ closeLogger, logger })
+  await closeProcessLogger({
+    closeLogger,
+    logger,
+  })
   return { runtimeStopped: true }
 }
 
@@ -169,7 +181,10 @@ export function createRuntimeShutdownHandler(dependencies = {}) {
     if (shutdownPromise) {
       return shutdownPromise
     }
-    shutdownPromise = runRuntimeShutdown({ ...dependencies, reason })
+    shutdownPromise = runRuntimeShutdown({
+      ...dependencies,
+      reason,
+    })
       .then(({ runtimeStopped }) => {
         if (!runtimeStopped) {
           shutdownPromise = undefined
