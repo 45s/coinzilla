@@ -1,6 +1,6 @@
 import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal } from "@coinzilla/utils"
 import { Fill, Market, Money, Quantity } from "@coinzilla/entities"
-import { calculatePositionFill } from "./position-accounting.js"
+import { calculatePositionFill, calculatePositionSellAllocation } from "./position-accounting.js"
 
 export function createPositionId({ marketId, strategyId } = {}) {
   if (typeof marketId !== "string" || !marketId.trim()) {
@@ -110,6 +110,44 @@ export class Position {
       fill,
     })
 
+    return new Position({
+      positionId: this.#positionId,
+      strategyId: this.#strategyId,
+      market: this.#market,
+      baseQuantity: new Quantity({
+        amount: accounting.baseQuantity,
+        asset: this.#market.baseAsset,
+      }),
+      freeBaseQuantity: this.#freeBaseQuantity,
+      quoteNetCashFlow: new Money({
+        amount: accounting.quoteNetCashFlow,
+        asset: this.#market.quoteAsset,
+      }),
+      spent: new Money({
+        amount: accounting.spent,
+        asset: this.#market.quoteAsset,
+      }),
+    })
+  }
+
+
+  /**
+   * Apply this Position's explicitly allocated share of one canonical SELL Fill.
+   * The Portfolio records canonical Fill identity; this method updates only
+   * the Position's recovery-side accounting and never creates a synthetic Fill.
+   *
+   * @param {object} input
+   * @param {object} input.allocation Immutable SELL allocation side.
+   * @returns {Position} New immutable Position snapshot.
+   */
+  applySellAllocation({ allocation } = {}) {
+    const accounting = calculatePositionSellAllocation({
+      market: this.#market,
+      baseQuantity: this.#baseQuantity.amount,
+      quoteNetCashFlow: this.#quoteNetCashFlow.amount,
+      spent: this.#spent.amount,
+      allocation,
+    })
     return new Position({
       positionId: this.#positionId,
       strategyId: this.#strategyId,
