@@ -13,11 +13,18 @@ describe(`${Order.name}`, () => {
   const id = generateUUID()
 
   const validOrder = (overrides = {}) =>
-    new Order({ symbol, type, side, quantity, price, id, ...overrides })
+    new Order({ symbol,
+type,
+side,
+quantity,
+price,
+id,
+...overrides })
 
   it("should normalize and expose all order fields", () => {
     const clientOrderId = "FR_BTC_0001"
-    const o = validOrder({ symbol: "  btcusdt  ", clientOrderId })
+    const o = validOrder({ symbol: "  btcusdt  ",
+clientOrderId })
 
     assert.strictEqual(o.symbol, "BTCUSDT")
     assert.strictEqual(o.type, type)
