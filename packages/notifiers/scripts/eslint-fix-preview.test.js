@@ -18,13 +18,15 @@ function indentObjectProperties(source) {
   })
   const indentationByLine = new Map()
 
-  function visit(node, objectAncestors = []) {
+  const objectAncestors = []
+
+  function visit(node) {
     if (!node || typeof node !== "object") {
       return
     }
     if (Array.isArray(node)) {
       for (const child of node) {
-        visit(child, objectAncestors)
+        visit(child)
       }
       return
     }
@@ -35,9 +37,12 @@ function indentObjectProperties(source) {
     ) {
       const openingLine = node.loc.start.line
       const openingIndent = lines[openingLine - 1].match(/^\s*/)[0].length
-      const sameLineAncestors = objectAncestors.filter(
-        (ancestor) => ancestor.loc.start.line === openingLine,
-      ).length
+      let sameLineAncestors = 0
+      for (const ancestor of objectAncestors) {
+        if (ancestor.loc.start.line === openingLine) {
+          sameLineAncestors += 1
+        }
+      }
       const expectedIndent = openingIndent + 2 + (sameLineAncestors * 2)
       for (const property of node.properties) {
         if (property.loc.start.line !== openingLine) {
@@ -48,14 +53,18 @@ function indentObjectProperties(source) {
       }
     }
 
-    const nextObjectAncestors =
+    const isObjectNode =
       node.type === "ObjectExpression" || node.type === "ObjectPattern"
-        ? [...objectAncestors, node]
-        : objectAncestors
+    if (isObjectNode) {
+      objectAncestors.push(node)
+    }
     for (const [key, value] of Object.entries(node)) {
       if (key !== "loc" && key !== "range" && key !== "tokens" && key !== "comments") {
-        visit(value, nextObjectAncestors)
+        visit(value)
       }
+    }
+    if (isObjectNode) {
+      objectAncestors.pop()
     }
   }
 
