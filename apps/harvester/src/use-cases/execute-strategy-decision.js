@@ -552,6 +552,14 @@ async function executePendingOrders({ context, pendingOrders } = {}) {
       candidate,
     })
     if (!submitted.ok) {return submitted}
+    if (submitted.data?.deferred) {
+      return toResult({
+        data: {
+          ...submitted.data,
+          submittedOrders,
+        },
+      })
+    }
     submittedOrders.push(submitted.data.order)
   }
   return toResult({ data: { submittedOrders } })

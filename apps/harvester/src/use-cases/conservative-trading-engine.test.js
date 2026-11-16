@@ -11004,7 +11004,7 @@ test("invalidates and rechecks a safe market after a late owned SELL execution",
     baseFreeBalance: "1",
     accountingApplied: true,
     isStopping: () => shutdownStarted,
-    getTerminalFills: () => terminalSellFills,
+    getAcknowledgedFills: () => terminalSellFills,
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
