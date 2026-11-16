@@ -1,12 +1,13 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest("[telegram-operator-keyboard.test.js] " + name, ...args)
 import assert from "node:assert/strict"
 import {
   createTelegramOperatorAdapter,
   parseTelegramOperatorCommand,
 } from "./telegram-operator-adapter.js"
 
-function makeResponse(payload, status = 200) {
+const test = nodeTest
+
+function makeResponse({ payload, status = 200 }) {
   return {
     ok: status >= 200 && status < 300,
     status,
@@ -20,10 +21,28 @@ function makeUpdate({ updateId = 100, userId = 12345, text = "/start" } = {}) {
     message: {
       message_id: updateId,
       date: 1700000000,
-      from: { id: userId, is_bot: false },
-      chat: { id: userId, type: "private" },
+      from: {
+        id: userId,
+        is_bot: false,
+      },
+      chat: {
+        id: userId,
+        type: "private",
+      },
       text,
     },
+  }
+}
+
+function makeMarket({ symbol, enabled, operatorPaused }) {
+  return {
+    symbol,
+    enabled,
+    readiness: enabled ? "READY" : "DISABLED",
+    latestPrice: enabled ? "10" : null,
+    priceFresh: enabled,
+    operatorPaused,
+    blockers: [],
   }
 }
 
@@ -32,20 +51,41 @@ async function runAdapter({ updates, operator } = {}) {
   const registeredCommands = []
   let pollCount = 0
   let finishSecondPoll
-  const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
-  const fetchImpl = async (url, options = {}) => {
+  const secondPoll = new Promise((resolve) => {
+    finishSecondPoll = resolve
+  })
+  const fetchImpl = async (...args) => {
+    const [url, options = {}] = args
     const method = url.split("/").pop()
     if (method === "getMe") {
-      return makeResponse({ ok: true, result: { id: 99, username: "coinzilla_bot" } })
+      return makeResponse({
+        payload: {
+          ok: true,
+          result: {
+            id: 99,
+            username: "coinzilla_bot",
+          },
+        },
+      })
     }
     if (method === "setMyCommands") {
       registeredCommands.push(JSON.parse(options.body))
-      return makeResponse({ ok: true, result: true })
+      return makeResponse({
+        payload: {
+          ok: true,
+          result: true,
+        },
+      })
     }
     if (method === "getUpdates") {
       pollCount += 1
       if (pollCount === 1) {
-        return makeResponse({ ok: true, result: updates })
+        return makeResponse({
+          payload: {
+            ok: true,
+            result: updates,
+          },
+        })
       }
       finishSecondPoll()
       return new Promise((resolve, reject) => {
@@ -54,12 +94,24 @@ async function runAdapter({ updates, operator } = {}) {
     }
     if (method === "sendMessage") {
       sentMessages.push(JSON.parse(options.body))
-      return makeResponse({ ok: true, result: { message_id: 200 } })
+      return makeResponse({
+        payload: {
+          ok: true,
+          result: {
+            message_id: 200,
+          },
+        },
+      })
     }
     if (method === "answerCallbackQuery") {
-      return makeResponse({ ok: true, result: true })
+      return makeResponse({
+        payload: {
+          ok: true,
+          result: true,
+        },
+      })
     }
-    throw new Error("Unexpected Telegram API method: " + method)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -73,24 +125,45 @@ async function runAdapter({ updates, operator } = {}) {
   await secondPoll
   await adapter.stop()
 
-  return { sentMessages, registeredCommands }
+  return {
+    sentMessages,
+    registeredCommands,
+  }
 }
 
 test("parses the six persistent keyboard labels as existing Command Center actions", () => {
   const buttonActions = [
-    { label: "Pause", expected: { type: "PAUSE_MENU" } },
-    { label: "Resume", expected: { type: "RESUME_MENU" } },
-    { label: "Status", expected: { type: "STATUS" } },
-    { label: "Markets", expected: { type: "MARKETS" } },
-    { label: "Portfolio", expected: { type: "POSITIONS" } },
-    { label: "Open Orders", expected: { type: "ORDERS" } },
+    {
+      label: "Pause",
+      expected: { type: "PAUSE_MENU" },
+    },
+    {
+      label: "Resume",
+      expected: { type: "RESUME_MENU" },
+    },
+    {
+      label: "Status",
+      expected: { type: "STATUS" },
+    },
+    {
+      label: "Markets",
+      expected: { type: "MARKETS" },
+    },
+    {
+      label: "Portfolio",
+      expected: { type: "POSITIONS" },
+    },
+    {
+      label: "Open Orders",
+      expected: { type: "ORDERS" },
+    },
   ]
 
   for (const { label, expected } of buttonActions) {
     assert.deepEqual(
       parseTelegramOperatorCommand(label),
       expected,
-      "The persistent keyboard label " + label + " must resolve to its existing Command Center action.",
+      `The persistent keyboard label ${label} must resolve to its existing Command Center action.`,
     )
   }
   assert.deepEqual(
@@ -120,8 +193,14 @@ test("parses start, menu and help as separate Telegram entry points", () => {
 
 test("opens and restores the persistent six-button keyboard through start and menu commands", async () => {
   const updates = [
-    makeUpdate({ updateId: 101, text: "/start" }),
-    makeUpdate({ updateId: 102, text: "/menu" }),
+    makeUpdate({
+      updateId: 101,
+      text: "/start",
+    }),
+    makeUpdate({
+      updateId: 102,
+      text: "/menu",
+    }),
   ]
   const { sentMessages, registeredCommands } = await runAdapter({
     updates,
@@ -140,9 +219,18 @@ test("opens and restores the persistent six-button keyboard through start and me
       sentMessage.reply_markup,
       {
         keyboard: [
-          [{ text: "Pause" }, { text: "Resume" }],
-          [{ text: "Status" }, { text: "Markets" }],
-          [{ text: "Portfolio" }, { text: "Open Orders" }],
+          [
+            { text: "Pause" },
+            { text: "Resume" },
+          ],
+          [
+            { text: "Status" },
+            { text: "Markets" },
+          ],
+          [
+            { text: "Portfolio" },
+            { text: "Open Orders" },
+          ],
         ],
         is_persistent: true,
         resize_keyboard: true,
@@ -159,7 +247,12 @@ test("opens and restores the persistent six-button keyboard through start and me
 })
 
 test("Pause opens only eligible pause choices and never pauses a market without confirmation", async () => {
-  const updates = [makeUpdate({ updateId: 201, text: "Pause" })]
+  const updates = [
+    makeUpdate({
+      updateId: 201,
+      text: "Pause",
+    }),
+  ]
   const marketQueries = []
   const { sentMessages } = await runAdapter({
     updates,
@@ -171,9 +264,21 @@ test("Pause opens only eligible pause choices and never pauses a market without 
           ok: true,
           data: {
             markets: [
-              { symbol: "LINKUSDT", enabled: true, readiness: "READY", latestPrice: "10", priceFresh: true, operatorPaused: false, blockers: [] },
-              { symbol: "BTCUSDT", enabled: true, readiness: "READY", latestPrice: "20", priceFresh: true, operatorPaused: true, blockers: [] },
-              { symbol: "ADAUSDT", enabled: false, readiness: "DISABLED", latestPrice: null, priceFresh: false, operatorPaused: false, blockers: [] },
+              makeMarket({
+                symbol: "LINKUSDT",
+                enabled: true,
+                operatorPaused: false,
+              }),
+              makeMarket({
+                symbol: "BTCUSDT",
+                enabled: true,
+                operatorPaused: true,
+              }),
+              makeMarket({
+                symbol: "ADAUSDT",
+                enabled: false,
+                operatorPaused: false,
+              }),
             ],
           },
         }
@@ -197,7 +302,12 @@ test("Pause opens only eligible pause choices and never pauses a market without 
 })
 
 test("Resume opens only currently operator-paused markets and never resumes before confirmation", async () => {
-  const updates = [makeUpdate({ updateId: 202, text: "Resume" })]
+  const updates = [
+    makeUpdate({
+      updateId: 202,
+      text: "Resume",
+    }),
+  ]
   const marketQueries = []
   const { sentMessages } = await runAdapter({
     updates,
@@ -210,9 +320,21 @@ test("Resume opens only currently operator-paused markets and never resumes befo
           ok: true,
           data: {
             markets: [
-              { symbol: "LINKUSDT", enabled: true, readiness: "READY", latestPrice: "10", priceFresh: true, operatorPaused: false, blockers: [] },
-              { symbol: "BTCUSDT", enabled: true, readiness: "READY", latestPrice: "20", priceFresh: true, operatorPaused: true, blockers: [] },
-              { symbol: "ADAUSDT", enabled: false, readiness: "DISABLED", latestPrice: null, priceFresh: false, operatorPaused: true, blockers: [] },
+              makeMarket({
+                symbol: "LINKUSDT",
+                enabled: true,
+                operatorPaused: false,
+              }),
+              makeMarket({
+                symbol: "BTCUSDT",
+                enabled: true,
+                operatorPaused: true,
+              }),
+              makeMarket({
+                symbol: "ADAUSDT",
+                enabled: false,
+                operatorPaused: true,
+              }),
             ],
           },
         }
@@ -237,38 +359,73 @@ test("Resume opens only currently operator-paused markets and never resumes befo
 
 test("routes Status, Markets, Portfolio and Open Orders through existing read-only queries", async () => {
   const updates = [
-    makeUpdate({ updateId: 301, text: "Status" }),
-    makeUpdate({ updateId: 302, text: "Markets" }),
-    makeUpdate({ updateId: 303, text: "Portfolio" }),
-    makeUpdate({ updateId: 304, text: "Open Orders" }),
+    makeUpdate({
+      updateId: 301,
+      text: "Status",
+    }),
+    makeUpdate({
+      updateId: 302,
+      text: "Markets",
+    }),
+    makeUpdate({
+      updateId: 303,
+      text: "Portfolio",
+    }),
+    makeUpdate({
+      updateId: 304,
+      text: "Open Orders",
+    }),
   ]
   const methods = []
   const actorIds = []
-  const observe = (method) => async ({ actor }) => {
+  const snapshots = {
+    status: {
+      runtimeState: "RUNNING",
+      readiness: {
+        state: "READY",
+        blockers: [],
+      },
+      userData: {
+        ready: true,
+        status: "READY",
+        ageMs: 0,
+      },
+      markets: {
+        enabled: 1,
+        configured: 1,
+        blocked: 0,
+      },
+      observedAt: 1700000000,
+    },
+    markets: {
+      markets: [],
+      observedAt: 1700000000,
+    },
+    positions: {
+      positions: [],
+      observedAt: 1700000000,
+    },
+    orders: {
+      orders: [],
+      observedAt: 1700000000,
+    },
+  }
+  const readQuery = (method) => async ({ actor }) => {
     methods.push(method)
     actorIds.push(actor.id)
-    const data = {
-      status: {
-        runtimeState: "RUNNING",
-        readiness: { state: "READY", blockers: [] },
-        userData: { ready: true, status: "READY", ageMs: 0 },
-        markets: { enabled: 1, configured: 1, blocked: 0 },
-        observedAt: 1700000000,
-      },
-      markets: { markets: [], observedAt: 1700000000 },
-      positions: { positions: [], observedAt: 1700000000 },
-      orders: { orders: [], observedAt: 1700000000 },
-    }[method]
-    return { ok: true, data }
+    return {
+      ok: true,
+      data: snapshots[method],
+    }
   }
   const { sentMessages } = await runAdapter({
     updates,
     operator: {
       pauseMarket: async () => assert.fail("Read-only keyboard actions must never invoke pauseMarket."),
-      getStatus: observe("status"),
-      getMarkets: observe("markets"),
-      getPositions: observe("positions"),
-      getOrders: observe("orders"),
+      getStatus: readQuery("status"),
+      getMarkets: readQuery("markets"),
+      getPositions: readQuery("positions"),
+      getOrders: readQuery("orders"),
     },
   })
 
@@ -278,19 +435,30 @@ test("routes Status, Markets, Portfolio and Open Orders through existing read-on
     "Each read-only button must dispatch to its existing application query in the expected order.",
   )
   assert.deepEqual(
-    sentMessages.map((message) => message.text.split("\\n")[0]),
+    sentMessages.map((message) => message.text.split("\n")[0]),
     ["Harvester status", "Harvester markets", "Harvester positions", "Harvester orders"],
     "Each button must render the corresponding existing Command Center page.",
   )
   assert.deepEqual(
     actorIds,
-    ["telegram-user:12345", "telegram-user:12345", "telegram-user:12345", "telegram-user:12345"],
+    [
+      "telegram-user:12345",
+      "telegram-user:12345",
+      "telegram-user:12345",
+      "telegram-user:12345",
+    ],
     "Every button must use the authenticated Telegram operator actor.",
   )
 })
 
 test("rejects an unauthorized persistent-keyboard action before reading market state", async () => {
-  const updates = [makeUpdate({ updateId: 203, userId: 99999, text: "Pause" })]
+  const updates = [
+    makeUpdate({
+      updateId: 203,
+      userId: 99999,
+      text: "Pause",
+    }),
+  ]
   const marketQueries = []
   const { sentMessages } = await runAdapter({
     updates,
@@ -298,7 +466,12 @@ test("rejects an unauthorized persistent-keyboard action before reading market s
       pauseMarket: async () => assert.fail("An unauthorized keyboard action must never reach a control use case."),
       getMarkets: async (request) => {
         marketQueries.push(request)
-        return { ok: true, data: { markets: [] } }
+        return {
+          ok: true,
+          data: {
+            markets: [],
+          },
+        }
       },
     },
   })
