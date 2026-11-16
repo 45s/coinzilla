@@ -174,3 +174,15 @@ test("offline context adapter rejects a non-boolean confirmation flag before evi
   assert.equal(result.ok, false, "Confirmation must require an explicit boolean rather than a truthy operator value.")
   assert.match(result.errors[0].message, /confirm must be a boolean/i, "The invalid confirmation flag must be reported before recovery processing.")
 })
+
+test("offline context adapter rejects contradictory canonical asset identities", async () => {
+  const result = await runOfflineMarketRecovery({
+    context: {
+      ...context,
+      assets: [{ id: "binance:LINK", code: "WRONG" }],
+    },
+  })
+
+  assert.equal(result.ok, false, "Conflicting asset IDs and codes must fail closed.")
+  assert.match(result.errors[0].message, /contradictory canonical asset identity/i, "The conflicting canonical identity must be identified.")
+})
