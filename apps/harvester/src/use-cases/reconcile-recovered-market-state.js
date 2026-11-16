@@ -68,7 +68,7 @@ function getAuditStatus({ audit }) {
     reason = "TARGET_MARKET_BLOCKED"
   }
 
-  return { ready, status, reason }
+  return { ready, status, ...(reason ? { reason } : {}) }
 }
 
 async function runMarketReconciliation({
@@ -138,7 +138,6 @@ async function runMarketReconciliation({
     data: Object.freeze({
       symbol: targetMarket.symbol,
       ...status,
-      ...(status.reason ? { reason: status.reason } : {}),
       orderReconciliation: orderReconciliation.data,
       audit,
     }),
