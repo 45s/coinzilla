@@ -323,12 +323,12 @@ function assertTerminalOrder({ reconciliation, terminalOrder, orderRegistry }) {
       message: "Terminal order status and executed quantity must match the canonical OrderRegistry entry.",
     })
   }
+  const { amount: executedQuantity } = terminalOrder.executedQuantity
   assertDecimal({
-    value: terminalOrder.executedQuantity.amount,
+    value: executedQuantity,
     field: "terminalOrder.executedQuantity",
     allowZero: true,
   })
-  const { amount: executedQuantity } = terminalOrder.executedQuantity
   const originalQuantity = reconciliation.order.originalQuantity
   if (compareDecimal({
     left: executedQuantity,
