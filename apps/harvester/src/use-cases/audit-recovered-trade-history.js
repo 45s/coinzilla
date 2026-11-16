@@ -16,7 +16,7 @@ function requireString({ value, field }) {
 }
 
 function getJournalCommissionFacts({ commissions }) {
-  return commissions.map((commission, index) => ({
+  return [...commissions.entries()].map(([index, commission]) => ({
     amount: requireString({ value: commission?.amount,
 field: `Journal commissions[${  index  }].amount` }),
     assetId: requireString({ value: commission?.assetId,
@@ -27,7 +27,7 @@ field: `Journal commissions[${  index  }].asset` }),
 }
 
 function getExchangeCommissionFacts({ fill }) {
-  return fill.commissions.map((commission, index) => ({
+  return [...fill.commissions.entries()].map(([index, commission]) => ({
     amount: requireString({
       value: commission?.amount?.amount,
       field: `Exchange fill commissions[${  index  }].amount`,
@@ -43,7 +43,7 @@ function getExchangeCommissionFacts({ fill }) {
   })).sort(compareCommissionFacts)
 }
 
-function compareCommissionFacts(left, right) {
+function compareCommissionFacts(...[left, right]) {
   return (`${left.assetId  }:${  left.asset  }:${  left.amount}`)
     .localeCompare(`${right.assetId  }:${  right.asset  }:${  right.amount}`)
 }
