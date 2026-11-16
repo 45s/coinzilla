@@ -58,9 +58,9 @@ right: "0" }) <= 0) {throw new RangeError(`${field  } must be positive`)}
     return value
   }
   const bestBidPrice = positive({ value: bookTicker.bestBidPrice, field: "bestBidPrice" })
-  const bestBidQuantity = positive(bookTicker.bestBidQuantity, "bestBidQuantity")
+  const bestBidQuantity = positive({ value: bookTicker.bestBidQuantity, field: "bestBidQuantity" })
   const bestAskPrice = positive({ value: bookTicker.bestAskPrice, field: "bestAskPrice" })
-  const bestAskQuantity = positive(bookTicker.bestAskQuantity, "bestAskQuantity")
+  const bestAskQuantity = positive({ value: bookTicker.bestAskQuantity, field: "bestAskQuantity" })
   if (compareDecimal({ left: bestBidPrice,
 right: bestAskPrice }) >= 0) {
     throw new RangeError("Market book best bid must be below best ask")
