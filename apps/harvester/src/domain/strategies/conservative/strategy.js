@@ -293,20 +293,13 @@ function createRecoverySellAction({ context, accounting, sellPlan, residualPrice
   })
 }
 
-function createRecoverySellDecision({ context, accounting }) {
-  if (context.hasActiveSell || !hasSellableInventory({
-    activeQuantity: accounting.activeQuantity,
-    keepQuantity: accounting.keepQuantity,
-  })) {
-    return {}
-  }
-
+function createRecoverySellPlanForPosition({ context, accounting }) {
   const { feeRate } = calculateSellFeeRate({
     makerPercent: String(context.pairConfig.makerPercent),
     takerPercent: String(context.pairConfig.takerPercent),
     orderType: context.marketMetadata.orderType,
   })
-  const sellPlan = calculateRecoverySellPlan({
+  return calculateRecoverySellPlan({
     activeQuantity: accounting.activeQuantity,
     keepQuantity: accounting.keepQuantity,
     positionSpent: accounting.positionSpent,
@@ -316,19 +309,47 @@ function createRecoverySellDecision({ context, accounting }) {
     priceTickSize: context.priceTickSize,
     quantityStepSize: context.quantityStepSize,
   })
+}
+
+function createQuantityIncrementDustDisposition({ context, accounting }) {
+  return Object.freeze({
+    status: "EXCHANGE_CONSTRAINED_DUST",
+    quantity: subtractDecimal({
+      left: accounting.activeQuantity,
+      right: accounting.keepQuantity,
+    }),
+    reason: "QUANTITY_INCREMENT",
+    quantityStepSize: context.quantityStepSize,
+    evaluatedQuantity: "0",
+  })
+}
+
+function createPriceFilterBlockedDisposition({ context, accounting, residualPrice }) {
+  return Object.freeze({
+    status: "PRICE_FILTER_BLOCKED",
+    quantity: subtractDecimal({
+      left: accounting.activeQuantity,
+      right: accounting.keepQuantity,
+    }),
+    reason: "MAX_PRICE",
+    requiredPrice: residualPrice,
+    maximumPrice: context.maxPrice,
+  })
+}
+
+function createRecoverySellDecision({ context, accounting }) {
+  if (context.hasActiveSell || !hasSellableInventory({
+    activeQuantity: accounting.activeQuantity,
+    keepQuantity: accounting.keepQuantity,
+  })) {
+    return {}
+  }
+
+  const sellPlan = createRecoverySellPlanForPosition({ context, accounting })
   if (compareDecimal({ left: sellPlan.quantity,
 right: "0" }) <= 0) {
     return {
-      inventoryDisposition: Object.freeze({
-        status: "EXCHANGE_CONSTRAINED_DUST",
-        quantity: subtractDecimal({
-          left: accounting.activeQuantity,
-          right: accounting.keepQuantity,
-        }),
-        reason: "QUANTITY_INCREMENT",
-        quantityStepSize: context.quantityStepSize,
-        evaluatedQuantity: "0",
-      }),
+      inventoryDisposition: createQuantityIncrementDustDisposition({ context, accounting }),
     }
   }
 
@@ -341,15 +362,10 @@ right: "0" }) <= 0) {
   if (context.maxPrice && compareDecimal({ left: residualPrice,
 right: context.maxPrice }) > 0) {
     return {
-      inventoryDisposition: Object.freeze({
-        status: "PRICE_FILTER_BLOCKED",
-        quantity: subtractDecimal({
-          left: accounting.activeQuantity,
-          right: accounting.keepQuantity,
-        }),
-        reason: "MAX_PRICE",
-        requiredPrice: residualPrice,
-        maximumPrice: context.maxPrice,
+      inventoryDisposition: createPriceFilterBlockedDisposition({
+        context,
+        accounting,
+        residualPrice,
       }),
     }
   }
@@ -417,23 +433,59 @@ function createBuyFilterDisposition({ context, buyQuantity, buyNotional, reason 
   })
 }
 
-function createStandingBuyDecision({ context, accounting, inventoryDisposition, lastBuyPrice }) {
-  if (context.hasActiveBuy ||
-      context.hasUnacknowledgedRecoverySell ||
-      inventoryDisposition?.status === "PRICE_FILTER_BLOCKED") {
-    return {}
-  }
+function calculateStandingBuyPrice({ context, accounting, lastBuyPrice }) {
   if (hasActivePosition({ activeQuantity: accounting.activeQuantity }) && lastBuyPrice === undefined) {
     throw new Error("Conservative active Position requires the reconciled completed-BUY VWAP before placing the next standing BUY")
   }
   const referencePrice = lastBuyPrice ?? context.marketPrice.price
   assertDecimalString({ value: referencePrice,
 field: "lastBuyPrice" })
-  const buyPrice = calculateInitialBuyPrice({
+  return calculateInitialBuyPrice({
     lastTradePrice: referencePrice,
     priceStepPercent: String(context.pairConfig.priceStepPercent),
     priceTickSize: context.priceTickSize,
   }).price
+}
+
+function evaluateBuyOrderLimits({ context, accounting, buyPrice, buyQuantity, buyNotional, investmentLimit }) {
+  const quantityMeetsMinimum = compareDecimal({ left: buyQuantity,
+right: context.minQuantity }) >= 0
+  const notionalMeetsMinimum = compareDecimal({ left: buyNotional,
+right: context.minNotional }) >= 0
+  const quantityWithinMaximum = !context.maxQuantity ||
+    compareDecimal({ left: buyQuantity,
+right: context.maxQuantity }) <= 0
+  const notionalWithinMaximum = !context.maxNotional ||
+    compareDecimal({ left: buyNotional,
+right: context.maxNotional }) <= 0
+  const priceWithinFilters =
+    (!context.minPrice || compareDecimal({ left: buyPrice,
+right: context.minPrice }) >= 0) &&
+    (!context.maxPrice || compareDecimal({ left: buyPrice,
+right: context.maxPrice }) <= 0)
+  const withinInvestmentLimit = investmentLimit === undefined || compareDecimal({
+    left: addDecimal({ left: accounting.outstandingRecovery,
+right: buyNotional }),
+    right: investmentLimit,
+  }) <= 0
+  return {
+    quantityMeetsMinimum,
+    notionalMeetsMinimum,
+    quantityWithinMaximum,
+    notionalWithinMaximum,
+    priceWithinFilters,
+    withinInvestmentLimit,
+  }
+}
+
+function createStandingBuyDecision({ context, accounting, inventoryDisposition, lastBuyPrice }) {
+  if (context.hasActiveBuy ||
+      context.hasUnacknowledgedRecoverySell ||
+      inventoryDisposition?.status === "PRICE_FILTER_BLOCKED") {
+    return {}
+  }
+
+  const buyPrice = calculateStandingBuyPrice({ context, accounting, lastBuyPrice })
   const buyQuantity = roundDecimalToIncrement({
     value: String(context.pairConfig.orderQuantity),
     increment: context.quantityStepSize,
@@ -456,34 +508,22 @@ right: "0" }) <= 0) {
 
   const buyNotional = multiplyDecimal({ left: buyPrice,
 right: buyQuantity })
-  const quantityMeetsMinimum = compareDecimal({ left: buyQuantity,
-right: context.minQuantity }) >= 0
-  const notionalMeetsMinimum = compareDecimal({ left: buyNotional,
-right: context.minNotional }) >= 0
-  const quantityWithinMaximum = !context.maxQuantity ||
-    compareDecimal({ left: buyQuantity,
-right: context.maxQuantity }) <= 0
-  const notionalWithinMaximum = !context.maxNotional ||
-    compareDecimal({ left: buyNotional,
-right: context.maxNotional }) <= 0
-  const priceWithinFilters =
-    (!context.minPrice || compareDecimal({ left: buyPrice,
-right: context.minPrice }) >= 0) &&
-    (!context.maxPrice || compareDecimal({ left: buyPrice,
-right: context.maxPrice }) <= 0)
-  const withinInvestmentLimit = investmentLimit === undefined || compareDecimal({
-    left: addDecimal({ left: accounting.outstandingRecovery,
-right: buyNotional }),
-    right: investmentLimit,
-  }) <= 0
-
-  if (!quantityMeetsMinimum || !notionalMeetsMinimum || !quantityWithinMaximum ||
-      !notionalWithinMaximum || !priceWithinFilters) {
+  const limits = evaluateBuyOrderLimits({
+    context,
+    accounting,
+    buyPrice,
+    buyQuantity,
+    buyNotional,
+    investmentLimit,
+  })
+  if (!limits.quantityMeetsMinimum || !limits.notionalMeetsMinimum ||
+      !limits.quantityWithinMaximum || !limits.notionalWithinMaximum ||
+      !limits.priceWithinFilters) {
     const reason = getBuyFilterReason({
-      quantityMeetsMinimum,
-      notionalMeetsMinimum,
-      quantityWithinMaximum,
-      notionalWithinMaximum,
+      quantityMeetsMinimum: limits.quantityMeetsMinimum,
+      notionalMeetsMinimum: limits.notionalMeetsMinimum,
+      quantityWithinMaximum: limits.quantityWithinMaximum,
+      notionalWithinMaximum: limits.notionalWithinMaximum,
       buyPrice,
       minPrice: context.minPrice,
     })
@@ -496,7 +536,7 @@ right: buyNotional }),
       }),
     }
   }
-  if (withinInvestmentLimit) {
+  if (limits.withinInvestmentLimit) {
     return {
       action: Object.freeze({
         side: "BUY",
