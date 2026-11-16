@@ -358,14 +358,14 @@ export function createTelegramOperatorAdapter({
       else if (code === "SAFETY_BLOCKER_ACTIVE") { reply = "Cannot resume " + symbol + ": a safety, recovery, or volatility blocker is still active. The blocker was not changed." }
       else {
         const actionLabel = action === "RESUME" ? "Resume" : "Pause"
-        reply = actionLabel + " was not acknowledged. Durable state was not committed; check Harvester logs and retry."
+        reply = actionLabel + " was not acknowledged; check Harvester logs and retry."
       }
     } else if (action === "RESUME") {
       reply = "Resumed " + symbol + ": the operator-owned pause was removed. Safety, recovery, and volatility controls remain in force."
     } else if (result.data?.alreadyPaused === true) {
       reply = "Already paused " + symbol + ". New strategy BUYs remain blocked."
     } else {
-      reply = "Paused " + symbol + ": new strategy BUYs and trailing-BUY replacements are blocked. Existing exchange orders remain open and may still fill. Fill accounting and recovery SELLs continue."
+      reply = "Paused " + symbol + ": new strategy BUYs and trailing-BUY replacements are blocked. Existing exchange orders remain open and may still fill. This pause is process-local and is not restored after restart."
     }
     if (messageId !== undefined) { await editMessage({ chatId, messageId, text: reply, replyMarkup: navigationKeyboard(), signal }) }
     else { await sendMessage({ chatId, text: reply, replyMarkup: navigationKeyboard(), signal }) }

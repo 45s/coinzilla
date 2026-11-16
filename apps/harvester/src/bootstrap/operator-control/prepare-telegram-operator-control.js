@@ -1,6 +1,4 @@
 import { createHarvesterOperator } from "../../application/operator/create-harvester-operator.js"
-import { createFileOperationalStateStore } from "../../infrastructure/operational-state/create-file-operational-state-store.js"
-import { resolveOperationalStateDirectory } from "../../infrastructure/operational-state/resolve-operational-state-directory.js"
 import { createTelegramOperatorAdapter } from "../../infrastructure/telegram/telegram-operator-adapter.js"
 
 export class OperatorControlStartupError extends Error {
@@ -19,10 +17,16 @@ const disabledLifecycle = Object.freeze({
   async stop() { return Object.freeze({ stopped: true, alreadyStopped: true }) },
 })
 
-/** Prepare optional Telegram control after verifying the pre-initialized ADR-0001 store. */
+/**
+ * Prepare Telegram operator control without restart recovery or durable command history.
+ *
+ * TEMPORARY: ADR-0001 Operational State Store construction/verification is deliberately
+ * bypassed so Telegram CC commands can run independently. Pause/resume changes are
+ * process-local only and are lost on restart. Reintroduce durable facts only after the
+ * recovery design is explicitly revisited and its startup requirements are accepted.
+ */
 export async function prepareTelegramOperatorControl({
-  telegramConfig, env = process.env, runtimeSessionId, operationalStateStore: suppliedOperationalStateStore,
-  createOperationalStateStore = createFileOperationalStateStore,
+  telegramConfig, env = process.env, operationalStateStore: suppliedOperationalStateStore,
   createAdapter = createTelegramOperatorAdapter, fetchImpl, logger,
 } = {}) {
   if (telegramConfig?.enabled !== true) {
@@ -32,50 +36,10 @@ export async function prepareTelegramOperatorControl({
   if (!botToken) {
     throw new OperatorControlStartupError("Telegram operator control is enabled but TELEGRAM_BOT_TOKEN is missing", "OPERATOR_CONTROL_TELEGRAM_TOKEN_REQUIRED")
   }
-  let operationalStateStore = suppliedOperationalStateStore
-  if (operationalStateStore === undefined) {
-    let directory
-    try {
-      directory = resolveOperationalStateDirectory({ env })
-    } catch (cause) {
-      throw new OperatorControlStartupError(
-        "Telegram operator control has an invalid Operational State Store directory",
-        "OPERATOR_CONTROL_OPERATIONAL_STATE_DIRECTORY_INVALID",
-        cause,
-      )
-    }
-    if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
-      throw new OperatorControlStartupError("Telegram operator control requires the current Harvester runtime session identity", "OPERATOR_CONTROL_RUNTIME_SESSION_REQUIRED")
-    }
-    try {
-      operationalStateStore = createOperationalStateStore({ directory, runtimeSessionId })
-    } catch (cause) {
-      throw new OperatorControlStartupError("Unable to construct the configured Operational State Store", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
-    }
-  } else if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
-    throw new OperatorControlStartupError("Telegram operator control requires the current Harvester runtime session identity", "OPERATOR_CONTROL_RUNTIME_SESSION_REQUIRED")
-  }
-  if (runtimeSessionId !== undefined &&
-      operationalStateStore?.runtimeSessionId !== undefined &&
-      operationalStateStore.runtimeSessionId !== runtimeSessionId) {
-    throw new OperatorControlStartupError(
-      "Telegram operator control must share the current Harvester process-session Operational State Store",
-      "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID",
-    )
-  }
-  if (typeof operationalStateStore?.verify !== "function" || typeof operationalStateStore?.append !== "function") {
-    throw new OperatorControlStartupError("Configured Operational State Store does not expose verify() and append()", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID")
-  }
-  let verification
-  try {
-    verification = await operationalStateStore.verify()
-  } catch (cause) {
-    throw new OperatorControlStartupError("Unable to verify the initialized Operational State Store; operator control remains disabled", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
-  }
-  if (verification?.ok !== true || verification.data?.valid !== true || verification.data?.durableWriteSupported !== true) {
-    const cause = verification?.errors?.[0] ?? new Error("Operational State Store verification did not confirm a valid durable store")
-    throw new OperatorControlStartupError("Configured Operational State Store is missing, uninitialized, corrupt or not durably writable", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
-  }
+  // TEMPORARILY DISABLED: Telegram CC does not construct or verify ADR-0001 recovery storage.
+  // An independently supplied store may still record process-lifetime operator commands.
+  // Without one, pause/resume are process-local and are lost on restart.
+  const operationalStateStore = suppliedOperationalStateStore
   let adapter
   return Object.freeze({
     enabled: true,
