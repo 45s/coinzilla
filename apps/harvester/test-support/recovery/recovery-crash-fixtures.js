@@ -110,22 +110,7 @@ function canonicalFill({
   })
 }
 
-/**
- * Build two chronological process-session fixtures from the same canonical
- * values and lifecycle DTO mappers used by production event publication.
- *
- * The fixture intentionally represents the legacy Journal observer envelope.
- * It is not an ADR-0001 durable-fact stream and must not be used as evidence
- * that the current Journal is an authoritative recovery store.
- */
-export function createRecoveryCrashFixture() {
-  const records = []
-  const append = ({ session, mapper, input, eventName }) => {
-    const lineNumber = records.filter((record) => record.position.fileName === session).length + 1
-    records.push(requireMapped({ mapper, input, eventName, session, lineNumber }))
-    return records.length
-  }
-
+function appendFirstSession({ append }) {
   append({
     session: firstSession,
     eventName: HARVESTER_EVENT_NAMES.STARTED,
@@ -185,7 +170,10 @@ export function createRecoveryCrashFixture() {
     mapper: mapFillAppliedData,
     input: { fill: partialBuyFill },
   })
+  return buyClientOrderId
+}
 
+function appendSecondSessionStart({ append }) {
   append({
     session: secondSession,
     eventName: HARVESTER_EVENT_NAMES.STARTED,
@@ -197,7 +185,9 @@ export function createRecoveryCrashFixture() {
       tradingEnabled: true,
     },
   })
+}
 
+function appendFinalBuyFill({ append, buyClientOrderId }) {
   const finalBuyFill = canonicalFill({
     tradeId: "buy-trade-002",
     brokerOrderId: "9001",
@@ -214,7 +204,9 @@ export function createRecoveryCrashFixture() {
     mapper: mapFillAppliedData,
     input: { fill: finalBuyFill },
   })
+}
 
+function appendRecoverySell({ append }) {
   const sellClientOrderId = "harvester-BTCUSDT-sell-001"
   const sellIntent = pendingOrder({
     clientOrderId: sellClientOrderId,
@@ -261,7 +253,9 @@ export function createRecoveryCrashFixture() {
     mapper: mapFillAppliedData,
     input: { fill: sellFill },
   })
+}
 
+function appendRecoveryCycleCompletion({ append }) {
   append({
     session: secondSession,
     eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_COMPLETED,
@@ -275,7 +269,9 @@ export function createRecoveryCrashFixture() {
       realizedNetProfit: "2",
     },
   })
+}
 
+function appendUnownedOrder({ append }) {
   const externalOrder = new CanonicalOrder({
     clientOrderId: "external-manual-order-001",
     brokerOrderId: "manual-7001",
@@ -293,7 +289,9 @@ export function createRecoveryCrashFixture() {
     mapper: mapExecutionUnownedOrderData,
     input: { order: externalOrder },
   })
+}
 
+function appendStrategyPause({ append }) {
   append({
     session: secondSession,
     eventName: HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
@@ -303,6 +301,31 @@ export function createRecoveryCrashFixture() {
       reason: "UNOWNED_ORDER",
     },
   })
+}
+
+/**
+ * Build two chronological process-session fixtures from the same canonical
+ * values and lifecycle DTO mappers used by production event publication.
+ *
+ * The fixture intentionally represents the legacy Journal observer envelope.
+ * It is not an ADR-0001 durable-fact stream and must not be used as evidence
+ * that the current Journal is an authoritative recovery store.
+ */
+export function createRecoveryCrashFixture() {
+  const records = []
+  const append = ({ session, mapper, input, eventName }) => {
+    const lineNumber = records.filter((record) => record.position.fileName === session).length + 1
+    records.push(requireMapped({ mapper, input, eventName, session, lineNumber }))
+    return records.length
+  }
+
+  const buyClientOrderId = appendFirstSession({ append })
+  appendSecondSessionStart({ append })
+  appendFinalBuyFill({ append, buyClientOrderId })
+  appendRecoverySell({ append })
+  appendRecoveryCycleCompletion({ append })
+  appendUnownedOrder({ append })
+  appendStrategyPause({ append })
 
   return Object.freeze({
     market: recoveryTestMarket,
