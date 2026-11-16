@@ -646,8 +646,8 @@ function navigationKeyboard({ page = "home", markets = [], marketAction } = {}) 
       if (marketAction === "RESUME" && market.operatorPaused !== true) { continue }
       const action = market.operatorPaused === true ? "RESUME" : "PAUSE"
       rows.push([{
-        text: \`\${action === "PAUSE" ? "Pause" : "Resume"} \${market.symbol}\`,
-        callback_data: \`cc:ask:\${action}:\${market.symbol}\`,
+        text: `${action === "PAUSE" ? "Pause" : "Resume"} ${market.symbol}`,
+        callback_data: `cc:ask:${action}:${market.symbol}`,
       }])
       actionCount += 1
     }
@@ -655,7 +655,7 @@ function navigationKeyboard({ page = "home", markets = [], marketAction } = {}) 
   const refreshPage = marketAction ? marketAction.toLowerCase() : page
   rows.push([{
     text: "Refresh",
-    callback_data: \`cc:refresh:\${refreshPage}\`,
+    callback_data: `cc:refresh:${refreshPage}`,
   }, {
     text: "Main menu",
     callback_data: "cc:nav:home",
