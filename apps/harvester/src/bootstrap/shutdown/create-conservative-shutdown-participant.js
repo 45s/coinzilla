@@ -1,17 +1,21 @@
 import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 
 function createStageBlocker({ stage, error } = {}) {
-  return stage + ":" + (error?.code ?? error?.message ?? "FAILED")
+  const reason = error?.code ?? error?.message ?? "FAILED"
+  return `${stage}:${reason}`
 }
 
 async function runStage({ stage, operation } = {}) {
   try {
     const result = await operation()
-    if (result?.ok === true) return []
+    if (result?.ok === true) {
+      return []
+    }
     const errors = Array.isArray(result?.errors) ? result.errors : []
-    return errors.length > 0
-      ? errors.map((error) => createStageBlocker({ stage, error }))
-      : [stage + ":UNCONFIRMED"]
+    if (errors.length > 0) {
+      return errors.map((error) => createStageBlocker({ stage, error }))
+    }
+    return [`${stage}:UNCONFIRMED`]
   } catch (error) {
     return [createStageBlocker({ stage, error })]
   }
@@ -32,21 +36,34 @@ async function drainUserData(drainUserDataEvents) {
 async function flushJournal(eventPublisher) {
   try {
     if (typeof eventPublisher?.flush !== "function") {
-      return { durable: false, blockers: ["JOURNAL_FLUSH_UNAVAILABLE"] }
+      return {
+        durable: false,
+        blockers: ["JOURNAL_FLUSH_UNAVAILABLE"],
+      }
     }
+
     const result = await eventPublisher.flush()
     if (result?.ok === true && result?.durable === true) {
-      return { durable: true, blockers: [] }
+      return {
+        durable: true,
+        blockers: [],
+      }
     }
+
     const errors = Array.isArray(result?.errors) ? result.errors : []
-    return {
-      durable: false,
-      blockers: errors.length > 0
-        ? errors.map((error) => createStageBlocker({
+    if (errors.length > 0) {
+      return {
+        durable: false,
+        blockers: errors.map((error) => createStageBlocker({
           stage: "JOURNAL_FLUSH",
           error,
-        }))
-        : ["JOURNAL_NOT_DURABLE"],
+        })),
+      }
+    }
+
+    return {
+      durable: false,
+      blockers: ["JOURNAL_NOT_DURABLE"],
     }
   } catch (error) {
     return {
@@ -60,9 +77,16 @@ async function flushJournal(eventPublisher) {
 }
 
 function getExternalBlockers({ getShutdownBlockers, symbol } = {}) {
-  const blockers = getShutdownBlockers({ symbol })
-  return (Array.isArray(blockers) ? blockers : [blockers])
-    .filter((blocker) => blocker !== undefined && blocker !== null && blocker !== "")
+  try {
+    const blockers = getShutdownBlockers({ symbol })
+    return (Array.isArray(blockers) ? blockers : [blockers])
+      .filter((blocker) => blocker !== undefined && blocker !== null && blocker !== "")
+  } catch (error) {
+    return [createStageBlocker({
+      stage: "SHUTDOWN_BLOCKER_INSPECTION",
+      error,
+    })]
+  }
 }
 
 function getMarketBlockers({ snapshot, symbol } = {}) {
@@ -71,83 +95,135 @@ function getMarketBlockers({ snapshot, symbol } = {}) {
 }
 
 function createMarketSafetyError({ symbol, blockers } = {}) {
-  const error = new Error("Conservative shutdown safety is not proven for " + symbol + ": " + blockers.join(", "))
+  const error = new Error(
+    `Conservative shutdown safety is not proven for ${symbol}: ${blockers.join(", ")}`,
+  )
   error.code = "CONSERVATIVE_SHUTDOWN_SAFETY_UNPROVEN"
   error.symbol = symbol
   error.blockers = blockers
   return error
 }
 
-async function secureMarket({
+async function collectStageBlockers({ blockers, stage, operation } = {}) {
+  const stageBlockers = await runStage({ stage, operation })
+  blockers.push(...stageBlockers)
+}
+
+async function collectDrainBlockers({ blockers, drainUserDataEvents } = {}) {
+  const drainBlockers = await drainUserData(drainUserDataEvents)
+  blockers.push(...drainBlockers)
+}
+
+async function reconcileOwnedOrders({
   engine,
-  eventPublisher,
+  symbol,
+  blockers,
   drainUserDataEvents,
+} = {}) {
+  await collectStageBlockers({
+    blockers,
+    stage: "OWNED_ORDER_RECONCILIATION",
+    operation: () => engine.reconcileOwnedOrders({ symbol }),
+  })
+  await collectDrainBlockers({ blockers, drainUserDataEvents })
+
+  await collectStageBlockers({
+    blockers,
+    stage: "OWNED_BUY_CANCELLATION",
+    operation: () => engine.cancelOwnedBuyOrdersForShutdown({ symbol }),
+  })
+  await collectDrainBlockers({ blockers, drainUserDataEvents })
+
+  await collectStageBlockers({
+    blockers,
+    stage: "FINAL_OWNED_ORDER_RECONCILIATION",
+    operation: () => engine.reconcileOwnedOrders({ symbol }),
+  })
+  await collectDrainBlockers({ blockers, drainUserDataEvents })
+}
+
+async function reconcileRecoverySells({
+  engine,
+  symbol,
+  blockers,
+  drainUserDataEvents,
+} = {}) {
+  if (blockers.length > 0) {
+    return false
+  }
+
+  const recoveryBlockers = await runStage({
+    stage: "RECOVERY_SELL_RECONCILIATION",
+    operation: () => engine.reconcileRecoverySellsForShutdown({ symbols: [symbol] }),
+  })
+  blockers.push(...recoveryBlockers)
+  await collectDrainBlockers({ blockers, drainUserDataEvents })
+
+  if (blockers.length > 0) {
+    return false
+  }
+
+  await collectStageBlockers({
+    blockers,
+    stage: "POST_RECOVERY_OWNED_ORDER_RECONCILIATION",
+    operation: () => engine.reconcileOwnedOrders({ symbol }),
+  })
+  await collectDrainBlockers({ blockers, drainUserDataEvents })
+
+  return recoveryBlockers.length === 0 && blockers.length === 0
+}
+
+async function auditRecoverySellCoverage({ engine, symbol, blockers } = {}) {
+  const unavailable = {
+    ok: false,
+    data: {
+      covered: false,
+      findings: [],
+    },
+  }
+  if (blockers.length > 0) {
+    return unavailable
+  }
+
+  try {
+    const result = await engine.auditShutdownRecoverySellCoverage({ symbols: [symbol] })
+    if (result?.ok === true && result.data?.covered === true) {
+      return result
+    }
+
+    const findings = result?.data?.findings ?? []
+    if (findings.length > 0) {
+      blockers.push(...findings.map((finding) =>
+        `RECOVERY_SELL_COVERAGE:${finding.reason}`))
+    } else {
+      blockers.push("RECOVERY_SELL_COVERAGE_UNVERIFIED")
+    }
+    return result
+  } catch (error) {
+    blockers.push(createStageBlocker({
+      stage: "RECOVERY_SELL_COVERAGE",
+      error,
+    }))
+    return unavailable
+  }
+}
+
+async function assessMarketSafety({
+  engine,
+  symbol,
+  blockers,
+  recoveryReconciled,
+  journalDurable,
+  coverageResult,
   getShutdownBlockers,
   logger,
-  symbol,
-  initialDrainBlockers,
 } = {}) {
-  const blockers = [...initialDrainBlockers]
-  const collectStage = async (stage, operation) => {
-    blockers.push(...await runStage({ stage, operation }))
-  }
-  const collectDrain = async () => {
-    blockers.push(...await drainUserData(drainUserDataEvents))
-  }
-
-  await collectStage("OWNED_ORDER_RECONCILIATION", () =>
-    engine.reconcileOwnedOrders({ symbol }))
-  await collectDrain()
-  await collectStage("OWNED_BUY_CANCELLATION", () =>
-    engine.cancelOwnedBuyOrdersForShutdown({ symbol }))
-  await collectDrain()
-  await collectStage("FINAL_OWNED_ORDER_RECONCILIATION", () =>
-    engine.reconcileOwnedOrders({ symbol }))
-  await collectDrain()
-
-  let recoveryReconciled = false
-  if (blockers.length === 0) {
-    const recoveryBlockers = await runStage({
-      stage: "RECOVERY_SELL_RECONCILIATION",
-      operation: () => engine.reconcileRecoverySellsForShutdown({ symbols: [symbol] }),
-    })
-    blockers.push(...recoveryBlockers)
-    recoveryReconciled = recoveryBlockers.length === 0
-  }
-  await collectDrain()
-
-  if (blockers.length === 0) {
-    await collectStage("POST_RECOVERY_OWNED_ORDER_RECONCILIATION", () =>
-      engine.reconcileOwnedOrders({ symbol }))
-    await collectDrain()
-  }
-
-  let coverageResult = { ok: false, data: { covered: false, findings: [] } }
-  if (blockers.length === 0) {
-    try {
-      coverageResult = await engine.auditShutdownRecoverySellCoverage({ symbols: [symbol] })
-      if (coverageResult?.ok !== true || coverageResult.data?.covered !== true) {
-        const findings = coverageResult?.data?.findings ?? []
-        blockers.push(...(findings.length > 0
-          ? findings.map((finding) => "RECOVERY_SELL_COVERAGE:" + finding.reason)
-          : ["RECOVERY_SELL_COVERAGE_UNVERIFIED"]))
-      }
-    } catch (error) {
-      blockers.push(createStageBlocker({
-        stage: "RECOVERY_SELL_COVERAGE",
-        error,
-      }))
-    }
-  }
-
-  const journal = await flushJournal(eventPublisher)
-  blockers.push(...journal.blockers)
   blockers.push(...getExternalBlockers({ getShutdownBlockers, symbol }))
 
   const safety = await engine.auditShutdownSafety({
     symbol,
     reconciliationComplete: blockers.length === 0 && recoveryReconciled,
-    journalDurable: journal.durable,
+    journalDurable,
     coverageResult,
     externalBlockers: blockers,
   })
@@ -159,8 +235,12 @@ async function secureMarket({
       symbol,
       error,
     })
-    return { ok: false, blockers: [error.message] }
+    return {
+      ok: false,
+      blockers: [error.message],
+    }
   }
+
   const marketBlockers = getMarketBlockers({
     snapshot: safety.data,
     symbol,
@@ -173,21 +253,72 @@ async function secureMarket({
       blockers: marketBlockers,
       shutdownSafetyRevision: safety.data.revision,
     })
-    return { ok: false, blockers: marketBlockers }
+    return {
+      ok: false,
+      blockers: marketBlockers,
+    }
   }
+
   logger?.info?.({
     message: "Conservative market is safe to shut down",
     strategyId: StrategyId.COIN_GRABBER,
     symbol,
     shutdownSafetyRevision: safety.data.revision,
   })
-  return { ok: true, blockers: [] }
+  return {
+    ok: true,
+    blockers: [],
+  }
+}
+
+async function secureMarket({
+  engine,
+  eventPublisher,
+  drainUserDataEvents,
+  getShutdownBlockers,
+  logger,
+  symbol,
+  initialDrainBlockers,
+} = {}) {
+  const blockers = [...initialDrainBlockers]
+  await reconcileOwnedOrders({
+    engine,
+    symbol,
+    blockers,
+    drainUserDataEvents,
+  })
+
+  const recoveryReconciled = await reconcileRecoverySells({
+    engine,
+    symbol,
+    blockers,
+    drainUserDataEvents,
+  })
+  const coverageResult = await auditRecoverySellCoverage({
+    engine,
+    symbol,
+    blockers,
+  })
+  const journal = await flushJournal(eventPublisher)
+  blockers.push(...journal.blockers)
+
+  return assessMarketSafety({
+    engine,
+    symbol,
+    blockers,
+    recoveryReconciled,
+    journalDurable: journal.durable,
+    coverageResult,
+    getShutdownBlockers,
+    logger,
+  })
 }
 
 function createMarketFailure({ symbol, result } = {}) {
-  const blockers = result.blockers?.length
-    ? result.blockers
-    : [result.error?.message ?? "MARKET_SAFETY_ASSESSMENT_FAILED"]
+  let blockers = result.blockers
+  if (!Array.isArray(blockers) || blockers.length === 0) {
+    blockers = [result.error?.message ?? "MARKET_SAFETY_ASSESSMENT_FAILED"]
+  }
   return {
     symbol,
     blockers,
@@ -218,7 +349,8 @@ export function createConservativeShutdownParticipant({
       operation: () => engine.cancelOwnedBuyOrdersForShutdown(),
     })
     const initialDrainBlockers = await drainUserData(drainUserDataEvents)
-    let snapshot = engine.getShutdownSafetySnapshot()
+    const snapshot = engine.getShutdownSafetySnapshot()
+
     while (true) {
       const unsafeMarkets = snapshot.markets.filter((market) =>
         market.status !== "SAFE_TO_SHUTDOWN")
@@ -231,9 +363,10 @@ export function createConservativeShutdownParticipant({
           },
         }
       }
+
       const results = await Promise.all(unsafeMarkets.map(async (market) => {
         try {
-          return await secureMarket({
+          const result = await secureMarket({
             engine,
             eventPublisher,
             drainUserDataEvents,
@@ -242,30 +375,34 @@ export function createConservativeShutdownParticipant({
             symbol: market.symbol,
             initialDrainBlockers,
           })
+          return {
+            symbol: market.symbol,
+            result,
+          }
         } catch (error) {
           return {
-            ok: false,
-            blockers: [error?.code ?? error?.message ?? "MARKET_SAFETY_ASSESSMENT_FAILED"],
-            error,
+            symbol: market.symbol,
+            result: {
+              ok: false,
+              blockers: [error?.code ?? error?.message ?? "MARKET_SAFETY_ASSESSMENT_FAILED"],
+              error,
+            },
           }
         }
       }))
+
       const failedMarkets = results
-        .map((result, index) => result.ok === true
-          ? null
-          : createMarketFailure({
-            symbol: unsafeMarkets[index].symbol,
-            result,
-          }))
-        .filter(Boolean)
-      snapshot = engine.getShutdownSafetySnapshot()
+        .filter(({ result }) => result.ok !== true)
+        .map(({ symbol, result }) => createMarketFailure({ symbol, result }))
+      const latestSnapshot = engine.getShutdownSafetySnapshot()
+
       if (failedMarkets.length > 0) {
         const blockerSummary = failedMarkets.map(({ symbol, blockers }) =>
-          symbol + ": " + blockers.join(", ")).join("; ")
+          `${symbol}: ${blockers.join(", ")}`).join("; ")
         const error = new AggregateError(
           failedMarkets.map(({ symbol, blockers }) =>
             createMarketSafetyError({ symbol, blockers })),
-          "Conservative shutdown safety could not be proven for every market: " + blockerSummary,
+          `Conservative shutdown safety could not be proven for every market: ${blockerSummary}`,
         )
         error.code = "CONSERVATIVE_SHUTDOWN_SAFETY_UNPROVEN"
         error.shutdownDiagnostics = Object.freeze({
@@ -274,8 +411,21 @@ export function createConservativeShutdownParticipant({
         })
         throw error
       }
+
       // Late execution evidence can invalidate a market while another market
       // is being audited. Re-evaluate it immediately; never use a quiet timer.
+      if (latestSnapshot.markets.some((market) =>
+        market.status !== "SAFE_TO_SHUTDOWN")) {
+        continue
+      }
+
+      return {
+        ok: true,
+        data: {
+          markets: latestSnapshot.markets,
+          revision: latestSnapshot.revision,
+        },
+      }
     }
   }
 

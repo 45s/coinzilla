@@ -1,10 +1,11 @@
 function createStrategyBlocker({ participant, error, reason } = {}) {
-  let safetySnapshot = null
+  let safetySnapshot
   try {
     safetySnapshot = participant.getSafetySnapshot?.() ?? null
   } catch {
     safetySnapshot = null
   }
+
   return Object.freeze({
     strategyId: participant.strategyId,
     reason: reason ?? error?.code ?? "STRATEGY_SAFETY_UNPROVEN",
@@ -15,16 +16,19 @@ function createStrategyBlocker({ participant, error, reason } = {}) {
 }
 
 function createStrategyShutdownError({ blockers, errors = [] } = {}) {
-  const causes = errors.length > 0
-    ? errors
-    : blockers.map((blocker) => new Error(blocker.strategyId + ": " + blocker.message))
+  let causes = errors
+  if (causes.length === 0) {
+    causes = blockers.map((blocker) =>
+      new Error(`${blocker.strategyId}: ${blocker.message}`))
+  }
+
   const blockerSummary = blockers.map(({ strategyId, reason, message }) =>
-    strategyId + " [" + reason + "]: " + message).join("; ")
-  const error = new AggregateError(
-    causes,
-    "Harvester shutdown was incomplete: strategy shutdown safety could not be proven" +
-      (blockerSummary ? ": " + blockerSummary : ""),
-  )
+    `${strategyId} [${reason}]: ${message}`).join("; ")
+  const errorMessage = blockerSummary
+    ? `Harvester shutdown was incomplete: strategy shutdown safety could not be proven: ${blockerSummary}`
+    : "Harvester shutdown was incomplete: strategy shutdown safety could not be proven"
+  const error = new AggregateError(causes, errorMessage)
+
   error.code = "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN"
   error.shutdownDiagnostics = Object.freeze({
     strategyBlockers: Object.freeze(blockers),
@@ -33,28 +37,35 @@ function createStrategyShutdownError({ blockers, errors = [] } = {}) {
 }
 
 function validateParticipant(participant) {
-  if (typeof participant?.strategyId !== "string" || !participant.strategyId.trim() ||
-      typeof participant.beginShutdown !== "function" ||
-      typeof participant.waitUntilSafe !== "function" ||
-      typeof participant.isSafeToShutdown !== "function") {
-    throw new TypeError("A strategy shutdown participant requires strategyId, beginShutdown(), waitUntilSafe(), and isSafeToShutdown()")
+  const valid = typeof participant?.strategyId === "string" &&
+    participant.strategyId.trim() &&
+    typeof participant.beginShutdown === "function" &&
+    typeof participant.waitUntilSafe === "function" &&
+    typeof participant.isSafeToShutdown === "function"
+
+  if (!valid) {
+    throw new TypeError(
+      "A strategy shutdown participant requires strategyId, beginShutdown(), waitUntilSafe(), and isSafeToShutdown()",
+    )
   }
   return participant
 }
 
 function getParticipantSnapshot(participant) {
-  let safe = false
+  let safe
   try {
     safe = participant.isSafeToShutdown() === true
   } catch {
     safe = false
   }
+
   let snapshot
   try {
     snapshot = participant.getSafetySnapshot?.()
   } catch {
     snapshot = null
   }
+
   return Object.freeze({
     strategyId: participant.strategyId,
     safe,
@@ -72,6 +83,7 @@ export function createStrategyShutdownCoordinator({ participants = [] } = {}) {
   if (new Set(strategyIds).size !== strategyIds.length) {
     throw new TypeError("Strategy shutdown participant strategyId values must be unique")
   }
+
   let shutdownStarted = false
 
   const getSafetySnapshot = () => Object.freeze(
@@ -87,9 +99,12 @@ export function createStrategyShutdownCoordinator({ participants = [] } = {}) {
   })
 
   const beginShutdown = () => {
-    if (shutdownStarted) return { ok: true }
+    if (shutdownStarted) {
+      return { ok: true }
+    }
     shutdownStarted = true
     const failures = []
+
     for (const participant of registeredParticipants) {
       try {
         participant.beginShutdown()
@@ -97,6 +112,7 @@ export function createStrategyShutdownCoordinator({ participants = [] } = {}) {
         failures.push({ participant, error })
       }
     }
+
     if (failures.length > 0) {
       shutdownStarted = false
       throw createStrategyShutdownError({
@@ -107,6 +123,7 @@ export function createStrategyShutdownCoordinator({ participants = [] } = {}) {
         errors: failures.map(({ error }) => error),
       })
     }
+
     return { ok: true }
   }
 
@@ -115,6 +132,7 @@ export function createStrategyShutdownCoordinator({ participants = [] } = {}) {
     if (signal?.aborted) {
       throw signal.reason ?? new Error("Strategy shutdown was aborted")
     }
+
     const results = await Promise.allSettled(registeredParticipants.map(async (participant) => {
       const result = await participant.waitUntilSafe({ signal })
       if (result?.ok !== true) {
@@ -125,30 +143,40 @@ export function createStrategyShutdownCoordinator({ participants = [] } = {}) {
       }
       return result
     }))
+
     const blockers = []
     const errors = []
-    results.forEach((result, index) => {
-      if (result.status !== "rejected") return
+    for (const [index, result] of results.entries()) {
+      if (result.status !== "rejected") {
+        continue
+      }
       const participant = registeredParticipants[index]
       errors.push(result.reason)
       blockers.push(createStrategyBlocker({
         participant,
         error: result.reason,
       }))
-    })
+    }
+
     if (!isSafeToShutdown()) {
       for (const participant of registeredParticipants) {
-        if (participant.isSafeToShutdown() === true) continue
-        if (blockers.some((blocker) => blocker.strategyId === participant.strategyId)) continue
+        if (participant.isSafeToShutdown() === true) {
+          continue
+        }
+        if (blockers.some((blocker) => blocker.strategyId === participant.strategyId)) {
+          continue
+        }
         blockers.push(createStrategyBlocker({
           participant,
           reason: "STRATEGY_SAFETY_MARKER_INVALIDATED",
         }))
       }
     }
+
     if (blockers.length > 0) {
       throw createStrategyShutdownError({ blockers, errors })
     }
+
     return {
       ok: true,
       data: {
