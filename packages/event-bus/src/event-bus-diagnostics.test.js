@@ -8,11 +8,13 @@ function deferred() {
   const promise = new Promise((done) => {
     resolve = done
   })
-  return { promise, resolve }
+  return { promise,
+resolve }
 }
 
 test("diagnostics expose immutable snapshots of pending capacity and lifecycle", async () => {
-  const bus = new EventBus({ logger: {}, maxPending: 2 })
+  const bus = new EventBus({ logger: {},
+maxPending: 2 })
   const release = deferred()
   const started = deferred()
 
@@ -30,7 +32,8 @@ test("diagnostics expose immutable snapshots of pending capacity and lifecycle",
     },
   })
 
-  assert.equal(bus.publish({ name: "task.started", source: "test" }).ok, true)
+  assert.equal(bus.publish({ name: "task.started",
+source: "test" }).ok, true)
   await started.promise
 
   const pending = bus.getDiagnostics()
@@ -69,7 +72,8 @@ test("close timeout leaves the bus closed and allows a later drain", async () =>
     },
   })
 
-  assert.equal(bus.publish({ name: "task.started", source: "test" }).ok, true)
+  assert.equal(bus.publish({ name: "task.started",
+source: "test" }).ok, true)
   await started.promise
 
   const timedOut = await bus.close({ timeoutMs: 10 })
@@ -81,7 +85,8 @@ test("close timeout leaves the bus closed and allows a later drain", async () =>
     maxPending: 1000,
     closed: true,
   })
-  assert.equal(bus.publish({ name: "task.started", source: "test" }).ok, false)
+  assert.equal(bus.publish({ name: "task.started",
+source: "test" }).ok, false)
   assert.equal(subscriptionResult.subscription.unsubscribe().unsubscribed, false)
 
   release.resolve()
@@ -113,7 +118,8 @@ test("concurrent close callers both observe a completed drain", async () => {
       await release.promise
     },
   })
-  assert.equal(bus.publish({ name: "task.started", source: "test" }).ok, true)
+  assert.equal(bus.publish({ name: "task.started",
+source: "test" }).ok, true)
   await started.promise
 
   const firstClose = bus.close()
@@ -133,11 +139,15 @@ test("concurrent close callers both observe a completed drain", async () => {
 })
 
 test("diagnostics remain accurate when fan-out is rejected atomically", async () => {
-  const bus = new EventBus({ logger: {}, maxPending: 1 })
-  bus.subscribe({ name: "task.started", handler: () => {} })
-  bus.subscribe({ name: "task.started", handler: () => {} })
+  const bus = new EventBus({ logger: {},
+maxPending: 1 })
+  bus.subscribe({ name: "task.started",
+handler: () => {} })
+  bus.subscribe({ name: "task.started",
+handler: () => {} })
 
-  const rejected = bus.publish({ name: "task.started", source: "test" })
+  const rejected = bus.publish({ name: "task.started",
+source: "test" })
   assert.equal(rejected.ok, false)
   assert.equal(bus.getDiagnostics().pendingCount, 0)
 
@@ -162,7 +172,8 @@ test("close rejects nested publishes attempted by handlers during shutdown", asy
     },
   })
 
-  assert.equal(bus.publish({ name: "task.started", source: "test" }).ok, true)
+  assert.equal(bus.publish({ name: "task.started",
+source: "test" }).ok, true)
   await started.promise
 
   const closing = bus.close()
@@ -174,7 +185,8 @@ test("close rejects nested publishes attempted by handlers during shutdown", asy
 })
 
 test("slow handlers retain capacity until settlement and capacity recovers afterward", async () => {
-  const bus = new EventBus({ logger: {}, maxPending: 1 })
+  const bus = new EventBus({ logger: {},
+maxPending: 1 })
   const started = deferred()
   const release = deferred()
   let calls = 0
@@ -188,15 +200,18 @@ test("slow handlers retain capacity until settlement and capacity recovers after
     },
   })
 
-  assert.equal(bus.publish({ name: "slow.event", source: "test" }).ok, true)
+  assert.equal(bus.publish({ name: "slow.event",
+source: "test" }).ok, true)
   await started.promise
   assert.equal(bus.getDiagnostics().pendingCount, 1)
-  assert.equal(bus.publish({ name: "slow.event", source: "test" }).ok, false)
+  assert.equal(bus.publish({ name: "slow.event",
+source: "test" }).ok, false)
 
   release.resolve()
   assert.equal((await bus.flush()).ok, true)
   assert.equal(bus.getDiagnostics().pendingCount, 0)
-  assert.equal(bus.publish({ name: "slow.event", source: "test" }).ok, true)
+  assert.equal(bus.publish({ name: "slow.event",
+source: "test" }).ok, true)
   assert.equal((await bus.flush()).ok, true)
   assert.equal(calls, 2)
   assert.equal((await bus.close()).ok, true)
@@ -220,7 +235,8 @@ test("error reporter rejection becomes a process warning, not an unhandled rejec
     },
   })
 
-  assert.equal(bus.publish({ name: "handler.failed", source: "test" }).ok, true)
+  assert.equal(bus.publish({ name: "handler.failed",
+source: "test" }).ok, true)
   assert.equal((await bus.flush()).ok, true)
 
   const emittedWarning = await warning
