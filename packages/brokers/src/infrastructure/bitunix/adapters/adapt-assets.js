@@ -24,11 +24,6 @@ export function adaptAssets(input) {
     }
 
     const quantity = Number(amount)
-    if (!Number.isFinite(quantity)) {
-      throw new TypeError(
-        `Bitunix Spot legacy Coin quantity for "${balance.free.asset.code}" must be a finite Number`,
-      )
-    }
     return [new Coin({
       ticker: balance.free.asset.code,
       quantity,
