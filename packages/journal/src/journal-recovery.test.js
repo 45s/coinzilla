@@ -66,8 +66,8 @@ force: true })
 test("reads legacy raw event sessions and sorts sessions deterministically", async () => {
   const { directory, journal } = await createStoppedJournal()
   try {
-    await writeFile(path.join(directory, "2026-01-02_00-00-00.jsonl"), `${JSON.stringify(legacyEvent("second"))}\n`)
-    await writeFile(path.join(directory, "2026-01-01_00-00-00.jsonl"), `${JSON.stringify(legacyEvent("first"))}\n`)
+    await writeFile(path.join(directory, "2026-01-02_00-00-00.jsonl"), `${JSON.stringify(legacyEvent({ id: "second" }))}\n`)
+    await writeFile(path.join(directory, "2026-01-01_00-00-00.jsonl"), `${JSON.stringify(legacyEvent({ id: "first" }))}\n`)
     const result = await journal.read()
     assert.equal(result.ok, true)
     assert.deepEqual(result.records.map((record) => record.id), ["first", "second"])
@@ -85,9 +85,9 @@ force: true })
 test("orders same-timestamp session suffixes after the base session", async () => {
   const { directory, journal } = await createStoppedJournal()
   try {
-    await writeFile(path.join(directory, "2026-01-01_00-00-00-002.jsonl"), `${JSON.stringify(legacyEvent("third"))}\n`)
-    await writeFile(path.join(directory, "2026-01-01_00-00-00.jsonl"), `${JSON.stringify(legacyEvent("first"))}\n`)
-    await writeFile(path.join(directory, "2026-01-01_00-00-00-001.jsonl"), `${JSON.stringify(legacyEvent("second"))}\n`)
+    await writeFile(path.join(directory, "2026-01-01_00-00-00-002.jsonl"), `${JSON.stringify(legacyEvent({ id: "third" }))}\n`)
+    await writeFile(path.join(directory, "2026-01-01_00-00-00.jsonl"), `${JSON.stringify(legacyEvent({ id: "first" }))}\n`)
+    await writeFile(path.join(directory, "2026-01-01_00-00-00-001.jsonl"), `${JSON.stringify(legacyEvent({ id: "second" }))}\n`)
     const result = await journal.read()
     assert.equal(result.ok, true)
     assert.deepEqual(result.records.map((record) => record.id), ["first", "second", "third"])
@@ -101,7 +101,7 @@ force: true })
 test("rejects duplicate stable identities across session files", async () => {
   const { directory, journal } = await createStoppedJournal()
   try {
-    const line = `${JSON.stringify(legacyEvent("duplicate"))}\n`
+    const line = `${JSON.stringify(legacyEvent({ id: "duplicate" }))}\n`
     await writeFile(path.join(directory, "2026-01-01_00-00-00.jsonl"), line)
     await writeFile(path.join(directory, "2026-01-02_00-00-00.jsonl"), line)
     const result = await journal.read()
@@ -117,7 +117,7 @@ force: true })
 test("rejects an incomplete final line without silently truncating it", async () => {
   const { directory, journal } = await createStoppedJournal()
   const filePath = path.join(directory, "2026-01-01_00-00-00.jsonl")
-  const partial = JSON.stringify(legacyEvent("partial")).slice(0, -4)
+  const partial = JSON.stringify(legacyEvent({ id: "partial" })).slice(0, -4)
   try {
     await writeFile(filePath, partial)
     const result = await journal.read()
@@ -173,7 +173,7 @@ test("rejects unsupported schema versions", async () => {
     const envelope = {
       __coinzillaJournal: { schemaVersion: 99,
 id: "future" },
-      payload: legacyEvent("future"),
+      payload: legacyEvent({ id: "future" }),
     }
     await writeFile(path.join(directory, "2026-01-01_00-00-00.jsonl"), `${JSON.stringify(envelope)}\n`)
     const result = await journal.read()
@@ -204,8 +204,8 @@ force: true })
 test("bounds record count, total bytes, and individual record size", async () => {
   const { directory, journal } = await createStoppedJournal()
   try {
-    const first = legacyEvent("one")
-    const second = legacyEvent("two")
+    const first = legacyEvent({ id: "one" })
+    const second = legacyEvent({ id: "two" })
     const content = `${JSON.stringify(first)}\n${JSON.stringify(second)}\n`
     const filePath = path.join(directory, "2026-01-01_00-00-00.jsonl")
     await writeFile(filePath, content)
@@ -234,7 +234,7 @@ test("replays only after the complete journal validates and preserves record ord
   try {
     await writeFile(
       path.join(directory, "2026-01-01_00-00-00.jsonl"),
-      `${JSON.stringify(legacyEvent("one"))}\n${JSON.stringify(legacyEvent("two"))}\n`,
+      `${JSON.stringify(legacyEvent({ id: "one" }))}\n${JSON.stringify(legacyEvent({ id: "two" }))}\n`,
     )
     const result = await journal.replay({
       handler: async ({ record }) => seen.push(record.id),
@@ -255,7 +255,7 @@ test("does not invoke replay handlers when any later record is malformed", async
   try {
     await writeFile(
       path.join(directory, "2026-01-01_00-00-00.jsonl"),
-      `${JSON.stringify(legacyEvent("valid"))}\n{invalid}\n`,
+      `${JSON.stringify(legacyEvent({ id: "valid" }))}\n{invalid}\n`,
     )
     const result = await journal.replay({
       handler: async ({ record }) => seen.push(record.id),
@@ -275,7 +275,7 @@ test("stops replay on handler failure and reports the last successful record", a
   try {
     await writeFile(
       path.join(directory, "2026-01-01_00-00-00.jsonl"),
-      `${JSON.stringify(legacyEvent("one"))}\n${JSON.stringify(legacyEvent("two"))}\n`,
+      `${JSON.stringify(legacyEvent({ id: "one" }))}\n${JSON.stringify(legacyEvent({ id: "two" }))}\n`,
     )
     const result = await journal.replay({
       handler: async ({ record }) => {
@@ -316,7 +316,7 @@ test("treats a failed replay result without errors as a failure", async () => {
   try {
     await writeFile(
       path.join(directory, "2026-01-01_00-00-00.jsonl"),
-      `${JSON.stringify(legacyEvent("failed"))}\n`,
+      `${JSON.stringify(legacyEvent({ id: "failed" }))}\n`,
     )
     const result = await journal.replay({
       handler: async () => ({ ok: false,
@@ -359,8 +359,8 @@ eventBus })
     journal.store.append = async () => {
       throw new Error("simulated partial write")
     }
-    const first = await journal.record({ event: legacyEvent("one") })
-    const second = await journal.record({ event: legacyEvent("two") })
+    const first = await journal.record({ event: legacyEvent({ id: "one" }) })
+    const second = await journal.record({ event: legacyEvent({ id: "two" }) })
     assert.equal(first.ok, false)
     assert.equal(second.ok, false)
     assert.equal(journal.writeFailed, true)
@@ -440,7 +440,7 @@ test("orders very large and zero-padded collision suffixes deterministically", a
 
   try {
     for (const fileName of [...sessionNames].reverse()) {
-      await writeFile(path.join(directory, fileName), `${JSON.stringify(legacyEvent(fileName))}\n`)
+      await writeFile(path.join(directory, fileName), `${JSON.stringify(legacyEvent({ id: fileName }))}\n`)
     }
 
     const result = await journal.read()
@@ -517,7 +517,7 @@ test("orders timestamp-only, numeric collision, and identity-suffixed sessions d
 
   try {
     for (const [fileName, id] of entries) {
-      await writeFile(path.join(directory, fileName), `${JSON.stringify(legacyEvent(id))}\n`)
+      await writeFile(path.join(directory, fileName), `${JSON.stringify(legacyEvent({ id: id }))}\n`)
     }
     const result = await journal.read()
     assert.equal(result.ok, true, "Every filename emitted by the supported Journal writers must be readable")
