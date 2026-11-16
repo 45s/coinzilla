@@ -35,7 +35,8 @@ info() {} },
 
 test("getCanonicalOrder resolves a lost submission acknowledgement by client order ID", async () => {
   const broker = createBroker({
-    "order.status"(params, options) {
+    "order.status"(...args) {
+      const [params, options] = args
       assert.deepEqual(params, { symbol: "DOGEUSDT",
 origClientOrderId: "harvester-client-123" })
       assert.deepEqual(options, { signed: true })

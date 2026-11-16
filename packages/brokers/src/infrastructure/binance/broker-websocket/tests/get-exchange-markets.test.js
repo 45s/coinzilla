@@ -20,14 +20,17 @@ warn() {} },
 rpc }
 }
 
-const marketInfo = (symbol, baseAsset, quoteAsset) => ({
+const marketInfo = (...args) => {
+  const [symbol, baseAsset, quoteAsset] = args
+  return ({
   symbol,
   baseAsset,
   quoteAsset,
   status: "TRADING",
   orderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
   filters: [],
-})
+  })
+}
 
 test("returns the canonical market catalog from one unfiltered exchangeInfo request", async () => {
   const { broker, rpc } = createBroker((params) => {

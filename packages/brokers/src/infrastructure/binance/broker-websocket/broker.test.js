@@ -42,7 +42,8 @@ const exchangeOrder = {
 
 test("getAssets uses signed account.status and adapts non-zero balances", async () => {
   const { broker, rpc } = createBroker({
-    "account.status": (params, options) => {
+    "account.status": (...args) => {
+      const [params, options] = args
       assert.deepEqual(params, { omitZeroBalances: true })
       assert.deepEqual(options, { signed: true })
       return { balances: [
