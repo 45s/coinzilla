@@ -10,19 +10,19 @@ const config = ({ recovery = false, operator = false } = {}) => ({
 })
 const store = () => ({ verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }) })
 
-test("skips store creation for Telegram CC while restart recovery is disabled", async () => {
+test("skips store creation when neither recovery nor operator control requires it", async () => {
   let calls = 0
   assert.equal(await prepareProcessOperationalStateStore({
-    appConfig: config({ operator: true }), runtimeSessionId: "session", createOperationalStateStore: () => { calls += 1 },
+    appConfig: config(), runtimeSessionId: "session", createOperationalStateStore: () => { calls += 1 },
   }), undefined)
   assert.equal(calls, 0)
 })
 
-test("uses the documented default directory when restart recovery is enabled", async () => {
+test("uses the documented default directory for Telegram operator control", async () => {
   let options
   const expected = store()
   const actual = await prepareProcessOperationalStateStore({
-    appConfig: config({ recovery: true }), env: {}, runtimeSessionId: "session",
+    appConfig: config({ operator: true }), env: {}, runtimeSessionId: "session",
     createOperationalStateStore: (value) => { options = value; return expected },
   })
   assert.strictEqual(actual, expected)
@@ -35,7 +35,7 @@ test("uses the documented default directory when restart recovery is enabled", a
 test("honors a valid absolute OPERATIONAL_STATE_DIRECTORY", async () => {
   let options
   await prepareProcessOperationalStateStore({
-    appConfig: config({ recovery: true }), env: { OPERATIONAL_STATE_DIRECTORY: path.resolve("ledger") },
+    appConfig: config({ operator: true }), env: { OPERATIONAL_STATE_DIRECTORY: path.resolve("ledger") },
     runtimeSessionId: "session", createOperationalStateStore: (value) => { options = value; return store() },
   })
   assert.equal(options.directory, path.resolve("ledger"))
@@ -45,7 +45,7 @@ test("rejects malformed OPERATIONAL_STATE_DIRECTORY before calling the factory",
   let calls = 0
   await assert.rejects(
     prepareProcessOperationalStateStore({
-      appConfig: config({ recovery: true }), env: { OPERATIONAL_STATE_DIRECTORY: "relative/path" },
+      appConfig: config({ operator: true }), env: { OPERATIONAL_STATE_DIRECTORY: "relative/path" },
       runtimeSessionId: "session", createOperationalStateStore: () => { calls += 1 },
     }),
     (error) => error.code === "PROCESS_OPERATIONAL_STATE_DIRECTORY_INVALID" && error.message.includes("OPERATIONAL_STATE_DIRECTORY"),
@@ -57,7 +57,7 @@ test("wraps store factory failures with stage, path and original cause", async (
   const cause = new Error("disk unavailable")
   await assert.rejects(
     prepareProcessOperationalStateStore({
-      appConfig: config({ recovery: true }), env: {}, runtimeSessionId: "session",
+      appConfig: config({ operator: true }), env: {}, runtimeSessionId: "session",
       createOperationalStateStore: () => { throw cause },
     }),
     (error) => error.code === "PROCESS_OPERATIONAL_STATE_STORE_CREATE_FAILED" &&
@@ -86,12 +86,12 @@ test("fails closed when recovery ledger verification fails or throws", async () 
 
 test("reports invalid session identity and factory dependencies", async () => {
   await assert.rejects(
-    prepareProcessOperationalStateStore({ appConfig: config({ recovery: true }), runtimeSessionId: "" }),
+    prepareProcessOperationalStateStore({ appConfig: config({ operator: true }), runtimeSessionId: "" }),
     (error) => error.code === "PROCESS_OPERATIONAL_STATE_SESSION_ID_INVALID",
   )
   await assert.rejects(
     prepareProcessOperationalStateStore({
-      appConfig: config({ recovery: true }), runtimeSessionId: "session", createOperationalStateStore: null,
+      appConfig: config({ operator: true }), runtimeSessionId: "session", createOperationalStateStore: null,
     }),
     (error) => error.code === "PROCESS_OPERATIONAL_STATE_FACTORY_INVALID",
   )
@@ -100,7 +100,7 @@ test("reports invalid session identity and factory dependencies", async () => {
 test("ignores the removed DURABLE_FACTS_DIRECTORY override", async () => {
   let options
   await prepareProcessOperationalStateStore({
-    appConfig: config({ recovery: true }),
+    appConfig: config({ operator: true }),
     env: { DURABLE_FACTS_DIRECTORY: path.resolve("legacy-recovery-facts") },
     runtimeSessionId: "session",
     createOperationalStateStore: (value) => { options = value; return store() },
@@ -112,7 +112,7 @@ test("uses the canonical override and ignores the removed legacy variable", asyn
   let options
   const canonicalDirectory = path.resolve("new-store")
   await prepareProcessOperationalStateStore({
-    appConfig: config({ recovery: true }),
+    appConfig: config({ operator: true }),
     env: {
       OPERATIONAL_STATE_DIRECTORY: canonicalDirectory,
       DURABLE_FACTS_DIRECTORY: path.resolve("old-store"),
