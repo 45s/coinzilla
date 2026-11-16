@@ -785,6 +785,42 @@ function createAuditResult({
  * coverage or unexplained commitments fail closed. This function performs no
  * broker calls and no exchange mutations.
  */
+function prepareExpectedAccountBalances({
+  projection,
+  recoveredState,
+  currentAccountSnapshot,
+  openOrders,
+  markets,
+  targetMarket,
+}) {
+  const accountBalances = createAccountBalanceContext({ projection, currentAccountSnapshot })
+  const marketContext = createMarketContext({ recoveredState, markets, targetMarket })
+  const thirdAssetCommissionCodes = applyThirdAssetCommissionDeltas({
+    recoveredState,
+    marketsById: marketContext.marketsById,
+    baselineByAsset: accountBalances.baselineByAsset,
+    baselineSequenceByAsset: accountBalances.baselineSequenceByAsset,
+    expectedDeltas: marketContext.expectedDeltas,
+  })
+  const { assetCodes, marketAssetCodes } = createRelevantAssetCodes({
+    recoveredState,
+    targetMarket,
+    openOrders,
+    marketsById: marketContext.marketsById,
+    marketsBySymbol: marketContext.marketsBySymbol,
+    baselineByAsset: accountBalances.baselineByAsset,
+    currentByAsset: accountBalances.currentByAsset,
+    expectedDeltas: marketContext.expectedDeltas,
+  })
+  validateAccountBalances({
+    assetCodes,
+    baselineByAsset: accountBalances.baselineByAsset,
+    currentByAsset: accountBalances.currentByAsset,
+    expectedDeltas: marketContext.expectedDeltas,
+  })
+  return { accountBalances, marketContext, thirdAssetCommissionCodes, assetCodes, marketAssetCodes }
+}
+
 function runRecoveredAccountAudit(options) {
     const {
       projection,
@@ -819,34 +855,15 @@ function runRecoveredAccountAudit(options) {
       targetMarket,
       currentAccountSnapshot,
     })
-    const accountBalances = createAccountBalanceContext({ projection, 
-      currentAccountSnapshot })
-    const marketContext = createMarketContext({ recoveredState, 
-      markets, 
-      targetMarket })
-    const thirdAssetCommissionCodes = applyThirdAssetCommissionDeltas({
+    const balanceContext = prepareExpectedAccountBalances({
+      projection,
       recoveredState,
-      marketsById: marketContext.marketsById,
-      baselineByAsset: accountBalances.baselineByAsset,
-      baselineSequenceByAsset: accountBalances.baselineSequenceByAsset,
-      expectedDeltas: marketContext.expectedDeltas,
-    })
-    const { assetCodes, marketAssetCodes } = createRelevantAssetCodes({
-      recoveredState,
-      targetMarket,
+      currentAccountSnapshot,
       openOrders,
-      marketsById: marketContext.marketsById,
-      marketsBySymbol: marketContext.marketsBySymbol,
-      baselineByAsset: accountBalances.baselineByAsset,
-      currentByAsset: accountBalances.currentByAsset,
-      expectedDeltas: marketContext.expectedDeltas,
+      markets,
+      targetMarket,
     })
-    validateAccountBalances({
-      assetCodes,
-      baselineByAsset: accountBalances.baselineByAsset,
-      currentByAsset: accountBalances.currentByAsset,
-      expectedDeltas: marketContext.expectedDeltas,
-    })
+    const { accountBalances, marketContext, thirdAssetCommissionCodes, assetCodes, marketAssetCodes } = balanceContext
     const orderCommitments = createExpectedOrderCommitments({ recoveredState })
     const exchangeOrders = inspectExchangeOpenOrders({
       openOrders,
