@@ -46,43 +46,49 @@ const IGNORABLE_HARVESTER_EVENTS = new Set([
 
 function requireObject({ value, field }) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new TypeError(field + " must be an object")
+    throw new TypeError(`${field  } must be an object`)
   }
   return value
 }
 
 function requireString({ value, field }) {
   if (typeof value !== "string" || value.trim() === "") {
-    throw new TypeError(field + " must be a non-empty string")
+    throw new TypeError(`${field  } must be a non-empty string`)
   }
   return value.trim()
 }
 
 function requireDecimal({ value, field, positive = false }) {
-  if (typeof value !== "string") throw new TypeError(field + " must be an exact decimal string")
-  assertDecimalString({ value, field })
-  if (compareDecimal({ left: value, right: "0" }) < (positive ? 1 : 0)) {
+  if (typeof value !== "string") {throw new TypeError(`${field  } must be an exact decimal string`)}
+  assertDecimalString({ value,
+field })
+  if (compareDecimal({ left: value,
+right: "0" }) < (positive ? 1 : 0)) {
     throw new RangeError(field + (positive ? " must be positive" : " must be non-negative"))
   }
   return value
 }
 
 function requireSignedDecimal({ value, field }) {
-  if (typeof value !== "string") throw new TypeError(field + " must be an exact decimal string")
-  assertDecimalString({ value, field })
+  if (typeof value !== "string") {throw new TypeError(`${field  } must be an exact decimal string`)}
+  assertDecimalString({ value,
+field })
   return value
 }
 
 function requireRecoveryDust({ value }) {
-  if (value === undefined) return undefined
-  const dust = requireObject({ value, field: "dust" })
-  if (dust.status !== "EXCHANGE_CONSTRAINED_DUST") throw new TypeError("dust.status must be EXCHANGE_CONSTRAINED_DUST")
+  if (value === undefined) {return undefined}
+  const dust = requireObject({ value,
+field: "dust" })
+  if (dust.status !== "EXCHANGE_CONSTRAINED_DUST") {throw new TypeError("dust.status must be EXCHANGE_CONSTRAINED_DUST")}
   if (!["MIN_QUANTITY", "MIN_NOTIONAL", "QUANTITY_INCREMENT"].includes(dust.reason)) {
     throw new TypeError("dust.reason must identify the limiting exchange filter")
   }
   const mapped = {
     status: "EXCHANGE_CONSTRAINED_DUST",
-    quantity: requireDecimal({ value: dust.quantity, field: "dust.quantity", positive: true }),
+    quantity: requireDecimal({ value: dust.quantity,
+field: "dust.quantity",
+positive: true }),
     reason: dust.reason,
   }
   const fields = {
@@ -91,19 +97,24 @@ function requireRecoveryDust({ value }) {
     QUANTITY_INCREMENT: ["quantityStepSize", "evaluatedQuantity"],
   }[dust.reason]
   for (const field of fields) {
-    mapped[field] = requireDecimal({ value: dust[field], field: "dust." + field })
+    mapped[field] = requireDecimal({ value: dust[field],
+field: `dust.${  field}` })
     if (["minimumQuantity", "minimumNotional", "quantityStepSize"].includes(field) &&
-        compareDecimal({ left: mapped[field], right: "0" }) <= 0) {
-      throw new RangeError("dust." + field + " must be positive")
+        compareDecimal({ left: mapped[field],
+right: "0" }) <= 0) {
+      throw new RangeError(`dust.${  field  } must be positive`)
     }
   }
   if (dust.reason === "MIN_QUANTITY" &&
-      compareDecimal({ left: mapped.evaluatedQuantity, right: mapped.minimumQuantity }) >= 0) {
+      compareDecimal({ left: mapped.evaluatedQuantity,
+right: mapped.minimumQuantity }) >= 0) {
     throw new RangeError("dust MIN_QUANTITY evidence does not prove the quantity is below the minimum")
   }
   if (dust.reason === "MIN_NOTIONAL" &&
-      (compareDecimal({ left: mapped.evaluatedQuantity, right: mapped.minimumQuantity }) < 0 ||
-       compareDecimal({ left: mapped.evaluatedNotional, right: mapped.minimumNotional }) >= 0)) {
+      (compareDecimal({ left: mapped.evaluatedQuantity,
+right: mapped.minimumQuantity }) < 0 ||
+       compareDecimal({ left: mapped.evaluatedNotional,
+right: mapped.minimumNotional }) >= 0)) {
     throw new RangeError("dust MIN_NOTIONAL evidence does not prove the notional is below the minimum")
   }
   if (dust.reason === "QUANTITY_INCREMENT" && mapped.evaluatedQuantity !== "0") {
@@ -113,55 +124,83 @@ function requireRecoveryDust({ value }) {
 }
 
 function requireOrderIntent({ data }) {
-  const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
-  const symbol = requireString({ value: data.symbol, field: "symbol" })
-  if (!ORDER_SIDES.has(data.side)) throw new TypeError("order side must be BUY or SELL")
-  const type = requireString({ value: data.type, field: "type" })
-  const price = requireDecimal({ value: data.price, field: "price", positive: true })
-  const quantity = requireDecimal({ value: data.quantity, field: "quantity", positive: true })
-  return { clientOrderId, symbol, side: data.side, type, price, quantity }
+  const clientOrderId = requireString({ value: data.clientOrderId,
+field: "clientOrderId" })
+  const symbol = requireString({ value: data.symbol,
+field: "symbol" })
+  if (!ORDER_SIDES.has(data.side)) {throw new TypeError("order side must be BUY or SELL")}
+  const type = requireString({ value: data.type,
+field: "type" })
+  const price = requireDecimal({ value: data.price,
+field: "price",
+positive: true })
+  const quantity = requireDecimal({ value: data.quantity,
+field: "quantity",
+positive: true })
+  return { clientOrderId,
+symbol,
+side: data.side,
+type,
+price,
+quantity }
 }
 
 function assertSameIntent({ current, next }) {
   for (const field of ["clientOrderId", "symbol", "side", "type", "price", "quantity"]) {
     if (current[field] !== next[field]) {
-      throw new Error("Journal order event changed immutable " + field + " for " + current.clientOrderId)
+      throw new Error(`Journal order event changed immutable ${  field  } for ${  current.clientOrderId}`)
     }
   }
 }
 
 function requireFill({ data }) {
-  const fillId = requireString({ value: data.fillId, field: "fillId" })
-  const tradeId = requireString({ value: data.tradeId, field: "tradeId" })
-  const brokerOrderId = requireString({ value: data.brokerOrderId, field: "brokerOrderId" })
+  const fillId = requireString({ value: data.fillId,
+field: "fillId" })
+  const tradeId = requireString({ value: data.tradeId,
+field: "tradeId" })
+  const brokerOrderId = requireString({ value: data.brokerOrderId,
+field: "brokerOrderId" })
   const clientOrderId = data.clientOrderId === undefined
     ? undefined
-    : requireString({ value: data.clientOrderId, field: "clientOrderId" })
-  const symbol = requireString({ value: data.symbol, field: "symbol" })
-  if (!ORDER_SIDES.has(data.side)) throw new TypeError("fill side must be BUY or SELL")
-  const price = requireDecimal({ value: data.price, field: "price", positive: true })
-  const quantity = requireDecimal({ value: data.quantity, field: "quantity", positive: true })
-  const quoteQuantity = requireDecimal({ value: data.quoteQuantity, field: "quoteQuantity", positive: true })
-  const liquidityRole = requireString({ value: data.liquidityRole, field: "liquidityRole" })
-  const commissionStatus = requireString({ value: data.commissionStatus, field: "commissionStatus" })
-  if (!Array.isArray(data.commissions)) throw new TypeError("fill commissions must be an array")
+    : requireString({ value: data.clientOrderId,
+field: "clientOrderId" })
+  const symbol = requireString({ value: data.symbol,
+field: "symbol" })
+  if (!ORDER_SIDES.has(data.side)) {throw new TypeError("fill side must be BUY or SELL")}
+  const price = requireDecimal({ value: data.price,
+field: "price",
+positive: true })
+  const quantity = requireDecimal({ value: data.quantity,
+field: "quantity",
+positive: true })
+  const quoteQuantity = requireDecimal({ value: data.quoteQuantity,
+field: "quoteQuantity",
+positive: true })
+  const liquidityRole = requireString({ value: data.liquidityRole,
+field: "liquidityRole" })
+  const commissionStatus = requireString({ value: data.commissionStatus,
+field: "commissionStatus" })
+  if (!Array.isArray(data.commissions)) {throw new TypeError("fill commissions must be an array")}
   const commissions = data.commissions.map((commission, index) => ({
-    amount: requireDecimal({ value: commission?.amount, field: "commissions[" + index + "].amount" }),
-    assetId: requireString({ value: commission?.assetId, field: "commissions[" + index + "].assetId" }),
-    asset: requireString({ value: commission?.asset, field: "commissions[" + index + "].asset" }),
+    amount: requireDecimal({ value: commission?.amount,
+field: `commissions[${  index  }].amount` }),
+    assetId: requireString({ value: commission?.assetId,
+field: `commissions[${  index  }].assetId` }),
+    asset: requireString({ value: commission?.asset,
+field: `commissions[${  index  }].asset` }),
     ...(commission?.quoteValue === undefined ? {} : {
       quoteValue: {
         amount: requireDecimal({
           value: commission.quoteValue?.amount,
-          field: "commissions[" + index + "].quoteValue.amount",
+          field: `commissions[${  index  }].quoteValue.amount`,
         }),
         assetId: requireString({
           value: commission.quoteValue?.assetId,
-          field: "commissions[" + index + "].quoteValue.assetId",
+          field: `commissions[${  index  }].quoteValue.assetId`,
         }),
         asset: requireString({
           value: commission.quoteValue?.asset,
-          field: "commissions[" + index + "].quoteValue.asset",
+          field: `commissions[${  index  }].quoteValue.asset`,
         }),
       },
     }),
@@ -199,7 +238,7 @@ function fillFingerprint({ fill }) {
  */
 export function projectHarvesterJournalRecovery({ records } = {}) {
   try {
-    if (!Array.isArray(records)) throw new TypeError("Harvester Journal recovery records must be an array")
+    if (!Array.isArray(records)) {throw new TypeError("Harvester Journal recovery records must be an array")}
 
     const ordersByClientId = new Map()
     const clientIdByBrokerId = new Map()
@@ -217,23 +256,25 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
 
     const requireOrder = ({ clientOrderId, eventName }) => {
       const order = ordersByClientId.get(clientOrderId)
-      if (!order) throw new Error(eventName + " references an unknown clientOrderId " + clientOrderId)
+      if (!order) {throw new Error(`${eventName  } references an unknown clientOrderId ${  clientOrderId}`)}
       return order
     }
 
     for (const record of records) {
       const currentSequence = journalSequence
       journalSequence += 1
-      const payload = requireObject({ value: record?.payload, field: "Journal record payload" })
-      const name = payload.name
-      if (typeof name !== "string") throw new TypeError("Journal event name must be a string")
+      const payload = requireObject({ value: record?.payload,
+field: "Journal record payload" })
+      const {name} = payload
+      if (typeof name !== "string") {throw new TypeError("Journal event name must be a string")}
       if (!Object.values(EVENT).includes(name)) {
         if ((payload.source === "harvester" || payload.source === undefined) && !IGNORABLE_HARVESTER_EVENTS.has(name)) {
-          throw new Error("unknown Harvester recovery event: " + name)
+          throw new Error(`unknown Harvester recovery event: ${  name}`)
         }
         continue
       }
-      const data = requireObject({ value: payload.data, field: name + " data" })
+      const data = requireObject({ value: payload.data,
+field: `${name  } data` })
       const fileName = requireString({
         value: record.position?.fileName,
         field: "Journal record position.fileName",
@@ -256,17 +297,18 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       }
 
       if (name === EVENT.STARTED) {
-        if (session.started) throw new Error("Journal session contains multiple started events")
-        if (typeof data.tradingEnabled !== "boolean") throw new TypeError("harvester.started tradingEnabled must be boolean")
+        if (session.started) {throw new Error("Journal session contains multiple started events")}
+        if (typeof data.tradingEnabled !== "boolean") {throw new TypeError("harvester.started tradingEnabled must be boolean")}
         session.started = true
         session.tradingEnabled = data.tradingEnabled
         continue
       }
 
       if (name === EVENT.STOPPED) {
-        if (!session.started) throw new Error("harvester.stopped has no preceding harvester.started event")
-        if (!["success", "failed"].includes(data.outcome)) throw new TypeError("harvester.stopped outcome must be success or failed")
-        requireString({ value: data.reason, field: "harvester.stopped reason" })
+        if (!session.started) {throw new Error("harvester.stopped has no preceding harvester.started event")}
+        if (!["success", "failed"].includes(data.outcome)) {throw new TypeError("harvester.stopped outcome must be success or failed")}
+        requireString({ value: data.reason,
+field: "harvester.stopped reason" })
         session.stoppedOutcome = data.outcome
         continue
       }
@@ -298,34 +340,43 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
           throw new TypeError("Account snapshot phase is invalid")
         }
         if (data.phase === "RECOVERY" && !session.started) {
-          throw new Error("RECOVERY account snapshot requires a started Journal session " + fileName)
+          throw new Error(`RECOVERY account snapshot requires a started Journal session ${  fileName}`)
         }
         if (data.phase === "PREFLIGHT" && (session.started || session.hasTradingActivity)) {
-          throw new Error("PREFLIGHT account snapshot must precede trading activity in Journal session " + fileName)
+          throw new Error(`PREFLIGHT account snapshot must precede trading activity in Journal session ${  fileName}`)
         }
-        if (!["COMPLETE", "INCOMPLETE"].includes(data.auditStatus)) throw new TypeError("Account snapshot auditStatus is invalid")
-        if (!Number.isSafeInteger(data.sourceTime) || data.sourceTime < 0) throw new TypeError("Account snapshot sourceTime must be a non-negative safe integer")
+        if (!["COMPLETE", "INCOMPLETE"].includes(data.auditStatus)) {throw new TypeError("Account snapshot auditStatus is invalid")}
+        if (!Number.isSafeInteger(data.sourceTime) || data.sourceTime < 0) {throw new TypeError("Account snapshot sourceTime must be a non-negative safe integer")}
         if (session.lastAccountSnapshotSourceTime !== undefined &&
             data.sourceTime < session.lastAccountSnapshotSourceTime) {
-          throw new Error("Account snapshot sourceTime moved backwards within Journal session " + fileName)
+          throw new Error(`Account snapshot sourceTime moved backwards within Journal session ${  fileName}`)
         }
         session.lastAccountSnapshotSourceTime = data.sourceTime
-        if (!Array.isArray(data.balances) || !Array.isArray(data.auditReasons)) throw new TypeError("Account snapshot balances and auditReasons must be arrays")
+        if (!Array.isArray(data.balances) || !Array.isArray(data.auditReasons)) {throw new TypeError("Account snapshot balances and auditReasons must be arrays")}
         const balances = data.balances.map((balance, index) => {
-          const asset = requireString({ value: balance?.asset, field: "balances[" + index + "].asset" })
-          const free = requireDecimal({ value: balance?.free, field: "balances[" + index + "].free" })
-          const locked = requireDecimal({ value: balance?.locked, field: "balances[" + index + "].locked" })
-          const total = requireDecimal({ value: balance?.total, field: "balances[" + index + "].total" })
-          if (total !== addDecimal({ left: free, right: locked })) {
-            throw new Error("Account snapshot total does not equal free plus locked for " + asset)
+          const asset = requireString({ value: balance?.asset,
+field: `balances[${  index  }].asset` })
+          const free = requireDecimal({ value: balance?.free,
+field: `balances[${  index  }].free` })
+          const locked = requireDecimal({ value: balance?.locked,
+field: `balances[${  index  }].locked` })
+          const total = requireDecimal({ value: balance?.total,
+field: `balances[${  index  }].total` })
+          if (total !== addDecimal({ left: free,
+right: locked })) {
+            throw new Error(`Account snapshot total does not equal free plus locked for ${  asset}`)
           }
-          return Object.freeze({ asset, free, locked, total })
+          return Object.freeze({ asset,
+free,
+locked,
+total })
         })
         if (new Set(balances.map(({ asset }) => asset)).size !== balances.length) {
           throw new Error("Account snapshot contains duplicate asset balances")
         }
         const auditReasons = data.auditReasons.map((reason, index) =>
-          requireString({ value: reason, field: "auditReasons[" + index + "]" }),
+          requireString({ value: reason,
+field: `auditReasons[${  index  }]` }),
         )
         if (data.auditStatus === "COMPLETE" && auditReasons.length > 0) {
           throw new Error("COMPLETE account snapshot cannot contain audit reasons")
@@ -348,40 +399,50 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
             throw new Error("Closing account snapshot requires a started trading-enabled session")
           }
           session.closingSnapshotCount += 1
-          if (session.closingSnapshotCount > 1) throw new Error("Journal session contains multiple closing account snapshots")
+          if (session.closingSnapshotCount > 1) {throw new Error("Journal session contains multiple closing account snapshots")}
           session.hasCompleteClosingSnapshot = data.auditStatus === "COMPLETE" && auditReasons.length === 0
         }
         continue
       }
 
       if (name === EVENT.ACCOUNT_OPEN_ORDERS) {
-        if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(data.phase)) throw new TypeError("Open-order snapshot phase is invalid")
+        if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(data.phase)) {throw new TypeError("Open-order snapshot phase is invalid")}
         if (data.phase === "RECOVERY" && !session.started) {
-          throw new Error("RECOVERY open-order snapshot requires a started Journal session " + fileName)
+          throw new Error(`RECOVERY open-order snapshot requires a started Journal session ${  fileName}`)
         }
         if (data.phase === "PREFLIGHT" && (session.started || session.hasTradingActivity)) {
-          throw new Error("PREFLIGHT open-order snapshot must precede trading activity in Journal session " + fileName)
+          throw new Error(`PREFLIGHT open-order snapshot must precede trading activity in Journal session ${  fileName}`)
         }
-        if (!Number.isSafeInteger(data.observedAt) || data.observedAt < 0) throw new TypeError("Open-order snapshot observedAt must be a non-negative safe integer")
+        if (!Number.isSafeInteger(data.observedAt) || data.observedAt < 0) {throw new TypeError("Open-order snapshot observedAt must be a non-negative safe integer")}
         if (session.lastOpenOrdersObservedAt !== undefined &&
             data.observedAt < session.lastOpenOrdersObservedAt) {
-          throw new Error("Open-order snapshot observedAt moved backwards within Journal session " + fileName)
+          throw new Error(`Open-order snapshot observedAt moved backwards within Journal session ${  fileName}`)
         }
         session.lastOpenOrdersObservedAt = data.observedAt
-        if (!["READY", "RECONCILED", "BLOCKED"].includes(data.readiness)) throw new TypeError("Open-order snapshot readiness is invalid")
-        if (!Array.isArray(data.orders) || !Array.isArray(data.blockReasons)) throw new TypeError("Open-order snapshot orders and blockReasons must be arrays")
-        if (data.orderCount !== data.orders.length) throw new Error("Open-order snapshot orderCount does not match orders")
+        if (!["READY", "RECONCILED", "BLOCKED"].includes(data.readiness)) {throw new TypeError("Open-order snapshot readiness is invalid")}
+        if (!Array.isArray(data.orders) || !Array.isArray(data.blockReasons)) {throw new TypeError("Open-order snapshot orders and blockReasons must be arrays")}
+        if (data.orderCount !== data.orders.length) {throw new Error("Open-order snapshot orderCount does not match orders")}
         const orders = data.orders.map((order, index) => {
-          const brokerOrderId = requireString({ value: order?.brokerOrderId, field: "orders[" + index + "].brokerOrderId" })
-          const symbol = requireString({ value: order?.symbol, field: "orders[" + index + "].symbol" })
-          if (!ORDER_SIDES.has(order?.side)) throw new TypeError("orders[" + index + "].side must be BUY or SELL")
-          const type = requireString({ value: order?.type, field: "orders[" + index + "].type" })
-          const quantity = requireDecimal({ value: order?.quantity, field: "orders[" + index + "].quantity", positive: true })
-          const executedQuantity = requireDecimal({ value: order?.executedQuantity, field: "orders[" + index + "].executedQuantity" })
-          const price = order?.price === undefined ? undefined : requireDecimal({ value: order.price, field: "orders[" + index + "].price", positive: true })
-          if (compareDecimal({ left: executedQuantity, right: quantity }) > 0) throw new Error("Open-order snapshot executed quantity exceeds original quantity")
+          const brokerOrderId = requireString({ value: order?.brokerOrderId,
+field: `orders[${  index  }].brokerOrderId` })
+          const symbol = requireString({ value: order?.symbol,
+field: `orders[${  index  }].symbol` })
+          if (!ORDER_SIDES.has(order?.side)) {throw new TypeError(`orders[${  index  }].side must be BUY or SELL`)}
+          const type = requireString({ value: order?.type,
+field: `orders[${  index  }].type` })
+          const quantity = requireDecimal({ value: order?.quantity,
+field: `orders[${  index  }].quantity`,
+positive: true })
+          const executedQuantity = requireDecimal({ value: order?.executedQuantity,
+field: `orders[${  index  }].executedQuantity` })
+          const price = order?.price === undefined ? undefined : requireDecimal({ value: order.price,
+field: `orders[${  index  }].price`,
+positive: true })
+          if (compareDecimal({ left: executedQuantity,
+right: quantity }) > 0) {throw new Error("Open-order snapshot executed quantity exceeds original quantity")}
           return Object.freeze({
-            ...(order?.clientOrderId === undefined ? {} : { clientOrderId: requireString({ value: order.clientOrderId, field: "orders[" + index + "].clientOrderId" }) }),
+            ...(order?.clientOrderId === undefined ? {} : { clientOrderId: requireString({ value: order.clientOrderId,
+field: `orders[${  index  }].clientOrderId` }) }),
             brokerOrderId,
             symbol,
             side: order.side,
@@ -389,13 +450,15 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
             ...(price === undefined ? {} : { price }),
             quantity,
             executedQuantity,
-            status: requireString({ value: order.status, field: "orders[" + index + "].status" }),
+            status: requireString({ value: order.status,
+field: `orders[${  index  }].status` }),
           })
         })
-        const identities = orders.map(({ symbol, brokerOrderId }) => symbol + ":" + brokerOrderId)
-        if (new Set(identities).size !== identities.length) throw new Error("Open-order snapshot contains duplicate order identities")
+        const identities = orders.map(({ symbol, brokerOrderId }) => `${symbol  }:${  brokerOrderId}`)
+        if (new Set(identities).size !== identities.length) {throw new Error("Open-order snapshot contains duplicate order identities")}
         const blockReasons = data.blockReasons.map((reason, index) =>
-          requireString({ value: reason, field: "blockReasons[" + index + "]" }),
+          requireString({ value: reason,
+field: `blockReasons[${  index  }]` }),
         )
         if (data.readiness === "READY" && (orders.length > 0 || blockReasons.length > 0)) {
           throw new Error("READY open-order snapshot requires no orders and no block reasons")
@@ -417,12 +480,15 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
                 owned.symbol !== order.symbol ||
                 owned.side !== order.side ||
                 owned.type !== order.type ||
-                compareDecimal({ left: owned.quantity, right: order.quantity }) !== 0 ||
-                compareDecimal({ left: owned.cumulativeFillQuantity, right: order.executedQuantity }) !== 0 ||
+                compareDecimal({ left: owned.quantity,
+right: order.quantity }) !== 0 ||
+                compareDecimal({ left: owned.cumulativeFillQuantity,
+right: order.executedQuantity }) !== 0 ||
                 (owned.price === undefined
                   ? order.price !== undefined
-                  : order.price === undefined || compareDecimal({ left: owned.price, right: order.price }) !== 0)) {
-              throw new Error("RECONCILED open-order snapshot contradicts durable Harvester ownership for " + order.clientOrderId)
+                  : order.price === undefined || compareDecimal({ left: owned.price,
+right: order.price }) !== 0)) {
+              throw new Error(`RECONCILED open-order snapshot contradicts durable Harvester ownership for ${  order.clientOrderId}`)
             }
           }
         }
@@ -442,18 +508,19 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
 
       if (name === EVENT.SUBMISSION_REQUESTED) {
         const intent = requireOrderIntent({ data })
-        if (data.status !== "PENDING") throw new Error("Submission intent must record PENDING status")
+        if (data.status !== "PENDING") {throw new Error("Submission intent must record PENDING status")}
         const existing = ordersByClientId.get(intent.clientOrderId)
         if (existing) {
-          assertSameIntent({ current: existing, next: intent })
-          if (existing.submissionRequested) continue
-          throw new Error("Conflicting duplicate submission intent for " + intent.clientOrderId)
+          assertSameIntent({ current: existing,
+next: intent })
+          if (existing.submissionRequested) {continue}
+          throw new Error(`Conflicting duplicate submission intent for ${  intent.clientOrderId}`)
         }
         const unresolvedCancellation = [...ordersByClientId.values()].find((order) =>
           order.symbol === intent.symbol && ["REQUESTED", "UNKNOWN"].includes(order.cancellationState)
         )
         if (unresolvedCancellation) {
-          throw new Error("New order submission is journaled while a prior cancellation remains UNKNOWN for " + intent.symbol)
+          throw new Error(`New order submission is journaled while a prior cancellation remains UNKNOWN for ${  intent.symbol}`)
         }
         ordersByClientId.set(intent.clientOrderId, {
           ...intent,
@@ -473,19 +540,23 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
 
       if (name === EVENT.SUBMITTED) {
         const intent = requireOrderIntent({ data })
-        const order = requireOrder({ clientOrderId: intent.clientOrderId, eventName: name })
-        assertSameIntent({ current: order, next: intent })
-        const brokerOrderId = requireString({ value: data.brokerOrderId, field: "brokerOrderId" })
-        const status = requireString({ value: data.status, field: "status" })
+        const order = requireOrder({ clientOrderId: intent.clientOrderId,
+eventName: name })
+        assertSameIntent({ current: order,
+next: intent })
+        const brokerOrderId = requireString({ value: data.brokerOrderId,
+field: "brokerOrderId" })
+        const status = requireString({ value: data.status,
+field: "status" })
         const existingOwner = clientIdByBrokerId.get(brokerOrderId)
         if (existingOwner && existingOwner !== order.clientOrderId) {
-          throw new Error("Broker order ID is assigned to multiple Harvester client order IDs: " + brokerOrderId)
+          throw new Error(`Broker order ID is assigned to multiple Harvester client order IDs: ${  brokerOrderId}`)
         }
         if (order.brokerOrderId !== undefined && order.brokerOrderId !== brokerOrderId) {
-          throw new Error("Journal acknowledgement changed brokerOrderId for " + order.clientOrderId)
+          throw new Error(`Journal acknowledgement changed brokerOrderId for ${  order.clientOrderId}`)
         }
         if (order.submissionOutcome === "REJECTED") {
-          throw new Error("Rejected submission later received an acknowledgement for " + order.clientOrderId)
+          throw new Error(`Rejected submission later received an acknowledgement for ${  order.clientOrderId}`)
         }
         order.brokerOrderId = brokerOrderId
         order.submissionOutcome = "ACKNOWLEDGED"
@@ -497,11 +568,17 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       }
 
       if (name === EVENT.SUBMISSION_FAILED) {
-        const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
-        const order = requireOrder({ clientOrderId, eventName: name })
-        const intent = requireOrderIntent({ data: { ...data, price: order.price, quantity: order.quantity, type: order.type } })
-        assertSameIntent({ current: order, next: intent })
-        if (!SUBMISSION_OUTCOMES.has(data.outcome)) throw new TypeError("Invalid order submission outcome")
+        const clientOrderId = requireString({ value: data.clientOrderId,
+field: "clientOrderId" })
+        const order = requireOrder({ clientOrderId,
+eventName: name })
+        const intent = requireOrderIntent({ data: { ...data,
+price: order.price,
+quantity: order.quantity,
+type: order.type } })
+        assertSameIntent({ current: order,
+next: intent })
+        if (!SUBMISSION_OUTCOMES.has(data.outcome)) {throw new TypeError("Invalid order submission outcome")}
         if (order.brokerOrderId !== undefined && data.outcome === "REJECTED") {
           throw new Error("Acknowledged order cannot later have a definite submission rejection")
         }
@@ -513,15 +590,18 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       }
 
       if (name === EVENT.CANCEL_REQUESTED) {
-        const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
-        const order = requireOrder({ clientOrderId, eventName: name })
+        const clientOrderId = requireString({ value: data.clientOrderId,
+field: "clientOrderId" })
+        const order = requireOrder({ clientOrderId,
+eventName: name })
         if (order.submissionOutcome === "REJECTED") {
-          throw new Error("Cancellation intent references a definitively rejected submission: " + clientOrderId)
+          throw new Error(`Cancellation intent references a definitively rejected submission: ${  clientOrderId}`)
         }
         if (order.cancellationState !== "NONE") {
-          throw new Error("Cancellation intent cannot be retried or duplicated before prior cancellation resolution: " + clientOrderId)
+          throw new Error(`Cancellation intent cannot be retried or duplicated before prior cancellation resolution: ${  clientOrderId}`)
         }
-        const brokerOrderId = requireString({ value: data.brokerOrderId, field: "brokerOrderId" })
+        const brokerOrderId = requireString({ value: data.brokerOrderId,
+field: "brokerOrderId" })
         if (order.brokerOrderId === undefined) {
           const existingOwner = clientIdByBrokerId.get(brokerOrderId)
           if (existingOwner && existingOwner !== order.clientOrderId) {
@@ -544,15 +624,19 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         if (!["OPEN", "PARTIALLY_FILLED"].includes(data.status)) {
           throw new Error("Cancellation intent must record an active order status")
         }
-        const executedQuantity = requireDecimal({ value: data.executedQuantity, field: "executedQuantity" })
-        if (compareDecimal({ left: executedQuantity, right: order.quantity }) > 0) {
+        const executedQuantity = requireDecimal({ value: data.executedQuantity,
+field: "executedQuantity" })
+        if (compareDecimal({ left: executedQuantity,
+right: order.quantity }) > 0) {
           throw new Error("Cancellation intent executed quantity exceeds original order quantity")
         }
-        if (compareDecimal({ left: executedQuantity, right: order.cumulativeFillQuantity }) < 0) {
+        if (compareDecimal({ left: executedQuantity,
+right: order.cumulativeFillQuantity }) < 0) {
           throw new Error("Cancellation intent executed quantity is behind journaled fills")
         }
         order.cancellationState = "REQUESTED"
-        order.cancellationReason = requireString({ value: data.reason, field: "cancellation reason" })
+        order.cancellationReason = requireString({ value: data.reason,
+field: "cancellation reason" })
         order.cancellationSequence = currentSequence
         order.cancellationExecutedQuantity = executedQuantity
         order.requiresExchangeReconciliation = true
@@ -560,8 +644,10 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       }
 
       if (name === EVENT.CANCELLED) {
-        const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
-        const order = requireOrder({ clientOrderId, eventName: name })
+        const clientOrderId = requireString({ value: data.clientOrderId,
+field: "clientOrderId" })
+        const order = requireOrder({ clientOrderId,
+eventName: name })
         if (order.cancellationState !== "REQUESTED") {
           throw new Error("Confirmed cancellation has no preceding durable cancellation intent")
         }
@@ -570,11 +656,14 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
             data.price !== order.price || data.quantity !== order.quantity || data.status !== "CANCELED") {
           throw new Error("Confirmed cancellation conflicts with the owned order identity")
         }
-        const executedQuantity = requireDecimal({ value: data.executedQuantity, field: "executedQuantity" })
-        if (compareDecimal({ left: executedQuantity, right: order.quantity }) > 0) {
+        const executedQuantity = requireDecimal({ value: data.executedQuantity,
+field: "executedQuantity" })
+        if (compareDecimal({ left: executedQuantity,
+right: order.quantity }) > 0) {
           throw new Error("Confirmed cancellation executed quantity exceeds original order quantity")
         }
-        if (compareDecimal({ left: executedQuantity, right: order.cumulativeFillQuantity }) < 0) {
+        if (compareDecimal({ left: executedQuantity,
+right: order.cumulativeFillQuantity }) < 0) {
           throw new Error("Confirmed cancellation executed quantity is behind journaled fills")
         }
         order.cancellationState = "CANCELED"
@@ -587,20 +676,23 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       }
 
       if (name === EVENT.CANCEL_FAILED) {
-        const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
-        const order = requireOrder({ clientOrderId, eventName: name })
+        const clientOrderId = requireString({ value: data.clientOrderId,
+field: "clientOrderId" })
+        const order = requireOrder({ clientOrderId,
+eventName: name })
         if (order.submissionOutcome === "REJECTED") {
-          throw new Error("Cancellation failure references a definitively rejected submission: " + clientOrderId)
+          throw new Error(`Cancellation failure references a definitively rejected submission: ${  clientOrderId}`)
         }
         if (order.cancellationState !== "REQUESTED") {
-          throw new Error("Cancellation failure has no preceding durable cancellation intent: " + clientOrderId)
+          throw new Error(`Cancellation failure has no preceding durable cancellation intent: ${  clientOrderId}`)
         }
-        if (!CANCEL_OUTCOMES.has(data.outcome)) throw new TypeError("Invalid order cancellation outcome")
+        if (!CANCEL_OUTCOMES.has(data.outcome)) {throw new TypeError("Invalid order cancellation outcome")}
         if (data.symbol !== order.symbol || data.side !== order.side) {
           throw new Error("Cancellation failure conflicts with the owned order identity")
         }
         if (data.brokerOrderId !== undefined) {
-          const brokerOrderId = requireString({ value: data.brokerOrderId, field: "brokerOrderId" })
+          const brokerOrderId = requireString({ value: data.brokerOrderId,
+field: "brokerOrderId" })
           if (order.brokerOrderId === undefined) {
             const existingOwner = clientIdByBrokerId.get(brokerOrderId)
             if (existingOwner && existingOwner !== order.clientOrderId) {
@@ -624,10 +716,11 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       if (name === EVENT.FILL_APPLIED) {
         const fill = requireFill({ data })
         const clientOrderId = fill.clientOrderId ?? clientIdByBrokerId.get(fill.brokerOrderId)
-        if (!clientOrderId) throw new Error("Applied fill cannot be assigned to a journaled Harvester order: " + fill.fillId)
-        const order = requireOrder({ clientOrderId, eventName: name })
+        if (!clientOrderId) {throw new Error(`Applied fill cannot be assigned to a journaled Harvester order: ${  fill.fillId}`)}
+        const order = requireOrder({ clientOrderId,
+eventName: name })
         if (order.submissionOutcome === "REJECTED") {
-          throw new Error("Applied fill references a definitively rejected submission: " + fill.fillId)
+          throw new Error(`Applied fill references a definitively rejected submission: ${  fill.fillId}`)
         }
         if (order.brokerOrderId === undefined) {
           const existingOwner = clientIdByBrokerId.get(fill.brokerOrderId)
@@ -644,7 +737,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
           clientIdByBrokerId.set(fill.brokerOrderId, order.clientOrderId)
         }
         if (order.brokerOrderId !== fill.brokerOrderId || order.symbol !== fill.symbol || order.side !== fill.side) {
-          throw new Error("Applied fill identity conflicts with its journaled order: " + fill.fillId)
+          throw new Error(`Applied fill identity conflicts with its journaled order: ${  fill.fillId}`)
         }
         if (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId) {
           throw new Error("Applied fill clientOrderId conflicts with its journaled order")
@@ -653,29 +746,32 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         const existing = fillsById.get(fill.fillId)
         if (existing) {
           if (existing.fingerprint !== fingerprint || fill.duplicate !== true) {
-            throw new Error("Duplicate execution ID has conflicting or unmarked replay facts: " + fill.fillId)
+            throw new Error(`Duplicate execution ID has conflicting or unmarked replay facts: ${  fill.fillId}`)
           }
           continue
         }
         if (fill.duplicate === true) {
-          throw new Error("Duplicate fill marker has no original execution record: " + fill.fillId)
+          throw new Error(`Duplicate fill marker has no original execution record: ${  fill.fillId}`)
         }
-        const tradeKey = fill.symbol + ":" + fill.tradeId
+        const tradeKey = `${fill.symbol  }:${  fill.tradeId}`
         const existingTrade = tradeIdBySymbol.get(tradeKey)
         if (existingTrade && existingTrade !== fill.fillId) {
-          throw new Error("Exchange trade ID maps to multiple execution IDs: " + tradeKey)
+          throw new Error(`Exchange trade ID maps to multiple execution IDs: ${  tradeKey}`)
         }
         const cumulativeFillQuantity = addDecimal({
           left: order.cumulativeFillQuantity,
           right: fill.quantity,
         })
-        if (compareDecimal({ left: cumulativeFillQuantity, right: order.quantity }) > 0) {
-          throw new Error("Journaled fills exceed original order quantity for " + order.clientOrderId)
+        if (compareDecimal({ left: cumulativeFillQuantity,
+right: order.quantity }) > 0) {
+          throw new Error(`Journaled fills exceed original order quantity for ${  order.clientOrderId}`)
         }
         order.cumulativeFillQuantity = cumulativeFillQuantity
         order.fillIds.push(fill.fillId)
         order.requiresExchangeReconciliation = true
-        fillsById.set(fill.fillId, { fill, fingerprint, sequence: currentSequence })
+        fillsById.set(fill.fillId, { fill,
+fingerprint,
+sequence: currentSequence })
         tradeIdBySymbol.set(tradeKey, fill.fillId)
         if (order.side === "BUY") {
           order.lastBuyFillSequence = currentSequence
@@ -686,7 +782,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         }) === 0) {
           const previousFullyFilledSell = lastFullyFilledSellBySymbol.get(order.symbol)
           if (previousFullyFilledSell && previousFullyFilledSell.outcome !== "CONTINUE_SELL_THROUGH") {
-            throw new Error("Multiple fully filled Harvester SELL orders require an explicit continue-sell-through outcome for " + order.symbol)
+            throw new Error(`Multiple fully filled Harvester SELL orders require an explicit continue-sell-through outcome for ${  order.symbol}`)
           }
           lastFullyFilledSellBySymbol.set(order.symbol, {
             clientOrderId: order.clientOrderId,
@@ -698,29 +794,40 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       }
 
       if (name === EVENT.RECOVERY_COMPLETED) {
-        const symbol = requireString({ value: data.symbol, field: "symbol" })
-        const marketId = requireString({ value: data.marketId, field: "marketId" })
-        const freeQuantity = requireDecimal({ value: data.freeQuantity, field: "freeQuantity" })
-        const keepQuantity = requireDecimal({ value: data.keepQuantity, field: "keepQuantity" })
-        const minProfit = requireDecimal({ value: data.minProfit, field: "minProfit", positive: true })
-        const realizedNetProfit = requireDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
-        if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) {
+        const symbol = requireString({ value: data.symbol,
+field: "symbol" })
+        const marketId = requireString({ value: data.marketId,
+field: "marketId" })
+        const freeQuantity = requireDecimal({ value: data.freeQuantity,
+field: "freeQuantity" })
+        const keepQuantity = requireDecimal({ value: data.keepQuantity,
+field: "keepQuantity" })
+        const minProfit = requireDecimal({ value: data.minProfit,
+field: "minProfit",
+positive: true })
+        const realizedNetProfit = requireDecimal({ value: data.realizedNetProfit,
+field: "realizedNetProfit" })
+        if (compareDecimal({ left: minProfit,
+right: "0.01" }) < 0) {
           throw new RangeError("Recovery-cycle minProfit must be at least 0.01")
         }
-        if (compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0) {
+        if (compareDecimal({ left: realizedNetProfit,
+right: minProfit }) < 0) {
           throw new RangeError("Recovery-cycle realizedNetProfit does not meet minProfit")
         }
         const dust = requireRecoveryDust({ value: data.dust })
-        const expectedFreeQuantity = addDecimal({ left: keepQuantity, right: dust?.quantity ?? "0" })
-        if (compareDecimal({ left: freeQuantity, right: expectedFreeQuantity }) !== 0) {
+        const expectedFreeQuantity = addDecimal({ left: keepQuantity,
+right: dust?.quantity ?? "0" })
+        if (compareDecimal({ left: freeQuantity,
+right: expectedFreeQuantity }) !== 0) {
           throw new Error("Recovery-cycle freeQuantity must equal keepQuantity plus validated dust")
         }
         const completedSellOrder = lastFullyFilledSellBySymbol.get(symbol)
         if (!completedSellOrder) {
-          throw new Error("Recovery-cycle completion has no preceding fully filled Harvester SELL order for " + symbol)
+          throw new Error(`Recovery-cycle completion has no preceding fully filled Harvester SELL order for ${  symbol}`)
         }
         if (completedSellOrder.outcome === "BLOCKED") {
-          throw new Error("Recovery-cycle completion follows a blocked non-completion outcome for " + symbol)
+          throw new Error(`Recovery-cycle completion follows a blocked non-completion outcome for ${  symbol}`)
         }
         cycles.push({
           symbol,
@@ -739,45 +846,69 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       }
 
       if (name === EVENT.RECOVERY_NOT_COMPLETED) {
-        const symbol = requireString({ value: data.symbol, field: "symbol" })
-        const marketId = requireString({ value: data.marketId, field: "marketId" })
-        const sellOrderClientId = requireString({ value: data.sellOrderClientId, field: "sellOrderClientId" })
-        const sellOrderBrokerOrderId = requireString({ value: data.sellOrderBrokerOrderId, field: "sellOrderBrokerOrderId" })
+        const symbol = requireString({ value: data.symbol,
+field: "symbol" })
+        const marketId = requireString({ value: data.marketId,
+field: "marketId" })
+        const sellOrderClientId = requireString({ value: data.sellOrderClientId,
+field: "sellOrderClientId" })
+        const sellOrderBrokerOrderId = requireString({ value: data.sellOrderBrokerOrderId,
+field: "sellOrderBrokerOrderId" })
         if (!["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(data.outcome)) {
           throw new TypeError("Recovery-cycle non-completion outcome is invalid")
         }
-        const reason = requireString({ value: data.reason, field: "reason" })
-        const realizedNetProfit = requireSignedDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
-        const activeQuantity = requireDecimal({ value: data.activeQuantity, field: "activeQuantity" })
-        const keepQuantity = requireDecimal({ value: data.keepQuantity, field: "keepQuantity" })
-        const minProfit = requireDecimal({ value: data.minProfit, field: "minProfit", positive: true })
-        if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) throw new RangeError("Recovery-cycle minProfit must be at least 0.01")
+        const reason = requireString({ value: data.reason,
+field: "reason" })
+        const realizedNetProfit = requireSignedDecimal({ value: data.realizedNetProfit,
+field: "realizedNetProfit" })
+        const activeQuantity = requireDecimal({ value: data.activeQuantity,
+field: "activeQuantity" })
+        const keepQuantity = requireDecimal({ value: data.keepQuantity,
+field: "keepQuantity" })
+        const minProfit = requireDecimal({ value: data.minProfit,
+field: "minProfit",
+positive: true })
+        if (compareDecimal({ left: minProfit,
+right: "0.01" }) < 0) {throw new RangeError("Recovery-cycle minProfit must be at least 0.01")}
         if (data.outcome === "CONTINUE_SELL_THROUGH") {
           if (!["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(reason)) {
             throw new Error("CONTINUE_SELL_THROUGH has an unsupported reason")
           }
-          if (compareDecimal({ left: activeQuantity, right: keepQuantity }) <= 0) {
+          if (compareDecimal({ left: activeQuantity,
+right: keepQuantity }) <= 0) {
             throw new Error("CONTINUE_SELL_THROUGH requires active inventory above keepQuantity")
           }
-          if (reason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" && compareDecimal({ left: realizedNetProfit, right: minProfit }) >= 0) {
+          if (reason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" && compareDecimal({ left: realizedNetProfit,
+right: minProfit }) >= 0) {
             throw new Error("Profit-target continuation requires realized profit below minProfit")
           }
-          if (reason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" && compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0) {
+          if (reason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" && compareDecimal({ left: realizedNetProfit,
+right: minProfit }) < 0) {
             throw new Error("Residual sell-through requires realized profit to meet minProfit")
           }
         } else if (["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(reason)) {
           throw new Error("BLOCKED cannot use a residual sell-through reason")
-        } else if (reason === "RECOVERY_SELL_FAILED_MIN_PROFIT" && compareDecimal({ left: realizedNetProfit, right: minProfit }) >= 0) {
+        } else if (reason === "RECOVERY_SELL_FAILED_MIN_PROFIT" && compareDecimal({ left: realizedNetProfit,
+right: minProfit }) >= 0) {
           throw new Error("RECOVERY_SELL_FAILED_MIN_PROFIT requires realized profit below minProfit")
         }
         const pendingSell = lastFullyFilledSellBySymbol.get(symbol)
         if (!pendingSell || pendingSell.clientOrderId !== sellOrderClientId || pendingSell.brokerOrderId !== sellOrderBrokerOrderId) {
-          throw new Error("Recovery-cycle non-completion does not match the latest fully filled SELL order for " + symbol)
+          throw new Error(`Recovery-cycle non-completion does not match the latest fully filled SELL order for ${  symbol}`)
         }
-        if (pendingSell.outcome === "BLOCKED") throw new Error("Recovery-cycle SELL already has a terminal BLOCKED outcome for " + symbol)
+        if (pendingSell.outcome === "BLOCKED") {throw new Error(`Recovery-cycle SELL already has a terminal BLOCKED outcome for ${  symbol}`)}
         const evaluation = Object.freeze({
-          symbol, marketId, sellOrderClientId, sellOrderBrokerOrderId, outcome: data.outcome, reason,
-          realizedNetProfit, activeQuantity, keepQuantity, minProfit, sequence: currentSequence,
+          symbol,
+marketId,
+sellOrderClientId,
+sellOrderBrokerOrderId,
+outcome: data.outcome,
+reason,
+          realizedNetProfit,
+activeQuantity,
+keepQuantity,
+minProfit,
+sequence: currentSequence,
         })
         recoveryCycleEvaluations.push(evaluation)
         pendingSell.outcome = data.outcome
@@ -785,8 +916,10 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       }
 
       if (name === EVENT.STRATEGY_PAUSED) {
-        const symbol = requireString({ value: data.symbol, field: "symbol" })
-        const reason = requireString({ value: data.reason, field: "reason" })
+        const symbol = requireString({ value: data.symbol,
+field: "symbol" })
+        const reason = requireString({ value: data.reason,
+field: "reason" })
         pausedMarkets.set(symbol, reason)
         continue
       }
@@ -796,20 +929,25 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         EVENT.EXECUTION_INVALID_FILL,
         EVENT.EXECUTION_ACCOUNTING_FAILED,
       ].includes(name)) {
-        const symbol = requireString({ value: data.symbol, field: name + " symbol" })
-        const reason = requireString({ value: data.reason ?? data.error?.message ?? data.error?.code ?? name, field: name + " reason" })
+        const symbol = requireString({ value: data.symbol,
+field: `${name  } symbol` })
+        const reason = requireString({ value: data.reason ?? data.error?.message ?? data.error?.code ?? name,
+field: `${name  } reason` })
         stickySafetyBlockers.push(Object.freeze({
           eventName: name,
           symbol,
           reason,
           ...(data.clientOrderId === undefined ? {} : {
-            clientOrderId: requireString({ value: data.clientOrderId, field: name + " clientOrderId" }),
+            clientOrderId: requireString({ value: data.clientOrderId,
+field: `${name  } clientOrderId` }),
           }),
           ...(data.brokerOrderId === undefined ? {} : {
-            brokerOrderId: requireString({ value: data.brokerOrderId, field: name + " brokerOrderId" }),
+            brokerOrderId: requireString({ value: data.brokerOrderId,
+field: `${name  } brokerOrderId` }),
           }),
           ...(data.fillId === undefined ? {} : {
-            fillId: requireString({ value: data.fillId, field: name + " fillId" }),
+            fillId: requireString({ value: data.fillId,
+field: `${name  } fillId` }),
           }),
           sequence: currentSequence,
         }))
@@ -818,7 +956,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
 
     for (const [symbol, pendingSell] of lastFullyFilledSellBySymbol) {
       if (pendingSell.outcome === undefined) {
-        throw new Error("fully filled SELL has no explicit recovery-cycle outcome for " + symbol)
+        throw new Error(`fully filled SELL has no explicit recovery-cycle outcome for ${  symbol}`)
       }
     }
 
@@ -850,7 +988,8 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         fills: Object.freeze(fills),
         recoveryCycles: Object.freeze(cycles.map((cycle) => Object.freeze({ ...cycle }))),
         recoveryCycleEvaluations: Object.freeze(recoveryCycleEvaluations),
-        pausedMarkets: Object.freeze([...pausedMarkets].map(([symbol, reason]) => Object.freeze({ symbol, reason }))),
+        pausedMarkets: Object.freeze([...pausedMarkets].map(([symbol, reason]) => Object.freeze({ symbol,
+reason }))),
         stickySafetyBlockers: Object.freeze(stickySafetyBlockers),
         sessions: Object.freeze(sessions),
         accountSnapshots: Object.freeze(accountSnapshots),

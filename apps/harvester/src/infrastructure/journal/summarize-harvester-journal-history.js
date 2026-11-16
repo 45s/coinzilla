@@ -28,9 +28,9 @@ export function summarizeHarvesterJournalHistory({ records } = {}) {
   const counts = Object.fromEntries([...TRADING_EVENT_NAMES].map((name) => [name, 0]))
   for (const record of records) {
     const payload = record?.payload
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) continue
-    if (typeof payload.name !== "string" || !TRADING_EVENT_NAMES.has(payload.name)) continue
-    if (payload.name === "harvester.started" && payload.data?.tradingEnabled !== true) continue
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {continue}
+    if (typeof payload.name !== "string" || !TRADING_EVENT_NAMES.has(payload.name)) {continue}
+    if (payload.name === "harvester.started" && payload.data?.tradingEnabled !== true) {continue}
     counts[payload.name] += 1
   }
 

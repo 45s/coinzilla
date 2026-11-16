@@ -40,7 +40,7 @@ function reportJournalFailure({ logger, error, errors }) {
 }
 
 export function resolveJournalDirectory({ directory }) {
-  if (directory === undefined) return path.resolve(APPLICATION_DIRECTORY, "logs")
+  if (directory === undefined) {return path.resolve(APPLICATION_DIRECTORY, "logs")}
   if (typeof directory !== "string" || directory.trim() === "") {
     throw new TypeError("Harvester Journal directory must be a non-empty string")
   }
@@ -74,7 +74,9 @@ export function prepareOptionalJournal({
   let state = enabled ? "starting" : "disabled"
   let journal
 
-  const reportFailure = ({ error, errors }) => reportJournalFailure({ logger, error, errors })
+  const reportFailure = ({ error, errors }) => reportJournalFailure({ logger,
+error,
+errors })
 
   if (!enabled) {
     const ready = Promise.resolve(toResult({ disabled: true }))
@@ -91,7 +93,8 @@ export function prepareOptionalJournal({
         })
       },
       flush: async () => toResult({ error: new Error("Durable account audit requires an enabled Journal") }),
-      close: async () => toResult({ closed: true, disabled: true }),
+      close: async () => toResult({ closed: true,
+disabled: true }),
     })
   }
 
@@ -162,13 +165,13 @@ export function prepareOptionalJournal({
 
   const flush = async () => {
     const startResult = await ready
-    if (!startResult.ok || !journal) return startResult
+    if (!startResult.ok || !journal) {return startResult}
     if (typeof journal.flush !== "function") {
       return toResult({ error: new TypeError("Journal implementation must provide flush() for durable account audits") })
     }
     try {
       const result = await journal.flush()
-      if (result?.ok !== true) state = "degraded"
+      if (result?.ok !== true) {state = "degraded"}
       return result?.ok === true ? result : result?.ok === false ? result
         : toResult({ error: new TypeError("Journal flush returned an invalid result") })
     } catch (error) {

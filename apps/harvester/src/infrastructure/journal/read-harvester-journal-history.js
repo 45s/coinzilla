@@ -35,7 +35,7 @@ function validateLimits({ maxDirectories, maxSessions, maxRecords, maxBytes, max
     maxRecordBytes,
   })) {
     if (!Number.isSafeInteger(value) || value < 1) {
-      throw new TypeError(name + " must be a positive safe integer")
+      throw new TypeError(`${name  } must be a positive safe integer`)
     }
   }
 }
@@ -55,8 +55,9 @@ function parseProcessStarted({ records, directory }) {
   if (startedRecords.length > 1) {
     throw createHistoryError({
       code: "HARVESTER_JOURNAL_PROCESS_IDENTITY_INVALID",
-      message: "Journal session contains more than one harvester.process_started record: " + directory,
-      details: { directory, count: startedRecords.length },
+      message: `Journal session contains more than one harvester.process_started record: ${  directory}`,
+      details: { directory,
+count: startedRecords.length },
     })
   }
   if (startedRecords.length === 0) { return undefined }
@@ -81,8 +82,11 @@ function parseProcessStarted({ records, directory }) {
   ) {
     throw createHistoryError({
       code: "HARVESTER_JOURNAL_PROCESS_IDENTITY_INVALID",
-      message: "Journal session has invalid process-start identity metadata: " + directory,
-      details: { directory, startedAt, runtimeSessionId, processId },
+      message: `Journal session has invalid process-start identity metadata: ${  directory}`,
+      details: { directory,
+startedAt,
+runtimeSessionId,
+processId },
     })
   }
 
@@ -96,7 +100,7 @@ function parseProcessStarted({ records, directory }) {
     if (directoryMatch[1] !== expectedTimestamp || directoryMatch[2] !== expectedSessionId) {
       throw createHistoryError({
         code: "HARVESTER_JOURNAL_PROCESS_IDENTITY_MISMATCH",
-        message: "Process-start identity does not match its session directory: " + directory,
+        message: `Process-start identity does not match its session directory: ${  directory}`,
         details: {
           directory,
           expectedTimestamp,
@@ -118,7 +122,8 @@ function parseProcessStarted({ records, directory }) {
 }
 
 function resolveSessionChronology({ records, directory }) {
-  const processStarted = parseProcessStarted({ records, directory })
+  const processStarted = parseProcessStarted({ records,
+directory })
   // process_started is best-effort and may be appended after runtime startup;
   // its payload.startedAt is chronology metadata, not a trading-event boundary.
   const chronologyRecords = processStarted
@@ -148,8 +153,9 @@ function resolveSessionChronology({ records, directory }) {
     if (eventTimestamps.some((timestamp) => timestamp < processStarted.chronologyTimestamp)) {
       throw createHistoryError({
         code: "HARVESTER_JOURNAL_PROCESS_IDENTITY_INVALID",
-        message: "A Journal event timestamp precedes its process-start timestamp: " + directory,
-        details: { directory, startedAt: processStarted.startedAt },
+        message: `A Journal event timestamp precedes its process-start timestamp: ${  directory}`,
+        details: { directory,
+startedAt: processStarted.startedAt },
       })
     }
     return Object.freeze({
@@ -225,7 +231,7 @@ function validateAndOrderSessions(sessions) {
       if (identities.has(session.runtimeSessionId)) {
         throw createHistoryError({
           code: "HARVESTER_JOURNAL_DUPLICATE_SESSION_ID",
-          message: "Duplicate runtime session identity in Journal history: " + session.runtimeSessionId,
+          message: `Duplicate runtime session identity in Journal history: ${  session.runtimeSessionId}`,
           details: { runtimeSessionId: session.runtimeSessionId },
         })
       }
@@ -274,7 +280,8 @@ async function discoverSessionDirectories({
       throw createHistoryError({
         code: "HARVESTER_JOURNAL_DISCOVERY_LIMIT_EXCEEDED",
         message: "Harvester Journal session discovery exceeds maxDirectories",
-        details: { maxDirectories, directory },
+        details: { maxDirectories,
+directory },
       })
     }
 
@@ -284,7 +291,7 @@ async function discoverSessionDirectories({
     } catch (cause) {
       throw createHistoryError({
         code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
-        message: "Unable to enumerate Journal session directory: " + directory,
+        message: `Unable to enumerate Journal session directory: ${  directory}`,
         details: { directory },
         cause,
       })
@@ -294,8 +301,9 @@ async function discoverSessionDirectories({
     if (symbolicLinks.length > 0) {
       throw createHistoryError({
         code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
-        message: "Symbolic links make Journal session discovery incomplete: " + directory,
-        details: { directory, entries: symbolicLinks.map((entry) => entry.name) },
+        message: `Symbolic links make Journal session discovery incomplete: ${  directory}`,
+        details: { directory,
+entries: symbolicLinks.map((entry) => entry.name) },
       })
     }
 
@@ -304,8 +312,9 @@ async function discoverSessionDirectories({
     if (invalidJournalEntries.length > 0) {
       throw createHistoryError({
         code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
-        message: "A Journal session entry is not a regular file: " + directory,
-        details: { directory, entries: invalidJournalEntries.map((entry) => entry.name) },
+        message: `A Journal session entry is not a regular file: ${  directory}`,
+        details: { directory,
+entries: invalidJournalEntries.map((entry) => entry.name) },
       })
     }
 
@@ -314,8 +323,9 @@ async function discoverSessionDirectories({
     if (unknownEntries.length > 0) {
       throw createHistoryError({
         code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
-        message: "Unsupported filesystem entry in Journal session tree: " + directory,
-        details: { directory, entries: unknownEntries.map((entry) => entry.name) },
+        message: `Unsupported filesystem entry in Journal session tree: ${  directory}`,
+        details: { directory,
+entries: unknownEntries.map((entry) => entry.name) },
       })
     }
 
@@ -325,7 +335,9 @@ async function discoverSessionDirectories({
         throw createHistoryError({
           code: "JOURNAL_RECOVERY_LIMIT_EXCEEDED",
           message: "Harvester Journal history exceeds maxSessions during discovery",
-          details: { maxSessions, sessionsDiscovered, directory },
+          details: { maxSessions,
+sessionsDiscovered,
+directory },
         })
       }
       discovered.push({
@@ -335,20 +347,22 @@ async function discoverSessionDirectories({
     } else if (!isRoot && childDirectories.length === 0) {
       throw createHistoryError({
         code: "HARVESTER_JOURNAL_SESSION_MISSING",
-        message: "Discovered process-session directory has no Journal JSONL file: " + directory,
+        message: `Discovered process-session directory has no Journal JSONL file: ${  directory}`,
         details: { directory },
       })
     } else if (!isRoot && entries.some((entry) => entry.isFile())) {
       throw createHistoryError({
         code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
-        message: "Journal session container has files but no session record file: " + directory,
-        details: { directory, entries: entries.filter((entry) => entry.isFile()).map((entry) => entry.name) },
+        message: `Journal session container has files but no session record file: ${  directory}`,
+        details: { directory,
+entries: entries.filter((entry) => entry.isFile()).map((entry) => entry.name) },
       })
     } else if (isRoot && entries.some((entry) => entry.isFile() && !entry.name.endsWith(".jsonl"))) {
       throw createHistoryError({
         code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
-        message: "Unexpected file in Journal sessions root: " + directory,
-        details: { directory, entries: entries.filter((entry) => entry.isFile()).map((entry) => entry.name) },
+        message: `Unexpected file in Journal sessions root: ${  directory}`,
+        details: { directory,
+entries: entries.filter((entry) => entry.isFile()).map((entry) => entry.name) },
       })
     }
 
@@ -359,7 +373,8 @@ async function discoverSessionDirectories({
   }
 
   await walk(sessionsRoot, { isRoot: true })
-  return { directories: discovered, directoriesVisited }
+  return { directories: discovered,
+directoriesVisited }
 }
 
 /**
@@ -387,7 +402,8 @@ async function discoverSessionDirectories({
 export async function readHarvesterJournalHistory({
   directory,
   journalFactory = (options) => new Journal(options),
-  logger = { info() {}, error() {} },
+  logger = { info() {},
+error() {} },
   maxDirectories = DEFAULT_LIMITS.maxDirectories,
   maxSessions = DEFAULT_LIMITS.maxSessions,
   maxRecords = DEFAULT_LIMITS.maxRecords,
@@ -401,7 +417,11 @@ export async function readHarvesterJournalHistory({
     if (typeof journalFactory !== "function") {
       throw new TypeError("Harvester Journal history journalFactory must be a function")
     }
-    validateLimits({ maxDirectories, maxSessions, maxRecords, maxBytes, maxRecordBytes })
+    validateLimits({ maxDirectories,
+maxSessions,
+maxRecords,
+maxBytes,
+maxRecordBytes })
 
     const rootDirectory = path.resolve(directory)
     const rootEntries = await readdir(rootDirectory, { withFileTypes: true })
@@ -423,8 +443,9 @@ export async function readHarvesterJournalHistory({
       if (invalidRootJournalEntries.length > 0) {
         throw createHistoryError({
           code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
-          message: "A root-level Journal session entry is not a regular file: " + rootDirectory,
-          details: { directory: rootDirectory, entries: invalidRootJournalEntries.map((entry) => entry.name) },
+          message: `A root-level Journal session entry is not a regular file: ${  rootDirectory}`,
+          details: { directory: rootDirectory,
+entries: invalidRootJournalEntries.map((entry) => entry.name) },
         })
       }
       if (rootJournalEntries.length > 0) {
@@ -439,7 +460,7 @@ export async function readHarvesterJournalHistory({
         if (!sessionsEntry.isDirectory()) {
           throw createHistoryError({
             code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
-            message: "Harvester sessions path is not a readable directory: " + path.join(rootDirectory, "sessions"),
+            message: `Harvester sessions path is not a readable directory: ${  path.join(rootDirectory, "sessions")}`,
             details: { directory: path.join(rootDirectory, "sessions") },
           })
         }
@@ -458,7 +479,8 @@ export async function readHarvesterJournalHistory({
       throw createHistoryError({
         code: "JOURNAL_RECOVERY_LIMIT_EXCEEDED",
         message: "Harvester Journal history exceeds maxSessions",
-        details: { maxSessions, discoveredSessions: totalDiscoveredSessions },
+        details: { maxSessions,
+discoveredSessions: totalDiscoveredSessions },
       })
     }
 
@@ -466,7 +488,8 @@ export async function readHarvesterJournalHistory({
     let recordsRead = 0
     let bytesRead = 0
     for (const entry of sessionDirectories) {
-      const journal = journalFactory({ directory: entry.directory, logger })
+      const journal = journalFactory({ directory: entry.directory,
+logger })
       if (!journal || typeof journal.read !== "function") {
         throw new TypeError("Harvester Journal history reader must provide read()")
       }
@@ -495,8 +518,9 @@ export async function readHarvesterJournalHistory({
         if (!actualNames.has(fileName)) {
           throw createHistoryError({
             code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
-            message: "A discovered Journal session was not returned by the Journal reader: " + fileName,
-            details: { directory: entry.directory, fileName },
+            message: `A discovered Journal session was not returned by the Journal reader: ${  fileName}`,
+            details: { directory: entry.directory,
+fileName },
           })
         }
       }
@@ -504,8 +528,9 @@ export async function readHarvesterJournalHistory({
         if (!entry.fileNames.includes(fileName)) {
           throw createHistoryError({
             code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
-            message: "Journal reader returned a session that was not discovered: " + fileName,
-            details: { directory: entry.directory, fileName },
+            message: `Journal reader returned a session that was not discovered: ${  fileName}`,
+            details: { directory: entry.directory,
+fileName },
           })
         }
       }
@@ -517,7 +542,8 @@ export async function readHarvesterJournalHistory({
           throw createHistoryError({
             code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
             message: "Journal reader returned a record without a discovered session position",
-            details: { directory: entry.directory, fileName },
+            details: { directory: entry.directory,
+fileName },
           })
         }
         recordsByFile.get(fileName).push(record)
@@ -530,10 +556,12 @@ export async function readHarvesterJournalHistory({
         })
         const fileRecords = recordsByFile.get(fileName)
         sessions.push({
-          directory: toRelativePath({ rootDirectory, absolutePath: entry.directory }) || ".",
+          directory: toRelativePath({ rootDirectory,
+absolutePath: entry.directory }) || ".",
           fileName: relativeFileName,
           records: fileRecords,
-          ...resolveSessionChronology({ records: fileRecords, directory: entry.directory }),
+          ...resolveSessionChronology({ records: fileRecords,
+directory: entry.directory }),
         })
       }
 
@@ -543,7 +571,10 @@ export async function readHarvesterJournalHistory({
         throw createHistoryError({
           code: "JOURNAL_RECOVERY_LIMIT_EXCEEDED",
           message: "Harvester Journal history exceeds its configured read limits",
-          details: { maxRecords, recordsRead, maxBytes, bytesRead },
+          details: { maxRecords,
+recordsRead,
+maxBytes,
+bytesRead },
         })
       }
     }
@@ -554,7 +585,7 @@ export async function readHarvesterJournalHistory({
         if (recordIds.has(record.id)) {
           throw createHistoryError({
             code: "JOURNAL_DUPLICATE_RECORD_ID",
-            message: "Duplicate journal record id " + record.id + " at " + session.fileName + ":" + record.position.lineNumber,
+            message: `Duplicate journal record id ${  record.id  } at ${  session.fileName  }:${  record.position.lineNumber}`,
             details: {
               fileName: session.fileName,
               lineNumber: record.position.lineNumber,
@@ -598,7 +629,7 @@ export async function readHarvesterJournalHistory({
     if (error?.code === "ENOENT") {
       const missing = createHistoryError({
         code: "JOURNAL_DIRECTORY_NOT_FOUND",
-        message: "Journal history directory does not exist: " + path.resolve(directory),
+        message: `Journal history directory does not exist: ${  path.resolve(directory)}`,
         details: { directory: path.resolve(directory) },
         cause: error,
       })
