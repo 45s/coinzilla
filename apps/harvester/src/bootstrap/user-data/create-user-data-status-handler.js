@@ -117,28 +117,55 @@ function resolveUnsafeReadinessStatus({ state, status }) {
   return "AUTHORITATIVE_RECONCILIATION_REQUIRED"
 }
 
-function getStreamErrorTransition({ status, error, cause }) {
-  const key = [
+function getStreamErrorIdentity({ status, error }) {
+  return [
     "error",
     status.type,
     error?.code ?? status.code ?? "",
     error?.name ?? "",
     error?.message ?? "",
     typeof error?.stack === "string" ? error.stack.slice(0, 1024) : "",
+  ]
+}
+
+function getStreamCauseIdentity({ cause }) {
+  return [
     cause?.code ?? "",
     cause?.name ?? "",
     getCauseKeyMessage({ cause }),
     typeof cause?.stack === "string" ? cause.stack.slice(0, 1024) : "",
+  ]
+}
+
+function getRecoveryStatusIdentity({ status }) {
+  return [
     status.recoveryRequired === true,
     status.recoveryRequired === false,
     status.reconciliationRequired === true,
     status.reconciliationRequired === false,
+  ]
+}
+
+function getOrderStatusIdentity({ status }) {
+  return [
     status.symbol ?? "",
     status.brokerOrderId ?? "",
     status.executionId ?? "",
+  ]
+}
+
+function getStreamErrorTransitionKey({ status, error, cause }) {
+  return [
+    ...getStreamErrorIdentity({ status, error }),
+    ...getStreamCauseIdentity({ cause }),
+    ...getRecoveryStatusIdentity({ status }),
+    ...getOrderStatusIdentity({ status }),
   ].join(":")
+}
+
+function getStreamErrorTransition({ status, error, cause }) {
   return {
-    key,
+    key: getStreamErrorTransitionKey({ status, error, cause }),
     message: "User-data stream error",
     level: "error",
     details: {
