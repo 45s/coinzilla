@@ -226,7 +226,7 @@ The target configuration is intentionally separate from outbound notification po
 {
   "operatorControl": {
     "telegram": {
-      "enabled": false,
+      "enabled": true,
       "allowedUserIds": []
     }
   }
