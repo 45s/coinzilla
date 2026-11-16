@@ -16,8 +16,14 @@ import {
 } from "../domain/strategies/recovery-seller/mixed-sell-fill-reconciliation.js"
 import { createRecoverySellerAccountingWorkflow } from "./create-recovery-seller-accounting-workflow.js"
 
-const baseAsset = new Asset({ id: "binance:ZRO", code: "ZRO" })
-const quoteAsset = new Asset({ id: "binance:USDT", code: "USDT" })
+const baseAsset = new Asset({
+  id: "binance:ZRO",
+  code: "ZRO",
+})
+const quoteAsset = new Asset({
+  id: "binance:USDT",
+  code: "USDT",
+})
 const market = new Market({
   venue: "binance",
   symbol: "ZROUSDT",
@@ -34,9 +40,18 @@ function makeFill({ tradeId = "sell-1", quantity = "5.01", quoteQuantity = "10.5
     clientOrderId: "rs-sell-1",
     market,
     side: "SELL",
-    price: new Money({ amount: "2", asset: quoteAsset }),
-    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
-    quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+    price: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: quantity,
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: quoteQuantity,
+      asset: quoteAsset,
+    }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -49,9 +64,18 @@ function makeOrder({ status = "OPEN", executedQuantity = "0" } = {}) {
     market,
     side: "SELL",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "2", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "5.01", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+    limitPrice: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: executedQuantity,
+      asset: baseAsset,
+    }),
     status,
     createdAt: 100,
     acknowledgedAt: 101,
@@ -71,7 +95,10 @@ function makeRegistry(order) {
     clientOrderId: order.clientOrderId,
     brokerOrderId: order.brokerOrderId,
   })
-  return new OrderRegistry({ orders: [order], ownerships: [ownership] })
+  return new OrderRegistry({
+    orders: [order],
+    ownerships: [ownership],
+  })
 }
 
 function makeContext() {
@@ -81,9 +108,18 @@ function makeContext() {
     clientOrderId: "rs-buy-1",
     market,
     side: "BUY",
-    price: new Money({ amount: "2", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "5.01", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "10.02", asset: quoteAsset }),
+    price: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "10.02",
+      asset: quoteAsset,
+    }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -93,7 +129,10 @@ function makeContext() {
     strategyId,
   })
   const openOrder = makeOrder()
-  const terminalOrder = makeOrder({ status: "FILLED", executedQuantity: "5.01" })
+  const terminalOrder = makeOrder({
+    status: "FILLED",
+    executedQuantity: "5.01",
+  })
   const openRegistry = makeRegistry(openOrder)
   const terminalRegistry = makeRegistry(terminalOrder)
   const fill = makeFill()
@@ -103,13 +142,14 @@ function makeContext() {
     recoveryQuantity: "5",
     legacyQuantity: "0.01",
   })
-  const reconciliation = stageMixedSellFillAllocation({
+  const staged = stageMixedSellFillAllocation({
     reconciliation: createMixedSellFillReconciliation({
       order: openOrder,
       orderRegistry: openRegistry,
     }),
     allocation,
-  }).reconciliation
+  })
+  const { reconciliation } = staged
   return {
     portfolio,
     openRegistry,
@@ -117,7 +157,10 @@ function makeContext() {
     reconciliation,
     fill,
     allocation,
-    legacyPosition: createLegacyPosition({ invested: "100", quantity: "50" }),
+    legacyPosition: createLegacyPosition({
+      invested: "100",
+      quantity: "50",
+    }),
     legacyAccounting: createLegacyPositionAccounting(),
   }
 }
@@ -221,8 +264,14 @@ test("exposes only verified untracked Spot legacy quantity outside the shared Po
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   const balance = new Balance({
-    free: new Quantity({ amount: "50", asset: baseAsset }),
-    locked: new Quantity({ amount: "0", asset: baseAsset }),
+    free: new Quantity({
+      amount: "50",
+      asset: baseAsset,
+    }),
+    locked: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
   })
   const additionalTracked = workflow.getAdditionalTrackedBaseQuantity({
     balances: [balance],
