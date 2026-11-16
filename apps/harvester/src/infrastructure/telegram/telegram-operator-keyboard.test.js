@@ -535,3 +535,37 @@ test("temporary complete infrastructure ESLint report", async () => {
   process.stdout.write(`ESLINT_FINAL=${JSON.stringify({ filesWithFindings: findings.length, errors, warnings, findings })}\\n`);
   assert.ok(true);
 });
+
+test("temporary complete infrastructure ESLint report", async () => {
+  const { ESLint } = await import("eslint");
+  const eslint = new ESLint();
+  const results = await eslint.lintFiles(["src/infrastructure"]);
+  const findings = [];
+  for (const result of results) {
+    if (result.filePath.endsWith("telegram-operator-keyboard.test.js")) {
+      continue;
+    }
+    if (result.errorCount === 0 && result.warningCount === 0) {
+      continue;
+    }
+    const rules = {};
+    for (const message of result.messages) {
+      const rule = message.ruleId ?? "fatal";
+      rules[rule] = (rules[rule] ?? 0) + 1;
+    }
+    findings.push({
+      file: result.filePath.split("/apps/harvester/").pop(),
+      errors: result.errorCount,
+      warnings: result.warningCount,
+      rules,
+    });
+  }
+  let errors = 0;
+  let warnings = 0;
+  for (const finding of findings) {
+    errors += finding.errors;
+    warnings += finding.warnings;
+  }
+  process.stdout.write(`ESLINT_FINAL=${JSON.stringify({ filesWithFindings: findings.length, errors, warnings, findings })}\\n`);
+  assert.ok(true);
+});
