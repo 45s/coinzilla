@@ -42,9 +42,11 @@ const onLogStreamError = (error) => {
 }
 logStreams.forEach((stream) => stream.on("error", onLogStreamError))
 
-const streamOpenResults = await Promise.allSettled(
-  logStreams.map((stream) => once(stream, "open")),
-)
+const streamOpenResults = await Promise.allSettled(logStreams.map((stream) => new Promise((...callbacks) => {
+  const [resolveOpen, rejectOpen] = callbacks
+  stream.once("open", resolveOpen)
+  stream.once("error", rejectOpen)
+})))
 const streamOpenErrors = streamOpenResults
   .filter((result) => result.status === "rejected")
   .map((result) => result.reason)
