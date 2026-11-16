@@ -583,7 +583,10 @@ test("uses the app-local Operational State Store default and fails closed when i
         throw new Error("Broker connection must not start before the Operational State Store is verified.")
       },
     }),
-    (error) => error.code === "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID",
+    (error) => {
+      assert.equal(error.startupResourcesMayBeActive, false, "An Operational State Store preflight failure must report that broker resources were never activated.")
+      return error.code === "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID"
+    },
     "Telegram operator control must use the app-local default Operational State Store and fail closed until it is initialized.",
   )
 
