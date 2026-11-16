@@ -27,7 +27,8 @@ async function collectJavaScriptFiles(...args) {
       !entry.name.endsWith(".test.js") &&
       !entry.name.endsWith(".integration.js")
     ) {
-      files.push({ absolutePath, relativePath })
+      files.push({ absolutePath,
+        relativePath })
     }
   }
   return files
@@ -40,7 +41,7 @@ function getLayer(relativePath) {
 
 function resolveLocalTarget(...args) {
   const [relativePath, specifier] = args
-  if (!specifier.startsWith(".")) return null
+  if (!specifier.startsWith(".")) {return null}
   return path.posix.normalize(path.posix.join(path.posix.dirname(relativePath), specifier))
 }
 
@@ -68,29 +69,30 @@ export async function findForbiddenDependencies(sourceRoot) {
     try {
       files.push(...await collectJavaScriptFiles(directory, layer))
     } catch (error) {
-      if (error.code !== "ENOENT") throw error
+      if (error.code !== "ENOENT") {throw error}
     }
   }
 
   const entryPoint = path.join(root, "index.js")
   try {
     await readFile(entryPoint, "utf8")
-    files.push({ absolutePath: entryPoint, relativePath: "index.js" })
+    files.push({ absolutePath: entryPoint,
+      relativePath: "index.js" })
   } catch (error) {
-    if (error.code !== "ENOENT") throw error
+    if (error.code !== "ENOENT") {throw error}
   }
 
   const violations = []
   for (const file of files) {
     const source = await readFile(file.absolutePath, "utf8")
     const sourceLayer = getLayer(file.relativePath)
-    if (!sourceLayer) continue
+    if (!sourceLayer) {continue}
 
     for (const specifier of findImports(source)) {
       const targetPath = resolveLocalTarget(file.relativePath, specifier)
-      if (!targetPath) continue
+      if (!targetPath) {continue}
       const targetLayer = getLayer(targetPath)
-      if (!targetLayer || !FORBIDDEN_TARGETS[sourceLayer].has(targetLayer)) continue
+      if (!targetLayer || !FORBIDDEN_TARGETS[sourceLayer].has(targetLayer)) {continue}
 
       violations.push({
         file: file.relativePath,
@@ -123,6 +125,7 @@ export async function withArchitectureFixture(run) {
       },
     })
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+      force: true })
   }
 }
