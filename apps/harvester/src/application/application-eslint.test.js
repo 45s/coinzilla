@@ -35,10 +35,12 @@ test("keeps every application-layer JavaScript file free of ESLint errors and wa
     if (typeof result.output !== "string" || !autofixFiles.has(file)) {
       continue
     }
-    process.stderr.write(`APPLICATION_ESLINT_AUTOFIX_FILE:${fileIndex}:${file}\\n`)
+    process.stderr.write(`APPLICATION_ESLINT_AUTOFIX_FILE:${fileIndex}:${file}
+`)
     const encodedOutput = Buffer.from(result.output).toString("base64")
     for (let offset = 0; offset < encodedOutput.length; offset += 100) {
-      process.stderr.write(`APPLICATION_ESLINT_AUTOFIX_CHUNK:${fileIndex}:${offset}:${encodedOutput.slice(offset, offset + 100)}\\n`)
+      process.stderr.write(`APPLICATION_ESLINT_AUTOFIX_CHUNK:${fileIndex}:${offset}:${encodedOutput.slice(offset, offset + 100)}
+`)
     }
     fileIndex += 1
   }
@@ -55,8 +57,10 @@ test("keeps every application-layer JavaScript file free of ESLint errors and wa
   })))
 
   if (findings.length > 0) {
-    process.stderr.write(`Application ESLint findings (${findings.length}):\\n`)
-    process.stderr.write(`${JSON.stringify(findings, null, 2)}\\n`)
+    process.stderr.write(`Application ESLint findings (${findings.length}):
+`)
+    process.stderr.write(`${JSON.stringify(findings, null, 2)}
+`)
   }
 
   assert.deepEqual(
