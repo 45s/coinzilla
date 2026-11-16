@@ -254,6 +254,45 @@ function validateVolatilitySnapshotRequest({
   return undefined
 }
 
+async function settleVolatilityProtection({
+  update,
+  cancelOwnedBuyOrders,
+  logger,
+  symbol,
+  runTransition,
+  state,
+  currentSnapshot,
+  transitionPolicy,
+}) {
+  let settled = {
+    recovered: update.recovered,
+    state: update.state,
+  }
+  if (!update.shouldCancel) {
+    return { settled }
+  }
+  await cancelVolatilityBuyOrders({
+    cancelOwnedBuyOrders,
+    logger,
+    symbol,
+  })
+  try {
+    settled = await settleVolatilityTransition({
+      runTransition,
+      state,
+      symbol,
+      currentSnapshot,
+      transitionPolicy,
+    })
+  } catch (error) {
+    return { error }
+  }
+  if (!settled) {
+    return { error: new Error("Volatility protection settlement returned no result") }
+  }
+  return { settled }
+}
+
 async function processVolatilitySnapshot({
   state,
   isStopping,
@@ -299,27 +338,20 @@ async function processVolatilitySnapshot({
     return toResult({ data: update })
   }
 
-  let settled = { recovered: update.recovered, 
-    state: update.state }
-  if (update.shouldCancel) {
-    await cancelVolatilityBuyOrders({ cancelOwnedBuyOrders, 
-      logger, 
-      symbol })
-    try {
-      settled = await settleVolatilityTransition({
-        runTransition,
-        state,
-        symbol,
-        currentSnapshot,
-        transitionPolicy,
-      })
-    } catch (error) {
-      return toResult({ error })
-    }
-    if (!settled) {
-      return toResult({ error: new Error("Volatility protection settlement returned no result") })
-    }
+  const settlement = await settleVolatilityProtection({
+    update,
+    cancelOwnedBuyOrders,
+    logger,
+    symbol,
+    runTransition,
+    state,
+    currentSnapshot,
+    transitionPolicy,
+  })
+  if (settlement.error) {
+    return toResult({ error: settlement.error })
   }
+  const { settled } = settlement
 
   const recoveryResult = await completeVolatilityRecovery({
     logger,
