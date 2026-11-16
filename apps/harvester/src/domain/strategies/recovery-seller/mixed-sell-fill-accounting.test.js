@@ -17,8 +17,14 @@ import {
 } from "./mixed-sell-fill-reconciliation.js"
 import { applyReconciledMixedSellOrder } from "./mixed-sell-fill-accounting.js"
 
-const baseAsset = new Asset({ id: "binance:ZRO", code: "ZRO" })
-const quoteAsset = new Asset({ id: "binance:USDT", code: "USDT" })
+const baseAsset = new Asset({
+  id: "binance:ZRO",
+  code: "ZRO",
+})
+const quoteAsset = new Asset({
+  id: "binance:USDT",
+  code: "USDT",
+})
 const market = new Market({
   venue: "binance",
   symbol: "ZROUSDT",
@@ -40,9 +46,18 @@ function makeFill({
     clientOrderId: "rs-sell-1",
     market,
     side,
-    price: new Money({ amount: "2", asset: quoteAsset }),
-    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
-    quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+    price: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: quantity,
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: quoteQuantity,
+      asset: quoteAsset,
+    }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -55,9 +70,18 @@ function makeOrder({ status = "OPEN", executedQuantity = "0" } = {}) {
     market,
     side: "SELL",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "2", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "5.01", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+    limitPrice: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: executedQuantity,
+      asset: baseAsset,
+    }),
     status,
     createdAt: 100,
     acknowledgedAt: 101,
@@ -90,9 +114,18 @@ function makeBuyFill() {
     clientOrderId: "rs-buy-1",
     market,
     side: "BUY",
-    price: new Money({ amount: "2", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "5.01", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "10.02", asset: quoteAsset }),
+    price: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "10.02",
+      asset: quoteAsset,
+    }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
