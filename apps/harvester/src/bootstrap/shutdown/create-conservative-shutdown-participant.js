@@ -324,13 +324,105 @@ async function secureMarket({
 }
 
 function createMarketFailure({ symbol, result } = {}) {
-  let blockers = result.blockers
+  let { blockers } = result
   if (!Array.isArray(blockers) || blockers.length === 0) {
     blockers = [result.error?.message ?? "MARKET_SAFETY_ASSESSMENT_FAILED"]
   }
   return {
     symbol,
     blockers,
+  }
+}
+
+async function waitForConservativeMarkets({
+engine,
+eventPublisher,
+drainUserDataEvents,
+getShutdownBlockers,
+logger,
+} = {}) {
+  // Start cancelling every known owned BUY before any service is stopped.
+  await runStage({
+    stage: "INITIAL_OWNED_BUY_CANCELLATION",
+    operation: () => engine.cancelOwnedBuyOrdersForShutdown(),
+  })
+  const initialDrainBlockers = await drainUserData(drainUserDataEvents)
+  let snapshot = engine.getShutdownSafetySnapshot()
+
+  while (true) {
+    const unsafeMarkets = snapshot.markets.filter((market) =>
+      market.status !== "SAFE_TO_SHUTDOWN")
+    if (unsafeMarkets.length === 0) {
+      return {
+        ok: true,
+        data: {
+          markets: snapshot.markets,
+          revision: snapshot.revision,
+        },
+      }
+    }
+
+    const results = await Promise.all(unsafeMarkets.map(async (market) => {
+      try {
+        const result = await secureMarket({
+          engine,
+          eventPublisher,
+          drainUserDataEvents,
+          getShutdownBlockers,
+          logger,
+          symbol: market.symbol,
+          initialDrainBlockers,
+        })
+        return {
+          symbol: market.symbol,
+          result,
+        }
+      } catch (error) {
+        return {
+          symbol: market.symbol,
+          result: {
+            ok: false,
+            blockers: [error?.code ?? error?.message ?? "MARKET_SAFETY_ASSESSMENT_FAILED"],
+            error,
+          },
+        }
+      }
+    }))
+
+    const failedMarkets = results
+      .filter(({ result }) => result.ok !== true)
+      .map(({ symbol, result }) => createMarketFailure({ symbol,
+        result }))
+    snapshot = engine.getShutdownSafetySnapshot()
+
+    if (failedMarkets.length > 0) {
+      const blockerSummary = failedMarkets.map(({ symbol, blockers }) =>
+        `${symbol}: ${blockers.join(", ")}`).join("; ")
+      const error = new AggregateError(
+        failedMarkets.map(({ symbol, blockers }) =>
+          createMarketSafetyError({ symbol,
+            blockers })),
+        `Conservative shutdown safety could not be proven for every market: ${blockerSummary}`,
+      )
+      error.code = "CONSERVATIVE_SHUTDOWN_SAFETY_UNPROVEN"
+      error.shutdownDiagnostics = Object.freeze({
+        strategyId: StrategyId.COIN_GRABBER,
+        markets: Object.freeze(failedMarkets),
+      })
+      throw error
+    }
+
+    // Late execution evidence can invalidate a market while another market
+    // is being audited. Re-evaluate it immediately; never use a quiet timer.
+    if (snapshot.markets.every((market) => market.status === "SAFE_TO_SHUTDOWN")) {
+      return {
+        ok: true,
+        data: {
+          markets: snapshot.markets,
+          revision: snapshot.revision,
+        },
+      }
+    }
   }
 }
 
@@ -351,91 +443,13 @@ export function createConservativeShutdownParticipant({
 
   const beginShutdown = () => engine.beginShutdown()
 
-  const waitUntilSafe = async () => {
-    // Start cancelling every known owned BUY before any service is stopped.
-    await runStage({
-      stage: "INITIAL_OWNED_BUY_CANCELLATION",
-      operation: () => engine.cancelOwnedBuyOrdersForShutdown(),
-    })
-    const initialDrainBlockers = await drainUserData(drainUserDataEvents)
-    let snapshot = engine.getShutdownSafetySnapshot()
-
-    while (true) {
-      const unsafeMarkets = snapshot.markets.filter((market) =>
-        market.status !== "SAFE_TO_SHUTDOWN")
-      if (unsafeMarkets.length === 0) {
-        return {
-          ok: true,
-          data: {
-            markets: snapshot.markets,
-            revision: snapshot.revision,
-          },
-        }
-      }
-
-      const results = await Promise.all(unsafeMarkets.map(async (market) => {
-        try {
-          const result = await secureMarket({
-            engine,
-            eventPublisher,
-            drainUserDataEvents,
-            getShutdownBlockers,
-            logger,
-            symbol: market.symbol,
-            initialDrainBlockers,
-          })
-          return {
-            symbol: market.symbol,
-            result,
-          }
-        } catch (error) {
-          return {
-            symbol: market.symbol,
-            result: {
-              ok: false,
-              blockers: [error?.code ?? error?.message ?? "MARKET_SAFETY_ASSESSMENT_FAILED"],
-              error,
-            },
-          }
-        }
-      }))
-
-      const failedMarkets = results
-        .filter(({ result }) => result.ok !== true)
-        .map(({ symbol, result }) => createMarketFailure({ symbol,
-          result }))
-      snapshot = engine.getShutdownSafetySnapshot()
-
-      if (failedMarkets.length > 0) {
-        const blockerSummary = failedMarkets.map(({ symbol, blockers }) =>
-          `${symbol}: ${blockers.join(", ")}`).join("; ")
-        const error = new AggregateError(
-          failedMarkets.map(({ symbol, blockers }) =>
-            createMarketSafetyError({ symbol,
-              blockers })),
-          `Conservative shutdown safety could not be proven for every market: ${blockerSummary}`,
-        )
-        error.code = "CONSERVATIVE_SHUTDOWN_SAFETY_UNPROVEN"
-        error.shutdownDiagnostics = Object.freeze({
-          strategyId: StrategyId.COIN_GRABBER,
-          markets: Object.freeze(failedMarkets),
-        })
-        throw error
-      }
-
-      // Late execution evidence can invalidate a market while another market
-      // is being audited. Re-evaluate it immediately; never use a quiet timer.
-      if (snapshot.markets.every((market) => market.status === "SAFE_TO_SHUTDOWN")) {
-        return {
-          ok: true,
-          data: {
-            markets: snapshot.markets,
-            revision: snapshot.revision,
-          },
-        }
-      }
-    }
-  }
+  const waitUntilSafe = () => waitForConservativeMarkets({
+    engine,
+    eventPublisher,
+    drainUserDataEvents,
+    getShutdownBlockers,
+    logger,
+  })
 
   const isSafeToShutdown = () => engine.getShutdownSafetySnapshot().markets
     .every((market) => market.status === "SAFE_TO_SHUTDOWN")

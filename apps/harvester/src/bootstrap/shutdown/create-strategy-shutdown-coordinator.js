@@ -77,6 +77,95 @@ function getParticipantSnapshot(participant) {
  * Application-level coordinator. It knows only the participant contract;
  * trading safety and market rules remain owned by each strategy.
  */
+function beginShutdownParticipants({ registeredParticipants, shutdownState } = {}) {
+  if (shutdownState.started) {
+    return { ok: true }
+  }
+  shutdownState.started = true
+  const failures = []
+
+  for (const participant of registeredParticipants) {
+    try {
+      participant.beginShutdown()
+    } catch (error) {
+      failures.push({ participant,
+        error })
+    }
+  }
+
+  if (failures.length > 0) {
+    shutdownState.started = false
+    throw createStrategyShutdownError({
+      blockers: failures.map(({ participant, error }) => createStrategyBlocker({
+        participant,
+        error,
+      })),
+      errors: failures.map(({ error }) => error),
+    })
+  }
+
+  return { ok: true }
+}
+
+async function waitForStrategyShutdownParticipants({ registeredParticipants, beginShutdown, isSafeToShutdown, getSafetySnapshot, signal } = {}) {
+  beginShutdown()
+  if (signal?.aborted) {
+    throw signal.reason ?? new Error("Strategy shutdown was aborted")
+  }
+
+  const results = await Promise.allSettled(registeredParticipants.map(async (participant) => {
+    const result = await participant.waitUntilSafe({ signal })
+    if (result?.ok !== true) {
+      throw result?.errors?.[0] ?? new Error("Strategy returned an unsuccessful safety result")
+    }
+    if (participant.isSafeToShutdown() !== true) {
+      throw new Error("Strategy safety marker was invalidated before the shared shutdown barrier")
+    }
+    return result
+  }))
+
+  const blockers = []
+  const errors = []
+  for (const [index, result] of results.entries()) {
+    if (result.status !== "rejected") {
+      continue
+    }
+    const participant = registeredParticipants[index]
+    errors.push(result.reason)
+    blockers.push(createStrategyBlocker({
+      participant,
+      error: result.reason,
+    }))
+  }
+
+  if (!isSafeToShutdown()) {
+    for (const participant of registeredParticipants) {
+      if (participant.isSafeToShutdown() === true) {
+        continue
+      }
+      if (blockers.some((blocker) => blocker.strategyId === participant.strategyId)) {
+        continue
+      }
+      blockers.push(createStrategyBlocker({
+        participant,
+        reason: "STRATEGY_SAFETY_MARKER_INVALIDATED",
+      }))
+    }
+  }
+
+  if (blockers.length > 0) {
+    throw createStrategyShutdownError({ blockers,
+      errors })
+  }
+
+  return {
+    ok: true,
+    data: {
+      strategies: getSafetySnapshot(),
+    },
+  }
+}
+
 export function createStrategyShutdownCoordinator({ participants = [] } = {}) {
   const registeredParticipants = Object.freeze(participants.map(validateParticipant))
   const strategyIds = registeredParticipants.map(({ strategyId }) => strategyId)
@@ -84,7 +173,7 @@ export function createStrategyShutdownCoordinator({ participants = [] } = {}) {
     throw new TypeError("Strategy shutdown participant strategyId values must be unique")
   }
 
-  let shutdownStarted = false
+  const shutdownState = { started: false }
 
   const getSafetySnapshot = () => Object.freeze(
     registeredParticipants.map(getParticipantSnapshot),
@@ -98,94 +187,15 @@ export function createStrategyShutdownCoordinator({ participants = [] } = {}) {
     }
   })
 
-  const beginShutdown = () => {
-    if (shutdownStarted) {
-      return { ok: true }
-    }
-    shutdownStarted = true
-    const failures = []
+  const beginShutdown = () => beginShutdownParticipants({ registeredParticipants, shutdownState })
 
-    for (const participant of registeredParticipants) {
-      try {
-        participant.beginShutdown()
-      } catch (error) {
-        failures.push({ participant,
-          error })
-      }
-    }
-
-    if (failures.length > 0) {
-      shutdownStarted = false
-      throw createStrategyShutdownError({
-        blockers: failures.map(({ participant, error }) => createStrategyBlocker({
-          participant,
-          error,
-        })),
-        errors: failures.map(({ error }) => error),
-      })
-    }
-
-    return { ok: true }
-  }
-
-  const waitUntilSafe = async ({ signal } = {}) => {
-    beginShutdown()
-    if (signal?.aborted) {
-      throw signal.reason ?? new Error("Strategy shutdown was aborted")
-    }
-
-    const results = await Promise.allSettled(registeredParticipants.map(async (participant) => {
-      const result = await participant.waitUntilSafe({ signal })
-      if (result?.ok !== true) {
-        throw result?.errors?.[0] ?? new Error("Strategy returned an unsuccessful safety result")
-      }
-      if (participant.isSafeToShutdown() !== true) {
-        throw new Error("Strategy safety marker was invalidated before the shared shutdown barrier")
-      }
-      return result
-    }))
-
-    const blockers = []
-    const errors = []
-    for (const [index, result] of results.entries()) {
-      if (result.status !== "rejected") {
-        continue
-      }
-      const participant = registeredParticipants[index]
-      errors.push(result.reason)
-      blockers.push(createStrategyBlocker({
-        participant,
-        error: result.reason,
-      }))
-    }
-
-    if (!isSafeToShutdown()) {
-      for (const participant of registeredParticipants) {
-        if (participant.isSafeToShutdown() === true) {
-          continue
-        }
-        if (blockers.some((blocker) => blocker.strategyId === participant.strategyId)) {
-          continue
-        }
-        blockers.push(createStrategyBlocker({
-          participant,
-          reason: "STRATEGY_SAFETY_MARKER_INVALIDATED",
-        }))
-      }
-    }
-
-    if (blockers.length > 0) {
-      throw createStrategyShutdownError({ blockers,
-        errors })
-    }
-
-    return {
-      ok: true,
-      data: {
-        strategies: getSafetySnapshot(),
-      },
-    }
-  }
+  const waitUntilSafe = ({ signal } = {}) => waitForStrategyShutdownParticipants({
+    registeredParticipants,
+    beginShutdown,
+    isSafeToShutdown,
+    getSafetySnapshot,
+    signal,
+  })
 
   return Object.freeze({
     beginShutdown,
