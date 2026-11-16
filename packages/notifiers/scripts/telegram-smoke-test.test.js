@@ -44,8 +44,10 @@ test("rejects invalid environment before creating a notifier", async () => {
     {},
     { TELEGRAM_BOT_TOKEN: "test-token" },
     { TELEGRAM_CHAT_ID: "-100123" },
-    { TELEGRAM_BOT_TOKEN: " ", TELEGRAM_CHAT_ID: "-100123" },
-    { TELEGRAM_BOT_TOKEN: "test-token", TELEGRAM_CHAT_ID: [] },
+    { TELEGRAM_BOT_TOKEN: " ",
+      TELEGRAM_CHAT_ID: "-100123" },
+    { TELEGRAM_BOT_TOKEN: "test-token",
+      TELEGRAM_CHAT_ID: [] },
   ]) {
     await assert.rejects(
       runTelegramSmokeTest({
@@ -68,11 +70,13 @@ test("validates the clock and notifier boundary", async () => {
   }
 
   await assert.rejects(
-    runTelegramSmokeTest({ env, now: () => "not a date" }),
+    runTelegramSmokeTest({ env,
+      now: () => "not a date" }),
     /valid Date/,
   )
   await assert.rejects(
-    runTelegramSmokeTest({ env, createNotifier: () => ({}) }),
+    runTelegramSmokeTest({ env,
+      createNotifier: () => ({}) }),
     /sendMessage/,
   )
 })

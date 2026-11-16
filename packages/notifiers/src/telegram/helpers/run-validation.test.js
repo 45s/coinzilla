@@ -16,16 +16,44 @@ test("normalizes valid Telegram options and applies explicit defaults", () => {
       },
       defaultFetchImpl: fetchImpl,
     }),
-    { token: "token", chatId: "-100", fetchImpl, timeoutMs: 1500 },
+    { token: "token",
+      chatId: "-100",
+      fetchImpl,
+      timeoutMs: 1500 },
   )
 })
 
 test("rejects malformed options and invalid timeout boundaries", () => {
-  for (const options of [null, [], {}, { token: 1, chatId: "chat" },
-    { token: "token", chatId: {} }, { token: "token", chatId: "chat", fetchImpl: 1 },
-    { token: "token", chatId: "chat", timeoutMs: 0 },
-    { token: "token", chatId: "chat", timeoutMs: 2_147_483_648 }]) {
-    assert.throws(() => validateTelegramOptions({ options, defaultFetchImpl: async () => {} }))
+  for (const options of [
+    null,
+    [],
+    {},
+    {
+      token: 1,
+      chatId: "chat",
+    },
+    {
+      token: "token",
+      chatId: {},
+    },
+    {
+      token: "token",
+      chatId: "chat",
+      fetchImpl: 1,
+    },
+    {
+      token: "token",
+      chatId: "chat",
+      timeoutMs: 0,
+    },
+    {
+      token: "token",
+      chatId: "chat",
+      timeoutMs: 2_147_483_648,
+    },
+  ]) {
+    assert.throws(() => validateTelegramOptions({ options,
+      defaultFetchImpl: async () => {} }))
   }
 })
 
