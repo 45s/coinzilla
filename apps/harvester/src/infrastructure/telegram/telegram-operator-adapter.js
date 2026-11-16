@@ -1022,7 +1022,7 @@ async function executeTelegramOperatorControl({ action, symbol, userId, requestI
         interaction,
         message: "Telegram application operation COMPLETED",
         stage: "APPLICATION_OPERATION_COMPLETED",
-        level: interaction.stateChanged ? "info" : "debug",
+        level: "info",
         fields: {
           durationMs: Date.now() - startedAt,
           result: action === "PAUSE" ? "PAUSED" : "RESUME_PROCESSED",

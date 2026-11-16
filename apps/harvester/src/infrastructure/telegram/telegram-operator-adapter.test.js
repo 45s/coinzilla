@@ -1511,7 +1511,7 @@ test("does not report a resume when the application confirms no operator pause e
     },
     logger: {
       debug: entry => entries.push(entry),
-      info: entry => entries.push(entry),
+      info: entry => entries.push({ ...entry, loggedAtLevel: "info" }),
       error: entry => entries.push(entry),
     },
   })
@@ -1521,6 +1521,7 @@ test("does not report a resume when the application confirms no operator pause e
   const completion = entries.find(entry => entry.message === "Telegram application operation COMPLETED")
   assert.equal(completion?.applicationOperationCompleted, true)
   assert.equal(completion?.stateChanged, false)
+  assert.equal(completion?.loggedAtLevel, "info")
 })
 
 function createCallbackAckRetryFetch({ askUpdate, confirmUpdate }) {
