@@ -835,7 +835,13 @@ error() {} },
     if (typeof journalFactory !== "function") {
       throw new TypeError("Harvester Journal history journalFactory must be a function")
     }
-    validateLimits({ maxDirectories, maxSessions, maxRecords, maxBytes, maxRecordBytes })
+    validateLimits({
+      maxDirectories,
+      maxSessions,
+      maxRecords,
+      maxBytes,
+      maxRecordBytes,
+    })
 
     const rootDirectory = path.resolve(directory)
     const rootEntries = await readdir(rootDirectory, { withFileTypes: true })
@@ -846,7 +852,10 @@ error() {} },
       maxSessions,
     })
     const { sessionDirectories, directoriesVisited } = discovery
-    assertDiscoveredSessionCount({ sessionDirectories, maxSessions })
+    assertDiscoveredSessionCount({
+      sessionDirectories,
+      maxSessions,
+    })
 
     const readResult = await readDiscoveredJournalSessions({
       sessionDirectories,
@@ -877,6 +886,11 @@ error() {} },
       ordering: getSessionOrdering({ sessionCount: sessionMetadata.length }),
     })
   } catch (error) {
-    return toResult({ error: normalizeHistoryReadError({ error, directory }) })
+    return toResult({
+      error: normalizeHistoryReadError({
+        error,
+        directory,
+      }),
+    })
   }
 }
