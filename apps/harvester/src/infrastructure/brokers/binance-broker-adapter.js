@@ -5,17 +5,18 @@ import { assertBrokerPort } from "../../application/ports/broker.port.js"
 import { createBinanceMarketMetadata } from "./binance-market-metadata.js"
 
 const normalizePlaceOrderResult = (result, { order } = {}) => {
-  if (result?.ok !== false || !Array.isArray(result.errors) || result.errors.length !== 1) return result
+  if (result?.ok !== false || !Array.isArray(result.errors) || result.errors.length !== 1) {return result}
   const [error] = result.errors
   // Binance Spot's exact -2010 matching-engine response is a definite LIMIT_MAKER rejection.
-  if (error?.outcomeUnknown === true) return result
+  if (error?.outcomeUnknown === true) {return result}
 
   if (order?.type === "LIMIT_MAKER" &&
       error?.code === -2010 &&
       error.message === "Order would immediately match and take.") {
     const normalizedError = new Error(error.message, { cause: error })
     normalizedError.code = "POST_ONLY_WOULD_TAKE"
-    return { ...result, errors: [normalizedError] }
+    return { ...result,
+errors: [normalizedError] }
   }
 
   if (error?.code === -1013 &&
@@ -23,7 +24,8 @@ const normalizePlaceOrderResult = (result, { order } = {}) => {
       error.message.startsWith("Filter failure:")) {
     const normalizedError = new Error(error.message, { cause: error })
     normalizedError.code = "DEFINITE_EXCHANGE_FILTER_REJECTED"
-    return { ...result, errors: [normalizedError] }
+    return { ...result,
+errors: [normalizedError] }
   }
 
   return result
@@ -62,7 +64,8 @@ export function createBinanceBrokerAdapter({
     throw new TypeError("brokerFactory must be a function")
   }
 
-  const client = brokerFactory({ config, logger })
+  const client = brokerFactory({ config,
+logger })
 
   // Exchange filters are dynamic exchange facts, not process-lifetime cache
   // entries. Each request must fetch current exchangeInfo before a replacement
@@ -72,11 +75,11 @@ export function createBinanceBrokerAdapter({
     if (!result?.ok || !result.data) {
       const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
       throw new Error(
-        "Unable to load Binance market metadata for " + symbol + (details ? ": " + details : ""),
+        `Unable to load Binance market metadata for ${  symbol  }${details ? `: ${  details}` : ""}`,
       )
     }
     if (result.data.symbol !== symbol) {
-      throw new TypeError("Binance market metadata symbol does not match " + symbol)
+      throw new TypeError(`Binance market metadata symbol does not match ${  symbol}`)
     }
     return createBinanceMarketMetadata({ symbolFilters: result.data })
   }
@@ -121,7 +124,7 @@ export function createBinanceBrokerAdapter({
       const targetSymbol = order?.market?.symbol ?? symbol
       if (order) {
         const eligibility = validateCancellationEligibility({ order })
-        if (!eligibility.ok) return eligibility
+        if (!eligibility.ok) {return eligibility}
       }
       let targetOrderId
       try {
@@ -133,8 +136,8 @@ export function createBinanceBrokerAdapter({
         symbol: targetSymbol,
         orderId: targetOrderId,
       })
-      if (!order) return cancelResult
-      if (!cancelResult?.ok) return cancelResult
+      if (!order) {return cancelResult}
+      if (!cancelResult?.ok) {return cancelResult}
       if (typeof client.getCanonicalOrderHistory !== "function") {
         return toResult({ error: new Error("Canonical order history is required to confirm a cancellation") })
       }
@@ -174,12 +177,15 @@ export function createBinanceBrokerAdapter({
     getPrices: ({ symbol }) => client.getPrices({ symbol }),
     getCandles: (input) => client.getCandles(input),
     subscribeForPrices: ({ symbol, onPrice }) =>
-      client.subscribeForPrices({ symbol, onPrice }),
+      client.subscribeForPrices({ symbol,
+onPrice }),
     subscribeForCandles: (input) => client.subscribeForCandles(input),
     subscribeForBookTicker: ({ symbol, onBookTicker }) =>
-      client.subscribeForBookTicker({ symbol, onBookTicker }),
+      client.subscribeForBookTicker({ symbol,
+onBookTicker }),
     subscribeForUserData: ({ onEvent, onStatus }) =>
-      client.subscribeForUserData({ onEvent, onStatus }),
+      client.subscribeForUserData({ onEvent,
+onStatus }),
   })
 
   assertBrokerPort({ broker })

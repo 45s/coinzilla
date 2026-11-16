@@ -3,10 +3,11 @@ import { assertDecimalString, compareDecimal } from "@coinzilla/utils"
 
 function normalizeAsset({ code, field }) {
   if (typeof code !== "string" || !code.trim()) {
-    throw new TypeError("Binance market metadata " + field + " must be a non-empty asset code")
+    throw new TypeError(`Binance market metadata ${  field  } must be a non-empty asset code`)
   }
   const normalizedCode = code.trim().toUpperCase()
-  return new Asset({ id: normalizedCode.toLowerCase(), code: normalizedCode })
+  return new Asset({ id: normalizedCode.toLowerCase(),
+code: normalizedCode })
 }
 
 function createOptionalConstraint({
@@ -16,19 +17,25 @@ function createOptionalConstraint({
   ValueType,
 } = {}) {
   if (value === undefined || value === null) {
-    return Object.freeze({ type, status: "UNSUPPORTED" })
+    return Object.freeze({ type,
+status: "UNSUPPORTED" })
   }
-  assertDecimalString({ value, field: type })
-  if (compareDecimal({ left: value, right: "0" }) < 0) {
-    throw new RangeError("Binance market metadata " + type + " must be non-negative")
+  assertDecimalString({ value,
+field: type })
+  if (compareDecimal({ left: value,
+right: "0" }) < 0) {
+    throw new RangeError(`Binance market metadata ${  type  } must be non-negative`)
   }
-  if (compareDecimal({ left: value, right: "0" }) === 0) {
-    return Object.freeze({ type, status: "UNSUPPORTED" })
+  if (compareDecimal({ left: value,
+right: "0" }) === 0) {
+    return Object.freeze({ type,
+status: "UNSUPPORTED" })
   }
   return Object.freeze({
     type,
     status: "SUPPORTED",
-    value: new ValueType({ amount: value, asset }),
+    value: new ValueType({ amount: value,
+asset }),
   })
 }
 
@@ -43,11 +50,15 @@ export function createBinanceMarketMetadata({ symbolFilters } = {}) {
   if (typeof symbolFilters.symbol !== "string" || !symbolFilters.symbol.trim()) {
     throw new TypeError("Binance symbolFilters.symbol must be a non-empty string")
   }
-  assertDecimalString({ value: symbolFilters.tickSize, field: "tickSize" })
-  assertDecimalString({ value: symbolFilters.stepSize, field: "stepSize" })
+  assertDecimalString({ value: symbolFilters.tickSize,
+field: "tickSize" })
+  assertDecimalString({ value: symbolFilters.stepSize,
+field: "stepSize" })
   if (
-    compareDecimal({ left: symbolFilters.tickSize, right: "0" }) <= 0 ||
-    compareDecimal({ left: symbolFilters.stepSize, right: "0" }) <= 0
+    compareDecimal({ left: symbolFilters.tickSize,
+right: "0" }) <= 0 ||
+    compareDecimal({ left: symbolFilters.stepSize,
+right: "0" }) <= 0
   ) {
     throw new RangeError("Binance tickSize and stepSize must be greater than zero")
   }
@@ -80,7 +91,8 @@ export function createBinanceMarketMetadata({ symbolFilters } = {}) {
     {
       type: "PRICE_INCREMENT",
       status: "SUPPORTED",
-      value: new Money({ amount: symbolFilters.tickSize, asset: quoteAsset }),
+      value: new Money({ amount: symbolFilters.tickSize,
+asset: quoteAsset }),
     },
     createOptionalConstraint({
       type: "MIN_PRICE",
@@ -97,7 +109,8 @@ export function createBinanceMarketMetadata({ symbolFilters } = {}) {
     {
       type: "QUANTITY_INCREMENT",
       status: "SUPPORTED",
-      value: new Quantity({ amount: symbolFilters.stepSize, asset: baseAsset }),
+      value: new Quantity({ amount: symbolFilters.stepSize,
+asset: baseAsset }),
     },
     createOptionalConstraint({
       type: "MIN_QUANTITY",
@@ -125,8 +138,9 @@ export function createBinanceMarketMetadata({ symbolFilters } = {}) {
     }),
   ]
 
-  const tradingRules = new TradingRules({ market, constraints })
-  const unvalidatedConstraints = symbolFilters.unvalidatedConstraints
+  const tradingRules = new TradingRules({ market,
+constraints })
+  const {unvalidatedConstraints} = symbolFilters
   if (!Array.isArray(unvalidatedConstraints)) {
     throw new TypeError("Binance market metadata unvalidatedConstraints must be an array")
   }
