@@ -42,6 +42,7 @@ packages/brokers/src/
 │       │   │       ├── adapt-kline.js
 │       │   │       └── adapt-kline.test.js
 │       │   ├── tests/
+│       │   │   ├── subscribe-for-prices.test.js
 │       │   │   ├── subscribe-for-prices-liveness.test.js
 │       │   │   ├── user-data-session.setup.test.js
 │       │   │   ├── user-data-session.recovery.test.js
