@@ -660,7 +660,12 @@ async function applyOperatorBuyPauseTransition({ state, pairs, symbol, beforeApp
 function createOperatorBuyPauseHandler({ state, pairs, runTransition, cancelOwnedBuyOrders } = {}) {
   return async ({ symbol, beforeApply } = {}) => {
     const applied = await runTransition({
-      task: () => applyOperatorBuyPauseTransition({ state, pairs, symbol, beforeApply }),
+      task: () => applyOperatorBuyPauseTransition({
+        state,
+        pairs,
+        symbol,
+        beforeApply,
+      }),
     })
     if (!applied?.ok) {
       return applied
