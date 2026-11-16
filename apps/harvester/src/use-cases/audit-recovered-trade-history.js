@@ -56,10 +56,7 @@ function compareCommissionFacts(...[left, right]) {
     .localeCompare(`${right.assetId}:${right.asset}:${right.amount}`)
 }
 
-function assertFillParity({ journalFill, exchangeFill }) {
-  const mismatch = (field) => {
-    throw new Error(`Account trade history conflicts with durable Journal ${field} for execution ${journalFill.fillId}`)
-  }
+function assertFillIdentityParity({ journalFill, exchangeFill, mismatch }) {
   if (
     exchangeFill.id !== journalFill.fillId ||
     String(exchangeFill.tradeId) !== journalFill.tradeId ||
@@ -73,26 +70,71 @@ function assertFillParity({ journalFill, exchangeFill }) {
   ) {
     mismatch("identity or execution metadata")
   }
+}
 
+function assertFillAmountParity({ journalFill, exchangeFill, mismatch }) {
   for (const [field, actual, expected] of [
     ["price", exchangeFill.price.amount, journalFill.price],
     ["quantity", exchangeFill.quantity.amount, journalFill.quantity],
     ["quoteQuantity", exchangeFill.quoteQuantity.amount, journalFill.quoteQuantity],
   ]) {
-    if (compareDecimal({ left: actual, 
-      
-      right: expected }) !== 0) {
+    if (compareDecimal({ left: actual, right: expected }) !== 0) {
       mismatch(field)
     }
   }
   if (journalFill.executedAt !== undefined && exchangeFill.executedAt !== journalFill.executedAt) {
     mismatch("transaction timestamp")
   }
+}
 
+function assertFillCommissionParity({ journalFill, exchangeFill, mismatch }) {
   const expectedCommissions = getJournalCommissionFacts({ commissions: journalFill.commissions })
   const actualCommissions = getExchangeCommissionFacts({ fill: exchangeFill })
   if (JSON.stringify(actualCommissions) !== JSON.stringify(expectedCommissions)) {
     mismatch("commission facts")
+  }
+}
+
+function assertFillParity({ journalFill, exchangeFill }) {
+  const mismatch = (field) => {
+    throw new Error(`Account trade history conflicts with durable Journal ${field} for execution ${journalFill.fillId}`)
+  }
+  assertFillIdentityParity({ journalFill, exchangeFill, mismatch })
+  assertFillAmountParity({ journalFill, exchangeFill, mismatch })
+  assertFillCommissionParity({ journalFill, exchangeFill, mismatch })
+}
+
+function validateMarketPaginationEvidence({ historyEvidence, market }) {
+  const completePagination = historyEvidence?.historyPagesComplete === true &&
+    historyEvidence?.marketHistoryPagesComplete === true &&
+    historyEvidence?.historyScope === "MARKET" &&
+    Array.isArray(historyEvidence.marketsQueried) &&
+    historyEvidence.marketsQueried.length === 1 &&
+    historyEvidence.marketsQueried[0] === market.symbol &&
+    Number.isSafeInteger(historyEvidence.historyStartTime) &&
+    historyEvidence.historyStartTime >= 0
+  if (!completePagination) {
+    throw new Error(`Single-market trade-history pagination evidence is missing or does not cover ${market.symbol}`)
+  }
+}
+
+function validateMarketRetentionEvidence({ historyRetentionEvidence, historyEvidence, market }) {
+  const validRetention = historyRetentionEvidence?.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED" &&
+    typeof historyRetentionEvidence.baselineFactId === "string" &&
+    historyRetentionEvidence.baselineFactId.trim() !== "" &&
+    historyRetentionEvidence.symbol === market.symbol &&
+    Number.isSafeInteger(historyRetentionEvidence.coveredFromTime) &&
+    historyRetentionEvidence.coveredFromTime >= 0 &&
+    historyRetentionEvidence.coveredFromTime <= historyEvidence.historyStartTime &&
+    Number.isSafeInteger(historyRetentionEvidence.verifiedAt) &&
+    historyRetentionEvidence.verifiedAt >= historyEvidence.historyStartTime &&
+    historyRetentionEvidence.verifiedAt >= historyRetentionEvidence.coveredFromTime &&
+    typeof historyRetentionEvidence.evidenceDigest === "string" &&
+    SHA256_PATTERN.test(historyRetentionEvidence.evidenceDigest) &&
+    typeof historyRetentionEvidence.verifiedBy === "string" &&
+    historyRetentionEvidence.verifiedBy.trim() !== ""
+  if (!validRetention) {
+    throw new Error(`Durable market-history retention evidence is missing or does not cover ${market.symbol}`)
   }
 }
 
@@ -122,33 +164,8 @@ function validateScopeEvidence({
   if (marketUniverseComplete === true) {
     throw new Error("Single-market trade history cannot prove account-wide market-universe completeness")
   }
-  if (historyEvidence?.historyPagesComplete !== true ||
-      historyEvidence?.marketHistoryPagesComplete !== true ||
-      historyEvidence?.historyScope !== "MARKET" ||
-      !Array.isArray(historyEvidence.marketsQueried) ||
-      historyEvidence.marketsQueried.length !== 1 ||
-      historyEvidence.marketsQueried[0] !== market.symbol ||
-      !Number.isSafeInteger(historyEvidence.historyStartTime) ||
-      historyEvidence.historyStartTime < 0) {
-    throw new Error(`Single-market trade-history pagination evidence is missing or does not cover ${market.symbol}`)
-  }
-  if (!historyRetentionEvidence ||
-      historyRetentionEvidence.factType !== "MARKET_HISTORY_COVERAGE_CONFIRMED" ||
-      typeof historyRetentionEvidence.baselineFactId !== "string" ||
-      !historyRetentionEvidence.baselineFactId.trim() ||
-      historyRetentionEvidence.symbol !== market.symbol ||
-      !Number.isSafeInteger(historyRetentionEvidence.coveredFromTime) ||
-      historyRetentionEvidence.coveredFromTime < 0 ||
-      historyRetentionEvidence.coveredFromTime > historyEvidence.historyStartTime ||
-      !Number.isSafeInteger(historyRetentionEvidence.verifiedAt) ||
-      historyRetentionEvidence.verifiedAt < historyEvidence.historyStartTime ||
-      historyRetentionEvidence.verifiedAt < historyRetentionEvidence.coveredFromTime ||
-      typeof historyRetentionEvidence.evidenceDigest !== "string" ||
-      !SHA256_PATTERN.test(historyRetentionEvidence.evidenceDigest) ||
-      typeof historyRetentionEvidence.verifiedBy !== "string" ||
-      !historyRetentionEvidence.verifiedBy.trim()) {
-    throw new Error(`Durable market-history retention evidence is missing or does not cover ${market.symbol}`)
-  }
+  validateMarketPaginationEvidence({ historyEvidence, market })
+  validateMarketRetentionEvidence({ historyRetentionEvidence, historyEvidence, market })
 }
 
 function selectScopeRecords({ journalFills, exchangeFills, owned
