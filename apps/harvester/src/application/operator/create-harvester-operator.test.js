@@ -341,3 +341,48 @@ test("resumeBuys rejects an unauthorized actor before touching the engine or Ope
   assert.equal(result.errors[0].code, "OPERATOR_UNAUTHORIZED", "The rejected BUY resume must retain the existing operator authorization error.")
   assert.deepEqual(calls, [], "Unauthorized BUY resume must not reach the engine or append a durable fact.")
 })
+
+test("global BUY pause and resume commit distinct durable facts before applying their gates", async () => {
+  const { calls, operationalStateStore, engine } = createHarness()
+  const operator = createHarvesterOperator({
+    operationalStateStore,
+    engine,
+  })
+
+  const paused = await operator.pauseAllBuys({
+    actor,
+    requestId: "telegram:global-buy-pause:2005",
+  })
+  const resumed = await operator.resumeAllBuys({
+    actor,
+    requestId: "telegram:global-buy-resume:2006",
+  })
+
+  assert.equal(paused.ok, true)
+  assert.equal(resumed.ok, true)
+  assert.equal(calls[1].fact.factType, "OPERATOR_ALL_BUYS_PAUSED", "Global pause must append the global fact type.")
+  assert.equal(calls[1].fact.data.symbol, undefined, "Global pause facts must not pretend to be market-scoped.")
+  assert.equal(calls[4].fact.factType, "OPERATOR_ALL_BUYS_RESUMED", "Global resume must append a distinct global fact type.")
+  assert.equal(calls[4].fact.data.symbol, undefined, "Global resume facts must not pretend to be market-scoped.")
+})
+
+test("BUY controls reject missing market scope and reject symbols on global commands", async () => {
+  const { calls, engine } = createHarness()
+  const operator = createHarvesterOperator({ engine })
+
+  const missingMarket = await operator.pauseBuys({
+    actor,
+    requestId: "telegram:market-buy-pause:2007",
+  })
+  const globalWithSymbol = await operator.pauseAllBuys({
+    actor,
+    requestId: "telegram:global-buy-pause:2008",
+    symbol: "DOGEUSDT",
+  })
+
+  assert.equal(missingMarket.ok, false)
+  assert.equal(missingMarket.errors[0].code, "INVALID_OPERATOR_MARKET")
+  assert.equal(globalWithSymbol.ok, false)
+  assert.equal(globalWithSymbol.errors[0].code, "INVALID_OPERATOR_SCOPE")
+  assert.deepEqual(calls, [], "Invalid BUY control scope must be rejected before touching the engine.")
+})
