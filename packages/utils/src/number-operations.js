@@ -6,12 +6,11 @@
 
 /**
  * Round to a bounded number of fractional decimal places.
- * @param {number} number
- * @param {number} [decimals=2] Integer from 0 through 100.
+ * @param {{ number: number, decimals?: number }} options
  * @returns {number}
  * @throws {RangeError} If decimals is outside the supported range.
  */
-export function roundNumber(number, decimals = 2) {
+export function roundNumber({ number, decimals = 2 } = {}) {
   if (!Number.isInteger(decimals) || decimals < 0 || decimals > 100) {
     throw new RangeError('decimals must be an integer between 0 and 100')
   }
@@ -22,17 +21,16 @@ export function roundNumber(number, decimals = 2) {
     return number
   }
 
-  return Number(`${Math.round(`${number  }e+${decimals}`)  }e-${decimals}`)
+  return Number(`${Math.round(`${number}e+${decimals}`)}e-${decimals}`)
 }
 
 /**
  * Fix floating-point noise by converting to a bounded number of decimal places.
- * @param {number} number
- * @param {number} [digits=4] Integer from 0 through 100.
+ * @param {{ number: number, digits?: number }} options
  * @returns {number}
  * @throws {RangeError} If digits is outside the supported range.
  */
-export function fixNumber(number, digits = 4) {
+export function fixNumber({ number, digits = 4 } = {}) {
   if (!Number.isInteger(digits) || digits < 0 || digits > 100) {
     throw new RangeError('digits must be an integer between 0 and 100')
   }
@@ -42,12 +40,11 @@ export function fixNumber(number, digits = 4) {
 
 /**
  * Round a number to a bounded number of significant digits.
- * @param {number} number
- * @param {number} [precision=2] Integer from 1 through 100.
+ * @param {{ number: number, precision?: number }} options
  * @returns {number}
  * @throws {RangeError} If precision is outside the supported range.
  */
-export function preciseNumber(number, precision = 2) {
+export function preciseNumber({ number, precision = 2 } = {}) {
   if (!Number.isInteger(precision) || precision < 1 || precision > 100) {
     throw new RangeError('precision must be an integer between 1 and 100')
   }

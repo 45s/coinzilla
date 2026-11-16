@@ -28,7 +28,7 @@ export function validateDecimalScale({ scale } = {}) {
   validateScale(scale)
 }
 
-function alignDecimals(left, right) {
+function alignDecimals({ left, right }) {
   const scale = Math.max(left.scale, right.scale)
   return {
     left: left.coefficient * 10n ** BigInt(scale - left.scale),
@@ -48,25 +48,25 @@ function alignDecimals(left, right) {
  */
 export function parseDecimal({ value, field = "value" } = {}) {
   if (typeof value !== "string" && typeof value !== "bigint") {
-    throw new TypeError(`${field  } must be a decimal string or bigint`)
+    throw new TypeError(`${field} must be a decimal string or bigint`)
   }
 
   const decimal = String(value)
   const match = /^([+-]?)(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i.exec(decimal)
 
   if (!match) {
-    throw new TypeError(`${field  } has an invalid decimal format`)
+    throw new TypeError(`${field} has an invalid decimal format`)
   }
 
   const [, sign, whole, fraction = "", exponentText = "0"] = match
 
   if (whole.length + fraction.length > MAX_DECIMAL_DIGITS || exponentText.length > 4) {
-    throw new RangeError(`${field  } exceeds supported precision`)
+    throw new RangeError(`${field} exceeds supported precision`)
   }
 
   const exponent = Number(exponentText)
   if (!Number.isSafeInteger(exponent) || Math.abs(exponent) > MAX_DECIMAL_EXPONENT) {
-    throw new RangeError(`${field  } exponent exceeds supported range`)
+    throw new RangeError(`${field} exponent exceeds supported range`)
   }
 
   const scale = fraction.length - exponent
@@ -74,7 +74,7 @@ export function parseDecimal({ value, field = "value" } = {}) {
   const resultingDigits = digits.length + Math.max(0, -scale)
 
   if (scale > MAX_DECIMAL_SCALE || resultingDigits > MAX_DECIMAL_DIGITS) {
-    throw new RangeError(`${field  } exceeds supported precision`)
+    throw new RangeError(`${field} exceeds supported precision`)
   }
 
   let coefficient = BigInt((sign === "-" ? "-" : "") + digits)
@@ -113,7 +113,7 @@ export function formatDecimalString({ coefficient, scale } = {}) {
   const digits = rawDigits.padStart(scale + 1, "0")
   const decimal = scale === 0
     ? digits
-    : `${digits.slice(0, -scale)  }.${  digits.slice(-scale)}`
+    : `${digits.slice(0, -scale)}.${  digits.slice(-scale)}`
   const normalized = decimal.includes(".")
     ? decimal.replace(/0+$/, "").replace(/\.$/, "")
     : decimal
@@ -129,7 +129,7 @@ export function formatDecimalString({ coefficient, scale } = {}) {
  */
 export function assertDecimalString({ value, field = "value" } = {}) {
   if (typeof value !== "string") {
-    throw new TypeError(`${field  } must be a decimal string`)
+    throw new TypeError(`${field} must be a decimal string`)
   }
   parseDecimal({ value,
     field })
@@ -138,12 +138,10 @@ export function assertDecimalString({ value, field = "value" } = {}) {
 
 /** @param {{ left: string|bigint, right: string|bigint }} options @returns {string} Exact sum. */
 export function addDecimal({ left, right } = {}) {
-  const aligned = alignDecimals(
-    parseDecimal({ value: left,
-      field: "left" }),
-    parseDecimal({ value: right,
-      field: "right" }),
-  )
+  const aligned = alignDecimals({
+    left: parseDecimal({ value: left, field: "left" }),
+    right: parseDecimal({ value: right, field: "right" }),
+  })
   return formatDecimalString({
     coefficient: aligned.left + aligned.right,
     scale: aligned.scale,
@@ -188,19 +186,25 @@ export function multiplyDecimal({ left, right } = {}) {
 }
 
 function divideIntegers({ numerator, denominator, rounding } = {}) {
-  if (denominator === 0n) {throw new RangeError("Cannot divide by zero")}
+  if (denominator === 0n) {
+    throw new RangeError("Cannot divide by zero")
+  }
   if (!ROUNDING_MODES.has(rounding)) {
     throw new TypeError("rounding must be toward-zero, away-from-zero, or half-up")
   }
 
   const quotient = numerator / denominator
   const remainder = numerator % denominator
-  if (remainder === 0n || rounding === "toward-zero") {return quotient}
+  if (remainder === 0n || rounding === "toward-zero") {
+    return quotient
+  }
 
   const sameSign = (numerator < 0n) === (denominator < 0n)
   const adjustment = sameSign ? 1n : -1n
 
-  if (rounding === "away-from-zero") {return quotient + adjustment}
+  if (rounding === "away-from-zero") {
+    return quotient + adjustment
+  }
 
   const absoluteRemainder = remainder < 0n ? -remainder : remainder
   const absoluteDenominator = denominator < 0n ? -denominator : denominator
@@ -249,7 +253,13 @@ export function compareDecimal({ left, right } = {}) {
     parseDecimal({ value: right,
       field: "right" }),
   )
-  return aligned.left === aligned.right ? 0 : aligned.left > aligned.right ? 1 : -1
+  if (aligned.left === aligned.right) {
+    return 0
+  }
+  if (aligned.left > aligned.right) {
+    return 1
+  }
+  return -1
 }
 
 /** @param {{ value: string|bigint }} options @returns {string} Absolute value. */
@@ -340,14 +350,15 @@ export function roundDecimalToIncrement({ value, increment, direction } = {}) {
     return formatDecimalString(parsedValue)
   }
 
-  const aligned = alignDecimals(parsedValue, parsedIncrement)
+  const aligned = alignDecimals({ left: parsedValue, right: parsedIncrement })
   const quotient = aligned.left / aligned.right
   const remainder = aligned.left % aligned.right
-  const units = direction === "up" && remainder !== 0n
-    ? quotient + 1n
-    : direction === "nearest" && remainder * 2n >= aligned.right
-      ? quotient + 1n
-      : quotient
+  let units = quotient
+  if (direction === "up" && remainder !== 0n) {
+    units += 1n
+  } else if (direction === "nearest" && remainder * 2n >= aligned.right) {
+    units += 1n
+  }
 
   return formatDecimalString({
     coefficient: units * parsedIncrement.coefficient,
@@ -368,19 +379,21 @@ export function normalizeDecimalString({
   field = "Decimal amount",
 } = {}) {
   if (typeof value !== "string") {
-    throw new TypeError(`${field  } must be a decimal string`)
+    throw new TypeError(`${field} must be a decimal string`)
   }
 
   const input = value.trim()
   const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(input)
-  if (!match) {throw new TypeError(`${field  } has an invalid decimal format`)}
+  if (!match) {
+    throw new TypeError(`${field} has an invalid decimal format`)
+  }
 
   const [, sign, rawWhole, rawFraction = ""] = match
   if (
     rawWhole.length + rawFraction.length > MAX_DECIMAL_DIGITS ||
     rawFraction.length > MAX_DECIMAL_SCALE
   ) {
-    throw new RangeError(`${field  } exceeds supported precision`)
+    throw new RangeError(`${field} exceeds supported precision`)
   }
 
   const whole = rawWhole.replace(/^0+(?=\d)/, "")
@@ -388,7 +401,7 @@ export function normalizeDecimalString({
   const isZero = whole === "0" && fraction.length === 0
 
   if (sign === "-" && !allowNegative && !isZero) {
-    throw new RangeError(`${field  } must be non-negative`)
+    throw new RangeError(`${field} must be non-negative`)
   }
 
   const normalizedSign = sign === "-" && !isZero ? "-" : ""
