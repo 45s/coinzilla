@@ -1,10 +1,15 @@
+import { Fill } from "@coinzilla/entities"
 import {
+  addDecimal,
   assertDecimalString,
   DEFAULT_DECIMAL_DIVISION_SCALE,
   compareDecimal,
   divideDecimal,
+  multiplyDecimal,
   subtractDecimal,
 } from "@coinzilla/utils"
+import { createFillFingerprint } from "../../fills/fill-fingerprint.js"
+import { calculatePositionSellAllocation } from "../../portfolio/position-accounting.js"
 
 
 function assertPositiveAmount({ value, field }) {
@@ -140,5 +145,246 @@ export function recordLegacySale({ position, quantitySold } = {}) {
       left: position.remainingQuantity,
       right: quantitySold,
     }),
+  })
+}
+
+
+function assertLegacyPositionAccounting({ accounting } = {}) {
+  if (!accounting || typeof accounting !== "object" || Array.isArray(accounting)) {
+    throw new TypeError("Legacy position accounting is required")
+  }
+  for (const field of ["realizedQuoteProceeds", "realizedCostBasis", "realizedProfit"]) {
+    assertDecimalString({
+      value: accounting[field],
+      field: `accounting.${field}`,
+    })
+  }
+  if (compareDecimal({
+    left: accounting.realizedQuoteProceeds,
+    right: "0",
+  }) < 0 || compareDecimal({
+    left: accounting.realizedCostBasis,
+    right: "0",
+  }) < 0) {
+    throw new RangeError("Legacy realized proceeds and cost basis must be non-negative")
+  }
+  if (!Array.isArray(accounting.appliedFillIds) ||
+      !Array.isArray(accounting.appliedFillFingerprints) ||
+      accounting.appliedFillIds.length !== accounting.appliedFillFingerprints.length) {
+    throw new TypeError("Legacy accounting Fill identity history is invalid")
+  }
+  const seenFillIds = new Set()
+  accounting.appliedFillFingerprints.forEach((item, index) => {
+    if (!item ||
+        typeof item.id !== "string" ||
+        !item.id.trim() ||
+        typeof item.fillFingerprint !== "string" ||
+        !item.fillFingerprint.trim() ||
+        typeof item.allocationFingerprint !== "string" ||
+        !item.allocationFingerprint.trim() ||
+        item.id !== accounting.appliedFillIds[index] ||
+        seenFillIds.has(item.id)) {
+      throw new TypeError("Legacy accounting Fill identity history is invalid")
+    }
+    seenFillIds.add(item.id)
+  })
+  const expectedProfit = subtractDecimal({
+    left: accounting.realizedQuoteProceeds,
+    right: accounting.realizedCostBasis,
+  })
+  if (compareDecimal({
+    left: accounting.realizedProfit,
+    right: expectedProfit,
+  }) !== 0) {
+    throw new RangeError("Legacy realized profit must equal net proceeds less realized cost basis")
+  }
+}
+
+function validateLegacySellAllocation({ fill, allocation }) {
+  if (!(fill instanceof Fill) || fill.side !== "SELL") {
+    throw new TypeError("Legacy sell accounting requires a canonical SELL Fill")
+  }
+  if (!allocation ||
+      allocation.fillId !== fill.id ||
+      allocation.marketId !== fill.market.id ||
+      allocation.fillFingerprint !== createFillFingerprint({ fill }) ||
+      typeof allocation.allocationFingerprint !== "string" ||
+      !allocation.allocationFingerprint.trim() ||
+      !allocation.legacy ||
+      typeof allocation.legacy !== "object") {
+    throw new TypeError("Legacy allocation identity must match the canonical SELL Fill")
+  }
+  return allocation.fillFingerprint
+}
+
+function assertZeroLegacyAllocation({ allocation } = {}) {
+  for (const field of ["grossBaseQuantity", "baseDebit", "quoteProceeds"]) {
+    assertDecimalString({
+      value: allocation[field],
+      field: `allocation.legacy.${field}`,
+    })
+    if (compareDecimal({
+      left: allocation[field],
+      right: "0",
+    }) !== 0) {
+      throw new RangeError("A zero legacy allocation must not debit base or receive quote proceeds")
+    }
+  }
+  if (!Array.isArray(allocation.commissions)) {
+    throw new TypeError("A zero legacy allocation must include its commission split")
+  }
+  for (const commission of allocation.commissions) {
+    assertDecimalString({
+      value: commission?.amount,
+      field: "allocation.legacy.commissions.amount",
+    })
+    if (compareDecimal({
+      left: commission.amount,
+      right: "0",
+    }) !== 0) {
+      throw new RangeError("A zero legacy allocation cannot include a non-zero commission")
+    }
+    if (commission.quoteValue) {
+      assertDecimalString({
+        value: commission.quoteValue.amount,
+        field: "allocation.legacy.commissions.quoteValue.amount",
+      })
+      if (compareDecimal({
+        left: commission.quoteValue.amount,
+        right: "0",
+      }) !== 0) {
+        throw new RangeError("A zero legacy allocation cannot include a non-zero commission valuation")
+      }
+    }
+  }
+}
+
+function appendLegacyFillAccounting({
+  accounting,
+  fillId,
+  fillFingerprint,
+  allocationFingerprint,
+  realizedQuoteProceeds = accounting.realizedQuoteProceeds,
+  realizedCostBasis = accounting.realizedCostBasis,
+}) {
+  const realizedProfit = subtractDecimal({
+    left: realizedQuoteProceeds,
+    right: realizedCostBasis,
+  })
+  return Object.freeze({
+    realizedQuoteProceeds,
+    realizedCostBasis,
+    realizedProfit,
+    appliedFillIds: Object.freeze([...accounting.appliedFillIds, fillId]),
+    appliedFillFingerprints: Object.freeze([
+      ...accounting.appliedFillFingerprints,
+      {
+        id: fillId,
+        fillFingerprint,
+        allocationFingerprint,
+      },
+    ]),
+  })
+}
+
+/**
+ * Create the independent realized-proceeds/cost-basis ledger for legacy inventory.
+ */
+export function createLegacyPositionAccounting() {
+  return Object.freeze({
+    realizedQuoteProceeds: "0",
+    realizedCostBasis: "0",
+    realizedProfit: "0",
+    appliedFillIds: Object.freeze([]),
+    appliedFillFingerprints: Object.freeze([]),
+  })
+}
+
+/**
+ * Apply only the legacy side of one canonical mixed SELL allocation.
+ * The legacy inventory debit includes any base-denominated commission.
+ */
+export function applyLegacySellAllocation({
+  position,
+  accounting,
+  fill,
+  allocation,
+} = {}) {
+  assertLegacyPosition({ position })
+  assertLegacyPositionAccounting({ accounting })
+  const fillFingerprint = validateLegacySellAllocation({
+    fill,
+    allocation,
+  })
+  const existingFingerprint = accounting.appliedFillFingerprints.find((item) => item.id === fill.id)
+  if (existingFingerprint) {
+    if (existingFingerprint.fillFingerprint !== fillFingerprint ||
+        existingFingerprint.allocationFingerprint !== allocation.allocationFingerprint) {
+      throw new Error(`Conflicting allocation facts reused Fill ID ${fill.id}`)
+    }
+    return Object.freeze({
+      position,
+      accounting,
+      applied: false,
+      duplicate: true,
+    })
+  }
+  const { legacy } = allocation
+  assertDecimalString({
+    value: legacy.grossBaseQuantity,
+    field: "allocation.legacy.grossBaseQuantity",
+  })
+  if (compareDecimal({
+    left: legacy.grossBaseQuantity,
+    right: "0",
+  }) < 0) {
+    throw new RangeError("Legacy allocated gross quantity must be non-negative")
+  }
+  if (compareDecimal({
+    left: legacy.grossBaseQuantity,
+    right: "0",
+  }) === 0) {
+    assertZeroLegacyAllocation({ allocation: legacy })
+    return Object.freeze({
+      position,
+      accounting: appendLegacyFillAccounting({
+        accounting,
+        fillId: fill.id,
+        fillFingerprint,
+        allocationFingerprint: allocation.allocationFingerprint,
+      }),
+      applied: true,
+      duplicate: false,
+    })
+  }
+  const result = calculatePositionSellAllocation({
+    market: fill.market,
+    baseQuantity: position.remainingQuantity,
+    quoteNetCashFlow: accounting.realizedQuoteProceeds,
+    spent: position.invested,
+    allocation: legacy,
+  })
+  const realizedCostBasis = addDecimal({
+    left: accounting.realizedCostBasis,
+    right: multiplyDecimal({
+      left: position.averageCost,
+      right: legacy.baseDebit,
+    }),
+  })
+  return Object.freeze({
+    position: Object.freeze({
+      ...position,
+      remainingQuantity: result.baseQuantity,
+    }),
+    accounting: appendLegacyFillAccounting({
+      accounting,
+      fillId: fill.id,
+      fillFingerprint,
+      allocationFingerprint: allocation.allocationFingerprint,
+      realizedQuoteProceeds: result.quoteNetCashFlow,
+      realizedCostBasis,
+    }),
+    applied: true,
+    duplicate: false,
   })
 }
