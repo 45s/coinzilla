@@ -107,6 +107,125 @@ test("Bitunix Spot broker fetches pending orders for one symbol", async () => {
   assert.deepEqual(calls[0].options.body, { symbol: "BTCUSDT" })
 })
 
+function createFillLookupBroker({ dealVolume, deals = null } = {}) {
+  const order = {
+    orderId: "123",
+    symbol: "BTCUSDT",
+    side: "2",
+    type: "1",
+    status: "2",
+    volume: "0.5",
+    price: "10",
+    ctime: "2026-11-15T12:00:00Z",
+    utime: "2026-11-15T12:00:01Z",
+  }
+  if (dealVolume !== undefined) {
+    order.dealVolume = dealVolume
+  }
+
+  return createBroker({
+    responses: {
+      "/api/spot/v1/order/detail": order,
+      "/api/spot/v1/common/coin_pair/list": [
+        {
+          base: "BTC",
+          quote: "USDT",
+          isOpen: "1",
+        },
+      ],
+      "/api/spot/v1/order/deal/list": deals,
+    },
+  })
+}
+
+test("Bitunix Spot fill lookup rejects missing or invalid executed quantity", async () => {
+  const cases = [
+    {
+      name: "missing dealVolume",
+      dealVolume: undefined,
+    },
+    {
+      name: "invalid dealVolume",
+      dealVolume: "not-a-decimal",
+    },
+    {
+      name: "negative dealVolume",
+      dealVolume: "-0.5",
+    },
+  ]
+  const unexpectedSuccesses = []
+
+  for (const entry of cases) {
+    const { broker } = createFillLookupBroker({
+      dealVolume: entry.dealVolume,
+    })
+    const result = await broker.getFills({
+      symbol: "BTCUSDT",
+      orderId: "123",
+    })
+    if (result.ok) {
+      unexpectedSuccesses.push(entry.name)
+    }
+  }
+
+  assert.deepEqual(
+    unexpectedSuccesses,
+    [],
+    "fill lookup must require an exact, non-negative executed quantity from order detail",
+  )
+})
+
+test("Bitunix Spot fill lookup rejects an empty matching-order response for a filled order", async () => {
+  const { broker } = createFillLookupBroker({
+    dealVolume: "0.5",
+  })
+
+  const result = await broker.getFills({
+    symbol: "BTCUSDT",
+    orderId: "123",
+  })
+
+  assert.equal(result.ok, false, "positive dealVolume cannot be reconciled with an empty matching-order response")
+  assert.match(result.errors[0].message, /matching-order response is empty/i)
+})
+
+test("Bitunix Spot fill lookup rejects matching-order data for an unfilled order", async () => {
+  const { broker } = createFillLookupBroker({
+    dealVolume: "0",
+    deals: {
+      id: "trade-1",
+      volume: "0.5",
+      price: "10",
+      fee: "0.001",
+      feeCoin: "BTC",
+      role: "1",
+      ctime: "2026-11-15T12:00:01Z",
+    },
+  })
+
+  const result = await broker.getFills({
+    symbol: "BTCUSDT",
+    orderId: "123",
+  })
+
+  assert.equal(result.ok, false, "zero dealVolume cannot be reconciled with matching-order data")
+  assert.match(result.errors[0].message, /zero executed quantity/i)
+})
+
+test("Bitunix Spot fill lookup returns an empty array for an unfilled order", async () => {
+  const { broker } = createFillLookupBroker({
+    dealVolume: "0",
+  })
+
+  const result = await broker.getFills({
+    symbol: "BTCUSDT",
+    orderId: "123",
+  })
+
+  assert.equal(result.ok, true, "an order with zero executed quantity and no matching orders has no fills")
+  assert.deepEqual(result.data, [], "an unfilled order must return an empty fill array")
+})
+
 test("Bitunix Spot broker fetches canonical fills for a specific order", async () => {
   const { broker, calls } = createBroker({
     responses: {
