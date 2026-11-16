@@ -168,8 +168,7 @@ function validateScopeEvidence({
   validateMarketRetentionEvidence({ historyRetentionEvidence, historyEvidence, market })
 }
 
-function selectScopeRecords({ journalFills, exchangeFills, owned
-  Orders, scope, market }) {
+function selectScopeRecords({ journalFills, exchangeFills, ownedOrders, scope, market }) {
   const allJournalRecords = requireArray({ value: journalFills, 
     
     field: "journalFills" })
