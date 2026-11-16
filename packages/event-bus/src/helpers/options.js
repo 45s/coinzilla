@@ -1,9 +1,10 @@
 /**
  * Validate constructor options and return the normalized supported options.
- * @param {unknown} options
- * @param {object} defaultLogger
+ * @param {object} input
+ * @param {unknown} input.options
+ * @param {object} input.defaultLogger
  */
-export function validateOptions(options, defaultLogger) {
+export function validateOptions({ options, defaultLogger }) {
   if (
     options === null ||
     typeof options !== "object" ||
@@ -37,5 +38,9 @@ export function validateOptions(options, defaultLogger) {
     throw new TypeError("EventBus maxPending must be a positive safe integer")
   }
 
-  return { logger, onError, maxPending }
+  return {
+    logger,
+    onError,
+    maxPending,
+  }
 }

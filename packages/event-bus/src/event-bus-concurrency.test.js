@@ -8,7 +8,8 @@ function deferred() {
   const promise = new Promise((done) => {
     resolve = done
   })
-  return { promise, resolve }
+  return { promise,
+resolve }
 }
 
 test("accepted deliveries may overlap and complete out of publish order", async () => {
@@ -23,7 +24,7 @@ test("accepted deliveries may overlap and complete out of publish order", async 
     name: "work.started",
     handler: async (event) => {
       started.push(event.data.id)
-      if (started.length === 2) bothStarted.resolve()
+      if (started.length === 2) {bothStarted.resolve()}
       await (event.data.id === 1 ? firstGate.promise : secondGate.promise)
       completed.push(event.data.id)
     },
@@ -70,11 +71,13 @@ test("unsubscribe does not cancel an already accepted delivery", async () => {
   })
 
   assert.equal(result.ok, true)
-  assert.equal(bus.publish({ name: "work.started", source: "test" }).ok, true)
+  assert.equal(bus.publish({ name: "work.started",
+    source: "test" }).ok, true)
   await started.promise
 
   assert.equal(result.subscription.unsubscribe().unsubscribed, true)
-  assert.equal(bus.publish({ name: "work.started", source: "test" }).ok, true)
+  assert.equal(bus.publish({ name: "work.started",
+    source: "test" }).ok, true)
 
   release.resolve()
   assert.equal((await bus.flush()).ok, true)
@@ -93,13 +96,14 @@ test("matching subscribers start independently for one accepted event", async ()
       name: "work.started",
       handler: async () => {
         started.push(subscriber)
-        if (started.length === 2) bothStarted.resolve()
+        if (started.length === 2) {bothStarted.resolve()}
         await release.promise
       },
     })
   }
 
-  assert.equal(bus.publish({ name: "work.started", source: "test" }).ok, true)
+  assert.equal(bus.publish({ name: "work.started",
+    source: "test" }).ok, true)
   await bothStarted.promise
   assert.deepEqual(started, ["first", "second"])
 
@@ -134,7 +138,8 @@ test("flush waits for nested publishes made after an async handler resumes", asy
     },
   })
 
-  assert.equal(bus.publish({ name: "workflow.started", source: "test" }).ok, true)
+  assert.equal(bus.publish({ name: "workflow.started",
+    source: "test" }).ok, true)
   await started.promise
 
   const flushing = bus.flush()
@@ -146,7 +151,8 @@ test("flush waits for nested publishes made after an async handler resumes", asy
 })
 
 test("re-entrant publish at capacity rejects the complete nested fan-out", async () => {
-  const bus = new EventBus({ logger: {}, maxPending: 2 })
+  const bus = new EventBus({ logger: {},
+    maxPending: 2 })
   const release = deferred()
   const started = deferred()
   const nestedResults = []
@@ -178,7 +184,8 @@ test("re-entrant publish at capacity rejects the complete nested fan-out", async
     handler: () => { nestedHandlerCalls += 1 },
   })
 
-  assert.equal(bus.publish({ name: "outer.event", source: "test" }).ok, true)
+  assert.equal(bus.publish({ name: "outer.event",
+    source: "test" }).ok, true)
   await started.promise
   assert.equal(bus.getDiagnostics().pendingCount, 2)
 
@@ -195,7 +202,8 @@ test("bounded stress workload drains every accepted delivery", async () => {
   const workload = 80
   const subscribers = 3
   const maxPending = workload * subscribers
-  const bus = new EventBus({ logger: {}, maxPending })
+  const bus = new EventBus({ logger: {},
+maxPending })
   const release = deferred()
   const allStarted = deferred()
   let started = 0
@@ -206,7 +214,7 @@ test("bounded stress workload drains every accepted delivery", async () => {
       name: "stress.event",
       handler: async () => {
         started += 1
-        if (started === maxPending) allStarted.resolve()
+        if (started === maxPending) {allStarted.resolve()}
         await release.promise
         completed += 1
       },
