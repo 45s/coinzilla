@@ -5,7 +5,12 @@ import {
   analyzeMarkdownStyleDocuments,
   parseChangedMarkdownDiff,
   GIT_DIFF_MAX_BUFFER_BYTES,
-} from "./check-markdown-style.js"\n\nfunction getLineNumbers(content) {\n  return [...content.split(/\\r?\\n/).keys()].map((index) => index + 1)\n}
+} from "./check-markdown-style.js"
+
+function getLineNumbers(content) {
+  return [...content.split(/\r?\n/).keys()].map((index) => index + 1)
+}
+
 
 test("allows release-scale Git diffs larger than the child-process default buffer", () => {
   assert.equal(GIT_DIFF_MAX_BUFFER_BYTES, 64 * 1024 * 1024)
@@ -44,13 +49,13 @@ test("parses changed Markdown lines and new files from a unified diff", () => {
 })
 
 test("does not force cleanup of unrelated pre-existing findings in an edited document", () => {
-  const result = analyzeMarkdownStyleDocuments(
-    [{
+  const result = analyzeMarkdownStyleDocuments({
+    documents: [{
       path: "docs/existing.md",
       content: "# Existing\n\nold text  \n\n\n## Details\n\nChanged paragraph.\n",
     }],
-    new Map([["docs/existing.md", { lines: new Set([8]),
-      isNewFile: false }]]),
+    changesByPath: new Map([["docs/existing.md", { lines: new Set([8]),
+    isNewFile: false }]]),
   )
 
   assert.equal(result.scannedFiles, 1)
@@ -58,13 +63,13 @@ test("does not force cleanup of unrelated pre-existing findings in an edited doc
 })
 
 test("enforces whitespace and heading rules when the affected lines change", () => {
-  const result = analyzeMarkdownStyleDocuments(
-    [{
+  const result = analyzeMarkdownStyleDocuments({
+    documents: [{
       path: "docs/changed.md",
       content: "# Title\n\nText  \n\n\n### Skipped\n",
     }],
-    new Map([["docs/changed.md", { lines: new Set([3, 4, 5, 6]),
-      isNewFile: false }]]),
+    changesByPath: new Map([["docs/changed.md", { lines: new Set([3, 4, 5, 6]),
+    isNewFile: false }]]),
   )
 
   assert.deepEqual(result.violations.trailingWhitespace.map(({ path }) => path), [
@@ -79,8 +84,8 @@ test("enforces whitespace and heading rules when the affected lines change", () 
 })
 
 test("checks new files fully while preserving historical, superseded and GitHub template exceptions", () => {
-  const result = analyzeMarkdownStyleDocuments(
-    [
+  const result = analyzeMarkdownStyleDocuments({
+    documents: [
       {
         path: "docs/new.md",
         content: "# New  \n\n\n### Skipped",
@@ -106,7 +111,7 @@ test("checks new files fully while preserving historical, superseded and GitHub 
         content: "## Summary\n\nDescription.\n- item\n\n## Context\n\nDescription.\n",
       },
     ],
-    new Map([
+    changesByPath: new Map([
       ["docs/new.md", { lines: new Set([1, 2, 3, 4]),
         isNewFile: true }],
       ["apps/harvester/AUDIT_2026-11-09.md", { lines: new Set([1, 2, 3, 4]),
@@ -120,7 +125,7 @@ test("checks new files fully while preserving historical, superseded and GitHub 
       [".github/ISSUE_TEMPLATE/cross-domain-request.md", { lines: new Set([1, 2, 3, 4, 5]),
         isNewFile: true }],
     ]),
-  )
+  })
 
   assert.equal(result.scannedFiles, 3, 'only maintained documents and GitHub templates should be scanned')
   assert.equal(result.skippedHistorical, 3, 'historical and superseded documents should be excluded from changed-line enforcement')
@@ -144,13 +149,13 @@ test("checks new files fully while preserving historical, superseded and GitHub 
 })
 
 test("accepts a clean changed document", () => {
-  const result = analyzeMarkdownStyleDocuments(
-    [{
+  const result = analyzeMarkdownStyleDocuments({
+    documents: [{
       path: "docs/clean.md",
       content: "# Clean\n\n## Details\n\nNo style findings.\n",
     }],
-    new Map([["docs/clean.md", { lines: new Set([1, 3]),
-      isNewFile: false }]]),
+    changesByPath: new Map([["docs/clean.md", { lines: new Set([1, 3]),
+    isNewFile: false }]]),
   )
 
   assert.equal(result.scannedFiles, 1)
@@ -182,7 +187,7 @@ test("enforces every existing style rule for new maintained documents", () => {
   ]
   const changes = new Map(documents.map(({ path, content }) => [
     path,
-    { lines: new Set(content.split(/\r?\n/).map((line, index) => index + 1)),
+    { lines: new Set(getLineNumbers(content)),
       isNewFile: true },
   ]))
   const result = analyzeMarkdownStyleDocuments({ documents, changesByPath: changes })
@@ -218,11 +223,11 @@ test("keeps non-spacing list and table structure metrics report-only after list-
     "After table",
     "",
   ].join("\n")
-  const result = analyzeMarkdownStyleDocuments(
-    [{ path: "docs/new-list-table.md",
+  const result = analyzeMarkdownStyleDocuments({
+    documents: [{ path: "docs/new-list-table.md",
 content }],
-    new Map([["docs/new-list-table.md", {
-      lines: new Set(content.split("\n").map((line, index) => index + 1)),
+    changesByPath: new Map([["docs/new-list-table.md", {
+      lines: new Set(getLineNumbers(content)),
       isNewFile: true,
     }]]),
   )
@@ -240,11 +245,11 @@ content }],
 
 test("enforces blank lines before and after list blocks in changed maintained documents", () => {
   const content = "# Title\n\nIntro paragraph.\n- item\nAfter list.\n"
-  const result = analyzeMarkdownStyleDocuments(
-    [{ path: "docs/list-spacing.md",
+  const result = analyzeMarkdownStyleDocuments({
+    documents: [{ path: "docs/list-spacing.md",
 content }],
-    new Map([["docs/list-spacing.md", {
-      lines: new Set(content.split("\n").map((line, index) => index + 1)),
+    changesByPath: new Map([["docs/list-spacing.md", {
+      lines: new Set(getLineNumbers(content)),
       isNewFile: true,
     }]]),
   )
@@ -258,11 +263,11 @@ content }],
 
 test("accepts list blocks separated from surrounding content by blank lines", () => {
   const content = "# Title\n\nIntro paragraph.\n\n- item\n\nAfter list.\n"
-  const result = analyzeMarkdownStyleDocuments(
-    [{ path: "docs/list-spacing.md",
+  const result = analyzeMarkdownStyleDocuments({
+    documents: [{ path: "docs/list-spacing.md",
 content }],
-    new Map([["docs/list-spacing.md", {
-      lines: new Set(content.split("\n").map((line, index) => index + 1)),
+    changesByPath: new Map([["docs/list-spacing.md", {
+      lines: new Set(getLineNumbers(content)),
       isNewFile: true,
     }]]),
   )
@@ -272,11 +277,11 @@ content }],
 
 test("does not require unrelated pre-existing list spacing to be cleaned in an edited document", () => {
   const content = "# Existing\n\nIntro paragraph.\n- old item\n\nChanged paragraph.\n"
-  const result = analyzeMarkdownStyleDocuments(
-    [{ path: "docs/existing.md",
+  const result = analyzeMarkdownStyleDocuments({
+    documents: [{ path: "docs/existing.md",
 content }],
-    new Map([["docs/existing.md", { lines: new Set([6]),
-      isNewFile: false }]]),
+    changesByPath: new Map([["docs/existing.md", { lines: new Set([6]),
+    isNewFile: false }]]),
   )
 
   assert.deepEqual(result.violations.listSpacing, [])
@@ -285,11 +290,11 @@ content }],
 test("excludes historical documents from every changed-file style rule", () => {
   const fence = String.fromCharCode(96).repeat(3)
   const content = `# Historical  \r\n\n\n### Skipped\r\n# Second H1\r\n${fence}\ncode\n${fence}\nParagraph\n- item\n`
-  const result = analyzeMarkdownStyleDocuments(
-    [{ path: "apps/harvester/docs/audits/legacy-style.md",
+  const result = analyzeMarkdownStyleDocuments({
+    documents: [{ path: "apps/harvester/docs/audits/legacy-style.md",
 content }],
-    new Map([["apps/harvester/docs/audits/legacy-style.md", {
-      lines: new Set(content.split(/\r?\n/).map((line, index) => index + 1)),
+    changesByPath: new Map([["apps/harvester/docs/audits/legacy-style.md", {
+      lines: new Set(getLineNumbers(content)),
       isNewFile: true,
     }]]),
   )
