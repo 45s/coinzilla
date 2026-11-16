@@ -115,13 +115,6 @@ function createContextSnapshot(context) {
  * Diagnostic context is a detached, frozen flat record containing only strings,
  * finite numbers, booleans, or null. Callers remain responsible for choosing
  * safe values and must never include credentials or unrestricted payloads.
- *
- * @param {string} message Concise, actionable failure description.
- * @param {object} [options]
- * @param {unknown} [options.cause] Original lower-level failure; preserved by native Error.
- * @param {string} [options.code] Stable, machine-readable error identifier.
- * @param {Record<string, string|number|boolean|null>} [options.context] Safe scalar diagnostic facts.
- * @param {boolean} [options.retryable] Whether the owning operation can meaningfully be retried.
  */
 export class SystemCustomError extends Error {
   /**
