@@ -12,7 +12,8 @@ import {
 
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-safety-recorders-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "safety-recorders-test-session",
@@ -26,10 +27,18 @@ const createStore = async (t) => {
 test("records strategy pause/resume transitions with distinct durable identities", async (t) => {
   const operationalStateStore = await createStore(t)
   const strategyPause = await recordStrategyMarketControl({
-    operationalStateStore, action: "PAUSE", transitionId: "session-1:1", symbol: "ETHUSDT", reason: "FILL_RECONCILIATION_FAILED",
+    operationalStateStore,
+action: "PAUSE",
+transitionId: "session-1:1",
+symbol: "ETHUSDT",
+reason: "FILL_RECONCILIATION_FAILED",
   })
   const strategyResume = await recordStrategyMarketControl({
-    operationalStateStore, action: "RESUME", transitionId: "session-1:2", symbol: "ETHUSDT", reason: "AUTHORITATIVE_RECONCILIATION_COMPLETED",
+    operationalStateStore,
+action: "RESUME",
+transitionId: "session-1:2",
+symbol: "ETHUSDT",
+reason: "AUTHORITATIVE_RECONCILIATION_COMPLETED",
   })
 
   assert.equal(strategyPause.ok, true, "A strategy pause transition must be durably recorded.")
@@ -52,7 +61,7 @@ test("records a sticky safety blocker and resolves it only after a committed rai
     evidenceDigest: "a".repeat(64),
   })
   assert.equal(raised.ok, true, "The triggering safety evidence must be committed before a blocker is considered durable.")
-  const blockerId = raised.data.record.data.blockerId
+  const {blockerId} = raised.data.record.data
   const resolved = await recordSafetyBlockerResolved({
     operationalStateStore,
     blockerId,
@@ -110,14 +119,19 @@ test("refuses to resolve an absent safety blocker or accept an implicit restart 
 })
 
 test("does not initialize a missing Operational State Store for safety controls", async (t) => {
-  const directory = path.join(os.tmpdir(), "harvester-safety-recorders-missing-" + process.pid + "-" + Date.now())
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  const directory = path.join(os.tmpdir(), `harvester-safety-recorders-missing-${  process.pid  }-${  Date.now()}`)
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const operationalStateStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "safety-recorders-test-session",
   })
   const result = await recordStrategyMarketControl({
-    operationalStateStore, action: "PAUSE", transitionId: "missing-ledger:1", symbol: "BTCUSDT", reason: "FILL_RECONCILIATION_FAILED",
+    operationalStateStore,
+action: "PAUSE",
+transitionId: "missing-ledger:1",
+symbol: "BTCUSDT",
+reason: "FILL_RECONCILIATION_FAILED",
   })
   assert.equal(result.ok, false, "Safety recorders must never initialize a missing ledger.")
 })
