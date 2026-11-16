@@ -27,7 +27,8 @@ export function createCandle({
   })
 }
 
-export function createHistoryFrom(symbol, startIndex, count, includeForming = false) {
+export function createHistoryFrom(...args) {
+  const [symbol, startIndex, count, includeForming = false] = args
   const candles = Array.from({ length: count }, (_, index) => createCandle({
     symbol,
     openTime: (startIndex + index) * INTERVAL_MS,
@@ -42,12 +43,16 @@ export function createHistoryFrom(symbol, startIndex, count, includeForming = fa
   return candles
 }
 
-export function createHistory(symbol, count = 100, includeForming = false) {
+export function createHistory(...args) {
+  const [symbol, count = 100, includeForming = false] = args
   return createHistoryFrom(symbol, 0, count, includeForming)
 }
 
 export function createFixture({
-  pairs = { BTCUSDT: { enabled: true }, DOGEUSDT: { enabled: false } },
+  pairs = {
+    BTCUSDT: { enabled: true },
+    DOGEUSDT: { enabled: false },
+  },
   historyBySymbol = {},
   onSubscribe,
   getCandles,
@@ -61,7 +66,11 @@ export function createFixture({
   const clock = { now: 10_000 }
   const broker = {
     subscribeForCandles: async ({ symbol, interval, onCandle }) => {
-      calls.push({ method: "subscribeForCandles", symbol, interval })
+      calls.push({
+        method: "subscribeForCandles",
+        symbol,
+        interval,
+      })
       candleHandlers.set(symbol, onCandle)
       await onSubscribe?.({ symbol, interval, onCandle, calls })
       if (subscribeForCandles) return subscribeForCandles({ symbol, interval, onCandle, calls })
@@ -69,12 +78,18 @@ export function createFixture({
         ok: true,
         data: {
           stream: symbol.toLowerCase() + "@kline_1m",
-          unsubscribe: async () => calls.push({ method: "unsubscribe", symbol }),
+          unsubscribe: async () => calls.push({
+            method: "unsubscribe",
+            symbol,
+          }),
         },
       }
     },
     getCandles: async (input) => {
-      calls.push({ method: "getCandles", ...input })
+      calls.push({
+        method: "getCandles",
+        ...input,
+      })
       if (getCandles) return getCandles(input, calls)
       return {
         ok: true,
@@ -88,11 +103,23 @@ export function createFixture({
     now: () => clock.now,
     onSnapshot,
   })
-  const start = () => service.start({ pairs, subscriptions })
-  return { service, broker, calls, candleHandlers, subscriptions, clock, start }
+  const start = () => service.start({
+    pairs,
+    subscriptions,
+  })
+  return {
+    service,
+    broker,
+    calls,
+    candleHandlers,
+    subscriptions,
+    clock,
+    start,
+  }
 }
 
-export function getSnapshot(fixture, symbol = "BTCUSDT") {
+export function getSnapshot(...args) {
+  const [fixture, symbol = "BTCUSDT"] = args
   const result = fixture.service.getSnapshot({ symbol })
   assert.equal(result.ok, true, "A started market must return its candle-history snapshot.")
   return result.data
