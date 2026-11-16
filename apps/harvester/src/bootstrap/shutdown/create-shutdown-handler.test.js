@@ -151,7 +151,8 @@ test("activates every strategy gate before any shared service can stop", async (
 test("a safe strategy cannot release shared services while another strategy is unsafe", async () => {
   const calls = []
   const participants = [
-    createSafeParticipant({ strategyId: "CONSERVATIVE", calls }),
+    createSafeParticipant({ strategyId: "CONSERVATIVE",
+      calls }),
     {
       strategyId: "RECOVERY_SELLER",
       beginShutdown: () => calls.push("gate:RECOVERY_SELLER"),
@@ -166,7 +167,8 @@ test("a safe strategy cannot release shared services while another strategy is u
       }),
     },
   ]
-  const fixture = createShutdown({ participants, calls })
+  const fixture = createShutdown({ participants,
+    calls })
 
   await assert.rejects(fixture.stop(), (error) => {
     assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN")
@@ -317,7 +319,8 @@ test("allows a new shutdown attempt after an earlier safety failure", async () =
     isSafeToShutdown: () => safe,
     getSafetySnapshot: () => ({ status: safe ? "SAFE_TO_SHUTDOWN" : "UNSAFE" }),
   }
-  const fixture = createShutdown({ participants: [participant], calls })
+  const fixture = createShutdown({ participants: [participant],
+    calls })
 
   await assert.rejects(fixture.stop())
   await fixture.stop()

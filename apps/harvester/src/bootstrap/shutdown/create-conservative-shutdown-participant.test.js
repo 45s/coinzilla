@@ -137,7 +137,8 @@ function createParticipant({ engine, calls = [], eventPublisher } = {}) {
 test("activates the BUY gate and starts owned BUY cancellation before draining user data", async () => {
   const calls = []
   const engine = createFakeEngine({ calls })
-  const participant = createParticipant({ engine, calls })
+  const participant = createParticipant({ engine,
+    calls })
 
   participant.beginShutdown()
   await participant.waitUntilSafe()
@@ -163,7 +164,8 @@ test("keeps each market safety marker independent and blocks the strategy while 
     calls,
     unsafeSymbols: ["SOLUSDT"],
   })
-  const participant = createParticipant({ engine, calls })
+  const participant = createParticipant({ engine,
+    calls })
 
   participant.beginShutdown()
   await assert.rejects(
@@ -229,7 +231,8 @@ test("rechecks a market immediately when late evidence invalidates it during ano
       }
     },
   })
-  const participant = createParticipant({ engine, calls })
+  const participant = createParticipant({ engine,
+    calls })
 
   participant.beginShutdown()
   await participant.waitUntilSafe()

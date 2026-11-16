@@ -109,7 +109,8 @@ export function createStrategyShutdownCoordinator({ participants = [] } = {}) {
       try {
         participant.beginShutdown()
       } catch (error) {
-        failures.push({ participant, error })
+        failures.push({ participant,
+          error })
       }
     }
 
@@ -174,7 +175,8 @@ export function createStrategyShutdownCoordinator({ participants = [] } = {}) {
     }
 
     if (blockers.length > 0) {
-      throw createStrategyShutdownError({ blockers, errors })
+      throw createStrategyShutdownError({ blockers,
+        errors })
     }
 
     return {

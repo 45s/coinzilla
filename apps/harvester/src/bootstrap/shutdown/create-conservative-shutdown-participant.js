@@ -13,11 +13,13 @@ async function runStage({ stage, operation } = {}) {
     }
     const errors = Array.isArray(result?.errors) ? result.errors : []
     if (errors.length > 0) {
-      return errors.map((error) => createStageBlocker({ stage, error }))
+      return errors.map((error) => createStageBlocker({ stage,
+        error }))
     }
     return [`${stage}:UNCONFIRMED`]
   } catch (error) {
-    return [createStageBlocker({ stage, error })]
+    return [createStageBlocker({ stage,
+      error })]
   }
 }
 
@@ -105,7 +107,8 @@ function createMarketSafetyError({ symbol, blockers } = {}) {
 }
 
 async function collectStageBlockers({ blockers, stage, operation } = {}) {
-  const stageBlockers = await runStage({ stage, operation })
+  const stageBlockers = await runStage({ stage,
+    operation })
   blockers.push(...stageBlockers)
 }
 
@@ -125,21 +128,24 @@ async function reconcileOwnedOrders({
     stage: "OWNED_ORDER_RECONCILIATION",
     operation: () => engine.reconcileOwnedOrders({ symbol }),
   })
-  await collectDrainBlockers({ blockers, drainUserDataEvents })
+  await collectDrainBlockers({ blockers,
+    drainUserDataEvents })
 
   await collectStageBlockers({
     blockers,
     stage: "OWNED_BUY_CANCELLATION",
     operation: () => engine.cancelOwnedBuyOrdersForShutdown({ symbol }),
   })
-  await collectDrainBlockers({ blockers, drainUserDataEvents })
+  await collectDrainBlockers({ blockers,
+    drainUserDataEvents })
 
   await collectStageBlockers({
     blockers,
     stage: "FINAL_OWNED_ORDER_RECONCILIATION",
     operation: () => engine.reconcileOwnedOrders({ symbol }),
   })
-  await collectDrainBlockers({ blockers, drainUserDataEvents })
+  await collectDrainBlockers({ blockers,
+    drainUserDataEvents })
 }
 
 async function reconcileRecoverySells({
@@ -157,7 +163,8 @@ async function reconcileRecoverySells({
     operation: () => engine.reconcileRecoverySellsForShutdown({ symbols: [symbol] }),
   })
   blockers.push(...recoveryBlockers)
-  await collectDrainBlockers({ blockers, drainUserDataEvents })
+  await collectDrainBlockers({ blockers,
+    drainUserDataEvents })
 
   if (blockers.length > 0) {
     return false
@@ -168,7 +175,8 @@ async function reconcileRecoverySells({
     stage: "POST_RECOVERY_OWNED_ORDER_RECONCILIATION",
     operation: () => engine.reconcileOwnedOrders({ symbol }),
   })
-  await collectDrainBlockers({ blockers, drainUserDataEvents })
+  await collectDrainBlockers({ blockers,
+    drainUserDataEvents })
 
   return recoveryBlockers.length === 0 && blockers.length === 0
 }
@@ -218,7 +226,8 @@ async function assessMarketSafety({
   getShutdownBlockers,
   logger,
 } = {}) {
-  blockers.push(...getExternalBlockers({ getShutdownBlockers, symbol }))
+  blockers.push(...getExternalBlockers({ getShutdownBlockers,
+    symbol }))
 
   const safety = await engine.auditShutdownSafety({
     symbol,
@@ -393,7 +402,8 @@ export function createConservativeShutdownParticipant({
 
       const failedMarkets = results
         .filter(({ result }) => result.ok !== true)
-        .map(({ symbol, result }) => createMarketFailure({ symbol, result }))
+        .map(({ symbol, result }) => createMarketFailure({ symbol,
+          result }))
       snapshot = engine.getShutdownSafetySnapshot()
 
       if (failedMarkets.length > 0) {
@@ -401,7 +411,8 @@ export function createConservativeShutdownParticipant({
           `${symbol}: ${blockers.join(", ")}`).join("; ")
         const error = new AggregateError(
           failedMarkets.map(({ symbol, blockers }) =>
-            createMarketSafetyError({ symbol, blockers })),
+            createMarketSafetyError({ symbol,
+              blockers })),
           `Conservative shutdown safety could not be proven for every market: ${blockerSummary}`,
         )
         error.code = "CONSERVATIVE_SHUTDOWN_SAFETY_UNPROVEN"
