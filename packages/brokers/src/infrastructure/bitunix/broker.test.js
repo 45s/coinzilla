@@ -201,7 +201,8 @@ test("Bitunix Spot broker exposes symbol metadata, price, order detail and histo
       "/api/spot/v1/market/last_price": "10.25",
       "/api/spot/v1/order/detail": order,
       "/api/spot/v1/order/history/page": { data: [order],
-        total: 1 },
+        total: 1,
+        pageNum: "1" },
     },
   })
 
@@ -321,7 +322,8 @@ test("Bitunix Spot broker supports explicit history page selection", async () =>
   const { broker, calls } = createBroker({
     responses: {
       "/api/spot/v1/order/history/page": { data: [],
-        total: 0 },
+        total: 0,
+        pageNum: "3" },
     },
   })
 
@@ -340,7 +342,8 @@ test("Bitunix Spot order history maps exchange-neutral filters to documented API
   const { broker, calls } = createBroker({
     responses: {
       "/api/spot/v1/order/history/page": { data: [],
-        total: 0 },
+        total: 0,
+        pageNum: "1" },
     },
   })
 
@@ -407,4 +410,84 @@ test("Bitunix Spot market catalog excludes pairs without an explicit open status
 
   assert.equal(result.ok, true, "a catalog containing unknown market states should remain readable")
   assert.deepEqual(result.data.map(({ symbol }) => symbol), ["BTCUSDT"], "only explicitly open Bitunix markets may enter the active catalog")
+})
+
+
+test("Bitunix Spot order history rejects missing or inconsistent pagination metadata", async () => {
+  const order = {
+    orderId: "123",
+    symbol: "BTCUSDT",
+    side: "2",
+    type: "1",
+    status: "2",
+    volume: "1",
+    dealVolume: "1",
+    price: "10",
+  }
+  const cases = [
+    { name: "missing total", response: { pageNum: "1", data: [] } },
+    { name: "string total", response: { total: "0", pageNum: "1", data: [] } },
+    { name: "negative total", response: { total: -1, pageNum: "1", data: [] } },
+    { name: "fractional total", response: { total: 0.5, pageNum: "1", data: [] } },
+    { name: "missing page number", response: { total: 0, data: [] } },
+    { name: "invalid page number", response: { total: 0, pageNum: "one", data: [] } },
+    { name: "wrong returned page", response: { total: 0, pageNum: "2", data: [] } },
+    { name: "more rows than total", response: { total: 0, pageNum: "1", data: [order] } },
+  ]
+  const unexpectedSuccesses = []
+
+  for (const entry of cases) {
+    const { broker } = createBroker({
+      responses: {
+        "/api/spot/v1/order/history/page": entry.response,
+      },
+    })
+    const result = await broker.getOrderHistory({
+      symbol: "BTCUSDT",
+      page: 1,
+    })
+    if (result.ok) {
+      unexpectedSuccesses.push(entry.name)
+    }
+  }
+
+  assert.deepEqual(
+    unexpectedSuccesses,
+    [],
+    "history pages with missing, invalid, or inconsistent metadata must fail closed",
+  )
+})
+
+test("Bitunix Spot order history accepts an omitted data array only for an empty result set", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      "/api/spot/v1/order/history/page": {
+        total: 0,
+        pageNum: "1",
+      },
+    },
+  })
+
+  const result = await broker.getOrderHistory({ symbol: "BTCUSDT" })
+
+  assert.equal(result.ok, true, "an omitted optional data array is valid when total is zero")
+  assert.deepEqual(result.data, [], "an empty history page must normalize to an empty order array")
+  assert.equal(calls.length, 1, "history validation must not trigger extra exchange requests")
+})
+
+test("Bitunix Spot order history accepts an exact numeric page number from the SDK-compatible response shape", async () => {
+  const { broker } = createBroker({
+    responses: {
+      "/api/spot/v1/order/history/page": {
+        total: 0,
+        pageNum: 1,
+        data: [],
+      },
+    },
+  })
+
+  const result = await broker.getOrderHistory({ symbol: "BTCUSDT" })
+
+  assert.equal(result.ok, true, "an integer page number is semantically equivalent to the documented numeric string")
+  assert.deepEqual(result.data, [], "a valid empty page must remain an empty order array")
 })
