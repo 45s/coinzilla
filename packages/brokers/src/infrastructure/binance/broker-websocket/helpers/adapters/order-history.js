@@ -68,6 +68,8 @@ export function validateCanonicalOrderHistoryItems({ orders, symbol }) {
  * @returns {import("@coinzilla/entities").CanonicalOrder[]}
  */
 export function adaptCanonicalOrderHistory({ orders, market }) {
-  validateCanonicalOrderHistoryItems({ orders, symbol: market?.symbol })
-  return orders.map((order) => adaptCanonicalOrder({ order, market }))
+  validateCanonicalOrderHistoryItems({ orders,
+symbol: market?.symbol })
+  return orders.map((order) => adaptCanonicalOrder({ order,
+market }))
 }

@@ -6,8 +6,10 @@ import { adaptCanonicalOrder, createCanonicalMarket } from "./adapt-canonical-or
 const market = new Market({
   venue: "binance",
   symbol: "DOGEFDUSD",
-  baseAsset: new Asset({ id: "doge", code: "DOGE" }),
-  quoteAsset: new Asset({ id: "fdusd", code: "FDUSD" }),
+  baseAsset: new Asset({ id: "doge",
+code: "DOGE" }),
+  quoteAsset: new Asset({ id: "fdusd",
+code: "FDUSD" }),
 })
 
 const order = {
@@ -25,7 +27,8 @@ const order = {
 }
 
 test("adapts a Binance order to an immutable canonical order with exact values", () => {
-  const result = adaptCanonicalOrder({ order, market })
+  const result = adaptCanonicalOrder({ order,
+market })
 
   assert.ok(result instanceof CanonicalOrder)
   assert.equal(result.brokerOrderId, "123")
@@ -65,7 +68,10 @@ test("maps terminal and unknown Binance lifecycle states safely", () => {
 
 test("adapts market orders without inventing a limit price", () => {
   const result = adaptCanonicalOrder({
-    order: { ...order, type: "MARKET", status: "FILLED", executedQty: "100" },
+    order: { ...order,
+type: "MARKET",
+status: "FILLED",
+executedQty: "100" },
     market,
   })
 
@@ -76,19 +82,27 @@ test("adapts market orders without inventing a limit price", () => {
 
 test("rejects missing IDs, unsupported types, malformed values, and unsafe IDs", () => {
   for (const invalid of [
-    { ...order, clientOrderId: "" },
-    { ...order, orderId: Number.MAX_SAFE_INTEGER + 1 },
-    { ...order, type: "STOP_LOSS_LIMIT" },
-    { ...order, origQty: 100 },
-    { ...order, updateTime: -1 },
+    { ...order,
+clientOrderId: "" },
+    { ...order,
+orderId: Number.MAX_SAFE_INTEGER + 1 },
+    { ...order,
+type: "STOP_LOSS_LIMIT" },
+    { ...order,
+origQty: 100 },
+    { ...order,
+updateTime: -1 },
   ]) {
-    assert.throws(() => adaptCanonicalOrder({ order: invalid, market }))
+    assert.throws(() => adaptCanonicalOrder({ order: invalid,
+market }))
   }
 })
 
 test("creates market identity only from explicit exchange metadata", () => {
   const result = createCanonicalMarket({
-    symbolInfo: { symbol: "DOGEFDUSD", baseAsset: "DOGE", quoteAsset: "FDUSD" },
+    symbolInfo: { symbol: "DOGEFDUSD",
+baseAsset: "DOGE",
+quoteAsset: "FDUSD" },
   })
 
   assert.equal(result.id, "binance:DOGEFDUSD")

@@ -9,21 +9,28 @@ function createBroker(handler) {
     tradingMode: "testnet",
     apiKey: "test-key",
     apiSecret: "test-secret",
-    logger: { error() {}, info() {}, debug() {}, warn() {} },
+    logger: { error() {},
+info() {},
+debug() {},
+warn() {} },
   })
   const rpc = createFakeRpcClient({ exchangeInfo: handler })
   broker.tradingConnection = rpc
-  return { broker, rpc }
+  return { broker,
+rpc }
 }
 
-const marketInfo = (symbol, baseAsset, quoteAsset) => ({
+const marketInfo = (...args) => {
+  const [symbol, baseAsset, quoteAsset] = args
+  return ({
   symbol,
   baseAsset,
   quoteAsset,
   status: "TRADING",
   orderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
   filters: [],
-})
+  })
+}
 
 test("returns the canonical market catalog from one unfiltered exchangeInfo request", async () => {
   const { broker, rpc } = createBroker((params) => {
@@ -46,8 +53,12 @@ test("returns the canonical market catalog from one unfiltered exchangeInfo requ
     base: market.baseAsset.code,
     quote: market.quoteAsset.code,
   })), [
-    { symbol: "BTCUSDT", base: "BTC", quote: "USDT" },
-    { symbol: "ETHBTC", base: "ETH", quote: "BTC" },
+    { symbol: "BTCUSDT",
+base: "BTC",
+quote: "USDT" },
+    { symbol: "ETHBTC",
+base: "ETH",
+quote: "BTC" },
   ])
   assert.deepEqual(rpc.calls, [{
     method: "exchangeInfo",
@@ -77,7 +88,8 @@ test("rejects duplicate exchange market symbols instead of returning ambiguous i
 
 test("rejects exchange market entries without canonical base and quote assets", async () => {
   const { broker } = createBroker(() => ({
-    symbols: [{ symbol: "BTCUSDT", baseAsset: "BTC" }],
+    symbols: [{ symbol: "BTCUSDT",
+baseAsset: "BTC" }],
   }))
   const result = await broker.getExchangeMarkets()
 
