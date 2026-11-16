@@ -24,7 +24,7 @@ reason },
   }
 }
 
-function getNextVolatilityState({ state, candleSnapshot, activeBuyOrderCount }) {
+function getNextVolatilityState({ state, snapshot: candleSnapshot, activeBuyOrderCount }) {
   const transition = transitionVolatilityProtection({
     state,
     snapshot: candleSnapshot,

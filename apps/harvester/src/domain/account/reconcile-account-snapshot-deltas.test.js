@@ -143,16 +143,8 @@ auditReasons: ["UNRESOLVED_OWNED_ORDERS:1"],
   assert.deepEqual(result.data.auditReasons, ["CLOSING:UNRESOLVED_OWNED_ORDERS:1"])
 })
 
-test("returns the exact failure and leaves both snapshots unchanged for invalid reconciliation inputs", () => {
-  const openingSnapshot = snapshot({
-    phase: "OPENING",
-    sourceTime: 100,
-    balances: [balance({ asset: "USDT",
-free: "1",
-locked: "0",
-total: "1" })],
-  })
-  const cases = [
+function createInvalidReconciliationCases() {
+  return [
     {
       name: "closing snapshot predates opening snapshot",
       closingSnapshot: snapshot({ phase: "CLOSING",
@@ -200,6 +192,18 @@ total: "2" })],
       expectedError: "CLOSING snapshot contains duplicate asset USDT",
     },
   ]
+}
+
+test("returns the exact failure and leaves both snapshots unchanged for invalid reconciliation inputs", () => {
+  const openingSnapshot = snapshot({
+    phase: "OPENING",
+    sourceTime: 100,
+    balances: [balance({ asset: "USDT",
+free: "1",
+locked: "0",
+total: "1" })],
+  })
+  const cases = createInvalidReconciliationCases()
 
   for (const scenario of cases) {
     const openingBefore = copySnapshot(openingSnapshot)
