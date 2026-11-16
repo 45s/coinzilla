@@ -74,7 +74,8 @@ function createDisabledJournal() {
       })
     },
     flush: async () => toResult({ error: new Error("Durable account audit requires an enabled Journal") }),
-    close: async () => toResult({ closed: true, disabled: true }),
+    close: async () => toResult({ closed: true,
+disabled: true }),
   })
 }
 
@@ -140,7 +141,8 @@ function startOptionalJournal({
     reportFailure({ error })
     ready = Promise.resolve(toResult({ error }))
   }
-  return { journal, ready }
+  return { journal,
+ready }
 }
 
 function createJournalLifecycle({ journal, ready, state, reportFailure }) {
@@ -223,7 +225,9 @@ export function prepareOptionalJournal({
 } = {}) {
   if (!enabled) {return createDisabledJournal()}
   const state = { current: "starting" }
-  const reportFailure = ({ error, errors }) => reportJournalFailure({ logger, error, errors })
+  const reportFailure = ({ error, errors }) => reportJournalFailure({ logger,
+error,
+errors })
   const started = startOptionalJournal({
     eventBus,
     directory,

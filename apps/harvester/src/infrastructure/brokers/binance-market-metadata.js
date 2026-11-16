@@ -46,11 +46,15 @@ function validateSymbolFilters({ symbolFilters }) {
   if (typeof symbolFilters.symbol !== "string" || !symbolFilters.symbol.trim()) {
     throw new TypeError("Binance symbolFilters.symbol must be a non-empty string")
   }
-  assertDecimalString({ value: symbolFilters.tickSize, field: "tickSize" })
-  assertDecimalString({ value: symbolFilters.stepSize, field: "stepSize" })
+  assertDecimalString({ value: symbolFilters.tickSize,
+field: "tickSize" })
+  assertDecimalString({ value: symbolFilters.stepSize,
+field: "stepSize" })
   if (
-    compareDecimal({ left: symbolFilters.tickSize, right: "0" }) <= 0 ||
-    compareDecimal({ left: symbolFilters.stepSize, right: "0" }) <= 0
+    compareDecimal({ left: symbolFilters.tickSize,
+right: "0" }) <= 0 ||
+    compareDecimal({ left: symbolFilters.stepSize,
+right: "0" }) <= 0
   ) {
     throw new RangeError("Binance tickSize and stepSize must be greater than zero")
   }
@@ -68,7 +72,8 @@ function createMarketConstraints({ symbolFilters, baseAsset, quoteAsset }) {
     {
       type: "PRICE_INCREMENT",
       status: "SUPPORTED",
-      value: new Money({ amount: symbolFilters.tickSize, asset: quoteAsset }),
+      value: new Money({ amount: symbolFilters.tickSize,
+asset: quoteAsset }),
     },
     createOptionalConstraint({
       type: "MIN_PRICE",
@@ -85,7 +90,8 @@ function createMarketConstraints({ symbolFilters, baseAsset, quoteAsset }) {
     {
       type: "QUANTITY_INCREMENT",
       status: "SUPPORTED",
-      value: new Quantity({ amount: symbolFilters.stepSize, asset: baseAsset }),
+      value: new Quantity({ amount: symbolFilters.stepSize,
+asset: baseAsset }),
     },
     createOptionalConstraint({
       type: "MIN_QUANTITY",
@@ -139,16 +145,21 @@ function normalizeUnvalidatedConstraints({ unvalidatedConstraints }) {
  */
 export function createBinanceMarketMetadata({ symbolFilters } = {}) {
   validateSymbolFilters({ symbolFilters })
-  const baseAsset = normalizeAsset({ code: symbolFilters.baseAsset, field: "baseAsset" })
-  const quoteAsset = normalizeAsset({ code: symbolFilters.quoteAsset, field: "quoteAsset" })
+  const baseAsset = normalizeAsset({ code: symbolFilters.baseAsset,
+field: "baseAsset" })
+  const quoteAsset = normalizeAsset({ code: symbolFilters.quoteAsset,
+field: "quoteAsset" })
   const market = new Market({
     venue: "binance",
     symbol: symbolFilters.symbol.trim().toUpperCase(),
     baseAsset,
     quoteAsset,
   })
-  const constraints = createMarketConstraints({ symbolFilters, baseAsset, quoteAsset })
-  const tradingRules = new TradingRules({ market, constraints })
+  const constraints = createMarketConstraints({ symbolFilters,
+baseAsset,
+quoteAsset })
+  const tradingRules = new TradingRules({ market,
+constraints })
   const normalizedUnvalidatedConstraints = normalizeUnvalidatedConstraints({
     unvalidatedConstraints: symbolFilters.unvalidatedConstraints,
   })

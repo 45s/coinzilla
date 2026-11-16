@@ -163,7 +163,8 @@ logger })
       const result = typeof client.createCanonicalOrder === "function"
         ? await client.createCanonicalOrder(order)
         : await client.createOrder(order)
-      return normalizePlaceOrderResult({ result, order })
+      return normalizePlaceOrderResult({ result,
+order })
     },
     cancelOrder: createCancelOrderHandler({ client }),
     getOpenOrders: ({ symbol }) => client.getOpenOrders({ symbol }),
@@ -175,7 +176,8 @@ logger })
     getSymbolFilters: async ({ symbol }) => {
       try {
         return toResult({
-          data: await getCanonicalMarketMetadata({ client, symbol }),
+          data: await getCanonicalMarketMetadata({ client,
+symbol }),
         })
       } catch (error) {
         return toResult({ error })

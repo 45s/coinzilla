@@ -37,7 +37,8 @@ function canonicalizeArray({ value, depth }) {
       throw new TypeError("Operational State arrays must not contain sparse entries")
     }
   }
-  return value.map((item) => canonicalize({ value: item, depth: depth + 1 }))
+  return value.map((item) => canonicalize({ value: item,
+depth: depth + 1 }))
 }
 
 function canonicalizeObject({ value, depth }) {
@@ -68,7 +69,8 @@ function canonicalizeObject({ value, depth }) {
     if (descriptor.value === undefined) {
       throw new TypeError("Operational State payload must not contain undefined values")
     }
-    result[key] = canonicalize({ value: descriptor.value, depth: depth + 1 })
+    result[key] = canonicalize({ value: descriptor.value,
+depth: depth + 1 })
   }
   return result
 }
@@ -96,10 +98,12 @@ function canonicalize({ value, depth = 0 }) {
     return value
   }
   if (Array.isArray(value)) {
-    return canonicalizeArray({ value, depth })
+    return canonicalizeArray({ value,
+depth })
   }
   if (typeof value === "object") {
-    return canonicalizeObject({ value, depth })
+    return canonicalizeObject({ value,
+depth })
   }
   throw new TypeError("Operational State payload contains a non-JSON value")
 }

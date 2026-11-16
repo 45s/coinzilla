@@ -77,9 +77,13 @@ export function createHarvesterProcessIdentity({
     throw new TypeError("processId must be a positive safe integer")
   }
 
-  const startedAtDate = resolveStartedAt({ env, now })
-  const runtimeSessionId = resolveRuntimeSessionId({ env, generateRuntimeSessionId })
-  const source = captureSource({ captureBuildMetadata, cwd, env })
+  const startedAtDate = resolveStartedAt({ env,
+now })
+  const runtimeSessionId = resolveRuntimeSessionId({ env,
+generateRuntimeSessionId })
+  const source = captureSource({ captureBuildMetadata,
+cwd,
+env })
 
   return Object.freeze({
     application: APPLICATION,

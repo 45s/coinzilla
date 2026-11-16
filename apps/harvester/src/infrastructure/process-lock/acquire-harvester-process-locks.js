@@ -66,7 +66,8 @@ function createLockRelease({ journalLock, hostLock }) {
   let hostReleased = false
   return async function release() {
     if (journalReleased && hostReleased) {
-      return toResult({ released: false, alreadyReleased: true })
+      return toResult({ released: false,
+alreadyReleased: true })
     }
     if (!journalReleased) {
       const result = await releaseJournalLock({ journalLock })
@@ -87,7 +88,8 @@ async function handleJournalLockFailure({ journalLock, hostLock }) {
     result: journalLock,
     fallbackMessage: "Unable to acquire the Journal-directory Harvester trading lock",
   })
-  await releaseHostLockAfterJournalFailure({ hostLock, errors })
+  await releaseHostLockAfterJournalFailure({ hostLock,
+errors })
   return toResult({
     error: errors.length === 1
       ? errors[0]
@@ -131,14 +133,16 @@ export async function acquireHarvesterProcessLocks({
 
     const journalLock = await acquireLock({ directory: journalDirectory })
     if (journalLock?.ok !== true || typeof journalLock.release !== "function") {
-      return handleJournalLockFailure({ journalLock, hostLock })
+      return handleJournalLockFailure({ journalLock,
+hostLock })
     }
 
     return toResult({
       lockPath: journalLock.lockPath,
       hostLockPath: hostLock.lockPath,
       owner: hostLock.owner,
-      release: createLockRelease({ journalLock, hostLock }),
+      release: createLockRelease({ journalLock,
+hostLock }),
     })
   } catch (error) {
     return toResult({ error })

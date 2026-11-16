@@ -66,7 +66,8 @@ function isSameLockOwner({ currentOwner, existingOwner }) {
 function createLockRelease({ lockPath, token }) {
   let released = false
   return async function release() {
-    if (released) {return toResult({ released: false, alreadyReleased: true })}
+    if (released) {return toResult({ released: false,
+alreadyReleased: true })}
     try {
       const existingOwner = JSON.parse(await readFile(lockPath, "utf8"))
       if (existingOwner?.token !== token) {
@@ -81,7 +82,8 @@ function createLockRelease({ lockPath, token }) {
     } catch (error) {
       if (error?.code === "ENOENT") {
         released = true
-        return toResult({ released: false, alreadyReleased: true })
+        return toResult({ released: false,
+alreadyReleased: true })
       }
       return toResult({ error })
     }
@@ -114,7 +116,8 @@ async function acquireLockFile({ lockPath, owner, hostname, checkProcessAlive })
         // Re-read immediately before unlinking so a replaced lock is not removed.
         const currentOwnerContents = await readFile(lockPath, "utf8").catch(() => "null")
         const currentOwner = JSON.parse(currentOwnerContents)
-        if (isSameLockOwner({ currentOwner, existingOwner })) {
+        if (isSameLockOwner({ currentOwner,
+existingOwner })) {
           await unlink(lockPath)
           continue
         }
@@ -122,14 +125,16 @@ async function acquireLockFile({ lockPath, owner, hostname, checkProcessAlive })
 
       const conflict = new Error("Another Harvester trading process already owns the process lock")
       conflict.code = "HARVESTER_PROCESS_LOCK_EXISTS"
-      conflict.details = { lockPath, existingOwner }
+      conflict.details = { lockPath,
+existingOwner }
       return toResult({ error: conflict })
     }
   }
   return toResult({
     lockPath,
     owner,
-    release: createLockRelease({ lockPath, token: owner.token }),
+    release: createLockRelease({ lockPath,
+token: owner.token }),
   })
 }
 
@@ -160,9 +165,15 @@ export async function acquireHarvesterProcessLock({
     })
     const resolvedDirectory = path.resolve(directory)
     const lockPath = path.join(resolvedDirectory, lockFileName)
-    const owner = Object.freeze({ pid, hostname, startedAt, token })
+    const owner = Object.freeze({ pid,
+hostname,
+startedAt,
+token })
     await mkdir(resolvedDirectory, { recursive: true })
-    return await acquireLockFile({ lockPath, owner, hostname, checkProcessAlive })
+    return await acquireLockFile({ lockPath,
+owner,
+hostname,
+checkProcessAlive })
   } catch (error) {
     return toResult({ error })
   }
