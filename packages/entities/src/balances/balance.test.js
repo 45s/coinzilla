@@ -5,15 +5,20 @@ import { Asset } from "../assets/asset.js"
 import { Quantity } from "../quantity/quantity.js"
 import { Balance, balanceErrMsgs } from "./balance.js"
 
+const btc = new Asset({
+  id: "bitcoin",
+  code: "BTC",
+})
+const otherBtc = new Asset({
+  id: "wrapped-bitcoin",
+  code: "BTC",
+})
+const quantity = (amount) => new Quantity({
+  amount,
+  asset: btc,
+})
+
 describe(Balance.name, () => {
-  const btc = new Asset({ id: "bitcoin",
-code: "BTC" })
-  const otherBtc = new Asset({ id: "wrapped-bitcoin",
-code: "BTC" })
-
-  const quantity = (amount) => new Quantity({ amount,
-asset: btc })
-
   it("stores exact free and locked quantities and derives total", () => {
     const balance = new Balance({
       free: quantity("1.25"),
@@ -89,6 +94,9 @@ asset: otherBtc }),
     )
   })
 
+})
+
+describe(`${Balance.name} snapshots`, () => {
   it("returns independent snapshots", () => {
     const balance = new Balance({
       free: quantity("1"),
