@@ -99,25 +99,34 @@ function createBrokerConnectionPorts({ connectError }) {
 
 function createBrokerAccountPorts() {
   return {
-    getOpenOrders: async () => ({ ok: true, data: [] }),
-    getFills: async () => ({ ok: true, data: [] }),
-    getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
-    getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
+    getOpenOrders: async () => ({ ok: true,
+data: [] }),
+    getFills: async () => ({ ok: true,
+data: [] }),
+    getCanonicalOrderHistory: async () => ({ ok: true,
+data: [] }),
+    getCanonicalOrder: async () => ({ ok: false,
+errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => ({
       ok: true,
       data: {
         balances: ["BTC", "USDT"].map((code) => {
-          const asset = new Asset({ id: `asset:${code}`, code })
+          const asset = new Asset({ id: `asset:${code}`,
+code })
           return new Balance({
-            free: new Quantity({ amount: "1000", asset }),
-            locked: new Quantity({ amount: "0", asset }),
+            free: new Quantity({ amount: "1000",
+asset }),
+            locked: new Quantity({ amount: "0",
+asset }),
           })
         }),
         sourceTime: 1,
       },
     }),
-    getSymbolFilters: async () => ({ ok: true, data: createMarketMetadata() }),
-    getExchangeMarkets: async () => ({ ok: true, data: [createMarketMetadata().market] }),
+    getSymbolFilters: async () => ({ ok: true,
+data: createMarketMetadata() }),
+    getExchangeMarkets: async () => ({ ok: true,
+data: [createMarketMetadata().market] }),
   }
 }
 
@@ -146,7 +155,8 @@ function createBrokerUserDataPorts({
               reconciliationRequired: false,
             })
             onRecoveryAcknowledged?.()
-            return { accepted: true, completed: true }
+            return { accepted: true,
+completed: true }
           },
         },
       }
@@ -157,10 +167,15 @@ function createBrokerUserDataPorts({
 
 function createBrokerMarketDataPorts({ state, priceResult, priceError }) {
   return {
-    getPrices: async ({ symbol }) => ({ ok: true, data: { symbol, price: "65000" } }),
-    getCandles: async () => ({ ok: true, data: [] }),
-    subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
-    subscribeForBookTicker: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
+    getPrices: async ({ symbol }) => ({ ok: true,
+data: { symbol,
+price: "65000" } }),
+    getCandles: async () => ({ ok: true,
+data: [] }),
+    subscribeForCandles: async () => ({ ok: true,
+data: { unsubscribe: async () => {} } }),
+    subscribeForBookTicker: async () => ({ ok: true,
+data: { unsubscribe: async () => {} } }),
     subscribeForPrices: async ({ onPrice }) => {
       state.priceHandler = onPrice
       if (priceError) {
@@ -183,8 +198,10 @@ function createBroker(options = {}) {
   return {
     ...createBrokerConnectionPorts(options),
     ...createBrokerAccountPorts(),
-    ...createBrokerUserDataPorts({ ...options, state }),
-    ...createBrokerMarketDataPorts({ ...options, state }),
+    ...createBrokerUserDataPorts({ ...options,
+state }),
+    ...createBrokerMarketDataPorts({ ...options,
+state }),
   }
 }
 
