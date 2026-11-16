@@ -9,15 +9,22 @@ function createBroker(handler, exchangeInfoHandler = () => ({ symbols: [] })) {
     "userDataStream.subscribe.signature": handler,
     "userDataStream.unsubscribe": () => ({}),
     exchangeInfo: exchangeInfoHandler,
-    myFilters: () => ({ symbolFilters: [], exchangeFilters: [], assetFilters: [] }),
+    myFilters: () => ({ symbolFilters: [],
+exchangeFilters: [],
+assetFilters: [] }),
   })
   rpc.state = "open"
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
-    apiSecret: "test-secret", tradingMode: "testnet",
-    logger: { error() {}, info() {}, debug() {}, warn() {} },
+    apiSecret: "test-secret",
+tradingMode: "testnet",
+    logger: { error() {},
+info() {},
+debug() {},
+warn() {} },
   }, { apiClientFactory: () => rpc })
-  return { broker, rpc }
+  return { broker,
+rpc }
 }
 
 describe("BinanceSdkBroker.subscribeForUserData", () => {
@@ -29,8 +36,11 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
     })
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
-      apiSecret: "test-secret", tradingMode: "testnet",
-      logger: { error() {}, info() {}, warn() {} },
+      apiSecret: "test-secret",
+tradingMode: "testnet",
+      logger: { error() {},
+info() {},
+warn() {} },
     }, { apiClientFactory: () => rpc })
     broker.connected = true
 
@@ -83,7 +93,11 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
 
     rpc.emitEvent({
       subscriptionId: 7,
-      event: { e: "balanceUpdate", a: "USDT", d: "12.50", T: 200, E: 201 },
+      event: { e: "balanceUpdate",
+a: "USDT",
+d: "12.50",
+T: 200,
+E: 201 },
     })
 
     assert.deepEqual(received, [{
@@ -117,8 +131,10 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
           quoteAsset: "USDT",
           orderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
           filters: [
-            { filterType: "PRICE_FILTER", tickSize: "0.01" },
-            { filterType: "LOT_SIZE", stepSize: "0.00001" },
+            { filterType: "PRICE_FILTER",
+tickSize: "0.01" },
+            { filterType: "LOT_SIZE",
+stepSize: "0.00001" },
           ],
         }],
       }),
@@ -150,10 +166,15 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
       Y: "100",
     }
 
-    rpc.emitEvent({ subscriptionId: 20, event: report })
-    rpc.emitEvent({ subscriptionId: 21, event: report })
-    rpc.emitEvent({ subscriptionId: 21, event: structuredClone(report) })
-    rpc.emitEvent({ subscriptionId: 21, event: { ...report, I: 201 } })
+    rpc.emitEvent({ subscriptionId: 20,
+event: report })
+    rpc.emitEvent({ subscriptionId: 21,
+event: report })
+    rpc.emitEvent({ subscriptionId: 21,
+event: structuredClone(report) })
+    rpc.emitEvent({ subscriptionId: 21,
+event: { ...report,
+I: 201 } })
 
     await new Promise((resolve) => setImmediate(resolve))
     assert.equal(received.length, 2)
@@ -170,9 +191,16 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
           quoteAsset: "USDT",
           orderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
           filters: [
-            { filterType: "PRICE_FILTER", tickSize: "0.01", minPrice: "0.01", maxPrice: "1000000" },
-            { filterType: "LOT_SIZE", stepSize: "0.00001", minQty: "0.00001", maxQty: "1000" },
-            { filterType: "MIN_NOTIONAL", minNotional: "5" },
+            { filterType: "PRICE_FILTER",
+tickSize: "0.01",
+minPrice: "0.01",
+maxPrice: "1000000" },
+            { filterType: "LOT_SIZE",
+stepSize: "0.00001",
+minQty: "0.00001",
+maxQty: "1000" },
+            { filterType: "MIN_NOTIONAL",
+minNotional: "5" },
           ],
         }],
       }),
@@ -235,8 +263,10 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
           quoteAsset: "USDT",
           orderTypes: ["LIMIT", "LIMIT_MAKER"],
           filters: [
-            { filterType: "PRICE_FILTER", tickSize: "0.01" },
-            { filterType: "LOT_SIZE", stepSize: "0.00001" },
+            { filterType: "PRICE_FILTER",
+tickSize: "0.01" },
+            { filterType: "LOT_SIZE",
+stepSize: "0.00001" },
           ],
         }],
       }),
@@ -347,7 +377,8 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
 
     rpc.emitEvent({
       subscriptionId: 22,
-      event: { e: "eventStreamTerminated", E: 123456 },
+      event: { e: "eventStreamTerminated",
+E: 123456 },
     })
 
     assert.deepEqual(statuses, [{
@@ -357,7 +388,8 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
       recoveryRequired: true,
     }])
     assert.deepEqual(received, [{
-      event: { e: "eventStreamTerminated", E: 123456 },
+      event: { e: "eventStreamTerminated",
+E: 123456 },
     }])
     await result.data.disconnect()
   })
@@ -372,7 +404,9 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
       onStatus: (status) => statuses.push(status),
     })
 
-    rpc.emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    rpc.emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
 
     assert.deepEqual(statuses, [
       {
@@ -413,7 +447,8 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
 
     rpc.emitEvent({
       subscriptionId: 25,
-      event: { e: "eventStreamTerminated", E: 123457 },
+      event: { e: "eventStreamTerminated",
+E: 123457 },
     })
 
     const order = await broker.createOrder({
@@ -462,7 +497,8 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
     const received = []
     const result = await broker.subscribeForUserData({ onEvent: (event) => received.push(event) })
     await result.data.disconnect()
-    rpc.emitEvent({ e: "futureEvent", value: 1 })
+    rpc.emitEvent({ e: "futureEvent",
+value: 1 })
     assert.deepEqual(received, [])
     assert.equal(rpc.listenerCount, 0)
   })
@@ -476,7 +512,8 @@ it("removes local observers when remote unsubscribe fails and does not replay it
   rpc.state = "open"
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
-    apiSecret: "test-secret", tradingMode: "testnet",
+    apiSecret: "test-secret",
+tradingMode: "testnet",
   }, { apiClientFactory: () => rpc })
   broker.connected = true
 
