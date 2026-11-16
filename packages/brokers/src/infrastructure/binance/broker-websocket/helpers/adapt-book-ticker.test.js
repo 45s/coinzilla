@@ -33,21 +33,27 @@ test("maps a matching book ticker into an immutable exact-string snapshot", () =
 test("accepts the raw book ticker payload without an event type", () => {
   const { e, ...message } = validMessage
   assert.equal(adaptBookTickerMessage({
-    message, symbol: "BTCUSDT", timestamp: 42,
+    message,
+symbol: "BTCUSDT",
+timestamp: 42,
   }).timestamp, 42)
 })
 
 test("rejects non-object messages and other event types", () => {
-  for (const message of [null, [], "bookTicker", { ...validMessage, e: "aggTrade" }]) {
+  for (const message of [null, [], "bookTicker", { ...validMessage,
+e: "aggTrade" }]) {
     assert.throws(() => adaptBookTickerMessage({
-      message, symbol: "BTCUSDT", timestamp: 1,
+      message,
+symbol: "BTCUSDT",
+timestamp: 1,
     }), /bookTicker event is required/)
   }
 })
 
 test("rejects a symbol that differs from the subscription", () => {
   assert.throws(() => adaptBookTickerMessage({
-    message: { ...validMessage, s: "ETHUSDT" },
+    message: { ...validMessage,
+s: "ETHUSDT" },
     symbol: "BTCUSDT",
     timestamp: 1,
   }), /symbol does not match/)
@@ -56,12 +62,14 @@ test("rejects a symbol that differs from the subscription", () => {
 test("validates every bid and ask decimal as a positive exact string", () => {
   for (const field of ["b", "B", "a", "A"]) {
     assert.throws(() => adaptBookTickerMessage({
-      message: { ...validMessage, [field]: 0.1 },
+      message: { ...validMessage,
+[field]: 0.1 },
       symbol: "BTCUSDT",
       timestamp: 1,
     }), /decimal string/)
     assert.throws(() => adaptBookTickerMessage({
-      message: { ...validMessage, [field]: "0" },
+      message: { ...validMessage,
+[field]: "0" },
       symbol: "BTCUSDT",
       timestamp: 1,
     }), /must be positive/)
