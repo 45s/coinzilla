@@ -28,6 +28,8 @@ The base should extend the native `Error`, set `name` to the concrete subclass n
 - `context`: a small, safe object containing relevant diagnostic facts.
 - `retryable`: an explicit boolean only when the operation can meaningfully be classified as retryable or permanent.
 
+The shared base stores `context` as a detached, frozen flat record of JSON-safe scalar values (`string`, finite `number`, `boolean`, or `null`); nested objects and mutable payload graphs are rejected.
+
 Do not add speculative fields or a complex error framework. Keep the base small and independent of logging, transport, persistence, application services, and domain policy.
 
 ## 2. Package- and feature-owned subclasses
@@ -79,6 +81,7 @@ Error messages should be concise and actionable. Put machine-readable detail in 
 Log at the boundary that owns the operational decision or at the actionable failure point. Use structured fields including the error name, stable code, operation/component, safe context, and original cause when available.
 
 - Preserve the original error object for logger/telemetry integrations where supported.
+- The shared Logger intentionally allowlists standard Error diagnostics. Pass custom `code`, `context`, and `retryable` as explicit structured fields when they are needed in logs.
 - Avoid duplicate logs when an error is rethrown unchanged.
 - Do not log and then silently continue unless that is an explicitly tested recovery policy.
 - A logging or notification failure must not mask the original operational failure.
