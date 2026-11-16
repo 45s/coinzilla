@@ -65,7 +65,10 @@ export async function resolvePublicAddresses(...args) {
   const resolver = options.resolveHost ?? dnsLookup;
   const resolution = resolver(normalizedHostname, { all: true,
 verbatim: true });
-  const answers = await awaitWithAbort({ promise: resolution, signal: options.signal });
+  const answers = await awaitWithAbort({
+    promise: resolution,
+    signal: options.signal,
+  });
   if (!Array.isArray(answers) || answers.length === 0) {
     throw new Error('DNS resolution returned no addresses');
   }
@@ -149,7 +152,10 @@ export async function fetchPinned(...args) {
     signal: init.signal ?? options.signal,
   });
   const transport = options.requestImpl ?? (url.protocol === 'https:' ? httpsRequest : httpRequest);
-  const lookup = createPinnedLookup({ hostname, addresses });
+  const lookup = createPinnedLookup({
+    hostname,
+    addresses,
+  });
 
   return new Promise((...executorArguments) => {
     const [resolveResponse, rejectRequest] = executorArguments;
