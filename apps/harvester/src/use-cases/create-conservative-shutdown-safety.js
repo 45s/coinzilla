@@ -184,7 +184,6 @@ export function createConservativeShutdownSafety({
           journalDurable,
           coverageResult,
           externalBlockers,
-          hasBlockingOpenOrdersForSymbol,
         })
         const revision = notifyRevision()
         const status = blockers.length === 0 ? "SAFE_TO_SHUTDOWN" : "UNSAFE"
