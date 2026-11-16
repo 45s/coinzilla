@@ -401,7 +401,7 @@ test("publishes process started and stopped events for Binance trading startup",
   await eventBus.close()
 })
 
-test("publishes failed process shutdown outcome when runtime.stop rejects", async () => {
+test("does not publish STOPPED when runtime.stop rejects", async () => {
   const eventBus = new EventBus()
   const events = []
   const handlers = {}
@@ -429,11 +429,10 @@ test("publishes failed process shutdown outcome when runtime.stop rejects", asyn
 
     await handlers.SIGINT()
     await eventBus.flush()
-    assert.equal(process.exitCode, 1)
-    assert.equal(events.at(-1).name, HARVESTER_EVENT_NAMES.STOPPED)
-    assert.equal(events.at(-1).data.reason, "SIGINT")
-    assert.equal(events.at(-1).data.outcome, "failed")
-    assert.equal(events.at(-1).data.error.message, "runtime stop failed")
+    assert.equal(process.exitCode, 1, "A failed runtime shutdown must set a non-zero process exit code.")
+    assert.equal(events.length, 2, "A failed runtime shutdown must retain startup events without publishing a false STOPPED event.")
+    assert.equal(events.at(-1).name, HARVESTER_EVENT_NAMES.STARTED, "The last lifecycle event must remain STARTED when runtime shutdown is unproven.")
+    assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.STOPPED), false, "Harvester must never publish STOPPED when runtime safety was not confirmed.")
   } finally {
     process.exitCode = previousExitCode
     subscription.subscription.unsubscribe()
@@ -546,7 +545,7 @@ test("continues EventBus cleanup when Journal close fails", async () => {
         tradingEnabled: false,
         strategyMode: "read-only",
         subscriptions: [],
-        stop: async () => operations.push("runtime.stop"),
+        stop: async () => { operations.push("runtime.stop") },
       }),
       registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
       logger: { info() {}, debug() {}, error() {} },
@@ -586,7 +585,7 @@ test("reports EventBus timeout and preserves Journal close result", async () => 
         tradingEnabled: false,
         strategyMode: "read-only",
         subscriptions: [],
-        stop: async () => operations.push("runtime.stop"),
+        stop: async () => { operations.push("runtime.stop") },
       }),
       registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
       logger: { info() {}, debug() {}, error() {} },

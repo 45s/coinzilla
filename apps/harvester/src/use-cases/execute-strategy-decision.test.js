@@ -156,7 +156,7 @@ test("uses different client order ID namespaces for separate executor instances"
   assert.ok(secondId.length <= 36)
 })
 
-test("preserves explicit strategy purpose through both submission-gate checks without sending it to the broker", async () => {
+test("preserves explicit strategy purpose through every submission-gate check without sending it to the broker", async () => {
   const gatePurposes = []
   const pendingPurposes = []
   let brokerOrder
@@ -186,14 +186,14 @@ test("preserves explicit strategy purpose through both submission-gate checks wi
   })
 
   const validation = await execute.validate({ decision: sellDecision, marketMetadata })
-  assert.equal(validation.ok, true)
-  assert.deepEqual(gatePurposes, ["RECOVERY_SELL"])
+  assert.equal(validation.ok, true, "The recovery SELL must pass canonical preflight validation.")
+  assert.deepEqual(gatePurposes, ["RECOVERY_SELL"], "Preflight validation must preserve the recovery SELL purpose at its submission gate.")
   gatePurposes.length = 0
 
   const result = await execute({ decision: sellDecision, marketMetadata })
-  assert.equal(result.ok, true)
-  assert.deepEqual(gatePurposes, ["RECOVERY_SELL", "RECOVERY_SELL"])
-  assert.deepEqual(pendingPurposes, ["RECOVERY_SELL"])
+  assert.equal(result.ok, true, "A valid recovery SELL must complete its broker submission.")
+  assert.deepEqual(gatePurposes, ["RECOVERY_SELL", "RECOVERY_SELL", "RECOVERY_SELL"], "Initial, post-registration and final broker-boundary checks must all receive the recovery SELL purpose.")
+  assert.deepEqual(pendingPurposes, ["RECOVERY_SELL"], "The pending-order lifecycle must retain the recovery SELL purpose.")
   assert.equal(Object.hasOwn(brokerOrder, "purpose"), false, "Application-only recovery purpose must not leak into the broker order request.")
 })
 
@@ -377,7 +377,7 @@ test("preserves earlier acknowledged orders when a later action is deferred", as
     },
     canSubmit: () => {
       readinessChecks += 1
-      if (readinessChecks <= 2) {return { allowed: true }}
+      if (readinessChecks <= 3) {return { allowed: true }}
       return {
         allowed: false,
         reason: "MARKET_BOOK_STALE",

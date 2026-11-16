@@ -10993,11 +10993,13 @@ test("shutdown cancellation leaves external manual BUY orders untouched", async 
 
 test("invalidates and rechecks a safe market after a late owned SELL execution", async () => {
   const seeded = makeSeededRecoveryState()
+  let shutdownStarted = false
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
     accountingApplied: true,
+    isStopping: () => shutdownStarted,
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -11009,6 +11011,7 @@ test("invalidates and rechecks a safe market after a late owned SELL execution",
   })
 
   harness.engine.beginShutdown()
+  shutdownStarted = true
   await harness.engine.cancelOwnedBuyOrdersForShutdown()
   const initialCoverage = await harness.engine.auditShutdownRecoverySellCoverage()
   const initialSafety = await harness.engine.auditShutdownSafety({
@@ -11050,6 +11053,9 @@ test("invalidates and rechecks a safe market after a late owned SELL execution",
     "UNSAFE",
     "Late execution evidence must immediately invalidate the previous safe marker.",
   )
+
+  const recoveryReconciliation = await harness.engine.reconcileRecoverySellsForShutdown({ symbols: ["DOGEUSDT"] })
+  assert.equal(recoveryReconciliation.ok, true, "Shutdown must reconcile and replan recovery SELL coverage after a late owned SELL fill.")
 
   const finalCoverage = await harness.engine.auditShutdownRecoverySellCoverage()
   const recheckedSafety = await harness.engine.auditShutdownSafety({
