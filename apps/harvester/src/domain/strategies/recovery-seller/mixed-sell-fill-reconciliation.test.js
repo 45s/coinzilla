@@ -354,3 +354,211 @@ test("rejects an order without registered Recovery Seller ownership", () => {
     "An unowned order must not receive Recovery Seller reconciliation state.",
   )
 })
+
+
+const terminalModule = await import("./mixed-sell-fill-reconciliation.js")
+const reconcileMixedSellFillOrder = terminalModule.reconcileMixedSellFillOrder
+
+if (typeof reconcileMixedSellFillOrder !== "function") {
+  test("Recovery Seller exposes exact-once terminal mixed SELL reconciliation", () => {
+    assert.equal(
+      typeof reconcileMixedSellFillOrder,
+      "function",
+      "RS must reconcile complete canonical Fill history against the terminal broker order before accounting can commit.",
+    )
+  })
+} else {
+  test("reconciles a FILLED SELL only when complete canonical fills equal original order quantity", () => {
+    const initial = makeOrderContext()
+    const terminal = makeOrderContext({
+      status: "FILLED",
+      executedQuantity: "5.01",
+    })
+    const allocation = makeAllocation({
+      fill: makeFill(),
+      orderRegistry: terminal.orderRegistry,
+      recoveryQuantity: "5.01",
+      legacyQuantity: "0",
+    })
+    const staged = stageMixedSellFillAllocation({
+      reconciliation: createMixedSellFillReconciliation(initial),
+      allocation,
+    }).reconciliation
+    const result = reconcileMixedSellFillOrder({
+      reconciliation: staged,
+      terminalOrder: terminal.order,
+      orderRegistry: terminal.orderRegistry,
+      canonicalFillAllocations: [allocation],
+    })
+    assert.equal(result.reconciliation.status, "RECONCILED", "A fully reconciled terminal SELL must leave staging.")
+    assert.equal(result.reconciliation.terminalOrderStatus, "FILLED", "The broker terminal status must be preserved.")
+    assert.equal(result.reconciliation.terminalExecutedQuantity, "5.01", "The broker execution quantity must be preserved.")
+    assert.equal(result.reconciliation.terminalFillCount, 1, "The complete canonical fill count must be preserved.")
+    assert.equal(staged.status, "STAGING", "Terminal reconciliation must not mutate the earlier staging snapshot.")
+  })
+
+  test("reconciles a partially filled CANCELED SELL without treating it as fully filled", () => {
+    const initial = makeOrderContext()
+    const terminal = makeOrderContext({
+      status: "CANCELED",
+      executedQuantity: "2.5",
+    })
+    const allocation = makeAllocation({
+      fill: makeFill({
+        quantity: "2.5",
+        quoteQuantity: "5",
+      }),
+      orderRegistry: terminal.orderRegistry,
+      recoveryQuantity: "2.5",
+      legacyQuantity: "0",
+    })
+    const staged = stageMixedSellFillAllocation({
+      reconciliation: createMixedSellFillReconciliation(initial),
+      allocation,
+    }).reconciliation
+    const result = reconcileMixedSellFillOrder({
+      reconciliation: staged,
+      terminalOrder: terminal.order,
+      orderRegistry: terminal.orderRegistry,
+      canonicalFillAllocations: [allocation],
+    })
+    assert.equal(result.reconciliation.status, "RECONCILED", "A canceled order can reconcile its confirmed partial fills.")
+    assert.equal(result.reconciliation.terminalOrderStatus, "CANCELED", "Cancellation must not be mistaken for a filled order.")
+    assert.equal(result.reconciliation.terminalExecutedQuantity, "2.5", "Only confirmed partial execution may be reconciled.")
+  })
+
+  test("rejects terminal reconciliation when canonical fill history is incomplete", () => {
+    const initial = makeOrderContext()
+    const terminal = makeOrderContext({
+      status: "CANCELED",
+      executedQuantity: "2.5",
+    })
+    const allocation = makeAllocation({
+      fill: makeFill({
+        quantity: "2.5",
+        quoteQuantity: "5",
+      }),
+      orderRegistry: terminal.orderRegistry,
+      recoveryQuantity: "2.5",
+      legacyQuantity: "0",
+    })
+    const staged = stageMixedSellFillAllocation({
+      reconciliation: createMixedSellFillReconciliation(initial),
+      allocation,
+    }).reconciliation
+    assert.throws(
+      () => reconcileMixedSellFillOrder({
+        reconciliation: staged,
+        terminalOrder: terminal.order,
+        orderRegistry: terminal.orderRegistry,
+        canonicalFillAllocations: [],
+      }),
+      hasCode("RS_MIXED_SELL_RECONCILIATION_FILL_HISTORY_MISMATCH"),
+      "Every staged Fill must be present in the complete terminal canonical history.",
+    )
+  })
+
+  test("rejects a terminal broker executed quantity that differs from distinct canonical fills", () => {
+    const initial = makeOrderContext()
+    const terminal = makeOrderContext({
+      status: "CANCELED",
+      executedQuantity: "2.6",
+    })
+    const allocation = makeAllocation({
+      fill: makeFill({
+        quantity: "2.5",
+        quoteQuantity: "5",
+      }),
+      orderRegistry: terminal.orderRegistry,
+      recoveryQuantity: "2.5",
+      legacyQuantity: "0",
+    })
+    const staged = stageMixedSellFillAllocation({
+      reconciliation: createMixedSellFillReconciliation(initial),
+      allocation,
+    }).reconciliation
+    assert.throws(
+      () => reconcileMixedSellFillOrder({
+        reconciliation: staged,
+        terminalOrder: terminal.order,
+        orderRegistry: terminal.orderRegistry,
+        canonicalFillAllocations: [allocation],
+      }),
+      hasCode("RS_MIXED_SELL_RECONCILIATION_EXECUTED_QUANTITY_MISMATCH"),
+      "Broker cumulative execution must equal the sum of distinct canonical fills.",
+    )
+  })
+
+  test("rejects FILLED status when executed quantity is below original order quantity", () => {
+    const initial = makeOrderContext()
+    const terminal = makeOrderContext({
+      status: "FILLED",
+      executedQuantity: "2.5",
+    })
+    const allocation = makeAllocation({
+      fill: makeFill({
+        quantity: "2.5",
+        quoteQuantity: "5",
+      }),
+      orderRegistry: terminal.orderRegistry,
+      recoveryQuantity: "2.5",
+      legacyQuantity: "0",
+    })
+    const staged = stageMixedSellFillAllocation({
+      reconciliation: createMixedSellFillReconciliation(initial),
+      allocation,
+    }).reconciliation
+    assert.throws(
+      () => reconcileMixedSellFillOrder({
+        reconciliation: staged,
+        terminalOrder: terminal.order,
+        orderRegistry: terminal.orderRegistry,
+        canonicalFillAllocations: [allocation],
+      }),
+      hasCode("RS_MIXED_SELL_RECONCILIATION_FILLED_QUANTITY_MISMATCH"),
+      "A FILLED terminal order must reconcile to its original order quantity.",
+    )
+  })
+
+  test("rejects a non-terminal order state during terminal reconciliation", () => {
+    const initial = makeOrderContext()
+    assert.throws(
+      () => reconcileMixedSellFillOrder({
+        reconciliation: createMixedSellFillReconciliation(initial),
+        terminalOrder: initial.order,
+        orderRegistry: initial.orderRegistry,
+        canonicalFillAllocations: [],
+      }),
+      hasCode("RS_MIXED_SELL_RECONCILIATION_INVALID_TERMINAL_ORDER"),
+      "OPEN orders must remain staged until the broker reports an authoritative terminal status.",
+    )
+  })
+
+  test("rejects duplicate canonical Fill IDs in terminal history", () => {
+    const initial = makeOrderContext()
+    const terminal = makeOrderContext({
+      status: "FILLED",
+      executedQuantity: "5.01",
+    })
+    const allocation = makeAllocation({
+      fill: makeFill(),
+      orderRegistry: terminal.orderRegistry,
+      recoveryQuantity: "5.01",
+      legacyQuantity: "0",
+    })
+    const staged = stageMixedSellFillAllocation({
+      reconciliation: createMixedSellFillReconciliation(initial),
+      allocation,
+    }).reconciliation
+    assert.throws(
+      () => reconcileMixedSellFillOrder({
+        reconciliation: staged,
+        terminalOrder: terminal.order,
+        orderRegistry: terminal.orderRegistry,
+        canonicalFillAllocations: [allocation, allocation],
+      }),
+      hasCode("RS_MIXED_SELL_RECONCILIATION_FILL_HISTORY_MISMATCH"),
+      "Canonical terminal history must contain each Fill identity exactly once.",
+    )
+  })
+}
