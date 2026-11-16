@@ -631,6 +631,72 @@ export function parseTelegramOperatorCommand(text, { botUsername } = {}) {
 }
 
 
+function navigationKeyboard({ page = "home", markets = [], marketAction } = {}) {
+  const rows = [
+    [{ text: "Status", callback_data: "cc:nav:status" }, { text: "Markets", callback_data: "cc:nav:markets" }],
+    [{ text: "Positions", callback_data: "cc:nav:positions" }, { text: "Orders", callback_data: "cc:nav:orders" }],
+    [{ text: "Balances", callback_data: "cc:nav:balances" }],
+  ]
+  if (page === "markets") {
+    let actionCount = 0
+    for (const market of markets) {
+      if (actionCount >= 20) { break }
+      if (typeof market?.symbol !== "string" || !/^[A-Z0-9]{2,30}$/.test(market.symbol) || market.enabled !== true) { continue }
+      if (marketAction === "PAUSE" && market.operatorPaused === true) { continue }
+      if (marketAction === "RESUME" && market.operatorPaused !== true) { continue }
+      const action = market.operatorPaused === true ? "RESUME" : "PAUSE"
+      rows.push([{
+        text: \`\${action === "PAUSE" ? "Pause" : "Resume"} \${market.symbol}\`,
+        callback_data: \`cc:ask:\${action}:\${market.symbol}\`,
+      }])
+      actionCount += 1
+    }
+  }
+  const refreshPage = marketAction ? marketAction.toLowerCase() : page
+  rows.push([{
+    text: "Refresh",
+    callback_data: \`cc:refresh:\${refreshPage}\`,
+  }, {
+    text: "Main menu",
+    callback_data: "cc:nav:home",
+  }])
+  return { inline_keyboard: rows }
+}
+
+function mainMenuKeyboard() {
+  return {
+    keyboard: [
+      [{ text: "Pause" }, { text: "Resume" }],
+      [{ text: "Status" }, { text: "Markets" }],
+      [{ text: "Portfolio" }, { text: "Open Orders" }],
+    ],
+    is_persistent: true,
+    resize_keyboard: true,
+    one_time_keyboard: false,
+    input_field_placeholder: "Command Center",
+  }
+}
+
+function helpText() {
+  return [
+    "Harvester Command Center",
+    "/start — open the persistent Command Center keyboard",
+    "/menu — restore the persistent keyboard",
+    "/status — runtime readiness and blockers",
+    "/markets — configured market prices, freshness and blockers",
+    "/positions — canonical active and retained inventory with recovery accounting",
+    "/orders — Harvester-owned and external open orders",
+    "/balances — latest exchange free and locked balances with snapshot age",
+    "/pause SYMBOL — request a market-scoped operator pause",
+    "/resume SYMBOL — request removal of the operator-owned pause",
+    "/help — show this help",
+    "",
+    "Inline pause/resume buttons always require confirmation. Text control commands are explicit requests.",
+    "Operator pause does not cancel existing orders. Existing orders may still fill; accounting and recovery SELLs continue.",
+    "Operator pause lasts only for this process and is not restored after restart.",
+  ].join("\n")
+}
+
 const PAGE_METHODS = Object.freeze({
   status: "getStatus",
   markets: "getMarkets",
@@ -826,7 +892,7 @@ async function readTelegramOperatorPage({ page, userId, interaction, operator, d
     try {
       result = await operator[method]({
         actor: {
-          id: "telegram-user:" + userId,
+          id: `telegram-user:${userId}`,
           roles: ["trading-operator"],
         },
       })
@@ -838,21 +904,30 @@ async function readTelegramOperatorPage({ page, userId, interaction, operator, d
         operation: method,
       })
       return {
-        text: "Unable to read the Harvester " + PAGE_TITLES[queryPage] + ". No trading state was changed; check Harvester diagnostics.",
+        text: `Unable to read the Harvester ${PAGE_TITLES[queryPage]}. No trading state was changed; check Harvester diagnostics.`,
         keyboard: navigationKeyboard({ page: queryPage }),
       }
     }
     if (result?.ok !== true) {
-      const error = result?.errors?.[0] ?? result?.error ??
-        new Error("Operator read query returned ok:false without error details: " + method)
-      diagnostics.fail({
-        interaction,
-        error,
-        stage: "QUERY_RESULT",
-        operation: method,
-      })
+      const queryError = result?.errors?.[0] ?? result?.error
+      if (queryError !== undefined) {
+        diagnostics.fail({
+          interaction,
+          error: queryError,
+          stage: "QUERY_RESULT",
+          operation: method,
+        })
+      } else {
+        diagnostics.report({
+          interaction,
+          stage: "QUERY_RESULT",
+          operation: method,
+          classification: "OPERATOR_QUERY_FAILED",
+          message: `Operator read query returned ok:false without error details: ${method}`,
+        })
+      }
       return {
-        text: "Unable to read the Harvester " + PAGE_TITLES[queryPage] + ". No trading state was changed; check Harvester diagnostics.",
+        text: `Unable to read the Harvester ${PAGE_TITLES[queryPage]}. No trading state was changed; check Harvester diagnostics.`,
         keyboard: navigationKeyboard({ page: queryPage }),
       }
     }
@@ -916,7 +991,7 @@ async function executeTelegramOperatorControl({ action, symbol, userId, requestI
     try {
       result = await operator[method]({
         actor: {
-          id: "telegram-user:" + userId,
+          id: `telegram-user:${userId}`,
           roles: ["trading-operator"],
         },
         requestId,
@@ -1117,59 +1192,6 @@ export function createTelegramOperatorAdapter({
   }
 
   const { sendMessage, editMessage, answerCallback } = createTelegramMessageApi({ callApi, logStage })
-
-  const navigationKeyboard = ({ page = "home", markets = [], marketAction } = {}) => {
-    const rows = [
-      [{ text: "Status", callback_data: "cc:nav:status" }, { text: "Markets", callback_data: "cc:nav:markets" }],
-      [{ text: "Positions", callback_data: "cc:nav:positions" }, { text: "Orders", callback_data: "cc:nav:orders" }],
-      [{ text: "Balances", callback_data: "cc:nav:balances" }],
-    ]
-    if (page === "markets") {
-      let actionCount = 0
-      for (const market of markets) {
-        if (actionCount >= 20) { break }
-        if (typeof market?.symbol !== "string" || !/^[A-Z0-9]{2,30}$/.test(market.symbol) || market.enabled !== true) { continue }
-        if (marketAction === "PAUSE" && market.operatorPaused === true) { continue }
-        if (marketAction === "RESUME" && market.operatorPaused !== true) { continue }
-        const action = market.operatorPaused === true ? "RESUME" : "PAUSE"
-        rows.push([{ text: (action === "PAUSE" ? "Pause " : "Resume ") + market.symbol, callback_data: "cc:ask:" + action + ":" + market.symbol }])
-        actionCount += 1
-      }
-    }
-    const refreshPage = marketAction ? marketAction.toLowerCase() : page
-    rows.push([{ text: "Refresh", callback_data: "cc:refresh:" + refreshPage }, { text: "Main menu", callback_data: "cc:nav:home" }])
-    return { inline_keyboard: rows }
-  }
-
-  const mainMenuKeyboard = () => ({
-    keyboard: [
-      [{ text: "Pause" }, { text: "Resume" }],
-      [{ text: "Status" }, { text: "Markets" }],
-      [{ text: "Portfolio" }, { text: "Open Orders" }],
-    ],
-    is_persistent: true,
-    resize_keyboard: true,
-    one_time_keyboard: false,
-    input_field_placeholder: "Command Center",
-  })
-
-  const helpText = () => [
-    "Harvester Command Center",
-    "/start — open the persistent Command Center keyboard",
-    "/menu — restore the persistent keyboard",
-    "/status — runtime readiness and blockers",
-    "/markets — configured market prices, freshness and blockers",
-    "/positions — canonical active and retained inventory with recovery accounting",
-    "/orders — Harvester-owned and external open orders",
-    "/balances — latest exchange free and locked balances with snapshot age",
-    "/pause SYMBOL — request a market-scoped operator pause",
-    "/resume SYMBOL — request removal of the operator-owned pause",
-    "/help — show this help",
-    "",
-    "Inline pause/resume buttons always require confirmation. Text control commands are explicit requests.",
-    "Operator pause does not cancel existing orders. Existing orders may still fill; accounting and recovery SELLs continue.",
-    "Operator pause lasts only for this process and is not restored after restart.",
-  ].join("\n")
 
   const readPage = ({ page, userId, interaction }) => readTelegramOperatorPage({
     page,
