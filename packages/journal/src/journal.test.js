@@ -15,28 +15,45 @@ async function createTestJournal() {
   const logs = []
 
   const logger = {
-    info: (message, context) => logs.push({ level: "info", message, context }),
-    system: (message, context) => logs.push({ level: "system", message, context }),
-    error: (message, context) =>
-      logs.push({ level: "error", message, context }),
+    info: (...loggerArguments) => {
+      const [message, context] = loggerArguments
+      logs.push({ level: "info",
+message,
+context })
+    },
+    system: (...loggerArguments) => {
+      const [message, context] = loggerArguments
+      logs.push({ level: "system",
+message,
+context })
+    },
+    error: (...loggerArguments) => {
+      const [message, context] = loggerArguments
+      logs.push({ level: "error",
+message,
+context })
+    },
   }
 
   const eventBus = new EventBus({ logger })
-  const journal = new Journal({ eventBus, directory, logger })
+  const journal = new Journal({ eventBus,
+directory,
+logger })
 
   const result = await journal.start()
 
   assert.equal(result.ok, true)
 
-  return { directory, eventBus, journal, logs, filePath: result.filePath }
+  return { directory,
+eventBus,
+journal,
+logs,
+filePath: result.filePath }
 }
 
 
-test("prevents a second process from writing to an active journal directory", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-process-lock-"))
-  const eventBus = new EventBus()
-  const journal = new Journal({ eventBus, directory })
-  const childScript = `
+function createSecondProcessJournalScript() {
+  return `
     import path from "node:path"
     import { pathToFileURL } from "node:url"
     const { EventBus } = await import(pathToFileURL(path.resolve("../event-bus/src/index.js")))
@@ -53,10 +70,19 @@ test("prevents a second process from writing to an active journal directory", as
     await eventBus.close()
     process.stdout.write(JSON.stringify(outcome))
   `
+}
+
+test("prevents a second process from writing to an active journal directory", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-process-lock-"))
+  const eventBus = new EventBus()
+  const journal = new Journal({ eventBus,
+directory })
+  const childScript = createSecondProcessJournalScript()
   const runChildJournal = () => spawnSync(
     process.execPath,
     ["--input-type=module", "-e", childScript, directory],
-    { encoding: "utf8", timeout: 5000 },
+    { encoding: "utf8",
+timeout: 5000 },
   )
 
   try {
@@ -80,7 +106,8 @@ test("prevents a second process from writing to an active journal directory", as
     )
     assert.deepEqual(
       JSON.parse(competingProcess.stdout),
-      { ok: false, code: "JOURNAL_DIRECTORY_LOCKED" },
+      { ok: false,
+code: "JOURNAL_DIRECTORY_LOCKED" },
       "A separate process must fail closed while another process owns the same Journal directory.",
     )
 
@@ -104,13 +131,16 @@ test("prevents a second process from writing to an active journal directory", as
     )
     assert.deepEqual(
       JSON.parse(afterRelease.stdout),
-      { ok: true, code: null, closeOk: true },
+      { ok: true,
+code: null,
+closeOk: true },
       "A different process may acquire the directory only after the prior writer has durably closed.",
     )
   } finally {
     await journal.close()
     await eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -118,11 +148,16 @@ test("prevents a second process from writing to an active journal directory", as
 test("refuses to take over an existing journal directory lock", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-stale-lock-"))
   const lockFilePath = path.join(directory, ".coinzilla-journal.lock")
-  const existingLock = JSON.stringify({ pid: 98765, startedAt: "2026-11-08T00:00:00.000Z" }) + "\n"
+  const existingLock = `${JSON.stringify({ pid: 98765,
+startedAt: "2026-11-08T00:00:00.000Z" })  }\n`
   await writeFile(lockFilePath, existingLock, { flag: "wx" })
-  const logger = { info() {}, system() {}, error() {} }
+  const logger = { info() {},
+system() {},
+error() {} }
   const eventBus = new EventBus({ logger })
-  const journal = new Journal({ eventBus, directory, logger })
+  const journal = new Journal({ eventBus,
+directory,
+logger })
 
   try {
     const result = await journal.start()
@@ -149,7 +184,8 @@ test("refuses to take over an existing journal directory lock", async () => {
   } finally {
     await journal.close()
     await eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -158,7 +194,8 @@ test("releases directory ownership when session-file creation fails during start
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-lock-rollback-"))
   const lockFilePath = path.join(directory, ".coinzilla-journal.lock")
   const eventBus = new EventBus()
-  const journal = new Journal({ eventBus, directory })
+  const journal = new Journal({ eventBus,
+directory })
   let observedLockBeforeSessionCreation = false
 
   journal.store.createSession = async () => {
@@ -196,7 +233,8 @@ test("releases directory ownership when session-file creation fails during start
   } finally {
     await journal.close()
     await eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -217,7 +255,8 @@ test("creates a timestamped JSONL session file", async () => {
   } finally {
     await context.journal.close()
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
@@ -265,7 +304,8 @@ test("uses the supplied process identity in its exclusive session filename", asy
   } finally {
     await journal.close()
     await eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -303,7 +343,8 @@ test("writes published events as JSONL records", async () => {
   } finally {
     await context.journal.close()
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
@@ -328,25 +369,28 @@ test("preserves event order when multiple events are published", async () => {
 
     const result = await context.journal.flush()
 
-    assert.equal(result.ok, true)
+    assert.equal(result.ok, true, "The Journal must durably flush all published events before the ordering assertion.")
 
     const content = await readFile(context.filePath, "utf8")
     const events = content
       .trim()
       .split("\n")
       .map((line) => {
-        const { __coinzillaJournal, ...event } = JSON.parse(line)
+        const event = JSON.parse(line)
+        delete event.__coinzillaJournal
         return event
       })
 
     assert.deepEqual(
       events.map((event) => event.name),
       ["bot.started", "ws.connected", "order.created"],
+      "The persisted JSONL session must retain the exact EventBus publication order.",
     )
   } finally {
     await context.journal.close()
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
@@ -365,13 +409,15 @@ test("close drains events published immediately before shutdown", async () => {
     assert.equal(result.ok, true)
 
     const content = await readFile(context.filePath, "utf8")
-    const { __coinzillaJournal, ...event } = JSON.parse(content.trim())
+    const event = JSON.parse(content.trim())
+    delete event.__coinzillaJournal
 
-    assert.equal(event.name, "order.filled")
-    assert.equal(event.data.orderId, "456")
+    assert.equal(event.name, "order.filled", "The event published immediately before shutdown must remain in the persisted session.")
+    assert.equal(event.data.orderId, "456", "The shutdown drain must preserve the exact order identifier from the accepted event.")
   } finally {
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
@@ -391,7 +437,8 @@ test("rejects records after close", async () => {
     assert.equal(result.ok, false)
   } finally {
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
@@ -405,7 +452,8 @@ test("logs journal startup and shutdown", async () => {
     assert.ok(context.logs.some(({ level, message }) => level === "system" && message === "Journal closed"))
   } finally {
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
@@ -427,7 +475,9 @@ test("rejects invalid records and makes serialization failure visible to flush a
     assert.equal(context.journal.writeErrors.length, 1, "The original serialization failure must be retained for lifecycle durability results.")
 
     const subsequentResult = await context.journal.record({
-      event: { id: "event-after-invalid", name: "journal.valid", data: { value: "valid" } },
+      event: { id: "event-after-invalid",
+name: "journal.valid",
+data: { value: "valid" } },
     })
     assert.equal(subsequentResult.ok, false, "The writer must reject later records after a source event could not be serialized losslessly.")
 
@@ -444,14 +494,16 @@ test("rejects invalid records and makes serialization failure visible to flush a
   } finally {
     await context.journal.close()
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
 test("rejects overlapping startup attempts without leaking a session file or subscription", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-concurrent-start-"))
   const eventBus = new EventBus()
-  const journal = new Journal({ eventBus, directory })
+  const journal = new Journal({ eventBus,
+directory })
 
   try {
     const [first, second] = await Promise.all([journal.start(), journal.start()])
@@ -504,15 +556,12 @@ test("rejects overlapping startup attempts without leaking a session file or sub
     )
   } finally {
     await eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
-test("waits for startup cancellation to release the writer lock before close resolves", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-start-close-race-"))
-  const eventBus = new EventBus()
-  const journal = new Journal({ eventBus, directory })
-
+function blockSessionCreation({ journal }) {
   let releaseCreateSessionFile
   let signalCreateSessionFileStarted
   const createSessionFileStarted = new Promise((resolve) => {
@@ -527,6 +576,23 @@ test("waits for startup cancellation to release the writer lock before close res
     await createSessionFileGate
     return originalCreateSession()
   }
+
+  return {
+    createSessionFileStarted,
+    releaseCreateSessionFile,
+  }
+}
+
+test("waits for startup cancellation to release the writer lock before close resolves", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-start-close-race-"))
+  const eventBus = new EventBus()
+  const journal = new Journal({ eventBus,
+directory })
+
+  const {
+    createSessionFileStarted,
+    releaseCreateSessionFile,
+  } = blockSessionCreation({ journal })
 
   let startPromise
   let closePromise
@@ -597,7 +663,8 @@ test("waits for startup cancellation to release the writer lock before close res
     releaseCreateSessionFile()
     await Promise.allSettled([startPromise, closePromise].filter(Boolean))
     await eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -615,7 +682,8 @@ test("does not allow a journal to start more than once or restart after close", 
     assert.equal(restart.ok, false)
   } finally {
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
@@ -628,7 +696,8 @@ test("rejects startup without a usable event bus", async () => {
     assert.match(result.errors[0].message, /valid eventBus is required/)
     assert.equal(journal.started, false)
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -637,21 +706,24 @@ test("cleans up the file handle when a closed event bus rejects subscription", a
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-closed-bus-"))
   const eventBus = new EventBus()
   await eventBus.close()
-  const journal = new Journal({ eventBus, directory })
+  const journal = new Journal({ eventBus,
+directory })
   try {
     const result = await journal.start()
     assert.equal(result.ok, false)
     assert.equal(journal.store.sessionHandle, null)
     assert.equal(journal.started, false)
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
 
 test("rejects an empty directory before creating a session file", async () => {
   const eventBus = new EventBus()
-  const journal = new Journal({ eventBus, directory: "   " })
+  const journal = new Journal({ eventBus,
+directory: "   " })
   const result = await journal.start()
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /journal directory is required/)
@@ -663,124 +735,186 @@ test("rejects an empty directory before creating a session file", async () => {
 test("can close before startup and then rejects startup", async () => {
   const journal = new Journal({ directory: "/unused" })
   const closeResult = await journal.close()
-  assert.equal(closeResult.ok, true)
-  assert.equal(closeResult.closed, true)
+  assert.equal(
+    closeResult.ok,
+    true,
+    "Closing a Journal before startup must complete without acquiring writer resources.",
+  )
+  assert.equal(
+    closeResult.closed,
+    true,
+    "A Journal closed before startup must enter its terminal closed state.",
+  )
   const startResult = await journal.start()
-  assert.equal(startResult.ok, false)
+  assert.equal(
+    startResult.ok,
+    false,
+    "A Journal that has already been closed must reject a later startup attempt.",
+  )
 })
 
 
 
+async function assertFirstAppendFailure({
+    context,
+    appendState,
+  }) {
+  const first = await context.journal.record({
+    event: {
+      id: "append-failed",
+      name: "journal.append_failure",
+    },
+  })
+  assert.equal(
+    first.ok,
+    false,
+    "The record whose append fails must report the original storage error.",
+  )
+  assert.equal(
+    first.errors[0],
+    appendState.appendError,
+    "The first failed append must preserve the original adapter error object.",
+  )
+  assert.ok(
+    appendState.partialContent.length > 0,
+    "The injected failure must occur after a non-empty prefix reaches the session file.",
+  )
+  assert.equal(
+    await readFile(context.filePath, "utf8"),
+    appendState.partialContent,
+    "The deterministic append failure must leave the exact prefix already written to the session file.",
+  )
+}
+
+async function assertLaterAppendAndFlushAreRejected({
+    context,
+    appendState,
+  }) {
+  const second = await context.journal.record({
+    event: {
+      id: "append-after-failure",
+      name: "journal.append_after_failure",
+    },
+  })
+  assert.equal(
+    second.ok,
+    false,
+    "A writer with an uncertain failed append must reject later records.",
+  )
+  assert.match(
+    second.errors[0].message,
+    /session is failed after a previous write error/,
+    "Subsequent records must report the poisoned writer state rather than retrying an uncertain append.",
+  )
+  assert.equal(
+    appendState.appendCalls,
+    1,
+    "The adapter must not be called again after the first append failure poisons the writer.",
+  )
+
+  const flushed = await context.journal.flush()
+  assert.equal(
+    flushed.ok,
+    false,
+    "Flush must not claim durability after a failed append.",
+  )
+  assert.match(
+    flushed.errors[0].message,
+    /simulated append failure/,
+    "Flush must retain the original append error.",
+  )
+  assert.equal(
+    appendState.syncCalls,
+    0,
+    "Flush must not sync and claim a healthy write queue after an append failure.",
+  )
+}
+
+async function assertFailedWriterResourcesAreReleased({
+    context,
+    appendState,
+  }) {
+  const closed = await context.journal.close()
+  assert.equal(
+    closed.ok,
+    false,
+    "Close must preserve the failed append outcome rather than claiming durable closure.",
+  )
+  assert.equal(
+    context.journal.closed,
+    true,
+    "The failed writer must still reach the stopped lifecycle state after cleanup.",
+  )
+  assert.equal(
+    context.journal.store.sessionHandle,
+    null,
+    "Close must release the session handle even when an append failed.",
+  )
+  assert.equal(
+    appendState.syncCalls,
+    1,
+    "Close must still attempt its final file-content sync before releasing the session.",
+  )
+  const remainingFiles = await readdir(context.directory)
+  assert.equal(
+    remainingFiles.some((name) => name.endsWith(".lock")),
+    false,
+    "Close must release the directory lock owned by the failed writer.",
+  )
+  assert.equal(
+    await readFile(context.filePath, "utf8"),
+    appendState.partialContent,
+    "Close must preserve the exact partial bytes from the failed append without truncating, rewriting, or repairing the session file.",
+  )
+}
+
+async function assertAppendFailurePoisonsWriter({
+      context,
+      appendState,
+    }) {
+  await assertFirstAppendFailure({
+    context,
+    appendState,
+  })
+  await assertLaterAppendAndFlushAreRejected({
+    context,
+    appendState,
+  })
+  await assertFailedWriterResourcesAreReleased({
+    context,
+    appendState,
+  })
+}
+
 test("poisons the writer after append failure and releases owned resources on close", async () => {
   const context = await createTestJournal()
-  let appendCalls = 0
-  let syncCalls = 0
-  let partialContent = ""
-  const appendError = new Error("simulated append failure")
+  const appendState = {
+    appendCalls: 0,
+    syncCalls: 0,
+    partialContent: "",
+    appendError: new Error("simulated append failure"),
+  }
 
   context.journal.store.append = async (line) => {
-    appendCalls += 1
-    partialContent = line.slice(0, Math.floor(line.length / 2))
-    await context.journal.store.sessionHandle.writeFile(partialContent, "utf8")
-    throw appendError
+    appendState.appendCalls += 1
+    appendState.partialContent = line.slice(0, Math.floor(line.length / 2))
+    await context.journal.store.sessionHandle.writeFile(appendState.partialContent, "utf8")
+    throw appendState.appendError
   }
   context.journal.store.sync = async () => {
-    syncCalls += 1
+    appendState.syncCalls += 1
   }
 
   try {
-    const first = await context.journal.record({
-      event: { id: "append-failed", name: "journal.append_failure" },
+    await assertAppendFailurePoisonsWriter({
+      context,
+      appendState,
     })
-    assert.equal(
-      first.ok,
-      false,
-      "The record whose append fails must report the original storage error.",
-    )
-    assert.equal(
-      first.errors[0],
-      appendError,
-      "The first failed append must preserve the original adapter error object.",
-    )
-    assert.ok(partialContent.length > 0, "The injected failure must occur after a non-empty prefix reaches the session file.")
-    assert.equal(
-      await readFile(context.filePath, "utf8"),
-      partialContent,
-      "The deterministic append failure must leave the exact prefix already written to the session file.",
-    )
-
-    const second = await context.journal.record({
-      event: { id: "append-after-failure", name: "journal.append_after_failure" },
-    })
-    assert.equal(
-      second.ok,
-      false,
-      "A writer with an uncertain failed append must reject later records.",
-    )
-    assert.match(
-      second.errors[0].message,
-      /session is failed after a previous write error/,
-      "Subsequent records must report the poisoned writer state rather than retrying an uncertain append.",
-    )
-    assert.equal(
-      appendCalls,
-      1,
-      "The adapter must not be called again after the first append failure poisons the writer.",
-    )
-
-    const flushed = await context.journal.flush()
-    assert.equal(
-      flushed.ok,
-      false,
-      "Flush must not claim durability after a failed append.",
-    )
-    assert.match(
-      flushed.errors[0].message,
-      /simulated append failure/,
-      "Flush must retain the original append error.",
-    )
-    assert.equal(
-      syncCalls,
-      0,
-      "Flush must not sync and claim a healthy write queue after an append failure.",
-    )
-
-    const closed = await context.journal.close()
-    assert.equal(
-      closed.ok,
-      false,
-      "Close must preserve the failed append outcome rather than claiming durable closure.",
-    )
-    assert.equal(
-      context.journal.closed,
-      true,
-      "The failed writer must still reach the stopped lifecycle state after cleanup.",
-    )
-    assert.equal(
-      context.journal.store.sessionHandle,
-      null,
-      "Close must release the session handle even when an append failed.",
-    )
-    assert.equal(
-      syncCalls,
-      1,
-      "Close must still attempt its final file-content sync before releasing the session.",
-    )
-    const remainingFiles = await readdir(context.directory)
-    assert.equal(
-      remainingFiles.some((name) => name.endsWith(".lock")),
-      false,
-      "Close must release the directory lock owned by the failed writer.",
-    )
-    assert.equal(
-      await readFile(context.filePath, "utf8"),
-      partialContent,
-      "Close must preserve the exact partial bytes from the failed append without truncating, rewriting, or repairing the session file.",
-    )
   } finally {
     await context.journal.close()
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
@@ -801,7 +935,8 @@ test("reports a failed disk sync instead of claiming the journal was flushed", a
     delete context.journal.store.sync
     await context.journal.close()
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
@@ -821,7 +956,8 @@ test("does not claim a durable close on a repeated close after sync failure", as
     assert.match(second.errors[0].message, /without durable confirmation/)
   } finally {
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
@@ -841,7 +977,8 @@ test("reports a failed disk sync during close and still closes the file handle",
     assert.equal(context.journal.closed, true)
   } finally {
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
@@ -865,7 +1002,8 @@ test("keeps close successful when the shutdown system logger throws", async () =
     assert.equal(context.journal.closed, true)
   } finally {
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
@@ -888,7 +1026,8 @@ test("returns close errors even when the error logger throws", async () => {
     assert.equal(context.journal.closed, true)
   } finally {
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
@@ -906,7 +1045,9 @@ test("keeps startup successful when the startup system logger throws", async () 
       throw new Error("simulated error logger failure")
     },
   }
-  const journal = new Journal({ eventBus, directory, logger })
+  const journal = new Journal({ eventBus,
+directory,
+logger })
 
   try {
     const result = await journal.start()
@@ -922,7 +1063,8 @@ test("keeps startup successful when the startup system logger throws", async () 
     assert.equal(journal.store.sessionHandle, null)
   } finally {
     await eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -943,7 +1085,8 @@ test("returns a flush error when the event bus flush rejects", async () => {
     context.eventBus.flush = EventBus.prototype.flush
     await context.journal.close()
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
@@ -969,126 +1112,157 @@ test("still closes the journal when unsubscribe and event bus flush throw", asyn
   } finally {
     context.eventBus.flush = EventBus.prototype.flush
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
 
+async function publishRecoveryAuditEvent({ context, attempt }) {
+  const published = context.eventBus.publish({
+    name: "account.snapshot_captured",
+    source: "harvester",
+    data: {
+      phase: "RECOVERY",
+      generation: 1,
+      attempt,
+    },
+  })
+  assert.equal(
+    published.ok,
+    true,
+    `Recovery audit attempt ${attempt} must be accepted by EventBus before its durability is checked.`,
+  )
+  return published
+}
+
+async function assertFirstTransientSyncFailure({
+      context,
+      first,
+    }) {
+  const firstFlush = await context.journal.flush()
+  assert.equal(
+    firstFlush.ok,
+    false,
+    "The first flush must report the injected file-sync failure instead of claiming durability.",
+  )
+  assert.equal(
+    firstFlush.durable,
+    undefined,
+    "A failed file sync must not expose a durable confirmation for the first recovery audit event.",
+  )
+  assert.match(
+    firstFlush.errors[0].message,
+    /simulated transient disk sync failure/,
+    "The failed flush result must retain the original transient sync failure message.",
+  )
+
+  const firstWrittenContent = await readFile(context.filePath, "utf8")
+  const firstWrittenRecord = JSON.parse(firstWrittenContent.trim().split("\n")[0])
+  assert.equal(
+    firstWrittenRecord.__coinzillaJournal.id,
+    first.event.id,
+    "The first JSONL record must have completed its write before the failed sync is retried.",
+  )
+}
+
+async function assertTransientSyncRetry({
+      context,
+      first,
+      syncState,
+    }) {
+  const second = await publishRecoveryAuditEvent({
+    context,
+    attempt: 2,
+  })
+  const secondFlush = await context.journal.flush()
+  assert.equal(
+    secondFlush.ok,
+    true,
+    "A later flush on the same Journal instance must recover from the transient sync failure.",
+  )
+  assert.equal(
+    secondFlush.durable,
+    true,
+    "The successful retry flush must confirm durable storage for all completed writes in the session file.",
+  )
+  assert.equal(
+    syncState.attempts,
+    2,
+    "The Journal must attempt one failed sync and one successful retry sync before cleanup.",
+  )
+
+  const records = (await readFile(context.filePath, "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+  assert.equal(
+    records.length,
+    2,
+    "The later successful sync must preserve both the original uncertain audit record and the retry audit record.",
+  )
+  assert.deepEqual(
+    records.map((record) => record.__coinzillaJournal.id),
+    [first.event.id, second.event.id],
+    "The Journal must retain both distinct event IDs in their original append order rather than deduplicating or rewriting evidence.",
+  )
+  assert.deepEqual(
+    records.map((record) => record.data.attempt),
+    [1, 2],
+    "The durable JSONL history must preserve the first and retry audit payloads in publication order.",
+  )
+}
+
 test("retries a transient disk sync failure and durably persists records written before and after it", async () => {
   const context = await createTestJournal()
   const originalSync = context.journal.store.sync.bind(context.journal.store)
-  let syncAttempts = 0
+  const syncState = { attempts: 0 }
 
   try {
     context.journal.store.sync = async () => {
-      syncAttempts += 1
-      if (syncAttempts === 1) {
+      syncState.attempts += 1
+      if (syncState.attempts === 1) {
         throw new Error("simulated transient disk sync failure")
       }
       return originalSync()
     }
 
-    const first = context.eventBus.publish({
-      name: "account.snapshot_captured",
-      source: "harvester",
-      data: { phase: "RECOVERY", generation: 1, attempt: 1 },
+    const first = await publishRecoveryAuditEvent({
+      context,
+      attempt: 1,
     })
-    assert.equal(
-      first.ok,
-      true,
-      "The first recovery audit event must be accepted by the event bus before the transient sync failure is injected.",
-    )
-
-    const firstFlush = await context.journal.flush()
-    assert.equal(
-      firstFlush.ok,
-      false,
-      "The first flush must report the injected file-sync failure instead of claiming durability.",
-    )
-    assert.equal(
-      firstFlush.durable,
-      undefined,
-      "A failed file sync must not expose a durable confirmation for the first recovery audit event.",
-    )
-    assert.match(
-      firstFlush.errors[0].message,
-      /simulated transient disk sync failure/,
-      "The failed flush result must retain the original transient sync failure message.",
-    )
-
-    const firstWrittenContent = await readFile(context.filePath, "utf8")
-    const firstWrittenRecord = JSON.parse(firstWrittenContent.trim().split("\n")[0])
-    assert.equal(
-      firstWrittenRecord.__coinzillaJournal.id,
-      first.event.id,
-      "The first JSONL record must have completed its write before the failed sync is retried.",
-    )
-
-    const second = context.eventBus.publish({
-      name: "account.snapshot_captured",
-      source: "harvester",
-      data: { phase: "RECOVERY", generation: 1, attempt: 2 },
+    await assertFirstTransientSyncFailure({
+      context,
+      first,
     })
-    assert.equal(
-      second.ok,
-      true,
-      "The retry audit event must be accepted after the transient sync failure without restarting the Journal.",
-    )
 
-    const secondFlush = await context.journal.flush()
-    assert.equal(
-      secondFlush.ok,
-      true,
-      "A later flush on the same Journal instance must recover from the transient sync failure.",
-    )
-    assert.equal(
-      secondFlush.durable,
-      true,
-      "The successful retry flush must confirm durable storage for all completed writes in the session file.",
-    )
-    assert.equal(
-      syncAttempts,
-      2,
-      "The Journal must attempt one failed sync and one successful retry sync before cleanup.",
-    )
-
-    const records = (await readFile(context.filePath, "utf8"))
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line))
-    assert.equal(
-      records.length,
-      2,
-      "The later successful sync must preserve both the original uncertain audit record and the retry audit record.",
-    )
-    assert.deepEqual(
-      records.map((record) => record.__coinzillaJournal.id),
-      [first.event.id, second.event.id],
-      "The Journal must retain both distinct event IDs in their original append order rather than deduplicating or rewriting evidence.",
-    )
-    assert.deepEqual(
-      records.map((record) => record.data.attempt),
-      [1, 2],
-      "The durable JSONL history must preserve the first and retry audit payloads in publication order.",
-    )
+    await assertTransientSyncRetry({
+      context,
+      first,
+      syncState,
+    })
   } finally {
     if (context.journal.store.sessionHandle) {
       delete context.journal.store.sync
     }
     await context.journal.close()
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
 
-test("delegates writer lifecycle and record persistence to its injected internal store", async () => {
+async function createInjectedJournalStoreFixture() {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-store-injection-"))
   const eventBus = new EventBus()
   const storeCalls = []
   const expectedFilePath = "virtual-journal/session.jsonl"
   const sessionFileName = "2026-11-08_12-30-00.jsonl"
-  const sessionContent = `${JSON.stringify({ id: "stored-record", name: "stored.event" })}\n`
+  const sessionContent = `${JSON.stringify({
+    id: "stored-record",
+    name: "stored.event",
+  })}\n`
   const store = {
     ensureDirectory: async () => storeCalls.push("ensureDirectory"),
     acquireWriter: async () => storeCalls.push("acquireWriter"),
@@ -1096,13 +1270,19 @@ test("delegates writer lifecycle and record persistence to its injected internal
       storeCalls.push("createSession")
       return { filePath: expectedFilePath }
     },
-    append: async (line) => storeCalls.push({ operation: "append", line }),
+    append: async (line) => storeCalls.push({
+      operation: "append",
+      line,
+    }),
     sync: async () => storeCalls.push("sync"),
     closeSession: async () => storeCalls.push("closeSession"),
     releaseWriter: async () => storeCalls.push("releaseWriter"),
     listSessions: async () => {
       storeCalls.push("listSessions")
-      return [{ name: sessionFileName, isFile: true }]
+      return [{
+        name: sessionFileName,
+        isFile: true,
+      }]
     },
     statSession: async () => {
       storeCalls.push("statSession")
@@ -1119,100 +1299,239 @@ test("delegates writer lifecycle and record persistence to its injected internal
     [JOURNAL_STORE]: store,
   })
 
+  return {
+    directory,
+    eventBus,
+    storeCalls,
+    expectedFilePath,
+    journal,
+  }
+}
+
+function assertInjectedStoreCallSequence({ storeCalls }) {
+  assert.deepEqual(
+    storeCalls.map((call) => typeof call === "string" ? call : call.operation),
+    [
+      "ensureDirectory",
+      "acquireWriter",
+      "createSession",
+      "append",
+      "sync",
+      "sync",
+      "closeSession",
+      "releaseWriter",
+      "listSessions",
+      "statSession",
+      "readSession",
+      "listSessions",
+      "statSession",
+      "readSession",
+    ],
+    "The Journal service must delegate writer lifecycle, append, sync, bounded discovery/read, close, and release operations in order.",
+  )
+  const appendCall = storeCalls.find((call) => typeof call === "object" && call.operation === "append")
+  assert.equal(
+    appendCall.line.includes("journal.store_delegation_verified"),
+    true,
+    "The injected store must receive the serialized JSONL record produced from the EventBus source event.",
+  )
+}
+
+async function assertInjectedJournalStoreLifecycle({ fixture }) {
+  const { journal, eventBus, storeCalls, expectedFilePath } = fixture
+  const startResult = await journal.start()
+  assert.equal(
+    startResult.ok,
+    true,
+    "Journal startup must succeed when its injected persistence store completes directory acquisition and session creation.",
+  )
+  assert.equal(
+    startResult.filePath,
+    expectedFilePath,
+    "The session path returned by Journal must come from the injected store rather than direct filesystem access.",
+  )
+
+  const published = eventBus.publish({
+    name: "journal.store_delegation_verified",
+    source: "unit-test",
+    data: { contract: "internal-store" },
+  })
+  assert.equal(
+    published.ok,
+    true,
+    "The EventBus must accept a source event while Journal delegates persistence to the injected store.",
+  )
+
+  const flushResult = await journal.flush()
+  assert.equal(
+    flushResult.ok,
+    true,
+    "Journal flush must delegate file-content synchronization to the injected store after draining EventBus and queued writes.",
+  )
+
+  const closeResult = await journal.close()
+  assert.equal(
+    closeResult.ok,
+    true,
+    "Journal close must close the injected session and release only the writer ownership acquired through that store.",
+  )
+
+  const readResult = await journal.read()
+  assert.equal(
+    readResult.ok,
+    true,
+    "Journal read must discover and load sessions through the same injected persistence boundary after the writer stops.",
+  )
+  assert.equal(
+    readResult.records[0].id,
+    "stored-record",
+    "The recovered snapshot must contain the record supplied by the injected store rather than the physical test directory.",
+  )
+
+  const replayedIds = []
+  const replayResult = await journal.replay({
+    handler: async ({ record }) => replayedIds.push(record.id),
+  })
+  assert.equal(
+    replayResult.ok,
+    true,
+    "Journal replay must validate and replay records obtained through the injected persistence boundary.",
+  )
+  assert.deepEqual(
+    replayedIds,
+    ["stored-record"],
+    "The replay handler must receive the recovered record supplied by the injected store.",
+  )
+
+  assertInjectedStoreCallSequence({ storeCalls })
+}
+
+function createDeferredPromise() {
+  let resolve
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return {
+    promise,
+    resolve,
+  }
+}
+
+async function createConcurrentCloseFixture() {
+  const eventBus = new EventBus()
+  const storeCalls = []
+  const store = {
+    ensureDirectory: async () => storeCalls.push("ensureDirectory"),
+    acquireWriter: async () => storeCalls.push("acquireWriter"),
+    createSession: async () => {
+      storeCalls.push("createSession")
+      return { filePath: "virtual-journal/session.jsonl" }
+    },
+    append: async () => storeCalls.push("append"),
+    sync: async () => storeCalls.push("sync"),
+    closeSession: async () => storeCalls.push("closeSession"),
+    releaseWriter: async () => storeCalls.push("releaseWriter"),
+  }
+  const journal = new Journal({
+    eventBus,
+    directory: "virtual-journal",
+    [JOURNAL_STORE]: store,
+  })
+  const firstFlushStarted = createDeferredPromise()
+  const firstFlushGate = createDeferredPromise()
+  const originalFlush = eventBus.flush.bind(eventBus)
+  const fixture = {
+    eventBus,
+    storeCalls,
+    journal,
+    firstFlushStarted,
+    firstFlushGate,
+    originalFlush,
+    closePromises: [],
+    flushCalls: 0,
+  }
+  eventBus.flush = async () => {
+    fixture.flushCalls += 1
+    if (fixture.flushCalls === 1) {
+      firstFlushStarted.resolve()
+      await firstFlushGate.promise
+    }
+    return {
+      ok: true,
+      errors: [],
+    }
+  }
+  return fixture
+}
+
+async function assertConcurrentCloseIsRejected({ fixture }) {
+  const { journal, firstFlushStarted, firstFlushGate, closePromises } = fixture
+  const startResult = await journal.start()
+  assert.equal(
+    startResult.ok,
+    true,
+    "The Journal must become active before the test holds its first shutdown flush.",
+  )
+
+  const firstClosePromise = journal.close()
+  closePromises.push(firstClosePromise)
+  await firstFlushStarted.promise
+
+  const secondClosePromise = journal.close()
+  closePromises.push(secondClosePromise)
+  assert.equal(
+    fixture.flushCalls,
+    1,
+    "A concurrent close attempt must be rejected before it invokes a second EventBus flush while the first close is still draining.",
+  )
+
+  const secondCloseResult = await secondClosePromise
+  assert.equal(
+    secondCloseResult.ok,
+    false,
+    "The second close call must report that another close operation already owns shutdown.",
+  )
+  assert.match(
+    secondCloseResult.errors[0].message,
+    /already closing/,
+    "The concurrent close failure must preserve the existing already-closing result contract.",
+  )
+
+  firstFlushGate.resolve()
+  const firstCloseResult = await firstClosePromise
+  assert.equal(
+    firstCloseResult.ok,
+    true,
+    "The first close operation must finish successfully after the in-flight EventBus flush is released.",
+  )
+  assert.equal(
+    fixture.flushCalls,
+    1,
+    "Exactly one EventBus flush must participate in a single active Journal close operation.",
+  )
+  assert.deepEqual(
+    fixture.storeCalls,
+    ["ensureDirectory", "acquireWriter", "createSession", "sync", "closeSession", "releaseWriter"],
+    "Only the close operation that owns shutdown may sync and release the session and writer resources.",
+  )
+  assert.equal(
+    journal.closed,
+    true,
+    "The owning close operation must leave the Journal in its terminal closed state.",
+  )
+}
+
+test("delegates writer lifecycle and record persistence to its injected internal store", async () => {
+  const fixture = await createInjectedJournalStoreFixture()
   try {
-    const startResult = await journal.start()
-    assert.equal(
-      startResult.ok,
-      true,
-      "Journal startup must succeed when its injected persistence store completes directory acquisition and session creation.",
-    )
-    assert.equal(
-      startResult.filePath,
-      expectedFilePath,
-      "The session path returned by Journal must come from the injected store rather than direct filesystem access.",
-    )
-
-    const published = eventBus.publish({
-      name: "journal.store_delegation_verified",
-      source: "unit-test",
-      data: { contract: "internal-store" },
+    await assertInjectedJournalStoreLifecycle({ fixture })
+  } finally {
+    await fixture.journal.close()
+    await fixture.eventBus.close()
+    await rm(fixture.directory, {
+      recursive: true,
+      force: true,
     })
-    assert.equal(
-      published.ok,
-      true,
-      "The EventBus must accept a source event while Journal delegates persistence to the injected store.",
-    )
-
-    const flushResult = await journal.flush()
-    assert.equal(
-      flushResult.ok,
-      true,
-      "Journal flush must delegate file-content synchronization to the injected store after draining EventBus and queued writes.",
-    )
-
-    const closeResult = await journal.close()
-    assert.equal(
-      closeResult.ok,
-      true,
-      "Journal close must close the injected session and release only the writer ownership acquired through that store.",
-    )
-
-    const readResult = await journal.read()
-    assert.equal(
-      readResult.ok,
-      true,
-      "Journal read must discover and load sessions through the same injected persistence boundary after the writer stops.",
-    )
-    assert.equal(
-      readResult.records[0].id,
-      "stored-record",
-      "The recovered snapshot must contain the record supplied by the injected store rather than the physical test directory.",
-    )
-
-    const replayedIds = []
-    const replayResult = await journal.replay({
-      handler: async ({ record }) => replayedIds.push(record.id),
-    })
-    assert.equal(
-      replayResult.ok,
-      true,
-      "Journal replay must validate and replay records obtained through the injected persistence boundary.",
-    )
-    assert.deepEqual(
-      replayedIds,
-      ["stored-record"],
-      "The replay handler must receive the recovered record supplied by the injected store.",
-    )
-
-    assert.deepEqual(
-      storeCalls.map((call) => typeof call === "string" ? call : call.operation),
-      [
-        "ensureDirectory",
-        "acquireWriter",
-        "createSession",
-        "append",
-        "sync",
-        "sync",
-        "closeSession",
-        "releaseWriter",
-        "listSessions",
-        "statSession",
-        "readSession",
-        "listSessions",
-        "statSession",
-        "readSession",
-      ],
-      "The Journal service must delegate writer lifecycle, append, sync, bounded discovery/read, close, and release operations in order.",
-    )
-    const appendCall = storeCalls.find((call) => typeof call === "object" && call.operation === "append")
-    assert.equal(
-      appendCall.line.includes("journal.store_delegation_verified"),
-      true,
-      "The injected store must receive the serialized JSONL record produced from the EventBus source event.",
-    )  } finally {
-    await journal.close()
-    await eventBus.close()
-    await rm(directory, { recursive: true, force: true })
   }
 })
 
@@ -1251,122 +1570,36 @@ test("keeps the legacy internal file-handle override forwarded to the store-owne
 
 
 test("rejects a concurrent close without starting a second EventBus flush", async () => {
-  const eventBus = new EventBus()
-  const storeCalls = []
-  const store = {
-    ensureDirectory: async () => storeCalls.push("ensureDirectory"),
-    acquireWriter: async () => storeCalls.push("acquireWriter"),
-    createSession: async () => {
-      storeCalls.push("createSession")
-      return { filePath: "virtual-journal/session.jsonl" }
-    },
-    append: async () => storeCalls.push("append"),
-    sync: async () => storeCalls.push("sync"),
-    closeSession: async () => storeCalls.push("closeSession"),
-    releaseWriter: async () => storeCalls.push("releaseWriter"),
-  }
-  const journal = new Journal({
-    eventBus,
-    directory: "virtual-journal",
-    [JOURNAL_STORE]: store,
-  })
-
-  let releaseFirstFlush
-  let signalFirstFlushStarted
-  const firstFlushStarted = new Promise((resolve) => {
-    signalFirstFlushStarted = resolve
-  })
-  const firstFlushGate = new Promise((resolve) => {
-    releaseFirstFlush = resolve
-  })
-  let flushCalls = 0
-  eventBus.flush = async () => {
-    flushCalls += 1
-    if (flushCalls === 1) {
-      signalFirstFlushStarted()
-      await firstFlushGate
-    }
-    return { ok: true, errors: [] }
-  }
-
-  let firstClosePromise
-  let secondClosePromise
+  const fixture = await createConcurrentCloseFixture()
   try {
-    const startResult = await journal.start()
-    assert.equal(
-      startResult.ok,
-      true,
-      "The Journal must become active before the test holds its first shutdown flush.",
-    )
-
-    firstClosePromise = journal.close()
-    await firstFlushStarted
-
-    secondClosePromise = journal.close()
-    assert.equal(
-      flushCalls,
-      1,
-      "A concurrent close attempt must be rejected before it invokes a second EventBus flush while the first close is still draining.",
-    )
-
-    const secondCloseResult = await secondClosePromise
-    assert.equal(
-      secondCloseResult.ok,
-      false,
-      "The second close call must report that another close operation already owns shutdown.",
-    )
-    assert.match(
-      secondCloseResult.errors[0].message,
-      /already closing/,
-      "The concurrent close failure must preserve the existing already-closing result contract.",
-    )
-
-    releaseFirstFlush()
-    const firstCloseResult = await firstClosePromise
-    assert.equal(
-      firstCloseResult.ok,
-      true,
-      "The first close operation must finish successfully after the in-flight EventBus flush is released.",
-    )
-    assert.equal(
-      flushCalls,
-      1,
-      "Exactly one EventBus flush must participate in a single active Journal close operation.",
-    )
-    assert.deepEqual(
-      storeCalls,
-      ["ensureDirectory", "acquireWriter", "createSession", "sync", "closeSession", "releaseWriter"],
-      "Only the close operation that owns shutdown may sync and release the session and writer resources.",
-    )
-    assert.equal(
-      journal.closed,
-      true,
-      "The owning close operation must leave the Journal in its terminal closed state.",
-    )
+    await assertConcurrentCloseIsRejected({ fixture })
   } finally {
-    releaseFirstFlush()
-    await Promise.allSettled([firstClosePromise, secondClosePromise].filter(Boolean))
-    eventBus.flush = EventBus.prototype.flush
-    await eventBus.close()
+    fixture.firstFlushGate.resolve()
+    await Promise.allSettled(fixture.closePromises)
+    fixture.eventBus.flush = fixture.originalFlush
+    await fixture.eventBus.close()
   }
 })
 
 
-test("waits for an active flush before closing the session and rejects flushes after close claims shutdown", async () => {
+async function createActiveFlushFixture() {
   const eventBus = new EventBus()
   const storeCalls = []
-  let activeSyncs = 0
-  let syncCalls = 0
-  let concurrentSync = false
-  let closeWhileSyncActive = false
-  let releaseFirstSync
-  let signalFirstSyncStarted
-  const firstSyncStarted = new Promise((resolve) => {
-    signalFirstSyncStarted = resolve
-  })
-  const firstSyncGate = new Promise((resolve) => {
-    releaseFirstSync = resolve
-  })
+  const firstSyncStarted = createDeferredPromise()
+  const firstSyncGate = createDeferredPromise()
+  const fixture = {
+    eventBus,
+    storeCalls,
+    firstSyncStarted,
+    firstSyncGate,
+    activeSyncs: 0,
+    syncCalls: 0,
+    concurrentSync: false,
+    closeWhileSyncActive: false,
+    busFlushCalls: 0,
+    flushPromise: null,
+    closePromise: null,
+  }
   const store = {
     ensureDirectory: async () => storeCalls.push("ensureDirectory"),
     acquireWriter: async () => storeCalls.push("acquireWriter"),
@@ -1376,25 +1609,25 @@ test("waits for an active flush before closing the session and rejects flushes a
     },
     append: async () => storeCalls.push("append"),
     sync: async () => {
-      syncCalls += 1
-      activeSyncs += 1
-      if (activeSyncs > 1) {
-        concurrentSync = true
-        activeSyncs -= 1
+      fixture.syncCalls += 1
+      fixture.activeSyncs += 1
+      if (fixture.activeSyncs > 1) {
+        fixture.concurrentSync = true
+        fixture.activeSyncs -= 1
         throw new Error("Journal session sync operations must not overlap.")
       }
       try {
-        if (syncCalls === 1) {
-          signalFirstSyncStarted()
-          await firstSyncGate
+        if (fixture.syncCalls === 1) {
+          firstSyncStarted.resolve()
+          await firstSyncGate.promise
         }
         storeCalls.push("sync")
       } finally {
-        activeSyncs -= 1
+        fixture.activeSyncs -= 1
       }
     },
     closeSession: async () => {
-      closeWhileSyncActive ||= activeSyncs > 0
+      fixture.closeWhileSyncActive ||= fixture.activeSyncs > 0
       storeCalls.push("closeSession")
     },
     releaseWriter: async () => storeCalls.push("releaseWriter"),
@@ -1404,118 +1637,114 @@ test("waits for an active flush before closing the session and rejects flushes a
     directory: "virtual-journal",
     [JOURNAL_STORE]: store,
   })
-  const originalFlush = eventBus.flush.bind(eventBus)
-  let busFlushCalls = 0
+  fixture.journal = journal
+  fixture.originalFlush = eventBus.flush.bind(eventBus)
   eventBus.flush = async () => {
-    busFlushCalls += 1
-    return { ok: true, errors: [] }
+    fixture.busFlushCalls += 1
+    return {
+      ok: true,
+      errors: [],
+    }
   }
+  return fixture
+}
 
-  let flushPromise
-  let closePromise
-  try {
-    const startResult = await journal.start()
-    assert.equal(
-      startResult.ok,
-      true,
-      "The Journal must be active before the test holds a flush inside the session sync boundary.",
-    )
+async function assertCloseWaitsForActiveFlush({ fixture }) {
+  const startResult = await fixture.journal.start()
+  assert.equal(
+    startResult.ok,
+    true,
+    "The Journal must be active before the test holds a flush inside the session sync boundary.",
+  )
 
-    flushPromise = journal.flush()
-    await firstSyncStarted
+  fixture.flushPromise = fixture.journal.flush()
+  await fixture.firstSyncStarted.promise
+  fixture.closePromise = fixture.journal.close()
+  const flushDuringClose = await fixture.journal.flush()
+  assert.equal(
+    flushDuringClose.ok,
+    false,
+    "A new flush must be rejected as soon as close owns shutdown, before the later record-admission cutoff.",
+  )
+  assert.equal(
+    flushDuringClose.errors[0].message,
+    "Journal must be started to flush durable records",
+    "A flush rejected by close ownership must return the normal stopped/closing guard error, not reach storage.",
+  )
+  assert.equal(
+    fixture.syncCalls,
+    1,
+    "Close must wait for the already-running flush rather than starting a concurrent final session sync.",
+  )
+  assert.equal(
+    fixture.busFlushCalls,
+    1,
+    "Close must wait for the active flush before starting its own final EventBus drain.",
+  )
 
-    closePromise = journal.close()
-    const flushDuringClose = await journal.flush()
-    assert.equal(
-      flushDuringClose.ok,
-      false,
-      "A new flush must be rejected as soon as close owns shutdown, before the later record-admission cutoff.",
-    )
-    assert.equal(
-      flushDuringClose.errors[0].message,
-      "Journal must be started to flush durable records",
-      "A flush rejected by close ownership must return the normal stopped/closing guard error, not reach storage.",
-    )
-    assert.equal(
-      syncCalls,
-      1,
-      "Close must wait for the already-running flush rather than starting a concurrent final session sync.",
-    )
-    assert.equal(
-      busFlushCalls,
-      1,
-      "Close must wait for the active flush before starting its own final EventBus drain.",
-    )
+  fixture.firstSyncGate.resolve()
+  const flushResult = await fixture.flushPromise
+  const closeResult = await fixture.closePromise
+  assert.equal(
+    flushResult.ok,
+    true,
+    "The flush that began before close claimed shutdown must finish successfully.",
+  )
+  assert.equal(
+    closeResult.ok,
+    true,
+    "Close must complete successfully after the active flush has settled and its own final drain and sync have completed.",
+  )
+  assert.equal(
+    fixture.concurrentSync,
+    false,
+    "The Journal must never issue overlapping session sync operations when flush and close overlap.",
+  )
+  assert.equal(
+    fixture.closeWhileSyncActive,
+    false,
+    "The session handle must not be closed while an earlier flush still owns an active sync operation.",
+  )
+  assert.equal(
+    fixture.syncCalls,
+    2,
+    "The lifecycle must perform exactly one sync for the explicit flush and one final sync for close.",
+  )
+  assert.equal(
+    fixture.busFlushCalls,
+    2,
+    "The close operation must perform one final EventBus drain after the earlier flush has completed.",
+  )
+  assert.deepEqual(
+    fixture.storeCalls,
+    ["ensureDirectory", "acquireWriter", "createSession", "sync", "sync", "closeSession", "releaseWriter"],
+    "The active flush must finish before the owning close performs its final sync, session close, and writer release.",
+  )
+  assert.equal(
+    fixture.journal.closed,
+    true,
+    "The Journal must reach its terminal closed state after flush/close serialization.",
+  )
+}
 
-    releaseFirstSync()
-    const flushResult = await flushPromise
-    const closeResult = await closePromise
-
-    assert.equal(
-      flushResult.ok,
-      true,
-      "The flush that began before close claimed shutdown must finish successfully.",
-    )
-    assert.equal(
-      closeResult.ok,
-      true,
-      "Close must complete successfully after the active flush has settled and its own final drain and sync have completed.",
-    )
-    assert.equal(
-      concurrentSync,
-      false,
-      "The Journal must never issue overlapping session sync operations when flush and close overlap.",
-    )
-    assert.equal(
-      closeWhileSyncActive,
-      false,
-      "The session handle must not be closed while an earlier flush still owns an active sync operation.",
-    )
-    assert.equal(
-      syncCalls,
-      2,
-      "The lifecycle must perform exactly one sync for the explicit flush and one final sync for close.",
-    )
-    assert.equal(
-      busFlushCalls,
-      2,
-      "The close operation must perform one final EventBus drain after the earlier flush has completed.",
-    )
-    assert.deepEqual(
-      storeCalls,
-      ["ensureDirectory", "acquireWriter", "createSession", "sync", "sync", "closeSession", "releaseWriter"],
-      "The active flush must finish before the owning close performs its final sync, session close, and writer release.",
-    )
-    assert.equal(
-      journal.closed,
-      true,
-      "The Journal must reach its terminal closed state after flush/close serialization.",
-    )
-  } finally {
-    releaseFirstSync()
-    await Promise.allSettled([flushPromise, closePromise].filter(Boolean))
-    eventBus.flush = originalFlush
-    await eventBus.close()
-  }
-})
-
-
-
-test("serializes concurrent explicit flushes across EventBus drain and session sync", async () => {
+async function createConcurrentFlushFixture() {
   const eventBus = new EventBus()
   const storeCalls = []
-  let activeSyncs = 0
-  let maxActiveSyncs = 0
-  let syncCalls = 0
-  let busFlushCalls = 0
-  let releaseFirstSync
-  let signalFirstSyncStarted
-  const firstSyncStarted = new Promise((resolve) => {
-    signalFirstSyncStarted = resolve
-  })
-  const firstSyncGate = new Promise((resolve) => {
-    releaseFirstSync = resolve
-  })
+  const firstSyncStarted = createDeferredPromise()
+  const firstSyncGate = createDeferredPromise()
+  const fixture = {
+    eventBus,
+    storeCalls,
+    firstSyncStarted,
+    firstSyncGate,
+    activeSyncs: 0,
+    maxActiveSyncs: 0,
+    syncCalls: 0,
+    busFlushCalls: 0,
+    firstFlush: null,
+    secondFlush: null,
+    closePromise: null,
+  }
   const store = {
     ensureDirectory: async () => storeCalls.push("ensureDirectory"),
     acquireWriter: async () => storeCalls.push("acquireWriter"),
@@ -1525,17 +1754,17 @@ test("serializes concurrent explicit flushes across EventBus drain and session s
     },
     append: async () => storeCalls.push("append"),
     sync: async () => {
-      syncCalls += 1
-      activeSyncs += 1
-      maxActiveSyncs = Math.max(maxActiveSyncs, activeSyncs)
+      fixture.syncCalls += 1
+      fixture.activeSyncs += 1
+      fixture.maxActiveSyncs = Math.max(fixture.maxActiveSyncs, fixture.activeSyncs)
       try {
-        if (syncCalls === 1) {
-          signalFirstSyncStarted()
-          await firstSyncGate
+        if (fixture.syncCalls === 1) {
+          firstSyncStarted.resolve()
+          await firstSyncGate.promise
         }
         storeCalls.push("sync")
       } finally {
-        activeSyncs -= 1
+        fixture.activeSyncs -= 1
       }
     },
     closeSession: async () => storeCalls.push("closeSession"),
@@ -1546,172 +1775,278 @@ test("serializes concurrent explicit flushes across EventBus drain and session s
     directory: "virtual-journal",
     [JOURNAL_STORE]: store,
   })
+  fixture.journal = journal
   eventBus.flush = async () => {
-    busFlushCalls += 1
+    fixture.busFlushCalls += 1
     storeCalls.push("busFlush")
-    return { ok: true, errors: [] }
+    return {
+      ok: true,
+      errors: [],
+    }
   }
+  return fixture
+}
 
-  let firstFlush
-  let secondFlush
-  let closePromise
+async function assertConcurrentFlushesAreSerialized({ fixture }) {
+  const started = await fixture.journal.start()
+  assert.equal(
+    started.ok,
+    true,
+    "The Journal must start successfully before explicit flush serialization is tested.",
+  )
+
+  fixture.firstFlush = fixture.journal.flush()
+  await fixture.firstSyncStarted.promise
+  fixture.secondFlush = fixture.journal.flush()
+
+  await Promise.resolve()
+  assert.equal(
+    fixture.busFlushCalls,
+    1,
+    "A second explicit flush must wait before starting another EventBus drain while the first flush is active.",
+  )
+  assert.equal(
+    fixture.syncCalls,
+    1,
+    "A second explicit flush must not enter the session sync boundary while the first sync is held.",
+  )
+  assert.equal(
+    fixture.activeSyncs,
+    1,
+    "At most one explicit flush may own a session sync operation.",
+  )
+
+  fixture.firstSyncGate.resolve()
+  const [firstResult, secondResult] = await Promise.all([fixture.firstFlush, fixture.secondFlush])
+  assert.equal(firstResult.ok, true, "The first serialized explicit flush must complete successfully.")
+  assert.equal(secondResult.ok, true, "The second serialized explicit flush must complete successfully.")
+  assert.equal(fixture.busFlushCalls, 2, "Each explicit flush must perform exactly one EventBus drain.")
+  assert.equal(fixture.syncCalls, 2, "Each explicit flush must perform exactly one session sync.")
+  assert.equal(fixture.maxActiveSyncs, 1, "Explicit flushes must never overlap session sync operations.")
+  assert.deepEqual(
+    fixture.storeCalls,
+    [
+      "ensureDirectory",
+      "acquireWriter",
+      "createSession",
+      "busFlush",
+      "sync",
+      "busFlush",
+      "sync",
+    ],
+    "Each explicit flush must finish its full drain-and-sync lifecycle before the next begins.",
+  )
+}
+
+function blockSessionAppend({ context }) {
+  const appendStarted = createDeferredPromise()
+  const appendGate = createDeferredPromise()
+  const originalAppend = context.journal.store.append.bind(context.journal.store)
+  context.journal.store.append = async (line) => {
+    appendStarted.resolve()
+    await appendGate.promise
+    return originalAppend(line)
+  }
+  return {
+    appendStarted,
+    appendGate,
+  }
+}
+
+async function assertCloseDrainsPublishedEvent({ context, appendGate, appendStarted }) {
+  const published = context.eventBus.publish({
+    name: "journal.close_publish_race",
+    source: "unit-test",
+    data: { admission: "before-close" },
+  })
+  assert.equal(
+    published.ok,
+    true,
+    "The EventBus must accept the source event before close claims shutdown.",
+  )
+
+  let closeSettled = false
+  const closePromise = context.journal.close().then((result) => {
+    closeSettled = true
+    return result
+  })
+
+  await appendStarted.promise
+  await Promise.resolve()
+  assert.equal(
+    closeSettled,
+    false,
+    "Close must remain pending while the already-published event is still being appended to the session.",
+  )
+  assert.ok(
+    context.journal.store.sessionHandle,
+    "The session handle must remain owned and open while an admitted publish is still being persisted.",
+  )
+  assert.ok(
+    (await readdir(context.directory)).includes(".coinzilla-journal.lock"),
+    "The exclusive writer lock must remain owned while an admitted publish is still being persisted.",
+  )
+
+  appendGate.resolve()
+  const closeResult = await closePromise
+  assert.equal(
+    closeResult.ok,
+    true,
+    "Close must finish successfully after the admitted event append, final sync, and resource cleanup complete.",
+  )
+  assert.equal(
+    closeResult.durable,
+    true,
+    "Close may report durable completion only after the admitted event has been synchronized.",
+  )
+  assert.equal(
+    context.journal.store.sessionHandle,
+    null,
+    "The session handle must be released after the admitted event has been drained and synchronized.",
+  )
+  assert.equal(
+    (await readdir(context.directory)).includes(".coinzilla-journal.lock"),
+    false,
+    "The exclusive writer lock must be released only after the admitted event has been drained and durably synchronized.",
+  )
+
+  const lines = (await readFile(context.filePath, "utf8")).trim().split("\n")
+  assert.equal(
+    lines.length,
+    1,
+    "The close/publish race must preserve exactly the one event admitted before shutdown.",
+  )
+  const stored = JSON.parse(lines[0])
+  assert.equal(
+    stored.__coinzillaJournal.id,
+    published.event.id,
+    "The durable session record must retain the exact identity assigned to the event accepted before close.",
+  )
+  assert.equal(
+    stored.name,
+    "journal.close_publish_race",
+    "The durable session must preserve the source event that was published immediately before close.",
+  )
+  assert.equal(
+    stored.data.admission,
+    "before-close",
+    "The durable record must preserve the admitted event payload without mutation.",
+  )
+}
+
+async function assertJournalRejectsLossyPayload({ invalidPayload }) {
+  const context = await createTestJournal()
   try {
-    const started = await journal.start()
-    assert.equal(started.ok, true)
-
-    firstFlush = journal.flush()
-    await firstSyncStarted
-    secondFlush = journal.flush()
-
-    await Promise.resolve()
+    const published = context.eventBus.publish({
+      name: "journal.lossy_payload",
+      source: "journal-integration-test",
+      data: invalidPayload.data,
+    })
     assert.equal(
-      busFlushCalls,
-      1,
-      "A second explicit flush must wait before starting another EventBus drain while the first flush is active.",
-    )
-    assert.equal(
-      syncCalls,
-      1,
-      "A second explicit flush must not enter the session sync boundary while the first sync is held.",
-    )
-    assert.equal(
-      activeSyncs,
-      1,
-      "At most one explicit flush may own a session sync operation.",
+      published.ok,
+      true,
+      `The broader EventBus in-memory contract must accept the ${invalidPayload.label} fixture so the real Journal subscriber path is exercised.`,
     )
 
-    releaseFirstSync()
-    const [firstResult, secondResult] = await Promise.all([firstFlush, secondFlush])
-    assert.equal(firstResult.ok, true)
-    assert.equal(secondResult.ok, true)
-    assert.equal(busFlushCalls, 2)
-    assert.equal(syncCalls, 2)
-    assert.equal(maxActiveSyncs, 1)
-    assert.deepEqual(
-      storeCalls,
-      [
-        "ensureDirectory",
-        "acquireWriter",
-        "createSession",
-        "busFlush",
-        "sync",
-        "busFlush",
-        "sync",
-      ],
-      "Each explicit flush must finish its full drain-and-sync lifecycle before the next begins.",
+    const busFlush = await context.eventBus.flush()
+    assert.equal(
+      busFlush.ok,
+      true,
+      `EventBus delivery should settle normally for ${invalidPayload.label}; Journal owns the stricter persistence contract.`,
+    )
+
+    const journalFlush = await context.journal.flush()
+    assert.equal(
+      journalFlush.ok,
+      false,
+      `Journal flush must fail when a delivered ${invalidPayload.label} cannot be persisted losslessly.`,
+    )
+    assert.equal(
+      context.journal.writeFailed,
+      true,
+      `A delivered ${invalidPayload.label} that cannot be serialized must poison the Journal writer.`,
+    )
+    assert.equal(
+      context.journal.writeErrors.length,
+      1,
+      `Journal must retain the original ${invalidPayload.label} serialization failure for flush and close.`,
+    )
+
+    const closeResult = await context.journal.close()
+    assert.equal(
+      closeResult.ok,
+      false,
+      `Journal close must remain failed after the subscriber rejects a ${invalidPayload.label} event.`,
+    )
+    assert.equal(
+      closeResult.durable,
+      false,
+      `Journal close must not claim durable closure after omitting a ${invalidPayload.label} event.`,
+    )
+    assert.equal(
+      context.journal.closeDurable,
+      false,
+      `Journal closeDurable must remain false after a ${invalidPayload.label} serialization failure.`,
+    )
+    assert.equal(
+      await readFile(context.filePath, "utf8"),
+      "",
+      `The ${invalidPayload.label} source event must be rejected before any JSONL bytes are appended.`,
     )
   } finally {
-    releaseFirstSync()
-    await Promise.allSettled([firstFlush, secondFlush].filter(Boolean))
-    closePromise = journal.close()
-    await closePromise
-    await eventBus.close()
+    await context.journal.close()
+    await context.eventBus.close()
+    await rm(context.directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+}
+
+test("waits for an active flush before closing the session and rejects flushes after close claims shutdown", async () => {
+  const fixture = await createActiveFlushFixture()
+  try {
+    await assertCloseWaitsForActiveFlush({ fixture })
+  } finally {
+    fixture.firstSyncGate.resolve()
+    await Promise.allSettled([fixture.flushPromise, fixture.closePromise].filter(Boolean))
+    fixture.eventBus.flush = fixture.originalFlush
+    await fixture.eventBus.close()
+  }
+})
+
+
+test("serializes concurrent explicit flushes across EventBus drain and session sync", async () => {
+  const fixture = await createConcurrentFlushFixture()
+  try {
+    await assertConcurrentFlushesAreSerialized({ fixture })
+  } finally {
+    fixture.firstSyncGate.resolve()
+    await Promise.allSettled([fixture.firstFlush, fixture.secondFlush].filter(Boolean))
+    fixture.closePromise = fixture.journal.close()
+    await fixture.closePromise
+    await fixture.eventBus.close()
   }
 })
 
 
 test("close drains a published event before releasing the session and writer lock", async () => {
   const context = await createTestJournal()
-  let signalAppendStarted
-  let releaseAppend
-  const appendStarted = new Promise((resolve) => {
-    signalAppendStarted = resolve
-  })
-  const appendGate = new Promise((resolve) => {
-    releaseAppend = resolve
-  })
-  const originalAppend = context.journal.store.append.bind(context.journal.store)
-  context.journal.store.append = async (line) => {
-    signalAppendStarted()
-    await appendGate
-    return originalAppend(line)
-  }
-
-  let closePromise
+  const appendGate = blockSessionAppend({ context })
   try {
-    const published = context.eventBus.publish({
-      name: "journal.close_publish_race",
-      source: "unit-test",
-      data: { admission: "before-close" },
+    await assertCloseDrainsPublishedEvent({
+      context,
+      appendGate: appendGate.appendGate,
+      appendStarted: appendGate.appendStarted,
     })
-    assert.equal(
-      published.ok,
-      true,
-      "The EventBus must accept the source event before close claims shutdown.",
-    )
-
-    let closeSettled = false
-    closePromise = context.journal.close().then((result) => {
-      closeSettled = true
-      return result
-    })
-
-    await appendStarted
-    await Promise.resolve()
-    assert.equal(
-      closeSettled,
-      false,
-      "Close must remain pending while the already-published event is still being appended to the session.",
-    )
-    assert.ok(
-      context.journal.store.sessionHandle,
-      "The session handle must remain owned and open while an admitted publish is still being persisted.",
-    )
-    assert.ok(
-      (await readdir(context.directory)).includes(".coinzilla-journal.lock"),
-      "The exclusive writer lock must remain owned while an admitted publish is still being persisted.",
-    )
-
-    releaseAppend()
-    const closeResult = await closePromise
-    assert.equal(
-      closeResult.ok,
-      true,
-      "Close must finish successfully after the admitted event append, final sync, and resource cleanup complete.",
-    )
-    assert.equal(
-      closeResult.durable,
-      true,
-      "Close may report durable completion only after the admitted event has been synchronized.",
-    )
-    assert.equal(
-      context.journal.store.sessionHandle,
-      null,
-      "The session handle must be released after the admitted event has been drained and synchronized.",
-    )
-    assert.equal(
-      (await readdir(context.directory)).includes(".coinzilla-journal.lock"),
-      false,
-      "The exclusive writer lock must be released only after the admitted event has been drained and durably synchronized.",
-    )
-
-    const lines = (await readFile(context.filePath, "utf8")).trim().split("\n")
-    assert.equal(
-      lines.length,
-      1,
-      "The close/publish race must preserve exactly the one event admitted before shutdown.",
-    )
-    const stored = JSON.parse(lines[0])
-    assert.equal(
-      stored.__coinzillaJournal.id,
-      published.event.id,
-      "The durable session record must retain the exact identity assigned to the event accepted before close.",
-    )
-    assert.equal(
-      stored.name,
-      "journal.close_publish_race",
-      "The durable session must preserve the source event that was published immediately before close.",
-    )
-    assert.equal(
-      stored.data.admission,
-      "before-close",
-      "The durable record must preserve the admitted event payload without mutation.",
-    )
   } finally {
-    releaseAppend()
-    await Promise.allSettled([closePromise].filter(Boolean))
+    appendGate.appendGate.resolve()
+    await context.journal.close()
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -1772,7 +2107,8 @@ test("finishes previously accepted queued writes before reporting a later serial
   } finally {
     await context.journal.close()
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
 
@@ -1785,85 +2121,49 @@ test("does not report durable success when the real EventBus delivers JSON-lossy
   sparseArray[1] = "present"
 
   const invalidPayloads = [
-    { label: "BigInt", data: { amount: 1n } },
-    { label: "cyclic graph", data: { nested: cyclicData } },
-    { label: "undefined object property", data: { nested: { amount: undefined } } },
-    { label: "undefined array entry", data: { amounts: [1, undefined] } },
-    { label: "sparse array hole", data: { amounts: sparseArray } },
-    { label: "NaN", data: { amount: NaN } },
-    { label: "positive infinity", data: { amount: Infinity } },
-    { label: "negative infinity", data: { amount: -Infinity } },
-    { label: "negative zero", data: { amount: -0 } },
+    {
+      label: "BigInt",
+      data: { amount: 1n },
+    },
+    {
+      label: "cyclic graph",
+      data: { nested: cyclicData },
+    },
+    {
+      label: "undefined object property",
+      data: { nested: { amount: undefined } },
+    },
+    {
+      label: "undefined array entry",
+      data: { amounts: [1, undefined] },
+    },
+    {
+      label: "sparse array hole",
+      data: { amounts: sparseArray },
+    },
+    {
+      label: "NaN",
+      data: { amount: NaN },
+    },
+    {
+      label: "positive infinity",
+      data: { amount: Infinity },
+    },
+    {
+      label: "negative infinity",
+      data: { amount: -Infinity },
+    },
+    {
+      label: "negative zero",
+      data: { amount: -0 },
+    },
   ]
 
   for (const invalidPayload of invalidPayloads) {
-    const context = await createTestJournal()
-
-    try {
-      const published = context.eventBus.publish({
-        name: "journal.lossy_payload",
-        source: "journal-integration-test",
-        data: invalidPayload.data,
-      })
-
-      assert.equal(
-        published.ok,
-        true,
-        `The broader EventBus in-memory contract must accept the ${invalidPayload.label} fixture so the real Journal subscriber path is exercised.`,
-      )
-
-      const busFlush = await context.eventBus.flush()
-      assert.equal(
-        busFlush.ok,
-        true,
-        `EventBus delivery should settle normally for ${invalidPayload.label}; Journal owns the stricter persistence contract.`,
-      )
-
-      const journalFlush = await context.journal.flush()
-      assert.equal(
-        journalFlush.ok,
-        false,
-        `Journal flush must fail when a delivered ${invalidPayload.label} cannot be persisted losslessly.`,
-      )
-      assert.equal(
-        context.journal.writeFailed,
-        true,
-        `A delivered ${invalidPayload.label} that cannot be serialized must poison the Journal writer.`,
-      )
-      assert.equal(
-        context.journal.writeErrors.length,
-        1,
-        `Journal must retain the original ${invalidPayload.label} serialization failure for flush and close.`,
-      )
-
-      const closeResult = await context.journal.close()
-      assert.equal(
-        closeResult.ok,
-        false,
-        `Journal close must remain failed after the subscriber rejects a ${invalidPayload.label} event.`,
-      )
-      assert.equal(
-        closeResult.durable,
-        false,
-        `Journal close must not claim durable closure after omitting a ${invalidPayload.label} event.`,
-      )
-      assert.equal(
-        context.journal.closeDurable,
-        false,
-        `Journal closeDurable must remain false after a ${invalidPayload.label} serialization failure.`,
-      )
-      assert.equal(
-        await readFile(context.filePath, "utf8"),
-        "",
-        `The ${invalidPayload.label} source event must be rejected before any JSONL bytes are appended.`,
-      )
-    } finally {
-      await context.journal.close()
-      await context.eventBus.close()
-      await rm(context.directory, { recursive: true, force: true })
-    }
+    await assertJournalRejectsLossyPayload({ invalidPayload })
   }
 })
+
 
 test("persists shared EventBus references as repeated values without preserving identity", async () => {
   const context = await createTestJournal()
@@ -1873,7 +2173,8 @@ test("persists shared EventBus references as repeated values without preserving 
     const published = context.eventBus.publish({
       name: "journal.shared_reference",
       source: "journal-integration-test",
-      data: { first: shared, second: shared },
+      data: { first: shared,
+second: shared },
     })
 
     assert.equal(published.ok, true, "EventBus must accept a shared reference as part of its in-memory payload graph.")
@@ -1889,7 +2190,8 @@ test("persists shared EventBus references as repeated values without preserving 
     assert.equal(readResult.ok, true, "The persisted shared-reference record must remain readable after close.")
     assert.deepEqual(
       readResult.records[0].payload.data,
-      { first: { orderId: "shared-order-42" }, second: { orderId: "shared-order-42" } },
+      { first: { orderId: "shared-order-42" },
+second: { orderId: "shared-order-42" } },
       "The recovered payload must retain the value of both references.",
     )
     assert.notStrictEqual(
@@ -1900,6 +2202,7 @@ test("persists shared EventBus references as repeated values without preserving 
   } finally {
     await context.journal.close()
     await context.eventBus.close()
-    await rm(context.directory, { recursive: true, force: true })
+    await rm(context.directory, { recursive: true,
+force: true })
   }
 })
