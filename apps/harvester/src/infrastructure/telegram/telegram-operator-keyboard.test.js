@@ -545,20 +545,50 @@ test("dispatches emergency BUY pause commands through the authenticated operator
     operator: {
       pauseMarket: async () => assert.fail("Emergency BUY commands must not invoke the legacy market pause."),
       pauseAllBuys: async (request) => {
-        calls.push({ method: "pauseAllBuys", request })
-        return { ok: true, data: { paused: true } }
+        calls.push({
+          method: "pauseAllBuys",
+          request,
+        })
+        return {
+          ok: true,
+          data: { paused: true },
+        }
       },
       pauseBuys: async (request) => {
-        calls.push({ method: "pauseBuys", request })
-        return { ok: true, data: { paused: true, symbol: request.symbol } }
+        calls.push({
+          method: "pauseBuys",
+          request,
+        })
+        return {
+          ok: true,
+          data: {
+            paused: true,
+            symbol: request.symbol,
+          },
+        }
       },
       resumeBuys: async (request) => {
-        calls.push({ method: "resumeBuys", request })
-        return { ok: true, data: { resumed: true, symbol: request.symbol } }
+        calls.push({
+          method: "resumeBuys",
+          request,
+        })
+        return {
+          ok: true,
+          data: {
+            resumed: true,
+            symbol: request.symbol,
+          },
+        }
       },
       resumeAllBuys: async (request) => {
-        calls.push({ method: "resumeAllBuys", request })
-        return { ok: true, data: { resumed: true } }
+        calls.push({
+          method: "resumeAllBuys",
+          request,
+        })
+        return {
+          ok: true,
+          data: { resumed: true },
+        }
       },
     },
   })
