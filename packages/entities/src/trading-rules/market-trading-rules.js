@@ -77,7 +77,8 @@ const normalizeConstraint = ({ constraint, market }) => {
     if (value !== undefined) {
       throw new Error(tradingRulesErrMsgs.unsupportedValue)
     }
-    return Object.freeze({ type, status })
+    return Object.freeze({ type,
+status })
   }
 
   const expectedType = moneyConstraintTypes.has(type) ? Money : Quantity
@@ -98,7 +99,9 @@ const normalizeConstraint = ({ constraint, market }) => {
     throw new Error(tradingRulesErrMsgs.positiveIncrement)
   }
 
-  return Object.freeze({ type, status, value })
+  return Object.freeze({ type,
+status,
+value })
 }
 
 export class TradingRules {
@@ -117,7 +120,8 @@ export class TradingRules {
     }
 
     const normalizedConstraints = constraints.map((constraint) =>
-      normalizeConstraint({ constraint, market }),
+      normalizeConstraint({ constraint,
+market }),
     )
     const types = normalizedConstraints.map(({ type }) => type)
     if (new Set(types).size !== types.length) {
