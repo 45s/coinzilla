@@ -26,102 +26,118 @@ const record = (...[sequence, factType, data, factId = `${factType  }:${  sequen
   data,
 })
 
-const records = ({ accountBlocker = false, externalOpenOrder = false } = {}) => [
-  record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
-  record(1, "CONFIGURATION_BASELINE", {
-    schemaVersion: 1,
-    strategyName: "conservative",
-    markets: ["BTCUSDT"],
-    fingerprint,
-  }, `configuration-baseline:${  fingerprint}`),
-  record(2, "PROCESS_STARTED", {
-    configurationFingerprint: fingerprint,
-    strategyName: "conservative",
-    markets: ["BTCUSDT"],
-    tradingEnabled: true,
-  }, `process-started:${  sessionId}`),
-  record(3, "ACCOUNT_SNAPSHOT_CAPTURED", {
-    phase: "PREFLIGHT",
-auditStatus: "COMPLETE",
-sourceTime: 1_700_000_000_000,
-    assetCount: 0,
-balances: [],
-auditReasons: [],
-  }),
-  record(4, "ACCOUNT_OPEN_ORDERS_CAPTURED", {
-    phase: "PREFLIGHT",
-observedAt: 1_700_000_000_001,
-    readiness: externalOpenOrder ? "BLOCKED" : "READY",
-    orderCount: externalOpenOrder ? 1 : 0,
-    orders: externalOpenOrder ? [{
-      symbol: "BTCUSDT",
-      clientOrderId: "manual-client-1",
-      brokerOrderId: "broker-manual-1",
+function createPreflightRecords({ externalOpenOrder }) {
+  return [
+    record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+    record(1, "CONFIGURATION_BASELINE", {
+      schemaVersion: 1,
+      strategyName: "conservative",
+      markets: ["BTCUSDT"],
+      fingerprint,
+    }, `configuration-baseline:${fingerprint}`),
+    record(2, "PROCESS_STARTED", {
+      configurationFingerprint: fingerprint,
+      strategyName: "conservative",
+      markets: ["BTCUSDT"],
+      tradingEnabled: true,
+    }, `process-started:${sessionId}`),
+    record(3, "ACCOUNT_SNAPSHOT_CAPTURED", {
+      phase: "PREFLIGHT",
+      auditStatus: "COMPLETE",
+      sourceTime: 1_700_000_000_000,
+      assetCount: 0,
+      balances: [],
+      auditReasons: [],
+    }),
+    record(4, "ACCOUNT_OPEN_ORDERS_CAPTURED", {
+      phase: "PREFLIGHT",
+      observedAt: 1_700_000_000_001,
+      readiness: externalOpenOrder ? "BLOCKED" : "READY",
+      orderCount: externalOpenOrder ? 1 : 0,
+      orders: externalOpenOrder ? [{
+        symbol: "BTCUSDT",
+        clientOrderId: "manual-client-1",
+        brokerOrderId: "broker-manual-1",
+        side: "BUY",
+        type: "LIMIT",
+        price: "90",
+        quantity: "0.1",
+        executedQuantity: "0",
+        status: "NEW",
+      }] : [],
+      blockReasons: externalOpenOrder ? ["UNOWNED_OPEN_ORDERS"] : [],
+    }),
+  ]
+}
+
+function createOwnedOrderRecords() {
+  return [
+    record(5, "ORDER_SUBMISSION_INTENT", {
+      clientOrderId: "harvester-client-1",
+      marketId: market.id,
+      venue: market.venue,
+      symbol: market.symbol,
+      baseAssetId: market.baseAsset.id,
+      quoteAssetId: market.quoteAsset.id,
       side: "BUY",
-      type: "LIMIT",
-      price: "90",
+      type: "LIMIT_MAKER",
+      price: "100",
+      quantity: "0.1",
+      purpose: null,
+    }, "order-submission-intent:harvester-client-1"),
+    record(6, "ORDER_SUBMISSION_OUTCOME", {
+      clientOrderId: "harvester-client-1",
+      marketId: market.id,
+      venue: market.venue,
+      symbol: market.symbol,
+      baseAssetId: market.baseAsset.id,
+      quoteAssetId: market.quoteAsset.id,
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "100",
       quantity: "0.1",
       executedQuantity: "0",
-      status: "NEW",
-    }] : [],
-    blockReasons: externalOpenOrder ? ["UNOWNED_OPEN_ORDERS"] : [],
-  }),
-  record(5, "ORDER_SUBMISSION_INTENT", {
-    clientOrderId: "harvester-client-1",
-marketId: market.id,
-venue: market.venue,
-    symbol: market.symbol,
-baseAssetId: market.baseAsset.id,
-quoteAssetId: market.quoteAsset.id,
-    side: "BUY",
-type: "LIMIT_MAKER",
-price: "100",
-quantity: "0.1",
-purpose: null,
-  }, "order-submission-intent:harvester-client-1"),
-  record(6, "ORDER_SUBMISSION_OUTCOME", {
-    clientOrderId: "harvester-client-1",
-marketId: market.id,
-venue: market.venue,
-    symbol: market.symbol,
-baseAssetId: market.baseAsset.id,
-quoteAssetId: market.quoteAsset.id,
-    side: "BUY",
-type: "LIMIT_MAKER",
-price: "100",
-quantity: "0.1",
-executedQuantity: "0",
-    purpose: null,
-outcome: "ACKNOWLEDGED",
-brokerOrderId: "broker-order-1",
-status: "OPEN",
-  }, "order-submission-outcome:harvester-client-1:ACKNOWLEDGED"),
-  record(7, "EXECUTION_FILL_APPLIED", {
-    fillId: "binance:BTCUSDT:trade-1",
-    tradeId: "trade-1",
-    brokerOrderId: "broker-order-1",
-    clientOrderId: "harvester-client-1",
-    marketId: market.id,
-    venue: market.venue,
-    symbol: market.symbol,
-    baseAssetId: market.baseAsset.id,
-    quoteAssetId: market.quoteAsset.id,
-    side: "BUY",
-    price: "100",
-    quantity: "0.02",
-    quoteQuantity: "2",
-    liquidityRole: "MAKER",
-    executedAt: 1_700_000_000_002,
-    commissionStatus: "COMPLETE",
-    commissions: [],
-  }, "execution-fill-applied:binance:BTCUSDT:trade-1"),
-  ...(accountBlocker ? [record(8, "SAFETY_BLOCKER_RAISED", {
+      purpose: null,
+      outcome: "ACKNOWLEDGED",
+      brokerOrderId: "broker-order-1",
+      status: "OPEN",
+    }, "order-submission-outcome:harvester-client-1:ACKNOWLEDGED"),
+    record(7, "EXECUTION_FILL_APPLIED", {
+      fillId: "binance:BTCUSDT:trade-1",
+      tradeId: "trade-1",
+      brokerOrderId: "broker-order-1",
+      clientOrderId: "harvester-client-1",
+      marketId: market.id,
+      venue: market.venue,
+      symbol: market.symbol,
+      baseAssetId: market.baseAsset.id,
+      quoteAssetId: market.quoteAsset.id,
+      side: "BUY",
+      price: "100",
+      quantity: "0.02",
+      quoteQuantity: "2",
+      liquidityRole: "MAKER",
+      executedAt: 1_700_000_000_002,
+      commissionStatus: "COMPLETE",
+      commissions: [],
+    }, "execution-fill-applied:binance:BTCUSDT:trade-1"),
+  ]
+}
+
+function createAccountBlockerRecord() {
+  return record(8, "SAFETY_BLOCKER_RAISED", {
     blockerId,
-scope: "ACCOUNT",
-symbol: null,
-reason: "ACCOUNTING_INTEGRITY_FAILURE",
-evidenceDigest: "a".repeat(64),
-  }, `safety-blocker-raised:${  blockerId}`)] : []),
+    scope: "ACCOUNT",
+    symbol: null,
+    reason: "ACCOUNTING_INTEGRITY_FAILURE",
+    evidenceDigest: "a".repeat(64),
+  }, `safety-blocker-raised:${blockerId}`)
+}
+
+const records = ({ accountBlocker = false, externalOpenOrder = false } = {}) => [
+  ...createPreflightRecords({ externalOpenOrder }),
+  ...createOwnedOrderRecords(),
+  ...(accountBlocker ? [createAccountBlockerRecord()] : []),
 ]
 
 const makeStore = (recordsValue) => ({
@@ -208,7 +224,261 @@ test("preserves external account-wide open orders as evidence without adopting t
 })
 
 
-test("replays a completed recovery cycle before later-session fills when non-projected evidence advances the durable sequence", async () => {
+function createFirstCycleBuyRecords({ clientOrderId, fillId }) {
+  return [
+    record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+    record(1, "CONFIGURATION_BASELINE", {
+      schemaVersion: 1,
+      strategyName: "conservative",
+      markets: ["BTCUSDT"],
+      fingerprint,
+    }, `configuration-baseline:${fingerprint}`),
+    record(2, "PROCESS_STARTED", {
+      configurationFingerprint: fingerprint,
+      strategyName: "conservative",
+      markets: ["BTCUSDT"],
+      tradingEnabled: true,
+    }, `process-started:${sessionId}`),
+    record(3, "ACCOUNT_SNAPSHOT_CAPTURED", {
+      phase: "PREFLIGHT",
+      auditStatus: "COMPLETE",
+      sourceTime: 100,
+      assetCount: 0,
+      balances: [],
+      auditReasons: [],
+    }),
+    record(4, "ACCOUNT_OPEN_ORDERS_CAPTURED", {
+      phase: "PREFLIGHT",
+      observedAt: 101,
+      readiness: "READY",
+      orderCount: 0,
+      orders: [],
+      blockReasons: [],
+    }),
+    record(5, "ORDER_SUBMISSION_INTENT", {
+      clientOrderId,
+      marketId: market.id,
+      venue: market.venue,
+      symbol: market.symbol,
+      baseAssetId: market.baseAsset.id,
+      quoteAssetId: market.quoteAsset.id,
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "100",
+      quantity: "0.41",
+      purpose: null,
+    }, `order-submission-intent:${clientOrderId}`),
+    record(6, "ORDER_SUBMISSION_OUTCOME", {
+      clientOrderId,
+      marketId: market.id,
+      venue: market.venue,
+      symbol: market.symbol,
+      baseAssetId: market.baseAsset.id,
+      quoteAssetId: market.quoteAsset.id,
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "100",
+      quantity: "0.41",
+      executedQuantity: "0.41",
+      purpose: null,
+      outcome: "ACKNOWLEDGED",
+      brokerOrderId: "broker-cycle-one-buy",
+      status: "FILLED",
+    }, `order-submission-outcome:${clientOrderId}:ACKNOWLEDGED`),
+    record(7, "EXECUTION_FILL_APPLIED", {
+      fillId,
+      tradeId: "cycle-one-buy-trade",
+      brokerOrderId: "broker-cycle-one-buy",
+      clientOrderId,
+      marketId: market.id,
+      venue: market.venue,
+      symbol: market.symbol,
+      baseAssetId: market.baseAsset.id,
+      quoteAssetId: market.quoteAsset.id,
+      side: "BUY",
+      price: "100",
+      quantity: "0.41",
+      quoteQuantity: "41",
+      liquidityRole: "MAKER",
+      executedAt: 1000,
+      commissionStatus: "COMPLETE",
+      commissions: [],
+    }, `execution-fill-applied:${fillId}`),
+  ]
+}
+
+function createFirstCycleSellRecords({ clientOrderId, fillId }) {
+  return [
+    record(8, "ORDER_SUBMISSION_INTENT", {
+      clientOrderId,
+      marketId: market.id,
+      venue: market.venue,
+      symbol: market.symbol,
+      baseAssetId: market.baseAsset.id,
+      quoteAssetId: market.quoteAsset.id,
+      side: "SELL",
+      type: "LIMIT",
+      price: "105",
+      quantity: "0.4",
+      purpose: "RECOVERY_SELL",
+    }, `order-submission-intent:${clientOrderId}`),
+    record(9, "ORDER_SUBMISSION_OUTCOME", {
+      clientOrderId,
+      marketId: market.id,
+      venue: market.venue,
+      symbol: market.symbol,
+      baseAssetId: market.baseAsset.id,
+      quoteAssetId: market.quoteAsset.id,
+      side: "SELL",
+      type: "LIMIT",
+      price: "105",
+      quantity: "0.4",
+      executedQuantity: "0.4",
+      purpose: "RECOVERY_SELL",
+      outcome: "ACKNOWLEDGED",
+      brokerOrderId: "broker-cycle-one-sell",
+      status: "FILLED",
+    }, `order-submission-outcome:${clientOrderId}:ACKNOWLEDGED`),
+    record(10, "EXECUTION_FILL_APPLIED", {
+      fillId,
+      tradeId: "cycle-one-sell-trade",
+      brokerOrderId: "broker-cycle-one-sell",
+      clientOrderId,
+      marketId: market.id,
+      venue: market.venue,
+      symbol: market.symbol,
+      baseAssetId: market.baseAsset.id,
+      quoteAssetId: market.quoteAsset.id,
+      side: "SELL",
+      price: "105",
+      quantity: "0.4",
+      quoteQuantity: "42",
+      liquidityRole: "MAKER",
+      executedAt: 1001,
+      commissionStatus: "COMPLETE",
+      commissions: [],
+    }, `execution-fill-applied:${fillId}`),
+  ]
+}
+
+function createResolvedBlockerRecords({ count, firstSequence }) {
+  return Array.from({ length: count }, (...[, index]) => {
+    const reason = `TEST_EVIDENCE_${index}`
+    const evidenceDigest = String(index + 1).padStart(64, "0")
+    const resolutionDigest = String(index + 101).padStart(64, "0")
+    const resolvedBlockerId = createHash("sha256")
+      .update(["MARKET", market.symbol, reason, evidenceDigest].join("\\0"))
+      .digest("hex")
+    return [
+      record(firstSequence + index * 2, "SAFETY_BLOCKER_RAISED", {
+        blockerId: resolvedBlockerId,
+        scope: "MARKET",
+        symbol: market.symbol,
+        reason,
+        evidenceDigest,
+      }, `safety-blocker-raised:${resolvedBlockerId}`),
+      record(firstSequence + index * 2 + 1, "SAFETY_BLOCKER_RESOLVED", {
+        blockerId: resolvedBlockerId,
+        resolvedBy: "reconciliation:test-fixture",
+        resolution: "AUTHORITATIVE_RECONCILIATION",
+        evidenceDigest: resolutionDigest,
+      }, `safety-blocker-resolved:${resolvedBlockerId}`),
+    ]
+  }).flat()
+}
+
+function createCompletedCycleBoundaryRecords({ cycleCompletedSequence, firstBuyFillId, firstSellFillId, sellClientOrderId }) {
+  return [
+    record(cycleCompletedSequence, "RECOVERY_CYCLE_COMPLETED", {
+      cycleId: "c".repeat(64),
+      marketId: market.id,
+      venue: market.venue,
+      symbol: market.symbol,
+      baseAssetId: market.baseAsset.id,
+      quoteAssetId: market.quoteAsset.id,
+      appliedFillIds: [firstBuyFillId, firstSellFillId],
+      sellOrderClientId: sellClientOrderId,
+      sellOrderBrokerOrderId: "broker-cycle-one-sell",
+      buyCost: "41",
+      spent: "41",
+      netSellProceeds: "42",
+      realizedNetProfit: "1",
+      minProfit: "0.01",
+      activeQuantity: "0.01",
+      keepQuantity: "0.01",
+      freeQuantity: "0.01",
+      inventoryDisposition: null,
+    }, `recovery-cycle-completed:${market.id}:${"c".repeat(64)}`),
+    record(cycleCompletedSequence + 1, "PROCESS_STOPPED", {
+      reason: "CLEAN_TEST_SHUTDOWN",
+      clean: true,
+    }, `process-stopped:${sessionId}`),
+  ]
+}
+
+function createSecondSessionRecords({ secondSessionId, fillId, firstSequence }) {
+  const clientOrderId = "harvester-cycle-two-buy"
+  const brokerOrderId = "broker-cycle-two-buy"
+  return [
+    record(firstSequence, "PROCESS_STARTED", {
+      configurationFingerprint: fingerprint,
+      strategyName: "conservative",
+      markets: ["BTCUSDT"],
+      tradingEnabled: true,
+    }, `process-started:${secondSessionId}`, secondSessionId),
+    record(firstSequence + 1, "ORDER_SUBMISSION_INTENT", {
+      clientOrderId,
+      marketId: market.id,
+      venue: market.venue,
+      symbol: market.symbol,
+      baseAssetId: market.baseAsset.id,
+      quoteAssetId: market.quoteAsset.id,
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "100",
+      quantity: "0.2",
+      purpose: null,
+    }, `order-submission-intent:${clientOrderId}`, secondSessionId),
+    record(firstSequence + 2, "ORDER_SUBMISSION_OUTCOME", {
+      clientOrderId,
+      marketId: market.id,
+      venue: market.venue,
+      symbol: market.symbol,
+      baseAssetId: market.baseAsset.id,
+      quoteAssetId: market.quoteAsset.id,
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "100",
+      quantity: "0.2",
+      executedQuantity: "0.2",
+      purpose: null,
+      outcome: "ACKNOWLEDGED",
+      brokerOrderId,
+      status: "FILLED",
+    }, `order-submission-outcome:${clientOrderId}:ACKNOWLEDGED`, secondSessionId),
+    record(firstSequence + 3, "EXECUTION_FILL_APPLIED", {
+      fillId,
+      tradeId: "cycle-two-buy-trade",
+      brokerOrderId,
+      clientOrderId,
+      marketId: market.id,
+      venue: market.venue,
+      symbol: market.symbol,
+      baseAssetId: market.baseAsset.id,
+      quoteAssetId: market.quoteAsset.id,
+      side: "BUY",
+      price: "100",
+      quantity: "0.2",
+      quoteQuantity: "20",
+      liquidityRole: "MAKER",
+      executedAt: 2000,
+      commissionStatus: "COMPLETE",
+      commissions: [],
+    }, `execution-fill-applied:${fillId}`, secondSessionId),
+  ]
+}
+
+function createCompletedCycleEvidence() {
   const firstBuyClientOrderId = "harvester-cycle-one-buy"
   const firstSellClientOrderId = "harvester-cycle-one-sell"
   const secondSessionId = "process-session-after-completed-cycle"
@@ -216,269 +486,61 @@ test("replays a completed recovery cycle before later-session fills when non-pro
   const firstSellFillId = "binance:BTCUSDT:cycle-one-sell-trade"
   const secondBuyFillId = "binance:BTCUSDT:cycle-two-buy-trade"
   const cycleCompletedSequence = 51
-  const secondSessionStartedSequence = 53
-  const secondBuyIntentSequence = 54
-  const secondBuyOutcomeSequence = 55
-  const secondBuyFillSequence = 56
-  const cycleEvidence = [
-    record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
-    record(1, "CONFIGURATION_BASELINE", {
-      schemaVersion: 1,
-strategyName: "conservative",
-markets: ["BTCUSDT"],
-fingerprint,
-    }, `configuration-baseline:${  fingerprint}`),
-    record(2, "PROCESS_STARTED", {
-      configurationFingerprint: fingerprint,
-strategyName: "conservative",
-markets: ["BTCUSDT"],
-tradingEnabled: true,
-    }, `process-started:${  sessionId}`),
-    record(3, "ACCOUNT_SNAPSHOT_CAPTURED", {
-      phase: "PREFLIGHT",
-auditStatus: "COMPLETE",
-sourceTime: 100,
-      assetCount: 0,
-balances: [],
-auditReasons: [],
-    }),
-    record(4, "ACCOUNT_OPEN_ORDERS_CAPTURED", {
-      phase: "PREFLIGHT",
-observedAt: 101,
-readiness: "READY",
-orderCount: 0,
-orders: [],
-blockReasons: [],
-    }),
-    record(5, "ORDER_SUBMISSION_INTENT", {
+  return [
+    ...createFirstCycleBuyRecords({
       clientOrderId: firstBuyClientOrderId,
-marketId: market.id,
-venue: market.venue,
-      symbol: market.symbol,
-baseAssetId: market.baseAsset.id,
-quoteAssetId: market.quoteAsset.id,
-      side: "BUY",
-type: "LIMIT_MAKER",
-price: "100",
-quantity: "0.41",
-purpose: null,
-    }, `order-submission-intent:${  firstBuyClientOrderId}`),
-    record(6, "ORDER_SUBMISSION_OUTCOME", {
-      clientOrderId: firstBuyClientOrderId,
-marketId: market.id,
-venue: market.venue,
-      symbol: market.symbol,
-baseAssetId: market.baseAsset.id,
-quoteAssetId: market.quoteAsset.id,
-      side: "BUY",
-type: "LIMIT_MAKER",
-price: "100",
-quantity: "0.41",
-executedQuantity: "0.41",
-      purpose: null,
-outcome: "ACKNOWLEDGED",
-brokerOrderId: "broker-cycle-one-buy",
-status: "FILLED",
-    }, `order-submission-outcome:${  firstBuyClientOrderId  }:ACKNOWLEDGED`),
-    record(7, "EXECUTION_FILL_APPLIED", {
       fillId: firstBuyFillId,
-tradeId: "cycle-one-buy-trade",
-brokerOrderId: "broker-cycle-one-buy",
-      clientOrderId: firstBuyClientOrderId,
-marketId: market.id,
-venue: market.venue,
-symbol: market.symbol,
-      baseAssetId: market.baseAsset.id,
-quoteAssetId: market.quoteAsset.id,
-side: "BUY",
-      price: "100",
-quantity: "0.41",
-quoteQuantity: "41",
-liquidityRole: "MAKER",
-      executedAt: 1000,
-commissionStatus: "COMPLETE",
-commissions: [],
-    }, `execution-fill-applied:${  firstBuyFillId}`),
-    record(8, "ORDER_SUBMISSION_INTENT", {
+    }),
+    ...createFirstCycleSellRecords({
       clientOrderId: firstSellClientOrderId,
-marketId: market.id,
-venue: market.venue,
-      symbol: market.symbol,
-baseAssetId: market.baseAsset.id,
-quoteAssetId: market.quoteAsset.id,
-      side: "SELL",
-type: "LIMIT",
-price: "105",
-quantity: "0.4",
-purpose: "RECOVERY_SELL",
-    }, `order-submission-intent:${  firstSellClientOrderId}`),
-    record(9, "ORDER_SUBMISSION_OUTCOME", {
-      clientOrderId: firstSellClientOrderId,
-marketId: market.id,
-venue: market.venue,
-      symbol: market.symbol,
-baseAssetId: market.baseAsset.id,
-quoteAssetId: market.quoteAsset.id,
-      side: "SELL",
-type: "LIMIT",
-price: "105",
-quantity: "0.4",
-executedQuantity: "0.4",
-      purpose: "RECOVERY_SELL",
-outcome: "ACKNOWLEDGED",
-brokerOrderId: "broker-cycle-one-sell",
-status: "FILLED",
-    }, `order-submission-outcome:${  firstSellClientOrderId  }:ACKNOWLEDGED`),
-    record(10, "EXECUTION_FILL_APPLIED", {
       fillId: firstSellFillId,
-tradeId: "cycle-one-sell-trade",
-brokerOrderId: "broker-cycle-one-sell",
-      clientOrderId: firstSellClientOrderId,
-marketId: market.id,
-venue: market.venue,
-symbol: market.symbol,
-      baseAssetId: market.baseAsset.id,
-quoteAssetId: market.quoteAsset.id,
-side: "SELL",
-      price: "105",
-quantity: "0.4",
-quoteQuantity: "42",
-liquidityRole: "MAKER",
-      executedAt: 1001,
-commissionStatus: "COMPLETE",
-commissions: [],
-    }, `execution-fill-applied:${  firstSellFillId}`),
-    ...Array.from({ length: 20 }, (...[, index]) => {
-      const reason = `TEST_EVIDENCE_${  index}`
-      const evidenceDigest = String(index + 1).padStart(64, "0")
-      const resolutionDigest = String(index + 101).padStart(64, "0")
-      const resolvedBlockerId = createHash("sha256")
-        .update(["MARKET", market.symbol, reason, evidenceDigest].join("\0"))
-        .digest("hex")
-      return [
-        record(11 + index * 2, "SAFETY_BLOCKER_RAISED", {
-          blockerId: resolvedBlockerId,
-scope: "MARKET",
-symbol: market.symbol,
-reason,
-evidenceDigest,
-        }, `safety-blocker-raised:${  blockerId}`),
-        record(12 + index * 2, "SAFETY_BLOCKER_RESOLVED", {
-          blockerId,
-          resolvedBy: "reconciliation:test-fixture",
-          resolution: "AUTHORITATIVE_RECONCILIATION",
-          evidenceDigest: resolutionDigest,
-        }, `safety-blocker-resolved:${  blockerId}`),
-      ]
-    }).flat(),
-    record(cycleCompletedSequence, "RECOVERY_CYCLE_COMPLETED", {
-      cycleId: "c".repeat(64),
-marketId: market.id,
-venue: market.venue,
-symbol: market.symbol,
-      baseAssetId: market.baseAsset.id,
-quoteAssetId: market.quoteAsset.id,
-      appliedFillIds: [firstBuyFillId, firstSellFillId],
-      sellOrderClientId: firstSellClientOrderId,
-sellOrderBrokerOrderId: "broker-cycle-one-sell",
-      buyCost: "41",
-spent: "41",
-netSellProceeds: "42",
-realizedNetProfit: "1",
-      minProfit: "0.01",
-activeQuantity: "0.01",
-keepQuantity: "0.01",
-freeQuantity: "0.01",
-      inventoryDisposition: null,
-    }, `recovery-cycle-completed:${  market.id  }:${  "c".repeat(64)}`),
-    record(cycleCompletedSequence + 1, "PROCESS_STOPPED", {
-      reason: "CLEAN_TEST_SHUTDOWN",
-clean: true,
-    }, `process-stopped:${  sessionId}`),
-    record(secondSessionStartedSequence, "PROCESS_STARTED", {
-      configurationFingerprint: fingerprint,
-strategyName: "conservative",
-markets: ["BTCUSDT"],
-tradingEnabled: true,
-    }, `process-started:${  secondSessionId}`, secondSessionId),
-    record(secondBuyIntentSequence, "ORDER_SUBMISSION_INTENT", {
-      clientOrderId: "harvester-cycle-two-buy",
-marketId: market.id,
-venue: market.venue,
-      symbol: market.symbol,
-baseAssetId: market.baseAsset.id,
-quoteAssetId: market.quoteAsset.id,
-      side: "BUY",
-type: "LIMIT_MAKER",
-price: "100",
-quantity: "0.2",
-purpose: null,
-    }, "order-submission-intent:harvester-cycle-two-buy", secondSessionId),
-    record(secondBuyOutcomeSequence, "ORDER_SUBMISSION_OUTCOME", {
-      clientOrderId: "harvester-cycle-two-buy",
-marketId: market.id,
-venue: market.venue,
-      symbol: market.symbol,
-baseAssetId: market.baseAsset.id,
-quoteAssetId: market.quoteAsset.id,
-      side: "BUY",
-type: "LIMIT_MAKER",
-price: "100",
-quantity: "0.2",
-executedQuantity: "0.2",
-      purpose: null,
-outcome: "ACKNOWLEDGED",
-brokerOrderId: "broker-cycle-two-buy",
-status: "FILLED",
-    }, "order-submission-outcome:harvester-cycle-two-buy:ACKNOWLEDGED", secondSessionId),
-    record(secondBuyFillSequence, "EXECUTION_FILL_APPLIED", {
+    }),
+    ...createResolvedBlockerRecords({ count: 20, firstSequence: 11 }),
+    ...createCompletedCycleBoundaryRecords({
+      cycleCompletedSequence,
+      firstBuyFillId,
+      firstSellFillId,
+      sellClientOrderId: firstSellClientOrderId,
+    }),
+    ...createSecondSessionRecords({
+      secondSessionId,
       fillId: secondBuyFillId,
-tradeId: "cycle-two-buy-trade",
-brokerOrderId: "broker-cycle-two-buy",
-      clientOrderId: "harvester-cycle-two-buy",
-marketId: market.id,
-venue: market.venue,
-symbol: market.symbol,
-      baseAssetId: market.baseAsset.id,
-quoteAssetId: market.quoteAsset.id,
-side: "BUY",
-      price: "100",
-quantity: "0.2",
-quoteQuantity: "20",
-liquidityRole: "MAKER",
-      executedAt: 2000,
-commissionStatus: "COMPLETE",
-commissions: [],
-    }, `execution-fill-applied:${  secondBuyFillId}`, secondSessionId),
+      firstSequence: cycleCompletedSequence + 2,
+    }),
   ]
+}
+
+test("replays a completed recovery cycle before later-session fills when non-projected evidence advances the durable sequence", async () => {
   const result = await restoreHarvesterOperationalState({
-    operationalStateStore: makeStore(cycleEvidence),
+    operationalStateStore: makeStore(createCompletedCycleEvidence()),
     marketMetadata: new Map([[market.symbol, { market }]]),
   })
 
   assert.equal(result.ok, true, "A later-session BUY must not be replayed before the earlier committed cycle reset.")
+  const position = result.data.portfolio.getPosition({ marketId: market.id })
+  const recoveryLedger = result.data.recoveryLedgers.get(market.id)
   assert.equal(
-    result.data.portfolio.getPosition({ marketId: market.id }).spent.amount,
+    position.spent.amount,
     "20",
     "The second cycle must start with a fresh quote-cost basis after the first cycle's durable completion.",
   )
   assert.equal(
-    result.data.recoveryLedgers.get(market.id).buyCost,
+    recoveryLedger.buyCost,
     "20",
     "The RecoveryLedger must contain only the second cycle's BUY cost after the earlier completion boundary.",
   )
   assert.equal(
-    result.data.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount,
+    position.baseQuantity.amount,
     "0.2",
     "Only the second cycle's BUY remains active strategy inventory after the earlier cycle completes.",
   )
   assert.equal(
-    result.data.portfolio.getPosition({ marketId: market.id }).freeBaseQuantity.amount,
+    position.freeBaseQuantity.amount,
     "0.01",
     "The first cycle's retained inventory remains permanently free and unavailable to strategy orders.",
   )
   assert.equal(
-    result.data.portfolio.getPosition({ marketId: market.id }).totalBaseQuantity.amount,
+    position.totalBaseQuantity.amount,
     "0.21",
     "The candidate Portfolio must retain both active and free inventory across process sessions.",
   )
