@@ -205,12 +205,17 @@ export async function main({
       throw new Error("Harvester cannot start without the Binance single-writer process lock" + (details ? ": " + details : ""))
     }
     processLock = lockResult
-    const operationalStateStore = await prepareProcessOperationalStateStore({
-      appConfig,
-      env,
-      runtimeSessionId: processIdentity.runtimeSessionId,
-      createOperationalStateStore,
-    })
+    // TEMPORARY: Telegram CC alone must not initialize or require restart-recovery storage.
+    // The ADR-0001 store is composed only when the CoinGrabber recovery feature is enabled.
+    const recoveryEnabled = appConfig?.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
+    const operationalStateStore = recoveryEnabled
+      ? await prepareProcessOperationalStateStore({
+        appConfig,
+        env,
+        runtimeSessionId: processIdentity.runtimeSessionId,
+        createOperationalStateStore,
+      })
+      : undefined
     journalService = createJournalService({
       eventBus,
       logger,
