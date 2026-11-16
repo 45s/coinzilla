@@ -102,5 +102,8 @@ export const parseOrderHistoryArguments = ({ args = [] } = {}) => {
     throw new RangeError(`Limit must be an integer between 1 and ${MAX_ORDER_HISTORY_LIMIT}`)
   }
 
-  return { symbol, limit }
+  return {
+    symbol,
+    limit,
+  }
 }
