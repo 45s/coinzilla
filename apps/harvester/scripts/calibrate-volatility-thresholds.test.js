@@ -306,8 +306,10 @@ test("reports complete observation and protection-state totals for a validated h
   const report = analyzeVolatilityHistory({ symbol: "BTCUSDT", candles })
   const protectedObservations =
     report.stateCounts.PROTECTED + report.stateCounts.RECOVERING
-  const stateObservationCount = Object.values(report.stateCounts)
-    .reduce((total, count) => total + count, 0)
+  let stateObservationCount = 0
+  for (const count of Object.values(report.stateCounts)) {
+    stateObservationCount += count
+  }
 
   assert.equal(report.observationCount, 201, "A 300-candle history must produce 201 rolling 100-candle observations.")
   assert.equal(report.ratioObservations + report.unavailableObservations, report.observationCount, "Every analyzed observation must be classified as either a valid ratio or unavailable.")
