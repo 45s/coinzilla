@@ -288,8 +288,8 @@ function collectMarkdownHeadingAnchors(content) {
   const anchors = new Set()
   const lines = content.split(/\r?\n/)
   const codeCharacter = String.fromCharCode(96)
-  const fencePattern = new RegExp(\`^ {0,3}(\${codeCharacter}{3,}|~{3,})(.*)$\`)
-  const inlineCodePattern = new RegExp(\`\${codeCharacter}+([^\${codeCharacter}]*?)\${codeCharacter}+\`, 'g')
+  const fencePattern = new RegExp(`^ {0,3}(${codeCharacter}{3,}|~{3,})(.*)$`)
+  const inlineCodePattern = new RegExp(`${codeCharacter}+([^${codeCharacter}]*?)${codeCharacter}+`, 'g')
   const explicitIdPattern = /\b(?:id|name)\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/gi
   const state = {
     activeFence: null,
