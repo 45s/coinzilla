@@ -11,20 +11,27 @@ export async function recordConfigurationBaseline({ operationalStateStore, appCo
     }
     const strategyNames = Object.keys(strategies).sort()
     if (strategyNames.length !== 1) { throw new TypeError("Configuration baseline requires exactly one configured strategy") }
-    const strategyName = strategyNames[0]
+    const [strategyName] = strategyNames
     const { fingerprint, enabledMarkets: markets } = createEffectiveStrategyConfigurationFingerprint({
       strategyName,
       strategy: strategies[strategyName],
     })
     const result = await operationalStateStore.append({
-      factId: "configuration-baseline:" + fingerprint,
+      factId: `configuration-baseline:${  fingerprint}`,
       factType: "CONFIGURATION_BASELINE",
-      data: { schemaVersion: 1, strategyName, markets, fingerprint },
+      data: { schemaVersion: 1,
+strategyName,
+markets,
+fingerprint },
     })
     if (result?.ok !== true || result.data?.durable !== true) {
       return toResult({ errors: result?.errors?.length ? result.errors : [new Error("Configuration baseline append did not confirm durable commitment")] })
     }
-    return { ...result, data: { ...result.data, fingerprint, strategyName, markets } }
+    return { ...result,
+data: { ...result.data,
+fingerprint,
+strategyName,
+markets } }
   } catch (error) {
     return toResult({ error })
   }

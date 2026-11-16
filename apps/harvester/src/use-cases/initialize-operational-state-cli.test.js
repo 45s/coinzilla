@@ -40,7 +40,10 @@ test("uses the app-local default directory and rejects relative overrides or unk
     args: ["--confirm-initialize"],
     initialize: async (input) => {
       defaultDirectory = input.directory
-      return { ok: true, data: { directory: input.directory, sequence: "0", durable: true } }
+      return { ok: true,
+data: { directory: input.directory,
+sequence: "0",
+durable: true } }
     },
     logger: createLogger(),
   })
@@ -63,12 +66,16 @@ test("initializes only the operator-selected absolute directory and reports dura
     args: ["--confirm-initialize"],
     initialize: async (input) => {
       received = input
-      return { ok: true, data: { directory: input.directory, sequence: "0", durable: true } }
+      return { ok: true,
+data: { directory: input.directory,
+sequence: "0",
+durable: true } }
     },
     logger,
   })
   assert.equal(exitCode, 0)
-  assert.deepEqual(received, { confirmed: true, directory: "/tmp/recovery-facts" })
+  assert.deepEqual(received, { confirmed: true,
+directory: "/tmp/recovery-facts" })
   assert.equal(logger.calls[0][0], "system")
 })
 
@@ -77,7 +84,8 @@ test("does not report success when genesis initialization fails", async () => {
   const exitCode = await runInitializeOperationalState({
     env: { OPERATIONAL_STATE_DIRECTORY: "/tmp/recovery-facts" },
     args: ["--confirm-initialize"],
-    initialize: async () => ({ ok: false, errors: [new Error("ledger already exists")] }),
+    initialize: async () => ({ ok: false,
+errors: [new Error("ledger already exists")] }),
     logger,
   })
   assert.equal(exitCode, 1)
@@ -91,7 +99,10 @@ test("does not read the removed legacy directory environment variable", async ()
     args: ["--confirm-initialize"],
     initialize: async (input) => {
       received = input
-      return { ok: true, data: { directory: input.directory, sequence: "0", durable: true } }
+      return { ok: true,
+data: { directory: input.directory,
+sequence: "0",
+durable: true } }
     },
     logger: createLogger(),
   })

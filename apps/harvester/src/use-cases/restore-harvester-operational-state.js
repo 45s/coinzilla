@@ -27,7 +27,8 @@ export async function restoreHarvesterOperationalState({ operationalStateStore, 
     }
     const projection = projectHarvesterOperationalState({ records: read.data.records })
     if (projection?.ok !== true) { return projection }
-    const restored = restoreHarvesterJournalState({ projection, marketMetadata })
+    const restored = restoreHarvesterJournalState({ projection,
+marketMetadata })
     if (restored?.ok !== true) { return restored }
     return toResult({
       data: Object.freeze({

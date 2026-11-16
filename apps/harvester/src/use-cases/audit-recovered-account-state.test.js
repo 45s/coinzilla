@@ -10,23 +10,41 @@ import { auditRecoveredAccountState } from "./audit-recovered-account-state.js"
 const market = new Market({
   venue: "binance",
   symbol: "BTCUSDT",
-  baseAsset: new Asset({ id: "binance:BTC", code: "BTC" }),
-  quoteAsset: new Asset({ id: "binance:USDT", code: "USDT" }),
+  baseAsset: new Asset({ id: "binance:BTC",
+code: "BTC" }),
+  quoteAsset: new Asset({ id: "binance:USDT",
+code: "USDT" }),
 })
-const feeAsset = new Asset({ id: "binance:BNB", code: "BNB" })
+const feeAsset = new Asset({ id: "binance:BNB",
+code: "BNB" })
 
-const record = (name, data, lineNumber) => ({
-  id: "record-" + lineNumber,
-  payload: { id: "record-" + lineNumber, name, data },
-  position: { fileName: "2026-11-05_08-00-00.jsonl", lineNumber },
+const record = (...[name, data, lineNumber]) => ({
+  id: `record-${  lineNumber}`,
+  payload: { id: `record-${  lineNumber}`,
+name,
+data },
+  position: { fileName: "2026-11-05_08-00-00.jsonl",
+lineNumber },
 })
 
-const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = false, includeCommissionBaseline = true } = {}) => {
+function createOpeningRecords() {
   const balances = [
-    { asset: "BTC", free: "0", locked: "0", total: "0" },
-    { asset: "USDT", free: "1000", locked: "0", total: "1000" },
+    { asset: "BTC", 
+      
+      
+      
+      free: "0", 
+   
+         
+      
+      locked: "0", 
+      total: "0" },
+    { asset: "USDT", 
+      free: "1000", 
+      locked: "0", 
+      total: "1000" },
   ]
-  const records = [
+  return [
     record("account.snapshot_captured", {
       phase: "PREFLIGHT",
       sourceTime: 1000,
@@ -59,35 +77,60 @@ const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = fals
       quantity: "0.5",
       status: "FILLED",
     }, 4),
-    ...(thirdAssetCommission && includeCommissionBaseline ? [record("account.snapshot_captured", {
-      phase: "COMMISSION_BASELINE",
-      sourceTime: 1000,
-      auditStatus: "COMPLETE",
-      balances: [{ asset: "BNB", free: "0.75", locked: "0.25", total: "1" }],
-      auditReasons: [],
-    }, 5)] : []),
-    record("execution.fill_applied", {
-      fillId: "binance:BTCUSDT:trade-1",
-      tradeId: "trade-1",
-      brokerOrderId: "9001",
-      clientOrderId: "h-BTCUSDT-buy-1",
-      symbol: "BTCUSDT",
-      side: "BUY",
-      price: "100",
-      quantity: "0.5",
-      quoteQuantity: "50",
-      liquidityRole: "MAKER",
-      commissions: [
-        { amount: "0.0004", assetId: "binance:BTC", asset: "BTC" },
-        ...(thirdAssetCommission ? [{
-          amount: "0.0001",
-          assetId: "binance:BNB",
-          asset: "BNB",
-          quoteValue: { amount: "0.01", assetId: "binance:USDT", asset: "USDT" },
-        }] : []),
-      ],
-      commissionStatus: "COMPLETE",
-    }, thirdAssetCommission ? 6 : 5),
+  ]
+}
+
+  
+  
+  
+function createCommissionBaselineRecord() {
+  return record("account.snapshot_captured", {
+    phase: "COMMISSION_BASELINE",
+    sourceTime: 1000,
+    auditStatus: "COMPLETE",
+    balances: [{ asset: "BNB", 
+      free: "0.75", 
+      locked: "0.25", 
+      total: "1" }],
+    auditReasons: [],
+  }, 5)
+}
+
+function createBuyFillRecord({ thirdAssetCommission }) {
+  return record("execution.fill_applied", {
+    fillId: "binance:BTCUSDT:trade-1",
+    tradeId: "trade-1",
+    brokerOrderId: "9001",
+    
+    
+    clientOrderId: "h-BTCUSDT-buy-1",
+    symbol: "BTCUSDT",
+    side: "BUY",
+    price: "100",
+    quantity: "0.5",
+    
+    
+    quoteQuantity: "50",
+    liquidityRole: "MAKER",
+    commissions: [
+      { amount: "0.0004", 
+        assetId: "binance:BTC", 
+        asset: "BTC" },
+      ...(thirdAssetCommission ? [{
+        amount: "0.0001",
+        assetId: "binance:BNB",
+        asset: "BNB",
+        quoteValue: { amount: "0.01", 
+          assetId: "binance:USDT", 
+          asset: "USDT" },
+      }] : []),
+    ],
+    commissionStatus: "COMPLETE",
+  }, thirdAssetCommission ? 6 : 5)
+}
+
+function createSellCycleRecords({ freeQuantity, thirdAssetCommission }) {
+  return [
     record("order.submission_requested", {
       clientOrderId: "h-BTCUSDT-sell-1",
       symbol: "BTCUSDT",
@@ -127,20 +170,60 @@ const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = fals
       freeQuantity,
       keepQuantity: "0.01",
       minProfit: "0.01",
+      
+      
+      
       realizedNetProfit: thirdAssetCommission ? "0.24" : "0.25",
     }, thirdAssetCommission ? 10 : 9),
+  ]
+}
+
+function createClosingRecords({ thirdAssetCommission }) {
+  return [
     record("account.snapshot_captured", {
       phase: "CLOSING",
       sourceTime: 2000,
       auditStatus: "COMPLETE",
       balances: [
-        { asset: "BTC", free: "0.01", locked: "0", total: "0.01" },
-        { asset: "USDT", free: thirdAssetCommission ? "1000.24" : "1000.25", locked: "0", total: thirdAssetCommission ? "1000.24" : "1000.25" },
-        ...(thirdAssetCommission ? [{ asset: "BNB", free: "0.7499", locked: "0.25", total: "0.9999" }] : []),
+        { asset: "BTC", 
+          free: "0.01", 
+          locked: "0", 
+          total: "0.01" },
+        {
+          asset: "USDT",
+          free: thirdAssetCommission ? "1000.24" : "1000.25",
+          locked: "0",
+          total: thirdAssetCommission ? "1000.24" : "1000.25",
+        },
+        ...(thirdAssetCommission ? [{
+          asset: "BNB",
+          free: "0.7499",
+          locked: "0.25",
+          total: "0.9999",
+        }] : []),
       ],
       auditReasons: [],
     }, thirdAssetCommission ? 11 : 10),
-    record("harvester.stopped", { reason: "SIGTERM", outcome: "success" }, thirdAssetCommission ? 12 : 11),
+    record("harvester.stopped", {
+      
+      reason: "SIGTERM",
+      outcome: "success",
+    }, thirdAssetCommission ? 12 : 11),
+  ]
+}
+
+const recoveryProjection = ({
+  freeQuantity = "0.01",
+  thirdAssetCommission = false,
+  includeCommissionBaseline = true,
+} = {}) => {
+  const records = [
+    ...createOpeningRecords(),
+    ...(thirdAssetCommission && includeCommissionBaseline ? [createCommissionBaselineRecord()] : []),
+    createBuyFillRecord({ thirdAssetCommission }),
+    ...createSellCycleRecords({ freeQuantity, 
+      thirdAssetCommission }),
+    ...createClosingRecords({ thirdAssetCommission }),
   ]
   return projectHarvesterJournalRecovery({ records })
 }
@@ -153,7 +236,8 @@ const restoreState = (options) => {
     marketMetadata: new Map([["BTCUSDT", market]]),
   })
   assert.equal(restored.ok, true, restored.errors?.map(({ message }) => message).join('; '))
-  return { projection, restored: restored.data }
+  return { projection,
+restored: restored.data }
 }
 
 const exchangeFillsFromJournal = (journalFills) => journalFills.map((entry) => new Fill({
@@ -162,15 +246,19 @@ const exchangeFillsFromJournal = (journalFills) => journalFills.map((entry) => n
   clientOrderId: entry.clientOrderId,
   market,
   side: entry.side,
-  price: new Money({ amount: entry.price, asset: market.quoteAsset }),
-  quantity: new Quantity({ amount: entry.quantity, asset: market.baseAsset }),
-  quoteQuantity: new Money({ amount: entry.quoteQuantity, asset: market.quoteAsset }),
+  price: new Money({ amount: entry.price,
+asset: market.quoteAsset }),
+  quantity: new Quantity({ amount: entry.quantity,
+asset: market.baseAsset }),
+  quoteQuantity: new Money({ amount: entry.quoteQuantity,
+asset: market.quoteAsset }),
   liquidityRole: entry.liquidityRole,
   ...(entry.executedAt === undefined ? {} : { executedAt: entry.executedAt }),
   commissions: entry.commissions.map((commission) => new Commission({
     amount: new Money({
       amount: commission.amount,
-      asset: new Asset({ id: commission.assetId, code: commission.asset }),
+      asset: new Asset({ id: commission.assetId,
+code: commission.asset }),
     }),
     ...(commission.quoteValue === undefined ? {} : {
       quoteValue: new Money({
@@ -244,16 +332,22 @@ const snapshot = ({ btcFree = "0.01", btcLocked = "0", usdtFree = "1000.25", usd
     sourceTime,
     balances: [
       new Balance({
-        free: new Quantity({ amount: btcFree, asset: market.baseAsset }),
-        locked: new Quantity({ amount: btcLocked, asset: market.baseAsset }),
+        free: new Quantity({ amount: btcFree,
+asset: market.baseAsset }),
+        locked: new Quantity({ amount: btcLocked,
+asset: market.baseAsset }),
       }),
       new Balance({
-        free: new Quantity({ amount: usdtFree, asset: market.quoteAsset }),
-        locked: new Quantity({ amount: usdtLocked, asset: market.quoteAsset }),
+        free: new Quantity({ amount: usdtFree,
+asset: market.quoteAsset }),
+        locked: new Quantity({ amount: usdtLocked,
+asset: market.quoteAsset }),
       }),
       ...(bnbFree === undefined ? [] : [new Balance({
-        free: new Quantity({ amount: bnbFree, asset: feeAsset }),
-        locked: new Quantity({ amount: bnbLocked, asset: feeAsset }),
+        free: new Quantity({ amount: bnbFree,
+asset: feeAsset }),
+        locked: new Quantity({ amount: bnbLocked,
+asset: feeAsset }),
       })]),
     ],
   })
@@ -264,9 +358,12 @@ const openBuyOrder = ({ type = "LIMIT" } = {}) => new CanonicalOrder({
   market,
   side: "BUY",
   type,
-  limitPrice: new Money({ amount: "100", asset: market.quoteAsset }),
-  originalQuantity: new Quantity({ amount: "1", asset: market.baseAsset }),
-  executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+  limitPrice: new Money({ amount: "100",
+asset: market.quoteAsset }),
+  originalQuantity: new Quantity({ amount: "1",
+asset: market.baseAsset }),
+  executedQuantity: new Quantity({ amount: "0",
+asset: market.baseAsset }),
   status: "OPEN",
 })
 
@@ -291,7 +388,9 @@ test("accounts for third-asset commission debits during recovered account reconc
   const result = auditRecoveredAccountState({
     projection,
     recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
-    currentAccountSnapshot: snapshot({ usdtFree: "1000.24", bnbFree: "0.7499", bnbLocked: "0.25" }),
+    currentAccountSnapshot: snapshot({ usdtFree: "1000.24",
+bnbFree: "0.7499",
+bnbLocked: "0.25" }),
     openOrders: [],
     markets: [market],
   })
@@ -308,17 +407,20 @@ test("fails closed when the third-asset baseline is journaled after the applied 
     ...projection,
     data: {
       ...projection.data,
-      accountSnapshots: projection.data.accountSnapshots.map((snapshot) =>
-        snapshot.phase === "COMMISSION_BASELINE"
-          ? { ...snapshot, sequence: fill.sequence + 1 }
-          : snapshot
+      accountSnapshots: projection.data.accountSnapshots.map((accountSnapshot) =>
+        accountSnapshot.phase === "COMMISSION_BASELINE"
+          ? { ...accountSnapshot,
+sequence: fill.sequence + 1 }
+          : accountSnapshot
       ),
     },
   }
   const result = auditRecoveredAccountState({
     projection: lateBaselineProjection,
     recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
-    currentAccountSnapshot: snapshot({ usdtFree: "1000.24", bnbFree: "0.7499", bnbLocked: "0.25" }),
+    currentAccountSnapshot: snapshot({ usdtFree: "1000.24",
+bnbFree: "0.7499",
+bnbLocked: "0.25" }),
     openOrders: [],
     markets: [market],
   })
@@ -335,7 +437,9 @@ test("fails closed when a positive third-asset commission has no durable baselin
   const result = auditRecoveredAccountState({
     projection,
     recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
-    currentAccountSnapshot: snapshot({ usdtFree: "1000.24", bnbFree: "0.7499", bnbLocked: "0.25" }),
+    currentAccountSnapshot: snapshot({ usdtFree: "1000.24",
+bnbFree: "0.7499",
+bnbLocked: "0.25" }),
     openOrders: [],
     markets: [market],
   })
@@ -349,7 +453,9 @@ test("rejects an unexplained third-asset balance movement despite matching marke
   const result = auditRecoveredAccountState({
     projection,
     recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
-    currentAccountSnapshot: snapshot({ usdtFree: "1000.24", bnbFree: "0.75", bnbLocked: "0.25" }),
+    currentAccountSnapshot: snapshot({ usdtFree: "1000.24",
+bnbFree: "0.75",
+bnbLocked: "0.25" }),
     openOrders: [],
     markets: [market],
   })
@@ -379,7 +485,8 @@ test("keeps a reconciled external open order unowned and reports its symbol conf
   const result = auditRecoveredAccountState({
     projection,
     recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
-    currentAccountSnapshot: snapshot({ usdtFree: "900.25", usdtLocked: "100" }),
+    currentAccountSnapshot: snapshot({ usdtFree: "900.25",
+usdtLocked: "100" }),
     openOrders: [externalOrder],
     markets: [market],
     targetMarket: market,
@@ -495,7 +602,8 @@ test("accepts the broker Order shape with exact raw quantity and price fields", 
   const result = auditRecoveredAccountState({
     projection,
     recoveredState,
-    currentAccountSnapshot: snapshot({ usdtFree: "900.25", usdtLocked: "100" }),
+    currentAccountSnapshot: snapshot({ usdtFree: "900.25",
+usdtLocked: "100" }),
     openOrders: [brokerOrder],
     markets: [market],
   })
@@ -538,10 +646,12 @@ test("rejects an incomplete durable PREFLIGHT baseline even when current balance
     ...projection,
     data: {
       ...projection.data,
-      accountSnapshots: projection.data.accountSnapshots.map((snapshot, index) =>
+      accountSnapshots: [...projection.data.accountSnapshots.entries()].map(([index, accountSnapshot]) =>
         index === 0
-          ? { ...snapshot, auditStatus: "INCOMPLETE", auditReasons: ["MISSING_ASSET_COVERAGE"] }
-          : snapshot
+          ? { ...accountSnapshot,
+auditStatus: "INCOMPLETE",
+auditReasons: ["MISSING_ASSET_COVERAGE"] }
+          : accountSnapshot
       ),
     },
   }
@@ -568,7 +678,8 @@ test("accepts a recovered LIMIT_MAKER commitment with exact quote reservation", 
   const result = auditRecoveredAccountState({
     projection,
     recoveredState,
-    currentAccountSnapshot: snapshot({ usdtFree: "900.25", usdtLocked: "100" }),
+    currentAccountSnapshot: snapshot({ usdtFree: "900.25",
+usdtLocked: "100" }),
     openOrders: [order],
     markets: [market],
   })
@@ -584,7 +695,8 @@ test("reports an unowned same-market open order as a narrow market blocker witho
   const result = auditRecoveredAccountState({
     projection,
     recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
-    currentAccountSnapshot: snapshot({ usdtFree: "900.25", usdtLocked: "100" }),
+    currentAccountSnapshot: snapshot({ usdtFree: "900.25",
+usdtLocked: "100" }),
     openOrders: [externalOrder],
     markets: [market],
     targetMarket: market,
@@ -603,7 +715,8 @@ test("reports an unowned same-market open order as a narrow market blocker witho
 })
 
 test("keeps an unrelated external order unowned and does not block the reconciled market", () => {
-  const ethAsset = new Asset({ id: "binance:ETH", code: "ETH" })
+  const ethAsset = new Asset({ id: "binance:ETH",
+code: "ETH" })
   const ethMarket = new Market({
     venue: "binance",
     symbol: "ETHUSDT",
@@ -636,25 +749,34 @@ test("keeps an unrelated external order unowned and does not block the reconcile
     market: ethMarket,
     side: "SELL",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "10", asset: market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "0.1", asset: ethAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: ethAsset }),
+    limitPrice: new Money({ amount: "10",
+asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.1",
+asset: ethAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: ethAsset }),
     status: "OPEN",
   })
   const currentAccountSnapshot = new AccountSnapshot({
     sourceTime: 3000,
     balances: [
       new Balance({
-        free: new Quantity({ amount: "0.01", asset: market.baseAsset }),
-        locked: new Quantity({ amount: "0", asset: market.baseAsset }),
+        free: new Quantity({ amount: "0.01",
+asset: market.baseAsset }),
+        locked: new Quantity({ amount: "0",
+asset: market.baseAsset }),
       }),
       new Balance({
-        free: new Quantity({ amount: "1000.25", asset: market.quoteAsset }),
-        locked: new Quantity({ amount: "0", asset: market.quoteAsset }),
+        free: new Quantity({ amount: "1000.25",
+asset: market.quoteAsset }),
+        locked: new Quantity({ amount: "0",
+asset: market.quoteAsset }),
       }),
       new Balance({
-        free: new Quantity({ amount: "0.4", asset: ethAsset }),
-        locked: new Quantity({ amount: "0.1", asset: ethAsset }),
+        free: new Quantity({ amount: "0.4",
+asset: ethAsset }),
+        locked: new Quantity({ amount: "0.1",
+asset: ethAsset }),
       }),
     ],
   })
@@ -680,8 +802,10 @@ test("fails closed when a relevant market asset is absent from the current accou
     sourceTime: 3000,
     balances: [
       new Balance({
-        free: new Quantity({ amount: "1000.25", asset: market.quoteAsset }),
-        locked: new Quantity({ amount: "0", asset: market.quoteAsset }),
+        free: new Quantity({ amount: "1000.25",
+asset: market.quoteAsset }),
+        locked: new Quantity({ amount: "0",
+asset: market.quoteAsset }),
       }),
     ],
   })
@@ -705,7 +829,8 @@ test("fails closed when the durable baseline omits a relevant market asset", () 
       ...projection.data,
       accountSnapshots: projection.data.accountSnapshots.map((entry) =>
         entry.phase === "PREFLIGHT"
-          ? { ...entry, balances: entry.balances.filter(({ asset }) => asset !== "BTC") }
+          ? { ...entry,
+balances: entry.balances.filter(({ asset }) => asset !== "BTC") }
           : entry
       ),
     },
@@ -723,7 +848,8 @@ test("fails closed when the durable baseline omits a relevant market asset", () 
 })
 
 test("fails closed when an unowned open order has no canonical market metadata", () => {
-  const ethAsset = new Asset({ id: "binance:ETH", code: "ETH" })
+  const ethAsset = new Asset({ id: "binance:ETH",
+code: "ETH" })
   const ethMarket = new Market({
     venue: "binance",
     symbol: "ETHUSDT",
@@ -737,9 +863,12 @@ test("fails closed when an unowned open order has no canonical market metadata",
     market: ethMarket,
     side: "SELL",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "10", asset: market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "0.1", asset: ethAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: ethAsset }),
+    limitPrice: new Money({ amount: "10",
+asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.1",
+asset: ethAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: ethAsset }),
     status: "OPEN",
   })
   const result = auditRecoveredAccountState({
@@ -804,9 +933,12 @@ test("fails closed when an exchange open order reuses a terminal recovered broke
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "100", asset: market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "0.1", asset: market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+    limitPrice: new Money({ amount: "100",
+asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.1",
+asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: market.baseAsset }),
     status: "OPEN",
   })
   const result = auditRecoveredAccountState({
@@ -829,9 +961,12 @@ test("fails closed when an unowned open order reuses a recovered clientOrderId",
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "100", asset: market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "0.1", asset: market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+    limitPrice: new Money({ amount: "100",
+asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.1",
+asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: market.baseAsset }),
     status: "OPEN",
   })
   const result = auditRecoveredAccountState({

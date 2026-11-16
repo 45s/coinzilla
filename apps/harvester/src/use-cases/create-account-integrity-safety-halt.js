@@ -14,8 +14,8 @@ export function createAccountIntegritySafetyHalt({
 
   return function cancelOwnedBuysAfterAccountingFailure() {
     const tradingEngine = getTradingEngine()
-    if (!tradingEngine || isStopped()) return Promise.resolve()
-    if (cancellationTask) return cancellationTask
+    if (!tradingEngine || isStopped()) {return Promise.resolve()}
+    if (cancellationTask) {return cancellationTask}
 
     const task = (async () => {
       let reconciliation
@@ -53,7 +53,8 @@ export function createAccountIntegritySafetyHalt({
     })()
 
     cancellationTask = task.catch((error) => {
-      logger.error?.({ message: "account-integrity safety halt workflow failed", error })
+      logger.error?.({ message: "account-integrity safety halt workflow failed",
+error })
     }).finally(() => {
       cancellationTask = null
     })

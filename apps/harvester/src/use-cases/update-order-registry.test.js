@@ -4,9 +4,14 @@ import { Asset, CanonicalOrder, Market, Money, Quantity } from "@coinzilla/entit
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { updateOrderRegistry } from "./update-order-registry.js"
 
-const baseAsset = new Asset({ id: "doge", code: "DOGE" })
-const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({ id: "doge",
+code: "DOGE" })
+const quoteAsset = new Asset({ id: "usdt",
+code: "USDT" })
+const market = new Market({ venue: "binance",
+symbol: "DOGEUSDT",
+baseAsset,
+quoteAsset })
 
 const makeOrder = ({ status = "OPEN", executedQuantity = "0" } = {}) => new CanonicalOrder({
   clientOrderId: "harvester-1",
@@ -14,9 +19,12 @@ const makeOrder = ({ status = "OPEN", executedQuantity = "0" } = {}) => new Cano
   market,
   side: "BUY",
   type: "LIMIT_MAKER",
-  limitPrice: new Money({ amount: "0.1", asset: quoteAsset }),
-  originalQuantity: new Quantity({ amount: "100", asset: baseAsset }),
-  executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+  limitPrice: new Money({ amount: "0.1",
+asset: quoteAsset }),
+  originalQuantity: new Quantity({ amount: "100",
+asset: baseAsset }),
+  executedQuantity: new Quantity({ amount: executedQuantity,
+asset: baseAsset }),
   status,
   createdAt: 1,
   acknowledgedAt: 2,
@@ -29,13 +37,17 @@ test("returns an updated immutable registry through the shared result shape", ()
     market,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "0.1", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "100", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    limitPrice: new Money({ amount: "0.1",
+asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "100",
+asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: baseAsset }),
     status: "PENDING",
   })
-  const registry = OrderRegistry.empty().registerPending({ order: pending }).registry
-  const result = updateOrderRegistry({ registry, order: makeOrder() })
+  const {registry} = OrderRegistry.empty().registerPending({ order: pending })
+  const result = updateOrderRegistry({ registry,
+order: makeOrder() })
 
   assert.equal(result.ok, true)
   assert.equal(result.data.applied, true)
@@ -54,7 +66,8 @@ test("returns unknown exchange order updates without adopting them", () => {
 })
 
 test("returns validation errors through toResult", () => {
-  assert.equal(updateOrderRegistry({ registry: {}, order: makeOrder() }).ok, false)
+  assert.equal(updateOrderRegistry({ registry: {},
+order: makeOrder() }).ok, false)
   assert.equal(updateOrderRegistry({
     registry: OrderRegistry.empty(),
     order: {},

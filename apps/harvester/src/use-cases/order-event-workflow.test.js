@@ -153,7 +153,8 @@ function createWorkflowAccountingRecorder({ calls, accountedFillIds, accountingR
     calls.accounting.push(fill)
     if (accountedFillIds.has(fill.id)) {
       calls.duplicateAccounting.push(fill)
-      return toResult({ data: { applied: false, duplicate: true } })
+      return toResult({ data: { applied: false,
+duplicate: true } })
     }
     const result = accountingResult
     if (result?.ok === true && result.data?.applied === true) {
@@ -222,8 +223,11 @@ function createWorkflowDependencies({
 }
 
 function makeWorkflow({
-  updateResult = { applied: true, duplicate: false, stale: false },
-  accountingResult = toResult({ data: { applied: true, duplicate: false } }),
+  updateResult = { applied: true,
+duplicate: false,
+stale: false },
+  accountingResult = toResult({ data: { applied: true,
+duplicate: false } }),
   terminalFills = [],
   completeResult = toResult({
     data: {
@@ -239,7 +243,8 @@ function makeWorkflow({
   registry,
 } = {}) {
   const calls = createWorkflowCalls()
-  const state = createWorkflowState({ updateResult, activeOrders })
+  const state = createWorkflowState({ updateResult,
+activeOrders })
   if (registry) {
     state.registry = registry
   }
@@ -256,7 +261,9 @@ function makeWorkflow({
     ...dependencies,
     logger,
   })
-  return { workflow, state, calls }
+  return { workflow,
+state,
+calls }
 }
 
 function createLifecycleRegistry({ currentOrder, ownership } = {}) {
