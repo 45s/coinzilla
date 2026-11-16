@@ -10,6 +10,7 @@ export class FakeTransport {
     this.messageListener = null
     this.errorListener = null
     this.closeListener = null
+    this.pingListener = null
     this.closeCalls = []
   }
 
@@ -26,6 +27,11 @@ export class FakeTransport {
   onClose(listener) {
     this.closeListener = listener
     return () => { this.closeListener = null }
+  }
+
+  onPing(listener) {
+    this.pingListener = listener
+    return () => { this.pingListener = null }
   }
 
   async connect() {
@@ -48,6 +54,10 @@ reason })
 
   receive(message) {
     this.messageListener?.(message)
+  }
+
+  ping(payload) {
+    this.pingListener?.(payload)
   }
 
   serverClose({ code = 1006, reason = "network lost" } = {}) {

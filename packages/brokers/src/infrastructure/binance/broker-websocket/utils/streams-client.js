@@ -3,6 +3,7 @@ import { parseStreamMessage, validateStreamName } from "./streams-protocol.js"
 
 const DEFAULT_URL = "wss://stream.binance.com:9443/ws"
 const DEFAULT_ACK_TIMEOUT = 5_000
+const DEFAULT_HEARTBEAT_TIMEOUT = 45_000
 const DEFAULT_RECONNECT_DELAY = 1_000
 const MAX_RECONNECT_DELAY = 30_000
 const CONNECTION_ROTATION_DELAY = 23 * 60 * 60 * 1_000 + 50 * 60 * 1_000
@@ -10,12 +11,15 @@ const CONTROL_MESSAGE_INTERVAL = 300
 const MAX_STREAMS_PER_CONNECTION = 1_024
 const MAX_STREAMS_PER_SUBSCRIBE = 200
 
-function validateClientOptions({ url, transportFactory, ackTimeout, reconnectDelay, maxReconnectDelay, rotationDelay, onError }) {
+function validateClientOptions({ url, transportFactory, ackTimeout, heartbeatTimeout, reconnectDelay, maxReconnectDelay, rotationDelay, onError }) {
   if (typeof url !== "string" || !url.startsWith("wss://") && !url.startsWith("ws://")) {
     throw new TypeError("A valid WebSocket Streams URL is required")
   }
   if (typeof transportFactory !== "function") {throw new TypeError("transportFactory must be a function")}
   if (!Number.isInteger(ackTimeout) || ackTimeout < 1) {throw new RangeError("ackTimeout must be a positive integer")}
+  if (!Number.isInteger(heartbeatTimeout) || heartbeatTimeout < 1) {
+    throw new RangeError("heartbeatTimeout must be a positive integer")
+  }
   if (!Number.isInteger(reconnectDelay) || reconnectDelay < 1) {throw new RangeError("reconnectDelay must be a positive integer")}
   if (!Number.isInteger(maxReconnectDelay) || maxReconnectDelay < reconnectDelay) {
     throw new RangeError("maxReconnectDelay must be greater than or equal to reconnectDelay")
@@ -72,9 +76,13 @@ export class BinanceStreamsClient {
   #rotationTimer = null
   #reconnectAttempts = 0
   #transportCleanup = null
+  #heartbeatTimer = null
+  #lastPingAt = null
+  #lastMessageAt = new Map()
+  #connectionGeneration = 0
 
   /**
-   * @param {{url?: string, transportFactory?: (options: {url: string}) => object, ackTimeout?: number, reconnectDelay?: number, maxReconnectDelay?: number, rotationDelay?: number, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void, nowFn?: () => number, onError?: (error: Error) => void}} [options]
+   * @param {{url?: string, transportFactory?: (options: {url: string}) => object, ackTimeout?: number, heartbeatTimeout?: number, reconnectDelay?: number, maxReconnectDelay?: number, rotationDelay?: number, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void, nowFn?: () => number, onError?: (error: Error) => void}} [options]
    * @throws {TypeError|RangeError} If a URL, callback, or timing option is invalid.
    */
   constructor(...args) {
@@ -82,6 +90,7 @@ export class BinanceStreamsClient {
     url = DEFAULT_URL,
     transportFactory = (options) => new NativeWebSocketTransport(options),
     ackTimeout = DEFAULT_ACK_TIMEOUT,
+    heartbeatTimeout = DEFAULT_HEARTBEAT_TIMEOUT,
     reconnectDelay = DEFAULT_RECONNECT_DELAY,
     maxReconnectDelay = MAX_RECONNECT_DELAY,
     rotationDelay = CONNECTION_ROTATION_DELAY,
@@ -93,6 +102,7 @@ export class BinanceStreamsClient {
     validateClientOptions({ url,
       transportFactory,
       ackTimeout,
+      heartbeatTimeout,
       reconnectDelay,
       maxReconnectDelay,
       rotationDelay,
@@ -102,6 +112,7 @@ export class BinanceStreamsClient {
     this.url = url
     this.transportFactory = transportFactory
     this.ackTimeout = ackTimeout
+    this.heartbeatTimeout = heartbeatTimeout
     this.reconnectDelay = reconnectDelay
     this.maxReconnectDelay = maxReconnectDelay
     this.rotationDelay = rotationDelay
@@ -117,6 +128,27 @@ export class BinanceStreamsClient {
 
   get subscriptions() {
     return [...this.#listeners.keys()]
+  }
+
+  get diagnostics() {
+    const now = this.now()
+    const streams = [...this.#listeners.keys()].map((stream) => {
+      const lastMessageAt = this.#lastMessageAt.get(stream) ?? null
+      return Object.freeze({
+        stream,
+        desired: true,
+        confirmed: this.#activeStreams.has(stream),
+        lastMessageAt,
+        messageAgeMs: lastMessageAt === null ? null : Math.max(0, now - lastMessageAt),
+      })
+    })
+    return Object.freeze({
+      connectionState: this.#state,
+      connectionGeneration: this.#connectionGeneration,
+      lastPingAt: this.#lastPingAt,
+      heartbeatAgeMs: this.#lastPingAt === null ? null : Math.max(0, now - this.#lastPingAt),
+      streams: Object.freeze(streams),
+    })
   }
 
   /** @returns {Promise<BinanceStreamsClient>} Resolves when all desired streams are active. */
@@ -233,6 +265,7 @@ export class BinanceStreamsClient {
         if (listeners.size === 0) {
           this.#listeners.delete(stream)
           this.#activeStreams.delete(stream)
+          this.#lastMessageAt.delete(stream)
         }
       }
       if (this.#listeners.size === 0) {this.#clearReconnectTimer()}
@@ -247,10 +280,13 @@ export class BinanceStreamsClient {
     this.#clearReconnectTimer()
     this.#clearRotationTimer()
     this.#clearPumpTimer()
+    this.#clearHeartbeatTimer()
     this.#controlQueue.length = 0
     this.#rejectPending(new Error("Binance Streams client disconnected"))
     this.#listeners.clear()
     this.#activeStreams.clear()
+    this.#lastMessageAt.clear()
+    this.#lastPingAt = null
 
     const transport = this.#transport
     this.#transport = null
@@ -279,6 +315,8 @@ export class BinanceStreamsClient {
     this.#clearReconnectTimer()
     this.#state = "connecting"
     this.#ready = false
+    this.#lastPingAt = null
+    this.#lastControlSent = -Infinity
 
     let transport
     try {
@@ -290,6 +328,7 @@ export class BinanceStreamsClient {
     }
 
     this.#transport = transport
+    this.#connectionGeneration += 1
     this.#connectPromise = this.#initializeConnection({ transport,
       connectionStreams,
       isReconnect })
@@ -299,7 +338,7 @@ export class BinanceStreamsClient {
   #createTransport(connectionStreams) {
     const url = this.#buildCombinedUrl(connectionStreams.slice(0, MAX_STREAMS_PER_SUBSCRIBE))
     const transport = this.transportFactory({ url })
-    for (const method of ["connect", "send", "close", "onMessage", "onError", "onClose"]) {
+    for (const method of ["connect", "send", "close", "onMessage", "onError", "onClose", "onPing"]) {
       if (typeof transport?.[method] !== "function") {
         throw new TypeError(`Streams transport must implement ${method}()`)
       }
@@ -321,6 +360,7 @@ export class BinanceStreamsClient {
     removers.push(transport.onMessage((message) => this.#handleMessage(message, transport)))
     removers.push(transport.onError((error) => this.#reportError(error)))
     removers.push(transport.onClose((event) => this.#handleClose(event, transport)))
+    removers.push(transport.onPing(() => this.#handlePing(transport)))
   }
 
   #initializeConnection({ transport, connectionStreams, isReconnect }) {
@@ -334,6 +374,8 @@ export class BinanceStreamsClient {
       }
 
       this.#state = "open"
+      this.#lastPingAt = this.now()
+      this.#scheduleHeartbeatWatchdog(transport)
       this.#scheduleRotation()
       await this.#activateInitialStreams({ transport,
         connectionStreams })
@@ -343,9 +385,11 @@ export class BinanceStreamsClient {
     }).catch(async (error) => {
       this.#ready = false
       this.#activeStreams.clear()
+      this.#clearHeartbeatTimer()
       if (this.#transport === transport) {
         this.#transport = null
         this.#state = "closed"
+        this.#lastPingAt = null
         this.#detachTransportListeners()
         try {
           await transport.close()
@@ -411,7 +455,10 @@ export class BinanceStreamsClient {
     for (const stream of streams) {
       const listeners = this.#listeners.get(stream)
       listeners?.delete(listener)
-      if (listeners?.size === 0) {this.#listeners.delete(stream)}
+      if (listeners?.size === 0) {
+        this.#listeners.delete(stream)
+        this.#lastMessageAt.delete(stream)
+      }
     }
     if (this.#listeners.size === 0) {this.#clearReconnectTimer()}
   }
@@ -533,6 +580,7 @@ payload: JSON.stringify(request) })
       for (const [stream, listeners] of this.#listeners) {
         const matches = parsed.stream ? parsed.stream === stream : matchesRawStream(stream, message)
         if (!matches) {continue}
+        this.#lastMessageAt.set(stream, this.now())
         for (const listener of listeners) {
           try {
             listener(message)
@@ -552,6 +600,7 @@ payload: JSON.stringify(request) })
     this.#ready = false
     this.#state = "closed"
     this.#transport = null
+    this.#clearHeartbeatTimer()
     this.#activeStreams.clear()
     this.#clearRotationTimer()
     this.#clearPumpTimer()
@@ -599,6 +648,48 @@ payload: JSON.stringify(request) })
   #clearAckTimeout(timeout) {
     this.clearTimeout(timeout)
     this.#ackTimeouts.delete(timeout)
+  }
+
+  #handlePing(transport) {
+    if (this.#transport !== transport || this.#state !== "open") {return}
+    this.#lastPingAt = this.now()
+    this.#scheduleHeartbeatWatchdog(transport)
+  }
+
+  #scheduleHeartbeatWatchdog(transport) {
+    this.#clearHeartbeatTimer()
+    this.#heartbeatTimer = this.setTimeout(() => {
+      this.#heartbeatTimer = null
+      if (this.#transport !== transport || this.#state !== "open") {return}
+      const heartbeatAgeMs = this.#lastPingAt === null
+        ? this.heartbeatTimeout
+        : Math.max(0, this.now() - this.#lastPingAt)
+      if (heartbeatAgeMs < this.heartbeatTimeout) {
+        this.#scheduleHeartbeatWatchdog(transport)
+        return
+      }
+      const error = new Error(`Binance Streams heartbeat timed out after ${heartbeatAgeMs} ms`)
+      error.name = "BinanceStreamHeartbeatError"
+      error.code = "BINANCE_STREAM_HEARTBEAT_TIMEOUT"
+      error.retryable = true
+      error.context = Object.freeze({
+        connectionGeneration: this.#connectionGeneration,
+        heartbeatAgeMs,
+        heartbeatTimeoutMs: this.heartbeatTimeout,
+        activeStreamCount: this.#activeStreams.size,
+        streams: this.diagnostics.streams,
+      })
+      this.#reportError(error)
+      Promise.resolve(transport.close(4000, "Binance Streams heartbeat timed out"))
+        .catch((closeError) => this.#reportError(closeError))
+    }, this.heartbeatTimeout)
+  }
+
+  #clearHeartbeatTimer() {
+    if (this.#heartbeatTimer !== null) {
+      this.clearTimeout(this.#heartbeatTimer)
+      this.#heartbeatTimer = null
+    }
   }
 
   #clearReconnectTimer() {
