@@ -24,7 +24,7 @@ export function makeProcessMarketPrice({ evaluateStrategy } = {}) {
       }
       const marketPrice = createMarketPrice({ priceEvent })
       if (marketPrice.symbol !== symbol) {
-        throw new TypeError("Received price for " + marketPrice.symbol + " while subscribed to " + symbol)
+        throw new TypeError(`Received price for ${  marketPrice.symbol  } while subscribed to ${  symbol}`)
       }
       if (pairConfig === null || typeof pairConfig !== "object" || Array.isArray(pairConfig)) {
         throw new TypeError("processMarketPrice requires a pairConfig object")
@@ -36,8 +36,12 @@ export function makeProcessMarketPrice({ evaluateStrategy } = {}) {
         throw new TypeError("processMarketPrice requires a Portfolio")
       }
 
-      const decision = evaluateStrategy({ marketPrice, pairConfig, settings, portfolio })
-      return toResult({ data: { marketPrice, decision } })
+      const decision = evaluateStrategy({ marketPrice,
+pairConfig,
+settings,
+portfolio })
+      return toResult({ data: { marketPrice,
+decision } })
     } catch (error) {
       return toResult({ error })
     }
