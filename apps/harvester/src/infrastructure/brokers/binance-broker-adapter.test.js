@@ -311,7 +311,10 @@ test("normalizes only definite Binance filter rejections and preserves uncertain
 
 test("supports account-wide open-order reads without symbol options", async () => {
   const { calls, client, result } = createClient()
-  const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
+  const broker = createBinanceBrokerAdapter({
+    config,
+    brokerFactory: () => client,
+  })
 
   assert.equal(await broker.getOpenOrders(), result, "An omitted options object must still perform an account-wide open-order read.")
   assert.deepEqual(calls, [["getOpenOrders", {}]], "The underlying broker must receive an empty options object rather than an undefined argument.")
