@@ -84,7 +84,7 @@ test("retains the host lock when Journal-lock release is uncertain and retries i
     if (input.directory !== journalDirectory || result?.ok !== true) {return result}
     return {
       ...result,
-      release: async ({} = {}) => {
+      release: async () => {
         if (failJournalRelease) {
           failJournalRelease = false
           return toResult({ error: new Error("simulated Journal lock release failure") })
