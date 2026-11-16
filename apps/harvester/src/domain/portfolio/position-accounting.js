@@ -114,7 +114,7 @@ function calculateAllocatedCommission({ commission, market }) {
       quoteFees: commission.amount,
     })
   }
-  const quoteValue = commission.quoteValue
+  const { quoteValue } = commission
   if (!quoteValue ||
       quoteValue.assetId !== market.quoteAsset.id ||
       quoteValue.assetCode !== market.quoteAsset.code) {
@@ -156,28 +156,12 @@ function calculateAllocatedCommissionTotals({ market, commissions }) {
   })
 }
 
-/**
- * Purely calculate the next Position amounts from one already validated
- * allocation side of a canonical SELL Fill. No synthetic Fill is created.
- *
- * @param {object} input
- * @param {object} input.market Canonical market for the allocated SELL.
- * @param {string} input.baseQuantity Current active base quantity.
- * @param {string} input.quoteNetCashFlow Current net quote cash flow.
- * @param {string} [input.spent] Existing BUY cost basis, preserved on SELL.
- * @param {object} input.allocation Immutable recovery or legacy SELL allocation side.
- * @returns {{ baseQuantity: string, quoteNetCashFlow: string, spent: string }}
- */
-export function calculatePositionSellAllocation({
-  market,
+function validatePositionSellAllocationInput({
   baseQuantity,
   quoteNetCashFlow,
-  spent = "0",
+  spent,
   allocation,
-} = {}) {
-  if (!market?.baseAsset?.id || !market?.quoteAsset?.id || !allocation) {
-    throw new TypeError("calculatePositionSellAllocation requires market and allocation")
-  }
+}) {
   assertNonNegativeDecimal({
     value: baseQuantity,
     field: "baseQuantity",
@@ -203,6 +187,36 @@ export function calculatePositionSellAllocation({
   assertNonNegativeDecimal({
     value: allocation.quoteProceeds,
     field: "allocation.quoteProceeds",
+  })
+}
+
+/**
+ * Purely calculate the next Position amounts from one already validated
+ * allocation side of a canonical SELL Fill. No synthetic Fill is created.
+ *
+ * @param {object} input
+ * @param {object} input.market Canonical market for the allocated SELL.
+ * @param {string} input.baseQuantity Current active base quantity.
+ * @param {string} input.quoteNetCashFlow Current net quote cash flow.
+ * @param {string} [input.spent] Existing BUY cost basis, preserved on SELL.
+ * @param {object} input.allocation Immutable recovery or legacy SELL allocation side.
+ * @returns {{ baseQuantity: string, quoteNetCashFlow: string, spent: string }}
+ */
+export function calculatePositionSellAllocation({
+  market,
+  baseQuantity,
+  quoteNetCashFlow,
+  spent = "0",
+  allocation,
+} = {}) {
+  if (!market?.baseAsset?.id || !market?.quoteAsset?.id || !allocation) {
+    throw new TypeError("calculatePositionSellAllocation requires market and allocation")
+  }
+  validatePositionSellAllocationInput({
+    baseQuantity,
+    quoteNetCashFlow,
+    spent,
+    allocation,
   })
   const { baseCommission, quoteFees } = calculateAllocatedCommissionTotals({
     market,
