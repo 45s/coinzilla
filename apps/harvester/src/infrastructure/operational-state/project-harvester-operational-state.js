@@ -38,7 +38,7 @@ function requireRecord({ record, index }) {
       typeof record.runtimeSessionId !== "string" || !record.runtimeSessionId.trim() ||
       typeof record.sequence !== "string" || !/^(0|[1-9][0-9]*)$/.test(record.sequence) ||
       !record.data || typeof record.data !== "object" || Array.isArray(record.data)) {
-    throw new TypeError("Operational State Store record record " + index + " has an invalid committed envelope")
+    throw new TypeError(`Operational State Store record record ${  index  } has an invalid committed envelope`)
   }
   return record
 }
@@ -46,15 +46,18 @@ function requireRecord({ record, index }) {
 function requireSafeSequence({ sequence, factId }) {
   const numericSequence = Number(sequence)
   if (!Number.isSafeInteger(numericSequence) || numericSequence < 0 || String(numericSequence) !== sequence) {
-    throw new RangeError("Operational State record " + factId + " exceeds the safe recovery sequence range")
+    throw new RangeError(`Operational State record ${  factId  } exceeds the safe recovery sequence range`)
   }
   return numericSequence
 }
 
 function makeEventRecord({ sessionId, lineNumber, name, data }) {
   return {
-    position: { fileName: sessionId, lineNumber },
-    payload: { source: "harvester", name, data },
+    position: { fileName: sessionId,
+lineNumber },
+    payload: { source: "harvester",
+name,
+data },
   }
 }
 
@@ -90,7 +93,7 @@ function mapFill({ data }) {
 function assertIntentMatches({ intent, data, fields, context }) {
   for (const field of fields) {
     if (intent[field] !== data[field]) {
-      throw new Error(context + " conflicts with its original durable order intent: " + field)
+      throw new Error(`${context  } conflicts with its original durable order intent: ${  field}`)
     }
   }
 }
@@ -98,10 +101,12 @@ function assertIntentMatches({ intent, data, fields, context }) {
 function mapFact({ record, orderIntents, cancellationIntents }) {
   const { factType, data } = record
   if (factType === "ACCOUNT_SNAPSHOT_CAPTURED") {
-    return [{ name: EVENT.ACCOUNT_SNAPSHOT, data }]
+    return [{ name: EVENT.ACCOUNT_SNAPSHOT,
+data }]
   }
   if (factType === "ACCOUNT_OPEN_ORDERS_CAPTURED") {
-    return [{ name: EVENT.ACCOUNT_OPEN_ORDERS, data }]
+    return [{ name: EVENT.ACCOUNT_OPEN_ORDERS,
+data }]
   }
   if (factType === "ORDER_SUBMISSION_INTENT") {
     orderIntents.set(data.clientOrderId, data)
@@ -120,7 +125,7 @@ function mapFact({ record, orderIntents, cancellationIntents }) {
   }
   if (factType === "ORDER_SUBMISSION_OUTCOME") {
     const intent = orderIntents.get(data.clientOrderId)
-    if (!intent) { throw new Error("Durable submission outcome has no preceding intent: " + data.clientOrderId) }
+    if (!intent) { throw new Error(`Durable submission outcome has no preceding intent: ${  data.clientOrderId}`) }
     assertIntentMatches({
       intent,
       data,
@@ -138,17 +143,20 @@ function mapFact({ record, orderIntents, cancellationIntents }) {
     if (data.outcome === "ACKNOWLEDGED") {
       return [{
         name: EVENT.SUBMITTED,
-        data: { ...immutableIntent, brokerOrderId: data.brokerOrderId, status: data.status },
+        data: { ...immutableIntent,
+brokerOrderId: data.brokerOrderId,
+status: data.status },
       }]
     }
     return [{
       name: EVENT.SUBMISSION_FAILED,
-      data: { ...immutableIntent, outcome: data.outcome },
+      data: { ...immutableIntent,
+outcome: data.outcome },
     }]
   }
   if (factType === "ORDER_CANCELLATION_INTENT") {
     const intent = orderIntents.get(data.clientOrderId)
-    if (!intent) { throw new Error("Durable cancellation intent has no preceding submission intent: " + data.clientOrderId) }
+    if (!intent) { throw new Error(`Durable cancellation intent has no preceding submission intent: ${  data.clientOrderId}`) }
     assertIntentMatches({
       intent,
       data,
@@ -156,7 +164,7 @@ function mapFact({ record, orderIntents, cancellationIntents }) {
       context: "Durable cancellation intent",
     })
     if (cancellationIntents.has(data.clientOrderId)) {
-      throw new Error("Durable cancellation intent was repeated before its prior outcome: " + data.clientOrderId)
+      throw new Error(`Durable cancellation intent was repeated before its prior outcome: ${  data.clientOrderId}`)
     }
     cancellationIntents.set(data.clientOrderId, data)
     return [{
@@ -178,7 +186,7 @@ function mapFact({ record, orderIntents, cancellationIntents }) {
   if (factType === "ORDER_CANCELLATION_OUTCOME") {
     const intent = orderIntents.get(data.clientOrderId)
     const cancellationIntent = cancellationIntents.get(data.clientOrderId)
-    if (!intent || !cancellationIntent) { throw new Error("Durable cancellation outcome has no preceding submission and cancellation intent: " + data.clientOrderId) }
+    if (!intent || !cancellationIntent) { throw new Error(`Durable cancellation outcome has no preceding submission and cancellation intent: ${  data.clientOrderId}`) }
     assertIntentMatches({
       intent,
       data,
@@ -206,7 +214,7 @@ function mapFact({ record, orderIntents, cancellationIntents }) {
       }]
     }
     const outcome = CANCELLATION_FAILURE_OUTCOMES.get(data.outcome)
-    if (!outcome) { throw new Error("Unsupported durable cancellation outcome: " + data.outcome) }
+    if (!outcome) { throw new Error(`Unsupported durable cancellation outcome: ${  data.outcome}`) }
     return [{
       name: EVENT.CANCEL_FAILED,
       data: {
@@ -219,7 +227,8 @@ function mapFact({ record, orderIntents, cancellationIntents }) {
     }]
   }
   if (factType === "EXECUTION_FILL_APPLIED") {
-    return [{ name: EVENT.FILL_APPLIED, data: mapFill({ data }) }]
+    return [{ name: EVENT.FILL_APPLIED,
+data: mapFill({ data }) }]
   }
   if (factType === "RECOVERY_CYCLE_COMPLETED") {
     return [{
@@ -290,11 +299,12 @@ export function projectHarvesterOperationalState({ records } = {}) {
     let previousSequence = -1n
 
     for (const [index, rawRecord] of records.entries()) {
-      const record = requireRecord({ record: rawRecord, index })
+      const record = requireRecord({ record: rawRecord,
+index })
       const sequence = BigInt(record.sequence)
       if (sequence <= previousSequence) { throw new Error("Operational State Store record sequence must be strictly increasing") }
       previousSequence = sequence
-      if (seenFactIds.has(record.factId)) { throw new Error("Operational State Store record stream contains duplicate factId " + record.factId) }
+      if (seenFactIds.has(record.factId)) { throw new Error(`Operational State Store record stream contains duplicate factId ${  record.factId}`) }
       seenFactIds.add(record.factId)
 
       if (record.factType === "LEDGER_INITIALIZED") { continue }
@@ -306,10 +316,12 @@ export function projectHarvesterOperationalState({ records } = {}) {
           throw new TypeError("Durable configuration baseline is malformed")
         }
         const existing = configurationBaselines.get(fingerprint)
-        if (existing && JSON.stringify(existing) !== JSON.stringify({ strategyName, markets })) {
+        if (existing && JSON.stringify(existing) !== JSON.stringify({ strategyName,
+markets })) {
           throw new Error("Configuration fingerprint was reused with conflicting strategy metadata")
         }
-        configurationBaselines.set(fingerprint, { strategyName, markets })
+        configurationBaselines.set(fingerprint, { strategyName,
+markets })
         continue
       }
       if (record.factType === "PROCESS_STARTED") {
@@ -349,7 +361,9 @@ export function projectHarvesterOperationalState({ records } = {}) {
         )) {
           throw new Error("Market-history coverage facts must be monotonic and may never narrow a previously verified history window")
         }
-        const coverage = Object.freeze({ ...record.data, factId: record.factId, sequence: record.sequence })
+        const coverage = Object.freeze({ ...record.data,
+factId: record.factId,
+sequence: record.sequence })
         marketHistoryCoverageBySymbol.set(record.data.symbol, coverage)
         marketHistoryCoverage.push(coverage)
         continue
@@ -361,7 +375,8 @@ export function projectHarvesterOperationalState({ records } = {}) {
         if (activeBlockers.has(record.data.blockerId)) {
           throw new Error("Safety blocker was raised more than once without an intervening resolution")
         }
-        activeBlockers.set(record.data.blockerId, { ...record.data, sequence: record.sequence })
+        activeBlockers.set(record.data.blockerId, { ...record.data,
+sequence: record.sequence })
         continue
       }
       if (record.factType === "SAFETY_BLOCKER_RESOLVED") {
@@ -395,7 +410,8 @@ export function projectHarvesterOperationalState({ records } = {}) {
       if (record.factType === "STRATEGY_MARKET_PAUSED") {
         const controlSession = sessions.get(record.runtimeSessionId)
         if (!controlSession || controlSession.stopped) { throw new Error("Strategy pause fact is outside an active process session") }
-        strategyPauses.set(record.data.symbol, { reason: record.data.reason, sequence: record.sequence })
+        strategyPauses.set(record.data.symbol, { reason: record.data.reason,
+sequence: record.sequence })
         continue
       }
       if (record.factType === "STRATEGY_MARKET_RESUMED") {
@@ -407,21 +423,25 @@ export function projectHarvesterOperationalState({ records } = {}) {
 
       const session = sessions.get(record.runtimeSessionId)
       if (!session || session.stopped) {
-        throw new Error("Durable trading fact is outside an active process session: " + record.factType)
+        throw new Error(`Durable trading fact is outside an active process session: ${  record.factType}`)
       }
       if (!["ACCOUNT_SNAPSHOT_CAPTURED", "ACCOUNT_OPEN_ORDERS_CAPTURED", "ORDER_SUBMISSION_INTENT", "ORDER_SUBMISSION_OUTCOME", "ORDER_CANCELLATION_INTENT", "ORDER_CANCELLATION_OUTCOME", "EXECUTION_FILL_APPLIED", "RECOVERY_CYCLE_COMPLETED", "RECOVERY_CYCLE_NOT_COMPLETED"].includes(record.factType)) {
-        throw new Error("Unsupported Operational State Store projection type: " + record.factType)
+        throw new Error(`Unsupported Operational State Store projection type: ${  record.factType}`)
       }
       if (record.factType === "ORDER_SUBMISSION_OUTCOME") {
-        orderSubmissionOutcomes.push(Object.freeze({ ...record.data, factId: record.factId, sequence: record.sequence }))
+        orderSubmissionOutcomes.push(Object.freeze({ ...record.data,
+factId: record.factId,
+sequence: record.sequence }))
       }
       if (record.factType === "ORDER_CANCELLATION_OUTCOME") {
-        orderCancellationOutcomes.push(Object.freeze({ ...record.data, factId: record.factId, sequence: record.sequence }))
+        orderCancellationOutcomes.push(Object.freeze({ ...record.data,
+factId: record.factId,
+sequence: record.sequence }))
       }
       if (record.factType === "EXECUTION_FILL_APPLIED") {
         const appliedFillIds = cycleFillIdsByMarket.get(record.data.marketId) ?? []
         if (appliedFillIds.includes(record.data.fillId)) {
-          throw new Error("Durable recovery cycle contains a duplicate applied fill identity: " + record.data.fillId)
+          throw new Error(`Durable recovery cycle contains a duplicate applied fill identity: ${  record.data.fillId}`)
         }
         appliedFillIds.push(record.data.fillId)
         cycleFillIdsByMarket.set(record.data.marketId, appliedFillIds)
@@ -429,9 +449,11 @@ export function projectHarvesterOperationalState({ records } = {}) {
       if (record.factType === "RECOVERY_CYCLE_COMPLETED" || record.factType === "RECOVERY_CYCLE_NOT_COMPLETED") {
         const expectedFillIds = cycleFillIdsByMarket.get(record.data.marketId) ?? []
         if (JSON.stringify(expectedFillIds) !== JSON.stringify(record.data.appliedFillIds)) {
-          throw new Error("Durable recovery-cycle outcome does not match the exact applied-fill boundary for " + record.data.marketId)
+          throw new Error(`Durable recovery-cycle outcome does not match the exact applied-fill boundary for ${  record.data.marketId}`)
         }
-        const fact = Object.freeze({ factId: record.factId, sequence: record.sequence, data: record.data })
+        const fact = Object.freeze({ factId: record.factId,
+sequence: record.sequence,
+data: record.data })
         if (record.factType === "RECOVERY_CYCLE_COMPLETED") {
           recoveryCycleCompletedFacts.push(fact)
           cycleFillIdsByMarket.set(record.data.marketId, [])
@@ -459,7 +481,10 @@ export function projectHarvesterOperationalState({ records } = {}) {
         record.data.phase === "PREFLIGHT")
       const remaining = session.facts.filter((record) => !preflight.includes(record))
       const emit = (name, data) => {
-        syntheticRecords.push(makeEventRecord({ sessionId: session.sessionId, lineNumber: lineNumber++, name, data }))
+        syntheticRecords.push(makeEventRecord({ sessionId: session.sessionId,
+lineNumber: lineNumber++,
+name,
+data }))
       }
       for (const record of preflight) {
         const name = record.factType === "ACCOUNT_SNAPSHOT_CAPTURED" ? EVENT.ACCOUNT_SNAPSHOT : EVENT.ACCOUNT_OPEN_ORDERS
@@ -469,7 +494,8 @@ export function projectHarvesterOperationalState({ records } = {}) {
 
       if (session === latestSession) {
         for (const [symbol, pause] of activePauses) {
-          emit(EVENT.STRATEGY_PAUSED, { symbol, reason: pause.reason })
+          emit(EVENT.STRATEGY_PAUSED, { symbol,
+reason: pause.reason })
         }
         for (const blocker of activeBlockers.values()) {
           emit(EVENT.EXECUTION_ACCOUNTING_FAILED, {
@@ -480,7 +506,9 @@ export function projectHarvesterOperationalState({ records } = {}) {
       }
 
       for (const record of remaining) {
-        const events = mapFact({ record, orderIntents, cancellationIntents })
+        const events = mapFact({ record,
+orderIntents,
+cancellationIntents })
         for (const event of events) { emit(event.name, event.data) }
       }
       if (session.stop) {
@@ -503,7 +531,7 @@ export function projectHarvesterOperationalState({ records } = {}) {
         data.symbol === cycle.symbol
       )
       if (!fact) {
-        throw new Error("Canonical recovery-cycle projection has no matching durable completion fact for " + cycle.symbol)
+        throw new Error(`Canonical recovery-cycle projection has no matching durable completion fact for ${  cycle.symbol}`)
       }
       return Object.freeze({
         ...cycle,
@@ -523,7 +551,8 @@ export function projectHarvesterOperationalState({ records } = {}) {
         factId: fact.factId,
         // Keep the synthetic replay sequence in the same ordering domain as
         // projected fills. The durable stream sequence is separate metadata.
-        durableSequence: requireSafeSequence({ sequence: fact.sequence, factId: fact.factId }),
+        durableSequence: requireSafeSequence({ sequence: fact.sequence,
+factId: fact.factId }),
       })
     })
     if (recoveryCycles.length !== recoveryCycleCompletedFacts.length) {
@@ -539,7 +568,7 @@ export function projectHarvesterOperationalState({ records } = {}) {
         data.reason === evaluation.reason
       )
       if (!fact) {
-        throw new Error("Canonical recovery-cycle evaluation has no matching durable NOT_COMPLETED fact for " + evaluation.symbol)
+        throw new Error(`Canonical recovery-cycle evaluation has no matching durable NOT_COMPLETED fact for ${  evaluation.symbol}`)
       }
       return Object.freeze({
         ...evaluation,
@@ -557,16 +586,19 @@ export function projectHarvesterOperationalState({ records } = {}) {
         factId: fact.factId,
         // Keep the synthetic replay sequence in the same ordering domain as
         // projected fills. The durable stream sequence is separate metadata.
-        durableSequence: requireSafeSequence({ sequence: fact.sequence, factId: fact.factId }),
+        durableSequence: requireSafeSequence({ sequence: fact.sequence,
+factId: fact.factId }),
       })
     })
     if (recoveryCycleEvaluations.length !== recoveryCycleNotCompletedFacts.length) {
       throw new Error("Durable recovery-cycle NOT_COMPLETED facts do not map one-to-one to canonical evaluations")
     }
     const stickySafetyBlockers = Object.freeze([...activeBlockers.values()].map((blocker) =>
-      Object.freeze({ ...blocker, scope: blocker.scope })))
+      Object.freeze({ ...blocker,
+scope: blocker.scope })))
     const pausedMarkets = Object.freeze([...activePauses].map(([symbol, pause]) =>
-      Object.freeze({ symbol, reason: pause.reason })))
+      Object.freeze({ symbol,
+reason: pause.reason })))
     return toResult({
       data: Object.freeze({
         ...projected.data,

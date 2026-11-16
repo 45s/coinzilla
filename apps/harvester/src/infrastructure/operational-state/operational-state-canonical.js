@@ -18,7 +18,7 @@ const SECRET_KEY_PATTERN = /(?:api.?key|secret|password|token|authorization|cred
  */
 export function requireNonEmptyString({ value, field, maxLength = MAX_STRING_LENGTH }) {
   if (typeof value !== "string" || value.trim() === "" || value !== value.trim() || value.length > maxLength) {
-    throw new TypeError(field + " must be a canonical non-empty string of at most " + maxLength + " characters")
+    throw new TypeError(`${field  } must be a canonical non-empty string of at most ${  maxLength  } characters`)
   }
   return value
 }
@@ -69,7 +69,7 @@ function canonicalize(value, depth = 0) {
         throw new TypeError("Operational State payload must not contain credentials or secrets")
       }
       const descriptor = Object.getOwnPropertyDescriptor(value, key)
-      if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, "value")) {
+      if (!descriptor || !Object.hasOwn(descriptor, "value")) {
         throw new TypeError("Operational State payload must not contain accessor properties")
       }
       if (descriptor.value === undefined) {throw new TypeError("Operational State payload must not contain undefined values")}

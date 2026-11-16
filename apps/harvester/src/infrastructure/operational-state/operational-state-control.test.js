@@ -8,7 +8,8 @@ import { createFileOperationalStateStore } from "./create-file-operational-state
 
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-control-facts-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "control-facts-test-session",
@@ -29,27 +30,33 @@ test("accepts canonical operator and strategy market pause/resume facts", async 
     {
       factId: "operator-control:telegram-request-1",
       factType: "OPERATOR_MARKET_PAUSED",
-      data: { requestId: "telegram-request-1", actorId: "telegram-actor-1", symbol: "BTCUSDT" },
+      data: { requestId: "telegram-request-1",
+actorId: "telegram-actor-1",
+symbol: "BTCUSDT" },
     },
     {
       factId: "operator-control:telegram-request-2",
       factType: "OPERATOR_MARKET_RESUMED",
-      data: { requestId: "telegram-request-2", actorId: "telegram-actor-1", symbol: "BTCUSDT" },
+      data: { requestId: "telegram-request-2",
+actorId: "telegram-actor-1",
+symbol: "BTCUSDT" },
     },
     {
       factId: "strategy-market-paused:runtime-1:1",
       factType: "STRATEGY_MARKET_PAUSED",
-      data: { symbol: "ETHUSDT", reason: "ACKNOWLEDGED_FILL_IDENTITY_MISMATCH" },
+      data: { symbol: "ETHUSDT",
+reason: "ACKNOWLEDGED_FILL_IDENTITY_MISMATCH" },
     },
     {
       factId: "strategy-market-resumed:runtime-1:2",
       factType: "STRATEGY_MARKET_RESUMED",
-      data: { symbol: "ETHUSDT", reason: "AUTHORITATIVE_RECONCILIATION_COMPLETED" },
+      data: { symbol: "ETHUSDT",
+reason: "AUTHORITATIVE_RECONCILIATION_COMPLETED" },
     },
   ]
   for (const fact of facts) {
     const result = await store.append(fact)
-    assert.equal(result.ok, true, "A canonical control fact must be accepted: " + fact.factType)
+    assert.equal(result.ok, true, `A canonical control fact must be accepted: ${  fact.factType}`)
     assert.equal(result.data.durable, true, "A control fact must receive an explicit durable acknowledgement.")
   }
 })
@@ -60,32 +67,42 @@ test("rejects malformed operator and strategy control facts", async (t) => {
     {
       factId: "operator-control:request-1",
       factType: "OPERATOR_MARKET_PAUSED",
-      data: { requestId: "request-1", actorId: "actor-1", symbol: "btcUSDT" },
+      data: { requestId: "request-1",
+actorId: "actor-1",
+symbol: "btcUSDT" },
     },
     {
       factId: "operator-control:request-2",
       factType: "OPERATOR_MARKET_RESUMED",
-      data: { requestId: "request-2", actorId: "actor-1", symbol: "BTCUSDT", credentialLabel: "must-not-persist" },
+      data: { requestId: "request-2",
+actorId: "actor-1",
+symbol: "BTCUSDT",
+credentialLabel: "must-not-persist" },
     },
     {
       factId: "operator-control:wrong-request",
       factType: "OPERATOR_MARKET_PAUSED",
-      data: { requestId: "request-3", actorId: "actor-1", symbol: "BTCUSDT" },
+      data: { requestId: "request-3",
+actorId: "actor-1",
+symbol: "BTCUSDT" },
     },
     {
       factId: "strategy-market-paused:runtime-1:3",
       factType: "STRATEGY_MARKET_PAUSED",
-      data: { symbol: "BTCUSDT", reason: "SAFETY_PAUSE", ignored: true },
+      data: { symbol: "BTCUSDT",
+reason: "SAFETY_PAUSE",
+ignored: true },
     },
     {
       factId: "strategy-market-resumed:runtime-1:4",
       factType: "STRATEGY_MARKET_RESUMED",
-      data: { symbol: "btcUSDT", reason: "RECONCILED" },
+      data: { symbol: "btcUSDT",
+reason: "RECONCILED" },
     },
   ]
   for (const fact of invalidFacts) {
     const result = await store.append(fact)
-    assert.equal(result.ok, false, "Malformed control fact " + fact.factId + " must be rejected.")
+    assert.equal(result.ok, false, `Malformed control fact ${  fact.factId  } must be rejected.`)
   }
 })
 
@@ -93,7 +110,7 @@ test("accepts a sticky market safety blocker and a separate evidence-backed reso
   const store = await createStore(t)
   const blockerId = blockerIdFor()
   const raised = await store.append({
-    factId: "safety-blocker-raised:" + blockerId,
+    factId: `safety-blocker-raised:${  blockerId}`,
     factType: "SAFETY_BLOCKER_RAISED",
     data: {
       blockerId,
@@ -104,7 +121,7 @@ test("accepts a sticky market safety blocker and a separate evidence-backed reso
     },
   })
   const resolved = await store.append({
-    factId: "safety-blocker-resolved:" + blockerId,
+    factId: `safety-blocker-resolved:${  blockerId}`,
     factType: "SAFETY_BLOCKER_RESOLVED",
     data: {
       blockerId,
@@ -125,38 +142,61 @@ test("rejects safety blockers with invalid scope, evidence, identity, or resolut
   const validId = blockerIdFor()
   const invalidFacts = [
     {
-      factId: "safety-blocker-raised:" + validId,
+      factId: `safety-blocker-raised:${  validId}`,
       factType: "SAFETY_BLOCKER_RAISED",
-      data: { blockerId: validId, scope: "GLOBAL", symbol: "BTCUSDT", reason: "UNOWNED_EXECUTION", evidenceDigest },
+      data: { blockerId: validId,
+scope: "GLOBAL",
+symbol: "BTCUSDT",
+reason: "UNOWNED_EXECUTION",
+evidenceDigest },
     },
     {
-      factId: "safety-blocker-raised:" + validId,
+      factId: `safety-blocker-raised:${  validId}`,
       factType: "SAFETY_BLOCKER_RAISED",
-      data: { blockerId: validId, scope: "ACCOUNT", symbol: "BTCUSDT", reason: "UNOWNED_EXECUTION", evidenceDigest },
+      data: { blockerId: validId,
+scope: "ACCOUNT",
+symbol: "BTCUSDT",
+reason: "UNOWNED_EXECUTION",
+evidenceDigest },
     },
     {
-      factId: "safety-blocker-raised:" + validId,
+      factId: `safety-blocker-raised:${  validId}`,
       factType: "SAFETY_BLOCKER_RAISED",
-      data: { blockerId: validId, scope: "MARKET", symbol: "BTCUSDT", reason: "unowned execution", evidenceDigest },
+      data: { blockerId: validId,
+scope: "MARKET",
+symbol: "BTCUSDT",
+reason: "unowned execution",
+evidenceDigest },
     },
     {
-      factId: "safety-blocker-raised:" + validId,
+      factId: `safety-blocker-raised:${  validId}`,
       factType: "SAFETY_BLOCKER_RAISED",
-      data: { blockerId: validId, scope: "MARKET", symbol: "BTCUSDT", reason: "UNOWNED_EXECUTION", evidenceDigest: "not-a-digest" },
+      data: { blockerId: validId,
+scope: "MARKET",
+symbol: "BTCUSDT",
+reason: "UNOWNED_EXECUTION",
+evidenceDigest: "not-a-digest" },
     },
     {
-      factId: "safety-blocker-resolved:" + validId,
+      factId: `safety-blocker-resolved:${  validId}`,
       factType: "SAFETY_BLOCKER_RESOLVED",
-      data: { blockerId: validId, resolvedBy: "operator:trader", resolution: "AUTOMATIC_RESTART", evidenceDigest },
+      data: { blockerId: validId,
+resolvedBy: "operator:trader",
+resolution: "AUTOMATIC_RESTART",
+evidenceDigest },
     },
     {
-      factId: "safety-blocker-resolved:" + validId,
+      factId: `safety-blocker-resolved:${  validId}`,
       factType: "SAFETY_BLOCKER_RESOLVED",
-      data: { blockerId: validId, resolvedBy: "operator:trader", resolution: "OPERATOR_ACTION", evidenceDigest, note: "extra" },
+      data: { blockerId: validId,
+resolvedBy: "operator:trader",
+resolution: "OPERATOR_ACTION",
+evidenceDigest,
+note: "extra" },
     },
   ]
   for (const fact of invalidFacts) {
     const result = await store.append(fact)
-    assert.equal(result.ok, false, "Invalid safety blocker fact " + fact.factId + " must fail closed.")
+    assert.equal(result.ok, false, `Invalid safety blocker fact ${  fact.factId  } must fail closed.`)
   }
 })

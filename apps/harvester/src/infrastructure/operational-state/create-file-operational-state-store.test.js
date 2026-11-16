@@ -17,7 +17,9 @@ const createStore = (directory, options = {}) => createFileOperationalStateStore
 const operatorPause = (overrides = {}) => ({
   factId: "operator-control:request-1",
   factType: "OPERATOR_MARKET_PAUSED",
-  data: { requestId: "request-1", actorId: "telegram-actor-1", symbol: "BTCUSDT" },
+  data: { requestId: "request-1",
+actorId: "telegram-actor-1",
+symbol: "BTCUSDT" },
   ...overrides,
 })
 const canonicalize = (value) => {
@@ -36,8 +38,9 @@ const readLines = async (filePath) => (await readFile(filePath, "utf8")).trimEnd
 const readManifestRecords = async (directory) => (await readLines(path.join(directory, "manifest.jsonl"))).map(JSON.parse)
 
 test("normal verification and append never initialize a missing Operational State Store", async (t) => {
-  const directory = path.join(os.tmpdir(), "harvester-Operational State Store records-missing-" + process.pid + "-" + Date.now())
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  const directory = path.join(os.tmpdir(), `harvester-Operational State Store records-missing-${  process.pid  }-${  Date.now()}`)
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   const verification = await store.verify()
   assert.equal(verification.ok, false)
@@ -48,7 +51,8 @@ test("normal verification and append never initialize a missing Operational Stat
 
 test("explicit initialization writes a genesis fact and committed-head manifest checkpoint", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   const initialized = await store.initialize()
   assert.equal(initialized.ok, true)
@@ -79,7 +83,8 @@ test("explicit initialization writes a genesis fact and committed-head manifest 
 
 test("initialization is explicit and cannot overwrite an existing ledger", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   assert.equal((await store.initialize()).ok, true)
   const beforeFacts = await readFile(path.join(directory, "facts.jsonl"), "utf8")
@@ -92,7 +97,8 @@ test("initialization is explicit and cannot overwrite an existing ledger", async
 
 test("appends exact facts with global monotonic sequences across runtime sessions", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const firstStore = createStore(directory)
   await firstStore.initialize()
   const first = await firstStore.append(operatorPause())
@@ -104,7 +110,9 @@ test("appends exact facts with global monotonic sequences across runtime session
   const second = await secondStore.append({
     factId: "operator-control:request-2",
     factType: "OPERATOR_MARKET_PAUSED",
-    data: { requestId: "request-2", actorId: "telegram-actor-1", symbol: "ETHUSDT" },
+    data: { requestId: "request-2",
+actorId: "telegram-actor-1",
+symbol: "ETHUSDT" },
   })
   assert.equal(second.ok, true)
   assert.equal(second.data.durable, true)
@@ -118,7 +126,8 @@ test("appends exact facts with global monotonic sequences across runtime session
 
 test("treats an exact duplicate fact identity and payload as idempotent across runtime sessions", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   await store.initialize()
   const first = await store.append(operatorPause())
@@ -134,12 +143,15 @@ test("treats an exact duplicate fact identity and payload as idempotent across r
 
 test("rejects reuse of a fact identity with changed economic or control payload", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   await store.initialize()
   assert.equal((await store.append(operatorPause())).ok, true)
   const conflict = await store.append(operatorPause({
-    data: { requestId: "request-1", actorId: "telegram-actor-1", symbol: "ETHUSDT" },
+    data: { requestId: "request-1",
+actorId: "telegram-actor-1",
+symbol: "ETHUSDT" },
   }))
   assert.equal(conflict.ok, false)
   assert.match(conflict.errors[0].message, /record ID.*different payload|identity.*payload/i)
@@ -147,16 +159,19 @@ test("rejects reuse of a fact identity with changed economic or control payload"
 
 test("serializes concurrent appends across multiple store instances in one process", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   const secondStore = createStore(directory, { runtimeSessionId: "runtime-session-2" })
   await store.initialize()
   const results = await Promise.all(Array.from({ length: 8 }, (_, index) => {
     const writer = index % 2 === 0 ? store : secondStore
     return writer.append({
-      factId: "operator-control:concurrent-" + index,
+      factId: `operator-control:concurrent-${  index}`,
       factType: "OPERATOR_MARKET_PAUSED",
-      data: { requestId: "concurrent-" + index, actorId: "actor-1", symbol: "BTCUSDT" },
+      data: { requestId: `concurrent-${  index}`,
+actorId: "actor-1",
+symbol: "BTCUSDT" },
     })
   }))
   assert.equal(results.every(({ ok, data }) => ok && data.durable), true)
@@ -168,7 +183,8 @@ test("serializes concurrent appends across multiple store instances in one proce
 
 test("preserves exact decimal strings and canonical key ordering", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   await store.initialize()
   const appended = await store.append({
@@ -205,35 +221,52 @@ test("preserves exact decimal strings and canonical key ordering", async (t) => 
 
 test("rejects unknown fact types, unsafe numeric amounts, secrets, sparse arrays, accessors, and oversized payloads", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   await store.initialize()
-  assert.equal((await store.append({ ...operatorPause(), factType: "UNKNOWN_FACT" })).ok, false)
+  assert.equal((await store.append({ ...operatorPause(),
+factType: "UNKNOWN_FACT" })).ok, false)
   const unsafeNumber = await store.append(operatorPause({
-    data: { requestId: "r2", actorId: "a", symbol: "BTCUSDT", quantity: 0.01 },
+    data: { requestId: "r2",
+actorId: "a",
+symbol: "BTCUSDT",
+quantity: 0.01 },
   }))
   assert.equal(unsafeNumber.ok, false)
   const secret = await store.append(operatorPause({
-    data: { requestId: "r3", actorId: "a", symbol: "BTCUSDT", apiKey: "must-not-persist" },
+    data: { requestId: "r3",
+actorId: "a",
+symbol: "BTCUSDT",
+apiKey: "must-not-persist" },
   }))
   assert.equal(secret.ok, false)
   const oversized = await store.append(operatorPause({
-    data: { requestId: "r4", actorId: "a", symbol: "BTCUSDT", note: "x".repeat(70_000) },
+    data: { requestId: "r4",
+actorId: "a",
+symbol: "BTCUSDT",
+note: "x".repeat(70_000) },
   }))
   assert.equal(oversized.ok, false)
   const sparse = await store.append(operatorPause({
-    data: { requestId: "r5", actorId: "a", symbol: "BTCUSDT", items: new Array(1) },
+    data: { requestId: "r5",
+actorId: "a",
+symbol: "BTCUSDT",
+items: new Array(1) },
   }))
   assert.equal(sparse.ok, false)
-  const accessorData = { requestId: "r6", symbol: "BTCUSDT" }
-  Object.defineProperty(accessorData, "actorId", { enumerable: true, get: () => "actor-1" })
+  const accessorData = { requestId: "r6",
+symbol: "BTCUSDT" }
+  Object.defineProperty(accessorData, "actorId", { enumerable: true,
+get: () => "actor-1" })
   const accessor = await store.append(operatorPause({ data: accessorData }))
   assert.equal(accessor.ok, false)
 })
 
 test("detects tampered fact-record digests", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   await store.initialize()
   await store.append(operatorPause())
@@ -245,7 +278,8 @@ test("detects tampered fact-record digests", async (t) => {
 
 test("detects missing committed-head manifests and missing fact logs", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   await store.initialize()
   await unlink(path.join(directory, "manifest.jsonl"))
@@ -256,7 +290,8 @@ test("detects missing committed-head manifests and missing fact logs", async (t)
 
 test("detects a validly re-digested fact sequence gap", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   await store.initialize()
   await store.append(operatorPause())
@@ -266,7 +301,7 @@ test("detects a validly re-digested fact sequence gap", async (t) => {
   record.sequence = "2"
   record.digest = digestRecord(record)
   lines[1] = canonicalStringify(record)
-  await writeFile(logPath, lines.join("\n") + "\n")
+  await writeFile(logPath, `${lines.join("\n")  }\n`)
   const verification = await store.verify()
   assert.equal(verification.ok, false)
   assert.match(verification.errors[0].message, /sequence|gap|integrity/i)
@@ -274,24 +309,26 @@ test("detects a validly re-digested fact sequence gap", async (t) => {
 
 test("detects partial or torn final records in either append-only stream", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   await store.initialize()
   const factPath = path.join(directory, "facts.jsonl")
   const factLog = await readFile(factPath, "utf8")
-  await writeFile(factPath, factLog + "{")
+  await writeFile(factPath, `${factLog  }{`)
   assert.equal((await store.verify()).ok, false)
   await writeFile(factPath, factLog)
   const manifestPath = path.join(directory, "manifest.jsonl")
   const manifestLog = await readFile(manifestPath, "utf8")
-  await writeFile(manifestPath, manifestLog + "{")
+  await writeFile(manifestPath, `${manifestLog  }{`)
   const freshStore = createStore(directory)
   assert.equal((await freshStore.verify()).ok, false)
 })
 
 test("rejects unknown fact and manifest fields even when their JSON remains canonical", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   await store.initialize()
   await store.append(operatorPause())
@@ -302,7 +339,7 @@ test("rejects unknown fact and manifest fields even when their JSON remains cano
   fact.unrecognizedEnvelopeField = "must-fail"
   fact.digest = digestRecord(fact)
   factLines[1] = canonicalStringify(fact)
-  await writeFile(factPath, factLines.join("\n") + "\n")
+  await writeFile(factPath, `${factLines.join("\n")  }\n`)
   assert.equal((await store.verify()).ok, false)
   await writeFile(factPath, originalFacts)
   const freshStore = createStore(directory)
@@ -313,13 +350,14 @@ test("rejects unknown fact and manifest fields even when their JSON remains cano
   manifest.unrecognizedField = true
   manifest.digest = digestRecord(manifest)
   manifestLines[1] = canonicalStringify(manifest)
-  await writeFile(manifestPath, manifestLines.join("\n") + "\n")
+  await writeFile(manifestPath, `${manifestLines.join("\n")  }\n`)
   assert.equal((await freshStore.verify()).ok, false)
 })
 
 test("detects a broken committed-head manifest digest chain", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   await store.initialize()
   await store.append(operatorPause())
@@ -329,7 +367,7 @@ test("detects a broken committed-head manifest digest chain", async (t) => {
   second.previousManifestDigest = "0".repeat(64)
   second.digest = digestRecord(second)
   lines[1] = canonicalStringify(second)
-  await writeFile(manifestPath, lines.join("\n") + "\n")
+  await writeFile(manifestPath, `${lines.join("\n")  }\n`)
   const verification = await store.verify()
   assert.equal(verification.ok, false)
   assert.match(verification.errors[0].message, /manifest.*chain|previous.*manifest/i)
@@ -337,7 +375,8 @@ test("detects a broken committed-head manifest digest chain", async (t) => {
 
 test("does not acknowledge a fact when its manifest checkpoint cannot be appended", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   let failManifestAppend = false
   const manifestPath = path.join(directory, "manifest.jsonl")
   const fileSystem = {
@@ -368,7 +407,8 @@ test("does not acknowledge a fact when its manifest checkpoint cannot be appende
 
 test("poisons the current store after an uncertain manifest fsync, then verifies from a fresh instance", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   let failManifestSync = false
   const manifestPath = path.join(directory, "manifest.jsonl")
   const fileSystem = {
@@ -399,7 +439,8 @@ test("poisons the current store after an uncertain manifest fsync, then verifies
 
 test("verification flushes both committed streams before declaring the ledger valid", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const syncPaths = []
   const fileSystem = {
     ...fsPromises,
@@ -427,13 +468,14 @@ test("verification flushes both committed streams before declaring the ledger va
 
 test("fails closed when the fact log is truncated below the committed-head journal", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   await store.initialize()
   await store.append(operatorPause())
   const factPath = path.join(directory, "facts.jsonl")
   const lines = await readLines(factPath)
-  await writeFile(factPath, lines[0] + "\n")
+  await writeFile(factPath, `${lines[0]  }\n`)
   const verification = await createStore(directory).verify()
   assert.equal(verification.ok, false)
   assert.match(verification.errors[0].message, /manifest.*ahead|truncated|fact log/i)
@@ -442,7 +484,8 @@ test("fails closed when the fact log is truncated below the committed-head journ
 
 test("accepts a verified market-history coverage fact with exact durable evidence", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   await store.initialize()
   const appended = await store.append({
@@ -465,7 +508,8 @@ test("accepts a verified market-history coverage fact with exact durable evidenc
 
 test("accepts canonical ISO timestamp strings from the injected clock for market-history coverage", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   let clockCalls = 0
   const recordedAt = "2026-11-13T00:00:00.000Z"
   const store = createStore(directory, {
@@ -506,7 +550,8 @@ test("accepts canonical ISO timestamp strings from the injected clock for market
 
 test("rejects negative zero in Operational State Store record numeric fields before JSON can normalize it to zero", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   await store.initialize()
 
@@ -542,7 +587,8 @@ test("rejects negative zero in Operational State Store record numeric fields bef
 
 test("rejects malformed market-history coverage facts", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   await store.initialize()
   const invalidFacts = [
@@ -629,7 +675,8 @@ test("rejects malformed market-history coverage facts", async (t) => {
 
 test("rejects a recovery-cycle NOT_COMPLETED fact without its complete cycle and terminal SELL evidence", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createStore(directory)
   await store.initialize()
 
