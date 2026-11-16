@@ -8,12 +8,15 @@ import test from "node:test"
 import { createFileOperationalStateStore } from "./create-file-operational-state-store.js"
 
 const createDirectory = () => mkdtemp(path.join(os.tmpdir(), "harvester-Operational State Store records-"))
-const createStore = (directory, options = {}) => createFileOperationalStateStore({
+const createStore = (...parameters) => {
+  const [directory, options = {}] = parameters
+  return createFileOperationalStateStore({
   directory,
   runtimeSessionId: "runtime-session-1",
   now: () => new Date("2026-11-11T12:00:00.000Z"),
   ...options,
-})
+  })
+}
 const operatorPause = (overrides = {}) => ({
   factId: "operator-control:request-1",
   factType: "OPERATOR_MARKET_PAUSED",
@@ -381,7 +384,8 @@ force: true }))
   const manifestPath = path.join(directory, "manifest.jsonl")
   const fileSystem = {
     ...fsPromises,
-    open: async (target, ...args) => {
+    open: async (...parameters) => {
+        const [target, ...args] = parameters
       if (failManifestAppend && target === manifestPath && args[0] === "a") {
         return {
           writeFile: async () => { throw new Error("simulated manifest append failure") },
@@ -413,7 +417,8 @@ force: true }))
   const manifestPath = path.join(directory, "manifest.jsonl")
   const fileSystem = {
     ...fsPromises,
-    open: async (target, ...args) => {
+    open: async (...parameters) => {
+        const [target, ...args] = parameters
       const handle = await fsPromises.open(target, ...args)
       if (failManifestSync && target === manifestPath && args[0] === "a") {
         Object.defineProperty(handle, "sync", {
@@ -444,7 +449,8 @@ force: true }))
   const syncPaths = []
   const fileSystem = {
     ...fsPromises,
-    open: async (target, ...args) => {
+    open: async (...parameters) => {
+        const [target, ...args] = parameters
       const handle = await fsPromises.open(target, ...args)
       const sync = handle.sync.bind(handle)
       Object.defineProperty(handle, "sync", {
