@@ -1,7 +1,7 @@
 const MAX_ORDER_HISTORY_LIMIT = 1000
 
 function validateOrderId({ orderId, index }) {
-  const validStringId = typeof orderId === "string" && /^\\d+$/.test(orderId)
+  const validStringId = typeof orderId === "string" && /^\d+$/.test(orderId)
   const validNumericId = Number.isSafeInteger(orderId) && orderId >= 0
   if ((!validStringId && !validNumericId) || !Number.isSafeInteger(Number(orderId))) {
     throw new TypeError(`Binance order history item ${index} has an invalid orderId`)
