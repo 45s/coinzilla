@@ -11094,6 +11094,42 @@ test("continues recovery-only market evaluation after the shutdown BUY gate", as
   )
 })
 
+function assertNoShutdownSafetyPauses({ harness } = {}) {
+  assertNoShutdownSafetyPauses({ harness })
+}
+
+async function applyLateRecoverySellFill({ harness, sellOrder } = {}) {
+  const quantity = "0.1"
+  const lateFill = makeSellFill({
+    order: sellOrder,
+    tradeId: "late-shutdown-recovery-sell-fill",
+    quantity,
+    quoteQuantity: multiplyDecimal({
+      left: sellOrder.limitPrice.amount,
+      right: quantity,
+    }),
+    commissionAmount: "0.02",
+  })
+  const lateSellOrder = harness.engine.getOrders().find(({ brokerOrderId }) =>
+    brokerOrderId === lateFill.brokerOrderId)
+  assert.ok(lateSellOrder, "The late fill must belong to a known Harvester-owned recovery SELL.")
+  harness.setAcknowledgedOrder({
+    order: lateSellOrder,
+    fills: [lateFill],
+  })
+  return harness.engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makePartiallyFilledOrder({
+        order: sellOrder,
+        executedQuantity: quantity,
+        updatedAt: 3,
+      }),
+      fill: lateFill,
+    },
+  })
+}
+
 test("invalidates and rechecks a safe market after a late owned SELL execution", async () => {
   const seeded = makeSeededRecoveryState()
   let shutdownStarted = false
@@ -11128,34 +11164,7 @@ test("invalidates and rechecks a safe market after a late owned SELL execution",
   const sellOrder = harness.engine.getOrders().find((order) =>
     order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
   assert.ok(sellOrder, "The safe market must retain an acknowledged recovery SELL.")
-  const quantity = "0.1"
-  const lateFill = makeSellFill({
-    order: sellOrder,
-    tradeId: "late-shutdown-recovery-sell-fill",
-    quantity,
-    quoteQuantity: multiplyDecimal({
-      left: sellOrder.limitPrice.amount,
-      right: quantity,
-    }),
-    commissionAmount: "0.02",
-  })
-  const lateSellOrder = harness.engine.getOrders().find(({ brokerOrderId }) => brokerOrderId === lateFill.brokerOrderId)
-  assert.ok(lateSellOrder, "The late fill must belong to a known Harvester-owned recovery SELL.")
-  harness.setAcknowledgedOrder({
-    order: lateSellOrder,
-    fills: [lateFill],
-  })
-  const lateEvidence = await harness.engine.processUserDataEvent({
-    event: {
-      executionType: "TRADE",
-      executedOrder: makePartiallyFilledOrder({
-        order: sellOrder,
-        executedQuantity: quantity,
-        updatedAt: 3,
-      }),
-      fill: lateFill,
-    },
-  })
+  const lateEvidence = await applyLateRecoverySellFill({ harness, sellOrder })
 
   assert.equal(lateEvidence.ok, true, lateEvidence.errors?.[0]?.message)
   assert.deepEqual(
