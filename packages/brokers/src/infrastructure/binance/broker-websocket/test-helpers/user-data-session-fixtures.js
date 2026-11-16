@@ -7,7 +7,8 @@ export function createScheduler() {
   return {
     setTimeout(callback, delay) {
       const id = ++nextId
-      tasks.set(id, { callback, delay })
+      tasks.set(id, { callback,
+delay })
       return id
     },
     clearTimeout(id) {
@@ -21,7 +22,7 @@ export function createScheduler() {
     },
     async runNext() {
       const entry = tasks.entries().next().value
-      if (!entry) throw new Error("No scheduled task")
+      if (!entry) {throw new Error("No scheduled task")}
       const [id, task] = entry
       tasks.delete(id)
       await task.callback()
@@ -51,7 +52,8 @@ function createRpcFactory() {
     clients.push(client)
     return client
   }
-  return { clients, factory }
+  return { clients,
+factory }
 }
 
 export function createBroker({ warningThreshold = 3 } = {}) {
@@ -62,7 +64,9 @@ export function createBroker({ warningThreshold = 3 } = {}) {
     apiSecret: "test-secret",
     tradingMode: "testnet",
     reconnectDelay: 25,
-    logger: { error() {}, info() {}, warn() {} },
+    logger: { error() {},
+info() {},
+warn() {} },
   }, {
     apiClientFactory: rpc.factory,
     marketClientFactory: () => createFakeStreamsClient(),
@@ -70,5 +74,7 @@ export function createBroker({ warningThreshold = 3 } = {}) {
     clearTimeoutFn: scheduler.clearTimeout,
     userDataRecoveryWarningThreshold: warningThreshold,
   })
-  return { broker, scheduler, clients: rpc.clients }
+  return { broker,
+scheduler,
+clients: rpc.clients }
 }
