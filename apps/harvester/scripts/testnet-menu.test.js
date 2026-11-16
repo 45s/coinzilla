@@ -62,9 +62,9 @@ test("passes an optional journal directory only when supplied", () => {
 })
 
 test("normalizes prompt answers safely when input is missing or blank", () => {
-  assert.equal(normalizePromptAnswer(undefined), "")
-  assert.equal(normalizePromptAnswer(null), "")
-  assert.equal(normalizePromptAnswer("  "), "")
-  assert.equal(normalizePromptAnswer("  DOGEUSDT  "), "DOGEUSDT")
-  assert.equal(normalizePromptAnswer(undefined, "DOGEUSDT"), "DOGEUSDT")
+  assert.equal(normalizePromptAnswer({ answer: undefined }), "")
+  assert.equal(normalizePromptAnswer({ answer: null }), "")
+  assert.equal(normalizePromptAnswer({ answer: "  " }), "")
+  assert.equal(normalizePromptAnswer({ answer: "  DOGEUSDT  " }), "DOGEUSDT")
+  assert.equal(normalizePromptAnswer({ answer: undefined, fallback: "DOGEUSDT" }), "DOGEUSDT")
 })
