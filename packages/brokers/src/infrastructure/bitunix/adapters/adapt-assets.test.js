@@ -32,7 +32,7 @@ test("adapts Bitunix Spot balances to legacy Coin values and omits zero assets",
 test("rejects malformed Bitunix balances through canonical balance validation", () => {
   assert.throws(() => adaptAssets([
     {
-      coin: "BTC",
+        coin: "BTC",
       balance: 0.1,
       balanceLocked: "0",
     },
