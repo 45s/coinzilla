@@ -87,44 +87,69 @@ test("normalizes live Kline events and preserves their close flag", () => {
 })
 
 test("rejects invalid history row shapes and timestamps", () => {
-  assert.throws(() => adaptKlineHistoryRow({ row: null, symbol: "BTCUSDT", interval: "1m" }), /exactly 12 fields/)
-  assert.throws(() => adaptKlineHistoryRow({ row: historyRow.slice(0, 11), symbol: "BTCUSDT", interval: "1m" }), /exactly 12 fields/)
-  assert.throws(() => adaptKlineHistoryRow({ row: [NaN, ...historyRow.slice(1)], symbol: "BTCUSDT", interval: "1m" }), /openTime/)
-  assert.throws(() => adaptKlineHistoryRow({ row: [historyRow[0], ...historyRow.slice(1, 6), historyRow[0] - 1, ...historyRow.slice(7)], symbol: "BTCUSDT", interval: "1m" }), /closeTime/)
-  assert.throws(() => adaptKlineHistoryRow({ row: historyRow, symbol: "BTCUSDT", interval: "1m", now: -1 }), /now/)
+  assert.throws(() => adaptKlineHistoryRow({ row: null,
+symbol: "BTCUSDT",
+interval: "1m" }), /exactly 12 fields/)
+  assert.throws(() => adaptKlineHistoryRow({ row: historyRow.slice(0, 11),
+symbol: "BTCUSDT",
+interval: "1m" }), /exactly 12 fields/)
+  assert.throws(() => adaptKlineHistoryRow({ row: [NaN, ...historyRow.slice(1)],
+symbol: "BTCUSDT",
+interval: "1m" }), /openTime/)
+  assert.throws(() => adaptKlineHistoryRow({ row: [historyRow[0], ...historyRow.slice(1, 6), historyRow[0] - 1, ...historyRow.slice(7)],
+symbol: "BTCUSDT",
+interval: "1m" }), /closeTime/)
+  assert.throws(() => adaptKlineHistoryRow({ row: historyRow,
+symbol: "BTCUSDT",
+interval: "1m",
+now: -1 }), /now/)
 })
 
 test("rejects malformed live Kline events and symbol mismatches", () => {
   for (const message of [null, [], "kline", { e: "aggTrade" }]) {
     assert.throws(() => adaptKlineStreamMessage(message), /Kline event is required/)
   }
-  assert.throws(() => adaptKlineStreamMessage({ ...streamMessage, k: null }), /kline object/)
+  assert.throws(() => adaptKlineStreamMessage({ ...streamMessage,
+k: null }), /kline object/)
   assert.throws(() => adaptKlineStreamMessage({
     ...streamMessage,
-    k: { ...streamMessage.k, s: "ETHUSDT" },
+    k: { ...streamMessage.k,
+s: "ETHUSDT" },
   }), /symbol does not match/)
   assert.throws(() => adaptKlineStreamMessage({
     ...streamMessage,
-    k: { ...streamMessage.k, x: "false" },
+    k: { ...streamMessage.k,
+x: "false" },
   }), /isClosed must be a boolean/)
 })
 
 test("rejects missing or unsupported symbols and intervals", () => {
-  assert.throws(() => adaptKlineHistoryRow({ row: historyRow, interval: "1m" }), /non-empty symbol/)
-  assert.throws(() => adaptKlineHistoryRow({ row: historyRow, symbol: "BTCUSDT", interval: "2m" }), /supported Binance kline interval/)
+  assert.throws(() => adaptKlineHistoryRow({ row: historyRow,
+interval: "1m" }), /non-empty symbol/)
+  assert.throws(() => adaptKlineHistoryRow({ row: historyRow,
+symbol: "BTCUSDT",
+interval: "2m" }), /supported Binance kline interval/)
   assert.throws(() => adaptKlineStreamMessage({
     ...streamMessage,
-    k: { ...streamMessage.k, i: "2m" },
+    k: { ...streamMessage.k,
+i: "2m" },
   }), /supported Binance kline interval/)
 })
 
 test("validates exact positive prices, non-negative volume and OHLC relationships", () => {
   for (const field of ["open", "high", "low", "close", "volume"]) {
-    const index = { open: 1, high: 2, low: 3, close: 4, volume: 5 }[field]
+    const index = { open: 1,
+high: 2,
+low: 3,
+close: 4,
+volume: 5 }[field]
     const invalid = [...historyRow]
     invalid[index] = 1
     assert.throws(() => adaptKlineHistoryRow({
-      row: invalid, symbol: "BTCUSDT", interval: "1m", now: 1_700_000_060_000,
+      row: invalid,
+symbol: "BTCUSDT",
+interval: "1m",
+now: 1_700_000_060_000,
     }), /decimal/)
   }
 
@@ -137,7 +162,10 @@ test("validates exact positive prices, non-negative volume and OHLC relationship
     const invalid = [...historyRow]
     invalid[index] = value
     assert.throws(() => adaptKlineHistoryRow({
-      row: invalid, symbol: "BTCUSDT", interval: "1m", now: 1_700_000_060_000,
+      row: invalid,
+symbol: "BTCUSDT",
+interval: "1m",
+now: 1_700_000_060_000,
     }), pattern)
   }
 })
@@ -146,6 +174,9 @@ test("rejects a close time before the open time", () => {
   const invalid = [...historyRow]
   invalid[6] = invalid[0] - 1
   assert.throws(() => adaptKlineHistoryRow({
-    row: invalid, symbol: "BTCUSDT", interval: "1m", now: 1_700_000_060_000,
+    row: invalid,
+symbol: "BTCUSDT",
+interval: "1m",
+now: 1_700_000_060_000,
   }), /closeTime must not be before openTime/)
 })

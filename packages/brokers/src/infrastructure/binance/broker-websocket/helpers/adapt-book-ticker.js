@@ -23,9 +23,11 @@ export function adaptBookTickerMessage({ message, symbol, timestamp }) {
     ["A", "best ask quantity"],
   ]
   for (const [field, name] of decimalFields) {
-    assertDecimalString({ value: message[field], field: name })
-    if (compareDecimal({ left: message[field], right: "0" }) <= 0) {
-      throw new RangeError("Binance bookTicker " + name + " must be positive")
+    assertDecimalString({ value: message[field],
+field: name })
+    if (compareDecimal({ left: message[field],
+right: "0" }) <= 0) {
+      throw new RangeError(`Binance bookTicker ${  name  } must be positive`)
     }
   }
 

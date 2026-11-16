@@ -151,7 +151,9 @@ test("isolates throwing stream listeners through the error observer", async () =
   acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
   await subscription
 
-  transports[0].receive({ e: "aggTrade", s: "BTCUSDT", p: "1" })
+  transports[0].receive({ e: "aggTrade",
+s: "BTCUSDT",
+p: "1" })
   assert.deepEqual(errors, ["stream listener failed"])
   assert.equal(client.state, "open")
   await client.disconnect()
@@ -170,11 +172,14 @@ test("keeps a local stream subscription when the server rejects unsubscribe", as
   await flush()
   clock.advanceBy(300)
   await flush()
-  acknowledge(transports[0], 1, { code: 2, msg: "unsubscribe denied" })
+  acknowledge(transports[0], 1, { code: 2,
+msg: "unsubscribe denied" })
   await assert.rejects(unsubscribe, /unsubscribe denied/)
 
   assert.deepEqual(client.subscriptions, ["btcusdt@aggTrade"])
-  transports[0].receive({ e: "aggTrade", s: "BTCUSDT", p: "2" })
+  transports[0].receive({ e: "aggTrade",
+s: "BTCUSDT",
+p: "2" })
   assert.equal(events.length, 1)
   await client.disconnect()
 })
@@ -184,13 +189,21 @@ test("validates Streams client configuration and public operation arguments", as
     url: "wss://stream.binance.com:9443/ws",
     transportFactory: (options) => new FakeTransport(options),
   }
-  assert.throws(() => new BinanceStreamsClient({ ...valid, url: "https://example.com" }), /valid WebSocket Streams URL/)
-  assert.throws(() => new BinanceStreamsClient({ ...valid, transportFactory: null }), /transportFactory must be a function/)
-  assert.throws(() => new BinanceStreamsClient({ ...valid, ackTimeout: 0 }), /ackTimeout must be a positive integer/)
-  assert.throws(() => new BinanceStreamsClient({ ...valid, reconnectDelay: 0 }), /reconnectDelay must be a positive integer/)
-  assert.throws(() => new BinanceStreamsClient({ ...valid, reconnectDelay: 10, maxReconnectDelay: 5 }), /maxReconnectDelay must be greater than or equal/)
-  assert.throws(() => new BinanceStreamsClient({ ...valid, rotationDelay: 0 }), /rotationDelay must be a positive integer/)
-  assert.throws(() => new BinanceStreamsClient({ ...valid, onError: null }), /onError must be a function/)
+  assert.throws(() => new BinanceStreamsClient({ ...valid,
+url: "https://example.com" }), /valid WebSocket Streams URL/)
+  assert.throws(() => new BinanceStreamsClient({ ...valid,
+transportFactory: null }), /transportFactory must be a function/)
+  assert.throws(() => new BinanceStreamsClient({ ...valid,
+ackTimeout: 0 }), /ackTimeout must be a positive integer/)
+  assert.throws(() => new BinanceStreamsClient({ ...valid,
+reconnectDelay: 0 }), /reconnectDelay must be a positive integer/)
+  assert.throws(() => new BinanceStreamsClient({ ...valid,
+reconnectDelay: 10,
+maxReconnectDelay: 5 }), /maxReconnectDelay must be greater than or equal/)
+  assert.throws(() => new BinanceStreamsClient({ ...valid,
+rotationDelay: 0 }), /rotationDelay must be a positive integer/)
+  assert.throws(() => new BinanceStreamsClient({ ...valid,
+onError: null }), /onError must be a function/)
 
   const client = new BinanceStreamsClient(valid)
   await assert.rejects(client.connect(), /Subscribe to at least one stream/)
@@ -202,22 +215,44 @@ test("validates Streams client configuration and public operation arguments", as
 
 test("matches raw Binance events across symbol, interval, depth, and all-market streams", async () => {
   const cases = [
-    ["!miniTicker@arr", { e: "24hrMiniTicker", s: "OTHER" }, true],
-    ["!ticker@arr", { e: "24hrTicker", s: "OTHER" }, true],
-    ["!ticker_1h@arr", { e: "1hTicker", s: "OTHER" }, true],
-    ["!ticker_4h@arr", { e: "4hTicker", s: "OTHER" }, true],
-    ["btcusdt@aggTrade", { e: "aggTrade", s: "BTCUSDT" }, true],
-    ["ethusdt@trade", { e: "trade", s: "ETHUSDT" }, true],
-    ["bnbusdt@miniTicker", { e: "24hrMiniTicker", s: "BNBUSDT" }, true],
-    ["adausdt@ticker", { e: "24hrTicker", s: "ADAUSDT" }, true],
-    ["xrpusdt@bookTicker", { s: "XRPUSDT", u: 1, b: "1", B: "2", a: "3", A: "4" }, true],
-    ["dogeusdt@kline_1m", { e: "kline", s: "DOGEUSDT", k: { i: "1m" } }, true],
-    ["solusdt@ticker_1h", { e: "1hTicker", s: "SOLUSDT" }, true],
-    ["ltcusdt@depth5@100ms", { e: "depthUpdate", s: "LTCUSDT" }, true],
-    ["btcusdt@aggTrade", { e: "aggTrade", s: "ETHUSDT" }, false],
-    ["btcusdt@trade", { e: "aggTrade", s: "BTCUSDT" }, false],
-    ["dogeusdt@kline_1m", { e: "kline", s: "DOGEUSDT", k: { i: "5m" } }, false],
-    ["solusdt@ticker_1h", { e: "4hTicker", s: "SOLUSDT" }, false],
+    ["!miniTicker@arr", { e: "24hrMiniTicker",
+s: "OTHER" }, true],
+    ["!ticker@arr", { e: "24hrTicker",
+s: "OTHER" }, true],
+    ["!ticker_1h@arr", { e: "1hTicker",
+s: "OTHER" }, true],
+    ["!ticker_4h@arr", { e: "4hTicker",
+s: "OTHER" }, true],
+    ["btcusdt@aggTrade", { e: "aggTrade",
+s: "BTCUSDT" }, true],
+    ["ethusdt@trade", { e: "trade",
+s: "ETHUSDT" }, true],
+    ["bnbusdt@miniTicker", { e: "24hrMiniTicker",
+s: "BNBUSDT" }, true],
+    ["adausdt@ticker", { e: "24hrTicker",
+s: "ADAUSDT" }, true],
+    ["xrpusdt@bookTicker", { s: "XRPUSDT",
+u: 1,
+b: "1",
+B: "2",
+a: "3",
+A: "4" }, true],
+    ["dogeusdt@kline_1m", { e: "kline",
+s: "DOGEUSDT",
+k: { i: "1m" } }, true],
+    ["solusdt@ticker_1h", { e: "1hTicker",
+s: "SOLUSDT" }, true],
+    ["ltcusdt@depth5@100ms", { e: "depthUpdate",
+s: "LTCUSDT" }, true],
+    ["btcusdt@aggTrade", { e: "aggTrade",
+s: "ETHUSDT" }, false],
+    ["btcusdt@trade", { e: "aggTrade",
+s: "BTCUSDT" }, false],
+    ["dogeusdt@kline_1m", { e: "kline",
+s: "DOGEUSDT",
+k: { i: "5m" } }, false],
+    ["solusdt@ticker_1h", { e: "4hTicker",
+s: "SOLUSDT" }, false],
   ]
 
   for (const [stream, message, shouldMatch] of cases) {
@@ -309,8 +344,12 @@ test("ignores messages already queued by a superseded Streams transport", async 
   acknowledge(transports[1], 0, { result: ["btcusdt@aggTrade"] })
   await flush()
 
-  staleMessage({ e: "aggTrade", s: "BTCUSDT", p: "stale" })
-  transports[1].receive({ e: "aggTrade", s: "BTCUSDT", p: "fresh" })
+  staleMessage({ e: "aggTrade",
+s: "BTCUSDT",
+p: "stale" })
+  transports[1].receive({ e: "aggTrade",
+s: "BTCUSDT",
+p: "fresh" })
 
   assert.deepEqual(received, ["fresh"])
   await client.disconnect()
@@ -334,10 +373,16 @@ test("ignores a delayed close callback from a superseded Streams transport", asy
   assert.equal(transports.length, 2)
   acknowledge(transports[1], 0, { result: ["btcusdt@aggTrade"] })
   await flush()
-  transports[1].receive({ e: "aggTrade", s: "BTCUSDT", p: "before-stale-close" })
+  transports[1].receive({ e: "aggTrade",
+s: "BTCUSDT",
+p: "before-stale-close" })
 
-  staleClose({ code: 1006, reason: "late close callback", wasClean: false })
-  transports[1].receive({ e: "aggTrade", s: "BTCUSDT", p: "after-stale-close" })
+  staleClose({ code: 1006,
+reason: "late close callback",
+wasClean: false })
+  transports[1].receive({ e: "aggTrade",
+s: "BTCUSDT",
+p: "after-stale-close" })
 
   assert.equal(client.state, "open")
   assert.deepEqual(received, ["before-stale-close", "after-stale-close"])
@@ -585,7 +630,10 @@ test("paces queued cleanup requests and clears the control pump timer on disconn
 
   const batchStreams = Array.from(
     { length: 201 },
-    (_, index) => `s${String(index).padStart(4, "0")}@aggTrade`,
+    (...args) => {
+      const [, index] = args
+      return `s${String(index).padStart(4, "0")}@aggTrade`
+    },
   )
   const batch = client.subscribe(batchStreams, () => {})
   await flush()
@@ -598,7 +646,8 @@ test("paces queued cleanup requests and clears the control pump timer on disconn
   clock.advanceBy(300)
   await flush()
   assert.equal(transports[0].sent[2].method, "SUBSCRIBE")
-  acknowledge(transports[0], 2, { code: 2, msg: "second batch failed" })
+  acknowledge(transports[0], 2, { code: 2,
+msg: "second batch failed" })
   await assert.rejects(batch, /second batch failed/)
 
   const next = client.subscribe("ethusdt@trade", () => {})
