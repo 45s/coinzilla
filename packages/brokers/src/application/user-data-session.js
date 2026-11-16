@@ -101,7 +101,7 @@ export class UserDataSession {
 
   /** @returns {Promise<void>} Resolves when the current recovery attempt settles. */
   async waitForRecovery() {
-    if (this.#reconnectPromise) await this.#reconnectPromise
+    if (this.#reconnectPromise) {await this.#reconnectPromise}
   }
 
   /** Bind connection lifecycle listeners after the underlying client opens. */
@@ -114,15 +114,18 @@ export class UserDataSession {
 
   /** Resume or establish the shared remote subscription for active subscribers. */
   async resume() {
-    if (this.#stopped || this.#subscribers.size === 0) return
+    if (this.#stopped || this.#subscribers.size === 0) {return}
     this.#clearReconnectTimer()
-    if (this.#reconnectPromise) return this.#reconnectPromise
+    if (this.#reconnectPromise) {return this.#reconnectPromise}
     try {
       await this.#ensureRemoteSubscription()
     } catch (error) {
       this.setUnavailable(true)
       this.#reconnectAttempts = 0
-      this.#notify({ type: "recovering", attempt: 0, error, recoveryRequired: true })
+      this.#notify({ type: "recovering",
+attempt: 0,
+error,
+recoveryRequired: true })
       this.#scheduleRecovery()
     }
   }
@@ -135,8 +138,8 @@ export class UserDataSession {
    */
   async subscribe({ onEvent, onStatus }) {
     validateCallback(onEvent, "onEvent")
-    if (onStatus !== undefined) validateCallback(onStatus, "onStatus")
-    if (this.#stopped) throw new Error("User-data session is stopped")
+    if (onStatus !== undefined) {validateCallback(onStatus, "onStatus")}
+    if (this.#stopped) {throw new Error("User-data session is stopped")}
 
     const id = ++this.#nextSubscriberId
     const subscriber = {
@@ -202,11 +205,11 @@ export class UserDataSession {
   }
 
   async #ensureRemoteSubscription() {
-    if (this.#subscriptionId !== null) return this.#subscriptionId
+    if (this.#subscriptionId !== null) {return this.#subscriptionId}
     if (this.#subscribePromise) {
       await this.#subscribePromise
-      if (this.#stopped) throw new Error("User-data session is stopped")
-      if (this.#subscriptionId !== null) return this.#subscriptionId
+      if (this.#stopped) {throw new Error("User-data session is stopped")}
+      if (this.#subscriptionId !== null) {return this.#subscriptionId}
       return this.#ensureRemoteSubscription()
     }
 
@@ -250,7 +253,7 @@ export class UserDataSession {
       this.#clearReconnectTimer()
       this.#reconnectAttempts = 0
       this.setUnavailable(this.#recoveryRequired)
-      if (this.#recoveryRequired) this.#notifyRecoveryReady()
+      if (this.#recoveryRequired) {this.#notifyRecoveryReady()}
       return subscriptionId
     })().finally(() => {
       this.#subscribePromise = null
@@ -268,7 +271,7 @@ export class UserDataSession {
       throw originalError
     }
 
-    if (!Array.isArray(ids)) throw originalError
+    if (!Array.isArray(ids)) {throw originalError}
     if (ids.some((id) => !Number.isSafeInteger(id) || id < 0)) {
       throw new Error("Cannot safely identify the user-data subscription: malformed subscription state", {
         cause: originalError,
@@ -279,7 +282,7 @@ export class UserDataSession {
         cause: originalError,
       })
     }
-    if (ids.length === 1) return ids[0]
+    if (ids.length === 1) {return ids[0]}
     throw originalError
   }
 
@@ -306,7 +309,7 @@ export class UserDataSession {
           cause: originalError,
         })
       }
-      if (!activeIds.includes(subscriptionId)) return
+      if (!activeIds.includes(subscriptionId)) {return}
 
       try {
         await port.unsubscribe(subscriptionId)
@@ -332,22 +335,22 @@ export class UserDataSession {
     try {
       if (includeUserData) {
         const removeEventListener = port.onEvent((message) => {
-          if (this.getClient() === client) this.#handleEvent(message)
+          if (this.getClient() === client) {this.#handleEvent(message)}
         })
-        if (typeof removeEventListener === "function") removers.push(removeEventListener)
+        if (typeof removeEventListener === "function") {removers.push(removeEventListener)}
         this.#removeEventListener = removeEventListener ?? null
 
         const removeErrorListener = port.onError((error) => {
-          if (this.getClient() === client) this.#handleError(error)
+          if (this.getClient() === client) {this.#handleError(error)}
         })
-        if (typeof removeErrorListener === "function") removers.push(removeErrorListener)
+        if (typeof removeErrorListener === "function") {removers.push(removeErrorListener)}
         this.#removeErrorListener = removeErrorListener ?? null
       }
 
       const removeCloseListener = port.onClose((event) => {
-        if (this.getClient() === client) this.#handleClose(event)
+        if (this.getClient() === client) {this.#handleClose(event)}
       })
-      if (typeof removeCloseListener === "function") removers.push(removeCloseListener)
+      if (typeof removeCloseListener === "function") {removers.push(removeCloseListener)}
       this.#removeCloseListener = removeCloseListener ?? null
     } catch (error) {
       for (const remove of removers.reverse()) {
@@ -366,7 +369,7 @@ export class UserDataSession {
 
   #handleEvent(message) {
     if (this.#stopped || this.#subscribers.size === 0 ||
-        message?.subscriptionId !== this.#subscriptionId) return
+        message?.subscriptionId !== this.#subscriptionId) {return}
 
     if (message.type === "terminated") {
       logSafely(this.logger, "warn", "Binance user-data subscription terminated", {
@@ -391,8 +394,8 @@ export class UserDataSession {
   }
 
   #isDuplicateEvent(identity) {
-    if (typeof identity !== "string" || identity.length === 0) return false
-    if (this.#eventIdentities.has(identity)) return true
+    if (typeof identity !== "string" || identity.length === 0) {return false}
+    if (this.#eventIdentities.has(identity)) {return true}
 
     this.#eventIdentities.add(identity)
     if (this.#eventIdentities.size > 2048) {
@@ -403,7 +406,7 @@ export class UserDataSession {
 
   #forwardEvent(event) {
     for (const subscriber of [...this.#subscribers.values()]) {
-      if (!subscriber.active) continue
+      if (!subscriber.active) {continue}
       try {
         subscriber.onEvent({ event })
       } catch (error) {
@@ -414,11 +417,13 @@ export class UserDataSession {
 
   #handleError(error) {
     logSafely(this.logger, "error", "Binance user data stream error", error)
-    this.#notify({ type: "rpcError", error, recoveryRequired: false })
+    this.#notify({ type: "rpcError",
+error,
+recoveryRequired: false })
   }
 
   #handleClose(event) {
-    if (this.#stopped) return
+    if (this.#stopped) {return}
     this.#detachClientListeners()
     this.setConnected(false)
     if (this.#subscribers.size === 0) {
@@ -437,7 +442,9 @@ export class UserDataSession {
       reason: event?.reason ?? "",
       recoveryRequired: true,
     })
-    this.#notify({ type: "recovering", attempt: 0, recoveryRequired: true })
+    this.#notify({ type: "recovering",
+attempt: 0,
+recoveryRequired: true })
     this.#scheduleRecovery()
   }
 
@@ -453,7 +460,7 @@ export class UserDataSession {
   }
 
   #notifySubscriber(subscriber, status) {
-    if (!subscriber.active || typeof subscriber.onStatus !== "function") return
+    if (!subscriber.active || typeof subscriber.onStatus !== "function") {return}
     try {
       subscriber.onStatus(status)
     } catch (error) {
@@ -469,7 +476,7 @@ export class UserDataSession {
 
   #scheduleRecovery(delay) {
     if (this.#stopped || this.#subscribers.size === 0 || this.#subscriptionId !== null ||
-        this.#reconnectTimer !== null || this.#reconnectPromise) return
+        this.#reconnectTimer !== null || this.#reconnectPromise) {return}
     const exponent = Math.min(this.#reconnectAttempts, 10)
     const wait = delay ?? Math.min(this.reconnectDelay * (2 ** exponent), 30_000)
     this.#reconnectTimer = this.setTimeout(() => {
@@ -480,7 +487,7 @@ export class UserDataSession {
 
   async #recover() {
     if (this.#stopped || this.#subscribers.size === 0 || this.#subscriptionId !== null ||
-        this.#reconnectPromise) return
+        this.#reconnectPromise) {return}
 
     const generation = this.#generation
     let retryDelay = null
@@ -497,7 +504,7 @@ export class UserDataSession {
           try {
             await port.connect()
           } catch (error) {
-            if (this.getClient() === client) this.#detachClientListeners()
+            if (this.getClient() === client) {this.#detachClientListeners()}
             throw error
           }
           if (this.#stopped || generation !== this.#generation || this.#subscribers.size === 0 ||
@@ -507,13 +514,17 @@ export class UserDataSession {
           }
           this.setConnected(true)
         }
-        if (this.#stopped || generation !== this.#generation) return
+        if (this.#stopped || generation !== this.#generation) {return}
         await this.#ensureRemoteSubscription()
       } catch (error) {
-        if (this.#stopped || generation !== this.#generation) return
+        if (this.#stopped || generation !== this.#generation) {return}
         this.setUnavailable(true)
-        logSafely(this.logger, "error", "Binance user-data recovery attempt failed", { attempt, error })
-        this.#notify({ type: "recovering", attempt, error, recoveryRequired: true })
+        logSafely(this.logger, "error", "Binance user-data recovery attempt failed", { attempt,
+error })
+        this.#notify({ type: "recovering",
+attempt,
+error,
+recoveryRequired: true })
         if (attempt === this.recoveryWarningThreshold) {
           this.#notify({
             type: "recoveryFailed",
@@ -533,7 +544,7 @@ export class UserDataSession {
       this.#reconnectPromise = null
     }
 
-    if (generation !== this.#generation) return
+    if (generation !== this.#generation) {return}
     if (retryDelay !== null) {
       this.#scheduleRecovery(retryDelay)
     } else if (this.#subscriptionId === null && this.#recoveryRequired &&
@@ -551,20 +562,20 @@ export class UserDataSession {
       recoveryGeneration: this.#recoveryGeneration,
     }
     for (const subscriber of [...this.#subscribers.values()]) {
-      if (!subscriber.recoveryAcknowledged) this.#notifySubscriber(subscriber, status)
+      if (!subscriber.recoveryAcknowledged) {this.#notifySubscriber(subscriber, status)}
     }
     this.#scheduleAcknowledgementReminder()
   }
 
   #scheduleAcknowledgementReminder() {
     if (this.#stopped || !this.#recoveryRequired || this.#subscriptionId === null ||
-        this.#acknowledgementTimer !== null || this.#subscribers.size === 0) return
+        this.#acknowledgementTimer !== null || this.#subscribers.size === 0) {return}
 
     const exponent = Math.min(this.#acknowledgementAttempts, 10)
     const delay = Math.min(Math.max(1, this.reconnectDelay) * (2 ** exponent), 30_000)
     this.#acknowledgementTimer = this.setTimeout(() => {
       this.#acknowledgementTimer = null
-      if (this.#stopped || !this.#recoveryRequired || this.#subscriptionId === null) return
+      if (this.#stopped || !this.#recoveryRequired || this.#subscriptionId === null) {return}
       this.#acknowledgementAttempts += 1
       this.#notifyRecoveryReady()
     }, delay)
@@ -613,7 +624,7 @@ export class UserDataSession {
       subscriberAcknowledgements: [...this.#subscribers.values()]
         .map((subscriber) => subscriber.recoveryAcknowledged),
     })
-    if (!canComplete) return false
+    if (!canComplete) {return false}
 
     this.#clearAcknowledgementTimer()
     this.#acknowledgementAttempts = 0
@@ -630,7 +641,7 @@ export class UserDataSession {
 
   async #removeSubscriber(id) {
     const subscriber = this.#subscribers.get(id)
-    if (!subscriber) return
+    if (!subscriber) {return}
     subscriber.active = false
     this.#subscribers.delete(id)
 
