@@ -52,7 +52,7 @@ Pause and resume remain market-scoped application use cases:
 
 The persistent keyboard has exactly six buttons: Pause, Resume, Status, Markets, Portfolio, and Open Orders. Balances remains available through inline navigation and `/balances`.
 
-Emergency BUY controls are explicit text commands and are not replacements for the existing confirmation-gated market Pause/Resume buttons. Telegram command names are lowercase; application methods are `pauseAllBuys`, `resumeAllBuys`, `pauseBuys({ symbol })`, and `resumeBuys({ symbol })`.
+Emergency BUY controls are explicit text commands and are not replacements for the existing confirmation-gated market Pause/Resume buttons. They execute immediately after the existing private-chat authorization checks; there is no additional confirmation step for these emergency commands. Telegram command names are lowercase; application methods are `pauseAllBuys`, `resumeAllBuys`, `pauseBuys({ symbol })`, and `resumeBuys({ symbol })`.
 
 ## Interaction diagnostics
 
