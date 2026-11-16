@@ -56,7 +56,11 @@ function compareCommissionFacts(...[left, right]) {
     .localeCompare(`${right.assetId}:${right.asset}:${right.amount}`)
 }
 
-function assertFillIdentityParity({ journalFill, exchangeFill, mismatch }) {
+function assertFillIdentityParity({
+    journalFill,
+    exchangeFill,
+    mismatch,
+  }) {
   if (
     exchangeFill.id !== journalFill.fillId ||
     String(exchangeFill.tradeId) !== journalFill.tradeId ||
@@ -72,13 +76,20 @@ function assertFillIdentityParity({ journalFill, exchangeFill, mismatch }) {
   }
 }
 
-function assertFillAmountParity({ journalFill, exchangeFill, mismatch }) {
+function assertFillAmountParity({
+    journalFill,
+    exchangeFill,
+    mismatch,
+  }) {
   for (const [field, actual, expected] of [
     ["price", exchangeFill.price.amount, journalFill.price],
     ["quantity", exchangeFill.quantity.amount, journalFill.quantity],
     ["quoteQuantity", exchangeFill.quoteQuantity.amount, journalFill.quoteQuantity],
   ]) {
-    if (compareDecimal({ left: actual, right: expected }) !== 0) {
+    if (compareDecimal({
+      left: actual,
+      right: expected,
+    }) !== 0) {
       mismatch(field)
     }
   }
@@ -87,7 +98,11 @@ function assertFillAmountParity({ journalFill, exchangeFill, mismatch }) {
   }
 }
 
-function assertFillCommissionParity({ journalFill, exchangeFill, mismatch }) {
+function assertFillCommissionParity({
+    journalFill,
+    exchangeFill,
+    mismatch,
+  }) {
   const expectedCommissions = getJournalCommissionFacts({ commissions: journalFill.commissions })
   const actualCommissions = getExchangeCommissionFacts({ fill: exchangeFill })
   if (JSON.stringify(actualCommissions) !== JSON.stringify(expectedCommissions)) {
@@ -104,7 +119,10 @@ function assertFillParity({ journalFill, exchangeFill }) {
   assertFillCommissionParity({ journalFill, exchangeFill, mismatch })
 }
 
-function validateMarketPaginationEvidence({ historyEvidence, market }) {
+function validateMarketPaginationEvidence({
+    historyEvidence,
+    market,
+  }) {
   const completePagination = historyEvidence?.historyPagesComplete === true &&
     historyEvidence?.marketHistoryPagesComplete === true &&
     historyEvidence?.historyScope === "MARKET" &&
@@ -118,7 +136,11 @@ function validateMarketPaginationEvidence({ historyEvidence, market }) {
   }
 }
 
-function validateMarketRetentionEvidence({ historyRetentionEvidence, historyEvidence, market }) {
+function validateMarketRetentionEvidence({
+    historyRetentionEvidence,
+    historyEvidence,
+    market,
+  }) {
   const validRetention = historyRetentionEvidence?.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED" &&
     typeof historyRetentionEvidence.baselineFactId === "string" &&
     historyRetentionEvidence.baselineFactId.trim() !== "" &&
