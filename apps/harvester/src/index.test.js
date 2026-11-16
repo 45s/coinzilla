@@ -10,7 +10,7 @@ import { DEFAULT_OPERATIONAL_STATE_DIRECTORY } from "./infrastructure/operationa
 import { main as startMain } from "./index.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { UnvalidatedMarketExchangeConstraintsError } from "./domain/market/errors/unvalidated-market-exchange-constraints-error.js"
-import { appConfig } from "../config/index.js"
+import { appConfig as defaultAppConfig } from "../config/index.js"
 
 const disabledJournalService = () => ({
   ready: Promise.resolve({ ok: true, disabled: true }),
@@ -29,7 +29,10 @@ const main = (options = {}) => {
   return startMain({
     acquireProcessLock,
     createOperationalStateStore: () => ({
-      verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
+      verify: async () => ({
+          ok: true,
+          data: { valid: true, durableWriteSupported: true },
+        }),
     }),
     ...rest,
     env: { TRADING_MODE: "testnet", ...env },
@@ -79,7 +82,11 @@ test("does not create or inject durable recovery facts while recovery is disable
       startupInput = input
       return { connected: false, tradingEnabled: false, strategyMode: "conservative", subscriptions: [] }
     },
-    logger: { info() {}, system() {}, error() {} },
+    logger: {
+        info() {},
+        system() {},
+        error() {},
+      },
   })
   assert.equal(storeCreated, false, "Disabled restart recovery must not create or verify a ADR-0001 ledger.")
   assert.equal(startupInput.operationalStateStore, undefined, "Disabled restart recovery must not inject a Operational State Store into runtime startup.")
@@ -1633,7 +1640,7 @@ test("uses TRADING_MODE=live for Binance LIVE and acquires the single-writer loc
   let startInput
   await main({
     env: { NODE_ENV: "development", TRADING_MODE: "live" },
-    loadConfig: async () => appConfig,
+    loadConfig: async () => defaultAppConfig,
     createJournalService: () => ({
       ready: Promise.resolve({ ok: true }),
       flush: async () => ({ ok: true, durable: true }),
@@ -1803,7 +1810,9 @@ test("starts normal development runtime with outbound Telegram notifications and
       },
       createTelegramNotifier: () => {
         telegramNotifierFactoryCalls += 1
-        return { sendMessage: async () => ({ ok: true }) }
+        return {
+          sendMessage: async () => ({ ok: true }),
+        }
       },
       start: async (input) => {
         runtimeStarted = true
@@ -1818,8 +1827,8 @@ test("starts normal development runtime with outbound Telegram notifications and
       logger: { info() {}, system() {}, error() {} },
     })
 
-    assert.equal(appConfig.notifications.telegram.enabled, true, "Outbound Telegram notifications must remain enabled independently of inbound operator control.")
-    assert.equal(appConfig.operatorControl.telegram.enabled, false, "The default application configuration must leave inbound operator control opt-in.")
+    assert.equal(defaultAppConfig.notifications.telegram.enabled, true, "Outbound Telegram notifications must remain enabled independently of inbound operator control.")
+    assert.equal(defaultAppConfig.operatorControl.telegram.enabled, false, "The default application configuration must leave inbound operator control opt-in.")
     assert.equal(telegramNotifierFactoryCalls, 1, "Configured outbound Telegram notifications must initialize even when inbound operator control is disabled.")
     assert.equal(operationalStateStoreFactoryCalls, 0, "Normal development startup must not construct an uninitialized Operational State Store for an optional disabled feature.")
     assert.equal(runtimeStarted, true, "The Harvester runtime must start without a pre-initialized operator-control ledger.")
