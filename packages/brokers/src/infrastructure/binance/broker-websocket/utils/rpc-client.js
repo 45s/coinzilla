@@ -24,14 +24,16 @@ export class BinanceRpcError extends Error {
    * @param {string} message
    * @param {{code?: number|null, status?: number|null, requestId?: string|number|null, method?: string|null, details?: unknown, outcomeUnknown?: boolean}} [options]
    */
-  constructor(message, {
-    code = null,
-    status = null,
-    requestId = null,
-    method = null,
-    details = null,
-    outcomeUnknown = false,
-  } = {}) {
+  constructor(...args) {
+    const [message, options = {}] = args
+    const {
+      code = null,
+      status = null,
+      requestId = null,
+      method = null,
+      details = null,
+      outcomeUnknown = false,
+    } = options
     super(message)
     this.name = "BinanceRpcError"
     this.code = code
@@ -58,7 +60,8 @@ export class BinanceRpcTimeoutError extends BinanceRpcError {
 
 export class BinanceRpcConnectionError extends BinanceRpcError {
   /** @param {string} message @param {{requestId?: string|number, method?: string, stateChanging?: boolean}} [options] */
-  constructor(message, { requestId, method, stateChanging } = {}) {
+  constructor(...args) {
+    const [message, { requestId, method, stateChanging } = {}] = args
     super(message, {
       requestId,
       method,
@@ -70,7 +73,8 @@ export class BinanceRpcConnectionError extends BinanceRpcError {
 
 export class BinanceRpcProtocolError extends BinanceRpcError {
   /** @param {string} message @param {{requestId?: string|number, method?: string, details?: unknown}} [options] */
-  constructor(message, { requestId, method, details } = {}) {
+  constructor(...args) {
+    const [message, { requestId, method, details } = {}] = args
     super(message, { requestId,
 method,
 details })
@@ -104,8 +108,19 @@ function toText(data) {
   throw new TypeError("Binance WebSocket API only supports text JSON messages")
 }
 
-function hasOwn(value, key) {
+function hasOwn(...args) {
+  const [value, key] = args
   return Object.hasOwn(value, key)
+}
+
+function createFinalParams({ requestParams, signed, apiKey, apiSecret, now, recvWindow }) {
+  if (!signed) return requestParams
+  return createSignedBinanceParams(requestParams, {
+    apiKey,
+    apiSecret,
+    timestamp: now(),
+    recvWindow,
+  })
 }
 
 /**
@@ -215,12 +230,14 @@ export class BinanceWebSocketApiClient {
    * @param {BinanceRpcRequestOptions} [options]
    * @returns {Promise<BinanceRpcResponse>}
    */
-  request(method, params, {
-    signed = false,
-    recvWindow = this.recvWindow,
-    timeout = this.requestTimeout,
-    stateChanging = false,
-  } = {}) {
+  request(...args) {
+    const [method, params, options = {}] = args
+    const {
+      signed = false,
+      recvWindow = this.recvWindow,
+      timeout = this.requestTimeout,
+      stateChanging = false,
+    } = options
     validateMethod(method)
     const requestParams = validateParams(params)
 
@@ -250,16 +267,16 @@ stateChanging },
       return Promise.reject(new Error(`Duplicate in-flight Binance request ID: ${key}`))
     }
 
-    let finalParams = requestParams
+    let finalParams
     try {
-      if (signed) {
-        finalParams = createSignedBinanceParams(requestParams, {
-          apiKey: this.apiKey,
-          apiSecret: this.apiSecret,
-          timestamp: this.now(),
-          recvWindow,
-        })
-      }
+      finalParams = createFinalParams({
+        requestParams,
+        signed,
+        apiKey: this.apiKey,
+        apiSecret: this.apiSecret,
+        now: this.now,
+        recvWindow,
+      })
     } catch (error) {
       return Promise.reject(error)
     }
@@ -268,7 +285,8 @@ stateChanging },
 method }
     if (Object.keys(finalParams).length > 0) {envelope.params = finalParams}
 
-    return new Promise((resolve, reject) => {
+    return new Promise((...promiseArgs) => {
+      const [resolve, reject] = promiseArgs
       const timer = this.setTimeout(() => {
         const pending = this.#pending.get(key)
         if (!pending) {return}
@@ -311,17 +329,17 @@ stateChanging },
 
   /** @param {(event: object) => void} listener @returns {() => boolean} */
   onEvent(listener) {
-    return this.#subscribe(this.#eventListeners, listener, "event")
+    return this.#subscribe({ listeners: this.#eventListeners, listener, name: "event" })
   }
 
   /** @param {(error: Error) => void} listener @returns {() => boolean} */
   onError(listener) {
-    return this.#subscribe(this.#errorListeners, listener, "error")
+    return this.#subscribe({ listeners: this.#errorListeners, listener, name: "error" })
   }
 
   /** @param {(event: object) => void} listener @returns {() => boolean} */
   onClose(listener) {
-    return this.#subscribe(this.#closeListeners, listener, "close")
+    return this.#subscribe({ listeners: this.#closeListeners, listener, name: "close" })
   }
 
   /** @returns {Promise<void>} Rejects pending requests and closes the transport. */
@@ -372,16 +390,16 @@ stateChanging },
     if (!pending) {return}
 
     if (!Number.isInteger(payload.status) || payload.status < 100 || payload.status > 599) {
-      this.#settleProtocolError(key, pending, "Binance response has an invalid status field", payload)
+      this.#settleProtocolError({ key, pending, message: "Binance response has an invalid status field", details: payload })
       return
     }
 
     if (payload.status >= 200 && payload.status < 300) {
       if (!hasOwn(payload, "result") || hasOwn(payload, "error")) {
-        this.#settleProtocolError(key, pending, "Successful Binance response must contain result only", payload)
+        this.#settleProtocolError({ key, pending, message: "Successful Binance response must contain result only", details: payload })
         return
       }
-      this.#settle(key, () => pending.resolve({
+      this.#settle({ key, settle: () => pending.resolve({
         id: payload.id,
         status: payload.status,
         data: payload.result,
@@ -392,11 +410,11 @@ stateChanging },
 
     if (!payload.error || typeof payload.error !== "object" ||
         !Number.isInteger(payload.error.code) || typeof payload.error.msg !== "string") {
-      this.#settleProtocolError(key, pending, "Failed Binance response has a malformed error object", payload)
+      this.#settleProtocolError({ key, pending, message: "Failed Binance response has a malformed error object", details: payload })
       return
     }
 
-    this.#settle(key, () => pending.reject(new BinanceRpcError(payload.error.msg, {
+    this.#settle({ key, settle: () => pending.reject(new BinanceRpcError(payload.error.msg, {
       code: payload.error.code,
       status: payload.status,
       requestId: pending.id,
@@ -406,15 +424,15 @@ stateChanging },
     })))
   }
 
-  #settleProtocolError(key, pending, message, details) {
-    this.#settle(key, () => pending.reject(new BinanceRpcProtocolError(message, {
+  #settleProtocolError({ key, pending, message, details }) {
+    this.#settle({ key, settle: () => pending.reject(new BinanceRpcProtocolError(message, {
       requestId: pending.id,
       method: pending.method,
       details,
     })))
   }
 
-  #settle(key, settle) {
+  #settle({ key, settle }) {
     const pending = this.#pending.get(key)
     if (!pending) {return}
     this.#pending.delete(key)
@@ -434,7 +452,7 @@ stateChanging },
     }
   }
 
-  #subscribe(listeners, listener, name) {
+  #subscribe({ listeners, listener, name }) {
     if (typeof listener !== "function") {
       throw new TypeError(`Binance RPC ${name} listener must be a function`)
     }
