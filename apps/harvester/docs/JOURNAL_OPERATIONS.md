@@ -159,6 +159,8 @@ The production `main()` entry point verifies/projects the ADR-0001 durable-facts
 
 ## Normal shutdown
 
+> **P0 implementation gap — [issue #1186](https://github.com/45s/coinzilla/issues/1186):** The sequence and diagram below record the current implementation on `develop`; they are not the approved Conservative shutdown contract. The current handler stops market-price/book intake and performs initial owned-order reconciliation before cancelling BUYs. That order does **not** satisfy the owner-approved rule to block/cancel Conservative BUYs first and keep the market, user-data, operator/runtime, and broker services alive until every market is safe. The required contract is defined only in [the canonical Conservative specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md#conservative-graceful-shutdown--protect-trading-before-stopping-services). Do not treat the current sequence as proof that a Conservative market is safe to shut down. Implementation and regression coverage are tracked in #1186.
+
 The sequence below is the implemented trading-enabled shutdown path. It is verified against
 `src/bootstrap/shutdown/create-shutdown-handler.js`, the Conservative engine's
 `cancelOwnedBuyOrdersForShutdown()` and `reconcileOwnedOrders()` workflows,
