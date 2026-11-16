@@ -9,7 +9,7 @@ test("forwards each chunk to every durable destination", async () => {
   const destination = new Writable({
     write(...args) {
 
-      const [, , callback] = args
+      const [chunk, , callback] = args
       received.push(chunk.toString())
       callback()
     },
@@ -35,7 +35,7 @@ test("waits for every durable destination to drain before reading more output", 
     highWaterMark: 1,
     write(...args) {
 
-      const [chunk, , callback] = args
+      const [, , callback] = args
       releaseWrite = callback
     },
   })
