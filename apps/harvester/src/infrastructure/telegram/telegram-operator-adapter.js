@@ -196,7 +196,7 @@ function buildControlSuccessReply({ action, symbol, result, method, interaction,
     interaction.applicationOperationCompleted = true
     interaction.stateChanged = result.data.alreadyPaused !== true || result.data.canceled > 0
     const prefix = result.data.alreadyPaused === true ? "BUY pause remains active" : "BUY pause activated"
-    return `${prefix} ${buyScope}. Cancelled ${result.data.canceled ?? 0} Harvester-owned BUY order(s); reconciled ${result.data.reconciled ?? 0} fill(s). Recovery SELLs and accounting continue. This pause is process-local and is not restored after restart.`
+    return `${prefix} ${buyScope}. Cancelled ${result.data.canceled ?? 0} Harvester-owned BUY order(s); reconciled ${result.data.reconciled ?? 0} fill(s). Recovery SELLs and accounting continue. External/manual and prior-process orders are untouched; check /orders. This pause is process-local and is not restored after restart.`
   }
   if (isBuyResume && result.data?.resumed === true) {
     interaction.applicationOperationCompleted = true
