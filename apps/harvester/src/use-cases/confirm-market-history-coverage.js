@@ -55,6 +55,11 @@ function validateConfirmationInput({
   return {
     factId,
     evidence: { factId, 
+      
+      
+
+            
+      
       symbol, 
       coveredFromTime, 
       verifiedAt, 
@@ -78,12 +83,14 @@ async function readExistingCoverage({ operationalStateStore, symbol, evidence })
     record?.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED" &&
     record.data?.symbol === symbol
   )
+  
   if (existingCoverage.length === 0) {
     return undefined
   }
 
   const currentResult = await readMarketHistoryCoverage({ operationalStateStore, 
     symbol })
+  
   if (currentResult?.ok !== true) {
     return toResult({
       errors: currentResult?.errors ?? [new Error("Existing market-history coverage could not be verified")],
@@ -162,6 +169,7 @@ async function reconcileAndCommitCoverage({
   const readback = await readMarketHistoryCoverage({
     operationalStateStore,
     symbol: evidence.symbol,
+    
   })
   if (readback?.ok !== true) {
     return toResult({
