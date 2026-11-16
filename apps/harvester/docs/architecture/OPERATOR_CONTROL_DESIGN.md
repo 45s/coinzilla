@@ -1,6 +1,6 @@
 # Harvester operator control
 
-> **Status: ACCEPTED IMPLEMENTATION CONTRACT.** Architectural decisions are recorded in [ADR-0002](./decisions/0002-transport-independent-operator-control.md) and the initial process-lifetime scope is clarified by [ADR-0003](./decisions/0003-process-lifetime-operator-pause.md). Initial runtime configuration and lifecycle wiring were implemented in PR #1067; inbound Telegram is opt-in by default per ADR-0005 and, when explicitly enabled, fails closed without a valid environment-backed allowlist, bot token and verified Operational State Store. Operator pause state is not restored after a process restart.
+> **Status: ACCEPTED IMPLEMENTATION CONTRACT.** Architectural decisions are recorded in [ADR-0002](./decisions/0002-transport-independent-operator-control.md) and the initial process-lifetime scope is clarified by [ADR-0003](./decisions/0003-process-lifetime-operator-pause.md). Initial runtime configuration and lifecycle wiring were implemented in PR #1067; inbound Telegram is enabled by default and fails closed without a valid environment-backed allowlist, bot token and verified Operational State Store. Process-restart restoration remains disabled by `strategies.CG_coinGrabber.settings.recovery.enabled: false`; when a prior process session exists, the Command Center may start but trading remains disabled. Operator pause state is not restored after a process restart.
 
 ## Goal
 
@@ -14,8 +14,8 @@ Provide one Harvester-owned application capability that authorized operators can
 - The Conservative engine exposes a serialized operator-pause boundary separate from safety pause state; the implementation and regression tests are in [PR #1045](https://github.com/45s/coinzilla/pull/1045).
 - `src/application/operator/create-harvester-operator.js` composes explicit pause/resume use cases with actor-role authorization and the Operational State Store append port (ADR-0001 record contract).
 - The use cases pass the Operational State Store append callback into the engine transition; the engine changes in-memory state only after a confirmed durable commit.
-- `src/infrastructure/telegram/telegram-operator-adapter.js` implements the private-chat allowlist, command parser, serial Long Polling, stable update request IDs, retry behavior and graceful stop. PR #1067 wires its optional lifecycle into Harvester bootstrap.
-- The Operational State Store adapter and integrity checks are verified by process bootstrap. The same process-owned store is injected into order/fill/recovery producers and the operator facade; never create a second writer for the same store. Application use cases append operator facts before applying in-memory state. **Restart restoration is out of scope:** the initial operator pause lasts only for the current process and is not replayed after restart. Opt-in configuration and lifecycle validation are implemented independently of recovery Steps 7–9.
+- `src/infrastructure/telegram/telegram-operator-adapter.js` implements the private-chat allowlist, command parser, serial Long Polling, stable update request IDs, retry behavior and graceful stop. PR #1067 wires its lifecycle into Harvester bootstrap; the current default is enabled.
+- The Operational State Store adapter and integrity checks are verified by process bootstrap. The same process-owned store is injected into order/fill/recovery producers and the operator facade; never create a second writer for the same store. Application use cases append operator facts before applying in-memory state. **Restart restoration is out of scope:** the initial operator pause lasts only for the current process and is not replayed after restart. Enabled-by-default configuration and lifecycle validation remain independent of recovery Steps 7–9. When restart recovery is disabled, bootstrap reads process-boundary facts only; it does not project or restore previous trading state. A prior process session keeps trading disabled while allowing Command Center access.
 
 ## DDD ownership and source layout
 
@@ -208,19 +208,19 @@ Resume removes only the operator-owned pause. The engine refuses to invoke the d
 
 ## First transport: Telegram
 
-The first adapter uses Telegram Bot API Long Polling and is optional; its module and runtime lifecycle are implemented and tested offline. Inbound runtime control is disabled by default. When explicitly enabled, startup requires a valid allowlist, bot token and verified Operational State Store and fails closed when any requirement is missing.
+The first adapter uses Telegram Bot API Long Polling; its module and runtime lifecycle are implemented and tested offline. Inbound runtime control is enabled by default. Startup requires a valid allowlist, bot token and verified Operational State Store and fails closed when any requirement is missing.
 
 - Configuration belongs under `operatorControl.telegram`, independent from `notifications.telegram`.
-- Inbound control defaults disabled. Set `operatorControl.telegram.enabled: true` explicitly to opt in. `TELEGRAM_USER_ID` seeds the allowlist from the runtime environment; setting it alone does not enable control. When enabled, bootstrap validates it and startup fails closed if no valid allowed user ID or bot token is available.
+- Inbound control defaults enabled. Set `operatorControl.telegram.enabled: false` only to disable it intentionally. `TELEGRAM_USER_ID` seeds the allowlist from the runtime environment. Bootstrap validates it and startup fails closed if no valid allowed user ID or bot token is available.
 - Accept private chats only; do not accept group commands.
 - Resolve `message.from.id` through the allowlist to a trusted `trading-operator` actor. Never authorize based on a display name, message text, chat title or caller-supplied role.
 - Use Telegram `update_id` as the stable request identity and the durable fact ID as the final idempotency boundary.
 - Process updates serially. Retry transport failures without advancing the update offset; duplicate delivery after a crash must be harmless.
-- Start and stop the poller with the Harvester runtime. If the feature is enabled without a valid Operational State Store append capability, fail closed before strategy evaluation. Do not require full recovery projection for this initial process-lifetime capability; do not claim a pause survives restart.
+- Start and stop the poller with the Harvester runtime. If the feature is enabled without a valid Operational State Store append capability, fail closed before strategy evaluation. Do not require full recovery projection for this process-lifetime capability; read process-boundary facts only and keep trading disabled after a prior process session while recovery remains off. Do not claim a pause survives restart.
 - Reuse the existing `TELEGRAM_BOT_TOKEN` environment secret. Never commit credentials.
 - Keep outbound notification delivery independent and best-effort.
 
-The target configuration is intentionally separate from outbound notification policy and defaults disabled:
+The target configuration is intentionally separate from outbound notification policy and defaults enabled:
 
 ```json
 {
@@ -276,7 +276,7 @@ Typed `/pause SYMBOL` and `/resume SYMBOL` remain explicit command invocations a
 3. **Durable append — implemented foundation:** use the existing ADR-0001 append-only stream and committed-head contract for pause/resume acknowledgements. Do not create an operator-specific store.
 4. **Restart restoration — explicitly out of scope:** the initial operator pause is process-lifetime only. Do not add projection, recovery replay or a startup-readiness dependency to this operator-control task. Track full restart recovery separately under ADR-0001 / issue #654.
 5. **Telegram adapter — implemented in PR #1045:** parser, private-chat allowlist, serial polling, update idempotency, replies, retry/backoff and graceful stop, with mocked transport tests.
-6. **Configuration/bootstrap — implemented in PR #1067:** opt-in `operatorControl.telegram` configuration, fail-closed durable-store verification before broker connection, poller startup before trading subscriptions, and poller shutdown before broker disconnect. This remains independent of outbound notifications and full ADR-0001 restart recovery.
+6. **Configuration/bootstrap — implemented in PR #1067:** enabled-by-default `operatorControl.telegram` configuration, fail-closed durable-store verification before broker connection, poller startup before trading subscriptions, and poller shutdown before broker disconnect. This remains independent of outbound notifications and full ADR-0001 restart recovery.
 7. **Verification — completed for the initial process-lifetime rollout in PR #1067:** the runtime/config/lifecycle integration passed its exact-head required CI and merged. The read-only TESTNET integration was skipped; no exchange operations were performed.
 8. **CC-1 read-only visibility — implemented in PR #1081:** engine market snapshots are serialized and immutable; application queries enforce actor authorization and combine runtime readiness with market-local blockers; Telegram formats `/status` and `/markets` without broker access or trading-state mutation.
 9. **CC-2/CC-3 — implemented in PRs #1086 and #1087:** read-only positions/orders/balances queries and proactive readiness/recovery/delivery-health alerts reuse existing application/notifier boundaries.
