@@ -43,11 +43,13 @@ export function makeEventPublisher({ eventBus, flush: flushEvents, logger = defa
         ? result.errors
         : [new Error("EventBus publication failed without error details")]
       const failure = toResult({ errors })
-      reportFailure({ event, error: failure.errors[0] })
+      reportFailure({ event,
+        error: failure.errors[0] })
       return failure
     } catch (error) {
       const failure = toResult({ error })
-      reportFailure({ event, error })
+      reportFailure({ event,
+        error })
       return failure
     }
   }
@@ -70,15 +72,20 @@ export function makeEventPublisher({ eventBus, flush: flushEvents, logger = defa
         ? result.errors
         : [new Error("Harvester event journal flush failed")]
       const failure = toResult({ errors })
-      reportFailure({ event: { name: "journal.flush" }, error: failure.errors[0] })
+      reportFailure({ event: { name: "journal.flush" },
+        error: failure.errors[0] })
       return result?.recoveryFailure
-        ? { ...failure, recoveryFailure: result.recoveryFailure }
+        ? { ...failure,
+          recoveryFailure: result.recoveryFailure }
         : failure
     } catch (error) {
-      reportFailure({ event: { name: "journal.flush" }, error })
+      reportFailure({ event: { name: "journal.flush" },
+        error })
       return toResult({ error })
     }
   }
 
-  return Object.freeze({ publish, flush, reportFailure })
+  return Object.freeze({ publish,
+    flush,
+    reportFailure })
 }

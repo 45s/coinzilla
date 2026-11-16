@@ -8,7 +8,7 @@ import { StrategyId } from "../../domain/strategies/strategy-ids.js"
  * @returns {object|null}
  */
 export function createPositionLogSummary({ position } = {}) {
-  if (!position) return null
+  if (!position) {return null}
 
   return {
     ...(typeof position.positionId === "string" ? { positionId: position.positionId } : {}),
@@ -33,7 +33,7 @@ export function createPositionLogSummary({ position } = {}) {
  * @returns {object|null}
  */
 export function createRecoveryLedgerLogSummary({ recoveryLedger } = {}) {
-  if (!recoveryLedger) return null
+  if (!recoveryLedger) {return null}
 
   return {
     marketId: recoveryLedger.market.id,
@@ -60,7 +60,9 @@ export function createPortfolioLogSummary({ portfolio, marketId, positionId, str
   const hasPositionSelector = typeof marketId === "string" || typeof positionId === "string"
   return {
     position: createPositionLogSummary({
-      position: hasPositionSelector ? portfolio.getPosition({ positionId, marketId, strategyId }) : undefined,
+      position: hasPositionSelector ? portfolio.getPosition({ positionId,
+        marketId,
+        strategyId }) : undefined,
     }),
     appliedFillCount: portfolio.appliedFillIds.length,
   }
@@ -76,7 +78,7 @@ export function createPortfolioLogSummary({ portfolio, marketId, positionId, str
  * @returns {object|null}
  */
 export function createPortfolioStatsLogSummary({ position } = {}) {
-  if (!position) return null
+  if (!position) {return null}
 
   const baseAsset = position.market.baseAsset.code
   const quoteAsset = position.market.quoteAsset.code
@@ -85,13 +87,13 @@ export function createPortfolioStatsLogSummary({ position } = {}) {
     message: "Portfolio Stats",
     symbol: position.market.symbol,
     inventory: {
-      activeBaseQuantity: position.baseQuantity.amount + " " + baseAsset,
-      freeBaseQuantity: position.freeBaseQuantity.amount + " " + baseAsset,
-      totalBaseQuantity: position.totalBaseQuantity.amount + " " + baseAsset,
+      activeBaseQuantity: `${position.baseQuantity.amount} ${baseAsset}`,
+      freeBaseQuantity: `${position.freeBaseQuantity.amount} ${baseAsset}`,
+      totalBaseQuantity: `${position.totalBaseQuantity.amount} ${baseAsset}`,
     },
     accounting: {
-      spent: position.spent.amount + " " + quoteAsset,
-      quoteNetCashFlow: position.quoteNetCashFlow.amount + " " + quoteAsset,
+      spent: `${position.spent.amount} ${quoteAsset}`,
+      quoteNetCashFlow: `${position.quoteNetCashFlow.amount} ${quoteAsset}`,
     },
   }
 }
