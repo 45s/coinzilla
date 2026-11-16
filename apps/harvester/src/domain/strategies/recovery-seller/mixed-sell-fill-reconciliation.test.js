@@ -74,7 +74,7 @@ if (reconciliationModule === null) {
     assert.equal(state.stagedQuantity, "0", "A new reconciliation must not assume unfilled order quantity has executed.")
     assert.equal(state.stagedFillCount, 0, "A new reconciliation must not invent execution records.")
     assert.equal(state.orderOwnership.cycleId, "rs-cycle-1", "Staging must retain the registered RS cycle identity.")
-    assert.equal(state.order.originalQuantity.amount, "5.01", "Staging must retain the canonical original order quantity.")
+    assert.equal(state.order.originalQuantity, "5.01", "Staging must retain the canonical original order quantity.")
     assert.equal(Object.isFrozen(state), true, "Reconciliation snapshots must be immutable.")
   })
 
