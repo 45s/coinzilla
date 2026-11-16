@@ -259,12 +259,6 @@ function buildFailureFields({ details, stage, operation, symbol, interaction }) 
   return fields
 }
 
-/**
- * Creates safe, correlated diagnostic operations for the inbound Telegram adapter.
- *
- * @param {{logger?: object, botToken?: string}} [options]
- * @returns {{log: Function, fail: Function, report: Function, describeError: Function}}
- */
 function createTelegramDiagnosticLogger({ logger }) {
   return ({ interaction, message, level = "debug", fields = {} } = {}) => {
     const stage = fields.stage ?? interaction?.stage
@@ -376,6 +370,12 @@ function createTelegramDiagnosticReporter({ log, botToken }) {
   }
 }
 
+/**
+ * Creates safe, correlated diagnostic operations for the inbound Telegram adapter.
+ *
+ * @param {{logger?: object, botToken?: string}} [options]
+ * @returns {{log: Function, fail: Function, report: Function, describeError: Function}}
+ */
 export function createTelegramOperatorDiagnostics({ logger, botToken } = {}) {
   const log = createTelegramDiagnosticLogger({ logger })
   const fail = createTelegramDiagnosticFailure({
