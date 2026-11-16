@@ -32,8 +32,14 @@ test("forwards Undici ping frames only for its own WebSocket", async () => {
   await connected
 
   const payload = Buffer.from("binance-heartbeat")
-  channel("undici:websocket:ping").publish({ websocket: sockets[0], payload })
-  channel("undici:websocket:ping").publish({ websocket: {}, payload: Buffer.from("other") })
+  channel("undici:websocket:ping").publish({
+    websocket: sockets[0],
+    payload,
+  })
+  channel("undici:websocket:ping").publish({
+    websocket: {},
+    payload: Buffer.from("other"),
+  })
 
   assert.deepEqual(
     receivedPings,
