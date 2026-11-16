@@ -61,10 +61,12 @@ function createMarketPriceErrorReporter({ logger, onMarketPriceError }) {
 function createBookTickerHandler({ symbol, isStopped, processMarketBook, logger }) {
   return (bookTicker) => {
     if (isStopped()) {
-      return toResult({ data: { skipped: true, reason: "STOPPING" } })
+      return toResult({ data: { skipped: true,
+reason: "STOPPING" } })
     }
     return Promise.resolve()
-      .then(() => processMarketBook({ symbol, bookTicker }))
+      .then(() => processMarketBook({ symbol,
+bookTicker }))
       .then((processed) => {
         if (!processed.ok) {
           logger.error?.({
@@ -99,7 +101,8 @@ function createMarketPriceHandler({
 }) {
   return (priceEvent) => {
     if (isStopped()) {
-      return toResult({ data: { skipped: true, reason: "STOPPING" } })
+      return toResult({ data: { skipped: true,
+reason: "STOPPING" } })
     }
     try {
       if (isMarketPriceFresh(createMarketPrice({ priceEvent }))) {
@@ -117,15 +120,21 @@ function createMarketPriceHandler({
       }))
       .then((processed) => {
         if (!processed.ok) {
-          reportPriceError({ symbol, errors: processed.errors })
+          reportPriceError({ symbol,
+errors: processed.errors })
         } else {
-          logMarketPriceEvaluation({ logger, symbol, priceEvent, processed })
+          logMarketPriceEvaluation({ logger,
+symbol,
+priceEvent,
+processed })
         }
         return processed
       })
       .catch((error) => {
-        reportPriceError({ symbol, error })
-        return { ok: false, errors: [error] }
+        reportPriceError({ symbol,
+error })
+        return { ok: false,
+errors: [error] }
       })
     return intakeState.latestWebSocketPriceTask
   }
@@ -225,7 +234,10 @@ async function subscribeToMarketPrice({
       }),
     })
   } catch (error) {
-    publishSubscriptionFailure({ eventPublisher, brokerName, symbol, error })
+    publishSubscriptionFailure({ eventPublisher,
+brokerName,
+symbol,
+error })
     throw error
   }
   if (!result?.ok || typeof result.data?.unsubscribe !== "function") {
@@ -234,7 +246,10 @@ async function subscribeToMarketPrice({
       symbol,
       streamLabel: "market prices",
     })
-    publishSubscriptionFailure({ eventPublisher, brokerName, symbol, error })
+    publishSubscriptionFailure({ eventPublisher,
+brokerName,
+symbol,
+error })
     throw error
   }
   publishLifecycleEvent({
@@ -347,9 +362,13 @@ async function seedMissingInitialPrices({ context, reportPriceError }) {
       settings,
     })
     if (!processed.ok) {
-      reportPriceError({ symbol, errors: processed.errors })
+      reportPriceError({ symbol,
+errors: processed.errors })
     } else {
-      logMarketPriceEvaluation({ logger, symbol, priceEvent, processed })
+      logMarketPriceEvaluation({ logger,
+symbol,
+priceEvent,
+processed })
     }
   }
 }
@@ -396,13 +415,16 @@ export async function subscribeToMarketData({
     bookSubscriptions,
     marketPriceIntake,
   }
-  const reportPriceError = createMarketPriceErrorReporter({ logger, onMarketPriceError })
+  const reportPriceError = createMarketPriceErrorReporter({ logger,
+onMarketPriceError })
 
   // Establish every enabled market stream before requesting any missing
   // initial ticker snapshot through Binance WebSocket API `ticker.price`.
   // A slow first request must never prevent later markets receiving prices.
-  await subscribeToEnabledMarkets({ context, reportPriceError })
-  const subscribedSymbols = assertAllMarketSubscriptions({ enabledSymbols, subscriptions })
+  await subscribeToEnabledMarkets({ context,
+reportPriceError })
+  const subscribedSymbols = assertAllMarketSubscriptions({ enabledSymbols,
+subscriptions })
   logSystem({
     logger,
     message: "Market data subscriptions ready",
@@ -413,7 +435,8 @@ export async function subscribeToMarketData({
   // Only after all enabled symbols have active WebSocket Streams may startup
   // request missing ticker snapshots through WebSocket API `ticker.price`.
   if (tradingEnabled) {
-    await seedMissingInitialPrices({ context, reportPriceError })
+    await seedMissingInitialPrices({ context,
+reportPriceError })
   }
   return Object.freeze({
     subscriptions,
