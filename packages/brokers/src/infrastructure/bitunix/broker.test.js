@@ -580,3 +580,30 @@ test("Bitunix Spot order history accepts an omitted data array only for an empty
   assert.deepEqual(result.data, [], "an empty history page must normalize to an empty order array")
   assert.equal(calls.length, 1, "history validation must not trigger extra exchange requests")
 })
+
+
+test("Bitunix Spot symbol metadata rejects ambiguous duplicate catalog entries", async () => {
+  const { broker } = createBroker({
+    responses: {
+      "/api/spot/v1/common/coin_pair/list": [
+        {
+          base: "BTC",
+          quote: "USDT",
+          isOpen: "1",
+          minVolume: "0.001",
+        },
+        {
+          base: "BTC",
+          quote: "USDT",
+          isOpen: "1",
+          minVolume: "0.01",
+        },
+      ],
+    },
+  })
+
+  const result = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
+
+  assert.equal(result.ok, false, "ambiguous market metadata must not silently select one row")
+  assert.match(result.errors[0].message, /duplicate.*BTCUSDT|ambiguous.*BTCUSDT/i)
+})
