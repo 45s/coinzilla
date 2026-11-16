@@ -57,10 +57,14 @@ field })
 right: "0" }) <= 0) {throw new RangeError(`${field  } must be positive`)}
     return value
   }
-  const bestBidPrice = positive({ value: bookTicker.bestBidPrice, field: "bestBidPrice" })
-  const bestBidQuantity = positive({ value: bookTicker.bestBidQuantity, field: "bestBidQuantity" })
-  const bestAskPrice = positive({ value: bookTicker.bestAskPrice, field: "bestAskPrice" })
-  const bestAskQuantity = positive({ value: bookTicker.bestAskQuantity, field: "bestAskQuantity" })
+  const bestBidPrice = positive({ value: bookTicker.bestBidPrice, 
+    field: "bestBidPrice" })
+  const bestBidQuantity = positive({ value: bookTicker.bestBidQuantity, 
+    field: "bestBidQuantity" })
+  const bestAskPrice = positive({ value: bookTicker.bestAskPrice, 
+    field: "bestAskPrice" })
+  const bestAskQuantity = positive({ value: bookTicker.bestAskQuantity, 
+    field: "bestAskQuantity" })
   if (compareDecimal({ left: bestBidPrice,
 right: bestAskPrice }) >= 0) {
     throw new RangeError("Market book best bid must be below best ask")
@@ -1586,7 +1590,8 @@ function inspectAcknowledgedFillHistory({ order, fills }) {
   })
   const reconciledQuantity = uniqueFills.reduce((...entries) => {
     const [total, fill] = entries
-    return addDecimal({ left: total, right: fill.quantity.amount })
+    return addDecimal({ left: total, 
+      right: fill.quantity.amount })
   }, "0")
   const fillQuantityMatches = compareDecimal({
     left: reconciledQuantity,
@@ -3147,7 +3152,8 @@ function validateOwnedBuyExecutionHistory({ order, fillsResult, reasonPrefix }) 
 function getOwnedBuyReconciledQuantity({ fills }) {
   return fills.reduce((...entries) => {
     const [total, fill] = entries
-    return addDecimal({ left: total, right: fill.quantity.amount })
+    return addDecimal({ left: total, 
+      right: fill.quantity.amount })
   }, "0")
 }
 
