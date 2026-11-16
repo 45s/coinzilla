@@ -99,9 +99,21 @@ export async function prepareProcessOperationalStateStore({
   if (!recoveryEnabled) {
     return undefined
   }
-  assertStoreDependencies({ runtimeSessionId, createOperationalStateStore })
-  const directory = resolveStoreDirectory({ env })
-  const store = await createProcessStore({ directory, runtimeSessionId, createOperationalStateStore })
-  await verifyProcessStore({ store, directory })
+  assertStoreDependencies({
+    runtimeSessionId,
+    createOperationalStateStore,
+  })
+  const directory = resolveStoreDirectory({
+    env,
+  })
+  const store = await createProcessStore({
+    directory,
+    runtimeSessionId,
+    createOperationalStateStore,
+  })
+  await verifyProcessStore({
+    store,
+    directory,
+  })
   return store
 }
