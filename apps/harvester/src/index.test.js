@@ -53,9 +53,26 @@ test("does not create or inject durable recovery facts while recovery is disable
   let storeCreated = false
   let startupInput
   await runMain({
+    loadConfig: async () => ({
+      operatorControl: {
+        telegram: {
+          enabled: false,
+          allowedUserIds: [],
+        },
+      },
+      strategies: {
+        CG_coinGrabber: {
+          settings: {
+            recovery: {
+              enabled: false,
+            },
+          },
+        },
+      },
+    }),
     createOperationalStateStore: () => {
       storeCreated = true
-      throw new Error("disabled recovery must not construct a Operational State Store")
+      throw new Error("disabled recovery and operator control must not construct a Operational State Store")
     },
     start: async (input) => {
       startupInput = input
@@ -1725,10 +1742,27 @@ test("does not construct, verify, or inject Operational State Store records even
   let journalCreated = false
   let runtimeStarted = false
   await runMain({
+    loadConfig: async () => ({
+      operatorControl: {
+        telegram: {
+          enabled: false,
+          allowedUserIds: [],
+        },
+      },
+      strategies: {
+        CG_coinGrabber: {
+          settings: {
+            recovery: {
+              enabled: false,
+            },
+          },
+        },
+      },
+    }),
     env: { OPERATIONAL_STATE_DIRECTORY: "relative/recovery-facts" },
     createOperationalStateStore: () => {
       storeCreated = true
-      throw new Error("restart recovery is disabled")
+      throw new Error("restart recovery and Telegram operator control are disabled")
     },
     createJournalService: () => {
       journalCreated = true
@@ -1745,8 +1779,6 @@ test("does not construct, verify, or inject Operational State Store records even
   assert.equal(journalCreated, true, "An unused recovery directory must not prevent normal Journal startup.")
   assert.equal(runtimeStarted, true, "A missing or malformed recovery directory must not block startup while recovery is disabled.")
 })
-
-
 
 test("retains Journal, EventBus, process lock and logger when strategy shutdown safety is unresolved", async () => {
   const calls = []
