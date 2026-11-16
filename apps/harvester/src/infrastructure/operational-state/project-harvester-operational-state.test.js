@@ -356,7 +356,8 @@ function createCompletedRecoveryCycleProjectionRecords() {
     sellFill,
     cycle,
   ]
-  return { records, cycle }
+  return { records,
+cycle }
 }
 
 test("projects a durable completed recovery cycle only after its full SELL execution fact", () => {
