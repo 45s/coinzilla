@@ -461,7 +461,8 @@ test("does not leave recovery pending when startup is complete but recovery is b
 test("does not acknowledge after a queued retryable event failure and retries on a later recovery reminder", async () => {
   let failFirstDrain = true
   const fixture = createRecovery({
-    drainUserDataEvents: async (calls, state) => {
+    drainUserDataEvents: async (...args) => {
+      const [, state] = args
       if (failFirstDrain) {
         failFirstDrain = false
         state.retryableRecoveryFailure = {
