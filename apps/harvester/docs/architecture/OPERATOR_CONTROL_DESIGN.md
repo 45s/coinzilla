@@ -242,7 +242,7 @@ The separate emergency BUY controls are exposed by the application facade as `pa
 - The BUY gate itself does not suppress recovery SELL decisions/submissions, market-price intake, user-data intake, fill accounting or reconciliation. Recovery SELLs are never cancellation candidates. If an owned BUY cancellation is unconfirmed, that order remains UNKNOWN and existing order-integrity blockers may still defer conflicting same-market activity until reconciliation; this is not a broad pause created by the emergency BUY control.
 - Global and per-market scopes are independent. The effective gate is their union; resuming one scope never clears another active scope.
 - If cancellation is unconfirmed or an active owned BUY remains unresolved, the BUY gate stays active and the operation returns `OPERATOR_BUY_CANCELLATION_INCOMPLETE`. The operator must not assume the exchange has no resting BUYs.
-- Emergency BUY pause is process-lifetime only and is not restored after restart. When a store is supplied, its fact is committed before the in-memory gate is applied; no separate store or replay mechanism is added.
+- Emergency BUY pause is process-lifetime only and is not restored after restart. Orders from a previous process are external under ADR-0004 and are not canceled by a repeated emergency pause in the new process; reconcile those explicitly through the exchange/operator recovery procedure. When a store is supplied, its fact is committed before the in-memory gate is applied; no separate store or replay mechanism is added.
 
 This is a BUY-side emergency exposure control, not a market shutdown or exchange-wide cancel-all operation.
 
