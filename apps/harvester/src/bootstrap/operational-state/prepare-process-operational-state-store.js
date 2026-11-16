@@ -2,7 +2,8 @@ import { createFileOperationalStateStore } from "../../infrastructure/operationa
 import { resolveOperationalStateDirectory } from "../../infrastructure/operational-state/resolve-operational-state-directory.js"
 
 export class ProcessOperationalStateStartupError extends Error {
-  constructor(message, code, cause) {
+  constructor(...args) {
+    const [message, code, cause] = args
     super(message, { cause })
     this.name = "ProcessOperationalStateStartupError"
     this.code = code
