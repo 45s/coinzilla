@@ -9,7 +9,8 @@ export const normalizeOrderHistory = ({ orders, limit = 20 }) => {
     throw new RangeError(`Order history limit must be an integer between 1 and ${MAX_ORDER_HISTORY_LIMIT}`)
   }
 
-  const normalizedOrders = orders.map((order, index) => {
+  const normalizedOrders = []
+  for (const [index, order] of orders.entries()) {
     if (!order || typeof order !== "object" || Array.isArray(order)) {
       throw new TypeError(`Binance order history item ${index} must be an object`)
     }
@@ -43,7 +44,7 @@ export const normalizeOrderHistory = ({ orders, limit = 20 }) => {
       throw new TypeError(`Binance order history item ${index} has an invalid clientOrderId`)
     }
 
-    return {
+    normalizedOrders.push({
       time: order.time,
       orderId: String(orderId),
       symbol: order.symbol,
@@ -55,8 +56,8 @@ export const normalizeOrderHistory = ({ orders, limit = 20 }) => {
       quote: order.cummulativeQuoteQty,
       status: order.status,
       clientOrderId: order.clientOrderId ?? "",
-    }
-  })
+    })
+  }
 
   normalizedOrders.sort((left, right) => {
     if (left.time !== right.time) return right.time - left.time

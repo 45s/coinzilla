@@ -34,6 +34,6 @@ export const buildTestnetMenuArguments = ({ actionId, answers = {} }) => {
   }
 }
 
-export const normalizePromptAnswer = (answer, fallback = "") => (
+export const normalizePromptAnswer = ({ answer, fallback = "" } = {}) => (
   (answer ?? "").trim() || fallback
 )

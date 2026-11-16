@@ -5,7 +5,8 @@ export const normalizeTradeHistory = ({ trades }) => {
     throw new TypeError("Binance trade history must be an array")
   }
 
-  const normalizedTrades = trades.map((trade, index) => {
+  const normalizedTrades = []
+  for (const [index, trade] of trades.entries()) {
     if (!trade || typeof trade !== "object" || Array.isArray(trade)) {
       throw new TypeError(`Binance trade history item ${index} must be an object`)
     }
@@ -30,7 +31,7 @@ export const normalizeTradeHistory = ({ trades }) => {
       throw new TypeError(`Binance trade history item ${index} has invalid trade-side flags`)
     }
 
-    return {
+    normalizedTrades.push({
       tradeId: trade.id,
       orderId: trade.orderId,
       time: trade.time,
@@ -41,8 +42,8 @@ export const normalizeTradeHistory = ({ trades }) => {
       quoteQuantity: trade.quoteQty,
       commission: trade.commission,
       commissionAsset: trade.commissionAsset,
-    }
-  })
+    })
+  }
 
   normalizedTrades.sort((left, right) =>
     left.time === right.time
