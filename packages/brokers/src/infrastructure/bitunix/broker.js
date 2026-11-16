@@ -512,7 +512,10 @@ export class BitunixSpotBroker extends CoreBroker {
         },
       })
       const deals = normalizeDeals({ value: dealsResponse.data })
-      validateFillResponsePresence({ executedQuantityComparison, deals })
+      validateFillResponsePresence({
+        executedQuantityComparison,
+        deals,
+      })
       return toResult({
         data: deals.map((trade) => adaptCanonicalFill({
           trade: {
