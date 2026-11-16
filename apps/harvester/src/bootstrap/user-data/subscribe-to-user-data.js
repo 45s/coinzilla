@@ -51,7 +51,8 @@ export async function subscribeToUserData({
 
   let userDataResult
   try {
-    userDataResult = await broker.subscribeForUserData({ onEvent, onStatus })
+    userDataResult = await broker.subscribeForUserData({ onEvent,
+onStatus })
   } catch (error) {
     publishLifecycleEvent({
       eventPublisher,
@@ -68,12 +69,14 @@ export async function subscribeToUserData({
   if (!userDataResult?.ok || typeof userDataResult.data?.disconnect !== "function") {
     const details = userDataResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
     const error = new Error(
-      "Unable to subscribe to user data" + (details ? ": " + details : ""),
+      `Unable to subscribe to user data${  details ? `: ${  details}` : ""}`,
     )
     publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
-      dataResult: mapBrokerSubscriptionFailedData({ broker: brokerName, stream: "user-data", error }),
+      dataResult: mapBrokerSubscriptionFailedData({ broker: brokerName,
+stream: "user-data",
+error }),
     })
     throw error
   }
@@ -81,7 +84,8 @@ export async function subscribeToUserData({
   publishLifecycleEvent({
     eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
-    dataResult: mapBrokerSubscriptionEstablishedData({ broker: brokerName, stream: "user-data" }),
+    dataResult: mapBrokerSubscriptionEstablishedData({ broker: brokerName,
+stream: "user-data" }),
   })
   const userDataSubscription = userDataResult.data
   onSubscriptionEstablished?.(userDataSubscription)
@@ -113,16 +117,16 @@ export async function subscribeToUserData({
     while (true) {
       const queuedEvents = state.eventQueue
       await queuedEvents
-      if (queuedEvents === state.eventQueue) break
+      if (queuedEvents === state.eventQueue) {break}
     }
     if (state.accountingFailed || UNSAFE_USER_DATA_STARTUP_STATUSES.has(state.status)) {
-      throw new Error("Conservative " + tradingModeLabel + " startup blocked: user-data stream is not in a safe state")
+      throw new Error(`Conservative ${  tradingModeLabel  } startup blocked: user-data stream is not in a safe state`)
     }
     if (state.requiresReconciliation) {
-      throw new Error("Conservative " + tradingModeLabel + " startup blocked: user-data stream reconciliation is required")
+      throw new Error(`Conservative ${  tradingModeLabel  } startup blocked: user-data stream reconciliation is required`)
     }
     logSystem(logger, {
-      message: "Conservative " + tradingModeLabel + " startup checks passed; current account audit is complete",
+      message: `Conservative ${  tradingModeLabel  } startup checks passed; current account audit is complete`,
       enabledSymbols,
       accountSnapshotSourceTime: getAccountSnapshot().sourceTime,
     })
@@ -130,7 +134,7 @@ export async function subscribeToUserData({
     state.ready = true
     state.status = "READY"
     resumeDeferredStrategyEvaluations()
-    logSystem(logger, { message: "Conservative " + tradingModeLabel + " trading engine activated" })
+    logSystem(logger, { message: `Conservative ${  tradingModeLabel  } trading engine activated` })
   }
 
   return userDataSubscription
