@@ -1295,3 +1295,29 @@ test("emergency BUY pause state is not restored from a previous process snapshot
     pausedMarkets: [],
   }, "Emergency BUY pause state must remain process-lifetime only and must not be restored from prior process state.")
 })
+
+test("resuming the global BUY pause does not clear a market-specific BUY pause", async () => {
+  const { engine } = await createHarness({
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+    },
+  })
+  await engine.pauseBuys({
+    symbol: "DOGEUSDT",
+  })
+  await engine.pauseBuys()
+
+  const globalResume = await engine.resumeBuys()
+  assert.equal(globalResume.ok, true)
+  assert.equal(globalResume.data.stillPaused, true, "A market-specific BUY gate must remain after the global gate is cleared.")
+
+  const marketResume = await engine.resumeBuys({
+    symbol: "DOGEUSDT",
+  })
+  assert.equal(marketResume.ok, true)
+  assert.equal(marketResume.data.stillPaused, false, "The market gate clears only after its own resume command.")
+})
