@@ -89,7 +89,7 @@ The package entry point currently exports exactly `BinanceWebSocketBroker`, `Bin
 
 ## Bitunix Spot capability contract
 
-The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The current implementation is read-only and supports:
+The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The current implementation is read-only. Supported reads and explicitly blocked capabilities are:
 
 | Broker method | Bitunix operation | Constraint |
 |---|---|---|
@@ -100,10 +100,11 @@ The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The curren
 | `getOrderHistory({ symbol, status?, side?, type?, startTime?, endTime?, page?, limit? })` | `POST /api/spot/v1/order/history/page` | Symbol required; no exact order-ID filter. Canonical statuses (`OPEN`, `FILLED`, `PARTIALLY_FILLED`, `CANCELED`, `PARTIALLY_FILLED_CANCELED`), sides (`BUY`, `SELL`) and types (`LIMIT`, `MARKET`) are translated to Bitunix numeric codes inside the adapter. Validates non-negative safe-integer `total`, positive integer `pageNum` (string or number) matching the requested page, and the `data[]` shape; omitted `data` is accepted only when `total` is zero. Returns the requested page only; no automatic pagination or sorting is claimed. |
 | `getOrder({ symbol, orderId })` | `GET /api/spot/v1/order/detail` | Response identity is validated. |
 | `getPrices({ symbol })` | `GET /api/spot/v1/market/last_price` | Request/response lookup only; maps the returned price string to `{ symbol, price }`. |
-| `getFills({ symbol, orderId })` | `POST /api/spot/v1/order/deal/list` | Requires an exact non-negative order-detail `dealVolume`; rejects positive quantity with empty matching-order data and zero quantity with non-empty data. This is only a presence-consistency guard; pagination and completeness for multiple executions remain unproven. |
+| `getFills({ symbol, orderId })` | Blocked; no request is sent | The documented matching-order response does not define quantity denomination, complete partial-execution coverage, or stable/unique execution identity. No canonical `Fill` is emitted until Bitunix clarifies these semantics. |
 
 Mutations and lifecycle-dependent methods are deliberately unavailable:
 
+- Fill history is blocked: the matching-order response does not define base/quote quantity denomination, complete partial-execution coverage, or stable/unique execution identity; `getFills()` returns unsupported without a request.
 - Order placement has no exchange-side client order ID, so a lost response cannot be reliably reconciled.
 - Private Spot WebSocket documentation does not define a continuous order/execution event stream.
 - Public WebSocket market methods are request/response RPC, not continuous subscriptions.
