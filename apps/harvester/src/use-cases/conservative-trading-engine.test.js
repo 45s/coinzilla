@@ -4608,7 +4608,6 @@ async function runTerminalRecoverySellStatusScenario({ status }) {
   let currentPortfolio = seeded.portfolio
   let currentRecoveryLedger = seeded.recoveryLedger
   const accountedFills = []
-  const sellFill
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
@@ -4646,7 +4645,7 @@ async function runTerminalRecoverySellStatusScenario({ status }) {
     left: sellOrder.limitPrice.amount,
     right: "0.2",
   })
-  sellFill = makeSellFill({
+  const sellFill = makeSellFill({
     order: sellOrder,
     tradeId: `terminal-recovery-sell-${  status.toLowerCase()}`,
     quantity: "0.2",
