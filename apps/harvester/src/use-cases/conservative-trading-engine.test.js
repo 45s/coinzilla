@@ -11477,7 +11477,11 @@ test("failed owned BUY cancellation leaves the emergency BUY gate active and rep
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
   })
 
   const paused = await harness.engine.pauseBuys({ symbol: "DOGEUSDT" })
