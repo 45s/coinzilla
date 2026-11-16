@@ -17,29 +17,14 @@ const testEventPublisher = Object.freeze({
     durable: true
   }),
 })
-const startHarvesterForTest = (input = {}) => {
-  const eventPublisher = input.eventPublisher ?? testEventPublisher
-  if (eventPublisher !== testEventPublisher && typeof eventPublisher.flush !== "function") {
-    eventPublisher.flush = testEventPublisher.flush
-  }
-  return startHarvester({
-    ...input,
-    env: {
-      ...binanceEnv,
-      ...input.env
-    },
-    brokerAdapterFactory: input.brokerAdapterFactory ?? (() => createBroker()),
-    eventPublisher,
-  })
-}
-
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 
 // Include the source file in every reporter test name so failures are identifiable
 // even when the spec reporter output is copied without its surrounding file header.
-const test = (name, ...args) => nodeTest(`[start-harvester.test.js] ${name}`, ...args)
+const test = (...args) => nodeTest(`[start-harvester.test.js] ${args[0]}`, ...args.slice(1))
 
-async function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 15_000) {
+async function waitForTestSignal(...args) {
+  const [promise, label, getDiagnostics, timeoutMs = 15_000] = args
   let timeout
   try {
     await Promise.race([
@@ -99,7 +84,9 @@ const appConfig = {
     },
   },
 }
-const withExternalOrdersPolicy = (symbol, externalOrdersPolicy) => ({
+const withExternalOrdersPolicy = (...args) => {
+  const [symbol, externalOrdersPolicy] = args
+  return {
   ...appConfig,
   strategies: {
     ...appConfig.strategies,
@@ -114,7 +101,8 @@ const withExternalOrdersPolicy = (symbol, externalOrdersPolicy) => ({
       },
     },
   },
-})
+  }
+}
 const createMarketMetadata = (symbol) => {
   const quoteCode = ["USDT", "FDUSD"].find((code) => symbol.endsWith(code))
   if (!quoteCode) {throw new Error(`Unsupported test market quote asset for ${  symbol}`)}
@@ -349,8 +337,14 @@ function createBrokerPriceStreamPorts({ calls, state, subscribeResult, subscribe
         },
       }
     },
-    emitPrice: (symbol, priceEvent) => state.subscriptions.get(symbol)?.(priceEvent),
-    emitBookTicker: (symbol, bookTicker) => state.bookSubscriptions.get(symbol)?.(bookTicker),
+    emitPrice: (...args) => {
+      const [symbol, priceEvent] = args
+      return state.subscriptions.get(symbol)?.(priceEvent)
+    },
+    emitBookTicker: (...args) => {
+      const [symbol, bookTicker] = args
+      return state.bookSubscriptions.get(symbol)?.(bookTicker)
+    },
   }
 }
 
@@ -399,11 +393,13 @@ function createBrokerUserDataPorts({ calls, state }) {
   }
 }
 
-const createBroker = (calls = [], {
-  subscribeResult,
-  subscribeResultBySymbol = {},
-  externalOpenOrders = [],
-} = {}) => {
+const createBroker = (...args) => {
+  const [calls = [], options = {}] = args
+  const {
+    subscribeResult,
+    subscribeResultBySymbol = {},
+    externalOpenOrders = [],
+  } = options
   const state = createBrokerTestState({
     externalOpenOrders,
   })
@@ -431,7 +427,8 @@ const createBroker = (calls = [], {
   }
 }
 
-const makeVolatilityReadyBroker = (broker, symbols = ["BTCUSDT"]) => {
+const makeVolatilityReadyBroker = (...args) => {
+  const [broker, symbols = ["BTCUSDT"]] = args
   const createCandle = ({
     symbol,
     openTime
@@ -489,6 +486,22 @@ const binanceEnv = {
   BINANCE_API_KEY: "key",
   BINANCE_API_SECRET_KEY: "secret",
 }
+const startHarvesterForTest = (input = {}) => {
+  const eventPublisher = input.eventPublisher ?? testEventPublisher
+  if (eventPublisher !== testEventPublisher && typeof eventPublisher.flush !== "function") {
+    eventPublisher.flush = testEventPublisher.flush
+  }
+  return startHarvester({
+    ...input,
+    env: {
+      ...binanceEnv,
+      ...input.env
+    },
+    brokerAdapterFactory: input.brokerAdapterFactory ?? (() => createBroker()),
+    eventPublisher,
+  })
+}
+
 const createFill = ({
   tradeId = "trade-1",
   quantity = "0.01"
