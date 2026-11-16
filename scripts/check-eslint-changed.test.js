@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ESLint } from "eslint";
 
-import { selectChangedJavaScriptFiles } from "./check-eslint-changed.js";
+import {
+  countFindings,
+  findingKey,
+  parseChangedFileNames,
+  selectChangedJavaScriptFiles,
+} from "./check-eslint-changed.js";
 
 test("selectChangedJavaScriptFiles keeps JavaScript module extensions", () => {
   const changedFiles = selectChangedJavaScriptFiles([
@@ -114,4 +119,112 @@ test("the full workspace contains no ESM default exports outside the ESLint load
     [],
     "Every workspace ESM module must use named exports; only the root ESLint loader configuration is exempt.",
   );
+});
+
+
+test("ESLint rejects nested ternary operators and accepts explicit branches", async () => {
+  const eslint = new ESLint();
+  const [nestedTernary] = await eslint.lintText(
+    'const enabled = true; const ready = false; export const status = enabled ? "ON" : ready ? "READY" : "OFF";\n',
+    { filePath: "apps/harvester/config/nested-ternary-example.js" },
+  );
+  const [explicitBranches] = await eslint.lintText(
+    [
+      "const enabled = true; const ready = false;",
+      'export let status = "READY";',
+      "if (!enabled) {",
+      '  status = "OFF";',
+      "} else if (!ready) {",
+      '  status = "BLOCKED";',
+      "}",
+    ].join("\n"),
+    { filePath: "apps/harvester/config/explicit-branches-example.js" },
+  );
+
+  assert.ok(
+    nestedTernary.messages.some((message) => message.ruleId === "no-nested-ternary"),
+    "Nested ternary expressions must be rejected by the repository lint policy.",
+  );
+  assert.equal(
+    explicitBranches.errorCount,
+    0,
+    "Equivalent explicit if/else branches must pass the repository lint policy.",
+  );
+});
+
+test("ESLint requires braces around single-statement control-flow bodies", async () => {
+  const eslint = new ESLint();
+  const [unbracedControlFlow] = await eslint.lintText(
+    'const enabled = true; export let status = "READY"; if (!enabled) status = "OFF";\n',
+    { filePath: "apps/harvester/config/unbraced-control-flow-example.js" },
+  );
+
+  assert.ok(
+    unbracedControlFlow.messages.some((message) => message.ruleId === "curly"),
+    "Single-statement if bodies must still use braces under the repository lint policy.",
+  );
+});
+
+
+test("parseChangedFileNames preserves original paths for renamed files", () => {
+  const changes = parseChangedFileNames([
+    "M",
+    "apps/harvester/src/changed.js",
+    "R100",
+    "apps/harvester/src/old.js",
+    "apps/harvester/src/new.js",
+    "A",
+    "apps/harvester/src/added.js",
+    "D",
+    "apps/harvester/src/deleted.js",
+    "",
+  ].join("\0"));
+
+  assert.deepEqual(changes, [
+    {
+      path: "apps/harvester/src/changed.js",
+      basePath: "apps/harvester/src/changed.js",
+    },
+    {
+      path: "apps/harvester/src/new.js",
+      basePath: "apps/harvester/src/old.js",
+    },
+    {
+      path: "apps/harvester/src/added.js",
+      basePath: null,
+    },
+  ]);
+});
+
+test("findingKey changes when the offending source line changes", () => {
+  const original = {
+    ruleId: "prefer-template",
+    messageId: "unexpectedStringConcatenation",
+    message: "Unexpected string concatenation.",
+    nodeType: "BinaryExpression",
+    source: 'const label = "old" + suffix;',
+  };
+
+  assert.notEqual(
+    findingKey(original),
+    findingKey({ ...original, source: 'const label = "new" + suffix;' }),
+  );
+});
+
+test("countFindings retains duplicate violations", () => {
+  const finding = {
+    ruleId: "max-params",
+    messageId: "exceed",
+    message: "Too many parameters.",
+    nodeType: "FunctionDeclaration",
+    source: "function run(a, b) {}",
+  };
+
+  assert.equal(countFindings([finding, finding]).get(JSON.stringify([
+    "max-params",
+    "exceed",
+    "Too many parameters.",
+    "FunctionDeclaration",
+    "function run(a, b) {}",
+  ])), 2);
 });
