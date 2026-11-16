@@ -9,6 +9,53 @@ function formatAge(ageMs) {
   return `${Math.round(ageMs / 1000)  }s ago`
 }
 
+function formatUserDataLine({ userData }) {
+  const readiness = userData.ready === true ? "READY" : "NOT READY"
+  return `User data: ${readiness} (${String(userData.status ?? "UNKNOWN")}; last event ${formatAge(userData.ageMs)})`
+}
+
+function formatMarketCountsLine({ marketCounts }) {
+  return `Markets: ${marketCounts.enabled ?? 0} enabled / ${marketCounts.configured ?? 0} configured (${marketCounts.blocked ?? 0} blocked)`
+}
+
+function appendStatusBlockers({ lines, blockers }) {
+  if (Array.isArray(blockers) && blockers.length > 0) {
+    lines.push(`Blockers: ${blockers.join(", ")}`)
+  }
+}
+
+function formatMarketPriceLine({ market }) {
+  const hasPrice = market.latestPrice !== null && market.latestPrice !== undefined
+  let priceStatus = "stale"
+  if (!hasPrice) {
+    priceStatus = "unavailable"
+  } else if (market.priceFresh === true) {
+    priceStatus = "fresh"
+  }
+  return `Price: ${market.latestPrice ?? "unavailable"} (${priceStatus})`
+}
+
+function formatMarketVolatilityLine({ market }) {
+  if (!market.volatilityProtection) {return null}
+  return `Volatility: ${market.volatilityProtection.mode}${market.volatilityProtection.reason ? ` (${market.volatilityProtection.reason})` : ""}`
+}
+
+function appendMarketBlockers({ lines, market }) {
+  if (Array.isArray(market.blockers) && market.blockers.length > 0) {
+    lines.push(`Blockers: ${market.blockers.join(", ")}`)
+  }
+}
+
+function appendMarketDetails({ lines, market }) {
+  lines.push(`Price updated: ${formatTimestamp(market.priceTimestamp)}`)
+  lines.push(`Operator pause: ${market.operatorPaused ? "ACTIVE" : "OFF"}`)
+  lines.push(`Safety pause: ${market.safetyPaused ? "ACTIVE" : "OFF"}`)
+  lines.push(`Recovery pause: ${market.recoveryManagedPaused ? "ACTIVE" : "OFF"}`)
+  const volatilityLine = formatMarketVolatilityLine({ market })
+  if (volatilityLine) {lines.push(volatilityLine)}
+  appendMarketBlockers({ lines, market })
+}
+
 export function formatTelegramOperatorStatus({ status } = {}) {
   if (!status || typeof status !== "object") {
     throw new TypeError("formatTelegramOperatorStatus requires a status snapshot")
@@ -25,14 +72,10 @@ export function formatTelegramOperatorStatus({ status } = {}) {
     `Broker mode: ${  String(status.tradingMode ?? "unknown").toUpperCase()}`,
     `Trading: ${  status.tradingEnabled ? "ENABLED" : "DISABLED"}`,
     `Readiness: ${  String(readiness.state ?? "UNKNOWN")}`,
-    `User data: ${  userData.ready === true ? "READY" : "NOT READY" 
-      } (${  String(userData.status ?? "UNKNOWN")  }; last event ${  formatAge(userData.ageMs)  })`,
-    `Markets: ${  marketCounts.enabled ?? 0  } enabled / ${ 
-      marketCounts.configured ?? 0  } configured (${  marketCounts.blocked ?? 0  } blocked)`,
+    formatUserDataLine({ userData }),
+    formatMarketCountsLine({ marketCounts }),
   ]
-  if (Array.isArray(readiness.blockers) && readiness.blockers.length > 0) {
-    lines.push(`Blockers: ${  readiness.blockers.join(", ")}`)
-  }
+  appendStatusBlockers({ lines, blockers: readiness.blockers })
   if (status.stopping === true) {lines.push("Runtime is stopping.")}
   lines.push(`Observed: ${  formatTimestamp(status.observedAt)}`)
   return lines.join("\n")
@@ -47,26 +90,16 @@ export function formatTelegramOperatorMarkets({ snapshot } = {}) {
   for (const market of snapshot.markets) {
     lines.push("")
     lines.push(`${market.symbol  } — ${  String(market.readiness ?? "UNKNOWN")}`)
-    const hasPrice = market.latestPrice !== null && market.latestPrice !== undefined
-    let priceStatus = "stale"
-    if (!hasPrice) {
-      priceStatus = "unavailable"
-    } else if (market.priceFresh === true) {
-      priceStatus = "fresh"
-    }
-    lines.push(`Price: ${  market.latestPrice ?? "unavailable"  } (${  priceStatus  })`)
+    lines.push(formatMarketPriceLine({ market }))
     if (market.priceTimestamp !== null && market.priceTimestamp !== undefined) {
-      lines.push(`Price updated: ${  formatTimestamp(market.priceTimestamp)}`)
-    }
-    lines.push(`Operator pause: ${  market.operatorPaused ? "ACTIVE" : "OFF"}`)
-    lines.push(`Safety pause: ${  market.safetyPaused ? "ACTIVE" : "OFF"}`)
-    lines.push(`Recovery pause: ${  market.recoveryManagedPaused ? "ACTIVE" : "OFF"}`)
-    if (market.volatilityProtection) {
-      lines.push(`Volatility: ${  market.volatilityProtection.mode 
-        }${market.volatilityProtection.reason ? ` (${  market.volatilityProtection.reason  })` : ""}`)
-    }
-    if (Array.isArray(market.blockers) && market.blockers.length > 0) {
-      lines.push(`Blockers: ${  market.blockers.join(", ")}`)
+      appendMarketDetails({ lines, market })
+    } else {
+      lines.push(`Operator pause: ${market.operatorPaused ? "ACTIVE" : "OFF"}`)
+      lines.push(`Safety pause: ${market.safetyPaused ? "ACTIVE" : "OFF"}`)
+      lines.push(`Recovery pause: ${market.recoveryManagedPaused ? "ACTIVE" : "OFF"}`)
+      const volatilityLine = formatMarketVolatilityLine({ market })
+      if (volatilityLine) {lines.push(volatilityLine)}
+      appendMarketBlockers({ lines, market })
     }
   }
   const message = lines.join("\n")
