@@ -194,8 +194,9 @@ export function transitionVolatilityProtection({
       thresholds,
       activeBuyOrderCount,
     })
-    next = transition.state
-    warning = transition.warning
+    const { state: nextState, warning: nextWarning } = transition
+    next = nextState
+    warning = nextWarning
   }
 
   return Object.freeze({

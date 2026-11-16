@@ -3,6 +3,25 @@ import { execFileSync } from "node:child_process";
 import { test } from "node:test";
 
 test("Harvester domain source has no ESLint violations", () => {
+  let fixOutput = ""
+  try {
+    fixOutput = execFileSync(
+      "pnpm",
+      ["exec", "eslint", "src/domain", "--fix-dry-run", "--format", "json"],
+      { cwd: process.cwd(), encoding: "utf8", maxBuffer: 20 * 1024 * 1024 },
+    )
+  } catch (error) {
+    fixOutput = error.stdout?.toString() ?? ""
+  }
+  const fixResults = JSON.parse(fixOutput)
+  for (const result of fixResults) {
+    if (result.output) {
+      process.stdout.write(
+        `ESLINT_AUTOFIX_B64:${result.filePath}:${Buffer.from(result.output).toString("base64")}\n`,
+      )
+    }
+  }
+
   let output;
   try {
     output = execFileSync(
@@ -29,5 +48,6 @@ test("Harvester domain source has no ESLint violations", () => {
     }
   }
 
+  process.stdout.write(`ESLINT_FINDINGS_JSON:${JSON.stringify(findings)}\n`)
   assert.deepEqual(findings, [], JSON.stringify(findings));
 });

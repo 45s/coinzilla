@@ -550,8 +550,8 @@ export function evaluateConservativeStrategy({
   if (buyDecision.action) {
     actions.push(buyDecision.action)
   }
-  const inventoryDisposition = sellDecision.inventoryDisposition
-  const buyDisposition = buyDecision.buyDisposition
+  const { inventoryDisposition } = sellDecision
+  const { buyDisposition } = buyDecision
   return Object.freeze({
     strategy: "CONSERVATIVE",
     symbol: marketPrice.symbol,

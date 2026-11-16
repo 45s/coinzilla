@@ -24,6 +24,16 @@ reason },
   }
 }
 
+function getNextVolatilityState({ state, snapshot, activeBuyOrderCount }) {
+  const transition = transitionVolatilityProtection({
+    state,
+    snapshot,
+    activeBuyOrderCount,
+  })
+  const { state: nextState } = transition
+  return nextState
+}
+
 test("starts protected and fails closed when candle data is unavailable", () => {
   const initial = createVolatilityProtectionState({ symbol: "DOGEUSDT" })
   assert.equal(initial.mode, VOLATILITY_PROTECTION_MODES.PROTECTED)
@@ -58,7 +68,8 @@ test("counts each completed stable candle once and resumes after three", () => {
 openTime }),
       activeBuyOrderCount: 0,
     })
-    ({ state } = result)
+    const { state: nextState } = result
+    state = nextState
   }
   assert.equal(state.mode, VOLATILITY_PROTECTION_MODES.NORMAL)
   assert.equal(state.stableCandleCount, 3)
@@ -81,37 +92,37 @@ openTime: 60_000 }),
 test("does not resume while any owned BUY remains active or unresolved", () => {
   let state = createVolatilityProtectionState({ symbol: "DOGEUSDT" })
   for (const openTime of [60_000, 120_000, 180_000]) {
-    ({ state } = transitionVolatilityProtection({
+    state = getNextVolatilityState({
       state,
       snapshot: snapshot({ ratio: "1" ,
 openTime }),
       activeBuyOrderCount: 1,
-    }))
+    })
   }
   assert.equal(state.mode, VOLATILITY_PROTECTION_MODES.RECOVERING)
   assert.equal(state.stableCandleCount, 3)
   assert.equal(state.reason, "OWNED_BUY_ORDERS_UNRESOLVED")
 
-  ({ state } = transitionVolatilityProtection({
+  state = getNextVolatilityState({
     state,
     snapshot: snapshot({ ratio: "1",
 openTime: 240_000 }),
     activeBuyOrderCount: 0,
-  }))
+  })
   assert.equal(state.mode, VOLATILITY_PROTECTION_MODES.NORMAL)
 })
 
 test("resets recovery hysteresis when ratio rises above the recovery threshold", () => {
   let state = createVolatilityProtectionState({ symbol: "DOGEUSDT" })
-  ({ state } = transitionVolatilityProtection({ state,
+  state = getNextVolatilityState({ state,
 snapshot: snapshot({ ratio: "1",
-openTime: 60_000 }) }))
-  ({ state } = transitionVolatilityProtection({ state,
+openTime: 60_000 }) })
+  state = getNextVolatilityState({ state,
 snapshot: snapshot({ ratio: "1",
-openTime: 120_000 }) }))
-  ({ state } = transitionVolatilityProtection({ state,
+openTime: 120_000 }) })
+  state = getNextVolatilityState({ state,
 snapshot: snapshot({ ratio: "1.31",
-openTime: 180_000 }) }))
+openTime: 180_000 }) })
   assert.equal(state.mode, VOLATILITY_PROTECTION_MODES.PROTECTED)
   assert.equal(state.stableCandleCount, 0)
   assert.equal(state.reason, "VOLATILITY_NOT_RECOVERED")
@@ -134,17 +145,17 @@ test("keeps protection state isolated between markets", () => {
   let doge = createVolatilityProtectionState({ symbol: "DOGEUSDT" })
   let zro = createVolatilityProtectionState({ symbol: "ZROUSDT" })
 
-  ({ state: doge } = transitionVolatilityProtection({
+  doge = getNextVolatilityState({
     state: doge,
     snapshot: snapshot({ ratio: "2.4",
 openTime: 60_000 }),
-  }))
+  })
   for (const openTime of [60_000, 120_000, 180_000]) {
-    ({ state: zro } = transitionVolatilityProtection({
+    zro = getNextVolatilityState({
       state: zro,
       snapshot: snapshot({ ratio: "1",
 openTime }),
-    }))
+    })
   }
 
   assert.equal(doge.mode, VOLATILITY_PROTECTION_MODES.PROTECTED)
