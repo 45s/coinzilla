@@ -1753,16 +1753,25 @@ test("retains Journal, EventBus, process lock and logger when strategy shutdown 
   const signalHandlers = new Map()
   const unsafeShutdown = new Error("BTCUSDT owned BUY remains UNKNOWN")
   const eventBus = {
-    publish: () => ({ ok: true }),
-    flush: async () => ({ ok: true }),
+    publish: () => ({
+      ok: true,
+    }),
+    flush: async () => ({
+      ok: true,
+    }),
     close: async () => {
       calls.push("event-bus-close")
       return { ok: true }
     },
   }
   const journalService = {
-    ready: Promise.resolve({ ok: true }),
-    flush: async () => ({ ok: true, durable: true }),
+    ready: Promise.resolve({
+      ok: true,
+    }),
+    flush: async () => ({
+      ok: true,
+      durable: true,
+    }),
     close: async () => {
       calls.push("journal-close")
       return { ok: true, closed: true }
@@ -1784,7 +1793,10 @@ test("retains Journal, EventBus, process lock and logger when strategy shutdown 
         return { ok: true, released: true }
       },
     }),
-    registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
+    registerSignalHandler: (...args) => {
+      const [signal, handler] = args
+      signalHandlers.set(signal, handler)
+    },
     closeLogger: async () => calls.push("logger-close"),
     start: async () => ({
       connected: true,
