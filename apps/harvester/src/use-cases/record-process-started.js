@@ -1,36 +1,42 @@
 import { toResult } from "@coinzilla/utils"
 
-export async function recordProcessStarted({
-  operationalStateStore,
-  configurationFingerprint,
-  strategyName,
-  markets,
-  tradingEnabled,
-} = {}) {
+function validateProcessStart({ operationalStateStore, configurationFingerprint, strategyName, markets, tradingEnabled }) {
+  const sessionId = operationalStateStore?.runtimeSessionId
+  if (typeof operationalStateStore?.append !== "function" ||
+      typeof sessionId !== "string" || !sessionId.trim()) {
+    throw new TypeError("recordProcessStarted requires an initialized store runtime session")
+  }
+  if (typeof configurationFingerprint !== "string" || !/^[a-f0-9]{64}$/.test(configurationFingerprint)) {
+    throw new TypeError("recordProcessStarted requires a SHA-256 configuration fingerprint")
+  }
+  if (typeof strategyName !== "string" || !strategyName.trim() || typeof tradingEnabled !== "boolean" ||
+      !Array.isArray(markets) || markets.length === 0 ||
+      markets.some((market) => typeof market !== "string" || !/^[A-Z0-9]{3,30}$/.test(market))) {
+    throw new TypeError("recordProcessStarted requires a strategy name and canonical configured markets")
+  }
+  return sessionId
+}
+
+export async function recordProcessStarted(options = {}) {
   try {
-    const sessionId = operationalStateStore?.runtimeSessionId
-    if (typeof operationalStateStore?.append !== "function" ||
-        typeof sessionId !== "string" || !sessionId.trim()) {
-      throw new TypeError("recordProcessStarted requires an initialized store runtime session")
-    }
-    if (typeof configurationFingerprint !== "string" || !/^[a-f0-9]{64}$/.test(configurationFingerprint)) {
-      throw new TypeError("recordProcessStarted requires a SHA-256 configuration fingerprint")
-    }
-    if (typeof strategyName !== "string" || !strategyName.trim() || typeof tradingEnabled !== "boolean" ||
-        !Array.isArray(markets) || markets.length === 0 ||
-        markets.some((market) => typeof market !== "string" || !/^[A-Z0-9]{3,30}$/.test(market))) {
-      throw new TypeError("recordProcessStarted requires a strategy name and canonical configured markets")
-    }
+    const { operationalStateStore, configurationFingerprint, strategyName, markets, tradingEnabled } = options
+    const sessionId = validateProcessStart(options)
     const result = await operationalStateStore.append({
-      factId: `process-started:${  sessionId}`,
+      factId: `process-started:${sessionId}`,
       factType: "PROCESS_STARTED",
-      data: { configurationFingerprint,
-strategyName,
-markets: [...markets].sort(),
-tradingEnabled },
+      data: {
+        configurationFingerprint,
+        strategyName,
+        markets: [...markets].sort(),
+        tradingEnabled,
+      },
     })
     if (result?.ok !== true || result.data?.durable !== true) {
-      return toResult({ errors: result?.errors?.length ? result.errors : [new Error("Process-start append did not confirm durable commitment")] })
+      return toResult({
+        errors: result?.errors?.length
+          ? result.errors
+          : [new Error("Process-start append did not confirm durable commitment")],
+      })
     }
     return result
   } catch (error) {
