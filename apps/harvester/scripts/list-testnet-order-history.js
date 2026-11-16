@@ -1,8 +1,11 @@
+import { Console } from "node:console"
 import { getOrderHistory } from "./binance-testnet-api.js"
 import {
   normalizeOrderHistory,
   parseOrderHistoryArguments,
 } from "./testnet-order-history-utils.js"
+
+const cliConsole = new Console({ stdout: process.stdout, stderr: process.stderr })
 
 const main = async () => {
   const { symbol, limit } = parseOrderHistoryArguments({
@@ -15,14 +18,14 @@ limit })
     limit,
   })
 
-  console.log(`\nBinance Spot TESTNET — Recent Orders: ${symbol}\n`)
+  cliConsole.log(`\nBinance Spot TESTNET — Recent Orders: ${symbol}\n`)
 
   if (orders.length === 0) {
-    console.log(`No order history found for ${symbol}.`)
+    cliConsole.log(`No order history found for ${symbol}.`)
     return
   }
 
-  console.table(
+  cliConsole.table(
     orders.map((order) => ({
       time: new Date(order.time).toISOString(),
       orderId: order.orderId,
@@ -38,11 +41,11 @@ limit })
     })),
   )
 
-  console.log(`\nOrders displayed: ${orders.length} (requested: ${limit})`)
+  cliConsole.log(`\nOrders displayed: ${orders.length} (requested: ${limit})`)
 }
 
 main().catch((error) => {
-  console.error("\nFailed to retrieve TESTNET order history:")
-  console.error(error.message)
+  cliConsole.error("\nFailed to retrieve TESTNET order history:")
+  cliConsole.error(error.message)
   process.exitCode = 1
 })

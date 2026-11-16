@@ -1,7 +1,10 @@
+import { Console } from "node:console"
 import { spawnSync } from "node:child_process"
 import { existsSync, readFileSync, statSync, appendFileSync } from "node:fs"
 import { isAbsolute, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
+
+const cliConsole = new Console({ stdout: process.stdout, stderr: process.stderr })
 
 const packageDirectory = fileURLToPath(new URL("../", import.meta.url))
 const packageJsonPath = resolve(packageDirectory, "package.json")
@@ -31,7 +34,7 @@ const gray = (value) => color("90", value)
 const bold = (value) => color("1", value)
 
 function logSection(title) {
-  console.log(`\n${  cyan(bold(`  ${  title}`))}`)
+  cliConsole.log(`\n${  cyan(bold(`  ${  title}`))}`)
 }
 
 function statusLabel(status) {
@@ -49,33 +52,33 @@ function formatDuration(milliseconds) {
 
 function reportConfigurationError(message, filePath = "") {
   configurationErrors += 1
-  console.error(red("✖ CONFIGURATION ERROR: ") + message)
-  console.error(gray(`  Package: ${  packageJsonPath}`))
-  if (filePath) {console.error(gray(`  Configured path: ${  filePath}`))}
-  console.error(`::error::TARGETED TEST CONFIGURATION: ${  message}`)
+  cliConsole.error(red("✖ CONFIGURATION ERROR: ") + message)
+  cliConsole.error(gray(`  Package: ${  packageJsonPath}`))
+  if (filePath) {cliConsole.error(gray(`  Configured path: ${  filePath}`))}
+  cliConsole.error(`::error::TARGETED TEST CONFIGURATION: ${  message}`)
 }
 
-console.log(`Started at:       ${  startedAt.toISOString()}`)
-console.log(`Package:          ${  packageJson.name}`)
-console.log(`Package version:  ${  packageJson.version}`)
-console.log(`Package root:     ${  packageDirectory}`)
-console.log(`Working directory:${  process.cwd()}`)
-console.log(`Node version:     ${  process.version}`)
-console.log(`Node executable:  ${  process.execPath}`)
-console.log(`Platform:         ${  process.platform  } / ${  process.arch}`)
-console.log(`Package manifest: ${  packageJsonPath}`)
-console.log(`Per-file timeout: ${  formatDuration(perFileTimeoutMs)}`)
+cliConsole.log(`Started at:       ${  startedAt.toISOString()}`)
+cliConsole.log(`Package:          ${  packageJson.name}`)
+cliConsole.log(`Package version:  ${  packageJson.version}`)
+cliConsole.log(`Package root:     ${  packageDirectory}`)
+cliConsole.log(`Working directory:${  process.cwd()}`)
+cliConsole.log(`Node version:     ${  process.version}`)
+cliConsole.log(`Node executable:  ${  process.execPath}`)
+cliConsole.log(`Platform:         ${  process.platform  } / ${  process.arch}`)
+cliConsole.log(`Package manifest: ${  packageJsonPath}`)
+cliConsole.log(`Per-file timeout: ${  formatDuration(perFileTimeoutMs)}`)
 
 if (!Array.isArray(configuredFiles) || configuredFiles.length === 0) {
   reportConfigurationError(
     "No targeted test files configured. Add paths to config.targetedTestFiles in apps/harvester/package.json.",
   )
   logSection("FINAL RESULT")
-  console.error("RESULT: FAILED — no test files were configured.")
+  cliConsole.error("RESULT: FAILED — no test files were configured.")
   process.exit(1)
 }
 
-console.log(`Configured files: ${  configuredFiles.length}`)
+cliConsole.log(`Configured files: ${  configuredFiles.length}`)
 
 for (let index = 0; index < configuredFiles.length; index += 1) {
   const configuredPath = configuredFiles[index]
@@ -103,8 +106,8 @@ for (let index = 0; index < configuredFiles.length; index += 1) {
   const absolutePath = resolve(packageDirectory, configuredPath)
   const packageRelativePath = relative(packageDirectory, absolutePath)
 
-  console.log(`Configured path:  ${  configuredPath}`)
-  console.log(`Resolved path:    ${  absolutePath}`)
+  cliConsole.log(`Configured path:  ${  configuredPath}`)
+  cliConsole.log(`Resolved path:    ${  absolutePath}`)
 
   if (
     packageRelativePath.startsWith("..") ||
@@ -165,17 +168,17 @@ for (let index = 0; index < configuredFiles.length; index += 1) {
     continue
   }
 
-  console.log(`File size:        ${  fileStats.size  } bytes`)
-  console.log(`Last modified:    ${  fileStats.mtime.toISOString()}`)
-  console.log(
+  cliConsole.log(`File size:        ${  fileStats.size  } bytes`)
+  cliConsole.log(`Last modified:    ${  fileStats.mtime.toISOString()}`)
+  cliConsole.log(
     `Test command:     ${ 
       process.execPath 
       } --trace-uncaught --test --test-reporter=spec ${ 
       configuredPath}`,
   )
-  console.log(`Timeout:          ${  formatDuration(perFileTimeoutMs)}`)
-  console.log("Output:           stdout/stderr streamed directly below")
-  console.log("BEGIN TEST OUTPUT")
+  cliConsole.log(`Timeout:          ${  formatDuration(perFileTimeoutMs)}`)
+  cliConsole.log("Output:           stdout/stderr streamed directly below")
+  cliConsole.log("BEGIN TEST OUTPUT")
 
   const testStarted = process.hrtime.bigint()
   const child = spawnSync(
@@ -204,26 +207,26 @@ FORCE_COLOR: colorEnabled ? "1" : "0" },
       }${child.signal ? `; signal: ${  child.signal}` : ""}`
   }
 
-  console.log(gray("END TEST OUTPUT"))
-  console.log(`File result:      ${  statusLabel(status)}`)
-  console.log(
+  cliConsole.log(gray("END TEST OUTPUT"))
+  cliConsole.log(`File result:      ${  statusLabel(status)}`)
+  cliConsole.log(
     `Exit code:        ${ 
       child.status === 0 ? green("0") : red(String(child.status))}`,
   )
-  console.log(
+  cliConsole.log(
     `Signal:           ${  child.signal ? red(child.signal) : gray("none")}`,
   )
-  console.log(
+  cliConsole.log(
     `Spawn error:      ${ 
       child.error ? red(child.error.message) : gray("none")}`,
   )
-  console.log(`Duration:         ${  formatDuration(durationMs)}`)
-  console.log(`Absolute path:    ${  gray(absolutePath)}`)
+  cliConsole.log(`Duration:         ${  formatDuration(durationMs)}`)
+  cliConsole.log(`Absolute path:    ${  gray(absolutePath)}`)
 
   if (details) {
-    console.error(red(bold("DIAGNOSTIC DETAIL:")))
-    console.error(red(details))
-    console.error(
+    cliConsole.error(red(bold("DIAGNOSTIC DETAIL:")))
+    cliConsole.error(red(details))
+    cliConsole.error(
       `::error file=${ 
         configuredPath 
         }::Targeted test ${ 
@@ -254,25 +257,25 @@ const failed = results.filter(
 ).length
 
 logSection("FINAL RESULT — PER-FILE SUMMARY")
-console.log(`Started:          ${  startedAt.toISOString()}`)
-console.log(`Finished:         ${  finishedAt.toISOString()}`)
-console.log(
+cliConsole.log(`Started:          ${  startedAt.toISOString()}`)
+cliConsole.log(`Finished:         ${  finishedAt.toISOString()}`)
+cliConsole.log(
   `Elapsed wall time:${ 
     formatDuration(finishedAt.getTime() - startedAt.getTime())}`,
 )
-console.log(`Total test time:  ${  formatDuration(totalDurationMs)}`)
-console.log(`Configured files: ${  configuredFiles.length}`)
-console.log(`Passed files:     ${  green(String(passed))}`)
-console.log(
+cliConsole.log(`Total test time:  ${  formatDuration(totalDurationMs)}`)
+cliConsole.log(`Configured files: ${  configuredFiles.length}`)
+cliConsole.log(`Passed files:     ${  green(String(passed))}`)
+cliConsole.log(
   `Failed files:     ${  failed > 0 ? red(String(failed)) : green("0")}`,
 )
-console.log(
+cliConsole.log(
   `Config errors:    ${ 
     configurationErrors > 0 ? red(String(configurationErrors)) : green("0")}`,
 )
 
 for (const result of results) {
-  console.log(
+  cliConsole.log(
     `${statusLabel(result.status).padEnd(colorEnabled ? 22 : 14) 
       } ${ 
       formatDuration(result.durationMs).padStart(8) 
@@ -280,14 +283,14 @@ for (const result of results) {
       result.path}`,
   )
   if (result.absolutePath)
-    {console.log(gray(`       FULL PATH: ${  result.absolutePath}`))}
+    {cliConsole.log(gray(`       FULL PATH: ${  result.absolutePath}`))}
   if (result.exitCode !== undefined)
-    {console.log(gray(`       EXIT CODE: ${  result.exitCode}`))}
-  if (result.signal) {console.log(gray(`       SIGNAL:    ${  result.signal}`))}
+    {cliConsole.log(gray(`       EXIT CODE: ${  result.exitCode}`))}
+  if (result.signal) {cliConsole.log(gray(`       SIGNAL:    ${  result.signal}`))}
 }
 
 const overallFailed = configurationErrors > 0 || failed > 0
-console.log(
+cliConsole.log(
   `\nOVERALL STATUS: ${ 
     overallFailed ? red(bold("✖ FAILED")) : green(bold("✔ PASSED"))}`,
 )
