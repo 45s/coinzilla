@@ -210,7 +210,7 @@ status: "READY" },
 })
 
 
-test("formats every selected active Telegram notification icon exactly", () => {
+test("formats active operational Telegram notification icons exactly", () => {
   const examples = [
     { event: { name: "bot.started",
 data: {} },
@@ -274,6 +274,19 @@ fill: { price: "14.5",
 quantity: "1",
 tradeId: "sell-fill" } } },
 expectedMessage: "💸 FILL RECEIVED · LINK/USDT @ 14.5 × 1\n#sell-fill" },
+  ]
+
+  for (const { event, expectedMessage } of examples) {
+    assert.equal(
+      formatHarvesterTelegramNotification(event),
+      expectedMessage,
+      `The active Telegram event ${event.name} must render the exact icon selected for its notification.`,
+    )
+  }
+})
+
+test("formats active account-safety Telegram notification icons exactly", () => {
+  const examples = [
     { event: { name: "account.safety_alert",
 data: { category: "broker-subscription-failed",
 message: "subscription failed" } },
@@ -311,7 +324,7 @@ expectedMessage: "🚨 ACCOUNT SAFETY · N/A · user-data-stream-error · stream
       `The active Telegram event ${event.name} must render the exact icon selected for its notification.`,
     )
   }
-})
+}))
 
 test("keeps the existing icons for five notifications left undecided", () => {
   const examples = [
