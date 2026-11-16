@@ -20,7 +20,7 @@ export function assertSupportedPayload(value, seen = new WeakSet()) {
     throw new TypeError("Event data contains an unsupported value")
   }
 
-  if (seen.has(value)) return
+  if (seen.has(value)) {return}
   seen.add(value)
 
   const prototype = Object.getPrototypeOf(value)
@@ -41,7 +41,7 @@ export function assertSupportedPayload(value, seen = new WeakSet()) {
       throw new TypeError("Event data cannot contain symbol properties")
     }
 
-    if (isArray && key === "length") continue
+    if (isArray && key === "length") {continue}
 
     if (
       isArray &&
@@ -73,6 +73,6 @@ function deepFreeze(value, seen = new WeakSet()) {
   }
 
   seen.add(value)
-  for (const child of Object.values(value)) deepFreeze(child, seen)
+  for (const child of Object.values(value)) {deepFreeze(child, seen)}
   return Object.freeze(value)
 }
