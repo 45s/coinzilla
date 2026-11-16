@@ -9,7 +9,7 @@ import {
   getSnapshot,
 } from "../../test-support/candle-history-service-fixture.js"
 
-const test = (name, ...args) => nodeTest(`[create-candle-history-service.test.js] ${  name}`, ...args)
+const test = (...[name, ...args]) => nodeTest(`[create-candle-history-service.test.js] ${  name}`, ...args)
 
 test("subscribes every enabled market before requesting approximately 100 completed candles", async () => {
   const fixture = createFixture({
