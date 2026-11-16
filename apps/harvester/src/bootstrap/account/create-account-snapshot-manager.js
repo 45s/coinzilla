@@ -11,7 +11,7 @@ import {
 } from "../../application/events/lifecycle-event-dtos.js"
 import { recordAccountSnapshotCaptured, recordAccountOpenOrdersCaptured } from "../../use-cases/record-account-reconciliation-facts.js"
 
-function withRecoveryFailure(error, category, stage, retryable) {
+function withRecoveryFailure({ error, category, stage, retryable }) {
   const normalized = error instanceof Error ? error : new Error(String(error), {
     cause: error,
   })
@@ -23,7 +23,7 @@ function withRecoveryFailure(error, category, stage, retryable) {
   return normalized
 }
 
-function resolveAuditFlushFailure(flushed, stage) {
+function resolveAuditFlushFailure({ flushed, stage }) {
   const failure = flushed?.recoveryFailure
   if (failure?.category === "DURABILITY" && failure?.stage === "JOURNAL_WRITE_FAILURE" && failure?.retryable === false) { return failure }
   if (failure?.category === "DURABILITY" && failure?.stage === "JOURNAL_FLUSH_FAILURE" && failure?.retryable === true) { return failure }
@@ -39,12 +39,17 @@ function createAuditFlushError({
   message,
   stage,
 }) {
-  const failure = resolveAuditFlushFailure(flushed, stage)
+  const failure = resolveAuditFlushFailure({ flushed, stage })
   const cause = flushed?.errors?.find?.((error) => error instanceof Error)
   const error = cause ? new Error(message, {
     cause,
   }) : new Error(message)
-  return withRecoveryFailure(error, failure.category, failure.stage, failure.retryable)
+  return withRecoveryFailure({
+  error: error,
+  category: failure.category,
+  stage: failure.stage,
+  retryable: failure.retryable,
+})
 }
 
 function logSystem({ logger, ...data }) {
@@ -72,15 +77,20 @@ function createAccountSnapshotAuditPayload({
       auditReasons,
     })
   } catch (error) {
-    throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD", false)
+    throw withRecoveryFailure({
+  error: error,
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD",
+  retryable: false,
+})
   }
   if (!dataResult?.ok) {
-    throw withRecoveryFailure(
-      dataResult?.errors?.[0] ?? new Error("Account snapshot audit payload is invalid"),
-      "ACCOUNTING_INTEGRITY",
-      "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD",
-      false,
-    )
+    throw withRecoveryFailure({
+  error: dataResult?.errors?.[0] ?? new Error("Account snapshot audit payload is invalid"),
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD",
+  retryable: false,
+})
   }
   return dataResult
 }
@@ -98,14 +108,14 @@ async function persistAccountSnapshotAudit({
   })
   if (durable?.ok !== true || durable.data?.durable !== true) {
     const cause = durable?.errors?.[0] ?? new Error("Account snapshot durable fact was not committed")
-    throw withRecoveryFailure(
-      new Error(`Unable to durably persist account snapshot: ${  cause.message ?? String(cause)}`, {
+    throw withRecoveryFailure({
+  error: new Error(`Unable to durably persist account snapshot: ${  cause.message ?? String(cause)}`, {
         cause,
       }),
-      "DURABILITY",
-      "ACCOUNT_SNAPSHOT_DURABLE_FACT",
-      false,
-    )
+  category: "DURABILITY",
+  stage: "ACCOUNT_SNAPSHOT_DURABLE_FACT",
+  retryable: false,
+})
   }
 }
 
@@ -139,12 +149,12 @@ function throwMissingAccountSnapshotFlushCapability({ phase, logger, runtimeSess
       failureReason: "JOURNAL_FLUSH_CAPABILITY_MISSING",
     })
   }
-  throw withRecoveryFailure(
-    new Error("Harvester startup requires a durable Journal flush before market subscriptions"),
-    "ACCOUNTING_INTEGRITY",
-    "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_CAPABILITY",
-    false,
-  )
+  throw withRecoveryFailure({
+  error: new Error("Harvester startup requires a durable Journal flush before market subscriptions"),
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_CAPABILITY",
+  retryable: false,
+})
 }
 
 function throwAccountSnapshotFlushException({ error, isClosing, logger, runtimeSessionId, monotonicNow, startedAt }) {
@@ -158,7 +168,12 @@ function throwAccountSnapshotFlushException({ error, isClosing, logger, runtimeS
       failureReason: error?.recoveryFailure?.stage ?? error?.code ?? error?.name ?? "JOURNAL_FLUSH_FAILED",
     })
   }
-  throw withRecoveryFailure(error, "DURABILITY", "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_UNCLASSIFIED", false)
+  throw withRecoveryFailure({
+  error: error,
+  category: "DURABILITY",
+  stage: "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_UNCLASSIFIED",
+  retryable: false,
+})
 }
 
 function throwNonDurableAccountSnapshotFlush({ flushed, phase, isClosing, logger, runtimeSessionId, monotonicNow, startedAt }) {
@@ -249,32 +264,32 @@ function getAccountAuditMarkets({ marketMetadata }) {
 
 function getAccountSnapshotResultError({ result }) {
   if (result?.ok !== false && result?.ok !== true) {
-    return withRecoveryFailure(
-      new Error("Canonical exchange account snapshot response is missing an explicit success flag"),
-      "ACCOUNTING_INTEGRITY",
-      "ACCOUNT_SNAPSHOT_RESPONSE",
-      false,
-    )
+    return withRecoveryFailure({
+  error: new Error("Canonical exchange account snapshot response is missing an explicit success flag"),
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "ACCOUNT_SNAPSHOT_RESPONSE",
+  retryable: false,
+})
   }
   if (result.ok === false) {
     const details = result.errors?.map((error) => error?.message ?? String(error)).join("; ")
     const cause = result.errors?.find?.((error) => error instanceof Error)
-    return withRecoveryFailure(
-      new Error(`Unable to load canonical exchange account balances${  details ? `: ${  details}` : ""}`, {
+    return withRecoveryFailure({
+  error: new Error(`Unable to load canonical exchange account balances${  details ? `: ${  details}` : ""}`, {
         cause,
       }),
-      "REST_RECONCILIATION",
-      "ACCOUNT_SNAPSHOT_READ",
-      true,
-    )
+  category: "REST_RECONCILIATION",
+  stage: "ACCOUNT_SNAPSHOT_READ",
+  retryable: true,
+})
   }
   if (!result.data || !Array.isArray(result.data.balances)) {
-    return withRecoveryFailure(
-      new Error("Canonical exchange account snapshot is malformed: balances must be an array"),
-      "ACCOUNTING_INTEGRITY",
-      "ACCOUNT_SNAPSHOT_SHAPE",
-      false,
-    )
+    return withRecoveryFailure({
+  error: new Error("Canonical exchange account snapshot is malformed: balances must be an array"),
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "ACCOUNT_SNAPSHOT_SHAPE",
+  retryable: false,
+})
   }
   return undefined
 }
@@ -283,7 +298,12 @@ async function readAccountSnapshotFromBroker({ broker }) {
   try {
     return await broker.getAccountSnapshot()
   } catch (error) {
-    throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_READ_EXCEPTION", false)
+    throw withRecoveryFailure({
+  error: error,
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "ACCOUNT_SNAPSHOT_READ_EXCEPTION",
+  retryable: false,
+})
   }
 }
 
@@ -333,7 +353,12 @@ function getAccountSnapshotBaselines({ context, balances }) {
       portfolio,
     })
   } catch (error) {
-    throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_BASELINE", false)
+    throw withRecoveryFailure({
+  error: error,
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "ACCOUNT_SNAPSHOT_BASELINE",
+  retryable: false,
+})
   }
   const baselineResult = calculateAccountSnapshotBaselines({
     portfolio,
@@ -341,12 +366,12 @@ function getAccountSnapshotBaselines({ context, balances }) {
     additionalTrackedBaseQuantity,
   })
   if (!baselineResult.ok) {
-    throw withRecoveryFailure(
-      baselineResult.errors?.[0] ?? new Error("Unable to capture account snapshot accounting baselines"),
-      "ACCOUNTING_INTEGRITY",
-      "ACCOUNT_SNAPSHOT_BASELINE",
-      false,
-    )
+    throw withRecoveryFailure({
+  error: baselineResult.errors?.[0] ?? new Error("Unable to capture account snapshot accounting baselines"),
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "ACCOUNT_SNAPSHOT_BASELINE",
+  retryable: false,
+})
   }
   return baselineResult.data
 }
@@ -399,7 +424,12 @@ async function refreshAccountSnapshot({ context, capturePreflightBaseline = fals
         state: context.state,
       })
     } catch (error) {
-      throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_VALIDATION", false)
+      throw withRecoveryFailure({
+  error: error,
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "ACCOUNT_SNAPSHOT_VALIDATION",
+  retryable: false,
+})
     }
   }
   let nextSnapshot
@@ -410,7 +440,12 @@ async function refreshAccountSnapshot({ context, capturePreflightBaseline = fals
       baselines,
     })
   } catch (error) {
-    throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_SNAPSHOT_VALIDATION", false)
+    throw withRecoveryFailure({
+  error: error,
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "ACCOUNT_SNAPSHOT_VALIDATION",
+  retryable: false,
+})
   }
   context.state.accountSnapshot = nextSnapshot
   logSystem({ logger: context.logger,
@@ -424,12 +459,12 @@ async function refreshAccountSnapshot({ context, capturePreflightBaseline = fals
 async function readAccountOpenOrders({ broker, suppliedOrders }) {
   if (suppliedOrders !== undefined) {
     if (!Array.isArray(suppliedOrders)) {
-      throw withRecoveryFailure(
-        new TypeError("publishOpenOrdersSnapshot orders must be an array"),
-        "ACCOUNTING_INTEGRITY",
-        "ACCOUNT_WIDE_OPEN_ORDERS_SNAPSHOT",
-        false,
-      )
+      throw withRecoveryFailure({
+  error: new TypeError("publishOpenOrdersSnapshot orders must be an array"),
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "ACCOUNT_WIDE_OPEN_ORDERS_SNAPSHOT",
+  retryable: false,
+})
     }
     return suppliedOrders
   }
@@ -437,35 +472,40 @@ async function readAccountOpenOrders({ broker, suppliedOrders }) {
   try {
     result = await broker.getOpenOrders({})
   } catch (error) {
-    throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_WIDE_OPEN_ORDERS_READ_EXCEPTION", false)
+    throw withRecoveryFailure({
+  error: error,
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "ACCOUNT_WIDE_OPEN_ORDERS_READ_EXCEPTION",
+  retryable: false,
+})
   }
   if (result?.ok !== false && result?.ok !== true) {
-    throw withRecoveryFailure(
-      new Error("Account-wide open-orders response is missing an explicit success flag"),
-      "ACCOUNTING_INTEGRITY",
-      "ACCOUNT_WIDE_OPEN_ORDERS_RESPONSE",
-      false,
-    )
+    throw withRecoveryFailure({
+  error: new Error("Account-wide open-orders response is missing an explicit success flag"),
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "ACCOUNT_WIDE_OPEN_ORDERS_RESPONSE",
+  retryable: false,
+})
   }
   if (result.ok === false) {
     const details = result.errors?.map((error) => error?.message ?? String(error)).join("; ")
     const cause = result.errors?.find?.((error) => error instanceof Error)
-    throw withRecoveryFailure(
-      new Error(`Unable to load authoritative account-wide open orders${  details ? `: ${  details}` : ""}`, {
+    throw withRecoveryFailure({
+  error: new Error(`Unable to load authoritative account-wide open orders${  details ? `: ${  details}` : ""}`, {
         cause,
       }),
-      "REST_RECONCILIATION",
-      "ACCOUNT_WIDE_OPEN_ORDERS_READ",
-      true,
-    )
+  category: "REST_RECONCILIATION",
+  stage: "ACCOUNT_WIDE_OPEN_ORDERS_READ",
+  retryable: true,
+})
   }
   if (!Array.isArray(result.data)) {
-    throw withRecoveryFailure(
-      new TypeError("Account-wide open-orders response must be an array"),
-      "ACCOUNTING_INTEGRITY",
-      "ACCOUNT_WIDE_OPEN_ORDERS_SNAPSHOT",
-      false,
-    )
+    throw withRecoveryFailure({
+  error: new TypeError("Account-wide open-orders response must be an array"),
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "ACCOUNT_WIDE_OPEN_ORDERS_SNAPSHOT",
+  retryable: false,
+})
   }
   return result.data
 }
@@ -612,15 +652,20 @@ function createOpenOrdersAuditPayload({ phase, orders, classification, now }) {
       blockReasons: classification.blockReasons,
     })
   } catch (error) {
-    throw withRecoveryFailure(error, "ACCOUNTING_INTEGRITY", "ACCOUNT_OPEN_ORDERS_AUDIT_PAYLOAD", false)
+    throw withRecoveryFailure({
+  error: error,
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "ACCOUNT_OPEN_ORDERS_AUDIT_PAYLOAD",
+  retryable: false,
+})
   }
   if (!dataResult?.ok) {
-    throw withRecoveryFailure(
-      dataResult?.errors?.[0] ?? new Error("Account open-orders audit payload is invalid"),
-      "ACCOUNTING_INTEGRITY",
-      "ACCOUNT_OPEN_ORDERS_AUDIT_PAYLOAD",
-      false,
-    )
+    throw withRecoveryFailure({
+  error: dataResult?.errors?.[0] ?? new Error("Account open-orders audit payload is invalid"),
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "ACCOUNT_OPEN_ORDERS_AUDIT_PAYLOAD",
+  retryable: false,
+})
   }
   return dataResult
 }
@@ -635,14 +680,14 @@ async function persistOpenOrdersAuditFact({ operationalStateStore, dataResult })
   })
   if (durable?.ok !== true || durable.data?.durable !== true) {
     const cause = durable?.errors?.[0] ?? new Error("Account open-orders durable fact was not committed")
-    throw withRecoveryFailure(
-      new Error(`Unable to durably persist account open-orders snapshot: ${  cause.message ?? String(cause)}`, {
+    throw withRecoveryFailure({
+  error: new Error(`Unable to durably persist account open-orders snapshot: ${  cause.message ?? String(cause)}`, {
         cause,
       }),
-      "DURABILITY",
-      "ACCOUNT_OPEN_ORDERS_DURABLE_FACT",
-      false,
-    )
+  category: "DURABILITY",
+  stage: "ACCOUNT_OPEN_ORDERS_DURABLE_FACT",
+  retryable: false,
+})
   }
 }
 
@@ -654,26 +699,31 @@ async function publishOpenOrdersAuditEvent({ eventPublisher, dataResult }) {
   })
   if (!published?.ok) {
     const details = published?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-    throw withRecoveryFailure(
-      new Error(`Unable to publish account open-orders audit event${  details ? `: ${  details}` : ""}`),
-      "DURABILITY",
-      "ACCOUNT_OPEN_ORDERS_AUDIT_PUBLICATION",
-      true,
-    )
+    throw withRecoveryFailure({
+  error: new Error(`Unable to publish account open-orders audit event${  details ? `: ${  details}` : ""}`),
+  category: "DURABILITY",
+  stage: "ACCOUNT_OPEN_ORDERS_AUDIT_PUBLICATION",
+  retryable: true,
+})
   }
   if (typeof eventPublisher?.flush !== "function") {
-    throw withRecoveryFailure(
-      new Error("Harvester startup requires a durable open-orders audit before market subscriptions"),
-      "ACCOUNTING_INTEGRITY",
-      "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_CAPABILITY",
-      false,
-    )
+    throw withRecoveryFailure({
+  error: new Error("Harvester startup requires a durable open-orders audit before market subscriptions"),
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_CAPABILITY",
+  retryable: false,
+})
   }
   let flushed
   try {
     flushed = await eventPublisher.flush()
   } catch (error) {
-    throw withRecoveryFailure(error, "DURABILITY", "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_UNCLASSIFIED", false)
+    throw withRecoveryFailure({
+  error: error,
+  category: "DURABILITY",
+  stage: "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_UNCLASSIFIED",
+  retryable: false,
+})
   }
   if (flushed?.ok !== true || flushed?.durable !== true) {
     const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
@@ -785,12 +835,12 @@ async function publishAccountSnapshot({ context, options }) {
     dataResult,
   })
   if (!published?.ok) {
-    throw withRecoveryFailure(
-      new Error(`Unable to publish ${  options.phase  } account snapshot audit event`),
-      "DURABILITY",
-      "ACCOUNT_SNAPSHOT_AUDIT_PUBLICATION",
-      true,
-    )
+    throw withRecoveryFailure({
+  error: new Error(`Unable to publish ${  options.phase  } account snapshot audit event`),
+  category: "DURABILITY",
+  stage: "ACCOUNT_SNAPSHOT_AUDIT_PUBLICATION",
+  retryable: true,
+})
   }
   await flushAccountSnapshotAudit({
     eventPublisher: context.eventPublisher,
@@ -813,12 +863,12 @@ async function publishAccountSnapshot({ context, options }) {
 function validateCommissionAssetIdentity({ assetId, assetCode }) {
   if (typeof assetId !== "string" || !assetId.trim() ||
       typeof assetCode !== "string" || !assetCode.trim()) {
-    throw withRecoveryFailure(
-      new TypeError("Commission asset baseline requires assetId and assetCode"),
-      "ACCOUNTING_INTEGRITY",
-      "COMMISSION_ASSET_BASELINE_IDENTITY",
-      false,
-    )
+    throw withRecoveryFailure({
+  error: new TypeError("Commission asset baseline requires assetId and assetCode"),
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "COMMISSION_ASSET_BASELINE_IDENTITY",
+  retryable: false,
+})
   }
 }
 
@@ -835,12 +885,12 @@ function validateConfiguredCommissionAsset({ configuredAsset, assetId, assetCode
     return false
   }
   if (configuredAsset.id !== assetId || configuredAsset.code !== assetCode) {
-    throw withRecoveryFailure(
-      new Error(`Commission asset identity contradicts configured market metadata for ${  assetCode}`),
-      "ACCOUNTING_INTEGRITY",
-      "COMMISSION_ASSET_BASELINE_IDENTITY",
-      false,
-    )
+    throw withRecoveryFailure({
+  error: new Error(`Commission asset identity contradicts configured market metadata for ${  assetCode}`),
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "COMMISSION_ASSET_BASELINE_IDENTITY",
+  retryable: false,
+})
   }
   return true
 }
@@ -852,41 +902,41 @@ function getKnownCommissionBaseline({ context, assetId, assetCode }) {
     return false
   }
   if (knownAssetId !== assetId || knownAssetCode !== assetCode) {
-    throw withRecoveryFailure(
-      new Error(`Commission asset ID/code mapping is contradictory for ${  assetCode}`),
-      "ACCOUNTING_INTEGRITY",
-      "COMMISSION_ASSET_BASELINE_IDENTITY",
-      false,
-    )
+    throw withRecoveryFailure({
+  error: new Error(`Commission asset ID/code mapping is contradictory for ${  assetCode}`),
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "COMMISSION_ASSET_BASELINE_IDENTITY",
+  retryable: false,
+})
   }
   return true
 }
 
 function getPreflightCommissionBalance({ context, assetId, assetCode }) {
   if (context.state.preflightSourceTime === undefined) {
-    throw withRecoveryFailure(
-      new Error("Commission asset baseline cannot be captured before the durable PREFLIGHT snapshot"),
-      "ACCOUNTING_INTEGRITY",
-      "COMMISSION_ASSET_PREFLIGHT_MISSING",
-      false,
-    )
+    throw withRecoveryFailure({
+  error: new Error("Commission asset baseline cannot be captured before the durable PREFLIGHT snapshot"),
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "COMMISSION_ASSET_PREFLIGHT_MISSING",
+  retryable: false,
+})
   }
   const balance = context.state.preflightBalancesByCode.get(assetCode)
   if (!balance) {
-    throw withRecoveryFailure(
-      new Error(`PREFLIGHT account snapshot is missing commission asset ${assetCode}`),
-      "ACCOUNTING_INTEGRITY",
-      "COMMISSION_ASSET_PREFLIGHT_BALANCE_MISSING",
-      false,
-    )
+    throw withRecoveryFailure({
+  error: new Error(`PREFLIGHT account snapshot is missing commission asset ${assetCode}`),
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "COMMISSION_ASSET_PREFLIGHT_BALANCE_MISSING",
+  retryable: false,
+})
   }
   if (balance.asset.id !== assetId || balance.asset.code !== assetCode) {
-    throw withRecoveryFailure(
-      new Error(`PREFLIGHT commission asset balance identity contradicts the applied fill for ${assetCode}`),
-      "ACCOUNTING_INTEGRITY",
-      "COMMISSION_ASSET_PREFLIGHT_BALANCE_IDENTITY",
-      false,
-    )
+    throw withRecoveryFailure({
+  error: new Error(`PREFLIGHT commission asset balance identity contradicts the applied fill for ${assetCode}`),
+  category: "ACCOUNTING_INTEGRITY",
+  stage: "COMMISSION_ASSET_PREFLIGHT_BALANCE_IDENTITY",
+  retryable: false,
+})
   }
   return balance
 }
