@@ -693,7 +693,10 @@ function scanJavaScriptNonCodeToken({
       }),
     }
   }
-  if (isRegexStart({ character, previousToken })) {
+  if (isRegexStart({
+    character,
+    previousToken,
+  })) {
     return {
       nextIndex: skipRegexJavaScript({
         source,
