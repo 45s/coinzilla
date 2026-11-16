@@ -31,14 +31,22 @@ test("converts exact Binance filter strings into canonical Market and TradingRul
     type,
     status,
   })), [
-    { type: "PRICE_INCREMENT", status: "SUPPORTED" },
-    { type: "MIN_PRICE", status: "SUPPORTED" },
-    { type: "MAX_PRICE", status: "SUPPORTED" },
-    { type: "QUANTITY_INCREMENT", status: "SUPPORTED" },
-    { type: "MIN_QUANTITY", status: "SUPPORTED" },
-    { type: "MAX_QUANTITY", status: "SUPPORTED" },
-    { type: "MIN_NOTIONAL", status: "SUPPORTED" },
-    { type: "MAX_NOTIONAL", status: "SUPPORTED" },
+    { type: "PRICE_INCREMENT",
+status: "SUPPORTED" },
+    { type: "MIN_PRICE",
+status: "SUPPORTED" },
+    { type: "MAX_PRICE",
+status: "SUPPORTED" },
+    { type: "QUANTITY_INCREMENT",
+status: "SUPPORTED" },
+    { type: "MIN_QUANTITY",
+status: "SUPPORTED" },
+    { type: "MAX_QUANTITY",
+status: "SUPPORTED" },
+    { type: "MIN_NOTIONAL",
+status: "SUPPORTED" },
+    { type: "MAX_NOTIONAL",
+status: "SUPPORTED" },
   ])
   assert.equal(result.tradingRules.constraints[0].value.amount, "0.01")
   assert.equal(result.tradingRules.constraints[3].value.amount, "0.00001")
@@ -61,14 +69,21 @@ test("represents absent and disabled zero optional constraints as UNSUPPORTED", 
   assert.deepEqual(
     result.tradingRules.constraints
       .filter(({ status }) => status !== "SUPPORTED")
-      .map(({ type, status }) => ({ type, status })),
+      .map(({ type, status }) => ({ type,
+status })),
     [
-      { type: "MIN_PRICE", status: "UNSUPPORTED" },
-      { type: "MAX_PRICE", status: "UNSUPPORTED" },
-      { type: "MIN_QUANTITY", status: "UNSUPPORTED" },
-      { type: "MAX_QUANTITY", status: "UNSUPPORTED" },
-      { type: "MIN_NOTIONAL", status: "UNSUPPORTED" },
-      { type: "MAX_NOTIONAL", status: "UNSUPPORTED" },
+      { type: "MIN_PRICE",
+status: "UNSUPPORTED" },
+      { type: "MAX_PRICE",
+status: "UNSUPPORTED" },
+      { type: "MIN_QUANTITY",
+status: "UNSUPPORTED" },
+      { type: "MAX_QUANTITY",
+status: "UNSUPPORTED" },
+      { type: "MIN_NOTIONAL",
+status: "UNSUPPORTED" },
+      { type: "MAX_NOTIONAL",
+status: "UNSUPPORTED" },
     ],
   )
 })
@@ -76,25 +91,32 @@ test("represents absent and disabled zero optional constraints as UNSUPPORTED", 
 test("rejects missing required increments and malformed market metadata", () => {
   assert.throws(() => createBinanceMarketMetadata(), /symbolFilters must be an object/)
   assert.throws(() => createBinanceMarketMetadata({
-    symbolFilters: { ...baseFilters, tickSize: "0" },
+    symbolFilters: { ...baseFilters,
+tickSize: "0" },
   }), /tickSize and stepSize must be greater than zero/)
   assert.throws(() => createBinanceMarketMetadata({
-    symbolFilters: { ...baseFilters, stepSize: "not-a-decimal" },
+    symbolFilters: { ...baseFilters,
+stepSize: "not-a-decimal" },
   }))
   assert.throws(() => createBinanceMarketMetadata({
-    symbolFilters: { ...baseFilters, baseAsset: "" },
+    symbolFilters: { ...baseFilters,
+baseAsset: "" },
   }), /baseAsset must be a non-empty asset code/)
   assert.throws(() => createBinanceMarketMetadata({
-    symbolFilters: { ...baseFilters, supportedOrderTypes: ["LIMIT", "LIMIT"] },
+    symbolFilters: { ...baseFilters,
+supportedOrderTypes: ["LIMIT", "LIMIT"] },
   }), /unique non-empty strings/)
 })
 
 test("rejects negative optional filters and inverted bounds", () => {
   assert.throws(() => createBinanceMarketMetadata({
-    symbolFilters: { ...baseFilters, minNotional: "-1" },
+    symbolFilters: { ...baseFilters,
+minNotional: "-1" },
   }), /must be non-negative/)
   assert.throws(() => createBinanceMarketMetadata({
-    symbolFilters: { ...baseFilters, minQuantity: "200", maxQuantity: "100" },
+    symbolFilters: { ...baseFilters,
+minQuantity: "200",
+maxQuantity: "100" },
   }), /MIN_QUANTITY cannot exceed MAX_QUANTITY/)
 })
 
@@ -104,15 +126,23 @@ test("preserves exchange-neutral unvalidated constraints without leaking them in
     symbolFilters: {
       ...baseFilters,
       unvalidatedConstraints: [
-        { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
-        { type: "BASE_ASSET_POSITION_LIMIT", scope: "ACCOUNT", sourceFilterType: "MAX_POSITION" },
+        { type: "DYNAMIC_PRICE_BAND",
+scope: "SYMBOL",
+sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
+        { type: "BASE_ASSET_POSITION_LIMIT",
+scope: "ACCOUNT",
+sourceFilterType: "MAX_POSITION" },
       ],
     },
   })
 
   assert.deepEqual(result.unvalidatedConstraints, [
-    { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
-    { type: "BASE_ASSET_POSITION_LIMIT", scope: "ACCOUNT", sourceFilterType: "MAX_POSITION" },
+    { type: "DYNAMIC_PRICE_BAND",
+scope: "SYMBOL",
+sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
+    { type: "BASE_ASSET_POSITION_LIMIT",
+scope: "ACCOUNT",
+sourceFilterType: "MAX_POSITION" },
   ], "The canonical market metadata must retain constraints that require additional dynamic or account state.")
   assert.equal(result.tradingRules.constraints.length, 8, "Unvalidated constraints must remain separate from the static typed TradingRules until their evaluation contract is implemented.")
   assert.ok(Object.isFrozen(result.unvalidatedConstraints), "Unvalidated constraints must be immutable after metadata normalization.")
@@ -122,14 +152,17 @@ test("rejects malformed unvalidated exchange constraints", () => {
   assert.throws(() => createBinanceMarketMetadata({
     symbolFilters: {
       ...baseFilters,
-      unvalidatedConstraints: [{ type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL" }],
+      unvalidatedConstraints: [{ type: "DYNAMIC_PRICE_BAND",
+scope: "SYMBOL" }],
     },
   }), /invalid unvalidated exchange constraint/, "Incomplete exchange-constraint evidence must fail metadata normalization rather than be silently accepted.")
 })
 
 
 test("requires the adapter to provide an explicit unvalidated-constraint inventory", () => {
-  const { unvalidatedConstraints, ...incompleteSymbolFilters } = baseFilters;
+  const incompleteSymbolFilters = Object.fromEntries(
+    Object.entries(baseFilters).filter(([key]) => key !== "unvalidatedConstraints"),
+  );
 
   assert.throws(
     () => createBinanceMarketMetadata({ symbolFilters: incompleteSymbolFilters }),

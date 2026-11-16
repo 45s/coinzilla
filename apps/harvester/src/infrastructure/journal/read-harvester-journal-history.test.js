@@ -42,16 +42,18 @@ async function writeJournalSession({
     .replace("T", "_")
     .replaceAll(":", "-")
   const safeSessionId = runtimeSessionId.replace(/[^a-zA-Z0-9_-]/g, "-")
-  const fileName = fileTimestamp + "-" + safeSessionId + ".jsonl"
+  const fileName = `${fileTimestamp  }-${  safeSessionId  }.jsonl`
   const processStarted = {
-    id: runtimeSessionId + ":process-started",
+    id: `${runtimeSessionId  }:process-started`,
     timestamp: processStartedEventAt,
     source: "harvester",
     name: "harvester.process_started",
-    data: processStartedData({ startedAt, runtimeSessionId, processId }),
+    data: processStartedData({ startedAt,
+runtimeSessionId,
+processId }),
   }
   const marker = {
-    id: runtimeSessionId + ":marker",
+    id: `${runtimeSessionId  }:marker`,
     timestamp: markerEventAt,
     source: "harvester",
     name: eventName,
@@ -60,9 +62,10 @@ async function writeJournalSession({
   const events = processStartedLast ? [marker, processStarted] : [processStarted, marker]
   const lines = events.map((event) => JSON.stringify({
     ...event,
-    __coinzillaJournal: { schemaVersion: 1, id: event.id },
+    __coinzillaJournal: { schemaVersion: 1,
+id: event.id },
   }))
-  await writeFile(path.join(directory, fileName), lines.join("\n") + "\n")
+  await writeFile(path.join(directory, fileName), `${lines.join("\n")  }\n`)
 }
 async function writeLegacyFlatSession({ directory, fileName, id, timestamp, eventName = "harvester.legacy_session" }) {
   await mkdir(directory, { recursive: true })
@@ -73,7 +76,7 @@ async function writeLegacyFlatSession({ directory, fileName, id, timestamp, even
     name: eventName,
     data: {},
   }
-  await writeFile(path.join(directory, fileName), JSON.stringify(event) + "\n")
+  await writeFile(path.join(directory, fileName), `${JSON.stringify(event)  }\n`)
 }
 
 test("recursively discovers nested process sessions together with legacy flat files", async () => {
@@ -119,7 +122,8 @@ test("recursively discovers nested process sessions together with legacy flat fi
       ["FIRST_RECORD_TIMESTAMP", "PROCESS_STARTED"],
     )
   } finally {
-    await rm(rootDirectory, { recursive: true, force: true })
+    await rm(rootDirectory, { recursive: true,
+force: true })
   }
 })
 
@@ -158,7 +162,8 @@ test("orders same-second process sessions by millisecond process-start evidence,
       ["z-session", "a-session"],
     )
   } finally {
-    await rm(rootDirectory, { recursive: true, force: true })
+    await rm(rootDirectory, { recursive: true,
+force: true })
   }
 })
 
@@ -183,7 +188,8 @@ test("rejects multiple legacy sessions when their durable event chronology is am
     assert.equal(result.ok, false, "Second-resolution filenames must not resolve an equal event-time tie")
     assert.equal(result.errors[0].code, "HARVESTER_JOURNAL_SESSION_ORDER_AMBIGUOUS")
   } finally {
-    await rm(rootDirectory, { recursive: true, force: true })
+    await rm(rootDirectory, { recursive: true,
+force: true })
   }
 })
 
@@ -204,7 +210,8 @@ test("preserves compatibility for a single legacy flat session without process-s
     assert.equal(result.sessions.length, 1)
     assert.equal(result.sessions[0].chronologySource, "SINGLE_SESSION")
   } finally {
-    await rm(rootDirectory, { recursive: true, force: true })
+    await rm(rootDirectory, { recursive: true,
+force: true })
   }
 })
 
@@ -239,13 +246,14 @@ test("rejects duplicate record identities across separate session directories", 
       name: "harvester.duplicate",
       data: {},
     }
-    await writeFile(nestedJournalFile, JSON.stringify(duplicateEvent) + "\n", { flag: "a" })
+    await writeFile(nestedJournalFile, `${JSON.stringify(duplicateEvent)  }\n`, { flag: "a" })
 
     const result = await readHarvesterJournalHistory({ directory: rootDirectory })
     assert.equal(result.ok, false)
     assert.equal(result.errors[0].code, "JOURNAL_DUPLICATE_RECORD_ID")
   } finally {
-    await rm(rootDirectory, { recursive: true, force: true })
+    await rm(rootDirectory, { recursive: true,
+force: true })
   }
 })
 
@@ -261,7 +269,8 @@ test("rejects a discovered process directory with no Journal session file", asyn
     assert.equal(result.ok, false, "A discovered process folder without its expected Journal file must not vanish from the scan")
     assert.equal(result.errors[0].code, "HARVESTER_JOURNAL_SESSION_MISSING")
   } finally {
-    await rm(rootDirectory, { recursive: true, force: true })
+    await rm(rootDirectory, { recursive: true,
+force: true })
   }
 })
 
@@ -278,8 +287,10 @@ test("rejects symbolic links in the session tree instead of silently skipping un
     assert.equal(result.ok, false)
     assert.equal(result.errors[0].code, "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE")
   } finally {
-    await rm(rootDirectory, { recursive: true, force: true })
-    await rm(targetDirectory, { recursive: true, force: true })
+    await rm(rootDirectory, { recursive: true,
+force: true })
+    await rm(targetDirectory, { recursive: true,
+force: true })
   }
 })
 
@@ -304,7 +315,8 @@ test("accepts the sessions directory itself as a scan root and does not return a
       ["harvester.process_started", "harvester.session_root"],
     )
   } finally {
-    await rm(rootDirectory, { recursive: true, force: true })
+    await rm(rootDirectory, { recursive: true,
+force: true })
   }
 })
 
@@ -339,7 +351,8 @@ test("orders legacy flat sessions by unique event timestamps rather than filenam
       ["FIRST_RECORD_TIMESTAMP", "FIRST_RECORD_TIMESTAMP"],
     )
   } finally {
-    await rm(rootDirectory, { recursive: true, force: true })
+    await rm(rootDirectory, { recursive: true,
+force: true })
   }
 })
 
@@ -359,7 +372,8 @@ test("rejects process-start metadata that does not match its process-session dir
     assert.equal(result.ok, false)
     assert.equal(result.errors[0].code, "HARVESTER_JOURNAL_PROCESS_IDENTITY_MISMATCH")
   } finally {
-    await rm(rootDirectory, { recursive: true, force: true })
+    await rm(rootDirectory, { recursive: true,
+force: true })
   }
 })
 
@@ -382,7 +396,8 @@ test("bounds recursive session-directory discovery", async () => {
     assert.equal(result.ok, false)
     assert.equal(result.errors[0].code, "HARVESTER_JOURNAL_DISCOVERY_LIMIT_EXCEEDED")
   } finally {
-    await rm(rootDirectory, { recursive: true, force: true })
+    await rm(rootDirectory, { recursive: true,
+force: true })
   }
 })
 
@@ -395,7 +410,8 @@ test("reports a missing history root instead of returning an empty snapshot", as
     assert.equal(result.ok, false)
     assert.equal(result.errors[0].code, "JOURNAL_DIRECTORY_NOT_FOUND")
   } finally {
-    await rm(temporaryRoot, { recursive: true, force: true })
+    await rm(temporaryRoot, { recursive: true,
+force: true })
   }
 })
 
@@ -426,7 +442,8 @@ test("rejects overlapping session event ranges even when process-start timestamp
     assert.equal(result.ok, false, "Session start order alone is insufficient when persisted event ranges overlap")
     assert.equal(result.errors[0].code, "HARVESTER_JOURNAL_SESSION_ORDER_AMBIGUOUS")
   } finally {
-    await rm(rootDirectory, { recursive: true, force: true })
+    await rm(rootDirectory, { recursive: true,
+force: true })
   }
 })
 
@@ -456,7 +473,8 @@ test("enforces the total session-file limit during recursive discovery", async (
     assert.equal(result.ok, false)
     assert.equal(result.errors[0].code, "JOURNAL_RECOVERY_LIMIT_EXCEEDED")
   } finally {
-    await rm(rootDirectory, { recursive: true, force: true })
+    await rm(rootDirectory, { recursive: true,
+force: true })
   }
 })
 
@@ -486,12 +504,13 @@ test("keeps equal JSONL basenames distinguishable across nested legacy directori
     assert.deepEqual(
       result.records.map((record) => record.position.fileName),
       [
-        "sessions/legacy-a/" + fileName,
-        "sessions/legacy-b/" + fileName,
+        `sessions/legacy-a/${  fileName}`,
+        `sessions/legacy-b/${  fileName}`,
       ],
       "Returned positions must identify the full relative path, not a collision-prone basename",
     )
   } finally {
-    await rm(rootDirectory, { recursive: true, force: true })
+    await rm(rootDirectory, { recursive: true,
+force: true })
   }
 })

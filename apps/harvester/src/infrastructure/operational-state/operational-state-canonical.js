@@ -18,16 +18,74 @@ const SECRET_KEY_PATTERN = /(?:api.?key|secret|password|token|authorization|cred
  */
 export function requireNonEmptyString({ value, field, maxLength = MAX_STRING_LENGTH }) {
   if (typeof value !== "string" || value.trim() === "" || value !== value.trim() || value.length > maxLength) {
-    throw new TypeError(field + " must be a canonical non-empty string of at most " + maxLength + " characters")
+    throw new TypeError(`${field  } must be a canonical non-empty string of at most ${  maxLength  } characters`)
   }
   return value
 }
 
-function canonicalize(value, depth = 0) {
-  if (depth > MAX_JSON_DEPTH) {throw new RangeError("Operational State JSON exceeds the maximum nesting depth")}
-  if (value === null || typeof value === "boolean") {return value}
+function canonicalizeArray({ value, depth }) {
+  if (value.length > MAX_ARRAY_LENGTH) {
+    throw new RangeError("Operational State array exceeds the maximum length")
+  }
+  const arrayKeys = Reflect.ownKeys(value)
+  if (Object.keys(value).length !== value.length || arrayKeys.length !== value.length + 1 ||
+      arrayKeys.some((key) => typeof key !== "string")) {
+    throw new TypeError("Operational State arrays must not contain holes, symbols or custom properties")
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    if (!(index in value)) {
+      throw new TypeError("Operational State arrays must not contain sparse entries")
+    }
+  }
+  return value.map((item) => canonicalize({ value: item,
+depth: depth + 1 }))
+}
+
+function canonicalizeObject({ value, depth }) {
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError("Operational State payloads must contain only plain JSON objects")
+  }
+  const ownKeys = Reflect.ownKeys(value)
+  const keys = Object.keys(value).sort()
+  if (ownKeys.length !== keys.length) {
+    throw new TypeError("Operational State objects must not contain symbols or non-enumerable properties")
+  }
+  if (keys.length > MAX_OBJECT_KEYS) {
+    throw new RangeError("Operational State object exceeds the maximum key count")
+  }
+  const result = {}
+  for (const key of keys) {
+    if (key === "__proto__" || key === "prototype" || key === "constructor") {
+      throw new TypeError("Operational State payload contains a forbidden object key")
+    }
+    if (SECRET_KEY_PATTERN.test(key)) {
+      throw new TypeError("Operational State payload must not contain credentials or secrets")
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    if (!descriptor || !Object.hasOwn(descriptor, "value")) {
+      throw new TypeError("Operational State payload must not contain accessor properties")
+    }
+    if (descriptor.value === undefined) {
+      throw new TypeError("Operational State payload must not contain undefined values")
+    }
+    result[key] = canonicalize({ value: descriptor.value,
+depth: depth + 1 })
+  }
+  return result
+}
+
+function canonicalize({ value, depth = 0 }) {
+  if (depth > MAX_JSON_DEPTH) {
+    throw new RangeError("Operational State JSON exceeds the maximum nesting depth")
+  }
+  if (value === null || typeof value === "boolean") {
+    return value
+  }
   if (typeof value === "string") {
-    if (value.length > MAX_STRING_LENGTH) {throw new RangeError("Operational State string exceeds the maximum length")}
+    if (value.length > MAX_STRING_LENGTH) {
+      throw new RangeError("Operational State string exceeds the maximum length")
+    }
     return value
   }
   if (typeof value === "number") {
@@ -40,46 +98,15 @@ function canonicalize(value, depth = 0) {
     return value
   }
   if (Array.isArray(value)) {
-    if (value.length > MAX_ARRAY_LENGTH) {throw new RangeError("Operational State array exceeds the maximum length")}
-    const arrayKeys = Reflect.ownKeys(value)
-    if (Object.keys(value).length !== value.length || arrayKeys.length !== value.length + 1 ||
-        arrayKeys.some((key) => typeof key !== "string")) {
-      throw new TypeError("Operational State arrays must not contain holes, symbols or custom properties")
-    }
-    for (let index = 0; index < value.length; index += 1) {
-      if (!(index in value)) {throw new TypeError("Operational State arrays must not contain sparse entries")}
-    }
-    return value.map((item) => canonicalize(item, depth + 1))
+    return canonicalizeArray({ value,
+depth })
   }
   if (typeof value === "object") {
-    const prototype = Object.getPrototypeOf(value)
-    if (prototype !== Object.prototype && prototype !== null) {
-      throw new TypeError("Operational State payloads must contain only plain JSON objects")
-    }
-    const ownKeys = Reflect.ownKeys(value)
-    const keys = Object.keys(value).sort()
-    if (ownKeys.length !== keys.length) {throw new TypeError("Operational State objects must not contain symbols or non-enumerable properties")}
-    if (keys.length > MAX_OBJECT_KEYS) {throw new RangeError("Operational State object exceeds the maximum key count")}
-    const result = {}
-    for (const key of keys) {
-      if (key === "__proto__" || key === "prototype" || key === "constructor") {
-        throw new TypeError("Operational State payload contains a forbidden object key")
-      }
-      if (SECRET_KEY_PATTERN.test(key)) {
-        throw new TypeError("Operational State payload must not contain credentials or secrets")
-      }
-      const descriptor = Object.getOwnPropertyDescriptor(value, key)
-      if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, "value")) {
-        throw new TypeError("Operational State payload must not contain accessor properties")
-      }
-      if (descriptor.value === undefined) {throw new TypeError("Operational State payload must not contain undefined values")}
-      result[key] = canonicalize(descriptor.value, depth + 1)
-    }
-    return result
+    return canonicalizeObject({ value,
+depth })
   }
   throw new TypeError("Operational State payload contains a non-JSON value")
 }
-
 /**
  * Clone a Operational State Store record value into its bounded canonical JSON representation.
  *
@@ -92,7 +119,7 @@ function canonicalize(value, depth = 0) {
  * @throws {TypeError|RangeError} When the value is outside the durable JSON contract.
  */
 export function canonicalizeOperationalStateValue(value) {
-  return canonicalize(value)
+  return canonicalize({ value })
 }
 
 /**

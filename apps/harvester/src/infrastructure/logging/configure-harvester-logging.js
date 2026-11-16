@@ -140,9 +140,12 @@ async function createHarvesterFileTransport({
     }),
   ]
   const streamErrors = new Map()
-  streams.forEach((stream, index) => stream.on("error", (error) => streamErrors.set(index, error)))
+  for (const [index, stream] of streams.entries()) {
+    stream.on("error", (error) => streamErrors.set(index, error))
+  }
 
-  const openResults = await Promise.allSettled(streams.map((stream) => new Promise((resolve, reject) => {
+  const openResults = await Promise.allSettled(streams.map((stream) => new Promise((...callbacks) => {
+    const [resolve, reject] = callbacks
     stream.once("open", resolve)
     stream.once("error", reject)
   })))
@@ -150,6 +153,7 @@ async function createHarvesterFileTransport({
     .filter((result) => result.status === "rejected")
     .map((result) => result.reason)
   if (openErrors.length > 0) {
+    const [firstOpenError] = openErrors
     await Promise.allSettled(streams.map(async (stream) => {
       if (!stream.destroyed) {
         stream.destroy()
@@ -158,14 +162,14 @@ async function createHarvesterFileTransport({
         await once(stream, "close")
       }
     }))
-    throw openErrors[0]
+    throw firstOpenError
   }
 
   return {
     name,
     level,
     write(entry) {
-      const streamError = [...streamErrors.values()][0]
+      const [streamError] = [...streamErrors.values()]
       if (streamError) {
         return Promise.reject(streamError)
       }
@@ -175,7 +179,10 @@ async function createHarvesterFileTransport({
       } catch (error) {
         return Promise.reject(error)
       }
-      return Promise.all(streams.map((stream, index) => new Promise((resolve, reject) => {
+      return Promise.all(streams.map((...parameters) => {
+        const [stream, index] = parameters
+        return new Promise((...callbacks) => {
+          const [resolve, reject] = callbacks
         stream.write(`${serialized}\n`, (error) => {
           const currentError = error ?? streamErrors.get(index)
           if (currentError) {
@@ -184,7 +191,8 @@ async function createHarvesterFileTransport({
           }
           resolve()
         })
-      })))
+        })
+      }))
     },
     close: () => closeHarvesterLogStreams({ streams }),
   }
@@ -320,12 +328,12 @@ function writeOrderLifecycleRecord({ output, color, timestamp, level, method, da
     timestamp,
     data,
   })
-  output.write(formatConsoleLine({
+  output.write(`${formatConsoleLine({
     line,
     level,
     method,
     color,
-  }) + "\n")
+  })  }\n`)
 }
 
 function formatPortfolioBaseQuantity(value) {
@@ -397,12 +405,12 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
       strategyPrefix,
       details: summary.details ?? {},
     })
-    output.write(formatConsoleLine({
+    output.write(`${formatConsoleLine({
       line,
       level,
       method,
       color,
-    }) + "\n")
+    })  }\n`)
     return
   }
 
@@ -421,12 +429,12 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
   const boundedLine = plainLine.length > MAX_CONSOLE_LINE_LENGTH
     ? `${plainLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3)}...`
     : plainLine
-  output.write(formatConsoleLine({
+  output.write(`${formatConsoleLine({
     line: boundedLine,
     level,
     method,
     color,
-  }) + "\n")
+  })  }\n`)
 }
 
 function writeSuppressedConsoleRecord({ output, color, timestamp, count } = {}) {
@@ -437,11 +445,11 @@ function writeSuppressedConsoleRecord({ output, color, timestamp, count } = {}) 
     hour12: false,
   })
   const line = `${time} Previous identical log entry repeated ${count} additional time(s)`
-  output.write(formatConsoleLine({
+  output.write(`${formatConsoleLine({
     line,
     level: "info",
     color,
-  }) + "\n")
+  })  }\n`)
 }
 
 export function createHarvesterConsoleTransport({
@@ -455,7 +463,7 @@ export function createHarvesterConsoleTransport({
   let suppressedCount = 0
 
   const flushSuppressed = () => {
-    if (suppressedCount === 0) return
+    if (suppressedCount === 0) {return}
     writeSuppressedConsoleRecord({
       output,
       color,
