@@ -596,50 +596,12 @@ durable: true } }
   )
 })
 
-test("dispatches authorized read-only status and market queries without invoking trading controls", async () => {
-  const updates = [
-    makeUpdate({ updateId: 112,
-text: "/status" }),
-    makeUpdate({ updateId: 113,
-text: "/markets" }),
-  ]
-  const queryCalls = []
-  const sentMessages = []
-  let pollCount = 0
-  let finishSecondPoll
-  const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
-  const fetchImpl = async (...telegramFetchArguments) => {
-    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
-    const telegramApiMethod = telegramRequestUrl.split("/").pop()
-    if (telegramApiMethod === "getMe") {return makeResponse({ ok: true,
-result: { username: "coinzilla_bot" } })}
-    if (telegramApiMethod === "getUpdates") {
-      pollCount += 1
-      if (pollCount === 1) {return makeResponse({ ok: true,
-result: updates })}
-      if (pollCount === 2) {
-        finishSecondPoll()
-        return makeResponse({ ok: true,
-result: [] })
-      }
-      return new Promise((...args) => {
-        const [, reject] = args
-        telegramRequestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
-      })
-    }
-    if (telegramApiMethod === "sendMessage") {
-      sentMessages.push(JSON.parse(telegramRequestOptions.body))
-      return makeResponse({ ok: true,
-result: { message_id: 212 } })
-    }
-    throw new Error(`Unexpected Telegram API method: ${telegramApiMethod}`)
-  }
-  const operator = {
+function createStatusAndMarketsQueryOperator({ queryCalls }) {
+  return {
     pauseMarket: async () => assert.fail("Read-only queries must never invoke pauseMarket."),
     resumeMarket: async () => assert.fail("Read-only queries must never invoke resumeMarket."),
     getStatus: async (request) => {
-      queryCalls.push({ type: "status",
-request })
+      queryCalls.push({ type: "status", request })
       return {
         ok: true,
         data: {
@@ -647,20 +609,21 @@ request })
           tradingMode: "testnet",
           tradingEnabled: true,
           strategyMode: "conservative",
-          readiness: { state: "BLOCKED",
-blockers: ["AUTHORITATIVE_RECONCILIATION_REQUIRED"] },
-          userData: { ready: false,
-status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
-ageMs: 1000 },
-          markets: { configured: 2,
-enabled: 2,
-blocked: 1 },
+          readiness: {
+            state: "BLOCKED",
+            blockers: ["AUTHORITATIVE_RECONCILIATION_REQUIRED"],
+          },
+          userData: {
+            ready: false,
+            status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+            ageMs: 1000,
+          },
+          markets: { configured: 2, enabled: 2, blocked: 1 },
         },
       }
     },
     getMarkets: async (request) => {
-      queryCalls.push({ type: "markets",
-request })
+      queryCalls.push({ type: "markets", request })
       return {
         ok: true,
         data: {
@@ -674,13 +637,66 @@ request })
             blockers: ["USER_DATA_NOT_READY", "MARKET_PRICE_STALE"],
             operatorPaused: false,
             safetyPaused: false,
-            volatilityProtection: { mode: "PROTECTED",
-reason: "HIGH_VOLATILITY" },
+            volatilityProtection: {
+              mode: "PROTECTED",
+              reason: "HIGH_VOLATILITY",
+            },
           }],
         },
       }
     },
   }
+}
+
+function createStatusAndMarketsQueryFetch({ updates, sentMessages }) {
+  let pollCount = 0
+  let finishSecondPoll
+  const secondPoll = new Promise((resolve) => {
+    finishSecondPoll = resolve
+  })
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
+    const telegramApiMethod = telegramRequestUrl.split("/").pop()
+    if (telegramApiMethod === "getMe") {
+      return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })
+    }
+    if (telegramApiMethod === "getUpdates") {
+      pollCount += 1
+      if (pollCount === 1) {
+        return makeResponse({ ok: true, result: updates })
+      }
+      if (pollCount === 2) {
+        finishSecondPoll()
+        return makeResponse({ ok: true, result: [] })
+      }
+      return new Promise((...promiseArguments) => {
+        const [, reject] = promiseArguments
+        telegramRequestOptions.signal.addEventListener("abort", () => {
+          reject(new Error("poll aborted"))
+        }, { once: true })
+      })
+    }
+    if (telegramApiMethod === "sendMessage") {
+      sentMessages.push(JSON.parse(telegramRequestOptions.body))
+      return makeResponse({ ok: true, result: { message_id: 212 } })
+    }
+    throw new Error(`Unexpected Telegram API method: ${telegramApiMethod}`)
+  }
+  return { fetchImpl, secondPoll }
+}
+
+test("dispatches authorized read-only status and market queries without invoking trading controls", async () => {
+  const updates = [
+    makeUpdate({ updateId: 112, text: "/status" }),
+    makeUpdate({ updateId: 113, text: "/markets" }),
+  ]
+  const queryCalls = []
+  const sentMessages = []
+  const operator = createStatusAndMarketsQueryOperator({ queryCalls })
+  const { fetchImpl, secondPoll } = createStatusAndMarketsQueryFetch({
+    updates,
+    sentMessages,
+  })
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
     allowedUserIds: ["12345"],
@@ -698,16 +714,15 @@ reason: "HIGH_VOLATILITY" },
     ["status", "markets"],
     "The adapter must route /status and /markets to their read-only application queries in update order.",
   )
-  assert.equal(queryCalls[0].request.actor.id, "telegram-user:12345", "The status query must receive the authenticated application actor.")
-  assert.equal(queryCalls[1].request.actor.roles.includes("trading-operator"), true, "The market query must receive the authorized operator role.")
-  assert.equal(sentMessages.length, 2, "Each read-only command must receive exactly one Telegram response.")
-  assert.match(sentMessages[0].text, /Readiness: BLOCKED/, "The status response must not hide a closed readiness gate.")
-  assert.match(sentMessages[0].text, /AUTHORITATIVE_RECONCILIATION_REQUIRED/, "The status response must name its actual readiness blocker.")
-  assert.match(sentMessages[1].text, /DOGEUSDT/, "The market response must identify the configured market.")
-  assert.match(sentMessages[1].text, /MARKET_PRICE_STALE/, "The market response must identify stale price data.")
-  assert.match(sentMessages[1].text, /PROTECTED/, "The market response must expose the volatility protection state.")
+  assert.equal(queryCalls[0].request.actor.id, "telegram-user:12345")
+  assert.equal(queryCalls[1].request.actor.roles.includes("trading-operator"), true)
+  assert.equal(sentMessages.length, 2)
+  assert.match(sentMessages[0].text, /Readiness: BLOCKED/)
+  assert.match(sentMessages[0].text, /AUTHORITATIVE_RECONCILIATION_REQUIRED/)
+  assert.match(sentMessages[1].text, /DOGEUSDT/)
+  assert.match(sentMessages[1].text, /MARKET_PRICE_STALE/)
+  assert.match(sentMessages[1].text, /PROTECTED/)
 })
-
 test("logs structured operator query failures without exposing diagnostics to Telegram", async () => {
   const updates = [makeUpdate({ updateId: 114,
 text: "/status" })]
