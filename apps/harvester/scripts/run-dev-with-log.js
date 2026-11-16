@@ -119,7 +119,9 @@ const forwardOutput = async ({ stream, output }) => {
     if (!logStreamFailed) {
       process.stderr.write(`Failed to forward Harvester output: ${error.message}\n`)
       process.exitCode = 1
-      if (!childClosed && !child.killed) {child.kill("SIGTERM")}
+      if (!childClosed && !childProcess.current.killed) {
+        childProcess.current.kill("SIGTERM")
+      }
     }
     return 0
   }
