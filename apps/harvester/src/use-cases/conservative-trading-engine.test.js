@@ -10812,13 +10812,13 @@ test("adds only externally tracked legacy quote cash flow accrued after the acco
     market,
     baseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
-    quoteNetCashFlow: new Money({ amount: "0", asset: quoteAsset }),
+    quoteNetCashFlow: new Money({ amount: "100", asset: quoteAsset }),
   })
   const harness = await createHarness({
     initialPortfolio: new Portfolio({ positions: [position] }),
     initialRecoveryLedger: RecoveryLedger.empty({ market }),
     quoteFreeBalance: "80",
-    quoteCashFlowBaseline: "100",
+    quoteCashFlowBaseline: "200",
     additionalTrackedQuoteCashFlow: [
       { assetId: quoteAsset.id, amount: "120" },
     ],
