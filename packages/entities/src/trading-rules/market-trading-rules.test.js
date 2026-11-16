@@ -24,10 +24,10 @@ code: "BTC" })
     baseAsset: btc,
     quoteAsset: usd,
   })
-  const money = (amount, asset = usd) => new Money({ amount,
-asset })
-  const quantity = (amount, asset = btc) => new Quantity({ amount,
-asset })
+  const money = (amount) => new Money({ amount,
+asset: usd })
+  const quantity = (amount) => new Quantity({ amount,
+asset: btc })
 
   it("stores supported price, quantity, and notional constraints", () => {
     const rules = new TradingRules({
@@ -175,7 +175,8 @@ value }],
         market,
         constraints: [{ type: "PRICE_INCREMENT",
 status: "SUPPORTED",
-value: money("0.01", btc) }],
+value: new Money({ amount: "0.01",
+asset: btc }) }],
       }),
       { message: tradingRulesErrMsgs.asset },
     )
@@ -184,7 +185,8 @@ value: money("0.01", btc) }],
         market,
         constraints: [{ type: "QUANTITY_INCREMENT",
 status: "SUPPORTED",
-value: quantity("0.01", otherBtc) }],
+value: new Quantity({ amount: "0.01",
+asset: otherBtc }) }],
       }),
       { message: tradingRulesErrMsgs.asset },
     )
