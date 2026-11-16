@@ -37,7 +37,10 @@ function createHarness({ appendResult = { ok: true, data: { durable: true, dupli
 
 test("creates an immutable Harvester operator facade without a generic command dispatcher", () => {
   const { operationalStateStore, engine } = createHarness()
-  const operator = createHarvesterOperator({ operationalStateStore, engine })
+  const operator = createHarvesterOperator({
+    operationalStateStore,
+    engine,
+  })
 
   assert.deepEqual(Object.keys(operator), ["pauseMarket", "resumeMarket"])
   assert.equal(Object.isFrozen(operator), true)
