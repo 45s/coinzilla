@@ -14,8 +14,6 @@ created: 2026-11-11
 
 > **Terminology note (2026-11-14):** This accepted ADR retains the original durable-fact vocabulary as historical architectural terminology. The current application-facing name for the shared persistence component is **Operational State Store**; see the current [operator-control documentation](../../operator-control/README.md) for supported configuration and commands.
 
-> **Configuration-default update (2026-11-16):** [ADR-0005](./0005-operator-control-opt-in-startup.md) supersedes only the initial enabled-by-default rollout setting. Inbound Telegram is opt-in; durable-before-apply, actor authorization and fail-closed store verification remain unchanged.
-
 **Owner:** Harvester
 
 **Related decisions and work:**
