@@ -61,8 +61,7 @@ right: "0" }) <= 0) {throw new RangeError(`${field  } must be positive`)}
     
     field: "bestBidPrice" })
   
-  const bestBidQuantity = positive({ value: bookTicker.bestBidQuan
-    tity, 
+  const bestBidQuantity = positive({ value: bookTicker.bestBidQuantity, 
     field: "bestBidQuantity" })
   
   const bestAskPrice = positive({ value: bookTicker.bestAskPrice, 
