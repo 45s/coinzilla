@@ -157,12 +157,13 @@ test("renders allowlisted details as key-value text when no symbol is present", 
       message: "Harvester broker connection failed",
       broker: "Binance",
       errorCode: "BROKER_CONNECTION_FAILED",
+      readiness: { state: "BLOCKED" },
     },
   })
 
   assert.match(
     written.trim(),
-    /^\d{2}:\d{2}:\d{2} broker connection failed: errorCode BROKER_CONNECTION_FAILED, broker Binance$/,
+    /^\d{2}:\d{2}:\d{2} broker connection failed: errorCode BROKER_CONNECTION_FAILED, readiness.state BLOCKED, broker Binance$/,
     "Without a symbol, every allowlisted detail must retain its field name in readable inline form.",
   )
   output.destroy()
