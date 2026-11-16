@@ -117,7 +117,8 @@ test("drains market work, reconciles and cancels owned BUYs, audits CLOSING, the
     publishAccountSnapshot: async (input) => calls.push(`audit-status:${input.auditStatus}`),
     disconnectBroker: async () => [],
     stopMarketIntake: async () => [],
-    stopUserDataIntake: async (_timeline, subscription) => {
+    stopUserDataIntake: async (...args) => {
+      const [, subscription] = args
       await subscription.disconnect()
       return []
     },
