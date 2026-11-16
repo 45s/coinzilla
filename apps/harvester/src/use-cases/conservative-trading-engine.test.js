@@ -10994,6 +10994,66 @@ test("shutdown cancellation leaves external manual BUY orders untouched", async 
   )
 })
 
+test("continues recovery-only market evaluation after the shutdown BUY gate", async () => {
+  const seeded = makeSeededRecoveryState()
+  let shutdownStarted = false
+  let evaluationCount = 0
+  const strategyPolicy = {
+    ...conservativeStrategyPolicy,
+    evaluate: (input) => {
+      evaluationCount += 1
+      return conservativeStrategyPolicy.evaluate({
+        ...input,
+        lastBuyPrice: "100",
+      })
+    },
+  }
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    accountingApplied: true,
+    strategyPolicy,
+    isStopping: () => shutdownStarted,
+  })
+  const initialResult = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+  assert.equal(initialResult.ok, true, "The seeded recovery position must evaluate before shutdown begins.")
+
+  const buyCountBeforeShutdown = harness.orders.filter((order) => order.side === "BUY").length
+  harness.engine.beginShutdown()
+  shutdownStarted = true
+  const cancellation = await harness.engine.cancelOwnedBuyOrdersForShutdown()
+  assert.equal(cancellation.ok, true, "Shutdown must cancel owned BUYs before recovery-only market evaluation.")
+
+  const evaluationsBeforeShutdownPrice = evaluationCount
+  const priceResult = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "101",
+      timestamp: 2,
+    },
+  })
+  assert.equal(priceResult.ok, true, "A fresh price must remain usable while shutdown recovery is active.")
+  assert.equal(
+    evaluationCount,
+    evaluationsBeforeShutdownPrice + 1,
+    "An accepted market-price update must still evaluate recovery SELL work after the BUY gate activates.",
+  )
+  assert.equal(
+    harness.orders.filter((order) => order.side === "BUY").length,
+    buyCountBeforeShutdown,
+    "Recovery-only shutdown evaluation must never submit a new BUY.",
+  )
+})
+
 test("invalidates and rechecks a safe market after a late owned SELL execution", async () => {
   const seeded = makeSeededRecoveryState()
   let shutdownStarted = false
