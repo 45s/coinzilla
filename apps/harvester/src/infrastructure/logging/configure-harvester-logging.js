@@ -353,7 +353,7 @@ function createPortfolioStatsConsoleLine({ time, strategyPrefix, details } = {})
     "|",
     ["earned: ", formatPortfolioBaseQuantity(details.inventory?.freeBaseQuantity)].join(""),
     "|",
-    ["spent: ", String(details.accounting?.spent ?? "-")].join(""),
+    ["spent: ", formatPortfolioBaseQuantity(details.accounting?.spent)].join(""),
     "|",
     ["net: ", formatPortfolioNet(details.accounting?.quoteNetCashFlow)].join(""),
   ].join(" ")
