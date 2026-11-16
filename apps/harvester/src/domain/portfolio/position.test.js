@@ -5,9 +5,14 @@ import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/ent
 import { Position } from "./position.js"
 import { calculatePositionFill } from "./position-accounting.js"
 
-const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
-const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "BTCUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({ id: "asset:BTC",
+code: "BTC" })
+const quoteAsset = new Asset({ id: "asset:USDT",
+code: "USDT" })
+const market = new Market({ venue: "binance",
+symbol: "BTCUSDT",
+baseAsset,
+quoteAsset })
 const makeFill = ({
   side = "BUY",
   quantity = "2",
@@ -21,9 +26,12 @@ const makeFill = ({
   brokerOrderId: "order-1",
   market,
   side,
-  price: new Money({ amount: price, asset: quoteAsset }),
-  quantity: new Quantity({ amount: quantity, asset: baseAsset }),
-  quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+  price: new Money({ amount: price,
+asset: quoteAsset }),
+  quantity: new Quantity({ amount: quantity,
+asset: baseAsset }),
+  quoteQuantity: new Money({ amount: quoteQuantity,
+asset: quoteAsset }),
   commissions,
   commissionStatus,
 })
@@ -35,22 +43,30 @@ test("calculates BUY accounting with base and quote commissions as a pure functi
     quoteNetCashFlow: "0",
     fill: makeFill({
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.01", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.2", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01",
+asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.2",
+asset: quoteAsset }) }),
       ],
     }),
   })
-  assert.deepEqual(result, { baseQuantity: "1.99", quoteNetCashFlow: "-200.2", spent: "200.2" }, "BUY accounting must deduct the base commission and add the quote commission to spent cost and cash flow.")
+  assert.deepEqual(result, { baseQuantity: "1.99",
+quoteNetCashFlow: "-200.2",
+spent: "200.2" }, "BUY accounting must deduct the base commission and add the quote commission to spent cost and cash flow.")
 })
 
 test("applies BUY fills and base/quote commissions exactly", () => {
-  const position = Position.empty({ market, strategyId: StrategyId.COIN_GRABBER }).applyFill({
+  const position = Position.empty({ market,
+strategyId: StrategyId.COIN_GRABBER }).applyFill({
     fill: makeFill({
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.01", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.2", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01",
+asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.2",
+asset: quoteAsset }) }),
       ],
-    }), strategyId: StrategyId.COIN_GRABBER
+    }),
+strategyId: StrategyId.COIN_GRABBER
   })
   assert.equal(position.quantity.amount, "1.99", "The compatibility quantity must expose active inventory net of base commission.")
   assert.equal(position.baseQuantity.amount, "1.99", "Active base inventory must equal executed BUY quantity less base commission.")
@@ -60,7 +76,9 @@ test("applies BUY fills and base/quote commissions exactly", () => {
 })
 
 test("applies SELL fills and base/quote commissions to net holdings", () => {
-  const bought = Position.empty({ market, strategyId: StrategyId.COIN_GRABBER }).applyFill({ fill: makeFill(), strategyId: StrategyId.COIN_GRABBER })
+  const bought = Position.empty({ market,
+strategyId: StrategyId.COIN_GRABBER }).applyFill({ fill: makeFill(),
+strategyId: StrategyId.COIN_GRABBER })
   const sold = bought.applyFill({
     fill: makeFill({
       side: "SELL",
@@ -68,10 +86,13 @@ test("applies SELL fills and base/quote commissions to net holdings", () => {
       quoteQuantity: "120",
       tradeId: "trade-2",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.01", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.1", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01",
+asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.1",
+asset: quoteAsset }) }),
       ],
-    }), strategyId: StrategyId.COIN_GRABBER
+    }),
+strategyId: StrategyId.COIN_GRABBER
   })
   assert.equal(sold.baseQuantity.amount, "0.99", "SELL quantity and base commission must both reduce active inventory.")
   assert.equal(sold.spent.amount, "200", "A SELL must preserve the accumulated BUY cost basis.")
@@ -80,34 +101,46 @@ test("applies SELL fills and base/quote commissions to net holdings", () => {
 
 test("rejects incomplete commissions and unvalued third-asset fees but accepts reliable quote valuation", () => {
   assert.throws(
-    () => Position.empty({ market, strategyId: StrategyId.COIN_GRABBER }).applyFill({ fill: makeFill({ commissionStatus: "UNKNOWN" }), strategyId: StrategyId.COIN_GRABBER }),
+    () => Position.empty({ market,
+strategyId: StrategyId.COIN_GRABBER }).applyFill({ fill: makeFill({ commissionStatus: "UNKNOWN" }),
+strategyId: StrategyId.COIN_GRABBER }),
     /complete commission data/,
     "An incomplete commission report must be rejected before Position accounting is accepted.",
   )
-  const thirdAsset = new Asset({ id: "asset:BNB", code: "BNB" })
+  const thirdAsset = new Asset({ id: "asset:BNB",
+code: "BNB" })
   const thirdAssetFill = makeFill({
-    commissions: [new Commission({ amount: new Money({ amount: "0.01", asset: thirdAsset }) })],
+    commissions: [new Commission({ amount: new Money({ amount: "0.01",
+asset: thirdAsset }) })],
   })
-  assert.throws(() => Position.empty({ market, strategyId: StrategyId.COIN_GRABBER }).applyFill({ fill: thirdAssetFill, strategyId: StrategyId.COIN_GRABBER }), /requires reliable quote-currency valuation/, "A third-asset fee without quote valuation must fail closed.")
+  assert.throws(() => Position.empty({ market,
+strategyId: StrategyId.COIN_GRABBER }).applyFill({ fill: thirdAssetFill,
+strategyId: StrategyId.COIN_GRABBER }), /requires reliable quote-currency valuation/, "A third-asset fee without quote valuation must fail closed.")
   const valuedThirdAssetFill = makeFill({
     commissions: [new Commission({
-      amount: new Money({ amount: "0.01", asset: thirdAsset }),
-      quoteValue: new Money({ amount: "0.02", asset: quoteAsset }),
+      amount: new Money({ amount: "0.01",
+asset: thirdAsset }),
+      quoteValue: new Money({ amount: "0.02",
+asset: quoteAsset }),
     })],
   })
-  const valuedPosition = Position.empty({ market, strategyId: StrategyId.COIN_GRABBER }).applyFill({ fill: valuedThirdAssetFill, strategyId: StrategyId.COIN_GRABBER })
+  const valuedPosition = Position.empty({ market,
+strategyId: StrategyId.COIN_GRABBER }).applyFill({ fill: valuedThirdAssetFill,
+strategyId: StrategyId.COIN_GRABBER })
   assert.equal(valuedPosition.spent.amount, "200.02", "A reliably valued third-asset fee must be included in spent quote cost.")
   assert.equal(valuedPosition.quoteNetCashFlow.amount, "-200.02", "A reliably valued third-asset fee must be included in BUY quote cash flow.")
 })
 
 test("failed fill transitions preserve the complete Position snapshot", () => {
-  const funded = Position.empty({ market, strategyId: StrategyId.COIN_GRABBER }).applyFill({
+  const funded = Position.empty({ market,
+strategyId: StrategyId.COIN_GRABBER }).applyFill({
     fill: makeFill({
       quantity: "10",
       quoteQuantity: "1",
       price: "0.1",
       tradeId: "funding-fill",
-    }), strategyId: StrategyId.COIN_GRABBER
+    }),
+strategyId: StrategyId.COIN_GRABBER
   })
   const originalValue = funded.value
   const failureCases = [
@@ -131,7 +164,8 @@ test("failed fill transitions preserve the complete Position snapshot", () => {
         price: "0.1",
         tradeId: "base-fee-overdraw",
         commissions: [
-          new Commission({ amount: new Money({ amount: "2.1", asset: baseAsset }) }),
+          new Commission({ amount: new Money({ amount: "2.1",
+asset: baseAsset }) }),
         ],
       }),
       error: /base commission exceeds executed base quantity/i,
@@ -144,7 +178,8 @@ test("failed fill transitions preserve the complete Position snapshot", () => {
         price: "0.1",
         tradeId: "quote-fee-overdraw",
         commissions: [
-          new Commission({ amount: new Money({ amount: "0.11", asset: quoteAsset }) }),
+          new Commission({ amount: new Money({ amount: "0.11",
+asset: quoteAsset }) }),
         ],
       }),
       error: /quote commission exceeds executed quote notional/i,
@@ -164,7 +199,8 @@ test("failed fill transitions preserve the complete Position snapshot", () => {
 
   for (const { name, fill, error } of failureCases) {
     assert.throws(
-      () => funded.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER }),
+      () => funded.applyFill({ fill,
+strategyId: StrategyId.COIN_GRABBER }),
       error,
       `The ${name} failure must be rejected before changing Position state.`,
     )
@@ -177,8 +213,11 @@ test("failed fill transitions preserve the complete Position snapshot", () => {
 })
 
 test("allocates exactly keepQuantity into a separate permanent free-inventory bucket", () => {
-  const position = Position.empty({ market, strategyId: StrategyId.COIN_GRABBER }).applyFill({
-    fill: makeFill({ quantity: "100", quoteQuantity: "10" }), strategyId: StrategyId.COIN_GRABBER
+  const position = Position.empty({ market,
+strategyId: StrategyId.COIN_GRABBER }).applyFill({
+    fill: makeFill({ quantity: "100",
+quoteQuantity: "10" }),
+strategyId: StrategyId.COIN_GRABBER
   })
   const retained = position.allocateFreeQuantity({ quantity: "1" })
 
@@ -188,15 +227,19 @@ test("allocates exactly keepQuantity into a separate permanent free-inventory bu
 })
 
 test("future BUY fills increase active inventory without reusing free inventory", () => {
-  const position = Position.empty({ market, strategyId: StrategyId.COIN_GRABBER })
-    .applyFill({ fill: makeFill({ quantity: "100", quoteQuantity: "10" }), strategyId: StrategyId.COIN_GRABBER })
+  const position = Position.empty({ market,
+strategyId: StrategyId.COIN_GRABBER })
+    .applyFill({ fill: makeFill({ quantity: "100",
+quoteQuantity: "10" }),
+strategyId: StrategyId.COIN_GRABBER })
     .allocateFreeQuantity({ quantity: "1" })
     .applyFill({
       fill: makeFill({
         quantity: "100",
         quoteQuantity: "9.8",
         tradeId: "trade-2",
-      }), strategyId: StrategyId.COIN_GRABBER
+      }),
+strategyId: StrategyId.COIN_GRABBER
     })
 
   assert.equal(position.baseQuantity.amount, "199", "A later BUY must add to active inventory without subtracting retained inventory.")
@@ -205,7 +248,8 @@ test("future BUY fills increase active inventory without reusing free inventory"
 })
 
 test("rejects allocating more free inventory than active inventory", () => {
-  const position = Position.empty({ market, strategyId: StrategyId.COIN_GRABBER })
+  const position = Position.empty({ market,
+strategyId: StrategyId.COIN_GRABBER })
   assert.throws(
     () => position.allocateFreeQuantity({ quantity: "1" }),
     /exceeds active strategy inventory/,
@@ -214,17 +258,23 @@ test("rejects allocating more free inventory than active inventory", () => {
 })
 
 test("rejects zero or invalid free-inventory allocations", () => {
-  const position = Position.empty({ market, strategyId: StrategyId.COIN_GRABBER }).applyFill({
-    fill: makeFill({ quantity: "2", quoteQuantity: "200" }), strategyId: StrategyId.COIN_GRABBER
+  const position = Position.empty({ market,
+strategyId: StrategyId.COIN_GRABBER }).applyFill({
+    fill: makeFill({ quantity: "2",
+quoteQuantity: "200" }),
+strategyId: StrategyId.COIN_GRABBER
   })
   assert.throws(() => position.allocateFreeQuantity({ quantity: "0" }), /greater than zero/, "Zero free-inventory allocation must be rejected.")
   assert.throws(() => position.allocateFreeQuantity({ quantity: "nope" }), undefined, "Malformed free-inventory quantity must be rejected before a Position transition.")
 })
 
 test("SELL fills cannot consume previously allocated free inventory", () => {
-  const position = Position.empty({ market, strategyId: StrategyId.COIN_GRABBER })
+  const position = Position.empty({ market,
+strategyId: StrategyId.COIN_GRABBER })
     .applyFill({
-      fill: makeFill({ quantity: "100", quoteQuantity: "10" }), strategyId: StrategyId.COIN_GRABBER
+      fill: makeFill({ quantity: "100",
+quoteQuantity: "10" }),
+strategyId: StrategyId.COIN_GRABBER
     })
     .allocateFreeQuantity({ quantity: "1" })
 
@@ -234,7 +284,8 @@ test("SELL fills cannot consume previously allocated free inventory", () => {
       quantity: "99",
       quoteQuantity: "10.5",
       tradeId: "recovery-sell",
-    }), strategyId: StrategyId.COIN_GRABBER
+    }),
+strategyId: StrategyId.COIN_GRABBER
   })
 
   assert.equal(sold.baseQuantity.amount, "0", "The SELL must consume all active inventory above keepQuantity.")
@@ -244,8 +295,12 @@ test("SELL fills cannot consume previously allocated free inventory", () => {
 
 
 test("rejects base commission greater than SELL execution quantity", () => {
-  const funded = Position.empty({ market, strategyId: StrategyId.COIN_GRABBER }).applyFill({
-    fill: makeFill({ quantity: "10", quoteQuantity: "1", tradeId: "funding-fill" }), strategyId: StrategyId.COIN_GRABBER
+  const funded = Position.empty({ market,
+strategyId: StrategyId.COIN_GRABBER }).applyFill({
+    fill: makeFill({ quantity: "10",
+quoteQuantity: "1",
+tradeId: "funding-fill" }),
+strategyId: StrategyId.COIN_GRABBER
   })
   const sell = makeFill({
     side: "SELL",
@@ -253,11 +308,13 @@ test("rejects base commission greater than SELL execution quantity", () => {
     quoteQuantity: "0.2",
     tradeId: "excessive-base-fee",
     commissions: [
-      new Commission({ amount: new Money({ amount: "2.1", asset: baseAsset }) }),
+      new Commission({ amount: new Money({ amount: "2.1",
+asset: baseAsset }) }),
     ],
   })
 
-  assert.throws(() => funded.applyFill({ fill: sell, strategyId: StrategyId.COIN_GRABBER }), /base commission exceeds executed base quantity/i, "Base commission greater than executed SELL quantity must be rejected.")
+  assert.throws(() => funded.applyFill({ fill: sell,
+strategyId: StrategyId.COIN_GRABBER }), /base commission exceeds executed base quantity/i, "Base commission greater than executed SELL quantity must be rejected.")
 })
 
 test("rejects quote commission greater than BUY quote notional", () => {
@@ -265,16 +322,22 @@ test("rejects quote commission greater than BUY quote notional", () => {
     quantity: "1",
     quoteQuantity: "0.1",
     commissions: [
-      new Commission({ amount: new Money({ amount: "0.11", asset: quoteAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.11",
+asset: quoteAsset }) }),
     ],
   })
 
-  assert.throws(() => Position.empty({ market, strategyId: StrategyId.COIN_GRABBER }).applyFill({ fill, strategyId: StrategyId.COIN_GRABBER }), /quote commission exceeds executed quote notional/i, "Quote commission greater than BUY notional must be rejected.")
+  assert.throws(() => Position.empty({ market,
+strategyId: StrategyId.COIN_GRABBER }).applyFill({ fill,
+strategyId: StrategyId.COIN_GRABBER }), /quote commission exceeds executed quote notional/i, "Quote commission greater than BUY notional must be rejected.")
 })
 
 test("resets only the completed recovery cost basis after exact retained allocation", () => {
-  const position = Position.empty({ market, strategyId: StrategyId.COIN_GRABBER })
-    .applyFill({ fill: makeFill({ quantity: "100", quoteQuantity: "10" }), strategyId: StrategyId.COIN_GRABBER })
+  const position = Position.empty({ market,
+strategyId: StrategyId.COIN_GRABBER })
+    .applyFill({ fill: makeFill({ quantity: "100",
+quoteQuantity: "10" }),
+strategyId: StrategyId.COIN_GRABBER })
     .allocateFreeQuantity({ quantity: "1" })
     .resetRecoveryBasis()
 
@@ -286,17 +349,21 @@ test("resets only the completed recovery cost basis after exact retained allocat
 
 
 test("conserves total base inventory across BUY fills, free allocation, and SELL fees", () => {
-  const firstBuy = Position.empty({ market, strategyId: StrategyId.COIN_GRABBER }).applyFill({
+  const firstBuy = Position.empty({ market,
+strategyId: StrategyId.COIN_GRABBER }).applyFill({
     fill: makeFill({
       tradeId: "buy-1",
       price: "0.1",
       quantity: "100",
       quoteQuantity: "10",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.25", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.02", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.25",
+asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.02",
+asset: quoteAsset }) }),
       ],
-    }), strategyId: StrategyId.COIN_GRABBER
+    }),
+strategyId: StrategyId.COIN_GRABBER
   })
 
   const afterAllocation = firstBuy.allocateFreeQuantity({ quantity: "1.25" })
@@ -307,10 +374,13 @@ test("conserves total base inventory across BUY fills, free allocation, and SELL
       quantity: "20",
       quoteQuantity: "2",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.05", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.05",
+asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01",
+asset: quoteAsset }) }),
       ],
-    }), strategyId: StrategyId.COIN_GRABBER
+    }),
+strategyId: StrategyId.COIN_GRABBER
   })
   const afterSell = afterSecondBuy.applyFill({
     fill: makeFill({
@@ -320,10 +390,13 @@ test("conserves total base inventory across BUY fills, free allocation, and SELL
       quantity: "118.4",
       quoteQuantity: "23.68",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.05", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.03", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.05",
+asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.03",
+asset: quoteAsset }) }),
       ],
-    }), strategyId: StrategyId.COIN_GRABBER
+    }),
+strategyId: StrategyId.COIN_GRABBER
   })
 
   assert.equal(firstBuy.baseQuantity.amount, "99.75", "The first BUY must add executed base less its 0.25 base commission.")
