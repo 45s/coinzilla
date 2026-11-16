@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { createOrderOwnership } from "../domain/orders/order-ownership.js"
@@ -206,4 +206,46 @@ test("exposes separately tracked legacy quote proceeds to the shared account sna
     assetId: quoteAsset.id,
     amount: result.data.legacyAccounting.realizedQuoteProceeds,
   }], "The snapshot baseline must include net legacy proceeds without seeding them into Portfolio.")
+})
+
+test("exposes only verified untracked Spot legacy quantity outside the shared Portfolio", async () => {
+  const context = makeContext()
+  const workflow = makeWorkflow(context)
+  const result = await workflow.reconcileTerminalMixedSell({
+    reconciliation: context.reconciliation,
+    terminalOrder: context.terminalOrder,
+    canonicalFills: [context.fill],
+    canonicalFillAllocations: [context.allocation],
+    minProfit: "0.2",
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  const balance = new Balance({
+    free: new Quantity({ amount: "50", asset: baseAsset }),
+    locked: new Quantity({ amount: "0", asset: baseAsset }),
+  })
+  const additionalTracked = workflow.getAdditionalTrackedBaseQuantity({
+    balances: [balance],
+    portfolio: workflow.getPortfolio(),
+  })
+
+  assert.deepEqual(additionalTracked, [{
+    assetId: baseAsset.id,
+    amount: "49.99",
+  }], "Only remaining operator-authorized legacy quantity beyond aggregate Portfolio inventory may be exposed as tracked Spot custody.")
+  assert.equal(workflow.getPortfolio().getPosition({ positionId }).baseQuantity.amount, "0.01",
+    "Verified legacy Spot inventory must never be seeded into the recovery Portfolio.")
+})
+
+test("fails closed when the legacy Spot base asset is missing from the authoritative account snapshot", () => {
+  const context = makeContext()
+  const workflow = makeWorkflow(context)
+  assert.throws(
+    () => workflow.getAdditionalTrackedBaseQuantity({
+      balances: [],
+      portfolio: workflow.getPortfolio(),
+    }),
+    /omits an authorized base asset/i,
+    "A missing account balance must not be treated as zero or as verified legacy custody.",
+  )
 })
