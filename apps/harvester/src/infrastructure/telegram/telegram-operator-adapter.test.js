@@ -73,7 +73,30 @@ test("rejects malformed pause syntax and does not expose unimplemented commands"
   assert.deepEqual(parseTelegramOperatorCommand("/cancel LINKUSDT"), { type: "UNSUPPORTED" })
 })
 
-// eslint-disable-next-line max-lines-per-function -- Integration test verifies serialized polling, authorization, and application actor propagation in one lifecycle.
+function assertPauseInteractionDiagnostics({ entries }) {
+  const interactionEntries = entries.filter(entry => entry.correlationId === "telegram:100")
+  const expectedMessages = [
+    "Telegram update RECEIVED",
+    "Telegram interaction AUTHORIZED",
+    "Telegram command STARTED",
+    "Telegram application operation STARTED",
+    "Telegram application operation COMPLETED",
+    "Telegram response SENT",
+  ]
+  for (const message of expectedMessages) {
+    assert.equal(
+      interactionEntries.some(entry => entry.message === message),
+      true,
+      \`\${message} must be logged for an allowlisted pause command.\`,
+    )
+  }
+  assert.equal(
+    interactionEntries.every(entry => entry.action === "PAUSE"),
+    true,
+    "Every diagnostic for the pause command must carry its action name.",
+  )
+}
+
 test("polls serially, maps an allowlisted private sender to an actor, and acknowledges pause", async () => {
   const update = makeUpdate()
   const calls = []
@@ -145,18 +168,7 @@ test("polls serially, maps an allowlisted private sender to an actor, and acknow
   assert.match(sentMessages[0].text, /Paused LINKUSDT/)
   assert.match(sentMessages[0].text, /Existing exchange orders remain open and may still fill/)
   assert.equal(pollRequests[1].offset, 101, "The update offset must advance only after the command and reply are handled.")
-  const interactionEntries = diagnosticEntries.filter((entry) => entry.correlationId === "telegram:100")
-  for (const message of [
-    "Telegram update RECEIVED",
-    "Telegram interaction AUTHORIZED",
-    "Telegram command STARTED",
-    "Telegram application operation STARTED",
-    "Telegram application operation COMPLETED",
-    "Telegram response SENT",
-  ]) {
-    assert.equal(interactionEntries.some((entry) => entry.message === message), true, message + " must be logged for an allowlisted pause command.")
-  }
-  assert.equal(interactionEntries.every((entry) => entry.action === "PAUSE"), true, "Every diagnostic for the pause command must carry its action name.")
+  assertPauseInteractionDiagnostics({ entries: diagnosticEntries })
 })
 
 test("does not invoke the application for a user outside the private-chat allowlist", async () => {

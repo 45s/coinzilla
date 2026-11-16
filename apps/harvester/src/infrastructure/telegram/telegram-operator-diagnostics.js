@@ -259,8 +259,14 @@ function buildFailureFields({ details, stage, operation, symbol, interaction }) 
   return fields
 }
 
-export function createTelegramOperatorDiagnostics({ logger, botToken } = {}) {
-  const log = ({ interaction, message, level = "debug", fields = {} } = {}) => {
+/**
+ * Creates safe, correlated diagnostic operations for the inbound Telegram adapter.
+ *
+ * @param {{logger?: object, botToken?: string}} [options]
+ * @returns {{log: Function, fail: Function, report: Function, describeError: Function}}
+ */
+function createTelegramDiagnosticLogger({ logger }) {
+  return ({ interaction, message, level = "debug", fields = {} } = {}) => {
     const stage = fields.stage ?? interaction?.stage
     if (interaction && typeof stage === "string") {
       interaction.stage = stage
@@ -305,8 +311,10 @@ export function createTelegramOperatorDiagnostics({ logger, botToken } = {}) {
     }
     return entry
   }
+}
 
-  const fail = ({ interaction, error, stage, operation, symbol, level = "error" } = {}) => {
+function createTelegramDiagnosticFailure({ log, botToken }) {
+  return ({ interaction, error, stage, operation, symbol, level = "error" } = {}) => {
     if (!markFailure({
       interaction,
       error,
@@ -331,10 +339,57 @@ export function createTelegramOperatorDiagnostics({ logger, botToken } = {}) {
     })
     return true
   }
+}
 
+function createTelegramDiagnosticReporter({ log, botToken }) {
+  return ({ interaction, stage, operation, symbol, classification, message, level = "error" } = {}) => {
+    const reportKey = \`report:\${stage ?? "UNKNOWN"}:\${operation ?? ""}:\${symbol ?? ""}:\${classification ?? "UNCLASSIFIED"}\`
+    if (interaction?.loggedErrors instanceof Set && interaction.loggedErrors.has(reportKey)) {
+      return false
+    }
+    if (interaction?.loggedErrors instanceof Set) {
+      interaction.loggedErrors.add(reportKey)
+    }
+    if (interaction) {
+      interaction.failed = true
+    }
+    log({
+      interaction,
+      message: "Telegram interaction FAILED",
+      level,
+      fields: {
+        stage: stage ?? interaction?.stage ?? "UNKNOWN",
+        failureClassification: classification ?? "UNCLASSIFIED",
+        ...(operation ? { operation } : {}),
+        ...(symbol ? { symbol } : {}),
+        ...(message
+          ? {
+              errorMessage: sanitizeText({
+                value: message,
+                botToken,
+              }),
+            }
+          : {}),
+      },
+    })
+    return true
+  }
+}
+
+export function createTelegramOperatorDiagnostics({ logger, botToken } = {}) {
+  const log = createTelegramDiagnosticLogger({ logger })
+  const fail = createTelegramDiagnosticFailure({
+    log,
+    botToken,
+  })
+  const report = createTelegramDiagnosticReporter({
+    log,
+    botToken,
+  })
   return Object.freeze({
     log,
     fail,
+    report,
     describeError: error => describeError({
       error,
       botToken,

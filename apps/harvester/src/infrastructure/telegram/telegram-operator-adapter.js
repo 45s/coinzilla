@@ -148,15 +148,25 @@ function messageAuthorizationFailure({ message, userId, chatId }) {
 
 function buildControlFailureReply({ action, symbol, result, method, interaction, diagnostics }) {
   if (!interaction.failed) {
-    const error = result?.errors?.[0] ?? result?.error ??
-      new Error(`Operator control use case returned ok:false without error details: ${method}`)
-    diagnostics.fail({
-      interaction,
-      error,
-      stage: "APPLICATION_OPERATION_RESULT",
-      operation: method,
-      symbol,
-    })
+    const controlError = result?.errors?.[0] ?? result?.error
+    if (controlError !== undefined) {
+      diagnostics.fail({
+        interaction,
+        error: controlError,
+        stage: "APPLICATION_OPERATION_RESULT",
+        operation: method,
+        symbol,
+      })
+    } else {
+      diagnostics.report({
+        interaction,
+        stage: "APPLICATION_OPERATION_RESULT",
+        operation: method,
+        symbol,
+        classification: "APPLICATION_OPERATION_REJECTED",
+        message: `Operator control use case returned ok:false without error details: ${method}`,
+      })
+    }
   }
   const code = result?.errors?.[0]?.code ?? result?.error?.code
   if (code === "INVALID_OPERATOR_MARKET") {
@@ -187,16 +197,13 @@ function buildControlSuccessReply({ action, symbol, result, method, interaction,
     }
     return `Paused ${symbol}: new strategy BUYs and trailing-BUY replacements are blocked. Existing exchange orders remain open and may still fill. This pause is process-local and is not restored after restart.`
   }
-  const error = Object.assign(
-    new Error(`Operator control use case returned an invalid success result: ${method}`),
-    { code: "OPERATOR_CONTROL_RESULT_INVALID" },
-  )
-  diagnostics.fail({
+  diagnostics.report({
     interaction,
-    error,
     stage: "APPLICATION_OPERATION_RESULT",
     operation: method,
     symbol,
+    classification: "OPERATOR_CONTROL_RESULT_INVALID",
+    message: `Operator control use case returned an invalid success result: ${method}`,
   })
   return `${action === "RESUME" ? "Resume" : "Pause"} was not acknowledged; check Harvester logs and retry.`
 }
@@ -623,23 +630,7 @@ export function parseTelegramOperatorCommand(text, { botUsername } = {}) {
   return Object.freeze({ type: command === "/pause" ? "PAUSE" : "RESUME", symbol: argumentsList[0].toUpperCase() })
 }
 
-/**
- * Create the optional inbound Telegram adapter for the Harvester operator API.
- *
- * This adapter authenticates Telegram senders using a private-chat user-ID
- * allowlist, then calls the transport-independent application use case. It
- * owns no trading state and never accesses the broker or Journal.
- *
- * @param {object} options
- * @param {string} options.botToken - Telegram bot token from the process environment.
- * @param {string[]} options.allowedUserIds - Decimal Telegram user-ID allowlist.
- * @param {{pauseMarket: Function, resumeMarket?: Function}} options.operator - Harvester application facade.
- * @param {Function} [options.fetchImpl=globalThis.fetch] - Injectable fetch implementation.
- * @param {object} [options.logger] - Optional structured logger.
- * @param {number} [options.pollTimeoutSeconds=30] - Telegram long-poll timeout.
- * @param {number} [options.retryDelayMs=1000] - Initial transport retry delay.
- * @returns {{start: Function, stop: Function}} Adapter lifecycle.
- */
+
 const PAGE_METHODS = Object.freeze({
   status: "getStatus",
   markets: "getMarkets",
@@ -814,15 +805,12 @@ async function readTelegramOperatorPage({ page, userId, interaction, operator, d
     const queryPage = marketAction ? "markets" : page
     const method = PAGE_METHODS[queryPage]
     if (!method || typeof operator[method] !== "function") {
-      const error = Object.assign(
-        new Error(`Read-only operator query is not available: ${queryPage}`),
-        { code: "OPERATOR_QUERY_UNAVAILABLE" },
-      )
-      diagnostics.fail({
+      diagnostics.report({
         interaction,
-        error,
         stage: "QUERY_CONFIGURATION",
         operation: method ?? queryPage,
+        classification: "OPERATOR_QUERY_UNAVAILABLE",
+        message: `Read-only operator query is not available: ${queryPage}`,
       })
       return { text: "This read-only query is not available in the current operator configuration.", keyboard: navigationKeyboard({ page: queryPage }) }
     }
@@ -905,8 +893,14 @@ async function executeTelegramOperatorControl({ action, symbol, userId, requestI
     interaction.operation = method
     if (typeof operator[method] !== "function") {
       const text = action === "RESUME" ? "Resume is not available in this operator adapter configuration." : "Pause is not available in this operator adapter configuration."
-      const error = Object.assign(new Error("Operator control use case is unavailable: " + method), { code: "OPERATOR_CONTROL_UNAVAILABLE" })
-      diagnostics.fail({ interaction, error, stage: "APPLICATION_OPERATION_UNAVAILABLE", operation: method, symbol })
+      diagnostics.report({
+        interaction,
+        stage: "APPLICATION_OPERATION_UNAVAILABLE",
+        operation: method,
+        symbol,
+        classification: "OPERATOR_CONTROL_UNAVAILABLE",
+        message: `Operator control use case is unavailable: ${method}`,
+      })
       if (messageId !== undefined) { await editMessage({ chatId, messageId, text, replyMarkup: navigationKeyboard(), signal, interaction }) }
       else { await sendMessage({ chatId, text, replyMarkup: navigationKeyboard(), signal, interaction }) }
       return
@@ -1050,6 +1044,23 @@ async function pollTelegramOperatorUpdates({ signal, offsetState, botUsername, c
     }
 }
 
+/**
+ * Create the optional inbound Telegram adapter for the Harvester operator API.
+ *
+ * This adapter authenticates Telegram senders using a private-chat user-ID
+ * allowlist, then calls the transport-independent application use case. It
+ * owns no trading state and never accesses the broker or Journal.
+ *
+ * @param {object} options
+ * @param {string} options.botToken - Telegram bot token from the process environment.
+ * @param {string[]} options.allowedUserIds - Decimal Telegram user-ID allowlist.
+ * @param {{pauseMarket: Function, resumeMarket?: Function}} options.operator - Harvester application facade.
+ * @param {Function} [options.fetchImpl=globalThis.fetch] - Injectable fetch implementation.
+ * @param {object} [options.logger] - Optional structured logger.
+ * @param {number} [options.pollTimeoutSeconds=30] - Telegram long-poll timeout.
+ * @param {number} [options.retryDelayMs=1000] - Initial transport retry delay.
+ * @returns {{start: Function, stop: Function}} Adapter lifecycle.
+ */
 export function createTelegramOperatorAdapter({
   botToken,
   allowedUserIds,

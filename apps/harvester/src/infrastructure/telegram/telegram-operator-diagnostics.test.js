@@ -32,6 +32,38 @@ test("preserves nested error details while redacting bot tokens and excluding Te
   assert.equal(serialized.includes("12345"), false)
 })
 
+test("reports non-exception failures with a classification and safe context", () => {
+  const entries = []
+  const interaction = {
+    correlationId: "telegram:report",
+    interactionType: "message",
+    action: "MARKETS",
+    loggedErrors: new Set(),
+  }
+  const diagnostics = createTelegramOperatorDiagnostics({
+    logger: {
+      error: entry => entries.push(entry),
+    },
+  })
+  const failure = {
+    interaction,
+    stage: "QUERY_RESULT",
+    operation: "getMarkets",
+    symbol: "LINKUSDT",
+    classification: "OPERATOR_QUERY_FAILED",
+    message: "Market query returned no diagnostic error.",
+  }
+  assert.equal(diagnostics.report(failure), true)
+  assert.equal(diagnostics.report(failure), false)
+  assert.equal(interaction.failed, true)
+  assert.equal(entries.length, 1)
+  assert.equal(entries[0].failureClassification, "OPERATOR_QUERY_FAILED")
+  assert.equal(entries[0].errorMessage, "Market query returned no diagnostic error.")
+  assert.equal(entries[0].operation, "getMarkets")
+  assert.equal(entries[0].symbol, "LINKUSDT")
+  assert.equal(entries[0].errorName, undefined)
+})
+
 test("logs a rejected interaction and safely ignores logger failures", () => {
   const interaction = {
     correlationId: "telegram:1",
