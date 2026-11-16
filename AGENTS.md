@@ -13,6 +13,7 @@ Every AI agent and automated contributor must follow the canonical documents bel
 | Binance exchange environment selection | [ADR-0002: Explicit Binance trading environment](docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md) |
 | Task checklists | [docs/engineering/TASK_WORKFLOWS.md](docs/engineering/TASK_WORKFLOWS.md) |
 | Domain/path ownership | [docs/engineering/DOMAIN_OWNERSHIP.md](docs/engineering/DOMAIN_OWNERSHIP.md) |
+| Bitunix Spot reference-driven implementation | [packages/brokers/AGENTS.md — mandatory Bitunix reference audit](packages/brokers/AGENTS.md#bitunix-spot-development--mandatory-reference-audit) |
 | Cross-domain requests | [docs/engineering/CROSS_DOMAIN_REQUESTS.md](docs/engineering/CROSS_DOMAIN_REQUESTS.md) |
 | Module boundaries, feature-folder layout and pure-function extraction | [docs/engineering/MODULARITY_STANDARD.md](docs/engineering/MODULARITY_STANDARD.md) |
 | Shared utility search and reuse | [docs/engineering/SHARED_UTILITIES_POLICY.md](docs/engineering/SHARED_UTILITIES_POLICY.md) |
@@ -64,6 +65,7 @@ All agents must follow the canonical [visual documentation and workflow schemas 
 - Select the smallest applicable checklist from `docs/engineering/TASK_WORKFLOWS.md`.
 - For every refactoring or code-audit task, read and follow the canonical [AI Refactoring and Code Audit Standard](docs/engineering/AI_REFACTORING_AUDIT_STANDARD.md); the applicable task checklist links to it.
 - Identify the owning domain and its roadmap before editing. Local instructions may add domain-specific constraints but must not redefine repository-wide policy.
+- For any Bitunix Spot task, read and follow [the Brokers package's mandatory reference-audit rule](packages/brokers/AGENTS.md#bitunix-spot-development--mandatory-reference-audit) before implementation; inspect the referenced Spot source and tests first.
 - For every JavaScript change, study and follow [ESLint Standard](docs/engineering/ESLINT_STANDARD.md) before editing; do not wait for CI to reveal predictable lint violations.
 - For a new generic helper or cross-cutting capability, follow the shared-utility policy before implementing it.
 - Follow the [Structured Error Handling Standard](docs/engineering/structured-error-handling.md) whenever adding or materially changing errors; adopt it incrementally in new functionality and bug fixes.
