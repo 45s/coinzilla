@@ -412,6 +412,7 @@ function logOrderAllocation({ dependencies, context, balances, allocation } = {}
     committedBaseBalanceBaseline: accountSnapshot.getCommittedBaseBalanceBaseline({ assetId: metadata.market.baseAsset.id }),
     quoteCashFlow,
     portfolioQuoteCashFlow,
+    additionalQuoteCashFlow,
     quoteCashFlowBaseline,
   })
 }
