@@ -46,7 +46,9 @@ test("forwards Undici ping frames only for its own WebSocket", async () => {
     [payload],
     "the transport must forward heartbeat frames only from its owned WebSocket instance",
   )
-  await transport.disconnect()
+  const closing = transport.disconnect()
+  sockets[0].serverClose()
+  await closing
 })
 
 test("stops forwarding Undici ping frames after the WebSocket closes", async () => {
