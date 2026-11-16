@@ -399,12 +399,15 @@ stateChanging },
         this.#settleProtocolError({ key, pending, message: "Successful Binance response must contain result only", details: payload })
         return
       }
-      this.#settle({ key, settle: () => pending.resolve({
-        id: payload.id,
-        status: payload.status,
-        data: payload.result,
-        rateLimits: payload.rateLimits,
-      }))
+      this.#settle({
+        key,
+        settle: () => pending.resolve({
+          id: payload.id,
+          status: payload.status,
+          data: payload.result,
+          rateLimits: payload.rateLimits,
+        }),
+      })
       return
     }
 
@@ -414,22 +417,28 @@ stateChanging },
       return
     }
 
-    this.#settle({ key, settle: () => pending.reject(new BinanceRpcError(payload.error.msg, {
-      code: payload.error.code,
-      status: payload.status,
-      requestId: pending.id,
-      method: pending.method,
-      details: payload.error,
-      outcomeUnknown: pending.stateChanging && (payload.status === 409 || payload.status >= 500),
-    })))
+    this.#settle({
+      key,
+      settle: () => pending.reject(new BinanceRpcError(payload.error.msg, {
+        code: payload.error.code,
+        status: payload.status,
+        requestId: pending.id,
+        method: pending.method,
+        details: payload.error,
+        outcomeUnknown: pending.stateChanging && (payload.status === 409 || payload.status >= 500),
+      })),
+    })
   }
 
   #settleProtocolError({ key, pending, message, details }) {
-    this.#settle({ key, settle: () => pending.reject(new BinanceRpcProtocolError(message, {
-      requestId: pending.id,
-      method: pending.method,
-      details,
-    })))
+    this.#settle({
+      key,
+      settle: () => pending.reject(new BinanceRpcProtocolError(message, {
+        requestId: pending.id,
+        method: pending.method,
+        details,
+      })),
+    })
   }
 
   #settle({ key, settle }) {
