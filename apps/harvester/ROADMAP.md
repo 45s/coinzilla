@@ -1785,3 +1785,9 @@ The current rationale, filter mapping, deliberately excluded order-type-specific
 - [ ] Continue validating supported static rules (price tick, quantity step, min/max quantity, min/max notional) and required order-type support. Missing or malformed authoritative metadata remains a startup failure.
 - [ ] Binance remains authoritative for unsupported dynamic/account/exchange constraints. Definite exchange filter rejections must be surfaced as `DEFINITE_EXCHANGE_FILTER_REJECTED`, remove only the definitely rejected PENDING order, and never be confused with an ambiguous/UNKNOWN outcome.
 - [ ] Verify the readiness, bootstrap, and refreshed trailing-order paths with offline regression tests and exact-head CI. No TESTNET or LIVE exchange operations are part of this change.
+
+## 2026-11-16 — Bitunix Spot market metadata preparation (issue #1185)
+
+- [x] Implement a pure Harvester mapping from raw Bitunix Spot pair metadata into canonical `Market` and `TradingRules`: `minVolume` to `MIN_QUANTITY`, `minPrice` to `MIN_NOTIONAL`.
+- [x] Keep price/quantity increments, maximum bounds, and depth precision UNKNOWN where the official API does not define their semantics; record reference-only maximum field names as unvalidated diagnostics.
+- [ ] Keep this helper disconnected from runtime bootstrap until Bitunix lifecycle and reconciliation prerequisites in [issue #1185](https://github.com/45s/coinzilla/issues/1185) are resolved. This work does not enable Bitunix trading. Implemented as a pure helper in [PR #1209](https://github.com/45s/coinzilla/pull/1209).
