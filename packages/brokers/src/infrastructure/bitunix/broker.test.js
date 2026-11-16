@@ -652,3 +652,28 @@ test("Bitunix Spot broker exposes legacy Coin assets from free and locked accoun
     },
   ])
 })
+
+test("Bitunix Spot last price rejects non-positive values and preserves positive decimal strings", async () => {
+  for (const invalidPrice of ["0", "-0.01"]) {
+    const { broker, calls } = createBroker({
+      responses: {
+        "/api/spot/v1/market/last_price": invalidPrice,
+      },
+    })
+
+    const result = await broker.getPrice({ symbol: "BTCUSDT" })
+
+    assert.equal(result.ok, false, `last price ${invalidPrice} must be rejected`)
+    assert.equal(calls.length, 1)
+  }
+
+  const { broker } = createBroker({
+    responses: {
+      "/api/spot/v1/market/last_price": "0.0000000100",
+    },
+  })
+  const result = await broker.getPrice({ symbol: "BTCUSDT" })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.price, "0.0000000100")
+})
