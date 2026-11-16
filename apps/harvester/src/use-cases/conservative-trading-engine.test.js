@@ -11189,7 +11189,10 @@ async function prepareLateSellShutdownScenario({ fillFraction } = {}) {
       right: fillFraction,
     })
   assert.ok(
-    compareDecimal({ left: quantity, right: sellOrder.originalQuantity.amount }) <= 0,
+    compareDecimal({
+      left: quantity,
+      right: sellOrder.originalQuantity.amount,
+    }) <= 0,
     "The late fill must not exceed the original recovery SELL quantity.",
   )
   cancelSellExecutedQuantity = quantity
