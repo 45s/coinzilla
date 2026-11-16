@@ -4,7 +4,10 @@ import { reconcileAccountSnapshotDeltas } from "../src/domain/account/reconcile-
 const SNAPSHOT_EVENT = "account.snapshot_captured"
 const RECOVERY_CYCLE_EVENT = "recovery.cycle_completed"
 
-function addRecordToSession({ sessions, record }) {
+function addRecordToSession({
+      sessions,
+      record,
+    }) {
   const event = record?.payload
   if (![SNAPSHOT_EVENT, RECOVERY_CYCLE_EVENT].includes(event?.name)) {
     return
@@ -70,7 +73,10 @@ function createRecoverySummary({ recoveryCycleProfits }) {
   }
 }
 
-function createSessionReport({ session, pair }) {
+function createSessionReport({
+        session,
+        pair,
+      }) {
   const blockers = []
   if (pair.opening.length !== 1) {
     blockers.push(`PREFLIGHT_SNAPSHOT_COUNT:${pair.opening.length}`)
@@ -120,7 +126,11 @@ function createSessionReport({ session, pair }) {
     ? []
     : [new Error(`${session} closing account snapshot is marked INCOMPLETE`)]
   return {
-    report: { session, ...result.data, ...recoverySummary },
+    report: {
+      session,
+      ...result.data,
+      ...recoverySummary,
+    },
     errors,
   }
 }
