@@ -216,3 +216,30 @@ test("does not expose partially updated projections when the legacy debit cannot
   assert.equal(context.legacyPosition, legacyPositionBefore, "A failed transition must leave the caller's legacy Position unchanged.")
   assert.equal(context.legacyAccounting, legacyAccountingBefore, "A failed transition must leave the caller's legacy P&L snapshot unchanged.")
 })
+
+test("reconciles a rejected zero-fill SELL without claiming an accounting commit or duplicate", () => {
+  const rejectedOrder = makeOrder({
+    status: "REJECTED",
+    executedQuantity: "0",
+  })
+  const orderRegistry = makeOrderRegistry(rejectedOrder)
+  const context = makeAccountingContext()
+  const result = applyReconciledMixedSellOrder({
+    ...context,
+    reconciliation: createMixedSellFillReconciliation({
+      order: rejectedOrder,
+      orderRegistry,
+    }),
+    terminalOrder: rejectedOrder,
+    orderRegistry,
+    canonicalFills: [],
+    canonicalFillAllocations: [],
+  })
+
+  assert.equal(result.applied, false, "A rejected order with no fills must not claim a projection transition.")
+  assert.equal(result.duplicate, false, "An empty fill history is not a duplicate accounting commit.")
+  assert.equal(result.portfolio, context.portfolio, "A zero-fill order must preserve the original Portfolio.")
+  assert.equal(result.legacyPosition, context.legacyPosition, "A zero-fill order must preserve legacy inventory.")
+  assert.equal(result.legacyAccounting, context.legacyAccounting, "A zero-fill order must preserve legacy realized P&L.")
+  assert.equal(result.reconciliation.status, "RECONCILED", "The zero-fill terminal order must still be reconciled.")
+})
