@@ -143,7 +143,7 @@ test("rejects symbols that are not actively tradable on Spot", async () => {
       fetchBinanceSpotMetadata({
         symbol: "ADAFDUSD",
         fetchImpl: async () => createResponse({
-    body: body,
+    body,
   }),
       }),
       /not.*(trading|spot)/i,
