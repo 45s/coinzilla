@@ -17,7 +17,9 @@ test("connects lazily and subscribes with a correlated acknowledgement", async (
 
   acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
   await subscription
-  transports[0].receive({ e: "aggTrade", s: "BTCUSDT", p: "65000.00" })
+  transports[0].receive({ e: "aggTrade",
+s: "BTCUSDT",
+p: "65000.00" })
 
   assert.equal(events.length, 1)
   assert.equal(events[0].p, "65000.00")
@@ -40,13 +42,17 @@ test("deduplicates server subscriptions while allowing multiple local listeners"
   await client.subscribe("btcusdt@aggTrade", second)
   assert.equal(transports[0].sent.length, 1)
 
-  transports[0].receive({ e: "aggTrade", s: "BTCUSDT", p: "1" })
+  transports[0].receive({ e: "aggTrade",
+s: "BTCUSDT",
+p: "1" })
   assert.equal(firstEvents.length, 1)
   assert.equal(secondEvents.length, 1)
 
   await client.unsubscribe("btcusdt@aggTrade", first)
   assert.equal(transports[0].sent.length, 1)
-  transports[0].receive({ e: "aggTrade", s: "BTCUSDT", p: "2" })
+  transports[0].receive({ e: "aggTrade",
+s: "BTCUSDT",
+p: "2" })
   assert.equal(firstEvents.length, 1)
   assert.equal(secondEvents.length, 2)
 
@@ -122,13 +128,20 @@ test("dispatches combined-stream envelopes and all-market arrays", async () => {
   acknowledge(transports[0], 1)
   await allMarket
 
-  const trade = { e: "aggTrade", s: "BTCUSDT", p: "2" }
-  transports[0].receive({ stream: "btcusdt@aggTrade", data: trade })
+  const trade = { e: "aggTrade",
+s: "BTCUSDT",
+p: "2" }
+  transports[0].receive({ stream: "btcusdt@aggTrade",
+data: trade })
   transports[0].receive({
     stream: "!miniTicker@arr",
     data: [
-      { e: "24hrMiniTicker", s: "BTCUSDT", c: "3" },
-      { e: "24hrMiniTicker", s: "ETHUSDT", c: "4" },
+      { e: "24hrMiniTicker",
+s: "BTCUSDT",
+c: "3" },
+      { e: "24hrMiniTicker",
+s: "ETHUSDT",
+c: "4" },
     ],
   })
 
@@ -141,7 +154,8 @@ test("rejects Binance subscription errors and times out missing acknowledgements
   const { client, clock, transports } = createClient()
   const failed = client.subscribe("btcusdt@aggTrade", () => {})
   await flush()
-  acknowledge(transports[0], 0, { code: 2, msg: "Invalid stream" })
+  acknowledge(transports[0], 0, { code: 2,
+msg: "Invalid stream" })
   await assert.rejects(failed, /Invalid stream/)
   assert.deepEqual(client.subscriptions, [])
 
@@ -195,7 +209,8 @@ test("handles serverShutdown and rotates connections before the 24-hour limit", 
   acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
   await subscription
 
-  transports[0].receive({ e: "serverShutdown", E: 123 })
+  transports[0].receive({ e: "serverShutdown",
+E: 123 })
   assert.equal(transports[0].closeCalls.length, 1)
   assert.equal(transports[0].closeCalls[0].code, 1000)
   clock.advanceBy(10)
