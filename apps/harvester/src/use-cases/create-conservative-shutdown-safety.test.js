@@ -59,6 +59,37 @@ test("keeps a hard strategy safety pause as a shutdown blocker", async () => {
   assert.deepEqual(result.data.markets[0].blockers, ["STRATEGY_SAFETY_PAUSED"])
 })
 
+test("keeps a non-recovery-managed in-memory pause as a shutdown blocker", async () => {
+  const state = createState()
+  state.paused.add("BTCUSDT")
+  const safety = createConservativeShutdownSafety({
+    state,
+    pairs: {
+      BTCUSDT: { enabled: true },
+    },
+    runTransition: ({ task }) => task(),
+  })
+
+  safety.beginShutdown()
+  const result = await safety.auditShutdownSafety({
+    symbol: "BTCUSDT",
+    reconciliationComplete: true,
+    journalDurable: true,
+    coverageResult: {
+      ok: true,
+      data: {
+        covered: true,
+        symbols: ["BTCUSDT"],
+        findings: [],
+      },
+    },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.markets[0].status, "UNSAFE")
+  assert.deepEqual(result.data.markets[0].blockers, ["STRATEGY_SAFETY_PAUSED"])
+})
+
 test("keeps a recovery-managed pause unsafe until cancellation facts are resolved", async () => {
   const state = createState()
   state.paused.add("BTCUSDT")
