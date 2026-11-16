@@ -369,7 +369,7 @@ test("composes enabled Telegram operator control independently from outbound not
   assert.equal(
     appConfig.notifications.telegram.enabled,
     true,
-    "Disabling inbound operator control by default must not disable independently configured outbound notifications.",
+    "Enabling inbound operator control by default must not change independently configured outbound notifications.",
   )
   assert.deepEqual(
     OPERATOR_CONTROL_CONFIG.telegram.allowedUserIds,
