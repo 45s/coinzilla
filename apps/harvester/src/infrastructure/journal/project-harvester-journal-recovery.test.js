@@ -891,27 +891,27 @@ function createAccountingParityFills({ bnbAsset }) {
   ]
 }
 
-function appendAccountingParityFillRecords({ records, fill }) {
-  const dto = mapFillAppliedData({ fill })
+function appendAccountingParityFillRecords({ records, fillValue }) {
+  const dto = mapFillAppliedData({ fillValue })
   assert.equal(dto.ok, true, dto.errors?.map(({ message }) => message).join("; "))
   const orderFacts = {
-    clientOrderId: fill.clientOrderId,
+    clientOrderId: fillValue.clientOrderId,
     symbol: canonicalMarket.symbol,
-    side: fill.side,
+    side: fillValue.side,
     type: "LIMIT",
-    price: fill.price.amount,
-    quantity: fill.side === "SELL" ? "100" : fill.quantity.amount,
+    price: fillValue.price.amount,
+    quantity: fillValue.side === "SELL" ? "100" : fillValue.quantity.amount,
   }
   records.push(record("order.submission_requested", {
     ...orderFacts,
     status: "PENDING",
-  }, `requested-${fill.tradeId}`))
+  }, `requested-${fillValue.tradeId}`))
   records.push(record("order.submitted", {
     ...orderFacts,
-    brokerOrderId: fill.brokerOrderId,
-    status: fill.side === "SELL" ? "PARTIALLY_FILLED" : "NEW",
-  }, `submitted-${fill.tradeId}`))
-  records.push(record("execution.fill_applied", dto.data, `fill-${fill.tradeId}`))
+    brokerOrderId: fillValue.brokerOrderId,
+    status: fillValue.side === "SELL" ? "PARTIALLY_FILLED" : "NEW",
+  }, `submitted-${fillValue.tradeId}`))
+  records.push(record("execution.fillValue_applied", dto.data, `fillValue-${fillValue.tradeId}`))
 }
 
 function assertAccountingParity({ livePortfolio, liveLedger, restored }) {
@@ -928,16 +928,16 @@ test("matches live BUY/SELL accounting through DTO, projection, and restore for 
   let livePortfolio = new Portfolio()
   let liveLedger = RecoveryLedger.empty({ market: canonicalMarket })
   const records = []
-  for (const fill of fills) {
+  for (const fillValue of fills) {
     const live = updateTradingAccounting({
       portfolio: livePortfolio,
       recoveryLedger: liveLedger,
-      fill,
+      fill: fillValue,
     })
     assert.equal(live.ok, true, live.errors?.map(({ message }) => message).join("; "))
     livePortfolio = live.data.portfolio
     liveLedger = live.data.recoveryLedger
-    appendAccountingParityFillRecords({ records, fill })
+    appendAccountingParityFillRecords({ records, fillValue })
   }
 
   const projection = projectHarvesterJournalRecovery({ records })
