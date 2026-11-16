@@ -296,7 +296,10 @@ function prepareMarkdownHeadingLine({ line, index, state, fencePattern }) {
     }
   }
 
-  return { line: normalizedLine, skip: false }
+  return {
+    line: normalizedLine,
+    skip: false,
+  }
 }
 
 function collectMarkdownHeadingAnchors(content) {
@@ -742,8 +745,9 @@ function scanJavaScriptCode({ source, output, startIndex, stopAtTemplateBrace = 
     })
     if (nonCodeToken) {
       index = nonCodeToken.nextIndex
-      if (nonCodeToken.previousToken) {
-        previousToken = nonCodeToken.previousToken
+      const { previousToken: nextPreviousToken } = nonCodeToken
+      if (nextPreviousToken) {
+        previousToken = nextPreviousToken
       }
       continue
     }
