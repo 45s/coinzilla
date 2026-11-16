@@ -34,9 +34,9 @@ describe(`${Market.name} identity`, () => {
       venue: "binance",
       symbol: "DOGEFDUSD",
       baseAsset: { id: "dogecoin",
-code: "DOGE" },
+        code: "DOGE" },
       quoteAsset: { id: "fdusd",
-code: "FDUSD" },
+        code: "FDUSD" },
     })
   })
 
@@ -86,7 +86,7 @@ describe(`${Market.name} validation`, () => {
 
   it("requires canonical Asset instances for both sides", () => {
     assert.throws(() => createMarket({ baseAsset: { id: "dogecoin",
-code: "DOGE" } }), {
+      code: "DOGE" } }), {
       message: marketErrMsgs.baseAsset,
     })
     assert.throws(() => createMarket({ quoteAsset: null }), {
@@ -96,11 +96,11 @@ code: "DOGE" } }), {
 
   it("rejects a market that quotes an asset against itself", () => {
     const sameAsset = new Asset({ id: "dogecoin",
-code: "DOGE" })
+      code: "DOGE" })
 
     assert.throws(
       () => createMarket({ baseAsset: sameAsset,
-quoteAsset: sameAsset }),
+        quoteAsset: sameAsset }),
       { message: marketErrMsgs.sameAssets },
     )
   })
