@@ -31,7 +31,8 @@ export class EventBus {
     let data
 
     try {
-      assertObjectInput({ input, operation: "Event publish" })
+      assertObjectInput({ input,
+operation: "Event publish" })
       ;({ name, source, data = {} } = input)
     } catch (error) {
       return toResult({ error })
@@ -105,7 +106,8 @@ export class EventBus {
     let handler
 
     try {
-      assertObjectInput({ input, operation: "Event subscription" })
+      assertObjectInput({ input,
+operation: "Event subscription" })
       ;({ name, handler } = input)
     } catch (error) {
       return toResult({ error })
@@ -117,14 +119,16 @@ export class EventBus {
       })
     }
 
-    return this.addSubscription({ name, handler })
+    return this.addSubscription({ name,
+handler })
   }
 
   subscribeAll(input = {}) {
     let handler
 
     try {
-      assertObjectInput({ input, operation: "Event subscribeAll" })
+      assertObjectInput({ input,
+operation: "Event subscribeAll" })
       ;({ handler } = input)
     } catch (error) {
       return toResult({ error })
@@ -141,7 +145,8 @@ export class EventBus {
     let handler
 
     try {
-      assertObjectInput({ input, operation: "Event subscription" })
+      assertObjectInput({ input,
+operation: "Event subscription" })
       ;({ name, handler } = input)
     } catch (error) {
       return toResult({ error })
@@ -200,7 +205,9 @@ export class EventBus {
 
     registry.add(listener)
 
-    const record = { registry, listener, active: true }
+    const record = { registry,
+listener,
+active: true }
     this.subscriptions.add(record)
 
     const subscription = {
