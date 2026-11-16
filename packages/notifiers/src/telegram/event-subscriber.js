@@ -92,6 +92,18 @@ function unsubscribeAll(subscriptions) {
   return errors
 }
 
+function createDeliveryState() {
+  return {
+    deliveryTail: Promise.resolve(),
+    pendingCount: 0,
+    acceptedCount: 0,
+    deliveredCount: 0,
+    failedCount: 0,
+    overflowCount: 0,
+    isClosed: false,
+  }
+}
+
 function createDeliveryHandler({
   eventName,
   state,
@@ -160,15 +172,7 @@ export function subscribeTelegramNotifications({
     maxPending,
     eventNames })
 
-  const state = {
-    deliveryTail: Promise.resolve(),
-    pendingCount: 0,
-    acceptedCount: 0,
-    deliveredCount: 0,
-    failedCount: 0,
-    overflowCount: 0,
-    isClosed: false,
-  }
+  const state = createDeliveryState()
   let closePromise
   const subscriptions = []
 
