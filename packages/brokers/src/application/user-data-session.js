@@ -515,7 +515,7 @@ recoveryRequired: true })
           client = this.createClient()
           this.setClient(client)
           port = this.#portFor(client)
-          this.#bindClient(client)
+          this.#bindClient({ client })
           try {
             await port.connect()
           } catch (error) {
@@ -580,7 +580,7 @@ recoveryRequired: true })
       recoveryGeneration: this.#recoveryGeneration,
     }
     for (const subscriber of [...this.#subscribers.values()]) {
-      if (!subscriber.recoveryAcknowledged) {this.#notifySubscriber(subscriber, status)}
+      if (!subscriber.recoveryAcknowledged) {this.#notifySubscriber({ subscriber, status })}
     }
     this.#scheduleAcknowledgementReminder()
   }
@@ -678,7 +678,7 @@ recoveryRequired: true })
     const port = client ? this.#portFor(client) : null
     try {
       if (subscriptionId !== null && port?.state === "open") {
-        await this.#unsubscribeRemoteSubscription(port, subscriptionId)
+        await this.#unsubscribeRemoteSubscription({ port, subscriptionId })
       }
     } finally {
       this.#detachUserDataListeners()
