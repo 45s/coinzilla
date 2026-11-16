@@ -1,10 +1,13 @@
 import { ESLint } from "eslint"
-import { parse } from "espree"
+import { createRequire } from "node:module"
 import { relative } from "node:path"
 import { fileURLToPath } from "node:url"
 import test from "node:test"
 
 const repositoryRoot = fileURLToPath(new URL("../../../", import.meta.url))
+const require = createRequire(import.meta.url)
+const eslintEntry = require.resolve("eslint")
+const { parse } = createRequire(eslintEntry)("espree")
 
 function indentObjectProperties(source) {
   const lines = source.split("\n")
