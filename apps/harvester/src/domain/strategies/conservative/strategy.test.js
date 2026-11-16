@@ -935,13 +935,11 @@ test("caps residual SELL quantity at MAX_NOTIONAL and leaves the rest for sell-t
       tradingRules: {
         constraints: [
           ...marketMetadata.tradingRules.constraints.map((rule) =>
-            rule.type === "QUANTITY_INCREMENT" || rule.type === "MIN_QUANTITY"
-              ? { ...rule,
-value: { amount: "0.1" } }
-              : rule.type === "MIN_NOTIONAL"
-                ? { ...rule,
-value: { amount: "0.05" } }
-                : rule,
+            withExchangeRuleOverrides({
+              rule,
+              quantityIncrement: "0.1",
+              minimumNotional: "0.05",
+            })
           ),
           { type: "MAX_NOTIONAL",
 status: "SUPPORTED",
