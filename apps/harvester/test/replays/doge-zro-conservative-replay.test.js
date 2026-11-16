@@ -1,4 +1,4 @@
-import nodeTest, { describe, beforeEach, afterEach } from "node:test"
+import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { createDogeTradingReplay } from "./doge-zro-conservative-replay-harness.js"
 
@@ -83,24 +83,20 @@ const expectedBuyFillReportsAfterFourBuys = [
   },
 ]
 
-describe("DOGEUSDT Conservative strategy replay", () => {
-  let dogeTradingReplay
-
-  beforeEach(async () => {
-    dogeTradingReplay = await createDogeTradingReplay({
+function runDogeTradingReplayTest(name, run) {
+  test(name, async (t) => {
+    const dogeTradingReplay = await createDogeTradingReplay({
       marketSymbol: MARKET_SYMBOL,
       appConfig,
-    })
-  })
+    });
+    t.after(async () => {
+      await dogeTradingReplay.runtime.stop();
+    });
+    await run(dogeTradingReplay);
+  });
+}
 
-  afterEach(async () => {
-    if (dogeTradingReplay?.runtime) {
-      await dogeTradingReplay.runtime.stop()
-    }
-    dogeTradingReplay = undefined
-  })
-
-  test("submits the initial DOGE BUY when the market reaches its configured entry trigger", async () => {
+runDogeTradingReplayTest("submits the initial DOGE BUY when the market reaches its configured entry trigger", async (dogeTradingReplay) => {
     const initialBuyOrder = await submitInitialBuyOrder(dogeTradingReplay)
 
     assertOrderMatches(
@@ -150,14 +146,82 @@ price }),
     )
   })
 
-  test("submits the recovery SELL before the next standing BUY after the actual BUY fill", async () => {
-    const {
-      recoverySellOrder,
-      nextStandingBuyOrder,
-    } = await submitFirstBuyAndWaitForRecoveryOrders(dogeTradingReplay)
+function assertRecoveryOrders(dogeTradingReplay, recoverySellOrder, nextStandingBuyOrder) {
+  assertOrderMatches(
+    recoverySellOrder,
+    {
+      marketSymbol: MARKET_SYMBOL,
+      side: "SELL",
+      price: dogeTradingReplay.scenarioExpectations.sellPrice,
+      quantity: dogeTradingReplay.scenarioExpectations.expectedSellQuantity,
+      orderType: "LIMIT",
+    },
+    "The actual completed BUY fill must create the recovery SELL at the calculated price and sellable quantity.",
+  );
+  assertOrderMatches(
+    nextStandingBuyOrder,
+    {
+      marketSymbol: MARKET_SYMBOL,
+      side: "BUY",
+      price: dogeTradingReplay.scenarioExpectations.nextBuyPrice,
+      quantity: String(dogeTradingReplay.marketConfiguration.orderQuantity),
+      orderType: "LIMIT",
+    },
+    "The completed BUY fill must create the next standing BUY one configured price step below the completed BUY price.",
+  );
+}
 
-    assertOrderMatches(
-      recoverySellOrder,
+function assertBuyExecutionReport(dogeTradingReplay) {
+  const receivedBuyExecutionReports = dogeTradingReplay.receivedExecutionReports.map(
+    ({ executedOrder, fill }) => ({
+      marketSymbol: executedOrder.symbol,
+      side: executedOrder.side,
+      orderPrice: executedOrder.price,
+      executedQuantity: executedOrder.executedQuantity,
+      fillPrice: fill.price,
+      fillQuantity: fill.quantity,
+      quoteQuantity: fill.quoteQuantity,
+      commissionAmount: fill.commissionAmount,
+      commissionAsset: fill.commissionAsset,
+    }),
+  );
+  assert.deepEqual(
+    receivedBuyExecutionReports,
+    [{
+      marketSymbol: MARKET_SYMBOL,
+      side: "BUY",
+      orderPrice: dogeTradingReplay.scenarioExpectations.buyPrice,
+      executedQuantity: String(dogeTradingReplay.marketConfiguration.orderQuantity),
+      fillPrice: dogeTradingReplay.scenarioExpectations.buyPrice,
+      fillQuantity: String(dogeTradingReplay.marketConfiguration.orderQuantity),
+      quoteQuantity: "28.628",
+      commissionAmount: "0.4",
+      commissionAsset: "DOGE",
+    }],
+    "The BUY execution report must preserve the exact order facts, executed quantity, quote notional, and DOGE commission.",
+  );
+}
+
+function assertBrokerOrderRequestSequence(dogeTradingReplay) {
+  const brokerOrderRequests = dogeTradingReplay.brokerOrderPlacementRequests.map(
+    ({ params }) => ({
+      marketSymbol: params.symbol,
+      side: params.side,
+      price: params.price,
+      quantity: params.quantity,
+      orderType: params.type,
+    }),
+  );
+  assert.deepEqual(
+    brokerOrderRequests,
+    [
+      {
+        marketSymbol: MARKET_SYMBOL,
+        side: "BUY",
+        price: dogeTradingReplay.scenarioExpectations.buyPrice,
+        quantity: String(dogeTradingReplay.marketConfiguration.orderQuantity),
+        orderType: "LIMIT",
+      },
       {
         marketSymbol: MARKET_SYMBOL,
         side: "SELL",
@@ -165,11 +229,6 @@ price }),
         quantity: dogeTradingReplay.scenarioExpectations.expectedSellQuantity,
         orderType: "LIMIT",
       },
-      "the actual completed BUY fill must create the recovery SELL at the calculated recovery price and sellable quantity",
-    )
-
-    assertOrderMatches(
-      nextStandingBuyOrder,
       {
         marketSymbol: MARKET_SYMBOL,
         side: "BUY",
@@ -177,77 +236,20 @@ price }),
         quantity: String(dogeTradingReplay.marketConfiguration.orderQuantity),
         orderType: "LIMIT",
       },
-      "the completed BUY fill must create the next standing BUY one configured price step below the completed BUY price",
-    )
+    ],
+    "The broker must receive the recovery SELL request before the next standing BUY request.",
+  );
+}
 
-    const receivedBuyExecutionReports = dogeTradingReplay.receivedExecutionReports.map(
-      ({ executedOrder, fill }) => ({
-        marketSymbol: executedOrder.symbol,
-        side: executedOrder.side,
-        orderPrice: executedOrder.price,
-        executedQuantity: executedOrder.executedQuantity,
-        fillPrice: fill.price,
-        fillQuantity: fill.quantity,
-        quoteQuantity: fill.quoteQuantity,
-        commissionAmount: fill.commissionAmount,
-        commissionAsset: fill.commissionAsset,
-      }),
-    )
-    assert.deepEqual(
-      receivedBuyExecutionReports,
-      [{
-        marketSymbol: MARKET_SYMBOL,
-        side: "BUY",
-        orderPrice: dogeTradingReplay.scenarioExpectations.buyPrice,
-        executedQuantity: String(dogeTradingReplay.marketConfiguration.orderQuantity),
-        fillPrice: dogeTradingReplay.scenarioExpectations.buyPrice,
-        fillQuantity: String(dogeTradingReplay.marketConfiguration.orderQuantity),
-        quoteQuantity: "28.628",
-        commissionAmount: "0.4",
-        commissionAsset: "DOGE",
-      }],
-      "the BUY execution report must include the exact order facts, executed quantity, quote notional, and DOGE commission",
-    )
+runDogeTradingReplayTest("submits the recovery SELL before the next standing BUY after the actual BUY fill", async (dogeTradingReplay) => {
+  const { recoverySellOrder, nextStandingBuyOrder } =
+    await submitFirstBuyAndWaitForRecoveryOrders(dogeTradingReplay);
+  assertRecoveryOrders(dogeTradingReplay, recoverySellOrder, nextStandingBuyOrder);
+  assertBuyExecutionReport(dogeTradingReplay);
+  assertBrokerOrderRequestSequence(dogeTradingReplay);
+});
 
-    const brokerOrderRequests = dogeTradingReplay.brokerOrderPlacementRequests.map(
-      ({ params }) => ({
-        marketSymbol: params.symbol,
-        side: params.side,
-        price: params.price,
-        quantity: params.quantity,
-        orderType: params.type,
-      }),
-    )
-    assert.deepEqual(
-      brokerOrderRequests,
-      [
-        {
-          marketSymbol: MARKET_SYMBOL,
-          side: "BUY",
-          price: dogeTradingReplay.scenarioExpectations.buyPrice,
-          quantity: String(dogeTradingReplay.marketConfiguration.orderQuantity),
-          orderType: "LIMIT",
-        },
-        {
-          marketSymbol: MARKET_SYMBOL,
-          side: "SELL",
-          price: dogeTradingReplay.scenarioExpectations.sellPrice,
-          quantity: dogeTradingReplay.scenarioExpectations.expectedSellQuantity,
-          orderType: "LIMIT",
-        },
-        {
-          marketSymbol: MARKET_SYMBOL,
-          side: "BUY",
-          price: dogeTradingReplay.scenarioExpectations.nextBuyPrice,
-          quantity: String(dogeTradingReplay.marketConfiguration.orderQuantity),
-          orderType: "LIMIT",
-        },
-      ],
-      "the broker must receive the recovery SELL request before the next standing BUY request",
-    )
-  })
-
-  test("combines four completed BUY fills into one profitable recovery SELL and retains the configured inventory", async () => {
+runDogeTradingReplayTest("combines four completed BUY fills into one profitable recovery SELL and retains the configured inventory", async (dogeTradingReplay) => {
     let currentStandingBuyOrder = await submitInitialBuyOrder(dogeTradingReplay)
     const completedBuyOrders = []
     let latestRecoverySellOrder
@@ -450,7 +452,7 @@ price }),
     )
   })
 
-  test("completes the recovery cycle only after the SELL fill report is received and reconciled", async () => {
+runDogeTradingReplayTest("completes the recovery cycle only after the SELL fill report is received and reconciled", async (dogeTradingReplay) => {
     const { recoverySellOrder } =
       await submitFirstBuyAndWaitForRecoveryOrders(dogeTradingReplay)
     const recoveryCycleCompletion = dogeTradingReplay.waitForRecoveryCycleCompletion()
@@ -532,7 +534,6 @@ price }),
       "the completed recovery cycle must reconcile the BUY and SELL reports with their actual quantities, proceeds, and commission assets",
     )
   })
-})
 
 async function submitInitialBuyOrder(dogeTradingReplay) {
   const initialBuyOrderSubmitted = dogeTradingReplay.waitForSubmittedOrder("BUY")
