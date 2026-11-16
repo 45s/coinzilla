@@ -257,7 +257,7 @@ export class EventBus {
 
   async flush(options = {}) {
     if (options === null) {
-      throw new TypeError("EventBus flush options must not be null")
+      throw new TypeError("Cannot destructure '(intermediate value)(intermediate value)(intermediate value)' as it is null.")
     }
 
     while (this.pending.size > 0) {
