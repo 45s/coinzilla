@@ -32,9 +32,10 @@ export class FakeClock {
     while (true) {
       const next = [...this.#timers.entries()]
         .filter(([, timer]) => timer.dueAt <= target)
-        .sort((left, right) =>
-          left[1].dueAt - right[1].dueAt || left[0] - right[0],
-        )[0]
+        .sort((...args) => {
+          const [left, right] = args
+          return left[1].dueAt - right[1].dueAt || left[0] - right[0]
+        })[0]
 
       if (!next) {break}
 

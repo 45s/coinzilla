@@ -12,7 +12,8 @@ const FORBIDDEN_TARGETS = Object.freeze({
 const IMPORT_PATTERN =
   /\b(?:import|export)\s+(?:[^"';`]*?\s+from\s*)?["']([^"']+)["']|\bimport\s*\(\s*["']([^"']+)["']\s*\)|\brequire\s*\(\s*["']([^"']+)["']\s*\)/g
 
-async function collectJavaScriptFiles(directory, prefix = "") {
+async function collectJavaScriptFiles(...args) {
+  const [directory, prefix = ""] = args
   const entries = await readdir(directory, { withFileTypes: true })
   const files = []
   for (const entry of entries) {
@@ -37,7 +38,8 @@ function getLayer(relativePath) {
   return FORBIDDEN_TARGETS[firstSegment] ? firstSegment : null
 }
 
-function resolveLocalTarget(relativePath, specifier) {
+function resolveLocalTarget(...args) {
+  const [relativePath, specifier] = args
   if (!specifier.startsWith(".")) return null
   return path.posix.normalize(path.posix.join(path.posix.dirname(relativePath), specifier))
 }
@@ -99,9 +101,10 @@ export async function findForbiddenDependencies(sourceRoot) {
     }
   }
 
-  return violations.sort((left, right) =>
-    left.file.localeCompare(right.file) || left.import.localeCompare(right.import),
-  )
+  return violations.sort((...args) => {
+    const [left, right] = args
+    return left.file.localeCompare(right.file) || left.import.localeCompare(right.import)
+  })
 }
 
 /** Create a temporary source tree for deterministic negative/control tests. */
@@ -112,7 +115,8 @@ export async function withArchitectureFixture(run) {
   try {
     await run({
       sourceRoot,
-      write: async (relativePath, source) => {
+      write: async (...args) => {
+        const [relativePath, source] = args
         const destination = path.join(sourceRoot, relativePath)
         await mkdir(path.dirname(destination), { recursive: true })
         await writeFile(destination, source)

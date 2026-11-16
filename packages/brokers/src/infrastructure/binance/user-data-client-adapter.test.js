@@ -6,7 +6,8 @@ import { createFakeRpcClient } from "./broker-websocket/test-helpers/fake-broker
 
 test("maps user-data port operations to the exact signed Binance RPC contract", async () => {
   const client = createFakeRpcClient({
-    "userDataStream.subscribe.signature": (_params, options) => {
+    "userDataStream.subscribe.signature": (...args) => {
+      const [, options] = args
       assert.deepEqual(options, { signed: true })
       return { subscriptionId: 17 }
     },

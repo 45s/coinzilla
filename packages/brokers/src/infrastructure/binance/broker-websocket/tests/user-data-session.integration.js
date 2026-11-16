@@ -21,7 +21,8 @@ if (!Number.isSafeInteger(eventTimeoutMs) || eventTimeoutMs < 1_000) {
   throw new RangeError("BINANCE_TESTNET_EVENT_TIMEOUT_MS must be an integer of at least 1000")
 }
 
-async function waitForStatus(statuses, type, startIndex = 0, timeoutMs = 30_000) {
+async function waitForStatus(...args) {
+  const [statuses, type, startIndex = 0, timeoutMs = 30_000] = args
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     const recent = statuses.slice(startIndex)
@@ -34,7 +35,8 @@ async function waitForStatus(statuses, type, startIndex = 0, timeoutMs = 30_000)
   throw new Error(`Timed out waiting for Binance user-data status: ${type}`)
 }
 
-async function waitForEvent(events, timeoutMs) {
+async function waitForEvent(...args) {
+  const [events, timeoutMs] = args
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (events.length > 0) {return events[0]}
