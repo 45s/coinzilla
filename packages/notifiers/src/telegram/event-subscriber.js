@@ -109,7 +109,9 @@ function createDeliveryHandler({
       const error = new Error(
         `Telegram notification queue capacity exceeded (maxPending=${maxPending})`,
       )
-      if (reportDeliveryFailure({ logger, eventName, error })) {
+      if (reportDeliveryFailure({ logger,
+        eventName,
+        error })) {
         return Promise.resolve()
       }
       return Promise.reject(error)
@@ -125,7 +127,9 @@ function createDeliveryHandler({
     })
     const observedDelivery = delivery.catch((error) => {
       state.failedCount += 1
-      if (!reportDeliveryFailure({ logger, eventName, error })) {
+      if (!reportDeliveryFailure({ logger,
+        eventName,
+        error })) {
         throw error
       }
     })
@@ -149,7 +153,12 @@ export function subscribeTelegramNotifications({
   eventNames,
   formatMessage,
 } = {}) {
-  const selectedEventNames = validateDependencies({ eventBus, notifier, formatMessage, logger, maxPending, eventNames })
+  const selectedEventNames = validateDependencies({ eventBus,
+    notifier,
+    formatMessage,
+    logger,
+    maxPending,
+    eventNames })
 
   const state = {
     deliveryTail: Promise.resolve(),
