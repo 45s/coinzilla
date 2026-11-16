@@ -62,8 +62,14 @@ const multiSessionRecords = [
     phase: "PREFLIGHT",
     sourceTime: 100,
     balances: [
-      balance({ asset: "DOGE", free: "10.0001" }),
-      balance({ asset: "USDT", free: "20" }),
+      balance({
+        asset: "DOGE",
+        free: "10.0001",
+      }),
+      balance({
+        asset: "USDT",
+        free: "20",
+      }),
     ],
   }),
   record({
@@ -92,15 +98,24 @@ const multiSessionRecords = [
     phase: "CLOSING",
     sourceTime: 200,
     balances: [
-      balance({ asset: "DOGE", free: "10.1251" }),
-      balance({ asset: "USDT", free: "19.5" }),
+      balance({
+        asset: "DOGE",
+        free: "10.1251",
+      }),
+      balance({
+        asset: "USDT",
+        free: "19.5",
+      }),
     ],
   }),
   snapshotRecord({
     fileName: "session-b.jsonl",
     phase: "PREFLIGHT",
     sourceTime: 300,
-    balances: [balance({ asset: "ZRO", free: "2" })],
+    balances: [balance({
+        asset: "ZRO",
+        free: "2",
+      })],
   }),
   record({
     fileName: "session-b.jsonl",
@@ -113,7 +128,10 @@ const multiSessionRecords = [
     fileName: "session-b.jsonl",
     phase: "CLOSING",
     sourceTime: 400,
-    balances: [balance({ asset: "ZRO", free: "2.1" })],
+    balances: [balance({
+        asset: "ZRO",
+        free: "2.1",
+      })],
   }),
 ]
 
@@ -140,8 +158,14 @@ test("pairs current PREFLIGHT/CLOSING snapshots by Journal session", () => {
         phase: "PREFLIGHT",
         sourceTime: 100,
         balances: [
-          balance({ asset: "DOGE", free: "10" }),
-          balance({ asset: "USDT", free: "20" }),
+          balance({
+        asset: "DOGE",
+        free: "10",
+      }),
+          balance({
+        asset: "USDT",
+        free: "20",
+      }),
         ],
       }),
       snapshotRecord({
@@ -149,8 +173,14 @@ test("pairs current PREFLIGHT/CLOSING snapshots by Journal session", () => {
         phase: "CLOSING",
         sourceTime: 200,
         balances: [
-          balance({ asset: "DOGE", free: "10.25" }),
-          balance({ asset: "USDT", free: "19.5" }),
+          balance({
+        asset: "DOGE",
+        free: "10.25",
+      }),
+          balance({
+        asset: "USDT",
+        free: "19.5",
+      }),
         ],
       }),
     ],
@@ -169,13 +199,19 @@ test("continues to read legacy OPENING snapshots from historical Journal session
         fileName: "legacy-session.jsonl",
         phase: "OPENING",
         sourceTime: 100,
-        balances: [balance({ asset: "DOGE", free: "2" })],
+        balances: [balance({
+        asset: "DOGE",
+        free: "2",
+      })],
       }),
       snapshotRecord({
         fileName: "legacy-session.jsonl",
         phase: "CLOSING",
         sourceTime: 200,
-        balances: [balance({ asset: "DOGE", free: "3" })],
+        balances: [balance({
+        asset: "DOGE",
+        free: "3",
+      })],
       }),
     ],
   })
