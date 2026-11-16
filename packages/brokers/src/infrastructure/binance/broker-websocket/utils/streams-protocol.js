@@ -41,7 +41,8 @@ export function validateStreamName(stream) {
  * @returns {string}
  * @throws {TypeError} If the selected stream type or its options are unsupported.
  */
-export function createStreamName(type, options = {}) {
+export function createStreamName(...args) {
+  const [type, options = {}] = args
   const { symbol, interval, windowSize, levels, speed } = options
   const normalizedSymbol = symbol === undefined || symbol === null ||
     typeof symbol === "string" && symbol.trim() === ""
