@@ -143,7 +143,8 @@ function collectAccountSymbolFilters({ accountFilters, symbol }) {
 function buildUnvalidatedConstraints({ filters, exchangeInfo, accountFilters, symbolInfo, symbol }) {
   const symbolFilters = [
     ...filters.filter((filter) => !STATIC_FILTER_TYPES.has(filter.filterType)),
-    ...collectAccountSymbolFilters({ accountFilters, symbol }),
+    ...collectAccountSymbolFilters({ accountFilters,
+      symbol }),
   ]
   const exchangeFilters = [
     ...(Array.isArray(exchangeInfo?.exchangeFilters) ? exchangeInfo.exchangeFilters : []),
@@ -156,7 +157,9 @@ function buildUnvalidatedConstraints({ filters, exchangeInfo, accountFilters, sy
       filter.asset === symbolInfo.quoteAsset
     )
     : []
-  return collectUnvalidatedConstraints({ symbolFilters, exchangeFilters, assetFilters })
+  return collectUnvalidatedConstraints({ symbolFilters,
+    exchangeFilters,
+    assetFilters })
 }
 
 /**
@@ -169,7 +172,8 @@ function buildUnvalidatedConstraints({ filters, exchangeInfo, accountFilters, sy
  * @throws {Error|TypeError} If required exchange metadata or decimal filters are invalid.
  */
 export function adaptSymbolFiltersResponse({ symbol, exchangeInfo, accountFilters = {} }) {
-  const metadata = findSymbolFilters({ symbol, exchangeInfo })
+  const metadata = findSymbolFilters({ symbol,
+    exchangeInfo })
   const { symbolInfo, filters, priceFilter, lotSizeFilter, notionalFilter } = metadata
   const tickSize = validatePositiveDecimalFilter({
     value: priceFilter?.tickSize,
@@ -181,9 +185,13 @@ export function adaptSymbolFiltersResponse({ symbol, exchangeInfo, accountFilter
     name: "LOT_SIZE.stepSize",
     symbol,
   })
-  validateSymbolMetadata({ symbolInfo, symbol })
+  validateSymbolMetadata({ symbolInfo,
+    symbol })
 
-  const optionalFilters = readOptionalFilters({ priceFilter, lotSizeFilter, notionalFilter, symbol })
+  const optionalFilters = readOptionalFilters({ priceFilter,
+    lotSizeFilter,
+    notionalFilter,
+    symbol })
   const unvalidatedConstraints = buildUnvalidatedConstraints({
     filters,
     exchangeInfo,

@@ -29,7 +29,7 @@ function readHttpUpgradeStatus(...sources) {
 
 function blockedByHostFrom(response) {
   const blockedByLink = response.headers.link?.match(/<([^>]+)>\s*;\s*rel=["']?blocked-by["']?/i)?.[1]
-  if (!blockedByLink) return null
+  if (!blockedByLink) {return null}
   try {
     return new URL(blockedByLink).host
   } catch {
@@ -41,7 +41,7 @@ function handleHttpUpgradeResponse({ name, response, finish }) {
   const chunks = []
   let size = 0
   response.on("data", (chunk) => {
-    if (size >= 512) return
+    if (size >= 512) {return}
     const bounded = chunk.subarray(0, 512 - size)
     chunks.push(bounded)
     size += bounded.length

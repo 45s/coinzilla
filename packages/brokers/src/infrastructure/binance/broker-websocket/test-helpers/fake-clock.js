@@ -30,7 +30,7 @@ export class FakeClock {
     const target = this.#now + milliseconds
 
     while (true) {
-      const next = [...this.#timers.entries()]
+      const [next] = [...this.#timers.entries()]
         .filter(([, timer]) => timer.dueAt <= target)
         .sort((...args) => {
           const [left, right] = args
