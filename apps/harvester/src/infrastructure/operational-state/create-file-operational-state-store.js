@@ -47,7 +47,8 @@ const MANIFEST_FILE_NAME = "manifest.jsonl"
 const operationQueues = new Map()
 const supportsPosixModeBits = process.platform !== "win32"
 
-function createError(message, code) {
+function createError(...parameters) {
+  const [message, code] = parameters
   const error = new Error(message)
   error.code = code
   return error
@@ -57,15 +58,18 @@ function factIdForOrderIntent(clientOrderId) {
   return `order-submission-intent:${  clientOrderId}`
 }
 
-function factIdForRecoveryCycle(marketId, cycleId) {
+function factIdForRecoveryCycle(...parameters) {
+  const [marketId, cycleId] = parameters
   return `recovery-cycle-completed:${  marketId  }:${  cycleId}`
 }
 
-function factIdForCancellationIntent(clientOrderId, reason, status, executedQuantity) {
+function factIdForCancellationIntent(...parameters) {
+  const [clientOrderId, reason, status, executedQuantity] = parameters
   return `order-cancellation-intent:${  clientOrderId  }:${  reason  }:${  status  }:${  executedQuantity}`
 }
 
-function factIdForCancellationOutcome(clientOrderId, reason, outcome) {
+function factIdForCancellationOutcome(...parameters) {
+  const [clientOrderId, reason, outcome] = parameters
   return `order-cancellation-outcome:${  clientOrderId  }:${  reason  }:${  outcome}`
 }
 
@@ -73,7 +77,8 @@ function factIdForExecutionFill(fillId) {
   return `execution-fill-applied:${  fillId}`
 }
 
-function factIdForOrderOutcome(clientOrderId, outcome) {
+function factIdForOrderOutcome(...parameters) {
+  const [clientOrderId, outcome] = parameters
   return `order-submission-outcome:${  clientOrderId  }:${  outcome}`
 }
 
