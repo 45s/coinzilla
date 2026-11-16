@@ -146,6 +146,20 @@ export function createSubmissionGate(dependencies = {}) {
       dependencies.isStopping?.() === true &&
       order.side === "SELL" &&
       purpose === "RECOVERY_SELL"
+    if (dependencies.state.shutdownBuyGate === true) {
+      if (order.side === "BUY") {
+        return defer({
+          symbol,
+          reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
+        })
+      }
+      if (!shutdownRecoverySubmission) {
+        return defer({
+          symbol,
+          reason: "CONSERVATIVE_SHUTDOWN_RECOVERY_SELL_ONLY",
+        })
+      }
+    }
     const context = {
       symbol,
       order,

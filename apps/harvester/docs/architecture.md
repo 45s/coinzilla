@@ -563,6 +563,19 @@ verified, the final coverage audit fails and CLOSING cannot report COMPLETE.
 External orders remain unowned and untouched; `EXTERNAL_ORDERS_POLICIES.IGNORE`
 is preserved.
 
+
+During graceful shutdown, BUY fills do not invoke the ordinary strategy
+evaluator. The event workflow records a per-market recovery-replan request. The
+Conservative participant keeps user-data intake alive while it cancels owned
+BUYs and reconciles pending identities, cancellation outcomes, racing fills and
+actual commissions. It then recalculates and verifies recovery SELL coverage
+from the resulting Position and RecoveryLedger. The application coordinator
+stops user-data intake only after every strategy participant is safe, then
+drains accepted events. Any late evidence invalidates the affected market's
+safety marker and triggers reconciliation and recovery SELL replanning before
+the shared shutdown barrier can pass. External orders remain unowned and
+untouched; `EXTERNAL_ORDERS_POLICIES.IGNORE` is preserved.
+
 ## Trailing BUY lifecycle
 
 The engine tracks whether the pair is in a trailing phase. A newly initialized
@@ -899,3 +912,17 @@ The shutdown-recovery inventory, conservative evaluation stages and operational-
 The ordinary TRADE startup regression fixture is split into market/config, broker-port, fill and assertion helpers. This is test-structure-only; the original startup, fill, accounting and shutdown assertions are retained.
 
 Completed SELL recovery-cycle publication receives the same injected workflow dependencies as the completion audit, preserving durable lifecycle evidence and state cleanup.
+
+## Strategy-owned shutdown coordination
+
+The application layer coordinates shutdown across independently running strategies. It uses a small participant contract: strategyId, beginShutdown(), waitUntilSafe(), isSafeToShutdown(), and a safety snapshot. On SIGINT/SIGTERM, the coordinator calls every participant's beginShutdown() synchronously before awaiting any participant. It waits for all participants and rechecks their current safety markers before shared cleanup.
+
+A strategy participant owns its domain-specific shutdown policy. The Conservative participant owns the BUY gate, Harvester-owned BUY cancellation, order/fill/commission reconciliation, per-market safety markers and recovery SELL coverage. A future Recovery Seller participant must own its own gate, order policy and safety proof. The coordinator must not import strategy accounting, order ownership or recovery calculations.
+
+Conservative markets are audited independently. A market becomes SAFE_TO_SHUTDOWN only when all required evidence is reconciled and Journal-durable. Late execution evidence invalidates the affected marker. The coordinator cannot release shared services while any enabled market or strategy participant remains unsafe. Market-price intake, user-data intake, operator control and Binance connectivity remain available until the strategy-level barrier passes.
+
+### Why this is not Express middleware
+
+Express middleware is a request/response pipeline: one request passes through ordered handlers and usually proceeds to the next handler. Shutdown is not one request with a fixed linear path. Multiple strategies own independent safety policies, may reconcile external exchange state concurrently, and can have previously safe state invalidated by late events.
+
+A middleware chain would blur strategy ownership and encourage a single generic shutdown policy. DDD application orchestration with strategy-owned participants is a better fit: the coordinator manages ordering and the shared-service barrier; each strategy's application/domain workflow proves its own safety. A small sequential pipeline can still be used for ordinary cleanup steps after all strategies are safe, but it must not decide trading safety.

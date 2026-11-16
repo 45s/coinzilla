@@ -215,6 +215,41 @@ async function persistDurableSubmissionIntent({ context, pendingOrder, purpose }
   }
 }
 
+async function deferAfterDurableSubmissionIntent({
+  context,
+  pendingOrder,
+  purpose,
+  deferral,
+  error,
+} = {}) {
+  const durableOutcome = await persistDurableSubmissionOutcome({
+    context,
+    order: pendingOrder,
+    outcome: "REJECTED",
+    purpose,
+  })
+  if (!durableOutcome.ok) {
+    await context.onSubmissionFailure({
+      order: pendingOrder,
+      errors: durableOutcome.errors,
+      outcome: "UNKNOWN",
+    })
+    return durableOutcome
+  }
+  await context.onSubmissionDeferred({
+    order: pendingOrder,
+    purpose,
+    registered: true,
+    ...deferral,
+  })
+  return error ? toResult({ error }) : toResult({
+    data: {
+      deferred: true,
+      ...deferral,
+    },
+  })
+}
+
 async function deferRegisteredSubmission({ context, order, purpose, errors, reason } = {}) {
   try {
     await context.onSubmissionDeferred({
@@ -435,6 +470,32 @@ async function handleBrokerAcknowledgement({ context, pendingOrder, purpose, ack
 
 async function submitBrokerOrder({ context, candidate } = {}) {
   const { orderIntent, pendingOrder, purpose } = candidate
+  let finalDeferral
+  try {
+    finalDeferral = context.getSubmissionDeferral({
+      order: pendingOrder,
+      purpose,
+    })
+  } catch (error) {
+    return deferAfterDurableSubmissionIntent({
+      context,
+      pendingOrder,
+      purpose,
+      deferral: {
+        reason: "SUBMISSION_GATE_ERROR",
+        details: { errorName: error.name },
+      },
+      error,
+    })
+  }
+  if (finalDeferral) {
+    return deferAfterDurableSubmissionIntent({
+      context,
+      pendingOrder,
+      purpose,
+      deferral: finalDeferral,
+    })
+  }
   let brokerResult
   try {
     brokerResult = await context.broker.placeOrder({ order: orderIntent })

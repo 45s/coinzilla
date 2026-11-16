@@ -99,6 +99,14 @@ export function createMarketPriceTransitionHandler({
       }
       state.marketPriceEventIds.set(symbol, marketEventId)
       state.prices.set(symbol, price)
+      if (state.shutdownBuyGate === true) {
+        return toResult({
+          data: {
+            skipped: true,
+            reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
+          },
+        })
+      }
       if (!canTrade({ symbol }) || state.paused.has(symbol)) {
         return evaluateLatestTransition({ symbol })
       }
