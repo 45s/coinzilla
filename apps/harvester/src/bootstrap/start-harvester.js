@@ -89,23 +89,17 @@ async function verifyOperationalStateStore({ operationalStateStore, recoveryEnab
   if (operationalStateStore === undefined) {
     return { previousProcessStarted: false }
   }
-  assertOperationalStateStoreInterface({ operationalStateStore })
-  await verifyOperationalStateStoreDurability({ operationalStateStore })
-  if (recoveryEnabled === true) {
-    const projection = await readVerifiedOperationalStateHistory({ operationalStateStore })
-    assertOperationalStateCanStart({ projection })
+  // TEMPORARY: when process-restart recovery is disabled, do not verify/read the
+  // Operational State Store as a Telegram CC startup prerequisite. An explicitly
+  // supplied store may still receive process-lifetime command/safety facts.
+  if (recoveryEnabled !== true) {
     return { previousProcessStarted: false }
   }
-  const existingFacts = await operationalStateStore.readAll()
-  if (existingFacts?.ok !== true ||
-      existingFacts.data?.durableWriteSupported !== true ||
-      !Array.isArray(existingFacts.data.records)) {
-    const cause = existingFacts?.errors?.[0] ?? new Error("Operational State Store history could not be read and verified")
-    throw new Error(`Harvester cannot determine prior process state from the verified Operational State Store: ${cause.message ?? String(cause)}`, { cause })
-  }
-  return {
-    previousProcessStarted: existingFacts.data.records.some((record) => record.factType === "PROCESS_STARTED"),
-  }
+  assertOperationalStateStoreInterface({ operationalStateStore })
+  await verifyOperationalStateStoreDurability({ operationalStateStore })
+  const projection = await readVerifiedOperationalStateHistory({ operationalStateStore })
+  assertOperationalStateCanStart({ projection })
+  return { previousProcessStarted: false }
 }
 
 function assertConfigurationBaselineMatchesRuntime({ baseline, configurationFingerprint, enabledMarkets } = {}) {
