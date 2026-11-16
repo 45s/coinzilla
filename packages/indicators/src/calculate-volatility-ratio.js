@@ -25,10 +25,16 @@ export function calculateVolatilityRatio({
   assertDecimalString({ value: current, field: "current volatility" })
   assertDecimalString({ value: reference, field: "reference volatility" })
 
-  if (compareDecimal({ left: current, right: "0" }) < 0) {
+  if (compareDecimal({
+    left: current,
+    right: "0",
+  }) < 0) {
     throw new RangeError("current volatility must be non-negative")
   }
-  if (compareDecimal({ left: reference, right: "0" }) <= 0) {
+  if (compareDecimal({
+    left: reference,
+    right: "0",
+  }) <= 0) {
     throw new RangeError("reference volatility must be positive")
   }
 
