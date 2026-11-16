@@ -10,7 +10,7 @@ const TARGETS = [
 ]
 
 function safeText(value) {
-  if (typeof value !== "string" || value.length === 0) return null
+  if (typeof value !== "string" || value.length === 0) {return null}
   return value
     .slice(0, 256)
     .replace(/(api[_-]?key|api[_-]?secret|signature|authorization|token)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
@@ -21,7 +21,7 @@ function readHttpUpgradeStatus(...sources) {
   for (const source of sources) {
     for (const key of ["status", "statusCode"]) {
       const value = source?.[key]
-      if (Number.isInteger(value) && value >= 100 && value <= 599) return value
+      if (Number.isInteger(value) && value >= 100 && value <= 599) {return value}
     }
   }
   return null
@@ -37,7 +37,7 @@ function probeHttpReachability(name, websocketUrl) {
     let settled = false
 
     const finish = (result) => {
-      if (settled) return
+      if (settled) {return}
       settled = true
       resolve(result)
     }
@@ -55,7 +55,7 @@ function probeHttpReachability(name, websocketUrl) {
       const chunks = []
       let size = 0
       response.on("data", (chunk) => {
-        if (size >= 512) return
+        if (size >= 512) {return}
         const remaining = 512 - size
         const bounded = chunk.subarray(0, remaining)
         chunks.push(bounded)
@@ -134,7 +134,7 @@ function probeEndpoint(name, url) {
     }
 
     const finish = () => {
-      if (settled) return
+      if (settled) {return}
       settled = true
       clearTimeout(timer)
       details.opened = opened
@@ -236,10 +236,10 @@ try {
 
 if (report.runtime.guard === "passed") {
   report.endpoints = await Promise.all(TARGETS.map(([name, url]) => probeEndpoint(name, url)))
-  if (report.endpoints.some((endpoint) => !endpoint.opened)) process.exitCode = 1
+  if (report.endpoints.some((endpoint) => !endpoint.opened)) {process.exitCode = 1}
 }
 
 if (report.httpUpgradeProbes.some((endpoint) =>
   !endpoint.reachable || !endpoint.upgraded || endpoint.acceptHeaderValid === false
-)) process.exitCode = 1
+)) {process.exitCode = 1}
 console.log(JSON.stringify(report, null, 2))
