@@ -2,7 +2,12 @@ import { CanonicalOrder, Fill, Order } from "@coinzilla/entities"
 import { addDecimal, compareDecimal } from "@coinzilla/utils"
 import { recoveryFailureError } from "./recovery-failure.js"
 
-function assertJournalFillIdentityParity({ fill, ownedOrder, journalFill, mismatch }) {
+function assertJournalFillIdentityParity({
+    fill,
+    ownedOrder,
+    journalFill,
+    mismatch,
+  }) {
   const expectedClientOrderId = journalFill.clientOrderId ?? ownedOrder.clientOrderId
   const actualClientOrderId = fill.clientOrderId ?? ownedOrder.clientOrderId
   if (
@@ -20,7 +25,11 @@ function assertJournalFillIdentityParity({ fill, ownedOrder, journalFill, mismat
   }
 }
 
-function assertJournalFillAmountParity({ fill, journalFill, mismatch }) {
+function assertJournalFillAmountParity({
+    fill,
+    journalFill,
+    mismatch,
+  }) {
   for (const [field, actual, expected] of [
     ["price", fill.price.amount, journalFill.price],
     ["quantity", fill.quantity.amount, journalFill.quantity],
@@ -38,7 +47,11 @@ function assertJournalFillAmountParity({ fill, journalFill, mismatch }) {
   }
 }
 
-function assertJournalFillCommissionParity({ fill, journalFill, mismatch }) {
+function assertJournalFillCommissionParity({
+    fill,
+    journalFill,
+    mismatch,
+  }) {
   const actualCommissions = fill.commissions.map((commission) => ({
     amount: commission.amount.amount,
     assetId: commission.amount.asset.id,
