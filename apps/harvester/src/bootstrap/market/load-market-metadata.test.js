@@ -4,7 +4,7 @@ import { Asset, Market, Money, Quantity, TradingRules } from "@coinzilla/entitie
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { loadMarketMetadata } from "./load-market-metadata.js"
 
-const test = (name, ...args) => nodeTest(`[load-market-metadata.test.js] ${  name}`, ...args)
+const test = (...args) => nodeTest(`[load-market-metadata.test.js] ${args[0]}`, ...args.slice(1))
 
 const createMetadata = (symbol = "BTCUSDT") => {
   const baseAsset = new Asset({ id: "asset:BTC",
