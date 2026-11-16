@@ -84,67 +84,61 @@ supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
 unvalidatedConstraints: [] }
 }
 
-function createBroker({
-  connectError,
-  userDataResult,
-  priceResult,
-  userDataError,
-  priceError,
-  onRecoveryAcknowledged,
-} = {}) {
-  let handlers
-  let priceHandler
+function createBrokerConnectionPorts({ connectError }) {
   return {
     connect: async () => {
-      if (connectError) {throw connectError}
+      if (connectError) {
+        throw connectError
+      }
     },
     disconnect: async () => {},
     placeOrder: async () => ({ ok: true }),
     cancelOrder: async () => ({ ok: true }),
-    getOpenOrders: async () => ({ ok: true,
-data: [] }),
-    getFills: async () => ({ ok: true,
-data: [] }),
-    getCanonicalOrderHistory: async () => ({ ok: true,
-data: [] }),
-    getCanonicalOrder: async () => ({ ok: false,
-errors: [new Error("order not found")] }),
+  }
+}
+
+function createBrokerAccountPorts() {
+  return {
+    getOpenOrders: async () => ({ ok: true, data: [] }),
+    getFills: async () => ({ ok: true, data: [] }),
+    getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
+    getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => ({
       ok: true,
       data: {
         balances: ["BTC", "USDT"].map((code) => {
-          const asset = new Asset({ id: `asset:${  code}`,
-code })
+          const asset = new Asset({ id: `asset:${code}`, code })
           return new Balance({
-            free: new Quantity({ amount: "1000",
-asset }),
-            locked: new Quantity({ amount: "0",
-asset }),
+            free: new Quantity({ amount: "1000", asset }),
+            locked: new Quantity({ amount: "0", asset }),
           })
         }),
         sourceTime: 1,
       },
     }),
-    getSymbolFilters: async () => ({ ok: true,
-data: createMarketMetadata() }),
-    getExchangeMarkets: async () => ({ ok: true,
-data: [createMarketMetadata().market] }),
-    getPrices: async ({ symbol }) => ({ ok: true,
-data: { symbol,
-price: "65000" } }),
-    getCandles: async () => ({ ok: true,
-data: [] }),
-    subscribeForCandles: async () => ({ ok: true,
-data: { unsubscribe: async () => {} } }),
+    getSymbolFilters: async () => ({ ok: true, data: createMarketMetadata() }),
+    getExchangeMarkets: async () => ({ ok: true, data: [createMarketMetadata().market] }),
+  }
+}
+
+function createBrokerUserDataPorts({
+  state,
+  userDataResult,
+  userDataError,
+  onRecoveryAcknowledged,
+}) {
+  return {
     subscribeForUserData: async (input) => {
-      handlers = input
-      if (userDataError) {throw userDataError}
+      state.handlers = input
+      if (userDataError) {
+        throw userDataError
+      }
       return userDataResult ?? {
         ok: true,
         data: {
           disconnect: async () => {},
           acknowledgeRecoveryResult: (recoveryGeneration) => {
-            handlers.onStatus({
+            state.handlers.onStatus({
               type: "reconciled",
               subscriptionId: 17,
               recoveryGeneration,
@@ -152,24 +146,45 @@ data: { unsubscribe: async () => {} } }),
               reconciliationRequired: false,
             })
             onRecoveryAcknowledged?.()
-            return { accepted: true,
-completed: true }
+            return { accepted: true, completed: true }
           },
         },
       }
     },
-    subscribeForBookTicker: async () => ({ ok: true,
-data: { unsubscribe: async () => {} } }),
+    emitStatus: (status) => state.handlers?.onStatus(status),
+  }
+}
+
+function createBrokerMarketDataPorts({ state, priceResult, priceError }) {
+  return {
+    getPrices: async ({ symbol }) => ({ ok: true, data: { symbol, price: "65000" } }),
+    getCandles: async () => ({ ok: true, data: [] }),
+    subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
+    subscribeForBookTicker: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
     subscribeForPrices: async ({ onPrice }) => {
-      priceHandler = onPrice
-      if (priceError) {throw priceError}
+      state.priceHandler = onPrice
+      if (priceError) {
+        throw priceError
+      }
       return priceResult ?? {
         ok: true,
         data: { unsubscribe: async () => {} },
       }
     },
-    emitStatus: (status) => handlers?.onStatus(status),
-    emitPrice: (priceEvent) => priceHandler?.(priceEvent),
+    emitPrice: (priceEvent) => state.priceHandler?.(priceEvent),
+  }
+}
+
+function createBroker(options = {}) {
+  const state = {
+    handlers: null,
+    priceHandler: null,
+  }
+  return {
+    ...createBrokerConnectionPorts(options),
+    ...createBrokerAccountPorts(),
+    ...createBrokerUserDataPorts({ ...options, state }),
+    ...createBrokerMarketDataPorts({ ...options, state }),
   }
 }
 
