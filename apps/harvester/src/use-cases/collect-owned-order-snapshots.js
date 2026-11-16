@@ -364,8 +364,7 @@ function sortOwnedOrderFills({ fillsById }) {
 
 function validateOwnedOrderFillCoverage({ fillsById, fills, journalFillsById, historyOrder, ownedOrder }) {
   const expectedJournalFillIds = [...journalFillsById.values()]
-    .filter((journalFill) => journalFil
-  l.brokerOrderId === ownedOrder.brokerOrderId)
+    .filter((journalFill) => journalFill.brokerOrderId === ownedOrder.brokerOrderId)
     .map((journalFill) => journalFill.fillId)
   for (const expectedFillId of expectedJournalFillIds) {
     if (!fillsById.has(expectedFillId)) {
