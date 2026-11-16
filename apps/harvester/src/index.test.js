@@ -11,7 +11,6 @@ import { main as startMain } from "./index.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { UnvalidatedMarketExchangeConstraintsError } from "./domain/market/errors/unvalidated-market-exchange-constraints-error.js"
 import { appConfig } from "../config/index.js"
-import { OperatorControlStartupError } from "./bootstrap/operator-control/prepare-telegram-operator-control.js"
 
 const disabledJournalService = () => ({
   ready: Promise.resolve({ ok: true, disabled: true }),
@@ -1836,11 +1835,13 @@ test("releases the process lock after operator-control preflight failure while p
   const previousExitCode = process.exitCode
   process.exitCode = 0
   const originalCause = new Error("ledger genesis is missing")
-  const startupError = new OperatorControlStartupError(
+  const startupError = new Error(
     "Configured Operational State Store is missing, uninitialized, corrupt or not durably writable",
-    "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID",
-    originalCause,
+    { cause: originalCause },
   )
+  startupError.name = "OperatorControlStartupError"
+  startupError.code = "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID"
+  startupError.startupResourcesMayBeActive = false
   let processLockReleaseCalls = 0
   const errorLogs = []
 
