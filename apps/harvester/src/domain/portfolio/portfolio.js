@@ -127,12 +127,15 @@ strategyId })
     if (!(market instanceof Market)) {
       throw new TypeError("Portfolio.getTotalBaseQuantity requires a canonical Market")
     }
-    const amount = this.#positions
-      .filter((position) => position.market.id === market.id)
-      .reduce((total, position) => addDecimal({
-        left: total,
-        right: position.totalBaseQuantity.amount,
-      }), "0")
+    let amount = "0"
+    for (const position of this.#positions) {
+      if (position.market.id === market.id) {
+        amount = addDecimal({
+          left: amount,
+          right: position.totalBaseQuantity.amount,
+        })
+      }
+    }
     return new Quantity({ amount,
 asset: market.baseAsset })
   }

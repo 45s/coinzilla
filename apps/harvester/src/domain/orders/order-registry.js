@@ -319,9 +319,8 @@ alreadyAcknowledged: true } })
       })
       validateOrderUpdate({ current,
 next: unknownOrder })
-      const orders = this.#orders.map((order, orderIndex) =>
-        orderIndex === index ? unknownOrder : order,
-      )
+      const orders = [...this.#orders]
+      orders[index] = unknownOrder
       return toResult({
         data: {
           registry: new OrderRegistry({
@@ -375,9 +374,8 @@ alreadyTerminal: true } })
       })
       validateOrderUpdate({ current,
 next: unknownOrder })
-      const orders = this.#orders.map((order, orderIndex) =>
-        orderIndex === index ? unknownOrder : order,
-      )
+      const orders = [...this.#orders]
+      orders[index] = unknownOrder
       return toResult({
         data: {
           registry: new OrderRegistry({
@@ -441,7 +439,8 @@ duplicate: true })
       acknowledgedAt: order.acknowledgedAt,
       updatedAt: order.updatedAt,
     })
-    const orders = this.#orders.map((item, itemIndex) => itemIndex === index ? attached : item)
+    const orders = [...this.#orders]
+    orders[index] = attached
     const ownerships = attachBrokerOrderIdToOwnership({
       ownerships: this.#ownerships,
       clientOrderId: current.clientOrderId,
@@ -516,9 +515,8 @@ next: nextOrder })
       })
     }
 
-    const orders = this.#orders.map((item, itemIndex) =>
-      itemIndex === index ? nextOrder : item,
-    )
+    const orders = [...this.#orders]
+    orders[index] = nextOrder
     const ownerships = nextOrder.brokerOrderId === undefined
       ? this.#ownerships
       : attachBrokerOrderIdToOwnership({
