@@ -108,7 +108,8 @@ function appendCompletedCandles({ state, candles, logger } = {}) {
     state.pendingGapOpenTime = null
   }
   state.bufferOverflow = false
-  updateMetrics({ state, logger })
+  updateMetrics({ state,
+logger })
 }
 
 function createCandleHistoryService({
@@ -141,7 +142,7 @@ function createCandleHistoryService({
   function snapshot({ symbol } = {}) {
     const state = markets.get(symbol)
     if (!state) {
-      return toResult({ error: new Error("No candle history was started for " + (symbol ?? "unknown symbol")) })
+      return toResult({ error: new Error(`No candle history was started for ${  symbol ?? "unknown symbol"}`) })
     }
 
     const observedAt = now()
@@ -185,7 +186,8 @@ function createCandleHistoryService({
   function notifySnapshot({ state } = {}) {
     const currentSnapshot = snapshot({ symbol: state.symbol })
     state.observerQueue = state.observerQueue
-      .then(() => snapshotObserver({ symbol: state.symbol, snapshot: currentSnapshot }))
+      .then(() => snapshotObserver({ symbol: state.symbol,
+snapshot: currentSnapshot }))
       .catch((error) => {
         logger.error?.({
           message: "Volatility snapshot observer failed",
@@ -212,7 +214,8 @@ function createCandleHistoryService({
       : Math.max(state.pendingGapOpenTime, lastMissingOpenTime)
     const missingCount = (nextOpenTime - expectedOpenTime) / CANDLE_INTERVAL_MS
     if (missingCount > MAX_BACKFILL_CANDLES) {
-      failMarket({ state, reason: "GAP_TOO_LARGE" })
+      failMarket({ state,
+reason: "GAP_TOO_LARGE" })
       return false
     }
 
@@ -226,7 +229,9 @@ function createCandleHistoryService({
         endTime: nextOpenTime - 1,
       })
     } catch (error) {
-      failMarket({ state, reason: "GAP_DETECTED", error })
+      failMarket({ state,
+reason: "GAP_DETECTED",
+error })
       return false
     }
     if (!result?.ok || !Array.isArray(result.data)) {
@@ -256,10 +261,14 @@ function createCandleHistoryService({
       const restoredCandles = incomingCandle
         ? [...backfill, incomingCandle]
         : backfill
-      appendCompletedCandles({ state, candles: restoredCandles, logger })
+      appendCompletedCandles({ state,
+candles: restoredCandles,
+logger })
       return true
     } catch (error) {
-      failMarket({ state, reason: "GAP_DETECTED", error })
+      failMarket({ state,
+reason: "GAP_DETECTED",
+error })
       return false
     }
   }
@@ -277,31 +286,40 @@ function createCandleHistoryService({
 
     if (!validated.isClosed) {
       if (existing?.isClosed) {
-        failMarket({ state, reason: "CANDLE_CONFLICT", fatal: true })
+        failMarket({ state,
+reason: "CANDLE_CONFLICT",
+fatal: true })
         return
       }
       if (latest && validated.openTime < latest.openTime) {
         if (validated.openTime < oldest.openTime) {return}
-        failMarket({ state, reason: "OUT_OF_ORDER_CANDLE", fatal: true })
+        failMarket({ state,
+reason: "OUT_OF_ORDER_CANDLE",
+fatal: true })
         return
       }
 
       state.lastEventAt = receivedAt
       if (latest && validated.openTime > latest.openTime + CANDLE_INTERVAL_MS) {
-        await backfillGap({ state, nextCandleOpenTime: validated.openTime })
+        await backfillGap({ state,
+nextCandleOpenTime: validated.openTime })
       }
       return
     }
 
     if (state.candles.length === 0) {
       state.lastEventAt = receivedAt
-      appendCompletedCandles({ state, candles: [validated], logger })
+      appendCompletedCandles({ state,
+candles: [validated],
+logger })
       return
     }
 
     if (existing) {
       if (!areCandlesEqual(existing, validated)) {
-        failMarket({ state, reason: "CANDLE_CONFLICT", fatal: true })
+        failMarket({ state,
+reason: "CANDLE_CONFLICT",
+fatal: true })
       } else if (existing.openTime === latest.openTime) {
         state.lastEventAt = receivedAt
       }
@@ -310,18 +328,23 @@ function createCandleHistoryService({
 
     if (validated.openTime < latest.openTime) {
       if (validated.openTime < oldest.openTime) {return}
-      failMarket({ state, reason: "OUT_OF_ORDER_CANDLE", fatal: true })
+      failMarket({ state,
+reason: "OUT_OF_ORDER_CANDLE",
+fatal: true })
       return
     }
 
     state.lastEventAt = receivedAt
     const missingCount = (validated.openTime - latest.openTime) / CANDLE_INTERVAL_MS - 1
     if (missingCount > 0) {
-      await backfillGap({ state, incomingCandle: validated })
+      await backfillGap({ state,
+incomingCandle: validated })
       return
     }
 
-    appendCompletedCandles({ state, candles: [validated], logger })
+    appendCompletedCandles({ state,
+candles: [validated],
+logger })
   }
 
   function receiveCandle({ state, candle } = {}) {
@@ -331,10 +354,12 @@ function createCandleHistoryService({
     if (!state.initialized) {
       if (state.bufferedEvents.length >= MAX_BUFFERED_LIVE_EVENTS) {
         state.bufferOverflow = true
-        failMarket({ state, reason: "LIVE_BUFFER_OVERFLOW" })
+        failMarket({ state,
+reason: "LIVE_BUFFER_OVERFLOW" })
         return notifySnapshot({ state })
       }
-      state.bufferedEvents.push({ candle, receivedAt })
+      state.bufferedEvents.push({ candle,
+receivedAt })
       return Promise.resolve()
     }
 
@@ -353,8 +378,13 @@ function createCandleHistoryService({
     }
 
     state.queue = state.queue
-      .then(() => processLiveCandle({ state, candle, receivedAt }))
-      .catch((error) => failMarket({ state, reason: "INVALID_CANDLE", error, fatal: true }))
+      .then(() => processLiveCandle({ state,
+candle,
+receivedAt }))
+      .catch((error) => failMarket({ state,
+reason: "INVALID_CANDLE",
+error,
+fatal: true }))
       .then(() => notifySnapshot({ state }))
     return state.queue
   }
@@ -372,10 +402,13 @@ function createCandleHistoryService({
       result = await broker.subscribeForCandles({
         symbol: state.symbol,
         interval: CANDLE_INTERVAL,
-        onCandle: (candle) => receiveCandle({ state, candle }),
+        onCandle: (candle) => receiveCandle({ state,
+candle }),
       })
     } catch (error) {
-      failMarket({ state, reason: "SUBSCRIPTION_FAILED", error })
+      failMarket({ state,
+reason: "SUBSCRIPTION_FAILED",
+error })
       return
     }
     if (!result?.ok || typeof result.data?.unsubscribe !== "function") {
@@ -429,7 +462,9 @@ function createCandleHistoryService({
       })
     } catch (error) {
       state.initialized = true
-      failMarket({ state, reason: "HISTORY_UNAVAILABLE", error })
+      failMarket({ state,
+reason: "HISTORY_UNAVAILABLE",
+error })
       return
     }
     if (!result?.ok || !Array.isArray(result.data)) {
@@ -452,7 +487,8 @@ function createCandleHistoryService({
       const completed = historical.filter((candle) => candle.isClosed).slice(-HISTORY_SIZE)
       state.candles = Object.freeze(completed)
       state.initialized = true
-      updateMetrics({ state, logger })
+      updateMetrics({ state,
+logger })
       if (state.bufferOverflow) {
         state.metrics = null
         logUnavailable(logger, state, "LIVE_BUFFER_OVERFLOW")
@@ -460,10 +496,12 @@ function createCandleHistoryService({
     } catch (error) {
       state.candles = Object.freeze([])
       state.initialized = true
-      failMarket({ state, reason: "INVALID_HISTORY", error })
+      failMarket({ state,
+reason: "INVALID_HISTORY",
+error })
     }
 
-    const bufferedEvents = state.bufferedEvents
+    const {bufferedEvents} = state
     state.bufferedEvents = []
     for (const event of bufferedEvents) {
       state.queue = state.queue
@@ -472,7 +510,10 @@ function createCandleHistoryService({
           candle: event.candle,
           receivedAt: event.receivedAt,
         }))
-        .catch((error) => failMarket({ state, reason: "INVALID_CANDLE", error, fatal: true }))
+        .catch((error) => failMarket({ state,
+reason: "INVALID_CANDLE",
+error,
+fatal: true }))
         .then(() => notifySnapshot({ state }))
     }
     await state.queue
@@ -498,7 +539,8 @@ function createCandleHistoryService({
 
     startPromise = (async () => {
       await Promise.all(enabledSymbols.map((symbol) =>
-        subscribeMarket({ state: markets.get(symbol), subscriptions })
+        subscribeMarket({ state: markets.get(symbol),
+subscriptions })
       ))
       await Promise.all(enabledSymbols.map((symbol) =>
         loadInitialHistory({ state: markets.get(symbol) })
