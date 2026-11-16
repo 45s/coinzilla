@@ -1,6 +1,5 @@
 import { toResult } from "@coinzilla/utils"
 import { authorizeOperatorActor } from "../../application/operator/authorize-operator-actor.js"
-import { assertOperationalStatePort } from "../../application/ports/operational-state.port.js"
 
 /**
  * Create the transport-independent use case for removing only an operator pause.
@@ -17,7 +16,6 @@ export function createResumeMarket({ engine, operationalStateStore } = {}) {
   if (typeof engine?.resumeMarket !== "function") {
     throw new TypeError("createResumeMarket requires the trading engine resumeMarket boundary")
   }
-  assertOperationalStatePort({ operationalStateStore })
 
   return async ({ actor, requestId, symbol } = {}) => {
     try {
@@ -36,15 +34,18 @@ export function createResumeMarket({ engine, operationalStateStore } = {}) {
       const normalizedRequestId = requestId.trim()
       return await engine.resumeMarket({
         symbol: normalizedSymbol,
-        beforeApply: () => operationalStateStore.append({
-          factId: "operator-control:" + normalizedRequestId,
-          factType: "OPERATOR_MARKET_RESUMED",
-          data: {
-            requestId: normalizedRequestId,
-            actorId: authorizedActor.id,
-            symbol: normalizedSymbol,
-          },
-        }),
+        // TEMPORARY: CC commands are process-local; durable recovery facts are disabled.
+        ...(typeof operationalStateStore?.append === "function" ? {
+          beforeApply: () => operationalStateStore.append({
+            factId: "operator-control:" + normalizedRequestId,
+            factType: "OPERATOR_MARKET_RESUMED",
+            data: {
+              requestId: normalizedRequestId,
+              actorId: authorizedActor.id,
+              symbol: normalizedSymbol,
+            },
+          }),
+        } : {}),
       })
     } catch (error) {
       return toResult({ error })
