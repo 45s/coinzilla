@@ -8,12 +8,14 @@ import { addDecimal, assertDecimalString, compareDecimal, multiplyDecimal, subtr
 
 function addAmount({ amounts, asset, amount }) {
   const current = amounts.get(asset) ?? "0"
-  amounts.set(asset, addDecimal({ left: current, right: amount }))
+  amounts.set(asset, addDecimal({ left: current,
+right: amount }))
 }
 
 function requireAmount({ value, field }) {
-  if (typeof value !== "string") throw new TypeError(field + " must be an exact decimal string")
-  assertDecimalString({ value, field })
+  if (typeof value !== "string") {throw new TypeError(`${field  } must be an exact decimal string`)}
+  assertDecimalString({ value,
+field })
   return value
 }
 
@@ -40,12 +42,12 @@ function getInitialTradingSnapshot({ projection }) {
   const firstTradingSession = projection.data.sessions.find((session) =>
     session.tradingEnabled || session.hasTradingActivity
   )
-  if (!firstTradingSession) return undefined
+  if (!firstTradingSession) {return undefined}
   const snapshots = projection.data.accountSnapshots.filter((snapshot) =>
     snapshot.fileName === firstTradingSession.fileName &&
     ["PREFLIGHT", "COMMISSION_BASELINE"].includes(snapshot.phase)
   )
-  if (snapshots.length === 0) return undefined
+  if (snapshots.length === 0) {return undefined}
 
   const initial = snapshots[0]
   const balancesByAsset = new Map()
@@ -57,7 +59,7 @@ function getInitialTradingSnapshot({ projection }) {
     }
     if (snapshot.auditStatus !== "COMPLETE" || snapshot.auditReasons.length > 0) {
       auditStatus = "INCOMPLETE"
-      for (const reason of snapshot.auditReasons) auditReasons.add(reason)
+      for (const reason of snapshot.auditReasons) {auditReasons.add(reason)}
     }
     for (const balance of snapshot.balances) {
       const previous = balancesByAsset.get(balance.asset)
@@ -66,7 +68,7 @@ function getInitialTradingSnapshot({ projection }) {
         previous.locked !== balance.locked ||
         previous.total !== balance.total
       )) {
-        throw new Error("PREFLIGHT account snapshots contain contradictory baseline balances for " + balance.asset)
+        throw new Error(`PREFLIGHT account snapshots contain contradictory baseline balances for ${  balance.asset}`)
       }
       balancesByAsset.set(balance.asset, balance)
     }
@@ -111,14 +113,15 @@ export function auditRecoveredAccountState({
     if (!(currentAccountSnapshot instanceof AccountSnapshot)) {
       throw new TypeError("auditRecoveredAccountState requires a canonical current AccountSnapshot")
     }
-    if (!Array.isArray(openOrders)) throw new TypeError("openOrders must be an array")
-    if (!Array.isArray(markets)) throw new TypeError("markets must be an array")
+    if (!Array.isArray(openOrders)) {throw new TypeError("openOrders must be an array")}
+    if (!Array.isArray(markets)) {throw new TypeError("markets must be an array")}
     if (targetMarket !== undefined && !(targetMarket instanceof Market)) {
       throw new TypeError("targetMarket must be a canonical Market")
     }
 
     if (!projection.data.requiresExchangeReconciliation) {
-      return toResult({ data: Object.freeze({ skipped: true, reason: "NO_PRIOR_TRADING_STATE" }) })
+      return toResult({ data: Object.freeze({ skipped: true,
+reason: "NO_PRIOR_TRADING_STATE" }) })
     }
     if (!Array.isArray(recoveredState.journalFills)) {
       throw new TypeError("auditRecoveredAccountState requires restored Journal fill facts")
@@ -167,7 +170,7 @@ export function auditRecoveredAccountState({
     const baselineSequenceByAsset = new Map()
     for (const snapshot of projection.data.accountSnapshots) {
       if (snapshot.fileName !== baseline.fileName ||
-          !["PREFLIGHT", "COMMISSION_BASELINE"].includes(snapshot.phase)) continue
+          !["PREFLIGHT", "COMMISSION_BASELINE"].includes(snapshot.phase)) {continue}
       for (const balance of snapshot.balances) {
         const previousSequence = baselineSequenceByAsset.get(balance.asset)
         if (previousSequence === undefined || snapshot.sequence < previousSequence) {
@@ -177,10 +180,11 @@ export function auditRecoveredAccountState({
     }
     const currentByAsset = new Map()
     for (const balance of currentAccountSnapshot.balances) {
-      const code = balance.asset.code
-      if (currentByAsset.has(code)) throw new Error("Current account snapshot contains duplicate asset code " + code)
+      const {code} = balance.asset
+      if (currentByAsset.has(code)) {throw new Error(`Current account snapshot contains duplicate asset code ${  code}`)}
       currentByAsset.set(code, {
-        total: addDecimal({ left: balance.free.amount, right: balance.locked.amount }),
+        total: addDecimal({ left: balance.free.amount,
+right: balance.locked.amount }),
         locked: balance.locked.amount,
       })
     }
@@ -190,37 +194,40 @@ export function auditRecoveredAccountState({
     const marketsBySymbol = new Map()
     for (const position of recoveredState.portfolio.value.positions) {
       if (!markets.some((market) => market.id === position.market.id)) {
-        throw new Error("Canonical Market metadata is missing for restored Position " + position.market.symbol)
+        throw new Error(`Canonical Market metadata is missing for restored Position ${  position.market.symbol}`)
       }
     }
     for (const order of recoveredState.orderRegistry.orders) {
       if (!markets.some((market) => market.id === order.market.id)) {
-        throw new Error("Canonical Market metadata is missing for restored order " + order.clientOrderId)
+        throw new Error(`Canonical Market metadata is missing for restored order ${  order.clientOrderId}`)
       }
     }
     for (const market of markets) {
       if (!(market instanceof Market)) {
         throw new TypeError("markets must contain canonical Market values")
       }
-      if (marketsById.has(market.id)) throw new Error("Duplicate canonical Market metadata for " + market.id)
-      if (marketsBySymbol.has(market.symbol)) throw new Error("Duplicate canonical Market symbol " + market.symbol)
+      if (marketsById.has(market.id)) {throw new Error(`Duplicate canonical Market metadata for ${  market.id}`)}
+      if (marketsBySymbol.has(market.symbol)) {throw new Error(`Duplicate canonical Market symbol ${  market.symbol}`)}
       marketsById.set(market.id, market)
       marketsBySymbol.set(market.symbol, market)
-      const position = recoveredState.portfolio.getPosition({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER })
-      if (!position) continue
+      const position = recoveredState.portfolio.getPosition({ marketId: market.id,
+strategyId: StrategyId.COIN_GRABBER })
+      if (!position) {continue}
       addAmount({
         amounts: expectedDeltas,
         asset: market.baseAsset.code,
-        amount: requireAmount({ value: position.totalBaseQuantity.amount, field: market.symbol + ".totalBaseQuantity" }),
+        amount: requireAmount({ value: position.totalBaseQuantity.amount,
+field: `${market.symbol  }.totalBaseQuantity` }),
       })
       addAmount({
         amounts: expectedDeltas,
         asset: market.quoteAsset.code,
-        amount: requireAmount({ value: position.quoteNetCashFlow.amount, field: market.symbol + ".quoteNetCashFlow" }),
+        amount: requireAmount({ value: position.quoteNetCashFlow.amount,
+field: `${market.symbol  }.quoteNetCashFlow` }),
       })
     }
     if (targetMarket && marketsBySymbol.get(targetMarket.symbol)?.id !== targetMarket.id) {
-      throw new Error("Canonical Market metadata is missing for target market " + targetMarket.symbol)
+      throw new Error(`Canonical Market metadata is missing for target market ${  targetMarket.symbol}`)
     }
 
     const commissionAssetIdByCode = new Map()
@@ -232,7 +239,7 @@ export function auditRecoveredAccountState({
         const knownCode = commissionAssetCodeById.get(asset.id)
         if ((knownId !== undefined && knownId !== asset.id) ||
             (knownCode !== undefined && knownCode !== asset.code)) {
-          throw new Error("Canonical Market metadata contains contradictory asset identity for " + asset.code)
+          throw new Error(`Canonical Market metadata contains contradictory asset identity for ${  asset.code}`)
         }
         commissionAssetIdByCode.set(asset.code, asset.id)
         commissionAssetCodeById.set(asset.id, asset.code)
@@ -243,77 +250,81 @@ export function auditRecoveredAccountState({
         throw new TypeError("Recovered Journal fill is missing symbol or commission facts")
       }
       const market = marketsBySymbol.get(fill.symbol)
-      if (!market) throw new Error("Canonical Market metadata is missing for recovered fill " + fill.symbol)
+      if (!market) {throw new Error(`Canonical Market metadata is missing for recovered fill ${  fill.symbol}`)}
       for (const commission of fill.commissions) {
         const amount = requireAmount({
           value: commission?.amount,
-          field: fill.symbol + ".commission.amount",
+          field: `${fill.symbol  }.commission.amount`,
         })
-        if (compareDecimal({ left: amount, right: "0" }) < 0) {
-          throw new Error("Recovered commission amount cannot be negative for " + fill.symbol)
+        if (compareDecimal({ left: amount,
+right: "0" }) < 0) {
+          throw new Error(`Recovered commission amount cannot be negative for ${  fill.symbol}`)
         }
         const assetId = commission?.assetId
         const asset = commission?.asset
         if (typeof assetId !== "string" || !assetId.trim() ||
             typeof asset !== "string" || !asset.trim()) {
-          throw new TypeError("Recovered commission requires exact asset ID and code for " + fill.symbol)
+          throw new TypeError(`Recovered commission requires exact asset ID and code for ${  fill.symbol}`)
         }
         if (assetId === market.baseAsset.id) {
           if (asset !== market.baseAsset.code) {
-            throw new Error("Recovered commission asset code contradicts market base asset identity for " + fill.symbol)
+            throw new Error(`Recovered commission asset code contradicts market base asset identity for ${  fill.symbol}`)
           }
           continue
         }
         if (assetId === market.quoteAsset.id) {
           if (asset !== market.quoteAsset.code) {
-            throw new Error("Recovered commission asset code contradicts market quote asset identity for " + fill.symbol)
+            throw new Error(`Recovered commission asset code contradicts market quote asset identity for ${  fill.symbol}`)
           }
           continue
         }
         if (asset === market.baseAsset.code || asset === market.quoteAsset.code) {
-          throw new Error("Recovered commission asset ID contradicts a market asset code for " + fill.symbol)
+          throw new Error(`Recovered commission asset ID contradicts a market asset code for ${  fill.symbol}`)
         }
         const knownId = commissionAssetIdByCode.get(asset)
         const knownCode = commissionAssetCodeById.get(assetId)
         if ((knownId !== undefined && knownId !== assetId) ||
             (knownCode !== undefined && knownCode !== asset)) {
-          throw new Error("Recovered third-asset commission identity is contradictory for " + asset)
+          throw new Error(`Recovered third-asset commission identity is contradictory for ${  asset}`)
         }
         commissionAssetIdByCode.set(asset, assetId)
         commissionAssetCodeById.set(assetId, asset)
-        if (compareDecimal({ left: amount, right: "0" }) === 0) continue
+        if (compareDecimal({ left: amount,
+right: "0" }) === 0) {continue}
 
         // A later snapshot cannot retroactively explain a fee debit that already occurred.
         const baselineSequence = baselineSequenceByAsset.get(asset)
         if (!baselineByAsset.has(asset) || !Number.isSafeInteger(baselineSequence)) {
-          throw new Error("Initial account snapshot is missing required third-asset commission baseline for " + asset)
+          throw new Error(`Initial account snapshot is missing required third-asset commission baseline for ${  asset}`)
         }
         if (!Number.isSafeInteger(fill.sequence) || baselineSequence >= fill.sequence) {
-          throw new Error("Third-asset commission baseline must be durably recorded before its applied fill for " + asset)
+          throw new Error(`Third-asset commission baseline must be durably recorded before its applied fill for ${  asset}`)
         }
-        const quoteValue = commission.quoteValue
+        const {quoteValue} = commission
         if (!quoteValue ||
             quoteValue.assetId !== market.quoteAsset.id ||
             quoteValue.asset !== market.quoteAsset.code ||
             typeof quoteValue.amount !== "string" ||
             compareDecimal({ left: requireAmount({
               value: quoteValue.amount,
-              field: fill.symbol + ".commission.quoteValue.amount",
-            }), right: "0" }) <= 0) {
-          throw new Error("Recovered third-asset commission has no valid historical quote valuation for " + fill.symbol)
+              field: `${fill.symbol  }.commission.quoteValue.amount`,
+            }),
+right: "0" }) <= 0) {
+          throw new Error(`Recovered third-asset commission has no valid historical quote valuation for ${  fill.symbol}`)
         }
         thirdAssetCommissionCodes.add(asset)
         addAmount({
           amounts: expectedDeltas,
           asset,
-          amount: subtractDecimal({ left: "0", right: amount }),
+          amount: subtractDecimal({ left: "0",
+right: amount }),
         })
       }
     }
 
     for (const asset of thirdAssetCommissionCodes) {
       if (!baselineByAsset.has(asset)) {
-        throw new Error("Initial account snapshot is missing required third-asset commission baseline for " + asset)
+        throw new Error(`Initial account snapshot is missing required third-asset commission baseline for ${  asset}`)
       }
     }
     const relevantMarketIds = new Set([
@@ -338,22 +349,25 @@ export function auditRecoveredAccountState({
     ])
     for (const asset of assetCodes) {
       if (!baselineByAsset.has(asset)) {
-        throw new Error("Initial account snapshot is missing required asset " + asset)
+        throw new Error(`Initial account snapshot is missing required asset ${  asset}`)
       }
       if (!currentByAsset.has(asset)) {
-        throw new Error("Current account snapshot is missing required asset " + asset)
+        throw new Error(`Current account snapshot is missing required asset ${  asset}`)
       }
       const initial = baselineByAsset.get(asset).total
       const delta = expectedDeltas.get(asset) ?? "0"
-      const expected = addDecimal({ left: initial, right: delta })
-      if (compareDecimal({ left: expected, right: "0" }) < 0) {
-        throw new Error("Replayed strategy accounting predicts a negative account balance for " + asset)
+      const expected = addDecimal({ left: initial,
+right: delta })
+      if (compareDecimal({ left: expected,
+right: "0" }) < 0) {
+        throw new Error(`Replayed strategy accounting predicts a negative account balance for ${  asset}`)
       }
       const actual = currentByAsset.get(asset).total
-      if (compareDecimal({ left: actual, right: expected }) !== 0) {
+      if (compareDecimal({ left: actual,
+right: expected }) !== 0) {
         throw new Error(
-          "Exchange balance does not match replayed Harvester ownership for " + asset +
-          ": expected " + expected + ", received " + actual,
+          `Exchange balance does not match replayed Harvester ownership for ${  asset 
+          }: expected ${  expected  }, received ${  actual}`,
         )
       }
     }
@@ -365,36 +379,37 @@ export function auditRecoveredAccountState({
     const expectedLocked = new Map()
     for (const order of recoveredState.orderRegistry.orders) {
       if (recoveredByClientOrderId.has(order.clientOrderId)) {
-        throw new Error("Recovered OrderRegistry contains duplicate clientOrderId " + order.clientOrderId)
+        throw new Error(`Recovered OrderRegistry contains duplicate clientOrderId ${  order.clientOrderId}`)
       }
       recoveredByClientOrderId.set(order.clientOrderId, order)
       if (typeof order.brokerOrderId === "string" && order.brokerOrderId.trim()) {
         if (recoveredByBrokerId.has(order.brokerOrderId)) {
-          throw new Error("Recovered OrderRegistry contains duplicate brokerOrderId " + order.brokerOrderId)
+          throw new Error(`Recovered OrderRegistry contains duplicate brokerOrderId ${  order.brokerOrderId}`)
         }
         recoveredByBrokerId.set(order.brokerOrderId, order)
       }
     }
     for (const order of expectedOpenOrders) {
       if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
-        throw new Error("Recovered active order remains unresolved and cannot pass account audit: " + order.clientOrderId)
+        throw new Error(`Recovered active order remains unresolved and cannot pass account audit: ${  order.clientOrderId}`)
       }
       if (typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
-        throw new Error("Recovered active order has no brokerOrderId: " + order.clientOrderId)
+        throw new Error(`Recovered active order has no brokerOrderId: ${  order.clientOrderId}`)
       }
       if (expectedByBrokerId.has(order.brokerOrderId)) {
-        throw new Error("Recovered OrderRegistry contains duplicate brokerOrderId " + order.brokerOrderId)
+        throw new Error(`Recovered OrderRegistry contains duplicate brokerOrderId ${  order.brokerOrderId}`)
       }
       expectedByBrokerId.set(order.brokerOrderId, order)
       const remainingQuantity = subtractDecimal({
         left: order.originalQuantity.amount,
         right: order.executedQuantity.amount,
       })
-      if (compareDecimal({ left: remainingQuantity, right: "0" }) <= 0) {
-        throw new Error("Recovered active order has no remaining quantity: " + order.clientOrderId)
+      if (compareDecimal({ left: remainingQuantity,
+right: "0" }) <= 0) {
+        throw new Error(`Recovered active order has no remaining quantity: ${  order.clientOrderId}`)
       }
       if (!["LIMIT", "LIMIT_MAKER"].includes(order.type) || !order.limitPrice) {
-        throw new Error("Recovered active order is not a supported LIMIT commitment: " + order.clientOrderId)
+        throw new Error(`Recovered active order is not a supported LIMIT commitment: ${  order.clientOrderId}`)
       }
       if (order.side === "BUY") {
         addAmount({
@@ -412,7 +427,7 @@ export function auditRecoveredAccountState({
           amount: remainingQuantity,
         })
       } else {
-        throw new Error("Recovered active order has an unsupported side: " + order.clientOrderId)
+        throw new Error(`Recovered active order has an unsupported side: ${  order.clientOrderId}`)
       }
     }
 
@@ -429,55 +444,58 @@ export function auditRecoveredAccountState({
         throw new Error("Exchange open-order snapshot contains an order without canonical identity")
       }
       if (seenOpenOrderIds.has(brokerOrderId)) {
-        throw new Error("Exchange open-order snapshot contains duplicate brokerOrderId " + brokerOrderId)
+        throw new Error(`Exchange open-order snapshot contains duplicate brokerOrderId ${  brokerOrderId}`)
       }
       seenOpenOrderIds.add(brokerOrderId)
       const expected = expectedByBrokerId.get(brokerOrderId)
       if (!expected) {
         if (recoveredByBrokerId.has(brokerOrderId)) {
-          throw new Error("Exchange reports a non-active recovered order as open: " + brokerOrderId)
+          throw new Error(`Exchange reports a non-active recovered order as open: ${  brokerOrderId}`)
         }
         if (recoveredByClientOrderId.has(identity.clientOrderId)) {
-          throw new Error("Unowned exchange order clientOrderId conflicts with recovered order ownership: " + identity.clientOrderId)
+          throw new Error(`Unowned exchange order clientOrderId conflicts with recovered order ownership: ${  identity.clientOrderId}`)
         }
         const externalMarket = marketsBySymbol.get(symbol)
         if (!externalMarket) {
-          throw new Error("Canonical Market metadata is missing for unowned open order " + symbol)
+          throw new Error(`Canonical Market metadata is missing for unowned open order ${  symbol}`)
         }
         const actualStatus = normalizeOrderStatus({ status: order.status })
         if (!["OPEN", "PARTIALLY_FILLED"].includes(actualStatus)) {
-          throw new Error("Unowned exchange order has an unsupported open status: " + brokerOrderId)
+          throw new Error(`Unowned exchange order has an unsupported open status: ${  brokerOrderId}`)
         }
         if (!["LIMIT", "LIMIT_MAKER"].includes(order.type)) {
-          throw new Error("Unowned exchange order has an unsupported commitment type: " + brokerOrderId)
+          throw new Error(`Unowned exchange order has an unsupported commitment type: ${  brokerOrderId}`)
         }
         const originalQuantity = requireAmount({
           value: identity.originalQuantity,
-          field: "Unowned order " + brokerOrderId + ".originalQuantity",
+          field: `Unowned order ${  brokerOrderId  }.originalQuantity`,
         })
         const executedQuantity = requireAmount({
           value: identity.executedQuantity,
-          field: "Unowned order " + brokerOrderId + ".executedQuantity",
+          field: `Unowned order ${  brokerOrderId  }.executedQuantity`,
         })
         const remainingQuantity = subtractDecimal({
           left: originalQuantity,
           right: executedQuantity,
         })
-        if (compareDecimal({ left: remainingQuantity, right: "0" }) <= 0) {
-          throw new Error("Unowned exchange order has no positive remaining quantity: " + brokerOrderId)
+        if (compareDecimal({ left: remainingQuantity,
+right: "0" }) <= 0) {
+          throw new Error(`Unowned exchange order has no positive remaining quantity: ${  brokerOrderId}`)
         }
         const actualPrice = requireAmount({
           value: getOrderPrice({ order }),
-          field: "Unowned order " + brokerOrderId + ".price",
+          field: `Unowned order ${  brokerOrderId  }.price`,
         })
-        if (compareDecimal({ left: actualPrice, right: "0" }) <= 0) {
-          throw new Error("Unowned exchange order price must be positive: " + brokerOrderId)
+        if (compareDecimal({ left: actualPrice,
+right: "0" }) <= 0) {
+          throw new Error(`Unowned exchange order price must be positive: ${  brokerOrderId}`)
         }
         if (order.side === "BUY") {
           addAmount({
             amounts: expectedLocked,
             asset: externalMarket.quoteAsset.code,
-            amount: multiplyDecimal({ left: remainingQuantity, right: actualPrice }),
+            amount: multiplyDecimal({ left: remainingQuantity,
+right: actualPrice }),
           })
         } else if (order.side === "SELL") {
           addAmount({
@@ -486,7 +504,7 @@ export function auditRecoveredAccountState({
             amount: remainingQuantity,
           })
         } else {
-          throw new Error("Unowned exchange order has an unsupported side: " + brokerOrderId)
+          throw new Error(`Unowned exchange order has an unsupported side: ${  brokerOrderId}`)
         }
         blockedMarkets.add(symbol)
         unownedOpenOrders.push(Object.freeze({
@@ -509,25 +527,29 @@ export function auditRecoveredAccountState({
         expected.side !== order.side ||
         expected.type !== order.type ||
         expectedStatus !== actualStatus ||
-        compareDecimal({ left: expected.originalQuantity.amount, right: identity.originalQuantity }) !== 0 ||
-        compareDecimal({ left: expected.executedQuantity.amount, right: identity.executedQuantity }) !== 0 ||
-        compareDecimal({ left: expectedPrice, right: actualPrice }) !== 0
+        compareDecimal({ left: expected.originalQuantity.amount,
+right: identity.originalQuantity }) !== 0 ||
+        compareDecimal({ left: expected.executedQuantity.amount,
+right: identity.executedQuantity }) !== 0 ||
+        compareDecimal({ left: expectedPrice,
+right: actualPrice }) !== 0
       ) {
-        throw new Error("Exchange open-order facts contradict recovered ownership for broker order " + brokerOrderId)
+        throw new Error(`Exchange open-order facts contradict recovered ownership for broker order ${  brokerOrderId}`)
       }
       actualOpenByBrokerId.set(brokerOrderId, order)
     }
     if (actualOpenByBrokerId.size !== expectedByBrokerId.size) {
       const missing = [...expectedByBrokerId.keys()].filter((id) => !actualOpenByBrokerId.has(id))
-      throw new Error("Recovered active orders are missing from the exchange open-order snapshot: " + missing.join(", "))
+      throw new Error(`Recovered active orders are missing from the exchange open-order snapshot: ${  missing.join(", ")}`)
     }
 
     for (const [asset, expected] of expectedLocked) {
       const actual = currentByAsset.get(asset)?.locked ?? "0"
-      if (compareDecimal({ left: actual, right: expected }) !== 0) {
+      if (compareDecimal({ left: actual,
+right: expected }) !== 0) {
         throw new Error(
-          "Exchange locked balance does not match recovered order commitments for " + asset +
-          ": expected " + expected + ", received " + actual,
+          `Exchange locked balance does not match recovered order commitments for ${  asset 
+          }: expected ${  expected  }, received ${  actual}`,
         )
       }
     }
@@ -535,10 +557,11 @@ export function auditRecoveredAccountState({
       const initialLocked = baselineByAsset.get(asset)?.locked ?? "0"
       const expected = expectedLocked.get(asset) ??
         (thirdAssetCommissionCodes.has(asset) && !marketAssetCodes.has(asset) ? initialLocked : "0")
-      if (compareDecimal({ left: actual.locked, right: expected }) !== 0) {
+      if (compareDecimal({ left: actual.locked,
+right: expected }) !== 0) {
         throw new Error(
-          "Exchange has unexplained locked funds for " + asset +
-          ": expected " + expected + ", received " + actual.locked,
+          `Exchange has unexplained locked funds for ${  asset 
+          }: expected ${  expected  }, received ${  actual.locked}`,
         )
       }
     }
