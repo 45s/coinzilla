@@ -35,7 +35,7 @@ export class FakeClock {
           left[1].dueAt - right[1].dueAt || left[0] - right[0],
         )[0]
 
-      if (!next) break
+      if (!next) {break}
 
       const [id, timer] = next
       this.#timers.delete(id)
