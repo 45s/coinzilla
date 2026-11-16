@@ -9,9 +9,13 @@ function createBroker() {
     tradingMode: "testnet",
     apiKey: "test-key",
     apiSecret: "test-secret",
-    logger: { error() {}, info() {}, debug() {}, warn() {} },
+    logger: { error() {},
+info() {},
+debug() {},
+warn() {} },
   }, { marketClientFactory: () => streams })
-  return { broker, streams }
+  return { broker,
+streams }
 }
 
 const validEvent = {
@@ -71,8 +75,10 @@ describe("BinanceSdkBroker.subscribeForBookTicker", () => {
     })
 
     assert.equal(result.ok, true)
-    assert.throws(() => streams.emit("btcusdt@bookTicker", { ...validEvent, b: 65000.1 }), /decimal string/)
-    assert.throws(() => streams.emit("btcusdt@bookTicker", { ...validEvent, A: "0" }), /must be positive/)
+    assert.throws(() => streams.emit("btcusdt@bookTicker", { ...validEvent,
+b: 65000.1 }), /decimal string/)
+    assert.throws(() => streams.emit("btcusdt@bookTicker", { ...validEvent,
+A: "0" }), /must be positive/)
     assert.equal(received.length, 0)
   })
 
@@ -85,7 +91,8 @@ describe("BinanceSdkBroker.subscribeForBookTicker", () => {
     })
 
     assert.equal(result.ok, true)
-    assert.throws(() => streams.emit("btcusdt@bookTicker", { ...validEvent, s: "ETHUSDT" }), /symbol does not match/)
+    assert.throws(() => streams.emit("btcusdt@bookTicker", { ...validEvent,
+s: "ETHUSDT" }), /symbol does not match/)
   })
 
   it("rejects invalid callback, symbol, and disconnected subscriptions", async () => {
