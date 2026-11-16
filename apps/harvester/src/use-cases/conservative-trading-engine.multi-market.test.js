@@ -249,7 +249,10 @@ async function createHarness({
   const portfolio = initialPortfolio ?? new Portfolio()
   const metadataBySymbol = new Map(markets.map((market) => [market.symbol, makeMarketMetadata(market)]))
   const appConfig = createHarnessAppConfig({ externalOrdersPolicyBySymbol })
-  const broker = createHarnessBroker({ orders, cancelledOrderIds })
+  const broker = createHarnessBroker({
+    orders,
+    cancelledOrderIds,
+  })
   const engine = createHarnessEngine({
     broker,
     portfolio,
@@ -1084,14 +1087,20 @@ test("per-market emergency BUY pause cancels only that market's owned BUY and le
   const { engine, orders } = await createHarness({
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
   })
   await startBothMarkets(engine)
 
   const paused = await engine.pauseBuys({
     symbol: "DOGEUSDT",
-    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+    beforeApply: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
   })
 
   assert.equal(paused.ok, true, "The market BUY pause must be acknowledged after owned BUY cancellation is confirmed.")
@@ -1111,13 +1120,19 @@ test("global emergency BUY pause cancels all owned BUYs and suppresses new BUYs 
   const { engine, orders } = await createHarness({
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
   })
   await startBothMarkets(engine)
 
   const paused = await engine.pauseBuys({
-    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+    beforeApply: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
   })
 
   assert.equal(paused.ok, true, "The global BUY pause must complete after all current-process-owned BUY orders are canceled.")
@@ -1134,7 +1149,10 @@ test("global and market BUY pauses remain independent when either scope is resum
   const { engine, orders } = await createHarness({
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
   })
   await engine.pauseBuys({ symbol: "DOGEUSDT" })
@@ -1142,13 +1160,19 @@ test("global and market BUY pauses remain independent when either scope is resum
 
   const marketResume = await engine.resumeBuys({
     symbol: "DOGEUSDT",
-    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+    beforeApply: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
   })
   assert.equal(marketResume.ok, true, "Resuming the market-specific BUY pause must clear only that scope.")
   assert.equal(engine.getOperatorBuyPauseState().allBuysPaused, true, "The global BUY pause must remain active after the market-specific pause is resumed.")
 
   const globalResume = await engine.resumeBuys({
-    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+    beforeApply: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
   })
   assert.equal(globalResume.ok, true, "The global BUY pause must be independently resumable.")
   assert.deepEqual(engine.getOperatorBuyPauseState().pausedMarkets, [], "Resuming both scopes must leave no emergency market BUY pause active.")
@@ -1166,21 +1190,36 @@ test("emergency BUY pause preserves recovery SELL submission while blocking the 
     recoveryLedgersByMarket: new Map([[dogeMarket.id, recoveryLedger]]),
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
   })
 
   const paused = await engine.pauseBuys({
     symbol: "DOGEUSDT",
-    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+    beforeApply: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
   })
   assert.equal(paused.ok, true, "The emergency BUY gate must be active before the recovery decision is evaluated.")
 
   await startBothMarkets(engine)
 
   assert.deepEqual(
-    orders.map(({ symbol, side }) => ({ symbol, side })),
-    [{ symbol: "DOGEUSDT", side: "SELL" }, { symbol: "SOLUSDT", side: "BUY" }],
+    orders.map(({ symbol, side }) => ({
+      symbol,
+      side,
+    })),
+    [{
+      symbol: "DOGEUSDT",
+      side: "SELL",
+    }, {
+      symbol: "SOLUSDT",
+      side: "BUY",
+    }],
     "The market emergency BUY pause must preserve the selected market recovery SELL, suppress that market BUY, and leave another market eligible.",
   )
 })
@@ -1194,7 +1233,10 @@ test("global emergency BUY pause never cancels an unowned external order", async
     },
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
   })
   await startBothMarkets(engine)
@@ -1205,16 +1247,28 @@ test("global emergency BUY pause never cancels an unowned external order", async
     market: solMarket,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "99.95", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: solAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: solAsset }),
+    limitPrice: new Money({
+      amount: "99.95",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: solAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: solAsset,
+    }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt: 1,
   })
   const observed = await engine.processUserDataEvent({
-    event: { eventType: "executionReport", executedOrder: externalOrder },
+    event: {
+      eventType: "executionReport",
+      executedOrder: externalOrder,
+    },
   })
   assert.equal(observed.ok, true, "An unowned external order report must be accepted without adopting it into Harvester ownership.")
   assert.deepEqual(externalOrderObservations, ["manual-sol-order"], "The test must establish that the external order was observed as unowned.")
