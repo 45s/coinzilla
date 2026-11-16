@@ -233,7 +233,8 @@ export function createTelegramOperatorAdapter({
         actionCount += 1
       }
     }
-    rows.push([{ text: "Refresh", callback_data: "cc:refresh:" + (page === "home" ? "home" : page) }, { text: "Main menu", callback_data: "cc:nav:home" }])
+    const refreshPage = marketAction ? marketAction.toLowerCase() : page
+    rows.push([{ text: "Refresh", callback_data: "cc:refresh:" + refreshPage }, { text: "Main menu", callback_data: "cc:nav:home" }])
     return { inline_keyboard: rows }
   }
 
@@ -269,7 +270,12 @@ export function createTelegramOperatorAdapter({
 
   const readPage = async ({ page, userId }) => {
     if (page === "home") { return { text: helpText(), keyboard: navigationKeyboard() } }
-    const marketAction = page === "pause" ? "PAUSE" : page === "resume" ? "RESUME" : undefined
+    let marketAction
+    if (page === "pause") {
+      marketAction = "PAUSE"
+    } else if (page === "resume") {
+      marketAction = "RESUME"
+    }
     const queryPage = marketAction ? "markets" : page
     const method = PAGE_METHODS[queryPage]
     if (!method || typeof operator[method] !== "function") {
@@ -363,7 +369,7 @@ export function createTelegramOperatorAdapter({
       return
     }
 
-    const navigation = /^cc:(nav|refresh):(home|status|markets|positions|orders|balances)$/.exec(callback.data)
+    const navigation = /^cc:(nav|refresh):(home|status|markets|pause|resume|positions|orders|balances)$/.exec(callback.data)
     if (navigation) {
       await answerCallback({ callbackId: callback.id, signal })
       await editPage({ page: navigation[2], chatId: chat.id, messageId, userId, signal })

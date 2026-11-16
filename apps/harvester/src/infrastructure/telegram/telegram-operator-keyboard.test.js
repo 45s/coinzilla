@@ -183,6 +183,11 @@ test("Pause opens only eligible pause choices and never pauses a market without 
 
   assert.equal(marketQueries.length, 1, "The Pause keyboard action must use the existing authorized markets query exactly once.")
   assert.equal(sentMessages.length, 1, "Selecting Pause must return one market-selection message.")
+  assert.equal(
+    sentMessages[0].reply_markup.inline_keyboard.at(-1)[0].callback_data,
+    "cc:refresh:pause",
+    "Refreshing a Pause selection must preserve the pause-only market filter.",
+  )
   const buttons = sentMessages[0].reply_markup.inline_keyboard.flat()
   assert.deepEqual(
     buttons.filter((button) => button.callback_data?.startsWith("cc:ask:")).map((button) => button.callback_data),
@@ -217,6 +222,11 @@ test("Resume opens only currently operator-paused markets and never resumes befo
 
   assert.equal(marketQueries.length, 1, "The Resume keyboard action must use the existing authorized markets query exactly once.")
   assert.equal(sentMessages.length, 1, "Selecting Resume must return one market-selection message.")
+  assert.equal(
+    sentMessages[0].reply_markup.inline_keyboard.at(-1)[0].callback_data,
+    "cc:refresh:resume",
+    "Refreshing a Resume selection must preserve the resume-only market filter.",
+  )
   const buttons = sentMessages[0].reply_markup.inline_keyboard.flat()
   assert.deepEqual(
     buttons.filter((button) => button.callback_data?.startsWith("cc:ask:")).map((button) => button.callback_data),
