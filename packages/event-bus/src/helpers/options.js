@@ -37,5 +37,7 @@ export function validateOptions(options, defaultLogger) {
     throw new TypeError("EventBus maxPending must be a positive safe integer")
   }
 
-  return { logger, onError, maxPending }
+  return { logger,
+onError,
+maxPending }
 }
