@@ -2,7 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { createShutdownHandler } from "./create-shutdown-handler.js"
 
-const test = (name, ...args) => nodeTest(`[create-shutdown-handler.test.js] ${name}`, ...args)
+const test = (...args) => nodeTest(`[create-shutdown-handler.test.js] ${args[0]}`, ...args.slice(1))
 
 const createState = (overrides = {}) => ({
   stopped: false,
