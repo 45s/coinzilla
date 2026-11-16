@@ -401,7 +401,10 @@ function applyThirdAssetCommissionDeltas({
         value: commission?.amount,
         field: `${fill.symbol}.commission.amount`,
       })
-      if (compareDecimal({ left: amount, right: "0" }) < 0) {
+      if (compareDecimal({
+        left: amount,
+        right: "0",
+      }) < 0) {
         throw new Error(`Recovered commission amount cannot be negative for ${fill.symbol}`)
       }
       const isThirdAsset = validateCommissionIdentity({
@@ -414,7 +417,10 @@ function applyThirdAssetCommissionDeltas({
         continue
       }
       applyThirdAssetCommission({
-        commission: { ...commission, amount },
+        commission: {
+          ...commission,
+          amount,
+        },
         fill,
         market,
         baselineByAsset,
@@ -804,8 +810,15 @@ function prepareExpectedAccountBalances({
   markets,
   targetMarket,
 }) {
-  const accountBalances = createAccountBalanceContext({ projection, currentAccountSnapshot })
-  const marketContext = createMarketContext({ recoveredState, markets, targetMarket })
+  const accountBalances = createAccountBalanceContext({
+    projection,
+    currentAccountSnapshot,
+  })
+  const marketContext = createMarketContext({
+    recoveredState,
+    markets,
+    targetMarket,
+  })
   const thirdAssetCommissionCodes = applyThirdAssetCommissionDeltas({
     recoveredState,
     marketsBySymbol: marketContext.marketsBySymbol,
