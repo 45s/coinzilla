@@ -62,6 +62,7 @@ function validateSubmissionOutcome(options) {
     clientOrderId: order.clientOrderId,
     acknowledged,
   }
+}
 
 /**
  * Persist the broker's classified submission outcome before local order state advances.
