@@ -16,7 +16,9 @@ test("every Harvester script satisfies the repository ESLint rules without warni
   })))
 
   if (findings.length > 0) {
-    process.stderr.write("ESLint findings for apps/harvester/scripts:\\n" + JSON.stringify(findings, null, 2) + "\\n")
+    for (const finding of findings) {
+      process.stderr.write("ESLINT_FINDING:" + JSON.stringify(finding) + "\\n")
+    }
   }
 
   assert.deepEqual(
