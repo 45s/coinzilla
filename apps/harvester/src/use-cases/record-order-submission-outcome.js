@@ -55,7 +55,9 @@ function validateSubmissionOutcome(options) {
   validateSubmissionStoreAndOrder({ operationalStateStore, order, outcome, purpose })
   const acknowledged = validateSubmissionAcknowledgement({ order, outcome })
   const { market } = order
-  validateSubmissionMarket({ market })
+  validateSubmissionMarket({
+    market,
+  })
   validateSubmissionOrderType({ order })
   return {
     market,
