@@ -3554,7 +3554,7 @@ test("emits per-execution debug audit records with commission and before/after a
 })
 
 
-test("disconnects after a CLOSING snapshot durability failure and reports shutdown incomplete", async () => {
+test("keeps Binance connected when the CLOSING snapshot durability barrier fails", async () => {
   const calls = []
   const broker = createBroker(calls)
   const events = []
@@ -3597,8 +3597,11 @@ test("disconnects after a CLOSING snapshot durability failure and reports shutdo
   assert.equal(snapshots.length, 2)
   assert.equal(snapshots[0].data.phase, "PREFLIGHT")
   assert.equal(snapshots[1].data.phase, "CLOSING")
-  assert.ok(calls.indexOf("disconnect") > calls.lastIndexOf("account:snapshot"))
-  assert.equal(calls.includes("disconnect"), true)
+  assert.equal(
+    calls.includes("disconnect"),
+    false,
+    "A failed CLOSING Journal durability barrier must keep Binance connected instead of disconnecting after an incomplete audit.",
+  )
 })
 
 
@@ -3711,21 +3714,18 @@ async function startOwnedOrderReconciliationFailureRuntime({ broker, events }) {
   })
 }
 
-async function assertIncompleteClosingReconciliation({ snapshots, calls }) {
-  assert.equal(snapshots.length, 2)
-  assert.equal(snapshots[1].data.phase, "CLOSING")
-  assert.equal(snapshots[1].data.auditStatus, "INCOMPLETE")
-  assert.ok(snapshots[1].data.auditReasons.includes("OWNED_ORDER_RECONCILIATION_FAILED"))
+async function assertNoClosingAfterSafetyFailure({ snapshots, calls }) {
   assert.equal(
-    snapshots[1].data.auditReasons.includes("UNRESOLVED_OWNED_ORDERS:1"),
-    false,
-    "the cancellation pass must resolve the BUY order even though the earlier REST reconciliation failure keeps the CLOSING audit incomplete",
+    snapshots.length,
+    1,
+    "Only PREFLIGHT may be published when an owned order cannot be reconciled; CLOSING requires proven strategy safety.",
   )
-  assert.ok(calls.indexOf("disconnect") > calls.lastIndexOf("account:snapshot"))
+  assert.equal(calls.includes("disconnect"), false)
+  assert.equal(calls.includes("unsubscribe:user-data"), false)
 }
 
 
-test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliation fails", async () => {
+test("does not publish CLOSING or disconnect when owned-order REST reconciliation fails", async () => {
   const calls = []
   const broker = createBroker(calls)
   const events = []
@@ -3763,10 +3763,10 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
   assert.equal(events.filter((event) => event.name === "account.snapshot_captured").length, 1)
   assert.equal(calls.includes("disconnect"), false)
   blockedQuery.releaseOpenOrders()
-  await assert.rejects(stopPromise, /Harvester shutdown was incomplete/)
+  await assert.rejects(stopPromise, /shutdown safety could not be proven|Conservative shutdown safety is not proven/i)
 
   const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
-  await assertIncompleteClosingReconciliation({
+  await assertNoClosingAfterSafetyFailure({
     snapshots,
     calls,
   })
@@ -4512,7 +4512,16 @@ async function startShutdownBuyCancellationRuntime({ broker, observedEvents, gat
 function assertUserDataRemainsActiveDuringShutdown({ calls, observedEvents }) {
   assert.equal(observedEvents.length, 1, "the user-data event delivered during the broker cancellation window must reach the application handler")
   assert.equal(calls.includes("unsubscribe:user-data"), false, "user-data intake must remain subscribed until cancellation and fill reconciliation have completed")
-  assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("cancelOrder:BUY"))
+  assert.equal(
+    calls.includes("unsubscribe:BTCUSDT"),
+    false,
+    "Market-price intake must remain active while shutdown BUY cancellation is unresolved.",
+  )
+  assert.equal(
+    calls.includes("unsubscribe:book:BTCUSDT"),
+    false,
+    "Book-ticker intake must remain active while shutdown BUY cancellation is unresolved.",
+  )
   assert.equal(calls.includes("cancelOrder:SELL"), false, "graceful shutdown must never cancel a strategy-owned SELL recovery order")
 }
 
@@ -4578,6 +4587,10 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
   if (stopError) {
     throw stopError
   }
+  assert.ok(
+    calls.indexOf("cancelOrder:BUY") < calls.indexOf("unsubscribe:BTCUSDT"),
+    "Owned BUY cancellation must start before market-price intake is stopped.",
+  )
   assert.ok(calls.indexOf("cancelOrder:BUY") < calls.indexOf("unsubscribe:user-data"))
   assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"))
 })
@@ -5766,11 +5779,12 @@ test("stops broker intake before draining queued user-data and disconnects after
   broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
   await queueStarted
   const stopPromise = runtime.stop()
-  await Promise.all([bookUnsubscribed, marketUnsubscribed])
+  await Promise.resolve()
+  await Promise.resolve()
 
-  assert.ok(calls.includes("unsubscribe:book:BTCUSDT"), "shutdown must stop book-ticker intake before draining accepted user-data work")
-  assert.ok(calls.includes("unsubscribe:BTCUSDT"), "shutdown must stop market-price intake before draining accepted user-data work")
-  assert.equal(calls.includes("unsubscribe:user-data"), false, "user-data intake must remain active until already accepted user-data work has drained")
+  assert.equal(calls.includes("unsubscribe:book:BTCUSDT"), false, "book-ticker intake must remain active while accepted user-data work blocks strategy safety")
+  assert.equal(calls.includes("unsubscribe:BTCUSDT"), false, "market-price intake must remain active while accepted user-data work blocks strategy safety")
+  assert.equal(calls.includes("unsubscribe:user-data"), false, "user-data intake must remain connected while accepted callbacks and reconciliation are incomplete")
   assert.equal(calls.includes("queue:done"), false, "shutdown must wait for the deliberately blocked user-data callback before continuing cleanup")
   assert.equal(calls.includes("disconnect"), false, "the broker must remain connected while accepted user-data work is still running")
 
@@ -5780,8 +5794,9 @@ test("stops broker intake before draining queued user-data and disconnects after
 
   resolveQueue()
   await stopPromise
-  assert.ok(calls.indexOf("unsubscribe:book:BTCUSDT") < calls.indexOf("queue:done"), "book-ticker intake must stop before the accepted user-data callback finishes")
-  assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("queue:done"), "market-price intake must stop before the accepted user-data callback finishes")
+  await Promise.all([bookUnsubscribed, marketUnsubscribed])
+  assert.ok(calls.indexOf("queue:done") < calls.indexOf("unsubscribe:book:BTCUSDT"), "book-ticker intake may stop only after the accepted user-data work no longer blocks strategy safety")
+  assert.ok(calls.indexOf("queue:done") < calls.indexOf("unsubscribe:BTCUSDT"), "market-price intake may stop only after the accepted user-data work no longer blocks strategy safety")
   assert.ok(calls.indexOf("queue:done") < calls.indexOf("unsubscribe:user-data"), "user-data intake may stop only after accepted callbacks have drained")
   assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"), "the user-data subscription must be disconnected before the broker itself")
 })

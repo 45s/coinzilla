@@ -12,6 +12,7 @@ import { makeOrderEventWorkflow } from "./order-event-workflow.js"
 import { makeVolatilityProtectionWorkflow } from "./volatility-protection-workflow.js"
 import { createSubmissionGate } from "./create-submission-gate.js"
 import { createShutdownRecoveryWorkflow } from "./create-shutdown-recovery-workflow.js"
+import { createConservativeShutdownSafety } from "./create-conservative-shutdown-safety.js"
 import { createLatestTransitionEvaluator } from "./create-latest-transition-evaluator.js"
 import { createMarketPriceTransitionHandler } from "./create-market-price-transition-handler.js"
 import { validateConservativeTradingEngineOptions } from "./validate-conservative-trading-engine-options.js"
@@ -841,7 +842,7 @@ function createOwnedOrderManagementHandlers({
       options,
     }),
   })
-  const cancelOwnedBuyOrdersForShutdown = () => cancelOwnedBuyOrders()
+  const cancelOwnedBuyOrdersForShutdown = (options = {}) => cancelOwnedBuyOrders(options)
   const cancelOwnedBuyOrdersForSafetyHalt = () => cancelOwnedBuyOrders({ reason: "ACCOUNT_INTEGRITY_FAILURE" })
   const reconcileOwnedOrders = (options = {}) => reconcileOwnedOrdersTransition({
     context: {
@@ -966,6 +967,12 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
   const { refreshedMarketMetadata, getCurrentMarketMetadata } = marketMetadataCache
   const { state } = createInitialEngineState({ initialState, pairs, initialRegistry })
   const runTransition = createSerializedTransitionQueue()
+  const shutdownSafety = createConservativeShutdownSafety({
+    state,
+    pairs,
+    runTransition,
+    hasBlockingOpenOrdersForSymbol,
+  })
   let strategyEvaluationSequence = 0
   let marketPriceEventSequence = 0
   const recoveryCancellationState = createRecoveryManagedCancellationState({ state })
@@ -987,6 +994,7 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
     nextMarketPriceEventId: () => ++marketPriceEventSequence,
     ...recoveryCancellationState,
     ...executionFillAccounting,
+    ...shutdownSafety,
   }
 }
 
@@ -1295,30 +1303,82 @@ function createConservativeEngineProtectionContext({ context } = {}) {
 function createConservativeEngineRuntimeOperations({ context } = {}) {
   const { dependencies } = context
   context.processMarketPrice = async ({ symbol, priceEvent } = {}) => {
-    const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
-    if (!protection?.ok) {return protection}
+    if (context.state.shutdownBuyGate !== true) {
+      const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
+      if (!protection?.ok) {return protection}
+    }
     return context.runTransition({ task: () => context.processMarketPriceTransition({
       symbol,
       priceEvent,
     }) })
   }
   context.processBookTicker = async ({ symbol, bookTicker } = {}) => {
-    const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
-    if (!protection?.ok) {return protection}
+    if (context.state.shutdownBuyGate !== true) {
+      const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
+      if (!protection?.ok) {return protection}
+    }
     return context.runTransition({ task: () => context.processMarketBookTransition({
       symbol,
       bookTicker,
     }) })
   }
   context.processUserDataEvent = ({ event, recoveryMode = false } = {}) =>
-    context.runTransition({ task: () => context.processUserDataEventTransition({
-      event,
-      recoveryMode,
-    }) })
+    context.runTransition({ task: async () => {
+      const symbol = event?.executedOrder?.market?.symbol ??
+        event?.order?.market?.symbol ??
+        event?.fill?.market?.symbol ??
+        event?.market?.symbol ??
+        event?.symbol ??
+        event?.s
+      if (context.state.shutdownBuyGate === true) {
+        context.invalidateShutdownSafety({
+          ...(typeof symbol === "string" ? { symbol } : {}),
+          reason: "LATE_ORDER_EXECUTION_EVIDENCE",
+        })
+      }
+      return context.processUserDataEventTransition({
+        event,
+        recoveryMode,
+      })
+    } })
   context.evaluateLatest = ({ symbol } = {}) =>
     context.runTransition({ task: () => context.evaluateLatestTransition({ symbol }) })
+  const reconcileOwnedOrders = context.reconcileOwnedOrders
+  context.reconcileOwnedOrders = (options = {}) => {
+    context.invalidateShutdownSafety({
+      ...(typeof options.symbol === "string" ? { symbol: options.symbol } : {}),
+      ...(Array.isArray(options.symbols) ? { symbols: options.symbols } : {}),
+      reason: "OWNED_ORDER_RECONCILIATION",
+    })
+    return reconcileOwnedOrders(options)
+  }
+  const cancelOwnedBuyOrdersForShutdown = context.cancelOwnedBuyOrdersForShutdown
+  context.cancelOwnedBuyOrdersForShutdown = (options = {}) => {
+    context.invalidateShutdownSafety({
+      ...(typeof options.symbol === "string" ? { symbol: options.symbol } : {}),
+      reason: "OWNED_BUY_CANCELLATION",
+    })
+    return cancelOwnedBuyOrdersForShutdown(options)
+  }
+  const reconcileRecoverySellsForShutdown = context.reconcileRecoverySellsForShutdown
+  context.reconcileRecoverySellsForShutdown = (options = {}) => {
+    context.invalidateShutdownSafety({
+      ...(Array.isArray(options.symbols) ? { symbols: options.symbols } : {}),
+      reason: "RECOVERY_SELL_RECONCILIATION",
+    })
+    return reconcileRecoverySellsForShutdown(options)
+  }
   context.resumeDeferredEvaluations = () => context.runTransition({
     task: async () => {
+      if (context.state.shutdownBuyGate === true) {
+        return toResult({
+          data: {
+            results: [],
+            skipped: true,
+            reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
+          },
+        })
+      }
       const results = []
       for (const symbol of [...context.state.deferredEvaluations]) {
         const result = await context.evaluateLatestTransition({ symbol })
@@ -1342,6 +1402,9 @@ function createConservativeEnginePublicApi({ context } = {}) {
   return Object.freeze({
     processMarketPrice: context.processMarketPrice,
     processBookTicker: context.processBookTicker,
+    beginShutdown: context.beginShutdown,
+    auditShutdownSafety: context.auditShutdownSafety,
+    getShutdownSafetySnapshot: context.getShutdownSafetySnapshot,
     processUserDataEvent: context.processUserDataEvent,
     reconcileOwnedOrders: context.reconcileOwnedOrders,
     reconcileRecoverySellsForShutdown: context.reconcileRecoverySellsForShutdown,
@@ -2571,6 +2634,14 @@ async function replaceTrailingBuy({ context, symbol, activeBuy, marketPrice, tri
 }
 
 async function maybeReplaceTrailingBuyTransition({ context, symbol, marketPrice }) {
+  if (context.state.shutdownBuyGate === true) {
+    return toResult({
+      data: {
+        skipped: true,
+        reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
+      },
+    })
+  }
   const {
     metadata,
     pairConfig,
@@ -3460,11 +3531,21 @@ async function collectAndApplyOwnedOrderSnapshots({ context, ownedOrders, symbol
   })
 }
 
+function matchesRequestedReconciliationMarket(order, requestedSymbols) {
+  return requestedSymbols === null || requestedSymbols.has(order.market.symbol)
+}
+
 async function reconcileOwnedOrdersTransition({ context, options }) {
+  const requestedSymbols = Array.isArray(options.symbols)
+    ? new Set(options.symbols)
+    : typeof options.symbol === "string"
+      ? new Set([options.symbol])
+      : null
   const initialOrdersResult = await context.runTransition({
     task: async () => toResult({
       data: {
-        ownedOrders: [...context.state.registry.orders],
+        ownedOrders: context.state.registry.orders.filter((order) =>
+          matchesRequestedReconciliationMarket(order, requestedSymbols)),
       },
     }),
   })
@@ -3482,7 +3563,8 @@ async function reconcileOwnedOrdersTransition({ context, options }) {
   const ownedOrdersResult = await context.runTransition({
     task: async () => toResult({
       data: {
-        ownedOrders: [...context.state.registry.orders],
+        ownedOrders: context.state.registry.orders.filter((order) =>
+          matchesRequestedReconciliationMarket(order, requestedSymbols)),
       },
     }),
   })

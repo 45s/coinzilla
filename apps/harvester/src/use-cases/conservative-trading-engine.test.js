@@ -10795,3 +10795,271 @@ test("keeps local deferral processing non-blocking when best-effort Journal publ
     "A lost deferral event must remain observable as a Journal evidence gap.")
 })
 
+
+
+test("blocks every Conservative BUY evaluation after shutdown while continuing to accept market prices", async () => {
+  const harness = await createHarness({
+    accountingApplied: true,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+  const initialBuyOrderCount = harness.orders.filter(({ side }) => side === "BUY").length
+  assert.equal(initialBuyOrderCount, 1, "The scenario must begin with one ordinary standing BUY before shutdown is requested.")
+
+  harness.engine.beginShutdown()
+
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100.10",
+      timestamp: 2,
+    },
+  })
+  await harness.engine.evaluateLatest({
+    symbol: "DOGEUSDT",
+  })
+  await harness.engine.resumeDeferredEvaluations()
+
+  assert.equal(
+    harness.orders.filter(({ side }) => side === "BUY").length,
+    initialBuyOrderCount,
+    "Market-price, direct and deferred strategy evaluation paths must not submit or replace a BUY after the Conservative shutdown gate activates.",
+  )
+  assert.deepEqual(
+    harness.cancellationIds,
+    [],
+    "The shutdown BUY gate must not run ordinary trailing replacement cancellation; owned BUY cancellation belongs to the explicit shutdown workflow.",
+  )
+  const operatorSnapshot = await harness.engine.getOperatorMarketSnapshots()
+  const dogeMarket = operatorSnapshot.data.markets.find(({ symbol }) => symbol === "DOGEUSDT")
+  assert.equal(
+    dogeMarket.latestPrice,
+    "100.10",
+    "Fresh market prices must continue updating the Conservative engine while ordinary BUY evaluation is gated.",
+  )
+})
+
+test("marks a market safe immediately when no owned orders or recovery obligation remain", async () => {
+  const harness = await createHarness({
+    accountingApplied: true,
+  })
+  harness.engine.beginShutdown()
+
+  const coverageResult = await harness.engine.auditShutdownRecoverySellCoverage()
+  const safety = await harness.engine.auditShutdownSafety({
+    reconciliationComplete: true,
+    journalDurable: true,
+    coverageResult,
+  })
+
+  assert.equal(safety.ok, true, "A fully reconciled market with durable Journal evidence must return a structured safety result.")
+  assert.equal(
+    safety.data.markets[0].status,
+    "SAFE_TO_SHUTDOWN",
+    "A market with no active owned orders and no recovery obligation must become safe without a quiet period or timer.",
+  )
+  assert.deepEqual(
+    safety.data.markets[0].blockers,
+    [],
+    "An immediately safe market must expose no outstanding safety blockers.",
+  )
+})
+
+test("keeps a market unsafe while an owned BUY remains UNKNOWN", async () => {
+  const harness = await createHarness({
+    placeOrderThrow: true,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+  const unknownBuyOrder = harness.engine.getOrders().find(({ side }) => side === "BUY")
+  assert.equal(unknownBuyOrder?.status, "UNKNOWN", "The fixture must contain a genuinely ambiguous owned BUY acknowledgement.")
+
+  harness.engine.beginShutdown()
+  const safety = await harness.engine.auditShutdownSafety({
+    reconciliationComplete: true,
+    journalDurable: true,
+  })
+
+  assert.equal(safety.ok, true, "Safety assessment must report blockers as data instead of hiding the affected market.")
+  assert.equal(
+    safety.data.markets[0].status,
+    "UNSAFE",
+    "An UNKNOWN owned BUY must prevent the market from being marked safe even when the caller reports its latest reconciliation pass complete.",
+  )
+  assert.ok(
+    safety.data.markets[0].blockers.includes("OWNED_BUY_ORDER_UNRESOLVED"),
+    "The unsafe-market report must identify the unresolved owned BUY as the exact blocker.",
+  )
+})
+
+test("keeps a market unsafe while an owned recovery SELL remains UNKNOWN", async () => {
+  const seeded = makeSeededRecoveryState()
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    placeOrderFailure: true,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+  const unknownSell = harness.engine.getOrders().find((order) => order.side === "SELL")
+  assert.equal(unknownSell?.status, "UNKNOWN", "The fixture must contain an ambiguous owned recovery SELL.")
+
+  harness.engine.beginShutdown()
+  const coverageResult = await harness.engine.auditShutdownRecoverySellCoverage()
+  const safety = await harness.engine.auditShutdownSafety({
+    reconciliationComplete: true,
+    journalDurable: true,
+    coverageResult,
+  })
+
+  assert.equal(safety.ok, true)
+  assert.equal(safety.data.markets[0].status, "UNSAFE")
+  assert.ok(
+    safety.data.markets[0].blockers.includes("OWNED_SELL_ORDER_UNRESOLVED"),
+    "An UNKNOWN owned recovery SELL must block shutdown even when no BUY remains.",
+  )
+})
+
+test("shutdown cancellation leaves external manual BUY orders untouched", async () => {
+  const harness = await createHarness()
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+  const ownedBuy = harness.engine.getOrders().find((order) => order.side === "BUY")
+  assert.ok(ownedBuy, "The fixture must contain a Harvester-owned BUY.")
+
+  const externalOrder = new CanonicalOrder({
+    clientOrderId: "manual-shutdown-buy",
+    brokerOrderId: "manual-shutdown-broker-buy",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const externalResult = await harness.engine.processUserDataEvent({
+    event: {
+      eventType: "executionReport",
+      executionType: "NEW",
+      executedOrder: externalOrder,
+    },
+  })
+  assert.equal(externalResult.ok, true)
+
+  harness.engine.beginShutdown()
+  const cancellation = await harness.engine.cancelOwnedBuyOrdersForShutdown()
+  assert.equal(cancellation.ok, true, cancellation.errors?.[0]?.message)
+  assert.deepEqual(
+    harness.cancellationIds,
+    [ownedBuy.brokerOrderId],
+    "Shutdown may cancel only the Harvester-owned BUY; the manual order must never be touched.",
+  )
+  assert.equal(
+    harness.engine.getOrders().some((order) => order.clientOrderId === externalOrder.clientOrderId),
+    false,
+    "The external/manual order must remain outside the canonical Harvester-owned registry.",
+  )
+})
+
+test("invalidates and rechecks a safe market after a late owned SELL execution", async () => {
+  const seeded = makeSeededRecoveryState()
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    accountingApplied: true,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  harness.engine.beginShutdown()
+  await harness.engine.cancelOwnedBuyOrdersForShutdown()
+  const initialCoverage = await harness.engine.auditShutdownRecoverySellCoverage()
+  const initialSafety = await harness.engine.auditShutdownSafety({
+    reconciliationComplete: true,
+    journalDurable: true,
+    coverageResult: initialCoverage,
+  })
+  assert.equal(initialSafety.data.markets[0].status, "SAFE_TO_SHUTDOWN")
+
+  const sellOrder = harness.engine.getOrders().find((order) =>
+    order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+  assert.ok(sellOrder, "The safe market must retain an acknowledged recovery SELL.")
+  const quantity = "0.1"
+  const lateFill = makeSellFill({
+    order: sellOrder,
+    tradeId: "late-shutdown-recovery-sell-fill",
+    quantity,
+    quoteQuantity: multiplyDecimal({
+      left: sellOrder.limitPrice.amount,
+      right: quantity,
+    }),
+    commissionAmount: "0.02",
+  })
+  const lateEvidence = await harness.engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makePartiallyFilledOrder({
+        order: sellOrder,
+        executedQuantity: quantity,
+        updatedAt: 3,
+      }),
+      fill: lateFill,
+    },
+  })
+
+  assert.equal(lateEvidence.ok, true, lateEvidence.errors?.[0]?.message)
+  assert.equal(
+    harness.engine.getShutdownSafetySnapshot().markets[0].status,
+    "UNSAFE",
+    "Late execution evidence must immediately invalidate the previous safe marker.",
+  )
+
+  const finalCoverage = await harness.engine.auditShutdownRecoverySellCoverage()
+  const recheckedSafety = await harness.engine.auditShutdownSafety({
+    reconciliationComplete: true,
+    journalDurable: true,
+    coverageResult: finalCoverage,
+  })
+  assert.equal(
+    recheckedSafety.data.markets[0].status,
+    "SAFE_TO_SHUTDOWN",
+    "The market may become safe again only after post-fill recovery SELL coverage is verified.",
+  )
+})
