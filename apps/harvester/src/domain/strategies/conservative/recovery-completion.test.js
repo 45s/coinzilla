@@ -146,8 +146,8 @@ test("does not complete the actual ZRO recovery while the 0.04 residual remains 
 })
 
 
-test("fails closed when exchange-constrained dust evidence contains non-positive filter values or negative evaluations", () => {
-  const invalidDispositions = [
+function createInvalidDustDispositions() {
+  return [
     {
       status: "EXCHANGE_CONSTRAINED_DUST",
       quantity: "0.1",
@@ -204,7 +204,10 @@ test("fails closed when exchange-constrained dust evidence contains non-positive
       evaluatedNotional: "0",
     },
   ]
+}
 
+test("fails closed when exchange-constrained dust evidence contains non-positive filter values or negative evaluations", () => {
+  const invalidDispositions = createInvalidDustDispositions()
   for (const inventoryDisposition of invalidDispositions) {
     const result = evaluateRecoveryCompletion({
       ...baseInput,
