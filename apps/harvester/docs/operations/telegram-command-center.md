@@ -2,19 +2,21 @@
 
 ## Scope and safety
 
-The Harvester Telegram Command Center is an inbound operator interface, enabled by default in `operatorControl.telegram`. Startup remains fail-closed and requires a valid private-chat user-ID allowlist and `TELEGRAM_BOT_TOKEN` in the runtime environment.
+The Harvester Telegram Command Center is enabled by default in `operatorControl.telegram`. Startup remains fail-closed and requires a valid private-chat user-ID allowlist, `TELEGRAM_BOT_TOKEN` and a verified, durably writable Operational State Store.
 
 The Command Center is not an exchange kill switch. It cannot place, cancel, adopt or modify exchange orders; change strategies or configuration; bypass safety/recovery/volatility blockers; or execute arbitrary commands. A market pause suppresses new strategy BUYs and trailing-BUY replacements for that market only. Existing orders remain open and may still fill; fill accounting and recovery SELLs continue. User-data disconnect/reconnect and reconciliation do not clear an active operator pause. Operator pauses last only for the current process and are not restored after restart.
 
 ## Configuring the Command Center
 
-1. `operatorControl.telegram.enabled` is `true` by default in `config/operator-control.js`.
+1. Leave `operatorControl.telegram.enabled` at its default `true` in `config/operator-control.js`. Set it to `false` only when intentionally disabling inbound commands.
 2. Set `TELEGRAM_USER_ID` in the runtime environment to your numeric Telegram sender user ID. The config module seeds `operatorControl.telegram.allowedUserIds` from this value; bootstrap validates it and merges it with any explicitly configured IDs. Invalid or missing values leave no usable allowlist and stop startup with a specific error.
 3. Set `TELEGRAM_BOT_TOKEN` in the runtime environment. Do not put the token in application configuration or commit it.
 4. Initialize the ADR-0001 Operational State Store once while Harvester is stopped, following the [Operational State Store setup](../../README.md#operational-state-store-adr-0001-step-8). The default directory is `apps/harvester/recovery-facts/` inside the Harvester application package; the initializer and runtime resolve this same path, so no directory variable is required. For a custom absolute path, set `OPERATIONAL_STATE_DIRECTORY` in both environments. The former home-directory recovery-data location is not a supported default or fallback. This cleanup does not move, delete, initialize, overwrite, or repair existing runtime data.
-5. Start only with a verified Operational State Store that contains no prior `PROCESS_STARTED` record. The current ADR-0001 gate blocks every second process start, even after clean shutdown, until Steps 8–9 are accepted. Do not delete or reinitialize an existing ledger to bypass this restriction.
+5. If the verified ledger contains a prior `PROCESS_STARTED` record, Harvester starts the Command Center in observation-only mode and keeps trading disabled. It does not restore previous Portfolio, RecoveryLedger or OrderRegistry state. Do not delete or reinitialize an existing ledger to bypass this restriction.
 
-Telegram control can be enabled while `recovery.enabled` remains false. The production entry point still composes the shared Operational State Store for operator-control records; it does not enable restart restoration or create/repair the store.
+Set the flag to false only when inbound commands are not needed. If both operator control and restart recovery are disabled, Harvester does not require the Operational State Store for operator control; outbound Telegram notifications remain independently configured under `notifications.telegram`.
+
+Telegram control is enabled by default while `recovery.enabled` remains false. The production entry point composes and verifies the shared Operational State Store for operator-control records. It reads process-boundary facts only; it does not project or restore previous trading state. If a prior process session exists, trading stays disabled while Telegram commands remain available. The store must already be initialized; startup never creates or repairs it.
 
 ## Command menu and navigation
 

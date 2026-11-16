@@ -560,88 +560,35 @@ test("rejects enabled Telegram operator control without a bot token before conne
   assert.equal(brokerFactoryCalled, false, "Invalid operator-control configuration must fail before Binance adapter construction.")
 })
 
-test("uses the app-local Operational State Store default and fails closed when it is not initialized", async () => {
+test("starts Telegram CC without constructing or verifying the recovery store", async () => {
   const config = {
     ...appConfig,
-    operatorControl: { telegram: {
-      enabled: true,
-      allowedUserIds: ["12345"]
-    } },
+    operatorControl: { telegram: { enabled: true, allowedUserIds: ["12345"] } },
   }
-  let brokerFactoryCalled = false
-
-  await assert.rejects(
-    startHarvesterForTest({
-      loadConfig: async () => config,
-      env: {
-        ...binanceEnv,
-        TELEGRAM_BOT_TOKEN: "test-telegram-token"
-      },
-      runtimeSessionId: "telegram-default-directory-session",
-      brokerAdapterFactory: () => {
-        brokerFactoryCalled = true
-        throw new Error("Broker connection must not start before the Operational State Store is verified.")
-      },
+  let storeFactoryCalls = 0
+  let adapterStarted = false
+  const broker = createBroker()
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => config,
+    env: { ...binanceEnv, TELEGRAM_BOT_TOKEN: "test-telegram-token" },
+    createOperationalStateStore: () => {
+      storeFactoryCalls += 1
+      throw new Error("Telegram CC must not construct or verify ADR-0001 recovery storage.")
+    },
+    createTelegramOperatorAdapter: () => ({
+      start: async () => { adapterStarted = true },
+      stop: async () => ({ stopped: true }),
     }),
-    (error) => error.code === "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID",
-    "Telegram operator control must use the app-local default Operational State Store and fail closed until it is initialized.",
-  )
-
-  assert.equal(brokerFactoryCalled, false, "An uninitialized default Operational State Store must fail before connecting to Binance.")
-})
-
-test("verifies the existing Operational State Store before connecting when Telegram operator control is enabled", async () => {
-  const config = {
-    ...appConfig,
-    operatorControl: { telegram: {
-      enabled: true,
-      allowedUserIds: ["12345"]
-    } },
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  })
+  try {
+    assert.equal(storeFactoryCalls, 0, "Telegram CC must not construct the recovery store when restart recovery is disabled.")
+    assert.equal(adapterStarted, true, "Telegram polling must start without an initialized recovery store.")
+    assert.equal(runtime.connected, true, "The recovery-store gate must not block broker/runtime startup.")
+  } finally {
+    await runtime.stop()
   }
-  const calls = []
-  let brokerFactoryCalled = false
-
-  await assert.rejects(
-    startHarvesterForTest({
-      loadConfig: async () => config,
-      env: {
-        ...binanceEnv,
-        TELEGRAM_BOT_TOKEN: "test-telegram-token",
-        OPERATIONAL_STATE_DIRECTORY: process.cwd()
-      },
-      runtimeSessionId: "test-runtime-session",
-      createOperationalStateStore: ({
-        directory,
-        runtimeSessionId
-      }) => {
-        calls.push({
-          type: "create-store",
-          directory,
-          runtimeSessionId
-        })
-        return {
-          verify: async () => ({
-            ok: false,
-            errors: [new Error("ledger genesis is missing")]
-          }),
-          append: async () => ({
-            ok: true,
-            data: { durable: true }
-          }),
-        }
-      },
-      brokerAdapterFactory: () => {
-        brokerFactoryCalled = true
-        throw new Error("Broker connection must not start when Operational State Store records verification fails.")
-      },
-    }),
-    (error) => error.code === "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID",
-    "An absent or invalid initialized ADR-0001 store must prevent inbound operator control and broker startup.",
-  )
-
-  assert.equal(calls.length, 1, "Enabled operator control must construct exactly one Operational State Store records adapter for verification.")
-  assert.equal(calls[0].runtimeSessionId, "test-runtime-session", "Operational State Store records must be attributed to this Harvester process session.")
-  assert.equal(brokerFactoryCalled, false, "Operational State Store records verification must complete before connecting to Binance.")
 })
 
 test("retries Telegram adapter shutdown during startup rollback before giving up", async () => {
@@ -770,7 +717,7 @@ test("keeps inbound operator control disabled without constructing its store or 
   } finally { await runtime.stop() }
 })
 
-test("verifies Operational State Store records before broker connect and starts/stops Telegram around the trading runtime", async () => {
+test("starts/stops Telegram CC and applies process-local pause without recovery storage", async () => {
   const config = {
     ...appConfig,
     operatorControl: { telegram: {
@@ -867,7 +814,8 @@ test("verifies Operational State Store records before broker connect and starts/
     },
   })
   try {
-    assert.ok(calls.indexOf("verify-Operational State Store records") < calls.indexOf("connect"), "Operational State Store records integrity must be verified before Binance broker connection.")
+    assert.equal(calls.includes("create-Operational State Store records-store"), false, "Telegram CC must not construct the recovery store.")
+    assert.equal(calls.includes("verify-Operational State Store records"), false, "Telegram CC startup must not verify the recovery store.")
     assert.ok(calls.indexOf("start-telegram-poller") < calls.indexOf("subscribe:user-data"), "The operator poller must be ready before the runtime begins accepting trading events.")
     const pauseResult = await operator.pauseMarket({
       actor: {
@@ -878,10 +826,9 @@ test("verifies Operational State Store records before broker connect and starts/
       symbol: "BTCUSDT"
     })
     assert.equal(pauseResult.ok, true, "An authorized market pause must complete through the existing application use case.")
-    const operatorPauseFacts = appendedFacts.filter(({ factType }) => factType === "OPERATOR_MARKET_PAUSED")
-    assert.equal(operatorPauseFacts.length, 1, "A successful operator pause must append exactly one Operational State Store record.")
-    assert.equal(operatorPauseFacts[0].data.symbol, "BTCUSDT", "The durable pause fact must identify the requested configured market.")
-    assert.ok(calls.indexOf("append-operator-fact") > calls.indexOf("start-telegram-poller"), "A pause fact is appended only after the adapter is running and a request is received.")
+    assert.equal(pauseResult.data.durable, false, "A CC pause without recovery storage must be explicitly process-local.")
+    assert.equal(appendedFacts.some(({ factType }) => factType === "OPERATOR_MARKET_PAUSED" || factType === "OPERATOR_MARKET_RESUMED"), false, "Process-local CC commands must not write recovery facts.")
+    assert.equal(calls.includes("append-operator-fact"), false, "A process-local CC pause must not access durable recovery storage.")
     assert.equal(placeOrderCalls, 0, "An operator pause must not submit any exchange order.")
     assert.equal(cancelOrderCalls, 0, "An operator pause must not cancel any exchange order.")
   } finally { await runtime.stop() }
@@ -5258,7 +5205,10 @@ test("records configuration and process boundaries before broker startup and aft
 
 test("fails closed when the effective configuration has no enabled markets", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-empty-effective-markets-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
   const operationalStateStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "empty-effective-markets-test",
@@ -5272,12 +5222,18 @@ test("fails closed when the effective configuration has no enabled markets", asy
         ...appConfig.strategies.CG_coinGrabber,
         pairs: Object.fromEntries(Object.entries(appConfig.strategies.CG_coinGrabber.pairs).map(([symbol, pair]) => [
           symbol,
-          { ...pair, enabled: false },
+          {
+            ...pair,
+            enabled: false,
+          },
         ])),
       },
     },
   }
-  const baseline = await recordConfigurationBaseline({ operationalStateStore, appConfig: disabledConfig })
+  const baseline = await recordConfigurationBaseline({
+    operationalStateStore,
+    appConfig: disabledConfig,
+  })
   assert.equal(baseline.ok, false, "A runtime baseline must not accept a configuration with no enabled markets.")
   assert.match(baseline.errors[0].message, /at least one enabled market/)
   const records = await operationalStateStore.readAll()
@@ -5287,101 +5243,106 @@ test("fails closed when the effective configuration has no enabled markets", asy
 })
 
 
-test("blocks even a clean second process start until the restart-recovery gate is accepted", async (t) => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-restart-gate-"))
-  t.after(() => rm(directory, {
-    recursive: true,
-    force: true
-  }))
-  const firstStore = createFileOperationalStateStore({
+async function createPriorProcessHistory({ directory, runtimeSessionId, priorAppConfig, clean = false } = {}) {
+  const store = createFileOperationalStateStore({
     directory,
-    runtimeSessionId: "first-process-session",
+    runtimeSessionId,
   })
-  await firstStore.initialize()
+  const initialization = await store.initialize()
+  assert.equal(initialization.ok, true, "the prior process history fixture must start from a valid durable ledger")
   const baseline = await recordConfigurationBaseline({
-    operationalStateStore: firstStore,
-    appConfig
+    operationalStateStore: store,
+    appConfig: priorAppConfig,
   })
   assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
   const started = await recordProcessStarted({
-    operationalStateStore: firstStore,
+    operationalStateStore: store,
     configurationFingerprint: baseline.data.fingerprint,
     strategyName: baseline.data.strategyName,
     markets: baseline.data.markets,
     tradingEnabled: true,
   })
   assert.equal(started.ok, true, started.errors?.[0]?.message)
-  const stopped = await recordProcessStopped({
-    operationalStateStore: firstStore,
-    reason: "CLEAN_TEST_SHUTDOWN",
+  if (clean) {
+    const stopped = await recordProcessStopped({
+      operationalStateStore: store,
+      reason: "CLEAN_TEST_SHUTDOWN",
+      clean: true,
+    })
+    assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
+  }
+}
+
+async function assertTelegramPauseCommandIsDurable({ operator, operationalStateStore } = {}) {
+  const pauseResult = await operator.pauseMarket({
+    actor: {
+      id: "telegram-user:12345",
+      roles: ["trading-operator"],
+    },
+    requestId: "telegram-after-unrecovered-restart",
+    symbol: "BTCUSDT",
+  })
+  assert.equal(pauseResult.ok, true, "authorized Telegram pause commands must remain usable in observation-only mode")
+  const persistedFacts = await operationalStateStore.readAll()
+  assert.equal(persistedFacts.ok, true)
+  assert.equal(
+    persistedFacts.data.records.some((record) => record.factType === "OPERATOR_MARKET_PAUSED"),
+    true,
+    "the observation-only Telegram pause command must still be durably recorded before it is applied",
+  )
+}
+
+test("starts in observation-only mode after a clean prior process when restart recovery is disabled", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-restart-gate-"))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+  await createPriorProcessHistory({
+    directory,
+    runtimeSessionId: "first-process-session",
+    priorAppConfig: appConfig,
     clean: true,
   })
-  assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
 
   const restartStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "second-process-session",
   })
-  const brokerCalls = []
-  await assert.rejects(
-    () => startHarvesterForTest({
-      appConfig,
-      operationalStateStore: restartStore,
-      brokerAdapterFactory: () => {
-        brokerCalls.push("broker-factory")
-        return createBroker(brokerCalls)
-      },
-    }),
-    /Automatic Harvester process restart is disabled/,
-  )
-  assert.deepEqual(brokerCalls, [], "Even a clean prior process must not reconnect before Step 9 proves restart safety.")
+  const runtime = await startHarvesterForTest({
+    appConfig,
+    operationalStateStore: restartStore,
+  })
+  assert.equal(runtime.connected, true, "a clean prior process must not prevent Command Center/runtime startup")
+  assert.equal(runtime.tradingEnabled, false, "trading must remain disabled because prior process state was not restored")
+  await runtime.stop()
 })
 
 
-test("blocks a second process start after an unclean prior session before broker connection", async (t) => {
+test("starts in observation-only mode after an unclean prior process when restart recovery is disabled", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-crash-restart-gate-"))
   t.after(() => rm(directory, {
     recursive: true,
-    force: true
+    force: true,
   }))
-  const firstStore = createFileOperationalStateStore({
+  await createPriorProcessHistory({
     directory,
     runtimeSessionId: "crashed-process-session",
+    priorAppConfig: appConfig,
   })
-  await firstStore.initialize()
-  const baseline = await recordConfigurationBaseline({
-    operationalStateStore: firstStore,
-    appConfig
-  })
-  assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
-  const started = await recordProcessStarted({
-    operationalStateStore: firstStore,
-    configurationFingerprint: baseline.data.fingerprint,
-    strategyName: baseline.data.strategyName,
-    markets: baseline.data.markets,
-    tradingEnabled: true,
-  })
-  assert.equal(started.ok, true, started.errors?.[0]?.message)
 
   const restartStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "post-crash-process-session",
   })
-  const brokerCalls = []
-  await assert.rejects(
-    () => startHarvesterForTest({
-      appConfig,
-      operationalStateStore: restartStore,
-      brokerAdapterFactory: () => {
-        brokerCalls.push("broker-factory")
-        return createBroker(brokerCalls)
-      },
-    }),
-    /Automatic Harvester process restart is disabled/,
-  )
-  assert.deepEqual(brokerCalls, [], "An unclean prior session must not reconnect before restart-recovery proof.")
+  const runtime = await startHarvesterForTest({
+    appConfig,
+    operationalStateStore: restartStore,
+  })
+  assert.equal(runtime.connected, true, "an unclean prior process must not prevent Command Center/runtime startup")
+  assert.equal(runtime.tradingEnabled, false, "trading must remain disabled because prior process state was not restored")
+  await runtime.stop()
 })
-
 
 
 async function createSharedOperatorRuntimeFixture({ broker, operationalStateStore, runtimeSessionId }) {
@@ -5952,4 +5913,85 @@ test("requires an explicit TRADING_MODE before connecting to Binance", async () 
     brokerAdapterFactory: () => { brokerFactoryCalled = true; return createBroker() },
   }), /TRADING_MODE must be set to "testnet" or "live"/)
   assert.equal(brokerFactoryCalled, false)
+})
+
+test("starts Telegram operator control without running process-restart recovery when recovery is disabled", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-operator-control-no-replay-"))
+  const config = {
+    ...appConfig,
+    operatorControl: {
+      telegram: {
+        enabled: true,
+        allowedUserIds: ["12345"],
+      },
+    },
+    strategies: {
+      ...appConfig.strategies,
+      CG_coinGrabber: {
+        ...appConfig.strategies.CG_coinGrabber,
+        settings: {
+          ...appConfig.strategies.CG_coinGrabber.settings,
+          recovery: {
+            enabled: false,
+          },
+        },
+      },
+    },
+  }
+  let operatorAdapterStarted = false
+  let operator
+  let runtime
+
+  try {
+    await createPriorProcessHistory({
+      directory,
+      runtimeSessionId: "previous-process-session",
+      priorAppConfig: config,
+    })
+
+    const currentStore = createFileOperationalStateStore({
+      directory,
+      runtimeSessionId: "current-process-session",
+    })
+    runtime = await startHarvesterForTest({
+      loadConfig: async () => config,
+      env: {
+        ...binanceEnv,
+        TELEGRAM_BOT_TOKEN: "test-telegram-token",
+        OPERATIONAL_STATE_DIRECTORY: directory,
+      },
+      runtimeSessionId: "current-process-session",
+      operationalStateStore: currentStore,
+      createTelegramOperatorAdapter: ({ operator: suppliedOperator }) => {
+        operator = suppliedOperator
+        return {
+          start: async () => {
+            operatorAdapterStarted = true
+            return {
+              ok: true,
+              started: true,
+            }
+          },
+          stop: async () => ({
+            ok: true,
+            stopped: true,
+          }),
+        }
+      },
+    })
+
+    assert.equal(operatorAdapterStarted, true, "Telegram polling must start even when the shared ledger contains an earlier process session and restart recovery is disabled")
+    assert.equal(runtime.connected, true, "disabling process-restart restoration must not bypass normal broker/runtime startup")
+    assert.equal(runtime.tradingEnabled, false, "trading must remain disabled because the prior in-memory trading state was not restored")
+    await assertTelegramPauseCommandIsDurable({
+      operator,
+      operationalStateStore: currentStore,
+    })
+  } finally {
+    await runtime?.stop?.()
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
 })

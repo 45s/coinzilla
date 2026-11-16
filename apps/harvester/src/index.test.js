@@ -6,7 +6,6 @@ import os from "node:os"
 import path from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
-import { DEFAULT_OPERATIONAL_STATE_DIRECTORY } from "./infrastructure/operational-state/resolve-operational-state-directory.js"
 import { main as startMain } from "./index.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { UnvalidatedMarketExchangeConstraintsError } from "./domain/market/errors/unvalidated-market-exchange-constraints-error.js"
@@ -84,7 +83,7 @@ test("does not create or inject durable recovery facts while recovery is disable
   assert.equal(startupInput.operationalStateStore, undefined, "Disabled restart recovery must not inject a Operational State Store into runtime startup.")
 })
 
-test("injects the shared default Operational State Store when Telegram operator control is enabled without recovery", async () => {
+test("does not create or inject recovery storage when Telegram operator control is enabled without recovery", async () => {
   const configuredApp = {
     operatorControl: {
       telegram: {
@@ -102,19 +101,14 @@ test("injects the shared default Operational State Store when Telegram operator 
       },
     },
   }
-  const operationalStateStore = {
-    verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
-    append: async () => ({ ok: true, data: { durable: true } }),
-    readAll: async () => ({ ok: true, data: { durableWriteSupported: true, records: [] } }),
-  }
-  let operationalStateStoreOptions
+  let storeFactoryCalls = 0
   let startupInput
 
   await runMain({
     loadConfig: async () => configuredApp,
-    createOperationalStateStore: (options) => {
-      operationalStateStoreOptions = options
-      return operationalStateStore
+    createOperationalStateStore: () => {
+      storeFactoryCalls += 1
+      throw new Error("Telegram CC must not construct ADR-0001 recovery storage when restart recovery is disabled.")
     },
     start: async (input) => {
       startupInput = input
@@ -123,19 +117,8 @@ test("injects the shared default Operational State Store when Telegram operator 
     logger: { info() {}, system() {}, error() {} },
   })
 
-  assert.deepEqual(
-    operationalStateStoreOptions,
-    {
-      directory: DEFAULT_OPERATIONAL_STATE_DIRECTORY,
-      runtimeSessionId: startupInput.runtimeSessionId,
-    },
-    "Enabling Telegram operator control without restart recovery must select the documented default ADR-0001 directory and current process identity.",
-  )
-  assert.strictEqual(
-    startupInput.operationalStateStore,
-    operationalStateStore,
-    "The production composition must pass the exact shared Operational State Store to Harvester when Telegram operator control is enabled independently of recovery.",
-  )
+  assert.equal(storeFactoryCalls, 0, "Telegram CC alone must not construct the process-owned recovery store.")
+  assert.equal(startupInput.operationalStateStore, undefined, "Telegram CC must start without an injected recovery store.")
 })
 
 test("uses the injected logger after Binance TESTNET startup", async () => {

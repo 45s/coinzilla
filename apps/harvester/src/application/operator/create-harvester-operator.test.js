@@ -19,17 +19,17 @@ function createHarness({ appendResult = { ok: true, data: { durable: true, dupli
   const engine = {
     pauseMarket: async ({ symbol, beforeApply }) => {
       calls.push({ type: "pause-start", symbol })
-      const committed = await beforeApply({ symbol, action: "PAUSE" })
+      const committed = typeof beforeApply === "function" ? await beforeApply({ symbol, action: "PAUSE" }) : { ok: true, data: { durable: false } }
       if (!committed?.ok) {return committed}
       calls.push({ type: "pause-applied", symbol })
-      return { ok: true, data: { symbol, paused: true, durable: true } }
+      return { ok: true, data: { symbol, paused: true, durable: committed.data.durable } }
     },
     resumeMarket: async ({ symbol, beforeApply }) => {
       calls.push({ type: "resume-start", symbol })
-      const committed = await beforeApply({ symbol, action: "RESUME" })
+      const committed = typeof beforeApply === "function" ? await beforeApply({ symbol, action: "RESUME" }) : { ok: true, data: { durable: false } }
       if (!committed?.ok) {return committed}
       calls.push({ type: "resume-applied", symbol })
-      return { ok: true, data: { symbol, resumed: true, durable: true } }
+      return { ok: true, data: { symbol, resumed: true, durable: committed.data.durable } }
     },
   }
   return { calls, operationalStateStore, engine }
@@ -37,7 +37,10 @@ function createHarness({ appendResult = { ok: true, data: { durable: true, dupli
 
 test("creates an immutable Harvester operator facade without a generic command dispatcher", () => {
   const { operationalStateStore, engine } = createHarness()
-  const operator = createHarvesterOperator({ operationalStateStore, engine })
+  const operator = createHarvesterOperator({
+    operationalStateStore,
+    engine,
+  })
 
   assert.deepEqual(Object.keys(operator), ["pauseMarket", "resumeMarket"])
   assert.equal(Object.isFrozen(operator), true)
@@ -166,7 +169,10 @@ test("rejects a non-canonical actor identity before touching the engine or store
   const operator = createHarvesterOperator({ operationalStateStore, engine })
 
   const result = await operator.pauseMarket({
-    actor: { id: " telegram-user:12345 ", roles: ["trading-operator"] },
+    actor: {
+      id: " telegram-user:12345 ",
+      roles: ["trading-operator"],
+    },
     requestId: "telegram:1006",
     symbol: "LINKUSDT",
   })
@@ -176,3 +182,30 @@ test("rejects a non-canonical actor identity before touching the engine or store
   assert.deepEqual(calls, [])
 })
 
+
+test("pause and resume remain process-local when recovery storage is not supplied", async () => {
+  const { calls, engine } = createHarness()
+  const operator = createHarvesterOperator({ engine })
+
+  const pause = await operator.pauseMarket({
+    actor,
+    requestId: "telegram:local-pause",
+    symbol: "LINKUSDT",
+  })
+  const resume = await operator.resumeMarket({
+    actor,
+    requestId: "telegram:local-resume",
+    symbol: "LINKUSDT",
+  })
+
+  assert.equal(pause.ok, true)
+  assert.equal(pause.data.durable, false)
+  assert.equal(resume.ok, true)
+  assert.equal(resume.data.durable, false)
+  assert.deepEqual(calls.map(({ type }) => type), [
+    "pause-start",
+    "pause-applied",
+    "resume-start",
+    "resume-applied",
+  ])
+})

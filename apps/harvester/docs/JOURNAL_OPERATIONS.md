@@ -159,6 +159,8 @@ The production `main()` entry point verifies/projects the ADR-0001 durable-facts
 
 ## Strategy-owned normal shutdown
 
+> **P0 implementation gap — [issue #1186](https://github.com/45s/coinzilla/issues/1186):** The sequence and diagram below record the current implementation on `develop`; they are not the approved Conservative shutdown contract. The current handler stops market-price/book intake and performs initial owned-order reconciliation before cancelling BUYs. That order does **not** satisfy the owner-approved rule to block/cancel Conservative BUYs first and keep the market, user-data, operator/runtime, and broker services alive until every market is safe. The required contract is defined only in [the canonical Conservative specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md#conservative-graceful-shutdown--protect-trading-before-stopping-services). Safety is state-driven: evaluate immediately after authoritative reconciliation; there is no arbitrary 20-second wait or quiet-period timer. Do not treat the current sequence as proof that a Conservative market is safe to shut down. Implementation and regression coverage are tracked in #1186.
+
 Shutdown is an application-level coordination process. The application coordinator knows only the strategy participant contract; each strategy owns its domain safety rules. Conservative owns its BUY gate, owned-order cancellation, fill/commission reconciliation and recovery SELL coverage. Other strategies register independent policies.
 
 The required order is:

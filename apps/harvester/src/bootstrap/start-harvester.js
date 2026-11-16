@@ -86,14 +86,27 @@ function assertOperationalStateCanStart({ projection } = {}) {
   }
 }
 
-async function verifyOperationalStateStore({ operationalStateStore } = {}) {
+async function verifyOperationalStateStore({ operationalStateStore, recoveryEnabled } = {}) {
   if (operationalStateStore === undefined) {
-    return
+    return { previousProcessStarted: false }
   }
   assertOperationalStateStoreInterface({ operationalStateStore })
   await verifyOperationalStateStoreDurability({ operationalStateStore })
-  const projection = await readVerifiedOperationalStateHistory({ operationalStateStore })
-  assertOperationalStateCanStart({ projection })
+  if (recoveryEnabled === true) {
+    const projection = await readVerifiedOperationalStateHistory({ operationalStateStore })
+    assertOperationalStateCanStart({ projection })
+    return { previousProcessStarted: false }
+  }
+  const existingFacts = await operationalStateStore.readAll()
+  if (existingFacts?.ok !== true ||
+      existingFacts.data?.durableWriteSupported !== true ||
+      !Array.isArray(existingFacts.data.records)) {
+    const cause = existingFacts?.errors?.[0] ?? new Error("Operational State Store history could not be read and verified")
+    throw new Error(`Harvester cannot determine prior process state from the verified Operational State Store: ${cause.message ?? String(cause)}`, { cause })
+  }
+  return {
+    previousProcessStarted: existingFacts.data.records.some((record) => record.factType === "PROCESS_STARTED"),
+  }
 }
 
 function assertConfigurationBaselineMatchesRuntime({ baseline, configurationFingerprint, enabledMarkets } = {}) {
@@ -197,6 +210,26 @@ function createCoinGrabberMarketPriceErrorHandler({ logger } = {}) {
   }
 }
 
+async function resolveStartupOptionsForProcessRecovery({ resolved, operationalStateStore, logger } = {}) {
+  const recoveryEnabled = resolved.appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
+  const operationalState = await verifyOperationalStateStore({
+    operationalStateStore,
+    recoveryEnabled,
+  })
+  const tradingEnabled = resolved.tradingEnabled && operationalState.previousProcessStarted !== true
+  const startupOptions = tradingEnabled === resolved.tradingEnabled
+    ? resolved
+    : Object.freeze({ ...resolved, tradingEnabled })
+  if (resolved.tradingEnabled && !tradingEnabled) {
+    logger.info?.({
+      message: "Trading disabled because process-restart recovery is disabled and prior process history exists",
+      reason: "PROCESS_RESTART_RECOVERY_DISABLED",
+      tradingEnabled: false,
+    })
+  }
+  return startupOptions
+}
+
 async function createHarvesterStartupContext({ options } = {}) {
   const {
     configSource,
@@ -238,13 +271,17 @@ async function createHarvesterStartupContext({ options } = {}) {
     logger,
   })
   const operationalStateStore = suppliedOperationalStateStore ?? operatorControlLifecycle.operationalStateStore
-  await verifyOperationalStateStore({ operationalStateStore })
+  const startupOptions = await resolveStartupOptionsForProcessRecovery({
+    resolved,
+    operationalStateStore,
+    logger,
+  })
   await persistHarvesterProcessStart({
     operationalStateStore,
-    appConfig: resolved.appConfig,
-    tradingEnabled: resolved.tradingEnabled,
-    configurationFingerprint: resolved.configurationFingerprint,
-    enabledMarkets: resolved.enabledSymbols,
+    appConfig: startupOptions.appConfig,
+    tradingEnabled: startupOptions.tradingEnabled,
+    configurationFingerprint: startupOptions.configurationFingerprint,
+    enabledMarkets: startupOptions.enabledSymbols,
   })
   const operationalStateCallbacks = createHarvesterOperationalStateCallbacks({ operationalStateStore })
   const accountSnapshotManagerRef = { current: null }
@@ -255,7 +292,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({ assetId, assetCode })
   }
   return {
-    ...resolved,
+    ...startupOptions,
     env,
     brokerAdapterFactory,
     evaluateStrategy,
@@ -747,7 +784,12 @@ export async function startHarvester(options = {}) {
   resources.userDataState.startupComplete = true
   startPendingUserDataRecovery({ userDataState: resources.userDataState, startUserDataRecovery: recoveryRuntime.startUserDataRecovery })
   const stop = createHarvesterRuntimeStop({ startup, resources, accountSnapshots, userDataEvents })
-  return createHarvesterRuntimeResult({ startup, portfolio, resources, stop })
+  return createHarvesterRuntimeResult({
+    startup,
+    portfolio,
+    resources,
+    stop,
+  })
 }
 
 function resolveStrategyMarketDataPairs({
