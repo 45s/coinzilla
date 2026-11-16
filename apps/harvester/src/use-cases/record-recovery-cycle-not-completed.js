@@ -30,29 +30,36 @@ export async function recordRecoveryCycleNotCompleted({
         typeof completion.reason !== "string" || completion.reason.trim() === "") {
       throw new TypeError("Recovery-cycle non-completion requires a complete ineligible evaluation")
     }
-    const market = recoveryLedger.market
+    const {market} = recoveryLedger
     if (position.market.id !== market.id || sellOrder.market.id !== market.id) {
       throw new TypeError("Recovery-cycle Position, ledger, and terminal SELL markets must match")
     }
-    if (compareDecimal({ left: position.spent.amount, right: recoveryLedger.buyCost }) !== 0 ||
-        compareDecimal({ left: completion.realizedNetProfit, right: recoveryLedger.realizedNetProfit }) !== 0 ||
-        compareDecimal({ left: completion.activeQuantity, right: position.baseQuantity.amount }) !== 0 ||
-        compareDecimal({ left: completion.minProfit, right: minProfit }) !== 0) {
+    if (compareDecimal({ left: position.spent.amount,
+right: recoveryLedger.buyCost }) !== 0 ||
+        compareDecimal({ left: completion.realizedNetProfit,
+right: recoveryLedger.realizedNetProfit }) !== 0 ||
+        compareDecimal({ left: completion.activeQuantity,
+right: position.baseQuantity.amount }) !== 0 ||
+        compareDecimal({ left: completion.minProfit,
+right: minProfit }) !== 0) {
       throw new TypeError("Recovery-cycle non-completion evidence must match canonical Position, RecoveryLedger, and minProfit")
     }
     const outcome = completion.pause === false && CONTINUE_REASONS.has(completion.reason)
       ? "CONTINUE_SELL_THROUGH"
       : "BLOCKED"
     if (outcome === "CONTINUE_SELL_THROUGH") {
-      if (compareDecimal({ left: completion.activeQuantity, right: completion.keepQuantity }) <= 0) {
+      if (compareDecimal({ left: completion.activeQuantity,
+right: completion.keepQuantity }) <= 0) {
         throw new TypeError("CONTINUE_SELL_THROUGH requires residual active inventory above keepQuantity")
       }
       if (completion.reason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" &&
-          compareDecimal({ left: completion.realizedNetProfit, right: minProfit }) < 0) {
+          compareDecimal({ left: completion.realizedNetProfit,
+right: minProfit }) < 0) {
         throw new TypeError("Residual sell-through requires the minimum profit target to be met")
       }
       if (completion.reason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" &&
-          compareDecimal({ left: completion.realizedNetProfit, right: minProfit }) >= 0) {
+          compareDecimal({ left: completion.realizedNetProfit,
+right: minProfit }) >= 0) {
         throw new TypeError("Profit-target continuation requires realized profit below minProfit")
       }
     } else if (CONTINUE_REASONS.has(completion.reason)) {
@@ -79,7 +86,7 @@ export async function recordRecoveryCycleNotCompleted({
     ])
     const evaluationId = createHash("sha256").update(evaluationIdentity).digest("hex")
     const result = await operationalStateStore.append({
-      factId: "recovery-cycle-not-completed:" + market.id + ":" + evaluationId,
+      factId: `recovery-cycle-not-completed:${  market.id  }:${  evaluationId}`,
       factType: "RECOVERY_CYCLE_NOT_COMPLETED",
       data: {
         evaluationId,
