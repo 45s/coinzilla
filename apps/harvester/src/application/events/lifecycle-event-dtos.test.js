@@ -38,6 +38,16 @@ import {
   mapStrategyPausedData,
 } from "./lifecycle-event-dtos.js"
 
+const INVALID_TRANSACTION_TIMESTAMPS = Object.freeze([
+  NaN,
+  Infinity,
+  -Infinity,
+  -0,
+  -1,
+  1.5,
+  Number.MAX_SAFE_INTEGER + 1,
+])
+
 const validLifecycle = {
   broker: "binance",
   strategyMode: "read-only",
@@ -666,7 +676,19 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
     },
   })
   assert.equal(mapFillAppliedData({ fill: {} }).ok, false)
+})
 
+test("rejects missing third-asset valuation and inconsistent asset identity", () => {
+  const baseAsset = new Asset({ id: "asset:DOGE",
+    code: "DOGE" })
+  const quoteAsset = new Asset({ id: "asset:USDT",
+    code: "USDT" })
+  const feeAsset = new Asset({ id: "asset:BNB",
+    code: "BNB" })
+  const market = new Market({ venue: "binance",
+    symbol: "DOGEUSDT",
+    baseAsset,
+    quoteAsset })
   const missingThirdAssetValuation = mapFillAppliedData({
     fill: new Fill({
       tradeId: "trade-43",
@@ -717,7 +739,19 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
   })
   assert.equal(contradictoryAssetIdentity.ok, false)
   assert.match(contradictoryAssetIdentity.errors[0].message, /asset ID and code do not match/)
+})
 
+test("validates third-asset quote valuation and accepts zero fees", () => {
+  const baseAsset = new Asset({ id: "asset:DOGE",
+    code: "DOGE" })
+  const quoteAsset = new Asset({ id: "asset:USDT",
+    code: "USDT" })
+  const feeAsset = new Asset({ id: "asset:BNB",
+    code: "BNB" })
+  const market = new Market({ venue: "binance",
+    symbol: "DOGEUSDT",
+    baseAsset,
+    quoteAsset })
   const invalidQuoteValuation = (quoteValue) => mapFillAppliedData({
     fill: new Fill({
       tradeId: "trade-45",
@@ -771,7 +805,6 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
   })
   assert.equal(zeroThirdAssetFee.ok, true)
 })
-
 
 test("maps invalid, unowned, and accounting-failed execution facts safely", () => {
   const baseAsset = new Asset({ id: "asset:DOGE",
@@ -979,13 +1012,15 @@ test("maps duplicate Fill and recovery-cycle completion DTOs", () => {
 })
 
 test("maps all account assets into sorted exact-decimal snapshot facts", () => {
-  const balance = (code, free, locked) => ({ asset: { code },
+  const balance = ({ code, free, locked }) => ({
+    asset: { code },
     free: { amount: free },
-    locked: { amount: locked } })
+    locked: { amount: locked },
+  })
   const result = mapAccountSnapshotCapturedData({
     phase: "OPENING",
     snapshot: { sourceTime: 1730740000000,
-      balances: [balance("USDT", "12.3400", "1.66"), balance("DOGE", "12321", "0"), balance("BNB", "0.2", "0.01")] },
+      balances: [balance({ code: "USDT", free: "12.3400", locked: "1.66" }), balance({ code: "DOGE", free: "12321", locked: "0" }), balance({ code: "BNB", free: "0.2", locked: "0.01" })] },
   })
   assert.equal(result.ok, true)
   assert.deepEqual(result.data.balances, [
@@ -1312,7 +1347,7 @@ test("keeps missing build provenance explicit and rejects malformed process iden
 })
 
 
-test("rejects lossy numeric timestamps at the Journal DTO boundary", () => {
+test("rejects lossy order and fill timestamps at the Journal DTO boundary", () => {
   const baseAsset = new Asset({ id: "asset:DOGE",
     code: "DOGE" })
   const quoteAsset = new Asset({ id: "asset:USDT",
@@ -1356,17 +1391,7 @@ test("rejects lossy numeric timestamps at the Journal DTO boundary", () => {
     commissionStatus: "COMPLETE",
   })
 
-  const invalidTransactionTimes = [
-    NaN,
-    Infinity,
-    -Infinity,
-    -0,
-    -1,
-    1.5,
-    Number.MAX_SAFE_INTEGER + 1,
-  ]
-
-  for (const transactionTime of invalidTransactionTimes) {
+  for (const transactionTime of INVALID_TRANSACTION_TIMESTAMPS) {
     const result = mapOrderUpdatedData({
       order: makeOrder(0),
       evidence: { transactionTime },
@@ -1388,9 +1413,11 @@ test("rejects lossy numeric timestamps at the Journal DTO boundary", () => {
     false,
     "Canonical fill executedAt must reject negative zero before the fill DTO is published.",
   )
+})
 
+test("rejects lossy broker execution-report timestamps", () => {
   for (const field of ["eventTime", "transactionTime", "orderCreationTime", "workingTime"]) {
-    for (const value of invalidTransactionTimes) {
+    for (const value of INVALID_TRANSACTION_TIMESTAMPS) {
       const result = mapBrokerExecutionReportData({
         evidence: {
           schemaVersion: 1,
@@ -1405,7 +1432,9 @@ test("rejects lossy numeric timestamps at the Journal DTO boundary", () => {
       )
     }
   }
+})
 
+test("rejects lossy account snapshot and open-order timestamps", () => {
   assert.equal(
     mapAccountSnapshotCapturedData({
       phase: "OPENING",
@@ -1424,7 +1453,7 @@ test("rejects lossy numeric timestamps at the Journal DTO boundary", () => {
     false,
     "Account snapshot sourceTime must reject negative timestamps.",
   )
-  for (const invalidTimestamp of invalidTransactionTimes) {
+  for (const invalidTimestamp of INVALID_TRANSACTION_TIMESTAMPS) {
     assert.equal(
       mapAccountSnapshotCapturedData({
         phase: "OPENING",
@@ -1447,7 +1476,7 @@ test("rejects lossy numeric timestamps at the Journal DTO boundary", () => {
   }
 })
 
-test("preserves valid zero timestamps and omits negative-zero optional diagnostics", () => {
+test("preserves valid zero timestamps across application event DTOs", () => {
   const baseAsset = new Asset({ id: "asset:DOGE",
     code: "DOGE" })
   const quoteAsset = new Asset({ id: "asset:USDT",
@@ -1526,6 +1555,9 @@ test("preserves valid zero timestamps and omits negative-zero optional diagnosti
     true,
     "Valid zero attempt and status-code values must remain valid.",
   )
+})
+
+test("omits negative-zero optional error and strategy diagnostics", () => {
   const connectionFailure = mapBrokerConnectionFailedData({
     broker: "binance",
     error: Object.assign(new Error("offline"), { code: -0 }),

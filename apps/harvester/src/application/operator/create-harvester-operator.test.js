@@ -1,5 +1,5 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest(`[create-harvester-operator.test.js] ${name}`, ...args)
+const test = (...args) => nodeTest(`[create-harvester-operator.test.js] ${args[0]}`, ...args.slice(1))
 import assert from "node:assert/strict"
 import { createHarvesterOperator } from "./create-harvester-operator.js"
 
