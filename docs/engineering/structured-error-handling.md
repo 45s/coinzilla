@@ -26,9 +26,9 @@ The base should extend the native `Error`, set `name` to the concrete subclass n
 - `code`: a stable, machine-readable, domain-scoped identifier.
 - `cause`: the original error or lower-level error, preserved without replacing its identity.
 - `context`: a small, safe object containing relevant diagnostic facts.
+- `retryable`: an explicit boolean only when the operation can meaningfully be classified as retryable or permanent.
 
 The shared base stores `context` as a detached, frozen flat record of JSON-safe scalar values (`string`, finite `number`, `boolean`, or `null`); nested objects and mutable payload graphs are rejected.
-- `retryable`: an explicit boolean only when the operation can meaningfully be classified as retryable or permanent.
 
 Do not add speculative fields or a complex error framework. Keep the base small and independent of logging, transport, persistence, application services, and domain policy.
 
