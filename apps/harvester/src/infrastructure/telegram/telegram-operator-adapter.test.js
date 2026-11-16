@@ -1168,3 +1168,30 @@ test("distinguishes a completed pause from a failed Telegram response", async ()
   assert.equal(loggedErrors[0].applicationOperationCompleted, true, "The diagnostic must distinguish a completed application operation from a failed reply.")
   assert.equal(loggedErrors[0].stateChanged, true, "The diagnostic must preserve the confirmed application state change.")
 })
+
+
+test("does not report a resume when the application confirms no operator pause existed", async () => {
+  const sentMessages = []
+  const entries = []
+  const result = await runTelegramUpdatesForDiagnostics({
+    updates: [makeUpdate({ updateId: 1204, text: "/resume LINKUSDT" })],
+    operator: {
+      resumeMarket: async () => ({
+        ok: true,
+        data: { symbol: "LINKUSDT", resumed: false, reason: "NOT_OPERATOR_PAUSED" },
+      }),
+    },
+    logger: {
+      debug: (entry) => entries.push(entry),
+      info: (entry) => entries.push(entry),
+      error: (entry) => entries.push(entry),
+    },
+  })
+  sentMessages.push(...result.sentMessages)
+  assert.match(sentMessages[0].text, /is not operator-paused/)
+  assert.match(sentMessages[0].text, /No state change/)
+  assert.doesNotMatch(sentMessages[0].text, /^Resumed LINKUSDT/)
+  const completion = entries.find((entry) => entry.message === "Telegram application operation COMPLETED")
+  assert.equal(completion?.applicationOperationCompleted, true)
+  assert.equal(completion?.stateChanged, false)
+})

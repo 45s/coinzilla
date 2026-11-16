@@ -853,7 +853,7 @@ export function createTelegramOperatorAdapter({
         chatId: message.chat.id,
         text: parsed.command === "RESUME" || parsed.command === "PAUSE"
           ? "Usage: /" + parsed.command.toLowerCase() + " <SYMBOL>. Use /help for commands."
-          : \`Usage: /\${String(parsed.command ?? "command").toLowerCase()} with no arguments. Use /help for commands.\`,
+          : `Usage: /${String(parsed.command ?? "command").toLowerCase()} with no arguments. Use /help for commands.`,
         signal,
         interaction,
       })
@@ -864,7 +864,7 @@ export function createTelegramOperatorAdapter({
       action,
       symbol: parsed.symbol,
       userId,
-      requestId: \`telegram:\${update.update_id}:\${message.date ?? "0"}:\${userId}\`,
+      requestId: `telegram:${update.update_id}:${message.date ?? "0"}:${userId}`,
       chatId: message.chat.id,
       signal,
       interaction,
