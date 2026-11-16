@@ -131,7 +131,7 @@ function validateSymbolTradingMetadata({
   }
   const supportedOrderTypes = [...new Set(symbolInfo.orderTypes)]
   if (supportedOrderTypes.some((orderType) => typeof orderType !== "string" || !orderType.trim())) {
-    throw new TypeError("Binance symbol " + requestedSymbol + " has malformed supported order types")
+    throw new TypeError(`Binance symbol ${requestedSymbol} has malformed supported order types`)
   }
   return { supportedOrderTypes }
 }
@@ -164,7 +164,10 @@ function collectSymbolFilterMetadata({ symbolInfo, exchangeInfo, requestedSymbol
       knownFilters: new Set(),
     }),
   ])
-  return { filters, unvalidatedConstraints }
+  return {
+    filters,
+    unvalidatedConstraints,
+  }
 }
 
 function parsePriceAndQuantityFilters({ filters }) {
@@ -286,14 +289,20 @@ function parseNotionalFilters({
 }
 
 function parseSymbolMetadata({ symbolInfo, requestedSymbol, exchangeInfo }) {
-  const { supportedOrderTypes } = validateSymbolTradingMetadata({ symbolInfo, requestedSymbol })
+  const { supportedOrderTypes } = validateSymbolTradingMetadata({
+    symbolInfo,
+    requestedSymbol,
+  })
   const { filters, unvalidatedConstraints } = collectSymbolFilterMetadata({
     symbolInfo,
     exchangeInfo,
     requestedSymbol,
   })
   const priceAndQuantity = parsePriceAndQuantityFilters({ filters })
-  const notional = parseNotionalFilters({ filters, requestedSymbol })
+  const notional = parseNotionalFilters({
+    filters,
+    requestedSymbol,
+  })
 
   return {
     symbol: requestedSymbol,
