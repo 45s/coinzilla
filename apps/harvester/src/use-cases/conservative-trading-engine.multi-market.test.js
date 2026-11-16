@@ -1093,15 +1093,7 @@ test("per-market emergency BUY pause cancels only that market's owned BUY and le
       }),
     },
   })
-  const initialDogecoinEvaluation = await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1,
-    },
-  })
-  assert.equal(initialDogecoinEvaluation.ok, true)
+  await startBothMarkets(engine)
 
   const paused = await engine.pauseBuys({
     symbol: "DOGEUSDT",
