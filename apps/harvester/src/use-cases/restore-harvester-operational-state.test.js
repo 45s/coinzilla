@@ -224,37 +224,8 @@ test("preserves external account-wide open orders as evidence without adopting t
 })
 
 
-function createFirstCycleBuyRecords({ clientOrderId, fillId }) {
+function createFirstCycleBuyExecutionRecords({ clientOrderId, fillId }) {
   return [
-    record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
-    record(1, "CONFIGURATION_BASELINE", {
-      schemaVersion: 1,
-      strategyName: "conservative",
-      markets: ["BTCUSDT"],
-      fingerprint,
-    }, `configuration-baseline:${fingerprint}`),
-    record(2, "PROCESS_STARTED", {
-      configurationFingerprint: fingerprint,
-      strategyName: "conservative",
-      markets: ["BTCUSDT"],
-      tradingEnabled: true,
-    }, `process-started:${sessionId}`),
-    record(3, "ACCOUNT_SNAPSHOT_CAPTURED", {
-      phase: "PREFLIGHT",
-      auditStatus: "COMPLETE",
-      sourceTime: 100,
-      assetCount: 0,
-      balances: [],
-      auditReasons: [],
-    }),
-    record(4, "ACCOUNT_OPEN_ORDERS_CAPTURED", {
-      phase: "PREFLIGHT",
-      observedAt: 101,
-      readiness: "READY",
-      orderCount: 0,
-      orders: [],
-      blockReasons: [],
-    }),
     record(5, "ORDER_SUBMISSION_INTENT", {
       clientOrderId,
       marketId: market.id,
@@ -304,6 +275,41 @@ function createFirstCycleBuyRecords({ clientOrderId, fillId }) {
       commissionStatus: "COMPLETE",
       commissions: [],
     }, `execution-fill-applied:${fillId}`),
+  ]
+}
+
+function createFirstCycleBuyRecords({ clientOrderId, fillId }) {
+  return [
+    record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+    record(1, "CONFIGURATION_BASELINE", {
+      schemaVersion: 1,
+      strategyName: "conservative",
+      markets: ["BTCUSDT"],
+      fingerprint,
+    }, `configuration-baseline:${fingerprint}`),
+    record(2, "PROCESS_STARTED", {
+      configurationFingerprint: fingerprint,
+      strategyName: "conservative",
+      markets: ["BTCUSDT"],
+      tradingEnabled: true,
+    }, `process-started:${sessionId}`),
+    record(3, "ACCOUNT_SNAPSHOT_CAPTURED", {
+      phase: "PREFLIGHT",
+      auditStatus: "COMPLETE",
+      sourceTime: 100,
+      assetCount: 0,
+      balances: [],
+      auditReasons: [],
+    }),
+    record(4, "ACCOUNT_OPEN_ORDERS_CAPTURED", {
+      phase: "PREFLIGHT",
+      observedAt: 101,
+      readiness: "READY",
+      orderCount: 0,
+      orders: [],
+      blockReasons: [],
+    }),
+    ...createFirstCycleBuyExecutionRecords({ clientOrderId, fillId }),
   ]
 }
 
