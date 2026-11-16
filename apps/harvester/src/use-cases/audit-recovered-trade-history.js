@@ -344,14 +344,14 @@ export function auditRecoveredTradeHistory(options = {}) {
     const { exchangeById } = createExchangeFillIndexes({
       exchangeRecords: scopedRecords.exchangeRecords,
     })
-    if (scope === "ACCOUNT" && marketUniverseComplete !== true) {
-      throw new Error("Account-wide exchange market universe is incomplete; unenumerated external executions cannot be excluded")
-    }
     const reconciledOwnedOrderFills = reconcileExchangeFills({
       exchangeById,
       journalById,
       ownedOrdersByBrokerId,
     })
+    if (scope === "ACCOUNT" && marketUniverseComplete !== true) {
+      throw new Error("Account-wide exchange market universe is incomplete; unenumerated external executions cannot be excluded")
+    }
     return createTradeHistoryAuditResult({
       scope,
       market,
