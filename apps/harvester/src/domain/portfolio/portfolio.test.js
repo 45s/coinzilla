@@ -7,11 +7,11 @@ import { Portfolio } from "./portfolio.js"
 const baseAsset = new Asset({ id: "asset:ETH", code: "ETH" })
 const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
 const market = new Market({ venue: "binance", symbol: "ETHUSDT", baseAsset, quoteAsset })
-const makeFill = ({ tradeId = "trade-1", quantity = "1", quoteQuantity = "100", commissions = [] } = {}) => new Fill({
+const makeFill = ({ tradeId = "trade-1", side = "BUY", quantity = "1", quoteQuantity = "100", commissions = [] } = {}) => new Fill({
   tradeId,
   brokerOrderId: "order-1",
   market,
-  side: "BUY",
+  side,
   price: new Money({ amount: "100", asset: quoteAsset }),
   quantity: new Quantity({ amount: quantity, asset: baseAsset }),
   quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
@@ -50,7 +50,7 @@ test("keeps exact fill accounting isolated when different markets reuse the same
     tradeId: "shared-trade-id",
     brokerOrderId: "sol-order",
     market: solMarket,
-    side,
+    side: "BUY",
     price: new Money({ amount: "100", asset: quoteAsset }),
     quantity: new Quantity({ amount: "2", asset: solBaseAsset }),
     quoteQuantity: new Money({ amount: "200", asset: quoteAsset }),
