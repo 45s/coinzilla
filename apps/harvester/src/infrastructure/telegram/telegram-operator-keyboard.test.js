@@ -503,7 +503,7 @@ test("rejects an unauthorized persistent-keyboard action before reading market s
   assert.equal(sentMessages[0].text, "Not authorized.", "An unauthorized keyboard action must receive the existing authorization response.")
 })
 
-test("TEMPORARY: report ESLint findings for the complete Harvester infrastructure directory", async () => {
+test("TEMPORARY: report ESLint findings for the complete Harvester infrastructure directory", async (t) => {
   const { ESLint } = await import("eslint")
   const eslint = new ESLint()
   const results = await eslint.lintFiles(["src/infrastructure/**/*.js"])
@@ -519,7 +519,7 @@ test("TEMPORARY: report ESLint findings for the complete Harvester infrastructur
   )
   const errorCount = findings.filter(({ severity }) => severity === 2).length
   const warningCount = findings.filter(({ severity }) => severity === 1).length
-  console.log("HARVESTER_INFRASTRUCTURE_ESLINT_REPORT", JSON.stringify({
+  t.diagnostic("HARVESTER_INFRASTRUCTURE_ESLINT_REPORT "+JSON.stringify({
     fileCount: results.length,
     errorCount,
     warningCount,
