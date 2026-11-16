@@ -931,7 +931,7 @@ error })
           })
           return recoveryPromise
         },
-        onStatus: (status, diagnostics) => {
+        onStatus: ({ status, diagnostics }) => {
           if (status === "exhausted") {return}
           const logLevel = status === "recovered" || status === "awaiting-aggTrade"
             ? "info"
