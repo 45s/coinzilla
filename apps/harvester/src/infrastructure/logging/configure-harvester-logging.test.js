@@ -7,6 +7,8 @@ import { PassThrough } from "node:stream"
 import { configureHarvesterLogging, createHarvesterConsoleTransport } from "./configure-harvester-logging.js"
 import { createHarvesterLogSessionPaths } from "./create-harvester-log-session-paths.js"
 
+const ANSI_ESCAPE = String.fromCharCode(27)
+
 function createLogger() {
   const transports = new Map()
   const levels = []
@@ -304,8 +306,8 @@ color: true })
     data: { message: "Detailed diagnostic" },
   })
 
-  assert.match(written, /\u001b\[34m.*Harvester ready\u001b\[0m/)
-  assert.match(written, /\u001b\[35m.*DEBUG Detailed diagnostic\u001b\[0m/)
+  assert.match(written, new RegExp(`${ANSI_ESCAPE}\\\\[34m.*Harvester ready${ANSI_ESCAPE}\\\\[0m`))
+  assert.match(written, new RegExp(`${ANSI_ESCAPE}\\\\[35m.*DEBUG Detailed diagnostic${ANSI_ESCAPE}\\\\[0m`))
   output.destroy()
 })
 
@@ -326,7 +328,7 @@ test("does not emit ANSI color codes when color is disabled", () => {
     data: { message: "Plain terminal output" },
   })
 
-  assert.doesNotMatch(written, /\u001b\[/)
+  assert.doesNotMatch(written, new RegExp(`${ANSI_ESCAPE}\\\\[`))
   assert.match(written, /Plain terminal output/)
   output.destroy()
 })
@@ -362,9 +364,9 @@ color: true })
   })
   transport.close()
 
-  assert.match(written, /\u001b\[32m.*SUCCESS Lifecycle event\u001b\[0m/)
-  assert.match(written, /\u001b\[36m.*Lifecycle event\u001b\[0m/)
-  assert.match(written, /\u001b\[34m.*Lifecycle event\u001b\[0m/)
+  assert.match(written, new RegExp(`${ANSI_ESCAPE}\\\\[32m.*SUCCESS Lifecycle event${ANSI_ESCAPE}\\\\[0m`))
+  assert.match(written, new RegExp(`${ANSI_ESCAPE}\\\\[36m.*Lifecycle event${ANSI_ESCAPE}\\\\[0m`))
+  assert.match(written, new RegExp(`${ANSI_ESCAPE}\\\\[34m.*Lifecycle event${ANSI_ESCAPE}\\\\[0m`))
   assert.equal((written.match(/Lifecycle event/g) ?? []).length, 3)
   assert.doesNotMatch(written, /SYSTEM Lifecycle event/)
   assert.doesNotMatch(written, /repeated/)
@@ -387,7 +389,7 @@ color: true })
     data: { message: "x".repeat(240) },
   })
 
-  const plainLine = written.replace(/\u001b\[[0-9;]*m/g, "").trimEnd()
+  const plainLine = written.replace(new RegExp(`${ANSI_ESCAPE}\\\\[[0-9;]*m`, "g"), "").trimEnd()
   assert.ok(plainLine.length <= 200)
   output.destroy()
 })
