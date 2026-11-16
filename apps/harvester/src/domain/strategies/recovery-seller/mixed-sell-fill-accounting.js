@@ -215,7 +215,7 @@ function applyAtomicProjections(input) {
     if (cause instanceof MixedSellFillReconciliationError) {
       throw cause
     }
-    fail({
+    return fail({
       code: "RS_MIXED_SELL_RECONCILIATION_PROJECTION_APPLY_FAILED",
       message: `The recovery and legacy projections could not be applied atomically: ${cause?.message ?? String(cause)}.`,
       cause,
