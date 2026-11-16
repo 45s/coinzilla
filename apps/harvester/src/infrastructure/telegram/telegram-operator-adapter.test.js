@@ -87,7 +87,7 @@ function assertPauseInteractionDiagnostics({ entries }) {
     assert.equal(
       interactionEntries.some(entry => entry.message === message),
       true,
-      \`\${message} must be logged for an allowlisted pause command.\`,
+      `${message} must be logged for an allowlisted pause command.`,
     )
   }
   assert.equal(
