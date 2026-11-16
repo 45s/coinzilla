@@ -166,7 +166,10 @@ test("rejects a non-canonical actor identity before touching the engine or store
   const operator = createHarvesterOperator({ operationalStateStore, engine })
 
   const result = await operator.pauseMarket({
-    actor: { id: " telegram-user:12345 ", roles: ["trading-operator"] },
+    actor: {
+      id: " telegram-user:12345 ",
+      roles: ["trading-operator"],
+    },
     requestId: "telegram:1006",
     symbol: "LINKUSDT",
   })
