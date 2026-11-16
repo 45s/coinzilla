@@ -1,10 +1,10 @@
 # Harvester documentation inventory
 
-- Status: Frozen 42-file baseline dispositions complete; all 4 initial Harvester REVIEW candidates have verified KEEP/SUPERSEDE dispositions; 19 post-baseline additions are recorded below; no current Harvester REVIEW candidates remain
+- Status: Frozen 42-file baseline dispositions complete; all 4 initial Harvester REVIEW candidates have verified KEEP/SUPERSEDE dispositions; 39 post-baseline additions are recorded below; no current Harvester REVIEW candidates remain
 - Type: Documentation inventory
 - Owner: Harvester
 - Inventory baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
-- Latest recursive checkpoint: `develop` at `b5fc236987833da4374258da876b412be3c48759` (`truncated: false`; 61 Harvester Markdown/MDX files)
+- Latest recursive checkpoint: `develop` at `27e098d04556f8fe67d526c36d98350ff55be78f` (`truncated: false`; 81 Harvester Markdown/MDX files)
 - Inventory date: 2026-11-09 (baseline); latest verification: 2026-11-11
 - Tracking: [#795](https://github.com/45s/coinzilla/issues/795)
 - Policy: [Documentation Governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md)
@@ -72,7 +72,7 @@ Each document was fetched for a first-pass title, heading, date, link and purpos
 
 ## Post-baseline additions — current 61-file checkpoint after PR #1013
 
-The 42-file table above remains a frozen baseline. A complete recursive Git tree comparison at `dcb0b64ece84ea2f3a41f5a110e559a01797ac6d` (`truncated: false`) found **57 tracked Harvester Markdown/MDX files**: 15 additions relative to the 42-file baseline. The source-verified `develop` tree at `515324a6b1cb872b99593bdf448d1914b005bfcb` contained **58**: the 2026-11-10 process-restart audit report was the sixteenth post-baseline addition. Merged PR #1003 added the accepted recovery ADR as the seventeenth addition; the `develop` tree at `bbd80b93cc0b8ab09172119c0d2d87617257a159` contained **59**. PR #1013 added `exchange-trading-constraints.md` and `volatility-protection.md`, bringing the current source-verified `develop` tree at `b5fc236987833da4374258da876b412be3c48759` to **61 tracked Harvester Markdown/MDX files** (19 additions relative to the frozen baseline). PR #951 added three audit-category indexes and relocated nine historical records without changing the total file count for those records; PRs #964 and #968 updated living roadmap, operations and domain-accounting guidance without adding or removing Markdown/MDX paths. PR #1021 updates existing documentation only and adds no Markdown/MDX paths. Additions are recorded separately so the original baseline byte sizes and paths remain intact.
+The 42-file table above remains a frozen baseline. A complete recursive Git tree comparison at `dcb0b64ece84ea2f3a41f5a110e559a01797ac6d` (`truncated: false`) found **57 tracked Harvester Markdown/MDX files**: 15 additions relative to the 42-file baseline. The source-verified `develop` tree at `515324a6b1cb872b99593bdf448d1914b005bfcb` contained **58**: the 2026-11-10 process-restart audit report was the sixteenth post-baseline addition. Merged PR #1003 added the accepted recovery ADR as the seventeenth addition; the `develop` tree at `bbd80b93cc0b8ab09172119c0d2d87617257a159` contained **59**. PR #1013 added `exchange-trading-constraints.md` and `volatility-protection.md`, bringing the historical `develop` tree at `b5fc236987833da4374258da876b412be3c48759` to 61 tracked Harvester Markdown/MDX files (19 additions relative to the frozen baseline). The current complete `develop` tree at `27e098d04556f8fe67d526c36d98350ff55be78f` contains **81 tracked Harvester Markdown/MDX files** (39 additions relative to the frozen 42-file baseline); 20 paths added since the 61-file checkpoint are listed below. PR #951 added three audit-category indexes and relocated nine historical records without changing the total file count for those records; PRs #964 and #968 updated living roadmap, operations and domain-accounting guidance without adding or removing Markdown/MDX paths. PR #1021 updates existing documentation only and adds no Markdown/MDX paths. Additions are recorded separately so the original baseline byte sizes and paths remain intact.
 
 | Added path | Purpose | Disposition |
 | --- | --- | --- |
@@ -99,6 +99,39 @@ The 42-file table above remains a frozen baseline. A complete recursive Git tree
 ## Source-verified documentation updates — PR #1021
 
 PR #1021 updates existing Harvester README, roadmap, Volatility Protection, architecture flow and BrokerPort/adapter guidance to match the implemented candle-history service, freshness handling, gap backfill and shutdown-drain guarantees. It adds no Markdown/MDX paths. Candle measurement collection is implemented; the high-volatility trading policy, central order gate and owned-BUY cancellation remain separate unimplemented work.
+
+## Subsequent recursive additions — current develop checkpoint 27e098d
+
+The complete recursive tree at `27e098d04556f8fe67d526c36d98350ff55be78f` contains 81 Harvester Markdown/MDX files. The following 20 Harvester paths were added since the prior 61-file checkpoint; no Harvester Markdown/MDX paths were removed:
+
+| Added path | Purpose |
+| --- | --- |
+| `apps/harvester/docs/SHUTDOWN_LOGGING_REDESIGN.md` | Accepted shutdown phase logging design and implementation contract. |
+| `apps/harvester/docs/architecture/OPERATOR_CONTROL_DESIGN.md` | Current transport-independent operator-control architecture and Command Center contract. |
+| `apps/harvester/docs/architecture/decisions/0002-transport-independent-operator-control.md` | Accepted operator-control ownership and market-pause decision. |
+| `apps/harvester/docs/architecture/decisions/0003-process-lifetime-operator-pause.md` | Accepted process-lifetime pause boundary. |
+| `apps/harvester/docs/architecture/decisions/0004-startup-open-orders-are-external.md` | Accepted startup open-order ownership decision. |
+| `apps/harvester/docs/audits/reports/2026-11-13_source-domain-correctness-audit.md` | Dated source/domain correctness audit. |
+| `apps/harvester/docs/audits/reports/2026-11-15_f055-shutdown-recovery.md` | Dated shutdown recovery finding. |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md` | Preserved session audit. |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-12_19-27-13Z_ORDER_FILL_LEDGER.md` | Matching session order/fill ledger. |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-13_15-50-59Z.md` | Preserved session audit. |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-13_15-50-59Z_ORDER_FILL_LEDGER.md` | Matching session order/fill ledger. |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-14_23-41-12Z.md` | Preserved session audit. |
+| `apps/harvester/docs/domain/recovery-seller-domain-specification.md` | Proposed Recovery Seller domain specification. |
+| `apps/harvester/docs/domain/recovery-seller-implementation-roadmap.md` | Proposed Recovery Seller implementation roadmap. |
+| `apps/harvester/docs/operations/submission-deferrals.md` | Order-submission deferral operations guide. |
+| `apps/harvester/docs/operations/telegram-command-center.md` | Telegram Command Center runbook. |
+| `apps/harvester/docs/operator-control/README.md` | Operator-control capability index. |
+| `apps/harvester/docs/plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md` | Startup order ownership design/implementation record. |
+| `apps/harvester/docs/plans/WORKFLOW_PIPELINE_MIGRATION.md` | Workflow-pipeline migration plan. |
+| `apps/harvester/docs/recovery/README.md` | Recovery documentation index. |
+
+### Pending addition — PR #1267
+
+| Added path | Purpose | Expected post-merge Harvester total |
+| --- | --- | ---: |
+| `apps/harvester/docs/architecture/decisions/0005-emergency-buy-pause.md` | Accepted emergency BUY pause and owned-order cancellation decision. | 82 |
 
 ## Content-based findings
 
