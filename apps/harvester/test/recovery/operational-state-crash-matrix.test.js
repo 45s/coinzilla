@@ -338,26 +338,22 @@ test("reopens a NOT_COMPLETED recovery SELL with exact cycle evidence and sticky
   assert.equal(recovered.data.restorationEnabled, false)
 })
 
-test("reopens a completed cycle with exact retained inventory and reset recovery basis", async (t) => {
-  const directory = await createDirectory(t)
-  const store = createStore(directory)
-  await initializeProcess(store)
-
+async function recordCompletedRecoveryCycle({ store }) {
   const buyOrder = await persistOrder({
     store,
-clientOrderId: "crash-matrix-completed-buy",
-side: "BUY",
+    clientOrderId: "crash-matrix-completed-buy",
+    side: "BUY",
     quantity: "2",
-price: "65000",
-  })
+    price: "65000",
+  });
   const sellOrder = await persistOrder({
     store,
-clientOrderId: "crash-matrix-completed-sell",
-side: "SELL",
+    clientOrderId: "crash-matrix-completed-sell",
+    side: "SELL",
     quantity: "1",
-price: "130005",
-purpose: "RECOVERY_SELL",
-  })
+    price: "130005",
+    purpose: "RECOVERY_SELL",
+  });
   const buyFill = makeFill({
     tradeId: "crash-matrix-completed-buy-fill",
     clientOrderId: buyOrder.clientOrderId,
@@ -366,7 +362,7 @@ purpose: "RECOVERY_SELL",
     quantity: "2",
     quoteQuantity: "130000",
     price: "65000",
-  })
+  });
   const sellFill = makeFill({
     tradeId: "crash-matrix-completed-sell-fill",
     clientOrderId: sellOrder.clientOrderId,
@@ -375,23 +371,17 @@ purpose: "RECOVERY_SELL",
     quantity: "1",
     quoteQuantity: "130005",
     price: "130005",
-  })
-  await applyFill({ store,
-fill: buyFill })
-  await applyFill({ store,
-fill: sellFill })
+  });
+  await applyFill({ store, fill: buyFill });
+  await applyFill({ store, fill: sellFill });
 
-  const {portfolio} = new Portfolio()
-    .applyFill({ fill: buyFill,
-strategyId: StrategyId.COIN_GRABBER }).portfolio
-    .applyFill({ fill: sellFill,
-strategyId: StrategyId.COIN_GRABBER })
+  const { portfolio } = new Portfolio()
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER });
   const recoveryLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill,
-strategyId: StrategyId.COIN_GRABBER }).ledger
-    .applyFill({ fill: sellFill,
-strategyId: StrategyId.COIN_GRABBER }).ledger
-  const position = portfolio.getPosition({ marketId: market.id })
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger;
+  const position = portfolio.getPosition({ marketId: market.id });
   const evaluated = evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,
     spent: position.spent.amount,
@@ -399,14 +389,14 @@ strategyId: StrategyId.COIN_GRABBER }).ledger
     activeQuantity: position.baseQuantity.amount,
     keepQuantity: "1",
     minProfit: "5",
-  })
+  });
   const completion = Object.freeze({
     ...evaluated,
     activeQuantity: position.baseQuantity.amount,
     keepQuantity: "1",
     minProfit: "5",
-  })
-  assert.equal(completion.eligible, true)
+  });
+  assert.equal(completion.eligible, true, "The exact completed recovery cycle must meet the configured profit threshold.");
   const recorded = await recordRecoveryCycleCompleted({
     operationalStateStore: store,
     recoveryLedger,
@@ -414,8 +404,18 @@ strategyId: StrategyId.COIN_GRABBER }).ledger
     sellOrder,
     completion,
     minProfit: "5",
-  })
-  assert.equal(recorded.ok, true, recorded.errors?.map(({ message }) => message).join("; "))
+  });
+  assert.equal(recorded.ok, true, recorded.errors?.map(({ message }) => message).join("; "));
+
+  return { buyOrder, sellOrder, recoveryLedger, recorded };
+}
+
+test("reopens a completed cycle with exact retained inventory and reset recovery basis", async (t) => {
+  const directory = await createDirectory(t)
+  const store = createStore(directory)
+  await initializeProcess(store)
+
+  const { buyOrder, sellOrder, recoveryLedger, recorded } = await recordCompletedRecoveryCycle({ store });
 
   const recovered = await readCandidate(directory, "crash-reader-after-completed-cycle")
   assert.equal(recovered.ok, true, recovered.errors?.map(({ message }) => message).join("; "))

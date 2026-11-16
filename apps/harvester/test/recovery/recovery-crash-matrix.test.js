@@ -281,23 +281,8 @@ test("fails closed when a full SELL is present but its cycle outcome has not yet
   assert.match(projection.errors[0].message, /fully filled SELL has no explicit recovery-cycle outcome/)
 })
 
-test("restores retained inventory, reset basis, and sticky pause after cycle and blocker publication", () => {
-  const fixture = createRecoveryCrashFixture()
-  const { state, projection } = restoreSnapshot({
-    fixture,
-    recordCount: fixture.checkpoints.afterStrategyPausePublication,
-  })
-
-  assert.equal(
-    fixture.records[fixture.checkpoints.afterRecoveryCycleCompletion].payload.name,
-    "execution.unowned_order",
-  )
-  assert.equal(
-    projection.data.pausedMarkets.some((item) => item.symbol === "BTCUSDT" && item.reason === "UNOWNED_ORDER"),
-    true,
-  )
-
-  assert.deepEqual(state, {
+function createExpectedRecoveredCrashState(fixture) {
+  return {
     orders: [
       {
         clientOrderId: "harvester-BTCUSDT-buy-001",
@@ -379,5 +364,29 @@ test("restores retained inventory, reset basis, and sticky pause after cycle and
         uncleanTradingShutdown: true,
       },
     ],
-  })
-})
+  };
+}
+
+test("restores retained inventory, reset basis, and sticky pause after cycle and blocker publication", () => {
+  const fixture = createRecoveryCrashFixture();
+  const { state, projection } = restoreSnapshot({
+    fixture,
+    recordCount: fixture.checkpoints.afterStrategyPausePublication,
+  });
+
+  assert.equal(
+    fixture.records[fixture.checkpoints.afterRecoveryCycleCompletion].payload.name,
+    "execution.unowned_order",
+    "The safety blocker must be published after recovery-cycle completion.",
+  );
+  assert.equal(
+    projection.data.pausedMarkets.some((item) => item.symbol === "BTCUSDT" && item.reason === "UNOWNED_ORDER"),
+    true,
+    "An unowned order must remain a durable pause after replay.",
+  );
+  assert.deepEqual(
+    state,
+    createExpectedRecoveredCrashState(fixture),
+    "The restored projection must preserve the completed recovery, retained inventory, and sticky pause exactly.",
+  );
+});
