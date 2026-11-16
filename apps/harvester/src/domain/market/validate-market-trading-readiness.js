@@ -32,13 +32,14 @@ unvalidatedConstraints }
 }
 
 function readRequiredConstraints({ symbol, tradingRules }) {
+  const constraints = new Map(tradingRules.constraints.map((item) => [item.type, item]))
   for (const type of REQUIRED_RULE_TYPES) {
-    const constraint = tradingRules.constraints.find((item) => item.type === type)
+    const constraint = constraints.get(type)
     if (!constraint || constraint.status !== "SUPPORTED") {
       throw new Error(`Required exchange trading rule is unavailable: ${type} for ${symbol}`)
     }
   }
-  return new Map(tradingRules.constraints.map((item) => [item.type, item]))
+  return constraints
 }
 
 function validatePositivePairSettings({ pairConfig }) {

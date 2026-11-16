@@ -24,10 +24,10 @@ reason },
   }
 }
 
-function getNextVolatilityState({ state, snapshot, activeBuyOrderCount }) {
+function getNextVolatilityState({ state, candleSnapshot, activeBuyOrderCount }) {
   const transition = transitionVolatilityProtection({
     state,
-    snapshot,
+    snapshot: candleSnapshot,
     activeBuyOrderCount,
   })
   const { state: nextState } = transition
