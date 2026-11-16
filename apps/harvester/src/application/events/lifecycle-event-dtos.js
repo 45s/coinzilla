@@ -681,8 +681,7 @@ const mapCommissionAmountData = ({ commission, index }) => ({
 })
 
 const hasValidMarketCommissionAssetIdentity = ({ fill, assetId, asset }) => {
-  const baseAsset = fill.market.baseAsset
-  const quoteAsset = fill.market.quoteAsset
+  const { baseAsset, quoteAsset } = fill.market
   const isBaseAsset = assetId === baseAsset?.id
   const isQuoteAsset = assetId === quoteAsset?.id
   return !(
