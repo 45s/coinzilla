@@ -3,19 +3,25 @@ import { describe, it } from "node:test"
 import { BinanceSdkBroker } from "../broker.js"
 import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 
-function createBroker(handler, myFiltersHandler = () => ({ symbolFilters: [], exchangeFilters: [], assetFilters: [] })) {
+function createBroker(handler, myFiltersHandler = () => ({ symbolFilters: [],
+exchangeFilters: [],
+assetFilters: [] })) {
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
     apiSecret: "test-secret",
       tradingMode: "testnet",
-    logger: { error() {}, info() {}, debug() {}, warn() {} },
+    logger: { error() {},
+info() {},
+debug() {},
+warn() {} },
   })
   const rpc = createFakeRpcClient({
     exchangeInfo: handler,
     myFilters: myFiltersHandler,
   })
   broker.tradingConnection = rpc
-  return { broker, rpc }
+  return { broker,
+rpc }
 }
 
 describe("BinanceSdkBroker.getSymbolFilters", () => {
@@ -28,9 +34,16 @@ describe("BinanceSdkBroker.getSymbolFilters", () => {
         quoteAsset: "USDT",
         orderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
         filters: [
-          { filterType: "PRICE_FILTER", tickSize: "0.10", minPrice: "0.10", maxPrice: "100000" },
-          { filterType: "LOT_SIZE", stepSize: "0.001", minQty: "0.001", maxQty: "1000" },
-          { filterType: "MIN_NOTIONAL", minNotional: "5" },
+          { filterType: "PRICE_FILTER",
+tickSize: "0.10",
+minPrice: "0.10",
+maxPrice: "100000" },
+          { filterType: "LOT_SIZE",
+stepSize: "0.001",
+minQty: "0.001",
+maxQty: "1000" },
+          { filterType: "MIN_NOTIONAL",
+minNotional: "5" },
         ],
       }] }
     })
@@ -38,18 +51,29 @@ describe("BinanceSdkBroker.getSymbolFilters", () => {
     assert.deepEqual(result, {
       ok: true,
       data: {
-        symbol: "BTCUSDT", baseAsset: "BTC", quoteAsset: "USDT",
-        tickSize: "0.10", stepSize: "0.001",
-        minPrice: "0.10", maxPrice: "100000",
-        minQuantity: "0.001", maxQuantity: "1000",
+        symbol: "BTCUSDT",
+baseAsset: "BTC",
+quoteAsset: "USDT",
+        tickSize: "0.10",
+stepSize: "0.001",
+        minPrice: "0.10",
+maxPrice: "100000",
+        minQuantity: "0.001",
+maxQuantity: "1000",
         minNotional: "5",
         supportedOrderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
         unvalidatedConstraints: [],
       },
     })
-    assert.deepEqual(rpc.calls.map(({ method, params, options }) => ({ method, params, options })), [
-      { method: "exchangeInfo", params: { symbol: "BTCUSDT" }, options: {} },
-      { method: "myFilters", params: { symbol: "BTCUSDT" }, options: { signed: true } },
+    assert.deepEqual(rpc.calls.map(({ method, params, options }) => ({ method,
+params,
+options })), [
+      { method: "exchangeInfo",
+params: { symbol: "BTCUSDT" },
+options: {} },
+      { method: "myFilters",
+params: { symbol: "BTCUSDT" },
+options: { signed: true } },
     ], "Market metadata loading must include authenticated account-specific filter data before declaring the symbol constraints complete.")
   })
 
@@ -67,8 +91,10 @@ describe("BinanceSdkBroker.getSymbolFilters", () => {
       quoteAsset: "USDT",
       orderTypes: ["LIMIT"],
       filters: [
-        { filterType: "PRICE_FILTER", tickSize: "0" },
-        { filterType: "LOT_SIZE", stepSize: "0.001" },
+        { filterType: "PRICE_FILTER",
+tickSize: "0" },
+        { filterType: "LOT_SIZE",
+stepSize: "0.001" },
       ],
     }] }))
     const result = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
@@ -80,8 +106,10 @@ describe("BinanceSdkBroker.getSymbolFilters", () => {
     const { broker } = createBroker(() => ({ symbols: [{
       symbol: "BTCUSDT",
       filters: [
-        { filterType: "PRICE_FILTER", tickSize: "0.01" },
-        { filterType: "LOT_SIZE", stepSize: "0.001" },
+        { filterType: "PRICE_FILTER",
+tickSize: "0.01" },
+        { filterType: "LOT_SIZE",
+stepSize: "0.001" },
       ],
     }] }))
     const result = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
@@ -104,9 +132,17 @@ describe("BinanceSdkBroker.getSymbolFilters", () => {
       quoteAsset: "USDT",
       orderTypes: ["LIMIT", "LIMIT_MAKER"],
       filters: [
-        { filterType: "PRICE_FILTER", tickSize: "0.01", minPrice: "0", maxPrice: "0" },
-        { filterType: "LOT_SIZE", stepSize: "0.001", minQty: "0", maxQty: "0" },
-        { filterType: "NOTIONAL", minNotional: "0", maxNotional: "0" },
+        { filterType: "PRICE_FILTER",
+tickSize: "0.01",
+minPrice: "0",
+maxPrice: "0" },
+        { filterType: "LOT_SIZE",
+stepSize: "0.001",
+minQty: "0",
+maxQty: "0" },
+        { filterType: "NOTIONAL",
+minNotional: "0",
+maxNotional: "0" },
       ],
     }] }))
     const result = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
@@ -127,8 +163,12 @@ describe("BinanceSdkBroker.getSymbolFilters", () => {
       quoteAsset: "USDT",
       orderTypes: ["LIMIT"],
       filters: [
-        { filterType: "PRICE_FILTER", tickSize: "0.01", minPrice: "NaN" },
-        { filterType: "LOT_SIZE", stepSize: "0.001", minQty: "0.001" },
+        { filterType: "PRICE_FILTER",
+tickSize: "0.01",
+minPrice: "NaN" },
+        { filterType: "LOT_SIZE",
+stepSize: "0.001",
+minQty: "0.001" },
       ],
     }] }))
     const result = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
@@ -147,9 +187,12 @@ describe("BinanceSdkBroker.getSymbolFilters", () => {
           quoteAsset: "USDT",
           orderTypes: ["LIMIT", "LIMIT_MAKER"],
           filters: [
-            { filterType: "PRICE_FILTER", tickSize: "0.01" },
-            { filterType: "LOT_SIZE", stepSize: "0.001" },
-            { filterType: "MIN_NOTIONAL", minNotional: "5" },
+            { filterType: "PRICE_FILTER",
+tickSize: "0.01" },
+            { filterType: "LOT_SIZE",
+stepSize: "0.001" },
+            { filterType: "MIN_NOTIONAL",
+minNotional: "5" },
           ],
         }],
       }),
@@ -174,13 +217,17 @@ describe("BinanceSdkBroker.getSymbolFilters", () => {
           quoteAsset: "USDT",
           orderTypes: ["LIMIT", "LIMIT_MAKER"],
           filters: [
-            { filterType: "PRICE_FILTER", tickSize: "0.01" },
-            { filterType: "LOT_SIZE", stepSize: "0.001" },
-            { filterType: "MIN_NOTIONAL", minNotional: "5" },
+            { filterType: "PRICE_FILTER",
+tickSize: "0.01" },
+            { filterType: "LOT_SIZE",
+stepSize: "0.001" },
+            { filterType: "MIN_NOTIONAL",
+minNotional: "5" },
           ],
         }],
       }),
-      () => ({ symbolFilters: [], exchangeFilters: [] }),
+      () => ({ symbolFilters: [],
+exchangeFilters: [] }),
     )
 
     const result = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
