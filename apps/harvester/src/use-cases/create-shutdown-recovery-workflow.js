@@ -404,10 +404,24 @@ function getShutdownRecoveryReplacementNotSubmittedFailure({ replacement, symbol
     ?.map((action) => action.reason)
     .filter(Boolean)
     .join(", ")
-  const reason = replacement.data?.decision?.reason || deferredReasons || "NO_SELL_SUBMITTED"
+  const decision = replacement.data?.decision
+  const decisionSummary = decision
+    ? {
+      action: decision.action,
+      reason: decision.reason,
+      actions: decision.actions?.map(({ side, quantity, price, reason: actionReason }) => ({
+        side,
+        quantity,
+        price,
+        reason: actionReason,
+      })),
+      inventoryDisposition: decision.inventoryDisposition,
+    }
+    : null
+  const reason = decision?.reason || deferredReasons || "NO_SELL_SUBMITTED"
   return shutdownRecoveryError({
     code: "SHUTDOWN_RECOVERY_REPLACEMENT_NOT_SUBMITTED",
-    message: `Shutdown recovery SELL replacement was not submitted for ${symbol}: ${reason}`,
+    message: `Shutdown recovery SELL replacement was not submitted for ${symbol}: ${reason}. Decision: ${JSON.stringify(decisionSummary)}. Deferred actions: ${JSON.stringify(replacement.data?.deferredActions ?? [])}`,
   })
 }
 
