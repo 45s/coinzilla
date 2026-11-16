@@ -59,6 +59,38 @@ test("keeps a hard strategy safety pause as a shutdown blocker", async () => {
   assert.deepEqual(result.data.markets[0].blockers, ["STRATEGY_SAFETY_PAUSED"])
 })
 
+test("keeps a recovery-managed pause unsafe until cancellation facts are resolved", async () => {
+  const state = createState()
+  state.paused.add("BTCUSDT")
+  state.recoveryManagedPausedMarkets.add("BTCUSDT")
+  const safety = createConservativeShutdownSafety({
+    state,
+    pairs: {
+      BTCUSDT: { enabled: true },
+    },
+    runTransition: ({ task }) => task(),
+  })
+
+  safety.beginShutdown()
+  const result = await safety.auditShutdownSafety({
+    symbol: "BTCUSDT",
+    reconciliationComplete: true,
+    journalDurable: true,
+    coverageResult: {
+      ok: true,
+      data: {
+        covered: true,
+        symbols: ["BTCUSDT"],
+        findings: [],
+      },
+    },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.markets[0].status, "UNSAFE")
+  assert.deepEqual(result.data.markets[0].blockers, ["RECOVERY_MANAGED_MARKET_PAUSED"])
+})
+
 test("does not treat an external/manual open order as a Conservative-owned shutdown blocker", async () => {
   const state = createState()
   const safety = createConservativeShutdownSafety({
