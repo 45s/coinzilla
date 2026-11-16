@@ -37,7 +37,7 @@ export function createPauseMarket({ engine, operationalStateStore } = {}) {
         // TEMPORARY: omit durable facts when CC recovery storage is disabled.
         ...(typeof operationalStateStore?.append === "function" ? {
           beforeApply: () => operationalStateStore.append({
-            factId: "operator-control:" + normalizedRequestId,
+            factId: `operator-control:${  normalizedRequestId}`,
             factType: "OPERATOR_MARKET_PAUSED",
             data: {
               requestId: normalizedRequestId,
