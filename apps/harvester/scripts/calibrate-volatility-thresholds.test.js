@@ -35,10 +35,11 @@ function makeKlineRow({ openTime, closeTime, close = "100" } = {}) {
 
 function createCandleSeries({ count = 300, spikeAt = 120 } = {}) {
   const firstOpenTime = 1_700_000_040_000
-  return Array.from({ length: count }, (_, index) => {
-    const range = index === spikeAt ? "20" : "0.1"
+  const candles = []
+
+  for (let index = 0; index < count; index += 1) {
     const openTime = firstOpenTime + index * INTERVAL_MS
-    return Object.freeze({
+    candles.push(Object.freeze({
       symbol: "BTCUSDT",
       interval: "1m",
       openTime,
@@ -49,8 +50,10 @@ function createCandleSeries({ count = 300, spikeAt = 120 } = {}) {
       close: "100",
       volume: "10",
       isClosed: true,
-    })
-  })
+    }))
+  }
+
+  return candles
 }
 
 test("parses Binance Spot kline CSV timestamps in milliseconds", () => {
@@ -132,7 +135,7 @@ spikeAt: -1 }),
 })
 
 test("rejects conflicting duplicate candles instead of choosing one archive row", () => {
-  const candle = createCandleSeries({ count: 1 })[0]
+  const [candle] = createCandleSeries({ count: 1 })
   const conflicting = Object.freeze({ ...candle,
 close: "100.01" })
 
@@ -279,11 +282,15 @@ test("runs the offline CLI and writes a reproducible report without network acce
   const inputPath = join(directory, "BTCUSDT-1m-2023-11.csv")
   const outputPath = join(directory, "calibration-report.json")
   const firstOpenTime = 1_700_000_040_000
-  const csv = Array.from({ length: 100 }, (_, index) => {
+  const rows = []
+  for (let index = 0; index < 100; index += 1) {
     const openTime = firstOpenTime + index * INTERVAL_MS
-    return makeKlineRow({ openTime,
-closeTime: openTime + INTERVAL_MS - 1 })
-  }).join("\n")
+    rows.push(makeKlineRow({
+      openTime,
+      closeTime: openTime + INTERVAL_MS - 1,
+    }))
+  }
+  const csv = rows.join("\n")
 
   try {
     writeFileSync(inputPath, csv, "utf8")
@@ -302,8 +309,14 @@ force: true })
 })
 
 test("reports complete observation and protection-state totals for a validated history", () => {
-  const candles = createCandleSeries({ count: 300, spikeAt: 120 })
-  const report = analyzeVolatilityHistory({ symbol: "BTCUSDT", candles })
+  const candles = createCandleSeries({
+    count: 300,
+    spikeAt: 120,
+  })
+  const report = analyzeVolatilityHistory({
+    symbol: "BTCUSDT",
+    candles,
+  })
   const protectedObservations =
     report.stateCounts.PROTECTED + report.stateCounts.RECOVERING
   let stateObservationCount = 0

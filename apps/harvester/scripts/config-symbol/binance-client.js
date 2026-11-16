@@ -64,7 +64,7 @@ defaultScope }),
     }))
 }
 
-function readExactlyOneFilter(filters, filterType) {
+function readExactlyOneFilter({ filters, filterType }) {
   const matches = filters.filter((filter) => filter?.filterType === filterType)
   if (matches.length !== 1) {
     throw new Error(`Binance exchangeInfo must contain exactly one ${  filterType  } filter`)
@@ -110,25 +110,28 @@ right: "0" }) <= 0) {
   return value
 }
 
-function validateSymbolTradingMetadata({ symbolInfo, requestedSymbol }) {
+function validateSymbolTradingMetadata({
+    symbolInfo,
+    requestedSymbol,
+  }) {
   if (!symbolInfo || symbolInfo.symbol !== requestedSymbol) {
-    throw new Error("Binance did not return the requested symbol " + requestedSymbol)
+    throw new Error(`Binance did not return the requested symbol ${requestedSymbol}`)
   }
   if (symbolInfo.status !== "TRADING") {
-    throw new Error("Binance symbol " + requestedSymbol + " is not currently trading")
+    throw new Error(`Binance symbol ${requestedSymbol} is not currently trading`)
   }
   if (symbolInfo.isSpotTradingAllowed !== true) {
-    throw new Error("Binance symbol " + requestedSymbol + " is not enabled for Spot trading")
+    throw new Error(`Binance symbol ${requestedSymbol} is not enabled for Spot trading`)
   }
   if (typeof symbolInfo.baseAsset !== "string" || !symbolInfo.baseAsset || typeof symbolInfo.quoteAsset !== "string" || !symbolInfo.quoteAsset) {
-    throw new Error("Binance symbol " + requestedSymbol + " is missing base/quote asset metadata")
+    throw new Error(`Binance symbol ${requestedSymbol} is missing base/quote asset metadata`)
   }
   if (!Array.isArray(symbolInfo.orderTypes)) {
-    throw new TypeError("Binance symbol " + requestedSymbol + " has malformed supported order types")
+    throw new TypeError(`Binance symbol ${requestedSymbol} has malformed supported order types`)
   }
   const supportedOrderTypes = [...new Set(symbolInfo.orderTypes)]
   if (supportedOrderTypes.some((orderType) => typeof orderType !== "string" || !orderType.trim())) {
-    throw new TypeError("Binance symbol " + requestedSymbol + " has malformed supported order types")
+    throw new TypeError(`Binance symbol ${requestedSymbol} has malformed supported order types`)
   }
   return { supportedOrderTypes }
 }
@@ -136,28 +139,46 @@ function validateSymbolTradingMetadata({ symbolInfo, requestedSymbol }) {
 function collectSymbolFilterMetadata({ symbolInfo, exchangeInfo, requestedSymbol }) {
   const {filters} = symbolInfo
   if (!Array.isArray(filters)) {
-    throw new TypeError("Binance symbol " + requestedSymbol + " has malformed exchange filters")
+    throw new TypeError(`Binance symbol ${requestedSymbol} has malformed exchange filters`)
   }
-  validateUniqueFilterTypes({ filters, label: "symbol filters for " + requestedSymbol })
+  validateUniqueFilterTypes({
+    filters,
+    label: `symbol filters for ${requestedSymbol}`,
+  })
   const exchangeFilters = exchangeInfo.exchangeFilters ?? []
   if (!Array.isArray(exchangeFilters)) {
     throw new TypeError("Binance exchangeInfo response has malformed exchangeFilters")
   }
-  validateUniqueFilterTypes({ filters: exchangeFilters, label: "exchange filters" })
+  validateUniqueFilterTypes({
+    filters: exchangeFilters,
+    label: "exchange filters",
+  })
   const unvalidatedConstraints = Object.freeze([
-    ...collectUnvalidatedFilters({ filters, defaultScope: "SYMBOL" }),
+    ...collectUnvalidatedFilters({
+      filters,
+      defaultScope: "SYMBOL",
+    }),
     ...collectUnvalidatedFilters({
       filters: exchangeFilters,
       defaultScope: "EXCHANGE",
       knownFilters: new Set(),
     }),
   ])
-  return { filters, unvalidatedConstraints }
+  return {
+    filters,
+    unvalidatedConstraints,
+  }
 }
 
 function parsePriceAndQuantityFilters({ filters }) {
-  const priceFilter = readExactlyOneFilter(filters, "PRICE_FILTER")
-  const lotSizeFilter = readExactlyOneFilter(filters, "LOT_SIZE")
+  const priceFilter = readExactlyOneFilter({
+    filters,
+    filterType: "PRICE_FILTER",
+  })
+  const lotSizeFilter = readExactlyOneFilter({
+    filters,
+    filterType: "LOT_SIZE",
+  })
   const tickSize = normalizePositiveExchangeDecimal({
     value: priceFilter.tickSize,
     field: "PRICE_FILTER.tickSize",
@@ -170,7 +191,10 @@ function parsePriceAndQuantityFilters({ filters }) {
     value: priceFilter.maxPrice,
     field: "PRICE_FILTER.maxPrice",
   })
-  if (minPrice && maxPrice && compareDecimal({ left: minPrice, right: maxPrice }) > 0) {
+  if (minPrice && maxPrice && compareDecimal({
+    left: minPrice,
+    right: maxPrice,
+  }) > 0) {
     throw new Error("Binance PRICE_FILTER.minPrice exceeds PRICE_FILTER.maxPrice")
   }
 
@@ -191,10 +215,16 @@ function parsePriceAndQuantityFilters({ filters }) {
     increment: stepSize,
     direction: "down",
   })
-  if (compareDecimal({ left: alignedMinimumQuantity, right: minQuantity }) !== 0) {
+  if (compareDecimal({
+    left: alignedMinimumQuantity,
+    right: minQuantity,
+  }) !== 0) {
     throw new Error("Binance LOT_SIZE.minQty is not aligned to LOT_SIZE.stepSize")
   }
-  if (compareDecimal({ left: minQuantity, right: maxQuantity }) > 0) {
+  if (compareDecimal({
+    left: minQuantity,
+    right: maxQuantity,
+  }) > 0) {
     throw new Error("Binance LOT_SIZE.minQty exceeds LOT_SIZE.maxQty")
   }
 
@@ -208,27 +238,40 @@ function parsePriceAndQuantityFilters({ filters }) {
   }
 }
 
-function parseNotionalFilters({ filters, requestedSymbol }) {
+function parseNotionalFilters({
+    filters,
+    requestedSymbol,
+  }) {
   for (const filterType of ["MIN_NOTIONAL", "NOTIONAL"]) {
     if (filters.filter((filter) => filter?.filterType === filterType).length > 1) {
-      throw new Error("Binance exchangeInfo contains duplicate " + filterType + " filters")
+      throw new Error(`Binance exchangeInfo contains duplicate ${filterType} filters`)
     }
   }
   const notionalFilters = filters.filter(
     (filter) => filter?.filterType === "MIN_NOTIONAL" || filter?.filterType === "NOTIONAL",
   )
   if (notionalFilters.length === 0) {
-    throw new Error("Binance exchangeInfo is missing MIN_NOTIONAL/NOTIONAL for " + requestedSymbol)
+    throw new Error(`Binance exchangeInfo is missing MIN_NOTIONAL/NOTIONAL for ${requestedSymbol}`)
   }
   const minNotionalValues = notionalFilters.map((filter) => {
     const value = normalizePositiveExchangeDecimal({
       value: filter.minNotional,
-      field: filter.filterType + ".minNotional",
+      field: `${filter.filterType}.minNotional`,
     })
-    return { value, normalized: normalizeDecimalString({ value, allowNegative: false }) }
+    return {
+      value,
+      normalized: normalizeDecimalString({
+        value,
+        allowNegative: false,
+      }),
+    }
   })
-  const strictestMinimum = minNotionalValues.reduce((highest, current) => {
-    return compareDecimal({ left: highest.normalized, right: current.normalized }) >= 0 ? highest : current
+  const strictestMinimum = minNotionalValues.reduce((...values) => {
+    const [highest, current] = values
+    return compareDecimal({
+      left: highest.normalized,
+      right: current.normalized,
+    }) >= 0 ? highest : current
   })
   const minNotional = strictestMinimum.value
   const notionalFilter = filters.find((filter) => filter?.filterType === "NOTIONAL")
@@ -246,14 +289,20 @@ function parseNotionalFilters({ filters, requestedSymbol }) {
 }
 
 function parseSymbolMetadata({ symbolInfo, requestedSymbol, exchangeInfo }) {
-  const { supportedOrderTypes } = validateSymbolTradingMetadata({ symbolInfo, requestedSymbol })
+  const { supportedOrderTypes } = validateSymbolTradingMetadata({
+    symbolInfo,
+    requestedSymbol,
+  })
   const { filters, unvalidatedConstraints } = collectSymbolFilterMetadata({
     symbolInfo,
     exchangeInfo,
     requestedSymbol,
   })
   const priceAndQuantity = parsePriceAndQuantityFilters({ filters })
-  const notional = parseNotionalFilters({ filters, requestedSymbol })
+  const notional = parseNotionalFilters({
+    filters,
+    requestedSymbol,
+  })
 
   return {
     symbol: requestedSymbol,

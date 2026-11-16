@@ -5,7 +5,10 @@ import {
   parseTradeHistoryArguments,
 } from "./testnet-trade-history-utils.js"
 
-const cliConsole = new Console({ stdout: process.stdout, stderr: process.stderr })
+const cliConsole = new Console({
+  stdout: process.stdout,
+  stderr: process.stderr,
+})
 
 const main = async () => {
   const { symbol, limit, fromId } = parseTradeHistoryArguments({

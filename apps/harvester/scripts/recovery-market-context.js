@@ -49,22 +49,31 @@ function prepareOfflineRecoveryEvidence({ context, canonical }) {
     marketsBySymbol,
     assetsByLookup,
   } = canonical.data
-  const symbol = requireString({ value: context.symbol, field: "context.symbol" })
+  const symbol = requireString({
+    value: context.symbol,
+    field: "context.symbol",
+  })
   const targetMarket = marketsBySymbol.get(symbol)
   if (!targetMarket) {
-    throw new Error("Canonical target market metadata is missing for " + symbol)
+    throw new Error(`Canonical target market metadata is missing for ${symbol}`)
   }
-  const coverage = requireObject({ value: context.coverage, field: "context.coverage" })
+  const coverage = requireObject({
+    value: context.coverage,
+    field: "context.coverage",
+  })
   const historyRetentionEvidence = {
     factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
-    baselineFactId: "market-history-coverage:" + symbol + ":baseline",
+    baselineFactId: `market-history-coverage:${symbol}:baseline`,
     symbol,
     coveredFromTime: coverage.coveredFromTime,
     verifiedAt: coverage.verifiedAt,
     evidenceDigest: coverage.evidenceDigest,
     verifiedBy: coverage.verifiedBy,
   }
-  const exchange = requireObject({ value: context.exchange, field: "context.exchange" })
+  const exchange = requireObject({
+    value: context.exchange,
+    field: "context.exchange",
+  })
   const currentAccountSnapshot = createAccountSnapshot({
     input: exchange.currentAccountSnapshot,
     assetsByLookup,
@@ -80,7 +89,11 @@ function prepareOfflineRecoveryEvidence({ context, canonical }) {
   const exchangeFills = requireArray({
     value: tradeHistory.fills,
     field: "exchange.tradeHistory.fills",
-  }).map((fill) => createCanonicalFill({ input: fill, marketsBySymbol, assetsByLookup }))
+  }).map((fill) => createCanonicalFill({
+    input: fill,
+    marketsBySymbol,
+    assetsByLookup,
+  }))
 
   return {
     projection,
@@ -148,7 +161,10 @@ async function confirmOfflineMarketRecovery({
   evidence,
   reconcileMarketState,
 }) {
-  requireString({ value: context.runtimeSessionId, field: "context.runtimeSessionId" })
+  requireString({
+    value: context.runtimeSessionId,
+    field: "context.runtimeSessionId",
+  })
   if (typeof operationalStateStore?.readAll !== "function" ||
       typeof operationalStateStore?.append !== "function") {
     throw new TypeError("Offline coverage confirmation requires the existing ADR-0001 Operational State Store records read/append port")

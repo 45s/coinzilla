@@ -253,7 +253,6 @@ test("Bitunix Spot broker keeps lifecycle and unsupported read capabilities expl
   assert.equal(broker.connected, false)
 
   const unsupportedResults = await Promise.all([
-    broker.getAssets(),
     broker.getMyTrades(),
     broker.getCanonicalOrder(),
     broker.getCanonicalOrderHistory(),
@@ -606,4 +605,50 @@ test("Bitunix Spot symbol metadata rejects ambiguous duplicate catalog entries",
 
   assert.equal(result.ok, false, "ambiguous market metadata must not silently select one row")
   assert.match(result.errors[0].message, /duplicate.*BTCUSDT|ambiguous.*BTCUSDT/i)
+})
+
+
+test("Bitunix Spot broker exposes legacy Coin assets from free and locked account balances", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      "/api/spot/v1/user/account": [
+        {
+          coin: "BTC",
+          balance: "0.2",
+          balanceLocked: "0.05",
+        },
+        {
+          coin: "USDT",
+          balance: "12.5",
+          balanceLocked: "0",
+        },
+        {
+          coin: "ZERO",
+          balance: "0",
+          balanceLocked: "0",
+        },
+      ],
+    },
+  })
+
+  const result = await broker.getAssets()
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data, [
+    {
+      ticker: "BTC",
+      quantity: 0.25,
+    },
+    {
+      ticker: "USDT",
+      quantity: 12.5,
+    },
+  ])
+  assert.deepEqual(calls, [
+    {
+      method: "GET",
+      path: "/api/spot/v1/user/account",
+      options: {},
+    },
+  ])
 })

@@ -45,11 +45,12 @@ export const normalizeTradeHistory = ({ trades }) => {
     })
   }
 
-  normalizedTrades.sort((left, right) =>
-    left.time === right.time
+  normalizedTrades.sort((...values) => {
+    const [left, right] = values
+    return left.time === right.time
       ? left.tradeId - right.tradeId
-      : left.time - right.time,
-  )
+      : left.time - right.time
+  })
 
   return { trades: normalizedTrades }
 }

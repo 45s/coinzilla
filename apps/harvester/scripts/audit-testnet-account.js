@@ -23,8 +23,15 @@ const requireSuccess = ({ result, operation }) => {
 }
 
 const publishAndFlush = async ({ eventPublisher, eventName, dataResult }) => {
-  const published = publishLifecycleEvent({ eventPublisher, eventName, dataResult })
-  requireSuccess({ result: published, operation: `Unable to publish ${eventName}` })
+  const published = publishLifecycleEvent({
+    eventPublisher,
+    eventName,
+    dataResult,
+  })
+  requireSuccess({
+    result: published,
+    operation: `Unable to publish ${eventName}`,
+  })
   requireSuccess({
     result: await eventPublisher.flush(),
     operation: `Unable to durably persist ${eventName}`,
@@ -78,7 +85,10 @@ async function captureAccountSnapshot({ broker, eventPublisher }) {
   await publishAndFlush({
     eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
-    dataResult: mapAccountSnapshotCapturedData({ phase: "PREFLIGHT", snapshot }),
+    dataResult: mapAccountSnapshotCapturedData({
+      phase: "PREFLIGHT",
+      snapshot,
+    }),
   })
   return snapshot
 }

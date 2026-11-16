@@ -64,6 +64,37 @@ function summarizeResult({ result }) {
 data: result.data }
 }
 
+function createConfirmationStore({ parsed, context, env }) {
+  if (!parsed.confirm) {
+    return undefined
+  }
+
+  let directory
+  try {
+    directory = resolveOperationalStateDirectory({ env })
+  } catch (cause) {
+    throw new Error("--confirm requires a valid OPERATIONAL_STATE_DIRECTORY", { cause })
+  }
+  if (typeof context.runtimeSessionId !== "string" || !context.runtimeSessionId.trim()) {
+    throw new Error("--confirm requires a non-empty runtimeSessionId in the offline evidence bundle")
+  }
+
+  return createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: context.runtimeSessionId,
+  })
+}
+
+function getRecoveryExitCode({ summary, confirm }) {
+  if (!summary.ok) {
+    return 1
+  }
+  if (confirm) {
+    return summary.data.confirmation?.confirmed === true ? 0 : 2
+  }
+  return summary.data.reconciliation?.ready === true ? 0 : 2
+}
+
 /**
  * Execute the offline recovery CLI with injectable I/O for deterministic tests.
  */
@@ -86,22 +117,11 @@ error: value }),
     const contextPath = path.resolve(cwd, parsed.contextPath)
     const raw = await readContext(contextPath, "utf8")
     const context = JSON.parse(raw)
-    let operationalStateStore
-    if (parsed.confirm) {
-      let directory
-      try {
-        directory = resolveOperationalStateDirectory({ env })
-      } catch (cause) {
-        throw new Error("--confirm requires a valid OPERATIONAL_STATE_DIRECTORY", { cause })
-      }
-      if (typeof context.runtimeSessionId !== "string" || !context.runtimeSessionId.trim()) {
-        throw new Error("--confirm requires a non-empty runtimeSessionId in the offline evidence bundle")
-      }
-      operationalStateStore = createFileOperationalStateStore({
-        directory,
-        runtimeSessionId: context.runtimeSessionId,
-      })
-    }
+    const operationalStateStore = createConfirmationStore({
+      parsed,
+      context,
+      env,
+    })
 
     const result = await runOfflineMarketRecovery({
       context,
@@ -110,9 +130,10 @@ error: value }),
     })
     const summary = summarizeResult({ result })
     writeOutput(JSON.stringify(summary, null, 2))
-    if (!summary.ok) { return 1 }
-    if (parsed.confirm) { return summary.data.confirmation?.confirmed === true ? 0 : 2 }
-    return summary.data.reconciliation?.ready === true ? 0 : 2
+    return getRecoveryExitCode({
+      summary,
+      confirm: parsed.confirm,
+    })
   } catch (error) {
     writeError(error?.message ?? String(error))
     return 1

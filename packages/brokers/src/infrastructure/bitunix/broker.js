@@ -1,6 +1,7 @@
 import { assertDecimalString, handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { BitunixRestClient } from "./api/rest-client.js"
+import { adaptAssets } from "./adapters/adapt-assets.js"
 import { adaptBalances } from "./adapters/adapt-balances.js"
 import { adaptOrder } from "./adapters/adapt-order.js"
 import { createCanonicalMarket, getBitunixSymbol } from "./adapters/create-canonical-market.js"
@@ -451,11 +452,24 @@ export class BitunixSpotBroker extends CoreBroker {
   }
 
   async getAssets() {
-    const error = unsupported({
-      operation: "getAssets()",
-      reason: "the legacy Coin representation is not defined by the Bitunix adapter; use canonical getBalances()",
-    })
-    return toResult({ errors: [error] })
+    try {
+      const response = await this.restClient.request({
+        method: "GET",
+        path: API.balances,
+      })
+      return toResult({
+        data: adaptAssets(requireArray({
+          value: response.data,
+          operation: "account",
+        })),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getAssets()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
   }
 
   async getMyTrades() {
