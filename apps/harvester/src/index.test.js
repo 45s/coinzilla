@@ -1646,7 +1646,7 @@ test("uses TRADING_MODE=live for Binance LIVE and acquires the single-writer loc
   let startInput
   await main({
     env: { NODE_ENV: "development", TRADING_MODE: "live" },
-    loadConfig: async () => defaultAppConfig,
+    loadConfig: async () => appConfig,
     createJournalService: () => ({
       ready: Promise.resolve({ ok: true }),
       flush: async () => ({ ok: true, durable: true }),
