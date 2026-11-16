@@ -408,7 +408,11 @@ function formatConsoleDetails(details = {}) {
   }
   for (const [key, value] of Object.entries(details)) {
     if (key !== "symbol") {
-      appendConsoleDetail({ parts, key, value })
+      appendConsoleDetail({
+        parts,
+        key,
+        value,
+      })
     }
   }
   return parts.length > 0 ? `: ${parts.join(", ")}` : ""
@@ -447,11 +451,12 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
   const plainPrefix = `${time} ${strategyPrefix}${levelLabel}${summaryMessage}`
   const formattedDetails = formatConsoleDetails(summary.details ?? {})
   const availableDetailsLength = Math.max(0, MAX_CONSOLE_LINE_LENGTH - plainPrefix.length)
-  const suffix = formattedDetails.length > availableDetailsLength
-    ? availableDetailsLength > 3
+  let suffix = formattedDetails
+  if (formattedDetails.length > availableDetailsLength) {
+    suffix = availableDetailsLength > 3
       ? `${formattedDetails.slice(0, availableDetailsLength - 3)}...`
       : ""
-    : formattedDetails
+  }
   const plainLine = `${plainPrefix}${suffix}`
   const boundedLine = plainLine.length > MAX_CONSOLE_LINE_LENGTH
     ? `${plainLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3)}...`
