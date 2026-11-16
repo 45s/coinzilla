@@ -203,13 +203,12 @@ function createAccountBalanceContext({ projection, currentAccountSnapshot }) {
   for (const balance of currentAccountSnapshot.balances) {
     const { code } = balance.asset
     if (currentByAsset.has(code)) {
-      throw new Error(`Current account snapshot conta
-      ins duplicate asset code ${code}`)
+      throw new Error(`Current account snapshot contains duplicate asset code ${code}`)
     }
     currentByAsset.set(code, {
       total: addDecimal({ left: balance.free.amount, 
-        right: balanc
-        e.locked.amount }
+        right: balance.locked.amount,
+      }
       ),
       
       locked: balance.locked.amount,
@@ -267,9 +266,7 @@ function createMarketContext({ recoveredState, markets, targetMarket }) {
       asset: market.quoteAsset.code,
       amount: requireAmount({
         value: position.quoteNetCashFlow.amount,
-        field: `${market.sy
-        mbol}.quoteNe
-        tCashFlow`,
+        field: `${market.symbol}.quoteNetCashFlow`,
       }),
     })
   }
@@ -350,8 +347,7 @@ function applyThirdAssetCommission({
       compareDecimal({
         left: requireAmount({
           value: quoteValue.amount,
-          field: `${fill.symbol}.commissi
-          on.quoteValue.amount`,
+          field: `${fill.symbol}.commission.quoteValue.amount`,
         }),
         right: "0",
       }) <= 0) {
