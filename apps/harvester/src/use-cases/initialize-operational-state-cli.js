@@ -34,14 +34,16 @@ export async function runInitializeOperationalState({
   }
   let result
   try {
-    result = await initialize({ confirmed: true, directory })
+    result = await initialize({ confirmed: true,
+directory })
   } catch (error) {
-    result = { ok: false, errors: [error] }
+    result = { ok: false,
+errors: [error] }
   }
   if (result?.ok === true && result.data?.durable === true) {
     logger.system?.(
-      "Harvester Operational State Store initialized at " + result.data.directory +
-      " (sequence " + result.data.sequence + ").",
+      `Harvester Operational State Store initialized at ${  result.data.directory 
+      } (sequence ${  result.data.sequence  }).`,
     )
     return 0
   }
