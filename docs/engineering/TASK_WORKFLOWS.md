@@ -2,6 +2,17 @@
 
 All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the owning domain's AGENTS.md, and its roadmap. Use the smallest applicable checklist below; high-risk requirements are additive.
 
+## Task contract, incremental commits and handoff
+
+For every non-trivial task, follow the mandatory [incremental commit and handoff protocol](../../AI_AGENT_WORKFLOW.md#11-incremental-commits-and-resumable-task-handoffs--mandatory).
+
+- [ ] A GitHub Issue (or explicitly adopted existing issue) describes the goal, owning scope, exclusions, requirements/invariants, acceptance criteria, dependencies, verification and documentation impact.
+- [ ] The issue, branch, PR and owning roadmap link to one another where applicable; update task state as scope, decisions, blockers and progress change.
+- [ ] Work is split into cohesive, reviewable commits using `<type>(<scope>): <imperative outcome>`; preserve test-first RED/GREEN evidence and avoid unrelated or progress-only commits.
+- [ ] Each meaningful checkpoint is committed and pushed; validation status is recorded against the exact commit SHA.
+- [ ] Before pausing or changing owners, add a handoff checkpoint to the issue (and update the PR when applicable) with exact branch/head, base freshness, completed/in-progress work, next action, decisions, checks/CI SHA, blockers, safety boundaries and documentation/roadmap status.
+- [ ] The task can be resumed from GitHub issue, branch, PR and canonical docs without relying on private chat history.
+
 ## Documentation-only change
 
 - Confirm the owning documentation/domain, canonical source of truth and linked references.

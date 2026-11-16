@@ -29,6 +29,70 @@ For any refactoring or code-audit task, use the canonical [AI Refactoring and Co
 8. Never merge task work directly into `main`.
 9. When the agreed milestone is ready, prepare one release PR from `develop` to `main`. The user reviews and approves that release PR.
 
+## 1.1 Incremental commits and resumable task handoffs — mandatory
+
+The task must remain understandable and safely resumable throughout implementation, not only when the PR is finished. The GitHub task issue is the live task contract; the branch and commit history are the implementation record; the roadmap is the concise priority/status index; canonical documentation owns durable rules and contracts. Do not create a parallel private task log or rely on chat history.
+
+### Task contract — before implementation
+
+Every non-trivial task MUST have a GitHub Issue (or an existing issue explicitly adopted for the task) before implementation. The issue description is the durable task brief and MUST state:
+
+- **Goal / outcome:** what observable result is required and why.
+- **Scope and ownership:** owning domain, affected paths/surfaces, explicit exclusions, and coordinating owners for cross-domain work.
+- **Requirements / invariants:** applicable contracts, safety constraints, compatibility expectations and links to canonical docs.
+- **Acceptance criteria:** concrete, verifiable outcomes; distinguish required from optional/deferred work.
+- **Dependencies:** linked issues/PRs, prerequisites and external constraints.
+- **Verification:** relevant tests/checks, expected evidence, and any separately authorized integration activity.
+- **Documentation impact:** living docs, roadmap and indexes expected to change, or why none are needed.
+- **Current state:** planned / in progress / blocked, current branch and PR when available.
+
+An issue title/body is not frozen after kickoff. The responsible agent MUST update it when scope, acceptance criteria, decisions, dependencies, blockers or status materially change. Keep the description concise and current; put dated progress/checkpoint detail in comments rather than accumulating an event log in the issue body. Link the issue from the branch/PR and the owning roadmap where appropriate. If the task is genuinely a tiny standalone change, use an existing tracking issue or create a concise issue; do not invent bureaucracy for a one-line typo.
+
+### Small, meaningful commits
+
+Commit continuously in coherent increments. A commit should represent one reviewable intention (for example: a failing regression test, the minimal fix, a focused refactor, or the corresponding documentation/status update), not an arbitrary number of changed lines.
+
+- Prefer several small, logically ordered commits over one large end-of-task dump. Avoid both extremes: do not split trivial adjacent edits into noisy commits, and do not combine unrelated behavior, cleanup, tests and documentation into one opaque commit.
+- Use the repository's established Conventional Commit form: `<type>(<scope>): <imperative outcome>`. Use the owning package/app as scope; use `repo` for repository-wide workflow/policy work. The subject must explain the result, not say only "updates", "fixes", "work", a phase number or an issue number.
+- Keep each commit limited to the task's authorized scope. Include the tests that prove a completed behavior increment and update affected living documentation in the same task/PR; when practical, include the relevant docs/status update in the same logical commit.
+- Preserve TDD evidence: a deliberate RED test-first commit may fail the targeted test for the expected behavioral reason. Make that explicit in the commit/PR narrative. The next implementation commit should make that same test GREEN. Do not disguise setup failures as RED evidence.
+- After each meaningful increment, inspect the diff and run the narrowest relevant checks when available. Before handing off or pausing, push a coherent checkpoint; do not leave the only copy of work in an uncommitted local workspace. If an unfinished change cannot yet pass checks, record exactly why and what remains.
+- Do not create empty/progress-only commits. Do not rewrite or squash away the only test-first evidence or commits needed to understand the task. Never force-push shared history.
+- A commit is not proof that the task is complete. Report validation status separately and identify the exact commit/PR head on which it was observed.
+
+### Checkpoint and handoff — required whenever work pauses or changes owner
+
+A task is not transferable merely because its branch exists. Before ending a work session, changing agents, or pausing for a blocker, the current owner MUST:
+
+1. Commit and push all safe, coherent work. If changes must remain uncommitted, explain why, list the exact paths and ensure the next owner can access them; never imply they are on GitHub.
+2. Update the GitHub issue's current description/status if the task contract changed, and add a concise checkpoint comment. Update the PR description when one exists and the change affects its scope, status, risks or validation.
+3. Ensure the owning roadmap accurately says planned / in progress / blocked / done and links the issue/PR. Mark Done only after merge to `develop` and required verification.
+4. State the exact repository, branch, latest commit SHA and commit subject, PR link/state, and latest `develop` base/synchronization status.
+5. Record completed outcomes, the current in-progress item, the next concrete action, decisions and rationale, unresolved questions/blockers, affected files/contracts, and any safety restrictions.
+6. Record checks actually run, exact commands/workflows and outcomes, expected RED evidence if applicable, skipped checks with reasons, and the exact SHA validated by the latest green CI. Never transfer a stale "green" claim to a newer commit.
+7. Identify the next owner only when known; otherwise explicitly mark ownership unassigned. The next agent independently repeats the mandatory documentation preflight and verifies branch/PR/CI state before acting.
+
+Use this compact issue-comment/PR checkpoint format (omit fields only when genuinely not applicable):
+
+```markdown
+## Handoff checkpoint — YYYY-MM-DD HH:mm UTC
+
+- **Status / owner:** in progress | blocked | ready for review; owner or unassigned
+- **Task:** #issue — one-sentence outcome
+- **Branch / head:** `branch` — `<sha> <commit subject>`
+- **PR:** #number, draft/ready, target; or not opened
+- **Base freshness:** latest `develop` SHA and whether it is an ancestor of the task head
+- **Completed:** verified outcomes and links
+- **In progress:** exact unfinished slice
+- **Next action:** one concrete next step
+- **Decisions / invariants:** durable decisions and relevant canonical links
+- **Validation:** commands/checks and results; latest green CI SHA; skipped checks and reasons
+- **Blockers / risks:** exact blocker, evidence, and safe boundary
+- **Documentation / roadmap:** updated paths and current status
+```
+
+The next agent must be able to continue from the issue, PR, branch and canonical docs alone. If those sources disagree, reconcile them before implementation; do not guess which one is current. This protocol supplements the existing branch freshness, draft/ready, verification and merge gates below; it does not weaken them.
+
 ## 2. Branch model
 
 | Branch | Purpose | Who merges |
