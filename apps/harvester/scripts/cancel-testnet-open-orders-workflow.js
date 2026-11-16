@@ -1,4 +1,7 @@
-function logInitialOpenOrders({ logger, orders }) {
+function logInitialOpenOrders({
+    logger,
+    orders,
+  }) {
   logger.info({
     message: "Binance Spot TESTNET — Cancel All Open Orders",
     orders: orders.map((order) => ({
@@ -50,7 +53,10 @@ async function cancelOrdersBySymbol({ symbols, cancelOpenOrdersForSymbol, logger
   return cancellationFailed
 }
 
-function logFinalOpenOrders({ logger, remainingOrders }) {
+function logFinalOpenOrders({
+    logger,
+    remainingOrders,
+  }) {
   logger.info({
     message: "Final TESTNET open-orders check",
     remainingOrders: remainingOrders.map((order) => ({
