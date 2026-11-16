@@ -69,7 +69,7 @@ Remaining safety and observability follow-ups #1103 and #1105 remain open; #1104
 
 **Current baseline:** inbound Telegram control defaults disabled. Explicitly enabling it requires a valid `TELEGRAM_USER_ID` allowlist entry, `TELEGRAM_BOT_TOKEN` and a verified Operational State Store; startup fails closed when any requirement is missing or invalid. Outbound Telegram notifications remain independently configured. CC-1 through CC-3 are delivered in PRs #1079, #1081, #1086 and #1087. CC-4 is delivered in merged [PR #1088](https://github.com/45s/coinzilla/pull/1088): Telegram command menu, authorized inline navigation/refresh, confirmation-gated market pause/resume controls, callback authorization/idempotency/retry/shutdown hardening and the operator runbook. The operator pause remains process-lifetime only and is not restored after restart.
 
-- [~] **Make inbound Telegram operator control opt-in by default and classify pre-broker failures correctly** — [PR #1197](https://github.com/45s/coinzilla/pull/1197). Ordinary development startup no longer composes an optional operator-control ledger; explicit enablement remains fail-closed, and pre-broker failures release the process lock only after Journal close is confirmed.
+- [~] **Make inbound Telegram operator control opt-in by default** — [PR #1197](https://github.com/45s/coinzilla/pull/1197). Ordinary development startup no longer composes an optional operator-control ledger; explicit enablement remains fail-closed.
 
 ### Delivery phases
 

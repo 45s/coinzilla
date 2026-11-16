@@ -696,15 +696,7 @@ function createHarvesterRuntimeResult({ startup, portfolio, resources, stop } = 
 }
 
 export async function startHarvester(options = {}) {
-  let startup
-  try {
-    startup = await createHarvesterStartupContext({ options })
-  } catch (error) {
-    if (error !== null && typeof error === "object" && Object.isExtensible(error)) {
-      Object.defineProperty(error, "startupResourcesMayBeActive", { value: false })
-    }
-    throw error
-  }
+  const startup = await createHarvesterStartupContext({ options })
   const portfolio = createHarvesterPortfolioContext({ startup })
   const resources = await createHarvesterRuntimeResources({ startup })
   const accountSnapshots = createHarvesterAccountSnapshotRuntime({ startup, portfolio, resources })

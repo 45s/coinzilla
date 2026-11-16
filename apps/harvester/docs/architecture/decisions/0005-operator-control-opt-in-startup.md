@@ -25,6 +25,8 @@ The current bootstrap deliberately shares one process-owned Operational State St
 
 This is not evidence that the ledger verifier should be weakened or that startup should create a replacement ledger. The coupling is caused by the default that activates the optional capability.
 
+The observed `observability shutdown incomplete` message is a consequence of the existing conservative process-lock retention after runtime startup has been invoked. The entry point logs cleanup diagnostics separately and then logs the original startup error with its cause. This PR leaves that lock-retention policy unchanged.
+
 ## Decision
 
 1. **Inbound Telegram operator control is opt-in.** `OPERATOR_CONTROL_CONFIG.telegram.enabled` defaults to `false` in every application mode. A deployment that needs the Command Center must explicitly set it to `true`.
@@ -33,7 +35,7 @@ This is not evidence that the ledger verifier should be weakened or that startup
 4. **Notifications remain independent.** Disabling inbound control does not disable `notifications.telegram`, its outbound notifier, or its best-effort delivery lifecycle.
 5. **Recovery remains independent.** This decision does not change `recovery.enabled`, the shared store schema, process-start fencing, or any ADR-0001 recovery requirement.
 6. **No automatic development initialization is introduced.** A missing store is not created or repaired by normal startup. The explicit one-time initializer remains the only genesis-creation path.
-7. **Pre-broker startup failures are classified accurately.** Errors raised while creating the startup context are marked as occurring before runtime resources can be active. The entry point may release the process lock after such a failure only when Journal shutdown is confirmed. Failures after runtime resources may have been activated retain the existing conservative lock-retention policy.
+7. **Existing process-lock cleanup remains conservative.** If the entry point has invoked runtime startup and that call fails, it retains the process lock. Cleanup diagnostics are logged separately and the original startup error is still logged with its cause. This PR does not relax the lock policy.
 
 ## Expected startup contract
 
@@ -65,4 +67,4 @@ This is not evidence that the ledger verifier should be weakened or that startup
 
 ## Validation
 
-The implementation is covered by regression tests for default development startup without a store, independent outbound notifications, explicit operator-control enablement with valid and invalid stores, production fail-closed behavior, missing credentials/allowlist, durable-before-apply command behavior, and safe pre-broker cleanup with original-error preservation.
+The implementation is covered by regression tests for default development startup without a store, independent outbound notifications, explicit operator-control enablement with valid and invalid stores, production fail-closed behavior, missing credentials/allowlist, durable-before-apply command behavior, and startup-failure logging and conservative process-lock retention with original-error preservation.

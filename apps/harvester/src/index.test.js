@@ -1849,7 +1849,7 @@ test("starts normal development runtime with outbound Telegram notifications and
 })
 
 
-test("releases the process lock after operator-control preflight failure while preserving the original startup error", async () => {
+test("preserves the original operator-control preflight error while retaining the conservative process lock", async () => {
   const previousExitCode = process.exitCode
   process.exitCode = 0
   const originalCause = new Error("ledger genesis is missing")
@@ -1859,7 +1859,6 @@ test("releases the process lock after operator-control preflight failure while p
   )
   startupError.name = "OperatorControlStartupError"
   startupError.code = "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID"
-  startupError.startupResourcesMayBeActive = false
   let processLockReleaseCalls = 0
   const errorLogs = []
 
@@ -1908,12 +1907,11 @@ test("releases the process lock after operator-control preflight failure while p
     })
 
     const startupFailureLog = errorLogs.find((entry) => entry.message === "startup failed.")
-    assert.equal(startupError.startupResourcesMayBeActive, false, "Operator-control preflight errors must explicitly state that broker resources were never activated.")
-    assert.equal(processLockReleaseCalls, 1, "A confirmed pre-broker operator-control failure must release the process lock after Journal shutdown.")
+    assert.equal(processLockReleaseCalls, 0, "The existing conservative policy must retain the process lock after runtime startup has been invoked.")
     assert.strictEqual(startupFailureLog?.error, startupError, "Cleanup must preserve and report the exact original operator-control startup error.")
     assert.equal(startupFailureLog?.errorCode, "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", "The original stable operator-control error code must remain visible after cleanup.")
     assert.strictEqual(startupError.cause, originalCause, "The original Operational State Store verification cause must remain attached to the startup error.")
-    assert.equal(errorLogs.some((entry) => entry.message === "observability shutdown incomplete"), false, "A safely releasable pre-broker failure must not produce a misleading incomplete-shutdown diagnostic.")
+    assert.equal(errorLogs.some((entry) => entry.message === "observability shutdown incomplete"), true, "Conservative process-lock retention must remain visible as a secondary cleanup diagnostic.")
     assert.equal(process.exitCode, 1, "A failed operator-control preflight must still fail startup after safe resource cleanup.")
   } finally {
     process.exitCode = previousExitCode
@@ -1925,7 +1923,6 @@ test("retains the process lock when a pre-broker failure cannot confirm Journal 
   process.exitCode = 0
   const startupError = new Error("Operator-control preflight failed before broker startup.")
   startupError.code = "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID"
-  startupError.startupResourcesMayBeActive = false
   const journalCloseError = new Error("Journal close was not confirmed.")
   let processLockReleaseCalls = 0
   const errorLogs = []
