@@ -1448,13 +1448,26 @@ runtimeSessionId }),
   }
 }
 
-function validateFactRecord({ record, schemaVersion, expectedSequence, previousDigest, index }) {
+function assertOperationalStateRecordEnvelope({
+  record,
+  schemaVersion,
+  expectedSequence,
+  index,
+}) {
   if (!record || typeof record !== "object" || Array.isArray(record)) {
     throw new TypeError("Operational State record must be an object")
   }
   const expectedKeys = [
-    "data", "digest", "factId", "factType", "formatVersion", "previousDigest",
-    "recordedAt", "runtimeSessionId", "schemaVersion", "sequence",
+    "data",
+    "digest",
+    "factId",
+    "factType",
+    "formatVersion",
+    "previousDigest",
+    "recordedAt",
+    "runtimeSessionId",
+    "schemaVersion",
+    "sequence",
   ]
   if (canonicalStringifyOperationalStateValue(Object.keys(record).sort()) !== canonicalStringifyOperationalStateValue(expectedKeys)) {
     throw new Error("Operational State record contains missing or unknown envelope fields")
@@ -1466,48 +1479,96 @@ function validateFactRecord({ record, schemaVersion, expectedSequence, previousD
     throw new TypeError("Operational State record sequence must be a canonical base-10 string")
   }
   if (record.sequence !== expectedSequence) {
-    throw new Error(`Operational State record sequence gap or reordering at record ${  index}`)
+    throw new Error(`Operational State record sequence gap or reordering at record ${index}`)
   }
-  requireNonEmptyString({ value: record.factId,
-field: "record.factId",
-maxLength: MAX_FACT_ID_LENGTH })
-  requireNonEmptyString({ value: record.factType,
-field: "record.factType",
-maxLength: 64 })
-  if (!FACT_TYPES.has(record.factType)) {throw new Error(`Operational State record type is not allowlisted: ${  record.factType}`)}
+  requireNonEmptyString({
+    value: record.factId,
+    field: "record.factId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  requireNonEmptyString({
+    value: record.factType,
+    field: "record.factType",
+    maxLength: 64,
+  })
+  if (!FACT_TYPES.has(record.factType)) {
+    throw new Error(`Operational State record type is not allowlisted: ${record.factType}`)
+  }
   requireNonEmptyString({
     value: record.runtimeSessionId,
     field: "record.runtimeSessionId",
     maxLength: MAX_RUNTIME_SESSION_ID_LENGTH,
   })
-  const recordedAt = requireNonEmptyString({ value: record.recordedAt,
-field: "record.recordedAt" })
+  const recordedAt = requireNonEmptyString({
+    value: record.recordedAt,
+    field: "record.recordedAt",
+  })
   const parsedDate = new Date(recordedAt)
   if (!Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString() !== recordedAt) {
     throw new Error("Operational State recorded-at timestamp is not canonical ISO-8601")
   }
+}
+
+function assertOperationalStateRecordSequenceIntegrity({ record, index, previousDigest, schemaVersion }) {
   if (index === 0) {
-    if (record.sequence !== "0" || record.factId !== "durable-facts:genesis" ||
-        record.factType !== "LEDGER_INITIALIZED" || record.previousDigest !== null ||
-        canonicalStringifyOperationalStateValue(record.data) !== canonicalStringifyOperationalStateValue({ schemaVersion })) {
+    if (
+      record.sequence !== "0" ||
+      record.factId !== "durable-facts:genesis" ||
+      record.factType !== "LEDGER_INITIALIZED" ||
+      record.previousDigest !== null ||
+      canonicalStringifyOperationalStateValue(record.data) !== canonicalStringifyOperationalStateValue({ schemaVersion })
+    ) {
       throw new Error("Operational State Store record stream must begin with its explicit genesis record")
     }
   } else {
-    if (record.factType === "LEDGER_INITIALIZED") {throw new Error("Operational State Store record stream contains a second genesis record")}
-    if (record.previousDigest !== previousDigest) {throw new Error("Operational State record previous-digest chain is broken")}
+    if (record.factType === "LEDGER_INITIALIZED") {
+      throw new Error("Operational State Store record stream contains a second genesis record")
+    }
+    if (record.previousDigest !== previousDigest) {
+      throw new Error("Operational State record previous-digest chain is broken")
+    }
   }
   if (record.previousDigest !== null && !SHA256_PATTERN.test(record.previousDigest)) {
     throw new TypeError("Operational State record previousDigest must be a SHA-256 digest or null for genesis")
   }
-  if (!SHA256_PATTERN.test(record.digest ?? "")) {throw new TypeError("Operational State record digest is malformed")}
-  validateFactData({ factType: record.factType,
-data: record.data,
-factId: record.factId,
-runtimeSessionId: record.runtimeSessionId })
+}
+
+function assertOperationalStateRecordPayloadIntegrity({ record, index, schemaVersion }) {
+  if (!SHA256_PATTERN.test(record.digest ?? "")) {
+    throw new TypeError("Operational State record digest is malformed")
+  }
+  validateFactData({
+    factType: record.factType,
+    data: record.data,
+    factId: record.factId,
+    runtimeSessionId: record.runtimeSessionId,
+  })
   if (index === 0 && record.data.schemaVersion !== schemaVersion) {
     throw new Error("Operational State Store genesis schema version does not match the stream schema")
   }
-  if (digestOperationalStateRecord(record) !== record.digest) {throw new Error(`Operational State record digest mismatch at sequence ${  record.sequence}`)}
+  if (digestOperationalStateRecord(record) !== record.digest) {
+    throw new Error(`Operational State record digest mismatch at sequence ${record.sequence}`)
+  }
+}
+
+function validateFactRecord({ record, schemaVersion, expectedSequence, previousDigest, index }) {
+  assertOperationalStateRecordEnvelope({
+    record,
+    schemaVersion,
+    expectedSequence,
+    index,
+  })
+  assertOperationalStateRecordSequenceIntegrity({
+    record,
+    index,
+    previousDigest,
+    schemaVersion,
+  })
+  assertOperationalStateRecordPayloadIntegrity({
+    record,
+    index,
+    schemaVersion,
+  })
 }
 
 function createManifestCheckpoint({ schemaVersion, record, previousManifestDigest }) {
@@ -1560,19 +1621,21 @@ function validateManifestCheckpoint({ checkpoint, schemaVersion, factRecord, exp
 
 function parseJsonLines({ source, label }) {
   if (typeof source !== "string" || !source.endsWith("\n")) {
-    throw new Error(`${label  } must end with a complete newline-terminated record`)
+    throw new Error(`${label} must end with a complete newline-terminated record`)
   }
   const lines = source.slice(0, -1).split("\n")
   if (lines.length === 0 || lines.some((line) => line === "")) {
-    throw new Error(`${label  } contains an empty or partial record`)
+    throw new Error(`${label} contains an empty or partial record`)
   }
-  return lines.map((line, index) => {
+  const records = []
+  for (const [index, line] of lines.entries()) {
     const parsed = JSON.parse(line)
     if (canonicalStringifyOperationalStateValue(parsed) !== line) {
-      throw new Error(`${label  } is not canonical JSON at line ${  index + 1}`)
+      throw new Error(`${label} is not canonical JSON at line ${index + 1}`)
     }
-    return parsed
-  })
+    records.push(parsed)
+  }
+  return records
 }
 
 /**
