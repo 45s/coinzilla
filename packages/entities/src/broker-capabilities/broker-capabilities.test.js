@@ -52,6 +52,9 @@ status: "SUPPORTED" },
     }
   })
 
+})
+
+describe(`${BrokerCapabilities.name} validation`, () => {
   it("rejects invalid capability collections", () => {
     for (const capabilities of [null, {}, "capabilities", [undefined]]) {
       assert.throws(() => new BrokerCapabilities({ capabilities }), {
@@ -110,6 +113,9 @@ status: "UNSUPPORTED" },
     }
   })
 
+})
+
+describe(`${BrokerCapabilities.name} immutability`, () => {
   it("returns independent snapshots and immutable capability collections", () => {
     const capabilities = new BrokerCapabilities({
       capabilities: [{ type: "READ_BALANCES",
