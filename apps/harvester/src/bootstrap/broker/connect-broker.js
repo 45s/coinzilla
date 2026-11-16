@@ -49,7 +49,8 @@ export async function connectBroker({
     publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED,
-      dataResult: mapBrokerConnectionFailedData({ broker: brokerName, error }),
+      dataResult: mapBrokerConnectionFailedData({ broker: brokerName,
+error }),
     })
     logger.error?.({
       message: "Binance broker connection failed",
