@@ -218,8 +218,7 @@ recoveryLedger,
 fill })
     assert.equal(result.ok, true, result.errors?.[0]?.message)
     assert.equal(result.data.applied, true)
-    portfolio = result.data.portfolio
-    recoveryLedger = result.data.recoveryLedger
+    ({ portfolio, recoveryLedger } = result.data)
   }
 
   const position = portfolio.getPosition({ marketId: market.id })
@@ -504,8 +503,7 @@ recoveryLedger,
 fill })
     assert.equal(result.ok, true, result.errors?.[0]?.message)
     assert.equal(result.data.applied, true)
-    portfolio = result.data.portfolio
-    recoveryLedger = result.data.recoveryLedger
+    ({ portfolio, recoveryLedger } = result.data)
   }
 
   const position = portfolio.getPosition({ marketId: market.id })
@@ -568,8 +566,7 @@ asset: quoteAsset }) }),
 recoveryLedger,
 fill })
     assert.equal(result.ok, true, result.errors?.[0]?.message)
-    portfolio = result.data.portfolio
-    recoveryLedger = result.data.recoveryLedger
+    ({ portfolio, recoveryLedger } = result.data)
   }
 
   const position = portfolio.getPosition({ marketId: market.id })
@@ -690,8 +687,7 @@ recoveryLedger,
 fill })
     assert.equal(result.ok, true, result.errors?.[0]?.message)
     assert.equal(result.data.applied, true)
-    portfolio = result.data.portfolio
-    recoveryLedger = result.data.recoveryLedger
+    ({ portfolio, recoveryLedger } = result.data)
   }
 
   const position = portfolio.getPosition({ marketId: zroMarket.id })
