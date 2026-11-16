@@ -6,7 +6,8 @@ const isRecord = (value) => value !== null && typeof value === "object" && !Arra
 const TRADING_ENVIRONMENT_VALUES = Object.values(TRADING_ENVIRONMENTS)
 const TRADING_ENVIRONMENT_SET = new Set(TRADING_ENVIRONMENT_VALUES)
 export class ConfigValidationError extends TypeError {
-  constructor({ path, expected }) {
+  constructor(...args) {
+    const [path, expected] = args
     super(`Invalid app config at "${path}": expected ${expected}`)
     this.name = "ConfigValidationError"
     this.path = path
@@ -14,7 +15,7 @@ export class ConfigValidationError extends TypeError {
   }
 }
 
-const fail = ({ path, expectation }) => { throw new ConfigValidationError({ path, expected: expectation }) }
+const fail = ({ path, expectation }) => { throw new ConfigValidationError(path, expectation) }
 const requireRecord = ({ value, path }) => { if (!isRecord(value)) {fail({ path, expectation: "an object" })} }
 const requireBoolean = ({ value, path }) => { if (typeof value !== "boolean") {fail({ path, expectation: "a boolean" })} }
 const requireNumber = ({ value, path, min = -Infinity, exclusiveMin = false, max = Infinity, exclusiveMax = false }) => {
