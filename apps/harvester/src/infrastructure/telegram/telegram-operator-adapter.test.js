@@ -132,15 +132,15 @@ durable: true },
     },
   }
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") {
       return makeResponse({ ok: true,
 result: { id: 99,
 username: "coinzilla_bot" } })
     }
     if (method === "getUpdates") {
-      const params = JSON.parse(options.body)
+      const params = JSON.parse(requestOptions.body)
       pollRequests.push(params)
       pollCount += 1
       if (pollCount === 1) {return makeResponse({ ok: true,
@@ -148,13 +148,13 @@ result: [update] })}
       finishSecondPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => {
+        requestOptions.signal.addEventListener("abort", () => {
           reject(new Error("poll aborted"))
         }, { once: true })
       })
     }
     if (method === "sendMessage") {
-      sentMessages.push(JSON.parse(options.body))
+      sentMessages.push(JSON.parse(requestOptions.body))
       return makeResponse({ ok: true,
 result: { message_id: 200 } })
     }
@@ -203,8 +203,8 @@ updateId: 101 })
   let finishSecondPoll
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
     if (method === "getUpdates") {
@@ -214,13 +214,13 @@ result: [update] })}
       finishSecondPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => {
+        requestOptions.signal.addEventListener("abort", () => {
           reject(new Error("poll aborted"))
         }, { once: true })
       })
     }
     if (method === "sendMessage") {
-      sentMessages.push(JSON.parse(options.body))
+      sentMessages.push(JSON.parse(requestOptions.body))
       return makeResponse({ ok: true,
 result: { message_id: 201 } })
     }
@@ -251,8 +251,8 @@ chatType: "group" })
   let finishSecondPoll
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
     if (method === "getUpdates") {
@@ -262,13 +262,13 @@ result: [update] })}
       finishSecondPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => {
+        requestOptions.signal.addEventListener("abort", () => {
           reject(new Error("poll aborted"))
         }, { once: true })
       })
     }
     if (method === "sendMessage") {
-      sentMessages.push(JSON.parse(options.body))
+      sentMessages.push(JSON.parse(requestOptions.body))
       return makeResponse({ ok: true,
 result: { message_id: 202 } })
     }
@@ -298,8 +298,8 @@ text: "/resume LINKUSDT" })
   let finishSecondPoll
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
     if (method === "getUpdates") {
@@ -309,11 +309,11 @@ result: [update] })}
       finishSecondPoll()
       return new Promise(promiseArgs => {
         const [, reject] = promiseArgs
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     if (method === "sendMessage") {
-      sentMessages.push(JSON.parse(options.body))
+      sentMessages.push(JSON.parse(requestOptions.body))
       return makeResponse({ ok: true,
 result: { message_id: 210 } })
     }
@@ -350,8 +350,8 @@ text: "/help" })
   let finishSecondPoll
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
     if (method === "getUpdates") {
@@ -361,11 +361,11 @@ result: [update] })}
       finishSecondPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     if (method === "sendMessage") {
-      sentMessages.push(JSON.parse(options.body))
+      sentMessages.push(JSON.parse(requestOptions.body))
       return makeResponse({ ok: true,
 result: { message_id: 211 } })
     }
@@ -408,8 +408,8 @@ test("retries an unacknowledged Telegram update with the same application reques
   let finishThirdPoll
   const thirdPoll = new Promise((resolve) => { finishThirdPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
     if (method === "getUpdates") {
@@ -419,7 +419,7 @@ result: [update] })}
       finishThirdPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     if (method === "sendMessage") {
@@ -472,8 +472,8 @@ test("concurrent start calls share one Telegram identity check and one poller", 
   let finishPoll
   const pollStarted = new Promise((resolve) => { finishPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") {
       getMeCalls += 1
       const result = await identity
@@ -485,7 +485,7 @@ result })
       finishPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     throw new Error(`Unexpected Telegram API method: ${method}`)
@@ -520,8 +520,8 @@ chatId: 54321 })
   let finishSecondPoll
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
     if (method === "getUpdates") {
@@ -531,11 +531,11 @@ result: [update] })}
       finishSecondPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     if (method === "sendMessage") {
-      sentMessages.push(JSON.parse(options.body))
+      sentMessages.push(JSON.parse(requestOptions.body))
       return makeResponse({ ok: true,
 result: { message_id: 304 } })
     }
@@ -586,8 +586,8 @@ text: "/markets" }),
   let finishSecondPoll
   const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
     if (method === "getUpdates") {
@@ -601,11 +601,11 @@ result: [] })
       }
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     if (method === "sendMessage") {
-      sentMessages.push(JSON.parse(options.body))
+      sentMessages.push(JSON.parse(requestOptions.body))
       return makeResponse({ ok: true,
 result: { message_id: 212 } })
     }
@@ -702,8 +702,8 @@ text: "/status" })]
 operation: "READ_STATUS" },
   })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") {return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } })}
     if (method === "getUpdates") {
@@ -717,11 +717,11 @@ result: [] })
       }
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     if (method === "sendMessage") {
-      sentMessages.push(JSON.parse(options.body))
+      sentMessages.push(JSON.parse(requestOptions.body))
       return makeResponse({ ok: true,
 result: { message_id: 213 } })
     }
@@ -785,10 +785,10 @@ test("registers the supported command menu and requests callback updates", async
   let finishPoll
   const pollStarted = new Promise(resolve => { finishPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     calls.push({ method,
-payload: options.body ? JSON.parse(options.body) : {} })
+payload: requestOptions.body ? JSON.parse(requestOptions.body) : {} })
     if (method === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
     if (method === "setMyCommands") { return makeResponse({ ok: true,
@@ -797,7 +797,7 @@ result: true }) }
       finishPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     throw new Error(`Unexpected Telegram API method: ${method}`)
@@ -828,8 +828,8 @@ messageId: 701 })
   let finishSecondPoll
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
     if (method === "getUpdates") {
@@ -839,12 +839,12 @@ result: [update] }) }
       finishSecondPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     if (method === "answerCallbackQuery") { return makeResponse({ ok: true,
 result: true }) }
-    if (method === "editMessageText") { editedMessages.push(JSON.parse(options.body)); return makeResponse({ ok: true,
+    if (method === "editMessageText") { editedMessages.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: true }) }
     if (method === "setMyCommands") { return makeResponse({ ok: true,
 result: true }) }
@@ -885,8 +885,8 @@ data: "cc:confirm:PAUSE:LINKUSDT:502" }),
   let finishThirdPoll
   const thirdPoll = new Promise(resolve => { finishThirdPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
     if (method === "getUpdates") {
@@ -898,14 +898,14 @@ result: [updates[1]] }) }
       finishThirdPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     if (method === "sendMessage") { return makeResponse({ ok: true,
 result: { message_id: 702 } }) }
-    if (method === "answerCallbackQuery") { callbackAnswers.push(JSON.parse(options.body)); return makeResponse({ ok: true,
+    if (method === "answerCallbackQuery") { callbackAnswers.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: true }) }
-    if (method === "editMessageText") { editedMessages.push(JSON.parse(options.body)); return makeResponse({ ok: true,
+    if (method === "editMessageText") { editedMessages.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: true }) }
     if (method === "setMyCommands") { return makeResponse({ ok: true,
 result: true }) }
@@ -942,8 +942,8 @@ data: "cc:nav:status" })
   const calls = []
   const diagnosticEntries = []
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
     if (method === "getUpdates") {
@@ -953,10 +953,10 @@ result: [update] }) }
       finishSecondPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "answerCallbackQuery") { calls.push(JSON.parse(options.body)); return makeResponse({ ok: true,
+    if (method === "answerCallbackQuery") { calls.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: true }) }
     if (method === "setMyCommands") { return makeResponse({ ok: true,
 result: true }) }
@@ -993,8 +993,8 @@ messageId: 705 })
   let finishSecondPoll
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
     if (method === "getUpdates") {
@@ -1004,12 +1004,12 @@ result: [update] }) }
       finishSecondPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     if (method === "answerCallbackQuery") { return makeResponse({ ok: true,
 result: true }) }
-    if (method === "editMessageText") { edits.push(JSON.parse(options.body)); return makeResponse({ ok: true,
+    if (method === "editMessageText") { edits.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: true }) }
     if (method === "setMyCommands") { return makeResponse({ ok: true,
 result: true }) }
@@ -1072,8 +1072,8 @@ data: "cc:confirm:PAUSE:LINKUSDT:601" }),
   let finishSecondPoll
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
     if (method === "getUpdates") {
@@ -1083,7 +1083,7 @@ result: updates }) }
       finishSecondPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     if (method === "answerCallbackQuery" || method === "editMessageText" || method === "setMyCommands") { return makeResponse({ ok: true,
@@ -1112,8 +1112,8 @@ messageId: 804 })
   let finishSecondPoll
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
     if (method === "getUpdates") {
@@ -1123,7 +1123,7 @@ result: [update] }) }
       finishSecondPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     if (method === "answerCallbackQuery" || method === "setMyCommands") { return makeResponse({ ok: true,
@@ -1173,8 +1173,8 @@ data: "cc:cancel:701" }),
   let finishThirdPoll
   const thirdPoll = new Promise(resolve => { finishThirdPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
     if (method === "getUpdates") {
@@ -1186,12 +1186,12 @@ result: [updates[1]] }) }
       finishThirdPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     if (method === "answerCallbackQuery") { return makeResponse({ ok: true,
 result: true }) }
-    if (method === "editMessageText") { edits.push(JSON.parse(options.body)); return makeResponse({ ok: true,
+    if (method === "editMessageText") { edits.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: true }) }
     if (method === "setMyCommands") { return makeResponse({ ok: true,
 result: true }) }
@@ -1230,8 +1230,8 @@ data: "cc:nav:status" }),
   let finishSecondPoll
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
     if (method === "getUpdates") {
@@ -1241,10 +1241,10 @@ result: updates }) }
       finishSecondPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "answerCallbackQuery") { callbackAnswers.push(JSON.parse(options.body)); return makeResponse({ ok: true,
+    if (method === "answerCallbackQuery") { callbackAnswers.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: true }) }
     if (method === "setMyCommands") { return makeResponse({ ok: true,
 result: true }) }
@@ -1280,8 +1280,8 @@ text: "/help" })
   let finishSecondPoll
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
     if (method === "setMyCommands") { return makeResponse({ ok: false,
@@ -1293,10 +1293,10 @@ result: [update] }) }
       finishSecondPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
-    if (method === "sendMessage") { sentMessages.push(JSON.parse(options.body)); return makeResponse({ ok: true,
+    if (method === "sendMessage") { sentMessages.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: { message_id: 901 } }) }
     throw new Error(`Unexpected Telegram API method: ${method}`)
   }
@@ -1328,8 +1328,8 @@ messageId: 1001 })
   let finishSecondPoll
   const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") { return makeResponse({ ok: true,
 result: { username: "coinzilla_bot" } }) }
     if (method === "getUpdates") {
@@ -1339,12 +1339,12 @@ result: [update] }) }
       finishSecondPoll()
       return new Promise((...args) => {
         const [, reject] = args
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     if (method === "answerCallbackQuery") { return makeResponse({ ok: true,
 result: true }) }
-    if (method === "editMessageText") { edits.push(JSON.parse(options.body)); return makeResponse({ ok: true,
+    if (method === "editMessageText") { edits.push(JSON.parse(requestOptions.body)); return makeResponse({ ok: true,
 result: true }) }
     if (method === "setMyCommands") { return makeResponse({ ok: true,
 result: true }) }
@@ -1420,8 +1420,8 @@ async function runTelegramUpdatesForDiagnostics({ updates, operator, logger, sen
     finishSecondPoll = resolve
   })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") {
       return makeResponse({
         ok: true,
@@ -1445,21 +1445,21 @@ async function runTelegramUpdatesForDiagnostics({ updates, operator, logger, sen
       finishSecondPoll()
       return new Promise((...promiseArgs) => {
         const [, reject] = promiseArgs
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     if (method === "sendMessage") {
       if (sendMessageError) {
         throw sendMessageError
       }
-      sentMessages.push(JSON.parse(options.body))
+      sentMessages.push(JSON.parse(requestOptions.body))
       return makeResponse({
         ok: true,
         result: { message_id: 1200 },
       })
     }
     if (method === "answerCallbackQuery") {
-      callbackAnswers.push(JSON.parse(options.body))
+      callbackAnswers.push(JSON.parse(requestOptions.body))
       return makeResponse({
         ok: true,
         result: true,
@@ -1823,8 +1823,8 @@ function createCallbackAckRetryFetch({ askUpdate, confirmUpdate }) {
     finishThirdPoll = resolve
   })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") {
       return makeResponse({
         ok: true,
@@ -1839,7 +1839,7 @@ function createCallbackAckRetryFetch({ askUpdate, confirmUpdate }) {
     }
     if (method === "getUpdates") {
       pollCount += 1
-      updateOffsets.push(JSON.parse(options.body).offset)
+      updateOffsets.push(JSON.parse(requestOptions.body).offset)
       if (pollCount === 1) {
         return makeResponse({
           ok: true,
@@ -1855,7 +1855,7 @@ function createCallbackAckRetryFetch({ askUpdate, confirmUpdate }) {
       finishThirdPoll()
       return new Promise((...promiseArgs) => {
         const [, reject] = promiseArgs
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     if (method === "answerCallbackQuery") {
@@ -1954,8 +1954,8 @@ function createExpiredCallbackAcknowledgementFetch({ updates }) {
     finishSecondPoll = resolve
   })
   const fetchImpl = async (...args) => {
-    const [url, options = {}] = args
-    const method = url.split("/").pop()
+    const [requestUrl, requestOptions = {}] = args
+    const method = requestUrl.split("/").pop()
     if (method === "getMe") {
       return makeResponse({
         ok: true,
@@ -1979,7 +1979,7 @@ function createExpiredCallbackAcknowledgementFetch({ updates }) {
       finishSecondPoll()
       return new Promise(promiseArgs => {
         const [, reject] = promiseArgs
-        options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+        requestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
     if (method === "answerCallbackQuery") {
