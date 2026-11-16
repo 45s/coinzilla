@@ -471,159 +471,188 @@ const approvedConsoleFiles = new Set([
  * @param {string} source
  * @returns {string}
  */
+const REGEX_PREFIX_TOKENS = new Set([
+  '=', '(', '[', '{', ',', ':', ';', '!', '?', '&&', '||', '??',
+  'return', 'throw', 'case', '=>',
+])
+const TWO_CHARACTER_TOKENS = new Set(['=>', '&&', '||', '??'])
+
+function blankJavaScriptSource({ output, start, end }) {
+  for (let index = start; index < end; index += 1) {
+    if (output[index] !== '\n' && output[index] !== '\r') {output[index] = ' '}
+  }
+}
+
+function skipQuotedJavaScript({ source, output, startIndex, quote }) {
+  let index = startIndex + 1
+  while (index < source.length) {
+    if (source[index] === '\\') {
+      index += 2
+      continue
+    }
+    if (source[index] === quote) {
+      index += 1
+      break
+    }
+    index += 1
+  }
+  blankJavaScriptSource({ output, start: startIndex, end: index })
+  return index
+}
+
+function skipRegexJavaScript({ source, output, startIndex }) {
+  let index = startIndex + 1
+  let inCharacterClass = false
+  while (index < source.length) {
+    if (source[index] === '\\') {
+      index += 2
+      continue
+    }
+    if (source[index] === '[') {inCharacterClass = true}
+    else if (source[index] === ']') {inCharacterClass = false}
+    else if (source[index] === '/' && !inCharacterClass) {
+      index += 1
+      while (/[a-z]/i.test(source[index] ?? '')) {index += 1}
+      break
+    } else if (source[index] === '\n') {
+      break
+    }
+    index += 1
+  }
+  blankJavaScriptSource({ output, start: startIndex, end: index })
+  return index
+}
+
+function skipLineComment({ source, output, startIndex }) {
+  let index = startIndex
+  while (index < source.length && source[index] !== '\n') {index += 1}
+  blankJavaScriptSource({ output, start: startIndex, end: index })
+  return index
+}
+
+function skipBlockComment({ source, output, startIndex }) {
+  let index = startIndex + 2
+  while (index < source.length && !(source[index] === '*' && source[index + 1] === '/')) {
+    index += 1
+  }
+  index = Math.min(source.length, index + 2)
+  blankJavaScriptSource({ output, start: startIndex, end: index })
+  return index
+}
+
+function scanJavaScriptTemplate({ source, output, startIndex }) {
+  let index = startIndex
+  let segmentStart = index - 1
+  blankJavaScriptSource({ output, start: segmentStart, end: index })
+  while (index < source.length) {
+    if (source[index] === '\\') {
+      index += 2
+      continue
+    }
+    if (source[index] === String.fromCharCode(96)) {
+      blankJavaScriptSource({ output, start: segmentStart, end: index + 1 })
+      return index + 1
+    }
+    if (source[index] === '$' && source[index + 1] === '{') {
+      blankJavaScriptSource({ output, start: segmentStart, end: index + 2 })
+      index = scanJavaScriptCode({
+        source,
+        output,
+        startIndex: index + 2,
+        stopAtTemplateBrace: true,
+      })
+      segmentStart = index
+      continue
+    }
+    index += 1
+  }
+  blankJavaScriptSource({ output, start: segmentStart, end: index })
+  return index
+}
+
+function readJavaScriptIdentifier({ source, startIndex }) {
+  let index = startIndex + 1
+  while (/[A-Za-z0-9_$]/.test(source[index] ?? '')) {index += 1}
+  return {
+    token: source.slice(startIndex, index),
+    nextIndex: index,
+  }
+}
+
+function isRegexStart({ character, previousToken }) {
+  return character === '/' && (
+    previousToken === '' || REGEX_PREFIX_TOKENS.has(previousToken)
+  )
+}
+
+function scanJavaScriptCode({ source, output, startIndex, stopAtTemplateBrace = false }) {
+  let index = startIndex
+  let nestedBraces = 0
+  let previousToken = ''
+
+  while (index < source.length) {
+    const character = source[index]
+    const next = source[index + 1]
+
+    if (stopAtTemplateBrace && character === '}') {
+      if (nestedBraces === 0) {
+        blankJavaScriptSource({ output, start: index, end: index + 1 })
+        return index + 1
+      }
+      nestedBraces -= 1
+    } else if (stopAtTemplateBrace && character === '{') {
+      nestedBraces += 1
+    }
+
+    if (character === "'" || character === '"') {
+      index = skipQuotedJavaScript({ source, output, startIndex: index, quote: character })
+      previousToken = 'value'
+      continue
+    }
+    if (character === String.fromCharCode(96)) {
+      index = scanJavaScriptTemplate({ source, output, startIndex: index + 1 })
+      previousToken = 'value'
+      continue
+    }
+    if (character === '/' && next === '/') {
+      index = skipLineComment({ source, output, startIndex: index })
+      continue
+    }
+    if (character === '/' && next === '*') {
+      index = skipBlockComment({ source, output, startIndex: index })
+      continue
+    }
+    if (isRegexStart({ character, previousToken })) {
+      index = skipRegexJavaScript({ source, output, startIndex: index })
+      previousToken = 'value'
+      continue
+    }
+
+    const pair = source.slice(index, index + 2)
+    if (TWO_CHARACTER_TOKENS.has(pair)) {
+      previousToken = pair
+      index += 2
+      continue
+    }
+
+    if (/[A-Za-z_$]/.test(character)) {
+      const identifier = readJavaScriptIdentifier({ source, startIndex: index })
+      previousToken = identifier.token
+      index = identifier.nextIndex
+      continue
+    }
+
+    if (!/\s/.test(character)) {previousToken = character}
+    index += 1
+  }
+
+  return index
+}
+
 function maskJavaScriptNonCode(source) {
-  const output = source.split('');
-  const blank = (...args) => {
-    const [start, end] = args;
-    for (let index = start; index < end; index += 1) {
-      if (output[index] !== '\n' && output[index] !== '\r') {output[index] = ' ';}
-    }
-  };
-
-  function skipQuoted(...args) {
-    let [index, quote] = args;
-    const start = index;
-    index += 1;
-    while (index < source.length) {
-      if (source[index] === '\\') {
-        index += 2;
-        continue;
-      }
-      if (source[index] === quote) {
-        index += 1;
-        break;
-      }
-      index += 1;
-    }
-    blank(start, index);
-    return index;
-  }
-
-  function skipRegex(...args) {
-    let index = args[0];
-    const start = index;
-    index += 1;
-    let inCharacterClass = false;
-    while (index < source.length) {
-      if (source[index] === '\\') {
-        index += 2;
-        continue;
-      }
-      if (source[index] === '[') {inCharacterClass = true;}
-      else if (source[index] === ']') {inCharacterClass = false;}
-      else if (source[index] === '/' && !inCharacterClass) {
-        index += 1;
-        while (/[a-z]/i.test(source[index] ?? '')) {index += 1;}
-        break;
-      } else if (source[index] === '\n') {
-        break;
-      }
-      index += 1;
-    }
-    blank(start, index);
-    return index;
-  }
-
-  function scanTemplate(...args) {
-    let index = args[0];
-    let segmentStart = index - 1;
-    blank(segmentStart, index);
-    while (index < source.length) {
-      if (source[index] === '\\') {
-        index += 2;
-        continue;
-      }
-      if (source[index] === String.fromCharCode(96)) {
-        blank(segmentStart, index + 1);
-        return index + 1;
-      }
-      if (source[index] === '$' && source[index + 1] === '{') {
-        blank(segmentStart, index + 2);
-        index = scanCode(index + 2, true);
-        segmentStart = index;
-        continue;
-      }
-      index += 1;
-    }
-    blank(segmentStart, index);
-    return index;
-  }
-
-  function scanCode(...args) {
-    let [index, stopAtTemplateBrace = false] = args;
-    let nestedBraces = 0;
-    let previousToken = '';
-    while (index < source.length) {
-      const character = source[index];
-      const next = source[index + 1];
-
-      if (stopAtTemplateBrace && character === '}') {
-        if (nestedBraces === 0) {
-          blank(index, index + 1);
-          return index + 1;
-        }
-        nestedBraces -= 1;
-      } else if (stopAtTemplateBrace && character === '{') {
-        nestedBraces += 1;
-      }
-
-      if (character === "'" || character === '"') {
-        index = skipQuoted(index, character);
-        previousToken = 'value';
-        continue;
-      }
-      if (character === String.fromCharCode(96)) {
-        index = scanTemplate(index + 1);
-        previousToken = 'value';
-        continue;
-      }
-      if (character === '/' && next === '/') {
-        const start = index;
-        while (index < source.length && source[index] !== '\n') {index += 1;}
-        blank(start, index);
-        continue;
-      }
-      if (character === '/' && next === '*') {
-        const start = index;
-        index += 2;
-        while (index < source.length && !(source[index] === '*' && source[index + 1] === '/')) {index += 1;}
-        index = Math.min(source.length, index + 2);
-        blank(start, index);
-        continue;
-      }
-      if (
-        character === '/' &&
-        (previousToken === '' ||
-          ['=', '(', '[', '{', ',', ':', ';', '!', '?', '&&', '||', '??', 'return', 'throw', 'case', '=>'].includes(previousToken))
-      ) {
-        index = skipRegex(index);
-        previousToken = 'value';
-        continue;
-      }
-
-      const pair = source.slice(index, index + 2);
-      if (['=>', '&&', '||', '??'].includes(pair)) {
-        previousToken = pair;
-        index += 2;
-        continue;
-      }
-
-      if (/[A-Za-z_$]/.test(character)) {
-        const start = index;
-        index += 1;
-        while (/[A-Za-z0-9_$]/.test(source[index] ?? '')) {index += 1;}
-        previousToken = source.slice(start, index);
-        continue;
-      }
-
-      if (!/\s/.test(character)) {previousToken = character;}
-      index += 1;
-    }
-    return index;
-  }
-
-  scanCode(0);
-  return output.join('');
+  const output = source.split('')
+  scanJavaScriptCode({ source, output, startIndex: 0 })
+  return output.join('')
 }
 
 /**
