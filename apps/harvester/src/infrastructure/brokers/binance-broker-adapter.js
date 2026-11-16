@@ -156,7 +156,7 @@ export function createBinanceBrokerAdapter({
       }
       return toResult({ data: canonicalOrder })
     },
-    getOpenOrders: ({ symbol } = {}) => client.getOpenOrders({ symbol }),
+    getOpenOrders: (options = {}) => client.getOpenOrders(options),
     getFills: (input) => client.getFills(input),
     getCanonicalOrderHistory: (input) => client.getCanonicalOrderHistory(input),
     getCanonicalOrder: (input) => client.getCanonicalOrder(input),

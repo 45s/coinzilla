@@ -99,7 +99,7 @@ export const createBinanceBrokerAdapter = ({ config, logger }) => {
     disconnect: () => client.disconnect(),
     placeOrder: ({ order }) => client.createOrder(order),
     cancelOrder: ({ symbol, orderId }) => client.cancelOrder({ symbol, orderId }),
-    getOpenOrders: ({ symbol } = {}) => client.getOpenOrders({ symbol }),
+    getOpenOrders: (options = {}) => client.getOpenOrders(options),
     getFills: ({ symbol, ...query }) => client.getFills({ symbol, ...query }),
     getCanonicalOrderHistory: ({ symbol, orderId }) => client.getCanonicalOrderHistory({ symbol, orderId }),
     getAccountSnapshot: () => client.getAccountSnapshot(),
