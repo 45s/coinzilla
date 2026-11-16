@@ -355,68 +355,103 @@ stateChanging },
   }
 
   #handleMessage(message) {
+    const payload = this.#parseMessage(message)
+    if (!payload) return
+    if (!hasOwn(payload, "id") || payload.id === null) {
+      this.#notifyEventListeners(payload)
+      return
+    }
+    this.#handleAcknowledgement(payload)
+  }
+
+  #parseMessage(message) {
     let payload
     try {
       payload = JSON.parse(toText(message))
     } catch (error) {
-      const protocolError = new BinanceRpcProtocolError(
+      this.#rejectForProtocolError(new BinanceRpcProtocolError(
         `Invalid Binance WebSocket API JSON message: ${error.message}`,
-      )
-      this.#emitError(protocolError)
-      this.#rejectPending(protocolError)
-      return
+      ))
+      return null
     }
-
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-      const error = new BinanceRpcProtocolError("Binance WebSocket API message must be a JSON object")
-      this.#emitError(error)
-      this.#rejectPending(error)
-      return
+      this.#rejectForProtocolError(
+        new BinanceRpcProtocolError("Binance WebSocket API message must be a JSON object"),
+      )
+      return null
     }
+    return payload
+  }
 
-    if (!hasOwn(payload, "id") || payload.id === null) {
-      for (const listener of this.#eventListeners) {
-        try {
-          listener(payload)
-        } catch (error) {
-          this.#emitError(error)
-        }
+  #rejectForProtocolError(error) {
+    this.#emitError(error)
+    this.#rejectPending(error)
+  }
+
+  #notifyEventListeners(payload) {
+    for (const listener of this.#eventListeners) {
+      try {
+        listener(payload)
+      } catch (error) {
+        this.#emitError(error)
       }
-      return
     }
+  }
 
+  #handleAcknowledgement(payload) {
     const key = String(payload.id)
     const pending = this.#pending.get(key)
-    if (!pending) {return}
+    if (!pending) return
 
     if (!Number.isInteger(payload.status) || payload.status < 100 || payload.status > 599) {
-      this.#settleProtocolError({ key, pending, message: "Binance response has an invalid status field", details: payload })
-      return
-    }
-
-    if (payload.status >= 200 && payload.status < 300) {
-      if (!hasOwn(payload, "result") || hasOwn(payload, "error")) {
-        this.#settleProtocolError({ key, pending, message: "Successful Binance response must contain result only", details: payload })
-        return
-      }
-      this.#settle({
+      this.#settleProtocolError({
         key,
-        settle: () => pending.resolve({
-          id: payload.id,
-          status: payload.status,
-          data: payload.result,
-          rateLimits: payload.rateLimits,
-        }),
+        pending,
+        message: "Binance response has an invalid status field",
+        details: payload,
       })
       return
     }
 
-    if (!payload.error || typeof payload.error !== "object" ||
-        !Number.isInteger(payload.error.code) || typeof payload.error.msg !== "string") {
-      this.#settleProtocolError({ key, pending, message: "Failed Binance response has a malformed error object", details: payload })
+    if (payload.status >= 200 && payload.status < 300) {
+      this.#handleSuccessfulResponse({ key, pending, payload })
       return
     }
+    this.#handleFailedResponse({ key, pending, payload })
+  }
 
+  #handleSuccessfulResponse({ key, pending, payload }) {
+    if (!hasOwn(payload, "result") || hasOwn(payload, "error")) {
+      this.#settleProtocolError({
+        key,
+        pending,
+        message: "Successful Binance response must contain result only",
+        details: payload,
+      })
+      return
+    }
+    this.#settle({
+      key,
+      settle: () => pending.resolve({
+        id: payload.id,
+        status: payload.status,
+        data: payload.result,
+        rateLimits: payload.rateLimits,
+      }),
+    })
+  }
+
+  #handleFailedResponse({ key, pending, payload }) {
+    if (!payload.error || typeof payload.error !== "object" ||
+        !Number.isInteger(payload.error.code) || typeof payload.error.msg !== "string") {
+      this.#settleProtocolError({
+        key,
+        pending,
+        message: "Failed Binance response has a malformed error object",
+        details: payload,
+      })
+      return
+    }
     this.#settle({
       key,
       settle: () => pending.reject(new BinanceRpcError(payload.error.msg, {
