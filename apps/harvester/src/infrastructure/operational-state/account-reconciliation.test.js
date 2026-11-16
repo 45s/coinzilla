@@ -249,7 +249,8 @@ test("requires a targeted COMMISSION_BASELINE snapshot to contain exactly one as
       balances,
       auditReasons,
     },
-  })
+    })
+  }
   const valid = await store.append(baseline(
     "account-snapshot:COMMISSION_BASELINE:single-asset",
     [{ asset: "BNB",
