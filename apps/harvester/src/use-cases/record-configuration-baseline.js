@@ -17,14 +17,21 @@ export async function recordConfigurationBaseline({ operationalStateStore, appCo
       strategy: strategies[strategyName],
     })
     const result = await operationalStateStore.append({
-      factId: "configuration-baseline:" + fingerprint,
+      factId: `configuration-baseline:${  fingerprint}`,
       factType: "CONFIGURATION_BASELINE",
-      data: { schemaVersion: 1, strategyName, markets, fingerprint },
+      data: { schemaVersion: 1,
+strategyName,
+markets,
+fingerprint },
     })
     if (result?.ok !== true || result.data?.durable !== true) {
       return toResult({ errors: result?.errors?.length ? result.errors : [new Error("Configuration baseline append did not confirm durable commitment")] })
     }
-    return { ...result, data: { ...result.data, fingerprint, strategyName, markets } }
+    return { ...result,
+data: { ...result.data,
+fingerprint,
+strategyName,
+markets } }
   } catch (error) {
     return toResult({ error })
   }
