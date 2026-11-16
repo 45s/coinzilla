@@ -160,7 +160,10 @@ export async function recordSafetyBlockerResolved({
       operation: "recordSafetyBlockerResolved",
       needsRead: true,
     })
-    validateSafetyBlockerResolution({ blockerId, resolvedBy, resolution, evidenceDigest })
+    validateSafetyBlockerResolution({ blockerId, 
+      resolvedBy, 
+      resolution, 
+      evidenceDigest })
     const readResult = await verifyRaisedSafetyBlocker({
       operationalStateStore,
       blockerId,
@@ -169,14 +172,18 @@ export async function recordSafetyBlockerResolved({
     if (readResult) {
       return readResult
     }
-    validateSafetyBlockerResolver({ resolvedBy, resolution })
+    validateSafetyBlockerResolver({ resolvedBy, 
+      resolution })
     return await appendDurably({
       operationalStateStore,
       operation: "Safety blocker resolution",
       fact: {
         factId: `safety-blocker-resolved:${blockerId}`,
         factType: "SAFETY_BLOCKER_RESOLVED",
-        data: { blockerId, resolvedBy, resolution, evidenceDigest },
+        data: { blockerId, 
+          resolvedBy, 
+          resolution, 
+          evidenceDigest },
       },
     })
   } catch (error) {
