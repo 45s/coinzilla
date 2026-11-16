@@ -780,6 +780,7 @@ function helpText() {
     "Inline pause/resume buttons always require confirmation. Text control commands are explicit requests.",
     "Operator pause does not cancel existing orders. Existing orders may still fill; accounting and recovery SELLs continue.",
     "Emergency BUY pause cancels only current-process-owned BUYs. Recovery SELLs and accounting continue; manual/external orders are untouched.",
+    "Emergency BUY commands execute immediately after private-chat authorization; they do not use the market-button confirmation flow.",
     "Operator pause lasts only for this process and is not restored after restart.",
   ].join("\n")
 }
