@@ -2,7 +2,10 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { createHarvesterStop } from "./create-harvester-stop.js"
 
-const test = (name, ...args) => nodeTest(`[create-harvester-stop.test.js] ${name}`, ...args)
+const test = (...args) => {
+  const [name, ...testArgs] = args
+  return nodeTest(`[create-harvester-stop.test.js] ${name}`, ...testArgs)
+ }
 
 function createStopDependencies({ calls, stopRuntime, operatorStop } = {}) {
   return {
