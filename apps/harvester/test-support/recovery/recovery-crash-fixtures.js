@@ -321,7 +321,10 @@ export function createRecoveryCrashFixture() {
 
   const buyClientOrderId = appendFirstSession({ append })
   appendSecondSessionStart({ append })
-  appendFinalBuyFill({ append, buyClientOrderId })
+  appendFinalBuyFill({
+    append,
+    buyClientOrderId,
+  })
   appendRecoverySell({ append })
   appendRecoveryCycleCompletion({ append })
   appendUnownedOrder({ append })
