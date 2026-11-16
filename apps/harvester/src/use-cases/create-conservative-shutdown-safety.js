@@ -189,16 +189,7 @@ function createSafetySnapshot({ state, pairs } = {}) {
   })
 }
 
-export function createConservativeShutdownSafety({
-  state,
-  pairs,
-  runTransition,
-} = {}) {
-  const enabledSymbols = getEnabledSymbols({ pairs })
-  state.shutdownSafetyBySymbol = createInitialSafetyMarkers({ pairs })
-  state.shutdownSafetyRevision = 0
-  state.shutdownBuyGate = false
-
+function createShutdownSafetyRevision({ state, pairs, enabledSymbols } = {}) {
   const notifyRevision = () => {
     state.shutdownSafetyRevision += 1
     return state.shutdownSafetyRevision
@@ -230,61 +221,76 @@ export function createConservativeShutdownSafety({
     return revision
   }
 
+  return { notifyRevision, invalidateShutdownSafety }
+}
+
+function createShutdownSafetyAuditor({ state, pairs, enabledSymbols, runTransition, notifyRevision } = {}) {
+  return ({ symbol, reconciliationComplete = false, journalDurable = false, coverageResult, externalBlockers = [] } = {}) =>
+    runTransition({
+      task: async () => {
+        const symbols = typeof symbol === "string" ? [symbol] : enabledSymbols
+        if (symbols.some((targetSymbol) => !enabledSymbols.includes(targetSymbol))) {
+          return {
+            ok: false,
+            errors: [new Error("Conservative shutdown audit received an unknown market")],
+          }
+        }
+
+        for (const targetSymbol of symbols) {
+          const blockers = getMarketSafetyBlockers({
+            state,
+            symbol: targetSymbol,
+            reconciliationComplete,
+            journalDurable,
+            coverageResult,
+            externalBlockers,
+          })
+          const revision = notifyRevision()
+          const status = blockers.length === 0 ? "SAFE_TO_SHUTDOWN" : "UNSAFE"
+          state.shutdownSafetyBySymbol.set(targetSymbol, {
+            status,
+            blockers,
+            revision,
+          })
+        }
+
+        return {
+          ok: true,
+          data: createSafetySnapshot({ state, pairs }),
+        }
+      },
+    })
+}
+
+export function createConservativeShutdownSafety({ state, pairs, runTransition } = {}) {
+  const enabledSymbols = getEnabledSymbols({ pairs })
+  state.shutdownSafetyBySymbol = createInitialSafetyMarkers({ pairs })
+  state.shutdownSafetyRevision = 0
+  state.shutdownBuyGate = false
+
+  const { notifyRevision, invalidateShutdownSafety } = createShutdownSafetyRevision({
+    state,
+    pairs,
+    enabledSymbols,
+  })
   const beginShutdown = () => {
     state.shutdownBuyGate = true
     state.deferredEvaluations.clear()
     invalidateShutdownSafety({ reason: "SHUTDOWN_SAFETY_NOT_PROVEN" })
     return { ok: true }
   }
-
-  const auditShutdownSafety = ({
-    symbol,
-    reconciliationComplete = false,
-    journalDurable = false,
-    coverageResult,
-    externalBlockers = [],
-  } = {}) => runTransition({
-    task: async () => {
-      const symbols = typeof symbol === "string" ? [symbol] : enabledSymbols
-      if (symbols.some((targetSymbol) => !enabledSymbols.includes(targetSymbol))) {
-        return {
-          ok: false,
-          errors: [new Error("Conservative shutdown audit received an unknown market")],
-        }
-      }
-
-      for (const targetSymbol of symbols) {
-        const blockers = getMarketSafetyBlockers({
-          state,
-          symbol: targetSymbol,
-          reconciliationComplete,
-          journalDurable,
-          coverageResult,
-          externalBlockers,
-        })
-        const revision = notifyRevision()
-        const status = blockers.length === 0 ? "SAFE_TO_SHUTDOWN" : "UNSAFE"
-
-        state.shutdownSafetyBySymbol.set(targetSymbol, {
-          status,
-          blockers,
-          revision,
-        })
-      }
-
-      return {
-        ok: true,
-        data: createSafetySnapshot({ state,
-          pairs }),
-      }
-    },
+  const auditShutdownSafety = createShutdownSafetyAuditor({
+    state,
+    pairs,
+    enabledSymbols,
+    runTransition,
+    notifyRevision,
   })
 
   return Object.freeze({
     beginShutdown,
     auditShutdownSafety,
     invalidateShutdownSafety,
-    getShutdownSafetySnapshot: () => createSafetySnapshot({ state,
-      pairs }),
+    getShutdownSafetySnapshot: () => createSafetySnapshot({ state, pairs }),
   })
 }
