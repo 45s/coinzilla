@@ -3591,7 +3591,11 @@ test("keeps Binance connected when the CLOSING snapshot durability barrier fails
     },
   })
 
-  await assert.rejects(runtime.stop(), /Harvester shutdown was incomplete/)
+  await assert.rejects(runtime.stop(), (error) => {
+    assert.match(error.message, /Unable to durably persist CLOSING account snapshot/)
+    assert.equal(error.recoveryFailure?.category, "DURABILITY")
+    return true
+  })
 
   const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
   assert.equal(flushCount, 4)
