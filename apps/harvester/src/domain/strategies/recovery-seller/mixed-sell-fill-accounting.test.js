@@ -243,3 +243,24 @@ test("reconciles a rejected zero-fill SELL without claiming an accounting commit
   assert.equal(result.legacyAccounting, context.legacyAccounting, "A zero-fill order must preserve legacy realized P&L.")
   assert.equal(result.reconciliation.status, "RECONCILED", "The zero-fill terminal order must still be reconciled.")
 })
+
+test("rejects changed allocation-side facts even when a caller reuses the staged fingerprint", () => {
+  const context = makeAccountingContext()
+  const original = context.canonicalFillAllocations[0]
+  const forged = {
+    ...original,
+    recovery: {
+      ...original.recovery,
+      quoteProceeds: "0",
+    },
+  }
+
+  assert.throws(
+    () => applyReconciledMixedSellOrder({
+      ...context,
+      canonicalFillAllocations: [forged],
+    }),
+    /allocation|projection|fill history/i,
+    "The orchestrator must recompute allocation facts from the canonical Fill rather than trusting a caller-supplied fingerprint.",
+  )
+})
