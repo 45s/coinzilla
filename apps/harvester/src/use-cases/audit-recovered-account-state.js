@@ -8,14 +8,16 @@ import { addDecimal, assertDecimalString, compareDecimal, multiplyDecimal, subtr
 
 function addAmount({ amounts, asset, amount }) {
   const current = amounts.get(asset) ?? "0"
-  amounts.set(asset, addDecimal({ left: current, right: amount }))
+  amounts.set(asset, addDecimal({ left: current, 
+    right: amount }))
 }
 
 function requireAmount({ value, field }) {
   if (typeof value !== "string") {
     throw new TypeError(`${field} must be an exact decimal string`)
   }
-  assertDecimalString({ value, field })
+  assertDecimalString({ value, 
+    field })
   return value
 }
 
@@ -120,7 +122,8 @@ function validateAuditInput({
     throw new TypeError("targetMarket must be a canonical Market")
   }
   if (!projection.data.requiresExchangeReconciliation) {
-    return toResult({ data: Object.freeze({ skipped: true, reason: "NO_PRIOR_TRADING_STATE" }) })
+    return toResult({ data: Object.freeze({ skipped: true, 
+      reason: "NO_PRIOR_TRADING_STATE" }) })
   }
   if (!Array.isArray(recoveredState.journalFills)) {
     throw new TypeError("auditRecoveredAccountState requires restored Journal fill facts")
@@ -201,11 +204,15 @@ function createAccountBalanceContext({ projection, currentAccountSnapshot }) {
       throw new Error(`Current account snapshot contains duplicate asset code ${code}`)
     }
     currentByAsset.set(code, {
-      total: addDecimal({ left: balance.free.amount, right: balance.locked.amount }),
+      total: addDecimal({ left: balance.free.amount, 
+        right: balance.locked.amount }),
       locked: balance.locked.amount,
     })
   }
-  return { baseline, baselineByAsset, baselineSequenceByAsset, currentByAsset }
+  return { baseline, 
+    baselineByAsset, 
+    baselineSequenceByAsset, 
+    currentByAsset }
 }
 
 function createMarketContext({ recoveredState, markets, targetMarket }) {
@@ -261,7 +268,9 @@ function createMarketContext({ recoveredState, markets, targetMarket }) {
   if (targetMarket && marketsBySymbol.get(targetMarket.symbol)?.id !== targetMarket.id) {
     throw new Error(`Canonical Market metadata is missing for target market ${targetMarket.symbol}`)
   }
-  return { expectedDeltas, marketsById, marketsBySymbol }
+  return { expectedDeltas, 
+    marketsById, 
+    marketsBySymbol }
 }
 
 function registerCommissionAssetIdentity({ asset, commissionAssetIdByCode, commissionAssetCodeById }) {
@@ -313,7 +322,8 @@ function applyThirdAssetCommission({
   thirdAssetCommissionCodes,
 }) {
   const { amount, asset } = commission
-  if (compareDecimal({ left: amount, right: "0" }) === 0) {
+  if (compareDecimal({ left: amount, 
+    right: "0" }) === 0) {
     return
   }
   const baselineSequence = baselineSequenceByAsset.get(asset)
@@ -341,7 +351,8 @@ function applyThirdAssetCommission({
   addAmount({
     amounts: expectedDeltas,
     asset,
-    amount: subtractDecimal({ left: "0", right: amount }),
+    amount: subtractDecimal({ left: "0", 
+      right: amount }),
   })
 }
 
@@ -428,7 +439,8 @@ function createRelevantAssetCodes({
     ...marketAssetCodes,
     ...expectedDeltas.keys(),
   ])
-  return { assetCodes, marketAssetCodes }
+  return { assetCodes, 
+    marketAssetCodes }
 }
 
 function validateAccountBalances({ assetCodes, baselineByAsset, currentByAsset, expectedDeltas }) {
@@ -441,12 +453,15 @@ function validateAccountBalances({ assetCodes, baselineByAsset, currentByAsset, 
     }
     const initial = baselineByAsset.get(asset).total
     const delta = expectedDeltas.get(asset) ?? "0"
-    const expected = addDecimal({ left: initial, right: delta })
-    if (compareDecimal({ left: expected, right: "0" }) < 0) {
+    const expected = addDecimal({ left: initial, 
+      right: delta })
+    if (compareDecimal({ left: expected, 
+      right: "0" }) < 0) {
       throw new Error(`Replayed strategy accounting predicts a negative account balance for ${asset}`)
     }
     const actual = currentByAsset.get(asset).total
-    if (compareDecimal({ left: actual, right: expected }) !== 0) {
+    if (compareDecimal({ left: actual, 
+      right: expected }) !== 0) {
       throw new Error(
         `Exchange balance does not match replayed Harvester ownership for ${asset}: expected ${expected}, received ${actual}`,
       )
@@ -487,7 +502,8 @@ function createExpectedOrderCommitments({ recoveredState }) {
       left: order.originalQuantity.amount,
       right: order.executedQuantity.amount,
     })
-    if (compareDecimal({ left: remainingQuantity, right: "0" }) <= 0) {
+    if (compareDecimal({ left: remainingQuantity, 
+      right: "0" }) <= 0) {
       throw new Error(`Recovered active order has no remaining quantity: ${order.clientOrderId}`)
     }
     if (!["LIMIT", "LIMIT_MAKER"].includes(order.type) || !order.limitPrice) {
@@ -550,22 +566,26 @@ function validateUnownedOpenOrder({
     value: identity.executedQuantity,
     field: `Unowned order ${brokerOrderId}.executedQuantity`,
   })
-  const remainingQuantity = subtractDecimal({ left: originalQuantity, right: executedQuantity })
-  if (compareDecimal({ left: remainingQuantity, right: "0" }) <= 0) {
+  const remainingQuantity = subtractDecimal({ left: originalQuantity, 
+    right: executedQuantity })
+  if (compareDecimal({ left: remainingQuantity, 
+    right: "0" }) <= 0) {
     throw new Error(`Unowned exchange order has no positive remaining quantity: ${brokerOrderId}`)
   }
   const actualPrice = requireAmount({
     value: getOrderPrice({ order }),
     field: `Unowned order ${brokerOrderId}.price`,
   })
-  if (compareDecimal({ left: actualPrice, right: "0" }) <= 0) {
+  if (compareDecimal({ left: actualPrice, 
+    right: "0" }) <= 0) {
     throw new Error(`Unowned exchange order price must be positive: ${brokerOrderId}`)
   }
   if (order.side === "BUY") {
     addAmount({
       amounts: expectedLocked,
       asset: externalMarket.quoteAsset.code,
-      amount: multiplyDecimal({ left: remainingQuantity, right: actualPrice }),
+      amount: multiplyDecimal({ left: remainingQuantity, 
+        right: actualPrice }),
     })
   } else if (order.side === "SELL") {
     addAmount({
@@ -598,9 +618,12 @@ function validateOwnedOpenOrder({ order, identity, expected, symbol, brokerOrder
     expected.side !== order.side ||
     expected.type !== order.type ||
     expectedStatus !== actualStatus ||
-    compareDecimal({ left: expected.originalQuantity.amount, right: identity.originalQuantity }) !== 0 ||
-    compareDecimal({ left: expected.executedQuantity.amount, right: identity.executedQuantity }) !== 0 ||
-    compareDecimal({ left: expectedPrice, right: actualPrice }) !== 0
+    compareDecimal({ left: expected.originalQuantity.amount, 
+      right: identity.originalQuantity }) !== 0 ||
+    compareDecimal({ left: expected.executedQuantity.amount, 
+      right: identity.executedQuantity }) !== 0 ||
+    compareDecimal({ left: expectedPrice, 
+      right: actualPrice }) !== 0
   ) {
     throw new Error(`Exchange open-order facts contradict recovered ownership for broker order ${brokerOrderId}`)
   }
@@ -664,7 +687,10 @@ function inspectExchangeOpenOrders({
     const missing = [...expectedByBrokerId.keys()].filter((id) => !actualOpenByBrokerId.has(id))
     throw new Error(`Recovered active orders are missing from the exchange open-order snapshot: ${missing.join(", ")}`)
   }
-  return { actualOpenByBrokerId, unownedOpenOrders, blockedMarkets, seenOpenOrderIds }
+  return { actualOpenByBrokerId, 
+    unownedOpenOrders, 
+    blockedMarkets, 
+    seenOpenOrderIds }
 }
 
 function validateLockedBalances({
@@ -676,7 +702,8 @@ function validateLockedBalances({
 }) {
   for (const [asset, expected] of expectedLocked) {
     const actual = currentByAsset.get(asset)?.locked ?? "0"
-    if (compareDecimal({ left: actual, right: expected }) !== 0) {
+    if (compareDecimal({ left: actual, 
+      right: expected }) !== 0) {
       throw new Error(
         `Exchange locked balance does not match recovered order commitments for ${asset}: expected ${expected}, received ${actual}`,
       )
@@ -686,7 +713,8 @@ function validateLockedBalances({
     const initialLocked = baselineByAsset.get(asset)?.locked ?? "0"
     const expected = expectedLocked.get(asset) ??
       (thirdAssetCommissionCodes.has(asset) && !marketAssetCodes.has(asset) ? initialLocked : "0")
-    if (compareDecimal({ left: actual.locked, right: expected }) !== 0) {
+    if (compareDecimal({ left: actual.locked, 
+      right: expected }) !== 0) {
       throw new Error(
         `Exchange has unexplained locked funds for ${asset}: expected ${expected}, received ${actual.locked}`,
       )
@@ -763,8 +791,11 @@ export function auditRecoveredAccountState(options = {}) {
       targetMarket,
       currentAccountSnapshot,
     })
-    const accountBalances = createAccountBalanceContext({ projection, currentAccountSnapshot })
-    const marketContext = createMarketContext({ recoveredState, markets, targetMarket })
+    const accountBalances = createAccountBalanceContext({ projection, 
+      currentAccountSnapshot })
+    const marketContext = createMarketContext({ recoveredState, 
+      markets, 
+      targetMarket })
     const thirdAssetCommissionCodes = applyThirdAssetCommissionDeltas({
       recoveredState,
       marketsById: marketContext.marketsById,
