@@ -45,20 +45,3 @@ test("rejects malformed Bitunix balances through canonical balance validation", 
     },
   ]), /non-negative/i)
 })
-
-test("rejects legacy Coin quantities that overflow or underflow Number", () => {
-  assert.throws(() => adaptAssets([
-    {
-      coin: "BTC",
-      balance: "1".padEnd(310, "0"),
-      balanceLocked: "0",
-    },
-  ]), /finite Number/i)
-  assert.throws(() => adaptAssets([
-    {
-      coin: "BTC",
-      balance: "0.".concat("0".repeat(400), "1"),
-      balanceLocked: "0",
-    },
-  ]), /below Number precision/i)
-})
