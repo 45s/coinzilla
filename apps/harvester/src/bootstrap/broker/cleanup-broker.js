@@ -17,7 +17,7 @@ export async function stopMarketIntake({ subscriptions, bookSubscriptions = [] }
 }
 
 export async function stopUserDataIntake({ userDataSubscription }) {
-  if (typeof userDataSubscription?.disconnect !== "function") return []
+  if (typeof userDataSubscription?.disconnect !== "function") {return []}
   const result = await Promise.allSettled([
     Promise.resolve().then(() => userDataSubscription.disconnect()),
   ])
@@ -28,7 +28,8 @@ export async function stopUserDataIntake({ userDataSubscription }) {
 
 async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDataSubscription }) {
   const [marketErrors, userDataErrors] = await Promise.all([
-    stopMarketIntake({ subscriptions, bookSubscriptions }),
+    stopMarketIntake({ subscriptions,
+bookSubscriptions }),
     stopUserDataIntake({ userDataSubscription }),
   ])
   return [...marketErrors, ...userDataErrors]
@@ -56,8 +57,12 @@ export async function disconnectBroker({ broker, brokerName, eventPublisher }) {
 }
 
 export async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions = [], userDataSubscription }) {
-  const intakeErrors = await stopBrokerIntake({ subscriptions, bookSubscriptions, userDataSubscription })
-  const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher })
+  const intakeErrors = await stopBrokerIntake({ subscriptions,
+bookSubscriptions,
+userDataSubscription })
+  const disconnectErrors = await disconnectBroker({ broker,
+brokerName,
+eventPublisher })
   const errors = [...intakeErrors, ...disconnectErrors]
 
   return errors
