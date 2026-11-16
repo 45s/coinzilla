@@ -160,6 +160,112 @@ async function resolveMarketSafetyBlockers({
   return { resolvedSafetyBlockerIds, unresolvedSafetyBlockers }
 }
 
+function validateCandidateReconciliationInput(options) {
+  const {
+    operationalStateStore,
+    reconcileOwnedOrders,
+    getRecoveredState,
+  } = options
+  if (typeof operationalStateStore?.readAll !== "function") {
+    throw new TypeError("Durable-fact candidate reconciliation requires an initialized read port")
+  }
+  if (typeof reconcileOwnedOrders !== "function" || typeof getRecoveredState !== "function") {
+    throw new TypeError("Durable-fact candidate reconciliation requires a candidate-bound owned-order reconciler and state reader")
+  }
+  return options
+}
+
+function createCandidateReconciliationResult({
+  reconciliation,
+  resolvedSafetyBlockerIds,
+  unresolvedSafetyBlockers,
+  finalCandidate,
+  targetMarket,
+}) {
+  const targetScopedBlockers = unresolvedSafetyBlockers.filter(({ scope, symbol }) =>
+    scope === "ACCOUNT" || symbol === targetMarket.symbol
+  )
+  const targetMarketReady = reconciliation.ready === true && targetScopedBlockers.length === 0
+  const targetMarketReconciliation = Object.freeze({
+    ...reconciliation,
+    ready: targetMarketReady,
+    status: targetMarketReady ? reconciliation.status : "BLOCKED",
+    ...(!targetMarketReady && reconciliation.ready === true
+      ? { reason: "ACTIVE_SAFETY_BLOCKER" }
+      : {}),
+  })
+  const candidateState = Object.freeze({
+    ...finalCandidate,
+    stickySafetyBlockers: Object.freeze([...unresolvedSafetyBlockers]),
+  })
+  return toResult({
+    data: Object.freeze({
+      candidateState,
+      targetMarketReconciliation,
+      targetMarketReady,
+      resolvedSafetyBlockerIds: Object.freeze([...resolvedSafetyBlockerIds]),
+      unresolvedSafetyBlockers: Object.freeze([...unresolvedSafetyBlockers]),
+      readiness: "BLOCKED",
+      allMarketsReady: false,
+      candidateOnly: true,
+      restorationEnabled: false,
+      requiresExchangeReconciliation: true,
+      historyCoverageComplete: false,
+    }),
+  })
+}
+
+async function runCandidateMarketReconciliation({ input, projection, candidate }) {
+  const {
+    operationalStateStore,
+    marketMetadata,
+    markets,
+    targetMarket,
+    reconcileOwnedOrders,
+    getRecoveredState,
+    refreshAccountSnapshot,
+    refreshOpenOrders,
+    fetchMarketTradeHistory,
+    auditAccountState,
+  } = input
+  const historyRetentionEvidence = createHistoryRetentionEvidence({ projection, targetMarket })
+  const { reconciliation, readCandidateState } = await reconcileCandidateMarket({
+    projection,
+    candidateState: candidate.data,
+    reconcileOwnedOrders,
+    getRecoveredState,
+    refreshAccountSnapshot,
+    refreshOpenOrders,
+    fetchMarketTradeHistory,
+    markets,
+    targetMarket,
+    historyRetentionEvidence,
+    auditAccountState,
+  })
+  if (reconciliation?.ok !== true) {
+    return reconciliation
+  }
+
+  const safetyBlockers = await resolveMarketSafetyBlockers({
+    operationalStateStore,
+    projection,
+    targetMarket,
+    historyRetentionEvidence,
+    reconciliation,
+  })
+  if (safetyBlockers?.ok === false) {
+    return safetyBlockers
+  }
+  const finalCandidate = await readCandidateState()
+  return createCandidateReconciliationResult({
+    reconciliation: reconciliation.data,
+    resolvedSafetyBlockerIds: safetyBlockers.resolvedSafetyBlockerIds,
+    unresolvedSafetyBlockers: safetyBlockers.unresolvedSafetyBlockers,
+    finalCandidate,
+    targetMarket,
+  })
+}
+
 /**
  * Reconcile one offline durable-fact candidate market using only the existing
  * read-only recovered-market audit boundary. A passing market audit never
@@ -167,94 +273,21 @@ async function resolveMarketSafetyBlockers({
  */
 export async function reconcileHarvesterOperationalStateCandidate(options = {}) {
   try {
-    const {
-      operationalStateStore,
-      marketMetadata,
-      markets,
-      targetMarket,
-      reconcileOwnedOrders,
-      getRecoveredState,
-      refreshAccountSnapshot,
-      refreshOpenOrders,
-      fetchMarketTradeHistory,
-      auditAccountState,
-    } = options
-    if (typeof operationalStateStore?.readAll !== "function") {
-      throw new TypeError("Durable-fact candidate reconciliation requires an initialized read port")
-    }
-    if (typeof reconcileOwnedOrders !== "function" || typeof getRecoveredState !== "function") {
-      throw new TypeError("Durable-fact candidate reconciliation requires a candidate-bound owned-order reconciler and state reader")
-    }
-
-    const projection = await readVerifiedProjection({ operationalStateStore })
+    const input = validateCandidateReconciliationInput(options)
+    const projection = await readVerifiedProjection({
+      operationalStateStore: input.operationalStateStore,
+    })
     if (projection?.ok !== true) {
       return projection
     }
-    const candidate = restoreHarvesterJournalState({ projection, marketMetadata })
+    const candidate = restoreHarvesterJournalState({
+      projection,
+      marketMetadata: input.marketMetadata,
+    })
     if (candidate?.ok !== true) {
       return candidate
     }
-    const historyRetentionEvidence = createHistoryRetentionEvidence({ projection, targetMarket })
-    const { reconciliation, readCandidateState } = await reconcileCandidateMarket({
-      projection,
-      candidateState: candidate.data,
-      reconcileOwnedOrders,
-      getRecoveredState,
-      refreshAccountSnapshot,
-      refreshOpenOrders,
-      fetchMarketTradeHistory,
-      markets,
-      targetMarket,
-      historyRetentionEvidence,
-      auditAccountState,
-    })
-    if (reconciliation?.ok !== true) {
-      return reconciliation
-    }
-
-    const safetyBlockers = await resolveMarketSafetyBlockers({
-      operationalStateStore,
-      projection,
-      targetMarket,
-      historyRetentionEvidence,
-      reconciliation,
-    })
-    if (safetyBlockers?.ok === false) {
-      return safetyBlockers
-    }
-    const { resolvedSafetyBlockerIds, unresolvedSafetyBlockers } = safetyBlockers
-    const targetScopedBlockers = unresolvedSafetyBlockers.filter(({ scope, symbol }) =>
-      scope === "ACCOUNT" || symbol === targetMarket.symbol
-    )
-    const targetMarketReady = reconciliation.data.ready === true && targetScopedBlockers.length === 0
-    const targetMarketReconciliation = Object.freeze({
-      ...reconciliation.data,
-      ready: targetMarketReady,
-      status: targetMarketReady ? reconciliation.data.status : "BLOCKED",
-      ...(!targetMarketReady && reconciliation.data.ready === true
-        ? { reason: "ACTIVE_SAFETY_BLOCKER" }
-        : {}),
-    })
-    const finalCandidate = await readCandidateState()
-    const candidateState = Object.freeze({
-      ...finalCandidate,
-      stickySafetyBlockers: Object.freeze([...unresolvedSafetyBlockers]),
-    })
-    return toResult({
-      data: Object.freeze({
-        candidateState,
-        targetMarketReconciliation,
-        targetMarketReady,
-        resolvedSafetyBlockerIds: Object.freeze([...resolvedSafetyBlockerIds]),
-        unresolvedSafetyBlockers: Object.freeze([...unresolvedSafetyBlockers]),
-        readiness: "BLOCKED",
-        allMarketsReady: false,
-        candidateOnly: true,
-        restorationEnabled: false,
-        requiresExchangeReconciliation: true,
-        historyCoverageComplete: false,
-      }),
-    })
+    return await runCandidateMarketReconciliation({ input, projection, candidate })
   } catch (error) {
     return toResult({ error })
   }
