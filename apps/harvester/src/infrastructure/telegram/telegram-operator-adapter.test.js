@@ -1,12 +1,16 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest(`[telegram-operator-adapter.test.js] ${  name}`, ...args)
+const test = (...args) => {
+  const [name, ...testArguments] = args
+  return nodeTest(`[telegram-operator-adapter.test.js] ${  name}`, ...testArguments)
+}
 import assert from "node:assert/strict"
 import {
   createTelegramOperatorAdapter,
   parseTelegramOperatorCommand,
 } from "./telegram-operator-adapter.js"
 
-function makeResponse(payload, status = 200) {
+function makeResponse(...args) {
+  const [payload, status = 200] = args
   return {
     ok: status >= 200 && status < 300,
     status,
