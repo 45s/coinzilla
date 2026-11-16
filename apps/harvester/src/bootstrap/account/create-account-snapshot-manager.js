@@ -29,7 +29,7 @@ function resolveAuditFlushFailure(flushed, stage) {
   if (failure?.category === "DURABILITY" && failure?.stage === "JOURNAL_FLUSH_FAILURE" && failure?.retryable === true) { return failure }
   return {
     category: "DURABILITY",
-    stage: stage + "_UNCLASSIFIED",
+    stage: `${stage  }_UNCLASSIFIED`,
     retryable: false,
   }
 }
@@ -99,7 +99,7 @@ async function persistAccountSnapshotAudit({
   if (durable?.ok !== true || durable.data?.durable !== true) {
     const cause = durable?.errors?.[0] ?? new Error("Account snapshot durable fact was not committed")
     throw withRecoveryFailure(
-      new Error("Unable to durably persist account snapshot: " + (cause.message ?? String(cause)), {
+      new Error(`Unable to durably persist account snapshot: ${  cause.message ?? String(cause)}`, {
         cause,
       }),
       "DURABILITY",
@@ -118,7 +118,7 @@ function logClosingJournalBarrier({
   failureReason,
 }) {
   logSystem(logger, {
-    message: "Harvester shutdown phase " + phaseStatus.toLowerCase(),
+    message: `Harvester shutdown phase ${  phaseStatus.toLowerCase()}`,
     shutdownPhase: "JOURNAL_DURABILITY_BARRIER",
     phaseStatus,
     phase: "CLOSING",
@@ -175,7 +175,7 @@ function throwNonDurableAccountSnapshotFlush({ flushed, phase, isClosing, logger
   const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
   throw createAuditFlushError({
     flushed,
-    message: "Unable to durably persist " + phase + " account snapshot" + (details ? ": " + details : ""),
+    message: `Unable to durably persist ${  phase  } account snapshot${  details ? `: ${  details}` : ""}`,
     stage: "ACCOUNT_SNAPSHOT_AUDIT_FLUSH",
   })
 }
@@ -188,7 +188,9 @@ async function flushAccountSnapshotAudit({
   monotonicNow,
 }) {
   if (typeof eventPublisher?.flush !== "function") {
-    throwMissingAccountSnapshotFlushCapability({ phase, logger, runtimeSessionId })
+    throwMissingAccountSnapshotFlushCapability({ phase,
+logger,
+runtimeSessionId })
   }
 
   const startedAt = monotonicNow()
@@ -258,7 +260,7 @@ function getAccountSnapshotResultError({ result }) {
     const details = result.errors?.map((error) => error?.message ?? String(error)).join("; ")
     const cause = result.errors?.find?.((error) => error instanceof Error)
     return withRecoveryFailure(
-      new Error("Unable to load canonical exchange account balances" + (details ? ": " + details : ""), {
+      new Error(`Unable to load canonical exchange account balances${  details ? `: ${  details}` : ""}`, {
         cause,
       }),
       "REST_RECONCILIATION",
@@ -449,7 +451,7 @@ async function readAccountOpenOrders({ broker, suppliedOrders }) {
     const details = result.errors?.map((error) => error?.message ?? String(error)).join("; ")
     const cause = result.errors?.find?.((error) => error instanceof Error)
     throw withRecoveryFailure(
-      new Error("Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""), {
+      new Error(`Unable to load authoritative account-wide open orders${  details ? `: ${  details}` : ""}`, {
         cause,
       }),
       "REST_RECONCILIATION",
@@ -582,7 +584,7 @@ function classifyAccountOpenOrders({ orders, restoredOrders, ownershipReconciled
   }))
   const blockReasons = []
   if (unownedOrders.length > 0) {
-    blockReasons.push("UNOWNED_OPEN_ORDERS:" + unownedOrders.length)
+    blockReasons.push(`UNOWNED_OPEN_ORDERS:${  unownedOrders.length}`)
   } else if (orders.length > 0 && !ownershipReconciled) {
     blockReasons.push("CANONICAL_ORDER_RECONCILIATION_REQUIRED")
   }
@@ -634,7 +636,7 @@ async function persistOpenOrdersAuditFact({ operationalStateStore, dataResult })
   if (durable?.ok !== true || durable.data?.durable !== true) {
     const cause = durable?.errors?.[0] ?? new Error("Account open-orders durable fact was not committed")
     throw withRecoveryFailure(
-      new Error("Unable to durably persist account open-orders snapshot: " + (cause.message ?? String(cause)), {
+      new Error(`Unable to durably persist account open-orders snapshot: ${  cause.message ?? String(cause)}`, {
         cause,
       }),
       "DURABILITY",
@@ -653,7 +655,7 @@ async function publishOpenOrdersAuditEvent({ eventPublisher, dataResult }) {
   if (!published?.ok) {
     const details = published?.errors?.map((error) => error?.message ?? String(error)).join("; ")
     throw withRecoveryFailure(
-      new Error("Unable to publish account open-orders audit event" + (details ? ": " + details : "")),
+      new Error(`Unable to publish account open-orders audit event${  details ? `: ${  details}` : ""}`),
       "DURABILITY",
       "ACCOUNT_OPEN_ORDERS_AUDIT_PUBLICATION",
       true,
@@ -677,7 +679,7 @@ async function publishOpenOrdersAuditEvent({ eventPublisher, dataResult }) {
     const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
     throw createAuditFlushError({
       flushed,
-      message: "Unable to durably persist account open-orders audit" + (details ? ": " + details : ""),
+      message: `Unable to durably persist account open-orders audit${  details ? `: ${  details}` : ""}`,
       stage: "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH",
     })
   }
@@ -784,7 +786,7 @@ async function publishAccountSnapshot({ context, options }) {
   })
   if (!published?.ok) {
     throw withRecoveryFailure(
-      new Error("Unable to publish " + options.phase + " account snapshot audit event"),
+      new Error(`Unable to publish ${  options.phase  } account snapshot audit event`),
       "DURABILITY",
       "ACCOUNT_SNAPSHOT_AUDIT_PUBLICATION",
       true,
@@ -834,7 +836,7 @@ function validateConfiguredCommissionAsset({ configuredAsset, assetId, assetCode
   }
   if (configuredAsset.id !== assetId || configuredAsset.code !== assetCode) {
     throw withRecoveryFailure(
-      new Error("Commission asset identity contradicts configured market metadata for " + assetCode),
+      new Error(`Commission asset identity contradicts configured market metadata for ${  assetCode}`),
       "ACCOUNTING_INTEGRITY",
       "COMMISSION_ASSET_BASELINE_IDENTITY",
       false,
@@ -851,7 +853,7 @@ function getKnownCommissionBaseline({ context, assetId, assetCode }) {
   }
   if (knownAssetId !== assetId || knownAssetCode !== assetCode) {
     throw withRecoveryFailure(
-      new Error("Commission asset ID/code mapping is contradictory for " + assetCode),
+      new Error(`Commission asset ID/code mapping is contradictory for ${  assetCode}`),
       "ACCOUNTING_INTEGRITY",
       "COMMISSION_ASSET_BASELINE_IDENTITY",
       false,
