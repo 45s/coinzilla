@@ -36,7 +36,8 @@ function createApiClient(config) {
  * @param {object} logger
  * @returns {BinanceStreamsClient}
  */
-function createMarketClient(config, logger) {
+function createMarketClient(...args) {
+  const [config, logger] = args
   return new BinanceStreamsClient({
     url: config.websocketStreamsUrl,
     reconnectDelay: Math.max(1, config.reconnectDelay),
@@ -76,21 +77,24 @@ async function getCanonicalMarket({ broker, symbol }) {
   return request
 }
 
-function validateCallback(callback, name) {
+function validateCallback(...args) {
+  const [callback, name] = args
   if (typeof callback !== "function") {
     throw new TypeError(`${name} callback must be a function`)
   }
 }
 
-function logSafely(logger, level, ...args) {
+function logSafely(...args) {
+  const [logger, level, ...messageArgs] = args
   try {
-    logger?.[level]?.(...args)
+    logger?.[level]?.(...messageArgs)
   } catch {
     // Logging failures must not interrupt event delivery.
   }
 }
 
-function notifySafely(onStatus, status, logger) {
+function notifySafely(...args) {
+  const [onStatus, status, logger] = args
   if (typeof onStatus !== "function") {return}
   try {
     onStatus(status)
@@ -99,7 +103,8 @@ function notifySafely(onStatus, status, logger) {
   }
 }
 
-function forwardSafely(onEvent, onStatus, event, logger) {
+function forwardSafely(...args) {
+  const [onEvent, onStatus, event, logger] = args
   try {
     const result = onEvent({ event })
     if (result && typeof result.then === "function") {
@@ -137,13 +142,15 @@ export class BinanceWebSocketBroker extends CoreBroker {
    * @param {{apiKey: string, apiSecret: string, websocketApiUrl?: string, websocketStreamsUrl?: string, reconnectDelay?: number, logger?: object}} [input]
    * @param {{apiClientFactory?: (config: BinanceWebSocketConfig) => BinanceWebSocketApiClient, marketClientFactory?: (config: BinanceWebSocketConfig, logger: object) => BinanceStreamsClient, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void, userDataRecoveryWarningThreshold?: number}} [dependencies]
    */
-  constructor(input = {}, {
-    apiClientFactory = createApiClient,
-    marketClientFactory = createMarketClient,
-    setTimeoutFn = setTimeout,
-    clearTimeoutFn = clearTimeout,
-    userDataRecoveryWarningThreshold = 5,
-  } = {}) {
+  constructor(...args) {
+    const [input = {}, dependencies = {}] = args
+    const {
+      apiClientFactory = createApiClient,
+      marketClientFactory = createMarketClient,
+      setTimeoutFn = setTimeout,
+      clearTimeoutFn = clearTimeout,
+      userDataRecoveryWarningThreshold = 5,
+    } = dependencies
     super(input)
 
     this.config = new BinanceWebSocketConfig(input)
