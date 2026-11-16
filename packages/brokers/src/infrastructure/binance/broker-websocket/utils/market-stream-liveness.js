@@ -161,7 +161,10 @@ class MarketStreamLivenessMonitor {
   #reportStatus(status) {
     safelyCall({
       callback: this.#onStatus,
-      args: [status, this.diagnostics],
+      args: [{
+        status,
+        diagnostics: this.diagnostics,
+      }],
     })
   }
 
