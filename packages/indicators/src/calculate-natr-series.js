@@ -39,6 +39,9 @@ export function calculateNatrSeries({
       scale: outputScale,
       rounding,
     })
-    return Object.freeze({ openTime: observation.openTime, value })
+    return Object.freeze({
+      openTime: observation.openTime,
+      value,
+    })
   }))
 }

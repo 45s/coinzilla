@@ -27,33 +27,73 @@ function isAsyncFunction(callback) {
   return callback.constructor?.name === "AsyncFunction"
 }
 
-/**
- * Create a SQLite database backed by Node.js' built-in node:sqlite module.
- *
- * SQLite operations are synchronous. Transaction callbacks must therefore
- * complete synchronously; asynchronous callbacks are rejected before running.
- *
- * @param {{ filename: string, timeout?: number }} options
- * @returns {ReturnType<typeof createDatabase> & {
- *   exec: (sql: string) => void,
- *   prepare: (sql: string) => import('node:sqlite').StatementSync,
- *   migrate: (migrations: Array<{version: number, name: string, up: Function}>) => Promise<number[]>
- * }}
- */
-export function createSqliteDatabase({
-  filename,
-  timeout = DEFAULT_TIMEOUT_MS,
-} = {}) {
-  validateOptions({ filename, timeout })
+function createSqliteTransactionHandler({ requireConnection }) {
+  return function withTransaction(work) {
+    const activeConnection = requireConnection()
 
-  const isMemoryDatabase = filename === ":memory:"
-  const databaseFilename = isMemoryDatabase ? filename : resolve(filename)
+    if (activeConnection.isTransaction) {
+      throw new Error("Nested SQLite transactions are not supported")
+    }
+
+    if (isAsyncFunction(work)) {
+      throw new TypeError("SQLite transaction callbacks must be synchronous")
+    }
+
+    activeConnection.exec("BEGIN IMMEDIATE")
+
+    try {
+      const transaction = Object.freeze({
+        exec: (sql) => activeConnection.exec(sql),
+        prepare: (sql) => activeConnection.prepare(sql),
+      })
+      const result = work(transaction)
+
+      if (isThenable(result)) {
+        Promise.resolve(result).catch(() => {})
+        throw new TypeError("SQLite transaction callbacks must be synchronous")
+      }
+
+      activeConnection.exec("COMMIT")
+      return result
+    } catch (error) {
+      if (activeConnection.isTransaction) {
+        let rollbackFailed = false
+        let rollbackError
+
+        try {
+          activeConnection.exec("ROLLBACK")
+        } catch (caughtRollbackError) {
+          rollbackFailed = true
+          rollbackError = caughtRollbackError
+        }
+
+        if (rollbackFailed) {
+          throw new AggregateError(
+            [error, rollbackError],
+            "SQLite transaction failed and rollback also failed",
+            { cause: error },
+          )
+        }
+      }
+
+      throw error
+    }
+  }
+}
+
+function createSqliteAdapter({
+  databaseFilename,
+  isMemoryDatabase,
+  timeout,
+  getDatabaseState,
+}) {
   let connection = null
 
   function requireConnection() {
-    if (database.state !== "connected" || !connection?.isOpen) {
+    const state = getDatabaseState()
+    if (state !== "connected" || !connection?.isOpen) {
       throw new Error(
-        `SQLite database must be connected to execute SQL (state: ${database.state})`,
+        `SQLite database must be connected to execute SQL (state: ${state})`,
       )
     }
 
@@ -87,52 +127,51 @@ export function createSqliteDatabase({
       connection = null
     },
 
-    withTransaction(work) {
-      const activeConnection = requireConnection()
-
-      if (activeConnection.isTransaction) {
-        throw new Error("Nested SQLite transactions are not supported")
-      }
-
-      if (isAsyncFunction(work)) {
-        throw new TypeError("SQLite transaction callbacks must be synchronous")
-      }
-
-      activeConnection.exec("BEGIN IMMEDIATE")
-
-      try {
-        const transaction = Object.freeze({
-          exec: (sql) => activeConnection.exec(sql),
-          prepare: (sql) => activeConnection.prepare(sql),
-        })
-        const result = work(transaction)
-
-        if (isThenable(result)) {
-          Promise.resolve(result).catch(() => {})
-          throw new TypeError("SQLite transaction callbacks must be synchronous")
-        }
-
-        activeConnection.exec("COMMIT")
-        return result
-      } catch (error) {
-        if (activeConnection.isTransaction) {
-          try {
-            activeConnection.exec("ROLLBACK")
-          } catch (rollbackError) {
-            throw new AggregateError(
-              [error, rollbackError],
-              "SQLite transaction failed and rollback also failed",
-              { cause: error },
-            )
-          }
-        }
-
-        throw error
-      }
-    },
+    withTransaction: createSqliteTransactionHandler({ requireConnection }),
   }
 
+  return {
+    adapter,
+    requireConnection,
+  }
+}
+
+/**
+ * Create a SQLite database backed by Node.js' built-in node:sqlite module.
+ *
+ * SQLite operations are synchronous. Transaction callbacks must therefore
+ * complete synchronously; asynchronous callbacks are rejected before running.
+ *
+ * @param {{ filename: string, timeout?: number }} options
+ * @returns {ReturnType<typeof createDatabase> & {
+ *   exec: (sql: string) => void,
+ *   prepare: (sql: string) => import('node:sqlite').StatementSync,
+ *   migrate: (migrations: Array<{version: number, name: string, up: Function}>) => Promise<number[]>
+ * }}
+ */
+export function createSqliteDatabase({
+  filename,
+  timeout = DEFAULT_TIMEOUT_MS,
+} = {}) {
+  validateOptions({
+    filename,
+    timeout,
+  })
+
+  const isMemoryDatabase = filename === ":memory:"
+  const databaseFilename = isMemoryDatabase ? filename : resolve(filename)
+  const databaseReference = {
+    current: null,
+  }
+
+  const { adapter, requireConnection } = createSqliteAdapter({
+    databaseFilename,
+    isMemoryDatabase,
+    timeout,
+    getDatabaseState: () => databaseReference.current.state,
+  })
   const database = createDatabase({ adapter })
+  databaseReference.current = database
 
   const sqliteDatabase = Object.freeze({
     connect: database.connect,
@@ -148,7 +187,10 @@ export function createSqliteDatabase({
       return requireConnection().prepare(sql)
     },
     migrate(migrations) {
-      return migrateSqliteDatabase(sqliteDatabase, migrations)
+      return migrateSqliteDatabase({
+        database: sqliteDatabase,
+        migrations,
+      })
     },
   })
 

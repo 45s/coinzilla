@@ -24,5 +24,9 @@ export function createMigration({ version, name, up } = {}) {
     throw new TypeError("Migration up functions must be synchronous")
   }
 
-  return Object.freeze({ version, name, up })
+  return Object.freeze({
+    version,
+    name,
+    up,
+  })
 }
