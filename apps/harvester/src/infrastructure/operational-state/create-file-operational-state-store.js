@@ -319,7 +319,7 @@ maxLength: MAX_FACT_ID_LENGTH })
 }
 
 function isCanonicalDecimalString({ value }) {
-  return typeof value === "string" && /^(0|[1-9][0-9]*)(\\.[0-9]+)?$/.test(value)
+  return typeof value === "string" && /^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)
 }
 
 function isPositiveCanonicalDecimalString({ value }) {
@@ -327,7 +327,7 @@ function isPositiveCanonicalDecimalString({ value }) {
 }
 
 function isSignedCanonicalDecimalString({ value }) {
-  return typeof value === "string" && /^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$/.test(value)
+  return typeof value === "string" && /^-?(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)
 }
 
 function validateOrderSubmissionOutcomeIdentity({ canonicalData, factId, clientOrderId }) {
