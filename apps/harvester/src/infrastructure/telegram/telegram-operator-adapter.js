@@ -52,11 +52,11 @@ function formatMarketActionPrompt({ action, eligibleMarkets, text }) {
   const prompt = action === "PAUSE"
     ? "Choose an enabled market to pause."
     : "Choose an enabled market to resume."
-  if (eligibleMarkets.length > 0) { return prompt + "\n\n" + text }
+  if (eligibleMarkets.length > 0) { return `${prompt}\n\n${text}` }
   const emptyMessage = action === "PAUSE"
     ? "No enabled markets are currently available to pause."
     : "No enabled operator-paused markets are currently available to resume."
-  return prompt + "\n" + emptyMessage + "\n\n" + text
+  return `${prompt}\n${emptyMessage}\n\n${text}`
 }
 
 function normalizeTelegramUserId(value) {

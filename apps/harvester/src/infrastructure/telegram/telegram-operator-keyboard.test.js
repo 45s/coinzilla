@@ -46,9 +46,7 @@ function makeMarket({ symbol, enabled, operatorPaused }) {
   }
 }
 
-async function runAdapter({ updates, operator } = {}) {
-  const sentMessages = []
-  const registeredCommands = []
+function createFetchMock({ updates, sentMessages, registeredCommands }) {
   let pollCount = 0
   let finishSecondPoll
   const secondPoll = new Promise((resolve) => {
@@ -119,6 +117,20 @@ async function runAdapter({ updates, operator } = {}) {
     }
     throw new Error(`Unexpected Telegram API method: ${method}`)
   }
+  return {
+    fetchImpl,
+    secondPoll,
+  }
+}
+
+async function runAdapter({ updates, operator } = {}) {
+  const sentMessages = []
+  const registeredCommands = []
+  const { fetchImpl, secondPoll } = createFetchMock({
+    updates,
+    sentMessages,
+    registeredCommands,
+  })
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
     allowedUserIds: ["12345"],
@@ -126,11 +138,9 @@ async function runAdapter({ updates, operator } = {}) {
     fetchImpl,
     retryDelayMs: 1,
   })
-
   await adapter.start()
   await secondPoll
   await adapter.stop()
-
   return {
     sentMessages,
     registeredCommands,
@@ -363,27 +373,7 @@ test("Resume opens only currently operator-paused markets and never resumes befo
   )
 })
 
-test("routes Status, Markets, Portfolio and Open Orders through existing read-only queries", async () => {
-  const updates = [
-    makeUpdate({
-      updateId: 301,
-      text: "Status",
-    }),
-    makeUpdate({
-      updateId: 302,
-      text: "Markets",
-    }),
-    makeUpdate({
-      updateId: 303,
-      text: "Portfolio",
-    }),
-    makeUpdate({
-      updateId: 304,
-      text: "Open Orders",
-    }),
-  ]
-  const methods = []
-  const actorIds = []
+function createReadOnlyOperator({ methods, actorIds }) {
   const snapshots = {
     status: {
       runtimeState: "RUNNING",
@@ -424,15 +414,42 @@ test("routes Status, Markets, Portfolio and Open Orders through existing read-on
       data: snapshots[method],
     }
   }
+  return {
+    pauseMarket: async () => assert.fail("Read-only keyboard actions must never invoke pauseMarket."),
+    getStatus: readQuery("status"),
+    getMarkets: readQuery("markets"),
+    getPositions: readQuery("positions"),
+    getOrders: readQuery("orders"),
+  }
+}
+
+test("routes Status, Markets, Portfolio and Open Orders through existing read-only queries", async () => {
+  const updates = [
+    makeUpdate({
+      updateId: 301,
+      text: "Status",
+    }),
+    makeUpdate({
+      updateId: 302,
+      text: "Markets",
+    }),
+    makeUpdate({
+      updateId: 303,
+      text: "Portfolio",
+    }),
+    makeUpdate({
+      updateId: 304,
+      text: "Open Orders",
+    }),
+  ]
+  const methods = []
+  const actorIds = []
   const { sentMessages } = await runAdapter({
     updates,
-    operator: {
-      pauseMarket: async () => assert.fail("Read-only keyboard actions must never invoke pauseMarket."),
-      getStatus: readQuery("status"),
-      getMarkets: readQuery("markets"),
-      getPositions: readQuery("positions"),
-      getOrders: readQuery("orders"),
-    },
+    operator: createReadOnlyOperator({
+      methods,
+      actorIds,
+    }),
   })
 
   assert.deepEqual(
