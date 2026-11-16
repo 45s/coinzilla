@@ -29,8 +29,14 @@ lineNumber },
 
 function createOpeningRecords() {
   const balances = [
-    { asset: "BTC", free: "0", locked: "0", total: "0" },
-    { asset: "USDT", free: "1000", locked: "0", total: "1000" },
+    { asset: "BTC", 
+      free: "0", 
+      locked: "0", 
+      total: "0" },
+    { asset: "USDT", 
+      free: "1000", 
+      locked: "0", 
+      total: "1000" },
   ]
   return [
     record("account.snapshot_captured", {
@@ -73,7 +79,10 @@ function createCommissionBaselineRecord() {
     phase: "COMMISSION_BASELINE",
     sourceTime: 1000,
     auditStatus: "COMPLETE",
-    balances: [{ asset: "BNB", free: "0.75", locked: "0.25", total: "1" }],
+    balances: [{ asset: "BNB", 
+      free: "0.75", 
+      locked: "0.25", 
+      total: "1" }],
     auditReasons: [],
   }, 5)
 }
@@ -91,12 +100,16 @@ function createBuyFillRecord({ thirdAssetCommission }) {
     quoteQuantity: "50",
     liquidityRole: "MAKER",
     commissions: [
-      { amount: "0.0004", assetId: "binance:BTC", asset: "BTC" },
+      { amount: "0.0004", 
+        assetId: "binance:BTC", 
+        asset: "BTC" },
       ...(thirdAssetCommission ? [{
         amount: "0.0001",
         assetId: "binance:BNB",
         asset: "BNB",
-        quoteValue: { amount: "0.01", assetId: "binance:USDT", asset: "USDT" },
+        quoteValue: { amount: "0.01", 
+          assetId: "binance:USDT", 
+          asset: "USDT" },
       }] : []),
     ],
     commissionStatus: "COMPLETE",
@@ -156,7 +169,10 @@ function createClosingRecords({ thirdAssetCommission }) {
       sourceTime: 2000,
       auditStatus: "COMPLETE",
       balances: [
-        { asset: "BTC", free: "0.01", locked: "0", total: "0.01" },
+        { asset: "BTC", 
+          free: "0.01", 
+          locked: "0", 
+          total: "0.01" },
         {
           asset: "USDT",
           free: thirdAssetCommission ? "1000.24" : "1000.25",
@@ -188,7 +204,8 @@ const recoveryProjection = ({
     ...createOpeningRecords(),
     ...(thirdAssetCommission && includeCommissionBaseline ? [createCommissionBaselineRecord()] : []),
     createBuyFillRecord({ thirdAssetCommission }),
-    ...createSellCycleRecords({ freeQuantity, thirdAssetCommission }),
+    ...createSellCycleRecords({ freeQuantity, 
+      thirdAssetCommission }),
     ...createClosingRecords({ thirdAssetCommission }),
   ]
   return projectHarvesterJournalRecovery({ records })
