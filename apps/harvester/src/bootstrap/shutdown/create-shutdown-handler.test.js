@@ -69,7 +69,7 @@ const createShutdown = ({
     eventPublisher: {},
     publishAccountSnapshot: async (input) => {
       calls.push(`account-audit:${input.phase}`)
-      if (publishAccountSnapshot) await publishAccountSnapshot(input, calls)
+      if (publishAccountSnapshot) {await publishAccountSnapshot(input, calls)}
     },
     stopMarketIntake: async () => {
       calls.push("market-intake-stop")
@@ -77,8 +77,8 @@ const createShutdown = ({
     },
     stopUserDataIntake: async () => {
       calls.push("user-data-intake-stop")
-      if (stopUserDataIntake) return stopUserDataIntake(calls, userDataSubscription)
-      if (typeof userDataSubscription?.disconnect === "function") await userDataSubscription.disconnect()
+      if (stopUserDataIntake) {return stopUserDataIntake(calls, userDataSubscription)}
+      if (typeof userDataSubscription?.disconnect === "function") {await userDataSubscription.disconnect()}
       return []
     },
     disconnectBroker: async () => {
@@ -174,7 +174,7 @@ function createBuyFillShutdownEngine({ calls, initialGate, cancellationGate, app
   return {
     reconcileOwnedOrders: async () => {
       reconciliationCount += 1
-      calls.push("reconcile:" + reconciliationCount)
+      calls.push(`reconcile:${  reconciliationCount}`)
       if (reconciliationCount === 1) {
         initialGate.signalStarted()
         await initialGate.gate
