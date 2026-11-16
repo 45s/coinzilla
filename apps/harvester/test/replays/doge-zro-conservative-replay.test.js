@@ -272,7 +272,8 @@ async function completeFourBuyOrders(dogeTradingReplay) {
     currentStandingBuyOrder = submittedNextStandingBuyOrder;
   }
 
-  return { completedBuyOrders, latestRecoverySellOrder };
+  return { completedBuyOrders,
+latestRecoverySellOrder };
 }
 
 function assertFourBuyExecutionHistory(dogeTradingReplay, completedBuyOrders, latestRecoverySellOrder) {

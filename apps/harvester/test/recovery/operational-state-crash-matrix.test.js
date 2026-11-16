@@ -372,15 +372,21 @@ async function recordCompletedRecoveryCycle({ store }) {
     quoteQuantity: "130005",
     price: "130005",
   });
-  await applyFill({ store, fill: buyFill });
-  await applyFill({ store, fill: sellFill });
+  await applyFill({ store,
+fill: buyFill });
+  await applyFill({ store,
+fill: sellFill });
 
   const { portfolio } = new Portfolio()
-    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
-    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER });
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER });
   const recoveryLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
-    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger;
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger;
   const position = portfolio.getPosition({ marketId: market.id });
   const evaluated = evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,
@@ -407,7 +413,10 @@ async function recordCompletedRecoveryCycle({ store }) {
   });
   assert.equal(recorded.ok, true, recorded.errors?.map(({ message }) => message).join("; "));
 
-  return { buyOrder, sellOrder, recoveryLedger, recorded };
+  return { buyOrder,
+sellOrder,
+recoveryLedger,
+recorded };
 }
 
 test("reopens a completed cycle with exact retained inventory and reset recovery basis", async (t) => {

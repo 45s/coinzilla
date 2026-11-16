@@ -79,7 +79,8 @@ function createDogeReplayState({ marketSymbol, appConfig }) {
   return {
     marketSymbol,
     marketConfiguration: appConfig.strategies.CG_coinGrabber.pairs[marketSymbol],
-    dogeExchangeInfo: createExchangeMarketMetadata({ marketSymbol, appConfig }),
+    dogeExchangeInfo: createExchangeMarketMetadata({ marketSymbol,
+appConfig }),
     scenarioExpectations: createScenarioExpectations(),
     submittedCanonicalOrders: [],
     brokerOrderPlacementRequests: [],
@@ -166,16 +167,20 @@ function createDogeReplayTradingRequest(state) {
   return async (...requestArguments) => {
     const [method, params = {}] = requestArguments;
     if (method === "order.place") {
-      state.brokerOrderPlacementRequests.push({ method, params: { ...params } });
+      state.brokerOrderPlacementRequests.push({ method,
+params: { ...params } });
     }
     if (method === "exchangeInfo") {
       return { data: { symbols: [state.dogeExchangeInfo] } };
     }
     if (method === "myFilters") {
-      return { data: { symbolFilters: [], exchangeFilters: [], assetFilters: [] } };
+      return { data: { symbolFilters: [],
+exchangeFilters: [],
+assetFilters: [] } };
     }
     if (method === "ticker.price") {
-      return { data: { symbol: state.marketSymbol, price: state.scenarioExpectations.initialPrice } };
+      return { data: { symbol: state.marketSymbol,
+price: state.scenarioExpectations.initialPrice } };
     }
     if (method === "order.place") {
       const timestamp = Date.now();
@@ -245,7 +250,8 @@ function createDogeReplayUserDataSubscription(state) {
             : order.market.quoteAsset;
           const commissions = executionFill.commissionAmount && executionFill.commissionAmount !== "0"
             ? [new Commission({
-              amount: new Money({ amount: executionFill.commissionAmount, asset: commissionAsset }),
+              amount: new Money({ amount: executionFill.commissionAmount,
+asset: commissionAsset }),
             })]
             : [];
           const canonicalFill = new Fill({
@@ -253,9 +259,12 @@ function createDogeReplayUserDataSubscription(state) {
             brokerOrderId,
             market: order.market,
             side: executionFill.side,
-            price: new Money({ amount: executionFill.price, asset: order.market.quoteAsset }),
-            quantity: new Quantity({ amount: executionFill.quantity, asset: order.market.baseAsset }),
-            quoteQuantity: new Money({ amount: executionFill.quoteQuantity, asset: order.market.quoteAsset }),
+            price: new Money({ amount: executionFill.price,
+asset: order.market.quoteAsset }),
+            quantity: new Quantity({ amount: executionFill.quantity,
+asset: order.market.baseAsset }),
+            quoteQuantity: new Money({ amount: executionFill.quoteQuantity,
+asset: order.market.quoteAsset }),
             liquidityRole: executionFill.isMaker ? "MAKER" : "TAKER",
             executedAt: executionFill.time,
             commissions,
@@ -331,7 +340,8 @@ function createDogeReplayPriceSubscription(state) {
       state.receivedMarketPriceEvents.push(event);
       return onPrice(event);
     });
-    return { ok: true, data: { unsubscribe: async () => {} } };
+    return { ok: true,
+data: { unsubscribe: async () => {} } };
   };
 }
 
@@ -340,7 +350,8 @@ function createDogeReplayCancelOrder(state) {
     const brokerOrderId = String(orderId);
     const order = state.exchangeOrderHistory.get(brokerOrderId);
     if (!order) {
-      return { ok: false, errors: [new Error("simulated exchange order not found")] };
+      return { ok: false,
+errors: [new Error("simulated exchange order not found")] };
     }
     const timestamp = Date.now();
     const canceledCanonicalOrder = new CanonicalOrder({
@@ -361,7 +372,8 @@ function createDogeReplayCancelOrder(state) {
     state.exchangeOpenOrders.delete(order.clientOrderId);
     state.exchangeOrderHistory.set(brokerOrderId, canceledCanonicalOrder);
     state.confirmedCanceledOrders.push(canceledCanonicalOrder);
-    return { ok: true, data: canceledCanonicalOrder };
+    return { ok: true,
+data: canceledCanonicalOrder };
   };
 }
 
@@ -395,16 +407,20 @@ function createDogeReplayBrokerFactory(state) {
           (!requestedSymbol || order.market.symbol === requestedSymbol),
       ),
     });
-    broker.getCanonicalOrder = async () => ({ ok: false, errors: [new Error("not found")] });
+    broker.getCanonicalOrder = async () => ({ ok: false,
+errors: [new Error("not found")] });
     broker.getAccountSnapshot = async () => ({
       ok: true,
       data: {
         sourceTime: Date.now(),
         balances: [state.marketSymbol.slice(0, -4), "USDT"].map((code) => {
-          const asset = new Asset({ id: code.toLowerCase(), code });
+          const asset = new Asset({ id: code.toLowerCase(),
+code });
           return new Balance({
-            free: new Quantity({ amount: code === "USDT" ? "1000" : "0", asset }),
-            locked: new Quantity({ amount: "0", asset }),
+            free: new Quantity({ amount: code === "USDT" ? "1000" : "0",
+asset }),
+            locked: new Quantity({ amount: "0",
+asset }),
           });
         }),
       },
@@ -445,7 +461,8 @@ async function startDogeReplayRuntime({ state, appConfig, brokerFactory }) {
         }
         return { ok: true };
       },
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({ ok: true,
+durable: true }),
     },
     logger: {
       info() {},
@@ -481,7 +498,8 @@ async function publishDogeReplayMarketPrice(state, price) {
 
 async function publishDogeReplayFullOrderFill(state, { order, price, tradeId }) {
   const executedBaseQuantity = order.originalQuantity.amount;
-  const executedQuoteQuantity = multiplyDecimal({ left: price, right: executedBaseQuantity });
+  const executedQuoteQuantity = multiplyDecimal({ left: price,
+right: executedBaseQuantity });
   const executionCommissionRate = percentageToRate({
     percent: String(
       order.type === "LIMIT_MAKER"
@@ -504,7 +522,8 @@ async function publishDogeReplayFullOrderFill(state, { order, price, tradeId }) 
     type: order.type,
     limitPrice: order.limitPrice,
     originalQuantity: order.originalQuantity,
-    executedQuantity: new Quantity({ amount: executedBaseQuantity, asset: order.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: executedBaseQuantity,
+asset: order.market.baseAsset }),
     status: "FILLED",
     createdAt: order.createdAt,
     acknowledgedAt: order.acknowledgedAt,
@@ -548,9 +567,12 @@ async function publishDogeReplayFullOrderFill(state, { order, price, tradeId }) 
 }
 
 export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
-  const state = createDogeReplayState({ marketSymbol, appConfig });
+  const state = createDogeReplayState({ marketSymbol,
+appConfig });
   const brokerFactory = createDogeReplayBrokerFactory(state);
-  const runtime = await startDogeReplayRuntime({ state, appConfig, brokerFactory });
+  const runtime = await startDogeReplayRuntime({ state,
+appConfig,
+brokerFactory });
   return {
     runtime,
     symbol: marketSymbol,
@@ -564,7 +586,9 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
     harvesterRuntimeErrors: state.harvesterRuntimeErrors,
     waitForSubmittedOrder: (...orderArguments) => {
       const [side, occurrence = 1] = orderArguments;
-      return waitForSubmittedOrder({ state, side, occurrence });
+      return waitForSubmittedOrder({ state,
+side,
+occurrence });
     },
     waitForRecoveryCycleCompletion: () => waitForRecoveryCycleCompletion(state),
     publishMarketPrice: (price) => publishDogeReplayMarketPrice(state, price),

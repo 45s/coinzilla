@@ -35,16 +35,33 @@ reject }
 }
 
 function createMarketFixture() {
-  const baseAsset = new Asset({ id: "asset-zro", code: "ZRO" });
-  const quoteAsset = new Asset({ id: "asset-usdt", code: "USDT" });
-  const market = new Market({ venue: "binance", symbol: "ZROUSDT", baseAsset, quoteAsset });
+  const baseAsset = new Asset({ id: "asset-zro",
+code: "ZRO" });
+  const quoteAsset = new Asset({ id: "asset-usdt",
+code: "USDT" });
+  const market = new Market({ venue: "binance",
+symbol: "ZROUSDT",
+baseAsset,
+quoteAsset });
   const tradingRules = new TradingRules({
     market,
     constraints: [
-      { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.001", asset: quoteAsset }) },
-      { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.01", asset: baseAsset }) },
-      { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "0.01", asset: baseAsset }) },
-      { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "1", asset: quoteAsset }) },
+      { type: "PRICE_INCREMENT",
+status: "SUPPORTED",
+value: new Money({ amount: "0.001",
+asset: quoteAsset }) },
+      { type: "QUANTITY_INCREMENT",
+status: "SUPPORTED",
+value: new Quantity({ amount: "0.01",
+asset: baseAsset }) },
+      { type: "MIN_QUANTITY",
+status: "SUPPORTED",
+value: new Quantity({ amount: "0.01",
+asset: baseAsset }) },
+      { type: "MIN_NOTIONAL",
+status: "SUPPORTED",
+value: new Money({ amount: "1",
+asset: quoteAsset }) },
     ],
   });
   const marketMetadata = {
@@ -57,16 +74,24 @@ function createMarketFixture() {
     sourceTime: 1,
     balances: [
       new Balance({
-        free: new Quantity({ amount: "1000", asset: quoteAsset }),
-        locked: new Quantity({ amount: "0", asset: quoteAsset }),
+        free: new Quantity({ amount: "1000",
+asset: quoteAsset }),
+        locked: new Quantity({ amount: "0",
+asset: quoteAsset }),
       }),
       new Balance({
-        free: new Quantity({ amount: "0", asset: baseAsset }),
-        locked: new Quantity({ amount: "0", asset: baseAsset }),
+        free: new Quantity({ amount: "0",
+asset: baseAsset }),
+        locked: new Quantity({ amount: "0",
+asset: baseAsset }),
       }),
     ],
   });
-  return { baseAsset, quoteAsset, market, marketMetadata, accountSnapshot };
+  return { baseAsset,
+quoteAsset,
+market,
+marketMetadata,
+accountSnapshot };
 }
 
 function createFixtureBroker({ market, baseAsset, quoteAsset, deferFirstSell, deferCancellation }) {
@@ -89,9 +114,12 @@ function createFixtureBroker({ market, baseAsset, quoteAsset, deferFirstSell, de
         market,
         side: order.side,
         type: order.type,
-        limitPrice: new Money({ amount: order.price, asset: quoteAsset }),
-        originalQuantity: new Quantity({ amount: order.quantity, asset: baseAsset }),
-        executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+        limitPrice: new Money({ amount: order.price,
+asset: quoteAsset }),
+        originalQuantity: new Quantity({ amount: order.quantity,
+asset: baseAsset }),
+        executedQuantity: new Quantity({ amount: "0",
+asset: baseAsset }),
         status: "OPEN",
       });
       if (order.side === "SELL" && deferSell) {
@@ -175,7 +203,8 @@ function createTradeEventFactory({ market, baseAsset, quoteAsset }) {
       market,
       side: acknowledgedOrder.side,
       price: acknowledgedOrder.limitPrice,
-      quantity: new Quantity({ amount: quantity, asset: baseAsset }),
+      quantity: new Quantity({ amount: quantity,
+asset: baseAsset }),
       quoteQuantity: new Money({
         amount: String(Number(acknowledgedOrder.limitPrice.amount) * Number(quantity)),
         asset: quoteAsset,
@@ -192,10 +221,14 @@ function createTradeEventFactory({ market, baseAsset, quoteAsset }) {
       type: acknowledgedOrder.type,
       limitPrice: acknowledgedOrder.limitPrice,
       originalQuantity: acknowledgedOrder.originalQuantity,
-      executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+      executedQuantity: new Quantity({ amount: executedQuantity,
+asset: baseAsset }),
       status,
     });
-    return { eventType: "executionReport", executionType: "TRADE", executedOrder, fill };
+    return { eventType: "executionReport",
+executionType: "TRADE",
+executedOrder,
+fill };
   };
 }
 
@@ -241,14 +274,17 @@ const createFixture = ({
     getMarketMetadata: () => marketMetadata,
     getAccountSnapshot: () => accountSnapshot,
     updateTradingAccounting: ({ fill } = {}) => {
-      const result = applyTradingAccounting({ portfolio, recoveryLedger, fill });
+      const result = applyTradingAccounting({ portfolio,
+recoveryLedger,
+fill });
       if (result.ok) {
         portfolio = result.data.portfolio;
         recoveryLedger = result.data.recoveryLedger;
       }
       return result;
     },
-    completeRecoveryCycle: () => toResult({ data: { eligible: true, freeQuantity: "1" } }),
+    completeRecoveryCycle: () => toResult({ data: { eligible: true,
+freeQuantity: "1" } }),
     canTrade: () => ready,
     hasUnownedOpenOrdersForSymbol,
     hasUnresolvedHarvesterOpenOrdersForSymbol,
@@ -271,7 +307,9 @@ const createFixture = ({
     pendingCancel,
     cancelStarted,
     setFillsForOrder: brokerState.setFillsForOrder,
-    createTradeEvent: createTradeEventFactory({ market, baseAsset, quoteAsset }),
+    createTradeEvent: createTradeEventFactory({ market,
+baseAsset,
+quoteAsset }),
     setReady: ({ value } = {}) => { ready = value; },
     getPortfolio: () => portfolio,
     getRecoveryLedger: () => recoveryLedger,
@@ -757,7 +795,9 @@ async function startDeferredRecoveryScenario(fixture) {
   await engine.processBookTicker(createBookTickerEvent());
   await engine.processMarketPrice({
     symbol: "ZROUSDT",
-    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+    priceEvent: { symbol: "ZROUSDT",
+price: "1",
+timestamp: 1 },
   });
   const [initialBuyIntent] = submittedIntents;
   const initialBuy = new CanonicalOrder({
@@ -766,9 +806,12 @@ async function startDeferredRecoveryScenario(fixture) {
     market: fixture.market,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: initialBuyIntent.price, asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: initialBuyIntent.quantity, asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+    limitPrice: new Money({ amount: initialBuyIntent.price,
+asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: initialBuyIntent.quantity,
+asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: fixture.market.baseAsset }),
     status: "OPEN",
   });
   await engine.processUserDataEvent({
@@ -797,12 +840,16 @@ async function startDeferredRecoveryScenario(fixture) {
     market: fixture.market,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: secondBuyIntent.price, asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: secondBuyIntent.quantity, asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+    limitPrice: new Money({ amount: secondBuyIntent.price,
+asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: secondBuyIntent.quantity,
+asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: fixture.market.baseAsset }),
     status: "OPEN",
   });
-  return { secondBuy, pendingSellOrder };
+  return { secondBuy,
+pendingSellOrder };
 }
 
 async function completeDeferredRecoverySellCancellation(fixture, { secondBuy, pendingSellOrder }) {
@@ -838,7 +885,8 @@ async function completeDeferredRecoverySellCancellation(fixture, { secondBuy, pe
     executedQuantity: "2",
     status: "PARTIALLY_FILLED",
   });
-  setFillsForOrder({ orderId: pendingSellOrder.brokerOrderId, fills: [sellFillEvent.fill] });
+  setFillsForOrder({ orderId: pendingSellOrder.brokerOrderId,
+fills: [sellFillEvent.fill] });
   const delayedSellReport = engine.processUserDataEvent({ event: sellFillEvent });
   pendingCancel.resolve(toResult({
     data: new CanonicalOrder({
@@ -849,7 +897,8 @@ async function completeDeferredRecoverySellCancellation(fixture, { secondBuy, pe
       type: pendingSellOrder.type,
       limitPrice: pendingSellOrder.limitPrice,
       originalQuantity: pendingSellOrder.originalQuantity,
-      executedQuantity: new Quantity({ amount: "2", asset: fixture.market.baseAsset }),
+      executedQuantity: new Quantity({ amount: "2",
+asset: fixture.market.baseAsset }),
       status: "CANCELED",
     }),
   }));
@@ -914,7 +963,8 @@ async function assertFinalRecoverySellReplacement(fixture) {
 }
 
 test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel its exact ID and replace from latest fills", async () => {
-  const fixture = createFixture({ deferFirstSell: true, deferCancellation: true });
+  const fixture = createFixture({ deferFirstSell: true,
+deferCancellation: true });
   const scenario = await startDeferredRecoveryScenario(fixture);
   const { sellFillEvent } = await completeDeferredRecoverySellCancellation(fixture, scenario);
 

@@ -26,10 +26,12 @@ function publishSafetyAlertEvents(eventBus) {
     data: {
       broker: "binance",
       stream: "user-data",
-      error: { name: "Error", message: "user-data stream unavailable" },
+      error: { name: "Error",
+message: "user-data stream unavailable" },
     },
   });
-  return { published, subscriptionFailurePublished };
+  return { published,
+subscriptionFailurePublished };
 }
 
 function assertSafetyNotificationDelivery({ safetyAlerts, notificationsSent }) {
@@ -97,7 +99,8 @@ test("durably journals a blocked multi-symbol open-orders Telegram safety alert"
     )
     assert.equal(flushed.durable, true, "A successful startup audit flush must confirm durable Journal persistence.")
 
-    assertSafetyNotificationDelivery({ safetyAlerts, notificationsSent });
+    assertSafetyNotificationDelivery({ safetyAlerts,
+notificationsSent });
 
     await notifications.close()
     notifications = null

@@ -27,15 +27,46 @@ env: { TRADING_MODE: "testnet",
 }
 
 const readinessAndRecoveryEvents = [
-  ["user_data.readiness_changed", { broker: "binance", ready: false, status: "AUTHORITATIVE_RECONCILIATION_REQUIRED", trigger: "connectionClosed" }],
-  ["user_data.readiness_changed", { broker: "binance", ready: true, status: "READY", trigger: "reconciled" }],
-  ["broker.status_changed", { broker: "binance", stream: "user-data", status: "recovered", recoveryRequired: true }],
-  ["broker.status_changed", { broker: "binance", stream: "user-data", status: "recoveryFailed", recoveryRequired: false, error: { message: "REST snapshot failed" } }],
-  ["broker.status_changed", { broker: "binance", stream: "user-data", status: "recovering", recoveryRequired: true }],
-  ["broker.status_changed", { broker: "binance", stream: "user-data", status: "terminated", recoveryRequired: true, error: { message: "stream closed" } }],
-  ["broker.status_changed", { broker: "binance", stream: "user-data", status: "executionNormalizationFailed", recoveryRequired: false, error: { message: "invalid execution payload" } }],
-  ["broker.status_changed", { broker: "binance", stream: "user-data", status: "rpcError", recoveryRequired: true, error: { message: "user-data RPC failed" } }],
-  ["broker.status_changed", { broker: "binance", stream: "market-price", status: "recoveryFailed", recoveryRequired: true }],
+  ["user_data.readiness_changed", { broker: "binance",
+ready: false,
+status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+trigger: "connectionClosed" }],
+  ["user_data.readiness_changed", { broker: "binance",
+ready: true,
+status: "READY",
+trigger: "reconciled" }],
+  ["broker.status_changed", { broker: "binance",
+stream: "user-data",
+status: "recovered",
+recoveryRequired: true }],
+  ["broker.status_changed", { broker: "binance",
+stream: "user-data",
+status: "recoveryFailed",
+recoveryRequired: false,
+error: { message: "REST snapshot failed" } }],
+  ["broker.status_changed", { broker: "binance",
+stream: "user-data",
+status: "recovering",
+recoveryRequired: true }],
+  ["broker.status_changed", { broker: "binance",
+stream: "user-data",
+status: "terminated",
+recoveryRequired: true,
+error: { message: "stream closed" } }],
+  ["broker.status_changed", { broker: "binance",
+stream: "user-data",
+status: "executionNormalizationFailed",
+recoveryRequired: false,
+error: { message: "invalid execution payload" } }],
+  ["broker.status_changed", { broker: "binance",
+stream: "user-data",
+status: "rpcError",
+recoveryRequired: true,
+error: { message: "user-data RPC failed" } }],
+  ["broker.status_changed", { broker: "binance",
+stream: "market-price",
+status: "recoveryFailed",
+recoveryRequired: true }],
   ["recovery.cycle_not_completed", {
     symbol: "ETHUSDT",
     marketId: "binance:ETHUSDT",
@@ -63,40 +94,66 @@ const readinessAndRecoveryEvents = [
 ];
 
 function publishLifecycleNotifications(eventPublisher) {
-  eventPublisher.publish({ name: "strategy.paused", source: "harvester", data: { symbol: "DOGEUSDT", reason: "accounting safety halt" } });
+  eventPublisher.publish({ name: "strategy.paused",
+source: "harvester",
+data: { symbol: "DOGEUSDT",
+reason: "accounting safety halt" } });
   eventPublisher.publish({
     name: "execution.fill_applied",
     source: "harvester",
-    data: { symbol: "DOGEUSDT", side: "BUY", price: "0.075", quantity: "400", tradeId: "trade-123" },
+    data: { symbol: "DOGEUSDT",
+side: "BUY",
+price: "0.075",
+quantity: "400",
+tradeId: "trade-123" },
   });
   eventPublisher.publish({
     name: "execution.fill_applied",
     source: "harvester",
-    data: { symbol: "DOGEUSDT", side: "SELL", price: "0.076", quantity: "399", tradeId: "trade-124" },
+    data: { symbol: "DOGEUSDT",
+side: "SELL",
+price: "0.076",
+quantity: "399",
+tradeId: "trade-124" },
   });
   eventPublisher.publish({
     name: "recovery.cycle_completed",
     source: "harvester",
-    data: { symbol: "DOGEUSDT", realizedNetProfit: "0.25", freeQuantity: "1" },
+    data: { symbol: "DOGEUSDT",
+realizedNetProfit: "0.25",
+freeQuantity: "1" },
   });
 }
 
 function publishCustomOverrideEvents(eventPublisher) {
-  eventPublisher.publish({ name: "strategy.paused", source: "harvester", data: { symbol: "ETHUSDT", reason: "account safety halt" } });
+  eventPublisher.publish({ name: "strategy.paused",
+source: "harvester",
+data: { symbol: "ETHUSDT",
+reason: "account safety halt" } });
   eventPublisher.publish({
     name: "execution.fill_applied",
     source: "harvester",
-    data: { symbol: "LINKUSDT", side: "BUY", price: "14.25", quantity: "2", tradeId: "link-fill" },
+    data: { symbol: "LINKUSDT",
+side: "BUY",
+price: "14.25",
+quantity: "2",
+tradeId: "link-fill" },
   });
   eventPublisher.publish({
     name: "execution.fill_applied",
     source: "harvester",
-    data: { symbol: "ETHUSDT", side: "SELL", price: "2500", quantity: "0.1", tradeId: "eth-fill" },
+    data: { symbol: "ETHUSDT",
+side: "SELL",
+price: "2500",
+quantity: "0.1",
+tradeId: "eth-fill" },
   });
   eventPublisher.publish({
     name: "recovery.cycle_completed",
     source: "harvester",
-    data: { symbol: "LINKUSDT", realizedNetProfit: "0.42", freeQuantity: "0.01" },
+    data: { symbol: "LINKUSDT",
+realizedNetProfit: "0.42",
+freeQuantity: "0.01" },
   });
   eventPublisher.publish({
     name: "account.open_orders_captured",
@@ -115,37 +172,79 @@ function publishCustomOverrideEvents(eventPublisher) {
 function publishProfileNotifications(eventPublisher) {
   const events = [
     ["broker.connected", { broker: "binance" }],
-    ["order.submitted", { symbol: "LINKUSDT", side: "BUY", price: "14.25", quantity: "2", brokerOrderId: "42", clientOrderId: "client-42" }],
-    ["order.cancelled", { symbol: "LINKUSDT", side: "SELL", brokerOrderId: "43", clientOrderId: "client-43", executedQuantity: "0" }],
-    ["execution.fill_applied", { symbol: "LINKUSDT", side: "BUY", price: "14.25", quantity: "2", tradeId: "profile-fill" }],
-    ["recovery.cycle_completed", { symbol: "LINKUSDT", realizedNetProfit: "0.42", freeQuantity: "0.01" }],
-    ["strategy.paused", { symbol: "LINKUSDT", reason: "safety pause" }],
+    ["order.submitted", { symbol: "LINKUSDT",
+side: "BUY",
+price: "14.25",
+quantity: "2",
+brokerOrderId: "42",
+clientOrderId: "client-42" }],
+    ["order.cancelled", { symbol: "LINKUSDT",
+side: "SELL",
+brokerOrderId: "43",
+clientOrderId: "client-43",
+executedQuantity: "0" }],
+    ["execution.fill_applied", { symbol: "LINKUSDT",
+side: "BUY",
+price: "14.25",
+quantity: "2",
+tradeId: "profile-fill" }],
+    ["recovery.cycle_completed", { symbol: "LINKUSDT",
+realizedNetProfit: "0.42",
+freeQuantity: "0.01" }],
+    ["strategy.paused", { symbol: "LINKUSDT",
+reason: "safety pause" }],
   ];
   for (const [name, data] of events) {
-    eventPublisher.publish({ name, source: "harvester", data });
+    eventPublisher.publish({ name,
+source: "harvester",
+data });
   }
 }
 
 function publishCriticalFailureEvents(eventPublisher) {
   const events = [
-    ["harvester.startup_failed", { stage: "broker-connect", error: { message: "connection refused" } }],
-    ["broker.connection_failed", { broker: "binance", error: { message: "socket unavailable" } }],
-    ["broker.subscription_failed", { broker: "binance", stream: "market", market: "ETHUSDT", error: { message: "subscription rejected" } }],
-    ["order.submission_failed", { symbol: "ETHUSDT", side: "BUY", outcome: "REJECTED", error: { message: "insufficient balance" } }],
-    ["order.submission_failed", { symbol: "ETHUSDT", side: "SELL", outcome: "REJECTED", error: { message: "sell submission rejected" } }],
-    ["order.cancel_failed", { symbol: "ETHUSDT", side: "BUY", outcome: "FAILED", error: { message: "buy cancel rejected" } }],
-    ["order.cancel_failed", { symbol: "ETHUSDT", side: "SELL", outcome: "FAILED", error: { message: "cancel rejected" } }],
-    ["execution.unowned_order", { symbol: "ETHUSDT", reason: "external order" }],
-    ["execution.invalid_fill", { symbol: "ETHUSDT", reason: "invalid quantity", error: { message: "fill quantity mismatch" } }],
+    ["harvester.startup_failed", { stage: "broker-connect",
+error: { message: "connection refused" } }],
+    ["broker.connection_failed", { broker: "binance",
+error: { message: "socket unavailable" } }],
+    ["broker.subscription_failed", { broker: "binance",
+stream: "market",
+market: "ETHUSDT",
+error: { message: "subscription rejected" } }],
+    ["order.submission_failed", { symbol: "ETHUSDT",
+side: "BUY",
+outcome: "REJECTED",
+error: { message: "insufficient balance" } }],
+    ["order.submission_failed", { symbol: "ETHUSDT",
+side: "SELL",
+outcome: "REJECTED",
+error: { message: "sell submission rejected" } }],
+    ["order.cancel_failed", { symbol: "ETHUSDT",
+side: "BUY",
+outcome: "FAILED",
+error: { message: "buy cancel rejected" } }],
+    ["order.cancel_failed", { symbol: "ETHUSDT",
+side: "SELL",
+outcome: "FAILED",
+error: { message: "cancel rejected" } }],
+    ["execution.unowned_order", { symbol: "ETHUSDT",
+reason: "external order" }],
+    ["execution.invalid_fill", { symbol: "ETHUSDT",
+reason: "invalid quantity",
+error: { message: "fill quantity mismatch" } }],
   ];
   for (const [name, data] of events) {
-    eventPublisher.publish({ name, source: "harvester", data });
+    eventPublisher.publish({ name,
+source: "harvester",
+data });
   }
 }
 
 function publishReadinessAndRecoveryEvents(eventPublisher) {
   for (const [name, data] of readinessAndRecoveryEvents) {
-    eventPublisher.publish({ name, source: "harvester", data });
+    eventPublisher.publish({ name,
+source: "harvester",
+data });
   }
 }
 
