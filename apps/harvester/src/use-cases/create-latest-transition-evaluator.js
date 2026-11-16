@@ -20,6 +20,9 @@ function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } 
     state.operatorPausedMarkets?.has(symbol) !== true &&
     state.replacementIntents?.has(symbol) !== true &&
     state.trailingBuyRepriceIntents?.has(symbol) !== true &&
+    state.safetyHaltRequired !== true &&
+    state.accountingFailed !== true &&
+    state.requiresReconciliation !== true &&
     ![...(state.recoveryManagedCancellationClientOrderIds ?? [])].some((clientOrderId) =>
       state.registry.getOrder({ clientOrderId })?.market.symbol === symbol)
   if (state.paused.has(symbol) && !recoveryManagedPause) {
