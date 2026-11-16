@@ -502,31 +502,3 @@ test("rejects an unauthorized persistent-keyboard action before reading market s
   assert.deepEqual(marketQueries, [], "An unauthorized keyboard action must not read protected operator market state.")
   assert.equal(sentMessages[0].text, "Not authorized.", "An unauthorized keyboard action must receive the existing authorization response.")
 })
-
-test("temporary complete infrastructure ESLint report", async () => {
-  const { ESLint } = await import("eslint")
-  const eslint = new ESLint()
-  const results = await eslint.lintFiles(["src/infrastructure"])
-  const findings = results
-    .filter(({ errorCount, warningCount }) => errorCount > 0 || warningCount > 0)
-    .map((result) => ({
-      file: result.filePath.split("/apps/harvester/").pop(),
-      errors: result.errorCount,
-      warnings: result.warningCount,
-      messages: result.messages.map(({ line, column, ruleId, message }) => ({
-        line,
-        column,
-        ruleId,
-        message,
-      })),
-    }))
-  const errors = findings.reduce((total, finding) => total + finding.errors, 0)
-  const warnings = findings.reduce((total, finding) => total + finding.warnings, 0)
-  process.stdout.write(`ESLINT_INFRASTRUCTURE=${JSON.stringify({
-    filesWithFindings: findings.length,
-    errors,
-    warnings,
-    findings,
-  })}\\n`)
-  assert.equal(errors + warnings, 0, "The complete infrastructure directory must have zero ESLint errors and warnings.")
-})
