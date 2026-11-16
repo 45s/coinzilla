@@ -9,7 +9,7 @@ import {
   getSnapshot,
 } from "../../test-support/candle-history-service-fixture.js"
 
-const test = (name, ...args) => nodeTest("[create-candle-history-service.test.js] " + name, ...args)
+const test = (name, ...args) => nodeTest(`[create-candle-history-service.test.js] ${  name}`, ...args)
 
 test("subscribes every enabled market before requesting approximately 100 completed candles", async () => {
   const fixture = createFixture({
@@ -36,17 +36,26 @@ test("subscribes every enabled market before requesting approximately 100 comple
     "All live candle streams must be established before any history request so events during warm-up can be buffered.",
   )
   assert.deepEqual(
-    fixture.calls.filter((call) => call.method === "getCandles").map(({ symbol, interval, limit }) => ({ symbol, interval, limit })),
+    fixture.calls.filter((call) => call.method === "getCandles").map(({ symbol, interval, limit }) => ({ symbol,
+interval,
+limit })),
     [
-      { symbol: "BTCUSDT", interval: "1m", limit: 101 },
-      { symbol: "DOGEUSDT", interval: "1m", limit: 101 },
+      { symbol: "BTCUSDT",
+interval: "1m",
+limit: 101 },
+      { symbol: "DOGEUSDT",
+interval: "1m",
+limit: 101 },
     ],
     "Harvester must request 101 one-minute candles to retain approximately 100 completed candles when the final bar is still forming.",
   )
 })
 
 test("does not subscribe to or warm candle history for an enabled pair with volatility protection disabled", async () => {
-  const fixture = createFixture({ pairs: { BTCUSDT: { enabled: true }, DOGEUSDT: { enabled: true, enableVolatilityProtection: false }, ZROUSDT: { enabled: false } } })
+  const fixture = createFixture({ pairs: { BTCUSDT: { enabled: true },
+DOGEUSDT: { enabled: true,
+enableVolatilityProtection: false },
+ZROUSDT: { enabled: false } } })
   await fixture.start()
   assert.deepEqual(fixture.calls.filter((call) => call.method === "subscribeForCandles").map(({ symbol }) => symbol), ["BTCUSDT"], "Only enabled pairs that retain volatility protection may receive Kline subscriptions.")
   assert.deepEqual(fixture.calls.filter((call) => call.method === "getCandles").map(({ symbol }) => symbol), ["BTCUSDT"], "Opted-out pairs must not incur historical candle requests or warm-up work.")
@@ -56,7 +65,8 @@ test("does not subscribe to or warm candle history for an enabled pair with vola
 test("filters a forming historical candle and calculates ATR, NATR and the previous-60-observation ratio", async () => {
   const fixture = createFixture({
     onSubscribe: async ({ onCandle }) => {
-      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
+      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS,
+isClosed: false }))
     },
   })
 
@@ -100,14 +110,17 @@ test("keeps markets with fewer than 74 completed candles unavailable for the 60-
 
 test("keeps readiness isolated per market when one symbol has insufficient history", async () => {
   const fixture = createFixture({
-    pairs: { BTCUSDT: { enabled: true }, DOGEUSDT: { enabled: true } },
+    pairs: { BTCUSDT: { enabled: true },
+DOGEUSDT: { enabled: true } },
     historyBySymbol: {
       BTCUSDT: createHistory("BTCUSDT", 100),
       DOGEUSDT: createHistory("DOGEUSDT", 73),
     },
     onSubscribe: async ({ symbol, onCandle }) => {
       if (symbol === "BTCUSDT") {
-        await onCandle(createCandle({ symbol, openTime: 100 * INTERVAL_MS, isClosed: false }))
+        await onCandle(createCandle({ symbol,
+openTime: 100 * INTERVAL_MS,
+isClosed: false }))
       }
     },
   })
@@ -133,7 +146,12 @@ test("keeps metrics unavailable when the reference NATR is zero", async () => {
   const fixture = createFixture({
     historyBySymbol: { BTCUSDT: flatHistory },
     onSubscribe: async ({ onCandle }) => {
-      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false, high: "10", low: "10", close: "10", volume: "0" }))
+      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS,
+isClosed: false,
+high: "10",
+low: "10",
+close: "10",
+volume: "0" }))
     },
   })
   await fixture.start()
@@ -147,8 +165,10 @@ test("keeps metrics unavailable when the reference NATR is zero", async () => {
 test("keeps history unavailable when the historical request throws or returns an invalid result", async () => {
   const failures = [
     async () => { throw new Error("history transport failed") },
-    async () => ({ ok: false, errors: [new Error("history rejected")] }),
-    async () => ({ ok: true, data: {} }),
+    async () => ({ ok: false,
+errors: [new Error("history rejected")] }),
+    async () => ({ ok: true,
+data: {} }),
   ]
 
   for (const getCandles of failures) {
@@ -164,7 +184,8 @@ test("keeps history unavailable when the historical request throws or returns an
 
 test("rejects forming candles anywhere except the final historical position", async () => {
   const history = createHistory("BTCUSDT", 100)
-  history[20] = createCandle({ openTime: 20 * INTERVAL_MS, isClosed: false })
+  history[20] = createCandle({ openTime: 20 * INTERVAL_MS,
+isClosed: false })
   const fixture = createFixture({ historyBySymbol: { BTCUSDT: history } })
 
   await fixture.start()
