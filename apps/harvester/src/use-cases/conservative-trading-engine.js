@@ -1787,8 +1787,6 @@ function createConservativeEnginePublicApi({ context } = {}) {
     getRecoveryIntents: () => Object.freeze({
       pausedMarkets: Object.freeze([...context.state.paused]),
       operatorPausedMarkets: Object.freeze([...context.state.operatorPausedMarkets]),
-      operatorAllBuysPaused: context.state.operatorAllBuysPaused,
-      operatorBuyPausedMarkets: Object.freeze([...context.state.operatorBuyPausedMarkets]),
       replacementIntents: Object.freeze([...context.state.replacementIntents]),
       trailingBuyRepriceIntents: Object.freeze([...context.state.trailingBuyRepriceIntents]),
       deferredEvaluations: Object.freeze([...context.state.deferredEvaluations]),
