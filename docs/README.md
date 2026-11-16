@@ -6,7 +6,7 @@ This index is the entry point for maintained repository documentation. The repos
 
 - [Repository README](../README.md) — workspace overview and setup
 - [Coding-agent instructions](../AGENTS.md) — mandatory agent entry point
-- [AI-agent workflow](../AI_AGENT_WORKFLOW.md) — branches, PRs, collaboration and integration
+- [AI-agent workflow](../AI_AGENT_WORKFLOW.md) — branches, PRs, collaboration and integration; incremental commits and resumable handoffs
 - [Engineering standards](../ENGINEERING_STANDARDS.md) — design, TDD, verification and documentation impact
 - [ESLint Standard](engineering/ESLINT_STANDARD.md) — rule compliance, agent preflight and suppression prevention
 - [Repository roadmap](../ROADMAP.md) — cross-workspace engineering and release work
