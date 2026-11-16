@@ -97,7 +97,8 @@ async function reconcileCandidateMarket({
     historyRetentionEvidence,
     ...(auditAccountState ? { auditAccountState } : {}),
   })
-  return { reconciliation, readCandidateState }
+  return { reconciliation, 
+    readCandidateState }
 }
 
 async function resolveMarketSafetyBlockers({
@@ -157,7 +158,8 @@ async function resolveMarketSafetyBlockers({
     }
     unresolvedSafetyBlockers = verifiedProjection.data.stickySafetyBlockers
   }
-  return { resolvedSafetyBlockerIds, unresolvedSafetyBlockers }
+  return { resolvedSafetyBlockerIds, 
+    unresolvedSafetyBlockers }
 }
 
 function validateCandidateReconciliationInput(options) {
@@ -227,7 +229,8 @@ async function runCandidateMarketReconciliation({ input, projection, candidate }
     fetchMarketTradeHistory,
     auditAccountState,
   } = input
-  const historyRetentionEvidence = createHistoryRetentionEvidence({ projection, targetMarket })
+  const historyRetentionEvidence = createHistoryRetentionEvidence({ projection, 
+    targetMarket })
   const { reconciliation, readCandidateState } = await reconcileCandidateMarket({
     projection,
     candidateState: candidate.data,
@@ -286,7 +289,9 @@ export async function reconcileHarvesterOperationalStateCandidate(options = {}) 
     if (candidate?.ok !== true) {
       return candidate
     }
-    return await runCandidateMarketReconciliation({ input, projection, candidate })
+    return await runCandidateMarketReconciliation({ input, 
+      projection, 
+      candidate })
   } catch (error) {
     return toResult({ error })
   }
