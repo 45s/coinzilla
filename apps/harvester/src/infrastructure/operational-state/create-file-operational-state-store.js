@@ -82,15 +82,7 @@ function factIdForOrderOutcome(...parameters) {
   return `order-submission-outcome:${  clientOrderId  }:${  outcome}`
 }
 
-function validateFactData({ factType, data, factId, runtimeSessionId }) {
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
-    throw new TypeError("Operational State record data must be a plain object")
-  }
-  const canonicalData = canonicalizeOperationalStateValue(data)
-  const byteLength = Buffer.byteLength(JSON.stringify(canonicalData), "utf8")
-  if (byteLength > MAX_FACT_DATA_BYTES) {
-    throw new RangeError(`Operational State record data exceeds the ${  MAX_FACT_DATA_BYTES  } byte limit`)
-  }
+function validateOperatorMarketControlFact({ factType, canonicalData, factId }) {
   if (factType === "OPERATOR_MARKET_PAUSED" || factType === "OPERATOR_MARKET_RESUMED") {
     const allowedFields = new Set(["requestId", "actorId", "symbol"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
@@ -109,6 +101,9 @@ maxLength: MAX_FACT_ID_LENGTH })
       throw new TypeError("Operator market-control factId must match its stable requestId")
     }
   }
+}
+
+function validateStrategyMarketControlFact({ factType, canonicalData, factId }) {
   if (factType === "STRATEGY_MARKET_PAUSED" || factType === "STRATEGY_MARKET_RESUMED") {
     const allowedFields = new Set(["symbol", "reason"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
@@ -125,6 +120,9 @@ maxLength: 256 })
       throw new TypeError("Strategy market-control factId must include its unique transition identity")
     }
   }
+}
+
+function validateSafetyBlockerRaisedFact({ factType, canonicalData, factId }) {
   if (factType === "SAFETY_BLOCKER_RAISED") {
     const allowedFields = new Set(["blockerId", "scope", "symbol", "reason", "evidenceDigest"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
@@ -160,6 +158,9 @@ maxLength: 128 })
       throw new TypeError("Safety-blocker identity must match its scope, reason, and immutable evidence digest")
     }
   }
+}
+
+function validateSafetyBlockerResolvedFact({ factType, canonicalData, factId }) {
   if (factType === "SAFETY_BLOCKER_RESOLVED") {
     const allowedFields = new Set(["blockerId", "resolvedBy", "resolution", "evidenceDigest"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
@@ -179,10 +180,16 @@ maxLength: MAX_FACT_ID_LENGTH })
       throw new TypeError("Safety-blocker resolution evidenceDigest must be a SHA-256 digest")
     }
   }
+}
+
+function validateLedgerInitializedFact({ factType, canonicalData }) {
   if (factType === "LEDGER_INITIALIZED" &&
       (!Number.isSafeInteger(canonicalData.schemaVersion) || canonicalData.schemaVersion < 1)) {
     throw new TypeError("Ledger genesis schemaVersion is unsupported")
   }
+}
+
+function validateConfigurationBaselineFact({ factType, canonicalData, factId }) {
   if (factType === "CONFIGURATION_BASELINE") {
     const allowedFields = new Set(["schemaVersion", "strategyName", "markets", "fingerprint"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
@@ -204,6 +211,9 @@ maxLength: 64 })
       throw new TypeError("Configuration baseline factId must match its fingerprint")
     }
   }
+}
+
+function validateProcessStartedFact({ factType, canonicalData, factId, runtimeSessionId }) {
   if (factType === "PROCESS_STARTED") {
     const allowedFields = new Set(["configurationFingerprint", "strategyName", "markets", "tradingEnabled"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
@@ -228,6 +238,9 @@ maxLength: 64 })
       throw new TypeError("Process-start factId must match its runtime session identity")
     }
   }
+}
+
+function validateProcessStoppedFact({ factType, canonicalData, factId, runtimeSessionId }) {
   if (factType === "PROCESS_STOPPED") {
     const allowedFields = new Set(["reason", "clean"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
@@ -243,6 +256,9 @@ maxLength: 64 })
       throw new TypeError("Process-stop factId must match its runtime session identity")
     }
   }
+}
+
+function validateOrderSubmissionIntentFact({ factType, canonicalData, factId }) {
   if (factType === "ORDER_SUBMISSION_INTENT") {
     const allowedFields = new Set([
       "clientOrderId",
@@ -300,6 +316,9 @@ maxLength: MAX_FACT_ID_LENGTH })
       throw new TypeError("Order-submission intent purpose must be null or RECOVERY_SELL")
     }
   }
+}
+
+function validateOrderSubmissionOutcomeFact({ factType, canonicalData, factId }) {
   if (factType === "ORDER_SUBMISSION_OUTCOME") {
     const allowedFields = new Set([
       "clientOrderId",
@@ -379,6 +398,9 @@ maxLength: MAX_FACT_ID_LENGTH })
       throw new TypeError("Unacknowledged order-submission outcome must preserve a PENDING order without broker identity or execution")
     }
   }
+}
+
+function validateOrderCancellationIntentFact({ factType, canonicalData, factId }) {
   if (factType === "ORDER_CANCELLATION_INTENT") {
     const allowedFields = new Set(["clientOrderId", "brokerOrderId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity", "executedQuantity", "reason", "status"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {throw new TypeError("Order-cancellation intent fact contains unsupported fields")}
@@ -418,6 +440,9 @@ maxLength: 64 })
       throw new TypeError("Order-cancellation amounts must be exact canonical decimal strings")
     }
   }
+}
+
+function validateOrderCancellationOutcomeFact({ factType, canonicalData, factId }) {
   if (factType === "ORDER_CANCELLATION_OUTCOME") {
     const allowedFields = new Set(["clientOrderId", "brokerOrderId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "reason", "outcome", "status", "executedQuantity"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {throw new TypeError("Order-cancellation outcome fact contains unsupported fields")}
@@ -460,6 +485,9 @@ maxLength: 64 })
       throw new TypeError("Unconfirmed cancellation outcome cannot invent a canonical order state")
     }
   }
+}
+
+function validateExecutionFillAppliedFact({ factType, canonicalData, factId }) {
   if (factType === "EXECUTION_FILL_APPLIED") {
     const allowedFields = new Set(["fillId", "tradeId", "brokerOrderId", "clientOrderId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "price", "quantity", "quoteQuantity", "liquidityRole", "executedAt", "commissionStatus", "commissions"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {throw new TypeError("Execution-fill fact contains unsupported fields")}
@@ -525,6 +553,9 @@ maxLength: 32 })
       }
     }
   }
+}
+
+function validateRecoveryCycleCompletedFact({ factType, canonicalData, factId }) {
   if (factType === "RECOVERY_CYCLE_COMPLETED") {
     const allowedFields = new Set(["cycleId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "appliedFillIds", "sellOrderClientId", "sellOrderBrokerOrderId", "buyCost", "spent", "netSellProceeds", "realizedNetProfit", "minProfit", "activeQuantity", "keepQuantity", "freeQuantity", "inventoryDisposition"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {throw new TypeError("Recovery-cycle completion fact contains unsupported fields")}
@@ -642,6 +673,9 @@ right: canonicalData.keepQuantity }) !== 0) {
       throw new TypeError("Recovery-cycle ID must be derived from the exact fill, accounting, inventory, and terminal SELL identity")
     }
   }
+}
+
+function validateRecoveryCycleNotCompletedFact({ factType, canonicalData, factId }) {
   if (factType === "RECOVERY_CYCLE_NOT_COMPLETED") {
     const allowedFields = new Set(["evaluationId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "appliedFillIds", "sellOrderClientId", "sellOrderBrokerOrderId", "buyCost", "spent", "netSellProceeds", "realizedNetProfit", "minProfit", "activeQuantity", "keepQuantity", "outcome", "reason"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {throw new TypeError("Recovery-cycle non-completion fact contains unsupported fields")}
@@ -746,6 +780,9 @@ right: canonicalData.minProfit }) >= 0) {
       throw new TypeError("Recovery-cycle evaluation ID must be derived from its exact fill, accounting, and terminal SELL identity")
     }
   }
+}
+
+function validateAccountSnapshotCapturedFact({ factType, canonicalData }) {
   if (factType === "ACCOUNT_SNAPSHOT_CAPTURED") {
     const allowedFields = new Set(["phase", "auditStatus", "sourceTime", "assetCount", "balances", "auditReasons"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
@@ -810,6 +847,9 @@ right: balance.locked }) }) !== 0) {
       }
     }
   }
+}
+
+function validateAccountOpenOrdersCapturedFact({ factType, canonicalData }) {
   if (factType === "ACCOUNT_OPEN_ORDERS_CAPTURED") {
     const allowedFields = new Set(["phase", "observedAt", "readiness", "orderCount", "orders", "blockReasons"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
@@ -892,6 +932,9 @@ right: order.quantity }) > 0) {
       throw new TypeError("BLOCKED account open-order snapshot requires explicit blockReasons")
     }
   }
+}
+
+function validateMarketHistoryCoverageConfirmedFact({ factType, canonicalData }) {
   if (factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
     const allowedFields = new Set([
       "symbol",
@@ -918,6 +961,43 @@ maxLength: MAX_FACT_ID_LENGTH })
     if (typeof canonicalData.evidenceDigest !== "string" || !SHA256_PATTERN.test(canonicalData.evidenceDigest)) {
       throw new TypeError("Market-history coverage evidenceDigest must be a SHA-256 digest")
     }
+  }
+}
+const FACT_DATA_VALIDATORS = Object.freeze({
+  OPERATOR_MARKET_PAUSED: validateOperatorMarketControlFact,
+  OPERATOR_MARKET_RESUMED: validateOperatorMarketControlFact,
+  STRATEGY_MARKET_PAUSED: validateStrategyMarketControlFact,
+  STRATEGY_MARKET_RESUMED: validateStrategyMarketControlFact,
+  SAFETY_BLOCKER_RAISED: validateSafetyBlockerRaisedFact,
+  SAFETY_BLOCKER_RESOLVED: validateSafetyBlockerResolvedFact,
+  LEDGER_INITIALIZED: validateLedgerInitializedFact,
+  CONFIGURATION_BASELINE: validateConfigurationBaselineFact,
+  PROCESS_STARTED: validateProcessStartedFact,
+  PROCESS_STOPPED: validateProcessStoppedFact,
+  ORDER_SUBMISSION_INTENT: validateOrderSubmissionIntentFact,
+  ORDER_SUBMISSION_OUTCOME: validateOrderSubmissionOutcomeFact,
+  ORDER_CANCELLATION_INTENT: validateOrderCancellationIntentFact,
+  ORDER_CANCELLATION_OUTCOME: validateOrderCancellationOutcomeFact,
+  EXECUTION_FILL_APPLIED: validateExecutionFillAppliedFact,
+  RECOVERY_CYCLE_COMPLETED: validateRecoveryCycleCompletedFact,
+  RECOVERY_CYCLE_NOT_COMPLETED: validateRecoveryCycleNotCompletedFact,
+  ACCOUNT_SNAPSHOT_CAPTURED: validateAccountSnapshotCapturedFact,
+  ACCOUNT_OPEN_ORDERS_CAPTURED: validateAccountOpenOrdersCapturedFact,
+  MARKET_HISTORY_COVERAGE_CONFIRMED: validateMarketHistoryCoverageConfirmedFact,
+})
+
+function validateFactData({ factType, data, factId, runtimeSessionId }) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new TypeError("Operational State record data must be a plain object")
+  }
+  const canonicalData = canonicalizeOperationalStateValue(data)
+  const byteLength = Buffer.byteLength(JSON.stringify(canonicalData), "utf8")
+  if (byteLength > MAX_FACT_DATA_BYTES) {
+    throw new RangeError(`Operational State record data exceeds the ${  MAX_FACT_DATA_BYTES  } byte limit`)
+  }
+  const validator = FACT_DATA_VALIDATORS[factType]
+  if (validator) {
+    validator({ factType, canonicalData, factId, runtimeSessionId })
   }
   return canonicalData
 }
