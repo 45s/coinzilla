@@ -26,7 +26,7 @@ export async function recordOrderSubmissionIntent({ operationalStateStore, order
     if (!SUPPORTED_PURPOSES.has(purpose)) {
       throw new TypeError("Order-submission intent purpose must be null or RECOVERY_SELL")
     }
-    const market = order.market
+    const {market} = order
     const requiredMarketValues = [
       market?.id,
       market?.venue,
@@ -47,9 +47,9 @@ export async function recordOrderSubmissionIntent({ operationalStateStore, order
       throw new TypeError("Order-submission intent requires exact decimal price and quantity strings")
     }
 
-    const clientOrderId = order.clientOrderId
+    const {clientOrderId} = order
     const result = await operationalStateStore.append({
-      factId: "order-submission-intent:" + clientOrderId,
+      factId: `order-submission-intent:${  clientOrderId}`,
       factType: "ORDER_SUBMISSION_INTENT",
       data: {
         clientOrderId,
