@@ -905,13 +905,14 @@ error })
     let monitor
     let disposed = false
     let subscriptionGeneration = 0
+    let recoveryPromise = Promise.resolve()
     let listener
     try {
       validateCallback(onPrice, "onPrice")
       if (!this.connected) {throw new Error("Binance broker must be connected before subscribing to prices")}
       const normalizedSymbol = symbol.trim().toUpperCase()
       stream = createStreamName("aggTrade", { symbol: normalizedSymbol })
-      const activityStream = "!ticker_1h@arr"
+      const activityStream = createStreamName("rollingWindowTicker", { windowSize: "1h" })
       monitor = createMarketStreamLivenessMonitor({
         symbol: normalizedSymbol,
         stallTimeoutMs: this.marketStreamStallTimeoutMs,
@@ -920,11 +921,15 @@ error })
         nowFn: this.now,
         setTimeoutFn: this.setTimeout,
         clearTimeoutFn: this.clearTimeout,
-        resubscribe: async () => {
+        resubscribe: () => {
           const generation = ++subscriptionGeneration
-          await this.marketConnection.unsubscribe(stream, listener)
-          if (disposed || generation !== subscriptionGeneration) {return}
-          await this.marketConnection.subscribe(stream, listener)
+          recoveryPromise = recoveryPromise.catch(() => {}).then(async () => {
+            if (disposed || generation !== subscriptionGeneration) {return}
+            await this.marketConnection.unsubscribe(stream, listener)
+            if (disposed || generation !== subscriptionGeneration) {return}
+            await this.marketConnection.subscribe(stream, listener)
+          })
+          return recoveryPromise
         },
         onStatus: (status, diagnostics) => {
           if (status === "exhausted") {return}
@@ -975,6 +980,7 @@ error })
             disposed = true
             subscriptionGeneration += 1
             monitor.dispose()
+            await recoveryPromise.catch(() => {})
             await Promise.all([
               this.marketConnection.unsubscribe(stream, listener),
               this.marketConnection.unsubscribe(activityStream, tickerListener),
