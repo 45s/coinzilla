@@ -13,7 +13,12 @@ describe(`${ExecutedOrder.name}`, () => {
   const id = generateUUID()
 
   it(`should be an instance of ${Order.name}`, () => {
-    const order = new ExecutedOrder({ symbol, type, side, quantity, price, id })
+    const order = new ExecutedOrder({ symbol,
+type,
+side,
+quantity,
+price,
+id })
 
     assert.ok(order instanceof Order)
     assert.strictEqual(order.symbol, "BTCUSDT")
@@ -71,7 +76,12 @@ describe(`${ExecutedOrder.name}`, () => {
 
   it("should enforce the inherited Order validation", () => {
     assert.throws(
-      () => new ExecutedOrder({ symbol, type, side, quantity: NaN, price, id }),
+      () => new ExecutedOrder({ symbol,
+type,
+side,
+quantity: NaN,
+price,
+id }),
       { message: "Order.quantity should be a number" },
     )
   })
@@ -79,8 +89,15 @@ describe(`${ExecutedOrder.name}`, () => {
 
   it("preserves explicitly supplied null execution metadata", () => {
     const order = new ExecutedOrder({
-      symbol: "BTCUSDT", type: "LIMIT", side: "BUY", quantity: 1, price: 10, id: "test-id",
-      status: null, commission: null, commissionAsset: null,
+      symbol: "BTCUSDT",
+type: "LIMIT",
+side: "BUY",
+quantity: 1,
+price: 10,
+id: "test-id",
+      status: null,
+commission: null,
+commissionAsset: null,
     })
     assert.equal(order.value.status, null)
     assert.equal(order.value.commission, null)
