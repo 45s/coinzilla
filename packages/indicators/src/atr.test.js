@@ -42,7 +42,7 @@ function createReferenceCandles() {
   ]
 }
 
-describe("calculateAtrSeries", () => {
+describe("calculateAtrSeries calculations", () => {
   it("seeds ATR with the average of the first period true ranges and then applies Wilder smoothing", () => {
     const result = calculateAtrSeries({
       candles: createReferenceCandles(),
@@ -90,7 +90,9 @@ describe("calculateAtrSeries", () => {
 
     assert.equal(result[1].value, "5.5", "true range must include the previous close-to-current high gap instead of using only the candle range")
   })
+})
 
+describe("calculateAtrSeries period and scale validation", () => {
   it("rejects insufficient history instead of returning a misleading partial indicator", () => {
     assert.throws(
       () => calculateAtrSeries({
@@ -129,7 +131,9 @@ describe("calculateAtrSeries", () => {
       )
     }
   })
+})
 
+describe("calculateAtrSeries timestamp validation", () => {
   it("rejects duplicate, out-of-order and discontinuous candle timestamps", () => {
     const candles = createReferenceCandles()
 
@@ -155,7 +159,9 @@ describe("calculateAtrSeries", () => {
       )
     }
   })
+})
 
+describe("calculateAtrSeries candle validation", () => {
   it("rejects forming candles and malformed or inconsistent OHLC values", () => {
     const valid = createReferenceCandles()
     const invalidCandles = [
@@ -219,7 +225,9 @@ describe("calculateAtrSeries", () => {
       )
     }
   })
+})
 
+describe("calculateAtrSeries interval validation", () => {
   it("rejects a missing interval and malformed candle collection", () => {
     assert.throws(
       () => calculateAtrSeries({
