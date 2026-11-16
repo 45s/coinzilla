@@ -156,7 +156,8 @@ function getOrderStatusIdentity({ status }) {
 
 function getStreamErrorTransitionKey({ status, error, cause }) {
   return [
-    ...getStreamErrorIdentity({ status, error }),
+    ...getStreamErrorIdentity({ status,
+error }),
     ...getStreamCauseIdentity({ cause }),
     ...getRecoveryStatusIdentity({ status }),
     ...getOrderStatusIdentity({ status }),
@@ -165,7 +166,9 @@ function getStreamErrorTransitionKey({ status, error, cause }) {
 
 function getStreamErrorTransition({ status, error, cause }) {
   return {
-    key: getStreamErrorTransitionKey({ status, error, cause }),
+    key: getStreamErrorTransitionKey({ status,
+error,
+cause }),
     message: "User-data stream error",
     level: "error",
     details: {
@@ -197,7 +200,8 @@ function resolveUserDataStreamTransition({ state, status }) {
     error?.code === "AUTHENTICATION_EXPIRED"
 
   if (authenticationExpired) {
-    return getAuthenticationExpiredTransition({ status, error })
+    return getAuthenticationExpiredTransition({ status,
+error })
   }
   if (status.type === "connectionClosed" || status.type === "terminated") {
     return getDisconnectedTransition({ status })
@@ -208,27 +212,33 @@ function resolveUserDataStreamTransition({ state, status }) {
   if (status.type === "recovered") {
     return getRecoveredTransition({ status })
   }
-  if (isRestoredSubscription({ state, status })) {
+  if (isRestoredSubscription({ state,
+status })) {
     return getRestoredTransition({ status })
   }
   if (["rpcError", "recoveryFailed", "executionNormalizationFailed"].includes(status.type)) {
-    return getStreamErrorTransition({ status, error, cause })
+    return getStreamErrorTransition({ status,
+error,
+cause })
   }
   return null
 }
 
 function logUserDataStreamTransition({ state, logger, status } = {}) {
-  const transition = resolveUserDataStreamTransition({ state, status })
+  const transition = resolveUserDataStreamTransition({ state,
+status })
   if (!transition || state.lastLoggedStreamLifecycleKey === transition.key) {
     return
   }
   state.lastLoggedStreamLifecycleKey = transition.key
-  const entry = { message: transition.message, ...transition.details }
+  const entry = { message: transition.message,
+...transition.details }
   if (transition.level === "error") {
     logger?.error?.(entry)
     return
   }
-  logSystem({ logger, ...entry })
+  logSystem({ logger,
+...entry })
 }
 
 function publishBrokerEvidence({ eventPublisher, status }) {
@@ -350,7 +360,8 @@ function updateUserDataReadiness({
     state.streamUnsafe = true
     state.requiresReconciliation = true
     state.ready = false
-    state.status = resolveUnsafeReadinessStatus({ state, status })
+    state.status = resolveUnsafeReadinessStatus({ state,
+status })
     return
   }
   if (state.requiresReconciliation) {
@@ -395,12 +406,14 @@ function reportUserDataStatus({
   cancelOwnedBuysAfterAccountingFailure,
 }) {
   try {
-    onUserDataStatus({ status, ready: state.ready })
+    onUserDataStatus({ status,
+ready: state.ready })
   } catch (error) {
     state.ready = false
     state.accountingFailed = true
     state.status = "STATUS_HANDLER_FAILED"
-    logger.error?.({ message: "user-data status handler failed", error })
+    logger.error?.({ message: "user-data status handler failed",
+error })
     void cancelOwnedBuysAfterAccountingFailure()
   }
 }
@@ -425,8 +438,10 @@ export function createUserDataStatusHandler({
     if (isStopped()) {
       return
     }
-    publishBrokerEvidence({ eventPublisher, status })
-    if (shouldSkipAcknowledgedRecovery({ state, status })) {
+    publishBrokerEvidence({ eventPublisher,
+status })
+    if (shouldSkipAcknowledgedRecovery({ state,
+status })) {
       return
     }
     publishBrokerStatusChanged({
@@ -435,7 +450,9 @@ export function createUserDataStatusHandler({
       eventPublisher,
       brokerName,
     })
-    logUserDataStreamTransition({ state, logger, status })
+    logUserDataStreamTransition({ state,
+logger,
+status })
 
     const diagnosticOnlyRpcError = isDiagnosticOnlyRpcError({ status })
     if (!diagnosticOnlyRpcError) {
@@ -457,7 +474,9 @@ export function createUserDataStatusHandler({
       "rpcError",
       "executionNormalizationFailed",
     ].includes(status.type)
-    updateRecoveryGeneration({ state, status, diagnosticOnlyRpcError })
+    updateRecoveryGeneration({ state,
+status,
+diagnosticOnlyRpcError })
     updateUserDataReadiness({
       state,
       status,
