@@ -1,6 +1,6 @@
 # Harvester operator control
 
-> **Status: ACCEPTED IMPLEMENTATION CONTRACT; current runtime caveat below.** Architectural decisions are recorded in [ADR-0002](./decisions/0002-transport-independent-operator-control.md) and the initial process-lifetime scope is clarified by [ADR-0003](./decisions/0003-process-lifetime-operator-pause.md). Telegram is enabled by default and requires an environment-backed allowlist and bot token. Since PR #1211, Telegram-only startup does not create or require an Operational State Store when restart recovery is disabled; in that default configuration pause/resume state is process-local. When a store is explicitly supplied, durable-before-apply remains required. Operator pause state is never restored after restart.
+> **Status: ACCEPTED IMPLEMENTATION CONTRACT; current runtime caveat below.** Architectural decisions are recorded in [ADR-0002](./decisions/0002-transport-independent-operator-control.md), the initial process-lifetime scope is clarified by [ADR-0003](./decisions/0003-process-lifetime-operator-pause.md), startup order ownership is defined by [ADR-0004](./decisions/0004-startup-open-orders-are-external.md), and the separate emergency BUY contract is defined by [ADR-0005](./decisions/0005-emergency-buy-pause.md). Telegram is enabled by default and requires an environment-backed allowlist and bot token. Since PR #1211, Telegram-only startup does not create or require an Operational State Store when restart recovery is disabled; in that default configuration pause/resume state is process-local. When a store is explicitly supplied, durable-before-apply remains required. Operator pause state is never restored after restart.
 
 ## Goal
 
@@ -146,6 +146,8 @@ The Operational State Store adapter must return `durable: true` only after the r
 
 The engine executes the append callback inside its serialized transition. Only a successful durable commit is followed by the in-memory operator state change. PR #1067 wires the same process-owned ADR-0001 store into the operator facade; the operator must not open an independent store instance. The initial process-lifetime scope deliberately does not restore operator facts at startup; the Operational State Store candidate projection excludes them while continuing to project durable strategy pauses and sticky safety blockers. This limitation is explicit and is not a dependency on full recovery.
 
+Emergency BUY controls use the same port and process-owned store. Their facts are `OPERATOR_ALL_BUYS_PAUSED`, `OPERATOR_ALL_BUYS_RESUMED`, `OPERATOR_MARKET_BUYS_PAUSED`, and `OPERATOR_MARKET_BUYS_RESUMED`. Global facts omit `symbol`; market facts include the validated configured symbol. These facts are audit evidence for the current process and are not projected or replayed after restart.
+
 ## Read-only query contract
 
 The application facade exposes two explicit read-only methods to authenticated operators:
@@ -186,25 +188,41 @@ The application returns the repository's structured result envelope. A successfu
 
 A rejected request uses a stable error code, for example `OPERATOR_UNAUTHORIZED`, `INVALID_OPERATOR_REQUEST_ID`, `INVALID_OPERATOR_MARKET` or `SAFETY_BLOCKER_ACTIVE`. Transport adapters map these codes to concise messages; they must not expose stack traces or internal storage details.
 
-## Pause semantics
+## Existing market pause semantics
 
-An operator pause is market-scoped and separate from safety/recovery pause ownership.
+The existing `pauseMarket` / Telegram `/pause SYMBOL` control is market-scoped and separate from safety/recovery pause ownership.
 
 - Block new strategy BUY intents for the selected market.
 - Suppress trailing-BUY replacement/repricing for that market.
 - Allow Conservative recovery SELL decisions.
 - Continue market prices, broker/user-data intake, fill accounting and reconciliation.
-- Leave all existing exchange orders untouched. A resting BUY may still fill after the pause; its fill is accounted and recovery SELL behavior remains available.
+- Leave all existing exchange orders untouched. A resting BUY may still fill after this pause; its fill is accounted and recovery SELL behavior remains available.
 - Do not cancel, adopt or modify orders, and do not mutate broker or OrderRegistry state outside the existing engine workflows.
 - Do not affect unrelated markets.
 
-This is not an exchange kill switch. The initial Telegram response must explicitly state that already-open orders remain open and may still fill.
+This is not an exchange kill switch. The existing `/pause SYMBOL` response must continue to state that already-open orders remain open and may still fill.
+
+## Emergency BUY pause semantics
+
+The separate emergency BUY controls are exposed by the application facade as `pauseAllBuys()`, `resumeAllBuys()`, `pauseBuys({ symbol })`, and `resumeBuys({ symbol })`.
+
+- Global pause blocks every new BUY decision, BUY replacement/repricing and final BUY submission across configured markets.
+- Market pause applies the same BUY-only gate to one configured market.
+- Activating either pause applies its gate inside the serialized engine transition, then cancels active BUY orders owned by the current process through the existing cancellation/reconciliation workflow.
+- A successful response requires that no current-process-owned active BUY remains in the requested scope. Cancellation-racing fills are reconciled and accounted before acknowledgement.
+- Only current-process-owned OrderRegistry BUY orders are cancellation candidates. Startup-snapshot, manual and other external orders remain untouched under ADR-0004.
+- Recovery SELL decisions/submissions, market-price intake, user-data intake, fill accounting and reconciliation continue. Recovery SELLs are never canceled by these controls.
+- Global and per-market scopes are independent. The effective gate is their union; resuming one scope never clears another active scope.
+- If cancellation is unconfirmed or an active owned BUY remains unresolved, the BUY gate stays active and the operation returns `OPERATOR_BUY_CANCELLATION_INCOMPLETE`. The operator must not assume the exchange has no resting BUYs.
+- Emergency BUY pause is process-lifetime only and is not restored after restart. When a store is supplied, its fact is committed before the in-memory gate is applied; no separate store or replay mechanism is added.
+
+This is a BUY-side emergency exposure control, not a market shutdown or exchange-wide cancel-all operation.
 
 ### Resume safety
 
-The Telegram adapter exposes `/start`, `/help`, `/status`, `/markets`, `/pause <SYMBOL>`, and `/resume <SYMBOL>`. Read commands use the same authorized application facade as state-changing commands; they never call the broker or mutate trading state.
+The Telegram adapter exposes `/start`, `/help`, `/status`, `/markets`, `/pause <SYMBOL>`, `/resume <SYMBOL>`, `/pauseallbuys`, `/resumeallbuys`, `/pausebuys <SYMBOL>`, and `/resumebuys <SYMBOL>`. Telegram command names are lowercase; the application facade uses camelCase methods. Read commands use the same authorized application facade as state-changing commands; they never call the broker or mutate trading state.
 
-Resume removes only the operator-owned pause. The engine refuses to invoke the durable resume callback if a safety/recovery blocker, durable safety pause, unresolved replacement/trailing intent or pending recovery-managed cancellation, or an active high-volatility protection state remains. It never clears a safety blocker or opens the global startup readiness gate.
+`/resume SYMBOL` removes only the legacy operator-owned market pause and retains its existing safety-blocker refusal. `resumeBuys({ symbol })` and `resumeAllBuys()` remove only their matching emergency BUY-pause scope; they do not clear any strategy, safety, recovery, volatility or startup-readiness blocker. A remaining global or market BUY-pause scope continues to block BUYs.
 
 ## First transport: Telegram
 
@@ -239,14 +257,14 @@ When enabled, `allowedUserIds` contains decimal Telegram user-ID strings. The ex
 
 The initial `/pause <SYMBOL>` adapter is the foundation, not the finished operator experience. The Command Center is tracked in [issue #1077](https://github.com/45s/coinzilla/issues/1077) and is the highest-priority Harvester workstream. Delivery is phased:
 
-1. **CC-1 — Operator essentials:** `/start`, `/help`, `/status`, `/markets`, `/pause SYMBOL`, `/resume SYMBOL`; status and market queries must be read-only application snapshots with explicit readiness, blockers and freshness.
+1. **CC-1 — Operator essentials:** `/start`, `/help`, `/status`, `/markets`, `/pause SYMBOL`, `/resume SYMBOL`, `/pauseallbuys`, `/resumeallbuys`, `/pausebuys SYMBOL`, `/resumebuys SYMBOL`; status and market queries must be read-only application snapshots with explicit readiness, blockers and freshness.
 2. **CC-2 — Trading visibility:** `/positions`, `/orders`, `/balances`; distinguish Harvester-owned orders from external/manual orders and expose accounting/source freshness.
 3. **CC-3 — Proactive alerts:** lifecycle/readiness, safety blockers, execution/recovery events and Telegram health; reuse `@coinzilla/notifiers` and never block trading transitions.
 4. **CC-4 — Usability and hardening:** Telegram command menu, authorized inline navigation/refresh, one-time confirmations for inline pause/resume controls, callback authorization/idempotency/retry/outage/shutdown coverage and an operator runbook.
 
 The adapter exposes `/start` and `/help`, routes `/resume <SYMBOL>` through the existing safe application use case, and exposes `/status` and `/markets` through the read-only query facade. Resume clears only the operator-owned pause. A safety, recovery or volatility blocker causes a refusal before durable append; the transport explains that the blocker remains active. Status/market query failures are reported as unavailable and never trigger a trading action.
 
-The initial `/pause` semantics remain unchanged: it does not cancel existing orders, and a resting order may still fill. No order-cancel, order-placement, configuration-edit, strategy-edit, arbitrary command execution, safety bypass or HTTP server is included. ADR-0001 Steps 8–9 remain deferred and do not block CC. The operator pause remains process-lifetime only and is not restored after restart.
+The initial `/pause` semantics remain unchanged: it does not cancel existing orders, and a resting order may still fill. The separate emergency BUY commands cancel only current-process-owned BUY orders through the engine workflow; they do not cancel recovery SELLs or external orders. No account-wide cancel-all, order-placement, configuration-edit, strategy-edit, arbitrary command execution, safety bypass or HTTP server is included. ADR-0001 Steps 8–9 remain deferred and do not block CC. The operator pause remains process-lifetime only and is not restored after restart.
 
 ## Inline Command Center interaction (CC-4)
 
@@ -265,7 +283,7 @@ Typed `/pause SYMBOL` and `/resume SYMBOL` remain explicit command invocations a
 | Unknown configured market | Engine rejects before applying state. |
 | Durable fact write failed or uncertain (when a store is supplied) | No state transition and no successful acknowledgement. |
 | Process restart after a pause | The initial scope does not replay operator facts. The process starts without the operator pause; the operator must issue `/pause <SYMBOL>` again if needed. |
-| Existing BUY fills after pause | Apply the fill normally; continue risk-reducing recovery SELL behavior; suppress new BUY intents. |
+| Existing BUY fills after `/pause SYMBOL` | Apply the fill normally; continue risk-reducing recovery SELL behavior; suppress new BUY intents. |\n| Emergency BUY cancellation is unresolved | Keep the requested BUY gate active; return `OPERATOR_BUY_CANCELLATION_INCOMPLETE`; tell the operator to inspect `/orders` and diagnostics. Never claim the emergency pause fully canceled all owned BUYs. |\n| Global/market BUY pauses overlap | Effective BUY gate remains active until both applicable scopes are resumed. |
 | Resume while safety/recovery blocker exists | Reject before writing a resume fact; preserve the blocker. |
 | Telegram transport failure | Log actionable diagnostics; never mutate trading state outside the application use case. |
 
@@ -281,11 +299,11 @@ Typed `/pause SYMBOL` and `/resume SYMBOL` remain explicit command invocations a
 8. **CC-1 read-only visibility — implemented in PR #1081:** engine market snapshots are serialized and immutable; application queries enforce actor authorization and combine runtime readiness with market-local blockers; Telegram formats `/status` and `/markets` without broker access or trading-state mutation.
 9. **CC-2/CC-3 — implemented in PRs #1086 and #1087:** read-only positions/orders/balances queries and proactive readiness/recovery/delivery-health alerts reuse existing application/notifier boundaries.
 10. **CC-4 usability and hardening — merged in PR #1088:** `setMyCommands` registration is best-effort; long polling accepts message and callback-query updates; private-chat-authorized inline navigation/refresh calls only existing read queries; enabled-market pause/resume buttons require a five-minute, one-time confirmation bound to the originating user/chat/message. Callback replay, malformed input, unauthorized identity, unchanged-message refresh, menu-registration failure, retry and shutdown paths are regression-tested. Exact PR head `afda070a565f42e546bfb0a76096939427451111` passed 1,479/1,479 Harvester tests, workspace unit tests and coverage, JavaScript syntax, Utils tests, dependency audit, actionlint and external documentation-link validation. No TESTNET/LIVE exchange operation was performed.
+11. **Emergency BUY pause — in progress in issue #1267 / PR #1267:** add global and market-scoped application controls, independent resume semantics, BUY-only evaluation/submission gates, current-process-owned BUY cancellation through the existing reconciliation workflow, recovery SELL continuity, Telegram lowercase commands, and explicit process-lifetime documentation. Required regressions cover overlapping scopes, cancellation races, unresolved cancellation and external-order isolation. No live Telegram or exchange operation is part of CI.
 
 ## References
 
-- [ADR-0002 — Transport-independent operator control](./decisions/0002-transport-independent-operator-control.md)
-- [ADR-0001 — Application-owned durable facts](./decisions/0001-application-owned-recovery-facts.md)
+- [ADR-0002 — Transport-independent operator control](./decisions/0002-transport-independent-operator-control.md)\n- [ADR-0005 — Emergency BUY pause](./decisions/0005-emergency-buy-pause.md)\n- [ADR-0001 — Application-owned durable facts](./decisions/0001-application-owned-recovery-facts.md)
 - [Harvester roadmap](../../ROADMAP.md)
 - [Harvester architecture](../architecture.md)
 - [Harvester documentation index](../README.md)
