@@ -7,7 +7,7 @@ import { BinanceWebSocketApiClient } from "./utils/rpc-client.js"
 import { adaptPublicStreamMessage } from "./helpers/public-stream-adapters.js"
 import { createStreamName } from "./utils/streams-protocol.js"
 import { BinanceStreamsClient } from "./utils/streams-client.js"
-import { createMarketStreamLivenessMonitor } from "./utils/market-stream-liveness.js"
+import { subscribeForPrices as subscribeForMarketPrices } from "./utils/subscribe-for-prices.js"
 import { NativeWebSocketTransport } from "./utils/transport.js"
 import { UserDataSession } from "../../../application/user-data-session.js"
 import { createMyTradesParams, createOrderHistoryParams } from "./helpers/history-query-params.js"
@@ -901,95 +901,21 @@ error })
    * @returns {Promise<BrokerResult<{stream: string, unsubscribe: () => Promise<unknown>}>>}
    */
   async subscribeForPrices({ symbol, onPrice }) {
-    let stream
-    let monitor
-    let disposed = false
-    let subscriptionGeneration = 0
-    let recoveryPromise = Promise.resolve()
-    let listener
     try {
-      validateCallback(onPrice, "onPrice")
-      if (!this.connected) {throw new Error("Binance broker must be connected before subscribing to prices")}
-      const normalizedSymbol = symbol.trim().toUpperCase()
-      stream = createStreamName("aggTrade", { symbol: normalizedSymbol })
-      const activityStream = createStreamName("rollingWindowTicker", { windowSize: "1h" })
-      monitor = createMarketStreamLivenessMonitor({
-        symbol: normalizedSymbol,
-        stallTimeoutMs: this.marketStreamStallTimeoutMs,
-        recoveryWindowMs: this.marketStreamRecoveryWindowMs,
-        maxRecoveryAttempts: this.marketStreamMaxRecoveryAttempts,
+      const data = await subscribeForMarketPrices({
+        marketConnection: this.marketConnection,
+        logger: this.logger,
+        symbol,
+        onPrice,
         nowFn: this.now,
         setTimeoutFn: this.setTimeout,
         clearTimeoutFn: this.clearTimeout,
-        resubscribe: () => {
-          const generation = ++subscriptionGeneration
-          recoveryPromise = recoveryPromise.catch(() => {}).then(async () => {
-            if (disposed || generation !== subscriptionGeneration) {return}
-            await this.marketConnection.unsubscribe(stream, listener)
-            if (disposed || generation !== subscriptionGeneration) {return}
-            await this.marketConnection.subscribe(stream, listener)
-          })
-          return recoveryPromise
-        },
-        onStatus: ({ status, diagnostics }) => {
-          if (status === "exhausted") {return}
-          const logLevel = status === "recovered" || status === "awaiting-aggTrade"
-            ? "info"
-            : "warn"
-          this.logger?.[logLevel]?.({
-            message: `Binance aggTrade stream ${status}`,
-            ...diagnostics,
-          })
-        },
-        onError: (error) => this.logger?.error?.({
-          message: "Binance aggTrade stream recovery failed",
-          symbol: normalizedSymbol,
-          error,
-        }),
+        stallTimeoutMs: this.marketStreamStallTimeoutMs,
+        recoveryWindowMs: this.marketStreamRecoveryWindowMs,
+        maxRecoveryAttempts: this.marketStreamMaxRecoveryAttempts,
       })
-      listener = (message) => {
-        monitor.onAggTrade(message)
-        onPrice(adaptPublicStreamMessage(message))
-      }
-      const tickerListener = (message) => monitor.onTicker(message)
-
-      await this.marketConnection.subscribe(stream, listener)
-      try {
-        await this.marketConnection.subscribe(activityStream, tickerListener)
-      } catch (error) {
-        disposed = true
-        subscriptionGeneration += 1
-        monitor.dispose()
-        try {
-          await this.marketConnection.unsubscribe(stream, listener)
-        } catch (cleanupError) {
-          this.logger?.error?.({
-            message: "Failed to clean up aggTrade after ticker liveness subscription failure",
-            symbol: normalizedSymbol,
-            error: cleanupError,
-          })
-        }
-        throw error
-      }
-
-      return toResult({
-        data: {
-          stream,
-          unsubscribe: async () => {
-            if (disposed) {return}
-            disposed = true
-            subscriptionGeneration += 1
-            monitor.dispose()
-            await recoveryPromise.catch(() => {})
-            await Promise.all([
-              this.marketConnection.unsubscribe(stream, listener),
-              this.marketConnection.unsubscribe(activityStream, tickerListener),
-            ])
-          },
-        },
-      })
+      return toResult({ data })
     } catch (error) {
-      monitor?.dispose()
       handleErr({ where: "BinanceWebSocketBroker.subscribeForPrices()",
 error })
       return toResult({ errors: [error] })
