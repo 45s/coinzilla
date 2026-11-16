@@ -247,18 +247,27 @@ function prepareMarkdownHeadingLine({ line, index, state, fencePattern }) {
 
   if (state.inFrontMatter) {
     if (index > 0 && line.trim() === '---') {state.inFrontMatter = false}
-    return { line: normalizedLine, skip: true }
+    return {
+      line: normalizedLine,
+      skip: true,
+    }
   }
 
   if (state.inHtmlComment) {
     if (line.includes('-->')) {state.inHtmlComment = false}
-    return { line: normalizedLine, skip: true }
+    return {
+      line: normalizedLine,
+      skip: true,
+    }
   }
 
   if (line.includes('<!--')) {
     if (!line.includes('-->')) {
       state.inHtmlComment = true
-      return { line: normalizedLine, skip: true }
+      return {
+      line: normalizedLine,
+      skip: true,
+    }
     }
     normalizedLine = line.replace(/<!--.*?-->/g, '')
   }
@@ -270,7 +279,10 @@ function prepareMarkdownHeadingLine({ line, index, state, fencePattern }) {
       fenceMatch[1].length >= state.activeFence.length &&
       /^[ \t]*$/.test(fenceMatch[2])
     if (isClosingFence) {state.activeFence = null}
-    return { line: normalizedLine, skip: true }
+    return {
+      line: normalizedLine,
+      skip: true,
+    }
   }
 
   if (fenceMatch) {
@@ -278,7 +290,10 @@ function prepareMarkdownHeadingLine({ line, index, state, fencePattern }) {
       character: fenceMatch[1][0],
       length: fenceMatch[1].length,
     }
-    return { line: normalizedLine, skip: true }
+    return {
+      line: normalizedLine,
+      skip: true,
+    }
   }
 
   return { line: normalizedLine, skip: false }
@@ -625,13 +640,70 @@ function readJavaScriptIdentifier({ source, startIndex }) {
   }
 }
 
-function isRegexStart({
-      character,
-      previousToken,
-    }) {
+function isRegexStart({ character, previousToken }) {
   return character === '/' && (
     previousToken === '' || REGEX_PREFIX_TOKENS.has(previousToken)
   )
+}
+
+function scanJavaScriptNonCodeToken({
+  source,
+  output,
+  index,
+  character,
+  next,
+  previousToken,
+}) {
+  if (character === "'" || character === '"') {
+    return {
+      nextIndex: skipQuotedJavaScript({
+        source,
+        output,
+        startIndex: index,
+        quote: character,
+      }),
+      previousToken: 'value',
+    }
+  }
+  if (character === String.fromCharCode(96)) {
+    return {
+      nextIndex: scanJavaScriptTemplate({
+        source,
+        output,
+        startIndex: index + 1,
+      }),
+      previousToken: 'value',
+    }
+  }
+  if (character === '/' && next === '/') {
+    return {
+      nextIndex: skipLineComment({
+        source,
+        output,
+        startIndex: index,
+      }),
+    }
+  }
+  if (character === '/' && next === '*') {
+    return {
+      nextIndex: skipBlockComment({
+        source,
+        output,
+        startIndex: index,
+      }),
+    }
+  }
+  if (isRegexStart({ character, previousToken })) {
+    return {
+      nextIndex: skipRegexJavaScript({
+        source,
+        output,
+        startIndex: index,
+      }),
+      previousToken: 'value',
+    }
+  }
+  return null
 }
 
 function scanJavaScriptCode({ source, output, startIndex, stopAtTemplateBrace = false }) {
@@ -657,51 +729,19 @@ function scanJavaScriptCode({ source, output, startIndex, stopAtTemplateBrace = 
       nestedBraces += 1
     }
 
-    if (character === "'" || character === '"') {
-      index = skipQuotedJavaScript({
-        source,
-        output,
-        startIndex: index,
-        quote: character,
-      })
-      previousToken = 'value'
-      continue
-    }
-    if (character === String.fromCharCode(96)) {
-      index = scanJavaScriptTemplate({
-        source,
-        output,
-        startIndex: index + 1,
-      })
-      previousToken = 'value'
-      continue
-    }
-    if (character === '/' && next === '/') {
-      index = skipLineComment({
-        source,
-        output,
-        startIndex: index,
-      })
-      continue
-    }
-    if (character === '/' && next === '*') {
-      index = skipBlockComment({
-        source,
-        output,
-        startIndex: index,
-      })
-      continue
-    }
-    if (isRegexStart({
+    const nonCodeToken = scanJavaScriptNonCodeToken({
+      source,
+      output,
+      index,
       character,
+      next,
       previousToken,
-    })) {
-      index = skipRegexJavaScript({
-        source,
-        output,
-        startIndex: index,
-      })
-      previousToken = 'value'
+    })
+    if (nonCodeToken) {
+      index = nonCodeToken.nextIndex
+      if (nonCodeToken.previousToken) {
+        previousToken = nonCodeToken.previousToken
+      }
       continue
     }
 
