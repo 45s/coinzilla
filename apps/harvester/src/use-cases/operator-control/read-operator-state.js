@@ -2,14 +2,25 @@ import { toResult } from "@coinzilla/utils"
 import { authorizeOperatorActor } from "../../application/operator/authorize-operator-actor.js"
 import { OperatorQueryError } from "./errors/operator-query-error.js"
 
+function hasValidRuntimeMetadata({ snapshot, runtimeState }) {
+  return snapshot !== null &&
+    typeof snapshot === "object" &&
+    !Array.isArray(snapshot) &&
+    Number.isSafeInteger(snapshot.observedAt) &&
+    typeof runtimeState === "string" &&
+    typeof snapshot.tradingEnabled === "boolean"
+}
+
+function hasValidUserDataSnapshot({ userData }) {
+  return userData !== null &&
+    typeof userData === "object" &&
+    typeof userData.ready === "boolean"
+}
+
 function validateRuntimeSnapshot({ snapshot, operation }) {
   const runtimeState = snapshot?.runtimeState ?? (snapshot?.connected === true ? "RUNNING" : "UNKNOWN")
-  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot) ||
-      !Number.isSafeInteger(snapshot.observedAt) ||
-      typeof runtimeState !== "string" ||
-      typeof snapshot.tradingEnabled !== "boolean" ||
-      !snapshot.userData || typeof snapshot.userData !== "object" ||
-      typeof snapshot.userData.ready !== "boolean") {
+  if (!hasValidRuntimeMetadata({ snapshot, runtimeState }) ||
+      !hasValidUserDataSnapshot({ userData: snapshot?.userData })) {
     const cause = new TypeError("Runtime snapshot must include an integer observedAt, runtime state, trading flag and user-data readiness.")
     throw new OperatorQueryError({
       message: "Harvester operator runtime snapshot is invalid",
