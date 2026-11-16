@@ -11,8 +11,7 @@ import {
   calculateVolatilityRatio,
 } from "@coinzilla/indicators"
 
-/** Validate one normalized candle for the requested market and timeframe. */
-export function validateCandle({ candle, symbol, interval, intervalMs } = {}) {
+function validateCandleIdentity({ candle, symbol, interval, intervalMs }) {
   if (typeof symbol !== "string" || symbol.length === 0) {
     throw new TypeError("candle symbol must be a non-empty string")
   }
@@ -28,31 +27,29 @@ export function validateCandle({ candle, symbol, interval, intervalMs } = {}) {
   if (candle.symbol !== symbol || candle.interval !== interval) {
     throw new RangeError("candle market or interval does not match its subscription")
   }
-  if (
-    !isCanonicalNonNegativeSafeInteger(candle.openTime) ||
-    candle.openTime % intervalMs !== 0
-  ) {
+  if (!isCanonicalNonNegativeSafeInteger(candle.openTime) ||
+      candle.openTime % intervalMs !== 0) {
     throw new RangeError("candle openTime must align to its UTC interval")
   }
-  if (
-    !isCanonicalNonNegativeSafeInteger(candle.closeTime) ||
-    candle.closeTime !== candle.openTime + intervalMs - 1
-  ) {
+  if (!isCanonicalNonNegativeSafeInteger(candle.closeTime) ||
+      candle.closeTime !== candle.openTime + intervalMs - 1) {
     throw new RangeError("candle closeTime does not match its interval")
   }
   if (typeof candle.isClosed !== "boolean") {
     throw new TypeError("candle isClosed must be a boolean")
   }
+}
 
+function validateCandlePrices({ candle }) {
   const decimalFields = ["open", "high", "low", "close", "volume"]
   for (const field of decimalFields) {
     assertDecimalString({ value: candle[field],
-field: `candle ${  field}` })
+field: `candle ${field}` })
   }
   for (const field of ["open", "high", "low", "close"]) {
     if (compareDecimal({ left: candle[field],
 right: "0" }) <= 0) {
-      throw new RangeError(`candle ${  field  } must be positive`)
+      throw new RangeError(`candle ${field} must be positive`)
     }
   }
   if (compareDecimal({ left: candle.volume,
@@ -64,16 +61,19 @@ right: candle.low }) < 0) {
     throw new RangeError("candle high must not be below candle low")
   }
   for (const field of ["open", "close"]) {
-    if (
-      compareDecimal({ left: candle[field],
+    if (compareDecimal({ left: candle[field],
 right: candle.low }) < 0 ||
-      compareDecimal({ left: candle[field],
-right: candle.high }) > 0
-    ) {
-      throw new RangeError(`candle ${  field  } must be within its high-low range`)
+        compareDecimal({ left: candle[field],
+right: candle.high }) > 0) {
+      throw new RangeError(`candle ${field} must be within its high-low range`)
     }
   }
+}
 
+/** Validate one normalized candle for the requested market and timeframe. */
+export function validateCandle({ candle, symbol, interval, intervalMs } = {}) {
+  validateCandleIdentity({ candle, symbol, interval, intervalMs })
+  validateCandlePrices({ candle })
   return Object.freeze({ ...candle })
 }
 
@@ -103,7 +103,8 @@ intervalMs })
 }
 
 /** Compare canonical candle facts without considering object identity. */
-export function areCandlesEqual(left, right) {
+export function areCandlesEqual(...args) {
+  const [left, right] = args
   return [
     "symbol",
     "interval",
@@ -165,11 +166,11 @@ reason: "INSUFFICIENT_HISTORY" }
   const currentNatr = natrSeries.at(-1)
   const reference = natrSeries.slice(-referenceObservations - 1, -1)
 
-  const referenceTotal = reference.reduce(
-    (total, observation) => addDecimal({ left: total,
-right: observation.value }),
-    "0",
-  )
+  let referenceTotal = "0"
+  for (const observation of reference) {
+    referenceTotal = addDecimal({ left: referenceTotal,
+right: observation.value })
+  }
   const referenceNatr = divideDecimal({
     left: referenceTotal,
     right: String(referenceObservations),
