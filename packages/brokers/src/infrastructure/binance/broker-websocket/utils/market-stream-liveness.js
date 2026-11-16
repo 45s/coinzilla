@@ -165,6 +165,18 @@ export function createMarketStreamLivenessMonitor({
         state = "healthy"
         return
       }
+      if (recoveryAttemptTimes.length >= maxRecoveryAttempts) {
+        state = "exhausted"
+        safelyCall(onError, createStalledStreamError({
+          symbol: normalizedSymbol,
+          lastAggTradeId,
+          lastTickerTradeId,
+          pendingTradeId,
+          attempts: recoveryAttemptTimes.length,
+        }))
+        reportStatus("exhausted")
+        return
+      }
       if (state !== "recovery-failed") {
         state = "awaiting-aggTrade"
         reportStatus("awaiting-aggTrade")
