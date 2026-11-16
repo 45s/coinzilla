@@ -1314,8 +1314,7 @@ function getUserDataEventSymbol(event) {
     event?.s
 }
 
-function createConservativeEngineRuntimeOperations({ context } = {}) {
-  const { dependencies } = context
+function createMarketEventOperations({ context } = {}) {
   context.processMarketPrice = async ({ symbol, priceEvent } = {}) => {
     if (context.state.shutdownBuyGate !== true) {
       const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
@@ -1352,7 +1351,14 @@ function createConservativeEngineRuntimeOperations({ context } = {}) {
     } })
   context.evaluateLatest = ({ symbol } = {}) =>
     context.runTransition({ task: () => context.evaluateLatestTransition({ symbol }) })
-  const reconcileOwnedOrders = context.reconcileOwnedOrders
+}
+
+function createShutdownSafetyOperations({ context } = {}) {
+  const {
+    reconcileOwnedOrders,
+    cancelOwnedBuyOrdersForShutdown,
+    reconcileRecoverySellsForShutdown,
+  } = context
   context.reconcileOwnedOrders = (options = {}) => {
     context.invalidateShutdownSafety({
       ...(typeof options.symbol === "string" ? { symbol: options.symbol } : {}),
@@ -1361,7 +1367,6 @@ function createConservativeEngineRuntimeOperations({ context } = {}) {
     })
     return reconcileOwnedOrders(options)
   }
-  const cancelOwnedBuyOrdersForShutdown = context.cancelOwnedBuyOrdersForShutdown
   context.cancelOwnedBuyOrdersForShutdown = (options = {}) => {
     context.invalidateShutdownSafety({
       ...(typeof options.symbol === "string" ? { symbol: options.symbol } : {}),
@@ -1369,7 +1374,6 @@ function createConservativeEngineRuntimeOperations({ context } = {}) {
     })
     return cancelOwnedBuyOrdersForShutdown(options)
   }
-  const reconcileRecoverySellsForShutdown = context.reconcileRecoverySellsForShutdown
   context.reconcileRecoverySellsForShutdown = (options = {}) => {
     context.invalidateShutdownSafety({
       ...(Array.isArray(options.symbols) ? { symbols: options.symbols } : {}),
@@ -1396,6 +1400,12 @@ function createConservativeEngineRuntimeOperations({ context } = {}) {
       return toResult({ data: { results } })
     },
   })
+}
+
+function createConservativeEngineRuntimeOperations({ context } = {}) {
+  createMarketEventOperations({ context })
+  createShutdownSafetyOperations({ context })
+  const { dependencies } = context
   context.getOperatorMarketSnapshots = createOperatorMarketSnapshotsGetter({
     state: context.state,
     pairs: context.pairs,
