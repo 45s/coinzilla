@@ -1184,6 +1184,8 @@ function createConservativeEngineEvaluationContext({ context } = {}) {
     eventPublisher: dependencies.eventPublisher,
     publishRecoveryCycleNotCompleted: context.publishRecoveryCycleNotCompleted,
     getAccountSnapshot: dependencies.getAccountSnapshot,
+    getAdditionalTrackedBaseQuantity: dependencies.getAdditionalTrackedBaseQuantity,
+    getAdditionalTrackedQuoteCashFlow: dependencies.getAdditionalTrackedQuoteCashFlow,
     allocateOrderCommitments,
     submit: context.submit,
     setShutdownRecoverySubmissionAllowed: (value) => { context.shutdownRecoverySubmission.allowed = value },
