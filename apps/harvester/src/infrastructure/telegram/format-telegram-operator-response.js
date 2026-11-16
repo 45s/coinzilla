@@ -61,7 +61,10 @@ function appendMarketDetails({
   lines.push(`Recovery pause: ${market.recoveryManagedPaused ? "ACTIVE" : "OFF"}`)
   const volatilityLine = formatMarketVolatilityLine({ market })
   if (volatilityLine) {lines.push(volatilityLine)}
-  appendMarketBlockers({ lines, market })
+  appendMarketBlockers({
+    lines,
+    market,
+  })
 }
 
 export function formatTelegramOperatorStatus({ status } = {}) {
@@ -102,7 +105,10 @@ export function formatTelegramOperatorMarkets({ snapshot } = {}) {
     lines.push("")
     lines.push(`${market.symbol  } — ${  String(market.readiness ?? "UNKNOWN")}`)
     lines.push(formatMarketPriceLine({ market }))
-    appendMarketDetails({ lines, market })
+    appendMarketDetails({
+      lines,
+      market,
+    })
   }
   const message = lines.join("\n")
   return message.length <= 3900 ? message : `${message.slice(0, 3850)  }\n… additional market details omitted`
