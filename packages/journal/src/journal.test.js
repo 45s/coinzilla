@@ -755,7 +755,10 @@ test("can close before startup and then rejects startup", async () => {
 
 
 
-async function assertFirstAppendFailure({ context, appendState }) {
+async function assertFirstAppendFailure({
+    context,
+    appendState,
+  }) {
   const first = await context.journal.record({
     event: {
       id: "append-failed",
@@ -783,7 +786,10 @@ async function assertFirstAppendFailure({ context, appendState }) {
   )
 }
 
-async function assertLaterAppendAndFlushAreRejected({ context, appendState }) {
+async function assertLaterAppendAndFlushAreRejected({
+    context,
+    appendState,
+  }) {
   const second = await context.journal.record({
     event: {
       id: "append-after-failure",
@@ -824,7 +830,10 @@ async function assertLaterAppendAndFlushAreRejected({ context, appendState }) {
   )
 }
 
-async function assertFailedWriterResourcesAreReleased({ context, appendState }) {
+async function assertFailedWriterResourcesAreReleased({
+    context,
+    appendState,
+  }) {
   const closed = await context.journal.close()
   assert.equal(
     closed.ok,
@@ -859,7 +868,10 @@ async function assertFailedWriterResourcesAreReleased({ context, appendState }) 
   )
 }
 
-async function assertAppendFailurePoisonsWriter({ context, appendState }) {
+async function assertAppendFailurePoisonsWriter({
+      context,
+      appendState,
+    }) {
   await assertFirstAppendFailure({ context, appendState })
   await assertLaterAppendAndFlushAreRejected({ context, appendState })
   await assertFailedWriterResourcesAreReleased({ context, appendState })
@@ -1112,7 +1124,10 @@ async function publishRecoveryAuditEvent({ context, attempt }) {
   return published
 }
 
-async function assertFirstTransientSyncFailure({ context, first }) {
+async function assertFirstTransientSyncFailure({
+      context,
+      first,
+    }) {
   const firstFlush = await context.journal.flush()
   assert.equal(
     firstFlush.ok,
@@ -1139,8 +1154,15 @@ async function assertFirstTransientSyncFailure({ context, first }) {
   )
 }
 
-async function assertTransientSyncRetry({ context, first, syncState }) {
-  const second = await publishRecoveryAuditEvent({ context, attempt: 2 })
+async function assertTransientSyncRetry({
+      context,
+      first,
+      syncState,
+    }) {
+  const second = await publishRecoveryAuditEvent({
+    context,
+    attempt: 2,
+  })
   const secondFlush = await context.journal.flush()
   assert.equal(
     secondFlush.ok,
@@ -1193,7 +1215,10 @@ test("retries a transient disk sync failure and durably persists records written
       return originalSync()
     }
 
-    const first = await publishRecoveryAuditEvent({ context, attempt: 1 })
+    const first = await publishRecoveryAuditEvent({
+      context,
+      attempt: 1,
+    })
     await assertFirstTransientSyncFailure({ context, first })
 
     await assertTransientSyncRetry({ context, first, syncState })
