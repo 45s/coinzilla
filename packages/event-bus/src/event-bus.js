@@ -12,7 +12,10 @@ export class EventBus {
    * @throws {TypeError} If options or a configured callback is invalid.
    */
   constructor(options = {}) {
-    const { logger, onError, maxPending } = validateOptions(options, defaultLogger)
+    const { logger, onError, maxPending } = validateOptions({
+      options,
+      defaultLogger,
+    })
     this.logger = logger
     this.onError = onError
     this.maxPending = maxPending
@@ -31,8 +34,10 @@ export class EventBus {
     let data
 
     try {
-      assertObjectInput({ input,
-operation: "Event publish" })
+      assertObjectInput({
+        input,
+        operation: "Event publish",
+      })
       ;({ name, source, data = {} } = input)
     } catch (error) {
       return toResult({ error })
@@ -106,8 +111,10 @@ operation: "Event publish" })
     let handler
 
     try {
-      assertObjectInput({ input,
-operation: "Event subscription" })
+      assertObjectInput({
+        input,
+        operation: "Event subscription",
+      })
       ;({ name, handler } = input)
     } catch (error) {
       return toResult({ error })
@@ -119,16 +126,20 @@ operation: "Event subscription" })
       })
     }
 
-    return this.addSubscription({ name,
-handler })
+    return this.addSubscription({
+      name,
+      handler,
+    })
   }
 
   subscribeAll(input = {}) {
     let handler
 
     try {
-      assertObjectInput({ input,
-operation: "Event subscribeAll" })
+      assertObjectInput({
+        input,
+        operation: "Event subscribeAll",
+      })
       ;({ handler } = input)
     } catch (error) {
       return toResult({ error })
@@ -165,9 +176,7 @@ operation: "Event subscription" })
     }
 
     const listener = (event) => {
-      let task
-
-      task = Promise.resolve()
+      const task = Promise.resolve()
         .then(() => handler(event))
         .catch(async (error) => {
           try {
@@ -205,9 +214,11 @@ operation: "Event subscription" })
 
     registry.add(listener)
 
-    const record = { registry,
-listener,
-active: true }
+    const record = {
+      registry,
+      listener,
+      active: true,
+    }
     this.subscriptions.add(record)
 
     const subscription = {
@@ -242,7 +253,11 @@ active: true }
     return listeners
   }
 
-  async flush({} = {}) {
+  async flush(options = {}) {
+    if (options === null) {
+      throw new TypeError("EventBus flush options must not be null")
+    }
+
     while (this.pending.size > 0) {
       await Promise.all([...this.pending])
     }
