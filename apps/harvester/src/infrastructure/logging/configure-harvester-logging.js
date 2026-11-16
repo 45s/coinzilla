@@ -169,7 +169,7 @@ async function createHarvesterFileTransport({
     name,
     level,
     write(entry) {
-      const streamError = [...streamErrors.values()][0]
+      const [streamError] = [...streamErrors.values()]
       if (streamError) {
         return Promise.reject(streamError)
       }
