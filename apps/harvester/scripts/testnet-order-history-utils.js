@@ -17,18 +17,32 @@ function validateOrderFields({ order, index, fields }) {
   }
 }
 
-function validateOrder({ order, index }) {
+function validateOrder({
+      order,
+      index,
+    }) {
   if (!order || typeof order !== "object" || Array.isArray(order)) {
     throw new TypeError(`Binance order history item ${index} must be an object`)
   }
 
-  const orderId = validateOrderId({ orderId: order.orderId, index })
+  const orderId = validateOrderId({
+    orderId: order.orderId,
+    index,
+  })
   if (!Number.isSafeInteger(order.time) || order.time < 0) {
     throw new TypeError(`Binance order history item ${index} has an invalid time`)
   }
 
-  validateOrderFields({ order, index, fields: ["symbol", "side", "type", "status"] })
-  validateOrderFields({ order, index, fields: ["price", "origQty", "executedQty", "cummulativeQuoteQty"] })
+  validateOrderFields({
+    order,
+    index,
+    fields: ["symbol", "side", "type", "status"],
+  })
+  validateOrderFields({
+    order,
+    index,
+    fields: ["price", "origQty", "executedQty", "cummulativeQuoteQty"],
+  })
   if (order.clientOrderId !== undefined && typeof order.clientOrderId !== "string") {
     throw new TypeError(`Binance order history item ${index} has an invalid clientOrderId`)
   }
@@ -48,8 +62,6 @@ function validateOrder({ order, index }) {
   }
 }
 
-// Array.sort requires a two-argument comparator.
- // eslint-disable-next-line max-params
 export const normalizeOrderHistory = ({ orders, limit = 20 }) => {
   if (!Array.isArray(orders)) {
     throw new TypeError("Binance order history must be an array")
