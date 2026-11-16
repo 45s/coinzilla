@@ -100,11 +100,73 @@ test("formats console entries as one compact line while retaining structured fie
   assert.equal(written.trim().split("\n").length, 1)
   assert.match(written, /Market price evaluated/)
   assert.doesNotMatch(written, /INFO Market price evaluated/)
-  assert.match(written, /"symbol":"ZROUSDT"/)
-  assert.match(written, /"price":"1.74100000"/)
+  assert.match(written, /ZROUSDT, price 1\.74100000/)
+  assert.doesNotMatch(written, /\{|\}/)
   output.destroy()
 })
 
+
+
+test("renders strategy cancellation details as readable inline text without the application prefix", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({ output, color: false })
+
+  transport.write({
+    timestamp: "2026-11-16T04:30:15.000Z",
+    level: "info",
+    data: {
+      message: "Harvester recovery SELL cancellation requested",
+      strategyId: "CG_coinGrabber",
+      symbol: "DOGEUSDT",
+      reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      clientOrderId: "h-order-1",
+      brokerOrderId: "12345",
+    },
+  })
+
+  const line = written.trim()
+  assert.match(
+    line,
+    /^\\d{2}:\\d{2}:\\d{2} 🪙 CG recovery SELL cancellation requested: DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL$/,
+    "The operator line must omit the redundant application prefix and render the symbol and reason as concise inline details.",
+  )
+  assert.doesNotMatch(
+    line,
+    /Harvester|clientOrderId|brokerOrderId|\\{|\\}/,
+    "The terminal must omit the application label, unallowlisted order identifiers, and JSON delimiters.",
+  )
+  output.destroy()
+})
+
+test("renders allowlisted details as key-value text when no symbol is present", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({ output, color: false })
+
+  transport.write({
+    timestamp: "2026-11-16T04:30:16.000Z",
+    level: "info",
+    data: {
+      message: "Harvester broker connection failed",
+      broker: "Binance",
+      errorCode: "BROKER_CONNECTION_FAILED",
+    },
+  })
+
+  assert.match(
+    written.trim(),
+    /^\\d{2}:\\d{2}:\\d{2} broker connection failed: errorCode BROKER_CONNECTION_FAILED, broker Binance$/,
+    "Without a symbol, every allowlisted detail must retain its field name in readable inline form.",
+  )
+  output.destroy()
+})
 
 test("renders Portfolio Stats as a concise readable summary instead of JSON", () => {
   const output = new PassThrough()
@@ -179,7 +241,7 @@ test("prints every enabled market symbol in the subscriptions-ready summary", ()
     },
   })
 
-  assert.match(written, /"enabledSymbols":\["LINKUSDT","ZROUSDT","DOGEUSDT","ADAUSDT"\]/)
+  assert.match(written, /enabledSymbols LINKUSDT, ZROUSDT, DOGEUSDT, ADAUSDT/)
   output.destroy()
 })
 
@@ -203,8 +265,8 @@ test("suppresses consecutive duplicate console entries and reports their count",
   transport.close()
 
   assert.equal((written.match(/Market data ready/g) ?? []).length, 2)
-  assert.match(written, /"price":"1.70"/)
-  assert.match(written, /"price":"1.71"/)
+  assert.match(written, /price 1\.70/)
+  assert.match(written, /price 1\.71/)
   assert.match(written, /repeated 2 additional time\(s\)/)
   output.destroy()
 })
@@ -236,9 +298,9 @@ test("keeps INFO output concise and excludes stack traces and audit internals", 
   })
 
   const line = written.trim()
-  assert.match(line, /ERROR Harvester broker workflow startup step failed/)
-  assert.match(line, /"errorMessage"/)
-  assert.match(line, /"orderCount":2/)
+  assert.match(line, /ERROR broker workflow startup step failed/)
+  assert.match(line, /errorMessage Conservative TESTNET startup blocked/)
+  assert.match(line, /orderCount 2/)
   assert.doesNotMatch(line, /errorStack|sourceAssetCount|auditReasons|fingerprint|filesystem paths/)
   assert.ok(line.length <= 200, "console line should remain bounded")
   output.destroy()
@@ -262,7 +324,7 @@ test("retains the machine-readable Journal error code in compact console output"
     },
   })
 
-  assert.match(written, /"errorCode":"JOURNAL_DIRECTORY_LOCKED"/)
+  assert.match(written, /errorCode JOURNAL_DIRECTORY_LOCKED/)
   assert.doesNotMatch(written, /diagnosticId/)
   output.destroy()
 })
@@ -287,7 +349,7 @@ test("colors INFO blue and DEBUG magenta when terminal colors are enabled", () =
     data: { message: "Detailed diagnostic" },
   })
 
-  assert.match(written, /\u001b\[34m.*Harvester ready\u001b\[0m/)
+  assert.match(written, /\u001b\[34m.*ready\u001b\[0m/)
   assert.match(written, /\u001b\[35m.*DEBUG Detailed diagnostic\u001b\[0m/)
   output.destroy()
 })
