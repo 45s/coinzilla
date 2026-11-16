@@ -4,7 +4,12 @@ import { toResult } from "@coinzilla/utils"
 const OUTCOMES = new Set(["ACKNOWLEDGED", "REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"])
 const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_SELL"])
 
-function validateSubmissionStoreAndOrder({ operationalStateStore, order, outcome, purpose }) {
+function validateSubmissionStoreAndOrder({
+    operationalStateStore,
+    order,
+    outcome,
+    purpose,
+  }) {
   if (typeof operationalStateStore?.append !== "function") {
     throw new TypeError("recordOrderSubmissionOutcome requires a Operational State Store append capability")
   }
@@ -19,7 +24,10 @@ function validateSubmissionStoreAndOrder({ operationalStateStore, order, outcome
   }
 }
 
-function validateSubmissionAcknowledgement({ order, outcome }) {
+function validateSubmissionAcknowledgement({
+    order,
+    outcome,
+  }) {
   const acknowledged = outcome === "ACKNOWLEDGED"
   if (acknowledged !== (typeof order.brokerOrderId === "string" && order.status !== "PENDING")) {
     throw new TypeError("Submission outcome classification contradicts canonical broker acknowledgement state")
