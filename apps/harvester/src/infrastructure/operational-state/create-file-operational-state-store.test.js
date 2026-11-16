@@ -591,13 +591,8 @@ force: true }))
   )
 })
 
-test("rejects malformed market-history coverage facts", async (t) => {
-  const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true,
-force: true }))
-  const store = createStore(directory)
-  await store.initialize()
-  const invalidFacts = [
+function createInvalidMarketHistoryCoverageFacts() {
+  return [
     {
       factId: "coverage:missing-digest",
       data: {
@@ -667,7 +662,15 @@ force: true }))
         apiKey: "must-not-be-stored",
       },
     },
-  ]
+}
+
+test("rejects malformed market-history coverage facts", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
+  const store = createStore(directory)
+  await store.initialize()
+  const invalidFacts = createInvalidMarketHistoryCoverageFacts() ]
   for (const invalid of invalidFacts) {
     const result = await store.append({
       factId: invalid.factId,
