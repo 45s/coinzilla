@@ -101,7 +101,7 @@ async function verifyOperationalStateStore({ operationalStateStore, recoveryEnab
       existingFacts.data?.durableWriteSupported !== true ||
       !Array.isArray(existingFacts.data.records)) {
     const cause = existingFacts?.errors?.[0] ?? new Error("Operational State Store history could not be read and verified")
-    throw new Error("Harvester cannot determine prior process state from the verified Operational State Store: " + (cause.message ?? String(cause)), { cause })
+    throw new Error(`Harvester cannot determine prior process state from the verified Operational State Store: ${cause.message ?? String(cause)}`, { cause })
   }
   return {
     previousProcessStarted: existingFacts.data.records.some((record) => record.factType === "PROCESS_STARTED"),
