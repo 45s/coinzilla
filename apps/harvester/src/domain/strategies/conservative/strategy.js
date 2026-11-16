@@ -258,7 +258,7 @@ right: minNotional }) >= 0
   }
 }
 
-function createSellDustDisposition({ context, sellPlan, quantityLimits }) {
+function createSellDustDisposition({ context, quantityLimits }) {
   return Object.freeze({
     status: "EXCHANGE_CONSTRAINED_DUST",
     quantity: subtractDecimal({
@@ -377,7 +377,6 @@ right: context.maxPrice }) > 0) {
   return {
     inventoryDisposition: createSellDustDisposition({
       context,
-      sellPlan,
       quantityLimits,
     }),
   }
