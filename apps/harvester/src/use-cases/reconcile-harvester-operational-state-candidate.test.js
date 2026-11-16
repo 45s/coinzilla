@@ -7,13 +7,15 @@ import { reconcileHarvesterOperationalStateCandidate } from "./reconcile-harvest
 const market = new Market({
   venue: "binance",
   symbol: "BTCUSDT",
-  baseAsset: new Asset({ id: "asset:BTC", code: "BTC" }),
-  quoteAsset: new Asset({ id: "asset:USDT", code: "USDT" }),
+  baseAsset: new Asset({ id: "asset:BTC",
+code: "BTC" }),
+  quoteAsset: new Asset({ id: "asset:USDT",
+code: "USDT" }),
 })
 const sessionId = "candidate-reconcile-session"
 const fingerprint = "f".repeat(64)
 
-const record = (sequence, factType, data, factId = factType + ":" + sequence) => ({
+const record = (sequence, factType, data, factId = `${factType  }:${  sequence}`) => ({
   sequence: String(sequence),
   factId,
   factType,
@@ -25,17 +27,32 @@ const records = ({ includeCoverage = true, blockerScope } = {}) => {
   const result = [
     record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
     record(1, "CONFIGURATION_BASELINE", {
-    schemaVersion: 1, strategyName: "conservative", markets: ["BTCUSDT"], fingerprint,
-  }, "configuration-baseline:" + fingerprint),
+    schemaVersion: 1,
+strategyName: "conservative",
+markets: ["BTCUSDT"],
+fingerprint,
+  }, `configuration-baseline:${  fingerprint}`),
     record(2, "PROCESS_STARTED", {
-    configurationFingerprint: fingerprint, strategyName: "conservative", markets: ["BTCUSDT"], tradingEnabled: true,
-  }, "process-started:" + sessionId),
+    configurationFingerprint: fingerprint,
+strategyName: "conservative",
+markets: ["BTCUSDT"],
+tradingEnabled: true,
+  }, `process-started:${  sessionId}`),
     record(3, "ACCOUNT_SNAPSHOT_CAPTURED", {
-    phase: "PREFLIGHT", auditStatus: "COMPLETE", sourceTime: 100,
-    assetCount: 0, balances: [], auditReasons: [],
+    phase: "PREFLIGHT",
+auditStatus: "COMPLETE",
+sourceTime: 100,
+    assetCount: 0,
+balances: [],
+auditReasons: [],
   }),
     record(4, "ACCOUNT_OPEN_ORDERS_CAPTURED", {
-    phase: "PREFLIGHT", observedAt: 101, readiness: "READY", orderCount: 0, orders: [], blockReasons: [],
+    phase: "PREFLIGHT",
+observedAt: 101,
+readiness: "READY",
+orderCount: 0,
+orders: [],
+blockReasons: [],
   }),
     ...(includeCoverage ? [record(5, "MARKET_HISTORY_COVERAGE_CONFIRMED", {
     symbol: "BTCUSDT",
@@ -53,8 +70,12 @@ const records = ({ includeCoverage = true, blockerScope } = {}) => {
       .update([blockerScope, symbol ?? "", reason, evidenceDigest].join("\0"))
       .digest("hex")
     result.push(record(result.length, "SAFETY_BLOCKER_RAISED", {
-      blockerId, scope: blockerScope, symbol, reason, evidenceDigest,
-    }, "safety-blocker-raised:" + blockerId))
+      blockerId,
+scope: blockerScope,
+symbol,
+reason,
+evidenceDigest,
+    }, `safety-blocker-raised:${  blockerId}`))
   }
   return result
 }
@@ -75,7 +96,9 @@ const makeStore = (recordsValue) => {
     }),
     append: async (fact) => {
       if (storedRecords.some(({ factId }) => factId === fact.factId)) {
-        return { ok: true, data: { durable: true, duplicate: true } }
+        return { ok: true,
+data: { durable: true,
+duplicate: true } }
       }
       storedRecords.push({
         sequence: String(storedRecords.length),
@@ -84,7 +107,9 @@ const makeStore = (recordsValue) => {
         runtimeSessionId: sessionId,
         data: fact.data,
       })
-      return { ok: true, data: { durable: true, duplicate: false } }
+      return { ok: true,
+data: { durable: true,
+duplicate: false } }
     },
   }
 }
@@ -100,15 +125,19 @@ const makeDependencies = ({ auditTargetMarketBlocked = false } = {}) => {
       assert.ok(candidateState.portfolio, "The candidate must carry the canonical Portfolio projection.")
       assert.ok(candidateState.orderRegistry, "The candidate must carry the canonical OrderRegistry projection.")
       assert.equal(recoveryMode, true, "Owned-order reconciliation must use the read-only recovery mode.")
-      return { ok: true, data: { reconciled: 1 } }
+      return { ok: true,
+data: { reconciled: 1 } }
     },
     getRecoveredState: async ({ candidateState: received }) => {
       calls.push("candidate-state")
       assert.equal(received, candidateState)
-      return { ok: true, data: candidateState }
+      return { ok: true,
+data: candidateState }
     },
-    refreshAccountSnapshot: async () => { calls.push("account"); return { ok: true, data: { sourceTime: 300 } } },
-    refreshOpenOrders: async () => { calls.push("open-orders"); return { ok: true, data: [] } },
+    refreshAccountSnapshot: async () => { calls.push("account"); return { ok: true,
+data: { sourceTime: 300 } } },
+    refreshOpenOrders: async () => { calls.push("open-orders"); return { ok: true,
+data: [] } },
     fetchMarketTradeHistory: async ({ market: requestedMarket, startTime }) => {
       calls.push("history")
       assert.equal(requestedMarket, market)
