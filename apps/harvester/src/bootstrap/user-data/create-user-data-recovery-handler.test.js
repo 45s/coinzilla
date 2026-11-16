@@ -977,7 +977,8 @@ test("recovers safely when a second disconnect supersedes a later retry", async 
       if (reconciliationCalls === 2) {
         return secondReconciliation
       }
-      return { ok: true, data: { reconciled: 2 } }
+      return { ok: true,
+data: { reconciled: 2 } }
     },
   })
 
@@ -991,13 +992,15 @@ test("recovers safely when a second disconnect supersedes a later retry", async 
   assert.equal(reconciliationCalls, 2, "The retry must begin a new owned-order reconciliation after the prior task has released its slot.")
 
   fixture.state.recoveryGeneration = 2
-  resolveSecondReconciliation({ ok: true, data: { reconciled: 2 } })
+  resolveSecondReconciliation({ ok: true,
+data: { reconciled: 2 } })
   await secondAttempt
   assertSupersededRetryBlocked({ fixture })
 
   fixture.start()
   await fixture.state.recoveryTask
-  assertLatestRetryCompleted({ fixture, reconciliationCalls })
+  assertLatestRetryCompleted({ fixture,
+reconciliationCalls })
 })
 
 function assertAccountSnapshotTimeoutBlocked({ fixture, openOrderReads }) {
@@ -1048,17 +1051,21 @@ test("retries application recovery after an account snapshot REST timeout releas
     },
     getOpenOrders: async () => {
       openOrderReads += 1
-      return { ok: true, data: [] }
+      return { ok: true,
+data: [] }
     },
   })
 
   fixture.start()
   await fixture.state.recoveryTask
-  assertAccountSnapshotTimeoutBlocked({ fixture, openOrderReads })
+  assertAccountSnapshotTimeoutBlocked({ fixture,
+openOrderReads })
 
   fixture.start()
   await fixture.state.recoveryTask
-  assertAccountSnapshotRetryCompleted({ fixture, accountSnapshotReads, openOrderReads })
+  assertAccountSnapshotRetryCompleted({ fixture,
+accountSnapshotReads,
+openOrderReads })
 })
 
 function assertOpenOrdersTimeoutBlocked({ fixture, timeout }) {
@@ -1087,25 +1094,30 @@ test("keeps recovery blocked and retries after an account-wide open-orders RPC t
   let openOrderReads = 0
   const timeout = Object.assign(
     new Error("account-wide open-orders RPC timed out"),
-    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
+    { name: "RpcTimeoutError",
+code: "RPC_TIMEOUT" },
   )
   const fixture = createRecovery({
     getOpenOrders: async () => {
       openOrderReads += 1
       if (openOrderReads === 1) {
-        return { ok: false, errors: [timeout] }
+        return { ok: false,
+errors: [timeout] }
       }
-      return { ok: true, data: [] }
+      return { ok: true,
+data: [] }
     },
   })
 
   fixture.start()
   await fixture.state.recoveryTask
-  assertOpenOrdersTimeoutBlocked({ fixture, timeout })
+  assertOpenOrdersTimeoutBlocked({ fixture,
+timeout })
 
   fixture.start()
   await fixture.state.recoveryTask
-  assertOpenOrdersTimeoutRetryCompleted({ fixture, openOrderReads })
+  assertOpenOrdersTimeoutRetryCompleted({ fixture,
+openOrderReads })
 })
 
 function assertAccountAuditFlushFailureBlocked({ fixture }) {
@@ -1269,5 +1281,6 @@ test("does not let a terminal account-snapshot failure from a superseded recover
 
   fixture.start()
   await fixture.state.recoveryTask
-  assertCurrentSnapshotRecoveryCompleted({ fixture, snapshotReads })
+  assertCurrentSnapshotRecoveryCompleted({ fixture,
+snapshotReads })
 })
