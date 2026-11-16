@@ -320,6 +320,7 @@ export function createRecoverySellerAccountingWorkflow({
     reconcileTerminalMixedSell,
     getPortfolio: () => state.portfolio,
     getOrderRegistry: () => state.orderRegistry,
+    getActiveOrders: () => state.orderRegistry.getActiveOrders(),
     getLegacyPosition: ({ marketId } = {}) => getLegacyPositionRecord({
       state,
       marketId,
