@@ -233,7 +233,7 @@ The target configuration is intentionally separate from outbound notification po
 }
 ```
 
-When enabled, `allowedUserIds` contains decimal Telegram user-ID strings. The existing bot token remains in `TELEGRAM_BOT_TOKEN`. The initial runtime configuration validation and lifecycle wiring were implemented in PR #1067; the feature now defaults disabled per ADR-0005. Explicit enablement still fails closed without its required environment-backed identity, token and verified durable store.
+When enabled, `allowedUserIds` contains decimal Telegram user-ID strings. The existing bot token remains in `TELEGRAM_BOT_TOKEN`. The initial runtime configuration validation and lifecycle wiring were implemented in PR #1067. The feature now defaults enabled; startup still fails closed without its required environment-backed identity, token and verified durable store.
 
 ## Telegram Command Center expansion
 
