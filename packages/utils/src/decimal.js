@@ -82,11 +82,11 @@ export function parseDecimal({ value, field = "value" } = {}) {
   if (scale < 0) {
     coefficient *= 10n ** BigInt(-scale)
     return { coefficient,
-scale: 0 }
+      scale: 0 }
   }
 
   return { coefficient,
-scale }
+    scale }
 }
 
 /**
@@ -132,7 +132,7 @@ export function assertDecimalString({ value, field = "value" } = {}) {
     throw new TypeError(`${field  } must be a decimal string`)
   }
   parseDecimal({ value,
-field })
+    field })
   return value
 }
 
@@ -140,9 +140,9 @@ field })
 export function addDecimal({ left, right } = {}) {
   const aligned = alignDecimals(
     parseDecimal({ value: left,
-field: "left" }),
+      field: "left" }),
     parseDecimal({ value: right,
-field: "right" }),
+      field: "right" }),
   )
   return formatDecimalString({
     coefficient: aligned.left + aligned.right,
@@ -154,9 +154,9 @@ field: "right" }),
 export function subtractDecimal({ left, right } = {}) {
   const aligned = alignDecimals(
     parseDecimal({ value: left,
-field: "left" }),
+      field: "left" }),
     parseDecimal({ value: right,
-field: "right" }),
+      field: "right" }),
   )
   return formatDecimalString({
     coefficient: aligned.left - aligned.right,
@@ -172,9 +172,9 @@ field: "right" }),
  */
 export function multiplyDecimal({ left, right } = {}) {
   const parsedLeft = parseDecimal({ value: left,
-field: "left" })
+    field: "left" })
   const parsedRight = parseDecimal({ value: right,
-field: "right" })
+    field: "right" })
   const scale = parsedLeft.scale + parsedRight.scale
 
   if (scale > MAX_DECIMAL_SCALE) {
@@ -219,9 +219,9 @@ function divideIntegers({ numerator, denominator, rounding } = {}) {
 export function divideDecimal({ left, right, scale, rounding } = {}) {
   validateScale(scale)
   const parsedLeft = parseDecimal({ value: left,
-field: "left" })
+    field: "left" })
   const parsedRight = parseDecimal({ value: right,
-field: "right" })
+    field: "right" })
 
   let numerator = parsedLeft.coefficient
   let denominator = parsedRight.coefficient
@@ -235,8 +235,8 @@ field: "right" })
 
   return formatDecimalString({
     coefficient: divideIntegers({ numerator,
-denominator,
-rounding }),
+      denominator,
+      rounding }),
     scale,
   })
 }
@@ -245,9 +245,9 @@ rounding }),
 export function compareDecimal({ left, right } = {}) {
   const aligned = alignDecimals(
     parseDecimal({ value: left,
-field: "left" }),
+      field: "left" }),
     parseDecimal({ value: right,
-field: "right" }),
+      field: "right" }),
   )
   return aligned.left === aligned.right ? 0 : aligned.left > aligned.right ? 1 : -1
 }
@@ -273,7 +273,7 @@ export function negateDecimal({ value } = {}) {
 /** @param {{ left: string|bigint, right: string|bigint }} options @returns {string} Smaller canonical operand. */
 export function minDecimal({ left, right } = {}) {
   return compareDecimal({ left,
-right }) <= 0
+    right }) <= 0
     ? formatDecimalString(parseDecimal({ value: left }))
     : formatDecimalString(parseDecimal({ value: right }))
 }
@@ -281,7 +281,7 @@ right }) <= 0
 /** @param {{ left: string|bigint, right: string|bigint }} options @returns {string} Larger canonical operand. */
 export function maxDecimal({ left, right } = {}) {
   return compareDecimal({ left,
-right }) >= 0
+    right }) >= 0
     ? formatDecimalString(parseDecimal({ value: left }))
     : formatDecimalString(parseDecimal({ value: right }))
 }
@@ -328,9 +328,9 @@ export function roundDecimalToIncrement({ value, increment, direction } = {}) {
   }
 
   const parsedValue = parseDecimal({ value,
-field: "value" })
+    field: "value" })
   const parsedIncrement = parseDecimal({ value: increment,
-field: "increment" })
+    field: "increment" })
 
   if (parsedValue.coefficient < 0n || parsedIncrement.coefficient < 0n) {
     throw new RangeError("value and increment must be non-negative")

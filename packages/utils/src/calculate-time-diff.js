@@ -10,5 +10,5 @@ import { calculateTimeDiffBetween } from './calculate-time-diff-between.js'
  */
 export const calculateTimeDiff = ({ start, end = new Date(), unit = 'hour' } = {}) =>
   calculateTimeDiffBetween({ start,
-end,
-unit })
+    end,
+    unit })

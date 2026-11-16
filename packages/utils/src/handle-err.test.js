@@ -13,8 +13,8 @@ describe('handleErr', () => {
     const error = new Error('Something failed')
 
     handleErr({ logger,
-where: 'unit test',
-error })
+      where: 'unit test',
+      error })
 
     assert.deepEqual(calls, [{
       where: 'unit test',
@@ -28,8 +28,8 @@ error })
     const logger = { error: (payload) => calls.push(payload) }
 
     handleErr({ logger,
-where: 'unit test',
-error: null })
+      where: 'unit test',
+      error: null })
 
     assert.deepEqual(calls, [{
       where: 'unit test',

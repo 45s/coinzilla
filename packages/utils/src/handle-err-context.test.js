@@ -8,11 +8,11 @@ describe("handleErr logger context", () => {
     const logger = { error: (payload) => calls.push(payload) }
     const error = new Error("request timed out")
     handleErr({ logger,
-where: "test.operation",
-error })
+      where: "test.operation",
+      error })
     assert.equal(calls.length, 1)
     assert.deepEqual(calls[0], { where: "test.operation",
-error,
-message: "request timed out" })
+      error,
+      message: "request timed out" })
   })
 })

@@ -14,7 +14,7 @@ describe('formatLogContent', () => {
     const error = new TypeError('broker failed')
     const direct = JSON.parse(formatLogContent(error))
     const nested = JSON.parse(formatLogContent({ error,
-errors: [error] }))
+      errors: [error] }))
 
     assert.equal(direct.name, 'TypeError')
     assert.equal(direct.message, 'broker failed')
@@ -54,7 +54,7 @@ errors: [error] }))
       symbol: 'BTCUSDT',
       accessToken: 'sensitive-token',
       nested: { apiKey: 'sensitive-key',
-password: 'sensitive-password' },
+        password: 'sensitive-password' },
       error,
     })
     assert.match(formatted, /BTCUSDT/)
@@ -75,7 +75,7 @@ password: 'sensitive-password' },
     })
 
     assert.match(formatLogContent({ hostileGetter,
-hostileProxy }), /Unreadable property/)
+      hostileProxy }), /Unreadable property/)
   })
 
   it('falls back for BigInt-containing objects and preserves non-Error thrown values', () => {

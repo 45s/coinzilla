@@ -13,8 +13,8 @@ describe('pure validation helpers', () => {
   it('returns structured validation failures', () => {
     assert.deepEqual(validateItems({ items: [[0, [VR.required, VR.num], 'amount']] }), [
       { value: 0,
-msgs: ['Field is required'],
-fieldName: 'amount' },
+        msgs: ['Field is required'],
+        fieldName: 'amount' },
     ])
   })
 
@@ -30,13 +30,13 @@ fieldName: 'amount' },
   it('rejects unknown and malformed rule identifiers before applying validation', () => {
     const invalidRules = [
       { value: 'notEmptyStrng',
-description: 'a misspelled rule name' },
+        description: 'a misspelled rule name' },
       { value: 42,
-description: 'a numeric rule identifier' },
+        description: 'a numeric rule identifier' },
       { value: null,
-description: 'a null rule identifier' },
+        description: 'a null rule identifier' },
       { value: {},
-description: 'an object rule identifier' },
+        description: 'an object rule identifier' },
     ]
 
     for (const invalidRule of invalidRules) {

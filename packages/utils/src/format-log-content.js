@@ -13,11 +13,11 @@ function readProperty({ value, key }) {
 
 function normalizeError({ error, seen, normalize }) {
   const name = readProperty({ value: error,
-key: 'name' })
+    key: 'name' })
   const message = readProperty({ value: error,
-key: 'message' })
+    key: 'message' })
   const stack = readProperty({ value: error,
-key: 'stack' })
+    key: 'stack' })
   const normalized = {
     name: typeof name === 'string' ? name : 'Error',
     message: typeof message === 'string' ? message : String(message ?? ''),
@@ -28,17 +28,17 @@ key: 'stack' })
   }
 
   const cause = readProperty({ value: error,
-key: 'cause' })
+    key: 'cause' })
   if (cause !== undefined) {
     normalized.cause = normalize({ value: cause,
-seen })
+      seen })
   }
 
   const errors = readProperty({ value: error,
-key: 'errors' })
+    key: 'errors' })
   if (Array.isArray(errors)) {
     normalized.errors = normalize({ value: errors,
-seen })
+      seen })
   }
 
   return normalized
@@ -71,7 +71,7 @@ function normalizeLogValue({ value, seen = new WeakSet() }) {
         seen,
         normalize: ({ value: nestedValue, seen: nestedSeen }) =>
           normalizeLogValue({ value: nestedValue,
-seen: nestedSeen }),
+            seen: nestedSeen }),
       })
     }
 
@@ -93,7 +93,7 @@ seen: nestedSeen }),
           item = UNREADABLE_VALUE
         }
         normalized.push(normalizeLogValue({ value: item,
-seen }))
+          seen }))
       }
       return normalized
     }
@@ -121,7 +121,7 @@ seen }))
       }
 
       normalized[key] = normalizeLogValue({ value: propertyValue,
-seen })
+        seen })
     }
 
     return normalized

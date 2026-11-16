@@ -15,9 +15,9 @@ import {
  */
 export function percentageToRate({ percent } = {}) {
   assertDecimalString({ value: percent,
-field: "percent" })
+    field: "percent" })
   return multiplyDecimal({ left: percent,
-right: "0.01" })
+    right: "0.01" })
 }
 
 /**
@@ -27,7 +27,7 @@ right: "0.01" })
  */
 export function calculatePercentageOf({ value, percent } = {}) {
   assertDecimalString({ value,
-field: "value" })
+    field: "value" })
   return multiplyDecimal({
     left: value,
     right: percentageToRate({ percent }),
@@ -41,11 +41,11 @@ field: "value" })
  */
 export function applyPercentageChange({ value, percent } = {}) {
   assertDecimalString({ value,
-field: "value" })
+    field: "value" })
   const change = calculatePercentageOf({ value,
-percent })
+    percent })
   return addDecimal({ left: value,
-right: change })
+    right: change })
 }
 
 /**
@@ -57,9 +57,9 @@ right: change })
  */
 export function calculatePercentageChange({ from, to, scale, rounding } = {}) {
   assertDecimalString({ value: from,
-field: "from" })
+    field: "from" })
   assertDecimalString({ value: to,
-field: "to" })
+    field: "to" })
   validateDecimalScale({ scale })
 
   if (scale > MAX_DECIMAL_SCALE - 2) {
@@ -69,7 +69,7 @@ field: "to" })
   }
 
   const difference = subtractDecimal({ left: to,
-right: from })
+    right: from })
   const ratio = divideDecimal({
     left: difference,
     right: from,
@@ -77,5 +77,5 @@ right: from })
     rounding,
   })
   return multiplyDecimal({ left: ratio,
-right: "100" })
+    right: "100" })
 }

@@ -9,7 +9,7 @@ import { collectJavaScriptFiles } from "../../../scripts/check-syntax.js";
 test("collectJavaScriptFiles recursively returns JavaScript files only", (t) => {
   const directory = mkdtempSync(join(tmpdir(), "coinzilla-syntax-check-"));
   t.after(() => rmSync(directory, { recursive: true,
-force: true }));
+    force: true }));
 
   mkdirSync(join(directory, "nested"));
   writeFileSync(join(directory, "root.js"), "");

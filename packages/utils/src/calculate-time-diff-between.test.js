@@ -8,9 +8,9 @@ describe('calculateTimeDiffBetween', () => {
     const end = new Date('2026-01-01T02:30:00.000Z')
 
     assert.equal(calculateTimeDiffBetween({ start,
-end }), 2.5)
+      end }), 2.5)
     assert.equal(calculateTimeDiffBetween({ start,
-end }), 2.5)
+      end }), 2.5)
   })
 
   it('does not mutate the supplied Date objects', () => {
@@ -20,7 +20,7 @@ end }), 2.5)
     const originalEnd = end.getTime()
 
     calculateTimeDiffBetween({ start,
-end })
+      end })
 
     assert.equal(start.getTime(), originalStart)
     assert.equal(end.getTime(), originalEnd)
@@ -31,7 +31,7 @@ end })
     assert.throws(
       () => calculateTimeDiffBetween({ start }),
       { name: 'TypeError',
-message: 'end must be a Date' },
+        message: 'end must be a Date' },
     )
   })
 
@@ -41,16 +41,16 @@ message: 'end must be a Date' },
 
     assert.throws(
       () => calculateTimeDiffBetween({ start,
-end,
-unit: 'day' }),
+        end,
+        unit: 'day' }),
       { name: 'RangeError',
-message: 'Unsupported time unit: day' },
+        message: 'Unsupported time unit: day' },
     )
     assert.throws(
       () => calculateTimeDiffBetween({ start: new Date('invalid'),
-end }),
+        end }),
       { name: 'RangeError',
-message: 'start must be a valid Date' },
+        message: 'start must be a valid Date' },
     )
   })
 })

@@ -40,37 +40,37 @@ describe('Validator', () => {
 
     assert.deepEqual(Validator.validate({ items }), [
       { value: 0,
-msgs: [EM.required(), EM.notString()],
-fieldName: 'quantity' },
+        msgs: [EM.required(), EM.notString()],
+        fieldName: 'quantity' },
       { value: '   ',
-msgs: [EM.emptyString(), EM.notNumber()],
-fieldName: 'symbol' },
+        msgs: [EM.emptyString(), EM.notNumber()],
+        fieldName: 'symbol' },
       { value: undefined,
-msgs: [EM.undefined()],
-fieldName: 'timestamp' },
+        msgs: [EM.undefined()],
+        fieldName: 'timestamp' },
       { value: 'not-an-array',
-msgs: [EM.arr()],
-fieldName: 'items' },
+        msgs: [EM.arr()],
+        fieldName: 'items' },
       { value: [],
-msgs: [EM.emptyArray()],
-fieldName: 'orders' },
+        msgs: [EM.emptyArray()],
+        fieldName: 'orders' },
       { value: 'not-a-function',
-msgs: [EM.notFunction()],
-fieldName: 'callback' },
+        msgs: [EM.notFunction()],
+        fieldName: 'callback' },
     ])
   })
 
   it('omits fieldName when none is supplied', () => {
     assert.deepEqual(Validator.validate({ items: [['x', [VR.num]]] }), [
       { value: 'x',
-msgs: [EM.notNumber()] },
+        msgs: [EM.notNumber()] },
     ])
   })
 
   it('throws the collected errors when soft mode is disabled', () => {
     assert.throws(
       () => Validator.validate({ isSoft: false,
-items: [['x', [VR.num]]] }),
+        items: [['x', [VR.num]]] }),
       (error) => Array.isArray(error) && error[0].msgs[0] === EM.notNumber(),
     )
   })
@@ -81,7 +81,7 @@ items: [['x', [VR.num]]] }),
     for (const isSoft of invalidModes) {
       assert.throws(
         () => Validator.validate({ isSoft,
-items: [['not-a-number', [VR.num]]] }),
+          items: [['not-a-number', [VR.num]]] }),
         { name: 'TypeError' },
         `Validator must reject the explicitly supplied ${String(isSoft)} isSoft value instead of interpreting it by truthiness`,
       )
@@ -92,7 +92,7 @@ items: [['not-a-number', [VR.num]]] }),
     assert.deepEqual(
       Validator.validate({ items: [['not-a-number', [VR.num]]] }),
       [{ value: 'not-a-number',
-msgs: [EM.notNumber()] }],
+        msgs: [EM.notNumber()] }],
       'Omitting isSoft must preserve the documented default soft mode and return validation errors',
     )
   })
@@ -129,20 +129,20 @@ msgs: [EM.notNumber()] }],
       Validator.validate({ items }),
       [
         { value: 0,
-msgs: [EM.required()],
-fieldName: 'zero' },
+          msgs: [EM.required()],
+          fieldName: 'zero' },
         { value: false,
-msgs: [EM.required()],
-fieldName: 'false' },
+          msgs: [EM.required()],
+          fieldName: 'false' },
         { value: '',
-msgs: [EM.required()],
-fieldName: 'emptyString' },
+          msgs: [EM.required()],
+          fieldName: 'emptyString' },
         { value: null,
-msgs: [EM.required()],
-fieldName: 'null' },
+          msgs: [EM.required()],
+          fieldName: 'null' },
         { value: undefined,
-msgs: [EM.required()],
-fieldName: 'undefined' },
+          msgs: [EM.required()],
+          fieldName: 'undefined' },
       ],
       'VR.required must reject every falsey value while allowing truthy values such as whitespace-only strings',
     )
@@ -152,7 +152,7 @@ fieldName: 'undefined' },
     for (const value of [NaN, Infinity, -Infinity]) {
       assert.deepEqual(Validator.validate({ items: [[value, [VR.num]]] }), [
         { value,
-msgs: [EM.notNumber()] },
+          msgs: [EM.notNumber()] },
       ])
     }
   })
@@ -161,7 +161,7 @@ msgs: [EM.notNumber()] },
     for (const value of [undefined, null, 'not-an-array', 42]) {
       assert.deepEqual(Validator.validate({ items: [[value, [VR.notEmptyArr]]] }), [
         { value,
-msgs: [EM.emptyArray()] },
+          msgs: [EM.emptyArray()] },
       ])
     }
   })
@@ -189,8 +189,8 @@ msgs: [EM.emptyArray()] },
     for (const value of [undefined, null, 0, 123, false, {}]) {
       assert.deepEqual(Validator.validate({ items: [[value, [VR.notEmptyString], 'field']] }), [
         { value,
-msgs: [EM.emptyString()],
-fieldName: 'field' },
+          msgs: [EM.emptyString()],
+          fieldName: 'field' },
       ])
     }
   })

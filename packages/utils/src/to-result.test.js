@@ -11,7 +11,7 @@ test("returns default result for empty input", () => {
 
 test("preserves provided data", () => {
   const data = { id: 1,
-name: "John" }
+    name: "John" }
 
   assert.deepEqual(toResult({ data }), {
     ok: true,
@@ -50,9 +50,9 @@ test("wraps a single error in an errors array", () => {
 test("preserves multiple errors", () => {
   const errors = [
     { code: "INVALID_PRICE",
-message: "Invalid price" },
+      message: "Invalid price" },
     { code: "INVALID_QUANTITY",
-message: "Invalid quantity" },
+      message: "Invalid quantity" },
   ]
 
   assert.deepEqual(toResult({ errors }), {
@@ -97,13 +97,13 @@ test("preserves additional properties", () => {
 
 test("calculates ok instead of trusting input ok", () => {
   assert.deepEqual(toResult({ ok: false,
-data: 123 }), {
+    data: 123 }), {
     ok: true,
     data: 123,
   })
 
   assert.deepEqual(toResult({ ok: true,
-error: "Oops" }), {
+    error: "Oops" }), {
     ok: false,
     errors: ["Oops"],
   })
@@ -133,7 +133,7 @@ test("preserves undefined data", () => {
 test("normalizes a scalar errors value into an array", () => {
   const error = new Error("invalid state")
   assert.deepEqual(toResult({ errors: error }), { ok: false,
-errors: [error] })
+    errors: [error] })
 })
 
 test("preserves falsey scalar errors instead of treating them as success", () => {

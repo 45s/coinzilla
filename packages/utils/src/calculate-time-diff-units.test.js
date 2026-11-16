@@ -7,24 +7,24 @@ describe("calculateTimeDiff units", () => {
     const start = new Date("2025-01-01T00:00:00.000Z")
     const end = new Date("2025-01-01T01:30:00.000Z")
     assert.equal(calculateTimeDiff({ start,
-end,
-unit: "second" }), 5400)
+      end,
+      unit: "second" }), 5400)
     assert.equal(calculateTimeDiff({ start,
-end,
-unit: "minute" }), 90)
+      end,
+      unit: "minute" }), 90)
     assert.equal(calculateTimeDiff({ start,
-end,
-unit: "hour" }), 1.5)
+      end,
+      unit: "hour" }), 1.5)
   })
 
   it("preserves negative intervals and rejects unsupported units", () => {
     const start = new Date("2025-01-01T01:00:00.000Z")
     const end = new Date("2025-01-01T00:00:00.000Z")
     assert.equal(calculateTimeDiff({ start,
-end,
-unit: "hour" }), -1)
+      end,
+      unit: "hour" }), -1)
     assert.throws(() => calculateTimeDiff({ start,
-end,
-unit: "day" }), /Unsupported time unit/)
+      end,
+      unit: "day" }), /Unsupported time unit/)
   })
 })

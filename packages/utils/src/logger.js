@@ -80,7 +80,7 @@ function createConsoleTransport() {
       let logContent = data
       if (context && Object.keys(context).length > 0) {
         logContent = { context,
-data }
+          data }
       }
       console.log(
         colors.fg.gray,
@@ -140,7 +140,7 @@ export class Logger {
 
     this.#onTransportError = onTransportError ?? (({ transport, error }) => {
       console.error('Logger transport failed', { transport,
-error })
+        error })
     })
 
     for (const transport of transports) {
@@ -236,7 +236,7 @@ error })
     }
     this.#transports.delete(name)
     await this.#closeTransport({ name,
-transport: configuration.transport })
+      transport: configuration.transport })
     return true
   }
 
@@ -250,7 +250,7 @@ transport: configuration.transport })
     this.#transports.clear()
     await Promise.all(transports.map(([name, configuration]) =>
       this.#closeTransport({ name,
-transport: configuration.transport }),
+        transport: configuration.transport }),
     ))
   }
 
@@ -261,7 +261,7 @@ transport: configuration.transport }),
     return Promise.resolve()
       .then(() => transport.close())
       .catch((error) => this.#reportTransportError({ transport: name,
-error }))
+        error }))
   }
 
   #reportTransportError(context) {
@@ -312,12 +312,12 @@ error }))
         if (result && typeof result.then === 'function') {
           Promise.resolve(result).catch((error) =>
             this.#reportTransportError({ transport: name,
-error }),
+              error }),
           )
         }
       } catch (error) {
         this.#reportTransportError({ transport: name,
-error })
+          error })
       }
     }
   }

@@ -49,7 +49,7 @@ export function createKeyedQueue(options = {}) {
     const execution = previous.then(task).catch((error) => {
       if (!onError) {throw error}
       return onError({ key,
-error })
+        error })
     })
 
     let tail
@@ -69,5 +69,5 @@ error })
   }
 
   return Object.freeze({ enqueue,
-drain })
+    drain })
 }

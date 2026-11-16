@@ -37,7 +37,7 @@ test("runs tasks for different keys independently", async () => {
   let secondStarted = false
 
   const first = queue.enqueue({ key: "DOGEUSDT",
-task: () => firstGate })
+    task: () => firstGate })
   const second = queue.enqueue({
     key: "BTCUSDT",
     task: async () => { secondStarted = true },
@@ -56,9 +56,9 @@ test("reports task failures and continues the same key queue", async () => {
   const failure = new Error("simulated failure")
 
   await queue.enqueue({ key: "DOGEUSDT",
-task: async () => { throw failure } })
+    task: async () => { throw failure } })
   await queue.enqueue({ key: "DOGEUSDT",
-task: async () => { order.push("continued") } })
+    task: async () => { order.push("continued") } })
 
   assert.equal(errors.length, 1)
   assert.equal(errors[0].key, "DOGEUSDT")
@@ -72,11 +72,11 @@ test("propagates task failures when no error handler is configured and continues
 
   await assert.rejects(
     queue.enqueue({ key: "same",
-task: async () => { throw new Error("task failed") } }),
+      task: async () => { throw new Error("task failed") } }),
     /task failed/,
   )
   await queue.enqueue({ key: "same",
-task: async () => { order.push("next") } })
+    task: async () => { order.push("next") } })
   await queue.drain()
 
   assert.deepEqual(order, ["next"])
@@ -90,11 +90,11 @@ test("a failing error handler does not poison later tasks", async () => {
 
   await assert.rejects(
     queue.enqueue({ key: "same",
-task: async () => { throw new Error("task failed") } }),
+      task: async () => { throw new Error("task failed") } }),
     /reporting failed/,
   )
   await queue.enqueue({ key: "same",
-task: async () => { order.push("next") } })
+    task: async () => { order.push("next") } })
   await queue.drain()
 
   assert.deepEqual(order, ["next"])
@@ -115,7 +115,7 @@ test("drain waits for pending tasks across all keys", async () => {
     },
   })
   const second = queue.enqueue({ key: "BTCUSDT",
-task: async () => {} })
+    task: async () => {} })
   const drain = queue.drain().then(() => { drainFinished = true })
 
   await second
@@ -136,6 +136,6 @@ test("validates queue options and enqueue input", () => {
   const queue = createKeyedQueue()
   assert.throws(() => queue.enqueue({ task() {} }), /key/)
   assert.throws(() => queue.enqueue({ key: "x",
-task: true }), /task/)
+    task: true }), /task/)
   assert.equal(Object.isFrozen(queue), true)
 })
