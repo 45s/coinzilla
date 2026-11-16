@@ -11142,7 +11142,7 @@ test("invalidates and rechecks a safe market after a late owned SELL execution",
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
     accountingApplied: true,
-    cancelExecutedQuantity: "0.1",
+    cancelExecutedQuantity: ({ order }) => order.side === "SELL" ? "0.1" : "0",
     isStopping: () => shutdownStarted,
   })
   await harness.engine.processMarketPrice({
@@ -11157,6 +11157,7 @@ test("invalidates and rechecks a safe market after a late owned SELL execution",
   harness.engine.beginShutdown()
   shutdownStarted = true
   await harness.engine.cancelOwnedBuyOrdersForShutdown()
+  assertNoShutdownSafetyPauses({ harness })
   const initialCoverage = await harness.engine.auditShutdownRecoverySellCoverage()
   const initialSafety = await harness.engine.auditShutdownSafety({
     reconciliationComplete: true,
