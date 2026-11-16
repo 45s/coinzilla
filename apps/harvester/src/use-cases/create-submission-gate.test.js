@@ -43,8 +43,8 @@ test("blocks every BUY at the final submission gate after shutdown", () => {
     purpose: "STANDING_BUY",
   })
 
-  assert.equal(result.allowed, false)
-  assert.equal(result.reason, "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE")
+  assert.equal(result.allowed, false, "Expected result.allowed to equal false in \"blocks every BUY at the final submission gate after shutdown\".")
+  assert.equal(result.reason, "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE", "Expected result.reason to equal \"CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE\" in \"blocks every BUY at the final submission gate after shutdown\".")
 })
 
 test("allows only the explicitly authorized recovery SELL after shutdown", () => {
@@ -56,7 +56,7 @@ test("allows only the explicitly authorized recovery SELL after shutdown", () =>
     purpose: "RECOVERY_SELL",
   })
 
-  assert.deepEqual(result, { allowed: true })
+  assert.deepEqual(result, { allowed: true }, "Expected result to match the expected structure in \"allows only the explicitly authorized recovery SELL after shutdown\".")
 })
 
 test("blocks an ordinary SELL while Conservative shutdown permits recovery SELL only", () => {
@@ -66,6 +66,6 @@ test("blocks an ordinary SELL while Conservative shutdown permits recovery SELL 
     purpose: "NORMAL_SELL",
   })
 
-  assert.equal(result.allowed, false)
-  assert.equal(result.reason, "CONSERVATIVE_SHUTDOWN_RECOVERY_SELL_ONLY")
+  assert.equal(result.allowed, false, "Expected result.allowed to equal false in \"blocks an ordinary SELL while Conservative shutdown permits recovery SELL only\".")
+  assert.equal(result.reason, "CONSERVATIVE_SHUTDOWN_RECOVERY_SELL_ONLY", "Expected result.reason to equal \"CONSERVATIVE_SHUTDOWN_RECOVERY_SELL_ONLY\" in \"blocks an ordinary SELL while Conservative shutdown permits recovery SELL only\".")
 })

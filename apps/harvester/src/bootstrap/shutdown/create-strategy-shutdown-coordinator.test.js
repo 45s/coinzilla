@@ -28,14 +28,14 @@ test("activates every strategy gate synchronously before starting safety work", 
   })
 
   coordinator.beginShutdown()
-  assert.deepEqual(calls, ["gate:CONSERVATIVE", "gate:RECOVERY_SELLER"])
+  assert.deepEqual(calls, ["gate:CONSERVATIVE", "gate:RECOVERY_SELLER"], "Expected calls to match the expected structure in \"activates every strategy gate synchronously before starting safety work\".")
   await coordinator.waitUntilSafe()
   assert.deepEqual(calls, [
     "gate:CONSERVATIVE",
     "gate:RECOVERY_SELLER",
     "wait:CONSERVATIVE",
     "wait:RECOVERY_SELLER",
-  ])
+  ], "Expected calls to match the expected structure in \"activates every strategy gate synchronously before starting safety work\".")
 })
 
 test("waits for all strategy participants concurrently", async () => {
@@ -67,10 +67,10 @@ test("waits for all strategy participants concurrently", async () => {
 
   const waiting = coordinator.waitUntilSafe()
   await Promise.resolve()
-  assert.deepEqual(started, ["CONSERVATIVE", "RECOVERY_SELLER"])
+  assert.deepEqual(started, ["CONSERVATIVE", "RECOVERY_SELLER"], "Expected started to match the expected structure in \"waits for all strategy participants concurrently\".")
   conservative.resolve({ ok: true })
   recoverySeller.resolve({ ok: true })
-  assert.equal((await waiting).ok, true)
+  assert.equal((await waiting).ok, true, "Expected (await waiting).ok to equal true in \"waits for all strategy participants concurrently\".")
 })
 
 test("fails closed with the exact strategy and market blockers when one participant is unsafe", async () => {
@@ -107,7 +107,7 @@ test("fails closed with the exact strategy and market blockers when one particip
     assert.equal(blocker.markets[0].symbol, "LINKUSDT")
     assert.deepEqual(blocker.markets[0].blockers, ["RECOVERY_SELL_UNKNOWN"])
     return true
-  })
+  }, "Expected coordinator.waitUntilSafe() to reject under the specified failure condition in \"fails closed with the exact strategy and market blockers when one participant is unsafe\".")
 })
 
 test("does not treat duplicate strategy registrations as independent policies", () => {
@@ -127,6 +127,6 @@ test("does not treat duplicate strategy registrations as independent policies", 
 
 test("an empty participant list is safe at the coordinator level", () => {
   const coordinator = createStrategyShutdownCoordinator()
-  assert.equal(coordinator.isSafeToShutdown(), true)
-  assert.deepEqual(coordinator.getSafetySnapshot(), [])
+  assert.equal(coordinator.isSafeToShutdown(), true, "Expected coordinator.isSafeToShutdown() to equal true in \"an empty participant list is safe at the coordinator level\".")
+  assert.deepEqual(coordinator.getSafetySnapshot(), [], "Expected coordinator.getSafetySnapshot() to match the expected structure in \"an empty participant list is safe at the coordinator level\".")
 })

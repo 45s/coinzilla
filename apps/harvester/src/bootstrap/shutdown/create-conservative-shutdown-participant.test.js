@@ -106,9 +106,9 @@ test("activates the BUY gate and starts owned BUY cancellation before draining u
   participant.beginShutdown()
   await participant.waitUntilSafe()
 
-  assert.ok(calls.indexOf("buy-gate") < calls.indexOf("cancel:all"))
-  assert.ok(calls.indexOf("cancel:all") < calls.indexOf("user-data-drain"))
-  assert.equal(participant.isSafeToShutdown(), true)
+  assert.ok(calls.indexOf("buy-gate") < calls.indexOf("cancel:all"), "Expected condition (calls.indexOf(\"buy-gate\") < calls.indexOf(\"cancel:all\")) to be true in \"activates the BUY gate and starts owned BUY cancellation before draining user data\".")
+  assert.ok(calls.indexOf("cancel:all") < calls.indexOf("user-data-drain"), "Expected condition (calls.indexOf(\"cancel:all\") < calls.indexOf(\"user-data-drain\")) to be true in \"activates the BUY gate and starts owned BUY cancellation before draining user data\".")
+  assert.equal(participant.isSafeToShutdown(), true, "Expected participant.isSafeToShutdown() to equal true in \"activates the BUY gate and starts owned BUY cancellation before draining user data\".")
 })
 
 test("keeps each market safety marker independent and blocks the strategy while one market is unsafe", async () => {
@@ -123,12 +123,12 @@ test("keeps each market safety marker independent and blocks the strategy while 
   await assert.rejects(participant.waitUntilSafe(), (error) => {
     assert.equal(error.code, "CONSERVATIVE_SHUTDOWN_SAFETY_UNPROVEN")
     return true
-  })
+  }, "Expected participant.waitUntilSafe() to reject under the specified failure condition in \"keeps each market safety marker independent and blocks the strategy while one market is unsafe\".")
 
   const snapshot = participant.getSafetySnapshot()
-  assert.equal(snapshot.markets.find((market) => market.symbol === "DOGEUSDT").status, "SAFE_TO_SHUTDOWN")
-  assert.equal(snapshot.markets.find((market) => market.symbol === "SOLUSDT").status, "UNSAFE")
-  assert.equal(participant.isSafeToShutdown(), false)
+  assert.equal(snapshot.markets.find((market) => market.symbol === "DOGEUSDT").status, "SAFE_TO_SHUTDOWN", "Expected snapshot.markets.find((market) => market.symbol === \"DOGEUSDT\").s to equal \"SAFE_TO_SHUTDOWN\" in \"keeps each market safety marker independent and blocks the strategy while one market is unsafe\".")
+  assert.equal(snapshot.markets.find((market) => market.symbol === "SOLUSDT").status, "UNSAFE", "Expected snapshot.markets.find((market) => market.symbol === \"SOLUSDT\").st to equal \"UNSAFE\" in \"keeps each market safety marker independent and blocks the strategy while one market is unsafe\".")
+  assert.equal(participant.isSafeToShutdown(), false, "Expected participant.isSafeToShutdown() to equal false in \"keeps each market safety marker independent and blocks the strategy while one market is unsafe\".")
 })
 
 test("does not mark a market safe when Journal durability cannot be proven", async () => {
@@ -143,7 +143,7 @@ test("does not mark a market safe when Journal durability cannot be proven", asy
   })
 
   participant.beginShutdown()
-  await assert.rejects(participant.waitUntilSafe(), /JOURNAL_NOT_DURABLE/)
+  await assert.rejects(participant.waitUntilSafe(), /JOURNAL_NOT_DURABLE/, "Expected participant.waitUntilSafe() to reject under the specified failure condition in \"does not mark a market safe when Journal durability cannot be proven\".")
   assert.equal(
     participant.getSafetySnapshot().markets.every((market) => market.status === "UNSAFE"),
     true,
@@ -167,7 +167,7 @@ test("rechecks a market immediately when late evidence invalidates it during ano
   participant.beginShutdown()
   await participant.waitUntilSafe()
 
-  assert.equal(invalidated, true)
-  assert.equal(participant.isSafeToShutdown(), true)
-  assert.ok(calls.filter((call) => call === "audit:DOGEUSDT").length >= 2)
+  assert.equal(invalidated, true, "Expected invalidated to equal true in \"rechecks a market immediately when late evidence invalidates it during another market audit\".")
+  assert.equal(participant.isSafeToShutdown(), true, "Expected participant.isSafeToShutdown() to equal true in \"rechecks a market immediately when late evidence invalidates it during another market audit\".")
+  assert.ok(calls.filter((call) => call === "audit:DOGEUSDT").length >= 2, "Expected condition (calls.filter((call) => call === \"audit:DOGEUSDT\").length >= 2) to be true in \"rechecks a market immediately when late evidence invalidates it during another market audit\".")
 })

@@ -50,7 +50,7 @@ test("does not treat an external/manual open order as a Conservative-owned shutd
     },
   })
 
-  assert.equal(result.ok, true)
+  assert.equal(result.ok, true, "Expected result.ok to equal true in \"does not treat an external/manual open order as a Conservative-owned shutdown blocker\".")
   assert.equal(
     result.data.markets[0].status,
     "SAFE_TO_SHUTDOWN",

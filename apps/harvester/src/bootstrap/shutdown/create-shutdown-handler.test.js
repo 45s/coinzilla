@@ -350,7 +350,7 @@ test("accepts an AccountSnapshot return value after its CLOSING audit has been d
 
   await fixture.stop()
 
-  assert.equal(fixture.state.status, "STOPPED")
-  assert.ok(calls.includes("closing-audit:COMPLETE"))
-  assert.ok(calls.includes("journal-flush"))
+  assert.equal(fixture.state.status, "STOPPED", "Expected fixture.state.status to equal \"STOPPED\" in \"accepts an AccountSnapshot return value after its CLOSING audit has been durably published\".")
+  assert.ok(calls.includes("closing-audit:COMPLETE"), "Expected condition (calls.includes(\"closing-audit:COMPLETE\")) to be true in \"accepts an AccountSnapshot return value after its CLOSING audit has been durably published\".")
+  assert.ok(calls.includes("journal-flush"), "Expected condition (calls.includes(\"journal-flush\")) to be true in \"accepts an AccountSnapshot return value after its CLOSING audit has been durably published\".")
 })
