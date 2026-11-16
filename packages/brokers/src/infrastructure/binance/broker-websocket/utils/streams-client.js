@@ -11,27 +11,27 @@ const MAX_STREAMS_PER_CONNECTION = 1_024
 const MAX_STREAMS_PER_SUBSCRIBE = 200
 
 function matchesRawStream(stream, message) {
-  if (Array.isArray(message)) return message.some((item) => matchesRawStream(stream, item))
+  if (Array.isArray(message)) {return message.some((item) => matchesRawStream(stream, item))}
 
   const symbol = typeof message.s === "string" ? message.s.toLowerCase() : null
   if (stream.startsWith("!")) {
-    if (stream === "!miniTicker@arr") return message.e === "24hrMiniTicker"
-    if (stream === "!ticker@arr") return message.e === "24hrTicker"
+    if (stream === "!miniTicker@arr") {return message.e === "24hrMiniTicker"}
+    if (stream === "!ticker@arr") {return message.e === "24hrTicker"}
     const window = stream.match(/^!ticker_(1h|4h)@arr$/)?.[1]
     return Boolean(window && message.e === `${window}Ticker`)
   }
 
   const [streamSymbol, streamType] = stream.split("@")
-  if (symbol !== streamSymbol) return false
+  if (symbol !== streamSymbol) {return false}
 
-  if (streamType === "aggTrade") return message.e === "aggTrade"
-  if (streamType === "trade") return message.e === "trade"
-  if (streamType === "miniTicker") return message.e === "24hrMiniTicker"
-  if (streamType === "ticker") return message.e === "24hrTicker"
-  if (streamType === "bookTicker") return message.e === undefined || message.e === "bookTicker"
-  if (streamType.startsWith("kline_")) return message.e === "kline" && message.k?.i === streamType.slice(6)
-  if (streamType.startsWith("ticker_")) return message.e === `${streamType.slice(7)}Ticker`
-  if (streamType.startsWith("depth")) return message.e === "depthUpdate"
+  if (streamType === "aggTrade") {return message.e === "aggTrade"}
+  if (streamType === "trade") {return message.e === "trade"}
+  if (streamType === "miniTicker") {return message.e === "24hrMiniTicker"}
+  if (streamType === "ticker") {return message.e === "24hrTicker"}
+  if (streamType === "bookTicker") {return message.e === undefined || message.e === "bookTicker"}
+  if (streamType.startsWith("kline_")) {return message.e === "kline" && message.k?.i === streamType.slice(6)}
+  if (streamType.startsWith("ticker_")) {return message.e === `${streamType.slice(7)}Ticker`}
+  if (streamType.startsWith("depth")) {return message.e === "depthUpdate"}
   return false
 }
 
@@ -77,14 +77,14 @@ export class BinanceStreamsClient {
     if (typeof url !== "string" || !url.startsWith("wss://") && !url.startsWith("ws://")) {
       throw new TypeError("A valid WebSocket Streams URL is required")
     }
-    if (typeof transportFactory !== "function") throw new TypeError("transportFactory must be a function")
-    if (!Number.isInteger(ackTimeout) || ackTimeout < 1) throw new RangeError("ackTimeout must be a positive integer")
-    if (!Number.isInteger(reconnectDelay) || reconnectDelay < 1) throw new RangeError("reconnectDelay must be a positive integer")
+    if (typeof transportFactory !== "function") {throw new TypeError("transportFactory must be a function")}
+    if (!Number.isInteger(ackTimeout) || ackTimeout < 1) {throw new RangeError("ackTimeout must be a positive integer")}
+    if (!Number.isInteger(reconnectDelay) || reconnectDelay < 1) {throw new RangeError("reconnectDelay must be a positive integer")}
     if (!Number.isInteger(maxReconnectDelay) || maxReconnectDelay < reconnectDelay) {
       throw new RangeError("maxReconnectDelay must be greater than or equal to reconnectDelay")
     }
-    if (!Number.isInteger(rotationDelay) || rotationDelay < 1) throw new RangeError("rotationDelay must be a positive integer")
-    if (typeof onError !== "function") throw new TypeError("onError must be a function")
+    if (!Number.isInteger(rotationDelay) || rotationDelay < 1) {throw new RangeError("rotationDelay must be a positive integer")}
+    if (typeof onError !== "function") {throw new TypeError("onError must be a function")}
 
     this.url = url
     this.transportFactory = transportFactory
@@ -122,9 +122,9 @@ export class BinanceStreamsClient {
    * @returns {Promise<string[]>} The normalized stream names subscribed.
    */
   async subscribe(streamNames, listener) {
-    if (typeof listener !== "function") throw new TypeError("A stream listener function is required")
+    if (typeof listener !== "function") {throw new TypeError("A stream listener function is required")}
     const streams = [...new Set((Array.isArray(streamNames) ? streamNames : [streamNames]).map(validateStreamName))]
-    if (streams.length === 0) throw new TypeError("At least one stream is required")
+    if (streams.length === 0) {throw new TypeError("At least one stream is required")}
 
     return this.#enqueueOperation(async () => {
       const addedListeners = []
@@ -163,7 +163,7 @@ export class BinanceStreamsClient {
           }
         } catch (error) {
           if (activatedStreams.length > 0) {
-            for (const stream of activatedStreams) this.#activeStreams.delete(stream)
+            for (const stream of activatedStreams) {this.#activeStreams.delete(stream)}
             this.#request("UNSUBSCRIBE", activatedStreams)
               .catch((cleanupError) => this.#reportError(cleanupError))
           }
@@ -187,7 +187,7 @@ export class BinanceStreamsClient {
    */
   async unsubscribe(streamNames, listener) {
     const streams = [...new Set((Array.isArray(streamNames) ? streamNames : [streamNames]).map(validateStreamName))]
-    if (streams.length === 0) throw new TypeError("At least one stream is required")
+    if (streams.length === 0) {throw new TypeError("At least one stream is required")}
     if (listener !== undefined && typeof listener !== "function") {
       throw new TypeError("listener must be a function when provided")
     }
@@ -207,15 +207,15 @@ export class BinanceStreamsClient {
 
       for (const stream of streams) {
         const listeners = this.#listeners.get(stream)
-        if (!listeners) continue
-        if (listener === undefined) listeners.clear()
-        else listeners.delete(listener)
+        if (!listeners) {continue}
+        if (listener === undefined) {listeners.clear()}
+        else {listeners.delete(listener)}
         if (listeners.size === 0) {
           this.#listeners.delete(stream)
           this.#activeStreams.delete(stream)
         }
       }
-      if (this.#listeners.size === 0) this.#clearReconnectTimer()
+      if (this.#listeners.size === 0) {this.#clearReconnectTimer()}
 
       return streams
     })
@@ -237,7 +237,7 @@ export class BinanceStreamsClient {
     this.#state = "closed"
     this.#ready = false
     this.#detachTransportListeners()
-    if (transport) await transport.close()
+    if (transport) {await transport.close()}
   }
 
   #enqueueOperation(operation) {
@@ -247,13 +247,13 @@ export class BinanceStreamsClient {
   }
 
   async #connect(isReconnect, initialStreams = []) {
-    if (isReconnect && this.#listeners.size === 0) return this
-    if (this.#state === "open") return this
-    if (this.#state === "connecting") return this.#connectPromise
-    if (this.#manualDisconnect) throw new Error("Binance Streams client has been disconnected")
+    if (isReconnect && this.#listeners.size === 0) {return this}
+    if (this.#state === "open") {return this}
+    if (this.#state === "connecting") {return this.#connectPromise}
+    if (this.#manualDisconnect) {throw new Error("Binance Streams client has been disconnected")}
 
     const connectionStreams = isReconnect ? [...this.#listeners.keys()] : [...initialStreams]
-    if (connectionStreams.length === 0) throw new Error("At least one desired stream is required to connect")
+    if (connectionStreams.length === 0) {throw new Error("At least one desired stream is required to connect")}
 
     this.#clearReconnectTimer()
     this.#state = "connecting"
@@ -270,7 +270,7 @@ export class BinanceStreamsClient {
       }
     } catch (error) {
       this.#state = "closed"
-      if (!this.#manualDisconnect && isReconnect) this.#scheduleReconnect()
+      if (!this.#manualDisconnect && isReconnect) {this.#scheduleReconnect()}
       throw error
     }
 
@@ -318,7 +318,7 @@ export class BinanceStreamsClient {
         }
       }
       for (const stream of initialBatch) {
-        if (desiredStreams.has(stream)) this.#activeStreams.add(stream)
+        if (desiredStreams.has(stream)) {this.#activeStreams.add(stream)}
       }
 
       const remainingStreams = connectionStreams
@@ -329,7 +329,7 @@ export class BinanceStreamsClient {
         if (this.#transport !== transport || this.#manualDisconnect || this.#state !== "open") {
           throw new Error("Binance Streams connection was superseded")
         }
-        for (const stream of batch) this.#activeStreams.add(stream)
+        for (const stream of batch) {this.#activeStreams.add(stream)}
       }
 
       this.#ready = true
@@ -348,10 +348,10 @@ export class BinanceStreamsClient {
           this.#reportError(closeError)
         }
       }
-      if (!this.#manualDisconnect && isReconnect) this.#scheduleReconnect()
+      if (!this.#manualDisconnect && isReconnect) {this.#scheduleReconnect()}
       throw error
     }).finally(() => {
-      if (this.#transport === transport) this.#connectPromise = null
+      if (this.#transport === transport) {this.#connectPromise = null}
     })
 
     return this.#connectPromise
@@ -372,9 +372,9 @@ export class BinanceStreamsClient {
     for (const stream of streams) {
       const listeners = this.#listeners.get(stream)
       listeners?.delete(listener)
-      if (listeners?.size === 0) this.#listeners.delete(stream)
+      if (listeners?.size === 0) {this.#listeners.delete(stream)}
     }
-    if (this.#listeners.size === 0) this.#clearReconnectTimer()
+    if (this.#listeners.size === 0) {this.#clearReconnectTimer()}
   }
 
   #request(method, streams) {
@@ -388,21 +388,26 @@ export class BinanceStreamsClient {
         this.#pending.delete(id)
         this.#ackTimeouts.delete(timeout)
         this.#controlQueue = this.#controlQueue.filter((item) => item.id !== id)
-        if (this.#controlQueue.length === 0) this.#clearPumpTimer()
+        if (this.#controlQueue.length === 0) {this.#clearPumpTimer()}
         reject(new Error(`Binance Streams ${method} acknowledgement timed out`))
       }, this.ackTimeout)
       this.#ackTimeouts.add(timeout)
-      this.#pending.set(id, { resolve, reject, timeout, method })
+      this.#pending.set(id, { resolve,
+reject,
+timeout,
+method })
 
-      const request = { method, id }
-      if (streams !== undefined) request.params = streams
-      this.#controlQueue.push({ id, payload: JSON.stringify(request) })
+      const request = { method,
+id }
+      if (streams !== undefined) {request.params = streams}
+      this.#controlQueue.push({ id,
+payload: JSON.stringify(request) })
       this.#pumpControlQueue()
     })
   }
 
   #pumpControlQueue() {
-    if (this.#pumpTimer !== null || this.#controlQueue.length === 0 || this.#state !== "open") return
+    if (this.#pumpTimer !== null || this.#controlQueue.length === 0 || this.#state !== "open") {return}
     const wait = Math.max(0, CONTROL_MESSAGE_INTERVAL - (this.now() - this.#lastControlSent))
     if (wait > 0) {
       this.#pumpTimer = this.setTimeout(() => {
@@ -434,7 +439,7 @@ export class BinanceStreamsClient {
   }
 
   #handleMessage(rawMessage, transport) {
-    if (this.#transport !== transport) return
+    if (this.#transport !== transport) {return}
 
     let parsed
     try {
@@ -447,7 +452,7 @@ export class BinanceStreamsClient {
     if (parsed.acknowledgement) {
       const { id, result, code, msg } = parsed.acknowledgement
       const pending = this.#pending.get(id)
-      if (!pending) return
+      if (!pending) {return}
       this.#pending.delete(id)
       this.#clearAckTimeout(pending.timeout)
       if (code !== undefined) {
@@ -477,7 +482,7 @@ export class BinanceStreamsClient {
       }
       for (const [stream, listeners] of this.#listeners) {
         const matches = parsed.stream ? parsed.stream === stream : matchesRawStream(stream, message)
-        if (!matches) continue
+        if (!matches) {continue}
         for (const listener of listeners) {
           try {
             listener(message)
@@ -490,7 +495,7 @@ export class BinanceStreamsClient {
   }
 
   #handleClose(event, transport) {
-    if (this.#transport !== transport) return
+    if (this.#transport !== transport) {return}
     this.#detachTransportListeners()
     const wasReady = this.#ready
     this.#ready = false
@@ -501,11 +506,11 @@ export class BinanceStreamsClient {
     this.#clearPumpTimer()
     this.#controlQueue.length = 0
     this.#rejectPending(new Error(`Binance Streams connection closed (${event.code}): ${event.reason}`))
-    if (!this.#manualDisconnect && wasReady && this.#listeners.size > 0) this.#scheduleReconnect()
+    if (!this.#manualDisconnect && wasReady && this.#listeners.size > 0) {this.#scheduleReconnect()}
   }
 
   #scheduleReconnect() {
-    if (this.#manualDisconnect || this.#reconnectTimer !== null || this.#listeners.size === 0) return
+    if (this.#manualDisconnect || this.#reconnectTimer !== null || this.#listeners.size === 0) {return}
     const delay = Math.min(
       this.reconnectDelay * (2 ** this.#reconnectAttempts),
       this.maxReconnectDelay,
