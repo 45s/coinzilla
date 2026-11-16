@@ -121,7 +121,7 @@ scope: "ACCOUNT",
 symbol: null,
 reason: "ACCOUNTING_INTEGRITY_FAILURE",
 evidenceDigest: "a".repeat(64),
-  }, `safety-blocker-raised:${  resolvedBlockerId}`)] : []),
+  }, `safety-blocker-raised:${  blockerId}`)] : []),
 ]
 
 const makeStore = (recordsValue) => ({
