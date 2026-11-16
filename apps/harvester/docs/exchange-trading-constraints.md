@@ -69,7 +69,7 @@ The Bitunix Spot market catalog does not expose a complete canonical trading-rul
 
 - `minVolume` is the minimum trading quantity and maps to canonical `MIN_QUANTITY` using the base asset.
 - `minPrice` is the minimum trading value and maps to canonical `MIN_NOTIONAL` using the quote asset.
-- Missing optional minimum fields remain `UNKNOWN`; malformed or negative decimal values fail metadata conversion.
+- Missing optional minimum fields remain `UNKNOWN`; malformed or negative decimal values fail metadata conversion. The adapter emits `SUPPORTED` only for documented minimum fields that are present; all unresolved canonical constraints remain `UNKNOWN`.
 - `PRICE_INCREMENT`, `QUANTITY_INCREMENT`, `MIN_PRICE`, `MAX_PRICE`, `MAX_QUANTITY`, and `MAX_NOTIONAL` remain `UNKNOWN` unless official evidence establishes their exact semantics.
 - `basePrecision`, `quotePrecision`, and `precisions` are not converted into tick size, step size, or depth aggregation. Their meaning is unresolved. The separate `token-specification.json` remains the sole runtime source of configured pair precision.
 - The .NET reference fixture includes `maxAmount`, `maxLimitOrderAmount`, and `maxMarketOrderAmount`, but the official Spot catalog does not document their semantics. Their presence is recorded only as unvalidated source metadata; they are not mapped into maximum trading rules.

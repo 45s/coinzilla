@@ -6,8 +6,6 @@ import {
   Money,
   Quantity,
   TradingRules,
-  TRADING_RULE_CONSTRAINT_TYPES,
-  TRADING_RULE_STATUSES,
 } from "@coinzilla/entities"
 
 import { createBitunixMarketMetadata } from "./bitunix-market-metadata.js"
@@ -56,18 +54,18 @@ test("maps Bitunix minimum volume and trading value into canonical constraints",
 
   const minQuantity = getConstraint({
     tradingRules: metadata.tradingRules,
-    type: TRADING_RULE_CONSTRAINT_TYPES.MIN_QUANTITY,
+    type: "MIN_QUANTITY",
   })
-  assert.equal(minQuantity.status, TRADING_RULE_STATUSES.SUPPORTED, "minVolume must be supported")
+  assert.equal(minQuantity.status, "SUPPORTED", "minVolume must be supported")
   assert.ok(minQuantity.value instanceof Quantity, "minVolume must use base-asset Quantity")
   assert.equal(minQuantity.value.amount, "0.001", "minVolume must remain an exact decimal string")
   assert.equal(minQuantity.value.asset.code, "BTC", "minVolume must use the base asset")
 
   const minNotional = getConstraint({
     tradingRules: metadata.tradingRules,
-    type: TRADING_RULE_CONSTRAINT_TYPES.MIN_NOTIONAL,
+    type: "MIN_NOTIONAL",
   })
-  assert.equal(minNotional.status, TRADING_RULE_STATUSES.SUPPORTED, "minPrice must be supported")
+  assert.equal(minNotional.status, "SUPPORTED", "minPrice must be supported")
   assert.ok(minNotional.value instanceof Money, "minPrice must use quote-asset Money")
   assert.equal(minNotional.value.amount, "0.01", "minPrice must remain an exact decimal string")
   assert.equal(minNotional.value.asset.code, "USDT", "minPrice must use the quote asset")
@@ -77,8 +75,8 @@ test("does not derive price or quantity increments from precision metadata", () 
   const metadata = createMetadata()
 
   for (const type of [
-    TRADING_RULE_CONSTRAINT_TYPES.PRICE_INCREMENT,
-    TRADING_RULE_CONSTRAINT_TYPES.QUANTITY_INCREMENT,
+    "PRICE_INCREMENT",
+    "QUANTITY_INCREMENT",
   ]) {
     const constraint = getConstraint({
       tradingRules: metadata.tradingRules,
@@ -86,7 +84,7 @@ test("does not derive price or quantity increments from precision metadata", () 
     })
     assert.equal(
       constraint.status,
-      TRADING_RULE_STATUSES.UNKNOWN,
+      "UNKNOWN",
       `${type} must remain unknown until Bitunix documents its increment semantics`,
     )
   }
@@ -148,17 +146,17 @@ test("keeps absent optional minimum constraints unknown", () => {
   assert.equal(
     getConstraint({
       tradingRules: metadata.tradingRules,
-      type: TRADING_RULE_CONSTRAINT_TYPES.MIN_NOTIONAL,
+      type: "MIN_NOTIONAL",
     }).status,
-    TRADING_RULE_STATUSES.UNKNOWN,
+    "UNKNOWN",
     "missing minPrice must not be guessed as zero or unsupported",
   )
   assert.equal(
     getConstraint({
       tradingRules: metadata.tradingRules,
-      type: TRADING_RULE_CONSTRAINT_TYPES.MIN_QUANTITY,
+      type: "MIN_QUANTITY",
     }).status,
-    TRADING_RULE_STATUSES.UNKNOWN,
+    "UNKNOWN",
     "missing minVolume must not be guessed as zero or unsupported",
   )
 })
@@ -174,7 +172,7 @@ test("preserves explicit zero minimum constraints without inventing a positive m
   assert.equal(
     getConstraint({
       tradingRules: metadata.tradingRules,
-      type: TRADING_RULE_CONSTRAINT_TYPES.MIN_NOTIONAL,
+      type: "MIN_NOTIONAL",
     }).value.amount,
     "0",
     "explicit zero minPrice must remain zero",
@@ -182,7 +180,7 @@ test("preserves explicit zero minimum constraints without inventing a positive m
   assert.equal(
     getConstraint({
       tradingRules: metadata.tradingRules,
-      type: TRADING_RULE_CONSTRAINT_TYPES.MIN_QUANTITY,
+      type: "MIN_QUANTITY",
     }).value.amount,
     "0",
     "explicit zero minVolume must remain zero",
@@ -234,9 +232,9 @@ test("keeps precision and undocumented maximum metadata explicitly unvalidated",
   assert.equal(
     getConstraint({
       tradingRules: metadata.tradingRules,
-      type: TRADING_RULE_CONSTRAINT_TYPES.MAX_QUANTITY,
+      type: "MAX_QUANTITY",
     }).status,
-    TRADING_RULE_STATUSES.UNKNOWN,
+    "UNKNOWN",
     "undocumented maximum fields must not become a supported maximum quantity",
   )
 })

@@ -4,8 +4,6 @@ import {
   Money,
   Quantity,
   TradingRules,
-  TRADING_RULE_CONSTRAINT_TYPES,
-  TRADING_RULE_STATUSES,
 } from "@coinzilla/entities"
 import { assertDecimalString, compareDecimal } from "@coinzilla/utils"
 
@@ -19,7 +17,7 @@ function normalizeRequiredCode({ value, field }) {
 function createUnknownConstraint({ type }) {
   return Object.freeze({
     type,
-    status: TRADING_RULE_STATUSES.UNKNOWN,
+    status: "UNKNOWN",
   })
 }
 
@@ -38,7 +36,7 @@ function createMinimumConstraint({ type, value, asset, ValueType, field }) {
 
   return Object.freeze({
     type,
-    status: TRADING_RULE_STATUSES.SUPPORTED,
+    status: "SUPPORTED",
     value: new ValueType({ amount, asset }),
   })
 }
@@ -122,36 +120,36 @@ export function createBitunixMarketMetadata({ symbolFilters } = {}) {
   })
   const constraints = [
     createUnknownConstraint({
-      type: TRADING_RULE_CONSTRAINT_TYPES.PRICE_INCREMENT,
+      type: "PRICE_INCREMENT",
     }),
     createUnknownConstraint({
-      type: TRADING_RULE_CONSTRAINT_TYPES.MIN_PRICE,
+      type: "MIN_PRICE",
     }),
     createUnknownConstraint({
-      type: TRADING_RULE_CONSTRAINT_TYPES.MAX_PRICE,
+      type: "MAX_PRICE",
     }),
     createUnknownConstraint({
-      type: TRADING_RULE_CONSTRAINT_TYPES.QUANTITY_INCREMENT,
+      type: "QUANTITY_INCREMENT",
     }),
     createMinimumConstraint({
-      type: TRADING_RULE_CONSTRAINT_TYPES.MIN_QUANTITY,
+      type: "MIN_QUANTITY",
       value: symbolFilters.minVolume,
       asset: baseAsset,
       ValueType: Quantity,
       field: "minVolume",
     }),
     createUnknownConstraint({
-      type: TRADING_RULE_CONSTRAINT_TYPES.MAX_QUANTITY,
+      type: "MAX_QUANTITY",
     }),
     createMinimumConstraint({
-      type: TRADING_RULE_CONSTRAINT_TYPES.MIN_NOTIONAL,
+      type: "MIN_NOTIONAL",
       value: symbolFilters.minPrice,
       asset: quoteAsset,
       ValueType: Money,
       field: "minPrice",
     }),
     createUnknownConstraint({
-      type: TRADING_RULE_CONSTRAINT_TYPES.MAX_NOTIONAL,
+      type: "MAX_NOTIONAL",
     }),
   ]
   const tradingRules = new TradingRules({ market, constraints })
