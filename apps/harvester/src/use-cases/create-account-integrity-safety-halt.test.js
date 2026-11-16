@@ -2,7 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { createAccountIntegritySafetyHalt } from "./create-account-integrity-safety-halt.js"
 
-const test = (name, ...args) => nodeTest(`[create-account-integrity-safety-halt.test.js] ${  name}`, ...args)
+const test = (...[name, ...args]) => nodeTest(`[create-account-integrity-safety-halt.test.js] ${  name}`, ...args)
 
 test("reconciles owned order identities before cancelling BUYs", async () => {
   const calls = []
