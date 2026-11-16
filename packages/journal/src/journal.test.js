@@ -872,9 +872,18 @@ async function assertAppendFailurePoisonsWriter({
       context,
       appendState,
     }) {
-  await assertFirstAppendFailure({ context, appendState })
-  await assertLaterAppendAndFlushAreRejected({ context, appendState })
-  await assertFailedWriterResourcesAreReleased({ context, appendState })
+  await assertFirstAppendFailure({
+    context,
+    appendState,
+  })
+  await assertLaterAppendAndFlushAreRejected({
+    context,
+    appendState,
+  })
+  await assertFailedWriterResourcesAreReleased({
+    context,
+    appendState,
+  })
 }
 
 test("poisons the writer after append failure and releases owned resources on close", async () => {
@@ -897,7 +906,10 @@ test("poisons the writer after append failure and releases owned resources on cl
   }
 
   try {
-    await assertAppendFailurePoisonsWriter({ context, appendState })
+    await assertAppendFailurePoisonsWriter({
+      context,
+      appendState,
+    })
   } finally {
     await context.journal.close()
     await context.eventBus.close()
@@ -1219,9 +1231,16 @@ test("retries a transient disk sync failure and durably persists records written
       context,
       attempt: 1,
     })
-    await assertFirstTransientSyncFailure({ context, first })
+    await assertFirstTransientSyncFailure({
+      context,
+      first,
+    })
 
-    await assertTransientSyncRetry({ context, first, syncState })
+    await assertTransientSyncRetry({
+      context,
+      first,
+      syncState,
+    })
   } finally {
     if (context.journal.store.sessionHandle) {
       delete context.journal.store.sync
