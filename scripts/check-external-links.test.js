@@ -14,7 +14,8 @@ import {
   shouldFailOnBroken,
 } from './check-external-links.js';
 
-function response(status, headers = {}) {
+function response(...args) {
+  const [status, headers = {}] = args;
   const values = new Map(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]));
   return {
     status,
@@ -23,7 +24,8 @@ function response(status, headers = {}) {
   };
 }
 
-function candidate(url, path = 'README.md') {
+function candidate(...args) {
+  const [url, path = 'README.md'] = args;
   return {
     status: 'candidate',
     url: new URL(url).href,
@@ -107,10 +109,13 @@ test('rejects and redacts credential-like query parameters without requesting th
   assert.ok(links.every((link) => link.status === 'invalid'));
   assert.doesNotMatch(JSON.stringify(links), /secret-(?:access|api|signature)/);
 
-  const extracted = extractExternalLinks(secrets.map((url, index) => ({
-    path: `docs/${  index  }.md`,
-    content: `[credential](<${  url  }>)`,
-  })));
+  const extracted = extractExternalLinks(secrets.map((...args) => {
+    const [url, index] = args;
+    return {
+      path: `docs/${  index  }.md`,
+      content: `[credential](<${  url  }>)`,
+    };
+  }));
   assert.ok(extracted.every((link) => link.status === 'invalid'));
   assert.doesNotMatch(JSON.stringify(extracted), /secret-(?:access|api|signature)/);
 
@@ -127,7 +132,10 @@ test('rejects and redacts credential-like query parameters without requesting th
 test('keeps GET 404/410 unverifiable when HEAD first reports access control', async () => {
   for (const headStatus of [401, 403]) {
     const result = await checkExternalLink(candidate('https://access-controlled.example/'), {
-      fetchImpl: async (_url, options) => response(options.method === 'HEAD' ? headStatus : 404),
+      fetchImpl: async (...args) => {
+        const [, options] = args;
+        return response(options.method === 'HEAD' ? headStatus : 404);
+      },
       sleep: noDelay,
       minHostIntervalMs: 0,
     });
@@ -140,7 +148,8 @@ test('keeps GET 404/410 unverifiable when HEAD first reports access control', as
 test('HEAD success is sufficient and avoids a GET request', async () => {
   const methods = [];
   const result = await checkExternalLink(candidate('https://ok.example/'), {
-    fetchImpl: async (_url, options) => {
+    fetchImpl: async (...args) => {
+      const [, options] = args;
       methods.push(options.method);
       return response(200);
     },
@@ -155,7 +164,8 @@ test('HEAD success is sufficient and avoids a GET request', async () => {
 test('falls back to a ranged GET when HEAD is unsupported', async () => {
   const calls = [];
   const result = await checkExternalLink(candidate('https://head-blocked.example/'), {
-    fetchImpl: async (url, options) => {
+    fetchImpl: async (...args) => {
+      const [url, options] = args;
       calls.push({ url,
 method: options.method,
 range: options.headers.range });
@@ -172,12 +182,18 @@ range: options.headers.range });
 
 test('requires GET confirmation before classifying HEAD 404/410 as broken', async () => {
   const broken = await checkExternalLink(candidate('https://gone.example/'), {
-    fetchImpl: async (_url, options) => response(options.method === 'HEAD' ? 404 : 410),
+    fetchImpl: async (...args) => {
+      const [, options] = args;
+      return response(options.method === 'HEAD' ? 404 : 410);
+    },
     sleep: noDelay,
     minHostIntervalMs: 0,
   });
   const recovered = await checkExternalLink(candidate('https://head-false-positive.example/'), {
-    fetchImpl: async (_url, options) => response(options.method === 'HEAD' ? 404 : 200),
+    fetchImpl: async (...args) => {
+      const [, options] = args;
+      return response(options.method === 'HEAD' ? 404 : 200);
+    },
     sleep: noDelay,
     minHostIntervalMs: 0,
   });
@@ -352,7 +368,8 @@ test('checks host groups and returns stable results', async () => {
     candidate('https://other.example/c'),
   ];
   const results = await checkExternalLinks(links, {
-    fetchImpl: async (url, options) => {
+    fetchImpl: async (...args) => {
+      const [url, options] = args;
       calls.push(`${new URL(url).hostname  }:${  options.method}`);
       return response(200);
     },
@@ -475,8 +492,10 @@ family: 6 },
         : [{ address: '127.0.0.1',
 family: 4 }];
     },
-    requestImpl: (url, options, onResponse) => {
-      options.lookup(url.hostname, { all: true }, (error, addresses) => {
+    requestImpl: (...args) => {
+      const [url, options, onResponse] = args;
+      options.lookup(url.hostname, { all: true }, (...lookupArgs) => {
+        const [error, addresses] = lookupArgs;
         assert.equal(error, null, 'The socket lookup must return only addresses that passed DNS validation.');
         connectedAddresses = addresses;
       });
@@ -503,12 +522,15 @@ test('revalidates DNS for every redirect and blocks a redirect to a private addr
 
   const requestedHosts = [];
   const result = await checkExternalLink(candidate('https://public.example.com/start'), {
-    fetchImpl: (url, init) => fetchPinned(url, init, {
+    fetchImpl: (...args) => {
+      const [url, init] = args;
+      return fetchPinned(url, init, {
       resolveHost: async (hostname) => [{
         address: hostname === 'public.example.com' ? '8.8.8.8' : '127.0.0.1',
         family: 4,
       }],
-      requestImpl: (requestUrl, options, onResponse) => {
+      requestImpl: (...args) => {
+        const [requestUrl, options, onResponse] = args;
         requestedHosts.push(requestUrl.hostname);
         options.lookup(requestUrl.hostname, {}, (error) => {
           assert.equal(error, null, 'Only the already-vetted public redirect source may reach the socket lookup.');
@@ -534,7 +556,9 @@ end() {} };
 test('blocks an initial public-looking hostname when any DNS answer is private before opening a socket', async () => {
   let openedConnections = 0;
   const result = await checkExternalLink(candidate('https://mixed-answer.example.com/start'), {
-    fetchImpl: (url, init) => fetchPinned(url, init, {
+    fetchImpl: (...args) => {
+      const [url, init] = args;
+      return fetchPinned(url, init, {
       resolveHost: async () => [
         { address: '8.8.8.8',
 family: 4 },
