@@ -807,8 +807,7 @@ retryable: true },
 })
 
 test("does not publish the open-orders audit after recovery is superseded during the account audit", async () => {
-  let fixture
-  fixture = createRecovery({
+  const fixture = createRecovery({
     publishAccountSnapshot: async () => {
       fixture.state.recoveryGeneration += 1
     },
@@ -886,8 +885,7 @@ data: [] }),
 })
 
 test("does not drain queued user-data events after recovery is superseded during the open-orders audit", async () => {
-  let fixture
-  fixture = createRecovery({
+  const fixture = createRecovery({
     publishOpenOrdersSnapshot: async () => {
       fixture.state.recoveryGeneration += 1
     },
@@ -1158,7 +1156,7 @@ test("keeps recovery blocked and retries the same generation after a transient a
   await fixture.state.recoveryTask
   assertAccountAuditFlushFailureBlocked({ fixture })
 
-  const firstAuditPublication = fixture.calls.accountAudits[0]
+  const [firstAuditPublication] = fixture.calls.accountAudits
   fixture.start()
   await fixture.state.recoveryTask
   assertAccountAuditFlushRetryCompleted({
@@ -1236,7 +1234,8 @@ test("does not let a terminal account-snapshot failure from a superseded recover
   const firstSnapshotStarted = new Promise((resolve) => {
     markFirstSnapshotStarted = resolve
   })
-  const firstSnapshot = new Promise((_resolve, reject) => {
+  const firstSnapshot = new Promise((...executorArgs) => {
+    const [, reject] = executorArgs
     rejectFirstSnapshot = reject
   })
   let snapshotReads = 0
