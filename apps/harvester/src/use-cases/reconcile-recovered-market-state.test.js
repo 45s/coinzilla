@@ -111,7 +111,7 @@ test("reconciles owned orders before auditing account-wide state and target-mark
 startTime: 100 },
     "Market history must be fetched only for the target market, from the operator-reviewed coverage boundary.",
   )
-  const auditCall = dependencies.calls.find(([name]) => name === "auditAccountState")[1]
+  const [, auditCall] = dependencies.calls.find(([name]) => name === "auditAccountState")
   assert.equal(auditCall.requireCompleteTradeHistory, true, "The audit must require exhausted history pagination.")
   assert.equal(auditCall.tradeHistoryScope, "MARKET", "A one-market audit must not claim account-wide history completeness.")
   assert.equal(auditCall.targetMarket, market, "The audit must be scoped to the exact canonical market.")
