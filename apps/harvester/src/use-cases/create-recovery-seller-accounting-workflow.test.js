@@ -331,3 +331,42 @@ test("treats a repeated terminal RS accounting event as an exact no-op", async (
   assert.equal(workflow.getOrderRegistry(), registryAfterFirst,
     "A replay must not release or recreate the terminal order reservation a second time.")
 })
+
+test("commits actual fills even when the independent legacy profitability gate fails", async () => {
+  const context = makeContext()
+  const legacyPosition = createLegacyPosition({
+    invested: "150",
+    quantity: "50",
+  })
+  const workflow = createRecoverySellerAccountingWorkflow({
+    initialPortfolio: context.portfolio,
+    initialOrderRegistry: context.openRegistry,
+    initialLegacyPositions: [{
+      market,
+      position: legacyPosition,
+      accounting: createLegacyPositionAccounting(),
+    }],
+  })
+
+  const result = await workflow.reconcileTerminalMixedSell({
+    reconciliation: context.reconciliation,
+    terminalOrder: context.terminalOrder,
+    canonicalFills: [context.fill],
+    canonicalFillAllocations: [context.allocation],
+    minProfit: "0.2",
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.applied, true,
+    "Confirmed exchange executions must always be accounted even when their profitability gate fails.")
+  assert.equal(result.data.profitability.recovery.eligible, true,
+    "The recovery allocation must retain its independent profitable result.")
+  assert.equal(result.data.profitability.legacy.eligible, false,
+    "The more expensive historical legacy basis must fail independently.")
+  assert.equal(result.data.profitability.eligible, false,
+    "Overall SELL profitability must fail when either applicable gate fails.")
+  assert.equal(workflow.getLegacyPosition({ marketId: market.id }).remainingQuantity, "49.99",
+    "Actual legacy base debit must still be recorded after a loss-making execution.")
+  assert.equal(workflow.getActiveOrders().length, 0,
+    "A fully reconciled terminal order releases its reservation even when realized profitability is below its gate.")
+})
