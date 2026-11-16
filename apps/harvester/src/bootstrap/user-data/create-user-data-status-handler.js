@@ -14,7 +14,7 @@ function logSystem(logger, data) {
 }
 
 function logUserDataStreamTransition({ state, logger, status } = {}) {
-  const error = status.error
+  const {error} = status
   const cause = error?.cause
   const authenticationExpired = status.authenticationExpired === true ||
     status.reason === "authentication_expired" ||
@@ -50,11 +50,11 @@ function logUserDataStreamTransition({ state, logger, status } = {}) {
       code: status.code,
     }
   } else if (status.type === "recovering") {
-    key = "reconnecting:" + (status.attempt ?? "unknown")
+    key = `reconnecting:${  status.attempt ?? "unknown"}`
     message = "User-data stream reconnecting"
     details = { attempt: status.attempt }
   } else if (status.type === "recovered") {
-    key = "reconnected:" + (status.recoveryGeneration ?? status.subscriptionId ?? status.attempt ?? "unknown")
+    key = `reconnected:${  status.recoveryGeneration ?? status.subscriptionId ?? status.attempt ?? "unknown"}`
     message = "User-data stream reconnected"
     details = {
       attempt: status.attempt,
@@ -70,7 +70,7 @@ function logUserDataStreamTransition({ state, logger, status } = {}) {
     Number.isSafeInteger(state.recoveryBrokerGeneration) &&
     state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration
   ) {
-    key = "restored:" + (status.recoveryGeneration ?? status.subscriptionId ?? "unknown")
+    key = `restored:${  status.recoveryGeneration ?? status.subscriptionId ?? "unknown"}`
     message = "User-data stream subscription restored"
     details = {
       subscriptionId: status.subscriptionId,
@@ -126,9 +126,10 @@ function logUserDataStreamTransition({ state, logger, status } = {}) {
     return
   }
 
-  if (state.lastLoggedStreamLifecycleKey === key) return
+  if (state.lastLoggedStreamLifecycleKey === key) {return}
   state.lastLoggedStreamLifecycleKey = key
-  const entry = { message, ...details }
+  const entry = { message,
+...details }
   if (level === "error") {
     logger?.error?.(entry)
     return
@@ -146,7 +147,7 @@ export function createUserDataStatusHandler({
   resumeDeferredStrategyEvaluations, onUserDataStatus,
 } = {}) {
   return (status = {}) => {
-    if (isStopped()) return
+    if (isStopped()) {return}
     if (status.brokerEvidence) {
       publishLifecycleEvent({
         eventPublisher,
@@ -155,7 +156,7 @@ export function createUserDataStatusHandler({
       })
     }
     if (status.type === "recovered" &&
-        state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration) return
+        state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration) {return}
     const isRepeatedRecoveredReminder = status.type === "recovered" &&
       state.lastReportedRecoveredGeneration === state.recoveryGeneration
     if (status.type === "recovered" && !isRepeatedRecoveredReminder) {
@@ -185,7 +186,9 @@ export function createUserDataStatusHandler({
         }),
       })
     }
-    logUserDataStreamTransition({ state, logger, status })
+    logUserDataStreamTransition({ state,
+logger,
+status })
     const isDiagnosticOnlyRpcError = status.type === "rpcError" &&
       status.recoveryRequired === false &&
       (status.reconciliationRequired === undefined || status.reconciliationRequired === false)
@@ -274,16 +277,18 @@ export function createUserDataStatusHandler({
       state.status = "INITIAL_ACCOUNT_SNAPSHOT_PENDING"
     }
     if (!isDiagnosticOnlyRpcError && status.type === "recovered" && status.recoveryRequired === true) {
-      if (state.startupComplete) startUserDataRecovery()
-      else state.pendingRecovery = true
+      if (state.startupComplete) {startUserDataRecovery()}
+      else {state.pendingRecovery = true}
     }
     try {
-      onUserDataStatus({ status, ready: state.ready })
+      onUserDataStatus({ status,
+ready: state.ready })
     } catch (error) {
       state.ready = false
       state.accountingFailed = true
       state.status = "STATUS_HANDLER_FAILED"
-      logger.error?.({ message: "user-data status handler failed", error })
+      logger.error?.({ message: "user-data status handler failed",
+error })
       void cancelOwnedBuysAfterAccountingFailure()
     }
   }
