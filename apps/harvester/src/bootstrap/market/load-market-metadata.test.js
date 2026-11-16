@@ -4,22 +4,42 @@ import { Asset, Market, Money, Quantity, TradingRules } from "@coinzilla/entitie
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { loadMarketMetadata } from "./load-market-metadata.js"
 
-const test = (name, ...args) => nodeTest("[load-market-metadata.test.js] " + name, ...args)
+const test = (name, ...args) => nodeTest(`[load-market-metadata.test.js] ${  name}`, ...args)
 
 const createMetadata = (symbol = "BTCUSDT") => {
-  const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
-  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-  const market = new Market({ venue: "binance", symbol, baseAsset, quoteAsset })
+  const baseAsset = new Asset({ id: "asset:BTC",
+code: "BTC" })
+  const quoteAsset = new Asset({ id: "asset:USDT",
+code: "USDT" })
+  const market = new Market({ venue: "binance",
+symbol,
+baseAsset,
+quoteAsset })
   const tradingRules = new TradingRules({
     market,
     constraints: [
-      { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.01", asset: quoteAsset }) },
-      { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.001", asset: baseAsset }) },
-      { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "0.001", asset: baseAsset }) },
-      { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
+      { type: "PRICE_INCREMENT",
+status: "SUPPORTED",
+value: new Money({ amount: "0.01",
+asset: quoteAsset }) },
+      { type: "QUANTITY_INCREMENT",
+status: "SUPPORTED",
+value: new Quantity({ amount: "0.001",
+asset: baseAsset }) },
+      { type: "MIN_QUANTITY",
+status: "SUPPORTED",
+value: new Quantity({ amount: "0.001",
+asset: baseAsset }) },
+      { type: "MIN_NOTIONAL",
+status: "SUPPORTED",
+value: new Money({ amount: "5",
+asset: quoteAsset }) },
     ],
   })
-  return { market, tradingRules, supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"], unvalidatedConstraints: [] }
+  return { market,
+tradingRules,
+supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+unvalidatedConstraints: [] }
 }
 
 test("loads every configured market and validates/emits trading rules only for enabled pairs", async () => {
@@ -34,12 +54,19 @@ test("loads every configured market and validates/emits trading rules only for e
     broker: {
       getSymbolFilters: async ({ symbol }) => {
         calls.push(symbol)
-        return { ok: true, data: responses.get(symbol) }
+        return { ok: true,
+data: responses.get(symbol) }
       },
     },
     pairs: {
-      BTCUSDT: { enabled: true, enableVolatilityProtection: true, orderQuantity: 0.01, investment: 100, makerPercent: 0, takerPercent: 0.1 },
-      ETHUSDT: { enabled: false, enableVolatilityProtection: true },
+      BTCUSDT: { enabled: true,
+enableVolatilityProtection: true,
+orderQuantity: 0.01,
+investment: 100,
+makerPercent: 0,
+takerPercent: 0.1 },
+      ETHUSDT: { enabled: false,
+enableVolatilityProtection: true },
     },
     marketMetadata,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
@@ -56,7 +83,8 @@ test("loads every configured market and validates/emits trading rules only for e
 test("fails startup when exchange metadata cannot be loaded for a configured market", async () => {
   await assert.rejects(
     loadMarketMetadata({
-      broker: { getSymbolFilters: async () => ({ ok: false, errors: [new Error("exchange metadata unavailable")] }) },
+      broker: { getSymbolFilters: async () => ({ ok: false,
+errors: [new Error("exchange metadata unavailable")] }) },
       pairs: { BTCUSDT: { enabled: true } },
       marketMetadata: new Map(),
       eventPublisher: { publish: () => ({ ok: true }) },
@@ -71,7 +99,8 @@ test("rejects mismatched market symbols before storing metadata", async () => {
   const marketMetadata = new Map()
   await assert.rejects(
     loadMarketMetadata({
-      broker: { getSymbolFilters: async () => ({ ok: true, data: createMetadata("ETHUSDT") }) },
+      broker: { getSymbolFilters: async () => ({ ok: true,
+data: createMetadata("ETHUSDT") }) },
       pairs: { BTCUSDT: { enabled: false } },
       marketMetadata,
       eventPublisher: { publish: () => ({ ok: true }) },
@@ -88,7 +117,9 @@ test("starts an enabled market with unsupported filters and retains their trace 
   const metadata = {
     ...createMetadata("BTCUSDT"),
     unvalidatedConstraints: [
-      { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE" },
+      { type: "DYNAMIC_PRICE_BAND",
+scope: "SYMBOL",
+sourceFilterType: "PERCENT_PRICE" },
     ],
   }
   const marketMetadata = new Map()
@@ -96,7 +127,8 @@ test("starts an enabled market with unsupported filters and retains their trace 
   const events = []
 
   await loadMarketMetadata({
-    broker: { getSymbolFilters: async () => ({ ok: true, data: metadata }) },
+    broker: { getSymbolFilters: async () => ({ ok: true,
+data: metadata }) },
     pairs: {
       BTCUSDT: {
         enabled: true,
