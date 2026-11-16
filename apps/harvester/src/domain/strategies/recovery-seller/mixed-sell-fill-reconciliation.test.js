@@ -489,10 +489,47 @@ if (typeof reconcileMixedSellFillOrder !== "function") {
     )
   })
 
-  test("rejects FILLED status when executed quantity is below original order quantity", () => {
+  test("treats an identical terminal reconciliation replay as an exact no-op", () => {
     const initial = makeOrderContext()
     const terminal = makeOrderContext({
       status: "FILLED",
+      executedQuantity: "5.01",
+    })
+    const allocation = makeAllocation({
+      fill: makeFill(),
+      orderRegistry: terminal.orderRegistry,
+      recoveryQuantity: "5.01",
+      legacyQuantity: "0",
+    })
+    const staged = stageMixedSellFillAllocation({
+      reconciliation: createMixedSellFillReconciliation(initial),
+      allocation,
+    }).reconciliation
+    const first = reconcileMixedSellFillOrder({
+      reconciliation: staged,
+      terminalOrder: terminal.order,
+      orderRegistry: terminal.orderRegistry,
+      canonicalFillAllocations: [allocation],
+    })
+    const replay = reconcileMixedSellFillOrder({
+      reconciliation: first.reconciliation,
+      terminalOrder: terminal.order,
+      orderRegistry: terminal.orderRegistry,
+      canonicalFillAllocations: [allocation],
+    })
+    assert.equal(replay.reconciliation, first.reconciliation, "An identical terminal replay must preserve the reconciled state reference.")
+    assert.equal(replay.reconciled, false, "An identical terminal replay must not reconcile twice.")
+    assert.equal(replay.duplicate, true, "An identical terminal replay must be explicitly classified.")
+  })
+
+  test("rejects a conflicting terminal status after an order was reconciled", () => {
+    const initial = makeOrderContext()
+    const canceled = makeOrderContext({
+      status: "CANCELED",
+      executedQuantity: "2.5",
+    })
+    const expired = makeOrderContext({
+      status: "EXPIRED",
       executedQuantity: "2.5",
     })
     const allocation = makeAllocation({
@@ -500,7 +537,7 @@ if (typeof reconcileMixedSellFillOrder !== "function") {
         quantity: "2.5",
         quoteQuantity: "5",
       }),
-      orderRegistry: terminal.orderRegistry,
+      orderRegistry: canceled.orderRegistry,
       recoveryQuantity: "2.5",
       legacyQuantity: "0",
     })
@@ -508,16 +545,39 @@ if (typeof reconcileMixedSellFillOrder !== "function") {
       reconciliation: createMixedSellFillReconciliation(initial),
       allocation,
     }).reconciliation
+    const first = reconcileMixedSellFillOrder({
+      reconciliation: staged,
+      terminalOrder: canceled.order,
+      orderRegistry: canceled.orderRegistry,
+      canonicalFillAllocations: [allocation],
+    })
     assert.throws(
       () => reconcileMixedSellFillOrder({
-        reconciliation: staged,
-        terminalOrder: terminal.order,
-        orderRegistry: terminal.orderRegistry,
+        reconciliation: first.reconciliation,
+        terminalOrder: expired.order,
+        orderRegistry: expired.orderRegistry,
         canonicalFillAllocations: [allocation],
       }),
-      hasCode("RS_MIXED_SELL_RECONCILIATION_FILLED_QUANTITY_MISMATCH"),
-      "A FILLED terminal order must reconcile to its original order quantity.",
+      hasCode("RS_MIXED_SELL_RECONCILIATION_TERMINAL_CONFLICT"),
+      "A terminal order must not be reconciled again with a different terminal status.",
     )
+  })
+
+  test("reconciles a REJECTED order with no executions", () => {
+    const initial = makeOrderContext()
+    const terminal = makeOrderContext({
+      status: "REJECTED",
+      executedQuantity: "0",
+    })
+    const result = reconcileMixedSellFillOrder({
+      reconciliation: createMixedSellFillReconciliation(initial),
+      terminalOrder: terminal.order,
+      orderRegistry: terminal.orderRegistry,
+      canonicalFillAllocations: [],
+    })
+    assert.equal(result.reconciliation.status, "RECONCILED", "A rejected order with no executions can be safely reconciled.")
+    assert.equal(result.reconciliation.terminalOrderStatus, "REJECTED", "The rejected broker status must be preserved.")
+    assert.equal(result.reconciliation.terminalFillCount, 0, "A rejected order must not invent canonical fills.")
   })
 
   test("rejects a non-terminal order state during terminal reconciliation", () => {
