@@ -18,7 +18,7 @@ const sessionId = "process-session-restore"
 const fingerprint = "f".repeat(64)
 const blockerId = "b".repeat(64)
 
-const record = (sequence, factType, data, factId = `${factType  }:${  sequence}`, runtimeSessionId = sessionId) => ({
+const record = (...[sequence, factType, data, factId = `${factType  }:${  sequence}`, runtimeSessionId = sessionId]) => ({
   sequence: String(sequence),
   factId,
   factType,
@@ -121,7 +121,7 @@ scope: "ACCOUNT",
 symbol: null,
 reason: "ACCOUNTING_INTEGRITY_FAILURE",
 evidenceDigest: "a".repeat(64),
-  }, `safety-blocker-raised:${  blockerId}`)] : []),
+  }, `safety-blocker-raised:${  resolvedBlockerId}`)] : []),
 ]
 
 const makeStore = (recordsValue) => ({
@@ -352,12 +352,12 @@ commissions: [],
       const reason = `TEST_EVIDENCE_${  index}`
       const evidenceDigest = String(index + 1).padStart(64, "0")
       const resolutionDigest = String(index + 101).padStart(64, "0")
-      const blockerId = createHash("sha256")
+      const resolvedBlockerId = createHash("sha256")
         .update(["MARKET", market.symbol, reason, evidenceDigest].join("\0"))
         .digest("hex")
       return [
         record(11 + index * 2, "SAFETY_BLOCKER_RAISED", {
-          blockerId,
+          blockerId: resolvedBlockerId,
 scope: "MARKET",
 symbol: market.symbol,
 reason,
