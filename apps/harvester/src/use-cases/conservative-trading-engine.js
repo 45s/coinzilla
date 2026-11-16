@@ -2301,8 +2301,33 @@ async function applyRecoverySellCancellation({ context, order, canceledOrder, sy
       retryable: false,
     })
   }
-  context.state.registry = update.registry
   const terminalStatuses = new Set(["CANCELED", "FILLED", "EXPIRED", "REJECTED"])
+  if (update.stale) {
+    const latestOrder = context.state.registry.getOrder({
+      clientOrderId: canceledOrder.clientOrderId,
+    })
+    if (!terminalStatuses.has(latestOrder?.status)) {
+      const error = new Error("Recovery SELL cancellation response was stale relative to a newer non-terminal order update")
+      context.publishOrderCancelFailed({
+        order,
+        outcome: "CANCELLATION_RESPONSE_STALE",
+        error,
+      })
+      await context.pause({
+        symbol,
+        reason: "RECOVERY_SELL_CANCELLATION_RESPONSE_STALE",
+        error,
+      })
+      return recoverySellFailure({
+        error,
+        category: "ORDER_TRANSITION",
+        stage: "RECOVERY_SELL_CANCELLATION_RESPONSE_STALE",
+        retryable: true,
+      })
+    }
+    canceledOrder = latestOrder
+  }
+  context.state.registry = update.registry
   if (!terminalStatuses.has(canceledOrder.status)) {
     context.publishOrderCancelFailed({
       order: canceledOrder,
