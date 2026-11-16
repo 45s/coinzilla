@@ -628,7 +628,10 @@ test("rechecks the shutdown gate after durable intent and before broker placemen
     },
     onDurableSubmissionOutcome: async ({ outcome }) => {
       calls.push(`durable-outcome:${outcome}`)
-      return { ok: true, data: { durable: true } }
+      return {
+        ok: true,
+        data: { durable: true },
+      }
     },
     onSubmissionDeferred: async ({ reason }) => {
       calls.push(`deferred:${reason}`)
