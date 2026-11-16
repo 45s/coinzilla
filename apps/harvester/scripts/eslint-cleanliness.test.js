@@ -4,10 +4,10 @@ import { ESLint } from "eslint"
 import test from "node:test"
 
 test("every Harvester script satisfies the repository ESLint rules without warnings", async () => {
-  const eslint = new ESLint({ cwd: path.resolve(import.meta.dirname, "../..") })
+  const eslint = new ESLint({ cwd: path.resolve(import.meta.dirname, "..") })
   const results = await eslint.lintFiles(["scripts/**/*.{js,mjs,cjs}"])
   const findings = results.flatMap((result) => result.messages.map((message) => ({
-    file: path.relative(process.cwd(), result.filePath),
+    file: path.relative(path.resolve(import.meta.dirname, ".."), result.filePath),
     line: message.line,
     column: message.column,
     severity: message.severity === 2 ? "error" : "warning",
