@@ -329,13 +329,14 @@ function validateOwnedOrderFill({ fill, ownedOrder, journalFillsById, fillsById 
 }
 
 function advanceOwnedFillCursor({ fills, lastTradeId, ownedOrder }) {
+  let nextTradeId = lastTradeId
   let pageLastTradeId
   for (const fill of fills) {
     if (typeof fill.tradeId !== "string" || !/^\d+$/.test(fill.tradeId)) {
       throw new Error(`REST fill history cannot be paginated safely because trade ID is non-numeric for owned order ${ownedOrder.brokerOrderId}`)
     }
     const tradeId = BigInt(fill.tradeId)
-    if (lastTradeId !== undefined && tradeId <= lastTradeId) {
+    if (nextTradeId !== undefined && tradeId <= nextTradeId) {
       throw new Error(`REST fill pagination did not advance strictly by trade ID for owned order ${ownedOrder.brokerOrderId}`)
     }
     lastTradeId = tradeId
