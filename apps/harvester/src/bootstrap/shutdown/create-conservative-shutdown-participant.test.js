@@ -39,7 +39,12 @@ function createFakeEngineState() {
       market.revision = state.revision
     }
   }
-  return { markets, state, snapshot, invalidate }
+  return {
+    markets,
+    state,
+    snapshot,
+    invalidate,
+  }
 }
 
 function createFakeEngineOrderOperations({ calls } = {}) {

@@ -579,38 +579,36 @@ async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } =
   return runtime
 }
 
-async function cleanupProcessStartupFailure({ error, options, resources } = {}) {
-  const { logger, closeLogger } = options
-  publishLifecycleEvent({
-    eventPublisher: resources.eventPublisher,
-    eventName: HARVESTER_EVENT_NAMES.STARTUP_FAILED,
-    dataResult: mapHarvesterStartupFailedData({ stage: "process-startup", error }),
-  })
-  if (typeof resources.eventBus?.flush === "function") {
-    try {
-      await resources.eventBus.flush()
-    } catch (flushError) {
-      logger.error?.({ message: "EventBus flush failed during startup cleanup.", error: flushError })
-    }
+async function flushStartupEventBus({ eventBus, logger } = {}) {
+  if (typeof eventBus?.flush !== "function") {
+    return
   }
-  if (resources.telegramNotifications) {
-    try {
-      await resources.telegramNotifications.close()
-    } catch (notificationError) {
-      logger.error?.({ message: "Telegram notification cleanup failed during startup failure.", error: notificationError })
-    }
-    logTelegramNotificationSummary({ notifications: resources.telegramNotifications, logger })
+  try {
+    await eventBus.flush()
+  } catch (error) {
+    logger.error?.({
+      message: "EventBus flush failed during startup cleanup.",
+      error,
+    })
   }
-  const cleanupErrors = await closeObservability({
-    journalService: resources.journalService,
-    eventBus: resources.eventBus,
-    processLock: resources.processLock,
-    allowProcessLockRelease: !resources.runtimeStartAttempted,
-    logger,
-  })
-  if (cleanupErrors.length > 0) {
-    process.exitCode = 1
+}
+
+async function closeStartupTelegramNotifications({ notifications, logger } = {}) {
+  if (!notifications) {
+    return
   }
+  try {
+    await notifications.close()
+  } catch (error) {
+    logger.error?.({
+      message: "Telegram notification cleanup failed during startup failure.",
+      error,
+    })
+  }
+  logTelegramNotificationSummary({ notifications, logger })
+}
+
+function logStartupFailure({ error, logger } = {}) {
   try {
     logger.error({
       message: "startup failed.",
@@ -625,16 +623,48 @@ async function cleanupProcessStartupFailure({ error, options, resources } = {}) 
   } catch {
     // Logging failure must not hide the original startup failure.
   }
+}
+
+async function closeStartupLogger({ closeLogger, logger } = {}) {
   try {
     await closeLogger()
-  } catch (loggingError) {
+  } catch (error) {
     process.exitCode = 1
     try {
-      logger.error({ message: "log transport shutdown failed.", error: loggingError })
+      logger.error({
+        message: "log transport shutdown failed.",
+        error,
+      })
     } catch {
       // Logging cleanup failure must not hide the original startup failure.
     }
   }
+}
+
+async function cleanupProcessStartupFailure({ error, options, resources } = {}) {
+  const { logger, closeLogger } = options
+  publishLifecycleEvent({
+    eventPublisher: resources.eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.STARTUP_FAILED,
+    dataResult: mapHarvesterStartupFailedData({ stage: "process-startup", error }),
+  })
+  await flushStartupEventBus({ eventBus: resources.eventBus, logger })
+  await closeStartupTelegramNotifications({
+    notifications: resources.telegramNotifications,
+    logger,
+  })
+  const cleanupErrors = await closeObservability({
+    journalService: resources.journalService,
+    eventBus: resources.eventBus,
+    processLock: resources.processLock,
+    allowProcessLockRelease: !resources.runtimeStartAttempted,
+    logger,
+  })
+  if (cleanupErrors.length > 0) {
+    process.exitCode = 1
+  }
+  logStartupFailure({ error, logger })
+  await closeStartupLogger({ closeLogger, logger })
   process.exitCode = 1
 }
 

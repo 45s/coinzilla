@@ -187,7 +187,10 @@ export function createStrategyShutdownCoordinator({ participants = [] } = {}) {
     }
   })
 
-  const beginShutdown = () => beginShutdownParticipants({ registeredParticipants, shutdownState })
+  const beginShutdown = () => beginShutdownParticipants({
+    registeredParticipants,
+    shutdownState,
+  })
 
   const waitUntilSafe = ({ signal } = {}) => waitForStrategyShutdownParticipants({
     registeredParticipants,

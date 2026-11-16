@@ -481,7 +481,10 @@ test("publishes stopped before closing Journal, then closes EventBus", async () 
     },
     close: async () => {
       operations.push("eventBus.close")
-      return { ok: true, closed: true }
+      return {
+        ok: true,
+        closed: true,
+      }
     },
   }
   const journalService = {
@@ -739,7 +742,10 @@ test("refuses TESTNET trading when Journal startup fails", async () => {
       acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: false, errors: [new Error("disk unavailable")] }),
-        flush: async () => ({ ok: true, durable: true }),
+        flush: async () => ({
+      ok: true,
+      durable: true,
+    }),
         close: async () => ({ ok: true, closed: true }),
       }),
       start: async () => { started = true; return { connected: false } },
@@ -1793,10 +1799,16 @@ async function startProcessWithUnresolvedStrategyShutdown({ calls } = {}) {
       ok: true,
       release: async () => {
         calls.push("process-lock-release")
-        return { ok: true, released: true }
+        return {
+          ok: true,
+          released: true,
+        }
       },
     }),
-    registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
+    registerSignalHandler: (...args) => {
+      const [signal, handler] = args
+      signalHandlers.set(signal, handler)
+    },
     closeLogger: async () => calls.push("logger-close"),
     start: async () => ({
       connected: true,

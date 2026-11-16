@@ -705,7 +705,11 @@ function createShutdownRequestContext({
     context,
     phaseRunner,
   })
-  return { context, phaseRunner, shutdownRequestedAt }
+  return {
+    context,
+    phaseRunner,
+    shutdownRequestedAt,
+  }
 }
 
 function reportShutdownFailure({ error, context, state, options, phaseRunner, shutdownRequestedAt, now } = {}) {

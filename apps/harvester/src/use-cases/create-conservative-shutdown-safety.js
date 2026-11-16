@@ -221,7 +221,10 @@ function createShutdownSafetyRevision({ state, pairs, enabledSymbols } = {}) {
     return revision
   }
 
-  return { notifyRevision, invalidateShutdownSafety }
+  return {
+    notifyRevision,
+    invalidateShutdownSafety,
+  }
 }
 
 function createShutdownSafetyAuditor({ state, pairs, enabledSymbols, runTransition, notifyRevision } = {}) {
@@ -256,7 +259,10 @@ function createShutdownSafetyAuditor({ state, pairs, enabledSymbols, runTransiti
 
         return {
           ok: true,
-          data: createSafetySnapshot({ state, pairs }),
+          data: createSafetySnapshot({
+            state,
+            pairs,
+          }),
         }
       },
     })
@@ -291,6 +297,9 @@ export function createConservativeShutdownSafety({ state, pairs, runTransition }
     beginShutdown,
     auditShutdownSafety,
     invalidateShutdownSafety,
-    getShutdownSafetySnapshot: () => createSafetySnapshot({ state, pairs }),
+    getShutdownSafetySnapshot: () => createSafetySnapshot({
+      state,
+      pairs,
+    }),
   })
 }

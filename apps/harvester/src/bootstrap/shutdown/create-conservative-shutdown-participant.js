@@ -334,6 +334,25 @@ function createMarketFailure({ symbol, result } = {}) {
   }
 }
 
+function throwForUnsafeConservativeMarkets({ failedMarkets } = {}) {
+  if (failedMarkets.length === 0) {
+    return
+  }
+  const blockerSummary = failedMarkets.map(({ symbol, blockers }) =>
+    `${symbol}: ${blockers.join(", ")}`).join("; ")
+  const error = new AggregateError(
+    failedMarkets.map(({ symbol, blockers }) =>
+      createMarketSafetyError({ symbol, blockers })),
+    `Conservative shutdown safety could not be proven for every market: ${blockerSummary}`,
+  )
+  error.code = "CONSERVATIVE_SHUTDOWN_SAFETY_UNPROVEN"
+  error.shutdownDiagnostics = Object.freeze({
+    strategyId: StrategyId.COIN_GRABBER,
+    markets: Object.freeze(failedMarkets),
+  })
+  throw error
+}
+
 async function waitForConservativeMarkets({
 engine,
 eventPublisher,
@@ -395,22 +414,7 @@ logger,
         result }))
     snapshot = engine.getShutdownSafetySnapshot()
 
-    if (failedMarkets.length > 0) {
-      const blockerSummary = failedMarkets.map(({ symbol, blockers }) =>
-        `${symbol}: ${blockers.join(", ")}`).join("; ")
-      const error = new AggregateError(
-        failedMarkets.map(({ symbol, blockers }) =>
-          createMarketSafetyError({ symbol,
-            blockers })),
-        `Conservative shutdown safety could not be proven for every market: ${blockerSummary}`,
-      )
-      error.code = "CONSERVATIVE_SHUTDOWN_SAFETY_UNPROVEN"
-      error.shutdownDiagnostics = Object.freeze({
-        strategyId: StrategyId.COIN_GRABBER,
-        markets: Object.freeze(failedMarkets),
-      })
-      throw error
-    }
+    throwForUnsafeConservativeMarkets({ failedMarkets })
 
     // Late execution evidence can invalidate a market while another market
     // is being audited. Re-evaluate it immediately; never use a quiet timer.
