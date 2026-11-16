@@ -3,7 +3,7 @@ import { describe, it } from 'node:test'
 import { Validator, VR } from './validator.js'
 import { EM } from './error-messages.js'
 
-describe('Validator', () => {
+describe('Validator input validation', () => {
   it('throws when items are missing or not an array', () => {
     assert.throws(() => Validator.validate(), { message: EM.invalidParameter('items') })
     assert.throws(() => Validator.validate({ items: {} }), { message: EM.invalidParameter('items') })
@@ -17,6 +17,9 @@ describe('Validator', () => {
     assert.throws(() => Validator.validate({ items: [['value', null]] }), TypeError)
   })
 
+})
+
+describe('Validator results', () => {
   it('returns undefined when all rules pass', () => {
     const items = [
       [42, [VR.required, VR.num, VR.notUndefined], 'price'],
@@ -67,6 +70,9 @@ describe('Validator', () => {
     ])
   })
 
+})
+
+describe('Validator soft mode', () => {
   it('throws the collected errors when soft mode is disabled', () => {
     assert.throws(
       () => Validator.validate({ isSoft: false,
@@ -97,6 +103,9 @@ describe('Validator', () => {
     )
   })
 
+})
+
+describe('Validator rule semantics', () => {
   it('preserves the documented valid edge semantics for every supported rule', () => {
     const items = [
       ['   ', [VR.required], 'truthyWhitespace'],
@@ -148,6 +157,9 @@ describe('Validator', () => {
     )
   })
 
+})
+
+describe('Validator helper behavior', () => {
   it('rejects non-finite values with the number rule', () => {
     for (const value of [NaN, Infinity, -Infinity]) {
       assert.deepEqual(Validator.validate({ items: [[value, [VR.num]]] }), [

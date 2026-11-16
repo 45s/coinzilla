@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { formatLogContent } from './format-log-content.js'
 
-describe('formatLogContent', () => {
+describe('formatLogContent values and errors', () => {
   it('preserves primitive values and serializes structured values', () => {
     assert.equal(formatLogContent('message'), 'message')
     assert.equal(formatLogContent(42), 42)
@@ -46,6 +46,9 @@ describe('formatLogContent', () => {
     assert.equal(JSON.parse(formatLogContent(error)).cause, '[Circular]')
   })
 
+})
+
+describe('formatLogContent redaction and fallbacks', () => {
   it('redacts common credential fields in nested structured log data and Error causes', () => {
     const error = new Error('request failed', {
       cause: Object.assign(new Error('nested'), { apiKey: 'sensitive-error-key' }),

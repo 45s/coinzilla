@@ -49,15 +49,15 @@ describe('calculateTimeDiff', () => {
   })
 
   it('preserves fractional units for sub-second intervals', () => {
-    const start = new Date('2026-01-01T00:00:00.000Z')
+    const subsecondStart = new Date('2026-01-01T00:00:00.000Z')
     const end = new Date('2026-01-01T00:00:00.250Z')
-    assert.equal(calculateTimeDiff({ start,
+    assert.equal(calculateTimeDiff({ start: subsecondStart,
       end,
       unit: 'second' }), 0.25)
-    assert.equal(calculateTimeDiff({ start,
+    assert.equal(calculateTimeDiff({ start: subsecondStart,
       end,
       unit: 'minute' }), 0.25 / 60)
-    assert.equal(calculateTimeDiff({ start,
+    assert.equal(calculateTimeDiff({ start: subsecondStart,
       end,
       unit: 'hour' }), 0.25 / 3600)
   })
