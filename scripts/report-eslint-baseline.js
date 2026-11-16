@@ -24,7 +24,8 @@ function summarizeResults(results) {
     (result) => result.errorCount > 0 || result.warningCount > 0,
   ).length;
   const topRules = [...ruleCounts.entries()]
-    .map(([ruleId, count]) => ({ ruleId, count }))
+    .map(([ruleId, count]) => ({ ruleId,
+count }))
     .sort((left, right) => {
       if (left.count !== right.count) {
         return right.count - left.count;

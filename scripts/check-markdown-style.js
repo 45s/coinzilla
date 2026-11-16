@@ -91,15 +91,17 @@ export function parseChangedMarkdownDiff(diffText) {
       const match = line.match(/^diff --git a\/(.+) b\/(.+)$/)
       const path = match?.[2]
       currentChange = path && /\.mdx?$/i.test(path)
-        ? { lines: new Set(), isNewFile: false, removedHeading: false }
+        ? { lines: new Set(),
+isNewFile: false,
+removedHeading: false }
         : null
 
-      if (currentChange) changes.set(path, currentChange)
+      if (currentChange) {changes.set(path, currentChange)}
       inHunk = false
       continue
     }
 
-    if (!currentChange) continue
+    if (!currentChange) {continue}
 
     if (line.startsWith("new file mode ") || line === "--- /dev/null") {
       currentChange.isNewFile = true
@@ -113,7 +115,7 @@ export function parseChangedMarkdownDiff(diffText) {
       continue
     }
 
-    if (!inHunk || line.startsWith("\\")) continue
+    if (!inHunk || line.startsWith("\\")) {continue}
 
     if (line.startsWith("+")) {
       currentChange.lines.add(newLineNumber)
@@ -174,11 +176,11 @@ export function analyzeMarkdownStyleDocuments(documents, changesByPath) {
   )
 
   for (const [name, entries] of Object.entries(baseline.findings)) {
-    if (REPORT_ONLY_FINDINGS.has(name)) continue
+    if (REPORT_ONLY_FINDINGS.has(name)) {continue}
     for (const entry of entries) {
       const change = changesByPath.get(entry.path)
       const document = documentsByPath.get(entry.path)
-      if (!change || !document) continue
+      if (!change || !document) {continue}
 
       if (
         HEADING_FINDINGS.has(name) &&
@@ -219,7 +221,7 @@ export function analyzeMarkdownStyleDocuments(documents, changesByPath) {
         )
       }
 
-      if (isRelevant) violations[name].push(entry)
+      if (isRelevant) {violations[name].push(entry)}
     }
   }
 
@@ -254,7 +256,9 @@ export function checkChangedMarkdownStyle(baseSha) {
       "*.md",
       "*.mdx",
     ],
-    { cwd: repositoryRoot, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER_BYTES },
+    { cwd: repositoryRoot,
+encoding: "utf8",
+maxBuffer: GIT_DIFF_MAX_BUFFER_BYTES },
   )
   const changesByPath = parseChangedMarkdownDiff(diffText)
   const discoveredDocuments = findMarkdownDocuments(repositoryRoot)

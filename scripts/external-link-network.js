@@ -25,7 +25,7 @@ function createUnsafeAddressError() {
 
 
 async function awaitWithAbort(promise, signal) {
-  if (!signal) return promise;
+  if (!signal) {return promise;}
   if (signal.aborted) {
     throw signal.reason ?? new Error('DNS resolution aborted before completion');
   }
@@ -61,7 +61,8 @@ export async function resolvePublicAddresses(hostname, options = {}) {
     throw options.signal.reason ?? new Error('DNS resolution aborted before completion');
   }
   const resolver = options.resolveHost ?? dnsLookup;
-  const resolution = resolver(normalizedHostname, { all: true, verbatim: true });
+  const resolution = resolver(normalizedHostname, { all: true,
+verbatim: true });
   const answers = await awaitWithAbort(resolution, options.signal);
   if (!Array.isArray(answers) || answers.length === 0) {
     throw new Error('DNS resolution returned no addresses');
@@ -74,7 +75,8 @@ export async function resolvePublicAddresses(hostname, options = {}) {
     if (family === 0 || !isPublicAddress(address)) {
       throw createUnsafeAddressError();
     }
-    addresses.set(address.toLowerCase(), { address, family });
+    addresses.set(address.toLowerCase(), { address,
+family });
   }
 
   return [...addresses.values()];
@@ -113,7 +115,8 @@ function createPinnedLookup(hostname, addresses) {
     }
 
     if (lookupOptions?.all === true) {
-      done(null, eligible.map((entry) => ({ address: entry.address, family: entry.family })));
+      done(null, eligible.map((entry) => ({ address: entry.address,
+family: entry.family })));
       return;
     }
 

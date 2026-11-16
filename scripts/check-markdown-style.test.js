@@ -49,7 +49,8 @@ test("does not force cleanup of unrelated pre-existing findings in an edited doc
       path: "docs/existing.md",
       content: "# Existing\n\nold text  \n\n\n## Details\n\nChanged paragraph.\n",
     }],
-    new Map([["docs/existing.md", { lines: new Set([8]), isNewFile: false }]]),
+    new Map([["docs/existing.md", { lines: new Set([8]),
+isNewFile: false }]]),
   )
 
   assert.equal(result.scannedFiles, 1)
@@ -62,7 +63,8 @@ test("enforces whitespace and heading rules when the affected lines change", () 
       path: "docs/changed.md",
       content: "# Title\n\nText  \n\n\n### Skipped\n",
     }],
-    new Map([["docs/changed.md", { lines: new Set([3, 4, 5, 6]), isNewFile: false }]]),
+    new Map([["docs/changed.md", { lines: new Set([3, 4, 5, 6]),
+isNewFile: false }]]),
   )
 
   assert.deepEqual(result.violations.trailingWhitespace.map(({ path }) => path), [
@@ -105,12 +107,18 @@ test("checks new files fully while preserving historical, superseded and GitHub 
       },
     ],
     new Map([
-      ["docs/new.md", { lines: new Set([1, 2, 3, 4]), isNewFile: true }],
-      ["apps/harvester/AUDIT_2026-11-09.md", { lines: new Set([1, 2, 3, 4]), isNewFile: true }],
-      ["docs/ai-agent/repository-engineering-audit.md", { lines: new Set([1, 2, 3, 4]), isNewFile: true }],
-      ["apps/harvester/docs/DOMAIN_FIRST_DELIVERY_PLAN.md", { lines: new Set([1, 2, 3, 4]), isNewFile: true }],
-      [".github/PULL_REQUEST_TEMPLATE.md", { lines: new Set([1, 2, 3]), isNewFile: true }],
-      [".github/ISSUE_TEMPLATE/cross-domain-request.md", { lines: new Set([1, 2, 3, 4, 5]), isNewFile: true }],
+      ["docs/new.md", { lines: new Set([1, 2, 3, 4]),
+isNewFile: true }],
+      ["apps/harvester/AUDIT_2026-11-09.md", { lines: new Set([1, 2, 3, 4]),
+isNewFile: true }],
+      ["docs/ai-agent/repository-engineering-audit.md", { lines: new Set([1, 2, 3, 4]),
+isNewFile: true }],
+      ["apps/harvester/docs/DOMAIN_FIRST_DELIVERY_PLAN.md", { lines: new Set([1, 2, 3, 4]),
+isNewFile: true }],
+      [".github/PULL_REQUEST_TEMPLATE.md", { lines: new Set([1, 2, 3]),
+isNewFile: true }],
+      [".github/ISSUE_TEMPLATE/cross-domain-request.md", { lines: new Set([1, 2, 3, 4, 5]),
+isNewFile: true }],
     ]),
   )
 
@@ -141,7 +149,8 @@ test("accepts a clean changed document", () => {
       path: "docs/clean.md",
       content: "# Clean\n\n## Details\n\nNo style findings.\n",
     }],
-    new Map([["docs/clean.md", { lines: new Set([1, 3]), isNewFile: false }]]),
+    new Map([["docs/clean.md", { lines: new Set([1, 3]),
+isNewFile: false }]]),
   )
 
   assert.equal(result.scannedFiles, 1)
@@ -152,19 +161,29 @@ test("accepts a clean changed document", () => {
 test("enforces every existing style rule for new maintained documents", () => {
   const fence = String.fromCharCode(96).repeat(3)
   const documents = [
-    { path: "docs/trailing.md", content: "# Title\nText  \n" },
-    { path: "docs/final-newline.md", content: "# Title" },
-    { path: "docs/crlf.md", content: "# Title\r\n" },
-    { path: "docs/repeated-blank.md", content: "# Title\n\n\nText\n" },
-    { path: "docs/missing-h1.md", content: "## Section\n" },
-    { path: "docs/multiple-h1.md", content: "# First\n# Second\n" },
-    { path: "docs/heading-skip.md", content: "# First\n### Third\n" },
-    { path: "docs/unlabelled-fence.md", content: "# Code\n\n" + fence + "\ncode\n" + fence + "\n" },
-    { path: "docs/code-only.md", content: "# Code\n\n" + fence + "md\nText  \n\n\n### Not a heading\n# Not another H1\n" + fence + "\n" },
+    { path: "docs/trailing.md",
+content: "# Title\nText  \n" },
+    { path: "docs/final-newline.md",
+content: "# Title" },
+    { path: "docs/crlf.md",
+content: "# Title\r\n" },
+    { path: "docs/repeated-blank.md",
+content: "# Title\n\n\nText\n" },
+    { path: "docs/missing-h1.md",
+content: "## Section\n" },
+    { path: "docs/multiple-h1.md",
+content: "# First\n# Second\n" },
+    { path: "docs/heading-skip.md",
+content: "# First\n### Third\n" },
+    { path: "docs/unlabelled-fence.md",
+content: `# Code\n\n${  fence  }\ncode\n${  fence  }\n` },
+    { path: "docs/code-only.md",
+content: `# Code\n\n${  fence  }md\nText  \n\n\n### Not a heading\n# Not another H1\n${  fence  }\n` },
   ]
   const changes = new Map(documents.map(({ path, content }) => [
     path,
-    { lines: new Set(content.split(/\r?\n/).map((line, index) => index + 1)), isNewFile: true },
+    { lines: new Set(content.split(/\r?\n/).map((line, index) => index + 1)),
+isNewFile: true },
   ]))
   const result = analyzeMarkdownStyleDocuments(documents, changes)
 
@@ -179,10 +198,10 @@ test("enforces every existing style rule for new maintained documents", () => {
     unlabelledCodeFences: "docs/unlabelled-fence.md",
   }
   for (const [rule, path] of Object.entries(expected)) {
-    assert.ok(result.violations[rule].some((entry) => entry.path === path), rule + " must be enforced")
+    assert.ok(result.violations[rule].some((entry) => entry.path === path), `${rule  } must be enforced`)
   }
   for (const rule of Object.keys(expected)) {
-    assert.equal(result.violations[rule].some((entry) => entry.path === "docs/code-only.md"), false, rule + " must ignore fenced content")
+    assert.equal(result.violations[rule].some((entry) => entry.path === "docs/code-only.md"), false, `${rule  } must ignore fenced content`)
   }
 })
 
@@ -200,7 +219,8 @@ test("keeps non-spacing list and table structure metrics report-only after list-
     "",
   ].join("\n")
   const result = analyzeMarkdownStyleDocuments(
-    [{ path: "docs/new-list-table.md", content }],
+    [{ path: "docs/new-list-table.md",
+content }],
     new Map([["docs/new-list-table.md", {
       lines: new Set(content.split("\n").map((line, index) => index + 1)),
       isNewFile: true,
@@ -214,14 +234,15 @@ test("keeps non-spacing list and table structure metrics report-only after list-
     "tableColumnMismatches",
     "tableSpacing",
   ]) {
-    assert.deepEqual(result.violations[rule], [], rule + " remains report-only")
+    assert.deepEqual(result.violations[rule], [], `${rule  } remains report-only`)
   }
 })
 
 test("enforces blank lines before and after list blocks in changed maintained documents", () => {
   const content = "# Title\n\nIntro paragraph.\n- item\nAfter list.\n"
   const result = analyzeMarkdownStyleDocuments(
-    [{ path: "docs/list-spacing.md", content }],
+    [{ path: "docs/list-spacing.md",
+content }],
     new Map([["docs/list-spacing.md", {
       lines: new Set(content.split("\n").map((line, index) => index + 1)),
       isNewFile: true,
@@ -229,14 +250,17 @@ test("enforces blank lines before and after list blocks in changed maintained do
   )
 
   assert.deepEqual(result.violations.listSpacing, [
-    { path: "docs/list-spacing.md", count: 2, lines: [4, 5] },
+    { path: "docs/list-spacing.md",
+count: 2,
+lines: [4, 5] },
   ])
 })
 
 test("accepts list blocks separated from surrounding content by blank lines", () => {
   const content = "# Title\n\nIntro paragraph.\n\n- item\n\nAfter list.\n"
   const result = analyzeMarkdownStyleDocuments(
-    [{ path: "docs/list-spacing.md", content }],
+    [{ path: "docs/list-spacing.md",
+content }],
     new Map([["docs/list-spacing.md", {
       lines: new Set(content.split("\n").map((line, index) => index + 1)),
       isNewFile: true,
@@ -249,8 +273,10 @@ test("accepts list blocks separated from surrounding content by blank lines", ()
 test("does not require unrelated pre-existing list spacing to be cleaned in an edited document", () => {
   const content = "# Existing\n\nIntro paragraph.\n- old item\n\nChanged paragraph.\n"
   const result = analyzeMarkdownStyleDocuments(
-    [{ path: "docs/existing.md", content }],
-    new Map([["docs/existing.md", { lines: new Set([6]), isNewFile: false }]]),
+    [{ path: "docs/existing.md",
+content }],
+    new Map([["docs/existing.md", { lines: new Set([6]),
+isNewFile: false }]]),
   )
 
   assert.deepEqual(result.violations.listSpacing, [])
@@ -258,9 +284,10 @@ test("does not require unrelated pre-existing list spacing to be cleaned in an e
 
 test("excludes historical documents from every changed-file style rule", () => {
   const fence = String.fromCharCode(96).repeat(3)
-  const content = "# Historical  \r\n\n\n### Skipped\r\n# Second H1\r\n" + fence + "\ncode\n" + fence + "\nParagraph\n- item\n"
+  const content = `# Historical  \r\n\n\n### Skipped\r\n# Second H1\r\n${  fence  }\ncode\n${  fence  }\nParagraph\n- item\n`
   const result = analyzeMarkdownStyleDocuments(
-    [{ path: "apps/harvester/docs/audits/legacy-style.md", content }],
+    [{ path: "apps/harvester/docs/audits/legacy-style.md",
+content }],
     new Map([["apps/harvester/docs/audits/legacy-style.md", {
       lines: new Set(content.split(/\r?\n/).map((line, index) => index + 1)),
       isNewFile: true,

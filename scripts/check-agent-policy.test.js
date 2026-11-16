@@ -46,7 +46,8 @@ test('recursively discovers nested domain instruction files', () => {
       'packages/entities',
     ]);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true,
+force: true });
   }
 });
 
@@ -57,7 +58,7 @@ test('checks inline and reference-style local links while ignoring external link
     mkdirSync(join(root, 'docs', 'audits'), { recursive: true });
     writeFileSync(join(root, 'docs', 'existing.md'), '# Existing');
     writeFileSync(join(root, 'docs', 'with space.md'), '# Spaced');
-    const inlineCode = String.fromCharCode(96) + '[inline example](missing-inline.md)' + String.fromCharCode(96);
+    const inlineCode = `${String.fromCharCode(96)  }[inline example](missing-inline.md)${  String.fromCharCode(96)}`;
     const gaps = findMissingLocalLinks(root, [
       {
         path: 'docs/policy.md',
@@ -90,7 +91,8 @@ test('checks inline and reference-style local links while ignoring external link
       'docs/policy.md links to missing path missing.md',
     ], 'reference definitions and historical documents remain covered; code/comments do not');
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true,
+force: true });
   }
 });
 
@@ -106,7 +108,8 @@ test('reports malformed percent-encoded local paths without throwing', () => {
       'docs/policy.md has malformed URL-encoded local link path "bad%ZZ.md"',
     ]);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true,
+force: true });
   }
 });
 
@@ -149,7 +152,8 @@ test('detects missing same-file and cross-file heading anchors with GitHub-style
       'docs/source.md links to missing heading anchor "#missing" in docs/source.md',
     ], 'only unresolved local Markdown fragments should be reported in stable sorted order');
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true,
+force: true });
   }
 });
 
@@ -179,7 +183,8 @@ test('validates reference-style heading fragments and ignores HTML-comment refer
       'docs/source.md links to missing heading anchor "#missing" in docs/target.md',
     ]);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true,
+force: true });
   }
 });
 
@@ -194,7 +199,8 @@ test('reports malformed percent-encoded local paths during anchor validation wit
       'docs/source.md has malformed URL-encoded local link path "bad%ZZ.md"',
     ]);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true,
+force: true });
   }
 });
 
@@ -210,7 +216,8 @@ test('reports malformed percent-encoded heading fragments without throwing', () 
       'docs/source.md has malformed URL-encoded heading fragment "#bad%ZZ"',
     ], 'malformed fragments should be reported as a controlled validation finding');
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true,
+force: true });
   }
 });
 
@@ -226,7 +233,8 @@ test('includes archived Markdown documents in the report-only anchor inventory',
       'docs/audits/old.md links to missing heading anchor "#removed-section" in docs/audits/old.md',
     ], 'historical documents remain visible in the baseline rather than being silently omitted');
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true,
+force: true });
   }
 });
 
@@ -241,7 +249,8 @@ test('requires a roadmap for each domain in the ownership map', () => {
       'packages/entities is missing ROADMAP.md',
     ]);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true,
+force: true });
   }
 });
 
@@ -260,7 +269,8 @@ test('discovers Markdown and MDX recursively while ignoring generated directorie
       ['docs/nested/index.mdx', 'README.md'],
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true,
+force: true });
   }
 });
 
@@ -274,7 +284,8 @@ test('reports missing required documentation entry points', () => {
       ['Required documentation file is missing: docs/DOCUMENTATION_GOVERNANCE.md'],
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true,
+force: true });
   }
 });
 
@@ -318,8 +329,8 @@ test('detects direct console access in production code while ignoring comments, 
       '// console.log("comment only")',
       'const message = "console.warn(\\"string only\\")";',
       'const pattern = /console\\.error\\(/;',
-      'const example = ' + tick + 'console.info("template text only")' + tick + ';',
-      'const actual = ' + tick + 'template ' + '$' + '{console.error("interpolation")} ' + tick + ';',
+      `const example = ${  tick  }console.info("template text only")${  tick  };`,
+      `const actual = ${  tick  }template ` + `$` + `{console.error("interpolation")} ${  tick  };`,
       'console["warn"]("computed access");',
       'const { error: reportError } = console;',
       'const hostConsole = globalThis.console;',
@@ -345,7 +356,8 @@ test('detects direct console access in production code while ignoring comments, 
       'apps/sample/src/runtime.js:8: direct global console references are not allowed; use Logger/defaultLogger from @coinzilla/utils or add a narrowly justified CLI exception',
     ]);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true,
+force: true });
   }
 });
 
@@ -360,6 +372,7 @@ test('discovers application and package production JavaScript but excludes tests
     writeFileSync(join(root, 'packages', 'sample', 'dist', 'main.js'), 'console.log("generated")');
     assert.deepEqual(findJavaScriptFiles(root), ['apps/sample/src/main.mjs']);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true,
+force: true });
   }
 });

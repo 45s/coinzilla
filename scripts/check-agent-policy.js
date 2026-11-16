@@ -22,7 +22,7 @@ export function findMarkdownDocuments(root) {
   function visit(directory, relativeDirectory) {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       if (entry.isDirectory()) {
-        if (ignoredMarkdownDirectories.has(entry.name)) continue;
+        if (ignoredMarkdownDirectories.has(entry.name)) {continue;}
         visit(
           join(directory, entry.name),
           relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name,
@@ -30,9 +30,10 @@ export function findMarkdownDocuments(root) {
         continue;
       }
 
-      if (!entry.isFile() || !/\.mdx?$/i.test(entry.name)) continue;
+      if (!entry.isFile() || !/\.mdx?$/i.test(entry.name)) {continue;}
       const path = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
-      documents.push({ path, content: readFileSync(join(directory, entry.name), 'utf8') });
+      documents.push({ path,
+content: readFileSync(join(directory, entry.name), 'utf8') });
     }
   }
 
@@ -72,7 +73,8 @@ export function removeCodeExamples(content) {
       continue;
     }
     if (fence) {
-      activeFence = { character: fence[1][0], length: fence[1].length };
+      activeFence = { character: fence[1][0],
+length: fence[1].length };
       continue;
     }
     output.push(line);
@@ -112,17 +114,17 @@ export function findInstructionDirectories(root) {
     }
 
     for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name === 'node_modules' || entry.name === '.git') continue;
+      if (!entry.isDirectory() || entry.name === 'node_modules' || entry.name === '.git') {continue;}
       visit(join(directory, entry.name), `${relativeDirectory}/${entry.name}`);
     }
   }
 
-  for (const area of domainAreas) visit(join(root, area), area);
+  for (const area of domainAreas) {visit(join(root, area), area);}
   return directories.sort();
 }
 
 function extractMappedPaths(document, suffix) {
-  const expression = new RegExp('`((?:apps|packages)/[^ `]+?)' + suffix + '`', 'g');
+  const expression = new RegExp(`\`((?:apps|packages)/[^ \`]+?)${  suffix  }\``, 'g');
   return [...document.matchAll(expression)].map((match) => match[1]).sort();
 }
 
@@ -131,15 +133,15 @@ function comparePathMaps(actualDirectories, mappedDirectories, documentName) {
   const actual = new Set(actualDirectories);
   const counts = new Map();
 
-  for (const directory of mappedDirectories) counts.set(directory, (counts.get(directory) ?? 0) + 1);
+  for (const directory of mappedDirectories) {counts.set(directory, (counts.get(directory) ?? 0) + 1);}
 
   for (const directory of actual) {
-    if (!counts.has(directory)) gaps.push(`${directory} missing from ${documentName}`);
-    if ((counts.get(directory) ?? 0) > 1) gaps.push(`${directory} appears more than once in ${documentName}`);
+    if (!counts.has(directory)) {gaps.push(`${directory} missing from ${documentName}`);}
+    if ((counts.get(directory) ?? 0) > 1) {gaps.push(`${directory} appears more than once in ${documentName}`);}
   }
 
   for (const directory of counts.keys()) {
-    if (!actual.has(directory)) gaps.push(`${directory} in ${documentName} has no matching AGENTS.md`);
+    if (!actual.has(directory)) {gaps.push(`${directory} in ${documentName} has no matching AGENTS.md`);}
   }
 
   return gaps;
@@ -164,22 +166,22 @@ export function findMissingLocalLinks(root, documents) {
 
   for (const document of documents) {
     for (const target of extractMarkdownLinkDestinations(document.content)) {
-      if (/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(target)) continue;
+      if (/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(target)) {continue;}
 
       const rawPath = target.split(/[?#]/, 1)[0];
-      if (!rawPath) continue;
+      if (!rawPath) {continue;}
 
       let relativeTarget;
       try {
         relativeTarget = decodeURIComponent(rawPath);
       } catch {
-        gaps.push(document.path + ' has malformed URL-encoded local link path "' + rawPath + '"');
+        gaps.push(`${document.path  } has malformed URL-encoded local link path "${  rawPath  }"`);
         continue;
       }
 
       const absoluteTarget = resolve(root, dirname(document.path), relativeTarget);
       if (!existsSync(absoluteTarget)) {
-        gaps.push(document.path + ' links to missing path ' + target);
+        gaps.push(`${document.path  } links to missing path ${  target}`);
       }
     }
   }
@@ -197,15 +199,15 @@ function collectMarkdownHeadingAnchors(content) {
   const anchors = new Set();
   const lines = content.split(/\r?\n/);
   const codeCharacter = String.fromCharCode(96);
-  const fencePattern = new RegExp('^ {0,3}(' + codeCharacter + '{3,}|~{3,})(.*)$');
-  const inlineCodePattern = new RegExp(codeCharacter + '+([^' + codeCharacter + ']*?)' + codeCharacter + '+', 'g');
+  const fencePattern = new RegExp(`^ {0,3}(${  codeCharacter  }{3,}|~{3,})(.*)$`);
+  const inlineCodePattern = new RegExp(`${codeCharacter  }+([^${  codeCharacter  }]*?)${  codeCharacter  }+`, 'g');
   const explicitIdPattern = /\b(?:id|name)\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/gi;
   let activeFence = null;
   let inHtmlComment = false;
   let inFrontMatter = lines[0]?.trim() === '---';
 
   function addHeading(rawHeading) {
-    if (/[{}]/.test(rawHeading)) return;
+    if (/[{}]/.test(rawHeading)) {return;}
 
     const plainText = rawHeading
       .replace(/<!--.*?-->/g, '')
@@ -230,13 +232,13 @@ function collectMarkdownHeadingAnchors(content) {
       .replace(/[^\p{L}\p{N}\p{M}\-_ ]/gu, '')
       .trim()
       .replace(/ /g, '-');
-    if (!baseSlug) return;
+    if (!baseSlug) {return;}
 
     let slug = baseSlug;
     let suffix = 0;
     while (anchors.has(slug)) {
       suffix += 1;
-      slug = baseSlug + '-' + suffix;
+      slug = `${baseSlug  }-${  suffix}`;
     }
     anchors.add(slug);
   }
@@ -245,12 +247,12 @@ function collectMarkdownHeadingAnchors(content) {
     let line = lines[index];
 
     if (inFrontMatter) {
-      if (index > 0 && line.trim() === '---') inFrontMatter = false;
+      if (index > 0 && line.trim() === '---') {inFrontMatter = false;}
       continue;
     }
 
     if (inHtmlComment) {
-      if (line.includes('-->')) inHtmlComment = false;
+      if (line.includes('-->')) {inHtmlComment = false;}
       continue;
     }
 
@@ -268,18 +270,19 @@ function collectMarkdownHeadingAnchors(content) {
         fenceMatch[1][0] === activeFence.character &&
         fenceMatch[1].length >= activeFence.length &&
         /^[ \t]*$/.test(fenceMatch[2]);
-      if (isClosingFence) activeFence = null;
+      if (isClosingFence) {activeFence = null;}
       continue;
     }
 
     if (fenceMatch) {
-      activeFence = { character: fenceMatch[1][0], length: fenceMatch[1].length };
+      activeFence = { character: fenceMatch[1][0],
+length: fenceMatch[1].length };
       continue;
     }
 
     for (const match of line.matchAll(explicitIdPattern)) {
       const identifier = match[1] ?? match[2] ?? match[3];
-      if (identifier) anchors.add(identifier);
+      if (identifier) {anchors.add(identifier);}
     }
 
     const atxHeading = line.match(/^ {0,3}#{1,6}(?:[ \t]+|$)(.*)$/);
@@ -319,12 +322,12 @@ export function findMissingLocalAnchors(root, documents) {
 
   for (const document of documents) {
     for (const target of extractMarkdownLinkDestinations(document.content)) {
-      if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(target)) continue;
+      if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(target)) {continue;}
 
       const hashIndex = target.indexOf('#');
-      if (hashIndex < 0) continue;
+      if (hashIndex < 0) {continue;}
       const rawFragment = target.slice(hashIndex + 1);
-      if (!rawFragment || rawFragment.startsWith(':~:text=')) continue;
+      if (!rawFragment || rawFragment.startsWith(':~:text=')) {continue;}
 
       const pathAndQuery = target.slice(0, hashIndex);
       const rawPath = pathAndQuery.split('?', 1)[0];
@@ -332,22 +335,22 @@ export function findMissingLocalAnchors(root, documents) {
       try {
         decodedPath = decodeURIComponent(rawPath);
       } catch {
-        gaps.push(document.path + ' has malformed URL-encoded local link path "' + rawPath + '"');
+        gaps.push(`${document.path  } has malformed URL-encoded local link path "${  rawPath  }"`);
         continue;
       }
       const absoluteTarget = decodedPath
         ? resolve(root, dirname(document.path), decodedPath)
         : resolve(root, document.path);
 
-      if (!existsSync(absoluteTarget) || !/\.mdx?$/i.test(absoluteTarget)) continue;
+      if (!existsSync(absoluteTarget) || !/\.mdx?$/i.test(absoluteTarget)) {continue;}
       const targetDocument = documentsByAbsolutePath.get(absoluteTarget);
-      if (!targetDocument) continue;
+      if (!targetDocument) {continue;}
 
       let fragment;
       try {
         fragment = decodeURIComponent(rawFragment);
       } catch {
-        gaps.push(document.path + ' has malformed URL-encoded heading fragment "#' + rawFragment + '"');
+        gaps.push(`${document.path  } has malformed URL-encoded heading fragment "#${  rawFragment  }"`);
         continue;
       }
 
@@ -355,7 +358,7 @@ export function findMissingLocalAnchors(root, documents) {
         anchorCache.set(absoluteTarget, collectMarkdownHeadingAnchors(targetDocument.content));
       }
       if (!anchorCache.get(absoluteTarget).has(fragment)) {
-        gaps.push(document.path + ' links to missing heading anchor "#' + fragment + '" in ' + targetDocument.path);
+        gaps.push(`${document.path  } links to missing heading anchor "#${  fragment  }" in ${  targetDocument.path}`);
       }
     }
   }
@@ -381,7 +384,7 @@ export function findUnbalancedMarkdownFences(documents) {
 
     for (let index = 0; index < lines.length; index += 1) {
       const match = lines[index].match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
-      if (!match) continue;
+      if (!match) {continue;}
 
       if (!activeFence) {
         activeFence = {
@@ -396,7 +399,7 @@ export function findUnbalancedMarkdownFences(documents) {
         match[1].length >= activeFence.length &&
         /^[ \t]*$/.test(match[2]);
 
-      if (isClosingFence) activeFence = null;
+      if (isClosingFence) {activeFence = null;}
     }
 
     if (activeFence) {
@@ -450,7 +453,7 @@ function maskJavaScriptNonCode(source) {
   const output = source.split('');
   const blank = (start, end) => {
     for (let index = start; index < end; index += 1) {
-      if (output[index] !== '\n' && output[index] !== '\r') output[index] = ' ';
+      if (output[index] !== '\n' && output[index] !== '\r') {output[index] = ' ';}
     }
   };
 
@@ -481,11 +484,11 @@ function maskJavaScriptNonCode(source) {
         index += 2;
         continue;
       }
-      if (source[index] === '[') inCharacterClass = true;
-      else if (source[index] === ']') inCharacterClass = false;
+      if (source[index] === '[') {inCharacterClass = true;}
+      else if (source[index] === ']') {inCharacterClass = false;}
       else if (source[index] === '/' && !inCharacterClass) {
         index += 1;
-        while (/[a-z]/i.test(source[index] ?? '')) index += 1;
+        while (/[a-z]/i.test(source[index] ?? '')) {index += 1;}
         break;
       } else if (source[index] === '\n') {
         break;
@@ -549,14 +552,14 @@ function maskJavaScriptNonCode(source) {
       }
       if (character === '/' && next === '/') {
         const start = index;
-        while (index < source.length && source[index] !== '\n') index += 1;
+        while (index < source.length && source[index] !== '\n') {index += 1;}
         blank(start, index);
         continue;
       }
       if (character === '/' && next === '*') {
         const start = index;
         index += 2;
-        while (index < source.length && !(source[index] === '*' && source[index + 1] === '/')) index += 1;
+        while (index < source.length && !(source[index] === '*' && source[index + 1] === '/')) {index += 1;}
         index = Math.min(source.length, index + 2);
         blank(start, index);
         continue;
@@ -581,12 +584,12 @@ function maskJavaScriptNonCode(source) {
       if (/[A-Za-z_$]/.test(character)) {
         const start = index;
         index += 1;
-        while (/[A-Za-z0-9_$]/.test(source[index] ?? '')) index += 1;
+        while (/[A-Za-z0-9_$]/.test(source[index] ?? '')) {index += 1;}
         previousToken = source.slice(start, index);
         continue;
       }
 
-      if (!/\s/.test(character)) previousToken = character;
+      if (!/\s/.test(character)) {previousToken = character;}
       index += 1;
     }
     return index;
@@ -610,23 +613,23 @@ export function findJavaScriptFiles(root) {
   function visit(directory, relativeDirectory) {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       if (entry.isDirectory()) {
-        if (ignoredJavaScriptDirectories.has(entry.name)) continue;
+        if (ignoredJavaScriptDirectories.has(entry.name)) {continue;}
         visit(
           join(directory, entry.name),
-          relativeDirectory ? relativeDirectory + '/' + entry.name : entry.name,
+          relativeDirectory ? `${relativeDirectory  }/${  entry.name}` : entry.name,
         );
         continue;
       }
-      if (!entry.isFile() || !/\.(?:js|mjs|cjs)$/i.test(entry.name)) continue;
-      if (/\.(?:test|spec)\.(?:js|mjs|cjs)$/i.test(entry.name)) continue;
-      const path = relativeDirectory ? relativeDirectory + '/' + entry.name : entry.name;
+      if (!entry.isFile() || !/\.(?:js|mjs|cjs)$/i.test(entry.name)) {continue;}
+      if (/\.(?:test|spec)\.(?:js|mjs|cjs)$/i.test(entry.name)) {continue;}
+      const path = relativeDirectory ? `${relativeDirectory  }/${  entry.name}` : entry.name;
       files.push(path);
     }
   }
 
   for (const area of domainAreas) {
     const directory = join(root, area);
-    if (existsSync(directory)) visit(directory, area);
+    if (existsSync(directory)) {visit(directory, area);}
   }
   return files.sort();
 }
@@ -642,13 +645,13 @@ export function findDirectConsoleUsages(root) {
   const expression = /\bconsole\b/g;
 
   for (const path of findJavaScriptFiles(root)) {
-    if (approvedConsoleFiles.has(path)) continue;
+    if (approvedConsoleFiles.has(path)) {continue;}
     const source = readFileSync(join(root, path), 'utf8');
     const code = maskJavaScriptNonCode(source);
     for (const match of code.matchAll(expression)) {
       const line = code.slice(0, match.index).split('\n').length;
       gaps.push(
-        path + ':' + line + ': direct global console references are not allowed; use Logger/defaultLogger from @coinzilla/utils or add a narrowly justified CLI exception',
+        `${path  }:${  line  }: direct global console references are not allowed; use Logger/defaultLogger from @coinzilla/utils or add a narrowly justified CLI exception`,
       );
     }
   }
@@ -671,10 +674,10 @@ function main() {
   const markdownDocuments = findMarkdownDocuments(repositoryRoot);
   const anchorGaps = findMissingLocalAnchors(repositoryRoot, markdownDocuments);
   console.log(
-    'Markdown heading-anchor baseline (report-only): ' + anchorGaps.length +
-    ' unresolved local anchors across ' + markdownDocuments.length + ' Markdown/MDX files.',
+    `Markdown heading-anchor baseline (report-only): ${  anchorGaps.length 
+    } unresolved local anchors across ${  markdownDocuments.length  } Markdown/MDX files.`,
   );
-  for (const gap of anchorGaps) console.log('- ' + gap);
+  for (const gap of anchorGaps) {console.log(`- ${  gap}`);}
 
   const gaps = [...new Set([
     ...findOwnershipGaps(directories, ownershipDocument),
@@ -687,7 +690,7 @@ function main() {
 
   if (gaps.length > 0) {
     console.error('Agent policy check failed:');
-    for (const gap of gaps) console.error(`- ${gap}`);
+    for (const gap of gaps) {console.error(`- ${gap}`);}
     process.exitCode = 1;
     return;
   }
@@ -695,4 +698,4 @@ function main() {
   console.log(`Agent policy check passed (${directories.length} domain instruction files; ${markdownDocuments.length} Markdown/MDX files; ownership maps, roadmaps, required entry points, balanced Markdown fences, inline/reference-style local paths, and application/package console boundaries are valid; heading anchors are report-only).`);
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {main();}
