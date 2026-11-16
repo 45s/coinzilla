@@ -122,13 +122,15 @@ function normalizeOrderHistoryPage({ value, requestedPage }) {
   if (!Number.isSafeInteger(value.total) || value.total < 0) {
     throw new TypeError("Bitunix Spot order history total must be a non-negative safe integer")
   }
-  if (typeof value.pageNum !== "string" || !/^[0-9]+$/.test(value.pageNum)) {
-    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string")
+  const pageNumIsNumber = typeof value.pageNum === "number" && Number.isSafeInteger(value.pageNum)
+  const pageNumIsString = typeof value.pageNum === "string" && /^[0-9]+$/.test(value.pageNum)
+  if (!pageNumIsNumber && !pageNumIsString) {
+    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
   }
 
   const returnedPage = Number(value.pageNum)
   if (!Number.isSafeInteger(returnedPage) || returnedPage < 1) {
-    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string")
+    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
   }
   if (returnedPage !== requestedPage) {
     throw new TypeError("Bitunix Spot order history returned pageNum does not match the requested page")
