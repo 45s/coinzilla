@@ -271,6 +271,8 @@ const DEFAULT_HARNESS_OPTIONS = {
   quoteCashFlowBaseline: "0",
   additionalTrackedQuoteCashFlow: [],
   portfolioBaseQuantityBaseline: "0",
+  additionalTrackedBaseQuantityBaseline: "0",
+  additionalTrackedBaseQuantity: [],
   committedQuoteBalanceBaseline: "0",
   committedBaseBalanceBaseline: "0",
   accountingApplied: false,
@@ -404,6 +406,7 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     accountingApplied,
     recoveryCompletion,
     additionalTrackedQuoteCashFlow,
+    additionalTrackedBaseQuantity,
     initialState,
   } = options
   const effectiveEventPublisher = createHarnessEventPublisher({ eventPublisher })
@@ -422,6 +425,7 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     eventPublisher: effectiveEventPublisher,
     appConfig: suppliedAppConfig ?? appConfig,
     getAdditionalTrackedQuoteCashFlow: () => additionalTrackedQuoteCashFlow,
+    getAdditionalTrackedBaseQuantity: () => additionalTrackedBaseQuantity,
     ...createHarnessEngineCallbacks({
       getPortfolioOverride,
       getRecoveryLedgerOverride,
