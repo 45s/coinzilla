@@ -480,7 +480,7 @@ function handleSafetyBlockerResolvedFact({ record, state }) {
   state.activeBlockers.delete(record.data.blockerId)
 }
 
-function handleOperatorMarketControlFact({ record, state, controlName }) {
+function handleOperatorControlFact({ record, state, controlName }) {
   requireActiveOperationalSession({
     record,
     state,
@@ -570,13 +570,29 @@ const FACT_RECORD_HANDLERS = Object.freeze({
   MARKET_HISTORY_COVERAGE_CONFIRMED: handleMarketHistoryCoverageFact,
   SAFETY_BLOCKER_RAISED: handleSafetyBlockerRaisedFact,
   SAFETY_BLOCKER_RESOLVED: handleSafetyBlockerResolvedFact,
-  OPERATOR_MARKET_PAUSED: (context) => handleOperatorMarketControlFact({
+  OPERATOR_MARKET_PAUSED: (context) => handleOperatorControlFact({
     ...context,
     controlName: "pause",
   }),
-  OPERATOR_MARKET_RESUMED: (context) => handleOperatorMarketControlFact({
+  OPERATOR_MARKET_RESUMED: (context) => handleOperatorControlFact({
     ...context,
     controlName: "resume",
+  }),
+  OPERATOR_ALL_BUYS_PAUSED: (context) => handleOperatorControlFact({
+    ...context,
+    controlName: "global BUY pause",
+  }),
+  OPERATOR_ALL_BUYS_RESUMED: (context) => handleOperatorControlFact({
+    ...context,
+    controlName: "global BUY resume",
+  }),
+  OPERATOR_MARKET_BUYS_PAUSED: (context) => handleOperatorControlFact({
+    ...context,
+    controlName: "market BUY pause",
+  }),
+  OPERATOR_MARKET_BUYS_RESUMED: (context) => handleOperatorControlFact({
+    ...context,
+    controlName: "market BUY resume",
   }),
   STRATEGY_MARKET_PAUSED: handleStrategyMarketPausedFact,
   STRATEGY_MARKET_RESUMED: handleStrategyMarketResumedFact,

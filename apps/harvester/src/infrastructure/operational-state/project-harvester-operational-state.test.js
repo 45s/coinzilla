@@ -126,7 +126,16 @@ test("does not replay process-lifetime operator pauses into a Operational State 
         actorId: "telegram-actor-1",
         symbol: "BTCUSDT",
       }, "operator-control:telegram-request-1"),
-      record(6, "STRATEGY_MARKET_PAUSED", {
+      record(6, "OPERATOR_ALL_BUYS_PAUSED", {
+        requestId: "telegram-global-buy-pause-2",
+        actorId: "telegram-actor-1",
+      }, "operator-control:telegram-global-buy-pause-2"),
+      record(7, "OPERATOR_MARKET_BUYS_PAUSED", {
+        requestId: "telegram-market-buy-pause-3",
+        actorId: "telegram-actor-1",
+        symbol: "BTCUSDT",
+      }, "operator-control:telegram-market-buy-pause-3"),
+      record(8, "STRATEGY_MARKET_PAUSED", {
         symbol: "ETHUSDT",
         reason: "FILL_RECONCILIATION_FAILED",
       }, "strategy-market-paused:session:1"),

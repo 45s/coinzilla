@@ -50,7 +50,12 @@
       "src/domain/strategies/recovery-seller/calculate-profitability.test.js",
       "src/domain/account/calculate-account-snapshot-baselines.test.js",
       "src/bootstrap/account/create-account-snapshot-manager.test.js",
-      "src/use-cases/conservative-trading-engine.test.js"
+      "src/use-cases/conservative-trading-engine.test.js",
+      "src/use-cases/conservative-trading-engine.multi-market.test.js",
+      "src/application/operator/create-harvester-operator.test.js",
+      "src/infrastructure/operational-state/operational-state-control.test.js",
+      "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
+      "src/infrastructure/telegram/format-telegram-operator-response.test.js"
     ]
   }
 }

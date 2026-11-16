@@ -49,6 +49,37 @@ function createHarness({ appendResult = { ok: true,
           resumed: true,
           durable: committed.data.durable } }
     },
+    pauseBuys: async ({ symbol, beforeApply }) => {
+      calls.push({ type: "pause-buys-start",
+        symbol })
+      const committed = typeof beforeApply === "function" ? await beforeApply({ symbol,
+        action: symbol === undefined ? "PAUSE_ALL_BUYS" : "PAUSE_BUYS" }) : { ok: true,
+        data: { durable: false } }
+      if (!committed?.ok) {return committed}
+      calls.push({ type: "pause-buys-applied",
+        symbol })
+      return { ok: true,
+        data: { symbol,
+          paused: true,
+          canceled: 0,
+          reconciled: 0,
+          durable: committed.data.durable } }
+    },
+    resumeBuys: async ({ symbol, beforeApply }) => {
+      calls.push({ type: "resume-buys-start",
+        symbol })
+      const committed = typeof beforeApply === "function" ? await beforeApply({ symbol,
+        action: symbol === undefined ? "RESUME_ALL_BUYS" : "RESUME_BUYS" }) : { ok: true,
+        data: { durable: false } }
+      if (!committed?.ok) {return committed}
+      calls.push({ type: "resume-buys-applied",
+        symbol })
+      return { ok: true,
+        data: { symbol,
+          resumed: true,
+          stillPaused: false,
+          durable: committed.data.durable } }
+    },
   }
   return { calls,
     operationalStateStore,
@@ -62,10 +93,14 @@ test("creates an immutable Harvester operator facade without a generic command d
     engine,
   })
 
-  assert.deepEqual(Object.keys(operator), ["pauseMarket", "resumeMarket"])
+  assert.deepEqual(Object.keys(operator), ["pauseMarket", "resumeMarket", "pauseBuys", "resumeBuys", "pauseAllBuys", "resumeAllBuys"])
   assert.equal(Object.isFrozen(operator), true)
   assert.equal(typeof operator.pauseMarket, "function")
   assert.equal(typeof operator.resumeMarket, "function")
+  assert.equal(typeof operator.pauseBuys, "function")
+  assert.equal(typeof operator.resumeBuys, "function")
+  assert.equal(typeof operator.pauseAllBuys, "function")
+  assert.equal(typeof operator.resumeAllBuys, "function")
 })
 
 test("pause authorizes the actor and commits an ADR-0001 durable fact inside the engine transition", async () => {
@@ -216,7 +251,9 @@ test("rejects a non-canonical actor identity before touching the engine or store
 
 test("pause and resume remain process-local when recovery storage is not supplied", async () => {
   const { calls, engine } = createHarness()
-  const operator = createHarvesterOperator({ engine })
+  const operator = createHarvesterOperator({
+    engine,
+  })
 
   const pause = await operator.pauseMarket({
     actor,
@@ -239,4 +276,130 @@ test("pause and resume remain process-local when recovery storage is not supplie
     "resume-start",
     "resume-applied",
   ])
+})
+
+test("pauseBuys authorizes the operator and commits a market-scoped BUY pause fact before applying it", async () => {
+  const { calls, operationalStateStore, engine } = createHarness()
+  const operator = createHarvesterOperator({
+    operationalStateStore,
+    engine,
+  })
+
+  const result = await operator.pauseBuys({
+    actor,
+    requestId: "telegram:buy-pause:2001",
+    symbol: "LINKUSDT",
+  })
+
+  assert.equal(result.ok, true, "An authorized market BUY pause must be acknowledged after its durable fact is committed.")
+  assert.deepEqual(calls.map(({ type }) => type), ["pause-buys-start", "append", "pause-buys-applied"], "The BUY pause gate must be applied only after the durable fact commit.")
+  assert.deepEqual(calls[1].fact, {
+    factId: "operator-control:telegram:buy-pause:2001",
+    factType: "OPERATOR_MARKET_BUYS_PAUSED",
+    data: {
+      requestId: "telegram:buy-pause:2001",
+      actorId: "telegram-user:12345",
+      symbol: "LINKUSDT",
+    },
+  }, "A market BUY pause fact must identify the request, authorized actor, and exact market.")
+})
+
+test("pauseAllBuys and resumeAllBuys use distinct global facts and remain process-local without a store", async () => {
+  const { calls, engine } = createHarness()
+  const operator = createHarvesterOperator({ engine })
+
+  const paused = await operator.pauseAllBuys({
+    actor,
+    requestId: "telegram:global-buy-pause:2002",
+  })
+  const resumed = await operator.resumeAllBuys({
+    actor,
+    requestId: "telegram:global-buy-resume:2003",
+  })
+
+  assert.equal(paused.ok, true, "An authorized global BUY pause must be available without restart-recovery storage.")
+  assert.equal(resumed.ok, true, "An authorized global BUY resume must be available without restart-recovery storage.")
+  assert.equal(paused.data.durable, false, "Global BUY pause must report process-local semantics when no Operational State Store is supplied.")
+  assert.equal(resumed.data.durable, false, "Global BUY resume must report process-local semantics when no Operational State Store is supplied.")
+  assert.deepEqual(calls.map(({ type }) => type), ["pause-buys-start", "pause-buys-applied", "resume-buys-start", "resume-buys-applied"], "Global pause and resume must use the same engine boundary without adding a separate persistence mechanism.")
+})
+
+test("resumeBuys rejects an unauthorized actor before touching the engine or Operational State Store", async () => {
+  const { calls, operationalStateStore, engine } = createHarness()
+  const operator = createHarvesterOperator({
+    operationalStateStore,
+    engine,
+  })
+
+  const result = await operator.resumeBuys({
+    actor: {
+      id: "telegram-user:untrusted",
+      roles: [],
+    },
+    requestId: "telegram:buy-resume:2004",
+    symbol: "LINKUSDT",
+  })
+
+  assert.equal(result.ok, false, "A caller without the trading-operator role must not resume a BUY pause.")
+  assert.equal(result.errors[0].code, "OPERATOR_UNAUTHORIZED", "The rejected BUY resume must retain the existing operator authorization error.")
+  assert.deepEqual(calls, [], "Unauthorized BUY resume must not reach the engine or append a durable fact.")
+})
+
+test("global BUY pause and resume commit distinct durable facts before applying their gates", async () => {
+  const { calls, operationalStateStore, engine } = createHarness()
+  const operator = createHarvesterOperator({
+    operationalStateStore,
+    engine,
+  })
+
+  const paused = await operator.pauseAllBuys({
+    actor,
+    requestId: "telegram:global-buy-pause:2005",
+  })
+  const resumed = await operator.resumeAllBuys({
+    actor,
+    requestId: "telegram:global-buy-resume:2006",
+  })
+
+  assert.equal(paused.ok, true)
+  assert.equal(resumed.ok, true)
+  assert.equal(calls[1].fact.factType, "OPERATOR_ALL_BUYS_PAUSED", "Global pause must append the global fact type.")
+  assert.equal(calls[1].fact.data.symbol, undefined, "Global pause facts must not pretend to be market-scoped.")
+  assert.equal(calls[4].fact.factType, "OPERATOR_ALL_BUYS_RESUMED", "Global resume must append a distinct global fact type.")
+  assert.equal(calls[4].fact.data.symbol, undefined, "Global resume facts must not pretend to be market-scoped.")
+})
+
+test("BUY controls reject missing market scope and reject symbols on global commands", async () => {
+  const { calls, engine } = createHarness()
+  const operator = createHarvesterOperator({ engine })
+
+  const missingMarket = await operator.pauseBuys({
+    actor,
+    requestId: "telegram:market-buy-pause:2007",
+  })
+  const globalWithSymbol = await operator.pauseAllBuys({
+    actor,
+    requestId: "telegram:global-buy-pause:2008",
+    symbol: "DOGEUSDT",
+  })
+
+  assert.equal(missingMarket.ok, false)
+  assert.equal(missingMarket.errors[0].code, "INVALID_OPERATOR_MARKET")
+  assert.equal(globalWithSymbol.ok, false)
+  assert.equal(globalWithSymbol.errors[0].code, "INVALID_OPERATOR_SCOPE")
+  assert.deepEqual(calls, [], "Invalid BUY control scope must be rejected before touching the engine.")
+})
+
+test("rejects a supplied Operational State Store without an append boundary before creating emergency BUY controls", () => {
+  const { calls, engine } = createHarness()
+
+  assert.throws(
+    () => createHarvesterOperator({
+      engine,
+      operationalStateStore: {},
+    }),
+    /Operational State Store.*append/i,
+    "A supplied but invalid store must fail closed instead of silently downgrading to process-local pause semantics.",
+  )
+  assert.deepEqual(calls, [], "Invalid persistence configuration must not reach the trading engine.")
 })

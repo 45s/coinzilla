@@ -33,6 +33,10 @@ const FACT_TYPES = new Set([
   "RECOVERY_CYCLE_NOT_COMPLETED",
   "OPERATOR_MARKET_PAUSED",
   "OPERATOR_MARKET_RESUMED",
+  "OPERATOR_ALL_BUYS_PAUSED",
+  "OPERATOR_ALL_BUYS_RESUMED",
+  "OPERATOR_MARKET_BUYS_PAUSED",
+  "OPERATOR_MARKET_BUYS_RESUMED",
   "STRATEGY_MARKET_PAUSED",
   "STRATEGY_MARKET_RESUMED",
   "SAFETY_BLOCKER_RAISED",
@@ -100,6 +104,44 @@ maxLength: MAX_FACT_ID_LENGTH })
     if (factId !== `operator-control:${  requestId}`) {
       throw new TypeError("Operator market-control factId must match its stable requestId")
     }
+  }
+}
+
+function validateOperatorBuyControlFact({ factType, canonicalData, factId }) {
+  const globalTypes = new Set([
+    "OPERATOR_ALL_BUYS_PAUSED",
+    "OPERATOR_ALL_BUYS_RESUMED",
+  ])
+  const marketTypes = new Set([
+    "OPERATOR_MARKET_BUYS_PAUSED",
+    "OPERATOR_MARKET_BUYS_RESUMED",
+  ])
+  const isMarketScoped = marketTypes.has(factType)
+  if (!globalTypes.has(factType) && !isMarketScoped) {
+    return
+  }
+  const allowedFields = isMarketScoped
+    ? new Set(["requestId", "actorId", "symbol"])
+    : new Set(["requestId", "actorId"])
+  if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+    throw new TypeError("Operator BUY-control fact contains unsupported fields")
+  }
+  const requestId = requireNonEmptyString({
+    value: canonicalData.requestId,
+    field: "data.requestId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  requireNonEmptyString({
+    value: canonicalData.actorId,
+    field: "data.actorId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  if (isMarketScoped &&
+      (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol))) {
+    throw new TypeError("Operator BUY-control symbol must be canonical uppercase alphanumeric")
+  }
+  if (factId !== `operator-control:${requestId}`) {
+    throw new TypeError("Operator BUY-control factId must match its stable requestId")
   }
 }
 
@@ -1381,6 +1423,10 @@ maxLength: MAX_FACT_ID_LENGTH })
 const FACT_DATA_VALIDATORS = Object.freeze({
   OPERATOR_MARKET_PAUSED: validateOperatorMarketControlFact,
   OPERATOR_MARKET_RESUMED: validateOperatorMarketControlFact,
+  OPERATOR_ALL_BUYS_PAUSED: validateOperatorBuyControlFact,
+  OPERATOR_ALL_BUYS_RESUMED: validateOperatorBuyControlFact,
+  OPERATOR_MARKET_BUYS_PAUSED: validateOperatorBuyControlFact,
+  OPERATOR_MARKET_BUYS_RESUMED: validateOperatorBuyControlFact,
   STRATEGY_MARKET_PAUSED: validateStrategyMarketControlFact,
   STRATEGY_MARKET_RESUMED: validateStrategyMarketControlFact,
   SAFETY_BLOCKER_RAISED: validateSafetyBlockerRaisedFact,

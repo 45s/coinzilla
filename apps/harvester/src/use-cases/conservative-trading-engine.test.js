@@ -11421,3 +11421,73 @@ test("does not submit a recovery SELL when a late fill exhausts sellable quantit
   })
   assert.equal(recheckedSafety.data.markets[0].status, "SAFE_TO_SHUTDOWN")
 })
+
+test("market emergency BUY pause reconciles fills that race with cancellation exactly once", async () => {
+  const harness = await createHarness({
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+    },
+    cancelWithFill: true,
+    accountingApplied: true,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+  const initialBuy = harness.engine.getActiveOrders().find((order) => order.side === "BUY")
+  assert.ok(initialBuy, "The test must begin with one acknowledged Harvester-owned BUY to exercise cancellation.")
+
+  const paused = await harness.engine.pauseBuys({ symbol: "DOGEUSDT" })
+
+  assert.equal(paused.ok, true, "A cancellation racing with a partial BUY fill must be reconciled before the emergency pause is acknowledged.")
+  assert.equal(harness.cancellationIds.length, 1, "The emergency pause must issue exactly one cancellation for the owned BUY.")
+  assert.equal(harness.accountedFills.length, 1, "The BUY fill returned by cancellation reconciliation must be applied exactly once.")
+  assert.equal(harness.engine.getOperatorBuyPauseState().pausedMarkets.includes("DOGEUSDT"), true, "The market BUY gate must remain active after the cancellation-racing fill is reconciled.")
+
+  const terminalOrder = harness.engine.getOrders().find((order) => order.clientOrderId === initialBuy.clientOrderId)
+  const duplicate = await harness.engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: terminalOrder,
+      fill: harness.accountedFills[0],
+    },
+  })
+  assert.equal(duplicate.ok, true, "A later duplicate user-data report for the cancellation-racing fill must remain a harmless event.")
+  assert.equal(harness.accountedFills.length, 1, "The same cancellation-racing fill must never be applied to accounting twice.")
+})
+
+test("failed owned BUY cancellation leaves the emergency BUY gate active and reports failure", async () => {
+  const harness = await createHarness({
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+    },
+    cancelFailure: true,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  const paused = await harness.engine.pauseBuys({ symbol: "DOGEUSDT" })
+
+  assert.equal(paused.ok, false, "The operator must not receive a successful emergency-stop acknowledgement while an owned BUY cancellation is unresolved.")
+  assert.equal(harness.engine.getOperatorBuyPauseState().pausedMarkets.includes("DOGEUSDT"), true, "A failed cancellation must never roll back the market BUY gate.")
+  assert.equal(harness.engine.getActiveOrders().some((order) => order.side === "BUY"), true, "The unresolved owned BUY must remain visible for reconciliation.")
+  assert.equal(harness.pauses.length, 0, "The emergency BUY-only pause must not convert an unresolved cancellation into a broad strategy pause.")
+})

@@ -128,7 +128,7 @@ function logEvaluationStarted({ dependencies, context } = {}) {
 
 function logEvaluationDecision({ dependencies, context } = {}) {
   const { logger, state } = dependencies
-  const { evaluationId, symbol, decision, operatorPaused, operatorSuppressedActions, portfolioBefore, recoveryLedgerBefore } = context
+  const { evaluationId, symbol, decision, operatorPaused, operatorBuyPaused, operatorSuppressedActions, portfolioBefore, recoveryLedgerBefore } = context
   logger?.debug?.({
     message: "Harvester Conservative evaluation decided",
     evaluationId,
@@ -138,6 +138,7 @@ function logEvaluationDecision({ dependencies, context } = {}) {
     reason: decision.reason,
     actions: decision.actions,
     operatorPaused,
+    operatorBuyPaused,
     operatorSuppressedActions,
     position: decision.position,
     portfolio: portfolioBefore.value,
@@ -152,16 +153,20 @@ function prepareEvaluationContext({ dependencies, options } = {}) {
     context: inputs })
   const decision = dependencies.strategyPolicy.evaluate(inputs.evaluationInput)
   const operatorPaused = dependencies.state.operatorPausedMarkets.has(inputs.symbol)
-  const operatorSuppressedActions = options.shutdownRecoveryOnly || operatorPaused
+  const operatorBuyPaused = dependencies.state.operatorAllBuysPaused === true ||
+    dependencies.state.operatorBuyPausedMarkets?.has(inputs.symbol) === true
+  const suppressBuyActions = options.shutdownRecoveryOnly || operatorPaused || operatorBuyPaused
+  const operatorSuppressedActions = suppressBuyActions
     ? decision.actions.filter((action) => action.side === "BUY")
     : []
-  const effectiveActions = options.shutdownRecoveryOnly || operatorPaused
+  const effectiveActions = suppressBuyActions
     ? decision.actions.filter((action) => action.side === "SELL")
     : decision.actions
   const context = {
     ...inputs,
     decision,
     operatorPaused,
+    operatorBuyPaused,
     operatorSuppressedActions,
     effectiveActions,
     preflightOnly: options.preflightOnly === true,

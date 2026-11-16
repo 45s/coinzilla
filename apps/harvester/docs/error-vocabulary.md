@@ -54,6 +54,13 @@ These operator-facing diagnostic codes are distinct from JavaScript error class 
 
 **If the error persists:** Preserve the lock and original error details. Check the actual Journal directory reported in the error; do not assume every caller uses `apps/harvester/logs/`. Confirm all writers of that exact directory have stopped before considering manual lock removal.
 
+## Emergency BUY pause diagnostics
+
+| Code | Symptom | Likely cause | Safe recovery |
+| --- | --- | --- | --- |
+| `OPERATOR_BUY_CANCELLATION_INCOMPLETE` | `/pauseallbuys` or `/pausebuys SYMBOL` reports that the BUY pause is active but cancellation is unresolved | A current-process-owned BUY remains active/UNKNOWN, or the broker/cancellation reconciliation workflow could not confirm its terminal state | The BUY gate remains active. Inspect `/orders`, broker order identity and cancellation/fill reconciliation diagnostics. Do not assume all owned BUYs are gone. Recovery SELLs remain enabled by the BUY gate itself, but existing order-integrity blockers may defer conflicting same-market activity until reconciliation. |
+| `INVALID_OPERATOR_SCOPE` | A global emergency BUY command is rejected | A market symbol was supplied to a global command | Retry `/pauseallbuys` or `/resumeallbuys` without a symbol. Use `/pausebuys SYMBOL` or `/resumebuys SYMBOL` for one market. |
+
 ## Operator query diagnostics
 
 The Telegram Command Center uses the feature-owned `OperatorQueryError` for failures while building read-only status and market snapshots. The application preserves the original cause and attaches only bounded component/operation/symbol context. Telegram replies remain generic; detailed errors are written to the structured Harvester logger.

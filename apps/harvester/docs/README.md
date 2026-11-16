@@ -11,6 +11,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Harvester agent instructions](../AGENTS.md) — mandatory preflight and domain-specific constraints
 - [Harvester roadmap](../ROADMAP.md) — current domain work and status
 - [Startup open-order ownership (ADR-0004)](architecture/decisions/0004-startup-open-orders-are-external.md) — accepted and implemented ownership rule for startup-snapshot orders
+- [Emergency BUY pause (ADR-0005)](architecture/decisions/0005-emergency-buy-pause.md) — global and market-scoped BUY-only controls; existing market pause remains unchanged
 - [Startup open-order boundary plan](plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md) — completed design and implementation record for #1157
 - [Trading First](TRADING_FIRST.md) — authoritative trading priority and exchange-safety requirements
 
