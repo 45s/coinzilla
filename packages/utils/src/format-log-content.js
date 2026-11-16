@@ -12,9 +12,12 @@ function readProperty({ value, key }) {
 }
 
 function normalizeError({ error, seen, normalize }) {
-  const name = readProperty({ value: error, key: 'name' })
-  const message = readProperty({ value: error, key: 'message' })
-  const stack = readProperty({ value: error, key: 'stack' })
+  const name = readProperty({ value: error,
+    key: 'name' })
+  const message = readProperty({ value: error,
+    key: 'message' })
+  const stack = readProperty({ value: error,
+    key: 'stack' })
   const normalized = {
     name: typeof name === 'string' ? name : 'Error',
     message: typeof message === 'string' ? message : String(message ?? ''),
@@ -24,14 +27,18 @@ function normalizeError({ error, seen, normalize }) {
     normalized.stack = stack
   }
 
-  const cause = readProperty({ value: error, key: 'cause' })
+  const cause = readProperty({ value: error,
+    key: 'cause' })
   if (cause !== undefined) {
-    normalized.cause = normalize({ value: cause, seen })
+    normalized.cause = normalize({ value: cause,
+      seen })
   }
 
-  const errors = readProperty({ value: error, key: 'errors' })
+  const errors = readProperty({ value: error,
+    key: 'errors' })
   if (Array.isArray(errors)) {
-    normalized.errors = normalize({ value: errors, seen })
+    normalized.errors = normalize({ value: errors,
+      seen })
   }
 
   return normalized
@@ -63,7 +70,8 @@ function normalizeLogValue({ value, seen = new WeakSet() }) {
         error: value,
         seen,
         normalize: ({ value: nestedValue, seen: nestedSeen }) =>
-          normalizeLogValue({ value: nestedValue, seen: nestedSeen }),
+          normalizeLogValue({ value: nestedValue,
+            seen: nestedSeen }),
       })
     }
 
@@ -84,7 +92,8 @@ function normalizeLogValue({ value, seen = new WeakSet() }) {
         } catch {
           item = UNREADABLE_VALUE
         }
-        normalized.push(normalizeLogValue({ value: item, seen }))
+        normalized.push(normalizeLogValue({ value: item,
+          seen }))
       }
       return normalized
     }
@@ -111,7 +120,8 @@ function normalizeLogValue({ value, seen = new WeakSet() }) {
         continue
       }
 
-      normalized[key] = normalizeLogValue({ value: propertyValue, seen })
+      normalized[key] = normalizeLogValue({ value: propertyValue,
+        seen })
     }
 
     return normalized

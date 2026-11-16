@@ -4,7 +4,7 @@ const unitsMap = {
   hour: 1_000 * 60 * 60,
 }
 
-function assertValidDate(value, name) {
+function assertValidDate({ value, name }) {
   if (!(value instanceof Date)) {
     throw new TypeError(`${name} must be a Date`)
   }
@@ -25,8 +25,14 @@ export const calculateTimeDiffBetween = ({ start, end, unit = 'hour' } = {}) => 
     throw new RangeError(`Unsupported time unit: ${unit}`)
   }
 
-  assertValidDate(start, 'start')
-  assertValidDate(end, 'end')
+  assertValidDate({
+    value: start,
+    name: 'start',
+  })
+  assertValidDate({
+    value: end,
+    name: 'end',
+  })
 
   return (end.getTime() - start.getTime()) / unitsMap[unit]
 }

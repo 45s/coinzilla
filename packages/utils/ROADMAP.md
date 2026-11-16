@@ -6,6 +6,12 @@ type: roadmap
 owner: utils
 ---
 
+## In progress — package ESLint cleanup ([issue #1238](https://github.com/45s/coinzilla/issues/1238))
+
+- Eliminate existing ESLint errors and warnings across `packages/utils/` without changing runtime behavior or public contracts.
+- Keep all changes within this package; do not alter root ESLint configuration, workspace scripts, workflows, or other domains.
+- Record the complete package-wide before/after ESLint inventory and verify tests/coverage on the exact PR head.
+
 ## Priority execution plan — current develop direction (2026-11-10)
 
 ### COMPLETED — build and runtime provenance (issue #763)
