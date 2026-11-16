@@ -316,345 +316,524 @@ function mapFact({ record, orderIntents, cancellationIntents }) {
  * @param {object[]} options.records Verified, globally ordered Operational State Store record records.
  * @returns {object} Candidate recovery projection.
  */
+const TRADING_FACT_TYPES = new Set([
+  "ACCOUNT_SNAPSHOT_CAPTURED",
+  "ACCOUNT_OPEN_ORDERS_CAPTURED",
+  "ORDER_SUBMISSION_INTENT",
+  "ORDER_SUBMISSION_OUTCOME",
+  "ORDER_CANCELLATION_INTENT",
+  "ORDER_CANCELLATION_OUTCOME",
+  "EXECUTION_FILL_APPLIED",
+  "RECOVERY_CYCLE_COMPLETED",
+  "RECOVERY_CYCLE_NOT_COMPLETED",
+])
+
+function createOperationalProjectionState() {
+  return {
+    configurationBaselines: new Map(),
+    sessions: new Map(),
+    seenFactIds: new Set(),
+    strategyPauses: new Map(),
+    activeBlockers: new Map(),
+    marketHistoryCoverage: [],
+    marketHistoryCoverageBySymbol: new Map(),
+    orderIntents: new Map(),
+    cancellationIntents: new Map(),
+    cycleFillIdsByMarket: new Map(),
+    orderSubmissionOutcomes: [],
+    orderCancellationOutcomes: [],
+    recoveryCycleCompletedFacts: [],
+    recoveryCycleNotCompletedFacts: [],
+    previousSequence: -1n,
+  }
+}
+
+function handleConfigurationBaselineFact({ record, state }) {
+  const { fingerprint, strategyName, markets, schemaVersion } = record.data
+  if (
+    schemaVersion !== 1 ||
+    typeof fingerprint !== "string" ||
+    !/^[a-f0-9]{64}$/.test(fingerprint) ||
+    typeof strategyName !== "string" ||
+    !strategyName.trim() ||
+    !Array.isArray(markets) ||
+    markets.length === 0 ||
+    markets.some((symbol) => typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol))
+  ) {
+    throw new TypeError("Durable configuration baseline is malformed")
+  }
+  const baseline = { strategyName, markets }
+  const existing = state.configurationBaselines.get(fingerprint)
+  if (existing && JSON.stringify(existing) !== JSON.stringify(baseline)) {
+    throw new Error("Configuration fingerprint was reused with conflicting strategy metadata")
+  }
+  state.configurationBaselines.set(fingerprint, baseline)
+}
+
+function handleProcessStartedFact({ record, sequence, state }) {
+  if (state.sessions.has(record.runtimeSessionId)) {
+    throw new Error("Runtime session has multiple PROCESS_STARTED facts")
+  }
+  const baseline = state.configurationBaselines.get(record.data.configurationFingerprint)
+  if (
+    !baseline ||
+    baseline.strategyName !== record.data.strategyName ||
+    JSON.stringify(baseline.markets) !== JSON.stringify(record.data.markets) ||
+    typeof record.data.tradingEnabled !== "boolean"
+  ) {
+    throw new Error("Process-start fact does not match a preceding durable configuration baseline")
+  }
+  state.sessions.set(record.runtimeSessionId, {
+    sessionId: record.runtimeSessionId,
+    startedSequence: sequence,
+    tradingEnabled: record.data.tradingEnabled,
+    facts: [],
+    stopped: false,
+  })
+}
+
+function requireActiveOperationalSession({ record, state, context }) {
+  const session = state.sessions.get(record.runtimeSessionId)
+  if (!session || session.stopped) {
+    throw new Error(`${context} is outside an active process session`)
+  }
+  return session
+}
+
+function handleProcessStoppedFact({ record, sequence, state }) {
+  const session = state.sessions.get(record.runtimeSessionId)
+  if (!session || session.stopped) {
+    throw new Error("Process-stop fact has no unique preceding process-start fact")
+  }
+  session.stopped = true
+  session.stop = record.data
+  session.stopSequence = sequence
+}
+
+function handleMarketHistoryCoverageFact({ record, state }) {
+  requireActiveOperationalSession({
+    record,
+    state,
+    context: "Market-history coverage fact",
+  })
+  const previousCoverage = state.marketHistoryCoverageBySymbol.get(record.data.symbol)
+  if (
+    previousCoverage &&
+    (
+      record.data.coveredFromTime > previousCoverage.coveredFromTime ||
+      record.data.verifiedAt < previousCoverage.verifiedAt
+    )
+  ) {
+    throw new Error("Market-history coverage facts must be monotonic and may never narrow a previously verified history window")
+  }
+  const coverage = Object.freeze({
+    ...record.data,
+    factId: record.factId,
+    sequence: record.sequence,
+  })
+  state.marketHistoryCoverageBySymbol.set(record.data.symbol, coverage)
+  state.marketHistoryCoverage.push(coverage)
+}
+
+function handleSafetyBlockerRaisedFact({ record, state }) {
+  requireActiveOperationalSession({
+    record,
+    state,
+    context: "Safety-blocker fact",
+  })
+  if (state.activeBlockers.has(record.data.blockerId)) {
+    throw new Error("Safety blocker was raised more than once without an intervening resolution")
+  }
+  state.activeBlockers.set(record.data.blockerId, {
+    ...record.data,
+    sequence: record.sequence,
+  })
+}
+
+function handleSafetyBlockerResolvedFact({ record, state }) {
+  requireActiveOperationalSession({
+    record,
+    state,
+    context: "Safety-blocker resolution",
+  })
+  const raisedBlocker = state.activeBlockers.get(record.data.blockerId)
+  if (!raisedBlocker) {
+    throw new Error("Safety blocker resolution has no preceding active raised fact")
+  }
+  if (
+    raisedBlocker.evidenceDigest === record.data.evidenceDigest ||
+    (
+      record.data.resolution === "AUTHORITATIVE_RECONCILIATION" &&
+      !record.data.resolvedBy.startsWith("reconciliation:")
+    ) ||
+    (
+      record.data.resolution === "OPERATOR_ACTION" &&
+      !record.data.resolvedBy.startsWith("operator:")
+    )
+  ) {
+    throw new Error("Safety blocker resolution does not carry independent evidence and an explicit resolver identity")
+  }
+  state.activeBlockers.delete(record.data.blockerId)
+}
+
+function handleOperatorMarketControlFact({ record, state, controlName }) {
+  requireActiveOperationalSession({
+    record,
+    state,
+    context: `Operator ${controlName} fact`,
+  })
+}
+
+function handleStrategyMarketPausedFact({ record, state }) {
+  requireActiveOperationalSession({
+    record,
+    state,
+    context: "Strategy pause fact",
+  })
+  state.strategyPauses.set(record.data.symbol, {
+    reason: record.data.reason,
+    sequence: record.sequence,
+  })
+}
+
+function handleStrategyMarketResumedFact({ record, state }) {
+  requireActiveOperationalSession({
+    record,
+    state,
+    context: "Strategy resume fact",
+  })
+  state.strategyPauses.delete(record.data.symbol)
+}
+
+function handleTradingOperationalFact({ record, state }) {
+  const session = requireActiveOperationalSession({
+    record,
+    state,
+    context: `Durable trading fact ${record.factType}`,
+  })
+  if (!TRADING_FACT_TYPES.has(record.factType)) {
+    throw new Error(`Unsupported Operational State Store projection type: ${record.factType}`)
+  }
+  if (record.factType === "ORDER_SUBMISSION_OUTCOME") {
+    state.orderSubmissionOutcomes.push(Object.freeze({
+      ...record.data,
+      factId: record.factId,
+      sequence: record.sequence,
+    }))
+  }
+  if (record.factType === "ORDER_CANCELLATION_OUTCOME") {
+    state.orderCancellationOutcomes.push(Object.freeze({
+      ...record.data,
+      factId: record.factId,
+      sequence: record.sequence,
+    }))
+  }
+  if (record.factType === "EXECUTION_FILL_APPLIED") {
+    const appliedFillIds = state.cycleFillIdsByMarket.get(record.data.marketId) ?? []
+    if (appliedFillIds.includes(record.data.fillId)) {
+      throw new Error(`Durable recovery cycle contains a duplicate applied fill identity: ${record.data.fillId}`)
+    }
+    appliedFillIds.push(record.data.fillId)
+    state.cycleFillIdsByMarket.set(record.data.marketId, appliedFillIds)
+  }
+  if (
+    record.factType === "RECOVERY_CYCLE_COMPLETED" ||
+    record.factType === "RECOVERY_CYCLE_NOT_COMPLETED"
+  ) {
+    const expectedFillIds = state.cycleFillIdsByMarket.get(record.data.marketId) ?? []
+    if (JSON.stringify(expectedFillIds) !== JSON.stringify(record.data.appliedFillIds)) {
+      throw new Error(`Durable recovery-cycle outcome does not match the exact applied-fill boundary for ${record.data.marketId}`)
+    }
+    const fact = Object.freeze({
+      factId: record.factId,
+      sequence: record.sequence,
+      data: record.data,
+    })
+    if (record.factType === "RECOVERY_CYCLE_COMPLETED") {
+      state.recoveryCycleCompletedFacts.push(fact)
+      state.cycleFillIdsByMarket.set(record.data.marketId, [])
+    } else {
+      state.recoveryCycleNotCompletedFacts.push(fact)
+    }
+  }
+  session.facts.push(record)
+}
+
+const FACT_RECORD_HANDLERS = Object.freeze({
+  CONFIGURATION_BASELINE: handleConfigurationBaselineFact,
+  PROCESS_STARTED: handleProcessStartedFact,
+  PROCESS_STOPPED: handleProcessStoppedFact,
+  MARKET_HISTORY_COVERAGE_CONFIRMED: handleMarketHistoryCoverageFact,
+  SAFETY_BLOCKER_RAISED: handleSafetyBlockerRaisedFact,
+  SAFETY_BLOCKER_RESOLVED: handleSafetyBlockerResolvedFact,
+  OPERATOR_MARKET_PAUSED: (context) => handleOperatorMarketControlFact({
+    ...context,
+    controlName: "pause",
+  }),
+  OPERATOR_MARKET_RESUMED: (context) => handleOperatorMarketControlFact({
+    ...context,
+    controlName: "resume",
+  }),
+  STRATEGY_MARKET_PAUSED: handleStrategyMarketPausedFact,
+  STRATEGY_MARKET_RESUMED: handleStrategyMarketResumedFact,
+})
+
+function processOperationalStateRecord({ rawRecord, index, state }) {
+  const record = requireRecord({ record: rawRecord, index })
+  const sequence = BigInt(record.sequence)
+  if (sequence <= state.previousSequence) {
+    throw new Error("Operational State Store record sequence must be strictly increasing")
+  }
+  state.previousSequence = sequence
+  if (state.seenFactIds.has(record.factId)) {
+    throw new Error(`Operational State Store record stream contains duplicate factId ${record.factId}`)
+  }
+  state.seenFactIds.add(record.factId)
+  if (record.factType === "LEDGER_INITIALIZED") {
+    return
+  }
+  const handler = FACT_RECORD_HANDLERS[record.factType]
+  if (handler) {
+    handler({ record, sequence, state })
+    return
+  }
+  handleTradingOperationalFact({ record, state })
+}
+
+function sortSessionsByStartedSequence({ sessions }) {
+  const orderedSessions = []
+  for (const session of sessions) {
+    let insertionIndex = orderedSessions.length
+    while (
+      insertionIndex > 0 &&
+      orderedSessions[insertionIndex - 1].startedSequence > session.startedSequence
+    ) {
+      insertionIndex -= 1
+    }
+    orderedSessions.splice(insertionIndex, 0, session)
+  }
+  return orderedSessions
+}
+
+function createSessionSyntheticRecords({ session, latestSession, state }) {
+  const syntheticRecords = []
+  let lineNumber = 0
+  const emit = ({ name, data }) => {
+    syntheticRecords.push(makeEventRecord({
+      sessionId: session.sessionId,
+      lineNumber,
+      name,
+      data,
+    }))
+    lineNumber += 1
+  }
+  const preflight = session.facts.filter((record) =>
+    (
+      record.factType === "ACCOUNT_SNAPSHOT_CAPTURED" ||
+      record.factType === "ACCOUNT_OPEN_ORDERS_CAPTURED"
+    ) && record.data.phase === "PREFLIGHT"
+  )
+  const remaining = session.facts.filter((record) => !preflight.includes(record))
+  for (const record of preflight) {
+    const name = record.factType === "ACCOUNT_SNAPSHOT_CAPTURED"
+      ? EVENT.ACCOUNT_SNAPSHOT
+      : EVENT.ACCOUNT_OPEN_ORDERS
+    emit({ name, data: record.data })
+  }
+  emit({ name: EVENT.STARTED, data: { tradingEnabled: session.tradingEnabled } })
+
+  if (session === latestSession) {
+    for (const [symbol, pause] of state.strategyPauses) {
+      emit({ name: EVENT.STRATEGY_PAUSED, data: { symbol, reason: pause.reason } })
+    }
+    for (const blocker of state.activeBlockers.values()) {
+      emit({
+        name: EVENT.EXECUTION_ACCOUNTING_FAILED,
+        data: {
+          symbol: blocker.scope === "ACCOUNT" ? "ACCOUNT" : blocker.symbol,
+          reason: blocker.reason,
+        },
+      })
+    }
+  }
+
+  for (const record of remaining) {
+    const events = mapFact({
+      record,
+      orderIntents: state.orderIntents,
+      cancellationIntents: state.cancellationIntents,
+    })
+    for (const event of events) {
+      emit({ name: event.name, data: event.data })
+    }
+  }
+  if (session.stop) {
+    emit({
+      name: EVENT.STOPPED,
+      data: {
+        outcome: session.stop.clean ? "success" : "failed",
+        reason: session.stop.reason,
+      },
+    })
+  }
+  return syntheticRecords
+}
+
+function createSyntheticJournalRecords({ state }) {
+  const sessions = sortSessionsByStartedSequence({ sessions: [...state.sessions.values()] })
+  const latestSession = sessions[sessions.length - 1]
+  const syntheticRecords = []
+  for (const session of sessions) {
+    syntheticRecords.push(...createSessionSyntheticRecords({
+      session,
+      latestSession,
+      state,
+    }))
+  }
+  return syntheticRecords
+}
+
+function mapCompletedRecoveryCycles({ cycles, facts }) {
+  const mappedCycles = []
+  for (const cycle of cycles) {
+    const fact = facts.find(({ data }) =>
+      data.sellOrderClientId === cycle.completedOrderClientId &&
+      data.sellOrderBrokerOrderId === cycle.completedOrderBrokerOrderId &&
+      data.marketId === cycle.marketId &&
+      data.symbol === cycle.symbol
+    )
+    if (!fact) {
+      throw new Error(`Canonical recovery-cycle projection has no matching durable completion fact for ${cycle.symbol}`)
+    }
+    mappedCycles.push(Object.freeze({
+      ...cycle,
+      cycleId: fact.data.cycleId,
+      appliedFillIds: Object.freeze([...fact.data.appliedFillIds]),
+      buyCost: fact.data.buyCost,
+      spent: fact.data.spent,
+      netSellProceeds: fact.data.netSellProceeds,
+      realizedNetProfit: fact.data.realizedNetProfit,
+      minProfit: fact.data.minProfit,
+      activeQuantity: fact.data.activeQuantity,
+      keepQuantity: fact.data.keepQuantity,
+      freeQuantity: fact.data.freeQuantity,
+      inventoryDisposition: fact.data.inventoryDisposition,
+      sellOrderClientId: fact.data.sellOrderClientId,
+      sellOrderBrokerOrderId: fact.data.sellOrderBrokerOrderId,
+      factId: fact.factId,
+      // Keep the synthetic replay sequence in the same ordering domain as
+      // projected fills. The durable stream sequence is separate metadata.
+      durableSequence: requireSafeSequence({ sequence: fact.sequence, factId: fact.factId }),
+    }))
+  }
+  if (mappedCycles.length !== facts.length) {
+    throw new Error("Durable recovery-cycle completion facts do not map one-to-one to canonical completed cycles")
+  }
+  return Object.freeze(mappedCycles)
+}
+
+function mapRecoveryCycleEvaluations({ evaluations, facts }) {
+  const mappedEvaluations = []
+  for (const evaluation of evaluations) {
+    const fact = facts.find(({ data }) =>
+      data.sellOrderClientId === evaluation.sellOrderClientId &&
+      data.sellOrderBrokerOrderId === evaluation.sellOrderBrokerOrderId &&
+      data.marketId === evaluation.marketId &&
+      data.symbol === evaluation.symbol &&
+      data.outcome === evaluation.outcome &&
+      data.reason === evaluation.reason
+    )
+    if (!fact) {
+      throw new Error(`Canonical recovery-cycle evaluation has no matching durable NOT_COMPLETED fact for ${evaluation.symbol}`)
+    }
+    mappedEvaluations.push(Object.freeze({
+      ...evaluation,
+      evaluationId: fact.data.evaluationId,
+      appliedFillIds: Object.freeze([...fact.data.appliedFillIds]),
+      buyCost: fact.data.buyCost,
+      spent: fact.data.spent,
+      netSellProceeds: fact.data.netSellProceeds,
+      realizedNetProfit: fact.data.realizedNetProfit,
+      minProfit: fact.data.minProfit,
+      activeQuantity: fact.data.activeQuantity,
+      keepQuantity: fact.data.keepQuantity,
+      sellOrderClientId: fact.data.sellOrderClientId,
+      sellOrderBrokerOrderId: fact.data.sellOrderBrokerOrderId,
+      factId: fact.factId,
+      // Keep the synthetic replay sequence in the same ordering domain as
+      // projected fills. The durable stream sequence is separate metadata.
+      durableSequence: requireSafeSequence({ sequence: fact.sequence, factId: fact.factId }),
+    }))
+  }
+  if (mappedEvaluations.length !== facts.length) {
+    throw new Error("Durable recovery-cycle NOT_COMPLETED facts do not map one-to-one to canonical evaluations")
+  }
+  return Object.freeze(mappedEvaluations)
+}
+
+function createOperationalProjectionResult({ projected, state }) {
+  const recoveryCycles = mapCompletedRecoveryCycles({
+    cycles: projected.data.recoveryCycles,
+    facts: state.recoveryCycleCompletedFacts,
+  })
+  const recoveryCycleEvaluations = mapRecoveryCycleEvaluations({
+    evaluations: projected.data.recoveryCycleEvaluations,
+    facts: state.recoveryCycleNotCompletedFacts,
+  })
+  const stickySafetyBlockers = Object.freeze([...state.activeBlockers.values()].map((blocker) =>
+    Object.freeze({ ...blocker, scope: blocker.scope })
+  ))
+  const pausedMarkets = Object.freeze([...state.strategyPauses].map(([symbol, pause]) =>
+    Object.freeze({ symbol, reason: pause.reason })
+  ))
+  return toResult({
+    data: Object.freeze({
+      ...projected.data,
+      recoveryCycles,
+      recoveryCycleEvaluations,
+      orderSubmissionOutcomes: Object.freeze(state.orderSubmissionOutcomes),
+      orderCancellationOutcomes: Object.freeze(state.orderCancellationOutcomes),
+      source: "DURABLE_FACTS",
+      candidateOnly: true,
+      restorationEnabled: false,
+      requiresExchangeReconciliation: true,
+      historyCoverageComplete: false,
+      marketHistoryCoverage: Object.freeze(state.marketHistoryCoverage),
+      pausedMarkets,
+      stickySafetyBlockers,
+      sessions: projected.data.sessions,
+    }),
+  })
+}
+
+/**
+ * Project the application-owned durable stream into the existing canonical
+ * recovery reducer. The Journal is not read or trusted here: this adapter
+ * translates verified Operational State Store records into the reducer's domain-event vocabulary.
+ *
+ * This is a candidate projection only. It never performs broker reads, mutates
+ * orders, or opens the trading-readiness gate. Exchange and history completeness
+ * remain mandatory independent reconciliation steps.
+ *
+ * @param {object} options
+ * @param {object[]} options.records Verified, globally ordered Operational State Store record records.
+ * @returns {object} Candidate recovery projection.
+ */
 export function projectHarvesterOperationalState({ records } = {}) {
   try {
-    if (!Array.isArray(records)) { throw new TypeError("Operational State Store projection requires a verified records array") }
-    const configurationBaselines = new Map()
-    const sessions = new Map()
-    const seenFactIds = new Set()
-    const strategyPauses = new Map()
-    const activeBlockers = new Map()
-    const marketHistoryCoverage = []
-    const marketHistoryCoverageBySymbol = new Map()
-    const orderIntents = new Map()
-    const cancellationIntents = new Map()
-    const cycleFillIdsByMarket = new Map()
-    const orderSubmissionOutcomes = []
-    const orderCancellationOutcomes = []
-    const recoveryCycleCompletedFacts = []
-    const recoveryCycleNotCompletedFacts = []
-    let previousSequence = -1n
-
+    if (!Array.isArray(records)) {
+      throw new TypeError("Operational State Store projection requires a verified records array")
+    }
+    const state = createOperationalProjectionState()
     for (const [index, rawRecord] of records.entries()) {
-      const record = requireRecord({ record: rawRecord,
-index })
-      const sequence = BigInt(record.sequence)
-      if (sequence <= previousSequence) { throw new Error("Operational State Store record sequence must be strictly increasing") }
-      previousSequence = sequence
-      if (seenFactIds.has(record.factId)) { throw new Error(`Operational State Store record stream contains duplicate factId ${  record.factId}`) }
-      seenFactIds.add(record.factId)
-
-      if (record.factType === "LEDGER_INITIALIZED") { continue }
-      if (record.factType === "CONFIGURATION_BASELINE") {
-        const { fingerprint, strategyName, markets, schemaVersion } = record.data
-        if (schemaVersion !== 1 || typeof fingerprint !== "string" || !/^[a-f0-9]{64}$/.test(fingerprint) ||
-            typeof strategyName !== "string" || !strategyName.trim() || !Array.isArray(markets) ||
-            markets.length === 0 || markets.some((symbol) => typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol))) {
-          throw new TypeError("Durable configuration baseline is malformed")
-        }
-        const existing = configurationBaselines.get(fingerprint)
-        if (existing && JSON.stringify(existing) !== JSON.stringify({ strategyName,
-markets })) {
-          throw new Error("Configuration fingerprint was reused with conflicting strategy metadata")
-        }
-        configurationBaselines.set(fingerprint, { strategyName,
-markets })
-        continue
-      }
-      if (record.factType === "PROCESS_STARTED") {
-        if (sessions.has(record.runtimeSessionId)) { throw new Error("Runtime session has multiple PROCESS_STARTED facts") }
-        const baseline = configurationBaselines.get(record.data.configurationFingerprint)
-        if (!baseline || baseline.strategyName !== record.data.strategyName ||
-            JSON.stringify(baseline.markets) !== JSON.stringify(record.data.markets) ||
-            typeof record.data.tradingEnabled !== "boolean") {
-          throw new Error("Process-start fact does not match a preceding durable configuration baseline")
-        }
-        sessions.set(record.runtimeSessionId, {
-          sessionId: record.runtimeSessionId,
-          startedSequence: sequence,
-          tradingEnabled: record.data.tradingEnabled,
-          facts: [],
-          stopped: false,
-        })
-        continue
-      }
-
-      if (record.factType === "PROCESS_STOPPED") {
-        const session = sessions.get(record.runtimeSessionId)
-        if (!session || session.stopped) { throw new Error("Process-stop fact has no unique preceding process-start fact") }
-        session.stopped = true
-        session.stop = record.data
-        session.stopSequence = sequence
-        continue
-      }
-
-      if (record.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
-        const coverageSession = sessions.get(record.runtimeSessionId)
-        if (!coverageSession || coverageSession.stopped) { throw new Error("Market-history coverage fact is outside an active process session") }
-        const previousCoverage = marketHistoryCoverageBySymbol.get(record.data.symbol)
-        if (previousCoverage && (
-          record.data.coveredFromTime > previousCoverage.coveredFromTime ||
-          record.data.verifiedAt < previousCoverage.verifiedAt
-        )) {
-          throw new Error("Market-history coverage facts must be monotonic and may never narrow a previously verified history window")
-        }
-        const coverage = Object.freeze({ ...record.data,
-factId: record.factId,
-sequence: record.sequence })
-        marketHistoryCoverageBySymbol.set(record.data.symbol, coverage)
-        marketHistoryCoverage.push(coverage)
-        continue
-      }
-
-      if (record.factType === "SAFETY_BLOCKER_RAISED") {
-        const blockerSession = sessions.get(record.runtimeSessionId)
-        if (!blockerSession || blockerSession.stopped) { throw new Error("Safety-blocker fact is outside an active process session") }
-        if (activeBlockers.has(record.data.blockerId)) {
-          throw new Error("Safety blocker was raised more than once without an intervening resolution")
-        }
-        activeBlockers.set(record.data.blockerId, { ...record.data,
-sequence: record.sequence })
-        continue
-      }
-      if (record.factType === "SAFETY_BLOCKER_RESOLVED") {
-        const resolutionSession = sessions.get(record.runtimeSessionId)
-        if (!resolutionSession || resolutionSession.stopped) { throw new Error("Safety-blocker resolution is outside an active process session") }
-        const raisedBlocker = activeBlockers.get(record.data.blockerId)
-        if (!raisedBlocker) {
-          throw new Error("Safety blocker resolution has no preceding active raised fact")
-        }
-        if (raisedBlocker.evidenceDigest === record.data.evidenceDigest ||
-            (record.data.resolution === "AUTHORITATIVE_RECONCILIATION" && !record.data.resolvedBy.startsWith("reconciliation:")) ||
-            (record.data.resolution === "OPERATOR_ACTION" && !record.data.resolvedBy.startsWith("operator:"))) {
-          throw new Error("Safety blocker resolution does not carry independent evidence and an explicit resolver identity")
-        }
-        activeBlockers.delete(record.data.blockerId)
-        continue
-      }
-
-      // ADR-0003 keeps operator pause process-lifetime only. Validate its session
-      // placement, but retain the fact only as durable audit evidence.
-      if (record.factType === "OPERATOR_MARKET_PAUSED") {
-        const controlSession = sessions.get(record.runtimeSessionId)
-        if (!controlSession || controlSession.stopped) { throw new Error("Operator pause fact is outside an active process session") }
-        continue
-      }
-      if (record.factType === "OPERATOR_MARKET_RESUMED") {
-        const controlSession = sessions.get(record.runtimeSessionId)
-        if (!controlSession || controlSession.stopped) { throw new Error("Operator resume fact is outside an active process session") }
-        continue
-      }
-      if (record.factType === "STRATEGY_MARKET_PAUSED") {
-        const controlSession = sessions.get(record.runtimeSessionId)
-        if (!controlSession || controlSession.stopped) { throw new Error("Strategy pause fact is outside an active process session") }
-        strategyPauses.set(record.data.symbol, { reason: record.data.reason,
-sequence: record.sequence })
-        continue
-      }
-      if (record.factType === "STRATEGY_MARKET_RESUMED") {
-        const controlSession = sessions.get(record.runtimeSessionId)
-        if (!controlSession || controlSession.stopped) { throw new Error("Strategy resume fact is outside an active process session") }
-        strategyPauses.delete(record.data.symbol)
-        continue
-      }
-
-      const session = sessions.get(record.runtimeSessionId)
-      if (!session || session.stopped) {
-        throw new Error(`Durable trading fact is outside an active process session: ${  record.factType}`)
-      }
-      if (!["ACCOUNT_SNAPSHOT_CAPTURED", "ACCOUNT_OPEN_ORDERS_CAPTURED", "ORDER_SUBMISSION_INTENT", "ORDER_SUBMISSION_OUTCOME", "ORDER_CANCELLATION_INTENT", "ORDER_CANCELLATION_OUTCOME", "EXECUTION_FILL_APPLIED", "RECOVERY_CYCLE_COMPLETED", "RECOVERY_CYCLE_NOT_COMPLETED"].includes(record.factType)) {
-        throw new Error(`Unsupported Operational State Store projection type: ${  record.factType}`)
-      }
-      if (record.factType === "ORDER_SUBMISSION_OUTCOME") {
-        orderSubmissionOutcomes.push(Object.freeze({ ...record.data,
-factId: record.factId,
-sequence: record.sequence }))
-      }
-      if (record.factType === "ORDER_CANCELLATION_OUTCOME") {
-        orderCancellationOutcomes.push(Object.freeze({ ...record.data,
-factId: record.factId,
-sequence: record.sequence }))
-      }
-      if (record.factType === "EXECUTION_FILL_APPLIED") {
-        const appliedFillIds = cycleFillIdsByMarket.get(record.data.marketId) ?? []
-        if (appliedFillIds.includes(record.data.fillId)) {
-          throw new Error(`Durable recovery cycle contains a duplicate applied fill identity: ${  record.data.fillId}`)
-        }
-        appliedFillIds.push(record.data.fillId)
-        cycleFillIdsByMarket.set(record.data.marketId, appliedFillIds)
-      }
-      if (record.factType === "RECOVERY_CYCLE_COMPLETED" || record.factType === "RECOVERY_CYCLE_NOT_COMPLETED") {
-        const expectedFillIds = cycleFillIdsByMarket.get(record.data.marketId) ?? []
-        if (JSON.stringify(expectedFillIds) !== JSON.stringify(record.data.appliedFillIds)) {
-          throw new Error(`Durable recovery-cycle outcome does not match the exact applied-fill boundary for ${  record.data.marketId}`)
-        }
-        const fact = Object.freeze({ factId: record.factId,
-sequence: record.sequence,
-data: record.data })
-        if (record.factType === "RECOVERY_CYCLE_COMPLETED") {
-          recoveryCycleCompletedFacts.push(fact)
-          cycleFillIdsByMarket.set(record.data.marketId, [])
-        } else {
-          recoveryCycleNotCompletedFacts.push(fact)
-        }
-      }
-      session.facts.push(record)
+      processOperationalStateRecord({ rawRecord, index, state })
     }
-
-    const sessionList = [...sessions.values()].sort((left, right) => {
-      if (left.startedSequence < right.startedSequence) {return -1}
-      if (left.startedSequence > right.startedSequence) {return 1}
-      return 0
-    })
-    const latestSession = sessionList[sessionList.length - 1]
-    // Strategy pauses are durable recovery state; operator pauses are not
-    // replayed after restart and were intentionally excluded above.
-    const activePauses = strategyPauses
-    const syntheticRecords = []
-    for (const session of sessionList) {
-      let lineNumber = 0
-      const preflight = session.facts.filter((record) =>
-        (record.factType === "ACCOUNT_SNAPSHOT_CAPTURED" || record.factType === "ACCOUNT_OPEN_ORDERS_CAPTURED") &&
-        record.data.phase === "PREFLIGHT")
-      const remaining = session.facts.filter((record) => !preflight.includes(record))
-      const emit = (...parameters) => {
-    const [name, data] = parameters
-        syntheticRecords.push(makeEventRecord({ sessionId: session.sessionId,
-lineNumber: lineNumber++,
-name,
-data }))
-      }
-      for (const record of preflight) {
-        const name = record.factType === "ACCOUNT_SNAPSHOT_CAPTURED" ? EVENT.ACCOUNT_SNAPSHOT : EVENT.ACCOUNT_OPEN_ORDERS
-        emit(name, record.data)
-      }
-      emit(EVENT.STARTED, { tradingEnabled: session.tradingEnabled })
-
-      if (session === latestSession) {
-        for (const [symbol, pause] of activePauses) {
-          emit(EVENT.STRATEGY_PAUSED, { symbol,
-reason: pause.reason })
-        }
-        for (const blocker of activeBlockers.values()) {
-          emit(EVENT.EXECUTION_ACCOUNTING_FAILED, {
-            symbol: blocker.scope === "ACCOUNT" ? "ACCOUNT" : blocker.symbol,
-            reason: blocker.reason,
-          })
-        }
-      }
-
-      for (const record of remaining) {
-        const events = mapFact({ record,
-orderIntents,
-cancellationIntents })
-        for (const event of events) { emit(event.name, event.data) }
-      }
-      if (session.stop) {
-        emit(EVENT.STOPPED, {
-          outcome: session.stop.clean ? "success" : "failed",
-          reason: session.stop.reason,
-        })
-      }
-    }
-
+    const syntheticRecords = createSyntheticJournalRecords({ state })
     const projected = projectHarvesterJournalRecovery({ records: syntheticRecords })
     if (projected?.ok !== true) {
       return projected
     }
-    const recoveryCycles = projected.data.recoveryCycles.map((cycle) => {
-      const fact = recoveryCycleCompletedFacts.find(({ data }) =>
-        data.sellOrderClientId === cycle.completedOrderClientId &&
-        data.sellOrderBrokerOrderId === cycle.completedOrderBrokerOrderId &&
-        data.marketId === cycle.marketId &&
-        data.symbol === cycle.symbol
-      )
-      if (!fact) {
-        throw new Error(`Canonical recovery-cycle projection has no matching durable completion fact for ${  cycle.symbol}`)
-      }
-      return Object.freeze({
-        ...cycle,
-        cycleId: fact.data.cycleId,
-        appliedFillIds: Object.freeze([...fact.data.appliedFillIds]),
-        buyCost: fact.data.buyCost,
-        spent: fact.data.spent,
-        netSellProceeds: fact.data.netSellProceeds,
-        realizedNetProfit: fact.data.realizedNetProfit,
-        minProfit: fact.data.minProfit,
-        activeQuantity: fact.data.activeQuantity,
-        keepQuantity: fact.data.keepQuantity,
-        freeQuantity: fact.data.freeQuantity,
-        inventoryDisposition: fact.data.inventoryDisposition,
-        sellOrderClientId: fact.data.sellOrderClientId,
-        sellOrderBrokerOrderId: fact.data.sellOrderBrokerOrderId,
-        factId: fact.factId,
-        // Keep the synthetic replay sequence in the same ordering domain as
-        // projected fills. The durable stream sequence is separate metadata.
-        durableSequence: requireSafeSequence({ sequence: fact.sequence,
-factId: fact.factId }),
-      })
-    })
-    if (recoveryCycles.length !== recoveryCycleCompletedFacts.length) {
-      throw new Error("Durable recovery-cycle completion facts do not map one-to-one to canonical completed cycles")
-    }
-    const recoveryCycleEvaluations = projected.data.recoveryCycleEvaluations.map((evaluation) => {
-      const fact = recoveryCycleNotCompletedFacts.find(({ data }) =>
-        data.sellOrderClientId === evaluation.sellOrderClientId &&
-        data.sellOrderBrokerOrderId === evaluation.sellOrderBrokerOrderId &&
-        data.marketId === evaluation.marketId &&
-        data.symbol === evaluation.symbol &&
-        data.outcome === evaluation.outcome &&
-        data.reason === evaluation.reason
-      )
-      if (!fact) {
-        throw new Error(`Canonical recovery-cycle evaluation has no matching durable NOT_COMPLETED fact for ${  evaluation.symbol}`)
-      }
-      return Object.freeze({
-        ...evaluation,
-        evaluationId: fact.data.evaluationId,
-        appliedFillIds: Object.freeze([...fact.data.appliedFillIds]),
-        buyCost: fact.data.buyCost,
-        spent: fact.data.spent,
-        netSellProceeds: fact.data.netSellProceeds,
-        realizedNetProfit: fact.data.realizedNetProfit,
-        minProfit: fact.data.minProfit,
-        activeQuantity: fact.data.activeQuantity,
-        keepQuantity: fact.data.keepQuantity,
-        sellOrderClientId: fact.data.sellOrderClientId,
-        sellOrderBrokerOrderId: fact.data.sellOrderBrokerOrderId,
-        factId: fact.factId,
-        // Keep the synthetic replay sequence in the same ordering domain as
-        // projected fills. The durable stream sequence is separate metadata.
-        durableSequence: requireSafeSequence({ sequence: fact.sequence,
-factId: fact.factId }),
-      })
-    })
-    if (recoveryCycleEvaluations.length !== recoveryCycleNotCompletedFacts.length) {
-      throw new Error("Durable recovery-cycle NOT_COMPLETED facts do not map one-to-one to canonical evaluations")
-    }
-    const stickySafetyBlockers = Object.freeze([...activeBlockers.values()].map((blocker) =>
-      Object.freeze({ ...blocker,
-scope: blocker.scope })))
-    const pausedMarkets = Object.freeze([...activePauses].map(([symbol, pause]) =>
-      Object.freeze({ symbol,
-reason: pause.reason })))
-    return toResult({
-      data: Object.freeze({
-        ...projected.data,
-        recoveryCycles: Object.freeze(recoveryCycles),
-        recoveryCycleEvaluations: Object.freeze(recoveryCycleEvaluations),
-        orderSubmissionOutcomes: Object.freeze(orderSubmissionOutcomes),
-        orderCancellationOutcomes: Object.freeze(orderCancellationOutcomes),
-        source: "DURABLE_FACTS",
-        candidateOnly: true,
-        restorationEnabled: false,
-        requiresExchangeReconciliation: true,
-        historyCoverageComplete: false,
-        marketHistoryCoverage: Object.freeze(marketHistoryCoverage),
-        pausedMarkets,
-        stickySafetyBlockers,
-        sessions: projected.data.sessions,
-      }),
-    })
+    return createOperationalProjectionResult({ projected, state })
   } catch (error) {
     return toResult({ error })
   }
