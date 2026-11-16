@@ -73,8 +73,9 @@ const startHarvesterForTest = (input = {}) => {
   })
 }
 
-function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 2000) {
-  return new Promise((resolve, reject) => {
+function waitForTestSignal({ promise, label, getDiagnostics, timeoutMs = 2000 }) {
+  return new Promise((...settlers) => {
+    const [resolve, reject] = settlers;
     const timeout = setTimeout(() => {
       let diagnostics
       try { diagnostics = getDiagnostics?.() } catch (error) { diagnostics = String(error) }
@@ -321,9 +322,13 @@ price: '1' } }),
 function createOrdinaryTradeMarketDataPorts({ state } = {}) {
   return {
     getCandles: async ({ symbol } = {}) => toResult({
-      data: Array.from({ length: 100 }, (_, index) =>
-        createTestCandle({ symbol,
-openTime: index * 60_000 })),
+      data: Array.from({ length: 100 }, (...values) => {
+        const [, index] = values;
+        return createTestCandle({
+          symbol,
+          openTime: index * 60_000,
+        });
+      }),
     }),
     subscribeForCandles: async ({ symbol, onCandle } = {}) => {
       for (const index of [100, 101, 102]) {
@@ -521,10 +526,10 @@ market: marketContext.market })
       fill,
     },
   })
-  await waitForTestSignal(
-    state.tradeObserved,
-    'trade execution observer',
-    () => ({
+  await waitForTestSignal({
+    promise: state.tradeObserved,
+    label: 'trade execution observer',
+    getDiagnostics: () => ({
       userDataReady: context.userDataReady,
       userDataStatus: context.userDataStatus,
       accountedBaseQuantity: context.portfolio.getPosition({
@@ -532,8 +537,8 @@ market: marketContext.market })
       })?.baseQuantity.amount ?? '0',
       errors: state.userDataErrors.map(([entry]) => entry?.message ?? String(entry)),
     }),
-    2000,
-  )
+    timeoutMs: 2000,
+  })
   await context.stop()
   assertOrdinaryTradeShutdown({ context,
 state,

@@ -320,7 +320,8 @@ test("production confirmation fails closed when the Operational State Store reco
   try {
     const fileSystem = {
       ...nodeFileSystem,
-      open: async (filePath, flags, mode) => {
+      open: async (...openArguments) => {
+        const [filePath, flags, mode] = openArguments;
         if (path.basename(filePath) === "manifest.jsonl" && flags === "a") {
           throw new Error("injected committed-head checkpoint failure")
         }

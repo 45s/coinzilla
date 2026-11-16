@@ -44,9 +44,13 @@ const createDirectory = async (t) => {
 force: true }))
   return directory
 }
-const createStore = (directory, runtimeSessionId = "crash-matrix-process-1") =>
-  createFileOperationalStateStore({ directory,
-runtimeSessionId })
+const createStore = (...storeArguments) => {
+  const [directory, runtimeSessionId = "crash-matrix-process-1"] = storeArguments;
+  return createFileOperationalStateStore({
+    directory,
+    runtimeSessionId,
+  });
+}
 const initializeProcess = async (store) => {
   const initialized = await store.initialize()
   assert.equal(initialized.ok, true, initialized.errors?.map(({ message }) => message).join("; "))
@@ -62,10 +66,13 @@ appConfig })
   })
   assert.equal(started.ok, true, started.errors?.map(({ message }) => message).join("; "))
 }
-const readCandidate = (directory, runtimeSessionId) => restoreHarvesterOperationalState({
-  operationalStateStore: createStore(directory, runtimeSessionId),
-  marketMetadata: new Map([[market.symbol, { market }]]),
-})
+const readCandidate = (...candidateArguments) => {
+  const [directory, runtimeSessionId] = candidateArguments;
+  return restoreHarvesterOperationalState({
+    operationalStateStore: createStore(directory, runtimeSessionId),
+    marketMetadata: new Map([[market.symbol, { market }]]),
+  });
+}
 const makeOrder = ({
   clientOrderId,
   brokerOrderId = null,

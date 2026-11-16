@@ -94,8 +94,9 @@ reason: "accounting safety halt" },
         stop: async () => ({ ok: true }),
       }
     },
-    registerSignalHandler: (signal, handler) => {
-      signalHandlers.set(signal, handler)
+    registerSignalHandler: (...signalHandlerArguments) => {
+      const [signal, handler] = signalHandlerArguments;
+      signalHandlers.set(signal, handler);
     },
     logger: {
       info() {},
@@ -143,7 +144,10 @@ test("keeps Harvester running when optional Telegram setup fails", async () => {
         stop: async () => ({ ok: true }),
       }
     },
-    registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
+    registerSignalHandler: (...signalHandlerArguments) => {
+      const [signal, handler] = signalHandlerArguments;
+      signalHandlers.set(signal, handler);
+    },
     logger: {
       info() {},
       error(entry) { loggerErrors.push(entry) },

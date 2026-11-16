@@ -25,7 +25,7 @@ function createOpenOrderSnapshot({ order }) {
   return openOrder
 }
 
-function createExchangeMarketMetadata(marketSymbol, appConfig) {
+function createExchangeMarketMetadata({ marketSymbol, appConfig }) {
   const baseAsset = marketSymbol.slice(0, -4)
   const marketConfiguration = appConfig.strategies.CG_coinGrabber.pairs[marketSymbol]
   return {
@@ -56,14 +56,22 @@ function createExchangeMarketMetadata(marketSymbol, appConfig) {
   }
 }
 
-function waitForSubmittedOrder(submittedCanonicalOrders, submittedOrderWaiters, marketSymbol, side, occurrence = 1) {
+function waitForSubmittedOrder({
+  submittedCanonicalOrders,
+  submittedOrderWaiters,
+  marketSymbol,
+  side,
+  occurrence = 1,
+}) {
   const matches = (order) =>
     order.market.symbol === marketSymbol && order.side === side
   const getOrders = () => submittedCanonicalOrders.filter(matches)
   const existing = getOrders()
   if (existing.length >= occurrence)
     {return Promise.resolve(existing[occurrence - 1])}
-  return new Promise((resolve, reject) => {
+  return new Promise((...settlers) => {
+    const [resolve, reject] = settlers;
+    let timeout;
     const waiter = {
       matches,
       isReady: () => getOrders().length >= occurrence,
@@ -72,7 +80,7 @@ function waitForSubmittedOrder(submittedCanonicalOrders, submittedOrderWaiters, 
         resolve(getOrders()[occurrence - 1])
       },
     }
-    const timeout = setTimeout(() => {
+    timeout = setTimeout(() => {
       const index = submittedOrderWaiters.indexOf(waiter)
       if (index >= 0) {submittedOrderWaiters.splice(index, 1)}
       reject(new Error(
@@ -86,7 +94,7 @@ function waitForSubmittedOrder(submittedCanonicalOrders, submittedOrderWaiters, 
 
 export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
   const marketConfiguration = appConfig.strategies.CG_coinGrabber.pairs[marketSymbol]
-  const dogeExchangeInfo = createExchangeMarketMetadata(marketSymbol, appConfig)
+  const dogeExchangeInfo = createExchangeMarketMetadata({ marketSymbol, appConfig })
   const scenarioExpectations = {
     initialPrice: "0.07161000",
     buyPrice: "0.07157",
@@ -122,12 +130,21 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
     }
   }
 
-  const waitForSubmittedOrderSide = (side, occurrence = 1) =>
-    waitForSubmittedOrder(submittedCanonicalOrders, submittedOrderWaiters, marketSymbol, side, occurrence)
+  const waitForSubmittedOrderSide = (...orderArguments) => {
+    const [side, occurrence = 1] = orderArguments;
+    return waitForSubmittedOrder({
+      submittedCanonicalOrders,
+      submittedOrderWaiters,
+      marketSymbol,
+      side,
+      occurrence,
+    });
+  }
 
   const waitForRecoveryCycleCompletion = () => {
     if (recoveryCycleCompletionResult) {return Promise.resolve(recoveryCycleCompletionResult)}
     return new Promise((resolve, reject) => {
+      let timeout;
       const resolveCycle = (data) => {
         clearTimeout(timeout)
         resolve(data)
@@ -153,7 +170,8 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
     broker.disconnect = async () => {
       broker.connected = false
     }
-    broker.tradingConnection.request = async (method, params = {}) => {
+    broker.tradingConnection.request = async (...requestArguments) => {
+      const [method, params = {}] = requestArguments;
       if (method === "order.place") {
         brokerOrderPlacementRequests.push({ method,
 params: { ...params } })
@@ -318,7 +336,9 @@ asset: order.market.quoteAsset }),
       }
       return {
         ok: true,
-        data: Array.from({ length: Math.min(limit, 101) }, (_, index) => ({
+        data: Array.from({ length: Math.min(limit, 101) }, (...values) => {
+          const [, index] = values;
+          return ({
           symbol: requestedSymbol,
           interval,
           openTime: index * 60_000,
@@ -329,7 +349,8 @@ asset: order.market.quoteAsset }),
           close: "1",
           volume: "1",
           isClosed: index < Math.min(limit, 101) - 1,
-        })),
+          });
+        }),
       }
     }
     broker.subscribeForCandles = async ({ symbol: requestedSymbol, interval, onCandle } = {}) => {
@@ -551,39 +572,3 @@ async function submitInitialBuyOrder(dogeTradingReplay) {
   return initialBuyOrderSubmitted
 }
 
-async function submitFirstBuyAndWaitForRecoveryOrders(dogeTradingReplay) {
-  const initialBuyOrder = await submitInitialBuyOrder(dogeTradingReplay)
-  const recoverySellOrderSubmitted = dogeTradingReplay.waitForSubmittedOrder("SELL")
-  const nextStandingBuyOrderSubmitted = dogeTradingReplay.waitForSubmittedOrder("BUY", 2)
-
-  await dogeTradingReplay.publishMarketPrice(dogeTradingReplay.scenarioExpectations.buyPrice)
-  await dogeTradingReplay.publishFullOrderFill({
-    order: initialBuyOrder,
-    price: dogeTradingReplay.scenarioExpectations.buyPrice,
-    tradeId: "645",
-  })
-
-  try {
-    const [recoverySellOrder, nextStandingBuyOrder] = await Promise.all([
-      recoverySellOrderSubmitted,
-      nextStandingBuyOrderSubmitted,
-    ])
-    return { initialBuyOrder,
-recoverySellOrder,
-nextStandingBuyOrder }
-  } catch (error) {
-    const runtimeErrorDetails = dogeTradingReplay.harvesterRuntimeErrors.map(
-      (runtimeError) => ({
-        message: runtimeError.message,
-        symbol: runtimeError.symbol,
-        side: runtimeError.side,
-        orderStatus: runtimeError.orderStatus,
-        errors: runtimeError.errors?.map(
-          (underlyingError) => underlyingError.message ?? String(underlyingError),
-        ),
-      }),
-    )
-    error.message += `\nHarvester runtime errors: ${  JSON.stringify(runtimeErrorDetails)}`
-    throw error
-  }
-}

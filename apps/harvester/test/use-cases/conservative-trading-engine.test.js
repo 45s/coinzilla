@@ -24,7 +24,8 @@ import { validateCancellationEligibility } from "../../src/domain/orders/validat
 const createDeferred = () => {
   let resolve
   let reject
-  const promise = new Promise((resolvePromise, rejectPromise) => {
+  const promise = new Promise((...settlers) => {
+    const [resolvePromise, rejectPromise] = settlers;
     resolve = resolvePromise
     reject = rejectPromise
   })

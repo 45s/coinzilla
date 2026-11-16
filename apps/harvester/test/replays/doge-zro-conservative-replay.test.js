@@ -584,7 +584,8 @@ nextStandingBuyOrder }
   }
 }
 
-function assertOrderMatches(actualOrder, expectedOrder, failureMessage) {
+function assertOrderMatches(...orderArguments) {
+  const [actualOrder, expectedOrder, failureMessage] = orderArguments;
   assert.deepEqual(
     {
       marketSymbol: actualOrder.market.symbol,
