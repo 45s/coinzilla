@@ -20,7 +20,8 @@ function resolvePositionId({ positionId, marketId, strategyId } = {}) {
   if (typeof marketId !== "string" || !marketId.trim()) {
     throw new TypeError("Portfolio operation requires positionId or marketId")
   }
-  return createPositionId({ marketId, strategyId })
+  return createPositionId({ marketId,
+strategyId })
 }
 
 export class Portfolio {
@@ -112,7 +113,10 @@ export class Portfolio {
   }
 
   getPosition({ positionId, symbol, marketId, strategyId } = {}) {
-    const matches = this.getPositions({ positionId, symbol, marketId, strategyId })
+    const matches = this.getPositions({ positionId,
+symbol,
+marketId,
+strategyId })
     if (matches.length > 1) {
       throw new Error("Portfolio.getPosition is ambiguous; provide a stable positionId")
     }
@@ -123,13 +127,17 @@ export class Portfolio {
     if (!(market instanceof Market)) {
       throw new TypeError("Portfolio.getTotalBaseQuantity requires a canonical Market")
     }
-    const amount = this.#positions
-      .filter((position) => position.market.id === market.id)
-      .reduce((total, position) => addDecimal({
-        left: total,
-        right: position.totalBaseQuantity.amount,
-      }), "0")
-    return new Quantity({ amount, asset: market.baseAsset })
+    let amount = "0"
+    for (const position of this.#positions) {
+      if (position.market.id === market.id) {
+        amount = addDecimal({
+          left: amount,
+          right: position.totalBaseQuantity.amount,
+        })
+      }
+    }
+    return new Quantity({ amount,
+asset: market.baseAsset })
   }
 
   applyFill({ fill, positionId, strategyId } = {}) {
@@ -155,7 +163,9 @@ export class Portfolio {
       if (existingFingerprint.allocationFingerprint !== undefined) {
         throw new Error(`Fill ID ${fill.id} was already applied with allocation metadata`)
       }
-      return Object.freeze({ portfolio: this, applied: false, duplicate: true })
+      return Object.freeze({ portfolio: this,
+applied: false,
+duplicate: true })
     }
 
     const existing = this.#positions.find((position) => position.positionId === id)
@@ -177,7 +187,10 @@ export class Portfolio {
         appliedFillIds: [...this.#appliedFillIds, fill.id],
         appliedFillFingerprints: [
           ...this.#appliedFillFingerprints,
-          { id: fill.id, fingerprint, positionId: id, strategyId: owner },
+          { id: fill.id,
+fingerprint,
+positionId: id,
+strategyId: owner },
         ],
       }),
       applied: true,
@@ -270,7 +283,9 @@ export class Portfolio {
 
   allocateFreeQuantity({ marketId, positionId, strategyId, quantity } = {}) {
     const owner = normalizeStrategyId({ strategyId })
-    const id = resolvePositionId({ positionId, marketId, strategyId: owner })
+    const id = resolvePositionId({ positionId,
+marketId,
+strategyId: owner })
     const current = this.getPosition({ positionId: id })
     if (!current) {
       throw new RangeError(`Portfolio has no Position ${id}`)
@@ -289,7 +304,9 @@ export class Portfolio {
 
   resetRecoveryBasis({ marketId, positionId, strategyId } = {}) {
     const owner = normalizeStrategyId({ strategyId })
-    const id = resolvePositionId({ positionId, marketId, strategyId: owner })
+    const id = resolvePositionId({ positionId,
+marketId,
+strategyId: owner })
     const current = this.getPosition({ positionId: id })
     if (!current) {
       throw new RangeError(`Portfolio has no Position ${id}`)

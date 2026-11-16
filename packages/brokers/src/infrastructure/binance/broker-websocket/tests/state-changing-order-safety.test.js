@@ -25,8 +25,13 @@ test("blocks every order mutation while the user-data stream is unavailable", as
     tradingMode: "testnet",
     apiKey: "test-key",
     apiSecret: "test-secret",
-    logger: { error() {}, info() {}, warn() {}, debug() {} },
-  }, { apiClientFactory: () => rpc, setTimeoutFn, clearTimeoutFn })
+    logger: { error() {},
+info() {},
+warn() {},
+debug() {} },
+  }, { apiClientFactory: () => rpc,
+setTimeoutFn,
+clearTimeoutFn })
   broker.connected = true
 
   const subscription = await broker.subscribeForUserData({ onEvent() {} })
@@ -34,7 +39,8 @@ test("blocks every order mutation while the user-data stream is unavailable", as
 
   rpc.emitEvent({
     subscriptionId: 71,
-    event: { e: "eventStreamTerminated", E: 123_457 },
+    event: { e: "eventStreamTerminated",
+E: 123_457 },
   })
 
   const results = await Promise.all([
@@ -53,7 +59,8 @@ test("blocks every order mutation while the user-data stream is unavailable", as
       price: "50000",
       clientOrderId: "safety-test-order-1",
     }),
-    broker.cancelOrder({ symbol: "BTCUSDT", orderId: 123 }),
+    broker.cancelOrder({ symbol: "BTCUSDT",
+orderId: 123 }),
     broker.cancelAllOpenOrders({ symbol: "BTCUSDT" }),
   ])
 

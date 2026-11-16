@@ -32,7 +32,8 @@ function createEventBus({ failAt, throwOnUnsubscribe = [] } = {}) {
             if (throwOnUnsubscribe.includes(name)) {
               throw new Error(`unsubscribe failed: ${name}`)
             }
-            return { ok: true, unsubscribed: true }
+            return { ok: true,
+              unsubscribed: true }
           },
         },
       }
@@ -43,7 +44,8 @@ function createEventBus({ failAt, throwOnUnsubscribe = [] } = {}) {
 function deferred() {
   let resolve
   const promise = new Promise((done) => { resolve = done })
-  return { promise, resolve }
+  return { promise,
+    resolve }
 }
 
 test("subscribes only to the explicit allowlist and delivers events", async () => {
@@ -115,7 +117,8 @@ test("ignores callbacks that were scheduled before unsubscribe but start after c
   const scheduledHandler = eventBus.handlers.get("bot.started")
 
   await subscriber.close()
-  await scheduledHandler({ name: "bot.started", data: {} })
+  await scheduledHandler({ name: "bot.started",
+    data: {} })
 
   assert.deepEqual(sent, [])
 })
@@ -187,8 +190,10 @@ test("reports delivery failures once and continues processing later events", asy
     logger: { error(entry) { errors.push(entry) } },
   })
 
-  await eventBus.handlers.get("bot.started")({ name: "bot.started", data: {} })
-  await eventBus.handlers.get("bot.stopped")({ name: "bot.stopped", data: {} })
+  await eventBus.handlers.get("bot.started")({ name: "bot.started",
+    data: {} })
+  await eventBus.handlers.get("bot.stopped")({ name: "bot.stopped",
+    data: {} })
 
   assert.equal(errors.length, 1)
   assert.equal(calls, 2)
@@ -212,10 +217,12 @@ test("leaves failures observable to the event bus when no logger is configured",
   })
 
   await assert.rejects(
-    eventBus.handlers.get("bot.started")({ name: "bot.started", data: {} }),
+    eventBus.handlers.get("bot.started")({ name: "bot.started",
+      data: {} }),
     /no logger path/,
   )
-  await eventBus.handlers.get("bot.stopped")({ name: "bot.stopped", data: {} })
+  await eventBus.handlers.get("bot.stopped")({ name: "bot.stopped",
+    data: {} })
   assert.equal(calls, 2)
   await subscriber.close()
 })
@@ -263,7 +270,8 @@ test("rejects malformed subscription handles and cleans up prior handles", () =>
   const originalSubscribe = eventBus.subscribe
   eventBus.subscribe = (options) => {
     if (options.name === TELEGRAM_NOTIFICATION_EVENTS[1]) {
-      return { ok: true, subscription: {} }
+      return { ok: true,
+        subscription: {} }
     }
     return originalSubscribe(options)
   }
@@ -337,11 +345,13 @@ test("validates dependencies and does not let logger failures poison later sends
     })
 
     await assert.rejects(
-      eventBus.handlers.get("bot.started")({ name: "bot.started", data: {} }),
+      eventBus.handlers.get("bot.started")({ name: "bot.started",
+        data: {} }),
       /send failed/,
     )
     await assert.rejects(
-      eventBus.handlers.get("bot.stopped")({ name: "bot.stopped", data: {} }),
+      eventBus.handlers.get("bot.stopped")({ name: "bot.stopped",
+        data: {} }),
       /send failed/,
     )
 
@@ -421,7 +431,10 @@ test("integrates with the real EventBus for allowlisting, ordering, flush, and c
   assert.equal(eventBus.publish({
     name: "order.filled",
     source: "integration-test",
-    data: { symbol: "BTCUSDT", side: "BUY", price: "100", quantity: "1" },
+    data: { symbol: "BTCUSDT",
+      side: "BUY",
+      price: "100",
+      quantity: "1" },
   }).ok, true)
   assert.equal(eventBus.publish({
     name: "order.execution_report",
@@ -445,7 +458,8 @@ test("lets the real EventBus observe delivery failures when no subscriber logger
   const reported = []
   const eventBus = new EventBus({
     onError: async ({ error, eventName }) => {
-      reported.push({ message: error.message, eventName })
+      reported.push({ message: error.message,
+        eventName })
     },
   })
   const subscriber = subscribeTelegramNotifications({
@@ -486,7 +500,10 @@ test("subscribes only to the explicitly selected supported notification events",
   )
   await eventBus.handlers.get("order.submitted")({
     name: "order.submitted",
-    data: { symbol: "LINKUSDT", side: "BUY", price: "14.25", quantity: "2" },
+    data: { symbol: "LINKUSDT",
+      side: "BUY",
+      price: "14.25",
+      quantity: "2" },
   })
   assert.match(
     messages[0],
@@ -504,10 +521,14 @@ test("subscribes only to the explicitly selected supported notification events",
 
 test("rejects malformed, duplicate, and empty application event selections", () => {
   const invalidSelections = [
-    { eventNames: "bot.started", message: /eventNames/ },
-    { eventNames: [], message: /at least one/ },
-    { eventNames: ["bot.started", "bot.started"], message: /Duplicate/ },
-      { eventNames: [null], message: /event name/ },
+    { eventNames: "bot.started",
+      message: /eventNames/ },
+    { eventNames: [],
+      message: /at least one/ },
+    { eventNames: ["bot.started", "bot.started"],
+      message: /Duplicate/ },
+      { eventNames: [null],
+        message: /event name/ },
   ]
 
   for (const { eventNames, message } of invalidSelections) {

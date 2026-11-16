@@ -11,8 +11,10 @@ import {
 test("canonicalizes nested object keys while preserving array order and exact decimal strings", () => {
   const value = {
     z: "0.0100",
-    nested: { second: 2, first: 1 },
-    entries: [{ right: "2.00", left: "1.00" }, "tail"],
+    nested: { second: 2,
+first: 1 },
+    entries: [{ right: "2.00",
+left: "1.00" }, "tail"],
   }
 
   assert.equal(
@@ -23,8 +25,10 @@ test("canonicalizes nested object keys while preserving array order and exact de
   assert.deepEqual(
     canonicalizeOperationalStateValue(value),
     {
-      entries: [{ left: "1.00", right: "2.00" }, "tail"],
-      nested: { first: 1, second: 2 },
+      entries: [{ left: "1.00",
+right: "2.00" }, "tail"],
+      nested: { first: 1,
+second: 2 },
       z: "0.0100",
     },
     "Canonicalization must return a detached value with deterministic object-key order.",
@@ -102,8 +106,14 @@ test("normalizes Date and canonical ISO timestamp string values", () => {
 })
 
 test("computes the same record digest regardless of input object key order", () => {
-  const first = { factId: "fact-1", data: { z: "2.00", a: "1.00" }, sequence: "1" }
-  const reordered = { sequence: "1", data: { a: "1.00", z: "2.00" }, factId: "fact-1" }
+  const first = { factId: "fact-1",
+data: { z: "2.00",
+a: "1.00" },
+sequence: "1" }
+  const reordered = { sequence: "1",
+data: { a: "1.00",
+z: "2.00" },
+factId: "fact-1" }
 
   assert.equal(
     digestOperationalStateRecord(first),
@@ -114,17 +124,21 @@ test("computes the same record digest regardless of input object key order", () 
 
 test("requires canonical bounded non-empty strings", () => {
   assert.equal(
-    requireNonEmptyString({ value: "BTCUSDT", field: "symbol" }),
+    requireNonEmptyString({ value: "BTCUSDT",
+field: "symbol" }),
     "BTCUSDT",
     "A canonical non-empty string within the default bound must be accepted.",
   )
   assert.throws(
-    () => requireNonEmptyString({ value: " BTCUSDT", field: "symbol" }),
+    () => requireNonEmptyString({ value: " BTCUSDT",
+field: "symbol" }),
     /canonical non-empty string/,
     "Leading whitespace must not be normalized silently.",
   )
   assert.throws(
-    () => requireNonEmptyString({ value: "BTCUSDT", field: "symbol", maxLength: 4 }),
+    () => requireNonEmptyString({ value: "BTCUSDT",
+field: "symbol",
+maxLength: 4 }),
     /at most 4 characters/,
     "Values exceeding the caller's explicit bound must be rejected.",
   )
@@ -148,7 +162,10 @@ test("rejects negative zero and oversized values at every canonical JSON depth",
   )
   assert.throws(
     () => canonicalizeOperationalStateValue(Object.fromEntries(
-      Array.from({ length: 129 }, (_, index) => ["key" + index, index]),
+      Array.from({ length: 129 }, (...parameters) => {
+        const [, index] = parameters
+        return [`key${  index}`, index]
+      }),
     )),
     RangeError,
     "The maximum object-key count must be enforced.",

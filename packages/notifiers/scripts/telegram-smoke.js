@@ -21,7 +21,8 @@ function validateSmokeTestEnvironment(env) {
       "TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must both be configured for the live smoke test",
     )
   }
-  return { token, chatId }
+  return { token,
+    chatId }
 }
 
 /**
@@ -40,7 +41,8 @@ export async function runTelegramSmokeTest({
     throw new TypeError("now() must return a valid Date")
   }
 
-  const notifier = createNotifier({ token, chatId })
+  const notifier = createNotifier({ token,
+    chatId })
   if (!notifier || typeof notifier.sendMessage !== "function") {
     throw new TypeError("createNotifier() must return an object exposing sendMessage()")
   }

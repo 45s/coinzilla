@@ -10,7 +10,7 @@ const TARGETS = [
 ]
 
 function safeText(value) {
-  if (typeof value !== "string" || value.length === 0) return null
+  if (typeof value !== "string" || value.length === 0) {return null}
   return value
     .slice(0, 256)
     .replace(/(api[_-]?key|api[_-]?secret|signature|authorization|token)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
@@ -21,13 +21,45 @@ function readHttpUpgradeStatus(...sources) {
   for (const source of sources) {
     for (const key of ["status", "statusCode"]) {
       const value = source?.[key]
-      if (Number.isInteger(value) && value >= 100 && value <= 599) return value
+      if (Number.isInteger(value) && value >= 100 && value <= 599) {return value}
     }
   }
   return null
 }
 
-function probeHttpReachability(name, websocketUrl) {
+function blockedByHostFrom(response) {
+  const blockedByLink = response.headers.link?.match(/<([^>]+)>\s*;\s*rel=["']?blocked-by["']?/i)?.[1]
+  if (!blockedByLink) {return null}
+  try {
+    return new URL(blockedByLink).host
+  } catch {
+    return null
+  }
+}
+
+function handleHttpUpgradeResponse({ name, response, finish }) {
+  const chunks = []
+  let size = 0
+  response.on("data", (chunk) => {
+    if (size >= 512) {return}
+    const bounded = chunk.subarray(0, 512 - size)
+    chunks.push(bounded)
+    size += bounded.length
+  })
+  response.on("end", () => {
+    finish({
+      endpoint: name,
+      reachable: true,
+      httpUpgradeStatus: response.statusCode ?? null,
+      upgraded: false,
+      responseMessage: safeText(Buffer.concat(chunks).toString("utf8")),
+      blockedByHost: blockedByHostFrom(response),
+    })
+  })
+}
+
+function probeHttpReachability(...args) {
+  const [name, websocketUrl] = args
   return new Promise((resolve) => {
     const endpoint = new URL(websocketUrl)
     endpoint.protocol = "https:"
@@ -37,7 +69,7 @@ function probeHttpReachability(name, websocketUrl) {
     let settled = false
 
     const finish = (result) => {
-      if (settled) return
+      if (settled) {return}
       settled = true
       resolve(result)
     }
@@ -51,38 +83,12 @@ function probeHttpReachability(name, websocketUrl) {
         "Sec-WebSocket-Key": key,
         "Sec-WebSocket-Version": "13",
       },
-    }, (response) => {
-      const chunks = []
-      let size = 0
-      response.on("data", (chunk) => {
-        if (size >= 512) return
-        const remaining = 512 - size
-        const bounded = chunk.subarray(0, remaining)
-        chunks.push(bounded)
-        size += bounded.length
-      })
-      response.on("end", () => {
-        const blockedByLink = response.headers.link?.match(/<([^>]+)>\s*;\s*rel=["']?blocked-by["']?/i)?.[1]
-        let blockedByHost = null
-        if (blockedByLink) {
-          try {
-            blockedByHost = new URL(blockedByLink).host
-          } catch {
-            blockedByHost = null
-          }
-        }
-        finish({
-          endpoint: name,
-          reachable: true,
-          httpUpgradeStatus: response.statusCode ?? null,
-          upgraded: false,
-          responseMessage: safeText(Buffer.concat(chunks).toString("utf8")),
-          blockedByHost,
-        })
-      })
-    })
+    }, (response) => handleHttpUpgradeResponse({ name,
+      response,
+      finish }))
 
-    request.on("upgrade", (response, socket) => {
+    request.on("upgrade", (...eventArgs) => {
+      const [response, socket] = eventArgs
       const expectedAccept = createHash("sha1")
         .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
         .digest("base64")
@@ -114,30 +120,52 @@ function probeHttpReachability(name, websocketUrl) {
   })
 }
 
-function probeEndpoint(name, url) {
+function createProbeDetails(name) {
+  return {
+    endpoint: name,
+    opened: false,
+    httpUpgradeStatus: null,
+    errorMessage: null,
+    underlyingError: null,
+    closeCode: null,
+    closeReason: null,
+    wasClean: null,
+    closeRequested: false,
+    closeTimedOut: false,
+  }
+}
+
+function armDiagnosticTimeout({ socket, state, details, finish, delay }) {
+  clearTimeout(state.timer)
+  state.timer = setTimeout(() => {
+    if (state.opened) {
+      details.closeTimedOut = true
+    } else {
+      details.errorMessage ??= "WebSocket handshake timed out"
+      try {
+        socket.close()
+      } catch {
+        // A timed-out diagnostic must still finish without affecting the workflow.
+      }
+    }
+    finish()
+  }, delay)
+}
+
+function probeEndpoint(...args) {
+  const [name, url] = args
   return new Promise((resolve) => {
     let socket
-    let opened = false
-    let settled = false
-    let timer
-    const details = {
-      endpoint: name,
-      opened: false,
-      httpUpgradeStatus: null,
-      errorMessage: null,
-      underlyingError: null,
-      closeCode: null,
-      closeReason: null,
-      wasClean: null,
-      closeRequested: false,
-      closeTimedOut: false,
-    }
+    const state = { opened: false,
+      settled: false,
+      timer: undefined }
+    const details = createProbeDetails(name)
 
     const finish = () => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      details.opened = opened
+      if (state.settled) {return}
+      state.settled = true
+      clearTimeout(state.timer)
+      details.opened = state.opened
       resolve(details)
     }
 
@@ -153,26 +181,17 @@ function probeEndpoint(name, url) {
       return
     }
 
-    const armTimeout = (delay) => {
-      clearTimeout(timer)
-      timer = setTimeout(() => {
-        if (opened) {
-          details.closeTimedOut = true
-        } else {
-          details.errorMessage ??= "WebSocket handshake timed out"
-          try {
-            socket.close()
-          } catch {
-            // A timed-out diagnostic must still finish without affecting the workflow.
-          }
-        }
-        finish()
-      }, delay)
-    }
+    const armTimeout = (delay) => armDiagnosticTimeout({
+      socket,
+      state,
+      details,
+      finish,
+      delay,
+    })
     armTimeout(5_000)
 
     socket.addEventListener("open", () => {
-      opened = true
+      state.opened = true
       details.closeRequested = true
       try {
         socket.close(1000, "read-only diagnostic complete")
@@ -236,10 +255,10 @@ try {
 
 if (report.runtime.guard === "passed") {
   report.endpoints = await Promise.all(TARGETS.map(([name, url]) => probeEndpoint(name, url)))
-  if (report.endpoints.some((endpoint) => !endpoint.opened)) process.exitCode = 1
+  if (report.endpoints.some((endpoint) => !endpoint.opened)) {process.exitCode = 1}
 }
 
 if (report.httpUpgradeProbes.some((endpoint) =>
   !endpoint.reachable || !endpoint.upgraded || endpoint.acceptHeaderValid === false
-)) process.exitCode = 1
-console.log(JSON.stringify(report, null, 2))
+)) {process.exitCode = 1}
+process.stdout.write(`${JSON.stringify(report, null, 2)}\n`)

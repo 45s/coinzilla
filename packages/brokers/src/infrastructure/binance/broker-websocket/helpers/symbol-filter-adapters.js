@@ -12,11 +12,13 @@ export function validatePositiveDecimalFilter({ value, name, symbol }) {
     throw new Error(`Binance ${name} missing for ${symbol}`)
   }
   try {
-    assertDecimalString({ value, field: name })
+    assertDecimalString({ value,
+field: name })
   } catch (error) {
     throw new TypeError(`Binance ${name} is invalid for ${symbol}`, { cause: error })
   }
-  if (compareDecimal({ left: value, right: "0" }) <= 0) {
+  if (compareDecimal({ left: value,
+right: "0" }) <= 0) {
     throw new Error(`Binance ${name} missing or non-positive for ${symbol}`)
   }
   return value
@@ -30,13 +32,15 @@ export function validatePositiveDecimalFilter({ value, name, symbol }) {
  * @throws {TypeError|RangeError} If a provided filter is malformed or negative.
  */
 export function readOptionalDecimalFilter({ value, name, symbol }) {
-  if (value === undefined || value === null) return undefined
+  if (value === undefined || value === null) {return undefined}
   try {
-    assertDecimalString({ value, field: name })
+    assertDecimalString({ value,
+field: name })
   } catch (error) {
     throw new TypeError(`Binance ${name} is invalid for ${symbol}`, { cause: error })
   }
-  if (compareDecimal({ left: value, right: "0" }) < 0) {
+  if (compareDecimal({ left: value,
+right: "0" }) < 0) {
     throw new RangeError(`Binance ${name} must be non-negative for ${symbol}`)
   }
   return value

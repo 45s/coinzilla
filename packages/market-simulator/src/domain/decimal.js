@@ -11,20 +11,35 @@ import {
  * simulator's historical non-negative result invariant.
  */
 export function addDecimal({ left, right } = {}) {
-  return addExactDecimal({ left, right })
+  return addExactDecimal({
+    left,
+    right,
+  })
 }
 
 export function compareDecimal({ left, right } = {}) {
-  return compareExactDecimal({ left, right })
+  return compareExactDecimal({
+    left,
+    right,
+  })
 }
 
 export function multiplyDecimal({ left, right } = {}) {
-  return multiplyExactDecimal({ left, right })
+  return multiplyExactDecimal({
+    left,
+    right,
+  })
 }
 
 export function subtractDecimal({ left, right } = {}) {
-  const result = subtractExactDecimal({ left, right })
-  if (compareExactDecimal({ left: result, right: "0" }) < 0) {
+  const result = subtractExactDecimal({
+    left,
+    right,
+  })
+  if (compareExactDecimal({
+    left: result,
+    right: "0",
+  }) < 0) {
     throw new RangeError("subtraction result must not be negative")
   }
   return result

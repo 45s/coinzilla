@@ -8,10 +8,14 @@ const createLogger = () => {
 
   return {
     entries,
-    info: (data) => entries.push({ level: "info", data }),
-    warn: (data) => entries.push({ level: "warn", data }),
-    error: (data) => entries.push({ level: "error", data }),
-    success: (data) => entries.push({ level: "success", data }),
+    info: (data) => entries.push({ level: "info",
+data }),
+    warn: (data) => entries.push({ level: "warn",
+data }),
+    error: (data) => entries.push({ level: "error",
+data }),
+    success: (data) => entries.push({ level: "success",
+data }),
   }
 }
 
@@ -53,7 +57,8 @@ test("cancels each distinct symbol and verifies the final account state", async 
     },
     cancelOpenOrdersForSymbol: async ({ symbol }) => {
       cancelledSymbols.push(symbol)
-      return { result: [{ symbol, status: "CANCELED" }] }
+      return { result: [{ symbol,
+status: "CANCELED" }] }
     },
     logger,
   })

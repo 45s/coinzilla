@@ -13,11 +13,17 @@ import { Portfolio } from "../../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../../domain/strategies/conservative/recovery-ledger.js"
 import { updateTradingAccounting } from "../../use-cases/update-trading-accounting.js"
 
-const record = (name, data, id = name) => ({
-  id,
-  payload: { id, name, data },
-  position: { fileName: "session.jsonl", lineNumber: 1 },
-})
+const record = (...args) => {
+  const [name, data, id = name] = args
+  return {
+    id,
+    payload: { id,
+name,
+data },
+    position: { fileName: "session.jsonl",
+lineNumber: 1 },
+  }
+}
 
 const submissionRequested = (overrides = {}) => record("order.submission_requested", {
   clientOrderId: "h-BTCUSDT-1",
@@ -53,7 +59,9 @@ const fill = (overrides = {}) => record("execution.fill_applied", {
   quantity: "0.4",
   quoteQuantity: "40",
   liquidityRole: "MAKER",
-  commissions: [{ amount: "0.0004", assetId: "binance:BTC", asset: "BTC" }],
+  commissions: [{ amount: "0.0004",
+assetId: "binance:BTC",
+asset: "BTC" }],
   commissionStatus: "COMPLETE",
   ...overrides,
 })
@@ -229,7 +237,8 @@ test("rejects cumulative fill quantity beyond the original order quantity", () =
     records: [
       submissionRequested(),
       submitted(),
-      fill({ quantity: "1.01", quoteQuantity: "101" }),
+      fill({ quantity: "1.01",
+quoteQuantity: "101" }),
     ],
   })
 
@@ -253,7 +262,9 @@ test("rejects a duplicate fill ID with changed execution facts", () => {
       submissionRequested(),
       submitted(),
       fill(),
-      fill({ duplicate: true, quantity: "0.5", quoteQuantity: "50" }),
+      fill({ duplicate: true,
+quantity: "0.5",
+quoteQuantity: "50" }),
     ],
   })
 
@@ -355,7 +366,10 @@ test("requires records to be an array", () => {
 
 
 test("projects account audit snapshots and recognizes a complete prior trading shutdown", () => {
-  const balances = [{ asset: "BTC", free: "0.5", locked: "0", total: "0.5" }]
+  const balances = [{ asset: "BTC",
+free: "0.5",
+locked: "0",
+total: "0.5" }]
   const result = projectHarvesterJournalRecovery({
     records: [
       record("account.snapshot_captured", {
@@ -386,7 +400,8 @@ test("projects account audit snapshots and recognizes a complete prior trading s
         balances,
         auditReasons: [],
       }),
-      record("harvester.stopped", { reason: "SIGTERM", outcome: "success" }),
+      record("harvester.stopped", { reason: "SIGTERM",
+outcome: "success" }),
     ],
   })
 
@@ -407,7 +422,8 @@ test("marks a trading session without a complete closing audit as unclean", () =
         enabledMarkets: ["BTCUSDT"],
         tradingEnabled: true,
       }),
-      record("harvester.stopped", { reason: "SIGTERM", outcome: "success" }),
+      record("harvester.stopped", { reason: "SIGTERM",
+outcome: "success" }),
     ],
   })
 
@@ -422,7 +438,10 @@ test("rejects account snapshot totals that do not equal free plus locked", () =>
         phase: "PREFLIGHT",
         sourceTime: 100,
         auditStatus: "COMPLETE",
-        balances: [{ asset: "BTC", free: "0.5", locked: "0.1", total: "0.5" }],
+        balances: [{ asset: "BTC",
+free: "0.5",
+locked: "0.1",
+total: "0.5" }],
         auditReasons: [],
       }),
     ],
@@ -599,8 +618,10 @@ test("rejects cancellation execution quantities above the original order quantit
 const canonicalMarket = new Market({
   venue: "binance",
   symbol: "BTCUSDT",
-  baseAsset: new Asset({ id: "binance:BTC", code: "BTC" }),
-  quoteAsset: new Asset({ id: "binance:USDT", code: "USDT" }),
+  baseAsset: new Asset({ id: "binance:BTC",
+code: "BTC" }),
+  quoteAsset: new Asset({ id: "binance:USDT",
+code: "USDT" }),
 })
 
 test("projects exact third-asset commission amount and historical quote valuation", () => {
@@ -683,7 +704,7 @@ test("restores a zero third-asset commission without inventing a quote valuation
   })
 
   assert.equal(restored.ok, true, restored.errors?.map(({ message }) => message).join("; "))
-  const restoredFill = restored.data.journalFills[0]
+  const [restoredFill] = restored.data.journalFills
   assert.equal(restoredFill.commissions[0].amount, "0")
   assert.equal(restoredFill.commissions[0].assetId, "binance:BNB")
   assert.equal(restoredFill.commissions[0].quoteValue, undefined)
@@ -779,51 +800,132 @@ test("rejects a third-asset commission valued in an asset other than the market 
   assert.match(restored.errors[0].message, /does not match the market quote asset/)
 })
 
-test("matches live BUY/SELL accounting through DTO, projection, and restore for base, quote, and third-asset fees", () => {
-  const bnbAsset = new Asset({ id: "binance:BNB", code: "BNB" })
-  const fills = [
-    new Fill({
+function createAccountingParityFill({
+  bnbAsset,
+  tradeId,
+  brokerOrderId,
+  clientOrderId,
+  side,
+  price,
+  quantity,
+  quoteQuantity,
+  baseCommission,
+  quoteCommission,
+  thirdAssetQuoteValue,
+}) {
+  return new Fill({
+    tradeId,
+    brokerOrderId,
+    clientOrderId,
+    market: canonicalMarket,
+    side,
+    price: new Money({
+      amount: price,
+      asset: canonicalMarket.quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: quantity,
+      asset: canonicalMarket.baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: quoteQuantity,
+      asset: canonicalMarket.quoteAsset,
+    }),
+    liquidityRole: "MAKER",
+    commissions: [
+      new Commission({
+        amount: new Money({
+          amount: baseCommission,
+          asset: canonicalMarket.baseAsset,
+        }),
+      }),
+      new Commission({
+        amount: new Money({
+          amount: quoteCommission,
+          asset: canonicalMarket.quoteAsset,
+        }),
+      }),
+      new Commission({
+        amount: new Money({
+          amount: "0.001",
+          asset: bnbAsset,
+        }),
+        quoteValue: new Money({
+          amount: thirdAssetQuoteValue,
+          asset: canonicalMarket.quoteAsset,
+        }),
+      }),
+    ],
+    commissionStatus: "COMPLETE",
+  })
+}
+
+function createAccountingParityFills({ bnbAsset }) {
+  return [
+    createAccountingParityFill({
+      bnbAsset,
       tradeId: "parity-buy",
       brokerOrderId: "9101",
       clientOrderId: "h-BTCUSDT-parity-buy",
-      market: canonicalMarket,
       side: "BUY",
-      price: new Money({ amount: "0.1", asset: canonicalMarket.quoteAsset }),
-      quantity: new Quantity({ amount: "100", asset: canonicalMarket.baseAsset }),
-      quoteQuantity: new Money({ amount: "10", asset: canonicalMarket.quoteAsset }),
-      liquidityRole: "MAKER",
-      commissions: [
-        new Commission({ amount: new Money({ amount: "1", asset: canonicalMarket.baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.01", asset: canonicalMarket.quoteAsset }) }),
-        new Commission({
-          amount: new Money({ amount: "0.001", asset: bnbAsset }),
-          quoteValue: new Money({ amount: "0.02", asset: canonicalMarket.quoteAsset }),
-        }),
-      ],
-      commissionStatus: "COMPLETE",
+      price: "0.1",
+      quantity: "100",
+      quoteQuantity: "10",
+      baseCommission: "1",
+      quoteCommission: "0.01",
+      thirdAssetQuoteValue: "0.02",
     }),
-    new Fill({
+    createAccountingParityFill({
+      bnbAsset,
       tradeId: "parity-sell",
       brokerOrderId: "9102",
       clientOrderId: "h-BTCUSDT-parity-sell",
-      market: canonicalMarket,
       side: "SELL",
-      price: new Money({ amount: "0.12", asset: canonicalMarket.quoteAsset }),
-      quantity: new Quantity({ amount: "50", asset: canonicalMarket.baseAsset }),
-      quoteQuantity: new Money({ amount: "6", asset: canonicalMarket.quoteAsset }),
-      liquidityRole: "MAKER",
-      commissions: [
-        new Commission({ amount: new Money({ amount: "0.5", asset: canonicalMarket.baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.02", asset: canonicalMarket.quoteAsset }) }),
-        new Commission({
-          amount: new Money({ amount: "0.001", asset: bnbAsset }),
-          quoteValue: new Money({ amount: "0.03", asset: canonicalMarket.quoteAsset }),
-        }),
-      ],
-      commissionStatus: "COMPLETE",
+      price: "0.12",
+      quantity: "50",
+      quoteQuantity: "6",
+      baseCommission: "0.5",
+      quoteCommission: "0.02",
+      thirdAssetQuoteValue: "0.03",
     }),
   ]
+}
 
+function appendAccountingParityFillRecords({ records, fillValue }) {
+  const dto = mapFillAppliedData({ fill: fillValue })
+  assert.equal(dto.ok, true, dto.errors?.map(({ message }) => message).join("; "))
+  const orderFacts = {
+    clientOrderId: fillValue.clientOrderId,
+    symbol: canonicalMarket.symbol,
+    side: fillValue.side,
+    type: "LIMIT",
+    price: fillValue.price.amount,
+    quantity: fillValue.side === "SELL" ? "100" : fillValue.quantity.amount,
+  }
+  records.push(record("order.submission_requested", {
+    ...orderFacts,
+    status: "PENDING",
+  }, `requested-${fillValue.tradeId}`))
+  records.push(record("order.submitted", {
+    ...orderFacts,
+    brokerOrderId: fillValue.brokerOrderId,
+    status: fillValue.side === "SELL" ? "PARTIALLY_FILLED" : "NEW",
+  }, `submitted-${fillValue.tradeId}`))
+  records.push(record("execution.fill_applied", dto.data, `fill-${fillValue.tradeId}`))
+}
+
+function assertAccountingParity({ livePortfolio, liveLedger, restored }) {
+  const livePosition = livePortfolio.getPosition({ marketId: canonicalMarket.id })
+  const restoredPosition = restored.data.portfolio.getPosition({ marketId: canonicalMarket.id })
+  const restoredLedger = restored.data.recoveryLedgers.get(canonicalMarket.id)
+  assert.deepEqual(restoredPosition.value, livePosition.value)
+  assert.deepEqual(restoredLedger.value, liveLedger.value)
+}
+
+test("matches live BUY/SELL accounting through DTO, projection, and restore for base, quote, and third-asset fees", () => {
+  const bnbAsset = new Asset({ id: "binance:BNB",
+code: "BNB" })
+  const fills = createAccountingParityFills({ bnbAsset })
   let livePortfolio = new Portfolio()
   let liveLedger = RecoveryLedger.empty({ market: canonicalMarket })
   const records = []
@@ -836,28 +938,8 @@ test("matches live BUY/SELL accounting through DTO, projection, and restore for 
     assert.equal(live.ok, true, live.errors?.map(({ message }) => message).join("; "))
     livePortfolio = live.data.portfolio
     liveLedger = live.data.recoveryLedger
-
-    const dto = mapFillAppliedData({ fill: fillValue })
-    assert.equal(dto.ok, true, dto.errors?.map(({ message }) => message).join("; "))
-    const clientOrderId = fillValue.clientOrderId
-    const orderFacts = {
-      clientOrderId,
-      symbol: canonicalMarket.symbol,
-      side: fillValue.side,
-      type: "LIMIT",
-      price: fillValue.price.amount,
-      quantity: fillValue.side === "SELL" ? "100" : fillValue.quantity.amount,
-    }
-    records.push(record("order.submission_requested", {
-      ...orderFacts,
-      status: "PENDING",
-    }, "requested-" + fillValue.tradeId))
-    records.push(record("order.submitted", {
-      ...orderFacts,
-      brokerOrderId: fillValue.brokerOrderId,
-      status: fillValue.side === "SELL" ? "PARTIALLY_FILLED" : "NEW",
-    }, "submitted-" + fillValue.tradeId))
-    records.push(record("execution.fill_applied", dto.data, "fill-" + fillValue.tradeId))
+    appendAccountingParityFillRecords({ records,
+fillValue })
   }
 
   const projection = projectHarvesterJournalRecovery({ records })
@@ -867,12 +949,11 @@ test("matches live BUY/SELL accounting through DTO, projection, and restore for 
     marketMetadata: new Map([[canonicalMarket.symbol, canonicalMarket]]),
   })
   assert.equal(restored.ok, true, restored.errors?.map(({ message }) => message).join("; "))
+  assertAccountingParity({ livePortfolio,
+liveLedger,
+restored })
 
   const livePosition = livePortfolio.getPosition({ marketId: canonicalMarket.id })
-  const restoredPosition = restored.data.portfolio.getPosition({ marketId: canonicalMarket.id })
-  const restoredLedger = restored.data.recoveryLedgers.get(canonicalMarket.id)
-  assert.deepEqual(restoredPosition.value, livePosition.value)
-  assert.deepEqual(restoredLedger.value, liveLedger.value)
   assert.equal(livePosition.baseQuantity.amount, "48.5")
   assert.equal(livePosition.spent.amount, "10.03")
   assert.equal(livePosition.quoteNetCashFlow.amount, "-4.08")
@@ -947,7 +1028,9 @@ const completedCycleRecords = () => [
     quantity: "0.5",
     quoteQuantity: "50",
     liquidityRole: "MAKER",
-    commissions: [{ amount: "0.0004", assetId: "binance:BTC", asset: "BTC" }],
+    commissions: [{ amount: "0.0004",
+assetId: "binance:BTC",
+asset: "BTC" }],
     commissionStatus: "COMPLETE",
   }),
   record("order.submission_requested", {
@@ -1416,8 +1499,10 @@ test("restores a partially filled canceled order as a paused strategy market", (
   const market = new Market({
     venue: "binance",
     symbol: "BTCUSDT",
-    baseAsset: new Asset({ id: "binance:BTC", code: "BTC" }),
-    quoteAsset: new Asset({ id: "binance:USDT", code: "USDT" }),
+    baseAsset: new Asset({ id: "binance:BTC",
+code: "BTC" }),
+    quoteAsset: new Asset({ id: "binance:USDT",
+code: "USDT" }),
   })
   const restored = restoreHarvesterJournalState({
     projection,
@@ -1451,7 +1536,8 @@ test("rejects a second cancellation intent while the first outcome is unresolved
     records: [submissionRequested(), submitted(), cancellation, {
       ...cancellation,
       id: "duplicate-cancel-request",
-      payload: { ...cancellation.payload, id: "duplicate-cancel-request" },
+      payload: { ...cancellation.payload,
+id: "duplicate-cancel-request" },
     }],
   })
 
@@ -1480,7 +1566,10 @@ test("requires a durable cancellation intent before accepting a cancellation fai
 
 
 test("rejects trading activity journaled after the closing account snapshot", () => {
-  const balances = [{ asset: "BTC", free: "0.5", locked: "0", total: "0.5" }]
+  const balances = [{ asset: "BTC",
+free: "0.5",
+locked: "0",
+total: "0.5" }]
   const result = projectHarvesterJournalRecovery({
     records: [
       record("harvester.started", {
@@ -1551,7 +1640,10 @@ test("rejects multiple fully filled SELL orders before one recovery-cycle comple
 
 
 test("rejects account snapshots whose exchange source time moves backwards", () => {
-  const balances = [{ asset: "BTC", free: "0.5", locked: "0", total: "0.5" }]
+  const balances = [{ asset: "BTC",
+free: "0.5",
+locked: "0",
+total: "0.5" }]
   const result = projectHarvesterJournalRecovery({
     records: [
       record("harvester.started", {
@@ -1616,7 +1708,10 @@ test("rejects a PREFLIGHT balance baseline written after trading activity", () =
         phase: "PREFLIGHT",
         sourceTime: 100,
         auditStatus: "COMPLETE",
-        balances: [{ asset: "BTC", free: "1", locked: "0", total: "1" }],
+        balances: [{ asset: "BTC",
+free: "1",
+locked: "0",
+total: "1" }],
         auditReasons: [],
       }),
     ],
@@ -1646,10 +1741,17 @@ test("rejects a PREFLIGHT open-order baseline written after trading activity", (
 })
 
 
-const harvesterRecord = (name, data, id = name) => ({
-  ...record(name, data, id),
-  payload: { id, source: "harvester", name, data },
-})
+const harvesterRecord = (...parameters) => {
+  const [name, data, id = name] = parameters
+  return ({
+    id,
+    payload: { id,
+name,
+data },
+    position: { fileName: "session.jsonl",
+lineNumber: 1 },
+  })
+}
 
 test("projects unowned-order evidence as a sticky safety blocker without a separate pause event", () => {
   const result = projectHarvesterJournalRecovery({
@@ -1697,7 +1799,7 @@ test("projects invalid-fill and accounting-failure evidence as sticky blockers w
       records: [harvesterRecord(eventName, data)],
     })
 
-    assert.equal(result.ok, true, eventName + " must be retained as safety evidence")
+    assert.equal(result.ok, true, `${eventName  } must be retained as safety evidence`)
     assert.equal(result.data.stickySafetyBlockers.length, 1)
     assert.equal(result.data.stickySafetyBlockers[0].eventName, eventName)
     assert.equal(result.data.stickySafetyBlockers[0].symbol, "BTCUSDT")
@@ -1718,7 +1820,10 @@ test("ignores unknown events from other sources without treating them as Harvest
   const result = projectHarvesterJournalRecovery({
     records: [{
       ...record("external.future_event", { symbol: "BTCUSDT" }),
-      payload: { id: "external.future_event", source: "external", name: "external.future_event", data: { symbol: "BTCUSDT" } },
+      payload: { id: "external.future_event",
+source: "external",
+name: "external.future_event",
+data: { symbol: "BTCUSDT" } },
     }],
   })
 
@@ -1727,7 +1832,10 @@ test("ignores unknown events from other sources without treating them as Harvest
 })
 
 test("accepts RECOVERY account and open-order snapshots between PREFLIGHT and CLOSING", () => {
-  const balances = [{ asset: "BTC", free: "0.5", locked: "0", total: "0.5" }]
+  const balances = [{ asset: "BTC",
+free: "0.5",
+locked: "0",
+total: "0.5" }]
   const result = projectHarvesterJournalRecovery({
     records: [
       record("account.snapshot_captured", {
@@ -1869,32 +1977,43 @@ test("fails closed when an unknown recovery event has no source classification",
 })
 
 test("preserves execution safety DTOs through projection and restoration", () => {
-  const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
-  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-  const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+  const baseAsset = new Asset({ id: "asset:DOGE",
+code: "DOGE" })
+  const quoteAsset = new Asset({ id: "asset:USDT",
+code: "USDT" })
+  const market = new Market({ venue: "binance",
+symbol: "DOGEUSDT",
+baseAsset,
+quoteAsset })
   const order = new CanonicalOrder({
     clientOrderId: "harvester-client-1",
     brokerOrderId: "broker-order-1",
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "99.95", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0.5", asset: baseAsset }),
+    limitPrice: new Money({ amount: "99.95",
+asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1",
+asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0.5",
+asset: baseAsset }),
     status: "PARTIALLY_FILLED",
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt: 2,
   })
-  const fill = new Fill({
+  const fillRecord = new Fill({
     tradeId: "trade-1",
     brokerOrderId: "broker-order-1",
     clientOrderId: "harvester-client-1",
     market,
     side: "BUY",
-    price: new Money({ amount: "99.95", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "0.5", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "49.975", asset: quoteAsset }),
+    price: new Money({ amount: "99.95",
+asset: quoteAsset }),
+    quantity: new Quantity({ amount: "0.5",
+asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "49.975",
+asset: quoteAsset }),
     liquidityRole: "MAKER",
     executedAt: 2,
     commissions: [],
@@ -1902,8 +2021,12 @@ test("preserves execution safety DTOs through projection and restoration", () =>
   })
   const facts = [
     ["execution.unowned_order", mapExecutionUnownedOrderData({ order })],
-    ["execution.invalid_fill", mapExecutionInvalidFillData({ order, fill, reason: "IDENTITY_MISMATCH" })],
-    ["execution.accounting_failed", mapExecutionAccountingFailedData({ order, fill, error: new Error("accounting mismatch") })],
+    ["execution.invalid_fill", mapExecutionInvalidFillData({ order,
+fill: fillRecord,
+reason: "IDENTITY_MISMATCH" })],
+    ["execution.accounting_failed", mapExecutionAccountingFailedData({ order,
+fill: fillRecord,
+error: new Error("accounting mismatch") })],
   ]
   const records = facts.map(([name, result]) => {
     assert.equal(result.ok, true)
@@ -1917,7 +2040,8 @@ test("preserves execution safety DTOs through projection and restoration", () =>
     ["execution.accounting_failed", "DOGEUSDT"],
   ])
 
-  const restored = restoreHarvesterJournalState({ projection, marketMetadata: new Map() })
+  const restored = restoreHarvesterJournalState({ projection,
+marketMetadata: new Map() })
   assert.equal(restored.ok, true)
   assert.equal(restored.data.pausedMarkets.has("DOGEUSDT"), true)
   assert.equal(restored.data.durablePausedMarkets.has("DOGEUSDT"), true)
@@ -1936,24 +2060,49 @@ test("fails closed when a fully filled SELL has no explicit recovery-cycle outco
 test("preserves an explicitly evaluated residual sell-through without resetting the recovery basis", () => {
   const records = completedCycleRecords().slice(0, 6)
   records[3] = record("order.submission_requested", {
-    clientOrderId: "h-BTCUSDT-sell-1", symbol: "BTCUSDT", side: "SELL", type: "LIMIT",
-    price: "102.75", quantity: "0.4", status: "PENDING",
+    clientOrderId: "h-BTCUSDT-sell-1",
+symbol: "BTCUSDT",
+side: "SELL",
+type: "LIMIT",
+    price: "102.75",
+quantity: "0.4",
+status: "PENDING",
   })
   records[4] = record("order.submitted", {
-    clientOrderId: "h-BTCUSDT-sell-1", brokerOrderId: "9002", symbol: "BTCUSDT", side: "SELL",
-    type: "LIMIT", price: "102.75", quantity: "0.4", status: "FILLED",
+    clientOrderId: "h-BTCUSDT-sell-1",
+brokerOrderId: "9002",
+symbol: "BTCUSDT",
+side: "SELL",
+    type: "LIMIT",
+price: "102.75",
+quantity: "0.4",
+status: "FILLED",
   })
   records[5] = record("execution.fill_applied", {
-    fillId: "binance:BTCUSDT:trade-2", tradeId: "trade-2", brokerOrderId: "9002",
-    clientOrderId: "h-BTCUSDT-sell-1", symbol: "BTCUSDT", side: "SELL",
-    price: "102.75", quantity: "0.4", quoteQuantity: "41.1", liquidityRole: "MAKER",
-    commissions: [], commissionStatus: "COMPLETE",
+    fillId: "binance:BTCUSDT:trade-2",
+tradeId: "trade-2",
+brokerOrderId: "9002",
+    clientOrderId: "h-BTCUSDT-sell-1",
+symbol: "BTCUSDT",
+side: "SELL",
+    price: "102.75",
+quantity: "0.4",
+quoteQuantity: "41.1",
+liquidityRole: "MAKER",
+    commissions: [],
+commissionStatus: "COMPLETE",
   })
   records.push(harvesterRecord("recovery.cycle_not_completed", {
-    symbol: "BTCUSDT", marketId: "binance:BTCUSDT",
-    sellOrderClientId: "h-BTCUSDT-sell-1", sellOrderBrokerOrderId: "9002",
-    outcome: "CONTINUE_SELL_THROUGH", reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
-    realizedNetProfit: "-8.9", activeQuantity: "0.0996", keepQuantity: "0.01", minProfit: "0.01",
+    symbol: "BTCUSDT",
+marketId: "binance:BTCUSDT",
+    sellOrderClientId: "h-BTCUSDT-sell-1",
+sellOrderBrokerOrderId: "9002",
+    outcome: "CONTINUE_SELL_THROUGH",
+reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+    realizedNetProfit: "-8.9",
+activeQuantity: "0.0996",
+keepQuantity: "0.01",
+minProfit: "0.01",
   }))
 
   const result = projectHarvesterJournalRecovery({ records })
@@ -1978,47 +2127,112 @@ test("preserves an explicitly evaluated residual sell-through without resetting 
   assert.equal(ledger.netSellProceeds, "41.1")
 })
 
-test("allows another fully filled SELL only after the prior SELL has an explicit continue-sell-through outcome", () => {
+function createFirstSellThroughRecords() {
   const records = completedCycleRecords().slice(0, 6)
   records[3] = record("order.submission_requested", {
-    clientOrderId: "h-BTCUSDT-sell-1", symbol: "BTCUSDT", side: "SELL", type: "LIMIT",
-    price: "102.75", quantity: "0.4", status: "PENDING",
+    clientOrderId: "h-BTCUSDT-sell-1",
+    symbol: "BTCUSDT",
+    side: "SELL",
+    type: "LIMIT",
+    price: "102.75",
+    quantity: "0.4",
+    status: "PENDING",
   })
   records[4] = record("order.submitted", {
-    clientOrderId: "h-BTCUSDT-sell-1", brokerOrderId: "9002", symbol: "BTCUSDT", side: "SELL",
-    type: "LIMIT", price: "102.75", quantity: "0.4", status: "FILLED",
+    clientOrderId: "h-BTCUSDT-sell-1",
+    brokerOrderId: "9002",
+    symbol: "BTCUSDT",
+    side: "SELL",
+    type: "LIMIT",
+    price: "102.75",
+    quantity: "0.4",
+    status: "FILLED",
   })
   records[5] = record("execution.fill_applied", {
-    fillId: "binance:BTCUSDT:trade-2", tradeId: "trade-2", brokerOrderId: "9002",
-    clientOrderId: "h-BTCUSDT-sell-1", symbol: "BTCUSDT", side: "SELL",
-    price: "102.75", quantity: "0.4", quoteQuantity: "41.1", liquidityRole: "MAKER",
-    commissions: [], commissionStatus: "COMPLETE",
+    fillId: "binance:BTCUSDT:trade-2",
+    tradeId: "trade-2",
+    brokerOrderId: "9002",
+    clientOrderId: "h-BTCUSDT-sell-1",
+    symbol: "BTCUSDT",
+    side: "SELL",
+    price: "102.75",
+    quantity: "0.4",
+    quoteQuantity: "41.1",
+    liquidityRole: "MAKER",
+    commissions: [],
+    commissionStatus: "COMPLETE",
   })
+  return records
+}
+
+function appendSellThroughContinuation({ records }) {
   records.push(harvesterRecord("recovery.cycle_not_completed", {
-    symbol: "BTCUSDT", marketId: "binance:BTCUSDT",
-    sellOrderClientId: "h-BTCUSDT-sell-1", sellOrderBrokerOrderId: "9002",
-    outcome: "CONTINUE_SELL_THROUGH", reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
-    realizedNetProfit: "-8.9", activeQuantity: "0.0996", keepQuantity: "0.01", minProfit: "0.01",
+    symbol: "BTCUSDT",
+    marketId: "binance:BTCUSDT",
+    sellOrderClientId: "h-BTCUSDT-sell-1",
+    sellOrderBrokerOrderId: "9002",
+    outcome: "CONTINUE_SELL_THROUGH",
+    reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+    realizedNetProfit: "-8.9",
+    activeQuantity: "0.0996",
+    keepQuantity: "0.01",
+    minProfit: "0.01",
   }))
+}
+
+function appendSecondSellThroughOrder({ records }) {
   records.push(record("order.submission_requested", {
-    clientOrderId: "h-BTCUSDT-sell-2", symbol: "BTCUSDT", side: "SELL", type: "LIMIT",
-    price: "102.75", quantity: "0.0896", status: "PENDING",
+    clientOrderId: "h-BTCUSDT-sell-2",
+    symbol: "BTCUSDT",
+    side: "SELL",
+    type: "LIMIT",
+    price: "102.75",
+    quantity: "0.0896",
+    status: "PENDING",
   }))
   records.push(record("order.submitted", {
-    clientOrderId: "h-BTCUSDT-sell-2", brokerOrderId: "9003", symbol: "BTCUSDT", side: "SELL",
-    type: "LIMIT", price: "102.75", quantity: "0.0896", status: "FILLED",
+    clientOrderId: "h-BTCUSDT-sell-2",
+    brokerOrderId: "9003",
+    symbol: "BTCUSDT",
+    side: "SELL",
+    type: "LIMIT",
+    price: "102.75",
+    quantity: "0.0896",
+    status: "FILLED",
   }))
   records.push(record("execution.fill_applied", {
-    fillId: "binance:BTCUSDT:trade-3", tradeId: "trade-3", brokerOrderId: "9003",
-    clientOrderId: "h-BTCUSDT-sell-2", symbol: "BTCUSDT", side: "SELL",
-    price: "102.75", quantity: "0.0896", quoteQuantity: "9.2088", liquidityRole: "MAKER",
-    commissions: [], commissionStatus: "COMPLETE",
+    fillId: "binance:BTCUSDT:trade-3",
+    tradeId: "trade-3",
+    brokerOrderId: "9003",
+    clientOrderId: "h-BTCUSDT-sell-2",
+    symbol: "BTCUSDT",
+    side: "SELL",
+    price: "102.75",
+    quantity: "0.0896",
+    quoteQuantity: "9.2088",
+    liquidityRole: "MAKER",
+    commissions: [],
+    commissionStatus: "COMPLETE",
   }))
   records.push(record("recovery.cycle_completed", {
-    symbol: "BTCUSDT", marketId: "binance:BTCUSDT", freeQuantity: "0.01",
-    keepQuantity: "0.01", minProfit: "0.01", realizedNetProfit: "0.3088",
+    symbol: "BTCUSDT",
+    marketId: "binance:BTCUSDT",
+    freeQuantity: "0.01",
+    keepQuantity: "0.01",
+    minProfit: "0.01",
+    realizedNetProfit: "0.3088",
   }))
+}
 
+function createSellThroughRecoveryRecords() {
+  const records = createFirstSellThroughRecords()
+  appendSellThroughContinuation({ records })
+  appendSecondSellThroughOrder({ records })
+  return records
+}
+
+test("allows another fully filled SELL only after the prior SELL has an explicit continue-sell-through outcome", () => {
+  const records = createSellThroughRecoveryRecords()
   const result = projectHarvesterJournalRecovery({ records })
   assert.equal(result.ok, true)
   assert.equal(result.data.recoveryCycleEvaluations.length, 1)
@@ -2026,14 +2240,19 @@ test("allows another fully filled SELL only after the prior SELL has an explicit
   assert.equal(result.data.recoveryCycles.length, 1)
   assert.equal(result.data.recoveryCycles[0].completedOrderClientId, "h-BTCUSDT-sell-2")
 })
-
 test("restores a BLOCKED cycle evaluation as a market pause", () => {
   const records = completedCycleRecords().slice(0, 6)
   records.push(harvesterRecord("recovery.cycle_not_completed", {
-    symbol: "BTCUSDT", marketId: "binance:BTCUSDT",
-    sellOrderClientId: "h-BTCUSDT-sell-1", sellOrderBrokerOrderId: "9002",
-    outcome: "BLOCKED", reason: "RECOVERY_SELL_FAILED_MIN_PROFIT",
-    realizedNetProfit: "-1", activeQuantity: "0.01", keepQuantity: "0.01", minProfit: "0.01",
+    symbol: "BTCUSDT",
+marketId: "binance:BTCUSDT",
+    sellOrderClientId: "h-BTCUSDT-sell-1",
+sellOrderBrokerOrderId: "9002",
+    outcome: "BLOCKED",
+reason: "RECOVERY_SELL_FAILED_MIN_PROFIT",
+    realizedNetProfit: "-1",
+activeQuantity: "0.01",
+keepQuantity: "0.01",
+minProfit: "0.01",
   }))
   const projection = projectHarvesterJournalRecovery({ records })
   assert.equal(projection.ok, true)

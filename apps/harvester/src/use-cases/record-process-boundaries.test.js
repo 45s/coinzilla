@@ -10,7 +10,8 @@ import path from "node:path"
 
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-process-facts-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "process-facts-test-session",
@@ -23,10 +24,15 @@ const appConfig = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
-      settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
+      settings: { conservative: { enabled: true },
+aggressive: { enabled: false } },
       pairs: {
-        ETHUSDT: { enabled: false, investment: 100, minProfit: 0.01 },
-        BTCUSDT: { enabled: true, investment: 250, minProfit: 0.02 },
+        ETHUSDT: { enabled: false,
+investment: 100,
+minProfit: 0.01 },
+        BTCUSDT: { enabled: true,
+investment: 250,
+minProfit: 0.02 },
       },
     },
   },
@@ -34,8 +40,10 @@ const appConfig = {
 
 test("records a deterministic non-secret configuration fingerprint and market set", async (t) => {
   const operationalStateStore = await createStore(t)
-  const first = await recordConfigurationBaseline({ operationalStateStore, appConfig })
-  const duplicate = await recordConfigurationBaseline({ operationalStateStore, appConfig })
+  const first = await recordConfigurationBaseline({ operationalStateStore,
+appConfig })
+  const duplicate = await recordConfigurationBaseline({ operationalStateStore,
+appConfig })
 
   assert.equal(first.ok, true, first.errors?.[0]?.message)
   assert.equal(first.data.durable, true)
@@ -46,14 +54,16 @@ test("records a deterministic non-secret configuration fingerprint and market se
 
   const changedConfig = structuredClone(appConfig)
   changedConfig.strategies.CG_coinGrabber.pairs.BTCUSDT.investment = 300
-  const changed = await recordConfigurationBaseline({ operationalStateStore, appConfig: changedConfig })
+  const changed = await recordConfigurationBaseline({ operationalStateStore,
+appConfig: changedConfig })
   assert.equal(changed.ok, true)
   assert.notEqual(changed.data.fingerprint, first.data.fingerprint, "A decision-affecting configuration change must produce a new immutable baseline.")
 })
 
 test("binds process start and clean/unclean stop facts to the durable store runtime session", async (t) => {
   const operationalStateStore = await createStore(t)
-  const baseline = await recordConfigurationBaseline({ operationalStateStore, appConfig })
+  const baseline = await recordConfigurationBaseline({ operationalStateStore,
+appConfig })
   const started = await recordProcessStarted({
     operationalStateStore,
     configurationFingerprint: baseline.data.fingerprint,
@@ -83,24 +93,34 @@ test("rejects malformed process-boundary and configuration-baseline facts", asyn
   const fingerprint = "a".repeat(64)
   const invalidFacts = [
     {
-      factId: "configuration-baseline:" + fingerprint,
+      factId: `configuration-baseline:${  fingerprint}`,
       factType: "CONFIGURATION_BASELINE",
-      data: { schemaVersion: 1, strategyName: "CG_coinGrabber", markets: ["ETHUSDT", "BTCUSDT"], fingerprint },
+      data: { schemaVersion: 1,
+strategyName: "CG_coinGrabber",
+markets: ["ETHUSDT", "BTCUSDT"],
+fingerprint },
     },
     {
-      factId: "configuration-baseline:" + fingerprint,
+      factId: `configuration-baseline:${  fingerprint}`,
       factType: "CONFIGURATION_BASELINE",
-      data: { schemaVersion: 1, strategyName: "CG_coinGrabber", markets: ["BTCUSDT"], fingerprint, apiToken: "must-not-persist" },
+      data: { schemaVersion: 1,
+strategyName: "CG_coinGrabber",
+markets: ["BTCUSDT"],
+fingerprint,
+apiToken: "must-not-persist" },
     },
     {
       factId: "process-started:wrong-session",
       factType: "PROCESS_STARTED",
-      data: { configurationFingerprint: fingerprint, strategyName: "CG_coinGrabber", markets: ["BTCUSDT"] },
+      data: { configurationFingerprint: fingerprint,
+strategyName: "CG_coinGrabber",
+markets: ["BTCUSDT"] },
     },
     {
       factId: "process-stopped:process-facts-test-session",
       factType: "PROCESS_STOPPED",
-      data: { reason: "SHUTDOWN_COMPLETED", clean: "true" },
+      data: { reason: "SHUTDOWN_COMPLETED",
+clean: "true" },
     },
   ]
   for (const fact of invalidFacts) {
@@ -112,7 +132,8 @@ test("rejects malformed process-boundary and configuration-baseline facts", asyn
 test("rejects process boundaries that are not tied to the store runtime session", async (t) => {
   const operationalStateStore = await createStore(t)
   const result = await recordProcessStopped({
-    operationalStateStore: { ...operationalStateStore, runtimeSessionId: "another-session" },
+    operationalStateStore: { ...operationalStateStore,
+runtimeSessionId: "another-session" },
     reason: "SHUTDOWN_COMPLETED",
     clean: true,
   })

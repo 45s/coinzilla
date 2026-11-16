@@ -13,20 +13,29 @@ function createBroker({ orderResponse, orderHandler, exchangeInfo } = {}) {
       quoteAsset: "USDT",
       orderTypes: ["LIMIT", "LIMIT_MAKER"],
       filters: [
-        { filterType: "PRICE_FILTER", tickSize: "0.01" },
-        { filterType: "LOT_SIZE", stepSize: "0.00001" },
+        { filterType: "PRICE_FILTER",
+tickSize: "0.01" },
+        { filterType: "LOT_SIZE",
+stepSize: "0.00001" },
       ],
     }] },
-    myFilters: () => ({ symbolFilters: [], exchangeFilters: [], assetFilters: [] }),
+    myFilters: () => ({ symbolFilters: [],
+exchangeFilters: [],
+assetFilters: [] }),
   })
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
-    apiSecret: "test-secret", tradingMode: "testnet",
-    logger: { error() {}, info() {}, debug() {}, warn() {} },
+    apiSecret: "test-secret",
+tradingMode: "testnet",
+    logger: { error() {},
+info() {},
+debug() {},
+warn() {} },
   })
   broker.tradingConnection = rpc
   broker.connected = true
-  return { broker, rpc }
+  return { broker,
+rpc }
 }
 
 test("places a limit order and returns the canonical exchange order", async () => {

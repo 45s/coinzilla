@@ -6,6 +6,20 @@ type: roadmap
 owner: utils
 ---
 
+## Completed — shared SystemCustomError base (request [#1208](https://github.com/45s/coinzilla/issues/1208); merged [PR #1262](https://github.com/45s/coinzilla/pull/1262))
+
+- Added the single domain-neutral native `Error` base in `@coinzilla/utils`, preserving native `cause` and exposing optional immutable `code`, safe scalar `context`, and `retryable` diagnostics.
+- Exported the base from the public Utils entry point and documented the API contract and usage example.
+- Kept subclasses, codes, messages and retry decisions in their owning packages; Logger behavior and consumer source were not changed.
+- The Harvester Recovery Seller consumer PR [#1203](https://github.com/45s/coinzilla/pull/1203) is merged; its `MixedSellFillReconciliationError` remains feature-local and requires a separate Harvester-owned migration.
+- Verification passed on exact PR head `1aea7ec46a3163c1b815434e73ca9a07b428b743`: Utils tests/coverage, workspace tests/coverage, changed-file ESLint and Markdown checks, dependency audit, and Harvester targeted tests.
+
+## In progress — package ESLint cleanup ([issue #1238](https://github.com/45s/coinzilla/issues/1238))
+
+- Eliminate existing ESLint errors and warnings across `packages/utils/` without changing runtime behavior or public contracts.
+- Keep all changes within this package; do not alter root ESLint configuration, workspace scripts, workflows, or other domains.
+- Record the complete package-wide before/after ESLint inventory and verify tests/coverage on the exact PR head.
+
 ## Priority execution plan — current develop direction (2026-11-10)
 
 ### COMPLETED — build and runtime provenance (issue #763)
@@ -84,6 +98,7 @@ Compatibility constraints: retain existing public exports and the legacy `NH` / 
 
 - [x] Extend the shared Logger with independent transport thresholds, runtime configuration, safe structured entries, and transport lifecycle handling (PR #631 merged).
 - [x] Document public and non-obvious `packages/utils` inputs, outputs, callbacks, async behavior, defaults, and validation contracts with JSDoc; completed in [PR #659](https://github.com/45s/coinzilla/pull/659), merged at `27388a54dd788819a08b5e605cb714258da57ccd`. JavaScript-first tooling remains unchanged.
+- [x] Add the single shared `SystemCustomError` base for package-owned subclasses; preserve native `cause` and keep all domain-specific error policy in the owning packages (request [#1208](https://github.com/45s/coinzilla/issues/1208)); implemented in merged [PR #1262](https://github.com/45s/coinzilla/pull/1262).
 
 - [x] Maintain deterministic unit tests and meaningful coverage for all exported helpers.
 - [x] Review helper APIs for consistent input validation, error semantics, and immutable behavior.

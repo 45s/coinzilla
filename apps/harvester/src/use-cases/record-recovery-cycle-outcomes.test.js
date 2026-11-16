@@ -11,17 +11,25 @@ import { createFileOperationalStateStore } from "../infrastructure/operational-s
 import { recordRecoveryCycleCompleted } from "./record-recovery-cycle-completed.js"
 import { recordRecoveryCycleNotCompleted } from "./record-recovery-cycle-not-completed.js"
 
-const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
-const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "BTCUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({ id: "asset:BTC",
+code: "BTC" })
+const quoteAsset = new Asset({ id: "asset:USDT",
+code: "USDT" })
+const market = new Market({ venue: "binance",
+symbol: "BTCUSDT",
+baseAsset,
+quoteAsset })
 const makeFill = ({ tradeId, side, quantity, quoteQuantity, price }) => new Fill({
   tradeId,
-  brokerOrderId: "broker-" + tradeId,
+  brokerOrderId: `broker-${  tradeId}`,
   market,
   side,
-  price: new Money({ amount: price, asset: quoteAsset }),
-  quantity: new Quantity({ amount: quantity, asset: baseAsset }),
-  quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+  price: new Money({ amount: price,
+asset: quoteAsset }),
+  quantity: new Quantity({ amount: quantity,
+asset: baseAsset }),
+  quoteQuantity: new Money({ amount: quoteQuantity,
+asset: quoteAsset }),
   commissionStatus: "COMPLETE",
 })
 const makeSellOrder = ({ status = "FILLED", quantity = "1", executedQuantity = quantity, price = "130005" } = {}) => new CanonicalOrder({
@@ -30,9 +38,12 @@ const makeSellOrder = ({ status = "FILLED", quantity = "1", executedQuantity = q
   market,
   side: "SELL",
   type: "LIMIT",
-  limitPrice: new Money({ amount: price, asset: quoteAsset }),
-  originalQuantity: new Quantity({ amount: quantity, asset: baseAsset }),
-  executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+  limitPrice: new Money({ amount: price,
+asset: quoteAsset }),
+  originalQuantity: new Quantity({ amount: quantity,
+asset: baseAsset }),
+  executedQuantity: new Quantity({ amount: executedQuantity,
+asset: baseAsset }),
   status,
   createdAt: 1,
   acknowledgedAt: 1,
@@ -41,7 +52,8 @@ const makeSellOrder = ({ status = "FILLED", quantity = "1", executedQuantity = q
 })
 const makeStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-recovery-cycle-outcomes-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "recovery-cycle-outcomes-test",
@@ -51,14 +63,26 @@ const makeStore = async (t) => {
   return store
 }
 const makeCycle = () => {
-  const buyFill = makeFill({ tradeId: "cycle-buy", side: "BUY", quantity: "2", quoteQuantity: "130000", price: "65000" })
-  const sellFill = makeFill({ tradeId: "cycle-sell", side: "SELL", quantity: "1", quoteQuantity: "130005", price: "130005" })
-  const portfolio = new Portfolio()
-    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
-    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+  const buyFill = makeFill({ tradeId: "cycle-buy",
+side: "BUY",
+quantity: "2",
+quoteQuantity: "130000",
+price: "65000" })
+  const sellFill = makeFill({ tradeId: "cycle-sell",
+side: "SELL",
+quantity: "1",
+quoteQuantity: "130005",
+price: "130005" })
+  const {portfolio} = new Portfolio()
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER })
   const recoveryLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
-    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
   return {
     portfolio,
     recoveryLedger,
@@ -75,14 +99,26 @@ const makeCycle = () => {
 }
 
 const makeNotCompletedCycle = () => {
-  const buyFill = makeFill({ tradeId: "cycle-not-completed-buy", side: "BUY", quantity: "0.42", quoteQuantity: "39.75", price: "94.642857142857142857" })
-  const sellFill = makeFill({ tradeId: "cycle-not-completed-sell", side: "SELL", quantity: "0.4", quoteQuantity: "40", price: "100" })
-  const portfolio = new Portfolio()
-    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
-    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+  const buyFill = makeFill({ tradeId: "cycle-not-completed-buy",
+side: "BUY",
+quantity: "0.42",
+quoteQuantity: "39.75",
+price: "94.642857142857142857" })
+  const sellFill = makeFill({ tradeId: "cycle-not-completed-sell",
+side: "SELL",
+quantity: "0.4",
+quoteQuantity: "40",
+price: "100" })
+  const {portfolio} = new Portfolio()
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER })
   const recoveryLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
-    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
   return {
     portfolio,
     recoveryLedger,
@@ -115,7 +151,8 @@ test("requires a canonical fully filled SELL before recording a completed cycle"
   const result = await recordRecoveryCycleCompleted({
     operationalStateStore,
     ...cycle,
-    sellOrder: makeSellOrder({ status: "OPEN", executedQuantity: "0" }),
+    sellOrder: makeSellOrder({ status: "OPEN",
+executedQuantity: "0" }),
     minProfit: "5",
   })
 
@@ -126,7 +163,8 @@ test("requires a canonical fully filled SELL before recording a completed cycle"
 test("persists an explicit CONTINUE_SELL_THROUGH outcome tied to the full SELL and current cycle evidence", async (t) => {
   const operationalStateStore = await makeStore(t)
   const cycle = makeNotCompletedCycle()
-  const sellOrder = makeSellOrder({ quantity: "0.4", price: "100" })
+  const sellOrder = makeSellOrder({ quantity: "0.4",
+price: "100" })
   const result = await recordRecoveryCycleNotCompleted({
     operationalStateStore,
     ...cycle,
@@ -153,12 +191,16 @@ test("persists an explicit CONTINUE_SELL_THROUGH outcome tied to the full SELL a
 
 test("does not persist a non-completion outcome for an unfilled or non-SELL order", async () => {
   let appendCalls = 0
-  const operationalStateStore = { append: async () => { appendCalls += 1; return { ok: true, data: { durable: true } } } }
+  const operationalStateStore = { append: async () => { appendCalls += 1; return { ok: true,
+data: { durable: true } } } }
   const cycle = makeNotCompletedCycle()
   const result = await recordRecoveryCycleNotCompleted({
     operationalStateStore,
     ...cycle,
-    sellOrder: makeSellOrder({ status: "OPEN", quantity: "0.4", executedQuantity: "0", price: "100" }),
+    sellOrder: makeSellOrder({ status: "OPEN",
+quantity: "0.4",
+executedQuantity: "0",
+price: "100" }),
     completion: {
       eligible: false,
       pause: false,

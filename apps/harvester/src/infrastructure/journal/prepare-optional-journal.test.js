@@ -8,7 +8,9 @@ import { EventBus } from "@coinzilla/event-bus"
 import { Journal } from "@coinzilla/journal"
 import { prepareOptionalJournal, resolveJournalDirectory } from "./prepare-optional-journal.js"
 
-const logger = { info() {}, error() {}, debug() {} }
+const logger = { info() {},
+error() {},
+debug() {} }
 const createTempDirectory = () =>
   mkdtemp(path.join(os.tmpdir(), "harvester-journal-"))
 
@@ -32,7 +34,8 @@ test("preserves explicitly absolute Journal directories", async () => {
   try {
     assert.equal(resolveJournalDirectory({ directory }), directory)
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -72,7 +75,8 @@ test("starts a real Journal with the shared process identity and closes it succe
     assert.equal(service.status.state, "closed")
     assert.equal(service.status.closed, true)
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -89,10 +93,13 @@ test("starts a new Journal writer without reading previous sessions", async () =
       },
       start: async () => {
         calls.push("start")
-        return { ok: true, filePath: "/unused-by-fake-journal/current.jsonl" }
+        return { ok: true,
+filePath: "/unused-by-fake-journal/current.jsonl" }
       },
-      flush: async () => ({ ok: true, durable: true }),
-      close: async () => ({ ok: true, closed: true }),
+      flush: async () => ({ ok: true,
+durable: true }),
+      close: async () => ({ ok: true,
+closed: true }),
     }),
   })
 
@@ -110,9 +117,11 @@ test("starts the Journal writer even when historical records are malformed", asy
     directory: "/unused-by-fake-journal",
     logger,
     journalFactory: () => ({
-      read: async () => ({ ok: false, errors: [error] }),
+      read: async () => ({ ok: false,
+errors: [error] }),
       start: async () => { startCalls += 1; return { ok: true } },
-      close: async () => ({ ok: true, closed: true }),
+      close: async () => ({ ok: true,
+closed: true }),
     }),
   })
 
@@ -125,7 +134,9 @@ test("starts the Journal writer even when historical records are malformed", asy
 test("starts a Journal in a new directory without inspecting prior history", async () => {
   const root = await createTempDirectory()
   const directory = path.join(root, "not-created-yet")
-  const service = prepareOptionalJournal({ eventBus: new EventBus(), directory, logger })
+  const service = prepareOptionalJournal({ eventBus: new EventBus(),
+directory,
+logger })
 
   try {
     assert.equal((await service.ready).ok, true)
@@ -133,7 +144,8 @@ test("starts a Journal in a new directory without inspecting prior history", asy
     assert.equal("recovery" in service, false)
   } finally {
     await service.close()
-    await rm(root, { recursive: true, force: true })
+    await rm(root, { recursive: true,
+force: true })
   }
 })
 
@@ -154,7 +166,8 @@ test("reports an invalid journal directory without throwing", async () => {
     assert.equal(service.status.state, "failed")
     assert.equal(service.status.started, false)
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -166,7 +179,8 @@ test("returns immediately while Journal initialization is still pending", async 
     logger,
     journalFactory: () => ({
       start: () => new Promise((resolve) => { resolveStart = resolve }),
-      close: async () => ({ ok: true, closed: true }),
+      close: async () => ({ ok: true,
+closed: true }),
     }),
   })
 
@@ -175,7 +189,8 @@ test("returns immediately while Journal initialization is still pending", async 
   assert.equal(typeof resolveStart, "function")
   assert.equal(service.status.state, "starting")
 
-  resolveStart({ ok: true, filePath: "/unused-by-fake-journal/session.jsonl" })
+  resolveStart({ ok: true,
+filePath: "/unused-by-fake-journal/session.jsonl" })
   assert.equal((await service.ready).ok, true)
   assert.equal(service.status.state, "ready")
   assert.equal((await service.close()).ok, true)
@@ -189,7 +204,8 @@ test("contains an asynchronous Journal initialization rejection", async () => {
     logger,
     journalFactory: () => ({
       start: async () => { throw error },
-      close: async () => ({ ok: true, closed: true }),
+      close: async () => ({ ok: true,
+closed: true }),
     }),
   })
 
@@ -207,10 +223,13 @@ test("closes a Journal whose startup failed after its startup rollback completed
     directory: "/unused",
     logger,
     journalFactory: () => ({
-      start: async () => ({ ok: false, errors: [startupError] }),
+      start: async () => ({ ok: false,
+errors: [startupError] }),
       close: async () => {
         closeCalls += 1
-        return { ok: true, closed: true, durable: true }
+        return { ok: true,
+closed: true,
+durable: true }
       },
     }),
   })
@@ -235,8 +254,11 @@ test("logs the original Journal startup error with structured diagnostics", asyn
     directory: "/unused",
     logger: { error: (entry) => loggedErrors.push(entry) },
     journalFactory: () => ({
-      start: async () => ({ ok: false, errors: [startupError] }),
-      close: async () => ({ ok: true, closed: true, durable: true }),
+      start: async () => ({ ok: false,
+errors: [startupError] }),
+      close: async () => ({ ok: true,
+closed: true,
+durable: true }),
     }),
   })
 
@@ -330,28 +352,37 @@ test("reports a write failure through live health status without affecting Event
     assert.equal(closed.ok, false)
     assert.equal(service.status.state, "close_failed")
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
 test("flush waits for Journal durability", async () => {
   const service = prepareOptionalJournal({
-    eventBus: new EventBus(), directory: "/unused", logger,
+    eventBus: new EventBus(),
+directory: "/unused",
+logger,
     journalFactory: () => ({
       start: async () => ({ ok: true }),
-      flush: async () => ({ ok: true, durable: true }),
-      close: async () => ({ ok: true, closed: true }),
+      flush: async () => ({ ok: true,
+durable: true }),
+      close: async () => ({ ok: true,
+closed: true }),
     }),
   })
   assert.equal((await service.ready).ok, true)
-  assert.deepEqual(await service.flush(), { ok: true, durable: true })
+  assert.deepEqual(await service.flush(), { ok: true,
+durable: true })
   assert.equal((await service.close()).ok, true)
 })
 
 test("fails closed when Journal has no durable flush capability", async () => {
   const service = prepareOptionalJournal({
-    eventBus: new EventBus(), directory: "/unused", logger,
-    journalFactory: () => ({ start: async () => ({ ok: true }), close: async () => ({ ok: true }) }),
+    eventBus: new EventBus(),
+directory: "/unused",
+logger,
+    journalFactory: () => ({ start: async () => ({ ok: true }),
+close: async () => ({ ok: true }) }),
   })
   assert.equal((await service.ready).ok, true)
   const result = await service.flush()

@@ -10,7 +10,8 @@ import {
 describe(BrokerResult.name, () => {
   it("represents a complete successful result with data", () => {
     const data = { orderId: "order-1" }
-    const result = new BrokerResult({ status: "SUCCESS", data })
+    const result = new BrokerResult({ status: "SUCCESS",
+data })
 
     assert.equal(result.status, "SUCCESS")
     assert.equal(result.ok, true)
@@ -29,7 +30,8 @@ describe(BrokerResult.name, () => {
 
   it("represents a definitive failure with errors and no data", () => {
     const error = new Error("Order rejected")
-    const result = new BrokerResult({ status: "FAILURE", errors: [error] })
+    const result = new BrokerResult({ status: "FAILURE",
+      errors: [error] })
 
     assert.equal(result.ok, false)
     assert.equal(result.hasData, false)
@@ -53,7 +55,8 @@ describe(BrokerResult.name, () => {
 
   it("represents an unresolved operation outcome without pretending it failed", () => {
     const error = new Error("Connection closed after request was sent")
-    const result = new BrokerResult({ status: "UNKNOWN", errors: [error] })
+    const result = new BrokerResult({ status: "UNKNOWN",
+      errors: [error] })
 
     assert.equal(result.status, "UNKNOWN")
     assert.equal(result.ok, false)
@@ -70,6 +73,9 @@ describe(BrokerResult.name, () => {
     ])
   })
 
+})
+
+describe(`${BrokerResult.name} validation`, () => {
   it("rejects invalid input, status, and error collections", () => {
     for (const input of [null, "result", []]) {
       assert.throws(() => new BrokerResult(input), {
@@ -80,7 +86,8 @@ describe(BrokerResult.name, () => {
       message: brokerResultErrMsgs.status,
     })
     for (const errors of [null, {}, "error", [undefined], [new Error(), "error"]]) {
-      assert.throws(() => new BrokerResult({ status: "SUCCESS", errors }), {
+      assert.throws(() => new BrokerResult({ status: "SUCCESS",
+errors }), {
         message: brokerResultErrMsgs.errors,
       })
     }
@@ -88,7 +95,8 @@ describe(BrokerResult.name, () => {
 
   it("rejects errors on successful results", () => {
     assert.throws(
-      () => new BrokerResult({ status: "SUCCESS", errors: [new Error("unexpected")] }),
+      () => new BrokerResult({ status: "SUCCESS",
+        errors: [new Error("unexpected")] }),
       { message: brokerResultErrMsgs.successErrors },
     )
   })
@@ -104,29 +112,39 @@ describe(BrokerResult.name, () => {
 
   it("rejects data on definitive failures and unknown outcomes", () => {
     assert.throws(
-      () => new BrokerResult({ status: "FAILURE", data: {}, errors: [new Error()] }),
+      () => new BrokerResult({ status: "FAILURE",
+        data: {},
+          errors: [new Error()] }),
       { message: brokerResultErrMsgs.failureData },
     )
     assert.throws(
-      () => new BrokerResult({ status: "UNKNOWN", data: {}, errors: [new Error()] }),
+      () => new BrokerResult({ status: "UNKNOWN",
+        data: {},
+          errors: [new Error()] }),
       { message: brokerResultErrMsgs.unknownData },
     )
   })
 
   it("requires both partial data and errors for incomplete results", () => {
     assert.throws(
-      () => new BrokerResult({ status: "INCOMPLETE", errors: [new Error()] }),
+      () => new BrokerResult({ status: "INCOMPLETE",
+        errors: [new Error()] }),
       { message: brokerResultErrMsgs.incompleteData },
     )
     assert.throws(
-      () => new BrokerResult({ status: "INCOMPLETE", data: [] }),
+      () => new BrokerResult({ status: "INCOMPLETE",
+        data: [] }),
       { message: brokerResultErrMsgs.incompleteErrors },
     )
   })
 
+})
+
+describe(`${BrokerResult.name} immutability`, () => {
   it("returns an immutable error collection without mutating caller data", () => {
     const errors = [new Error("first")]
-    const result = new BrokerResult({ status: "FAILURE", errors })
+    const result = new BrokerResult({ status: "FAILURE",
+errors })
 
     errors.push(new Error("second"))
 

@@ -4,16 +4,90 @@ function registerAssetIdentity({ asset, assetIdsByCode, assetCodesById, field })
   const id = asset?.id
   const code = asset?.code
   if (typeof id !== "string" || !id.trim() || typeof code !== "string" || !code.trim()) {
-    throw new TypeError(field + " must contain a non-empty asset ID and code")
+    throw new TypeError(`${field  } must contain a non-empty asset ID and code`)
   }
   const knownCode = assetCodesById.get(id)
   const knownId = assetIdsByCode.get(code)
   if ((knownCode !== undefined && knownCode !== code) ||
       (knownId !== undefined && knownId !== id)) {
-    throw new TypeError(field + " has a contradictory asset ID/code identity")
+    throw new TypeError(`${field  } has a contradictory asset ID/code identity`)
   }
   assetCodesById.set(id, code)
   assetIdsByCode.set(code, id)
+}
+
+function addCommissionTotals({ commission, market, assetIdsByCode, assetCodesById, totals }) {
+  const amount = commission?.amount
+  assertDecimalString({ value: amount?.amount,
+field: "commission.amount" })
+  if (compareDecimal({ left: amount.amount,
+right: "0" }) < 0) {
+    throw new RangeError("Commission amount must be non-negative")
+  }
+  if (compareDecimal({ left: amount.amount,
+right: "0" }) === 0) {
+    return
+  }
+
+  registerAssetIdentity({
+    asset: amount.asset,
+    assetIdsByCode,
+    assetCodesById,
+    field: "commission.amount.asset",
+  })
+  if (amount.asset.id === market.baseAsset.id) {
+    totals.baseCommission = addDecimal({ left: totals.baseCommission,
+right: amount.amount })
+    return
+  }
+  if (amount.asset.id === market.quoteAsset.id) {
+    totals.quoteCommission = addDecimal({ left: totals.quoteCommission,
+right: amount.amount })
+    return
+  }
+
+  const quoteValue = commission?.quoteValue
+  if (!quoteValue) {
+    throw new TypeError(
+      `Third-asset commission requires reliable quote-currency valuation: ${String(amount.asset?.code ?? "unknown")}`,
+    )
+  }
+  assertDecimalString({ value: quoteValue.amount,
+field: "commission.quoteValue.amount" })
+  registerAssetIdentity({
+    asset: quoteValue.asset,
+    assetIdsByCode,
+    assetCodesById,
+    field: "commission.quoteValue.asset",
+  })
+  if (quoteValue.asset?.id !== market.quoteAsset.id ||
+      quoteValue.asset?.code !== market.quoteAsset.code) {
+    throw new TypeError("Third-asset commission quote value must use the market quote asset")
+  }
+  if (compareDecimal({ left: quoteValue.amount,
+right: "0" }) <= 0) {
+    throw new RangeError("Third-asset commission quote value must be greater than zero")
+  }
+  totals.thirdAssetQuoteValue = addDecimal({
+    left: totals.thirdAssetQuoteValue,
+    right: quoteValue.amount,
+  })
+}
+
+function validateCommissionTotals({ fill, totals }) {
+  assertDecimalString({ value: fill.quantity?.amount,
+field: "fill.quantity.amount" })
+  assertDecimalString({ value: fill.quoteQuantity?.amount,
+field: "fill.quoteQuantity.amount" })
+  if (compareDecimal({ left: totals.baseCommission,
+right: fill.quantity.amount }) > 0) {
+    throw new RangeError("Base commission exceeds executed base quantity")
+  }
+  if (compareDecimal({ left: totals.quoteCommission,
+right: fill.quoteQuantity.amount }) > 0) {
+    const limit = fill.side === "SELL" ? "SELL quote proceeds" : "executed quote notional"
+    throw new RangeError(`Quote commission exceeds ${limit}`)
+  }
 }
 
 /**
@@ -55,68 +129,21 @@ export function validateFillCommissions({ market, fill } = {}) {
     field: "market.quoteAsset",
   })
 
-  let baseCommission = "0"
-  let quoteCommission = "0"
-  let thirdAssetQuoteValue = "0"
+  const totals = {
+    baseCommission: "0",
+    quoteCommission: "0",
+    thirdAssetQuoteValue: "0",
+  }
   for (const commission of fill.commissions) {
-    const amount = commission?.amount
-    assertDecimalString({ value: amount?.amount, field: "commission.amount" })
-    if (compareDecimal({ left: amount.amount, right: "0" }) < 0) {
-      throw new RangeError("Commission amount must be non-negative")
-    }
-    if (compareDecimal({ left: amount.amount, right: "0" }) === 0) continue
-
-    registerAssetIdentity({
-      asset: amount.asset,
+    addCommissionTotals({
+      commission,
+      market,
       assetIdsByCode,
       assetCodesById,
-      field: "commission.amount.asset",
-    })
-
-    if (amount.asset.id === market.baseAsset.id) {
-      baseCommission = addDecimal({ left: baseCommission, right: amount.amount })
-      continue
-    }
-    if (amount.asset.id === market.quoteAsset.id) {
-      quoteCommission = addDecimal({ left: quoteCommission, right: amount.amount })
-      continue
-    }
-    const quoteValue = commission?.quoteValue
-    if (!quoteValue) {
-      throw new TypeError(
-        "Third-asset commission requires reliable quote-currency valuation: " +
-        String(amount.asset?.code ?? "unknown"),
-      )
-    }
-    assertDecimalString({ value: quoteValue.amount, field: "commission.quoteValue.amount" })
-    registerAssetIdentity({
-      asset: quoteValue.asset,
-      assetIdsByCode,
-      assetCodesById,
-      field: "commission.quoteValue.asset",
-    })
-    if (quoteValue.asset?.id !== market.quoteAsset.id ||
-        quoteValue.asset?.code !== market.quoteAsset.code) {
-      throw new TypeError("Third-asset commission quote value must use the market quote asset")
-    }
-    if (compareDecimal({ left: quoteValue.amount, right: "0" }) <= 0) {
-      throw new RangeError("Third-asset commission quote value must be greater than zero")
-    }
-    thirdAssetQuoteValue = addDecimal({
-      left: thirdAssetQuoteValue,
-      right: quoteValue.amount,
+      totals,
     })
   }
-
-  assertDecimalString({ value: fill.quantity?.amount, field: "fill.quantity.amount" })
-  assertDecimalString({ value: fill.quoteQuantity?.amount, field: "fill.quoteQuantity.amount" })
-  if (compareDecimal({ left: baseCommission, right: fill.quantity.amount }) > 0) {
-    throw new RangeError("Base commission exceeds executed base quantity")
-  }
-  if (compareDecimal({ left: quoteCommission, right: fill.quoteQuantity.amount }) > 0) {
-    const limit = fill.side === "SELL" ? "SELL quote proceeds" : "executed quote notional"
-    throw new RangeError("Quote commission exceeds " + limit)
-  }
-
-  return Object.freeze({ baseCommission, quoteCommission, thirdAssetQuoteValue })
+  validateCommissionTotals({ fill,
+totals })
+  return Object.freeze(totals)
 }

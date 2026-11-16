@@ -5,11 +5,21 @@ import { summarizeHarvesterJournalHistory } from "./summarize-harvester-journal-
 test("detects prior order and fill history across Journal sessions", () => {
   const result = summarizeHarvesterJournalHistory({
     records: [
-      { id: "1", payload: { name: "harvester.started", source: "harvester" } },
-      { id: "2", payload: { name: "order.submission_requested", source: "harvester" } },
-      { id: "3", payload: { name: "order.cancel_requested", source: "harvester" } },
-      { id: "4", payload: { name: "execution.fill_applied", source: "harvester" } },
-      { id: "5", payload: { name: "account.snapshot_captured", source: "harvester" } },
+      { id: "1",
+payload: { name: "harvester.started",
+source: "harvester" } },
+      { id: "2",
+payload: { name: "order.submission_requested",
+source: "harvester" } },
+      { id: "3",
+payload: { name: "order.cancel_requested",
+source: "harvester" } },
+      { id: "4",
+payload: { name: "execution.fill_applied",
+source: "harvester" } },
+      { id: "5",
+payload: { name: "account.snapshot_captured",
+source: "harvester" } },
     ],
   })
 
@@ -25,7 +35,10 @@ test("detects prior order and fill history across Journal sessions", () => {
 test("detects a prior trading-enabled startup even without persisted order intents", () => {
   const result = summarizeHarvesterJournalHistory({
     records: [
-      { id: "1", payload: { name: "harvester.started", source: "harvester", data: { tradingEnabled: true } } },
+      { id: "1",
+payload: { name: "harvester.started",
+source: "harvester",
+data: { tradingEnabled: true } } },
     ],
   })
 
@@ -37,8 +50,13 @@ test("detects a prior trading-enabled startup even without persisted order inten
 test("allows a Journal containing only read-only startup events", () => {
   const result = summarizeHarvesterJournalHistory({
     records: [
-      { id: "1", payload: { name: "harvester.started", source: "harvester", data: { tradingEnabled: false } } },
-      { id: "2", payload: { name: "config.validated", source: "harvester" } },
+      { id: "1",
+payload: { name: "harvester.started",
+source: "harvester",
+data: { tradingEnabled: false } } },
+      { id: "2",
+payload: { name: "config.validated",
+source: "harvester" } },
     ],
   })
 
@@ -50,7 +68,9 @@ test("allows a Journal containing only read-only startup events", () => {
 test("requires recovery after a prior account snapshot even without order events", () => {
   const result = summarizeHarvesterJournalHistory({
     records: [
-      { id: "1", payload: { name: "account.snapshot_captured", source: "harvester" } },
+      { id: "1",
+payload: { name: "account.snapshot_captured",
+source: "harvester" } },
     ],
   })
 

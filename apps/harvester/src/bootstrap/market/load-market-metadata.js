@@ -3,7 +3,7 @@ import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { publishLifecycleEvent } from "../../application/events/publish-lifecycle-event.js"
 import { mapMarketTradingRulesCapturedData } from "../../application/events/lifecycle-event-dtos.js"
 
-function logSystem(logger, data) {
+function logSystem({ logger, ...data }) {
   if (typeof logger?.system === "function") {
     logger.system(data)
     return
@@ -24,11 +24,11 @@ export async function loadMarketMetadata({
       if (!filtersResult?.ok || !filtersResult.data) {
         const details = filtersResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
         throw new Error(
-          "Unable to load exchange market metadata for configured pair " + symbol +
-          (details ? ": " + details : ""),
+          `Unable to load exchange market metadata for configured pair ${  symbol 
+          }${details ? `: ${  details}` : ""}`,
         )
       }
-      const market = filtersResult.data.market
+      const {market} = filtersResult.data
       logger?.trace?.({
         message: "Exchange market metadata received",
         component: "market-metadata-bootstrap",
@@ -45,11 +45,11 @@ export async function loadMarketMetadata({
         !market.baseAsset?.code ||
         !market.quoteAsset?.code
       ) {
-        throw new Error("Configured pair " + symbol + " does not expose canonical base/quote asset metadata")
+        throw new Error(`Configured pair ${  symbol  } does not expose canonical base/quote asset metadata`)
       }
       if (!pairConfig.enabled) {
         marketMetadata.set(symbol, filtersResult.data)
-        logSystem(logger, {
+        logSystem({ logger,
           message: "Configured disabled market asset metadata loaded",
           symbol,
           baseAsset: market.baseAsset.code,
@@ -69,7 +69,7 @@ export async function loadMarketMetadata({
         eventName: HARVESTER_EVENT_NAMES.MARKET_TRADING_RULES_CAPTURED,
         dataResult: mapMarketTradingRulesCapturedData({ metadata: validatedMetadata }),
       })
-      logSystem(logger, {
+      logSystem({ logger,
         message: "Supported exchange trading rules validated",
         symbol,
         unvalidatedConstraintCount: validatedMetadata.unvalidatedConstraints.length,

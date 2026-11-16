@@ -9,8 +9,10 @@ import { auditRecoveredTradeHistory } from "./audit-recovered-trade-history.js"
 import { readMarketHistoryCoverage } from "./read-market-history-coverage.js"
 import { recordMarketHistoryCoverage } from "./record-market-history-coverage.js"
 
-const baseAsset = new Asset({ id: "binance:BTC", code: "BTC" })
-const quoteAsset = new Asset({ id: "binance:USDT", code: "USDT" })
+const baseAsset = new Asset({ id: "binance:BTC",
+code: "BTC" })
+const quoteAsset = new Asset({ id: "binance:USDT",
+code: "USDT" })
 const market = new Market({
   venue: "binance",
   symbol: "BTCUSDT",
@@ -24,9 +26,12 @@ const makeFill = (overrides = {}) => new Fill({
   clientOrderId: "h-BTCUSDT-1",
   market,
   side: "BUY",
-  price: new Money({ amount: "100", asset: quoteAsset }),
-  quantity: new Quantity({ amount: "0.4", asset: baseAsset }),
-  quoteQuantity: new Money({ amount: "40", asset: quoteAsset }),
+  price: new Money({ amount: "100",
+asset: quoteAsset }),
+  quantity: new Quantity({ amount: "0.4",
+asset: baseAsset }),
+  quoteQuantity: new Money({ amount: "40",
+asset: quoteAsset }),
   liquidityRole: "MAKER",
   commissions: [],
   commissionStatus: "COMPLETE",
@@ -134,8 +139,10 @@ test("rejects a Journal execution missing from complete exchange trade history",
 test("rejects contradictory exact execution facts and commission data", () => {
   const fill = makeFill()
   const contradictory = makeFill({
-    price: new Money({ amount: "101", asset: quoteAsset }),
-    quoteQuantity: new Money({ amount: "40.4", asset: quoteAsset }),
+    price: new Money({ amount: "101",
+asset: quoteAsset }),
+    quoteQuantity: new Money({ amount: "40.4",
+asset: quoteAsset }),
   })
   const result = auditMarketHistory({
     journalFills: [journalFill(fill)],
@@ -204,9 +211,12 @@ test("accepts exchange fills missing from the prior Journal only when their brok
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "0.4", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0.4", asset: baseAsset }),
+    limitPrice: new Money({ amount: "100",
+asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.4",
+asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0.4",
+asset: baseAsset }),
     status: "FILLED",
   })
   const result = auditMarketHistory({
@@ -265,7 +275,8 @@ test("rejects market-scoped history when structured pagination evidence is absen
 
 test("rejects cross-market executions in a single-market history response", () => {
   const fill = makeFill()
-  const ethAsset = new Asset({ id: "binance:ETH", code: "ETH" })
+  const ethAsset = new Asset({ id: "binance:ETH",
+code: "ETH" })
   const ethMarket = new Market({
     venue: "binance",
     symbol: "ETHUSDT",
@@ -278,9 +289,12 @@ test("rejects cross-market executions in a single-market history response", () =
     clientOrderId: "manual-eth",
     market: ethMarket,
     side: "BUY",
-    price: new Money({ amount: "10", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "1", asset: ethAsset }),
-    quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+    price: new Money({ amount: "10",
+asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1",
+asset: ethAsset }),
+    quoteQuantity: new Money({ amount: "10",
+asset: quoteAsset }),
     liquidityRole: "MAKER",
     commissions: [],
     commissionStatus: "COMPLETE",
@@ -356,7 +370,8 @@ test("rejects a history-coverage fact verified before the requested history star
 
 test("feeds integrity-verified durable coverage projection into the market history audit", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-market-history-audit-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const operationalStateStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "market-history-audit-test",
@@ -374,7 +389,8 @@ test("feeds integrity-verified durable coverage projection into the market histo
     verifiedBy: "operator:trader",
   })
   assert.equal(recorded.ok, true, recorded.errors?.map(({ message }) => message).join("; "))
-  const projected = await readMarketHistoryCoverage({ operationalStateStore, symbol: "BTCUSDT" })
+  const projected = await readMarketHistoryCoverage({ operationalStateStore,
+symbol: "BTCUSDT" })
   assert.equal(projected.ok, true, projected.errors?.map(({ message }) => message).join("; "))
   const fill = makeFill()
   const result = auditRecoveredTradeHistory({

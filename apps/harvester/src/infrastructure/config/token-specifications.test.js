@@ -41,14 +41,20 @@ test("validates registry root, token entries, market metadata, and precision val
   )
   assert.throws(
     () => validateTokenSpecifications({
-      LINK: { baseAsset: "LINK", markets: { LINKUSDT: { quoteAsset: "", pricePrecision: 3, quantityPrecision: 2 } } },
+      LINK: { baseAsset: "LINK",
+markets: { LINKUSDT: { quoteAsset: "",
+pricePrecision: 3,
+quantityPrecision: 2 } } },
     }),
     /malformed market metadata/i,
     "Every market must declare a normalized quote asset."
   )
   assert.throws(
     () => validateTokenSpecifications({
-      LINK: { baseAsset: "LINK", markets: { LINKUSDT: { quoteAsset: "USDT", pricePrecision: -1, quantityPrecision: 2 } } },
+      LINK: { baseAsset: "LINK",
+markets: { LINKUSDT: { quoteAsset: "USDT",
+pricePrecision: -1,
+quantityPrecision: 2 } } },
     }),
     /pricePrecision.*non-negative integer/i,
     "Precision values must be non-negative integers."
@@ -100,20 +106,27 @@ test("updates an existing market specification without changing other tokens or 
     LINK: {
       baseAsset: "LINK",
       markets: {
-        LINKUSDT: { quoteAsset: "USDT", pricePrecision: 3, quantityPrecision: 2 },
-        LINKFDUSD: { quoteAsset: "FDUSD", pricePrecision: 3, quantityPrecision: 2 },
+        LINKUSDT: { quoteAsset: "USDT",
+pricePrecision: 3,
+quantityPrecision: 2 },
+        LINKFDUSD: { quoteAsset: "FDUSD",
+pricePrecision: 3,
+quantityPrecision: 2 },
       },
     },
     POL: {
       baseAsset: "POL",
       markets: {
-        POLUSDT: { quoteAsset: "USDT", pricePrecision: 4, quantityPrecision: 1 },
+        POLUSDT: { quoteAsset: "USDT",
+pricePrecision: 4,
+quantityPrecision: 1 },
       },
     },
   }
   const updated = mergeTokenSpecifications({
     tokenSpecifications: existing,
-    metadata: metadata({ symbol: "LINKUSDT", tickSize: "0.0001" }),
+    metadata: metadata({ symbol: "LINKUSDT",
+tickSize: "0.0001" }),
   })
 
   assert.equal(updated.LINK.markets.LINKUSDT.pricePrecision, 4, "Refreshing a market must update its exchange-derived precision.")
@@ -124,17 +137,23 @@ test("updates an existing market specification without changing other tokens or 
 
 test("resolves configured pairs from exact registry market keys", () => {
   const pairs = {
-    LINKUSDT: { enabled: true, investment: 100 },
-    LINKFDUSD: { enabled: false, investment: 200 },
+    LINKUSDT: { enabled: true,
+investment: 100 },
+    LINKFDUSD: { enabled: false,
+investment: 200 },
   }
   const tokenSpecifications = mergeTokenSpecifications({
     tokenSpecifications: mergeTokenSpecifications({
       tokenSpecifications: {},
       metadata: metadata(),
     }),
-    metadata: metadata({ symbol: "LINKFDUSD", quoteAsset: "FDUSD", tickSize: "0.01", stepSize: "0.001" }),
+    metadata: metadata({ symbol: "LINKFDUSD",
+quoteAsset: "FDUSD",
+tickSize: "0.01",
+stepSize: "0.001" }),
   })
-  const resolved = resolvePairSpecifications({ pairs, tokenSpecifications })
+  const resolved = resolvePairSpecifications({ pairs,
+tokenSpecifications })
 
   assert.deepEqual(resolved.LINKUSDT, {
     enabled: true,
@@ -153,24 +172,31 @@ test("resolves configured pairs from exact registry market keys", () => {
 
 test("fails closed for missing markets, malformed token metadata, and duplicate market ownership", () => {
   assert.throws(
-    () => resolvePairSpecifications({ pairs: null, tokenSpecifications: {} }),
+    () => resolvePairSpecifications({ pairs: null,
+tokenSpecifications: {} }),
     /Strategy pairs must be an object/i,
     "Runtime pair configuration must be a symbol-keyed object."
   )
   assert.throws(
-    () => resolvePairSpecifications({ pairs: { LINKUSDT: null }, tokenSpecifications: { LINK: { baseAsset: "LINK", markets: { LINKUSDT: { quoteAsset: "USDT", pricePrecision: 3, quantityPrecision: 2 } } } } }),
+    () => resolvePairSpecifications({ pairs: { LINKUSDT: null },
+tokenSpecifications: { LINK: { baseAsset: "LINK",
+markets: { LINKUSDT: { quoteAsset: "USDT",
+pricePrecision: 3,
+quantityPrecision: 2 } } } } }),
     /Strategy pair LINKUSDT must be an object/i,
     "Each configured market must have a pair settings object."
   )
   assert.throws(
-    () => resolvePairSpecifications({ pairs: { POLUSDT: {} }, tokenSpecifications: {} }),
+    () => resolvePairSpecifications({ pairs: { POLUSDT: {} },
+tokenSpecifications: {} }),
     /missing token specification.*POLUSDT/i,
     "A configured market without metadata must block configuration loading.",
   )
   assert.throws(
     () => resolvePairSpecifications({
       pairs: { LINKUSDT: {} },
-      tokenSpecifications: { LINK: { baseAsset: "POL", markets: {} } },
+      tokenSpecifications: { LINK: { baseAsset: "POL",
+markets: {} } },
     }),
     /baseAsset/i,
     "A token registry key must match its declared base asset.",
@@ -179,8 +205,14 @@ test("fails closed for missing markets, malformed token metadata, and duplicate 
     () => resolvePairSpecifications({
       pairs: { LINKUSDT: {} },
       tokenSpecifications: {
-        LINK: { baseAsset: "LINK", markets: { LINKUSDT: { quoteAsset: "USDT", pricePrecision: 3, quantityPrecision: 2 } } },
-        LIN: { baseAsset: "LIN", markets: { LINKUSDT: { quoteAsset: "KUSDT", pricePrecision: 3, quantityPrecision: 2 } } },
+        LINK: { baseAsset: "LINK",
+markets: { LINKUSDT: { quoteAsset: "USDT",
+pricePrecision: 3,
+quantityPrecision: 2 } } },
+        LIN: { baseAsset: "LIN",
+markets: { LINKUSDT: { quoteAsset: "KUSDT",
+pricePrecision: 3,
+quantityPrecision: 2 } } },
       },
     }),
     /multiple token entries/i,
@@ -201,7 +233,9 @@ test("rejects token registry entries whose market symbol disagrees with base and
         LINK: {
           baseAsset: "LINK",
           markets: {
-            LINKUSDT: { quoteAsset: "FDUSD", pricePrecision: 3, quantityPrecision: 2 },
+            LINKUSDT: { quoteAsset: "FDUSD",
+pricePrecision: 3,
+quantityPrecision: 2 },
           },
         },
       },
@@ -212,7 +246,8 @@ test("rejects token registry entries whose market symbol disagrees with base and
 })
 
 test("rejects manually configured precision values instead of allowing stale duplicates", () => {
-  const tokenSpecifications = mergeTokenSpecifications({ tokenSpecifications: {}, metadata: metadata() })
+  const tokenSpecifications = mergeTokenSpecifications({ tokenSpecifications: {},
+metadata: metadata() })
   assert.throws(
     () => resolvePairSpecifications({
       pairs: { LINKUSDT: { pricePrecision: 5 } },

@@ -3,51 +3,30 @@ import { authorizeOperatorActor } from "../../application/operator/authorize-ope
 import { OperatorQueryError } from "./errors/operator-query-error.js"
 
 function freezeValue(value) {
-  if (Array.isArray(value)) { return Object.freeze(value.map(freezeValue)) }
+  if (Array.isArray(value)) {
+    return Object.freeze(value.map(freezeValue))
+  }
   if (value && typeof value === "object") {
     const copy = {}
-    for (const [key, item] of Object.entries(value)) { copy[key] = freezeValue(item) }
+    for (const [key, item] of Object.entries(value)) {
+      copy[key] = freezeValue(item)
+    }
     return Object.freeze(copy)
   }
   return value
 }
 
-function readFailure(operation, cause) {
+function readFailure({ operation, cause }) {
   return new OperatorQueryError({
-    message: "Harvester operator " + operation.toLowerCase() + " snapshot could not be read",
-    code: "HARVESTER_OPERATOR_" + operation + "_READ_FAILED",
+    message: `Harvester operator ${operation.toLowerCase()} snapshot could not be read`,
+    code: `HARVESTER_OPERATOR_${operation}_READ_FAILED`,
     cause,
-    context: { operation: "READ_" + operation },
+    context: { operation: `READ_${operation}` },
   })
 }
 
-/**
- * Create read-only trading visibility queries over application-owned snapshots.
- *
- * Providers are supplied by bootstrap; this use case never reaches into the
- * broker, mutable engine internals, or transport layer.
- *
- * @param {object} options
- * @param {Function} options.getPortfolio - Current canonical Portfolio provider.
- * @param {Function} options.getRecoveryLedger - Recovery ledger provider by market ID.
- * @param {Function} options.getAccountSnapshot - Latest canonical account snapshot provider.
- * @param {object} options.engine - Engine order read-model boundary.
- * @param {Function} options.getOpenOrders - Account-wide normalized exchange open-order provider.
- * @param {Function} options.getObservedAt - Clock returning epoch milliseconds.
- * @returns {Readonly<object>} Authorized trading visibility queries.
- */
-export function createReadOperatorTradingState({
-  getPortfolio, getRecoveryLedger, getAccountSnapshot, engine, getOpenOrders, getObservedAt = Date.now,
-} = {}) {
-  for (const [name, provider] of Object.entries({ getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders })) {
-    if (typeof provider !== "function") { throw new TypeError("createReadOperatorTradingState requires " + name) }
-  }
-  if (typeof engine?.getActiveOrders !== "function") {
-    throw new TypeError("createReadOperatorTradingState requires engine.getActiveOrders")
-  }
-  if (typeof getObservedAt !== "function") { throw new TypeError("getObservedAt must be a function") }
-
-  const execute = ({ actor, operation, read }) => {
+function createOperatorQueryExecutor({ getObservedAt }) {
+  return ({ actor, operation, read }) => {
     try {
       authorizeOperatorActor({ actor })
       const observedAt = getObservedAt()
@@ -55,19 +34,28 @@ export function createReadOperatorTradingState({
         throw new TypeError("Operator query clock must return a non-negative safe integer")
       }
       return Promise.resolve().then(read).then((data) => {
-        if (!data || typeof data !== "object") { throw new TypeError(operation + " provider returned an invalid snapshot") }
-        return toResult({ data: freezeValue({ observedAt, ...data }) })
-      }).catch((cause) => toResult({ error: readFailure(operation, cause) }))
+        if (!data || typeof data !== "object") {
+          throw new TypeError(`${operation} provider returned an invalid snapshot`)
+        }
+        return toResult({ data: freezeValue({ observedAt, 
+          ...data }) })
+      }).catch((cause) => toResult({ error: readFailure({ operation, 
+        cause }) }))
     } catch (error) {
       return Promise.resolve(toResult({ error }))
     }
   }
+}
 
-  const getPositions = ({ actor } = {}) => execute({
-    actor, operation: "POSITIONS",
+function createPositionsQuery({ execute, getPortfolio, getRecoveryLedger }) {
+  return ({ actor } = {}) => execute({
+    actor,
+    operation: "POSITIONS",
     read: () => {
       const portfolio = getPortfolio()
-      if (!portfolio || !Array.isArray(portfolio.positions)) { throw new TypeError("Canonical Portfolio is unavailable") }
+      if (!portfolio || !Array.isArray(portfolio.positions)) {
+        throw new TypeError("Canonical Portfolio is unavailable")
+      }
       return {
         positions: portfolio.positions.map((position) => {
           const value = position?.value
@@ -95,18 +83,25 @@ export function createReadOperatorTradingState({
       }
     },
   })
+}
 
-  const getOrders = ({ actor } = {}) => execute({
-    actor, operation: "ORDERS",
+function createOrdersQuery({ execute, engine, getOpenOrders }) {
+  return ({ actor } = {}) => execute({
+    actor,
+    operation: "ORDERS",
     read: async () => {
       const owned = engine.getActiveOrders()
-      if (!Array.isArray(owned)) { throw new TypeError("Engine order snapshot is invalid") }
+      if (!Array.isArray(owned)) {
+        throw new TypeError("Engine order snapshot is invalid")
+      }
       const externalResult = await getOpenOrders()
       if (externalResult?.ok !== true || !Array.isArray(externalResult.data)) {
         throw externalResult?.errors?.[0] ?? new TypeError("Account open-order snapshot is unavailable")
       }
       const ownedIds = new Set(owned.map((order) => String(order.brokerOrderId ?? "")).filter(Boolean))
-      const ownedClientIds = new Set(owned.map((order) => order.clientOrderId).filter((id) => typeof id === "string" && id.length > 0))
+      const ownedClientIds = new Set(owned.map((order) => order.clientOrderId).filter((id) =>
+        typeof id === "string" && id.length > 0
+      ))
       const ownedOrders = owned.map((order) => ({
         ownership: "HARVESTER",
         symbol: order.market?.symbol ?? order.symbol,
@@ -134,9 +129,12 @@ export function createReadOperatorTradingState({
       return { orders: [...ownedOrders, ...externalOrders] }
     },
   })
+}
 
-  const getBalances = ({ actor } = {}) => execute({
-    actor, operation: "BALANCES",
+function createBalancesQuery({ execute, getAccountSnapshot, getObservedAt }) {
+  return ({ actor } = {}) => execute({
+    actor,
+    operation: "BALANCES",
     read: () => {
       const snapshot = getAccountSnapshot()
       if (!snapshot || !Number.isSafeInteger(snapshot.sourceTime) || !Array.isArray(snapshot.balances)) {
@@ -153,11 +151,65 @@ export function createReadOperatorTradingState({
           asset: balance.asset?.code,
           free: balance.free?.amount ?? balance.free,
           locked: balance.locked?.amount ?? balance.locked,
-          total: addDecimal({ left: balance.free.amount, right: balance.locked.amount }),
+          total: addDecimal({ left: balance.free.amount, 
+            right: balance.locked.amount }),
         })),
       }
     },
   })
+}
 
-  return Object.freeze({ getPositions, getOrders, getBalances })
+/**
+ * Create read-only trading visibility queries over application-owned snapshots.
+ *
+ * Providers are supplied by bootstrap; this use case never reaches into the
+ * broker, mutable engine internals, or transport layer.
+ *
+ * @param {object} options
+ * @param {Function} options.getPortfolio - Current canonical Portfolio provider.
+ * @param {Function} options.getRecoveryLedger - Recovery ledger provider by market ID.
+ * @param {Function} options.getAccountSnapshot - Latest canonical account snapshot provider.
+ * @param {object} options.engine - Engine order read-model boundary.
+ * @param {Function} options.getOpenOrders - Account-wide normalized exchange open-order provider.
+ * @param {Function} options.getObservedAt - Clock returning epoch milliseconds.
+ * @returns {Readonly<object>} Authorized trading visibility queries.
+ */
+export function createReadOperatorTradingState({
+  getPortfolio,
+  getRecoveryLedger,
+  getAccountSnapshot,
+  engine,
+  getOpenOrders,
+  getObservedAt = Date.now,
+} = {}) {
+  for (const [name, provider] of Object.entries({
+    getPortfolio,
+    getRecoveryLedger,
+    getAccountSnapshot,
+    getOpenOrders,
+  })) {
+    if (typeof provider !== "function") {
+      throw new TypeError(`createReadOperatorTradingState requires ${name}`)
+    }
+  }
+  if (typeof engine?.getActiveOrders !== "function") {
+    throw new TypeError("createReadOperatorTradingState requires engine.getActiveOrders")
+  }
+  if (typeof getObservedAt !== "function") {
+    throw new TypeError("getObservedAt must be a function")
+  }
+
+  const execute = createOperatorQueryExecutor({ getObservedAt })
+  const getPositions = createPositionsQuery({ execute, 
+    getPortfolio, 
+    getRecoveryLedger })
+  const getOrders = createOrdersQuery({ execute, 
+    engine, 
+    getOpenOrders })
+  const getBalances = createBalancesQuery({ execute, 
+    getAccountSnapshot, 
+    getObservedAt })
+  return Object.freeze({ getPositions, 
+    getOrders, 
+    getBalances })
 }

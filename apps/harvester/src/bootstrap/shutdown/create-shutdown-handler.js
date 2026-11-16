@@ -5,7 +5,7 @@ import {
   disconnectBroker as disconnectBrokerDefault,
 } from "../broker/cleanup-broker.js"
 
-function logSystem(logger, data) {
+function logSystem({ logger, ...data }) {
   if (typeof logger?.system === "function") {
     logger.system(data)
     return
@@ -39,7 +39,7 @@ function getSafeFailureReason(error) {
 
 function createPhaseRunner({ logger, now, shutdownRequestedAt, shutdownCorrelationId }) {
   const logPhase = ({ phase, status, durationMs, failureReason } = {}) => {
-    logSystem(logger, {
+    logSystem({ logger,
       message: `Harvester shutdown phase ${status.toLowerCase()}`,
       shutdownPhase: phase,
       phaseStatus: status,
@@ -470,9 +470,9 @@ async function auditShutdownRecoverySellCoverage(context) {
     context.auditReasons.push("SHUTDOWN_RECOVERY_SELL_COVERAGE_INCOMPLETE")
     for (const finding of context.recoverySellFindings) {
       context.auditReasons.push(
-        "SHUTDOWN_RECOVERY_SELL_COVERAGE:" + finding.symbol + ":" + finding.reason +
-        ":required=" + (finding.requiredQuantity ?? "unknown") +
-        ":committed=" + (finding.committedQuantity ?? "unknown"),
+        `SHUTDOWN_RECOVERY_SELL_COVERAGE:${  finding.symbol  }:${  finding.reason 
+        }:required=${  finding.requiredQuantity ?? "unknown" 
+        }:committed=${  finding.committedQuantity ?? "unknown"}`,
       )
     }
     context.failureRecorder.logShutdownFailure({

@@ -1,5 +1,5 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest("[recovery-completion.test.js] " + name, ...args)
+const test = (...args) => nodeTest(`[recovery-completion.test.js] ${  args[0]}`, ...args.slice(1))
 import assert from "node:assert/strict"
 import { evaluateRecoveryCompletion } from "./recovery-completion.js"
 
@@ -146,8 +146,8 @@ test("does not complete the actual ZRO recovery while the 0.04 residual remains 
 })
 
 
-test("fails closed when exchange-constrained dust evidence contains non-positive filter values or negative evaluations", () => {
-  const invalidDispositions = [
+function createInvalidDustDispositions() {
+  return [
     {
       status: "EXCHANGE_CONSTRAINED_DUST",
       quantity: "0.1",
@@ -204,7 +204,10 @@ test("fails closed when exchange-constrained dust evidence contains non-positive
       evaluatedNotional: "0",
     },
   ]
+}
 
+test("fails closed when exchange-constrained dust evidence contains non-positive filter values or negative evaluations", () => {
+  const invalidDispositions = createInvalidDustDispositions()
   for (const inventoryDisposition of invalidDispositions) {
     const result = evaluateRecoveryCompletion({
       ...baseInput,

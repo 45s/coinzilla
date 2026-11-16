@@ -11,7 +11,8 @@ const priceEvent = {
 }
 
 test("passes validated price, pair settings, and Portfolio to a plain strategy function", () => {
-  const pairConfig = { enabled: true, orderQuantity: 0.01 }
+  const pairConfig = { enabled: true,
+orderQuantity: 0.01 }
   const settings = {}
   const portfolio = new Portfolio()
   let received
@@ -21,11 +22,17 @@ test("passes validated price, pair settings, and Portfolio to a plain strategy f
       return { action: "NO_ACTION" }
     },
   })
-  const result = processMarketPrice({ symbol: "BTCUSDT", priceEvent, pairConfig, settings, portfolio })
+  const result = processMarketPrice({ symbol: "BTCUSDT",
+priceEvent,
+pairConfig,
+settings,
+portfolio })
 
   assert.equal(result.ok, true)
   assert.deepEqual(received, {
-    marketPrice: { symbol: "BTCUSDT", price: "65000.12", timestamp: 123 },
+    marketPrice: { symbol: "BTCUSDT",
+price: "65000.12",
+timestamp: 123 },
     pairConfig,
     settings,
     portfolio,
@@ -37,7 +44,10 @@ test("rejects a price event routed to a different subscribed market", () => {
   const processMarketPrice = makeProcessMarketPrice({
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
   })
-  const result = processMarketPrice({ symbol: "ETHUSDT", priceEvent, pairConfig: {}, settings: {} })
+  const result = processMarketPrice({ symbol: "ETHUSDT",
+priceEvent,
+pairConfig: {},
+settings: {} })
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /while subscribed to ETHUSDT/)
 })
@@ -48,7 +58,8 @@ test("returns a failed result for invalid broker price events", () => {
   })
   const result = processMarketPrice({
     symbol: "BTCUSDT",
-    priceEvent: { ...priceEvent, price: "invalid" },
+    priceEvent: { ...priceEvent,
+price: "invalid" },
     pairConfig: {},
     settings: {},
   })
@@ -60,7 +71,10 @@ test("returns strategy failures instead of swallowing them", () => {
   const processMarketPrice = makeProcessMarketPrice({
     evaluateStrategy: () => { throw new Error("strategy failed") },
   })
-  const result = processMarketPrice({ symbol: "BTCUSDT", priceEvent, pairConfig: {}, settings: {} })
+  const result = processMarketPrice({ symbol: "BTCUSDT",
+priceEvent,
+pairConfig: {},
+settings: {} })
   assert.equal(result.ok, false)
   assert.equal(result.errors[0].message, "strategy failed")
 })

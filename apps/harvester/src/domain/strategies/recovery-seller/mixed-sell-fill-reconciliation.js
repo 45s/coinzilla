@@ -1,4 +1,4 @@
-import { addDecimal, assertDecimalString, compareDecimal } from "@coinzilla/utils"
+import { SystemCustomError, addDecimal, assertDecimalString, compareDecimal } from "@coinzilla/utils"
 import { CanonicalOrder } from "@coinzilla/entities"
 import { StrategyId } from "../strategy-ids.js"
 import { OrderRegistry } from "../../orders/order-registry.js"
@@ -6,17 +6,21 @@ import { OrderRegistry } from "../../orders/order-registry.js"
 const NON_EMPTY = (value) => typeof value === "string" && value.trim().length > 0
 
 /** A fail-closed Recovery Seller mixed-SELL reconciliation failure. */
-export class MixedSellFillReconciliationError extends Error {
+export class MixedSellFillReconciliationError extends SystemCustomError {
   /**
    * @param {object} options
    * @param {string} options.code Stable RS reconciliation error code.
    * @param {string} options.message Actionable failure description.
    * @param {Error} [options.cause] Original validation failure, when available.
+   * @param {Record<string, string|number|boolean|null>} [options.context] Safe diagnostic facts.
    */
-  constructor({ code, message, cause } = {}) {
-    super(message, { cause })
-    this.name = "MixedSellFillReconciliationError"
-    this.code = code
+  constructor({ code, message, cause, context } = {}) {
+    super(message, {
+      code,
+      cause,
+      retryable: false,
+      ...(context === undefined ? {} : { context }),
+    })
   }
 }
 

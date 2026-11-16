@@ -67,8 +67,12 @@ test("signature payload ignores an existing signature and sorts keys determinist
 
 test("signed params add credentials and timing fields before signing", () => {
   const params = createSignedBinanceParams(
-    { symbol: "BTCUSDT", omitZeroBalances: true },
-    { apiKey, apiSecret, timestamp: 123456, recvWindow: 5000 },
+    { symbol: "BTCUSDT",
+omitZeroBalances: true },
+    { apiKey,
+apiSecret,
+timestamp: 123456,
+recvWindow: 5000 },
   )
 
   assert.deepEqual(params, {
@@ -91,14 +95,22 @@ test("signing rejects unsupported parameter values instead of coercing them", ()
   assert.throws(() => buildBinanceSignaturePayload({ nested: { unsafe: true } }), /must be a string/)
   assert.throws(() => buildBinanceSignaturePayload({ missing: null }), /must be a string/)
   assert.throws(() => signBinanceParams({}, ""), /API secret is required/)
-  assert.throws(() => createSignedBinanceParams({}, { apiKey, apiSecret, timestamp: -1 }), /timestamp/)
-  assert.throws(() => createSignedBinanceParams({}, { apiKey, apiSecret, timestamp: 1, recvWindow: 60_001 }), /recvWindow/)
+  assert.throws(() => createSignedBinanceParams({}, { apiKey,
+apiSecret,
+timestamp: -1 }), /timestamp/)
+  assert.throws(() => createSignedBinanceParams({}, { apiKey,
+apiSecret,
+timestamp: 1,
+recvWindow: 60_001 }), /recvWindow/)
 })
 
 test("signed params accept Binance recvWindow precision up to three decimals", () => {
   const params = createSignedBinanceParams(
     {},
-    { apiKey, apiSecret, timestamp: 123456, recvWindow: 6000.346 },
+    { apiKey,
+apiSecret,
+timestamp: 123456,
+recvWindow: 6000.346 },
   )
   assert.equal(params.recvWindow, 6000.346)
   assert.match(params.signature, /^[a-f0-9]{64}$/)
@@ -108,7 +120,10 @@ test("signed params reject recvWindow precision beyond three decimals", () => {
   assert.throws(
     () => createSignedBinanceParams(
       {},
-      { apiKey, apiSecret, timestamp: 123456, recvWindow: 6000.3461 },
+      { apiKey,
+apiSecret,
+timestamp: 123456,
+recvWindow: 6000.3461 },
     ),
     /recvWindow/,
   )

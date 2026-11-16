@@ -38,6 +38,90 @@ export const fillErrMsgs = {
   unknownCommissions: "Fill.UNKNOWN commission status should not include commission entries",
 }
 
+function validateFillIdentity({ tradeId, brokerOrderId, clientOrderId }) {
+  if (typeof tradeId !== "string" || !tradeId.trim()) {
+    throw new Error(fillErrMsgs.tradeId)
+  }
+  if (typeof brokerOrderId !== "string" || !brokerOrderId.trim()) {
+    throw new Error(fillErrMsgs.brokerOrderId)
+  }
+  if (
+    clientOrderId !== undefined &&
+    clientOrderId !== null &&
+    (typeof clientOrderId !== "string" || !clientOrderId.trim())
+  ) {
+    throw new Error(fillErrMsgs.clientOrderId)
+  }
+}
+
+function validateFillValues({ market, side, price, quantity, quoteQuantity }) {
+  if (!(market instanceof Market)) {
+    throw new Error(fillErrMsgs.market)
+  }
+  if (side !== "BUY" && side !== "SELL") {
+    throw new Error(fillErrMsgs.side)
+  }
+  if (!(price instanceof Money)) {
+    throw new Error(fillErrMsgs.price)
+  }
+  if (!(quantity instanceof Quantity)) {
+    throw new Error(fillErrMsgs.quantity)
+  }
+  if (!(quoteQuantity instanceof Money)) {
+    throw new Error(fillErrMsgs.quoteQuantity)
+  }
+  if (price.asset.id !== market.quoteAsset.id) {
+    throw new Error(fillErrMsgs.priceAsset)
+  }
+  if (quantity.asset.id !== market.baseAsset.id) {
+    throw new Error(fillErrMsgs.quantityAsset)
+  }
+  if (quoteQuantity.asset.id !== market.quoteAsset.id) {
+    throw new Error(fillErrMsgs.quoteQuantityAsset)
+  }
+  if (price.amount === "0" || price.amount.startsWith("-")) {
+    throw new Error(fillErrMsgs.positivePrice)
+  }
+  if (quantity.amount === "0") {
+    throw new Error(fillErrMsgs.positiveQuantity)
+  }
+  if (quoteQuantity.amount === "0" || quoteQuantity.amount.startsWith("-")) {
+    throw new Error(fillErrMsgs.positiveQuoteQuantity)
+  }
+}
+
+function validateFillMetadata({
+  liquidityRole,
+  executedAt,
+  commissions,
+  commissionStatus,
+}) {
+  if (!FILL_LIQUIDITY_ROLES.includes(liquidityRole)) {
+    throw new Error(fillErrMsgs.liquidityRole)
+  }
+  if (
+    executedAt !== undefined &&
+    (!Number.isSafeInteger(executedAt) || executedAt < 0)
+  ) {
+    throw new Error(fillErrMsgs.executedAt)
+  }
+  if (
+    !Array.isArray(commissions) ||
+    Array.from(commissions).some((commission) => !(commission instanceof Commission))
+  ) {
+    throw new Error(fillErrMsgs.commissions)
+  }
+  if (!COMMISSION_STATUSES.includes(commissionStatus)) {
+    throw new Error(fillErrMsgs.commissionStatus)
+  }
+  if (commissionStatus === "PARTIAL" && commissions.length === 0) {
+    throw new Error(fillErrMsgs.partialCommissions)
+  }
+  if (commissionStatus === "UNKNOWN" && commissions.length > 0) {
+    throw new Error(fillErrMsgs.unknownCommissions)
+  }
+}
+
 export class Fill {
   #id
   #tradeId
@@ -67,73 +151,24 @@ export class Fill {
     commissions = [],
     commissionStatus = "UNKNOWN",
   } = {}) {
-    if (typeof tradeId !== "string" || !tradeId.trim()) {
-      throw new Error(fillErrMsgs.tradeId)
-    }
-    if (typeof brokerOrderId !== "string" || !brokerOrderId.trim()) {
-      throw new Error(fillErrMsgs.brokerOrderId)
-    }
-    if (
-      clientOrderId !== undefined &&
-      clientOrderId !== null &&
-      (typeof clientOrderId !== "string" || !clientOrderId.trim())
-    ) {
-      throw new Error(fillErrMsgs.clientOrderId)
-    }
-    if (!(market instanceof Market)) {
-      throw new Error(fillErrMsgs.market)
-    }
-    if (side !== "BUY" && side !== "SELL") {
-      throw new Error(fillErrMsgs.side)
-    }
-    if (!(price instanceof Money)) {
-      throw new Error(fillErrMsgs.price)
-    }
-    if (!(quantity instanceof Quantity)) {
-      throw new Error(fillErrMsgs.quantity)
-    }
-    if (!(quoteQuantity instanceof Money)) {
-      throw new Error(fillErrMsgs.quoteQuantity)
-    }
-    if (price.asset.id !== market.quoteAsset.id) {
-      throw new Error(fillErrMsgs.priceAsset)
-    }
-    if (quantity.asset.id !== market.baseAsset.id) {
-      throw new Error(fillErrMsgs.quantityAsset)
-    }
-    if (quoteQuantity.asset.id !== market.quoteAsset.id) {
-      throw new Error(fillErrMsgs.quoteQuantityAsset)
-    }
-    if (price.amount === "0" || price.amount.startsWith("-")) {
-      throw new Error(fillErrMsgs.positivePrice)
-    }
-    if (quantity.amount === "0") {
-      throw new Error(fillErrMsgs.positiveQuantity)
-    }
-    if (quoteQuantity.amount === "0" || quoteQuantity.amount.startsWith("-")) {
-      throw new Error(fillErrMsgs.positiveQuoteQuantity)
-    }
-    if (!FILL_LIQUIDITY_ROLES.includes(liquidityRole)) {
-      throw new Error(fillErrMsgs.liquidityRole)
-    }
-    if (
-      executedAt !== undefined &&
-      (!Number.isSafeInteger(executedAt) || executedAt < 0)
-    ) {
-      throw new Error(fillErrMsgs.executedAt)
-    }
-    if (!Array.isArray(commissions) || Array.from(commissions).some((commission) => !(commission instanceof Commission))) {
-      throw new Error(fillErrMsgs.commissions)
-    }
-    if (!COMMISSION_STATUSES.includes(commissionStatus)) {
-      throw new Error(fillErrMsgs.commissionStatus)
-    }
-    if (commissionStatus === "PARTIAL" && commissions.length === 0) {
-      throw new Error(fillErrMsgs.partialCommissions)
-    }
-    if (commissionStatus === "UNKNOWN" && commissions.length > 0) {
-      throw new Error(fillErrMsgs.unknownCommissions)
-    }
+    validateFillIdentity({
+      tradeId,
+      brokerOrderId,
+      clientOrderId,
+    })
+    validateFillValues({
+      market,
+      side,
+      price,
+      quantity,
+      quoteQuantity,
+    })
+    validateFillMetadata({
+      liquidityRole,
+      executedAt,
+      commissions,
+      commissionStatus,
+    })
 
     this.#tradeId = tradeId.trim()
     this.#brokerOrderId = brokerOrderId.trim()

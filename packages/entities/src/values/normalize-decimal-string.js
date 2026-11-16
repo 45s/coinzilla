@@ -6,7 +6,9 @@ export function normalizeDecimalString({
   field = "Decimal amount",
 } = {}) {
   try {
-    return toResult({ value: normalizeDecimal({ value, allowNegative, field }) })
+    return toResult({ value: normalizeDecimal({ value,
+allowNegative,
+field }) })
   } catch (error) {
     return toResult({ error })
   }

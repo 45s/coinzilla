@@ -10,10 +10,11 @@ import {
   reconcileMixedSellFillOrder,
 } from "./mixed-sell-fill-reconciliation.js"
 
-function fail({ code, message }) {
+function fail({ code, message, cause }) {
   throw new MixedSellFillReconciliationError({
     code,
     message,
+    cause,
   })
 }
 
@@ -68,12 +69,21 @@ function indexCanonicalFills({ canonicalFills, canonicalFillAllocations, orderRe
       })
     }
     const fill = fillsById.get(allocation.fillId)
-    const expected = createMixedSellFillAllocation({
-      fill,
-      orderRegistry,
-      recoveryQuantity: allocation.recovery?.grossBaseQuantity,
-      legacyQuantity: allocation.legacy?.grossBaseQuantity,
-    })
+    let expected
+    try {
+      expected = createMixedSellFillAllocation({
+        fill,
+        orderRegistry,
+        recoveryQuantity: allocation.recovery?.grossBaseQuantity,
+        legacyQuantity: allocation.legacy?.grossBaseQuantity,
+      })
+    } catch (cause) {
+      fail({
+        code: "RS_MIXED_SELL_RECONCILIATION_INVALID_ALLOCATION",
+        message: `Canonical Fill ${fill.id} could not be allocated from registered execution facts: ${cause?.message ?? String(cause)}.`,
+        cause,
+      })
+    }
     if (expected.fillFingerprint !== allocation.fillFingerprint ||
         expected.allocationFingerprint !== allocation.allocationFingerprint ||
         JSON.stringify(expected.recovery) !== JSON.stringify(allocation.recovery) ||
@@ -198,6 +208,21 @@ function applyProjections({
   }
 }
 
+function applyAtomicProjections(input) {
+  try {
+    return applyProjections(input)
+  } catch (cause) {
+    if (cause instanceof MixedSellFillReconciliationError) {
+      throw cause
+    }
+    return fail({
+      code: "RS_MIXED_SELL_RECONCILIATION_PROJECTION_APPLY_FAILED",
+      message: `The recovery and legacy projections could not be applied atomically: ${cause?.message ?? String(cause)}.`,
+      cause,
+    })
+  }
+}
+
 /**
  * Commit one fully reconciled mixed SELL to both immutable RS accounting
  * projections. The caller publishes the returned Portfolio and legacy
@@ -272,7 +297,7 @@ export function applyReconciledMixedSellOrder({
     reconciliation: terminalResult.reconciliation,
   })
 
-  const projections = applyProjections({
+  const projections = applyAtomicProjections({
     portfolio,
     legacyPosition,
     legacyAccounting,

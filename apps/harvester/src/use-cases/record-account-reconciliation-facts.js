@@ -4,7 +4,7 @@ import { toResult } from "@coinzilla/utils"
 
 const requireAppendPort = ({ operationalStateStore, operation }) => {
   if (typeof operationalStateStore?.append !== "function") {
-    throw new TypeError(operation + " requires a Operational State Store append capability")
+    throw new TypeError(`${operation  } requires a Operational State Store append capability`)
   }
 }
 
@@ -13,7 +13,7 @@ const requireDurableAppend = ({ result, operation }) => {
     return toResult({
       errors: result?.errors?.length
         ? result.errors
-        : [new Error(operation + " append did not confirm durable commitment")],
+        : [new Error(`${operation  } append did not confirm durable commitment`)],
     })
   }
   return result
@@ -34,7 +34,8 @@ const requireDurableAppend = ({ result, operation }) => {
  */
 export async function recordAccountSnapshotCaptured({ operationalStateStore, data } = {}) {
   try {
-    requireAppendPort({ operationalStateStore, operation: "recordAccountSnapshotCaptured" })
+    requireAppendPort({ operationalStateStore,
+operation: "recordAccountSnapshotCaptured" })
     if (!data || typeof data !== "object" || Array.isArray(data) ||
         typeof data.phase !== "string" || !isCanonicalNonNegativeSafeInteger(data.sourceTime) ||
         !Array.isArray(data.balances)) {
@@ -47,11 +48,12 @@ export async function recordAccountSnapshotCaptured({ operationalStateStore, dat
     }
     const assetSetDigest = createHash("sha256").update([...assets].sort().join("\\0")).digest("hex")
     const result = await operationalStateStore.append({
-      factId: "account-snapshot:" + data.phase + ":" + data.sourceTime + ":" + assetSetDigest,
+      factId: `account-snapshot:${  data.phase  }:${  data.sourceTime  }:${  assetSetDigest}`,
       factType: "ACCOUNT_SNAPSHOT_CAPTURED",
       data,
     })
-    return requireDurableAppend({ result, operation: "Account snapshot" })
+    return requireDurableAppend({ result,
+operation: "Account snapshot" })
   } catch (error) {
     return toResult({ error })
   }
@@ -72,17 +74,19 @@ export async function recordAccountSnapshotCaptured({ operationalStateStore, dat
  */
 export async function recordAccountOpenOrdersCaptured({ operationalStateStore, data } = {}) {
   try {
-    requireAppendPort({ operationalStateStore, operation: "recordAccountOpenOrdersCaptured" })
+    requireAppendPort({ operationalStateStore,
+operation: "recordAccountOpenOrdersCaptured" })
     if (!data || typeof data !== "object" || Array.isArray(data) ||
         typeof data.phase !== "string" || !isCanonicalNonNegativeSafeInteger(data.observedAt)) {
       throw new TypeError("recordAccountOpenOrdersCaptured requires a mapped account open-order DTO")
     }
     const result = await operationalStateStore.append({
-      factId: "account-open-orders:" + data.phase + ":" + data.observedAt,
+      factId: `account-open-orders:${  data.phase  }:${  data.observedAt}`,
       factType: "ACCOUNT_OPEN_ORDERS_CAPTURED",
       data,
     })
-    return requireDurableAppend({ result, operation: "Account open-orders snapshot" })
+    return requireDurableAppend({ result,
+operation: "Account open-orders snapshot" })
   } catch (error) {
     return toResult({ error })
   }

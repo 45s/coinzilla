@@ -22,15 +22,24 @@ const validCandle = Object.freeze({
 
 test("validateCandle requires explicit market and interval context", () => {
   assert.throws(
-    () => validateCandle({ candle: validCandle, symbol: "", interval: "1m", intervalMs: 60_000 }),
+    () => validateCandle({ candle: validCandle,
+symbol: "",
+interval: "1m",
+intervalMs: 60_000 }),
     /symbol must be a non-empty string/,
   )
   assert.throws(
-    () => validateCandle({ candle: validCandle, symbol: "BTCUSDT", interval: "", intervalMs: 60_000 }),
+    () => validateCandle({ candle: validCandle,
+symbol: "BTCUSDT",
+interval: "",
+intervalMs: 60_000 }),
     /interval must be a non-empty string/,
   )
   assert.throws(
-    () => validateCandle({ candle: validCandle, symbol: "BTCUSDT", interval: "1m", intervalMs: 0 }),
+    () => validateCandle({ candle: validCandle,
+symbol: "BTCUSDT",
+interval: "1m",
+intervalMs: 0 }),
     /intervalMs must be a positive safe integer/,
   )
 })
@@ -69,9 +78,10 @@ test("calculateVolatilityMetrics validates every calculation input before calcul
 
   for (const [field, value, expectedError] of invalidInputs) {
     assert.throws(
-      () => calculateVolatilityMetrics({ ...validInput, [field]: value }),
+      () => calculateVolatilityMetrics({ ...validInput,
+[field]: value }),
       expectedError,
-      field + " must be validated",
+      `${field  } must be validated`,
     )
   }
 })
@@ -80,7 +90,8 @@ test("calculateVolatilityMetrics validates every calculation input before calcul
 test("rejects negative-zero candle timestamps", () => {
   assert.throws(
     () => validateCandle({
-      candle: { ...validCandle, openTime: -0 },
+      candle: { ...validCandle,
+openTime: -0 },
       symbol: "BTCUSDT",
       interval: "1m",
       intervalMs: 60_000,
@@ -90,7 +101,9 @@ test("rejects negative-zero candle timestamps", () => {
   )
   assert.throws(
     () => validateCandle({
-      candle: { ...validCandle, interval: "1ms", closeTime: -0 },
+      candle: { ...validCandle,
+interval: "1ms",
+closeTime: -0 },
       symbol: "BTCUSDT",
       interval: "1ms",
       intervalMs: 1,

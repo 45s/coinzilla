@@ -8,7 +8,8 @@ function createDeferred() {
   const promise = new Promise((done) => {
     resolve = done
   })
-  return { promise, resolve }
+  return { promise,
+resolve }
 }
 
 function createTestBus({ onError } = {}) {
@@ -23,7 +24,8 @@ function createTestBus({ onError } = {}) {
     onError,
   })
 
-  return { bus, logs }
+  return { bus,
+logs }
 }
 
 test("validates constructor options and callbacks", async () => {
@@ -37,7 +39,8 @@ test("validates constructor options and callbacks", async () => {
   assert.throws(() => new EventBus({ onError: null }), /onError must be a function/)
   assert.throws(() => new EventBus({ loger: {} }), /Unknown EventBus option/)
 
-  const bus = new EventBus({ logger: {}, onError: () => {} })
+  const bus = new EventBus({ logger: {},
+    onError: () => {} })
   assert.equal((await bus.close()).ok, true)
 })
 
@@ -59,10 +62,12 @@ test("rejects malformed event names without normalizing valid names", async () =
   ]
 
   for (const name of invalidNames) {
-    const published = bus.publish({ name, source: "test" })
+    const published = bus.publish({ name,
+      source: "test" })
     assert.equal(published.ok, false, String(name))
     assert.match(published.errors[0].message, /Event name/)
-    const subscribed = bus.subscribe({ name, handler: () => {} })
+    const subscribed = bus.subscribe({ name,
+      handler: () => {} })
     assert.equal(subscribed.ok, false, String(name))
     assert.match(subscribed.errors[0].message, /Event name/)
   }
@@ -73,7 +78,8 @@ test("rejects malformed event names without normalizing valid names", async () =
     name: exactName,
     handler: event => { received = event.name },
   }).ok, true)
-  const published = bus.publish({ name: exactName, source: "test" })
+  const published = bus.publish({ name: exactName,
+    source: "test" })
   assert.equal(published.ok, true)
   await bus.flush()
   assert.equal(received, exactName)
@@ -171,8 +177,10 @@ test("delivers every event to subscribeAll", async () => {
     },
   })
 
-  bus.publish({ name: "bot.started", source: "bot" })
-  bus.publish({ name: "ws.connected", source: "binance" })
+  bus.publish({ name: "bot.started",
+    source: "bot" })
+  bus.publish({ name: "ws.connected",
+    source: "binance" })
 
   await bus.flush()
 
@@ -197,7 +205,8 @@ test("unsubscribe stops future delivery", async () => {
   const { subscription } = result
   assert.equal(subscription.unsubscribe().ok, true)
 
-  bus.publish({ name: "bot.started", source: "bot" })
+  bus.publish({ name: "bot.started",
+    source: "bot" })
 
   await bus.flush()
 
@@ -247,7 +256,8 @@ test("supports asynchronous error handlers", async () => {
   const reportedErrors = []
   const { bus } = createTestBus({
     onError: async ({ error, eventName }) => {
-      reportedErrors.push({ message: error.message, eventName })
+      reportedErrors.push({ message: error.message,
+eventName })
     },
   })
 
@@ -258,7 +268,8 @@ test("supports asynchronous error handlers", async () => {
     },
   })
 
-  bus.publish({ name: "bot.started", source: "bot" })
+  bus.publish({ name: "bot.started",
+    source: "bot" })
 
   await bus.flush()
 
@@ -287,7 +298,8 @@ test("flush waits for pending asynchronous handlers", async () => {
     },
   })
 
-  bus.publish({ name: "bot.started", source: "bot" })
+  bus.publish({ name: "bot.started",
+    source: "bot" })
   await started.promise
 
   let flushCompleted = false
@@ -324,11 +336,13 @@ test("close waits for pending handlers and rejects new work", async () => {
     },
   })
 
-  bus.publish({ name: "bot.started", source: "bot" })
+  bus.publish({ name: "bot.started",
+    source: "bot" })
   await started.promise
 
   const closing = bus.close()
-  assert.equal(bus.publish({ name: "bot.stopped", source: "bot" }).ok, false)
+  assert.equal(bus.publish({ name: "bot.stopped",
+    source: "bot" }).ok, false)
   assert.equal(
     bus.subscribe({
       name: "bot.stopped",
@@ -352,13 +366,16 @@ test("rejects invalid event sources and data payloads", async () => {
   const { bus } = createTestBus()
 
   for (const source of [undefined, null, "", "   ", 123]) {
-    const result = bus.publish({ name: "test.event", source })
+    const result = bus.publish({ name: "test.event",
+source })
     assert.equal(result.ok, false)
     assert.match(result.errors[0].message, /Event source/)
   }
 
   for (const data of [null, [], "text", 123, true]) {
-    const result = bus.publish({ name: "test.event", source: "test", data })
+    const result = bus.publish({ name: "test.event",
+      source: "test",
+data })
     assert.equal(result.ok, false)
     assert.match(result.errors[0].message, /Event data/)
   }
@@ -370,13 +387,15 @@ test("rejects invalid subscription names and handlers", async () => {
   const { bus } = createTestBus()
 
   for (const name of [undefined, null, "", "   ", 123]) {
-    const result = bus.subscribe({ name, handler: () => {} })
+    const result = bus.subscribe({ name,
+      handler: () => {} })
     assert.equal(result.ok, false)
     assert.match(result.errors[0].message, /Event name/)
   }
 
   for (const handler of [undefined, null, "handler", {}]) {
-    const result = bus.subscribe({ name: "test.event", handler })
+    const result = bus.subscribe({ name: "test.event",
+handler })
     assert.equal(result.ok, false)
     assert.match(result.errors[0].message, /Event handler/)
   }
@@ -516,7 +535,8 @@ test("preserves shared references while freezing supported payloads", async () =
   const result = bus.publish({
     name: "test.shared-reference",
     source: "unit-test",
-    data: { first: shared, second: shared },
+    data: { first: shared,
+      second: shared },
   })
 
   assert.equal(result.ok, true)
@@ -546,7 +566,8 @@ test("returns a failure result for functions in event data", async () => {
 
 test("reports unsubscribe state consistently across repeated calls", async () => {
   const { bus } = createTestBus()
-  const result = bus.subscribe({ name: "test.event", handler: () => {} })
+  const result = bus.subscribe({ name: "test.event",
+    handler: () => {} })
   assert.equal(result.ok, true)
   assert.equal(result.subscription.unsubscribe().unsubscribed, true)
   assert.equal(result.subscription.unsubscribe().unsubscribed, false)
@@ -586,7 +607,8 @@ test("passes the original event and source to the error reporter", async () => {
 
 test("defaults omitted event data to an empty object", async () => {
   const { bus } = createTestBus()
-  const result = bus.publish({ name: "test.default-data", source: "unit-test" })
+  const result = bus.publish({ name: "test.default-data",
+    source: "unit-test" })
   assert.equal(result.ok, true)
   assert.deepEqual(result.event.data, {})
   await bus.close()
@@ -594,7 +616,8 @@ test("defaults omitted event data to an empty object", async () => {
 
 test("rejects subscriptions without a function handler", async () => {
   const { bus } = createTestBus()
-  const result = bus.subscribe({ name: "test.event", handler: null })
+  const result = bus.subscribe({ name: "test.event",
+    handler: null })
 
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /Event handler must be a function/)
@@ -725,7 +748,8 @@ test("rejects a publish atomically when its complete fan-out exceeds capacity", 
   let release
   const gate = new Promise(resolve => { release = resolve })
   const received = []
-  const bus = new EventBus({ maxPending: 2, logger: { error() {} } })
+  const bus = new EventBus({ maxPending: 2,
+    logger: { error() {} } })
 
   bus.subscribe({
     name: "capacity.event",
@@ -735,26 +759,32 @@ test("rejects a publish atomically when its complete fan-out exceeds capacity", 
     handler: async () => { received.push("all"); await gate },
   })
 
-  const accepted = bus.publish({ name: "capacity.event", source: "test" })
+  const accepted = bus.publish({ name: "capacity.event",
+    source: "test" })
   assert.equal(accepted.ok, true)
-  const rejected = bus.publish({ name: "capacity.event", source: "test" })
+  const rejected = bus.publish({ name: "capacity.event",
+    source: "test" })
   assert.equal(rejected.ok, false)
   assert.match(rejected.errors[0].message, /pending delivery limit exceeded/)
 
   release()
   await bus.flush()
   assert.deepEqual(received, ["named", "all"])
-  assert.equal(bus.publish({ name: "capacity.event", source: "test" }).ok, true)
+  assert.equal(bus.publish({ name: "capacity.event",
+    source: "test" }).ok, true)
   await bus.close()
 })
 
 test("rejects fan-out before invoking any named or subscribeAll consumer", async () => {
-  const bus = new EventBus({ maxPending: 1, logger: { error() {} } })
+  const bus = new EventBus({ maxPending: 1,
+    logger: { error() {} } })
   let calls = 0
-  bus.subscribe({ name: "fanout.event", handler: () => { calls += 1 } })
+  bus.subscribe({ name: "fanout.event",
+    handler: () => { calls += 1 } })
   bus.subscribeAll({ handler: () => { calls += 1 } })
 
-  const result = bus.publish({ name: "fanout.event", source: "test" })
+  const result = bus.publish({ name: "fanout.event",
+    source: "test" })
   assert.equal(result.ok, false)
   await bus.flush()
   assert.equal(calls, 0)
@@ -762,14 +792,18 @@ test("rejects fan-out before invoking any named or subscribeAll consumer", async
 })
 
 test("accepts publishes without subscribers when no deliveries are scheduled", async () => {
-  const bus = new EventBus({ maxPending: 1, logger: { error() {} } })
-  assert.equal(bus.publish({ name: "unobserved.one", source: "test" }).ok, true)
-  assert.equal(bus.publish({ name: "unobserved.two", source: "test" }).ok, true)
+  const bus = new EventBus({ maxPending: 1,
+    logger: { error() {} } })
+  assert.equal(bus.publish({ name: "unobserved.one",
+    source: "test" }).ok, true)
+  assert.equal(bus.publish({ name: "unobserved.two",
+    source: "test" }).ok, true)
   await bus.close()
 })
 
 test("concurrent publishes cannot exceed the pending-delivery cap", async () => {
-  const bus = new EventBus({ maxPending: 2, logger: { error() {} } })
+  const bus = new EventBus({ maxPending: 2,
+    logger: { error() {} } })
   let release
   const gate = new Promise(resolve => { release = resolve })
   let calls = 0
@@ -779,11 +813,31 @@ test("concurrent publishes cannot exceed the pending-delivery cap", async () => 
   })
 
   const results = [1, 2, 3].map(() =>
-    bus.publish({ name: "concurrent.event", source: "test" }),
+    bus.publish({ name: "concurrent.event",
+      source: "test" }),
   )
   assert.deepEqual(results.map(result => result.ok), [true, true, false])
   release()
   await bus.flush()
   assert.equal(calls, 2)
+  await bus.close()
+})
+
+test("flush ignores option values and retains null rejection", async () => {
+  const { bus } = createTestBus()
+  let getterCalls = 0
+  const options = {}
+
+  Object.defineProperty(options, "ignored", {
+    enumerable: true,
+    get() {
+      getterCalls += 1
+      return true
+    },
+  })
+
+  assert.equal((await bus.flush(options)).ok, true)
+  assert.equal(getterCalls, 0)
+  await assert.rejects(bus.flush(null), TypeError)
   await bus.close()
 })

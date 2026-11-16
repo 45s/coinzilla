@@ -12,8 +12,10 @@ import { createFileOperationalStateStore } from "../../src/infrastructure/operat
 import { confirmMarketHistoryCoverage } from "../../src/use-cases/confirm-market-history-coverage.js"
 import { reconcileRecoveredMarketState } from "../../src/use-cases/reconcile-recovered-market-state.js"
 
-const baseAsset = new Asset({ id: "binance:LINK", code: "LINK" })
-const quoteAsset = new Asset({ id: "binance:USDT", code: "USDT" })
+const baseAsset = new Asset({ id: "binance:LINK",
+code: "LINK" })
+const quoteAsset = new Asset({ id: "binance:USDT",
+code: "USDT" })
 const market = new Market({
   venue: "BINANCE",
   symbol: "LINKUSDT",
@@ -36,7 +38,9 @@ function createProjection({ requiresExchangeReconciliation = true } = {}) {
     data: {
       requiresExchangeReconciliation,
       sessions: requiresExchangeReconciliation
-        ? [{ fileName: "legacy/session", tradingEnabled: true, hasTradingActivity: true }]
+        ? [{ fileName: "legacy/session",
+tradingEnabled: true,
+hasTradingActivity: true }]
         : [],
       accountSnapshots: requiresExchangeReconciliation
         ? [{
@@ -47,8 +51,14 @@ function createProjection({ requiresExchangeReconciliation = true } = {}) {
             auditStatus: "COMPLETE",
             auditReasons: [],
             balances: [
-              { asset: "LINK", free: "0", locked: "0", total: "0" },
-              { asset: "USDT", free: "100", locked: "0", total: "100" },
+              { asset: "LINK",
+free: "0",
+locked: "0",
+total: "0" },
+              { asset: "USDT",
+free: "100",
+locked: "0",
+total: "100" },
             ],
           }]
         : [],
@@ -61,12 +71,16 @@ function createAccountSnapshot({ quoteFree = "100", quoteLocked = "0" } = {}) {
     sourceTime: 300,
     balances: [
       new Balance({
-        free: new Quantity({ amount: "0", asset: baseAsset }),
-        locked: new Quantity({ amount: "0", asset: baseAsset }),
+        free: new Quantity({ amount: "0",
+asset: baseAsset }),
+        locked: new Quantity({ amount: "0",
+asset: baseAsset }),
       }),
       new Balance({
-        free: new Quantity({ amount: quoteFree, asset: quoteAsset }),
-        locked: new Quantity({ amount: quoteLocked, asset: quoteAsset }),
+        free: new Quantity({ amount: quoteFree,
+asset: quoteAsset }),
+        locked: new Quantity({ amount: quoteLocked,
+asset: quoteAsset }),
       }),
     ],
   })
@@ -92,7 +106,8 @@ function createReconciliationOptions(overrides = {}) {
       projection: createProjection(),
       reconcileOwnedOrders: async (options) => {
         calls.push(["reconcileOwnedOrders", options])
-        return { ok: true, data: { reconciledOrders: 0 } }
+        return { ok: true,
+data: { reconciledOrders: 0 } }
       },
       getRecoveredState: async () => {
         calls.push(["getRecoveredState"])
@@ -104,15 +119,18 @@ function createReconciliationOptions(overrides = {}) {
       },
       refreshAccountSnapshot: async () => {
         calls.push(["refreshAccountSnapshot"])
-        return { ok: true, data: createAccountSnapshot() }
+        return { ok: true,
+data: createAccountSnapshot() }
       },
       refreshOpenOrders: async () => {
         calls.push(["refreshOpenOrders"])
-        return { ok: true, data: [] }
+        return { ok: true,
+data: [] }
       },
       fetchMarketTradeHistory: async (query) => {
         calls.push(["fetchMarketTradeHistory", query])
-        return { ok: true, data: createHistory() }
+        return { ok: true,
+data: createHistory() }
       },
       markets: [market],
       targetMarket: market,
@@ -133,7 +151,8 @@ async function withOperationalStateStore(callback) {
     assert.equal(initialized.ok, true, "The test must explicitly initialize its isolated Operational State Store before exercising confirmation.")
     return await callback({ store })
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 }
 
@@ -167,7 +186,8 @@ test("production audit keeps readiness closed when prior trading state is absent
 
 test("production audit rejects incomplete target-market pagination", async () => {
   const { options } = createReconciliationOptions({
-    fetchMarketTradeHistory: async () => ({ ok: true, data: createHistory({ complete: false }) }),
+    fetchMarketTradeHistory: async () => ({ ok: true,
+data: createHistory({ complete: false }) }),
   })
   const result = await reconcileRecoveredMarketState(options)
 
@@ -177,7 +197,8 @@ test("production audit rejects incomplete target-market pagination", async () =>
 
 test("production audit rejects retention evidence scoped to a different market before reads", async () => {
   const { calls, options } = createReconciliationOptions({
-    historyRetentionEvidence: { ...evidence, symbol: "SOLUSDT" },
+    historyRetentionEvidence: { ...evidence,
+symbol: "SOLUSDT" },
   })
   const result = await reconcileRecoveredMarketState(options)
 
@@ -200,9 +221,11 @@ test("production audit blocks only the market with an unowned open order and pre
   const { options } = createReconciliationOptions({
     refreshAccountSnapshot: async () => ({
       ok: true,
-      data: createAccountSnapshot({ quoteFree: "90", quoteLocked: "10" }),
+      data: createAccountSnapshot({ quoteFree: "90",
+quoteLocked: "10" }),
     }),
-    refreshOpenOrders: async () => ({ ok: true, data: [externalOrder] }),
+    refreshOpenOrders: async () => ({ ok: true,
+data: [externalOrder] }),
   })
   const result = await reconcileRecoveredMarketState(options)
 
@@ -268,7 +291,7 @@ test("production Operational State Store record confirmation is idempotent and r
 })
 
 test("production confirmation fails closed when the Operational State Store is missing", async () => {
-  const directory = path.join(tmpdir(), "coinzilla-missing-recovery-ledger-" + process.pid)
+  const directory = path.join(tmpdir(), `coinzilla-missing-recovery-ledger-${  process.pid}`)
   const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "step7-missing-ledger",
@@ -283,7 +306,8 @@ test("production confirmation fails closed when the Operational State Store is m
     verifiedBy: evidence.verifiedBy,
     reconcileMarketState: async () => {
       reconciliationCalled = true
-      return { ok: true, data: {} }
+      return { ok: true,
+data: {} }
     },
   })
 
@@ -296,7 +320,8 @@ test("production confirmation fails closed when the Operational State Store reco
   try {
     const fileSystem = {
       ...nodeFileSystem,
-      open: async (filePath, flags, mode) => {
+      open: async (...openArguments) => {
+        const [filePath, flags, mode] = openArguments;
         if (path.basename(filePath) === "manifest.jsonl" && flags === "a") {
           throw new Error("injected committed-head checkpoint failure")
         }
@@ -327,6 +352,7 @@ test("production confirmation fails closed when the Operational State Store reco
     assert.equal(readback.ok, false, "The same store instance must remain fenced after an uncertain append.")
     assert.equal(readback.errors[0].code, "DURABLE_FACTS_COMMIT_UNCERTAIN", "The ledger must remain fail-closed until a fresh verification path resolves the uncertain commit.")
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
