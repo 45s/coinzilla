@@ -22,8 +22,14 @@ export function calculateVolatilityRatio({
   rounding = "half-up",
 } = {}) {
   validateDecimalScale({ scale: outputScale })
-  assertDecimalString({ value: current, field: "current volatility" })
-  assertDecimalString({ value: reference, field: "reference volatility" })
+  assertDecimalString({
+    value: current,
+    field: "current volatility",
+  })
+  assertDecimalString({
+    value: reference,
+    field: "reference volatility",
+  })
 
   if (compareDecimal({
     left: current,
