@@ -733,6 +733,59 @@ test("keeps inbound operator control disabled without constructing its store or 
   } finally { await runtime.stop() }
 })
 
+function createOperatorControlOperationalStateStore({ calls, appendedFacts }) {
+  return {
+    runtimeSessionId: "test-runtime-session",
+    verify: async () => {
+      calls.push("verify-Operational State Store records")
+      return {
+        ok: true,
+        data: {
+          valid: true,
+          durableWriteSupported: true,
+        },
+      }
+    },
+    readAll: async () => ({
+      ok: true,
+      data: {
+        records: [
+          {
+            sequence: "0",
+            factId: "durable-facts:genesis",
+            factType: "LEDGER_INITIALIZED",
+            runtimeSessionId: "test-runtime-session",
+            data: { schemaVersion: 1 },
+          },
+          ...appendedFacts,
+        ],
+        durableWriteSupported: true,
+        lastCommittedSequence: String(appendedFacts.length),
+        lastCommittedDigest: "a".repeat(64),
+      },
+    }),
+    append: async (fact) => {
+      calls.push(
+        fact.factType === "OPERATOR_MARKET_PAUSED" || fact.factType === "OPERATOR_MARKET_RESUMED"
+          ? "append-operator-fact"
+          : "append-process-fact",
+      )
+      appendedFacts.push({
+        ...fact,
+        sequence: String(appendedFacts.length + 1),
+        runtimeSessionId: "test-runtime-session",
+      })
+      return {
+        ok: true,
+        data: {
+          durable: true,
+          duplicate: false,
+        },
+      }
+    },
+  }
+}
+
 test("starts/stops Telegram CC and applies process-local pause without recovery storage", async () => {
   const config = {
     ...appConfig,
@@ -749,49 +802,10 @@ test("starts/stops Telegram CC and applies process-local pause without recovery 
   let cancelOrderCalls = 0
   broker.placeOrder = async () => { placeOrderCalls += 1; return { ok: true } }
   broker.cancelOrder = async () => { cancelOrderCalls += 1; return { ok: true } }
-  const operationalStateStore = {
-    runtimeSessionId: "test-runtime-session",
-    verify: async () => { calls.push("verify-Operational State Store records"); return {
-      ok: true,
-      data: {
-      valid: true,
-      durableWriteSupported: true
-    }
-    } },
-    readAll: async () => ({
-      ok: true,
-      data: {
-        records: [
-          {
-            sequence: "0",
-            factId: "durable-facts:genesis",
-            factType: "LEDGER_INITIALIZED",
-            runtimeSessionId: "test-runtime-session",
-            data: { schemaVersion: 1 }
-          },
-          ...appendedFacts,
-        ],
-        durableWriteSupported: true,
-        lastCommittedSequence: String(appendedFacts.length),
-        lastCommittedDigest: "a".repeat(64),
-      },
-    }),
-    append: async (fact) => {
-      calls.push(fact.factType === "OPERATOR_MARKET_PAUSED" || fact.factType === "OPERATOR_MARKET_RESUMED" ? "append-operator-fact" : "append-process-fact")
-      appendedFacts.push({
-        ...fact,
-        sequence: String(appendedFacts.length + 1),
-        runtimeSessionId: "test-runtime-session",
-      })
-      return {
-        ok: true,
-        data: {
-        durable: true,
-        duplicate: false
-      }
-      }
-    },
-  }
+  const operationalStateStore = createOperatorControlOperationalStateStore({
+    calls,
+    appendedFacts,
+  })
   const runtime = await startHarvesterForTest({
     loadConfig: async () => config,
     env: {
