@@ -826,8 +826,7 @@ test("operator pause preserves recovery SELL execution while suppressing the sam
   )
   
 
-  await startBothMarkets(eng
-  ine)
+  await startBothMarkets(engine)
 
   
   assert.deepEqual(
