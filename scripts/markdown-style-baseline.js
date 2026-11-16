@@ -461,7 +461,10 @@ export function collectMarkdownStyleBaseline(documents) {
     })
   }
 
-  return { fileCount: documents.length, findings }
+  return {
+    fileCount: documents.length,
+    findings,
+  }
 }
 
 /**
