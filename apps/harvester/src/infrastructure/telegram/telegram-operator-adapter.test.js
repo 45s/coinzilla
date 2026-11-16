@@ -109,45 +109,49 @@ function assertPauseInteractionDiagnostics({ entries }) {
   )
 }
 
-test("polls serially, maps an allowlisted private sender to an actor, and acknowledges pause", async () => {
-  const update = makeUpdate()
-  const calls = []
-  const sentMessages = []
-  const pollRequests = []
-  const diagnosticEntries = []
-  let pollCount = 0
-  let finishSecondPoll
-  const secondPoll = new Promise((resolve) => { finishSecondPoll = resolve })
-  const operator = {
+function createPauseAcknowledgementOperator({ calls }) {
+  return {
     pauseMarket: async (request) => {
       calls.push(request)
       return {
         ok: true,
-        data: { symbol: request.symbol,
-paused: true,
-alreadyPaused: false,
-durable: true },
+        data: {
+          symbol: request.symbol,
+          paused: true,
+          alreadyPaused: false,
+          durable: true,
+        },
         errors: [],
       }
     },
   }
+}
+
+function createPauseAcknowledgementFetch({ update, sentMessages, pollRequests }) {
+  let pollCount = 0
+  let finishSecondPoll
+  const secondPoll = new Promise((resolve) => {
+    finishSecondPoll = resolve
+  })
   const fetchImpl = async (...telegramFetchArguments) => {
     const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") {
-      return makeResponse({ ok: true,
-result: { id: 99,
-username: "coinzilla_bot" } })
+      return makeResponse({
+        ok: true,
+        result: { id: 99, username: "coinzilla_bot" },
+      })
     }
     if (telegramApiMethod === "getUpdates") {
       const params = JSON.parse(telegramRequestOptions.body)
       pollRequests.push(params)
       pollCount += 1
-      if (pollCount === 1) {return makeResponse({ ok: true,
-result: [update] })}
+      if (pollCount === 1) {
+        return makeResponse({ ok: true, result: [update] })
+      }
       finishSecondPoll()
-      return new Promise((...args) => {
-        const [, reject] = args
+      return new Promise((...promiseArguments) => {
+        const [, reject] = promiseArguments
         telegramRequestOptions.signal.addEventListener("abort", () => {
           reject(new Error("poll aborted"))
         }, { once: true })
@@ -155,11 +159,25 @@ result: [update] })}
     }
     if (telegramApiMethod === "sendMessage") {
       sentMessages.push(JSON.parse(telegramRequestOptions.body))
-      return makeResponse({ ok: true,
-result: { message_id: 200 } })
+      return makeResponse({ ok: true, result: { message_id: 200 } })
     }
     throw new Error(`Unexpected Telegram API method: ${telegramApiMethod}`)
   }
+  return { fetchImpl, secondPoll }
+}
+
+test("polls serially, maps an allowlisted private sender to an actor, and acknowledges pause", async () => {
+  const update = makeUpdate()
+  const calls = []
+  const sentMessages = []
+  const pollRequests = []
+  const diagnosticEntries = []
+  const operator = createPauseAcknowledgementOperator({ calls })
+  const { fetchImpl, secondPoll } = createPauseAcknowledgementFetch({
+    update,
+    sentMessages,
+    pollRequests,
+  })
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
     allowedUserIds: ["12345"],
@@ -180,8 +198,10 @@ result: { message_id: 200 } })
 
   assert.equal(calls.length, 1)
   assert.deepEqual(calls[0], {
-    actor: { id: "telegram-user:12345",
-roles: ["trading-operator"] },
+    actor: {
+      id: "telegram-user:12345",
+      roles: ["trading-operator"],
+    },
     requestId: "telegram:100:1700000000:12345",
     symbol: "LINKUSDT",
   })
@@ -189,10 +209,13 @@ roles: ["trading-operator"] },
   assert.equal(sentMessages[0].chat_id, 12345)
   assert.match(sentMessages[0].text, /Paused LINKUSDT/)
   assert.match(sentMessages[0].text, /Existing exchange orders remain open and may still fill/)
-  assert.equal(pollRequests[1].offset, 101, "The update offset must advance only after the command and reply are handled.")
+  assert.equal(
+    pollRequests[1].offset,
+    101,
+    "The update offset must advance only after the command and reply are handled.",
+  )
   assertPauseInteractionDiagnostics({ entries: diagnosticEntries })
 })
-
 test("does not invoke the application for a user outside the private-chat allowlist", async () => {
   const update = makeUpdate({ userId: 99999,
 chatId: 99999,
