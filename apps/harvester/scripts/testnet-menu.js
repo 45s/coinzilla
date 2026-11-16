@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process"
-import { createInterface, emitKeypressEvents } from "node:readline"
+import { emitKeypressEvents } from "node:readline"
 import { createInterface as createPromptInterface } from "node:readline/promises"
 import { stdin, stdout } from "node:process"
 import { pathToFileURL } from "node:url"
@@ -56,6 +56,8 @@ const waitForKeypress = () => new Promise((resolve) => {
 key }))
 })
 
+const stderrWrite = (message) => process.stderr.write(message)
+
 const runAction = async (action) => {
   const args = await collectArguments(action)
   stdout.write(`\nExecuting: ${action.script}${args.length ? ` ${args.join(" ")}` : ""}\n\n`)
@@ -74,8 +76,6 @@ const runAction = async (action) => {
 
   await prompt("\nPress Enter to return to the menu...")
 }
-
-const stderrWrite = (message) => process.stderr.write(message)
 
 export const runTestnetMenu = async () => {
   if (typeof stdin.setRawMode !== "function" || !stdin.isTTY) {
