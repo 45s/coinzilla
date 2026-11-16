@@ -16,7 +16,10 @@ test("SQLite connects and executes parameterized SQL", async () => {
 
     assert.deepEqual(
       database.prepare("SELECT id, name FROM users").all().map((row) => ({ ...row })),
-      [{ id: 1, name: "Morty" }],
+      [{
+        id: 1,
+        name: "Morty",
+      }],
     )
     assert.equal(database.state, "connected")
   } finally {
@@ -120,13 +123,19 @@ test("SQLite file databases persist data after closing and reopening", async () 
     try {
       assert.deepEqual(
         { ...second.prepare("SELECT key, value FROM settings").get() },
-        { key: "mode", value: "test" },
+        {
+          key: "mode",
+          value: "test",
+        },
       )
     } finally {
       await second.close()
     }
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+     recursive: true,
+     force: true,
+   })
   }
 })
 
@@ -155,8 +164,14 @@ test("SQLite enforces foreign keys", async () => {
 test("SQLite rejects missing or invalid options", () => {
   assert.throws(() => createSqliteDatabase(), /filename/)
   assert.throws(() => createSqliteDatabase({ filename: "" }), /filename/)
-  assert.throws(() => createSqliteDatabase({ filename: ":memory:", timeout: -1 }), /timeout/)
-  assert.throws(() => createSqliteDatabase({ filename: ":memory:", timeout: 1.5 }), /timeout/)
+  assert.throws(() => createSqliteDatabase({
+    filename: ":memory:",
+    timeout: -1,
+  }), /timeout/)
+  assert.throws(() => createSqliteDatabase({
+    filename: ":memory:",
+    timeout: 1.5,
+  }), /timeout/)
 })
 
 test("SQLite operations require an open connection", async () => {
