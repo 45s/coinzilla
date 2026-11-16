@@ -84,6 +84,31 @@ function normalizeDeals({ value }) {
   return [value]
 }
 
+function getExecutedQuantityComparison({ dealVolume }) {
+  const executedQuantity = assertDecimalString({
+    value: dealVolume,
+    field: "Bitunix Spot order detail dealVolume",
+  })
+  const comparison = compareDecimal({
+    left: executedQuantity,
+    right: "0",
+  })
+  if (comparison < 0) {
+    throw new TypeError("Bitunix Spot order detail dealVolume must be non-negative")
+  }
+  return comparison
+}
+
+function validateFillResponsePresence({ executedQuantityComparison, deals }) {
+  if (executedQuantityComparison > 0 && deals.length === 0) {
+    throw new Error("Bitunix Spot order reports positive dealVolume but matching-order response is empty")
+  }
+  if (executedQuantityComparison === 0 && deals.length > 0) {
+    throw new Error("Bitunix Spot order reports zero executed quantity but matching-order response contains data")
+  }
+}
+
+
 function isOpenMarket({ symbolInfo }) {
   return symbolInfo?.isOpen === "1" || symbolInfo?.isOpen === 1
 }
@@ -455,17 +480,9 @@ export class BitunixSpotBroker extends CoreBroker {
           String(order.symbol).toUpperCase() !== normalizedSymbol) {
         throw new TypeError("Bitunix Spot fill lookup order identity does not match the request")
       }
-      const executedQuantity = assertDecimalString({
-        value: order.dealVolume,
-        field: "Bitunix Spot order detail dealVolume",
+      const executedQuantityComparison = getExecutedQuantityComparison({
+        dealVolume: order.dealVolume,
       })
-      const executedQuantityComparison = compareDecimal({
-        left: executedQuantity,
-        right: "0",
-      })
-      if (executedQuantityComparison < 0) {
-        throw new TypeError("Bitunix Spot order detail dealVolume must be non-negative")
-      }
       const marketResponse = await this.restClient.request({
         method: "GET",
         path: API.markets,
@@ -496,12 +513,7 @@ export class BitunixSpotBroker extends CoreBroker {
         },
       })
       const deals = normalizeDeals({ value: dealsResponse.data })
-      if (executedQuantityComparison > 0 && deals.length === 0) {
-        throw new Error("Bitunix Spot order reports positive dealVolume but matching-order response is empty")
-      }
-      if (executedQuantityComparison === 0 && deals.length > 0) {
-        throw new Error("Bitunix Spot order reports zero executed quantity but matching-order response contains data")
-      }
+      validateFillResponsePresence({ executedQuantityComparison, deals })
       return toResult({
         data: deals.map((trade) => adaptCanonicalFill({
           trade: {
