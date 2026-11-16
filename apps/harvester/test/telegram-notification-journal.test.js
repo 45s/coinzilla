@@ -10,7 +10,8 @@ import { subscribeHarvesterTelegramNotifications } from "../src/bootstrap/notifi
 test("durably journals a blocked multi-symbol open-orders Telegram safety alert", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "harvester-telegram-journal-"))
   const eventBus = new EventBus()
-  const journal = new Journal({ eventBus, directory })
+  const journal = new Journal({ eventBus,
+directory })
   const notificationsSent = []
   const safetyAlerts = []
   let notifications
@@ -35,7 +36,8 @@ test("durably journals a blocked multi-symbol open-orders Telegram safety alert"
           notificationsSent.push(message)
         },
       },
-      telegramConfig: { enabled: true, profile: "trader" },
+      telegramConfig: { enabled: true,
+profile: "trader" },
       logger: { error() {} },
     })
 
@@ -59,7 +61,8 @@ test("durably journals a blocked multi-symbol open-orders Telegram safety alert"
       data: {
         broker: "binance",
         stream: "user-data",
-        error: { name: "Error", message: "user-data stream unavailable" },
+        error: { name: "Error",
+message: "user-data stream unavailable" },
       },
     })
     assert.equal(
@@ -75,8 +78,8 @@ test("durably journals a blocked multi-symbol open-orders Telegram safety alert"
     assert.equal(
       flushed.ok,
       true,
-      "The Journal must accept and durably flush the multi-symbol safety alert instead of rejecting an undefined symbol: " +
-        (flushed.errors?.[0]?.message ?? "unknown Journal failure"),
+      `The Journal must accept and durably flush the multi-symbol safety alert instead of rejecting an undefined symbol: ${ 
+        flushed.errors?.[0]?.message ?? "unknown Journal failure"}`,
     )
     assert.equal(flushed.durable, true, "A successful startup audit flush must confirm durable Journal persistence.")
 
@@ -123,6 +126,7 @@ test("durably journals a blocked multi-symbol open-orders Telegram safety alert"
       await journal.close()
     }
     await eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })

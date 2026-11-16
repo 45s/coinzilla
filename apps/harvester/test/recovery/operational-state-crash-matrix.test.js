@@ -19,29 +19,39 @@ import { recordRecoveryCycleNotCompleted } from "../../src/use-cases/record-reco
 import { recordSafetyBlockerRaised, recordStrategyMarketControl } from "../../src/use-cases/record-safety-control-facts.js"
 import { restoreHarvesterOperationalState } from "../../src/use-cases/restore-harvester-operational-state.js"
 
-const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
-const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "BTCUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({ id: "asset:BTC",
+code: "BTC" })
+const quoteAsset = new Asset({ id: "asset:USDT",
+code: "USDT" })
+const market = new Market({ venue: "binance",
+symbol: "BTCUSDT",
+baseAsset,
+quoteAsset })
 const appConfig = {
   strategies: {
     conservative: {
       pairs: {
-        BTCUSDT: { enabled: true, keepQuantity: 0.01, minProfit: 0.01 },
+        BTCUSDT: { enabled: true,
+keepQuantity: 0.01,
+minProfit: 0.01 },
       },
     },
   },
 }
 const createDirectory = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-durable-crash-matrix-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   return directory
 }
 const createStore = (directory, runtimeSessionId = "crash-matrix-process-1") =>
-  createFileOperationalStateStore({ directory, runtimeSessionId })
+  createFileOperationalStateStore({ directory,
+runtimeSessionId })
 const initializeProcess = async (store) => {
   const initialized = await store.initialize()
   assert.equal(initialized.ok, true, initialized.errors?.map(({ message }) => message).join("; "))
-  const baseline = await recordConfigurationBaseline({ operationalStateStore: store, appConfig })
+  const baseline = await recordConfigurationBaseline({ operationalStateStore: store,
+appConfig })
   assert.equal(baseline.ok, true, baseline.errors?.map(({ message }) => message).join("; "))
   const started = await recordProcessStarted({
     operationalStateStore: store,
@@ -70,9 +80,12 @@ const makeOrder = ({
   market,
   side,
   type: "LIMIT",
-  limitPrice: new Money({ amount: price, asset: quoteAsset }),
-  originalQuantity: new Quantity({ amount: quantity, asset: baseAsset }),
-  executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+  limitPrice: new Money({ amount: price,
+asset: quoteAsset }),
+  originalQuantity: new Quantity({ amount: quantity,
+asset: baseAsset }),
+  executedQuantity: new Quantity({ amount: executedQuantity,
+asset: baseAsset }),
   status,
   createdAt: 1_700_000_000_000,
   ...(status !== "PENDING" ? { acknowledgedAt: 1_700_000_000_001 } : {}),
@@ -82,7 +95,7 @@ const makeOrder = ({
 const acknowledge = ({ clientOrderId, side, quantity, price }) =>
   makeOrder({
     clientOrderId,
-    brokerOrderId: "broker-" + clientOrderId,
+    brokerOrderId: `broker-${  clientOrderId}`,
     side,
     quantity,
     price,
@@ -96,19 +109,31 @@ const makeFill = ({ tradeId, clientOrderId, brokerOrderId, side, quantity, quote
     brokerOrderId,
     market,
     side,
-    price: new Money({ amount: price, asset: quoteAsset }),
-    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
-    quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+    price: new Money({ amount: price,
+asset: quoteAsset }),
+    quantity: new Quantity({ amount: quantity,
+asset: baseAsset }),
+    quoteQuantity: new Money({ amount: quoteQuantity,
+asset: quoteAsset }),
     liquidityRole: "MAKER",
     executedAt: 1_700_000_000_010,
     commissionStatus: "COMPLETE",
     commissions: [],
   })
 const persistOrder = async ({ store, clientOrderId, side, quantity, price, purpose = null }) => {
-  const pending = makeOrder({ clientOrderId, side, quantity, price })
-  const intent = await recordOrderSubmissionIntent({ operationalStateStore: store, order: pending, purpose })
+  const pending = makeOrder({ clientOrderId,
+side,
+quantity,
+price })
+  const intent = await recordOrderSubmissionIntent({ operationalStateStore: store,
+order: pending,
+purpose })
   assert.equal(intent.ok, true, intent.errors?.map(({ message }) => message).join("; "))
-  const acknowledged = acknowledge({ clientOrderId, side, quantity, price, purpose })
+  const acknowledged = acknowledge({ clientOrderId,
+side,
+quantity,
+price,
+purpose })
   const outcome = await recordOrderSubmissionOutcome({
     operationalStateStore: store,
     order: acknowledged,
@@ -119,7 +144,8 @@ const persistOrder = async ({ store, clientOrderId, side, quantity, price, purpo
   return acknowledged
 }
 const applyFill = async ({ store, fill }) => {
-  const result = await recordExecutionFill({ operationalStateStore: store, fill })
+  const result = await recordExecutionFill({ operationalStateStore: store,
+fill })
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
 }
 
@@ -134,7 +160,8 @@ test("reopens the real append-only ledger after intent, acknowledgement, and fil
     quantity: "0.02",
     price: "100",
   })
-  const intent = await recordOrderSubmissionIntent({ operationalStateStore: store, order: pending })
+  const intent = await recordOrderSubmissionIntent({ operationalStateStore: store,
+order: pending })
   assert.equal(intent.ok, true, intent.errors?.map(({ message }) => message).join("; "))
 
   const afterIntent = await readCandidate(directory, "crash-reader-after-intent")
@@ -177,7 +204,8 @@ test("reopens the real append-only ledger after intent, acknowledgement, and fil
     quoteQuantity: "2",
     price: "100",
   })
-  await applyFill({ store, fill })
+  await applyFill({ store,
+fill })
 
   const afterFill = await readCandidate(directory, "crash-reader-after-fill")
   assert.equal(afterFill.ok, true, afterFill.errors?.map(({ message }) => message).join("; "))
@@ -224,14 +252,19 @@ async function recordNotCompletedRecoveryCycle({ store } = {}) {
     quoteQuantity: "40",
     price: "100",
   })
-  await applyFill({ store, fill: buyFill })
-  await applyFill({ store, fill: sellFill })
+  await applyFill({ store,
+fill: buyFill })
+  await applyFill({ store,
+fill: sellFill })
 
-  const portfolio = new Portfolio()
-    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
-    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+  const {portfolio} = new Portfolio()
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER })
   const recoveryLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
     .applyFill({
       fill: sellFill,
       strategyId: StrategyId.COIN_GRABBER,
@@ -304,12 +337,19 @@ test("reopens a completed cycle with exact retained inventory and reset recovery
   await initializeProcess(store)
 
   const buyOrder = await persistOrder({
-    store, clientOrderId: "crash-matrix-completed-buy", side: "BUY",
-    quantity: "2", price: "65000",
+    store,
+clientOrderId: "crash-matrix-completed-buy",
+side: "BUY",
+    quantity: "2",
+price: "65000",
   })
   const sellOrder = await persistOrder({
-    store, clientOrderId: "crash-matrix-completed-sell", side: "SELL",
-    quantity: "1", price: "130005", purpose: "RECOVERY_SELL",
+    store,
+clientOrderId: "crash-matrix-completed-sell",
+side: "SELL",
+    quantity: "1",
+price: "130005",
+purpose: "RECOVERY_SELL",
   })
   const buyFill = makeFill({
     tradeId: "crash-matrix-completed-buy-fill",
@@ -329,15 +369,21 @@ test("reopens a completed cycle with exact retained inventory and reset recovery
     quoteQuantity: "130005",
     price: "130005",
   })
-  await applyFill({ store, fill: buyFill })
-  await applyFill({ store, fill: sellFill })
+  await applyFill({ store,
+fill: buyFill })
+  await applyFill({ store,
+fill: sellFill })
 
-  const portfolio = new Portfolio()
-    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
-    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+  const {portfolio} = new Portfolio()
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER })
   const recoveryLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
-    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
   const position = portfolio.getPosition({ marketId: market.id })
   const evaluated = evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,

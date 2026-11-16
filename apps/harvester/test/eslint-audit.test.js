@@ -4,7 +4,8 @@ import { ESLint } from "eslint";
 import { relative } from "node:path";
 
 test("Harvester test files have no ESLint errors or warnings", async () => {
-  const eslint = new ESLint({ cwd: process.cwd(), fix: true });
+  const eslint = new ESLint({ cwd: process.cwd(),
+fix: true });
   const results = await eslint.lintFiles(["test"]);
 
   for (const result of results) {

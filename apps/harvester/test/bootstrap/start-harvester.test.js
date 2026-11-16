@@ -58,7 +58,7 @@ const createTestCandle = ({
   isClosed,
 })
 const startHarvesterForTest = (input = {}) => {
-  let eventPublisher = input.eventPublisher
+  let {eventPublisher} = input
   if (!eventPublisher) {
     eventPublisher = testEventPublisher
   } else if (input.env?.NODE_ENV === "development" && typeof eventPublisher.flush !== "function") {
@@ -79,7 +79,7 @@ function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 2000) {
       let diagnostics
       try { diagnostics = getDiagnostics?.() } catch (error) { diagnostics = String(error) }
       reject(new Error(
-        "Timed out waiting for " + label + (diagnostics === undefined ? "" : ": " + JSON.stringify(diagnostics)),
+        `Timed out waiting for ${  label  }${diagnostics === undefined ? "" : `: ${  JSON.stringify(diagnostics)}`}`,
       ))
     }, timeoutMs)
     Promise.resolve(promise).then(
@@ -145,8 +145,10 @@ test('loads the default validated strategy and pair configuration', async () => 
 
 
 function createOrdinaryTradeMarket() {
-  const baseAsset = new Asset({ id: 'asset-zro', code: 'ZRO' })
-  const quoteAsset = new Asset({ id: 'asset-usdt', code: 'USDT' })
+  const baseAsset = new Asset({ id: 'asset-zro',
+code: 'ZRO' })
+  const quoteAsset = new Asset({ id: 'asset-usdt',
+code: 'USDT' })
   const market = new Market({
     venue: 'binance',
     symbol: 'ZROUSDT',
@@ -159,22 +161,26 @@ function createOrdinaryTradeMarket() {
       {
         type: 'PRICE_INCREMENT',
         status: 'SUPPORTED',
-        value: new Money({ amount: '0.001', asset: quoteAsset }),
+        value: new Money({ amount: '0.001',
+asset: quoteAsset }),
       },
       {
         type: 'QUANTITY_INCREMENT',
         status: 'SUPPORTED',
-        value: new Quantity({ amount: '0.01', asset: baseAsset }),
+        value: new Quantity({ amount: '0.01',
+asset: baseAsset }),
       },
       {
         type: 'MIN_QUANTITY',
         status: 'SUPPORTED',
-        value: new Quantity({ amount: '0.01', asset: baseAsset }),
+        value: new Quantity({ amount: '0.01',
+asset: baseAsset }),
       },
       {
         type: 'MIN_NOTIONAL',
         status: 'SUPPORTED',
-        value: new Money({ amount: '1', asset: quoteAsset }),
+        value: new Money({ amount: '1',
+asset: quoteAsset }),
       },
     ],
   })
@@ -194,12 +200,16 @@ function createOrdinaryTradeMarket() {
 function createOrdinaryTradeBalances({ baseAsset, quoteAsset } = {}) {
   return [
     new Balance({
-      free: new Quantity({ amount: '25', asset: baseAsset }),
-      locked: new Quantity({ amount: '2', asset: baseAsset }),
+      free: new Quantity({ amount: '25',
+asset: baseAsset }),
+      locked: new Quantity({ amount: '2',
+asset: baseAsset }),
     }),
     new Balance({
-      free: new Quantity({ amount: '1000', asset: quoteAsset }),
-      locked: new Quantity({ amount: '0', asset: quoteAsset }),
+      free: new Quantity({ amount: '1000',
+asset: quoteAsset }),
+      locked: new Quantity({ amount: '0',
+asset: quoteAsset }),
     }),
   ]
 }
@@ -259,9 +269,12 @@ function createOrdinaryTradeOrderPorts({ market, baseAsset, quoteAsset, state } 
         market,
         side: order.side,
         type: order.type,
-        limitPrice: new Money({ amount: order.price, asset: quoteAsset }),
-        originalQuantity: new Quantity({ amount: order.quantity, asset: baseAsset }),
-        executedQuantity: new Quantity({ amount: '0', asset: baseAsset }),
+        limitPrice: new Money({ amount: order.price,
+asset: quoteAsset }),
+        originalQuantity: new Quantity({ amount: order.quantity,
+asset: baseAsset }),
+        executedQuantity: new Quantity({ amount: '0',
+asset: baseAsset }),
         status: 'OPEN',
       })
       state.canonicalOrders.set(submitted.brokerOrderId, submitted)
@@ -300,7 +313,8 @@ function createOrdinaryTradeAccountPorts({ market, marketMetadata, balances, sta
     },
     getSymbolFilters: async () => toResult({ data: marketMetadata }),
     getExchangeMarkets: async () => toResult({ data: [market] }),
-    getPrices: async () => toResult({ data: { symbol: 'ZROUSDT', price: '1' } }),
+    getPrices: async () => toResult({ data: { symbol: 'ZROUSDT',
+price: '1' } }),
   }
 }
 
@@ -308,11 +322,13 @@ function createOrdinaryTradeMarketDataPorts({ state } = {}) {
   return {
     getCandles: async ({ symbol } = {}) => toResult({
       data: Array.from({ length: 100 }, (_, index) =>
-        createTestCandle({ symbol, openTime: index * 60_000 })),
+        createTestCandle({ symbol,
+openTime: index * 60_000 })),
     }),
     subscribeForCandles: async ({ symbol, onCandle } = {}) => {
       for (const index of [100, 101, 102]) {
-        await onCandle(createTestCandle({ symbol, openTime: index * 60_000 }))
+        await onCandle(createTestCandle({ symbol,
+openTime: index * 60_000 }))
       }
       return toResult({ data: { unsubscribe: async () => {} } })
     },
@@ -355,8 +371,14 @@ function createOrdinaryTradeBroker({ market, baseAsset, quoteAsset, marketMetada
   return {
     connect: async () => {},
     disconnect: async () => {},
-    ...createOrdinaryTradeOrderPorts({ market, baseAsset, quoteAsset, state }),
-    ...createOrdinaryTradeAccountPorts({ market, marketMetadata, balances, state }),
+    ...createOrdinaryTradeOrderPorts({ market,
+baseAsset,
+quoteAsset,
+state }),
+    ...createOrdinaryTradeAccountPorts({ market,
+marketMetadata,
+balances,
+state }),
     ...createOrdinaryTradeMarketDataPorts({ state }),
     ...createOrdinaryTradeUserDataPort({ state }),
     get lastOrder() {
@@ -395,9 +417,12 @@ function createOrdinaryTradeFill({ market, baseAsset, quoteAsset, buyIntent } = 
     market,
     side: 'BUY',
     type: 'LIMIT_MAKER',
-    limitPrice: new Money({ amount: buyIntent.price, asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: buyIntent.quantity, asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: '0', asset: baseAsset }),
+    limitPrice: new Money({ amount: buyIntent.price,
+asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: buyIntent.quantity,
+asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: '0',
+asset: baseAsset }),
     status: 'OPEN',
   })
   const fill = new Fill({
@@ -407,7 +432,8 @@ function createOrdinaryTradeFill({ market, baseAsset, quoteAsset, buyIntent } = 
     market,
     side: 'BUY',
     price: submittedOrder.limitPrice,
-    quantity: new Quantity({ amount: '10', asset: baseAsset }),
+    quantity: new Quantity({ amount: '10',
+asset: baseAsset }),
     quoteQuantity: new Money({
       amount: String(Number(buyIntent.price) * Number(buyIntent.quantity)),
       asset: quoteAsset,
@@ -424,10 +450,12 @@ function createOrdinaryTradeFill({ market, baseAsset, quoteAsset, buyIntent } = 
     type: 'LIMIT_MAKER',
     limitPrice: submittedOrder.limitPrice,
     originalQuantity: submittedOrder.originalQuantity,
-    executedQuantity: new Quantity({ amount: '10', asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: '10',
+asset: baseAsset }),
     status: 'FILLED',
   })
-  return { fill, filledOrder }
+  return { fill,
+filledOrder }
 }
 
 function assertOrdinaryTradeStartup({ context, broker, state, market } = {}) {
@@ -477,7 +505,10 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     broker,
     state,
   }))
-  assertOrdinaryTradeStartup({ context, broker, state, market: marketContext.market })
+  assertOrdinaryTradeStartup({ context,
+broker,
+state,
+market: marketContext.market })
   const { fill, filledOrder } = createOrdinaryTradeFill({
     ...marketContext,
     buyIntent: broker.lastOrder,
@@ -504,12 +535,14 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     2000,
   )
   await context.stop()
-  assertOrdinaryTradeShutdown({ context, state, market: marketContext.market })
+  assertOrdinaryTradeShutdown({ context,
+state,
+market: marketContext.market })
 })
 
 function createVolatilityTestMetadata({ symbol, baseCode } = {}) {
   const baseAsset = new Asset({
-    id: "asset-" + baseCode.toLowerCase(),
+    id: `asset-${  baseCode.toLowerCase()}`,
     code: baseCode,
   })
   const quoteAsset = new Asset({
@@ -579,7 +612,7 @@ function createVolatilityTestMarkets() {
     })],
   ])
   const markets = [...metadataBySymbol.values()].map(({ market }) => market)
-  const quoteAsset = markets[0].quoteAsset
+  const {quoteAsset} = markets[0]
   const balances = [
     ...markets.map((market) => new Balance({
       free: new Quantity({
@@ -902,10 +935,10 @@ async function assertVolatilityTestShutdown({ context, state }) {
   assert.equal(
     shutdownError,
     undefined,
-    "multi-market shutdown must reconcile both canceled BUY orders successfully; diagnostic logs: " +
+    `multi-market shutdown must reconcile both canceled BUY orders successfully; diagnostic logs: ${ 
       JSON.stringify(state.diagnosticLogs.filter(({ message }) =>
         message === "Shutdown order reconciliation failed" ||
-        message === "paused a trading pair")),
+        message === "paused a trading pair"))}`,
   )
   assert.deepEqual(
     state.candleUnsubscriptions.sort(),

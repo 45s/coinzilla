@@ -62,7 +62,7 @@ function waitForSubmittedOrder(submittedCanonicalOrders, submittedOrderWaiters, 
   const getOrders = () => submittedCanonicalOrders.filter(matches)
   const existing = getOrders()
   if (existing.length >= occurrence)
-    return Promise.resolve(existing[occurrence - 1])
+    {return Promise.resolve(existing[occurrence - 1])}
   return new Promise((resolve, reject) => {
     const waiter = {
       matches,
@@ -74,10 +74,10 @@ function waitForSubmittedOrder(submittedCanonicalOrders, submittedOrderWaiters, 
     }
     const timeout = setTimeout(() => {
       const index = submittedOrderWaiters.indexOf(waiter)
-      if (index >= 0) submittedOrderWaiters.splice(index, 1)
+      if (index >= 0) {submittedOrderWaiters.splice(index, 1)}
       reject(new Error(
-        "Timed out waiting for " + marketSymbol + " " + side + " order #" + occurrence +
-        "; observed " + getOrders().length + " matching orders",
+        `Timed out waiting for ${  marketSymbol  } ${  side  } order #${  occurrence 
+        }; observed ${  getOrders().length  } matching orders`,
       ))
     }, 5000)
     submittedOrderWaiters.push(waiter)
@@ -116,7 +116,7 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
   const notifyOrderWaiters = () => {
     for (let index = submittedOrderWaiters.length - 1; index >= 0; index -= 1) {
       const waiter = submittedOrderWaiters[index]
-      if (!waiter.isReady()) continue
+      if (!waiter.isReady()) {continue}
       submittedOrderWaiters.splice(index, 1)
       waiter.resolve()
     }
@@ -126,15 +126,15 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
     waitForSubmittedOrder(submittedCanonicalOrders, submittedOrderWaiters, marketSymbol, side, occurrence)
 
   const waitForRecoveryCycleCompletion = () => {
-    if (recoveryCycleCompletionResult) return Promise.resolve(recoveryCycleCompletionResult)
+    if (recoveryCycleCompletionResult) {return Promise.resolve(recoveryCycleCompletionResult)}
     return new Promise((resolve, reject) => {
       const resolveCycle = (data) => {
         clearTimeout(timeout)
         resolve(data)
       }
       const timeout = setTimeout(() => {
-        if (recoveryCycleCompletionWaiter === resolveCycle) recoveryCycleCompletionWaiter = undefined
-        reject(new Error("Timed out waiting for recovery.cycle_completed for " + marketSymbol))
+        if (recoveryCycleCompletionWaiter === resolveCycle) {recoveryCycleCompletionWaiter = undefined}
+        reject(new Error(`Timed out waiting for recovery.cycle_completed for ${  marketSymbol}`))
       }, 5000)
       recoveryCycleCompletionWaiter = resolveCycle
     })
@@ -155,16 +155,20 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
     }
     broker.tradingConnection.request = async (method, params = {}) => {
       if (method === "order.place") {
-        brokerOrderPlacementRequests.push({ method, params: { ...params } })
+        brokerOrderPlacementRequests.push({ method,
+params: { ...params } })
       }
       if (method === "exchangeInfo") {
         return { data: { symbols: [dogeExchangeInfo] } }
       }
       if (method === "myFilters") {
-        return { data: { symbolFilters: [], exchangeFilters: [], assetFilters: [] } }
+        return { data: { symbolFilters: [],
+exchangeFilters: [],
+assetFilters: [] } }
       }
       if (method === "ticker.price") {
-        return { data: { symbol: marketSymbol, price: scenarioExpectations.initialPrice } }
+        return { data: { symbol: marketSymbol,
+price: scenarioExpectations.initialPrice } }
       }
       if (method === "order.place") {
         const timestamp = Date.now()
@@ -184,7 +188,7 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
           },
         }
       }
-      throw new Error("Unexpected simulated Binance RPC method: " + method)
+      throw new Error(`Unexpected simulated Binance RPC method: ${  method}`)
     }
 
     const createCanonicalOrder = broker.createCanonicalOrder.bind(broker)
@@ -247,13 +251,15 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
       data: {
         sourceTime: Date.now(),
         balances: [marketSymbol.slice(0, -4), "USDT"].map((code) => {
-          const asset = new Asset({ id: code.toLowerCase(), code })
+          const asset = new Asset({ id: code.toLowerCase(),
+code })
           return new Balance({
             free: new Quantity({
               amount: code === "USDT" ? "1000" : "0",
               asset,
             }),
-            locked: new Quantity({ amount: "0", asset }),
+            locked: new Quantity({ amount: "0",
+asset }),
           })
         }),
       },
@@ -272,7 +278,8 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
               : order.market.quoteAsset
             const commissions = executionFill.commissionAmount && executionFill.commissionAmount !== "0"
               ? [new Commission({
-                amount: new Money({ amount: executionFill.commissionAmount, asset: commissionAsset }),
+                amount: new Money({ amount: executionFill.commissionAmount,
+asset: commissionAsset }),
               })]
               : []
             // Match adaptCanonicalFill: Binance REST and user-data fills do not
@@ -282,9 +289,12 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
               brokerOrderId,
               market: order.market,
               side: executionFill.side,
-              price: new Money({ amount: executionFill.price, asset: order.market.quoteAsset }),
-              quantity: new Quantity({ amount: executionFill.quantity, asset: order.market.baseAsset }),
-              quoteQuantity: new Money({ amount: executionFill.quoteQuantity, asset: order.market.quoteAsset }),
+              price: new Money({ amount: executionFill.price,
+asset: order.market.quoteAsset }),
+              quantity: new Quantity({ amount: executionFill.quantity,
+asset: order.market.baseAsset }),
+              quoteQuantity: new Money({ amount: executionFill.quoteQuantity,
+asset: order.market.quoteAsset }),
               liquidityRole: executionFill.isMaker ? "MAKER" : "TAKER",
               executedAt: executionFill.time,
               commissions,
@@ -304,7 +314,7 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
     // allowing the newly composed candle service to reach Binance.
     broker.getCandles = async ({ symbol: requestedSymbol, interval, limit = 101 } = {}) => {
       if (requestedSymbol !== marketSymbol || interval !== "1m") {
-        throw new Error("Unexpected simulated candle request: " + requestedSymbol + " " + interval)
+        throw new Error(`Unexpected simulated candle request: ${  requestedSymbol  } ${  interval}`)
       }
       return {
         ok: true,
@@ -340,7 +350,7 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
       return {
         ok: true,
         data: {
-          stream: requestedSymbol.toLowerCase() + "@kline_" + interval,
+          stream: `${requestedSymbol.toLowerCase()  }@kline_${  interval}`,
           unsubscribe: async () => {},
         },
       }
@@ -355,7 +365,8 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
         receivedMarketPriceEvents.push(event)
         return onPrice(event)
       })
-      return { ok: true, data: { unsubscribe: async () => {} } }
+      return { ok: true,
+data: { unsubscribe: async () => {} } }
     }
     broker.subscribeForBookTicker = async () => ({
       ok: true,
@@ -365,10 +376,10 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
       const brokerOrderId = String(orderId)
       const order = exchangeOrderHistory.get(brokerOrderId)
       if (!order)
-        return {
+        {return {
           ok: false,
           errors: [new Error("simulated exchange order not found")],
-        }
+        }}
       const timestamp = Date.now()
       const canceledCanonicalOrder = new CanonicalOrder({
         clientOrderId: order.clientOrderId,
@@ -388,7 +399,8 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
       exchangeOpenOrders.delete(order.clientOrderId)
       exchangeOrderHistory.set(brokerOrderId, canceledCanonicalOrder)
       confirmedCanceledOrders.push(canceledCanonicalOrder)
-      return { ok: true, data: canceledCanonicalOrder }
+      return { ok: true,
+data: canceledCanonicalOrder }
     }
     return broker
   }
@@ -416,7 +428,8 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
         }
         return { ok: true }
       },
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({ ok: true,
+durable: true }),
     },
     logger: {
       info() {},
@@ -429,7 +442,7 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
 
   const publishMarketPrice = async (price) => {
     const marketPriceHandler = marketPriceEventHandlers.get(marketSymbol)
-    assert.equal(typeof marketPriceHandler, "function", marketSymbol + " must have an active market-price subscription before a price event is published")
+    assert.equal(typeof marketPriceHandler, "function", `${marketSymbol  } must have an active market-price subscription before a price event is published`)
     await marketPriceHandler({
       eventType: "aggTrade",
       eventTime: Date.now(),
@@ -447,7 +460,8 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
 
   const publishFullOrderFill = async ({ order, price, tradeId }) => {
     const executedBaseQuantity = order.originalQuantity.amount
-    const executedQuoteQuantity = multiplyDecimal({ left: price, right: executedBaseQuantity })
+    const executedQuoteQuantity = multiplyDecimal({ left: price,
+right: executedBaseQuantity })
     const executionCommissionRate = percentageToRate({
       percent: String(
         order.type === "LIMIT_MAKER" ? marketConfiguration.makerPercent : marketConfiguration.takerPercent,
@@ -469,7 +483,8 @@ export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
       type: order.type,
       limitPrice: order.limitPrice,
       originalQuantity: order.originalQuantity,
-      executedQuantity: new Quantity({ amount: executedBaseQuantity, asset: order.market.baseAsset }),
+      executedQuantity: new Quantity({ amount: executedBaseQuantity,
+asset: order.market.baseAsset }),
       status: "FILLED",
       createdAt: order.createdAt,
       acknowledgedAt: order.acknowledgedAt,
@@ -553,7 +568,9 @@ async function submitFirstBuyAndWaitForRecoveryOrders(dogeTradingReplay) {
       recoverySellOrderSubmitted,
       nextStandingBuyOrderSubmitted,
     ])
-    return { initialBuyOrder, recoverySellOrder, nextStandingBuyOrder }
+    return { initialBuyOrder,
+recoverySellOrder,
+nextStandingBuyOrder }
   } catch (error) {
     const runtimeErrorDetails = dogeTradingReplay.harvesterRuntimeErrors.map(
       (runtimeError) => ({
@@ -566,7 +583,7 @@ async function submitFirstBuyAndWaitForRecoveryOrders(dogeTradingReplay) {
         ),
       }),
     )
-    error.message += "\nHarvester runtime errors: " + JSON.stringify(runtimeErrorDetails)
+    error.message += `\nHarvester runtime errors: ${  JSON.stringify(runtimeErrorDetails)}`
     throw error
   }
 }

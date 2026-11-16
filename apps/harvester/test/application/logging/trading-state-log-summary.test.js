@@ -9,7 +9,8 @@ import {
 } from "../../../src/application/logging/trading-state-log-summary.js"
 
 const position = {
-  market: { id: "market-zro-usdt", symbol: "ZROUSDT" },
+  market: { id: "market-zro-usdt",
+symbol: "ZROUSDT" },
   quantity: { amount: "10" },
   spent: { amount: "10.5" },
   baseQuantity: { amount: "10" },
@@ -88,18 +89,23 @@ test("portfolio log summary is scoped to the evaluated market and exposes only a
 
 test("missing portfolio positions and ledgers are represented as null", () => {
   assert.deepEqual(createPortfolioLogSummary({
-    portfolio: { appliedFillIds: [], getPosition: () => undefined },
+    portfolio: { appliedFillIds: [],
+getPosition: () => undefined },
     marketId: "market-zro-usdt",
-  }), { position: null, appliedFillCount: 0 })
+  }), { position: null,
+appliedFillCount: 0 })
   assert.equal("appliedFillFingerprints" in createPortfolioLogSummary({
-    portfolio: { appliedFillIds: [], getPosition: () => undefined },
+    portfolio: { appliedFillIds: [],
+getPosition: () => undefined },
     marketId: "market-zro-usdt",
   }), false)
   assert.equal(createPositionLogSummary({}), null)
   assert.equal(createRecoveryLedgerLogSummary({}), null)
   assert.deepEqual(createPortfolioLogSummary({
-    portfolio: { appliedFillIds: [], getPosition: () => { throw new Error("must not query without market id") } },
-  }), { position: null, appliedFillCount: 0 })
+    portfolio: { appliedFillIds: [],
+getPosition: () => { throw new Error("must not query without market id") } },
+  }), { position: null,
+appliedFillCount: 0 })
 })
 
 

@@ -28,7 +28,9 @@ const createDeferred = () => {
     resolve = resolvePromise
     reject = rejectPromise
   })
-  return { promise, resolve, reject }
+  return { promise,
+resolve,
+reject }
 }
 
 const createFixture = ({
@@ -43,8 +45,10 @@ const createFixture = ({
   getVolatilityData,
   pausedMarkets = [],
 } = {}) => {
-  const baseAsset = new Asset({ id: "asset-zro", code: "ZRO" })
-  const quoteAsset = new Asset({ id: "asset-usdt", code: "USDT" })
+  const baseAsset = new Asset({ id: "asset-zro",
+code: "ZRO" })
+  const quoteAsset = new Asset({ id: "asset-usdt",
+code: "USDT" })
   const market = new Market({
     venue: "binance",
     symbol: "ZROUSDT",
@@ -54,10 +58,22 @@ const createFixture = ({
   const tradingRules = new TradingRules({
     market,
     constraints: [
-      { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.001", asset: quoteAsset }) },
-      { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.01", asset: baseAsset }) },
-      { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "0.01", asset: baseAsset }) },
-      { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "1", asset: quoteAsset }) },
+      { type: "PRICE_INCREMENT",
+status: "SUPPORTED",
+value: new Money({ amount: "0.001",
+asset: quoteAsset }) },
+      { type: "QUANTITY_INCREMENT",
+status: "SUPPORTED",
+value: new Quantity({ amount: "0.01",
+asset: baseAsset }) },
+      { type: "MIN_QUANTITY",
+status: "SUPPORTED",
+value: new Quantity({ amount: "0.01",
+asset: baseAsset }) },
+      { type: "MIN_NOTIONAL",
+status: "SUPPORTED",
+value: new Money({ amount: "1",
+asset: quoteAsset }) },
     ],
   })
   const marketMetadata = {
@@ -70,12 +86,16 @@ const createFixture = ({
     sourceTime: 1,
     balances: [
       new Balance({
-        free: new Quantity({ amount: "1000", asset: quoteAsset }),
-        locked: new Quantity({ amount: "0", asset: quoteAsset }),
+        free: new Quantity({ amount: "1000",
+asset: quoteAsset }),
+        locked: new Quantity({ amount: "0",
+asset: quoteAsset }),
       }),
       new Balance({
-        free: new Quantity({ amount: "0", asset: baseAsset }),
-        locked: new Quantity({ amount: "0", asset: baseAsset }),
+        free: new Quantity({ amount: "0",
+asset: baseAsset }),
+        locked: new Quantity({ amount: "0",
+asset: baseAsset }),
       }),
     ],
   })
@@ -101,9 +121,12 @@ const createFixture = ({
         market,
         side: order.side,
         type: order.type,
-        limitPrice: new Money({ amount: order.price, asset: quoteAsset }),
-        originalQuantity: new Quantity({ amount: order.quantity, asset: baseAsset }),
-        executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+        limitPrice: new Money({ amount: order.price,
+asset: quoteAsset }),
+        originalQuantity: new Quantity({ amount: order.quantity,
+asset: baseAsset }),
+        executedQuantity: new Quantity({ amount: "0",
+asset: baseAsset }),
         status: "OPEN",
       })
       if (order.side === "SELL" && deferSell) {
@@ -140,7 +163,8 @@ const createFixture = ({
     strategies: {
       CG_coinGrabber: {
         enabled: true,
-        settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
+        settings: { conservative: { enabled: true },
+aggressive: { enabled: false } },
         pairs: {
       ZROUSDT: {
         enabled: true,
@@ -167,14 +191,17 @@ const createFixture = ({
     getMarketMetadata: () => marketMetadata,
     getAccountSnapshot: () => accountSnapshot,
     updateTradingAccounting: ({ fill } = {}) => {
-      const result = applyTradingAccounting({ portfolio, recoveryLedger, fill })
+      const result = applyTradingAccounting({ portfolio,
+recoveryLedger,
+fill })
       if (result.ok) {
         portfolio = result.data.portfolio
         recoveryLedger = result.data.recoveryLedger
       }
       return result
     },
-    completeRecoveryCycle: () => toResult({ data: { eligible: true, freeQuantity: "1" } }),
+    completeRecoveryCycle: () => toResult({ data: { eligible: true,
+freeQuantity: "1" } }),
     canTrade: () => ready,
     hasUnownedOpenOrdersForSymbol,
     hasUnresolvedHarvesterOpenOrdersForSymbol,
@@ -194,7 +221,8 @@ const createFixture = ({
       market,
       side: acknowledgedOrder.side,
       price: acknowledgedOrder.limitPrice,
-      quantity: new Quantity({ amount: quantity, asset: baseAsset }),
+      quantity: new Quantity({ amount: quantity,
+asset: baseAsset }),
       quoteQuantity: new Money({
         amount: String(Number(acknowledgedOrder.limitPrice.amount) * Number(quantity)),
         asset: quoteAsset,
@@ -211,7 +239,8 @@ const createFixture = ({
       type: acknowledgedOrder.type,
       limitPrice: acknowledgedOrder.limitPrice,
       originalQuantity: acknowledgedOrder.originalQuantity,
-      executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+      executedQuantity: new Quantity({ amount: executedQuantity,
+asset: baseAsset }),
       status,
     })
     return {
@@ -271,7 +300,10 @@ test("readiness closing after PENDING registration removes the local order witho
 
   const result = await execute({
     decision: {
-      actions: [{ side: "BUY", type: "LIMIT_MAKER", quantity: "10", price: "1" }],
+      actions: [{ side: "BUY",
+type: "LIMIT_MAKER",
+quantity: "10",
+price: "1" }],
     },
     marketMetadata: fixture.marketMetadata,
   })
@@ -289,7 +321,9 @@ test("reports a structured reason when an executable LIMIT_MAKER intent has no m
   const fixture = createFixture()
   const result = await fixture.engine.processMarketPrice({
     symbol: "ZROUSDT",
-    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+    priceEvent: { symbol: "ZROUSDT",
+price: "1",
+timestamp: 1 },
   })
 
   assert.equal(result.ok, true, "A missing post-only book is a successful safety deferral, not a broker error.")
@@ -315,7 +349,9 @@ test("reports a structured reason and quote context when a LIMIT_MAKER intent wo
   })
   const result = await fixture.engine.processMarketPrice({
     symbol: "ZROUSDT",
-    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+    priceEvent: { symbol: "ZROUSDT",
+price: "1",
+timestamp: 1 },
   })
 
   assert.equal(result.data.deferred, true, "A crossing post-only intent must be deferred before exchange I/O.")
@@ -342,7 +378,9 @@ test("reports a structured reason when the book becomes stale at the final submi
   })
   const result = await fixture.engine.processMarketPrice({
     symbol: "ZROUSDT",
-    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+    priceEvent: { symbol: "ZROUSDT",
+price: "1",
+timestamp: 1 },
   })
 
   assert.equal(result.data.deferred, true, "The final gate must not authorize a maker order using a book that has become stale.")
@@ -358,7 +396,9 @@ test("reports a structured reason when market-price data becomes stale at the fi
   })
   const result = await fixture.engine.processMarketPrice({
     symbol: "ZROUSDT",
-    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+    priceEvent: { symbol: "ZROUSDT",
+price: "1",
+timestamp: 1 },
   })
 
   assert.equal(result.data.deferred, true, "A price that becomes stale after strategy evaluation must be deferred before broker I/O.")
@@ -370,12 +410,15 @@ test("reports a structured reason when market-price data becomes stale at the fi
 test("reports a structured reason when volatility history is unavailable", async () => {
   const fixture = createFixture({
     getVolatilityData: () => toResult({
-      data: { status: { isReady: false }, metrics: { volatilityRatio: null } },
+      data: { status: { isReady: false },
+metrics: { volatilityRatio: null } },
     }),
   })
   const result = await fixture.engine.processMarketPrice({
     symbol: "ZROUSDT",
-    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+    priceEvent: { symbol: "ZROUSDT",
+price: "1",
+timestamp: 1 },
   })
 
   assert.equal(result.data.deferred, true, "Unavailable volatility history must fail closed before broker submission.")
@@ -387,12 +430,15 @@ test("reports a structured reason when volatility history is unavailable", async
 test("reports a structured reason when volatility protection is active", async () => {
   const fixture = createFixture({
     getVolatilityData: () => toResult({
-      data: { status: { isReady: true }, metrics: { volatilityRatio: "2" } },
+      data: { status: { isReady: true },
+metrics: { volatilityRatio: "2" } },
     }),
   })
   const result = await fixture.engine.processMarketPrice({
     symbol: "ZROUSDT",
-    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+    priceEvent: { symbol: "ZROUSDT",
+price: "1",
+timestamp: 1 },
   })
 
   assert.equal(result.data.deferred, true, "An ordinary strategy BUY must be withheld while its market is above the protection threshold.")
@@ -407,7 +453,9 @@ test("reports the existing pre-evaluation skip for a safety-paused market", asyn
   const fixture = createFixture({ pausedMarkets: ["ZROUSDT"] })
   const result = await fixture.engine.processMarketPrice({
     symbol: "ZROUSDT",
-    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+    priceEvent: { symbol: "ZROUSDT",
+price: "1",
+timestamp: 1 },
   })
 
   assert.equal(result.data.skipped, true, "A safety-paused market must stop before strategy evaluation.")
@@ -422,7 +470,9 @@ test("reports the existing pre-evaluation skip when unowned open orders exist", 
   })
   const result = await fixture.engine.processMarketPrice({
     symbol: "ZROUSDT",
-    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+    priceEvent: { symbol: "ZROUSDT",
+price: "1",
+timestamp: 1 },
   })
 
   assert.equal(result.data.skipped, true, "The explicit block policy must stop evaluation when a manual order is open.")
@@ -434,7 +484,8 @@ test("ignores manual external open orders by default", async () => {
   const fixture = createFixture({
     hasUnownedOpenOrdersForSymbol: () => true,
     getVolatilityData: () => toResult({
-      data: { status: { isReady: true }, metrics: { volatilityRatio: "1" } },
+      data: { status: { isReady: true },
+metrics: { volatilityRatio: "1" } },
     }),
   })
   await fixture.engine.processBookTicker({
@@ -450,7 +501,9 @@ test("ignores manual external open orders by default", async () => {
   })
   const result = await fixture.engine.processMarketPrice({
     symbol: "ZROUSDT",
-    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+    priceEvent: { symbol: "ZROUSDT",
+price: "1",
+timestamp: 1 },
   })
 
   assert.equal(result.ok, true, "Manual external orders must not prevent the default strategy from evaluating.")
@@ -462,7 +515,9 @@ test("allows a Harvester-prefixed startup order under the default external-order
   const fixture = createFixture({ hasUnownedOpenOrdersForSymbol: () => true })
   const result = await fixture.engine.processMarketPrice({
     symbol: "ZROUSDT",
-    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+    priceEvent: { symbol: "ZROUSDT",
+price: "1",
+timestamp: 1 },
   })
 
   assert.equal(result.ok, true, "A prior-process order must not make a valid market-price event fail.")
@@ -479,9 +534,12 @@ test("ignores unmatched manual execution reports without mutating Harvester acco
     market: fixture.market,
     side: "SELL",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "1.01", asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+    limitPrice: new Money({ amount: "1.01",
+asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1",
+asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: fixture.market.baseAsset }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -505,9 +563,12 @@ test("keeps unmatched Harvester client IDs fail-closed under the default externa
     market: fixture.market,
     side: "SELL",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "1.01", asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+    limitPrice: new Money({ amount: "1.01",
+asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1",
+asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: fixture.market.baseAsset }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -517,7 +578,9 @@ test("keeps unmatched Harvester client IDs fail-closed under the default externa
   const result = await fixture.engine.processUserDataEvent({ event: { executedOrder: harvesterOrder } })
 
   assert.equal(result.ok, false, "An unmatched Harvester-generated ID must not be ignored as a manual order.")
-  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY", stage: "ORDER_REGISTRY_MATCH", retryable: false },
+  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY",
+stage: "ORDER_REGISTRY_MATCH",
+retryable: false },
     "An unresolved Harvester order must retain the ownership-integrity failure.")
 })
 
@@ -529,9 +592,12 @@ test("retains fail-closed handling for manual external execution reports when po
     market: fixture.market,
     side: "SELL",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "1.01", asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+    limitPrice: new Money({ amount: "1.01",
+asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1",
+asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: fixture.market.baseAsset }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -541,7 +607,9 @@ test("retains fail-closed handling for manual external execution reports when po
   const result = await fixture.engine.processUserDataEvent({ event: { executedOrder: externalOrder } })
 
   assert.equal(result.ok, false, "The explicit block policy must preserve fail-closed handling of manual order reports.")
-  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY", stage: "ORDER_REGISTRY_MATCH", retryable: false },
+  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY",
+stage: "ORDER_REGISTRY_MATCH",
+retryable: false },
     "The block policy must retain the established ownership-integrity failure.")
 })
 
@@ -555,9 +623,12 @@ test("PENDING orders remain explicitly uncancellable", () => {test("ignores unma
     market: fixture.market,
     side: "SELL",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "1.01", asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+    limitPrice: new Money({ amount: "1.01",
+asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1",
+asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: fixture.market.baseAsset }),
     status: "OPEN",
   })
 
@@ -578,16 +649,21 @@ test("keeps unmatched Harvester client IDs fail-closed under the default externa
     market: fixture.market,
     side: "SELL",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "1.01", asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+    limitPrice: new Money({ amount: "1.01",
+asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1",
+asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: fixture.market.baseAsset }),
     status: "OPEN",
   })
 
   const result = await fixture.engine.processUserDataEvent({ event: { executedOrder: harvesterOrder } })
 
   assert.equal(result.ok, false, "An unmatched Harvester-generated ID must not be ignored as a manual order.")
-  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY", stage: "ORDER_REGISTRY_MATCH", retryable: false })
+  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY",
+stage: "ORDER_REGISTRY_MATCH",
+retryable: false })
 })
 
 test("retains fail-closed handling for manual external execution reports when policy is block", async () => {
@@ -598,21 +674,27 @@ test("retains fail-closed handling for manual external execution reports when po
     market: fixture.market,
     side: "SELL",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "1.01", asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+    limitPrice: new Money({ amount: "1.01",
+asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1",
+asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: fixture.market.baseAsset }),
     status: "OPEN",
   })
 
   const result = await fixture.engine.processUserDataEvent({ event: { executedOrder: externalOrder } })
 
   assert.equal(result.ok, false)
-  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY", stage: "ORDER_REGISTRY_MATCH", retryable: false })
+  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY",
+stage: "ORDER_REGISTRY_MATCH",
+retryable: false })
 })
 
 
   const result = validateCancellationEligibility({
-    order: { status: "PENDING", brokerOrderId: undefined },
+    order: { status: "PENDING",
+brokerOrderId: undefined },
   })
 
   assert.equal(result.ok, false)
@@ -625,7 +707,9 @@ test("deferred strategy evaluation resumes without another market-price tick", a
 
   const deferred = await engine.processMarketPrice({
     symbol: "ZROUSDT",
-    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+    priceEvent: { symbol: "ZROUSDT",
+price: "1",
+timestamp: 1 },
   })
   assert.equal(deferred.data.reason, "TRADING_NOT_READY")
   assert.equal(submittedIntents.length, 0)
@@ -649,7 +733,8 @@ test("deferred strategy evaluation resumes without another market-price tick", a
 })
 
 test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel its exact ID and replace from latest fills", async () => {
-  const fixture = createFixture({ deferFirstSell: true, deferCancellation: true })
+  const fixture = createFixture({ deferFirstSell: true,
+deferCancellation: true })
   const {
     engine,
     submittedIntents,
@@ -688,7 +773,9 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
   })
   await engine.processMarketPrice({
     symbol: "ZROUSDT",
-    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+    priceEvent: { symbol: "ZROUSDT",
+price: "1",
+timestamp: 1 },
   })
   const initialBuyIntent = submittedIntents[0]
   const initialBuy = new CanonicalOrder({
@@ -697,9 +784,12 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
     market: fixture.market,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: initialBuyIntent.price, asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: initialBuyIntent.quantity, asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+    limitPrice: new Money({ amount: initialBuyIntent.price,
+asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: initialBuyIntent.quantity,
+asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: fixture.market.baseAsset }),
     status: "OPEN",
   })
 
@@ -735,9 +825,12 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
     market: fixture.market,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: secondBuyIntent.price, asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: secondBuyIntent.quantity, asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+    limitPrice: new Money({ amount: secondBuyIntent.price,
+asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: secondBuyIntent.quantity,
+asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: fixture.market.baseAsset }),
     status: "OPEN",
   })
 
@@ -777,7 +870,8 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
     executedQuantity: "2",
     status: "PARTIALLY_FILLED",
   })
-  setFillsForOrder({ orderId: pendingSellOrder.brokerOrderId, fills: [sellFillEvent.fill] })
+  setFillsForOrder({ orderId: pendingSellOrder.brokerOrderId,
+fills: [sellFillEvent.fill] })
   const delayedSellReport = engine.processUserDataEvent({ event: sellFillEvent })
   pendingCancel.resolve(toResult({
     data: new CanonicalOrder({
@@ -788,7 +882,8 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
       type: pendingSellOrder.type,
       limitPrice: pendingSellOrder.limitPrice,
       originalQuantity: pendingSellOrder.originalQuantity,
-      executedQuantity: new Quantity({ amount: "2", asset: fixture.market.baseAsset }),
+      executedQuantity: new Quantity({ amount: "2",
+asset: fixture.market.baseAsset }),
       status: "CANCELED",
     }),
   }))
@@ -803,7 +898,7 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
   assert.equal(
     canceledRecoverySellOrders.length,
     2,
-    "Exactly two earlier recovery SELL orders should be canceled: the initial protection order and the interim replacement created after the partial BUY fill. Actual canceled orders: " + JSON.stringify(canceledRecoverySellOrders.map((order) => order.value)) + "; broker cancellations: " + JSON.stringify(cancellations),
+    `Exactly two earlier recovery SELL orders should be canceled: the initial protection order and the interim replacement created after the partial BUY fill. Actual canceled orders: ${  JSON.stringify(canceledRecoverySellOrders.map((order) => order.value))  }; broker cancellations: ${  JSON.stringify(cancellations)}`,
   )
   const replacementSellOrder = canceledRecoverySellOrders.find(
     (order) => order.clientOrderId !== pendingSellOrder.clientOrderId,
@@ -865,11 +960,13 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
   assert.equal(
     recoverySellSubmissionIntents.length,
     3,
-    "Expected exactly three recovery SELL submissions: initial protection after the first BUY; interim protection after the second BUY's partial fill; and final protection after its remaining fill plus the canceled SELL's partial execution were reconciled. Each distinct BUY-fill state requires its own protected inventory quantity. Actual SELL submissions: " + JSON.stringify(recoverySellSubmissionIntents.map(({ clientOrderId, quantity, price }) => ({ clientOrderId, quantity, price }))),
+    `Expected exactly three recovery SELL submissions: initial protection after the first BUY; interim protection after the second BUY's partial fill; and final protection after its remaining fill plus the canceled SELL's partial execution were reconciled. Each distinct BUY-fill state requires its own protected inventory quantity. Actual SELL submissions: ${  JSON.stringify(recoverySellSubmissionIntents.map(({ clientOrderId, quantity, price }) => ({ clientOrderId,
+quantity,
+price })))}`,
   )
   assert.equal(
     recoverySellSubmissionIntents[2].quantity,
     "17",
-    "The final recovery SELL (third submission) must protect the latest reconciled inventory: 10 initial BUY + 10 later BUY - 2 partial SELL - 1 retained keepQuantity = 17. Actual SELL submissions: " + JSON.stringify(recoverySellSubmissionIntents.map(({ quantity }) => quantity)),
+    `The final recovery SELL (third submission) must protect the latest reconciled inventory: 10 initial BUY + 10 later BUY - 2 partial SELL - 1 retained keepQuantity = 17. Actual SELL submissions: ${  JSON.stringify(recoverySellSubmissionIntents.map(({ quantity }) => quantity))}`,
   )
 })

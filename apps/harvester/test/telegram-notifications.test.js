@@ -3,15 +3,27 @@ import assert from "node:assert/strict"
 import { main as startMain } from "../src/index.js"
 
 const disabledJournalService = () => ({
-  ready: Promise.resolve({ ok: true, disabled: true }),
-  status: { state: "disabled", enabled: false },
-  flush: async () => ({ ok: true, durable: true }),
-  close: async () => ({ ok: true, closed: true, disabled: true }),
+  ready: Promise.resolve({ ok: true,
+disabled: true }),
+  status: { state: "disabled",
+enabled: false },
+  flush: async () => ({ ok: true,
+durable: true }),
+  close: async () => ({ ok: true,
+closed: true,
+disabled: true }),
 })
 
 const runMain = (options = {}) => {
   const { env = {}, ...rest } = options
-  return startMain({ acquireProcessLock: async () => ({ ok: true, release: async () => ({ ok: true }) }), createOperationalStateStore: () => ({ verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }) }), ...rest, env: { TRADING_MODE: "testnet", ...env } })
+  return startMain({ acquireProcessLock: async () => ({ ok: true,
+release: async () => ({ ok: true }) }),
+createOperationalStateStore: () => ({ verify: async () => ({ ok: true,
+data: { valid: true,
+durableWriteSupported: true } }) }),
+...rest,
+env: { TRADING_MODE: "testnet",
+...env } })
 }
 
 test("sends allowlisted Harvester lifecycle, pause, fill, and recovery notifications", async () => {
@@ -38,7 +50,8 @@ test("sends allowlisted Harvester lifecycle, pause, fill, and recovery notificat
       eventPublisher.publish({
         name: "strategy.paused",
         source: "harvester",
-        data: { symbol: "DOGEUSDT", reason: "accounting safety halt" },
+        data: { symbol: "DOGEUSDT",
+reason: "accounting safety halt" },
       })
       eventPublisher.publish({
         name: "execution.fill_applied",
@@ -152,8 +165,13 @@ test("does not construct Telegram transport when credentials are absent", async 
       throw new Error("Notifier must not be constructed without credentials")
     },
     createJournalService: disabledJournalService,
-    start: async () => ({ connected: true, brokerName: "binance", tradingEnabled: true, strategyMode: "conservative", subscriptions: [] }),
-    logger: { info() {}, error() {} },
+    start: async () => ({ connected: true,
+brokerName: "binance",
+tradingEnabled: true,
+strategyMode: "conservative",
+subscriptions: [] }),
+    logger: { info() {},
+error() {} },
   })
 
   assert.equal(notifierCreations, 0, "Telegram transport must remain disabled when both optional credentials are absent")
@@ -240,22 +258,33 @@ test("applies custom Telegram event overrides and market filters while preservin
       eventPublisher.publish({
         name: "strategy.paused",
         source: "harvester",
-        data: { symbol: "ETHUSDT", reason: "account safety halt" },
+        data: { symbol: "ETHUSDT",
+reason: "account safety halt" },
       })
       eventPublisher.publish({
         name: "execution.fill_applied",
         source: "harvester",
-        data: { symbol: "LINKUSDT", side: "BUY", price: "14.25", quantity: "2", tradeId: "link-fill" },
+        data: { symbol: "LINKUSDT",
+side: "BUY",
+price: "14.25",
+quantity: "2",
+tradeId: "link-fill" },
       })
       eventPublisher.publish({
         name: "execution.fill_applied",
         source: "harvester",
-        data: { symbol: "ETHUSDT", side: "SELL", price: "2500", quantity: "0.1", tradeId: "eth-fill" },
+        data: { symbol: "ETHUSDT",
+side: "SELL",
+price: "2500",
+quantity: "0.1",
+tradeId: "eth-fill" },
       })
       eventPublisher.publish({
         name: "recovery.cycle_completed",
         source: "harvester",
-        data: { symbol: "LINKUSDT", realizedNetProfit: "0.42", freeQuantity: "0.01" },
+        data: { symbol: "LINKUSDT",
+realizedNetProfit: "0.42",
+freeQuantity: "0.01" },
       })
       eventPublisher.publish({
         name: "account.open_orders_captured",
@@ -280,7 +309,8 @@ test("applies custom Telegram event overrides and market filters while preservin
       }
     },
     registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
-    logger: { info() {}, error() {} },
+    logger: { info() {},
+error() {} },
   })
 
   await signalHandlers.get("SIGTERM")()
@@ -317,7 +347,8 @@ test("does not construct Telegram transport when the unified config disables not
       TELEGRAM_CHAT_ID: "test-chat-id",
     },
     loadConfig: async () => ({
-      notifications: { telegram: { enabled: false, profile: "trader" } },
+      notifications: { telegram: { enabled: false,
+profile: "trader" } },
     }),
     createTelegramNotifier: () => {
       notifierCreations += 1
@@ -331,7 +362,8 @@ test("does not construct Telegram transport when the unified config disables not
       strategyMode: "conservative",
       subscriptions: [],
     }),
-    logger: { info() {}, error() {} },
+    logger: { info() {},
+error() {} },
   })
 
   assert.equal(
@@ -365,36 +397,56 @@ test("provides distinct minimal, trader, and verbose Telegram profile presets", 
     const sentMessages = []
     const signalHandlers = new Map()
     await runMain({
-      env: { TELEGRAM_BOT_TOKEN: "test-token", TELEGRAM_CHAT_ID: "test-chat" },
-      loadConfig: async () => ({ notifications: { telegram: { enabled: true, profile: scenario.profile } } }),
+      env: { TELEGRAM_BOT_TOKEN: "test-token",
+TELEGRAM_CHAT_ID: "test-chat" },
+      loadConfig: async () => ({ notifications: { telegram: { enabled: true,
+profile: scenario.profile } } }),
       createTelegramNotifier: () => ({ async sendMessage(message) { sentMessages.push(message) } }),
       createJournalService: disabledJournalService,
       start: async ({ eventPublisher }) => {
-        eventPublisher.publish({ name: "broker.connected", source: "harvester", data: { broker: "binance" } })
+        eventPublisher.publish({ name: "broker.connected",
+source: "harvester",
+data: { broker: "binance" } })
         eventPublisher.publish({
           name: "order.submitted",
           source: "harvester",
-          data: { symbol: "LINKUSDT", side: "BUY", price: "14.25", quantity: "2", brokerOrderId: "42", clientOrderId: "client-42" },
+          data: { symbol: "LINKUSDT",
+side: "BUY",
+price: "14.25",
+quantity: "2",
+brokerOrderId: "42",
+clientOrderId: "client-42" },
         })
         eventPublisher.publish({
           name: "order.cancelled",
           source: "harvester",
-          data: { symbol: "LINKUSDT", side: "SELL", brokerOrderId: "43", clientOrderId: "client-43", executedQuantity: "0" },
+          data: { symbol: "LINKUSDT",
+side: "SELL",
+brokerOrderId: "43",
+clientOrderId: "client-43",
+executedQuantity: "0" },
         })
         eventPublisher.publish({
           name: "execution.fill_applied",
           source: "harvester",
-          data: { symbol: "LINKUSDT", side: "BUY", price: "14.25", quantity: "2", tradeId: "profile-fill" },
+          data: { symbol: "LINKUSDT",
+side: "BUY",
+price: "14.25",
+quantity: "2",
+tradeId: "profile-fill" },
         })
         eventPublisher.publish({
           name: "recovery.cycle_completed",
           source: "harvester",
-          data: { symbol: "LINKUSDT", realizedNetProfit: "0.42", freeQuantity: "0.01" },
+          data: { symbol: "LINKUSDT",
+realizedNetProfit: "0.42",
+freeQuantity: "0.01" },
         })
         eventPublisher.publish({
           name: "strategy.paused",
           source: "harvester",
-          data: { symbol: "LINKUSDT", reason: "safety pause" },
+          data: { symbol: "LINKUSDT",
+reason: "safety pause" },
         })
         return {
           connected: true,
@@ -406,7 +458,8 @@ test("provides distinct minimal, trader, and verbose Telegram profile presets", 
         }
       },
       registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
-      logger: { info() {}, error() {} },
+      logger: { info() {},
+error() {} },
     })
     await signalHandlers.get("SIGTERM")()
 
@@ -432,7 +485,8 @@ test("delivers startup, broker, order, and execution safety failures in custom m
   const signalHandlers = new Map()
 
   await runMain({
-    env: { TELEGRAM_BOT_TOKEN: "test-token", TELEGRAM_CHAT_ID: "test-chat" },
+    env: { TELEGRAM_BOT_TOKEN: "test-token",
+TELEGRAM_CHAT_ID: "test-chat" },
     loadConfig: async () => ({
       notifications: {
         telegram: {
@@ -452,18 +506,40 @@ test("delivers startup, broker, order, and execution safety failures in custom m
     createJournalService: disabledJournalService,
     start: async ({ eventPublisher }) => {
       const events = [
-        ["harvester.startup_failed", { stage: "broker-connect", error: { message: "connection refused" } }],
-        ["broker.connection_failed", { broker: "binance", error: { message: "socket unavailable" } }],
-        ["broker.subscription_failed", { broker: "binance", stream: "market", market: "ETHUSDT", error: { message: "subscription rejected" } }],
-        ["order.submission_failed", { symbol: "ETHUSDT", side: "BUY", outcome: "REJECTED", error: { message: "insufficient balance" } }],
-        ["order.submission_failed", { symbol: "ETHUSDT", side: "SELL", outcome: "REJECTED", error: { message: "sell submission rejected" } }],
-        ["order.cancel_failed", { symbol: "ETHUSDT", side: "BUY", outcome: "FAILED", error: { message: "buy cancel rejected" } }],
-        ["order.cancel_failed", { symbol: "ETHUSDT", side: "SELL", outcome: "FAILED", error: { message: "cancel rejected" } }],
-        ["execution.unowned_order", { symbol: "ETHUSDT", reason: "external order" }],
-        ["execution.invalid_fill", { symbol: "ETHUSDT", reason: "invalid quantity", error: { message: "fill quantity mismatch" } }],
+        ["harvester.startup_failed", { stage: "broker-connect",
+error: { message: "connection refused" } }],
+        ["broker.connection_failed", { broker: "binance",
+error: { message: "socket unavailable" } }],
+        ["broker.subscription_failed", { broker: "binance",
+stream: "market",
+market: "ETHUSDT",
+error: { message: "subscription rejected" } }],
+        ["order.submission_failed", { symbol: "ETHUSDT",
+side: "BUY",
+outcome: "REJECTED",
+error: { message: "insufficient balance" } }],
+        ["order.submission_failed", { symbol: "ETHUSDT",
+side: "SELL",
+outcome: "REJECTED",
+error: { message: "sell submission rejected" } }],
+        ["order.cancel_failed", { symbol: "ETHUSDT",
+side: "BUY",
+outcome: "FAILED",
+error: { message: "buy cancel rejected" } }],
+        ["order.cancel_failed", { symbol: "ETHUSDT",
+side: "SELL",
+outcome: "FAILED",
+error: { message: "cancel rejected" } }],
+        ["execution.unowned_order", { symbol: "ETHUSDT",
+reason: "external order" }],
+        ["execution.invalid_fill", { symbol: "ETHUSDT",
+reason: "invalid quantity",
+error: { message: "fill quantity mismatch" } }],
       ]
       for (const [name, data] of events) {
-        eventPublisher.publish({ name, source: "harvester", data })
+        eventPublisher.publish({ name,
+source: "harvester",
+data })
       }
       return {
         connected: true,
@@ -475,7 +551,8 @@ test("delivers startup, broker, order, and execution safety failures in custom m
       }
     },
     registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
-    logger: { info() {}, error() {} },
+    logger: { info() {},
+error() {} },
   })
 
   await signalHandlers.get("SIGTERM")()
@@ -516,31 +593,92 @@ test("sends readiness, reconnect, and blocked recovery alerts without notifying 
   const signalHandlers = new Map()
 
   await runMain({
-    env: { TELEGRAM_BOT_TOKEN: "test-token", TELEGRAM_CHAT_ID: "test-chat" },
-    loadConfig: async () => ({ notifications: { telegram: { enabled: true, profile: "custom", markets: ["LINKUSDT"], events: { accountSafetyAlert: false } } } }),
+    env: { TELEGRAM_BOT_TOKEN: "test-token",
+TELEGRAM_CHAT_ID: "test-chat" },
+    loadConfig: async () => ({ notifications: { telegram: { enabled: true,
+profile: "custom",
+markets: ["LINKUSDT"],
+events: { accountSafetyAlert: false } } } }),
     createTelegramNotifier: () => ({ async sendMessage(message) { sentMessages.push(message) } }),
     createJournalService: disabledJournalService,
     start: async ({ eventPublisher }) => {
       const events = [
-        ["user_data.readiness_changed", { broker: "binance", ready: false, status: "AUTHORITATIVE_RECONCILIATION_REQUIRED", trigger: "connectionClosed" }],
-        ["user_data.readiness_changed", { broker: "binance", ready: true, status: "READY", trigger: "reconciled" }],
-        ["broker.status_changed", { broker: "binance", stream: "user-data", status: "recovered", recoveryRequired: true }],
-        ["broker.status_changed", { broker: "binance", stream: "user-data", status: "recoveryFailed", recoveryRequired: false, error: { message: "REST snapshot failed" } }],
-        ["broker.status_changed", { broker: "binance", stream: "user-data", status: "recovering", recoveryRequired: true }],
-        ["broker.status_changed", { broker: "binance", stream: "user-data", status: "terminated", recoveryRequired: true, error: { message: "stream closed" } }],
-        ["broker.status_changed", { broker: "binance", stream: "user-data", status: "executionNormalizationFailed", recoveryRequired: false, error: { message: "invalid execution payload" } }],
-        ["broker.status_changed", { broker: "binance", stream: "user-data", status: "rpcError", recoveryRequired: true, error: { message: "user-data RPC failed" } }],
-        ["broker.status_changed", { broker: "binance", stream: "market-price", status: "recoveryFailed", recoveryRequired: true }],
-        ["recovery.cycle_not_completed", { symbol: "ETHUSDT", marketId: "binance:ETHUSDT", sellOrderClientId: "h-ETHUSDT-sell-1", sellOrderBrokerOrderId: "123", outcome: "BLOCKED", reason: "RECOVERY_SELL_FAILED_MIN_PROFIT", realizedNetProfit: "-0.02", activeQuantity: "0.01", keepQuantity: "0.01", minProfit: "0.01" }],
-        ["recovery.cycle_not_completed", { symbol: "ETHUSDT", marketId: "binance:ETHUSDT", sellOrderClientId: "h-ETHUSDT-sell-2", sellOrderBrokerOrderId: "124", outcome: "CONTINUE_SELL_THROUGH", reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", realizedNetProfit: "0", activeQuantity: "0.02", keepQuantity: "0.01", minProfit: "0.01" }],
+        ["user_data.readiness_changed", { broker: "binance",
+ready: false,
+status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+trigger: "connectionClosed" }],
+        ["user_data.readiness_changed", { broker: "binance",
+ready: true,
+status: "READY",
+trigger: "reconciled" }],
+        ["broker.status_changed", { broker: "binance",
+stream: "user-data",
+status: "recovered",
+recoveryRequired: true }],
+        ["broker.status_changed", { broker: "binance",
+stream: "user-data",
+status: "recoveryFailed",
+recoveryRequired: false,
+error: { message: "REST snapshot failed" } }],
+        ["broker.status_changed", { broker: "binance",
+stream: "user-data",
+status: "recovering",
+recoveryRequired: true }],
+        ["broker.status_changed", { broker: "binance",
+stream: "user-data",
+status: "terminated",
+recoveryRequired: true,
+error: { message: "stream closed" } }],
+        ["broker.status_changed", { broker: "binance",
+stream: "user-data",
+status: "executionNormalizationFailed",
+recoveryRequired: false,
+error: { message: "invalid execution payload" } }],
+        ["broker.status_changed", { broker: "binance",
+stream: "user-data",
+status: "rpcError",
+recoveryRequired: true,
+error: { message: "user-data RPC failed" } }],
+        ["broker.status_changed", { broker: "binance",
+stream: "market-price",
+status: "recoveryFailed",
+recoveryRequired: true }],
+        ["recovery.cycle_not_completed", { symbol: "ETHUSDT",
+marketId: "binance:ETHUSDT",
+sellOrderClientId: "h-ETHUSDT-sell-1",
+sellOrderBrokerOrderId: "123",
+outcome: "BLOCKED",
+reason: "RECOVERY_SELL_FAILED_MIN_PROFIT",
+realizedNetProfit: "-0.02",
+activeQuantity: "0.01",
+keepQuantity: "0.01",
+minProfit: "0.01" }],
+        ["recovery.cycle_not_completed", { symbol: "ETHUSDT",
+marketId: "binance:ETHUSDT",
+sellOrderClientId: "h-ETHUSDT-sell-2",
+sellOrderBrokerOrderId: "124",
+outcome: "CONTINUE_SELL_THROUGH",
+reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+realizedNetProfit: "0",
+activeQuantity: "0.02",
+keepQuantity: "0.01",
+minProfit: "0.01" }],
       ]
       for (const [name, data] of events) {
-        eventPublisher.publish({ name, source: "harvester", data })
+        eventPublisher.publish({ name,
+source: "harvester",
+data })
       }
-      return { connected: true, brokerName: "binance", tradingEnabled: true, strategyMode: "conservative", subscriptions: ["LINKUSDT"], stop: async () => ({ ok: true }) }
+      return { connected: true,
+brokerName: "binance",
+tradingEnabled: true,
+strategyMode: "conservative",
+subscriptions: ["LINKUSDT"],
+stop: async () => ({ ok: true }) }
     },
     registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
-    logger: { info() {}, error() {} },
+    logger: { info() {},
+error() {} },
   })
 
   await signalHandlers.get("SIGTERM")()

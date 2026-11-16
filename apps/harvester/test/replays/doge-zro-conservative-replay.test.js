@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { createDogeTradingReplay } from "./doge-zro-conservative-replay-harness.js"
 
 const test = (name, ...options) =>
-  nodeTest("[doge-zro-conservative-replay.test.js] " + name, ...options)
+  nodeTest(`[doge-zro-conservative-replay.test.js] ${  name}`, ...options)
 
 const MARKET_SYMBOL = "DOGEUSDT"
 const COMPLETED_BUY_COUNT = 4
@@ -137,7 +137,8 @@ describe("DOGEUSDT Conservative strategy replay", () => {
     )
 
     const receivedMarketPrices = dogeTradingReplay.receivedMarketPriceEvents.map(
-      ({ symbol, price }) => ({ marketSymbol: symbol, price }),
+      ({ symbol, price }) => ({ marketSymbol: symbol,
+price }),
     )
     assert.deepEqual(
       receivedMarketPrices,
@@ -563,7 +564,9 @@ async function submitFirstBuyAndWaitForRecoveryOrders(dogeTradingReplay) {
       recoverySellOrderSubmitted,
       nextStandingBuyOrderSubmitted,
     ])
-    return { initialBuyOrder, recoverySellOrder, nextStandingBuyOrder }
+    return { initialBuyOrder,
+recoverySellOrder,
+nextStandingBuyOrder }
   } catch (error) {
     const runtimeErrorDetails = dogeTradingReplay.harvesterRuntimeErrors.map(
       (runtimeError) => ({
@@ -576,7 +579,7 @@ async function submitFirstBuyAndWaitForRecoveryOrders(dogeTradingReplay) {
         ),
       }),
     )
-    error.message += "\nHarvester runtime errors: " + JSON.stringify(runtimeErrorDetails)
+    error.message += `\nHarvester runtime errors: ${  JSON.stringify(runtimeErrorDetails)}`
     throw error
   }
 }
