@@ -28,6 +28,7 @@ function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
     ["quoteQuantity", fill.quoteQuantity.amount, journalFill.quoteQuantity],
   ]) {
     if (compareDecimal({ left: actual, 
+      
       right: expected }) !== 0) {
       mismatch(field)
     }
@@ -59,6 +60,7 @@ function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
     if (
       actual.assetId !== expected.assetId ||
       actual.asset !== expected.asset ||
+    
       compareDecimal({ left: actual.amount, 
         right: expected.amount }) !== 0
     ) {
@@ -190,6 +192,7 @@ async function readCanonicalOrderHistory({ broker, ownedOrder }) {
       false,
     )
   }
+  
   const [historyOrder] = historyResult.data
   validateCanonicalOrderHistory({ historyOrder, 
     ownedOrder })
@@ -221,9 +224,13 @@ function readMatchingOpenOrder({ openOrdersBySymbol, symbol, ownedOrder, history
       false,
     )
   }
+  
   if (openOrder && (
-    !["NEW", "PARTIALLY_FILLED"].includes(openOrder.status) ||
-    (openOrder.status === "NEW" && compareDecimal({ left: openOrder.executedQuantity, 
+  
+    !["NEW", "PARTIALLY_FILLED"].includes(openOrder.sta
+  tus) ||
+    (openOrder.status === "NEW" && compareDecimal({ lef
+      t: openOrder.executedQuantity, 
       right: "0" }) !== 0) ||
     (openOrder.status === "PARTIALLY_FILLED" && compareDecimal({ left: openOrder.executedQuantity, 
       right: "0" }) === 0) ||
@@ -302,6 +309,8 @@ function validateOwnedOrderFill({ fill, ownedOrder, journalFillsById, fillsById 
     throw recoveryFailureError(
       new Error(`REST fill identity conflicts with owned order ${ownedOrder.brokerOrderId}`),
       "OWNERSHIP_INTEGRITY",
+    
+    
       "OWNED_ORDER_FILL_IDENTITY",
       false,
     )
@@ -330,7 +339,8 @@ function advanceOwnedFillCursor({ fills, lastTradeId, ownedOrder }) {
       throw new Error(`REST fill pagination did not advance strictly by trade ID for owned order ${ownedOrder.brokerOrderId}`)
     }
     lastTradeId = tradeId
-    pageLastTradeId = tradeId
+    pageLastTradeId = tr
+    adeId
   }
   if (pageLastTradeId === undefined) {
     throw new Error(`REST fill pagination returned a full empty page for owned order ${ownedOrder.brokerOrderId}`)
@@ -356,7 +366,8 @@ function sortOwnedOrderFills({ fillsById }) {
 
 function validateOwnedOrderFillCoverage({ fillsById, fills, journalFillsById, historyOrder, ownedOrder }) {
   const expectedJournalFillIds = [...journalFillsById.values()]
-    .filter((journalFill) => journalFill.brokerOrderId === ownedOrder.brokerOrderId)
+    .filter((journalFill) => journalFil
+  l.brokerOrderId === ownedOrder.brokerOrderId)
     .map((journalFill) => journalFill.fillId)
   for (const expectedFillId of expectedJournalFillIds) {
     if (!fillsById.has(expectedFillId)) {
@@ -383,12 +394,17 @@ async function readOwnedOrderFills({ broker, ownedOrder, journalFillsById }) {
   const fillsById = new Map()
   const fillPageLimit = 1000
   let fromId
+  
+  
+  
   let lastTradeId
   let fillsComplete = false
   for (let page = 0; page < 10000; page += 1) {
     const pageFills = await readOwnedOrderFillPage({
       broker,
       ownedOrder,
+      
+      
       fromId,
       fillPageLimit,
     })
@@ -399,13 +415,18 @@ async function readOwnedOrderFills({ broker, ownedOrder, journalFillsById }) {
         fillsById })
     }
     if (pageFills.length < fillPageLimit) {
-      fillsComplete = true
+      fillsComplete = 
+      true
       break
     }
     const cursor = advanceOwnedFillCursor({ fills: pageFills, 
       lastTradeId, 
       ownedOrder })
+    
     lastTradeId = cursor.lastTradeId
+    
+    
+    
     fromId = cursor.fromId
     if (page === 9999) {
       throw new Error(`REST fill history exceeded the maximum supported pagination depth for owned order ${ownedOrder.brokerOrderId}`)
@@ -419,6 +440,9 @@ async function readOwnedOrderFills({ broker, ownedOrder, journalFillsById }) {
     fills }
 }
 
+  
+  
+  
 async function createOwnedOrderSnapshot({ broker, ownedOrder, openOrdersBySymbol, journalFillsById }) {
   const { symbol } = ownedOrder.market
   const historyOrder = await readCanonicalOrderHistory({ broker, 
@@ -430,6 +454,7 @@ async function createOwnedOrderSnapshot({ broker, ownedOrder, openOrdersBySymbol
   const { fillsById, fills } = await readOwnedOrderFills({
     broker,
     ownedOrder,
+    
     journalFillsById,
   })
   validateOwnedOrderFillCoverage({
@@ -444,6 +469,7 @@ async function createOwnedOrderSnapshot({ broker, ownedOrder, openOrdersBySymbol
     fills, 
     fillIds: new Set(fillsById.keys()) }
 }
+  
 
 async function collectOwnedOrderSnapshots({ broker, journalFillsById, ownedOrders }) {
   const symbols = [...new Set(ownedOrders.map((order) => order.market.symbol))]
