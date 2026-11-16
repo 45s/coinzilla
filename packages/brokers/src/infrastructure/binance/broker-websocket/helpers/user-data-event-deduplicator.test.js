@@ -10,18 +10,24 @@ test("execution reports use symbol, order ID, and execution ID as identity", () 
   const deduplicator = createUserDataEventDeduplicator()
   const first = {
     subscriptionId: 4,
-    event: { e: "executionReport", s: "BTCUSDT", i: 10, I: 21, X: "PARTIALLY_FILLED" },
+    event: { e: "executionReport",
+s: "BTCUSDT",
+i: 10,
+I: 21,
+X: "PARTIALLY_FILLED" },
   }
 
   assert.equal(deduplicator.isDuplicate(first), false)
   assert.equal(deduplicator.isDuplicate(structuredClone(first)), true)
   assert.equal(deduplicator.isDuplicate({
     ...first,
-    event: { ...first.event, I: 22 },
+    event: { ...first.event,
+I: 22 },
   }), false)
   assert.equal(deduplicator.isDuplicate({
     ...first,
-    event: { ...first.event, i: 11 },
+    event: { ...first.event,
+i: 11 },
   }), false)
   assert.equal(deduplicator.isDuplicate({
     ...first,
@@ -33,14 +39,19 @@ test("events without a stable unique ID use exact payload identity", () => {
   const deduplicator = createUserDataEventDeduplicator()
   const event = {
     subscriptionId: 3,
-    event: { e: "balanceUpdate", a: "USDT", d: "2.50", T: 100, E: 101 },
+    event: { e: "balanceUpdate",
+a: "USDT",
+d: "2.50",
+T: 100,
+E: 101 },
   }
 
   assert.equal(deduplicator.isDuplicate(event), false)
   assert.equal(deduplicator.isDuplicate(structuredClone(event)), true)
   assert.equal(deduplicator.isDuplicate({
     ...event,
-    event: { ...event.event, d: "3.50" },
+    event: { ...event.event,
+d: "3.50" },
   }), false)
 })
 
@@ -48,7 +59,11 @@ test("the identity cache is bounded and evicts the oldest entry", () => {
   const deduplicator = createUserDataEventDeduplicator({ maxEntries: 2 })
   const event = (id) => ({
     subscriptionId: 1,
-    event: { e: "balanceUpdate", a: "USDT", d: String(id), T: id, E: id },
+    event: { e: "balanceUpdate",
+a: "USDT",
+d: String(id),
+T: id,
+E: id },
   })
 
   assert.equal(deduplicator.isDuplicate(event(1)), false)

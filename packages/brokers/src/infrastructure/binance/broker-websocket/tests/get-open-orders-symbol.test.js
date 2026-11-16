@@ -4,12 +4,24 @@ import { BinanceSdkBroker } from "../broker.js"
 import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 
 const createBroker = (handler) => {
-  const broker = new BinanceSdkBroker({ apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet" })
+  const broker = new BinanceSdkBroker({ apiKey: "test-key",
+apiSecret: "test-secret",
+tradingMode: "testnet" })
   const rpc = createFakeRpcClient({ "openOrders.status": handler })
   broker.tradingConnection = rpc
-  return { broker, rpc }
+  return { broker,
+rpc }
 }
-const rawOrder = (orderId, symbol = "BTCUSDT") => ({ orderId, symbol, type: "LIMIT", side: "BUY", price: "10", origQty: "3", executedQty: "1" })
+const rawOrder = (...args) => {
+  const [orderId, symbol = "BTCUSDT"] = args
+  return ({ orderId,
+symbol,
+type: "LIMIT",
+side: "BUY",
+price: "10",
+origQty: "3",
+executedQty: "1" })
+}
 
 describe("BinanceSdkBroker.getOpenOrders", () => {
   it("passes the requested symbol and adapts remaining quantities", async () => {

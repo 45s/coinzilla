@@ -4,7 +4,9 @@ import { CanonicalOrder } from "@coinzilla/entities"
 import { BinanceSdkBroker } from "../broker.js"
 import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 
-const symbolInfo = { symbol: "DOGEUSDT", baseAsset: "DOGE", quoteAsset: "USDT" }
+const symbolInfo = { symbol: "DOGEUSDT",
+baseAsset: "DOGE",
+quoteAsset: "USDT" }
 const rawOrder = {
   symbol: "DOGEUSDT",
   orderId: 987654,
@@ -24,7 +26,8 @@ function createBroker(handlers) {
     tradingMode: "testnet",
     apiKey: "test-key",
     apiSecret: "test-secret",
-    logger: { error() {}, info() {} },
+    logger: { error() {},
+info() {} },
   })
   broker.tradingConnection = createFakeRpcClient(handlers)
   return broker
@@ -32,8 +35,10 @@ function createBroker(handlers) {
 
 test("getCanonicalOrder resolves a lost submission acknowledgement by client order ID", async () => {
   const broker = createBroker({
-    "order.status"(params, options) {
-      assert.deepEqual(params, { symbol: "DOGEUSDT", origClientOrderId: "harvester-client-123" })
+    "order.status"(...args) {
+      const [params, options] = args
+      assert.deepEqual(params, { symbol: "DOGEUSDT",
+origClientOrderId: "harvester-client-123" })
       assert.deepEqual(options, { signed: true })
       return rawOrder
     },
@@ -62,13 +67,15 @@ test("getCanonicalOrder resolves a lost submission acknowledgement by client ord
 test("getCanonicalOrder supports exact broker order ID lookup", async () => {
   const broker = createBroker({
     "order.status"(params) {
-      assert.deepEqual(params, { symbol: "DOGEUSDT", orderId: 987654 })
+      assert.deepEqual(params, { symbol: "DOGEUSDT",
+orderId: 987654 })
       return rawOrder
     },
     exchangeInfo: () => ({ symbols: [symbolInfo] }),
   })
 
-  const result = await broker.getCanonicalOrder({ symbol: "DOGEUSDT", orderId: 987654 })
+  const result = await broker.getCanonicalOrder({ symbol: "DOGEUSDT",
+orderId: 987654 })
 
   assert.equal(result.ok, true)
   assert.equal(result.data.brokerOrderId, "987654")
@@ -79,9 +86,13 @@ test("getCanonicalOrder rejects missing or ambiguous identifiers before RPC", as
 
   for (const input of [
     { symbol: "DOGEUSDT" },
-    { symbol: "DOGEUSDT", orderId: 987654, clientOrderId: "harvester-client-123" },
-    { symbol: "DOGEUSDT", orderId: -1 },
-    { symbol: "", clientOrderId: "harvester-client-123" },
+    { symbol: "DOGEUSDT",
+orderId: 987654,
+clientOrderId: "harvester-client-123" },
+    { symbol: "DOGEUSDT",
+orderId: -1 },
+    { symbol: "",
+clientOrderId: "harvester-client-123" },
   ]) {
     const result = await broker.getCanonicalOrder(input)
     assert.equal(result.ok, false)
@@ -93,11 +104,15 @@ test("getCanonicalOrder rejects missing or ambiguous identifiers before RPC", as
 
 test("getCanonicalOrder fails closed when order status or market metadata is malformed", async () => {
   for (const handlers of [
-    { "order.status": () => ({ ...rawOrder, executedQty: 400 }), exchangeInfo: () => ({ symbols: [symbolInfo] }) },
-    { "order.status": () => rawOrder, exchangeInfo: () => ({ symbols: [symbolInfo, symbolInfo] }) },
+    { "order.status": () => ({ ...rawOrder,
+executedQty: 400 }),
+exchangeInfo: () => ({ symbols: [symbolInfo] }) },
+    { "order.status": () => rawOrder,
+exchangeInfo: () => ({ symbols: [symbolInfo, symbolInfo] }) },
   ]) {
     const broker = createBroker(handlers)
-    const result = await broker.getCanonicalOrder({ symbol: "DOGEUSDT", clientOrderId: "harvester-client-123" })
+    const result = await broker.getCanonicalOrder({ symbol: "DOGEUSDT",
+clientOrderId: "harvester-client-123" })
     assert.equal(result.ok, false)
     assert.ok(result.errors.length > 0)
     assert.deepEqual(
@@ -109,8 +124,10 @@ test("getCanonicalOrder fails closed when order status or market metadata is mal
 
 test("rejects order.status responses whose symbol or client order ID does not match the query", async () => {
   const mismatches = [
-    { ...rawOrder, symbol: "BTCUSDT" },
-    { ...rawOrder, clientOrderId: "foreign-client-id" },
+    { ...rawOrder,
+symbol: "BTCUSDT" },
+    { ...rawOrder,
+clientOrderId: "foreign-client-id" },
   ]
 
   for (const order of mismatches) {
@@ -128,11 +145,13 @@ test("rejects order.status responses whose symbol or client order ID does not ma
 
 test("rejects an order.status response with a different broker order ID", async () => {
   const broker = createBroker({
-    "order.status": () => ({ ...rawOrder, orderId: 987655 }),
+    "order.status": () => ({ ...rawOrder,
+orderId: 987655 }),
     exchangeInfo: () => ({ symbols: [symbolInfo] }),
   })
 
-  const result = await broker.getCanonicalOrder({ symbol: "DOGEUSDT", orderId: 987654 })
+  const result = await broker.getCanonicalOrder({ symbol: "DOGEUSDT",
+orderId: 987654 })
 
   assert.equal(result.ok, false)
 })
@@ -142,7 +161,8 @@ test("rejects a non-object order.status response", async () => {
     "order.status": () => null,
   })
 
-  const result = await broker.getCanonicalOrder({ symbol: "DOGEUSDT", clientOrderId: "harvester-client-123" })
+  const result = await broker.getCanonicalOrder({ symbol: "DOGEUSDT",
+clientOrderId: "harvester-client-123" })
 
   assert.equal(result.ok, false)
 })

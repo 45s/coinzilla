@@ -10,27 +10,42 @@ import {
   canonicalOrderErrMsgs,
 } from "./canonical-order.js"
 
-describe(CanonicalOrder.name, () => {
-  const baseAsset = new Asset({ id: "dogecoin", code: "DOGE" })
-  const quoteAsset = new Asset({ id: "fdusd", code: "FDUSD" })
-  const market = new Market({
-    venue: "binance",
-    symbol: "DOGEFDUSD",
-    baseAsset,
-    quoteAsset,
+const baseAsset = new Asset({
+  id: "dogecoin",
+  code: "DOGE",
+})
+const quoteAsset = new Asset({
+  id: "fdusd",
+  code: "FDUSD",
+})
+const market = new Market({
+  venue: "binance",
+  symbol: "DOGEFDUSD",
+  baseAsset,
+  quoteAsset,
+})
+const createOrder = (overrides = {}) =>
+  new CanonicalOrder({
+    clientOrderId: "bot-order-001",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({
+      amount: "0.1",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "100",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    ...overrides,
   })
-  const createOrder = (overrides = {}) =>
-    new CanonicalOrder({
-      clientOrderId: "bot-order-001",
-      market,
-      side: "BUY",
-      type: "LIMIT",
-      limitPrice: new Money({ amount: "0.1", asset: quoteAsset }),
-      originalQuantity: new Quantity({ amount: "100", asset: baseAsset }),
-      executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
-      ...overrides,
-    })
 
+describe(`${CanonicalOrder.name} lifecycle`, () => {
   it("represents a pending order intent before broker acknowledgement", () => {
     const order = createOrder()
 
@@ -43,10 +58,14 @@ describe(CanonicalOrder.name, () => {
       market: market.value,
       side: "BUY",
       type: "LIMIT",
-      limitPrice: { amount: "0.1", asset: quoteAsset.value },
-      originalQuantity: { amount: "100", asset: baseAsset.value },
-      executedQuantity: { amount: "0", asset: baseAsset.value },
-      remainingQuantity: { amount: "100", asset: baseAsset.value },
+      limitPrice: { amount: "0.1",
+        asset: quoteAsset.value },
+      originalQuantity: { amount: "100",
+        asset: baseAsset.value },
+      executedQuantity: { amount: "0",
+        asset: baseAsset.value },
+      remainingQuantity: { amount: "100",
+        asset: baseAsset.value },
       status: "PENDING",
     })
   })
@@ -82,12 +101,14 @@ describe(CanonicalOrder.name, () => {
     const order = createOrder({
       brokerOrderId: "123456",
       status: "FILLED",
-      executedQuantity: new Quantity({ amount: "100", asset: baseAsset }),
+      executedQuantity: new Quantity({ amount: "100",
+        asset: baseAsset }),
     })
 
     assert.equal(order.remainingQuantity.amount, "0")
     assert.throws(
-      () => createOrder({ brokerOrderId: "123456", status: "FILLED" }),
+      () => createOrder({ brokerOrderId: "123456",
+        status: "FILLED" }),
       { message: canonicalOrderErrMsgs.filledExecution },
     )
   })
@@ -99,6 +120,9 @@ describe(CanonicalOrder.name, () => {
     assert.equal(order.brokerOrderId, undefined)
   })
 
+})
+
+describe(`${CanonicalOrder.name} price validation`, () => {
   it("supports market orders without a limit price", () => {
     const order = createOrder({
       type: "MARKET",
@@ -138,13 +162,17 @@ describe(CanonicalOrder.name, () => {
     for (const amount of ["0", "-0.01"]) {
       assert.throws(
         () => createOrder({
-          limitPrice: new Money({ amount, asset: quoteAsset }),
+          limitPrice: new Money({ amount,
+            asset: quoteAsset }),
         }),
         { message: canonicalOrderErrMsgs.limitPricePositive },
       )
     }
   })
 
+})
+
+describe(`${CanonicalOrder.name} quantity validation`, () => {
   it("rejects mismatched markets and quantity assets", () => {
     assert.throws(
       () => createOrder({ market: {} }),
@@ -178,7 +206,8 @@ describe(CanonicalOrder.name, () => {
       () => createOrder({
         brokerOrderId: "123456",
         status: "OPEN",
-        executedQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+        executedQuantity: new Quantity({ amount: "1",
+          asset: baseAsset }),
       }),
       { message: canonicalOrderErrMsgs.openExecution },
     )
@@ -192,12 +221,16 @@ describe(CanonicalOrder.name, () => {
     assert.throws(
       () => createOrder({
         status: "PENDING",
-        executedQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+        executedQuantity: new Quantity({ amount: "1",
+          asset: baseAsset }),
       }),
       { message: canonicalOrderErrMsgs.pendingExecution },
     )
   })
 
+})
+
+describe(`${CanonicalOrder.name} identity and timestamps`, () => {
   it("requires broker identity for acknowledged lifecycle states", () => {
     for (const status of [
       "OPEN",

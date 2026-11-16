@@ -7,27 +7,30 @@ const fingerprint = "f".repeat(64)
 const blockerDigest = "a".repeat(64)
 const blockerId = "b".repeat(64)
 
-const record = (sequence, factType, data, factId = factType + ":" + sequence, runtimeSessionId = sessionId) => ({
+const record = (...parameters) => {
+  const [sequence, factType, data, factId = `${factType  }:${  sequence}`, runtimeSessionId = sessionId] = parameters
+  return ({
+
   sequence: String(sequence),
   factId,
   factType,
   runtimeSessionId,
   data,
-})
-
+  })
+}
 const baseline = () => record(1, "CONFIGURATION_BASELINE", {
   schemaVersion: 1,
   strategyName: "conservative",
   markets: ["BTCUSDT"],
   fingerprint,
-}, "configuration-baseline:" + fingerprint)
+}, `configuration-baseline:${  fingerprint}`)
 
 const started = () => record(2, "PROCESS_STARTED", {
   configurationFingerprint: fingerprint,
   strategyName: "conservative",
   markets: ["BTCUSDT"],
   tradingEnabled: true,
-}, "process-started:" + sessionId)
+}, `process-started:${  sessionId}`)
 
 const preflightFacts = () => [
   record(3, "ACCOUNT_SNAPSHOT_CAPTURED", {
@@ -105,13 +108,13 @@ test("does not replay process-lifetime operator pauses into a Operational State 
     strategyName: "conservative",
     markets: ["BTCUSDT", "ETHUSDT"],
     fingerprint,
-  }, "configuration-baseline:" + fingerprint)
+  }, `configuration-baseline:${  fingerprint}`)
   const multiMarketStarted = record(2, "PROCESS_STARTED", {
     configurationFingerprint: fingerprint,
     strategyName: "conservative",
     markets: ["BTCUSDT", "ETHUSDT"],
     tradingEnabled: true,
-  }, "process-started:" + sessionId)
+  }, `process-started:${  sessionId}`)
   const result = projectHarvesterOperationalState({
     records: [
       record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
@@ -133,7 +136,8 @@ test("does not replay process-lifetime operator pauses into a Operational State 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
   assert.deepEqual(
     result.data.pausedMarkets,
-    [{ symbol: "ETHUSDT", reason: "FILL_RECONCILIATION_FAILED" }],
+    [{ symbol: "ETHUSDT",
+reason: "FILL_RECONCILIATION_FAILED" }],
     "ADR-0003 operator pauses are process-lifetime instructions and must not be replayed into a restart candidate; durable strategy pauses remain projected.",
   )
 })
@@ -152,15 +156,17 @@ test("retains only unresolved pause and safety-blocker controls in the candidate
       baseline(),
       started(),
       ...preflightFacts(),
-      record(5, "STRATEGY_MARKET_PAUSED", { symbol: "BTCUSDT", reason: "FILL_RECONCILIATION_FAILED" }, "strategy-market-paused:session:1"),
-      record(6, "SAFETY_BLOCKER_RAISED", blocker, "safety-blocker-raised:" + blockerId),
+      record(5, "STRATEGY_MARKET_PAUSED", { symbol: "BTCUSDT",
+reason: "FILL_RECONCILIATION_FAILED" }, "strategy-market-paused:session:1"),
+      record(6, "SAFETY_BLOCKER_RAISED", blocker, `safety-blocker-raised:${  blockerId}`),
       record(7, "SAFETY_BLOCKER_RESOLVED", {
         blockerId,
         resolvedBy: "reconciliation:binance-history-audit",
         resolution: "AUTHORITATIVE_RECONCILIATION",
         evidenceDigest: "c".repeat(64),
-      }, "safety-blocker-resolved:" + blockerId),
-      record(8, "STRATEGY_MARKET_RESUMED", { symbol: "BTCUSDT", reason: "RECONCILED" }, "strategy-market-resumed:session:2"),
+      }, `safety-blocker-resolved:${  blockerId}`),
+      record(8, "STRATEGY_MARKET_RESUMED", { symbol: "BTCUSDT",
+reason: "RECONCILED" }, "strategy-market-resumed:session:2"),
     ],
   })
 
@@ -182,7 +188,7 @@ test("retains an unresolved account-scoped blocker as global evidence", () => {
         symbol: null,
         reason: "ACCOUNTING_INTEGRITY_FAILURE",
         evidenceDigest: blockerDigest,
-      }, "safety-blocker-raised:" + blockerId),
+      }, `safety-blocker-raised:${  blockerId}`),
     ],
   })
 
@@ -206,7 +212,7 @@ test("fails closed for missing configuration baseline, orphan facts, or resoluti
         resolvedBy: "operator:trader",
         resolution: "OPERATOR_ACTION",
         evidenceDigest: blockerDigest,
-      }, "safety-blocker-resolved:" + blockerId),
+      }, `safety-blocker-resolved:${  blockerId}`),
     ],
   })
 
@@ -230,7 +236,7 @@ test("projects cancellation outcomes in a later process session against the orig
         strategyName: "conservative",
         markets: ["BTCUSDT"],
         tradingEnabled: true,
-      }, "process-started:" + nextSession, nextSession),
+      }, `process-started:${  nextSession}`, nextSession),
       record(8, "ORDER_CANCELLATION_INTENT", {
         clientOrderId: "harvester-client-1",
         brokerOrderId: "broker-order-1",
@@ -271,7 +277,30 @@ test("projects cancellation outcomes in a later process session against the orig
   assert.equal(result.data.orders[0].brokerOrderId, "broker-order-1")
 })
 
-test("projects a durable completed recovery cycle only after its full SELL execution fact", () => {
+function createCompletedRecoveryCycleFact() {
+  return record(8, "RECOVERY_CYCLE_COMPLETED", {
+    cycleId: "c".repeat(64),
+    marketId: "binance:BTCUSDT",
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAssetId: "asset:BTC",
+    quoteAssetId: "asset:USDT",
+    appliedFillIds: ["binance:BTCUSDT:recovery-trade-1"],
+    sellOrderClientId: "harvester-recovery-sell-1",
+    sellOrderBrokerOrderId: "broker-recovery-sell-1",
+    buyCost: "39.75",
+    spent: "39.75",
+    netSellProceeds: "40",
+    realizedNetProfit: "0.25",
+    minProfit: "0.01",
+    activeQuantity: "0.01",
+    keepQuantity: "0.01",
+    freeQuantity: "0.01",
+    inventoryDisposition: null,
+  }, `recovery-cycle-completed:binance:BTCUSDT:${"c".repeat(64)}`)
+}
+
+function createCompletedRecoveryCycleProjectionRecords() {
   const sellIntent = record(5, "ORDER_SUBMISSION_INTENT", {
     clientOrderId: "harvester-recovery-sell-1",
     marketId: "binance:BTCUSDT",
@@ -321,29 +350,23 @@ test("projects a durable completed recovery cycle only after its full SELL execu
     commissionStatus: "COMPLETE",
     commissions: [],
   }, "execution-fill-applied:binance:BTCUSDT:recovery-trade-1")
-  const cycle = record(8, "RECOVERY_CYCLE_COMPLETED", {
-    cycleId: "c".repeat(64),
-    marketId: "binance:BTCUSDT",
-    venue: "binance",
-    symbol: "BTCUSDT",
-    baseAssetId: "asset:BTC",
-    quoteAssetId: "asset:USDT",
-    appliedFillIds: ["binance:BTCUSDT:recovery-trade-1"],
-    sellOrderClientId: "harvester-recovery-sell-1",
-    sellOrderBrokerOrderId: "broker-recovery-sell-1",
-    buyCost: "39.75",
-    spent: "39.75",
-    netSellProceeds: "40",
-    realizedNetProfit: "0.25",
-    minProfit: "0.01",
-    activeQuantity: "0.01",
-    keepQuantity: "0.01",
-    freeQuantity: "0.01",
-    inventoryDisposition: null,
-  }, "recovery-cycle-completed:binance:BTCUSDT:" + "c".repeat(64))
-  const result = projectHarvesterOperationalState({
-    records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"), baseline(), started(), sellIntent, sellOutcome, sellFill, cycle],
-  })
+  const cycle = createCompletedRecoveryCycleFact()
+  const records = [
+    record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+    baseline(),
+    started(),
+    sellIntent,
+    sellOutcome,
+    sellFill,
+    cycle,
+  ]
+  return { records,
+cycle }
+}
+
+test("projects a durable completed recovery cycle only after its full SELL execution fact", () => {
+  const { records, cycle } = createCompletedRecoveryCycleProjectionRecords()
+  const result = projectHarvesterOperationalState({ records })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
   assert.equal(result.data.recoveryCycles.length, 1, "The durable completion fact must be projected only after the fully filled SELL.")
@@ -363,12 +386,18 @@ test("rejects market-history coverage facts that narrow a previously verified wi
       baseline(),
       started(),
       record(3, "MARKET_HISTORY_COVERAGE_CONFIRMED", {
-        symbol: "BTCUSDT", coveredFromTime: 100, verifiedAt: 200,
-        evidenceDigest: "a".repeat(64), verifiedBy: "operator:trader",
+        symbol: "BTCUSDT",
+coveredFromTime: 100,
+verifiedAt: 200,
+        evidenceDigest: "a".repeat(64),
+verifiedBy: "operator:trader",
       }, "market-history-coverage:BTCUSDT:1"),
       record(4, "MARKET_HISTORY_COVERAGE_CONFIRMED", {
-        symbol: "BTCUSDT", coveredFromTime: 101, verifiedAt: 201,
-        evidenceDigest: "b".repeat(64), verifiedBy: "operator:trader",
+        symbol: "BTCUSDT",
+coveredFromTime: 101,
+verifiedAt: 201,
+        evidenceDigest: "b".repeat(64),
+verifiedBy: "operator:trader",
       }, "market-history-coverage:BTCUSDT:2"),
     ],
   })
@@ -446,7 +475,7 @@ test("projects an explicit durable NOT_COMPLETED outcome for a fully filled reco
     sellOrderBrokerOrderId: "broker-recovery-sell-continue",
     outcome: "CONTINUE_SELL_THROUGH",
     reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
-  }, "recovery-cycle-not-completed:binance:BTCUSDT:" + "d".repeat(64))
+  }, `recovery-cycle-not-completed:binance:BTCUSDT:${  "d".repeat(64)}`)
   const result = projectHarvesterOperationalState({
     records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"), baseline(), started(), sellIntent, sellOutcome, sellFill, nonCompletion],
   })
@@ -528,7 +557,7 @@ test("rejects a completed-cycle fact that names a different terminal SELL order"
     keepQuantity: "0.01",
     freeQuantity: "0.01",
     inventoryDisposition: null,
-  }, "recovery-cycle-completed:binance:BTCUSDT:" + "c".repeat(64))
+  }, `recovery-cycle-completed:binance:BTCUSDT:${  "c".repeat(64)}`)
   const result = projectHarvesterOperationalState({
     records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"), baseline(), started(), sellIntent, sellOutcome, sellFill, cycle],
   })

@@ -22,7 +22,8 @@ export function evaluateAggressiveStrategy({
     throw new TypeError("Aggressive strategy requires a Portfolio")
   }
 
-  const position = portfolio.getPosition({ symbol: marketPrice.symbol, strategyId: StrategyId.COIN_GRABBER })
+  const position = portfolio.getPosition({ symbol: marketPrice.symbol,
+strategyId: StrategyId.COIN_GRABBER })
   // Active strategy inventory is the only inventory that blocks a new BUY
   // cycle. Retained freeBaseQuantity is deliberately excluded. Any future
   // Aggressive grid repricing must apply this same Portfolio gate before

@@ -15,18 +15,150 @@ import { prepareOptionalJournal } from "../src/infrastructure/journal/prepare-op
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 
 const requireSuccess = ({ result, operation }) => {
-  if (result?.ok === true) return result
+  if (result?.ok === true) {
+    return result
+  }
   const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-  throw new Error(operation + (details ? ": " + details : ""))
+  throw new Error(`${operation}${details ? `: ${details}` : ""}`)
 }
 
 const publishAndFlush = async ({ eventPublisher, eventName, dataResult }) => {
   const published = publishLifecycleEvent({ eventPublisher, eventName, dataResult })
-  requireSuccess({ result: published, operation: "Unable to publish " + eventName })
+  requireSuccess({ result: published, operation: `Unable to publish ${eventName}` })
   requireSuccess({
     result: await eventPublisher.flush(),
-    operation: "Unable to durably persist " + eventName,
+    operation: `Unable to durably persist ${eventName}`,
   })
+}
+
+function assertAuditEnvironment({ env }) {
+  if (env.HARVESTER_BROKER !== "binance") {
+    throw new Error("TESTNET account audit requires HARVESTER_BROKER=binance")
+  }
+  if (env.HARVESTER_TRADING_MODE !== "testnet" || env.NODE_ENV === "production") {
+    throw new Error("TESTNET account audit requires HARVESTER_TRADING_MODE=testnet and non-production NODE_ENV")
+  }
+  if (env.HARVESTER_JOURNAL_ENABLED?.trim().toLowerCase() === "false") {
+    throw new Error("TESTNET account audit requires HARVESTER_JOURNAL_ENABLED=true")
+  }
+}
+
+async function createReadyJournal({ eventBus, logger, env, createJournalService }) {
+  const journalService = createJournalService({
+    eventBus,
+    logger,
+    enabled: true,
+    directory: env.HARVESTER_JOURNAL_DIRECTORY,
+  })
+  if (!journalService || typeof journalService.flush !== "function" ||
+      typeof journalService.close !== "function" || !journalService.ready) {
+    throw new Error("TESTNET account audit requires a ready Journal with durable flush() support")
+  }
+  requireSuccess({
+    result: await journalService.ready,
+    operation: "TESTNET account audit cannot start because the Journal is unavailable",
+  })
+  return journalService
+}
+
+async function captureAccountSnapshot({ broker, eventPublisher }) {
+  const accountResult = await broker.getAccountSnapshot()
+  requireSuccess({
+    result: accountResult,
+    operation: "Unable to load Binance TESTNET account balances",
+  })
+  if (!accountResult.data || !Array.isArray(accountResult.data.balances)) {
+    throw new TypeError("Binance TESTNET account snapshot did not contain a balances array")
+  }
+
+  const snapshot = new AccountSnapshot({
+    balances: accountResult.data.balances,
+    sourceTime: accountResult.data.sourceTime,
+  })
+  await publishAndFlush({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
+    dataResult: mapAccountSnapshotCapturedData({ phase: "PREFLIGHT", snapshot }),
+  })
+  return snapshot
+}
+
+async function captureOpenOrders({ broker, eventPublisher, now }) {
+  const ordersResult = await broker.getOpenOrders({})
+  requireSuccess({
+    result: ordersResult,
+    operation: "Unable to load Binance TESTNET account-wide open orders",
+  })
+  if (!Array.isArray(ordersResult.data)) {
+    throw new TypeError("Binance TESTNET open-orders response did not contain an array")
+  }
+
+  const orders = ordersResult.data
+  const blockReasons = orders.length > 0
+    ? [`UNOWNED_OPEN_ORDERS:${orders.length}`]
+    : []
+  await publishAndFlush({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
+    dataResult: mapAccountOpenOrdersCapturedData({
+      phase: "PREFLIGHT",
+      observedAt: now(),
+      orders,
+      readiness: orders.length === 0 ? "READY" : "BLOCKED",
+      blockReasons,
+    }),
+  })
+  return orders
+}
+
+function createAuditOutcome({ snapshot, orders }) {
+  return toResult({
+    data: {
+      sourceTime: snapshot.sourceTime,
+      assetCount: snapshot.balances.length,
+      orderCount: orders.length,
+      readiness: orders.length === 0 ? "READY" : "BLOCKED",
+      symbols: [...new Set(
+        orders.map((order) => order.symbol ?? order.market?.symbol).filter(Boolean),
+      )].sort(),
+    },
+  })
+}
+
+async function cleanupAuditResources({ broker, journalService, eventBus }) {
+  const cleanupErrors = []
+  if (broker && typeof broker.disconnect === "function") {
+    try {
+      await broker.disconnect()
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+  }
+  if (journalService && typeof journalService.close === "function") {
+    try {
+      const result = await journalService.close()
+      if (result?.ok !== true) {
+        cleanupErrors.push(...(result?.errors?.length ? result.errors : [
+          new Error("TESTNET account audit Journal close failed"),
+        ]))
+      }
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+  }
+  if (eventBus && typeof eventBus.close === "function") {
+    try {
+      const result = await eventBus.close({ timeoutMs: EVENT_BUS_CLOSE_TIMEOUT_MS })
+      if (result?.ok !== true) {
+        cleanupErrors.push(...(result?.errors?.length ? result.errors : [
+          new Error("TESTNET account audit EventBus close failed"),
+        ]))
+      }
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+  }
+  return cleanupErrors
 }
 
 /**
@@ -45,35 +177,16 @@ export async function runTestnetAccountAudit({
   let journalService
   let broker
   let outcome
-  const cleanupErrors = []
 
   try {
-    if (env.HARVESTER_BROKER !== "binance") {
-      throw new Error("TESTNET account audit requires HARVESTER_BROKER=binance")
-    }
-    if (env.HARVESTER_TRADING_MODE !== "testnet" || env.NODE_ENV === "production") {
-      throw new Error("TESTNET account audit requires HARVESTER_TRADING_MODE=testnet and non-production NODE_ENV")
-    }
-    if (env.HARVESTER_JOURNAL_ENABLED?.trim().toLowerCase() === "false") {
-      throw new Error("TESTNET account audit requires HARVESTER_JOURNAL_ENABLED=true")
-    }
-
+    assertAuditEnvironment({ env })
     eventBus = createEventBus({ eventBusLogger: logger })
-    journalService = createJournalService({
+    journalService = await createReadyJournal({
       eventBus,
       logger,
-      enabled: true,
-      directory: env.HARVESTER_JOURNAL_DIRECTORY,
+      env,
+      createJournalService,
     })
-    if (!journalService || typeof journalService.flush !== "function" ||
-        typeof journalService.close !== "function" || !journalService.ready) {
-      throw new Error("TESTNET account audit requires a ready Journal with durable flush() support")
-    }
-    requireSuccess({
-      result: await journalService.ready,
-      operation: "TESTNET account audit cannot start because the Journal is unavailable",
-    })
-
     const eventPublisher = makeEventPublisher({
       eventBus,
       logger,
@@ -88,56 +201,18 @@ export async function runTestnetAccountAudit({
     })
     await broker.connect()
 
-    const accountResult = await broker.getAccountSnapshot()
-    requireSuccess({
-      result: accountResult,
-      operation: "Unable to load Binance TESTNET account balances",
-    })
-    if (!accountResult.data || !Array.isArray(accountResult.data.balances)) {
-      throw new TypeError("Binance TESTNET account snapshot did not contain a balances array")
-    }
-    const snapshot = new AccountSnapshot({
-      balances: accountResult.data.balances,
-      sourceTime: accountResult.data.sourceTime,
-    })
-    await publishAndFlush({
+    const snapshot = await captureAccountSnapshot({
+      broker,
       eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
-      dataResult: mapAccountSnapshotCapturedData({ phase: "PREFLIGHT", snapshot }),
     })
-
-    const ordersResult = await broker.getOpenOrders({})
-    requireSuccess({
-      result: ordersResult,
-      operation: "Unable to load Binance TESTNET account-wide open orders",
-    })
-    if (!Array.isArray(ordersResult.data)) {
-      throw new TypeError("Binance TESTNET open-orders response did not contain an array")
-    }
-    const orders = ordersResult.data
-    const blockReasons = orders.length > 0
-      ? ["UNOWNED_OPEN_ORDERS:" + orders.length]
-      : []
-    await publishAndFlush({
+    const orders = await captureOpenOrders({
+      broker,
       eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
-      dataResult: mapAccountOpenOrdersCapturedData({
-        phase: "PREFLIGHT",
-        observedAt: now(),
-        orders,
-        readiness: orders.length === 0 ? "READY" : "BLOCKED",
-        blockReasons,
-      }),
+      now,
     })
-
-    outcome = toResult({
-      data: {
-        sourceTime: snapshot.sourceTime,
-        assetCount: snapshot.balances.length,
-        orderCount: orders.length,
-        readiness: orders.length === 0 ? "READY" : "BLOCKED",
-        symbols: [...new Set(orders.map((order) => order.symbol ?? order.market?.symbol).filter(Boolean))].sort(),
-      },
+    outcome = createAuditOutcome({
+      snapshot,
+      orders,
     })
     logger.info?.({
       message: "TESTNET account preflight audit durably journaled",
@@ -150,45 +225,19 @@ export async function runTestnetAccountAudit({
   } catch (error) {
     outcome = toResult({ error })
   } finally {
-    if (broker && typeof broker.disconnect === "function") {
-      try {
-        await broker.disconnect()
-      } catch (error) {
-        cleanupErrors.push(error)
-      }
-    }
-    if (journalService && typeof journalService.close === "function") {
-      try {
-        const result = await journalService.close()
-        if (result?.ok !== true) {
-          cleanupErrors.push(...(result?.errors?.length ? result.errors : [
-            new Error("TESTNET account audit Journal close failed"),
-          ]))
-        }
-      } catch (error) {
-        cleanupErrors.push(error)
-      }
-    }
-    if (eventBus && typeof eventBus.close === "function") {
-      try {
-        const result = await eventBus.close({ timeoutMs: EVENT_BUS_CLOSE_TIMEOUT_MS })
-        if (result?.ok !== true) {
-          cleanupErrors.push(...(result?.errors?.length ? result.errors : [
-            new Error("TESTNET account audit EventBus close failed"),
-          ]))
-        }
-      } catch (error) {
-        cleanupErrors.push(error)
-      }
+    const cleanupErrors = await cleanupAuditResources({
+      broker,
+      journalService,
+      eventBus,
+    })
+    if (cleanupErrors.length > 0) {
+      outcome = toResult({
+        errors: [...(outcome?.errors ?? []), ...cleanupErrors],
+        ...(outcome?.data === undefined ? {} : { data: outcome.data }),
+      })
     }
   }
 
-  if (cleanupErrors.length > 0) {
-    outcome = toResult({
-      errors: [...(outcome?.errors ?? []), ...cleanupErrors],
-      ...(outcome?.data === undefined ? {} : { data: outcome.data }),
-    })
-  }
   return outcome ?? toResult({ error: new Error("TESTNET account audit did not produce a result") })
 }
 

@@ -6,13 +6,13 @@ export function subtractDecimalStrings({ left, right } = {}) {
     value: left,
     field: "left decimal operand",
   })
-  if (!normalizedLeft.ok) return toResult({ errors: normalizedLeft.errors })
+  if (!normalizedLeft.ok) {return toResult({ errors: normalizedLeft.errors })}
 
   const normalizedRight = normalizeDecimalString({
     value: right,
     field: "right decimal operand",
   })
-  if (!normalizedRight.ok) return toResult({ errors: normalizedRight.errors })
+  if (!normalizedRight.ok) {return toResult({ errors: normalizedRight.errors })}
 
   try {
     return toResult({

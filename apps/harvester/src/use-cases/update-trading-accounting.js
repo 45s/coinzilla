@@ -26,13 +26,15 @@ export function updateTradingAccounting({
     if (!(fill instanceof Fill)) {
       throw new TypeError("updateTradingAccounting requires a canonical Fill")
     }
-    const portfolioResult = portfolio.applyFill({ fill, strategyId: StrategyId.COIN_GRABBER })
+    const portfolioResult = portfolio.applyFill({ fill,
+strategyId: StrategyId.COIN_GRABBER })
     const ledgerResult = recoveryLedger.applyFill({ fill })
     if (portfolioResult.applied !== ledgerResult.applied ||
         portfolioResult.duplicate !== ledgerResult.duplicate) {
       throw new Error("Portfolio and RecoveryLedger execution identities are inconsistent")
     }
-    const nextPosition = portfolioResult.portfolio.getPosition({ marketId: fill.market.id, strategyId: StrategyId.COIN_GRABBER })
+    const nextPosition = portfolioResult.portfolio.getPosition({ marketId: fill.market.id,
+strategyId: StrategyId.COIN_GRABBER })
     if (nextPosition?.spent?.amount !== ledgerResult.ledger.buyCost) {
       throw new Error("Position.spent and the legacy RecoveryLedger cost mirror are inconsistent")
     }

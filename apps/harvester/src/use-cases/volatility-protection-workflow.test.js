@@ -16,8 +16,16 @@ function makeSnapshot({
   return {
     ok: true,
     data: {
-      status: { isReady, isFresh, observedAt, lastClosedCandleOpenTime: openTime, reason },
-      metrics: { openTime, volatilityRatio, natr: "0.02", referenceNatr: "0.01", atr: "0.03" },
+      status: { isReady,
+isFresh,
+observedAt,
+lastClosedCandleOpenTime: openTime,
+reason },
+      metrics: { openTime,
+volatilityRatio,
+natr: "0.02",
+referenceNatr: "0.01",
+atr: "0.03" },
     },
   }
 }
@@ -26,10 +34,14 @@ function makeWorkflow({
   activeOrders = [],
   transition,
   cancelOwnedBuyOrders = async () => ({ ok: true }),
-  evaluateLatest = async () => ({ ok: true, data: { actions: [] } }),
+  evaluateLatest = async () => ({ ok: true,
+data: { actions: [] } }),
   snapshot = makeSnapshot(),
 } = {}) {
-  const calls = { transitions: [], cancellations: [], evaluations: [], logs: [] }
+  const calls = { transitions: [],
+cancellations: [],
+evaluations: [],
+logs: [] }
   const currentOrders = [...activeOrders]
   const state = {
     volatilityProtection: new Map(),
@@ -55,19 +67,25 @@ function makeWorkflow({
       return evaluateLatest(input)
     },
     logger: {
-      system: (entry) => calls.logs.push({ level: "system", ...entry }),
-      warn: (entry) => calls.logs.push({ level: "warn", ...entry }),
+      system: (entry) => calls.logs.push({ level: "system",
+...entry }),
+      warn: (entry) => calls.logs.push({ level: "warn",
+...entry }),
     },
     transitionVolatilityProtection: (input) => {
       calls.transitions.push(input)
       return transition(input)
     },
   })
-  return { workflow, state, calls }
+  return { workflow,
+state,
+calls }
 }
 
 test("cancels only active BUY orders when the serialized volatility transition enters protection", async () => {
-  const activeBuy = { market: { symbol }, side: "BUY", status: "OPEN" }
+  const activeBuy = { market: { symbol },
+side: "BUY",
+status: "OPEN" }
   const { workflow, state, calls } = makeWorkflow({
     activeOrders: [activeBuy],
     transition: ({ state: current }) => ({
@@ -84,7 +102,8 @@ test("cancels only active BUY orders when the serialized volatility transition e
     }),
   })
 
-  const result = await workflow.processVolatilitySnapshot({ symbol, snapshot: makeSnapshot() })
+  const result = await workflow.processVolatilitySnapshot({ symbol,
+snapshot: makeSnapshot() })
 
   assert.equal(result.ok, true, "A successful protection transition must return a successful result.")
   assert.equal(result.data.mode, "PROTECTED", "The per-market protection state must be retained.")
@@ -101,15 +120,20 @@ test("cancels only active BUY orders when the serialized volatility transition e
 test("skips an identical volatility snapshot without repeating the domain transition", async () => {
   const { workflow, calls } = makeWorkflow({
     transition: ({ state: current }) => ({
-      state: { ...current, mode: "PROTECTED", reason: "HIGH_VOLATILITY", volatilityRatio: "2" },
+      state: { ...current,
+mode: "PROTECTED",
+reason: "HIGH_VOLATILITY",
+volatilityRatio: "2" },
       changed: true,
       recovered: false,
       warning: false,
     }),
   })
 
-  await workflow.processVolatilitySnapshot({ symbol, snapshot: makeSnapshot() })
-  const repeated = await workflow.processVolatilitySnapshot({ symbol, snapshot: makeSnapshot() })
+  await workflow.processVolatilitySnapshot({ symbol,
+snapshot: makeSnapshot() })
+  const repeated = await workflow.processVolatilitySnapshot({ symbol,
+snapshot: makeSnapshot() })
 
   assert.equal(repeated.ok, true, "An identical observation is a successful no-op.")
   assert.equal(repeated.data.skipped, true, "The existing snapshot signature must suppress duplicate processing.")
@@ -140,7 +164,8 @@ test("resumes strategy evaluation after the volatility policy reports recovery",
   })
   state.volatilityProtection.set(symbol, protectedState)
 
-  const result = await workflow.processVolatilitySnapshot({ symbol, snapshot: makeSnapshot({ volatilityRatio: "1" }) })
+  const result = await workflow.processVolatilitySnapshot({ symbol,
+snapshot: makeSnapshot({ volatilityRatio: "1" }) })
 
   assert.equal(result.ok, true, "A recovered volatility state must return successfully.")
   assert.equal(result.data.recovered, true, "The result must expose the recovery transition.")

@@ -27,7 +27,7 @@ export function assertAccountSnapshotCoversMarkets({
   const uniqueMissing = [...new Set(missing)]
   if (uniqueMissing.length > 0) {
     throw new Error(
-      "Account snapshot is missing required market asset balances: " + uniqueMissing.join(", "),
+      `Account snapshot is missing required market asset balances: ${  uniqueMissing.join(", ")}`,
     )
   }
   return Object.freeze({

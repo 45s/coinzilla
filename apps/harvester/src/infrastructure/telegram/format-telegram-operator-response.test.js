@@ -1,5 +1,8 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest("[format-telegram-operator-response.test.js] " + name, ...args)
+const test = (...args) => {
+  const [name, ...testArguments] = args
+  return nodeTest(`[format-telegram-operator-response.test.js] ${  name}`, ...testArguments)
+}
 import assert from "node:assert/strict"
 import {
   formatTelegramOperatorPositions,
@@ -34,8 +37,16 @@ test("formats Harvester and external order ownership explicitly", () => {
     snapshot: {
       observedAt: 1000,
       orders: [
-        { ownership: "HARVESTER", symbol: "DOGEUSDT", side: "BUY", status: "OPEN", brokerOrderId: "101" },
-        { ownership: "EXTERNAL", symbol: "BTCUSDT", side: "SELL", status: "OPEN", brokerOrderId: "202" },
+        { ownership: "HARVESTER",
+symbol: "DOGEUSDT",
+side: "BUY",
+status: "OPEN",
+brokerOrderId: "101" },
+        { ownership: "EXTERNAL",
+symbol: "BTCUSDT",
+side: "SELL",
+status: "OPEN",
+brokerOrderId: "202" },
       ],
     },
   })
@@ -49,7 +60,10 @@ test("formats exchange balance freshness and free/locked/total values", () => {
       observedAt: 1000,
       sourceTime: 900,
       ageMs: 100,
-      balances: [{ asset: "USDT", free: "100", locked: "10", total: "110" }],
+      balances: [{ asset: "USDT",
+free: "100",
+locked: "10",
+total: "110" }],
     },
   })
   assert.match(text, /100ms ago/)

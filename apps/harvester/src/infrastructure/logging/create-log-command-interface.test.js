@@ -9,9 +9,11 @@ const createLogger = () => {
     levels,
     setLevel: (input) => {
       levels.push(input)
-      return { transports: [{ name: "console", level: input.level }] }
+      return { transports: [{ name: "console",
+level: input.level }] }
     },
-    getConfig: () => ({ transports: [{ name: "console", level: levels.at(-1)?.level ?? "info" }] }),
+    getConfig: () => ({ transports: [{ name: "console",
+level: levels.at(-1)?.level ?? "info" }] }),
   }
 }
 
@@ -22,7 +24,9 @@ test("registers /log level and status commands only for TTY input", () => {
   let outputText = ""
   output.on("data", (chunk) => { outputText += chunk.toString() })
   const logger = createLogger()
-  const command = createLogCommandInterface({ logger, input, output })
+  const command = createLogCommandInterface({ logger,
+input,
+output })
 
   assert.equal(command.enabled, true)
   input.write("/log debug\n")
@@ -31,9 +35,12 @@ test("registers /log level and status commands only for TTY input", () => {
   input.write("/log status\n")
 
   assert.deepEqual(logger.levels, [
-    { transport: "console", level: "debug" },
-    { transport: "console", level: "trace" },
-    { transport: "console", level: "info" },
+    { transport: "console",
+level: "debug" },
+    { transport: "console",
+level: "trace" },
+    { transport: "console",
+level: "info" },
   ])
   assert.match(outputText, /Console log level: debug/)
   assert.match(outputText, /"level": "info"/)
@@ -47,7 +54,9 @@ test("does not attach a readline listener to non-interactive stdin", () => {
   input.isTTY = false
   const output = new PassThrough()
   const logger = createLogger()
-  const command = createLogCommandInterface({ logger, input, output })
+  const command = createLogCommandInterface({ logger,
+input,
+output })
 
   assert.equal(command.enabled, false)
   input.write("/log debug\n")
@@ -64,7 +73,9 @@ test("reports invalid commands without changing logger configuration", () => {
   let outputText = ""
   output.on("data", (chunk) => { outputText += chunk.toString() })
   const logger = createLogger()
-  const command = createLogCommandInterface({ logger, input, output })
+  const command = createLogCommandInterface({ logger,
+input,
+output })
 
   input.write("/log verbose\n")
   input.write("/log debug extra\n")

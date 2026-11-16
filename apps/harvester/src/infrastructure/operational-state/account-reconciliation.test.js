@@ -7,7 +7,8 @@ import { createFileOperationalStateStore } from "./create-file-operational-state
 
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-account-facts-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
   const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "account-facts-test-session",
@@ -27,8 +28,14 @@ const balanceSnapshot = (overrides = {}) => ({
     sourceTime: 1_700_000_000_000,
     assetCount: 2,
     balances: [
-      { asset: "BTC", free: "0.1000", locked: "0.0200", total: "0.1200" },
-      { asset: "USDT", free: "100.00", locked: "25.00", total: "125.00" },
+      { asset: "BTC",
+free: "0.1000",
+locked: "0.0200",
+total: "0.1200" },
+      { asset: "USDT",
+free: "100.00",
+locked: "25.00",
+total: "125.00" },
     ],
     auditReasons: [],
   },
@@ -80,34 +87,58 @@ test("accepts complete exact-decimal balance and account-wide open-order snapsho
 test("rejects balance snapshots with incomplete or contradictory exact accounting", async (t) => {
   const store = await createStore(t)
   const invalidFacts = [
-    balanceSnapshot({ factId: "account-snapshot:bad-total", data: {
+    balanceSnapshot({ factId: "account-snapshot:bad-total",
+data: {
       ...balanceSnapshot().data,
-      balances: [{ asset: "BTC", free: "0.1", locked: "0.02", total: "0.11" }, { asset: "USDT", free: "100", locked: "25", total: "125" }],
+      balances: [{ asset: "BTC",
+free: "0.1",
+locked: "0.02",
+total: "0.11" }, { asset: "USDT",
+free: "100",
+locked: "25",
+total: "125" }],
     } }),
-    balanceSnapshot({ factId: "account-snapshot:duplicate-asset", data: {
+    balanceSnapshot({ factId: "account-snapshot:duplicate-asset",
+data: {
       ...balanceSnapshot().data,
       balances: [
-        { asset: "BTC", free: "0.1", locked: "0", total: "0.1" },
-        { asset: "BTC", free: "0.2", locked: "0", total: "0.2" },
+        { asset: "BTC",
+free: "0.1",
+locked: "0",
+total: "0.1" },
+        { asset: "BTC",
+free: "0.2",
+locked: "0",
+total: "0.2" },
       ],
     } }),
-    balanceSnapshot({ factId: "account-snapshot:wrong-count", data: {
+    balanceSnapshot({ factId: "account-snapshot:wrong-count",
+data: {
       ...balanceSnapshot().data,
       assetCount: 1,
     } }),
-    balanceSnapshot({ factId: "account-snapshot:complete-with-reason", data: {
+    balanceSnapshot({ factId: "account-snapshot:complete-with-reason",
+data: {
       ...balanceSnapshot().data,
       auditReasons: ["BALANCE_SOURCE_INCOMPLETE"],
     } }),
-    balanceSnapshot({ factId: "account-snapshot:incomplete-without-reason", data: {
+    balanceSnapshot({ factId: "account-snapshot:incomplete-without-reason",
+data: {
       ...balanceSnapshot().data,
       auditStatus: "INCOMPLETE",
     } }),
-    balanceSnapshot({ factId: "account-snapshot:decimal-number", data: {
+    balanceSnapshot({ factId: "account-snapshot:decimal-number",
+data: {
       ...balanceSnapshot().data,
       balances: [
-        { asset: "BTC", free: 0.1, locked: "0.02", total: "0.12" },
-        { asset: "USDT", free: "100", locked: "25", total: "125" },
+        { asset: "BTC",
+free: 0.1,
+locked: "0.02",
+total: "0.12" },
+        { asset: "USDT",
+free: "100",
+locked: "25",
+total: "125" },
       ],
     } }),
   ]
@@ -117,39 +148,48 @@ test("rejects balance snapshots with incomplete or contradictory exact accountin
     assert.equal(
       result.ok,
       false,
-      "Malformed balance snapshot " + fact.factId + " must be rejected instead of becoming recovery evidence.",
+      `Malformed balance snapshot ${  fact.factId  } must be rejected instead of becoming recovery evidence.`,
     )
   }
 })
 
 test("rejects open-order snapshots whose count, identity, state, or readiness contradicts their contents", async (t) => {
   const store = await createStore(t)
-  const validOrder = openOrdersSnapshot().data.orders[0]
+  const [validOrder] = openOrdersSnapshot().data.orders
   const invalidFacts = [
-    openOrdersSnapshot({ factId: "open-orders:wrong-count", data: {
+    openOrdersSnapshot({ factId: "open-orders:wrong-count",
+data: {
       ...openOrdersSnapshot().data,
       orderCount: 0,
     } }),
-    openOrdersSnapshot({ factId: "open-orders:duplicate-identity", data: {
+    openOrdersSnapshot({ factId: "open-orders:duplicate-identity",
+data: {
       ...openOrdersSnapshot().data,
       orderCount: 2,
-      orders: [validOrder, { ...validOrder, clientOrderId: "another-client-id" }],
+      orders: [validOrder, { ...validOrder,
+clientOrderId: "another-client-id" }],
     } }),
-    openOrdersSnapshot({ factId: "open-orders:ready-with-orders", data: {
+    openOrdersSnapshot({ factId: "open-orders:ready-with-orders",
+data: {
       ...openOrdersSnapshot().data,
       readiness: "READY",
     } }),
-    openOrdersSnapshot({ factId: "open-orders:blocked-without-reason", data: {
+    openOrdersSnapshot({ factId: "open-orders:blocked-without-reason",
+data: {
       ...openOrdersSnapshot().data,
       readiness: "BLOCKED",
     } }),
-    openOrdersSnapshot({ factId: "open-orders:terminal-order", data: {
+    openOrdersSnapshot({ factId: "open-orders:terminal-order",
+data: {
       ...openOrdersSnapshot().data,
-      orders: [{ ...validOrder, status: "FILLED" }],
+      orders: [{ ...validOrder,
+status: "FILLED" }],
     } }),
-    openOrdersSnapshot({ factId: "open-orders:over-executed", data: {
+    openOrdersSnapshot({ factId: "open-orders:over-executed",
+data: {
       ...openOrdersSnapshot().data,
-      orders: [{ ...validOrder, executedQuantity: "0.0200" }],
+      orders: [{ ...validOrder,
+executedQuantity: "0.0200" }],
     } }),
   ]
 
@@ -158,7 +198,7 @@ test("rejects open-order snapshots whose count, identity, state, or readiness co
     assert.equal(
       result.ok,
       false,
-      "Contradictory account-wide open-order snapshot " + fact.factId + " must fail closed.",
+      `Contradictory account-wide open-order snapshot ${  fact.factId  } must fail closed.`,
     )
   }
 })
@@ -195,7 +235,10 @@ test("accepts an explicitly blocked open-order snapshot without treating it as a
 
 test("requires a targeted COMMISSION_BASELINE snapshot to contain exactly one asset", async (t) => {
   const store = await createStore(t)
-  const baseline = (factId, balances, auditStatus = "COMPLETE", auditReasons = []) => ({
+  const baseline = (...parameters) => {
+  const [factId, balances, auditStatus = "COMPLETE", auditReasons = []] = parameters
+  return ({
+
     factId,
     factType: "ACCOUNT_SNAPSHOT_CAPTURED",
     data: {
@@ -206,10 +249,14 @@ test("requires a targeted COMMISSION_BASELINE snapshot to contain exactly one as
       balances,
       auditReasons,
     },
-  })
+    })
+  }
   const valid = await store.append(baseline(
     "account-snapshot:COMMISSION_BASELINE:single-asset",
-    [{ asset: "BNB", free: "1.0000", locked: "0.2500", total: "1.2500" }],
+    [{ asset: "BNB",
+free: "1.0000",
+locked: "0.2500",
+total: "1.2500" }],
   ))
   assert.equal(
     valid.ok,
@@ -229,7 +276,10 @@ test("requires a targeted COMMISSION_BASELINE snapshot to contain exactly one as
 
   const incomplete = await store.append(baseline(
     "account-snapshot:COMMISSION_BASELINE:incomplete",
-    [{ asset: "BNB", free: "1.0000", locked: "0.2500", total: "1.2500" }],
+    [{ asset: "BNB",
+free: "1.0000",
+locked: "0.2500",
+total: "1.2500" }],
     "INCOMPLETE",
     ["COMMISSION_BASELINE_INCOMPLETE"],
   ))
@@ -242,8 +292,14 @@ test("requires a targeted COMMISSION_BASELINE snapshot to contain exactly one as
   const multiple = await store.append(baseline(
     "account-snapshot:COMMISSION_BASELINE:multiple-assets",
     [
-      { asset: "BNB", free: "1.0000", locked: "0.2500", total: "1.2500" },
-      { asset: "XRP", free: "10", locked: "0", total: "10" },
+      { asset: "BNB",
+free: "1.0000",
+locked: "0.2500",
+total: "1.2500" },
+      { asset: "XRP",
+free: "10",
+locked: "0",
+total: "10" },
     ],
   ))
   assert.equal(

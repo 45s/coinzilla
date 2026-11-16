@@ -12,5 +12,6 @@ export const evaluateReadOnlyConservativeStrategy = ({ marketPrice, portfolio } 
   symbol: marketPrice?.symbol,
   action: "NO_ACTION",
   reason: "Trading is disabled; Conservative order evaluation runs only inside the trading engine.",
-  position: portfolio?.getPosition({ symbol: marketPrice?.symbol, strategyId: StrategyId.COIN_GRABBER })?.value,
+  position: portfolio?.getPosition({ symbol: marketPrice?.symbol,
+strategyId: StrategyId.COIN_GRABBER })?.value,
 })

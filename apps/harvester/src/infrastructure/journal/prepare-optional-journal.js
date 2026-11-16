@@ -11,7 +11,7 @@ const APPLICATION_DIRECTORY = path.resolve(
 
 function describeJournalError(error) {
   if (error instanceof AggregateError) {
-    const firstError = error.errors[0]
+    const [firstError] = error.errors
     return {
       errorName: error.name,
       errorMessage: error.message,
@@ -28,7 +28,7 @@ function describeJournalError(error) {
 function reportJournalFailure({ logger, error, errors }) {
   try {
     const originalErrors = errors ?? [error]
-    const firstError = originalErrors[0]
+    const [firstError] = originalErrors
     logger?.error?.({
       message: "Optional Harvester Journal startup failed",
       ...describeJournalError(firstError),
@@ -40,7 +40,7 @@ function reportJournalFailure({ logger, error, errors }) {
 }
 
 export function resolveJournalDirectory({ directory }) {
-  if (directory === undefined) return path.resolve(APPLICATION_DIRECTORY, "logs")
+  if (directory === undefined) {return path.resolve(APPLICATION_DIRECTORY, "logs")}
   if (typeof directory !== "string" || directory.trim() === "") {
     throw new TypeError("Harvester Journal directory must be a non-empty string")
   }
@@ -59,42 +59,36 @@ export function resolveJournalDirectory({ directory }) {
     : path.resolve(APPLICATION_DIRECTORY, configuredDirectory)
 }
 
-/**
- * Compose and start the Journal without blocking read-only startup.
- * Trading startup explicitly awaits ready and uses flush() before any order.
- * */
-export function prepareOptionalJournal({
+function createDisabledJournal() {
+  const ready = Promise.resolve(toResult({ disabled: true }))
+  return Object.freeze({
+    ready,
+    get status() {
+      return Object.freeze({
+        state: "disabled",
+        enabled: false,
+        started: false,
+        writeFailed: false,
+        writeErrorCount: 0,
+        closed: false,
+      })
+    },
+    flush: async () => toResult({ error: new Error("Durable account audit requires an enabled Journal") }),
+    close: async () => toResult({ closed: true,
+disabled: true }),
+  })
+}
+
+function startOptionalJournal({
   eventBus,
   directory,
-  enabled = true,
-  logger = defaultLogger,
-  journalFactory = (options) => new Journal(options),
+  logger,
+  journalFactory,
   processIdentity,
-} = {}) {
-  let state = enabled ? "starting" : "disabled"
+  state,
+  reportFailure,
+}) {
   let journal
-
-  const reportFailure = ({ error, errors }) => reportJournalFailure({ logger, error, errors })
-
-  if (!enabled) {
-    const ready = Promise.resolve(toResult({ disabled: true }))
-    return Object.freeze({
-      ready,
-      get status() {
-        return Object.freeze({
-          state,
-          enabled: false,
-          started: false,
-          writeFailed: false,
-          writeErrorCount: 0,
-          closed: false,
-        })
-      },
-      flush: async () => toResult({ error: new Error("Durable account audit requires an enabled Journal") }),
-      close: async () => toResult({ closed: true, disabled: true }),
-    })
-  }
-
   let ready
   try {
     if (typeof journalFactory !== "function") {
@@ -127,10 +121,10 @@ export function prepareOptionalJournal({
       .then(() => journal.start())
       .then((result) => {
         if (result?.ok === true) {
-          state = "ready"
+          state.current = "ready"
           return result
         }
-        state = "failed"
+        state.current = "failed"
         const errors = Array.isArray(result?.errors) && result.errors.length > 0
           ? result.errors
           : [new TypeError("Journal start returned an invalid result")]
@@ -138,18 +132,23 @@ export function prepareOptionalJournal({
         return result?.ok === false ? result : toResult({ errors })
       })
       .catch((error) => {
-        state = "failed"
+        state.current = "failed"
         reportFailure({ error })
         return toResult({ error })
       })
   } catch (error) {
-    state = "failed"
+    state.current = "failed"
     reportFailure({ error })
     ready = Promise.resolve(toResult({ error }))
   }
+  return { journal,
+ready }
+}
+
+function createJournalLifecycle({ journal, ready, state, reportFailure }) {
   const getStatus = () => {
     const writeFailed = journal?.writeFailed === true
-    const currentState = state === "ready" && writeFailed ? "degraded" : state
+    const currentState = state.current === "ready" && writeFailed ? "degraded" : state.current
     return Object.freeze({
       state: currentState,
       enabled: true,
@@ -162,17 +161,17 @@ export function prepareOptionalJournal({
 
   const flush = async () => {
     const startResult = await ready
-    if (!startResult.ok || !journal) return startResult
+    if (!startResult.ok || !journal) {return startResult}
     if (typeof journal.flush !== "function") {
       return toResult({ error: new TypeError("Journal implementation must provide flush() for durable account audits") })
     }
     try {
       const result = await journal.flush()
-      if (result?.ok !== true) state = "degraded"
-      return result?.ok === true ? result : result?.ok === false ? result
-        : toResult({ error: new TypeError("Journal flush returned an invalid result") })
+      if (result?.ok !== true) {state.current = "degraded"}
+      if (result?.ok === true || result?.ok === false) {return result}
+      return toResult({ error: new TypeError("Journal flush returned an invalid result") })
     } catch (error) {
-      state = "degraded"
+      state.current = "degraded"
       reportFailure({ error })
       return toResult({ error })
     }
@@ -181,7 +180,7 @@ export function prepareOptionalJournal({
   const close = async () => {
     const startResult = await ready
     if (!journal) {
-      state = "closed"
+      state.current = "closed"
       return toResult({
         closed: true,
         durable: true,
@@ -192,14 +191,11 @@ export function prepareOptionalJournal({
 
     try {
       const result = await journal.close()
-      state = result?.ok === true ? "closed" : "close_failed"
-      return result?.ok === true
-        ? result
-        : result?.ok === false
-          ? result
-          : toResult({ error: new TypeError("Journal close returned an invalid result") })
+      state.current = result?.ok === true ? "closed" : "close_failed"
+      if (result?.ok === true || result?.ok === false) {return result}
+      return toResult({ error: new TypeError("Journal close returned an invalid result") })
     } catch (error) {
-      state = "close_failed"
+      state.current = "close_failed"
       reportFailure({ error })
       return toResult({ error })
     }
@@ -212,5 +208,38 @@ export function prepareOptionalJournal({
     },
     flush,
     close,
+  })
+}
+
+/**
+ * Compose and start the Journal without blocking read-only startup.
+ * Trading startup explicitly awaits ready and uses flush() before any order.
+ */
+export function prepareOptionalJournal({
+  eventBus,
+  directory,
+  enabled = true,
+  logger = defaultLogger,
+  journalFactory = (options) => new Journal(options),
+  processIdentity,
+} = {}) {
+  if (!enabled) {return createDisabledJournal()}
+  const state = { current: "starting" }
+  const reportFailure = ({ error, errors }) => reportJournalFailure({ logger,
+error,
+errors })
+  const started = startOptionalJournal({
+    eventBus,
+    directory,
+    logger,
+    journalFactory,
+    processIdentity,
+    state,
+    reportFailure,
+  })
+  return createJournalLifecycle({
+    ...started,
+    state,
+    reportFailure,
   })
 }

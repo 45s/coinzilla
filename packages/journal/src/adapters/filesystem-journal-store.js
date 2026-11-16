@@ -59,16 +59,18 @@ export class FileSystemJournalStore {
     try {
       lockFileHandle = await open(lockFilePath, "wx", 0o600)
     } catch (cause) {
-      if (cause.code !== "EEXIST") throw cause
+      if (cause.code !== "EEXIST") {throw cause}
       const error = new Error(`Journal directory is already locked: ${this.directory}. Verify that no writer is active before removing ${lockFilePath}.`)
       error.code = "JOURNAL_DIRECTORY_LOCKED"
-      error.details = { directory: this.directory, lockFilePath }
+      error.details = { directory: this.directory,
+lockFilePath }
       error.cause = cause
       throw error
     }
     this.lockFileHandle = lockFileHandle
     this.lockFilePath = lockFilePath
-    const metadata = { pid: process.pid, startedAt: new Date().toISOString() }
+    const metadata = { pid: process.pid,
+startedAt: new Date().toISOString() }
     await lockFileHandle.writeFile(`${JSON.stringify(metadata)}\n`, "utf8")
   }
 
@@ -106,7 +108,7 @@ export class FileSystemJournalStore {
         this.ownedSessionHandle = sessionHandle
         return { filePath }
       } catch (error) {
-        if (error.code !== "EEXIST") throw error
+        if (error.code !== "EEXIST") {throw error}
       }
     }
   }
@@ -117,7 +119,7 @@ export class FileSystemJournalStore {
    * @returns {Promise<void>}
    */
   async append(line) {
-    if (!this.sessionHandle) throw new Error("Journal session file is not open")
+    if (!this.sessionHandle) {throw new Error("Journal session file is not open")}
     await this.sessionHandle.writeFile(line, "utf8")
   }
 
@@ -126,7 +128,7 @@ export class FileSystemJournalStore {
    * @returns {Promise<void>}
    */
   async sync() {
-    if (!this.sessionHandle) throw new Error("Journal session file is not open")
+    if (!this.sessionHandle) {throw new Error("Journal session file is not open")}
     await this.sessionHandle.sync()
   }
 
@@ -157,7 +159,7 @@ export class FileSystemJournalStore {
     this.sessionHandleOverride = failedHandles.has(overrideHandle) ? overrideHandle : null
     this.ownedSessionHandle = failedHandles.has(ownedHandle) ? ownedHandle : null
 
-    if (errors.length === 1) throw errors[0]
+    if (errors.length === 1) {throw errors[0]}
     if (errors.length > 1) {
       throw new AggregateError(errors, "Failed to close all Journal session handles")
     }
@@ -186,7 +188,8 @@ export class FileSystemJournalStore {
     const entries = []
     const directoryHandle = await opendir(this.directory)
     for await (const entry of directoryHandle) {
-      entries.push({ name: entry.name, isFile: entry.isFile() })
+      entries.push({ name: entry.name,
+isFile: entry.isFile() })
     }
     return entries
   }

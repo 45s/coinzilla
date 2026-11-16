@@ -11,6 +11,7 @@ import {
 } from "./legacy-position.js"
 import { createMixedSellFillAllocation } from "./mixed-sell-fill-allocation.js"
 import {
+  MixedSellFillReconciliationError,
   createMixedSellFillReconciliation,
   reconcileMixedSellFillOrder,
   stageMixedSellFillAllocation,
@@ -195,12 +196,72 @@ test("commits a fully reconciled mixed SELL to recovery and legacy projections t
     context.canonicalFillAllocations[0].allocationFingerprint,
     "The recovery projection must retain the immutable full allocation fingerprint.",
   )
-  assert.ok(
-    Number(result.legacyPosition.remainingQuantity) < Number(context.legacyPosition.remainingQuantity),
-    "The legacy remaining quantity must decrease by its allocated base debit only after terminal reconciliation.",
-  )
+  assert.equal(result.legacyPosition.remainingQuantity, "49.99", "The legacy remaining quantity must decrease by its exact allocated base debit only after terminal reconciliation.")
+  assert.equal(result.portfolio.getPosition({ positionId }).baseQuantity.amount, "0.01", "The recovery Position must receive only its allocated gross base debit.")
   assert.equal(result.legacyPosition.averageCost, context.legacyPosition.averageCost, "Legacy average cost must remain fixed after disposal.")
   assert.equal(result.legacyPosition.invested, context.legacyPosition.invested, "Original legacy investment must remain unchanged.")
+})
+
+test("commits every partial canonical Fill only after the complete terminal order reconciles", () => {
+  const context = makeAccountingContext()
+  const firstFill = makeFill({
+    tradeId: "sell-part-1",
+    quantity: "2.5",
+    quoteQuantity: "5",
+  })
+  const secondFill = makeFill({
+    tradeId: "sell-part-2",
+    quantity: "2.51",
+    quoteQuantity: "5.02",
+  })
+  const openOrder = makeOrder()
+  const openRegistry = makeOrderRegistry(openOrder)
+  const terminalOrder = makeOrder({
+    status: "FILLED",
+    executedQuantity: "5.01",
+  })
+  const terminalRegistry = makeOrderRegistry(terminalOrder)
+  const allocations = [
+    createMixedSellFillAllocation({
+      fill: firstFill,
+      orderRegistry: terminalRegistry,
+      recoveryQuantity: "2.5",
+      legacyQuantity: "0",
+    }),
+    createMixedSellFillAllocation({
+      fill: secondFill,
+      orderRegistry: terminalRegistry,
+      recoveryQuantity: "2.5",
+      legacyQuantity: "0.01",
+    }),
+  ]
+  let reconciliation = createMixedSellFillReconciliation({
+    order: openOrder,
+    orderRegistry: openRegistry,
+  })
+  for (const allocation of allocations) {
+    reconciliation = stageMixedSellFillAllocation({
+      reconciliation,
+      allocation,
+    }).reconciliation
+  }
+
+  const result = applyReconciledMixedSellOrder({
+    ...context,
+    reconciliation,
+    terminalOrder,
+    orderRegistry: terminalRegistry,
+    canonicalFills: [firstFill, secondFill],
+    canonicalFillAllocations: allocations,
+  })
+
+  assert.equal(result.applied, true, "The complete terminal order must commit both partial Fill allocations together.")
+  assert.equal(result.portfolio.appliedFillIds.includes(firstFill.id), true, "The recovery projection must record the first canonical partial Fill.")
+  assert.equal(result.portfolio.appliedFillIds.includes(secondFill.id), true, "The recovery projection must record the second canonical partial Fill.")
+  assert.equal(result.legacyAccounting.appliedFillIds.includes(firstFill.id), true, "The legacy projection must record the first canonical partial Fill.")
+  assert.equal(result.legacyAccounting.appliedFillIds.includes(secondFill.id), true, "The legacy projection must record the second canonical partial Fill.")
+  assert.equal(result.portfolio.getPosition({ positionId }).baseQuantity.amount, "0.01", "Recovery inventory must reflect only the aggregate recovery allocation.")
+  assert.equal(result.legacyPosition.remainingQuantity, "49.99", "Legacy inventory must reflect the aggregate legacy debit exactly once.")
 })
 
 test("treats a repeated complete mixed SELL accounting commit as an exact no-op", () => {
@@ -242,8 +303,11 @@ test("does not expose partially updated projections when the legacy debit cannot
 
   assert.throws(
     () => applyReconciledMixedSellOrder(context),
-    /legacy|remaining quantity|base quantity/i,
-    "A legacy accounting failure must reject the complete transition.",
+    (error) =>
+      error instanceof MixedSellFillReconciliationError &&
+      error.code === "RS_MIXED_SELL_RECONCILIATION_PROJECTION_APPLY_FAILED" &&
+      error.cause instanceof RangeError,
+    "A legacy accounting failure must reject the complete transition with its original typed cause.",
   )
   assert.equal(context.portfolio, portfolioBefore, "A failed transition must leave the caller's Portfolio snapshot unchanged.")
   assert.equal(context.legacyPosition, legacyPositionBefore, "A failed transition must leave the caller's legacy Position unchanged.")

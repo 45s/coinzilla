@@ -10,14 +10,15 @@ const gitOutputs = ({
   workingTree = "",
 } = {}) => ({
   "rev-parse --show-toplevel": "C:/coinzilla\n",
-  "rev-parse HEAD": COMMIT_SHA + "\n",
-  "branch --show-current": branch + "\n",
+  "rev-parse HEAD": `${COMMIT_SHA}\n`,
+  "branch --show-current": `${branch}\n`,
   "log -1 --format=%s": "feat(utils): capture build provenance\n",
   "log -1 --format=%cI": "2026-11-08T22:00:00+00:00\n",
   "status --porcelain --untracked-files=all": workingTree,
 })
 
-const createGitRunner = (outputs, { failure } = {}) => (command, args, options) => {
+const createGitRunner = ({ outputs, failure } = {}) => (...parameters) => {
+  const [command, args, options] = parameters
   assert.equal(command, "git", "build metadata capture must invoke the Git executable")
   assert.equal(options.encoding, "utf8", "Git metadata must be decoded as UTF-8 text")
   assert.equal(options.cwd, "C:/coinzilla", "Git commands must run in the supplied repository directory")
@@ -43,7 +44,7 @@ test("captures complete clean Git provenance for an application version", () => 
     version: "1.0.001",
     cwd: "C:/coinzilla",
     env: {},
-    execFileSync: createGitRunner(gitOutputs()),
+    execFileSync: createGitRunner({ outputs: gitOutputs() }),
   })
 
   assert.deepEqual(metadata, {
@@ -67,10 +68,10 @@ test("records dirty working trees and represents detached HEAD without inventing
     version: "1.0.001",
     cwd: "C:/coinzilla",
     env: {},
-    execFileSync: createGitRunner(gitOutputs({
+    execFileSync: createGitRunner({ outputs: gitOutputs({
       branch: "",
       workingTree: " M apps/harvester/src/index.js\n?? local-notes.txt\n",
-    })),
+    }) }),
   })
 
   assert.equal(metadata.source.workingTree, "dirty", "tracked modifications and untracked files must mark the running source as dirty")
@@ -89,7 +90,8 @@ test("uses explicit build environment metadata when Git is unavailable", () => {
       COINZILLA_BUILD_COMMIT_DATE: "2026-11-08T22:00:00Z",
       COINZILLA_BUILD_WORKING_TREE: "clean",
     },
-    execFileSync: createGitRunner({}, { failure: "rev-parse --show-toplevel" }),
+    execFileSync: createGitRunner({ outputs: {},
+      failure: "rev-parse --show-toplevel" }),
   })
 
   assert.deepEqual(metadata.source, {
@@ -109,7 +111,8 @@ test("keeps unavailable Git metadata explicit when no build environment is suppl
     version: "1.0.001",
     cwd: "C:/coinzilla",
     env: {},
-    execFileSync: createGitRunner({}, { failure: "rev-parse --show-toplevel" }),
+    execFileSync: createGitRunner({ outputs: {},
+      failure: "rev-parse --show-toplevel" }),
   })
 
   assert.deepEqual(metadata.source, {
@@ -125,17 +128,23 @@ test("keeps unavailable Git metadata explicit when no build environment is suppl
 
 test("rejects invalid build metadata capture inputs", () => {
   assert.throws(
-    () => captureMetadata({ application: "", version: "1.0.0", cwd: "C:/coinzilla" }),
+    () => captureMetadata({ application: "",
+      version: "1.0.0",
+      cwd: "C:/coinzilla" }),
     /application/,
     "build metadata capture must reject an empty application identifier",
   )
   assert.throws(
-    () => captureMetadata({ application: "harvester", version: "", cwd: "C:/coinzilla" }),
+    () => captureMetadata({ application: "harvester",
+      version: "",
+      cwd: "C:/coinzilla" }),
     /version/,
     "build metadata capture must reject an empty application version",
   )
   assert.throws(
-    () => captureMetadata({ application: "harvester", version: "1.0.0", cwd: "" }),
+    () => captureMetadata({ application: "harvester",
+      version: "1.0.0",
+      cwd: "" }),
     /cwd/,
     "build metadata capture must reject an empty working directory",
   )
@@ -185,8 +194,10 @@ test("replaces and clears logger context without retaining stale process identit
   })
 
   assert.equal(typeof logger.setContext, "function", "Logger must expose an explicit context replacement operation")
-  logger.setContext({ application: "harvester", runtimeSessionId: "session-1" })
-  logger.setContext({ application: "harvester", runtimeSessionId: "session-2" })
+  logger.setContext({ application: "harvester",
+    runtimeSessionId: "session-1" })
+  logger.setContext({ application: "harvester",
+    runtimeSessionId: "session-2" })
   logger.info({ message: "new process identity" })
   logger.setContext({})
   logger.info({ message: "context cleared" })
@@ -223,7 +234,8 @@ test("decodes Buffer output from the injected Git command boundary", () => {
     version: "1.0.001",
     cwd: "C:/coinzilla",
     env: {},
-    execFileSync: (command, args) => {
+    execFileSync: (...parameters) => {
+      const [command, args] = parameters
       assert.equal(command, "git", "the injectable Git boundary must receive the Git executable name")
       return Buffer.from(outputs[args.join(" ")] ?? "", "utf8")
     },
@@ -252,14 +264,16 @@ test("rejects malformed Git commit identifiers and falls back without inventing 
     version: "1.0.001",
     cwd: "C:/coinzilla",
     env: {},
-    execFileSync: (command, args) => {
-      if (args.join(" ") === "rev-parse --show-toplevel") {
+    execFileSync: (...parameters) => {
+      const [, args] = parameters
+      switch (args.join(" ")) {
+      case "rev-parse --show-toplevel":
         return "C:/coinzilla"
-      }
-      if (args.join(" ") === "rev-parse HEAD") {
+      case "rev-parse HEAD":
         return "not-a-commit-sha"
+      default:
+        return assert.fail("Git capture must stop after rejecting an invalid HEAD identifier")
       }
-      assert.fail("Git capture must stop after rejecting an invalid HEAD identifier")
     },
   })
 

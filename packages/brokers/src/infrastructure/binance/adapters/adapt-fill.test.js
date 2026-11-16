@@ -63,7 +63,9 @@ describe("adaptTrade", () => {
   })
 
   it("uses null for omitted optional commission asset and trade time", () => {
-    const { commissionAsset, time, ...tradeWithoutOptionalFields } = baseTrade
+    const tradeWithoutOptionalFields = { ...baseTrade }
+    delete tradeWithoutOptionalFields.commissionAsset
+    delete tradeWithoutOptionalFields.time
     const result = adaptTrade(tradeWithoutOptionalFields)
 
     assert.equal(result.commissionAsset, null)
@@ -80,13 +82,18 @@ describe("adaptTrade", () => {
       assert.throws(() => adaptTrade(trade), new RegExp(`missing ${field}`))
     }
 
-    assert.throws(() => adaptTrade({ ...baseTrade, id: null }), /missing id/)
+    assert.throws(() => adaptTrade({ ...baseTrade,
+id: null }), /missing id/)
   })
 
   it("requires boolean buyer and maker flags and exact non-negative IDs", () => {
-    assert.throws(() => adaptTrade({ ...baseTrade, isBuyer: "true" }), /isBuyer and isMaker flags/)
-    assert.throws(() => adaptTrade({ ...baseTrade, isMaker: 1 }), /isBuyer and isMaker flags/)
-    assert.throws(() => adaptTrade({ ...baseTrade, id: -1 }), /trade ID must be an exact non-negative integer/)
-    assert.throws(() => adaptTrade({ ...baseTrade, orderId: "1.5" }), /order ID must be an exact non-negative integer/)
+    assert.throws(() => adaptTrade({ ...baseTrade,
+isBuyer: "true" }), /isBuyer and isMaker flags/)
+    assert.throws(() => adaptTrade({ ...baseTrade,
+isMaker: 1 }), /isBuyer and isMaker flags/)
+    assert.throws(() => adaptTrade({ ...baseTrade,
+id: -1 }), /trade ID must be an exact non-negative integer/)
+    assert.throws(() => adaptTrade({ ...baseTrade,
+orderId: "1.5" }), /order ID must be an exact non-negative integer/)
   })
 })

@@ -93,6 +93,37 @@ test("Bitunix Spot broker requires a symbol for open orders and history", async 
   assert.equal(calls.length, 0)
 })
 
+test("Bitunix Spot symbol-scoped order reads reject rows for a different symbol", async () => {
+  const foreignOrder = {
+    orderId: "foreign-order",
+    symbol: "ETHUSDT",
+    side: "2",
+    type: "1",
+    status: "1",
+    volume: "0.5",
+    dealVolume: "0",
+    price: "10",
+  }
+  const { broker } = createBroker({
+    responses: {
+      "/api/spot/v1/order/pending/list": [foreignOrder],
+      "/api/spot/v1/order/history/page": {
+        total: 1,
+        pageNum: "1",
+        data: [foreignOrder],
+      },
+    },
+  })
+
+  const pending = await broker.getOpenOrders({ symbol: "BTCUSDT" })
+  const history = await broker.getOrderHistory({ symbol: "BTCUSDT" })
+
+  assert.equal(pending.ok, false, "pending-order rows must match the requested symbol")
+  assert.equal(history.ok, false, "order-history rows must match the requested symbol")
+  assert.match(pending.errors[0].message, /symbol.*does not match/i)
+  assert.match(history.errors[0].message, /symbol.*does not match/i)
+})
+
 test("Bitunix Spot broker fetches pending orders for one symbol", async () => {
   const { broker, calls } = createBroker({
     responses: {
@@ -107,169 +138,17 @@ test("Bitunix Spot broker fetches pending orders for one symbol", async () => {
   assert.deepEqual(calls[0].options.body, { symbol: "BTCUSDT" })
 })
 
-function createFillLookupBroker({ dealVolume, deals = null } = {}) {
-  const order = {
-    orderId: "123",
-    symbol: "BTCUSDT",
-    side: "2",
-    type: "1",
-    status: "2",
-    volume: "0.5",
-    price: "10",
-    ctime: "2026-11-15T12:00:00Z",
-    utime: "2026-11-15T12:00:01Z",
-  }
-  if (dealVolume !== undefined) {
-    order.dealVolume = dealVolume
-  }
-
-  return createBroker({
-    responses: {
-      "/api/spot/v1/order/detail": order,
-      "/api/spot/v1/common/coin_pair/list": [
-        {
-          base: "BTC",
-          quote: "USDT",
-          isOpen: "1",
-        },
-      ],
-      "/api/spot/v1/order/deal/list": deals,
-    },
-  })
-}
-
-test("Bitunix Spot fill lookup rejects missing or invalid executed quantity", async () => {
-  const cases = [
-    {
-      name: "missing dealVolume",
-      dealVolume: undefined,
-    },
-    {
-      name: "invalid dealVolume",
-      dealVolume: "not-a-decimal",
-    },
-    {
-      name: "negative dealVolume",
-      dealVolume: "-0.5",
-    },
-  ]
-  const unexpectedSuccesses = []
-
-  for (const entry of cases) {
-    const { broker } = createFillLookupBroker({
-      dealVolume: entry.dealVolume,
-    })
-    const result = await broker.getFills({
-      symbol: "BTCUSDT",
-      orderId: "123",
-    })
-    if (result.ok) {
-      unexpectedSuccesses.push(entry.name)
-    }
-  }
-
-  assert.deepEqual(
-    unexpectedSuccesses,
-    [],
-    "fill lookup must require an exact, non-negative executed quantity from order detail",
-  )
-})
-
-test("Bitunix Spot fill lookup rejects an empty matching-order response for a filled order", async () => {
-  const { broker } = createFillLookupBroker({
-    dealVolume: "0.5",
-  })
+test("Bitunix Spot fill lookup stays unsupported until execution semantics are proven", async () => {
+  const { broker, calls } = createBroker()
 
   const result = await broker.getFills({
     symbol: "BTCUSDT",
     orderId: "123",
   })
 
-  assert.equal(result.ok, false, "positive dealVolume cannot be reconciled with an empty matching-order response")
-  assert.match(result.errors[0].message, /matching-order response is empty/i)
-})
-
-test("Bitunix Spot fill lookup rejects matching-order data for an unfilled order", async () => {
-  const { broker } = createFillLookupBroker({
-    dealVolume: "0",
-    deals: {
-      id: "trade-1",
-      volume: "0.5",
-      price: "10",
-      fee: "0.001",
-      feeCoin: "BTC",
-      role: "1",
-      ctime: "2026-11-15T12:00:01Z",
-    },
-  })
-
-  const result = await broker.getFills({
-    symbol: "BTCUSDT",
-    orderId: "123",
-  })
-
-  assert.equal(result.ok, false, "zero dealVolume cannot be reconciled with matching-order data")
-  assert.match(result.errors[0].message, /zero executed quantity/i)
-})
-
-test("Bitunix Spot fill lookup returns an empty array for an unfilled order", async () => {
-  const { broker } = createFillLookupBroker({
-    dealVolume: "0",
-  })
-
-  const result = await broker.getFills({
-    symbol: "BTCUSDT",
-    orderId: "123",
-  })
-
-  assert.equal(result.ok, true, "an order with zero executed quantity and no matching orders has no fills")
-  assert.deepEqual(result.data, [], "an unfilled order must return an empty fill array")
-})
-
-test("Bitunix Spot broker fetches canonical fills for a specific order", async () => {
-  const { broker, calls } = createBroker({
-    responses: {
-      "/api/spot/v1/order/detail": {
-        orderId: "123",
-        symbol: "BTCUSDT",
-        side: "2",
-        type: "1",
-        status: "2",
-        volume: "0.5",
-        dealVolume: "0.5",
-        price: "10",
-        ctime: "2026-11-15T12:00:00Z",
-        utime: "2026-11-15T12:00:01Z",
-      },
-      "/api/spot/v1/common/coin_pair/list": [
-        { base: "BTC",
-          quote: "USDT",
-          isOpen: "1" },
-      ],
-      "/api/spot/v1/order/deal/list": {
-        id: "trade-1",
-        volume: "0.5",
-        price: "10",
-        fee: "0.001",
-        feeCoin: "BTC",
-        role: "1",
-        ctime: "2026-11-15T12:00:01Z",
-      },
-    },
-  })
-
-  const result = await broker.getFills({ symbol: "BTCUSDT",
-    orderId: "123" })
-
-  assert.equal(result.ok, true)
-  assert.equal(result.data.length, 1)
-  assert.equal(result.data[0].tradeId, "trade-1")
-  assert.equal(result.data[0].brokerOrderId, "123")
-  assert.deepEqual(calls.map(({ path }) => path), [
-    "/api/spot/v1/order/detail",
-    "/api/spot/v1/common/coin_pair/list",
-    "/api/spot/v1/order/deal/list",
-  ])
+  assert.equal(result.ok, false, "unproven matching-order semantics cannot be exposed as canonical fills")
+  assert.match(result.errors[0].message, /not supported safely.*quantity denomination.*execution completeness/i)
+  assert.equal(calls.length, 0, "unsupported fill lookup must not issue partial or misleading reads")
 })
 
 test("Bitunix Spot broker never submits or cancels orders without safe identity and stream guarantees", async () => {

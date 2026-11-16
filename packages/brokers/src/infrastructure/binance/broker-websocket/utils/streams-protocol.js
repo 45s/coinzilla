@@ -11,6 +11,72 @@ function assertSymbol(symbol) {
   return symbol.toLowerCase()
 }
 
+function normalizeSymbol(symbol) {
+  if (symbol === undefined || symbol === null ||
+      typeof symbol === "string" && symbol.trim() === "") {
+    return null
+  }
+  return assertSymbol(symbol)
+}
+
+function requireSymbol({ symbol, type }) {
+  if (!symbol) {throw new TypeError(`symbol is required for ${type}`)}
+  return symbol
+}
+
+function createTradeStream({ type, symbol }) {
+  return validateStreamName(`${requireSymbol({ symbol,
+    type })}@${type}`)
+}
+
+function createTickerStream({ type, symbol }) {
+  const stream = symbol ? `${symbol}@${type}` : `!${type}@arr`
+  return validateStreamName(stream)
+}
+
+function createBookTickerStream({ symbol }) {
+  return validateStreamName(`${requireSymbol({ symbol,
+    type: "bookTicker" })}@bookTicker`)
+}
+
+function createKlineStream({ symbol, interval }) {
+  requireSymbol({ symbol,
+    type: "kline" })
+  if (!INTERVALS.has(interval)) {
+    throw new TypeError("interval is not a supported Binance kline interval")
+  }
+  return validateStreamName(`${symbol}@kline_${interval}`)
+}
+
+function createRollingWindowStream({ symbol, windowSize }) {
+  if (!ROLLING_WINDOWS.has(windowSize)) {
+    throw new TypeError("windowSize must be 1h or 4h")
+  }
+  const stream = symbol ? `${symbol}@ticker_${windowSize}` : `!ticker_${windowSize}@arr`
+  return validateStreamName(stream)
+}
+
+function createPartialBookDepthStream({ symbol, levels, speed }) {
+  requireSymbol({ symbol,
+    type: "partialBookDepth" })
+  if (!DEPTH_LEVELS.has(Number(levels))) {
+    throw new TypeError("levels must be 5, 10, or 20")
+  }
+  if (!UPDATE_SPEEDS.has(speed)) {
+    throw new TypeError("speed must be 100ms or 1000ms")
+  }
+  return validateStreamName(`${symbol}@depth${levels}@${speed}`)
+}
+
+function createDiffBookDepthStream({ symbol, speed }) {
+  requireSymbol({ symbol,
+    type: "diffBookDepth" })
+  if (!UPDATE_SPEEDS.has(speed)) {
+    throw new TypeError("speed must be 100ms or 1000ms")
+  }
+  return validateStreamName(`${symbol}@depth@${speed}`)
+}
+
 /**
  * Validate a Binance Spot stream name without changing its spelling.
  *
@@ -41,46 +107,89 @@ export function validateStreamName(stream) {
  * @returns {string}
  * @throws {TypeError} If the selected stream type or its options are unsupported.
  */
-export function createStreamName(type, options = {}) {
+export function createStreamName(...args) {
+  const [type, options = {}] = args
   const { symbol, interval, windowSize, levels, speed } = options
-  const normalizedSymbol = symbol === undefined || symbol === null ||
-    typeof symbol === "string" && symbol.trim() === ""
-    ? null
-    : assertSymbol(symbol)
+  const normalizedSymbol = normalizeSymbol(symbol)
   const normalizedWindowSize = typeof windowSize === "string" ? windowSize.toLowerCase() : windowSize
 
   switch (type) {
     case "trade":
     case "aggTrade":
-      if (!normalizedSymbol) throw new TypeError(`symbol is required for ${type}`)
-      return validateStreamName(`${normalizedSymbol}@${type}`)
+      return createTradeStream({
+        type,
+        symbol: normalizedSymbol,
+      })
     case "miniTicker":
     case "ticker":
-      return validateStreamName(normalizedSymbol ? `${normalizedSymbol}@${type}` : `!${type}@arr`)
+      return createTickerStream({
+        type,
+        symbol: normalizedSymbol,
+      })
     case "bookTicker":
-      if (!normalizedSymbol) throw new TypeError("symbol is required for bookTicker")
-      return validateStreamName(`${normalizedSymbol}@bookTicker`)
+      return createBookTickerStream({ symbol: normalizedSymbol })
     case "kline":
-      if (!normalizedSymbol) throw new TypeError("symbol is required for kline")
-      if (!INTERVALS.has(interval)) throw new TypeError("interval is not a supported Binance kline interval")
-      return validateStreamName(`${normalizedSymbol}@kline_${interval}`)
+      return createKlineStream({
+        symbol: normalizedSymbol,
+        interval,
+      })
     case "rollingWindowTicker":
-      if (!ROLLING_WINDOWS.has(normalizedWindowSize)) throw new TypeError("windowSize must be 1h or 4h")
-      return validateStreamName(normalizedSymbol
-        ? `${normalizedSymbol}@ticker_${normalizedWindowSize}`
-        : `!ticker_${normalizedWindowSize}@arr`)
+      return createRollingWindowStream({
+        symbol: normalizedSymbol,
+        windowSize: normalizedWindowSize,
+      })
     case "partialBookDepth":
-      if (!normalizedSymbol) throw new TypeError("symbol is required for partialBookDepth")
-      if (!DEPTH_LEVELS.has(Number(levels))) throw new TypeError("levels must be 5, 10, or 20")
-      if (!UPDATE_SPEEDS.has(speed)) throw new TypeError("speed must be 100ms or 1000ms")
-      return validateStreamName(`${normalizedSymbol}@depth${levels}@${speed}`)
+      return createPartialBookDepthStream({
+        symbol: normalizedSymbol,
+        levels,
+        speed,
+      })
     case "diffBookDepth":
-      if (!normalizedSymbol) throw new TypeError("symbol is required for diffBookDepth")
-      if (!UPDATE_SPEEDS.has(speed)) throw new TypeError("speed must be 100ms or 1000ms")
-      return validateStreamName(`${normalizedSymbol}@depth@${speed}`)
+      return createDiffBookDepthStream({ symbol: normalizedSymbol,
+        speed })
     default:
       throw new TypeError(`Unsupported Binance stream type: ${type}`)
   }
+}
+
+function parseMessageInput(rawMessage) {
+  try {
+    return typeof rawMessage === "string" ? JSON.parse(rawMessage) : rawMessage
+  } catch {
+    throw new TypeError("Binance stream message is not valid JSON")
+  }
+}
+
+function parseCombinedStream(parsed) {
+  if (typeof parsed.stream !== "string" || !parsed.data || typeof parsed.data !== "object") {
+    throw new TypeError("Malformed Binance combined-stream envelope")
+  }
+  if (parsed.stream === "!serverShutdown" && parsed.data.e === "serverShutdown") {
+    return { serverShutdown: true,
+      data: parsed.data }
+  }
+  return { stream: validateStreamName(parsed.stream),
+    data: parsed.data }
+}
+
+function isBookTickerPayload(parsed) {
+  return typeof parsed.s === "string" &&
+    ["u", "b", "B", "a", "A"].every((field) => Object.hasOwn(parsed, field))
+}
+
+function parseRawStream(parsed) {
+  if (typeof parsed.id === "string" || typeof parsed.id === "number") {
+    return { acknowledgement: parsed }
+  }
+  if (parsed.e === "serverShutdown") {
+    return { serverShutdown: true,
+      data: parsed }
+  }
+  if ((typeof parsed.e !== "string" || parsed.e.length === 0) && !isBookTickerPayload(parsed)) {
+    throw new TypeError("Binance raw stream event is missing its event type")
+  }
+  return { stream: null,
+    data: parsed }
 }
 
 /**
@@ -91,49 +200,19 @@ export function createStreamName(type, options = {}) {
  * @throws {TypeError} If the payload is not a supported Binance stream message.
  */
 export function parseStreamMessage(rawMessage) {
-  let parsed
-  try {
-    parsed = typeof rawMessage === "string" ? JSON.parse(rawMessage) : rawMessage
-  } catch {
-    throw new TypeError("Binance stream message is not valid JSON")
-  }
-
+  const parsed = parseMessageInput(rawMessage)
   if (Array.isArray(parsed)) {
     if (!parsed.every((item) => item && typeof item === "object" && !Array.isArray(item))) {
       throw new TypeError("Binance all-market stream payload must contain objects")
     }
-    return { stream: null, data: parsed }
+    return { stream: null,
+      data: parsed }
   }
-
   if (!parsed || typeof parsed !== "object") {
     throw new TypeError("Binance stream message must be an object")
   }
-
   if (Object.hasOwn(parsed, "stream") && Object.hasOwn(parsed, "data")) {
-    if (typeof parsed.stream !== "string" || !parsed.data || typeof parsed.data !== "object") {
-      throw new TypeError("Malformed Binance combined-stream envelope")
-    }
-    if (parsed.stream === "!serverShutdown" && parsed.data.e === "serverShutdown") {
-      return { serverShutdown: true, data: parsed.data }
-    }
-    return { stream: validateStreamName(parsed.stream), data: parsed.data }
+    return parseCombinedStream(parsed)
   }
-
-  if (typeof parsed.id === "string" || typeof parsed.id === "number") {
-    return { acknowledgement: parsed }
-  }
-
-  if (parsed.e === "serverShutdown") {
-    return { serverShutdown: true, data: parsed }
-  }
-
-  if (typeof parsed.e !== "string" || parsed.e.length === 0) {
-    const isBookTickerPayload = typeof parsed.s === "string" &&
-      ["u", "b", "B", "a", "A"].every((field) => Object.hasOwn(parsed, field))
-    if (!isBookTickerPayload) {
-      throw new TypeError("Binance raw stream event is missing its event type")
-    }
-  }
-
-  return { stream: null, data: parsed }
+  return parseRawStream(parsed)
 }

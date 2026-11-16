@@ -4,9 +4,10 @@ import { Portfolio } from "../portfolio/portfolio.js"
 
 function addAmount({ values, assetId, amount, field }) {
   if (typeof assetId !== "string" || !assetId.trim()) {
-    throw new TypeError(field + " requires a non-empty asset ID")
+    throw new TypeError(`${field  } requires a non-empty asset ID`)
   }
-  values.set(assetId, addDecimal({ left: values.get(assetId) ?? "0", right: amount }))
+  values.set(assetId, addDecimal({ left: values.get(assetId) ?? "0",
+right: amount }))
 }
 
 function addAdditionalTrackedBaseQuantity({ values, item } = {}) {
@@ -53,10 +54,53 @@ function addAdditionalTrackedQuoteCashFlow({ values, item } = {}) {
   })
 }
 
+function addActiveOrderCommitments({
+  activeOrders,
+  committedQuoteBalance,
+  committedBaseBalance,
+}) {
+  for (const order of activeOrders) {
+    if (!["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status)) {
+      throw new TypeError("calculateAccountSnapshotBaselines activeOrders must contain only active orders")
+    }
+    if (order.side === "BUY") {
+      if (!order.limitPrice) {
+        throw new Error(`Cannot capture an active BUY commitment without a canonical limit price: ${order.clientOrderId}`)
+      }
+      addAmount({
+        values: committedQuoteBalance,
+        assetId: order.market.quoteAsset.id,
+        amount: multiplyDecimal({
+          left: order.remainingQuantity.amount,
+          right: order.limitPrice.amount,
+        }),
+        field: "Active BUY quote commitment",
+      })
+      continue
+    }
+    addAmount({
+      values: committedBaseBalance,
+      assetId: order.market.baseAsset.id,
+      amount: order.remainingQuantity.amount,
+      field: "Active SELL base commitment",
+    })
+  }
+}
+
 function toRecords(values) {
-  return Object.freeze([...values]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([assetId, amount]) => Object.freeze({ assetId, amount })))
+  const assetIds = []
+  for (const assetId of values.keys()) {
+    const insertionIndex = assetIds.findIndex((existing) => existing.localeCompare(assetId) > 0)
+    if (insertionIndex < 0) {
+      assetIds.push(assetId)
+    } else {
+      assetIds.splice(insertionIndex, 0, assetId)
+    }
+  }
+  return Object.freeze(assetIds.map((assetId) => Object.freeze({
+    assetId,
+    amount: values.get(assetId),
+  })))
 }
 
 /**
@@ -132,7 +176,7 @@ export function calculateAccountSnapshotBaselines({
       }
       if (order.side === "BUY") {
         if (!order.limitPrice) {
-          throw new Error("Cannot capture an active BUY commitment without a canonical limit price: " + order.clientOrderId)
+          throw new Error(`Cannot capture an active BUY commitment without a canonical limit price: ${  order.clientOrderId}`)
         }
         addAmount({
           values: committedQuoteBalance,
