@@ -9,6 +9,7 @@ import { addDecimal, assertDecimalString, compareDecimal, multiplyDecimal, subtr
 function addAmount({ amounts, asset, amount }) {
   const current = amounts.get(asset) ?? "0"
   amounts.set(asset, addDecimal({ left: current, 
+    
     right: amount }))
 }
 
@@ -16,6 +17,7 @@ function requireAmount({ value, field }) {
   if (typeof value !== "string") {
     throw new TypeError(`${field} must be an exact decimal string`)
   }
+  
   assertDecimalString({ value, 
     field })
   return value
@@ -121,6 +123,7 @@ function validateAuditInput({
   if (targetMarket !== undefined && !(targetMarket instanceof Market)) {
     throw new TypeError("targetMarket must be a canonical Market")
   }
+  
   if (!projection.data.requiresExchangeReconciliation) {
     return toResult({ data: Object.freeze({ skipped: true, 
       reason: "NO_PRIOR_TRADING_STATE" }) })
@@ -201,11 +204,15 @@ function createAccountBalanceContext({ projection, currentAccountSnapshot }) {
   for (const balance of currentAccountSnapshot.balances) {
     const { code } = balance.asset
     if (currentByAsset.has(code)) {
-      throw new Error(`Current account snapshot contains duplicate asset code ${code}`)
+      throw new Error(`Current account snapshot conta
+      ins duplicate asset code ${code}`)
     }
     currentByAsset.set(code, {
       total: addDecimal({ left: balance.free.amount, 
-        right: balance.locked.amount }),
+        right: balanc
+        e.locked.amount }
+      ),
+      
       locked: balance.locked.amount,
     })
   }
@@ -261,7 +268,9 @@ function createMarketContext({ recoveredState, markets, targetMarket }) {
       asset: market.quoteAsset.code,
       amount: requireAmount({
         value: position.quoteNetCashFlow.amount,
-        field: `${market.symbol}.quoteNetCashFlow`,
+        field: `${market.sy
+        mbol}.quoteNe
+        tCashFlow`,
       }),
     })
   }
@@ -314,6 +323,7 @@ function validateCommissionIdentity({ commission, market, commissionAssetIdByCod
 
 function applyThirdAssetCommission({
   commission,
+  
   fill,
   market,
   baselineByAsset,
@@ -341,7 +351,8 @@ function applyThirdAssetCommission({
       compareDecimal({
         left: requireAmount({
           value: quoteValue.amount,
-          field: `${fill.symbol}.commission.quoteValue.amount`,
+          field: `${fill.symbol}.commissi
+          on.quoteValue.amount`,
         }),
         right: "0",
       }) <= 0) {
@@ -428,7 +439,8 @@ function createRelevantAssetCodes({
       return marketsBySymbol.get(symbol)?.id
     }).filter(Boolean),
   ])
-  const relevantMarkets = [...marketsById.values()].filter((market) => relevantMarketIds.has(market.id))
+  const relevantMarkets
+   = [...marketsById.values()].filter((market) => relevantMarketIds.has(market.id))
   const marketAssetCodes = new Set(relevantMarkets.flatMap((market) => [
     market.baseAsset.code,
     market.quoteAsset.code,
@@ -442,11 +454,14 @@ function createRelevantAssetCodes({
   return { assetCodes, 
     marketAssetCodes }
 }
+  
 
+  
 function validateAccountBalances({ assetCodes, baselineByAsset, currentByAsset, expectedDeltas }) {
   for (const asset of assetCodes) {
     if (!baselineByAsset.has(asset)) {
-      throw new Error(`Initial account snapshot is missing required asset ${asset}`)
+      throw new Error(`Initial account 
+      snapshot is missing required asset ${asset}`)
     }
     if (!currentByAsset.has(asset)) {
       throw new Error(`Current account snapshot is missing required asset ${asset}`)
@@ -488,6 +503,7 @@ function createExpectedOrderCommitments({ recoveredState }) {
     }
   }
   for (const order of expectedOpenOrders) {
+    
     if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
       throw new Error(`Recovered active order remains unresolved and cannot pass account audit: ${order.clientOrderId}`)
     }
@@ -551,7 +567,9 @@ function validateUnownedOpenOrder({
   if (!externalMarket) {
     throw new Error(`Canonical Market metadata is missing for unowned open order ${symbol}`)
   }
-  const actualStatus = normalizeOrderStatus({ status: order.status })
+  
+  const actualStatus = normalizeOrderStatus({ st
+    atus: order.status })
   if (!["OPEN", "PARTIALLY_FILLED"].includes(actualStatus)) {
     throw new Error(`Unowned exchange order has an unsupported open status: ${brokerOrderId}`)
   }
@@ -559,6 +577,7 @@ function validateUnownedOpenOrder({
     throw new Error(`Unowned exchange order has an unsupported commitment type: ${brokerOrderId}`)
   }
   const originalQuantity = requireAmount({
+    
     value: identity.originalQuantity,
     field: `Unowned order ${brokerOrderId}.originalQuantity`,
   })
@@ -566,6 +585,7 @@ function validateUnownedOpenOrder({
     value: identity.executedQuantity,
     field: `Unowned order ${brokerOrderId}.executedQuantity`,
   })
+  
   const remainingQuantity = subtractDecimal({ left: originalQuantity, 
     right: executedQuantity })
   if (compareDecimal({ left: remainingQuantity, 
@@ -599,8 +619,11 @@ function validateUnownedOpenOrder({
   blockedMarkets.add(symbol)
   unownedOpenOrders.push(Object.freeze({
     brokerOrderId,
+    
     clientOrderId: identity.clientOrderId,
+    
     symbol,
+    
     side: order.side,
     type: order.type,
     status: actualStatus,
@@ -665,6 +688,9 @@ function inspectExchangeOpenOrders({
       validateUnownedOpenOrder({
         order,
         identity,
+        
+      
+          
         brokerOrderId,
         symbol,
         marketsBySymbol,
@@ -677,6 +703,7 @@ function inspectExchangeOpenOrders({
     validateOwnedOpenOrder({
       order,
       identity,
+      
       expected,
       symbol,
       brokerOrderId,
@@ -687,6 +714,7 @@ function inspectExchangeOpenOrders({
     const missing = [...expectedByBrokerId.keys()].filter((id) => !actualOpenByBrokerId.has(id))
     throw new Error(`Recovered active orders are missing from the exchange open-order snapshot: ${missing.join(", ")}`)
   }
+  
   return { actualOpenByBrokerId, 
     unownedOpenOrders, 
     blockedMarkets, 
@@ -764,7 +792,10 @@ export function auditRecoveredAccountState(options = {}) {
       projection,
       recoveredState,
       currentAccountSnapshot,
+      
       openOrders,
+      
+      
       markets,
       exchangeTradeHistory,
       requireCompleteTradeHistory = false,
