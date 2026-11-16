@@ -6,7 +6,7 @@ import { Portfolio } from "../../domain/portfolio/portfolio.js"
 import { createAccountSnapshotManager } from "./create-account-snapshot-manager.js"
 import { calculateVerifiedLegacySpotAllocation } from "../../domain/strategies/recovery-seller/legacy-spot-allocation.js"
 
-const test = (name, ...args) => nodeTest(`[create-account-snapshot-manager.test.js] ${  name}`, ...args)
+const test = (...args) => nodeTest(`[create-account-snapshot-manager.test.js] ${args[0]}`, ...args.slice(1))
 
 const createFixture = ({
   accountSnapshots = [],
