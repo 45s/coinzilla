@@ -16,6 +16,12 @@ test("all Market Simulator JavaScript files satisfy the repository ESLint rules"
     severity: message.severity,
     message: message.message,
   })))
+  let errorCount = 0
+  let warningCount = 0
+  for (const result of results) {
+    errorCount += result.errorCount
+    warningCount += result.warningCount
+  }
   const formattedFindings = findings.map((finding) => {
     const location = `${finding.filePath}:${finding.line}:${finding.column}`
     const rule = finding.ruleId ?? "unknown rule"
@@ -23,8 +29,13 @@ test("all Market Simulator JavaScript files satisfy the repository ESLint rules"
   }).join("\n")
 
   assert.equal(
-    findings.length,
+    errorCount,
     0,
-    `Market Simulator ESLint must report zero errors and warnings. Found ${findings.length} findings:\n${formattedFindings}`,
+    `Market Simulator ESLint must report zero errors. Found ${errorCount} errors:\n${formattedFindings}`,
+  )
+  assert.equal(
+    warningCount,
+    0,
+    `Market Simulator ESLint must report zero warnings. Found ${warningCount} warnings:\n${formattedFindings}`,
   )
 })
