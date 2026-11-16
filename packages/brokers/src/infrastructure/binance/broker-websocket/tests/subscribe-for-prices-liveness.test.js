@@ -15,8 +15,10 @@ function createBroker(dependencies = {}) {
     marketClientFactory: () => streams,
     ...dependencies,
   })
-  return { broker,
-    streams }
+  return {
+    broker,
+    streams,
+  }
 }
 
 function createAggTrade(lastTradeId) {
@@ -62,10 +64,14 @@ test("uses ticker trade IDs to detect and resubscribe a stalled aggTrade stream"
   assert.deepEqual(
     streams.calls,
     [
-      { method: "subscribe",
-        stream: "btcusdt@aggTrade" },
-      { method: "subscribe",
-        stream: "!ticker_1h@arr" },
+      {
+        method: "subscribe",
+        stream: "btcusdt@aggTrade",
+      },
+      {
+        method: "subscribe",
+        stream: "!ticker_1h@arr",
+      },
     ],
     "price subscriptions must include one independent all-market ticker activity stream",
   )
@@ -84,8 +90,10 @@ test("uses ticker trade IDs to detect and resubscribe a stalled aggTrade stream"
   assert.deepEqual(
     streams.calls.slice(2),
     [
-      { method: "unsubscribe",
-        stream: "btcusdt@aggTrade" },
+      {
+        method: "unsubscribe",
+        stream: "btcusdt@aggTrade",
+      },
       { method: "subscribe",
         stream: "btcusdt@aggTrade" },
     ],
