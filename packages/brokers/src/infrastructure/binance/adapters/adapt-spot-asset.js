@@ -23,7 +23,8 @@ export const adaptSpotAsset = (input) => {
     const ticker = asset.startsWith(EARN_SYMBOL_PREFIX)
       ? asset.replace(EARN_SYMBOL_PREFIX, "")
       : asset
-    assets.push(new Coin({ quantity, ticker }).value)
+    assets.push(new Coin({ quantity,
+ticker }).value)
   }
   return assets
 }
