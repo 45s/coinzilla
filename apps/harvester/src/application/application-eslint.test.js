@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { Buffer } from "node:buffer"
 import { relative } from "node:path"
 import test from "node:test"
 import { fileURLToPath } from "node:url"
@@ -10,16 +11,24 @@ test("keeps every application-layer JavaScript file free of ESLint errors and wa
   const autofixResults = await new ESLint({
     cwd: workspaceRoot,
     fix: true,
-    overrideConfig: [{ rules: { indent: ["error", 2, { ignoredNodes: ["TemplateLiteral"] }], "object-curly-newline": ["error", { ObjectExpression: { minProperties: 2 } }], "brace-style": ["error", "1tbs", { allowSingleLine: false }] } }],
+    overrideConfig: [{
+      rules: {
+        indent: ["error", 2, { ignoredNodes: ["TemplateLiteral"] }],
+        "object-curly-newline": ["error", { ObjectExpression: { minProperties: 2 } }],
+        "brace-style": ["error", "1tbs", { allowSingleLine: false }],
+      },
+    }],
   }).lintFiles(["apps/harvester/src/application"])
   for (const result of autofixResults) {
     if (typeof result.output === "string") {
-      process.stderr.write(`\nAPPLICATION_ESLINT_AUTOFIX_BEGIN:${relative(workspaceRoot, result.filePath)}\n`)
+      const file = relative(workspaceRoot, result.filePath)
       const formattedOutput = result.output
         .replace(/[ \\t]+$/gm, "")
         .replace(/\\$\\{\\s{2,}([^}\\n]*?)\\s{2,}\\}/g, "${$1}")
-      process.stderr.write(formattedOutput)
-      process.stderr.write("\nAPPLICATION_ESLINT_AUTOFIX_END\n")
+      const encodedOutput = Buffer.from(formattedOutput).toString("base64")
+      for (let offset = 0; offset < encodedOutput.length; offset += 1000) {
+        process.stderr.write(`APPLICATION_ESLINT_AUTOFIX_CHUNK:${file}:${offset}:${encodedOutput.slice(offset, offset + 1000)}\\n`)
+      }
     }
   }
 
