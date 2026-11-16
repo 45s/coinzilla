@@ -11,7 +11,7 @@ export async function recordConfigurationBaseline({ operationalStateStore, appCo
     }
     const strategyNames = Object.keys(strategies).sort()
     if (strategyNames.length !== 1) { throw new TypeError("Configuration baseline requires exactly one configured strategy") }
-    const strategyName = strategyNames[0]
+    const [strategyName] = strategyNames
     const { fingerprint, enabledMarkets: markets } = createEffectiveStrategyConfigurationFingerprint({
       strategyName,
       strategy: strategies[strategyName],
