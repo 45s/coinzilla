@@ -29,12 +29,6 @@ export function adaptAssets(input) {
         `Bitunix Spot legacy Coin quantity for "${balance.free.asset.code}" must be a finite Number`,
       )
     }
-    if (quantity === 0) {
-      throw new RangeError(
-        `Bitunix Spot legacy Coin quantity for "${balance.free.asset.code}" is below Number precision`,
-      )
-    }
-
     return [new Coin({
       ticker: balance.free.asset.code,
       quantity,
