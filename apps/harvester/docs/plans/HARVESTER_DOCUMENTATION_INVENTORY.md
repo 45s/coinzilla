@@ -4,8 +4,8 @@
 - Type: Documentation inventory
 - Owner: Harvester
 - Inventory baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
-- Latest recursive checkpoint: `develop` at `7590d332a307c7ef7bea37f0ba8721b399bd96e8` (`truncated: false`; 81 Harvester Markdown/MDX files)
-- Inventory date: 2026-11-09 (baseline); latest verification: 2026-11-11
+- Latest verified checkpoint: `develop` at `0a51d6034a6ff6473d9a9005b74744fd048c9135`; 81 Harvester Markdown/MDX paths, unchanged from the complete recursive tree at `7590d332a307c7ef7bea37f0ba8721b399bd96e8`
+- Inventory date: 2026-11-09 (baseline); latest verification: 2026-11-16
 - Tracking: [#795](https://github.com/45s/coinzilla/issues/795)
 - Policy: [Documentation Governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md)
 
@@ -100,9 +100,9 @@ The 42-file table above remains a frozen baseline. A complete recursive Git tree
 
 PR #1021 updates existing Harvester README, roadmap, Volatility Protection, architecture flow and BrokerPort/adapter guidance to match the implemented candle-history service, freshness handling, gap backfill and shutdown-drain guarantees. It adds no Markdown/MDX paths. Candle measurement collection is implemented; the high-volatility trading policy, central order gate and owned-BUY cancellation remain separate unimplemented work.
 
-## Subsequent recursive additions — current develop checkpoint 27e098d
+## Subsequent recursive additions — current develop checkpoint 0a51d603
 
-The complete recursive tree at `7590d332a307c7ef7bea37f0ba8721b399bd96e8` contains 81 Harvester Markdown/MDX files. The following 20 Harvester paths were added since the prior 61-file checkpoint; no Harvester Markdown/MDX paths were removed:
+The complete recursive tree at `7590d332a307c7ef7bea37f0ba8721b399bd96e8` contains 81 Harvester Markdown/MDX files; the changed-path comparison through current `develop` `0a51d6034a6ff6473d9a9005b74744fd048c9135` confirms that count and path set are unchanged. The following 20 Harvester paths were added since the prior 61-file checkpoint; no Harvester Markdown/MDX paths were removed:
 
 | Added path | Purpose |
 | --- | --- |
