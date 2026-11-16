@@ -328,24 +328,39 @@ function writeOrderLifecycleRecord({ output, color, timestamp, level, method, da
   }) + "\n")
 }
 
+function formatPortfolioBaseQuantity(value) {
+  const text = String(value ?? "-")
+  const match = /^(-?(?:\d+\.\d+|\d+|\.\d+))(?:\s+[A-Z0-9]+)?$/.exec(text)
+  return match ? match[1] : text
+}
+
+function formatPortfolioNet(value) {
+  const text = String(value ?? "-")
+  const match = /^([+-]?(?:\d+\.\d*|\.\d+))(?:\s+[A-Z0-9]+)?$/.exec(text)
+  if (!match) {
+    return text
+  }
+
+  const amount = Number(match[1])
+  return Number.isFinite(amount) ? amount.toFixed(3) : text
+}
+
 function createPortfolioStatsConsoleLine({ time, strategyPrefix, details } = {}) {
   const portfolioLine = [
     time,
-    `${strategyPrefix}PORTFOLIO ${String(details.symbol ?? "-")}`,
-    "| Amount:",
-    String(details.inventory?.totalBaseQuantity ?? "-"),
-    "| Earned:",
-    String(details.inventory?.freeBaseQuantity ?? "-"),
-    "| Spent:",
-    String(details.accounting?.spent ?? "-"),
-    "| Net:",
-    String(details.accounting?.quoteNetCashFlow ?? "-"),
+    strategyPrefix + "PORTFOLIO " + String(details.symbol ?? "-") + ":",
+    "amount: " + formatPortfolioBaseQuantity(details.inventory?.totalBaseQuantity),
+    "|",
+    "earned: " + formatPortfolioBaseQuantity(details.inventory?.freeBaseQuantity),
+    "|",
+    "spent: " + String(details.accounting?.spent ?? "-"),
+    "|",
+    "net: " + formatPortfolioNet(details.accounting?.quoteNetCashFlow),
   ].join(" ")
   return portfolioLine.length > MAX_CONSOLE_LINE_LENGTH
-    ? `${portfolioLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3)}...`
+    ? portfolioLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3) + "..."
     : portfolioLine
 }
-
 function formatStartupConsoleMessage(message) {
   const subscriptionMatch = /^Connected; subscribed to (\d+) enabled market\(s\)\. (.+)$/.exec(message)
   if (subscriptionMatch) {
