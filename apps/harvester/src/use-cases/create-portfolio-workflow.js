@@ -463,6 +463,103 @@ function logRecoveryCompletionFailure({ logger, state, marketId, error, recovery
   })
 }
 
+function evaluatePortfolioRecoveryCompletion({
+  logger,
+  marketId,
+  position,
+  recoveryLedger,
+  keepQuantity,
+  minProfit,
+  inventoryDisposition,
+}) {
+  const completionInput = createRecoveryCompletionInput({
+    position,
+    recoveryLedger,
+    keepQuantity,
+    minProfit,
+    inventoryDisposition,
+  })
+  logger.debug?.({
+    message: "recovery completion evaluation input",
+    marketId,
+    symbol: recoveryLedger.market.symbol,
+    completionInput,
+    position: createPositionLogSummary({ position }),
+    recoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
+  })
+  const evaluatedCompletion = evaluateRecoveryCompletion(completionInput)
+  return Object.freeze({
+    ...evaluatedCompletion,
+    activeQuantity: completionInput.activeQuantity,
+    keepQuantity: completionInput.keepQuantity,
+    minProfit: completionInput.minProfit,
+  })
+}
+
+async function completeEligibleRecoveryCycle({
+  state,
+  marketId,
+  position,
+  recoveryLedger,
+  sellOrder,
+  completion,
+  minProfit,
+  logger,
+  onOperationalStateRecoveryCycleCompleted,
+}) {
+  const staged = stageRecoveryCycleState({
+    state,
+    marketId,
+    position,
+    recoveryLedger,
+    completion,
+    minProfit,
+  })
+  const durableFailure = await persistRecoveryCycleOutcome({
+    callback: onOperationalStateRecoveryCycleCompleted,
+    marketId,
+    recoveryLedger,
+    position,
+    sellOrder,
+    completion,
+    minProfit,
+  })
+  if (durableFailure) {
+    return durableFailure
+  }
+  logRecoveryCycleCompleted({ logger, marketId, recoveryLedger, completion, staged })
+  state.portfolio = staged.nextPortfolio
+  state.recoveryLedgers = staged.nextRecoveryLedgers
+  logRecoveryCycleStats({ logger, position, nextPosition: staged.nextPosition })
+  return undefined
+}
+
+async function recordIneligibleRecoveryCycle({
+  marketId,
+  position,
+  recoveryLedger,
+  sellOrder,
+  completion,
+  minProfit,
+  logger,
+  onOperationalStateRecoveryCycleNotCompleted,
+}) {
+  const durableFailure = await persistRecoveryCycleOutcome({
+    callback: onOperationalStateRecoveryCycleNotCompleted,
+    marketId,
+    recoveryLedger,
+    position,
+    sellOrder,
+    completion,
+    minProfit,
+  })
+  if (durableFailure) {
+    return durableFailure
+  }
+  logRecoveryCycleNotCompleted({ logger, marketId, recoveryLedger, position, completion })
+  return undefined
+}
+
 async function runCompleteRecoveryCycle({
   state,
   marketId,
@@ -484,68 +581,42 @@ async function runCompleteRecoveryCycle({
   }
   try {
     assertTerminalRecoverySellOrder({ sellOrder, marketId })
-    const completionInput = createRecoveryCompletionInput({
+    const completion = evaluatePortfolioRecoveryCompletion({
+      logger,
+      marketId,
       position,
       recoveryLedger,
       keepQuantity,
       minProfit,
       inventoryDisposition,
     })
-    logger.debug?.({
-      message: "recovery completion evaluation input",
-      marketId,
-      symbol: recoveryLedger.market.symbol,
-      completionInput,
-      position: createPositionLogSummary({ position }),
-      recoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
-    })
-    const evaluatedCompletion = evaluateRecoveryCompletion(completionInput)
-    const completion = Object.freeze({
-      ...evaluatedCompletion,
-      activeQuantity: completionInput.activeQuantity,
-      keepQuantity: completionInput.keepQuantity,
-      minProfit: completionInput.minProfit,
-    })
-
+    let failure
     if (completion.eligible) {
-      const staged = stageRecoveryCycleState({
+      failure = await completeEligibleRecoveryCycle({
         state,
         marketId,
         position,
         recoveryLedger,
-        completion,
-        minProfit,
-      })
-      const durableFailure = await persistRecoveryCycleOutcome({
-        callback: onOperationalStateRecoveryCycleCompleted,
-        marketId,
-        recoveryLedger,
-        position,
         sellOrder,
         completion,
         minProfit,
+        logger,
+        onOperationalStateRecoveryCycleCompleted,
       })
-      if (durableFailure) {
-        return durableFailure
-      }
-      logRecoveryCycleCompleted({ logger, marketId, recoveryLedger, completion, staged })
-      state.portfolio = staged.nextPortfolio
-      state.recoveryLedgers = staged.nextRecoveryLedgers
-      logRecoveryCycleStats({ logger, position, nextPosition: staged.nextPosition })
     } else {
-      const durableFailure = await persistRecoveryCycleOutcome({
-        callback: onOperationalStateRecoveryCycleNotCompleted,
+      failure = await recordIneligibleRecoveryCycle({
         marketId,
-        recoveryLedger,
         position,
+        recoveryLedger,
         sellOrder,
         completion,
         minProfit,
+        logger,
+        onOperationalStateRecoveryCycleNotCompleted,
       })
-      if (durableFailure) {
-        return durableFailure
-      }
-      logRecoveryCycleNotCompleted({ logger, marketId, recoveryLedger, position, completion })
+    }
+    if (failure) {
+      return failure
     }
     return toResult({ data: completion })
   } catch (error) {
