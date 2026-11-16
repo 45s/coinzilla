@@ -843,7 +843,6 @@ test("verifies Operational State Store records before broker connect and starts/
     loadConfig: async () => config,
     env: {
       ...binanceEnv,
-      NODE_ENV: "production",
       TELEGRAM_BOT_TOKEN: "test-telegram-token",
       OPERATIONAL_STATE_DIRECTORY: process.cwd()
     },
@@ -5270,7 +5269,10 @@ test("fails closed when the effective configuration has no enabled markets", asy
       },
     },
   }
-  const baseline = await recordConfigurationBaseline({ operationalStateStore, appConfig: disabledConfig })
+  const baseline = await recordConfigurationBaseline({
+    operationalStateStore,
+    appConfig: disabledConfig,
+  })
   assert.equal(baseline.ok, false, "A runtime baseline must not accept a configuration with no enabled markets.")
   assert.match(baseline.errors[0].message, /at least one enabled market/)
   const records = await operationalStateStore.readAll()
