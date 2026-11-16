@@ -15,7 +15,7 @@ code: "USDT" }),
 const sessionId = "candidate-reconcile-session"
 const fingerprint = "f".repeat(64)
 
-const record = (sequence, factType, data, factId = `${factType  }:${  sequence}`) => ({
+const record = (...[sequence, factType, data, factId = `${factType  }:${  sequence}`]) => ({
   sequence: String(sequence),
   factId,
   factType,
