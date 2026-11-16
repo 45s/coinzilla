@@ -455,8 +455,7 @@ function createRelevantAssetCodes({
 function validateAccountBalances({ assetCodes, baselineByAsset, currentByAsset, expectedDeltas }) {
   for (const asset of assetCodes) {
     if (!baselineByAsset.has(asset)) {
-      throw new Error(`Initial account 
-      snapshot is missing required asset ${asset}`)
+      throw new Error(`Initial account snapshot is missing required asset ${asset}`)
     }
     if (!currentByAsset.has(asset)) {
       throw new Error(`Current account snapshot is missing required asset ${asset}`)
