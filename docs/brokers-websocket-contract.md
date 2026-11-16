@@ -42,6 +42,7 @@ packages/brokers/src/
 │       │   │       ├── adapt-kline.js
 │       │   │       └── adapt-kline.test.js
 │       │   ├── tests/
+│       │   │   ├── subscribe-for-prices-liveness.test.js
 │       │   │   ├── user-data-session.setup.test.js
 │       │   │   ├── user-data-session.recovery.test.js
 │       │   │   ├── user-data-session.reconciliation.test.js
@@ -49,12 +50,19 @@ packages/brokers/src/
 │       │   │   └── user-data-session.integration.js
 │       │   ├── test-helpers/
 │       │   └── utils/
+│       │       ├── market-stream-liveness.js
+│       │       ├── market-stream-liveness.test.js
 │       │       ├── rpc-client.js
 │       │       ├── runtime.js
 │       │       ├── signature.js
 │       │       ├── streams-client.js
+│       │       ├── streams-client.heartbeat.test.js
+│       │       ├── streams-client.lifecycle.test.js
+│       │       ├── streams-client.protocol.test.js
 │       │       ├── streams-protocol.js
-│       │       └── transport.js
+│       │       ├── subscribe-for-prices.js
+│       │       ├── transport.js
+│       │       └── transport.heartbeat.test.js
 │       ├── index.js
 │       ├── user-data-client-adapter.js
 │       └── user-data-client-adapter.test.js
