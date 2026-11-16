@@ -244,11 +244,12 @@ A restore does not merge histories or resolve duplicate IDs. Keep the original b
 
 ## Development and coverage
 
-Run the deterministic Journal tests and the package-scoped coverage gate from the repository root:
+Run package-scoped ESLint, the deterministic Journal tests, and the coverage gate from the repository root:
 
 ```sh
+pnpm --filter @coinzilla/journal lint
 pnpm --filter @coinzilla/journal test
 pnpm --filter @coinzilla/journal test:coverage
 ```
 
-The coverage command measures only Journal-owned implementation files under `src/` (including `src/helpers/`) and excludes test files and imported workspace dependencies. CI enforces a minimum of 85% line coverage and 80% branch coverage for the Journal package.
+The standalone lint command checks every JavaScript file under `src/`, including tests. Both the test and coverage commands run this lint check before executing tests. The coverage command measures only Journal-owned implementation files under `src/` (including `src/helpers/`) and excludes test files and imported workspace dependencies. CI enforces a minimum of 85% line coverage and 80% branch coverage for the Journal package.

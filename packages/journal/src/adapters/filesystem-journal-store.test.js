@@ -10,7 +10,8 @@ test("owns the lock and session handles across append, sync, read, and release",
   const rootDirectory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-store-"))
   const directory = path.join(rootDirectory, "nested", "journal")
   const store = new FileSystemJournalStore({ directory })
-  const event = { id: "adapter-record", name: "journal.adapter_verified" }
+  const event = { id: "adapter-record",
+name: "journal.adapter_verified" }
   const line = `${JSON.stringify(event)}\n`
   const lockFileName = ".coinzilla-journal.lock"
 
@@ -44,14 +45,16 @@ test("owns the lock and session handles across append, sync, read, and release",
   } finally {
     await store.closeSession()
     await store.releaseWriter()
-    await rm(rootDirectory, { recursive: true, force: true })
+    await rm(rootDirectory, { recursive: true,
+force: true })
   }
 })
 
 test("preserves a pre-existing lock when another adapter cannot acquire ownership", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-store-contended-"))
   const lockFilePath = path.join(directory, ".coinzilla-journal.lock")
-  const existingLock = `${JSON.stringify({ pid: 98765, startedAt: "2026-11-08T00:00:00.000Z" })}\n`
+  const existingLock = `${JSON.stringify({ pid: 98765,
+startedAt: "2026-11-08T00:00:00.000Z" })}\n`
   const store = new FileSystemJournalStore({ directory })
 
   try {
@@ -65,7 +68,8 @@ test("preserves a pre-existing lock when another adapter cannot acquire ownershi
   } finally {
     await store.closeSession()
     await store.releaseWriter()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -109,7 +113,8 @@ test("closes the owned session handle when a legacy compatibility override is in
   } finally {
     await store.closeSession()
     await store.releaseWriter()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -129,7 +134,7 @@ test("retains an owned session handle when close fails and releases it on retry"
     const originalClose = ownedHandle.close.bind(ownedHandle)
     ownedHandle.close = async () => {
       closeAttempts += 1
-      if (closeAttempts === 1) throw closeError
+      if (closeAttempts === 1) {throw closeError}
       return originalClose()
     }
 
@@ -147,9 +152,10 @@ test("retains an owned session handle when close fails and releases it on retry"
     assert.equal(store.sessionHandle, null, "A successfully closed session must no longer be exposed as active.")
   } finally {
     await store.closeSession().catch(() => {})
-    if (ownedHandle && store.ownedSessionHandle !== ownedHandle) await ownedHandle.close().catch(() => {})
+    if (ownedHandle && store.ownedSessionHandle !== ownedHandle) {await ownedHandle.close().catch(() => {})}
     await store.releaseWriter().catch(() => {})
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -163,7 +169,7 @@ test("retains only a failed compatibility handle while closing the owned session
     sync: async () => {},
     close: async () => {
       overrideCloseAttempts += 1
-      if (overrideCloseAttempts === 1) throw closeError
+      if (overrideCloseAttempts === 1) {throw closeError}
     },
   }
 
@@ -185,7 +191,8 @@ test("retains only a failed compatibility handle while closing the owned session
   } finally {
     await store.closeSession().catch(() => {})
     await store.releaseWriter().catch(() => {})
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -203,7 +210,7 @@ test("retains the writer lock handle when closing it fails and retries lock rele
     const originalClose = lockHandle.close.bind(lockHandle)
     lockHandle.close = async () => {
       closeAttempts += 1
-      if (closeAttempts === 1) throw closeError
+      if (closeAttempts === 1) {throw closeError}
       return originalClose()
     }
 
@@ -219,7 +226,8 @@ test("retains the writer lock handle when closing it fails and retries lock rele
     assert.equal((await readdir(directory)).includes(".coinzilla-journal.lock"), false, "A successful retry must remove the lock file.")
   } finally {
     await store.releaseWriter().catch(() => {})
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -244,8 +252,10 @@ test("retains the owned lock path when unlink fails and retries unlink after res
     assert.equal((await readdir(directory)).includes(".coinzilla-journal.lock"), false, "The retry must remove only the lock file originally acquired by this adapter.")
   } finally {
     await store.releaseWriter().catch(() => {})
-    await rm(directory, { recursive: true, force: true })
-    await rm(movedDirectory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
+    await rm(movedDirectory, { recursive: true,
+force: true })
   }
 })
 
@@ -277,6 +287,7 @@ test("tracks a partially acquired writer lock when writing its metadata fails", 
     await probeHandle.close()
     await store.closeSession().catch(() => {})
     await store.releaseWriter().catch(() => {})
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })

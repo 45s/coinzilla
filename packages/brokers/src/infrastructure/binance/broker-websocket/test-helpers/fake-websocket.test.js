@@ -29,9 +29,12 @@ test("FakeWebSocket exposes deterministic WHATWG lifecycle events", () => {
 
   socket.close(1001, "going away")
   assert.equal(socket.readyState, FakeWebSocket.CLOSING)
-  assert.deepEqual(socket.closeCalls, [{ code: 1001, reason: "going away" }])
+  assert.deepEqual(socket.closeCalls, [{ code: 1001,
+reason: "going away" }])
 
-  socket.serverClose({ code: 1001, reason: "going away", wasClean: true })
+  socket.serverClose({ code: 1001,
+reason: "going away",
+wasClean: true })
   assert.equal(socket.readyState, FakeWebSocket.CLOSED)
   assert.equal(events[3].code, 1001)
   assert.equal(events[3].reason, "going away")

@@ -22,8 +22,14 @@ import {
 export const recoveryTestMarket = new Market({
   venue: "binance",
   symbol: "BTCUSDT",
-  baseAsset: new Asset({ id: "binance:BTC", code: "BTC" }),
-  quoteAsset: new Asset({ id: "binance:USDT", code: "USDT" }),
+  baseAsset: new Asset({
+    id: "binance:BTC",
+    code: "BTC",
+  }),
+  quoteAsset: new Asset({
+    id: "binance:USDT",
+    code: "USDT",
+  }),
 })
 
 const firstSession = "process-001.jsonl"
@@ -33,9 +39,9 @@ function requireMapped({ mapper, input, eventName, session, lineNumber }) {
   const result = mapper(input)
   if (result?.ok !== true) {
     const detail = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-    throw new Error("Unable to build " + eventName + " fixture: " + (detail || "DTO mapping failed"))
+    throw new Error(`Unable to build ${eventName} fixture: ${detail || "DTO mapping failed"}`)
   }
-  const id = session + ":" + lineNumber
+  const id = `${session}:${lineNumber}`
   return Object.freeze({
     id,
     payload: Object.freeze({
@@ -44,13 +50,22 @@ function requireMapped({ mapper, input, eventName, session, lineNumber }) {
       source: "harvester",
       data: result.data,
     }),
-    position: Object.freeze({ fileName: session, lineNumber }),
+    position: Object.freeze({
+      fileName: session,
+      lineNumber,
+    }),
   })
 }
 
 function pendingOrder({ clientOrderId, side, price, quantity }) {
   return createPendingCanonicalOrder({
-    order: { symbol: recoveryTestMarket.symbol, side, type: "LIMIT", price, quantity },
+    order: {
+      symbol: recoveryTestMarket.symbol,
+      side,
+      type: "LIMIT",
+      price,
+      quantity,
+    },
     market: recoveryTestMarket,
     clientOrderId,
     supportedOrderTypes: ["LIMIT"],
@@ -72,9 +87,18 @@ function acknowledgedOrder({
     market: recoveryTestMarket,
     side,
     type: "LIMIT",
-    limitPrice: new Money({ amount: price, asset: recoveryTestMarket.quoteAsset }),
-    originalQuantity: new Quantity({ amount: quantity, asset: recoveryTestMarket.baseAsset }),
-    executedQuantity: new Quantity({ amount: executedQuantity, asset: recoveryTestMarket.baseAsset }),
+    limitPrice: new Money({
+      amount: price,
+      asset: recoveryTestMarket.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: quantity,
+      asset: recoveryTestMarket.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: executedQuantity,
+      asset: recoveryTestMarket.baseAsset,
+    }),
     status,
   })
 }
@@ -92,7 +116,10 @@ function canonicalFill({
   const commissions = baseCommission === "0"
     ? []
     : [new Commission({
-      amount: new Money({ amount: baseCommission, asset: recoveryTestMarket.baseAsset }),
+      amount: new Money({
+        amount: baseCommission,
+        asset: recoveryTestMarket.baseAsset,
+      }),
     })]
   return new Fill({
     tradeId,
@@ -100,9 +127,18 @@ function canonicalFill({
     clientOrderId,
     market: recoveryTestMarket,
     side,
-    price: new Money({ amount: side === "BUY" ? "100" : "103.112", asset: recoveryTestMarket.quoteAsset }),
-    quantity: new Quantity({ amount: quantity, asset: recoveryTestMarket.baseAsset }),
-    quoteQuantity: new Money({ amount: quoteQuantity, asset: recoveryTestMarket.quoteAsset }),
+    price: new Money({
+      amount: side === "BUY" ? "100" : "103.112",
+      asset: recoveryTestMarket.quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: quantity,
+      asset: recoveryTestMarket.baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: quoteQuantity,
+      asset: recoveryTestMarket.quoteAsset,
+    }),
     liquidityRole: "MAKER",
     executedAt,
     commissions,
@@ -110,22 +146,7 @@ function canonicalFill({
   })
 }
 
-/**
- * Build two chronological process-session fixtures from the same canonical
- * values and lifecycle DTO mappers used by production event publication.
- *
- * The fixture intentionally represents the legacy Journal observer envelope.
- * It is not an ADR-0001 durable-fact stream and must not be used as evidence
- * that the current Journal is an authoritative recovery store.
- */
-export function createRecoveryCrashFixture() {
-  const records = []
-  const append = ({ session, mapper, input, eventName }) => {
-    const lineNumber = records.filter((record) => record.position.fileName === session).length + 1
-    records.push(requireMapped({ mapper, input, eventName, session, lineNumber }))
-    return records.length
-  }
-
+function appendFirstSession({ append }) {
   append({
     session: firstSession,
     eventName: HARVESTER_EVENT_NAMES.STARTED,
@@ -185,7 +206,10 @@ export function createRecoveryCrashFixture() {
     mapper: mapFillAppliedData,
     input: { fill: partialBuyFill },
   })
+  return buyClientOrderId
+}
 
+function appendSecondSessionStart({ append }) {
   append({
     session: secondSession,
     eventName: HARVESTER_EVENT_NAMES.STARTED,
@@ -197,7 +221,9 @@ export function createRecoveryCrashFixture() {
       tradingEnabled: true,
     },
   })
+}
 
+function appendFinalBuyFill({ append, buyClientOrderId }) {
   const finalBuyFill = canonicalFill({
     tradeId: "buy-trade-002",
     brokerOrderId: "9001",
@@ -214,7 +240,9 @@ export function createRecoveryCrashFixture() {
     mapper: mapFillAppliedData,
     input: { fill: finalBuyFill },
   })
+}
 
+function appendRecoverySell({ append }) {
   const sellClientOrderId = "harvester-BTCUSDT-sell-001"
   const sellIntent = pendingOrder({
     clientOrderId: sellClientOrderId,
@@ -261,7 +289,9 @@ export function createRecoveryCrashFixture() {
     mapper: mapFillAppliedData,
     input: { fill: sellFill },
   })
+}
 
+function appendRecoveryCycleCompletion({ append }) {
   append({
     session: secondSession,
     eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_COMPLETED,
@@ -275,16 +305,27 @@ export function createRecoveryCrashFixture() {
       realizedNetProfit: "2",
     },
   })
+}
 
+function appendUnownedOrder({ append }) {
   const externalOrder = new CanonicalOrder({
     clientOrderId: "external-manual-order-001",
     brokerOrderId: "manual-7001",
     market: recoveryTestMarket,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "99", asset: recoveryTestMarket.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: recoveryTestMarket.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: recoveryTestMarket.baseAsset }),
+    limitPrice: new Money({
+      amount: "99",
+      asset: recoveryTestMarket.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: recoveryTestMarket.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: recoveryTestMarket.baseAsset,
+    }),
     status: "OPEN",
   })
   append({
@@ -293,7 +334,9 @@ export function createRecoveryCrashFixture() {
     mapper: mapExecutionUnownedOrderData,
     input: { order: externalOrder },
   })
+}
 
+function appendStrategyPause({ append }) {
   append({
     session: secondSession,
     eventName: HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
@@ -303,6 +346,40 @@ export function createRecoveryCrashFixture() {
       reason: "UNOWNED_ORDER",
     },
   })
+}
+
+/**
+ * Build two chronological process-session fixtures from the same canonical
+ * values and lifecycle DTO mappers used by production event publication.
+ *
+ * The fixture intentionally represents the legacy Journal observer envelope.
+ * It is not an ADR-0001 durable-fact stream and must not be used as evidence
+ * that the current Journal is an authoritative recovery store.
+ */
+export function createRecoveryCrashFixture() {
+  const records = []
+  const append = ({ session, mapper, input, eventName }) => {
+    const lineNumber = records.filter((record) => record.position.fileName === session).length + 1
+    records.push(requireMapped({
+      mapper,
+      input,
+      eventName,
+      session,
+      lineNumber,
+    }))
+    return records.length
+  }
+
+  const buyClientOrderId = appendFirstSession({ append })
+  appendSecondSessionStart({ append })
+  appendFinalBuyFill({
+    append,
+    buyClientOrderId,
+  })
+  appendRecoverySell({ append })
+  appendRecoveryCycleCompletion({ append })
+  appendUnownedOrder({ append })
+  appendStrategyPause({ append })
 
   return Object.freeze({
     market: recoveryTestMarket,

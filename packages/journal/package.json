@@ -11,8 +11,9 @@
     "@coinzilla/utils": "workspace:*"
   },
   "scripts": {
-    "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=85 --test-coverage-branches=80 --test-coverage-include=src/*.js --test-coverage-include=src/helpers/*.js --test-coverage-exclude=src/**/*.test.js"
+    "test": "pnpm run lint && node --test",
+    "test:coverage": "pnpm run lint && node --test --experimental-test-coverage --test-coverage-lines=85 --test-coverage-branches=80 --test-coverage-include=src/*.js --test-coverage-include=src/helpers/*.js --test-coverage-exclude=src/**/*.test.js",
+    "lint": "eslint src"
   },
   "engines": {
     "node": ">=20"

@@ -7,10 +7,51 @@ import { EventBus } from "@coinzilla/event-bus"
 import { Journal } from "@coinzilla/journal"
 import { subscribeHarvesterTelegramNotifications } from "../src/bootstrap/notifications/subscribe-harvester-telegram-notifications.js"
 
+function publishSafetyAlertEvents(eventBus) {
+  const published = eventBus.publish({
+    name: "account.open_orders_captured",
+    source: "harvester",
+    data: {
+      phase: "PREFLIGHT",
+      observedAt: 1_000,
+      readiness: "BLOCKED",
+      orderCount: 2,
+      orders: [{ symbol: "LINKFDUSD" }, { symbol: "ZROFDUSD" }],
+      blockReasons: ["UNOWNED_OPEN_ORDERS:2"],
+    },
+  });
+  const subscriptionFailurePublished = eventBus.publish({
+    name: "broker.subscription_failed",
+    source: "harvester",
+    data: {
+      broker: "binance",
+      stream: "user-data",
+      error: { name: "Error",
+message: "user-data stream unavailable" },
+    },
+  });
+  return { published,
+subscriptionFailurePublished };
+}
+
+function assertSafetyNotificationDelivery({ safetyAlerts, notificationsSent }) {
+  assert.equal(safetyAlerts.length, 2, "Both safety events must publish one derived safety alert.");
+  const accountAlert = safetyAlerts.find(({ data }) => data.category === "account-open-orders-blocked");
+  const subscriptionAlert = safetyAlerts.find(({ data }) => data.category === "broker-subscription-failed");
+  assert.ok(accountAlert, "The blocked account audit must retain its account-wide safety classification.");
+  assert.ok(subscriptionAlert, "A user-data subscription failure must retain its safety classification.");
+  assert.equal(Object.hasOwn(accountAlert.data, "symbol"), false, "Multi-symbol alerts must omit an undefined symbol.");
+  assert.equal(Object.hasOwn(subscriptionAlert.data, "symbol"), false, "Market-independent alerts must omit an undefined symbol.");
+  assert.equal(notificationsSent.length, 2, "Both safety alerts must produce Telegram notifications.");
+}
+
 test("durably journals a blocked multi-symbol open-orders Telegram safety alert", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "harvester-telegram-journal-"))
   const eventBus = new EventBus()
-  const journal = new Journal({ eventBus, directory })
+  const journal = new Journal({
+    eventBus,
+    directory,
+  })
   const notificationsSent = []
   const safetyAlerts = []
   let notifications
@@ -35,38 +76,16 @@ test("durably journals a blocked multi-symbol open-orders Telegram safety alert"
           notificationsSent.push(message)
         },
       },
-      telegramConfig: { enabled: true, profile: "trader" },
+      telegramConfig: {
+        enabled: true,
+        profile: "trader",
+      },
       logger: { error() {} },
     })
 
-    const published = eventBus.publish({
-      name: "account.open_orders_captured",
-      source: "harvester",
-      data: {
-        phase: "PREFLIGHT",
-        observedAt: 1_000,
-        readiness: "BLOCKED",
-        orderCount: 2,
-        orders: [{ symbol: "LINKFDUSD" }, { symbol: "ZROFDUSD" }],
-        blockReasons: ["UNOWNED_OPEN_ORDERS:2"],
-      },
-    })
-    assert.equal(published.ok, true, "The account-wide open-orders audit event must be accepted by EventBus.")
-
-    const subscriptionFailurePublished = eventBus.publish({
-      name: "broker.subscription_failed",
-      source: "harvester",
-      data: {
-        broker: "binance",
-        stream: "user-data",
-        error: { name: "Error", message: "user-data stream unavailable" },
-      },
-    })
-    assert.equal(
-      subscriptionFailurePublished.ok,
-      true,
-      "A user-data subscription failure without a market symbol must be accepted by EventBus.",
-    )
+    const { published, subscriptionFailurePublished } = publishSafetyAlertEvents(eventBus);
+    assert.equal(published.ok, true, "The account-wide open-orders audit event must be accepted by EventBus.");
+    assert.equal(subscriptionFailurePublished.ok, true, "A market-independent subscription failure must be accepted by EventBus.");
 
     const drained = await eventBus.flush()
     assert.equal(drained.ok, true, "The original audit and its derived Telegram safety alert must finish delivery.")
@@ -75,35 +94,13 @@ test("durably journals a blocked multi-symbol open-orders Telegram safety alert"
     assert.equal(
       flushed.ok,
       true,
-      "The Journal must accept and durably flush the multi-symbol safety alert instead of rejecting an undefined symbol: " +
-        (flushed.errors?.[0]?.message ?? "unknown Journal failure"),
+      `The Journal must accept and durably flush the multi-symbol safety alert instead of rejecting an undefined symbol: ${ 
+        flushed.errors?.[0]?.message ?? "unknown Journal failure"}`,
     )
     assert.equal(flushed.durable, true, "A successful startup audit flush must confirm durable Journal persistence.")
 
-    assert.equal(
-      safetyAlerts.length,
-      2,
-      "The blocked open-orders audit and market-independent user-data failure must each publish one safety alert.",
-    )
-    const accountAlert = safetyAlerts.find(({ data }) => data.category === "account-open-orders-blocked")
-    const subscriptionAlert = safetyAlerts.find(({ data }) => data.category === "broker-subscription-failed")
-    assert.ok(accountAlert, "The blocked account audit must retain its account-wide safety classification.")
-    assert.ok(subscriptionAlert, "A user-data subscription failure must retain its safety classification.")
-    assert.equal(
-      Object.hasOwn(accountAlert.data, "symbol"),
-      false,
-      "A multi-symbol safety alert must omit the optional symbol field rather than publish undefined.",
-    )
-    assert.equal(
-      Object.hasOwn(subscriptionAlert.data, "symbol"),
-      false,
-      "A user-data subscription alert without a market must omit the optional symbol field rather than publish undefined.",
-    )
-    assert.equal(
-      notificationsSent.length,
-      2,
-      "Both the blocked open-orders audit and the user-data subscription failure must produce Telegram safety notifications.",
-    )
+    assertSafetyNotificationDelivery({ safetyAlerts,
+notificationsSent });
 
     await notifications.close()
     notifications = null
@@ -123,6 +120,7 @@ test("durably journals a blocked multi-symbol open-orders Telegram safety alert"
       await journal.close()
     }
     await eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })

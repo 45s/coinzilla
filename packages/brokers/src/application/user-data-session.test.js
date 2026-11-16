@@ -2,7 +2,106 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { UserDataSession } from "./user-data-session.js"
 
-describe("Application user-data session", () => {
+function createRecoveryPort({ subscriptionId, isReconnectClient, failReconnect }) {
+  const listeners = {
+    event: new Set(),
+    error: new Set(),
+    close: new Set(),
+  }
+  return {
+    state: "open",
+    async connect() {
+      if (isReconnectClient && failReconnect) {
+        throw new Error("reconnect unavailable")
+      }
+      this.state = "open"
+    },
+    async disconnect() {
+      this.state = "closed"
+    },
+    async subscribe() {
+      return subscriptionId
+    },
+    async listSubscriptions() {
+      return [subscriptionId]
+    },
+    async unsubscribe() {},
+    onEvent(listener) {
+      listeners.event.add(listener)
+      return () => listeners.event.delete(listener)
+    },
+    onError(listener) {
+      listeners.error.add(listener)
+      return () => listeners.error.delete(listener)
+    },
+    onClose(listener) {
+      listeners.close.add(listener)
+      return () => listeners.close.delete(listener)
+    },
+    close() {
+      this.state = "closed"
+      for (const listener of [...listeners.close]) {listener({ code: 1006 })}
+    },
+  }
+}
+
+function createRecoveryFixture({ failReconnect = false } = {}) {
+  let currentClient = { name: "initial" }
+  const initialClient = currentClient
+  const reconnectClient = { name: "reconnected" }
+  const ports = new WeakMap()
+  const timers = new Map()
+  let nextTimerId = 0
+
+  const session = new UserDataSession({
+    getClient: () => currentClient,
+    createClient: () => reconnectClient,
+    createUserDataClientPort: (client) => {
+      if (!ports.has(client)) {
+        ports.set(client, createRecoveryPort({
+          subscriptionId: client === initialClient ? 17 : 18,
+          isReconnectClient: client === reconnectClient,
+          failReconnect,
+        }))
+      }
+      return ports.get(client)
+    },
+    setClient: (client) => {
+      currentClient = client
+    },
+    setConnected() {},
+    setUnavailable() {},
+    recoveryWarningThreshold: 1,
+    reconnectDelay: 1,
+    setTimeoutFn: (callback) => {
+      const id = ++nextTimerId
+      timers.set(id, callback)
+      return id
+    },
+    clearTimeoutFn: (id) => {
+      timers.delete(id)
+    },
+  })
+
+  return {
+    session,
+    closeInitialConnection() {
+      ports.get(initialClient).close()
+    },
+    closeCurrentConnection() {
+      ports.get(currentClient).close()
+    },
+    async reconnect() {
+      const [pending] = [...timers.entries()]
+      assert.ok(pending, "expected a scheduled reconnect")
+      timers.delete(pending[0])
+      await pending[1]()
+      await session.waitForRecovery()
+    },
+  }
+}
+
+describe("Application user-data session dependency validation", () => {
   it("validates required dependencies and retry policy", () => {
     assert.throws(() => new UserDataSession({}), TypeError)
     assert.throws(() => new UserDataSession({
@@ -43,7 +142,9 @@ describe("Application user-data session", () => {
       setUnavailable() {},
     }), /client port factory/)
   })
+})
 
+describe("Application user-data session callback validation", () => {
   it("rejects invalid event and status callbacks before accessing the client port", async () => {
     let portFactoryCalls = 0
     const session = new UserDataSession({
@@ -63,7 +164,8 @@ describe("Application user-data session", () => {
       /onEvent callback must be a function/,
     )
     await assert.rejects(
-      session.subscribe({ onEvent() {}, onStatus: null }),
+      session.subscribe({ onEvent() {},
+onStatus: null }),
       /onStatus callback must be a function/,
     )
     assert.equal(portFactoryCalls, 0)
@@ -91,11 +193,15 @@ describe("Application user-data session", () => {
     assert.equal(portFactoryCalls, 0)
     await session.stop()
   })
+})
 
+describe("Application user-data session client port", () => {
   it("coordinates user-data subscriptions through the injected port, not a raw RPC client", async () => {
     const rawClient = {}
     const calls = []
-    const listeners = { event: new Set(), error: new Set(), close: new Set() }
+    const listeners = { event: new Set(),
+error: new Set(),
+close: new Set() }
     const port = {
       state: "open",
       async connect() {},
@@ -149,106 +255,9 @@ describe("Application user-data session", () => {
     await session.stop()
     assert.equal(listeners.close.size, 0)
   })
+})
 
-
-function createRecoveryFixture({ failReconnect = false } = {}) {
-  let currentClient = { name: "initial" }
-  const initialClient = currentClient
-  const reconnectClient = { name: "reconnected" }
-  const ports = new WeakMap()
-  const timers = new Map()
-  let nextTimerId = 0
-
-  function createPort(subscriptionId, isReconnectClient = false) {
-    const listeners = {
-      event: new Set(),
-      error: new Set(),
-      close: new Set(),
-    }
-    return {
-      state: "open",
-      async connect() {
-        if (isReconnectClient && failReconnect) {
-          throw new Error("reconnect unavailable")
-        }
-        this.state = "open"
-      },
-      async disconnect() {
-        this.state = "closed"
-      },
-      async subscribe() {
-        return subscriptionId
-      },
-      async listSubscriptions() {
-        return [subscriptionId]
-      },
-      async unsubscribe() {},
-      onEvent(listener) {
-        listeners.event.add(listener)
-        return () => listeners.event.delete(listener)
-      },
-      onError(listener) {
-        listeners.error.add(listener)
-        return () => listeners.error.delete(listener)
-      },
-      onClose(listener) {
-        listeners.close.add(listener)
-        return () => listeners.close.delete(listener)
-      },
-      close() {
-        this.state = "closed"
-        for (const listener of [...listeners.close]) listener({ code: 1006 })
-      },
-    }
-  }
-
-  const session = new UserDataSession({
-    getClient: () => currentClient,
-    createClient: () => reconnectClient,
-    createUserDataClientPort: (client) => {
-      if (!ports.has(client)) {
-        ports.set(client, createPort(client === initialClient ? 17 : 18, client === reconnectClient))
-      }
-      return ports.get(client)
-    },
-    setClient: (client) => {
-      currentClient = client
-    },
-    setConnected() {},
-    setUnavailable() {},
-    recoveryWarningThreshold: 1,
-    reconnectDelay: 1,
-    setTimeoutFn: (callback) => {
-      const id = ++nextTimerId
-      timers.set(id, callback)
-      return id
-    },
-    clearTimeoutFn: (id) => {
-      timers.delete(id)
-    },
-  })
-
-  return {
-    session,
-    closeInitialConnection() {
-      ports.get(initialClient).close()
-    },
-    closeCurrentConnection() {
-      ports.get(currentClient).close()
-    },
-    async reconnect() {
-      const pending = [...timers.entries()][0]
-      assert.ok(pending, "expected a scheduled reconnect")
-      timers.delete(pending[0])
-      await pending[1]()
-      await session.waitForRecovery()
-    },
-  }
-}
-
-
-
-
+describe("Application user-data session recovery acknowledgements", () => {
   it("keeps recovery pending and rejects acknowledgement while reconnect is unavailable", async () => {
     const statuses = []
     const fixture = createRecoveryFixture({ failReconnect: true })
@@ -317,7 +326,22 @@ function createRecoveryFixture({ failReconnect = false } = {}) {
 
     await fixture.session.stop()
   })
+})
 
+function assertReconciledGenerationStatus({ statuses, recoveryGeneration, subscriberLabel }) {
+  assert.deepEqual(
+    statuses.filter((status) => status.type === "reconciled"),
+    [{
+      type: "reconciled",
+      subscriptionId: 18,
+      recoveryGeneration,
+      recoveryRequired: false,
+    }],
+    `${subscriberLabel} must receive one terminal status for the completed current generation.`,
+  )
+}
+
+describe("Application user-data session recovery generations", () => {
   it("rejects an acknowledgement from an older recovery generation without counting it toward the newer generation", async () => {
     const firstStatuses = []
     const secondStatuses = []
@@ -341,7 +365,8 @@ function createRecoveryFixture({ failReconnect = false } = {}) {
     )
     assert.deepEqual(
       first.data.acknowledgeRecoveryResult(firstRecoveryGeneration),
-      { accepted: true, completed: false },
+      { accepted: true,
+completed: false },
       "The first subscriber may acknowledge only the generation it actually reconciled.",
     )
 
@@ -370,38 +395,32 @@ function createRecoveryFixture({ failReconnect = false } = {}) {
     )
     assert.deepEqual(
       first.data.acknowledgeRecoveryResult(secondRecoveryGeneration),
-      { accepted: true, completed: false },
+      { accepted: true,
+completed: false },
       "The current generation must remain pending until every active subscriber acknowledges it.",
     )
     assert.deepEqual(
       second.data.acknowledgeRecoveryResult(secondRecoveryGeneration),
-      { accepted: true, completed: true },
+      { accepted: true,
+completed: true },
       "Only the final current-generation acknowledgement may complete shared recovery.",
     )
-    assert.deepEqual(
-      firstStatuses.filter((status) => status.type === "reconciled"),
-      [{
-        type: "reconciled",
-        subscriptionId: 18,
-        recoveryGeneration: secondRecoveryGeneration,
-        recoveryRequired: false,
-      }],
-      "Each active subscriber must receive one terminal status for the completed current generation.",
-    )
-    assert.deepEqual(
-      secondStatuses.filter((status) => status.type === "reconciled"),
-      [{
-        type: "reconciled",
-        subscriptionId: 18,
-        recoveryGeneration: secondRecoveryGeneration,
-        recoveryRequired: false,
-      }],
-      "The second active subscriber must receive the same single current-generation terminal status.",
-    )
+    assertReconciledGenerationStatus({
+      statuses: firstStatuses,
+      recoveryGeneration: secondRecoveryGeneration,
+      subscriberLabel: "First subscriber",
+    })
+    assertReconciledGenerationStatus({
+      statuses: secondStatuses,
+      recoveryGeneration: secondRecoveryGeneration,
+      subscriberLabel: "Second subscriber",
+    })
 
     await fixture.session.stop()
   })
+})
 
+describe("Application user-data session inactive subscribers", () => {
   it("rejects a recovery acknowledgement from a disconnected subscriber", async () => {
     const fixture = createRecoveryFixture()
     fixture.session.start()
@@ -419,5 +438,4 @@ function createRecoveryFixture({ failReconnect = false } = {}) {
 
     await fixture.session.stop()
   })
-
 })
