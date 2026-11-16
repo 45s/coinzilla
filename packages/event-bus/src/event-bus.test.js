@@ -822,3 +822,22 @@ source: "test" }),
   assert.equal(calls, 2)
   await bus.close()
 })
+
+test("flush ignores option values and retains null rejection", async () => {
+  const { bus } = createTestBus()
+  let getterCalls = 0
+  const options = {}
+
+  Object.defineProperty(options, "ignored", {
+    enumerable: true,
+    get() {
+      getterCalls += 1
+      return true
+    },
+  })
+
+  assert.equal((await bus.flush(options)).ok, true)
+  assert.equal(getterCalls, 0)
+  await assert.rejects(bus.flush(null), TypeError)
+  await bus.close()
+})
