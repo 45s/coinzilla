@@ -48,7 +48,8 @@ summary, not a second diagnostic dump: it removes a redundant leading
 a small allowlist of actionable fields (including the stable `diagnosticId`
 for catalogued startup failures). When a `symbol` is present, its value is
 shown first; remaining fields are rendered as `key value` pairs separated by
-commas. For example:
+commas. Arrays of scalar values are comma-separated, and nested objects are
+flattened into dotted field names. For example:
 
 ```text
 04:30:15 🪙 CG recovery SELL cancellation requested: DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL

@@ -157,7 +157,9 @@ test("renders allowlisted details as key-value text when no symbol is present", 
       message: "Harvester broker connection failed",
       broker: "Binance",
       errorCode: "BROKER_CONNECTION_FAILED",
-      readiness: { state: "BLOCKED" },
+      readiness: {
+        state: "BLOCKED",
+      },
     },
   })
 
@@ -521,7 +523,11 @@ test("preserves pre-existing transports after partial logging setup failure", as
     await writeFile(sessionPaths.trace, "preserve trace session\\n")
 
     await assert.rejects(
-      configureHarvesterLogging({ logger, directory, processIdentity }),
+      configureHarvesterLogging({
+        logger,
+        directory,
+        processIdentity,
+      }),
       /EEXIST/,
       "a TRACE session collision must fail setup",
     )
@@ -675,7 +681,10 @@ test("closes the already-open DEBUG streams when TRACE session creation fails", 
       "failed partial setup must close every stream without deleting any created or pre-existing log file",
     );
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    });
   }
 });
 
