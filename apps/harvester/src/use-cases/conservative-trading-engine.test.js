@@ -4608,6 +4608,7 @@ async function runTerminalRecoverySellStatusScenario({ status }) {
   let currentPortfolio = seeded.portfolio
   let currentRecoveryLedger = seeded.recoveryLedger
   const accountedFills = []
+  let sellFill
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
@@ -4645,7 +4646,7 @@ async function runTerminalRecoverySellStatusScenario({ status }) {
     left: sellOrder.limitPrice.amount,
     right: "0.2",
   })
-  const sellFill = makeSellFill({
+  sellFill = makeSellFill({
     order: sellOrder,
     tradeId: `terminal-recovery-sell-${  status.toLowerCase()}`,
     quantity: "0.2",
@@ -4766,6 +4767,7 @@ test("terminal recovery SELL with incomplete or conflicting fill history cannot 
     let currentPortfolio = seeded.portfolio
     let currentRecoveryLedger = seeded.recoveryLedger
     const sellFillRef = { current: undefined }
+    const sellOrderRef = { current: undefined }
     const harness = await createHarness({
       initialPortfolio: seeded.portfolio,
       initialRecoveryLedger: seeded.recoveryLedger,
@@ -4775,7 +4777,7 @@ test("terminal recovery SELL with incomplete or conflicting fill history cannot 
       getTerminalFills: ({ orderId }) => {
         if (sellFillRef.current?.brokerOrderId !== orderId) {return []}
         return fillHistory === "conflicting" ? [sellFillRef.current, makeSellFill({
-          order: sellOrderRef,
+          order: sellOrderRef.current,
           tradeId: sellFillRef.current.tradeId,
           quantity: "0.1",
           quoteQuantity: "1",
@@ -4803,8 +4805,8 @@ fill }).ledger
         timestamp: 1
       },
     })
-    const sellOrderRef = harness.engine.getOrders().find((order) => order.side === "SELL")
-    const sellOrder = sellOrderRef
+    sellOrderRef.current = harness.engine.getOrders().find((order) => order.side === "SELL")
+    const sellOrder = sellOrderRef.current
     sellFillRef.current = makeSellFill({
       order: sellOrder,
       tradeId: `invalid-terminal-sell-${fillHistory === "conflicting" ? "conflict" : "missing"}`,
@@ -5972,7 +5974,7 @@ test("validates exact-decimal books and detects BUY/SELL POST-ONLY crossing at e
     bestAskQuantity: "1",
     timestamp: 10,
   } })
-  const order = (side, amount) => ({
+  const order = (...[side, amount]) => ({
     type: "LIMIT_MAKER",
     side,
     market: { symbol: "DOGEUSDT" },
@@ -7346,7 +7348,7 @@ function createPagedRecoveryFillPages({ ownedOrder }) {
   return {
     firstPage: Array.from({
       length: 1000,
-    }, (_, index) => createPagedRecoveryFill({
+    }, (...[, index]) => createPagedRecoveryFill({
       ownedOrder,
       tradeId: index + 1,
     })),
