@@ -20,12 +20,19 @@ function createDependencies({ hardPause = false } = {}) {
     trailingBuyRepriceIntents: new Set(),
     recoveryManagedCancellationClientOrderIds: new Set(),
     deferredEvaluations: new Set(),
-    prices: new Map([[symbol, { price: "100", timestamp: 1 }]]),
+    prices: new Map([
+      [symbol, {
+        price: "100",
+        timestamp: 1,
+      }],
+    ]),
     lastBuyPrices: new Map(),
     buyReferenceOverrides: new Map(),
     lastAdjustmentPrices: new Map(),
     marketPriceEventIds: new Map(),
-    registry: { getActiveOrders: () => [] },
+    registry: {
+      getActiveOrders: () => [],
+    },
   }
   return {
     state,
@@ -33,14 +40,28 @@ function createDependencies({ hardPause = false } = {}) {
     isStopping: () => true,
     canTrade: () => false,
     isMarketPriceFresh: () => true,
-    getCurrentMarketMetadata: () => ({ market: { id: "DOGEUSDT" } }),
+    getCurrentMarketMetadata: () => ({
+      market: {
+        id: "DOGEUSDT",
+      },
+    }),
     nextEvaluationId: () => 1,
-    getPortfolio: () => ({ value: {}, positions: [] }),
-    getRecoveryLedger: () => ({ value: {} }),
+    getPortfolio: () => ({
+      value: {},
+      positions: [],
+    }),
+    getRecoveryLedger: () => ({
+      value: {},
+    }),
     pairs: { [symbol]: { enabled: true } },
     settings: {},
     logger: { debug: () => {} },
-    strategyPolicy: { evaluate: () => ({ actions: [], reason: "NO_ACTION" }) },
+    strategyPolicy: {
+      evaluate: () => ({
+        actions: [],
+        reason: "NO_ACTION",
+      }),
+    },
   }
 }
 
