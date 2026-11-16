@@ -51,7 +51,7 @@ function summarizeConsoleData({ data, shutdownPresentation } = {}) {
           }
         }
         if (Array.isArray(value)) {
-          return [key, value.slice(0, 3)]
+          return [key, key === "enabledSymbols" ? value : value.slice(0, 3)]
         }
         return [key, value]
       }),

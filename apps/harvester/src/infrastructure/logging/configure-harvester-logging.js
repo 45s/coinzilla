@@ -69,9 +69,14 @@ function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
   const clientOrderId = !data.brokerOrderId && typeof data.clientOrderId === "string"
     ? data.clientOrderId
     : ""
-  const detail = typeof data.detail === "string" && data.detail.length > 0
+  const rawDetail = typeof data.detail === "string" && data.detail.length > 0
     ? data.detail.replace(/[\r\n]+/g, " ")
     : ""
+  const detail = rawDetail
+    .split(/\s*\|\s*/)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0 && segment !== `Client order ID: ${clientOrderId}`)
+    .join(" | ")
 
   return [
     time,
@@ -323,19 +328,37 @@ function writeOrderLifecycleRecord({ output, color, timestamp, level, method, da
   }) + "\n")
 }
 
+function formatPortfolioBaseQuantity(value) {
+  const text = String(value ?? "-")
+  const match = /^(-?(?:\d+\.\d+|\d+|\.\d+))(?:\s+[A-Z0-9]+)?$/.exec(text)
+  return match ? match[1] : text
+}
+
+function formatPortfolioNet(value) {
+  const text = String(value ?? "-")
+  const match = /^([+-]?(?:\d+\.\d*|\.\d+))(?:\s+[A-Z0-9]+)?$/.exec(text)
+  if (!match) {
+    return text
+  }
+
+  const amount = Number(match[1])
+  return Number.isFinite(amount) ? amount.toFixed(3) : text
+}
+
 function createPortfolioStatsConsoleLine({ time, strategyPrefix, details } = {}) {
   const portfolioLine = [
     time,
-    `${strategyPrefix}PORTFOLIO ${String(details.symbol ?? "-")}`,
-    "| Inventory:",
-    String(details.inventory?.totalBaseQuantity ?? "-"),
-    "| Spent:",
-    String(details.accounting?.spent ?? "-"),
-    "| Net:",
-    String(details.accounting?.quoteNetCashFlow ?? "-"),
+    [strategyPrefix, "PORTFOLIO ", String(details.symbol ?? "-"), ":"].join(""),
+    ["amount: ", formatPortfolioBaseQuantity(details.inventory?.totalBaseQuantity)].join(""),
+    "|",
+    ["earned: ", formatPortfolioBaseQuantity(details.inventory?.freeBaseQuantity)].join(""),
+    "|",
+    ["spent: ", formatPortfolioBaseQuantity(details.accounting?.spent)].join(""),
+    "|",
+    ["net: ", formatPortfolioNet(details.accounting?.quoteNetCashFlow)].join(""),
   ].join(" ")
   return portfolioLine.length > MAX_CONSOLE_LINE_LENGTH
-    ? `${portfolioLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3)}...`
+    ? portfolioLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3).concat("...")
     : portfolioLine
 }
 
