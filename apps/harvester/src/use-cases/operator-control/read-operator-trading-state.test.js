@@ -1,5 +1,5 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest(`[read-operator-trading-state.test.js] ${  name}`, ...args)
+const test = (...[name, ...args]) => nodeTest(`[read-operator-trading-state.test.js] ${  name}`, ...args)
 import assert from "node:assert/strict"
 import { createReadOperatorTradingState } from "./read-operator-trading-state.js"
 
