@@ -122,6 +122,8 @@ The agent is responsible for merge execution and cleanup. Do not ask the user to
 
 ## 6. Branch freshness and conflict handling — required on every PR update
 
+**Continuous branch ownership — the AI agent is responsible, never the user.** Keeping the task branch current is part of the agent's work from branch creation until merge. The user must not be asked to fetch, pull, merge `develop`, resolve conflicts, rebase, or otherwise update a routine task branch. The agent must monitor the target branch while work is in progress and synchronize its task branch whenever the target advances, not merely as a final pre-merge chore. Before every push or PR action, fetch the latest target and PR head, synchronize if necessary, resolve conflicts on the task branch, inspect the complete diff, and verify freshness again. If synchronization invalidates earlier CI, rerun the affected checks and wait for success on the new exact head. If safe synchronization is blocked by permissions or a genuine conflict that cannot be resolved without product-owner input, report that precise blocker; never transfer routine branch maintenance to the user.
+
 The PR's actual target branch is authoritative. Never hard-code `main` as the synchronization target for every PR. **A PR branch must never be knowingly outdated when the PR is created, updated, pushed, marked ready, reviewed, or merged.** The responsible agent owns all freshness checks and synchronization; never ask the user to update a routine task branch.
 
 ### Mandatory freshness check before every PR update
