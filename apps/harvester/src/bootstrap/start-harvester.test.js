@@ -5955,6 +5955,7 @@ test("starts Telegram operator control without running process-restart recovery 
     },
   }
   let operatorAdapterStarted = false
+  let operator
   let runtime
 
   try {
@@ -5992,18 +5993,37 @@ test("starts Telegram operator control without running process-restart recovery 
       },
       runtimeSessionId: "current-process-session",
       operationalStateStore: currentStore,
-      createTelegramOperatorAdapter: () => ({
-        start: async () => {
-          operatorAdapterStarted = true
-          return { ok: true, started: true }
-        },
-        stop: async () => ({ ok: true, stopped: true }),
-      }),
+      createTelegramOperatorAdapter: ({ operator: suppliedOperator }) => {
+        operator = suppliedOperator
+        return {
+          start: async () => {
+            operatorAdapterStarted = true
+            return { ok: true, started: true }
+          },
+          stop: async () => ({ ok: true, stopped: true }),
+        }
+      },
     })
 
     assert.equal(operatorAdapterStarted, true, "Telegram polling must start even when the shared ledger contains an earlier process session and restart recovery is disabled")
     assert.equal(runtime.connected, true, "disabling process-restart restoration must not bypass normal broker/runtime startup")
     assert.equal(runtime.tradingEnabled, false, "trading must remain disabled because the prior in-memory trading state was not restored")
+    const pauseResult = await operator.pauseMarket({
+      actor: {
+        id: "telegram-user:12345",
+        roles: ["trading-operator"],
+      },
+      requestId: "telegram-after-unrecovered-restart",
+      symbol: "BTCUSDT",
+    })
+    assert.equal(pauseResult.ok, true, "authorized Telegram pause commands must remain usable in observation-only mode")
+    const persistedFacts = await currentStore.readAll()
+    assert.equal(persistedFacts.ok, true)
+    assert.equal(
+      persistedFacts.data.records.some((record) => record.factType === "OPERATOR_MARKET_PAUSED"),
+      true,
+      "the observation-only Telegram pause command must still be durably recorded before it is applied",
+    )
   } finally {
     await runtime?.stop?.()
     await rm(directory, { recursive: true, force: true })
