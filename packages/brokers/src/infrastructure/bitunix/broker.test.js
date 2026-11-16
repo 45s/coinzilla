@@ -413,17 +413,21 @@ test("Bitunix Spot market catalog excludes pairs without an explicit open status
 })
 
 
-test("Bitunix Spot order history rejects missing or inconsistent pagination metadata", async () => {
-  const order = {
-    orderId: "123",
+async function assertOrderHistoryPageRejected({ response, requestedPage = 1, message }) {
+  const { broker } = createBroker({
+    responses: {
+      "/api/spot/v1/order/history/page": response,
+    },
+  })
+  const result = await broker.getOrderHistory({
     symbol: "BTCUSDT",
-    side: "2",
-    type: "1",
-    status: "2",
-    volume: "1",
-    dealVolume: "1",
-    price: "10",
-  }
+    page: requestedPage,
+  })
+
+  assert.equal(result.ok, false, message)
+}
+
+test("Bitunix Spot order history rejects missing or invalid total metadata", async () => {
   const cases = [
     {
       name: "missing total",
@@ -456,6 +460,18 @@ test("Bitunix Spot order history rejects missing or inconsistent pagination meta
         data: [],
       },
     },
+  ]
+
+  for (const entry of cases) {
+    await assertOrderHistoryPageRejected({
+      response: entry.response,
+      message: `history page with ${entry.name} must fail closed`,
+    })
+  }
+})
+
+test("Bitunix Spot order history rejects missing or invalid page numbers", async () => {
+  const cases = [
     {
       name: "missing page number",
       response: {
@@ -472,44 +488,65 @@ test("Bitunix Spot order history rejects missing or inconsistent pagination meta
       },
     },
     {
-      name: "wrong returned page",
+      name: "zero page number",
       response: {
         total: 0,
-        pageNum: "2",
+        pageNum: "0",
         data: [],
       },
     },
-    {
-      name: "more rows than total",
-      response: {
-        total: 0,
-        pageNum: "1",
-        data: [order],
-      },
-    },
   ]
-  const unexpectedSuccesses = []
 
   for (const entry of cases) {
-    const { broker } = createBroker({
-      responses: {
-        "/api/spot/v1/order/history/page": entry.response,
-      },
+    await assertOrderHistoryPageRejected({
+      response: entry.response,
+      message: `history page with ${entry.name} must fail closed`,
     })
-    const result = await broker.getOrderHistory({
-      symbol: "BTCUSDT",
-      page: 1,
-    })
-    if (result.ok) {
-      unexpectedSuccesses.push(entry.name)
-    }
+  }
+})
+
+test("Bitunix Spot order history rejects a response for a different page", async () => {
+  await assertOrderHistoryPageRejected({
+    response: {
+      total: 0,
+      pageNum: "2",
+      data: [],
+    },
+    requestedPage: 1,
+    message: "returned pageNum must match the requested page",
+  })
+})
+
+test("Bitunix Spot order history rejects more rows than the reported total", async () => {
+  const order = {
+    orderId: "123",
+    symbol: "BTCUSDT",
+    side: "2",
+    type: "1",
+    status: "2",
+    volume: "1",
+    dealVolume: "1",
+    price: "10",
   }
 
-  assert.deepEqual(
-    unexpectedSuccesses,
-    [],
-    "history pages with missing, invalid, or inconsistent metadata must fail closed",
-  )
+  await assertOrderHistoryPageRejected({
+    response: {
+      total: 0,
+      pageNum: "1",
+      data: [order],
+    },
+    message: "page row count cannot exceed the reported total",
+  })
+})
+
+test("Bitunix Spot order history rejects omitted data when total is positive", async () => {
+  await assertOrderHistoryPageRejected({
+    response: {
+      total: 1,
+      pageNum: "1",
+    },
+    message: "an omitted data array with a positive total must fail closed",
+  })
 })
 
 test("Bitunix Spot order history accepts a numeric page number", async () => {
