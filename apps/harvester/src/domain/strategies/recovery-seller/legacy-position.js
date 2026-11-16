@@ -149,25 +149,7 @@ export function recordLegacySale({ position, quantitySold } = {}) {
 }
 
 
-function assertLegacyPositionAccounting({ accounting } = {}) {
-  if (!accounting || typeof accounting !== "object" || Array.isArray(accounting)) {
-    throw new TypeError("Legacy position accounting is required")
-  }
-  for (const field of ["realizedQuoteProceeds", "realizedCostBasis", "realizedProfit"]) {
-    assertDecimalString({
-      value: accounting[field],
-      field: `accounting.${field}`,
-    })
-  }
-  if (compareDecimal({
-    left: accounting.realizedQuoteProceeds,
-    right: "0",
-  }) < 0 || compareDecimal({
-    left: accounting.realizedCostBasis,
-    right: "0",
-  }) < 0) {
-    throw new RangeError("Legacy realized proceeds and cost basis must be non-negative")
-  }
+function assertLegacyAccountingFillHistory({ accounting }) {
   if (!Array.isArray(accounting.appliedFillIds) ||
       !Array.isArray(accounting.appliedFillFingerprints) ||
       accounting.appliedFillIds.length !== accounting.appliedFillFingerprints.length) {
@@ -188,6 +170,18 @@ function assertLegacyPositionAccounting({ accounting } = {}) {
     }
     seenFillIds.add(item.id)
   }
+}
+
+function assertLegacyAccountingProfit({ accounting }) {
+  if (compareDecimal({
+    left: accounting.realizedQuoteProceeds,
+    right: "0",
+  }) < 0 || compareDecimal({
+    left: accounting.realizedCostBasis,
+    right: "0",
+  }) < 0) {
+    throw new RangeError("Legacy realized proceeds and cost basis must be non-negative")
+  }
   const expectedProfit = subtractDecimal({
     left: accounting.realizedQuoteProceeds,
     right: accounting.realizedCostBasis,
@@ -198,6 +192,20 @@ function assertLegacyPositionAccounting({ accounting } = {}) {
   }) !== 0) {
     throw new RangeError("Legacy realized profit must equal net proceeds less realized cost basis")
   }
+}
+
+function assertLegacyPositionAccounting({ accounting } = {}) {
+  if (!accounting || typeof accounting !== "object" || Array.isArray(accounting)) {
+    throw new TypeError("Legacy position accounting is required")
+  }
+  for (const field of ["realizedQuoteProceeds", "realizedCostBasis", "realizedProfit"]) {
+    assertDecimalString({
+      value: accounting[field],
+      field: `accounting.${field}`,
+    })
+  }
+  assertLegacyAccountingProfit({ accounting })
+  assertLegacyAccountingFillHistory({ accounting })
 }
 
 function validateLegacySellAllocation({ fill, allocation }) {
