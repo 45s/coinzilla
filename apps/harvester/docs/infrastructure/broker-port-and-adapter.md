@@ -201,3 +201,8 @@ Implemented: application broker port and Binance adapter, Conservative Trading E
 The Harvester broker port exposes `subscribeForBookTicker({ symbol, onBookTicker })` alongside aggregate-trade price subscriptions. The callback receives normalized decimal strings for best bid/ask prices and quantities plus a local receipt timestamp in milliseconds. Bootstrap subscribes to this stream only when TESTNET trading is enabled, requires a successful unsubscribe handle, and removes the subscription during startup rollback and shutdown.
 
 For Conservative, order-type selection, POST-ONLY crossing constraints, and fail-closed behavior are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). The engine requires fresh same-symbol book data before a LIMIT_MAKER submission; this document records the adapter boundary and implementation only. The Binance adapter only classifies the exact Spot `-2010` POST-ONLY matching-engine response as definite when the response is not marked `outcomeUnknown`; all uncertain outcomes retain the existing fail-closed pause behavior.
+
+
+## Bitunix Spot metadata boundary
+
+The current application broker port and runtime composition remain Binance-only. The Bitunix Spot market-metadata helper is a pure read-side transformation; it is not a broker adapter, does not satisfy the full Harvester broker port, and is not wired into bootstrap. Do not use it to enable Bitunix trading while issue #1185 remains open.
