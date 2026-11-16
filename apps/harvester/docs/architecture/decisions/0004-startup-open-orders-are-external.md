@@ -99,3 +99,7 @@ Exact-head verification for #1166 passed the Harvester targeted tests (5 configu
 6. [x] Update the source, tests, this ADR, Journal operations and roadmaps together.
 
 No TESTNET or LIVE exchange operation is required or authorized by this decision.
+
+## Emergency BUY pause interaction
+
+[ADR-0005](./0005-emergency-buy-pause.md) does not weaken this ownership boundary. Emergency BUY pause cancellation is restricted to active BUY orders already owned by the current process's OrderRegistry. An order observed only in the startup account-wide open-order snapshot remains external and is never adopted, canceled or modified by the emergency BUY controls.

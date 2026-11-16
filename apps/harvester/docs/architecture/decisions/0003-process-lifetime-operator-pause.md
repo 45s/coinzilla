@@ -55,3 +55,7 @@ The initial operator-pause capability is **process-lifetime only**.
 - [Operator-control implementation contract](../OPERATOR_CONTROL_DESIGN.md)
 - [Operator-control roadmap](../../../ROADMAP.md#operator-control--initial-telegram-pause)
 - [Process-restart recovery issue #654](https://github.com/45s/coinzilla/issues/654)
+
+## Emergency BUY pause scope
+
+The process-lifetime rule also applies to the separate emergency BUY controls introduced by [ADR-0005](./0005-emergency-buy-pause.md). Global and market-specific BUY pauses are not replayed or restored after restart. When an Operational State Store is supplied, their facts use the same durable-before-apply append contract but remain excluded from startup restoration.

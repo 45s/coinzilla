@@ -5,6 +5,7 @@ const test = (...args) => {
 }
 import assert from "node:assert/strict"
 import {
+  formatTelegramOperatorMarkets,
   formatTelegramOperatorPositions,
   formatTelegramOperatorOrders,
   formatTelegramOperatorBalances,
@@ -68,4 +69,25 @@ total: "110" }],
   })
   assert.match(text, /100ms ago/)
   assert.match(text, /USDT: free 100 \| locked 10 \| total 110/)
+})
+
+test("formats emergency BUY pause state separately from the legacy market pause", () => {
+  const text = formatTelegramOperatorMarkets({
+    snapshot: {
+      observedAt: 1000,
+      markets: [{
+        symbol: "DOGEUSDT",
+        enabled: true,
+        readiness: "READY",
+        operatorPaused: false,
+        operatorBuysPaused: true,
+        safetyPaused: false,
+        recoveryManagedPaused: false,
+        blockers: ["OPERATOR_BUYS_PAUSED"],
+      }],
+    },
+  })
+
+  assert.match(text, /Operator pause: OFF/, "Emergency BUY pause must not be conflated with the legacy market pause.")
+  assert.match(text, /BUY pause: ACTIVE/, "Market status must expose the independent emergency BUY gate.")
 })

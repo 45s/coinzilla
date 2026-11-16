@@ -12,7 +12,7 @@ This index is the entry point for maintained repository documentation. The repos
 - [Repository roadmap](../ROADMAP.md) — cross-workspace engineering and release work
 - [Documentation Governance](DOCUMENTATION_GOVERNANCE.md) — the documentation vision and maintenance contract
 - [Markdown style standard](MARKDOWN_STYLE.md) — consistent formatting and authoring conventions
-- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (currently 124 tracked Markdown/MDX files)
+- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (currently 147 tracked Markdown/MDX files on `develop`; PR #1267 adds one pending Harvester ADR)
 
 ## Repository-wide engineering
 

@@ -200,3 +200,96 @@ note: "extra" },
     assert.equal(result.ok, false, `Invalid safety blocker fact ${  fact.factId  } must fail closed.`)
   }
 })
+
+test("accepts canonical global and market emergency BUY pause/resume facts", async (t) => {
+  const store = await createStore(t)
+  const facts = [
+    {
+      factId: "operator-control:global-buy-pause-1",
+      factType: "OPERATOR_ALL_BUYS_PAUSED",
+      data: {
+        requestId: "global-buy-pause-1",
+        actorId: "telegram-actor-1",
+      },
+    },
+    {
+      factId: "operator-control:global-buy-resume-2",
+      factType: "OPERATOR_ALL_BUYS_RESUMED",
+      data: {
+        requestId: "global-buy-resume-2",
+        actorId: "telegram-actor-1",
+      },
+    },
+    {
+      factId: "operator-control:market-buy-pause-3",
+      factType: "OPERATOR_MARKET_BUYS_PAUSED",
+      data: {
+        requestId: "market-buy-pause-3",
+        actorId: "telegram-actor-1",
+        symbol: "DOGEUSDT",
+      },
+    },
+    {
+      factId: "operator-control:market-buy-resume-4",
+      factType: "OPERATOR_MARKET_BUYS_RESUMED",
+      data: {
+        requestId: "market-buy-resume-4",
+        actorId: "telegram-actor-1",
+        symbol: "DOGEUSDT",
+      },
+    },
+  ]
+
+  for (const fact of facts) {
+    const result = await store.append(fact)
+    assert.equal(result.ok, true, `A canonical emergency BUY-control fact must be accepted: ${fact.factType}`)
+    assert.equal(result.data.durable, true, "Every emergency BUY-control fact must receive an explicit durable acknowledgement.")
+  }
+})
+
+test("rejects malformed emergency BUY pause/resume facts and invalid global scope", async (t) => {
+  const store = await createStore(t)
+  const invalidFacts = [
+    {
+      factId: "operator-control:global-buy-pause-5",
+      factType: "OPERATOR_ALL_BUYS_PAUSED",
+      data: {
+        requestId: "global-buy-pause-5",
+        actorId: "telegram-actor-1",
+        symbol: "DOGEUSDT",
+      },
+    },
+    {
+      factId: "operator-control:market-buy-pause-6",
+      factType: "OPERATOR_MARKET_BUYS_PAUSED",
+      data: {
+        requestId: "market-buy-pause-6",
+        actorId: "telegram-actor-1",
+        symbol: "dogeusdt",
+      },
+    },
+    {
+      factId: "operator-control:market-buy-resume-7",
+      factType: "OPERATOR_MARKET_BUYS_RESUMED",
+      data: {
+        requestId: "market-buy-resume-7",
+        actorId: "telegram-actor-1",
+        symbol: "DOGEUSDT",
+        extra: true,
+      },
+    },
+    {
+      factId: "operator-control:wrong-buy-request",
+      factType: "OPERATOR_ALL_BUYS_RESUMED",
+      data: {
+        requestId: "global-buy-resume-8",
+        actorId: "telegram-actor-1",
+      },
+    },
+  ]
+
+  for (const fact of invalidFacts) {
+    const result = await store.append(fact)
+    assert.equal(result.ok, false, `Malformed emergency BUY-control fact ${fact.factId} must be rejected.`)
+  }
+})

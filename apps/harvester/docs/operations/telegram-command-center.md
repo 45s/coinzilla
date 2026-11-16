@@ -17,8 +17,11 @@ Pause and resume remain market-scoped application use cases:
 - Inline Pause/Resume buttons show eligible markets, then a confirmation page. Only the confirmation callback invokes the application use case.
 - Explicit `/pause SYMBOL` and `/resume SYMBOL` commands remain available to an authorized operator.
 - Pause suppresses new strategy BUY intents and trailing-BUY repricing for that market. It does not cancel or modify existing exchange orders; a resting BUY may still fill.
+- Emergency BUY pause is separate: `/pauseallbuys` blocks new BUYs across configured markets; `/pausebuys SYMBOL` blocks BUYs for one market. Both cancel active BUY orders owned by the current Harvester process through the existing cancellation/reconciliation workflow.
+- Emergency BUY pause never cancels recovery SELLs or startup-snapshot/manual/external orders. It does not itself pause recovery SELL evaluation, fill accounting or reconciliation. If a BUY cancellation is unconfirmed, the BUY remains UNKNOWN and existing order-integrity blockers may still defer conflicting same-market activity until reconciliation. Global and per-market pause scopes are independent; resuming one does not clear the other. Orders from a previous Harvester process are external to the current process and will not be canceled by a repeated pause command after restart; reconcile those explicitly through the exchange/operator recovery procedure.
+- If any owned BUY cancellation is unconfirmed, the BUY gate remains active and the command reports `OPERATOR_BUY_CANCELLATION_INCOMPLETE`; inspect `/orders` and Harvester diagnostics before assuming the market is clear.
 - Fill accounting, reconciliation, and risk-reducing recovery SELL decisions continue.
-- Operator pause is process-lifetime only and is not restored after restart. Reissue `/pause SYMBOL` after restart if the market must remain paused.
+- Both the legacy market pause and emergency BUY pause are process-lifetime only and are not restored after restart. Reissue `/pause SYMBOL` or the relevant emergency BUY command after restart when required.
 
 ## Supported commands and buttons
 
@@ -38,12 +41,18 @@ Pause and resume remain market-scoped application use cases:
 | `/orders` | Orders | Calls `getOrders` |
 | `/pause SYMBOL` | Pause | Invokes the existing market-scoped `pauseMarket` use case |
 | `/resume SYMBOL` | Resume | Invokes the existing market-scoped `resumeMarket` use case |
+| `/pauseallbuys` | Emergency global BUY pause | Blocks new BUYs and cancels active current-process-owned BUY orders across configured markets |
+| `/resumeallbuys` | Resume global BUY pause | Removes only the global emergency BUY gate; market-specific gates remain |
+| `/pausebuys SYMBOL` | Emergency market BUY pause | Blocks new BUYs and cancels active current-process-owned BUYs for one market |
+| `/resumebuys SYMBOL` | Resume market BUY pause | Removes only that market emergency BUY gate; a global gate may still block BUYs |
 | Keyboard: Pause | Pause selection | Shows enabled, currently unpaused markets; selection opens confirmation |
 | Keyboard: Resume | Resume selection | Shows enabled, currently paused markets; selection opens confirmation |
 | Inline Refresh | Refresh | Re-runs the current read-only page or market selection |
 | Inline Cancel/Main menu | Navigation | Cancels the pending confirmation or returns to the menu |
 
 The persistent keyboard has exactly six buttons: Pause, Resume, Status, Markets, Portfolio, and Open Orders. Balances remains available through inline navigation and `/balances`.
+
+Emergency BUY controls are explicit text commands and are not replacements for the existing confirmation-gated market Pause/Resume buttons. They execute immediately after the existing private-chat authorization checks; there is no additional confirmation step for these emergency commands. Telegram command names are lowercase; application methods are `pauseAllBuys`, `resumeAllBuys`, `pauseBuys({ symbol })`, and `resumeBuys({ symbol })`.
 
 ## Interaction diagnostics
 
@@ -74,6 +83,7 @@ Do not log complete Telegram updates, callback payloads, bot tokens, allowlist I
 | `CALLBACK_ACKNOWLEDGEMENT`; `applicationOperationInvoked=false` | Telegram did not acknowledge the callback. The update offset is not advanced; the same update is retried. | Do not manually repeat the callback while the poller is retrying |
 | Application operation invoked but not completed | The use case was called but did not confirm completion. The state outcome may need inspection. | Check current market state before repeating the command |
 | `applicationOperationCompleted=true`, `stateChanged=true`, then response delivery failed | The application state change completed; only the Telegram response failed. | Verify state with `/markets` before considering any repeat operation |
+| `OPERATOR_BUY_CANCELLATION_INCOMPLETE` | The BUY gate is active, but one or more owned BUY cancellations remain unresolved. | Do not assume all BUYs are gone; inspect `/orders`, broker reconciliation and Harvester diagnostics. Recovery SELLs remain enabled. |
 | Response delivered after a market selection | Only the selection/confirmation page was displayed. | This is not evidence that the market was paused or resumed |
 
 The `/orders` command requires an account-wide open-order snapshot. Bootstrap intentionally supplies `getOpenOrders: () => resources.broker.getOpenOrders()` without a symbol filter. The Harvester Binance adapter must accept an omitted options object and forward `{}` to the broker; destructuring `symbol` without a default throws before any exchange request. Regression coverage in [PR #1261](https://github.com/45s/coinzilla/pull/1261) protects this contract. The query remains read-only and must never adopt, cancel, or modify returned external orders.\n\nThe historical message `Telegram operator read query returned a failure` came from the generic read-only query result-failure branch. When a query threw, the old `readPage` catch first emitted a separate `Telegram operator read query failed` entry with the original error, converted the result to `{ok:false}`, and then emitted the generic second failure entry. The captured generic line alone does not include the earlier exception details; without that preceding entry (or the structured `operation` field), the exact failing query and exception cannot be identified retrospectively. It is not proof that a pause operation ran.
