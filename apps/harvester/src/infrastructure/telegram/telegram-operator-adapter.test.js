@@ -1197,9 +1197,18 @@ function createReadOnlyOperator({ calls }) {
         data: {
           runtimeState: "RUNNING",
           tradingEnabled: false,
-          userData: { ready: false },
-          readiness: { state: "TRADING_DISABLED", blockers: [] },
-          markets: { enabled: 0, configured: 0, blocked: 0 },
+          userData: {
+            ready: false,
+          },
+          readiness: {
+            state: "TRADING_DISABLED",
+            blockers: [],
+          },
+          markets: {
+            enabled: 0,
+            configured: 0,
+            blocked: 0,
+          },
           observedAt: 1700000000000,
         },
       }
@@ -1250,11 +1259,26 @@ test("routes all read-only keyboard actions and the balances command to their ap
   const calls = []
   const diagnostics = []
   const updates = [
-    makeUpdate({ updateId: 1401, text: "Status" }),
-    makeUpdate({ updateId: 1402, text: "Markets" }),
-    makeUpdate({ updateId: 1403, text: "Portfolio" }),
-    makeUpdate({ updateId: 1404, text: "Open Orders" }),
-    makeUpdate({ updateId: 1405, text: "/balances" }),
+    makeUpdate({
+      updateId: 1401,
+      text: "Status",
+    }),
+    makeUpdate({
+      updateId: 1402,
+      text: "Markets",
+    }),
+    makeUpdate({
+      updateId: 1403,
+      text: "Portfolio",
+    }),
+    makeUpdate({
+      updateId: 1404,
+      text: "Open Orders",
+    }),
+    makeUpdate({
+      updateId: 1405,
+      text: "/balances",
+    }),
     makeCallbackUpdate({
       updateId: 1406,
       callbackId: "balance-nav-1406",
