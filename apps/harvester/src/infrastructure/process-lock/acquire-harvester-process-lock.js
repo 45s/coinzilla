@@ -112,9 +112,8 @@ async function acquireLockFile({ lockPath, owner, hostname, checkProcessAlive })
       const validPid = Number.isSafeInteger(existingOwner?.pid) && existingOwner.pid > 0
       if (attempt === 0 && sameHost && validPid && !checkProcessAlive(existingOwner.pid)) {
         // Re-read immediately before unlinking so a replaced lock is not removed.
-        const currentOwner = await readFile(lockPath, "utf8")
-          .then((content) => JSON.parse(content))
-          .catch(() => null)
+        const currentOwnerContents = await readFile(lockPath, "utf8").catch(() => "null")
+        const currentOwner = JSON.parse(currentOwnerContents)
         if (isSameLockOwner({ currentOwner, existingOwner })) {
           await unlink(lockPath)
           continue
