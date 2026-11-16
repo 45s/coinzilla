@@ -42,21 +42,27 @@ export function createKeyedQueue(options = {}) {
   const queues = new Map()
 
   function enqueue({ key, task } = {}) {
-    if (key === undefined) {throw new TypeError("key is required")}
-    if (typeof task !== "function") {throw new TypeError("task must be a function")}
+    if (key === undefined) {
+      throw new TypeError("key is required")
+    }
+    if (typeof task !== "function") {
+      throw new TypeError("task must be a function")
+    }
 
     const previous = queues.get(key) ?? Promise.resolve()
     const execution = previous.then(task).catch((error) => {
-      if (!onError) {throw error}
-      return onError({ key,
-        error })
+      if (!onError) {
+        throw error
+      }
+      return onError({ key, error })
     })
 
-    let tail
-    tail = execution
+    const tail = execution
       .catch(() => undefined)
       .finally(() => {
-        if (queues.get(key) === tail) {queues.delete(key)}
+        if (queues.get(key) === tail) {
+          queues.delete(key)
+        }
       })
 
     queues.set(key, tail)
@@ -68,6 +74,5 @@ export function createKeyedQueue(options = {}) {
     await Promise.all([...queues.values()])
   }
 
-  return Object.freeze({ enqueue,
-    drain })
+  return Object.freeze({ enqueue, drain })
 }
