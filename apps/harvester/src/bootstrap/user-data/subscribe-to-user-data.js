@@ -39,9 +39,12 @@ function publishUserDataSubscriptionFailure({ eventPublisher, brokerName, error 
 async function createUserDataSubscription({ broker, brokerName, eventPublisher, onEvent, onStatus }) {
   let result
   try {
-    result = await broker.subscribeForUserData({ onEvent, onStatus })
+    result = await broker.subscribeForUserData({ onEvent,
+onStatus })
   } catch (error) {
-    publishUserDataSubscriptionFailure({ eventPublisher, brokerName, error })
+    publishUserDataSubscriptionFailure({ eventPublisher,
+brokerName,
+error })
     throw error
   }
   if (!result?.ok || typeof result.data?.disconnect !== "function") {
@@ -49,7 +52,9 @@ async function createUserDataSubscription({ broker, brokerName, eventPublisher, 
     const error = new Error(
       `Unable to subscribe to user data${details ? `: ${details}` : ""}`,
     )
-    publishUserDataSubscriptionFailure({ eventPublisher, brokerName, error })
+    publishUserDataSubscriptionFailure({ eventPublisher,
+brokerName,
+error })
     throw error
   }
   publishLifecycleEvent({
@@ -142,7 +147,8 @@ export async function subscribeToUserData({
   resumeDeferredStrategyEvaluations,
 } = {}) {
   const tradingModeLabel = tradingMode === "live" ? "LIVE" : "TESTNET"
-  logSystem({ logger, message: "Subscribing to Binance user-data events" })
+  logSystem({ logger,
+message: "Subscribing to Binance user-data events" })
 
   const userDataSubscription = await createUserDataSubscription({
     broker,
@@ -152,14 +158,16 @@ export async function subscribeToUserData({
     onStatus,
   })
   onSubscriptionEstablished?.(userDataSubscription)
-  logSystem({ logger, message: "User-data stream connected" })
+  logSystem({ logger,
+message: "User-data stream connected" })
 
   state.ready = false
   state.status = state.accountingFailed
     ? "EXECUTION_ACCOUNTING_FAILED"
     : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
 
-  await publishInitialAccountSnapshot({ state, publishAccountSnapshot })
+  await publishInitialAccountSnapshot({ state,
+publishAccountSnapshot })
 
   if (!tradingEnabled) {
     await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
@@ -173,7 +181,8 @@ export async function subscribeToUserData({
 
   await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
   await waitForUserDataEventQueue({ state })
-  assertTradingStartupSafety({ state, tradingModeLabel })
+  assertTradingStartupSafety({ state,
+tradingModeLabel })
   activateTradingEngine({
     state,
     logger,
