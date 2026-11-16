@@ -15,9 +15,9 @@ export async function recordOrderCancellationIntent({ operationalStateStore, ord
     if (!["BUY", "SELL"].includes(order.side) || !["LIMIT", "LIMIT_MAKER"].includes(order.type)) {
       throw new TypeError("Cancellation intent order side or type is unsupported")
     }
-    const market = order.market
+    const {market} = order
     const result = await operationalStateStore.append({
-      factId: "order-cancellation-intent:" + order.clientOrderId + ":" + reason + ":" + order.status + ":" + order.executedQuantity.amount,
+      factId: `order-cancellation-intent:${  order.clientOrderId  }:${  reason  }:${  order.status  }:${  order.executedQuantity.amount}`,
       factType: "ORDER_CANCELLATION_INTENT",
       data: {
         clientOrderId: order.clientOrderId,
