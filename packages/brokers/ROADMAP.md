@@ -56,6 +56,23 @@ Historical completion uses Binance server time sampled immediately before the kl
 
 - [x] **Cancellation request outcome classification — Harvester issue [#774](https://github.com/45s/coinzilla/issues/774), implemented in merged PR [#786](https://github.com/45s/coinzilla/pull/786).** The broker exposes `NOT_SENT` only for a local preflight refusal before the Binance RPC and `OUTCOME_UNKNOWN` for a dispatched request without an authoritative canonical order result. Harvester accepts `NOT_SENT` only on `ok: false`, preserves known canonical order state, and retains fail-closed behavior for ambiguity. Exact-head broker/Harvester regressions, workspace tests, coverage, syntax/actionlint, Utils tests, and dependency audit passed. No TESTNET or exchange operations were performed.
 
+### Accepted cross-domain market-stream liveness work — Harvester issue #760 / Brokers issue #1270
+
+**Status: MERGED in PR #1272 (`1a52993483c7ce1684df26da7fef607e280305a3`).** This is a coordinated Brokers-owned transport capability with Harvester-owned freshness/trading policy.
+
+- [x] Observe Binance server ping frames through Undici's `undici:websocket:ping` diagnostics channel, filter by the owned socket instance, and release the diagnostic subscription on close/setup failure.
+- [x] Add a 45-second server-heartbeat watchdog. Missing pings close the public Streams transport and use the existing bounded reconnect/resubscribe lifecycle; generic transport errors remain diagnostic and do not cause blind reconnects.
+- [x] Expose connection state/generation, last ping and age, desired/confirmed stream state, and per-stream last-message receipt timestamp/age. Heartbeat expiry reports `BINANCE_STREAM_HEARTBEAT_TIMEOUT` with the stream snapshot.
+- [x] Detect a logical aggTrade gap using the documented all-market `!ticker_1h@arr` rolling-window ticker. Compare ticker last trade ID `L` with aggTrade last covered trade ID `l`; allow five seconds for normal delivery, then resubscribe only the affected aggTrade stream.
+- [x] Bound logical-stream recovery to three attempts per 60 seconds. A quiet market does not trigger recovery without a newer ticker trade ID; a successful subscription acknowledgement is not treated as recovered until aggTrade catches up.
+- [x] Keep market-data transport state separate from user-data/accounting recovery. Preserve Harvester's five-second stale-price gate; do not add a ticker-price fallback, REST fallback, order mutation, or process-wide restart.
+- [x] Add fake-clock tests for ping timeout/reconnect, heartbeat reset, per-stream receipt diagnostics, quiet markets, trade-ID gaps, targeted resubscription, recovery acknowledgement, retry exhaustion, and disposal races.
+- [x] Update [the WebSocket contract](../../docs/brokers-websocket-contract.md#public-market-data-liveness-and-recovery) and [package operations README](./README.md#binance-public-market-data-liveness).
+
+**Verification evidence:** all required CI passed on exact PR head `378c59ea4f2529607d212c001f2f6fd93afcc870`: workspace unit tests, workspace coverage, JavaScript syntax/lint, Harvester targeted tests, Utils unit tests, external documentation links, and dependency audit. The implementation was merged as `1a52993483c7ce1684df26da7fef607e280305a3`. Issues #760 and #1270 are closed. No TESTNET/LIVE connection or order activity was performed.
+
+**Known limit:** a WebSocket ping proves transport liveness, not delivery of every logical stream. The per-symbol detector requires the rolling ticker to report a newer trade ID. If aggTrade and ticker delivery both stop while server pings continue, the broker cannot safely infer an exchange data-plane outage; the consumer stale-price gate remains fail-closed and operators need runtime evidence.
+
 ### IMPORTANT — lifecycle quality and maintainability
 
 3. **Complete the read-only integration matrix and document what remains unverified.**
