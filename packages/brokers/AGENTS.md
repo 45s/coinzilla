@@ -126,4 +126,3 @@ These rules are mandatory for every AI agent working on the existing broker pack
 - Third-party tests are useful examples, not proof that Bitunix guarantees the behavior. Confirm pagination/completeness, stable identifiers, source timestamps, quantity semantics, and unknown-outcome reconciliation independently.
 - Keep order placement/cancellation disabled when required identity, quantity, execution-history, lifecycle, or mutation-environment guarantees remain unresolved. No live order placement, cancellation, or account mutation as part of ordinary development or tests. Default tests remain offline and credential-free.
 - Keep [issue #1185](https://github.com/45s/coinzilla/issues/1185) and the [Bitunix capability contract](../../docs/brokers-websocket-contract.md#bitunix-spot-capability-contract) aligned with verified findings. Do not silently remove an existing blocker because a third-party SDK implements a method.
-
