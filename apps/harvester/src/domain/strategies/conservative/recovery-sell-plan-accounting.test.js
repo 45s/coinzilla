@@ -154,14 +154,14 @@ test("quote-asset SELL commission and price-tick rounding meet the net-profit bo
 
   const initial = createInitialAccounting({ tradeId: "quote-commission-buy" })
   const quoteCommission = "0.1001"
-  const completed = applySellFill(initial, {
+  const completed = applySellFill({ state: initial,
     tradeId: "quote-commission-sell",
     quoteQuantity: "10.01",
     price: plan.price,
     commissionAsset: quoteAsset,
     commissionAmount: quoteCommission,
   })
-  const completion = evaluateCompletion(completed, "1.021")
+  const completion = evaluateCompletion({ state: completed, minProfit: "1.021" })
 
   assert.equal(completed.recoveryLedger.netSellProceeds, "9.9099", "The 10.01 quote proceeds less the independently supplied 0.1001 commission must equal 9.9099.")
   assert.equal(completion.eligible, false, "Residual active inventory must prevent recovery completion even after the profit target is met.")
@@ -170,7 +170,7 @@ test("quote-asset SELL commission and price-tick rounding meet the net-profit bo
   assert.equal(completion.realizedNetProfit, "1.0299", "Realized profit must use the actual quote commission supplied in the fill fixture.")
 
   const oneTickLower = "1"
-  const belowTick = applySellFill(initial, {
+  const belowTick = applySellFill({ state: initial,
     tradeId: "quote-commission-sell-below-tick",
     quoteQuantity: "10",
     price: oneTickLower,
@@ -191,7 +191,7 @@ test("exact minProfit equality remains eligible after actual quote commission", 
   assert.equal(plan.requiredNetProceeds, "9.9", "The required net proceeds must equal the 8.88 cost plus 1.02 profit.")
 
   const initial = createInitialAccounting({ tradeId: "exact-profit-buy", baseCommission: "0.1" })
-  const completed = applySellFill(initial, {
+  const completed = applySellFill({ state: initial,
     tradeId: "exact-profit-sell",
     quoteQuantity: "10",
     price: plan.price,
