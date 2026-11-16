@@ -160,15 +160,18 @@ export function createSqliteDatabase({
 
   const isMemoryDatabase = filename === ":memory:"
   const databaseFilename = isMemoryDatabase ? filename : resolve(filename)
-  let database
+  const databaseReference = {
+    current: null,
+  }
 
   const { adapter, requireConnection } = createSqliteAdapter({
     databaseFilename,
     isMemoryDatabase,
     timeout,
-    getDatabaseState: () => database.state,
+    getDatabaseState: () => databaseReference.current.state,
   })
-  database = createDatabase({ adapter })
+  const database = createDatabase({ adapter })
+  databaseReference.current = database
 
   const sqliteDatabase = Object.freeze({
     connect: database.connect,

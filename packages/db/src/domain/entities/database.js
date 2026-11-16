@@ -143,9 +143,18 @@ export function createDatabaseEntity({ provider } = {}) {
   }
 
   return Object.freeze({
-    connect: createConnectionOperation({ provider, lifecycle }),
-    transaction: createTransactionOperation({ provider, lifecycle }),
-    close: createCloseOperation({ provider, lifecycle }),
+    connect: createConnectionOperation({
+      provider,
+      lifecycle,
+    }),
+    transaction: createTransactionOperation({
+      provider,
+      lifecycle,
+    }),
+    close: createCloseOperation({
+      provider,
+      lifecycle,
+    }),
     get state() {
       return lifecycle.state
     },
