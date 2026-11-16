@@ -283,8 +283,7 @@ function reconcileExchangeFills({ exchangeById, journalById, ownedOrdersByBroker
       if (
         !ownedOrder ||
         ownedOrder.market.symbol !== exchangeFill.market.symbol ||
-        ownedOrder.side !== exchange
-      Fill.side ||
+        ownedOrder.side !== exchangeFill.side ||
         (exchangeFill.clientOrderId !== undefined &&
           exchangeFill.clientOrderId !== ownedOrder.clientOrderId)
       ) {
