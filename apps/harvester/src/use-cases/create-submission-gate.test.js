@@ -3,7 +3,10 @@ import nodeTest from "node:test"
 
 import { createSubmissionGate } from "./create-submission-gate.js"
 
-const test = (name, ...args) => nodeTest("[create-submission-gate.test.js] " + name, ...args)
+const test = (...args) => {
+  const [name, ...testArgs] = args
+  return nodeTest(`[create-submission-gate.test.js] ${name}`, ...testArgs)
+}
 
 function createDependencies({ recoverySubmissionAllowed = false } = {}) {
   return {

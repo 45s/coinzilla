@@ -3,7 +3,10 @@ import nodeTest from "node:test"
 
 import { createConservativeShutdownSafety } from "./create-conservative-shutdown-safety.js"
 
-const test = (name, ...args) => nodeTest("[create-conservative-shutdown-safety.test.js] " + name, ...args)
+const test = (...args) => {
+  const [name, ...testArgs] = args
+  return nodeTest(`[create-conservative-shutdown-safety.test.js] ${name}`, ...testArgs)
+}
 
 function createState() {
   return {

@@ -349,7 +349,7 @@ export function createConservativeShutdownParticipant({
       operation: () => engine.cancelOwnedBuyOrdersForShutdown(),
     })
     const initialDrainBlockers = await drainUserData(drainUserDataEvents)
-    const snapshot = engine.getShutdownSafetySnapshot()
+    let snapshot = engine.getShutdownSafetySnapshot()
 
     while (true) {
       const unsafeMarkets = snapshot.markets.filter((market) =>
@@ -394,7 +394,7 @@ export function createConservativeShutdownParticipant({
       const failedMarkets = results
         .filter(({ result }) => result.ok !== true)
         .map(({ symbol, result }) => createMarketFailure({ symbol, result }))
-      const latestSnapshot = engine.getShutdownSafetySnapshot()
+      snapshot = engine.getShutdownSafetySnapshot()
 
       if (failedMarkets.length > 0) {
         const blockerSummary = failedMarkets.map(({ symbol, blockers }) =>
@@ -414,17 +414,14 @@ export function createConservativeShutdownParticipant({
 
       // Late execution evidence can invalidate a market while another market
       // is being audited. Re-evaluate it immediately; never use a quiet timer.
-      if (latestSnapshot.markets.some((market) =>
-        market.status !== "SAFE_TO_SHUTDOWN")) {
-        continue
-      }
-
-      return {
-        ok: true,
-        data: {
-          markets: latestSnapshot.markets,
-          revision: latestSnapshot.revision,
-        },
+      if (snapshot.markets.every((market) => market.status === "SAFE_TO_SHUTDOWN")) {
+        return {
+          ok: true,
+          data: {
+            markets: snapshot.markets,
+            revision: snapshot.revision,
+          },
+        }
       }
     }
   }
