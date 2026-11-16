@@ -343,7 +343,7 @@ function createTelegramDiagnosticFailure({ log, botToken }) {
 
 function createTelegramDiagnosticReporter({ log, botToken }) {
   return ({ interaction, stage, operation, symbol, classification, message, level = "error" } = {}) => {
-    const reportKey = \`report:\${stage ?? "UNKNOWN"}:\${operation ?? ""}:\${symbol ?? ""}:\${classification ?? "UNCLASSIFIED"}\`
+    const reportKey = `report:${stage ?? "UNKNOWN"}:${operation ?? ""}:${symbol ?? ""}:${classification ?? "UNCLASSIFIED"}`
     if (interaction?.loggedErrors instanceof Set && interaction.loggedErrors.has(reportKey)) {
       return false
     }
