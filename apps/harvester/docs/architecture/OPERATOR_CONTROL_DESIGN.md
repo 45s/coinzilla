@@ -1,6 +1,6 @@
 # Harvester operator control
 
-> **Status: ACCEPTED IMPLEMENTATION CONTRACT.** Architectural decisions are recorded in [ADR-0002](./decisions/0002-transport-independent-operator-control.md) and the initial process-lifetime scope is clarified by [ADR-0003](./decisions/0003-process-lifetime-operator-pause.md). Runtime configuration and lifecycle wiring are implemented in PR #1067; inbound Telegram remains optional and disabled by default. Operator pause state is not restored after a process restart.
+> **Status: ACCEPTED IMPLEMENTATION CONTRACT.** Architectural decisions are recorded in [ADR-0002](./decisions/0002-transport-independent-operator-control.md) and the initial process-lifetime scope is clarified by [ADR-0003](./decisions/0003-process-lifetime-operator-pause.md). Runtime configuration and lifecycle wiring are implemented in PR #1067; inbound Telegram defaults enabled and fails closed without a valid environment-backed allowlist and bot token. Operator pause state is not restored after a process restart.
 
 ## Goal
 
@@ -15,7 +15,7 @@ Provide one Harvester-owned application capability that authorized operators can
 - `src/application/operator/create-harvester-operator.js` composes explicit pause/resume use cases with actor-role authorization and the Operational State Store append port (ADR-0001 record contract).
 - The use cases pass the Operational State Store append callback into the engine transition; the engine changes in-memory state only after a confirmed durable commit.
 - `src/infrastructure/telegram/telegram-operator-adapter.js` implements the private-chat allowlist, command parser, serial Long Polling, stable update request IDs, retry behavior and graceful stop. PR #1067 wires its optional lifecycle into Harvester bootstrap.
-- The Operational State Store adapter and integrity checks are verified by process bootstrap. The same process-owned store is injected into order/fill/recovery producers and the operator facade; never create a second writer for the same store. Application use cases append operator facts before applying in-memory state. **Restart restoration is out of scope:** the initial operator pause lasts only for the current process and is not replayed after restart. Disabled-by-default configuration and lifecycle validation are implemented independently of recovery Steps 7–9.
+- The Operational State Store adapter and integrity checks are verified by process bootstrap. The same process-owned store is injected into order/fill/recovery producers and the operator facade; never create a second writer for the same store. Application use cases append operator facts before applying in-memory state. **Restart restoration is out of scope:** the initial operator pause lasts only for the current process and is not replayed after restart. Enabled-by-default configuration and lifecycle validation are implemented independently of recovery Steps 7–9.
 
 ## DDD ownership and source layout
 
@@ -208,10 +208,10 @@ Resume removes only the operator-owned pause. The engine refuses to invoke the d
 
 ## First transport: Telegram
 
-The first adapter uses Telegram Bot API Long Polling and is optional; its module and runtime lifecycle are implemented and tested offline. Runtime control remains disabled unless explicitly enabled in app configuration.
+The first adapter uses Telegram Bot API Long Polling and is optional; its module and runtime lifecycle are implemented and tested offline. Inbound runtime control defaults enabled; startup requires a valid allowlist and bot token and fails closed when either is missing.
 
 - Configuration belongs under `operatorControl.telegram`, independent from `notifications.telegram`.
-- Inbound control defaults disabled. Enabling it requires a non-empty list of allowed Telegram user IDs.
+- Inbound control defaults enabled. `TELEGRAM_USER_ID` seeds the allowlist from the runtime environment; bootstrap validates it and startup fails closed if no valid allowed user ID or bot token is available.
 - Accept private chats only; do not accept group commands.
 - Resolve `message.from.id` through the allowlist to a trusted `trading-operator` actor. Never authorize based on a display name, message text, chat title or caller-supplied role.
 - Use Telegram `update_id` as the stable request identity and the durable fact ID as the final idempotency boundary.
