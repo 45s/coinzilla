@@ -47,61 +47,78 @@ const IPV6_BLOCKED_CIDRS = [
 ];
 
 function ipv4ToBigInt(address) {
-  if (isIP(address) !== 4) return null;
-  return address.split('.').reduce((value, octet) => (value << 8n) | BigInt(octet), 0n);
+  if (isIP(address) !== 4) {return null;}
+  let value = 0n;
+  for (const octet of address.split('.')) {
+    value = (value << 8n) | BigInt(octet);
+  }
+  return value;
 }
 
 function ipv6ToBigInt(address) {
-  if (isIP(address) !== 6 || address.includes('%')) return null;
+  if (isIP(address) !== 6 || address.includes('%')) {return null;}
 
   let normalized = address.toLowerCase();
   if (normalized.includes('.')) {
     const separator = normalized.lastIndexOf(':');
     const ipv4 = ipv4ToBigInt(normalized.slice(separator + 1));
-    if (ipv4 === null) return null;
+    if (ipv4 === null) {return null;}
     const high = Number((ipv4 >> 16n) & 0xffffn).toString(16);
     const low = Number(ipv4 & 0xffffn).toString(16);
-    normalized = normalized.slice(0, separator + 1) + high + ':' + low;
+    normalized = `${normalized.slice(0, separator + 1) + high  }:${  low}`;
   }
 
   const halves = normalized.split('::');
-  if (halves.length > 2) return null;
+  if (halves.length > 2) {return null;}
   const left = halves[0] ? halves[0].split(':') : [];
   const right = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
   let groups;
   if (halves.length === 2) {
     const omitted = 8 - left.length - right.length;
-    if (omitted < 1) return null;
+    if (omitted < 1) {return null;}
     groups = [...left, ...Array(omitted).fill('0'), ...right];
   } else {
     groups = left;
   }
 
-  if (groups.length !== 8 || groups.some((group) => !/^[0-9a-f]{1,4}$/.test(group))) return null;
-  return groups.reduce((value, group) => (value << 16n) | BigInt('0x' + group), 0n);
+  if (groups.length !== 8 || groups.some((group) => !/^[0-9a-f]{1,4}$/.test(group))) {return null;}
+  let value = 0n;
+  for (const group of groups) {
+    value = (value << 16n) | BigInt(`0x${group}`);
+  }
+  return value;
 }
 
-function parseCidrNetwork(address, family) {
+function parseCidrNetwork({ address, family }) {
   return family === 4 ? ipv4ToBigInt(address) : ipv6ToBigInt(address);
 }
 
-function isInCidr(addressValue, networkAddress, prefixLength, bitLength) {
+function isInCidr({ addressValue, networkAddress, prefixLength, bitLength }) {
   const mask = ((1n << BigInt(prefixLength)) - 1n) << BigInt(bitLength - prefixLength);
   return (addressValue & mask) === (networkAddress & mask);
 }
 
 const IPV4_BLOCKED_NETWORKS = IPV4_BLOCKED_CIDRS.map(([network, prefix]) => ({
-  network: parseCidrNetwork(network, 4),
+  network: parseCidrNetwork({
+    address: network,
+    family: 4,
+  }),
   prefix,
 }));
 
 const IPV6_GLOBAL_NETWORK = {
-  network: parseCidrNetwork(IPV6_GLOBAL_UNICAST[0], 6),
+  network: parseCidrNetwork({
+    address: IPV6_GLOBAL_UNICAST[0],
+    family: 6,
+  }),
   prefix: IPV6_GLOBAL_UNICAST[1],
 };
 
 const IPV6_BLOCKED_NETWORKS = IPV6_BLOCKED_CIDRS.map(([network, prefix]) => ({
-  network: parseCidrNetwork(network, 6),
+  network: parseCidrNetwork({
+    address: network,
+    family: 6,
+  }),
   prefix,
 }));
 
@@ -115,14 +132,29 @@ export function isPublicAddress(address) {
   const family = isIP(address);
   if (family === 4) {
     const value = ipv4ToBigInt(address);
-    return !IPV4_BLOCKED_NETWORKS.some(({ network, prefix }) => isInCidr(value, network, prefix, 32));
+    return !IPV4_BLOCKED_NETWORKS.some(({ network, prefix }) => isInCidr({
+      addressValue: value,
+      networkAddress: network,
+      prefixLength: prefix,
+      bitLength: 32,
+    }));
   }
   if (family === 6) {
     const value = ipv6ToBigInt(address);
-    if (value === null || !isInCidr(value, IPV6_GLOBAL_NETWORK.network, IPV6_GLOBAL_NETWORK.prefix, 128)) {
+    if (value === null || !isInCidr({
+      addressValue: value,
+      networkAddress: IPV6_GLOBAL_NETWORK.network,
+      prefixLength: IPV6_GLOBAL_NETWORK.prefix,
+      bitLength: 128,
+    })) {
       return false;
     }
-    return !IPV6_BLOCKED_NETWORKS.some(({ network, prefix }) => isInCidr(value, network, prefix, 128));
+    return !IPV6_BLOCKED_NETWORKS.some(({ network, prefix }) => isInCidr({
+      addressValue: value,
+      networkAddress: network,
+      prefixLength: prefix,
+      bitLength: 128,
+    }));
   }
   return false;
 }

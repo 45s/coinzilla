@@ -207,7 +207,8 @@ test("findingKey changes when the offending source line changes", () => {
 
   assert.notEqual(
     findingKey(original),
-    findingKey({ ...original, source: 'const label = "new" + suffix;' }),
+    findingKey({ ...original,
+source: 'const label = "new" + suffix;' }),
   );
 });
 

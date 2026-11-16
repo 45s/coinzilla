@@ -23,16 +23,18 @@ const FINDING_LABELS = Object.freeze({
 
 function parseListItem(line) {
   const match = line.match(/^([ \t]*)([-+*]|\d+[.)])([ \t]+|$)/)
-  if (!match) return null
-  return { indent: match[1], marker: match[2], separator: match[3] }
+  if (!match) {return null}
+  return { indent: match[1],
+marker: match[2],
+separator: match[3] }
 }
 
 function splitTableCells(line) {
   const trimmed = line.trim()
-  if (!trimmed.includes("|")) return null
+  if (!trimmed.includes("|")) {return null}
 
   let source = trimmed
-  if (source.startsWith("|")) source = source.slice(1)
+  if (source.startsWith("|")) {source = source.slice(1)}
   if (source.endsWith("|") && !source.endsWith("\\|")) {
     source = source.slice(0, -1)
   }
@@ -78,30 +80,21 @@ function splitTableCells(line) {
   return cells.length >= 2 ? cells : null
 }
 
-function isTableDelimiterCandidate(line, cells) {
-  return Boolean(
-    cells &&
-    line.includes("-") &&
-    /^\s*\|?[\s:|-]+\|?\s*$/.test(line),
-  )
-}
-
-function collectListFormattingFindings(lines, codeLineIndexes) {
+function collectListMarkerFindings({ lines, codeLineIndexes }) {
   const unorderedListMarkers = []
   const nestedListIndentation = []
-  const listSpacing = []
   const parentStack = []
 
   for (let index = 0; index < lines.length; index += 1) {
-    if (codeLineIndexes.has(index)) continue
+    if (codeLineIndexes.has(index)) {continue}
 
     const item = parseListItem(lines[index])
     if (!item) {
-      if (lines[index].trim() === "") continue
+      if (lines[index].trim() === "") {continue}
       const indentation = (lines[index].match(/^([ \t]*)/)?.[1] ?? "")
         .replace(/\t/g, "    ").length
       const parent = parentStack[parentStack.length - 1]
-      if (parent && indentation >= parent.contentColumn) continue
+      if (parent && indentation >= parent.contentColumn) {continue}
       parentStack.length = 0
       continue
     }
@@ -120,10 +113,9 @@ function collectListFormattingFindings(lines, codeLineIndexes) {
     }
 
     const parent = parentStack[parentStack.length - 1]
-    if (
-      item.indent.includes("\t") ||
+    const hasUnexpectedIndentation = item.indent.includes("\t") ||
       (indentWidth > 0 && (!parent || indentWidth !== parent.contentColumn))
-    ) {
+    if (hasUnexpectedIndentation) {
       nestedListIndentation.push(lineNumber)
     }
 
@@ -133,18 +125,27 @@ function collectListFormattingFindings(lines, codeLineIndexes) {
     })
   }
 
+  return {
+    unorderedListMarkers,
+    nestedListIndentation,
+  }
+}
+
+function collectListSpacingFindings({ lines, codeLineIndexes }) {
+  const listSpacing = []
+
   for (let index = 0; index < lines.length; index += 1) {
-    if (codeLineIndexes.has(index)) continue
+    if (codeLineIndexes.has(index)) {continue}
 
     const item = parseListItem(lines[index])
-    if (!item || item.indent !== "") continue
+    if (!item || item.indent !== "") {continue}
 
     const lineNumber = index + 1
     let end = index
     let cursor = index + 1
 
     while (cursor < lines.length) {
-      if (codeLineIndexes.has(cursor)) break
+      if (codeLineIndexes.has(cursor)) {break}
 
       if (parseListItem(lines[cursor])) {
         end = cursor
@@ -154,10 +155,9 @@ function collectListFormattingFindings(lines, codeLineIndexes) {
 
       if (lines[cursor].trim() === "") {
         const nextLine = lines[cursor + 1] ?? ""
-        if (
-          !codeLineIndexes.has(cursor + 1) &&
+        const nextLineContinuesList = !codeLineIndexes.has(cursor + 1) &&
           (parseListItem(nextLine) || /^[ \t]{2,}\S/.test(nextLine))
-        ) {
+        if (nextLineContinuesList) {
           cursor += 1
           continue
         }
@@ -183,26 +183,47 @@ function collectListFormattingFindings(lines, codeLineIndexes) {
     index = Math.max(index, cursor - 1)
   }
 
+  return [...new Set(listSpacing)].sort((...values) => values[0] - values[1])
+}
+
+function collectListFormattingFindings({ lines, codeLineIndexes }) {
   return {
-    unorderedListMarkers,
-    nestedListIndentation,
-    listSpacing: [...new Set(listSpacing)].sort((left, right) => left - right),
+    ...collectListMarkerFindings({
+      lines,
+      codeLineIndexes,
+    }),
+    listSpacing: collectListSpacingFindings({
+      lines,
+      codeLineIndexes,
+    }),
   }
 }
-function collectTableFormattingFindings(lines, codeLineIndexes) {
+
+function isTableDelimiterCandidate({ line, cells }) {
+  return Boolean(
+    cells &&
+    line.includes("-") &&
+    /^\s*\|?[\s:|-]+\|?\s*$/.test(line),
+  )
+}
+
+function collectTableFormattingFindings({ lines, codeLineIndexes }) {
   const malformedTableDelimiters = []
   const tableColumnMismatches = []
   const tableSpacing = []
 
   for (let index = 0; index < lines.length - 1; index += 1) {
-    if (codeLineIndexes.has(index) || codeLineIndexes.has(index + 1)) continue
+    if (codeLineIndexes.has(index) || codeLineIndexes.has(index + 1)) {continue}
 
     const headerCells = splitTableCells(lines[index])
     const delimiterCells = splitTableCells(lines[index + 1])
     if (
       !headerCells ||
       !delimiterCells ||
-      !isTableDelimiterCandidate(lines[index + 1], delimiterCells)
+      !isTableDelimiterCandidate({
+        line: lines[index + 1],
+        cells: delimiterCells,
+      })
     ) {
       continue
     }
@@ -225,7 +246,7 @@ function collectTableFormattingFindings(lines, codeLineIndexes) {
       lines[cursor].trim() !== ""
     ) {
       const rowCells = splitTableCells(lines[cursor])
-      if (!rowCells) break
+      if (!rowCells) {break}
       if (rowCells.length !== expectedColumnCount) {
         tableColumnMismatches.push(cursor + 1)
       }
@@ -246,7 +267,171 @@ function collectTableFormattingFindings(lines, codeLineIndexes) {
   return {
     malformedTableDelimiters,
     tableColumnMismatches,
-    tableSpacing: [...new Set(tableSpacing)].sort((left, right) => left - right),
+    tableSpacing: [...new Set(tableSpacing)].sort((...values) => values[0] - values[1]),
+  }
+}
+
+/**
+ * Collect objective Markdown style metrics without enforcing or rewriting files.
+ *
+ * Fenced code content is excluded from prose/list/table analysis. A fence is
+ * considered unlabeled when its opening delimiter has no info string. Findings
+ * are grouped by file and include affected line numbers where applicable.
+ *
+ * @param {{path: string, content: string}[]} documents
+ * @returns {{fileCount: number, findings: Record<string, Array<{path: string, count: number, lines: number[]}>>}}
+ */
+function scanMarkdownDocumentLines({ content }) {
+  const lines = content.split(/\r?\n/)
+  const codeLineIndexes = new Set()
+  const trailingWhitespaceLines = []
+  const repeatedBlankLines = []
+  const headingLevelSkips = []
+  const unlabelledCodeFenceLines = []
+  const h1Lines = []
+  let previousHeadingLevel = 0
+  let activeFence = null
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    const lineNumber = index + 1
+    const fencePattern = new RegExp(
+      `^ {0,3}(${INLINE_CODE_DELIMITER}{3,}|~{3,})(.*)$`,
+    )
+    const fenceMatch = line.match(fencePattern)
+
+    if (activeFence) {
+      codeLineIndexes.add(index)
+      const closesFence = fenceMatch &&
+        fenceMatch[1][0] === activeFence.character &&
+        fenceMatch[1].length >= activeFence.length &&
+        /^[ \t]*$/.test(fenceMatch[2])
+      if (closesFence) {activeFence = null}
+      continue
+    }
+
+    if (fenceMatch) {
+      codeLineIndexes.add(index)
+      if (fenceMatch[2].trim() === "") {
+        unlabelledCodeFenceLines.push(lineNumber)
+      }
+      activeFence = {
+        character: fenceMatch[1][0],
+        length: fenceMatch[1].length,
+      }
+      continue
+    }
+
+    if (/[ \t]+$/.test(line)) {trailingWhitespaceLines.push(lineNumber)}
+    if (index > 0 && line.trim() === "" && lines[index - 1].trim() === "") {
+      repeatedBlankLines.push(lineNumber)
+    }
+
+    const headingMatch = line.match(/^ {0,3}(#{1,6})(?:[ \t]+|$)/)
+    if (!headingMatch) {continue}
+
+    const level = headingMatch[1].length
+    if (level === 1) {h1Lines.push(lineNumber)}
+    if (level > previousHeadingLevel + 1) {
+      headingLevelSkips.push(lineNumber)
+    }
+    previousHeadingLevel = level
+  }
+
+  return {
+    lines,
+    codeLineIndexes,
+    trailingWhitespaceLines,
+    repeatedBlankLines,
+    headingLevelSkips,
+    unlabelledCodeFenceLines,
+    h1Lines,
+    hasFinalNewline: content.endsWith("\n"),
+    hasCrlfLineEndings: content.includes("\r\n"),
+  }
+}
+
+function createFindingRecorder({ findings, path }) {
+  return ({ name, affectedLines = [] }) => {
+    findings[name].push({
+      path,
+      count: Math.max(1, affectedLines.length),
+      lines: affectedLines,
+    })
+  }
+}
+
+function collectDocumentFindings({ document, findings }) {
+  if (
+    !document ||
+    typeof document.path !== "string" ||
+    typeof document.content !== "string"
+  ) {
+    throw new TypeError("Each Markdown document must include a path and string content")
+  }
+
+  const { path, content } = document
+  const addFinding = createFindingRecorder({
+    findings,
+    path,
+  })
+  const scannedDocument = scanMarkdownDocumentLines({ content })
+  const lineFindings = [
+    ["trailingWhitespace", scannedDocument.trailingWhitespaceLines],
+    ["repeatedBlankLines", scannedDocument.repeatedBlankLines],
+    ["headingLevelSkips", scannedDocument.headingLevelSkips],
+    ["unlabelledCodeFences", scannedDocument.unlabelledCodeFenceLines],
+  ]
+
+  for (const [name, affectedLines] of lineFindings) {
+    if (affectedLines.length > 0) {
+      addFinding({
+        name,
+        affectedLines,
+      })
+    }
+  }
+
+  if (!scannedDocument.hasFinalNewline) {
+    addFinding({ name: "missingFinalNewline" })
+  }
+  if (scannedDocument.hasCrlfLineEndings) {
+    addFinding({ name: "crlfLineEndings" })
+  }
+  if (scannedDocument.h1Lines.length === 0) {
+    addFinding({ name: "missingH1" })
+  }
+  if (scannedDocument.h1Lines.length > 1) {
+    addFinding({
+      name: "multipleH1",
+      affectedLines: scannedDocument.h1Lines,
+    })
+  }
+
+  const listFindings = collectListFormattingFindings({
+    lines: scannedDocument.lines,
+    codeLineIndexes: scannedDocument.codeLineIndexes,
+  })
+  for (const [name, affectedLines] of Object.entries(listFindings)) {
+    if (affectedLines.length > 0) {
+      addFinding({
+        name,
+        affectedLines,
+      })
+    }
+  }
+
+  const tableFindings = collectTableFormattingFindings({
+    lines: scannedDocument.lines,
+    codeLineIndexes: scannedDocument.codeLineIndexes,
+  })
+  for (const [name, affectedLines] of Object.entries(tableFindings)) {
+    if (affectedLines.length > 0) {
+      addFinding({
+        name,
+        affectedLines,
+      })
+    }
   }
 }
 
@@ -270,105 +455,16 @@ export function collectMarkdownStyleBaseline(documents) {
   )
 
   for (const document of documents) {
-    if (
-      !document ||
-      typeof document.path !== "string" ||
-      typeof document.content !== "string"
-    ) {
-      throw new TypeError("Each Markdown document must include a path and string content")
-    }
-
-    const { path, content } = document
-    const lines = content.split(/\r?\n/)
-    const codeLineIndexes = new Set()
-    const addFinding = (name, affectedLines = []) => {
-      findings[name].push({
-        path,
-        count: Math.max(1, affectedLines.length),
-        lines: affectedLines,
-      })
-    }
-
-    const trailingWhitespaceLines = []
-    const repeatedBlankLines = []
-    const headingLevelSkips = []
-    const unlabelledCodeFenceLines = []
-    const h1Lines = []
-    let previousHeadingLevel = 0
-    let activeFence = null
-
-    for (let index = 0; index < lines.length; index += 1) {
-      const line = lines[index]
-      const lineNumber = index + 1
-
-      const fenceMatch = line.match(new RegExp("^ {0,3}(" + INLINE_CODE_DELIMITER + "{3,}|~{3,})(.*)$"))
-      if (activeFence) {
-        codeLineIndexes.add(index)
-        const closesFence = fenceMatch &&
-          fenceMatch[1][0] === activeFence.character &&
-          fenceMatch[1].length >= activeFence.length &&
-          /^[ \t]*$/.test(fenceMatch[2])
-        if (closesFence) activeFence = null
-        continue
-      }
-
-      if (fenceMatch) {
-        codeLineIndexes.add(index)
-        if (fenceMatch[2].trim() === "") {
-          unlabelledCodeFenceLines.push(lineNumber)
-        }
-        activeFence = {
-          character: fenceMatch[1][0],
-          length: fenceMatch[1].length,
-        }
-        continue
-      }
-
-      if (/[ \t]+$/.test(line)) trailingWhitespaceLines.push(lineNumber)
-      if (index > 0 && line.trim() === "" && lines[index - 1].trim() === "") {
-        repeatedBlankLines.push(lineNumber)
-      }
-
-      const headingMatch = line.match(/^ {0,3}(#{1,6})(?:[ \t]+|$)/)
-      if (!headingMatch) continue
-
-      const level = headingMatch[1].length
-      if (level === 1) h1Lines.push(lineNumber)
-      if (level > previousHeadingLevel + 1) {
-        headingLevelSkips.push(lineNumber)
-      }
-      previousHeadingLevel = level
-    }
-
-    if (trailingWhitespaceLines.length > 0) {
-      addFinding("trailingWhitespace", trailingWhitespaceLines)
-    }
-    if (!content.endsWith("\n")) addFinding("missingFinalNewline")
-    if (content.includes("\r\n")) addFinding("crlfLineEndings")
-    if (repeatedBlankLines.length > 0) {
-      addFinding("repeatedBlankLines", repeatedBlankLines)
-    }
-    if (h1Lines.length === 0) addFinding("missingH1")
-    if (h1Lines.length > 1) addFinding("multipleH1", h1Lines)
-    if (headingLevelSkips.length > 0) {
-      addFinding("headingLevelSkips", headingLevelSkips)
-    }
-    if (unlabelledCodeFenceLines.length > 0) {
-      addFinding("unlabelledCodeFences", unlabelledCodeFenceLines)
-    }
-
-    const listFindings = collectListFormattingFindings(lines, codeLineIndexes)
-    for (const [name, affectedLines] of Object.entries(listFindings)) {
-      if (affectedLines.length > 0) addFinding(name, affectedLines)
-    }
-
-    const tableFindings = collectTableFormattingFindings(lines, codeLineIndexes)
-    for (const [name, affectedLines] of Object.entries(tableFindings)) {
-      if (affectedLines.length > 0) addFinding(name, affectedLines)
-    }
+    collectDocumentFindings({
+      document,
+      findings,
+    })
   }
 
-  return { fileCount: documents.length, findings }
+  return {
+    fileCount: documents.length,
+    findings,
+  }
 }
 
 /**
@@ -378,18 +474,18 @@ export function collectMarkdownStyleBaseline(documents) {
 export function reportMarkdownStyleBaseline() {
   const documents = findMarkdownDocuments(repositoryRoot)
   const report = collectMarkdownStyleBaseline(documents)
-  console.log(
-    "Markdown style baseline (report-only): " + report.fileCount + " files; no findings are enforced.",
+  process.stdout.write(
+    `Markdown style baseline (report-only): ${  report.fileCount  } files; no findings are enforced.\n`,
   )
 
   for (const [name, entries] of Object.entries(report.findings)) {
-    const total = entries.reduce((sum, entry) => sum + entry.count, 0)
-    console.log("- " + FINDING_LABELS[name] + ": " + entries.length + " files / " + total + " occurrences")
+    const total = entries.reduce((...values) => values[0] + values[1].count, 0)
+    process.stdout.write(`- ${  FINDING_LABELS[name]  }: ${  entries.length  } files / ${  total  } occurrences\n`)
     for (const entry of entries) {
       const lineDetail = entry.lines.length > 0
-        ? " (lines " + entry.lines.join(", ") + ")"
+        ? ` (lines ${  entry.lines.join(", ")  })`
         : ""
-      console.log("  - " + entry.path + lineDetail)
+      process.stdout.write(`  - ${  entry.path  }${lineDetail}\n`)
     }
   }
 
