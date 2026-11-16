@@ -329,7 +329,7 @@ function assertTerminalOrder({ reconciliation, terminalOrder, orderRegistry }) {
     field: "terminalOrder.executedQuantity",
     allowZero: true,
   })
-  const originalQuantity = reconciliation.order.originalQuantity
+  const { originalQuantity } = reconciliation.order
   if (compareDecimal({
     left: executedQuantity,
     right: originalQuantity,
