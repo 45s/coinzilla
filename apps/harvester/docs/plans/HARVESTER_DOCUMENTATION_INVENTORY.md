@@ -4,7 +4,7 @@
 - Type: Documentation inventory
 - Owner: Harvester
 - Inventory baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
-- Latest recursive checkpoint: `develop` at `27e098d04556f8fe67d526c36d98350ff55be78f` (`truncated: false`; 81 Harvester Markdown/MDX files)
+- Latest recursive checkpoint: `develop` at `5c9bc48244398cf4365a3cf8992478ba6ab17db3` (`truncated: false`; 81 Harvester Markdown/MDX files)
 - Inventory date: 2026-11-09 (baseline); latest verification: 2026-11-11
 - Tracking: [#795](https://github.com/45s/coinzilla/issues/795)
 - Policy: [Documentation Governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md)
@@ -72,7 +72,7 @@ Each document was fetched for a first-pass title, heading, date, link and purpos
 
 ## Post-baseline additions — current 61-file checkpoint after PR #1013
 
-The 42-file table above remains a frozen baseline. A complete recursive Git tree comparison at `dcb0b64ece84ea2f3a41f5a110e559a01797ac6d` (`truncated: false`) found **57 tracked Harvester Markdown/MDX files**: 15 additions relative to the 42-file baseline. The source-verified `develop` tree at `515324a6b1cb872b99593bdf448d1914b005bfcb` contained **58**: the 2026-11-10 process-restart audit report was the sixteenth post-baseline addition. Merged PR #1003 added the accepted recovery ADR as the seventeenth addition; the `develop` tree at `bbd80b93cc0b8ab09172119c0d2d87617257a159` contained **59**. PR #1013 added `exchange-trading-constraints.md` and `volatility-protection.md`, bringing the historical `develop` tree at `b5fc236987833da4374258da876b412be3c48759` to 61 tracked Harvester Markdown/MDX files (19 additions relative to the frozen baseline). The current complete `develop` tree at `27e098d04556f8fe67d526c36d98350ff55be78f` contains **81 tracked Harvester Markdown/MDX files** (39 additions relative to the frozen 42-file baseline); 20 paths added since the 61-file checkpoint are listed below. PR #951 added three audit-category indexes and relocated nine historical records without changing the total file count for those records; PRs #964 and #968 updated living roadmap, operations and domain-accounting guidance without adding or removing Markdown/MDX paths. PR #1021 updates existing documentation only and adds no Markdown/MDX paths. Additions are recorded separately so the original baseline byte sizes and paths remain intact.
+The 42-file table above remains a frozen baseline. A complete recursive Git tree comparison at `dcb0b64ece84ea2f3a41f5a110e559a01797ac6d` (`truncated: false`) found **57 tracked Harvester Markdown/MDX files**: 15 additions relative to the 42-file baseline. The source-verified `develop` tree at `515324a6b1cb872b99593bdf448d1914b005bfcb` contained **58**: the 2026-11-10 process-restart audit report was the sixteenth post-baseline addition. Merged PR #1003 added the accepted recovery ADR as the seventeenth addition; the `develop` tree at `bbd80b93cc0b8ab09172119c0d2d87617257a159` contained **59**. PR #1013 added `exchange-trading-constraints.md` and `volatility-protection.md`, bringing the historical `develop` tree at `b5fc236987833da4374258da876b412be3c48759` to 61 tracked Harvester Markdown/MDX files (19 additions relative to the frozen baseline). The current complete `develop` tree at `5c9bc48244398cf4365a3cf8992478ba6ab17db3` contains **81 tracked Harvester Markdown/MDX files** (39 additions relative to the frozen 42-file baseline); 20 paths added since the 61-file checkpoint are listed below. PR #951 added three audit-category indexes and relocated nine historical records without changing the total file count for those records; PRs #964 and #968 updated living roadmap, operations and domain-accounting guidance without adding or removing Markdown/MDX paths. PR #1021 updates existing documentation only and adds no Markdown/MDX paths. Additions are recorded separately so the original baseline byte sizes and paths remain intact.
 
 | Added path | Purpose | Disposition |
 | --- | --- | --- |
@@ -102,7 +102,7 @@ PR #1021 updates existing Harvester README, roadmap, Volatility Protection, arch
 
 ## Subsequent recursive additions — current develop checkpoint 27e098d
 
-The complete recursive tree at `27e098d04556f8fe67d526c36d98350ff55be78f` contains 81 Harvester Markdown/MDX files. The following 20 Harvester paths were added since the prior 61-file checkpoint; no Harvester Markdown/MDX paths were removed:
+The complete recursive tree at `5c9bc48244398cf4365a3cf8992478ba6ab17db3` contains 81 Harvester Markdown/MDX files. The following 20 Harvester paths were added since the prior 61-file checkpoint; no Harvester Markdown/MDX paths were removed:
 
 | Added path | Purpose |
 | --- | --- |
