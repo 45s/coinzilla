@@ -4,9 +4,10 @@ function text({ value, fallback = "n/a", maxLength = MAX_FIELD_LENGTH }) {
   if (typeof value !== "string" && typeof value !== "number") {return fallback}
   if (typeof value === "number" && !Number.isFinite(value)) {return fallback}
 
-  const normalized = String(value)
-    // eslint-disable-next-line no-control-regex -- remove untrusted control characters before Telegram formatting.
-    .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
+  const normalized = Array.from(String(value), (character) => {
+    const codePoint = character.codePointAt(0)
+    return codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f) ? " " : character
+  }).join("")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, maxLength)
