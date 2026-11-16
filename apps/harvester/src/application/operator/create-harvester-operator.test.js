@@ -65,7 +65,11 @@ test("creates an immutable Harvester operator facade without a generic command d
   assert.deepEqual(Object.keys(operator), ["pauseMarket", "resumeMarket", "pauseBuys", "resumeBuys", "pauseAllBuys", "resumeAllBuys"])
   assert.equal(Object.isFrozen(operator), true)
   assert.equal(typeof operator.pauseMarket, "function")
-  assert.equal(typeof operator.resumeMarket, "function")\n  assert.equal(typeof operator.pauseBuys, "function")\n  assert.equal(typeof operator.resumeBuys, "function")\n  assert.equal(typeof operator.pauseAllBuys, "function")\n  assert.equal(typeof operator.resumeAllBuys, "function")
+  assert.equal(typeof operator.resumeMarket, "function")
+  assert.equal(typeof operator.pauseBuys, "function")
+  assert.equal(typeof operator.resumeBuys, "function")
+  assert.equal(typeof operator.pauseAllBuys, "function")
+  assert.equal(typeof operator.resumeAllBuys, "function")
 })
 
 test("pause authorizes the actor and commits an ADR-0001 durable fact inside the engine transition", async () => {
