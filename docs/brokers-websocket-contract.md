@@ -94,6 +94,7 @@ The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The curren
 | Broker method | Bitunix operation | Constraint |
 |---|---|---|
 | `getBalances()` | `GET /api/spot/v1/user/account` | Raw JSON balance numeric tokens are preserved as decimal strings before canonical entity construction; no source update timestamp. |
+| `getAssets()` | `GET /api/spot/v1/user/account` | Legacy `Coin.value` compatibility projection: free + locked amounts are added exactly, converted to JavaScript `Number`, and exact zero balances are omitted. Use `getBalances()` for exact decimal financial values; `getAssets()` is not for reconciliation. |
 | `getExchangeMarkets()` | `GET /api/spot/v1/common/coin_pair/list` | Includes only pairs explicitly marked open (unknown states are excluded); derives each pair symbol by concatenating base and quote because the catalog response omits symbol. |
 | `getSymbolFilters({ symbol })` | Spot coin-pair catalog | Returns Bitunix metadata, not Binance filter schema. |
 | `getOpenOrders({ symbol })` | `POST /api/spot/v1/order/pending/list` | Symbol required. |
