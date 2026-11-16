@@ -5,42 +5,52 @@ const OUTCOMES = new Set(["CANCELED", "FILLED", "REJECTED", "EXPIRED", "NOT_CANC
 const CANONICAL_OUTCOMES = new Set(["CANCELED", "FILLED", "REJECTED", "EXPIRED", "NOT_CANCELED"])
 const isReason = (reason) => typeof reason === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(reason)
 
+function validateCanonicalCancellationResponse({ order, canceledOrder, outcome }) {
+  if (!(canceledOrder instanceof CanonicalOrder) ||
+      canceledOrder.clientOrderId !== order.clientOrderId ||
+      canceledOrder.brokerOrderId !== order.brokerOrderId ||
+      canceledOrder.market.id !== order.market.id ||
+      canceledOrder.side !== order.side) {
+    throw new TypeError("Cancellation outcome response does not match the original canonical order identity")
+  }
+  if (outcome === "NOT_CANCELED" && !["OPEN", "PARTIALLY_FILLED"].includes(canceledOrder.status)) {
+    throw new TypeError("NOT_CANCELED outcome requires an active canonical order response")
+  }
+  if (outcome !== "NOT_CANCELED" && canceledOrder.status !== outcome) {
+    throw new TypeError("Cancellation outcome classification contradicts canonical response status")
+  }
+}
+
+function validateCancellationInput({ operationalStateStore, order, canceledOrder, reason, outcome }) {
+  if (typeof operationalStateStore?.append !== "function") {
+    throw new TypeError("recordOrderCancellationOutcome requires a Operational State Store append capability")
+  }
+  if (!(order instanceof CanonicalOrder)) {
+    throw new TypeError("recordOrderCancellationOutcome requires the original canonical order")
+  }
+  if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status) || typeof order.brokerOrderId !== "string") {
+    throw new TypeError("Cancellation outcome requires the original active acknowledged order")
+  }
+  if (!isReason(reason) || !OUTCOMES.has(outcome)) {
+    throw new TypeError("Cancellation reason or outcome is unsupported")
+  }
+
+  const hasCanonicalResult = CANONICAL_OUTCOMES.has(outcome)
+  if (hasCanonicalResult) {
+    validateCanonicalCancellationResponse({ order, canceledOrder, outcome })
+  } else if (canceledOrder !== undefined) {
+    throw new TypeError("Unconfirmed cancellation outcome must not include an untrusted canonical response")
+  }
+  return { market: order.market, hasCanonicalResult }
+}
+
 /** Persist the classified broker cancellation result before local order state advances. */
-export async function recordOrderCancellationOutcome({
-  operationalStateStore,
-  order,
-  canceledOrder,
-  reason,
-  outcome,
-} = {}) {
+export async function recordOrderCancellationOutcome(options = {}) {
   try {
-    if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordOrderCancellationOutcome requires a Operational State Store append capability") }
-    if (!(order instanceof CanonicalOrder)) { throw new TypeError("recordOrderCancellationOutcome requires the original canonical order") }
-    if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status) || typeof order.brokerOrderId !== "string") {
-      throw new TypeError("Cancellation outcome requires the original active acknowledged order")
-    }
-    if (!isReason(reason) || !OUTCOMES.has(outcome)) { throw new TypeError("Cancellation reason or outcome is unsupported") }
-    const hasCanonicalResult = CANONICAL_OUTCOMES.has(outcome)
-    if (hasCanonicalResult) {
-      if (!(canceledOrder instanceof CanonicalOrder) ||
-          canceledOrder.clientOrderId !== order.clientOrderId ||
-          canceledOrder.brokerOrderId !== order.brokerOrderId ||
-          canceledOrder.market.id !== order.market.id ||
-          canceledOrder.side !== order.side) {
-        throw new TypeError("Cancellation outcome response does not match the original canonical order identity")
-      }
-      if (outcome === "NOT_CANCELED" && !["OPEN", "PARTIALLY_FILLED"].includes(canceledOrder.status)) {
-        throw new TypeError("NOT_CANCELED outcome requires an active canonical order response")
-      }
-      if (outcome !== "NOT_CANCELED" && canceledOrder.status !== outcome) {
-        throw new TypeError("Cancellation outcome classification contradicts canonical response status")
-      }
-    } else if (canceledOrder !== undefined) {
-      throw new TypeError("Unconfirmed cancellation outcome must not include an untrusted canonical response")
-    }
-    const {market} = order
+    const { operationalStateStore, order, canceledOrder, reason, outcome } = options
+    const { market, hasCanonicalResult } = validateCancellationInput(options)
     const result = await operationalStateStore.append({
-      factId: `order-cancellation-outcome:${  order.clientOrderId  }:${  reason  }:${  outcome}`,
+      factId: `order-cancellation-outcome:${order.clientOrderId}:${reason}:${outcome}`,
       factType: "ORDER_CANCELLATION_OUTCOME",
       data: {
         clientOrderId: order.clientOrderId,
@@ -58,7 +68,11 @@ export async function recordOrderCancellationOutcome({
       },
     })
     if (result?.ok !== true || result.data?.durable !== true) {
-      return toResult({ errors: result?.errors?.length ? result.errors : [new Error("Order-cancellation outcome append did not confirm durable commitment")] })
+      return toResult({
+        errors: result?.errors?.length
+          ? result.errors
+          : [new Error("Order-cancellation outcome append did not confirm durable commitment")],
+      })
     }
     return result
   } catch (error) {
