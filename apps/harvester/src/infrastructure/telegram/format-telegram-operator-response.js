@@ -40,13 +40,19 @@ function formatMarketVolatilityLine({ market }) {
   return `Volatility: ${market.volatilityProtection.mode}${market.volatilityProtection.reason ? ` (${market.volatilityProtection.reason})` : ""}`
 }
 
-function appendMarketBlockers({ lines, market }) {
+function appendMarketBlockers({
+    lines,
+    market,
+  }) {
   if (Array.isArray(market.blockers) && market.blockers.length > 0) {
     lines.push(`Blockers: ${market.blockers.join(", ")}`)
   }
 }
 
-function appendMarketDetails({ lines, market }) {
+function appendMarketDetails({
+      lines,
+      market,
+    }) {
   if (market.priceTimestamp !== null && market.priceTimestamp !== undefined) {
     lines.push(`Price updated: ${formatTimestamp(market.priceTimestamp)}`)
   }
@@ -77,7 +83,10 @@ export function formatTelegramOperatorStatus({ status } = {}) {
     formatUserDataLine({ userData }),
     formatMarketCountsLine({ marketCounts }),
   ]
-  appendStatusBlockers({ lines, blockers: readiness.blockers })
+  appendStatusBlockers({
+    lines,
+    blockers: readiness.blockers,
+  })
   if (status.stopping === true) {lines.push("Runtime is stopping.")}
   lines.push(`Observed: ${  formatTimestamp(status.observedAt)}`)
   return lines.join("\n")
