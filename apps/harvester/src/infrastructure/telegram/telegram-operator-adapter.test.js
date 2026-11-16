@@ -1708,7 +1708,7 @@ function createExpiredCallbackAcknowledgementFetch({ updates }) {
         result: true,
       })
     }
-    throw new Error(\`Unexpected Telegram API method: \${method}\`)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   return {
     fetchImpl,
