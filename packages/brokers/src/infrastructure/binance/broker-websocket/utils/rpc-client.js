@@ -113,6 +113,19 @@ function hasOwn(...args) {
   return Object.hasOwn(value, key)
 }
 
+function createRequestIdentity({ idFactory, pending }) {
+  const id = idFactory()
+  if ((typeof id !== "string" && typeof id !== "number") || id === "" ||
+      (typeof id === "number" && !Number.isFinite(id))) {
+    throw new TypeError("Binance request ID must be a non-empty string or finite number")
+  }
+  const key = String(id)
+  if (pending.has(key)) {
+    throw new Error(`Duplicate in-flight Binance request ID: ${key}`)
+  }
+  return { id, key }
+}
+
 function createFinalParams({ requestParams, signed, apiKey, apiSecret, now, recvWindow }) {
   if (!signed) return requestParams
   return createSignedBinanceParams(requestParams, {
@@ -244,27 +257,18 @@ export class BinanceWebSocketApiClient {
     if (this.#state !== "open") {
       return Promise.reject(new BinanceRpcConnectionError(
         `Cannot send "${method}" while Binance WebSocket API is ${this.#state}`,
-        { method,
-stateChanging },
+        { method, stateChanging },
       ))
     }
     if (!Number.isInteger(timeout) || timeout < 1) {
       return Promise.reject(new RangeError("request timeout must be a positive integer"))
     }
 
-    let id
+    let identity
     try {
-      id = this.idFactory()
+      identity = createRequestIdentity({ idFactory: this.idFactory, pending: this.#pending })
     } catch (error) {
       return Promise.reject(error)
-    }
-    if ((typeof id !== "string" && typeof id !== "number") || id === "" ||
-        (typeof id === "number" && !Number.isFinite(id))) {
-      return Promise.reject(new TypeError("Binance request ID must be a non-empty string or finite number"))
-    }
-    const key = String(id)
-    if (this.#pending.has(key)) {
-      return Promise.reject(new Error(`Duplicate in-flight Binance request ID: ${key}`))
     }
 
     let finalParams
@@ -281,12 +285,21 @@ stateChanging },
       return Promise.reject(error)
     }
 
-    const envelope = { id,
-method }
+    return this.#sendRequest({
+      ...identity,
+      method,
+      finalParams,
+      timeout,
+      stateChanging,
+    })
+  }
+
+  #sendRequest({ id, key, method, finalParams, timeout, stateChanging }) {
+    const envelope = { id, method }
     if (Object.keys(finalParams).length > 0) {envelope.params = finalParams}
 
-    return new Promise((...promiseArgs) => {
-      const [resolve, reject] = promiseArgs
+    return new Promise((...args) => {
+      const [resolve, reject] = args
       const timer = this.setTimeout(() => {
         const pending = this.#pending.get(key)
         if (!pending) {return}
@@ -300,15 +313,7 @@ method }
         }))
       }, timeout)
 
-      this.#pending.set(key, {
-        id,
-        method,
-        resolve,
-        reject,
-        timer,
-        stateChanging,
-      })
-
+      this.#pending.set(key, { id, method, resolve, reject, timer, stateChanging })
       try {
         this.transport.send(JSON.stringify(envelope))
       } catch (error) {
@@ -319,9 +324,7 @@ method }
         }
         reject(new BinanceRpcConnectionError(
           `Failed to send Binance WebSocket API request "${method}": ${error.message}`,
-          { requestId: id,
-method,
-stateChanging },
+          { requestId: id, method, stateChanging },
         ))
       }
     })
