@@ -54,7 +54,10 @@ function makeAllocation({ fill, orderRegistry, recoveryQuantity, legacyQuantity 
   return createMixedSellFillAllocation({ fill, orderRegistry, recoveryQuantity, legacyQuantity })
 }
 
-const reconciliationModule = await import("./mixed-sell-fill-reconciliation.js").catch(() => null)
+const reconciliationModule = await import("./mixed-sell-fill-reconciliation.js").catch((error) => {
+  if (error?.code === "ERR_MODULE_NOT_FOUND") return null
+  throw error
+})
 
 if (reconciliationModule === null) {
   test("Recovery Seller exposes a pure mixed SELL partial-fill staging boundary", () => {
