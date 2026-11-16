@@ -214,6 +214,45 @@ test("bounds repeated resubscription attempts and reports an exhausted stream", 
   monitor.dispose()
 })
 
+test("prunes expired attempts before evaluating new ticker trade activity", async () => {
+  const { monitor, clock, recoveries, errors } = createMonitor()
+  monitor.onAggTrade({ l: 10 })
+
+  for (let tradeId = 11; tradeId <= 13; tradeId += 1) {
+    monitor.onTicker({
+      s: "BTCUSDT",
+      L: tradeId,
+    })
+    clock.advanceBy(50)
+    await flush()
+  }
+  assert.equal(
+    monitor.diagnostics.state,
+    "awaiting-aggTrade",
+    "successful resubscriptions must wait for the next trade before retrying",
+  )
+
+  clock.advanceBy(1_000)
+  monitor.onTicker({
+    s: "BTCUSDT",
+    L: 14,
+  })
+  clock.advanceBy(50)
+  await flush()
+
+  assert.equal(
+    recoveries.length,
+    4,
+    "a fresh trade after the recovery window must be eligible for another attempt",
+  )
+  assert.equal(
+    errors.length,
+    0,
+    "expired attempts must not incorrectly exhaust the next recovery window",
+  )
+  monitor.dispose()
+})
+
 test("re-arms a bounded recovery window after fresh ticker activity following exhaustion", async () => {
   const { monitor, clock, recoveries, errors } = createMonitor()
   monitor.onAggTrade({ l: 10 })
