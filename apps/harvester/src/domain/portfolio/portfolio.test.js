@@ -7,11 +7,11 @@ import { Portfolio } from "./portfolio.js"
 const baseAsset = new Asset({ id: "asset:ETH", code: "ETH" })
 const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
 const market = new Market({ venue: "binance", symbol: "ETHUSDT", baseAsset, quoteAsset })
-const makeFill = ({ tradeId = "trade-1", quantity = "1", quoteQuantity = "100", commissions = [] } = {}) => new Fill({
+const makeFill = ({ tradeId = "trade-1", side = "BUY", quantity = "1", quoteQuantity = "100", commissions = [] } = {}) => new Fill({
   tradeId,
   brokerOrderId: "order-1",
   market,
-  side: "BUY",
+  side,
   price: new Money({ amount: "100", asset: quoteAsset }),
   quantity: new Quantity({ amount: quantity, asset: baseAsset }),
   quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
@@ -344,4 +344,258 @@ test("keeps legacy and recovery acquisition tranches as separate same-market Pos
   assert.equal(portfolio.getPosition({ positionId: firstPositionId }).spent.amount, "100", "The legacy tranche must preserve its independent historical cost basis.")
   assert.equal(portfolio.getPosition({ positionId: secondPositionId }).spent.amount, "20", "The recovery tranche must preserve its own cost basis without merging with legacy inventory.")
   assert.equal(portfolio.getTotalBaseQuantity({ market }).amount, "60", "Aggregate market custody must include both Positions owned by the same strategy.")
+})
+
+
+function makeSellAllocationSide({
+  grossBaseQuantity = "2",
+  baseDebit = "2.01",
+  quoteProceeds = "200",
+  commissions = [
+    {
+      assetId: baseAsset.id,
+      assetCode: baseAsset.code,
+      amount: "0.01",
+    },
+    {
+      assetId: quoteAsset.id,
+      assetCode: quoteAsset.code,
+      amount: "0.1",
+    },
+  ],
+} = {}) {
+  return {
+    grossBaseQuantity,
+    baseDebit,
+    quoteProceeds,
+    commissions,
+  }
+}
+
+test("applies one allocated SELL share to its owned Position and records canonical allocation identity", () => {
+  const positionId = "position:allocated-sell"
+  const strategyId = StrategyId.COIN_GRABBER
+  const buyFill = makeFill({
+    tradeId: "allocated-buy",
+    quantity: "10",
+    quoteQuantity: "1000",
+  })
+  const sellFill = makeFill({
+    tradeId: "allocated-sell",
+    side: "SELL",
+    quantity: "3",
+    quoteQuantity: "300",
+  })
+  const initial = new Portfolio().applyFill({
+    fill: buyFill,
+    positionId,
+    strategyId,
+  }).portfolio
+  const allocationSide = makeSellAllocationSide()
+  const result = initial.applySellAllocation({
+    fill: sellFill,
+    allocationFingerprint: "allocation-fingerprint-1",
+    allocationSide,
+    positionId,
+    strategyId,
+  })
+  const position = result.portfolio.getPosition({ positionId })
+  const applied = result.portfolio.appliedFillFingerprints.find((item) => item.id === sellFill.id)
+  assert.equal(result.applied, true, "A new allocation must be applied once.")
+  assert.equal(result.duplicate, false, "A new allocation must not be classified as a replay.")
+  assert.equal(position.baseQuantity.amount, "7.99", "Portfolio must apply only the allocated base debit.")
+  assert.equal(position.quoteNetCashFlow.amount, "-800.1", "Portfolio must apply allocated quote proceeds net of allocated fees.")
+  assert.equal(position.spent.amount, "1000", "Allocated SELL must preserve the Position BUY basis.")
+  assert.equal(applied.allocationFingerprint, "allocation-fingerprint-1", "Portfolio must bind Fill identity to the complete allocation fingerprint.")
+  assert.ok(result.portfolio.appliedFillIds.includes(sellFill.id), "The original canonical Fill ID must be recorded.")
+  assert.equal(initial.getPosition({ positionId }).baseQuantity.amount, "10", "Applying an allocation must preserve the previous Portfolio snapshot.")
+})
+
+test("treats an identical allocated SELL replay as an immutable no-op", () => {
+  const positionId = "position:allocated-sell-replay"
+  const strategyId = StrategyId.COIN_GRABBER
+  const buyFill = makeFill({
+    tradeId: "allocated-buy-replay",
+    quantity: "10",
+    quoteQuantity: "1000",
+  })
+  const sellFill = makeFill({
+    tradeId: "allocated-sell-replay",
+    side: "SELL",
+    quantity: "3",
+    quoteQuantity: "300",
+  })
+  const initial = new Portfolio().applyFill({
+    fill: buyFill,
+    positionId,
+    strategyId,
+  }).portfolio
+  const input = {
+    fill: sellFill,
+    allocationFingerprint: "allocation-fingerprint-replay",
+    allocationSide: makeSellAllocationSide(),
+    positionId,
+    strategyId,
+  }
+  const first = initial.applySellAllocation(input)
+  const replay = first.portfolio.applySellAllocation(input)
+  assert.equal(replay.portfolio, first.portfolio, "An identical allocation replay must preserve the same Portfolio snapshot.")
+  assert.equal(replay.applied, false, "An identical allocation replay must not apply accounting twice.")
+  assert.equal(replay.duplicate, true, "An identical allocation replay must be explicitly classified.")
+})
+
+test("rejects changed allocation facts for a previously applied canonical Fill", () => {
+  const positionId = "position:allocated-sell-conflict"
+  const strategyId = StrategyId.COIN_GRABBER
+  const buyFill = makeFill({
+    tradeId: "allocated-buy-conflict",
+    quantity: "10",
+    quoteQuantity: "1000",
+  })
+  const sellFill = makeFill({
+    tradeId: "allocated-sell-conflict",
+    side: "SELL",
+    quantity: "3",
+    quoteQuantity: "300",
+  })
+  const initial = new Portfolio().applyFill({
+    fill: buyFill,
+    positionId,
+    strategyId,
+  }).portfolio
+  const first = initial.applySellAllocation({
+    fill: sellFill,
+    allocationFingerprint: "allocation-fingerprint-original",
+    allocationSide: makeSellAllocationSide(),
+    positionId,
+    strategyId,
+  })
+  assert.throws(
+    () => first.portfolio.applySellAllocation({
+      fill: sellFill,
+      allocationFingerprint: "allocation-fingerprint-changed",
+      allocationSide: makeSellAllocationSide(),
+      positionId,
+      strategyId,
+    }),
+    /Conflicting allocation facts reused Fill ID/,
+    "One canonical Fill cannot be reallocated after its accounting attribution was recorded.",
+  )
+})
+
+test("prevents a canonical full-Fill application after the Fill was applied through allocation", () => {
+  const positionId = "position:allocated-sell-mode"
+  const strategyId = StrategyId.COIN_GRABBER
+  const buyFill = makeFill({
+    tradeId: "allocated-buy-mode",
+    quantity: "10",
+    quoteQuantity: "1000",
+  })
+  const sellFill = makeFill({
+    tradeId: "allocated-sell-mode",
+    side: "SELL",
+    quantity: "3",
+    quoteQuantity: "300",
+  })
+  const initial = new Portfolio().applyFill({
+    fill: buyFill,
+    positionId,
+    strategyId,
+  }).portfolio
+  const allocated = initial.applySellAllocation({
+    fill: sellFill,
+    allocationFingerprint: "allocation-fingerprint-mode",
+    allocationSide: makeSellAllocationSide(),
+    positionId,
+    strategyId,
+  })
+  assert.throws(
+    () => allocated.portfolio.applyFill({
+      fill: sellFill,
+      positionId,
+      strategyId,
+    }),
+    /already applied with allocation metadata/,
+    "The same Fill cannot later be applied as a full, unsplit execution.",
+  )
+})
+
+test("rejects allocated SELL quantity greater than the canonical Fill quantity", () => {
+  const positionId = "position:allocated-sell-overfill"
+  const strategyId = StrategyId.COIN_GRABBER
+  const buyFill = makeFill({
+    tradeId: "allocated-buy-overfill",
+    quantity: "10",
+    quoteQuantity: "1000",
+  })
+  const sellFill = makeFill({
+    tradeId: "allocated-sell-overfill",
+    side: "SELL",
+    quantity: "3",
+    quoteQuantity: "300",
+  })
+  const initial = new Portfolio().applyFill({
+    fill: buyFill,
+    positionId,
+    strategyId,
+  }).portfolio
+  assert.throws(
+    () => initial.applySellAllocation({
+      fill: sellFill,
+      allocationFingerprint: "allocation-fingerprint-overfill",
+      allocationSide: makeSellAllocationSide({
+        grossBaseQuantity: "4",
+        baseDebit: "4",
+      }),
+      positionId,
+      strategyId,
+    }),
+    /exceeds canonical Fill quantity/,
+    "An allocated Position share must not exceed the original canonical Fill quantity.",
+  )
+})
+
+
+test("rejects changed allocated Position facts even when the full allocation fingerprint is reused", () => {
+  const positionId = "position:allocated-sell-side-conflict"
+  const strategyId = StrategyId.COIN_GRABBER
+  const buyFill = makeFill({
+    tradeId: "allocated-buy-side-conflict",
+    quantity: "10",
+    quoteQuantity: "1000",
+  })
+  const sellFill = makeFill({
+    tradeId: "allocated-sell-side-conflict",
+    side: "SELL",
+    quantity: "3",
+    quoteQuantity: "300",
+  })
+  const initial = new Portfolio().applyFill({
+    fill: buyFill,
+    positionId,
+    strategyId,
+  }).portfolio
+  const first = initial.applySellAllocation({
+    fill: sellFill,
+    allocationFingerprint: "allocation-fingerprint-side-conflict",
+    allocationSide: makeSellAllocationSide(),
+    positionId,
+    strategyId,
+  })
+  assert.throws(
+    () => first.portfolio.applySellAllocation({
+      fill: sellFill,
+      allocationFingerprint: "allocation-fingerprint-side-conflict",
+      allocationSide: makeSellAllocationSide({
+        grossBaseQuantity: "1",
+        baseDebit: "1",
+        quoteProceeds: "100",
+        commissions: [],
+      }),
+      positionId,
+      strategyId,
+    }),
+    /Conflicting allocation side reused Fill ID/,
+    "A canonical Fill replay cannot change its Position share while reusing the full allocation fingerprint.",
+  )
 })
