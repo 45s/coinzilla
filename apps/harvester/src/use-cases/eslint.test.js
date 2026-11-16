@@ -31,10 +31,15 @@ test("passes ESLint for every JavaScript file in the Harvester use-cases directo
     .map(([key, count]) => `${count} ${key}`)
     .sort()
     .join("\n")
+  const findingDetails = findings
+    .map(({ file, rule, severity, line, column, message }) =>
+      `${file}:${line}:${column} ${severity} ${rule}: ${message}`,
+    )
+    .join("\n")
 
   assert.equal(
     findings.length,
     0,
-    `Found ${findings.length} ESLint findings in apps/harvester/src/use-cases/:\n${findingSummary}`,
+    `Found ${findings.length} ESLint findings in apps/harvester/src/use-cases/:\n${findingSummary}\n\n${findingDetails}`,
   )
 })
