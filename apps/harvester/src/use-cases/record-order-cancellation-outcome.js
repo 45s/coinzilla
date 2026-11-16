@@ -37,11 +37,14 @@ function validateCancellationInput({ operationalStateStore, order, canceledOrder
 
   const hasCanonicalResult = CANONICAL_OUTCOMES.has(outcome)
   if (hasCanonicalResult) {
-    validateCanonicalCancellationResponse({ order, canceledOrder, outcome })
+    validateCanonicalCancellationResponse({ order, 
+      canceledOrder, 
+      outcome })
   } else if (canceledOrder !== undefined) {
     throw new TypeError("Unconfirmed cancellation outcome must not include an untrusted canonical response")
   }
-  return { market: order.market, hasCanonicalResult }
+  return { market: order.market, 
+    hasCanonicalResult }
 }
 
 /** Persist the classified broker cancellation result before local order state advances. */
