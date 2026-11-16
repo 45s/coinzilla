@@ -34,7 +34,10 @@ export function summarizeHarvesterJournalHistory({ records } = {}) {
     counts[payload.name] += 1
   }
 
-  const total = Object.values(counts).reduce((sum, count) => sum + count, 0)
+  let total = 0
+  for (const count of Object.values(counts)) {
+    total += count
+  }
   return toResult({
     hasPriorTradingHistory: total > 0,
     totalTradingEvents: total,
