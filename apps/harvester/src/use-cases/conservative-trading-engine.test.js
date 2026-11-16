@@ -10807,12 +10807,24 @@ test("keeps local deferral processing non-blocking when best-effort Journal publ
 
 test("adds only externally tracked legacy quote cash flow accrued after the account snapshot", async () => {
   const position = new Position({
-    positionId: createPositionId({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }),
+    positionId: createPositionId({
+      marketId: market.id,
+      strategyId: StrategyId.COIN_GRABBER,
+    }),
     strategyId: StrategyId.COIN_GRABBER,
     market,
-    baseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
-    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
-    quoteNetCashFlow: new Money({ amount: "100", asset: quoteAsset }),
+    baseQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    freeBaseQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    quoteNetCashFlow: new Money({
+      amount: "100",
+      asset: quoteAsset,
+    }),
   })
   const harness = await createHarness({
     initialPortfolio: new Portfolio({ positions: [position] }),
@@ -10820,7 +10832,10 @@ test("adds only externally tracked legacy quote cash flow accrued after the acco
     quoteFreeBalance: "80",
     quoteCashFlowBaseline: "200",
     additionalTrackedQuoteCashFlow: [
-      { assetId: quoteAsset.id, amount: "120" },
+      {
+        assetId: quoteAsset.id,
+        amount: "120",
+      },
     ],
   })
   const result = await harness.engine.processMarketPrice({
@@ -10846,7 +10861,10 @@ test("subtracts post-snapshot external legacy base debits before allocating anot
     portfolioBaseQuantityBaseline: "1",
     additionalTrackedBaseQuantityBaseline: "0.5",
     additionalTrackedBaseQuantity: [
-      { assetId: baseAsset.id, amount: "0.49" },
+      {
+        assetId: baseAsset.id,
+        amount: "0.49",
+      },
     ],
   })
   const result = await harness.engine.processMarketPrice({
