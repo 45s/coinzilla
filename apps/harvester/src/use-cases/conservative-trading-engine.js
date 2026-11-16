@@ -1108,6 +1108,7 @@ function createOperatorMarketBlockers({
   priceFresh,
   safetyPaused,
   operatorPaused,
+  operatorBuyPaused,
   recoveryManagedPaused,
   replacementPending,
   trailingBuyRepricePending,
@@ -1132,6 +1133,9 @@ function createOperatorMarketBlockers({
   }
   if (operatorPaused) {
     blockers.push("OPERATOR_PAUSED")
+  }
+  if (operatorBuyPaused) {
+    blockers.push("OPERATOR_BUYS_PAUSED")
   }
   if (recoveryManagedPaused) {
     blockers.push("RECOVERY_MANAGED_PAUSED")
@@ -1164,6 +1168,7 @@ function createOperatorMarketSnapshot({
   const marketPrice = state.prices.get(symbol)
   const priceFresh = marketPrice ? isMarketPriceFresh(marketPrice) : false
   const operatorPaused = state.operatorPausedMarkets.has(symbol)
+  const operatorBuyPaused = isOperatorBuyPauseActive({ state, symbol })
   const safetyPaused = state.durablePausedMarkets.has(symbol) ||
     (state.paused.has(symbol) && !state.recoveryManagedPausedMarkets.has(symbol))
   const recoveryManagedPaused = state.recoveryManagedPausedMarkets.has(symbol)
@@ -1181,6 +1186,7 @@ function createOperatorMarketSnapshot({
     priceFresh,
     safetyPaused,
     operatorPaused,
+    operatorBuyPaused,
     recoveryManagedPaused,
     replacementPending,
     trailingBuyRepricePending,
@@ -1209,6 +1215,7 @@ function createOperatorMarketSnapshot({
     priceTimestamp: marketPrice?.timestamp ?? null,
     priceFresh,
     operatorPaused,
+    operatorBuysPaused: operatorBuyPaused,
     safetyPaused,
     recoveryManagedPaused,
     replacementPending,
@@ -3065,6 +3072,9 @@ async function maybeReplaceTrailingBuyTransition({ context, symbol, marketPrice 
         reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
       },
     })
+  }
+  if (isOperatorBuyPauseActive({ state: context.state, symbol })) {
+    return context.evaluateLatestTransition({ symbol })
   }
   const {
     metadata,
