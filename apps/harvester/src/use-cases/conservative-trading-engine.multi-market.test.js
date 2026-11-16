@@ -1093,7 +1093,15 @@ test("per-market emergency BUY pause cancels only that market's owned BUY and le
       }),
     },
   })
-  await startBothMarkets(engine)
+  const initialDogecoinEvaluation = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+  assert.equal(initialDogecoinEvaluation.ok, true)
 
   const paused = await engine.pauseBuys({
     symbol: "DOGEUSDT",
@@ -1114,9 +1122,16 @@ test("per-market emergency BUY pause cancels only that market's owned BUY and le
     "A market-scoped emergency pause must leave another market's owned BUY order untouched.",
   )
 
-  await startBothMarkets(engine)
-
-  assert.equal(orders.length, 2, "The paused market must not submit another BUY while the other market's existing BUY remains active.")
+  const solEvaluation = await engine.processMarketPrice({
+    symbol: "SOLUSDT",
+    priceEvent: {
+      symbol: "SOLUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+  assert.equal(solEvaluation.ok, true)
+  assert.equal(orders.length, 2, "The unpaused market must still be able to submit a new BUY after the other market is paused.")
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
