@@ -12,11 +12,12 @@ import {
   getSnapshot,
 } from "../../test-support/candle-history-service-fixture.js"
 
-const test = (name, ...args) => nodeTest("[create-candle-history-service.lifecycle.test.js] " + name, ...args)
+const test = (name, ...args) => nodeTest(`[create-candle-history-service.lifecycle.test.js] ${  name}`, ...args)
 
 test("requires a successful candle subscription before reporting data readiness", async () => {
   const fixture = createFixture({
-    subscribeForCandles: async () => ({ ok: false, errors: [new Error("stream rejected")] }),
+    subscribeForCandles: async () => ({ ok: false,
+errors: [new Error("stream rejected")] }),
   })
   await fixture.start()
   const snapshot = getSnapshot(fixture)
@@ -33,7 +34,8 @@ test("waits for in-flight backfill work before the candle subscription is consid
   const backfillGate = new Promise((resolve) => { resolveBackfill = resolve })
   const fixture = createFixture({
     getCandles: async (input) => {
-      if (input.startTime === undefined) return { ok: true, data: createHistory(input.symbol, 100, true) }
+      if (input.startTime === undefined) {return { ok: true,
+data: createHistory(input.symbol, 100, true) }}
       signalBackfillStarted()
       await backfillGate
       return {
@@ -64,7 +66,8 @@ test("fails closed when live Kline updates overflow the warm-up buffer", async (
   const fixture = createFixture({
     onSubscribe: async ({ onCandle }) => {
       for (let index = 0; index <= 500; index += 1) {
-        await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
+        await onCandle(createCandle({ openTime: 100 * INTERVAL_MS,
+isClosed: false }))
       }
     },
   })
@@ -92,9 +95,11 @@ test("validates broker, clock, pair and subscription inputs at composition time"
     /requires broker.subscribeForCandles/,
     "Live candle updates are a required broker capability, not an optional fallback.",
   )
-  const broker = { getCandles() {}, subscribeForCandles() {} }
+  const broker = { getCandles() {},
+subscribeForCandles() {} }
   assert.throws(
-    () => createCandleHistoryService({ broker, now: 10 }),
+    () => createCandleHistoryService({ broker,
+now: 10 }),
     /now must be a function/,
     "Freshness must use an injectable clock function.",
   )
@@ -106,7 +111,8 @@ test("validates broker, clock, pair and subscription inputs at composition time"
     "The service must reject invalid pair configuration before subscribing.",
   )
   assert.throws(
-    () => fixture.service.start({ pairs: {}, subscriptions: {} }),
+    () => fixture.service.start({ pairs: {},
+subscriptions: {} }),
     /subscriptions must be an array/,
     "Subscription cleanup handles must be collected in an array.",
   )
@@ -114,7 +120,8 @@ test("validates broker, clock, pair and subscription inputs at composition time"
 
 test("starts only once and performs no market requests when no pair is enabled", async () => {
   const fixture = createFixture({
-    pairs: { BTCUSDT: { enabled: false }, DOGEUSDT: { enabled: false } },
+    pairs: { BTCUSDT: { enabled: false },
+DOGEUSDT: { enabled: false } },
   })
   const firstStart = fixture.start()
   const secondStart = fixture.start()
@@ -139,7 +146,8 @@ test("keeps a failed candle subscription unavailable even when historical metric
 
 test("rejects a success-shaped candle subscription without an unsubscribe handle", async () => {
   const fixture = createFixture({
-    subscribeForCandles: async () => ({ ok: true, data: { stream: "btcusdt@kline_1m" } }),
+    subscribeForCandles: async () => ({ ok: true,
+data: { stream: "btcusdt@kline_1m" } }),
   })
   await fixture.start()
   const snapshot = getSnapshot(fixture)
@@ -152,7 +160,8 @@ test("rejects a success-shaped candle subscription without an unsubscribe handle
 test("does not restore readiness from a candle callback after shutdown", async () => {
   const fixture = createFixture({
     onSubscribe: async ({ onCandle }) => {
-      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS, isClosed: false }))
+      await onCandle(createCandle({ openTime: 100 * INTERVAL_MS,
+isClosed: false }))
     },
   })
   await fixture.start()
@@ -173,7 +182,8 @@ test("drains accepted candle work before propagating a failed stream unsubscribe
   const fixture = createFixture({
     getCandles: async (input) => {
       if (input.startTime === undefined) {
-        return { ok: true, data: createHistory(input.symbol, 100, true) }
+        return { ok: true,
+data: createHistory(input.symbol, 100, true) }
       }
       signalBackfillStarted()
       await backfillGate
