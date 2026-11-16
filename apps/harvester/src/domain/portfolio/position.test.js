@@ -362,17 +362,21 @@ const makeSellAllocation = ({
   commissions = [
     {
       assetId: baseAsset.id,
+      assetCode: baseAsset.code,
       amount: "0.01",
     },
     {
       assetId: quoteAsset.id,
+      assetCode: quoteAsset.code,
       amount: "0.1",
     },
     {
       assetId: "asset:BNB",
+      assetCode: "BNB",
       amount: "0.01",
       quoteValue: {
         assetId: quoteAsset.id,
+        assetCode: quoteAsset.code,
         amount: "0.05",
       },
     },
@@ -444,6 +448,7 @@ test("rejects an allocated SELL with an unvalued third-asset commission", () => 
         commissions: [
           {
             assetId: "asset:BNB",
+            assetCode: "BNB",
             amount: "0.01",
           },
         ],
