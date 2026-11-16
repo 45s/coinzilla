@@ -11164,7 +11164,11 @@ test("invalidates and rechecks a safe market after a late owned SELL execution",
     journalDurable: true,
     coverageResult: initialCoverage,
   })
-  assert.equal(initialSafety.data.markets[0].status, "SAFE_TO_SHUTDOWN", "Expected initialSafety.data.markets[0].status to equal \"SAFE_TO_SHUTDOWN\" in \"invalidates and rechecks a safe market after a late owned SELL execution\".")
+  assert.equal(
+    initialSafety.data.markets[0].status,
+    "SAFE_TO_SHUTDOWN",
+    `Initial shutdown safety blockers: ${JSON.stringify(initialSafety.data.markets[0].blockers)}. Pause callbacks: ${JSON.stringify(harness.pauses)}`,
+  )
 
   const sellOrder = harness.engine.getOrders().find((order) =>
     order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
