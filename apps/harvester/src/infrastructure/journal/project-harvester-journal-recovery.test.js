@@ -13,14 +13,14 @@ import { Portfolio } from "../../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../../domain/strategies/conservative/recovery-ledger.js"
 import { updateTradingAccounting } from "../../use-cases/update-trading-accounting.js"
 
-const record = (name, data, id = name) => ({
-  id,
-  payload: { id,
-name,
-data },
-  position: { fileName: "session.jsonl",
-lineNumber: 1 },
-})
+const record = (...args) => {
+  const [name, data, id = name] = args
+  return {
+    id,
+    payload: { id, name, data },
+    position: { fileName: "session.jsonl", lineNumber: 1 },
+  }
+}
 
 const submissionRequested = (overrides = {}) => record("order.submission_requested", {
   clientOrderId: "h-BTCUSDT-1",
