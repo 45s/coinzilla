@@ -6,6 +6,13 @@ type: roadmap
 owner: utils
 ---
 
+## In progress — shared SystemCustomError base (request [#1208](https://github.com/45s/coinzilla/issues/1208), repository initiative [#1028](https://github.com/45s/coinzilla/issues/1028); PR [#1262](https://github.com/45s/coinzilla/pull/1262))
+
+- Implement the single domain-neutral native `Error` base in `@coinzilla/utils`, preserving native `cause` and exposing optional immutable `code`, safe scalar `context`, and `retryable` diagnostics.
+- Keep subclasses, codes, messages and retry decisions in their owning packages. Do not change Logger behavior or migrate consumer code in this Utilities task.
+- The Harvester Recovery Seller consumer PR [#1203](https://github.com/45s/coinzilla/pull/1203) is merged; its `MixedSellFillReconciliationError` remains feature-local and must migrate in a separate Harvester-owned follow-up after this base is available.
+- Verify native cause identity, concrete subclass naming, option/context validation, public export, Utils tests/coverage, dependency direction and exact-head workspace CI.
+
 ## In progress — package ESLint cleanup ([issue #1238](https://github.com/45s/coinzilla/issues/1238))
 
 - Eliminate existing ESLint errors and warnings across `packages/utils/` without changing runtime behavior or public contracts.
@@ -90,6 +97,7 @@ Compatibility constraints: retain existing public exports and the legacy `NH` / 
 
 - [x] Extend the shared Logger with independent transport thresholds, runtime configuration, safe structured entries, and transport lifecycle handling (PR #631 merged).
 - [x] Document public and non-obvious `packages/utils` inputs, outputs, callbacks, async behavior, defaults, and validation contracts with JSDoc; completed in [PR #659](https://github.com/45s/coinzilla/pull/659), merged at `27388a54dd788819a08b5e605cb714258da57ccd`. JavaScript-first tooling remains unchanged.
+- [ ] Add the single shared `SystemCustomError` base for package-owned subclasses; preserve native `cause` and keep all domain-specific error policy in the owning packages (request [#1208](https://github.com/45s/coinzilla/issues/1208)).
 
 - [x] Maintain deterministic unit tests and meaningful coverage for all exported helpers.
 - [x] Review helper APIs for consistent input validation, error semantics, and immutable behavior.

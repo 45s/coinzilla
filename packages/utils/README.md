@@ -21,6 +21,7 @@ Import the supported API from the package entry point:
 - `generateUUID`: UUID v4 generation.
 - `capitalize`: trims and uppercases a string.
 - `toResult`: normalizes result objects; an explicit non-null `errors` property takes precedence over `error`, non-array errors are wrapped in an array, `ok` is recomputed from the normalized errors, and other input properties are preserved.
+- `SystemCustomError`: shared native `Error` base for package-owned subclasses; preserves native `cause`, sets the concrete subclass name, and optionally exposes a stable `code`, safe scalar `context`, and boolean `retryable` classification.
 - `createKeyedQueue`: creates independent serialized promise queues per key; tasks sharing a key run in enqueue order, different keys run concurrently, and `drain()` waits for tasks pending when it is called. An optional `onError({ key, error })` reports task failures without poisoning later tasks for that key.
 - `assertObjectInput`: validates that an operation received a non-null, non-array object. It checks only the input shape and deliberately does not read its properties; callers own property access and its error boundary.
 - `checkIfFeatureEnable`: enables a feature only when its environment variable is exactly `1`; warning diagnostics never include the variable's value.
@@ -192,6 +193,38 @@ Pass native `Error` and `AggregateError` instances as structured values; do not 
 Circular references on the active traversal path are represented as `[Circular]`; repeated non-circular references are serialized normally. The Logger therefore emits readable JSON containing the `[Circular]` marker for circular structured values, while unsupported JSON primitives such as BigInt still use the safe string fallback. Properties whose getters throw are represented as `[Unreadable property]`; hostile proxy enumeration is contained. Common sensitive field names continue to be redacted recursively, including inside normalized error causes. The formatter does not inspect secrets embedded in free-form messages or stack text, so callers must not place credentials or signed request data in those strings. If JSON serialization still fails (for example, because a structured value contains a BigInt), the existing safe string fallback is used.
 
 The normalized diagnostic shape intentionally allowlists standard Error diagnostics rather than copying arbitrary custom Error properties; it is intended for logs, not for reconstructing executable Error instances.
+
+Use `SystemCustomError` as the shared base for package-owned subclasses, not as a replacement for domain-specific error types:
+
+```js
+import { SystemCustomError, defaultLogger } from "@coinzilla/utils"
+
+class MarketDataReadError extends SystemCustomError {}
+
+const cause = new Error("connection closed")
+const error = new MarketDataReadError("Unable to read market data", {
+  code: "MARKET_DATA_READ_FAILED",
+  cause,
+  context: {
+    component: "market-data",
+    operation: "read",
+    symbol: "BTCUSDT",
+  },
+  retryable: true,
+})
+
+defaultLogger.error({
+  message: error.message,
+  error,
+  code: error.code,
+  context: error.context,
+  retryable: error.retryable,
+})
+```
+
+The base preserves native `cause` identity and freezes a detached context record. Context must be a plain object whose values are strings, finite numbers, booleans, or `null`; do not attach secrets, nested payloads, request/response objects, or mutable domain state. The base does not decide whether a failure is retryable; the owning component supplies that classification only when it is meaningful.
+
+The Logger continues to serialize only standard Error diagnostics. Pass custom `code`, `context`, and `retryable` as explicit structured fields when they are needed in logs.
 
 ## Validation and compatibility
 

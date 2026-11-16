@@ -11101,6 +11101,7 @@ function assertNoShutdownSafetyPauses({ harness } = {}) {
     "The late owned SELL fill must not create a hard safety pause that blocks its own shutdown recovery replacement.",
   )
 }
+
 async function applyLateRecoverySellFill({ harness, sellOrder } = {}) {
   const quantity = "0.1"
   const lateFill = makeSellFill({
