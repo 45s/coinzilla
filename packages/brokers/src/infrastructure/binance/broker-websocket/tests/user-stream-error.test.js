@@ -15,7 +15,8 @@ describe("BinanceSdkBroker user-data stream errors", () => {
       apiKey: "test-key",
       apiSecret: "test-secret",
       tradingMode: "testnet",
-      logger: { error: (...args) => logs.push(args), info() {} },
+      logger: { error: (...args) => logs.push(args),
+info() {} },
     }, { apiClientFactory: () => rpc })
     broker.connected = true
     let eventCalls = 0
@@ -33,7 +34,9 @@ describe("BinanceSdkBroker user-data stream errors", () => {
     assert.equal(logs.length, 1)
     assert.equal(logs[0][0], "Binance user data stream error")
     assert.equal(logs[0][1], error)
-    assert.deepEqual(statuses, [{ type: "rpcError", error, recoveryRequired: false }])
+    assert.deepEqual(statuses, [{ type: "rpcError",
+error,
+recoveryRequired: false }])
     await result.data.disconnect()
     assert.equal(rpc.listenerCount, 0)
   })
@@ -50,18 +53,23 @@ it("logs an unexpected user-data socket close even without an onStatus callback"
     apiKey: "test-key",
     apiSecret: "test-secret",
       tradingMode: "testnet",
-    logger: { error: (...args) => logs.push(args), info() {}, warn() {} },
+    logger: { error: (...args) => logs.push(args),
+info() {},
+warn() {} },
   }, { apiClientFactory: () => rpc })
   broker.connected = true
 
   const result = await broker.subscribeForUserData({ onEvent: () => {} })
   rpc.state = "closed"
-  rpc.emitClose({ code: 1006, reason: "network lost", wasClean: false })
+  rpc.emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
 
   assert.equal(broker.connected, false)
   assert.equal(broker.userDataUnavailable, true)
   assert.equal(logs.length, 1)
   assert.equal(logs[0][0], "Binance user-data API connection closed")
-  assert.deepEqual(logs[0][1], { code: 1006, reason: "network lost" })
+  assert.deepEqual(logs[0][1], { code: 1006,
+reason: "network lost" })
   await result.data.disconnect()
 })

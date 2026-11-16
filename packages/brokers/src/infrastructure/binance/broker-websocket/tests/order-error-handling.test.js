@@ -6,8 +6,12 @@ import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 function createBroker(handlers) {
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
-    apiSecret: "test-secret", tradingMode: "testnet",
-    logger: { error() {}, info() {}, debug() {}, warn() {} },
+    apiSecret: "test-secret",
+tradingMode: "testnet",
+    logger: { error() {},
+info() {},
+debug() {},
+warn() {} },
   })
   broker.tradingConnection = createFakeRpcClient(handlers)
   return broker
@@ -16,21 +20,25 @@ function createBroker(handlers) {
 describe("BinanceSdkBroker order error results", () => {
   it("returns errors from getOrder when order.status rejects", async () => {
     const broker = createBroker({ "order.status": async () => { throw new Error("request timed out") } })
-    const result = await broker.getOrder({ symbol: "BTCUSDT", orderId: 123 })
+    const result = await broker.getOrder({ symbol: "BTCUSDT",
+orderId: 123 })
     assert.equal(result.ok, false)
     assert.equal(result.errors[0].message, "request timed out")
   })
 
   it("returns errors from createOrder when order.place rejects", async () => {
     const broker = createBroker({ "order.place": async () => { throw new Error("insufficient balance") } })
-    const result = await broker.createOrder({ symbol: "BTCUSDT", quantity: 1, price: 100 })
+    const result = await broker.createOrder({ symbol: "BTCUSDT",
+quantity: 1,
+price: 100 })
     assert.equal(result.ok, false)
     assert.equal(result.errors[0].message, "insufficient balance")
   })
 
   it("returns errors from cancelOrder when order.cancel rejects", async () => {
     const broker = createBroker({ "order.cancel": async () => { throw new Error("unknown order") } })
-    const result = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: 123 })
+    const result = await broker.cancelOrder({ symbol: "BTCUSDT",
+orderId: 123 })
     assert.equal(result.ok, false, "A failed order.cancel RPC must return a failed broker result")
     assert.equal(result.cancellationOutcome, "OUTCOME_UNKNOWN", "A failed state-changing RPC must remain conservatively classified as outcome unknown")
     assert.equal(result.errors[0].message, "unknown order", "The broker must preserve the original cancellation error")

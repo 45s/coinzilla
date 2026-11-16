@@ -4,10 +4,13 @@ import { BinanceSdkBroker } from "./broker.js"
 import { createFakeRpcClient } from "./test-helpers/fake-broker-clients.js"
 
 function createBroker(handlers) {
-  const broker = new BinanceSdkBroker({ apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet" })
+  const broker = new BinanceSdkBroker({ apiKey: "test-key",
+apiSecret: "test-secret",
+tradingMode: "testnet" })
   const rpc = createFakeRpcClient(handlers)
   broker.tradingConnection = rpc
-  return { broker, rpc }
+  return { broker,
+rpc }
 }
 
 test("getServerTime returns exact exchange server milliseconds from the unsigned time method", async () => {
@@ -41,8 +44,12 @@ test("getAccountSnapshot returns canonical balances and account source updateTim
     "account.status": () => ({
       updateTime: 1_700_000_000_123,
       balances: [
-        { asset: "USDT", free: "10.25000000", locked: "1.75000000" },
-        { asset: "DOGE", free: "100.00000000", locked: "0.00000000" },
+        { asset: "USDT",
+free: "10.25000000",
+locked: "1.75000000" },
+        { asset: "DOGE",
+free: "100.00000000",
+locked: "0.00000000" },
       ],
     }),
   })

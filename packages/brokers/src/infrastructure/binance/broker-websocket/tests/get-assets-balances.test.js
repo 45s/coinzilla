@@ -4,7 +4,11 @@ import { BinanceSdkBroker } from "../broker.js"
 import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 
 const createBroker = (handlers) => {
-  const broker = new BinanceSdkBroker({ apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet", logger: { error() {}, info() {} } })
+  const broker = new BinanceSdkBroker({ apiKey: "test-key",
+apiSecret: "test-secret",
+tradingMode: "testnet",
+logger: { error() {},
+info() {} } })
   broker.tradingConnection = createFakeRpcClient(handlers)
   return broker
 }
@@ -15,14 +19,19 @@ describe("BinanceSdkBroker.getAssets", () => {
       "account.status": (params) => {
         assert.deepEqual(params, { omitZeroBalances: true })
         return { balances: [
-          { asset: "BTC", free: "0.2", locked: "0.05" },
-          { asset: "USDT", free: "0", locked: "0" },
+          { asset: "BTC",
+free: "0.2",
+locked: "0.05" },
+          { asset: "USDT",
+free: "0",
+locked: "0" },
         ] }
       },
     })
     const result = await instance.getAssets()
     assert.equal(result.ok, true)
-    assert.deepEqual(result.data, [{ ticker: "BTC", quantity: 0.25 }])
+    assert.deepEqual(result.data, [{ ticker: "BTC",
+quantity: 0.25 }])
   })
 })
 

@@ -6,7 +6,8 @@ import { createFakeRpcClient } from "./broker-websocket/test-helpers/fake-broker
 
 test("maps user-data port operations to the exact signed Binance RPC contract", async () => {
   const client = createFakeRpcClient({
-    "userDataStream.subscribe.signature": (_params, options) => {
+    "userDataStream.subscribe.signature": (...args) => {
+      const [, options] = args
       assert.deepEqual(options, { signed: true })
       return { subscriptionId: 17 }
     },
@@ -44,7 +45,9 @@ test("maps user-data port operations to the exact signed Binance RPC contract", 
 test("forwards connection state and listener lifecycle through the port", async () => {
   const client = createFakeRpcClient()
   const port = createBinanceUserDataClientPort(client)
-  const received = { events: [], errors: [], closes: [] }
+  const received = { events: [],
+    errors: [],
+    closes: [] }
   const removeEvent = port.onEvent((event) => received.events.push(event))
   const removeError = port.onError((error) => received.errors.push(error))
   const removeClose = port.onClose((event) => received.closes.push(event))
@@ -55,10 +58,15 @@ test("forwards connection state and listener lifecycle through the port", async 
 
   const event = {
     subscriptionId: 17,
-    event: { e: "balanceUpdate", a: "USDT", d: "1", T: 10, E: 11 },
+    event: { e: "balanceUpdate",
+      a: "USDT",
+      d: "1",
+      T: 10,
+      E: 11 },
   }
   const error = new Error("socket warning")
-  const close = { code: 1006, reason: "network lost" }
+  const close = { code: 1006,
+    reason: "network lost" }
   client.emitEvent(event)
   client.emitEvent(structuredClone(event))
   client.emitError(error)
@@ -110,8 +118,10 @@ test("normalizes Binance user-data stream termination into a neutral port event"
   const received = []
   const removeEvent = port.onEvent((event) => received.push(event))
 
-  const termination = { e: "eventStreamTerminated", E: 123456 }
-  client.emitEvent({ subscriptionId: 17, event: termination })
+  const termination = { e: "eventStreamTerminated",
+    E: 123456 }
+  client.emitEvent({ subscriptionId: 17,
+    event: termination })
 
   assert.deepEqual(received, [{
     type: "terminated",

@@ -24,7 +24,8 @@ export class FakeWebSocket extends EventTarget {
     this.sent.push(data)
   }
 
-  close(code = 1000, reason = "") {
+  close(...args) {
+    const [code = 1000, reason = ""] = args
     if (
       this.readyState === FakeWebSocket.CLOSING ||
       this.readyState === FakeWebSocket.CLOSED
@@ -33,11 +34,12 @@ export class FakeWebSocket extends EventTarget {
     }
 
     this.readyState = FakeWebSocket.CLOSING
-    this.closeCalls.push({ code, reason })
+    this.closeCalls.push({ code,
+reason })
   }
 
   open() {
-    if (this.readyState !== FakeWebSocket.CONNECTING) return
+    if (this.readyState !== FakeWebSocket.CONNECTING) {return}
 
     this.readyState = FakeWebSocket.OPEN
     this.dispatchEvent(new Event("open"))
@@ -49,7 +51,8 @@ export class FakeWebSocket extends EventTarget {
     this.dispatchEvent(event)
   }
 
-  fail(error = new Error("Fake WebSocket error"), message = error?.message ?? "") {
+  fail(...args) {
+    const [error = new Error("Fake WebSocket error"), message = error?.message ?? ""] = args
     const event = new Event("error")
     Object.defineProperties(event, {
       error: { value: error },
@@ -59,7 +62,7 @@ export class FakeWebSocket extends EventTarget {
   }
 
   serverClose({ code = 1000, reason = "", wasClean = true } = {}) {
-    if (this.readyState === FakeWebSocket.CLOSED) return
+    if (this.readyState === FakeWebSocket.CLOSED) {return}
 
     this.readyState = FakeWebSocket.CLOSED
     const event = new Event("close")
