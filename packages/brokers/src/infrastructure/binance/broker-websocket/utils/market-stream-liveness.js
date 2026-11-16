@@ -256,6 +256,12 @@ class MarketStreamLivenessMonitor {
     if (recoveryError) {
       this.#reportError(recoveryError)
       this.#state = "recovery-failed"
+      if (this.#recoveryAttemptTimes.length >= this.#maxRecoveryAttempts) {
+        this.#exhaustRecovery()
+        return
+      }
+      this.#scheduleCheck()
+      return
     }
     if (this.#pendingTradeId === null ||
         this.#lastAggTradeId !== null && this.#lastAggTradeId >= this.#pendingTradeId) {
@@ -263,15 +269,8 @@ class MarketStreamLivenessMonitor {
       this.#state = "healthy"
       return
     }
-    if (this.#recoveryAttemptTimes.length >= this.#maxRecoveryAttempts) {
-      this.#exhaustRecovery()
-      return
-    }
-    if (this.#state !== "recovery-failed") {
-      this.#state = "awaiting-aggTrade"
-      this.#reportStatus("awaiting-aggTrade")
-    }
-    this.#scheduleCheck()
+    this.#state = "awaiting-aggTrade"
+    this.#reportStatus("awaiting-aggTrade")
   }
 }
 
