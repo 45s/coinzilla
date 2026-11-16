@@ -24,7 +24,8 @@ const CREDENTIAL_QUERY_PARAMETERS = new Set([
 ]);
 const USER_AGENT = 'Coinzilla-Documentation-Link-Checker/1.0';
 
-function countCharacter(value, character) {
+function countCharacter(...args) {
+  const [value, character] = args;
   return [...value].filter((item) => item === character).length;
 }
 
@@ -56,7 +57,8 @@ function redactCredentials(value) {
     return parsed.href;
   } catch {
     return userInfoRedacted
-      .replace(/([?&])([^=&#]+)=([^&#]*)/g, (match, separator, name) => {
+      .replace(/([?&])([^=&#]+)=([^&#]*)/g, (...args) => {
+        const [match, separator, name] = args;
         let decodedName = name;
         try {
           decodedName = decodeURIComponent(name.replace(/\+/g, ' '));
@@ -124,7 +126,8 @@ host: hostname };
 export function extractExternalLinks(documents) {
   const links = new Map();
 
-  function add(raw, path) {
+  function add(...args) {
+    const [raw, path] = args;
     const parsed = parseExternalUrl(raw);
     if (!parsed) {return;}
     const key = `${parsed.status  }:${  parsed.url}`;
@@ -177,7 +180,8 @@ originalUrls: [] };
  * @param {string[]} changedPaths
  * @returns {{path: string, content: string}[]}
  */
-export function selectChangedMarkdownDocuments(documents, changedPaths) {
+export function selectChangedMarkdownDocuments(...args) {
+  const [documents, changedPaths] = args;
   const changed = new Set(changedPaths.filter((path) => /\.mdx?$/i.test(path)));
   return documents.filter((document) => changed.has(document.path) && !isHistoricalPath(document.path));
 }
@@ -189,7 +193,8 @@ export function selectChangedMarkdownDocuments(documents, changedPaths) {
  * @param {number} maxWaitMs
  * @returns {number|null}
  */
-export function parseRetryAfter(value, nowMs = Date.now(), maxWaitMs = 30_000) {
+export function parseRetryAfter(...args) {
+  const [value, nowMs = Date.now(), maxWaitMs = 30_000] = args;
   if (!value) {return null;}
   const seconds = Number(value);
   if (Number.isFinite(seconds) && seconds >= 0) {return Math.min(maxWaitMs, seconds * 1000);}
@@ -209,7 +214,8 @@ export function createHostRateLimiter(options = {}) {
   const tails = new Map();
   const lastStarted = new Map();
 
-  return async function run(host, task) {
+  return async function run(...args) {
+    const [host, task] = args;
     const previous = tails.get(host) ?? Promise.resolve();
     let release;
     const gate = new Promise((resolveGate) => { release = resolveGate; });
@@ -234,7 +240,8 @@ function defaultSleep(ms) {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
 
-async function cancelResponseBody(response, method) {
+async function cancelResponseBody(...args) {
+  const [response, method] = args;
   if (method !== 'GET' || !response.body || typeof response.body.cancel !== 'function') {return;}
   try {
     await response.body.cancel();
@@ -243,13 +250,17 @@ async function cancelResponseBody(response, method) {
   }
 }
 
-async function fetchWithRetries(url, method, options) {
+async function fetchWithRetries(...args) {
+  const [url, method, options] = args;
   const maxRetries = options.maxRetries ?? 2;
   const baseDelayMs = options.baseDelayMs ?? 500;
   const maxRetryAfterMs = options.maxRetryAfterMs ?? 30_000;
   const sleep = options.sleep ?? defaultSleep;
   const now = options.now ?? Date.now;
-  const fetchImpl = options.fetchImpl ?? ((target, init) => fetchPinned(target, init, options));
+  const fetchImpl = options.fetchImpl ?? ((...args) => {
+    const [target, init] = args;
+    return fetchPinned(target, init, options);
+  });
   const {hostLimiter} = options;
   let lastError;
 
@@ -286,7 +297,8 @@ async function fetchWithRetries(url, method, options) {
   return { error: lastError ?? new Error('Request attempts exhausted') };
 }
 
-async function fetchFollowingRedirects(startUrl, method, options) {
+async function fetchFollowingRedirects(...args) {
+  const [startUrl, method, options] = args;
   let currentUrl = startUrl;
   const maxRedirects = options.maxRedirects ?? 5;
 
@@ -339,7 +351,8 @@ function isBrokenStatus(status) {
  * @param {object} options Injectable network/rate-limit options for tests.
  * @returns {Promise<object>}
  */
-export async function checkExternalLink(link, options = {}) {
+export async function checkExternalLink(...args) {
+  const [link, options = {}] = args;
   if (link.status === 'invalid' || link.status === 'skipped') {return link;}
 
   const sleep = options.sleep ?? defaultSleep;
@@ -415,7 +428,8 @@ reason: `GET returned HTTP ${  get.response.status}` };
  * @param {object} options
  * @returns {Promise<object[]>}
  */
-export async function checkExternalLinks(links, options = {}) {
+export async function checkExternalLinks(...args) {
+  const [links, options = {}] = args;
   const concurrency = options.concurrency ?? 4;
   const sleep = options.sleep ?? defaultSleep;
   const now = options.now ?? Date.now;
@@ -450,7 +464,10 @@ hostLimiter }));
     }
   }));
 
-  return results.sort((left, right) => left.url.localeCompare(right.url));
+  return results.sort((...args) => {
+    const [left, right] = args;
+    return left.url.localeCompare(right.url);
+  });
 }
 
 /**
@@ -459,7 +476,8 @@ hostLimiter }));
  * @param {string} root
  * @returns {{path: string, content: string}[]}
  */
-export function getChangedMarkdownDocuments(baseSha, root = repositoryRoot) {
+export function getChangedMarkdownDocuments(...args) {
+  const [baseSha, root = repositoryRoot] = args;
   if (typeof baseSha !== 'string' || !/^[a-f0-9]{40}$/i.test(baseSha)) {
     throw new TypeError('Changed-document mode requires a 40-character base commit SHA');
   }
@@ -506,26 +524,28 @@ failOnBroken: false };
   return options;
 }
 
-function printResults(mode, links, results) {
-  const counts = results.reduce((summary, result) => {
+function printResults(...args) {
+  const [mode, links, results] = args;
+  const counts = results.reduce((...reduceArguments) => {
+    const [summary, result] = reduceArguments;
     summary[result.status] = (summary[result.status] ?? 0) + 1;
     return summary;
   }, {});
-  console.log(
+  process.stdout.write(
     `External Markdown links (${  mode  }): ${ 
     links.length  } unique URLs; ${ 
     counts.ok ?? 0  } OK; ${ 
     counts.broken ?? 0  } confirmed broken; ${ 
     counts.invalid ?? 0  } invalid; ${ 
     counts.unverifiable ?? 0  } unverifiable; ${ 
-    counts.skipped ?? 0  } skipped.`,
+    counts.skipped ?? 0  } skipped.\n`,
   );
   for (const result of results) {
     if (result.status === 'ok') {continue;}
-    console.log(
+    process.stdout.write(
       `- ${  result.status  }: ${  result.url 
       } [${  result.paths.join(', ')  }]${ 
-      result.reason ? ` — ${  result.reason}` : ''}`,
+      result.reason ? ` — ${  result.reason}` : ''}\n`,
     );
   }
 }
@@ -547,7 +567,8 @@ export async function main(argv = process.argv.slice(2)) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   main().catch((error) => {
-    console.error('External Markdown link check failed:', error);
+    const detail = error instanceof Error ? error.stack ?? error.message : String(error);
+    process.stderr.write(`External Markdown link check failed: ${detail}\n`);
     process.exitCode = 1;
   });
 }
