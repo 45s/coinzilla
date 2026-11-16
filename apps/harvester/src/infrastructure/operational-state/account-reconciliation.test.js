@@ -307,5 +307,4 @@ total: "10" },
     false,
     "A targeted commission baseline must not broaden into an unrelated multi-asset wallet snapshot.",
   )
-  })
-}
+})
