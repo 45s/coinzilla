@@ -274,6 +274,11 @@ describe("Binance user-data unsubscribe retry failure", () => {
     await assert.rejects(subscription.data.disconnect(), (error) => {
       assert.ok(error instanceof AggregateError)
       assert.deepEqual(error.errors, [originalError, retryError])
+      assert.equal(
+        error.cause,
+        retryError,
+        "The aggregate unsubscribe failure must preserve the final retry error as its cause",
+      )
       return true
     })
 
