@@ -12,7 +12,8 @@ const FORBIDDEN_TARGETS = Object.freeze({
 const IMPORT_PATTERN =
   /\b(?:import|export)\s+(?:[^"';`]*?\s+from\s*)?["']([^"']+)["']|\bimport\s*\(\s*["']([^"']+)["']\s*\)|\brequire\s*\(\s*["']([^"']+)["']\s*\)/g
 
-async function collectJavaScriptFiles(directory, prefix = "") {
+async function collectJavaScriptFiles(...args) {
+  const [directory, prefix = ""] = args
   const entries = await readdir(directory, { withFileTypes: true })
   const files = []
   for (const entry of entries) {
@@ -26,7 +27,8 @@ async function collectJavaScriptFiles(directory, prefix = "") {
       !entry.name.endsWith(".test.js") &&
       !entry.name.endsWith(".integration.js")
     ) {
-      files.push({ absolutePath, relativePath })
+      files.push({ absolutePath,
+        relativePath })
     }
   }
   return files
@@ -37,8 +39,9 @@ function getLayer(relativePath) {
   return FORBIDDEN_TARGETS[firstSegment] ? firstSegment : null
 }
 
-function resolveLocalTarget(relativePath, specifier) {
-  if (!specifier.startsWith(".")) return null
+function resolveLocalTarget(...args) {
+  const [relativePath, specifier] = args
+  if (!specifier.startsWith(".")) {return null}
   return path.posix.normalize(path.posix.join(path.posix.dirname(relativePath), specifier))
 }
 
@@ -66,29 +69,30 @@ export async function findForbiddenDependencies(sourceRoot) {
     try {
       files.push(...await collectJavaScriptFiles(directory, layer))
     } catch (error) {
-      if (error.code !== "ENOENT") throw error
+      if (error.code !== "ENOENT") {throw error}
     }
   }
 
   const entryPoint = path.join(root, "index.js")
   try {
     await readFile(entryPoint, "utf8")
-    files.push({ absolutePath: entryPoint, relativePath: "index.js" })
+    files.push({ absolutePath: entryPoint,
+      relativePath: "index.js" })
   } catch (error) {
-    if (error.code !== "ENOENT") throw error
+    if (error.code !== "ENOENT") {throw error}
   }
 
   const violations = []
   for (const file of files) {
     const source = await readFile(file.absolutePath, "utf8")
     const sourceLayer = getLayer(file.relativePath)
-    if (!sourceLayer) continue
+    if (!sourceLayer) {continue}
 
     for (const specifier of findImports(source)) {
       const targetPath = resolveLocalTarget(file.relativePath, specifier)
-      if (!targetPath) continue
+      if (!targetPath) {continue}
       const targetLayer = getLayer(targetPath)
-      if (!targetLayer || !FORBIDDEN_TARGETS[sourceLayer].has(targetLayer)) continue
+      if (!targetLayer || !FORBIDDEN_TARGETS[sourceLayer].has(targetLayer)) {continue}
 
       violations.push({
         file: file.relativePath,
@@ -99,9 +103,10 @@ export async function findForbiddenDependencies(sourceRoot) {
     }
   }
 
-  return violations.sort((left, right) =>
-    left.file.localeCompare(right.file) || left.import.localeCompare(right.import),
-  )
+  return violations.sort((...args) => {
+    const [left, right] = args
+    return left.file.localeCompare(right.file) || left.import.localeCompare(right.import)
+  })
 }
 
 /** Create a temporary source tree for deterministic negative/control tests. */
@@ -112,13 +117,15 @@ export async function withArchitectureFixture(run) {
   try {
     await run({
       sourceRoot,
-      write: async (relativePath, source) => {
+      write: async (...args) => {
+        const [relativePath, source] = args
         const destination = path.join(sourceRoot, relativePath)
         await mkdir(path.dirname(destination), { recursive: true })
         await writeFile(destination, source)
       },
     })
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+      force: true })
   }
 }

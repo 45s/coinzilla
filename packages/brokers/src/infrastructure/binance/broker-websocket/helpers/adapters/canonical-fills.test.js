@@ -29,15 +29,18 @@ const trade = {
 }
 
 test("builds a canonical fill market from the exact Binance symbol metadata", () => {
-  const market = createCanonicalFillMarket({ symbol: "BTCUSDT", exchangeInfo })
+  const market = createCanonicalFillMarket({ symbol: "BTCUSDT",
+exchangeInfo })
 
   assert.ok(market instanceof Market)
   assert.equal(market.venue, "binance")
   assert.equal(market.symbol, "BTCUSDT")
   assert.ok(market.baseAsset instanceof Asset)
   assert.ok(market.quoteAsset instanceof Asset)
-  assert.deepEqual(market.baseAsset.value, { id: "btc", code: "BTC" })
-  assert.deepEqual(market.quoteAsset.value, { id: "usdt", code: "USDT" })
+  assert.deepEqual(market.baseAsset.value, { id: "btc",
+code: "BTC" })
+  assert.deepEqual(market.quoteAsset.value, { id: "usdt",
+code: "USDT" })
 })
 
 test("rejects missing or ambiguous market metadata", () => {
@@ -54,9 +57,13 @@ test("rejects missing or ambiguous market metadata", () => {
 
 test("rejects incomplete base or quote asset metadata", () => {
   for (const symbolInfo of [
-    { ...exchangeInfo.symbols[0], baseAsset: " " },
-    { ...exchangeInfo.symbols[0], quoteAsset: "" },
-    { symbol: "BTCUSDT", baseAsset: 1, quoteAsset: "USDT" },
+    { ...exchangeInfo.symbols[0],
+baseAsset: " " },
+    { ...exchangeInfo.symbols[0],
+quoteAsset: "" },
+    { symbol: "BTCUSDT",
+baseAsset: 1,
+quoteAsset: "USDT" },
   ]) {
     assert.throws(() => createCanonicalFillMarket({
       symbol: "BTCUSDT",
@@ -66,8 +73,10 @@ test("rejects incomplete base or quote asset metadata", () => {
 })
 
 test("maps trade arrays to canonical Fill entities while preserving the market identity", () => {
-  const market = createCanonicalFillMarket({ symbol: "BTCUSDT", exchangeInfo })
-  const fills = adaptCanonicalFills({ trades: [trade], market })
+  const market = createCanonicalFillMarket({ symbol: "BTCUSDT",
+exchangeInfo })
+  const fills = adaptCanonicalFills({ trades: [trade],
+market })
 
   assert.equal(fills.length, 1)
   assert.ok(fills[0] instanceof Fill)
@@ -81,9 +90,12 @@ test("maps trade arrays to canonical Fill entities while preserving the market i
 })
 
 test("accepts an empty trade list and rejects non-array responses", () => {
-  const market = createCanonicalFillMarket({ symbol: "BTCUSDT", exchangeInfo })
-  assert.deepEqual(adaptCanonicalFills({ trades: [], market }), [])
+  const market = createCanonicalFillMarket({ symbol: "BTCUSDT",
+exchangeInfo })
+  assert.deepEqual(adaptCanonicalFills({ trades: [],
+market }), [])
   for (const trades of [undefined, null, {}, "not-an-array"]) {
-    assert.throws(() => adaptCanonicalFills({ trades, market }), /myTrades response should be an array/)
+    assert.throws(() => adaptCanonicalFills({ trades,
+market }), /myTrades response should be an array/)
   }
 })

@@ -55,23 +55,33 @@ test("builds allOrders cursor and time-window parameters", () => {
 
 test("rejects invalid symbols, IDs, timestamps, and limits", () => {
   assert.throws(() => createMyTradesParams({ symbol: "" }), /symbol is required/)
-  assert.throws(() => createMyTradesParams({ symbol: "DOGEUSDT", fromId: "1.5" }), /fromId/)
-  assert.throws(() => createMyTradesParams({ symbol: "DOGEUSDT", fromId: Number.MAX_SAFE_INTEGER + 1 }), /fromId/)
-  assert.throws(() => createMyTradesParams({ symbol: "DOGEUSDT", startTime: -1 }), /startTime/)
-  assert.throws(() => createOrderHistoryParams({ symbol: "DOGEUSDT", limit: 1001 }), /limit/)
+  assert.throws(() => createMyTradesParams({ symbol: "DOGEUSDT",
+fromId: "1.5" }), /fromId/)
+  assert.throws(() => createMyTradesParams({ symbol: "DOGEUSDT",
+fromId: Number.MAX_SAFE_INTEGER + 1 }), /fromId/)
+  assert.throws(() => createMyTradesParams({ symbol: "DOGEUSDT",
+startTime: -1 }), /startTime/)
+  assert.throws(() => createOrderHistoryParams({ symbol: "DOGEUSDT",
+limit: 1001 }), /limit/)
 })
 
 test("rejects conflicting cursor/time filters and time windows over 24 hours", () => {
   assert.throws(
-    () => createMyTradesParams({ symbol: "DOGEUSDT", fromId: 10, startTime: 100 }),
+    () => createMyTradesParams({ symbol: "DOGEUSDT",
+fromId: 10,
+startTime: 100 }),
     /cannot be combined/,
   )
   assert.throws(
-    () => createMyTradesParams({ symbol: "DOGEUSDT", orderId: 10, endTime: 100 }),
+    () => createMyTradesParams({ symbol: "DOGEUSDT",
+orderId: 10,
+endTime: 100 }),
     /cannot be combined/,
   )
   assert.throws(
-    () => createOrderHistoryParams({ symbol: "DOGEUSDT", orderId: 10, startTime: 100 }),
+    () => createOrderHistoryParams({ symbol: "DOGEUSDT",
+orderId: 10,
+startTime: 100 }),
     /cannot be combined/,
   )
   assert.throws(
@@ -83,7 +93,9 @@ test("rejects conflicting cursor/time filters and time windows over 24 hours", (
     /24 hours/,
   )
   assert.throws(
-    () => createMyTradesParams({ symbol: "DOGEUSDT", startTime: 200, endTime: 100 }),
+    () => createMyTradesParams({ symbol: "DOGEUSDT",
+startTime: 200,
+endTime: 100 }),
     /endTime/,
   )
 })

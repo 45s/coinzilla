@@ -10,12 +10,17 @@ function createBroker() {
     apiKey: "test-key",
     apiSecret: "test-secret",
       tradingMode: "testnet",
-    logger: { error() {}, info() {}, debug() {}, warn() {} },
+    logger: { error() {},
+info() {},
+debug() {},
+warn() {} },
   }, {
     apiClientFactory: () => rpc,
     marketClientFactory: () => streams,
   })
-  return { broker, rpc, streams }
+  return { broker,
+rpc,
+streams }
 }
 
 describe("BinanceSdkBroker.disconnect", () => {

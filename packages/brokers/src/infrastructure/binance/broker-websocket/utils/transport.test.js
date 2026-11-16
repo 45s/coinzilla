@@ -28,7 +28,9 @@ function createTransport(options = {}) {
     ...options.transport,
   })
 
-  return { transport, sockets, clock }
+  return { transport,
+    sockets,
+    clock }
 }
 
 test("connect is idempotent while connecting and resolves when the socket opens", async () => {
@@ -123,8 +125,10 @@ test("disconnect waits for close and resolves duplicate close events only once",
   assert.equal(first, second)
   assert.equal(sockets[0].closeCalls.length, 1)
 
-  sockets[0].serverClose({ code: 1000, reason: "done" })
-  sockets[0].serverClose({ code: 1000, reason: "duplicate" })
+  sockets[0].serverClose({ code: 1000,
+    reason: "done" })
+  sockets[0].serverClose({ code: 1000,
+    reason: "duplicate" })
   await first
 
   assert.equal(transport.state, "closed")
@@ -151,7 +155,9 @@ test("socket errors during connection reject and close the socket", async () => 
   const rejection = assert.rejects(connected, /Fake WebSocket error/)
 
   sockets[0].fail(new Error("Fake WebSocket error"))
-  sockets[0].serverClose({ code: 1006, reason: "", wasClean: false })
+  sockets[0].serverClose({ code: 1006,
+    reason: "",
+    wasClean: false })
   await rejection
 
   assert.equal(transport.state, "closed")
@@ -180,7 +186,9 @@ test("handshake failures retain safe cause, HTTP status, and close diagnostics",
   })
 
   sockets[0].fail(cause, "Received network error or non-101 status code.")
-  sockets[0].serverClose({ code: 1006, reason: "", wasClean: false })
+  sockets[0].serverClose({ code: 1006,
+    reason: "",
+    wasClean: false })
   await rejection
 
   assert.equal(transport.state, "closed")
@@ -202,7 +210,9 @@ test("handshake diagnostics redact credential-like text and URLs", async () => {
     new TypeError(),
     "Handshake failed apiKey=secret-value at https://private.example/path",
   )
-  sockets[0].serverClose({ code: 1006, reason: "", wasClean: false })
+  sockets[0].serverClose({ code: 1006,
+    reason: "",
+    wasClean: false })
   await rejection
 })
 
@@ -252,19 +262,9 @@ test("runtime gate requires the approved Node floor and patched Undici", () => {
 })
 
 
-test("the supported Node WebSocket client automatically answers server ping frames", {
-  skip: typeof globalThis.WebSocket !== "function",
-}, async () => {
-  const payload = Buffer.from("binance-ping")
-  let resolvePong
-  let rejectPong
-  const pongReceived = new Promise((resolve, reject) => {
-    resolvePong = resolve
-    rejectPong = reject
-  })
-  const server = createServer()
-
-  server.on("upgrade", (request, socket) => {
+function attachWebSocketPingHandler({ server, payload, resolvePong, rejectPong }) {
+  server.on("upgrade", (...args) => {
+    const [request, socket] = args
     const key = request.headers["sec-websocket-key"]
     const accept = createHash("sha1")
       .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
@@ -278,30 +278,23 @@ test("the supported Node WebSocket client automatically answers server ping fram
       "",
       "",
     ].join("\r\n"))
-
-    socket.write(Buffer.concat([
-      Buffer.from([0x89, payload.length]),
-      payload,
-    ]))
+    socket.write(Buffer.concat([Buffer.from([0x89, payload.length]), payload]))
 
     let received = Buffer.alloc(0)
     socket.on("data", (chunk) => {
       received = Buffer.concat([received, chunk])
-
       while (received.length >= 2) {
-        const first = received[0]
-        const second = received[1]
+        const [first, second] = received
         const opcode = first & 0x0f
         const masked = (second & 0x80) !== 0
         let length = second & 0x7f
         let offset = 2
-
         if (length === 126) {
-          if (received.length < 4) return
+          if (received.length < 4) {return}
           length = received.readUInt16BE(2)
           offset = 4
         } else if (length === 127) {
-          if (received.length < 10) return
+          if (received.length < 10) {return}
           const largeLength = received.readBigUInt64BE(2)
           if (largeLength > BigInt(Number.MAX_SAFE_INTEGER)) {
             rejectPong(new Error("Unexpected oversized WebSocket frame"))
@@ -312,8 +305,7 @@ test("the supported Node WebSocket client automatically answers server ping fram
         }
 
         const maskLength = masked ? 4 : 0
-        if (received.length < offset + maskLength + length) return
-
+        if (received.length < offset + maskLength + length) {return}
         let framePayload = received.subarray(offset + maskLength, offset + maskLength + length)
         if (masked) {
           const mask = received.subarray(offset, offset + 4)
@@ -324,22 +316,45 @@ test("the supported Node WebSocket client automatically answers server ping fram
         }
 
         received = received.subarray(offset + maskLength + length)
-        if (opcode === 0x0a) resolvePong(framePayload)
+        if (opcode === 0x0a) {resolvePong(framePayload)}
         if (opcode === 0x08) {
-          socket.write(Buffer.concat([
-            Buffer.from([0x88, framePayload.length]),
-            framePayload,
-          ]))
+          socket.write(Buffer.concat([Buffer.from([0x88, framePayload.length]), framePayload]))
           socket.end()
         }
       }
     })
   })
+}
 
-  await new Promise((resolve, reject) => {
+function listen(server) {
+  return new Promise((...args) => {
+    const [resolve, reject] = args
     server.once("error", reject)
     server.listen(0, "127.0.0.1", resolve)
   })
+}
+
+function closeServer(server) {
+  return new Promise((resolve) => server.close(resolve))
+}
+
+test("the supported Node WebSocket client automatically answers server ping frames", {
+  skip: typeof globalThis.WebSocket !== "function",
+}, async () => {
+  const payload = Buffer.from("binance-ping")
+  let resolvePong
+  let rejectPong
+  const pongReceived = new Promise((...args) => {
+    const [resolve, reject] = args
+    resolvePong = resolve
+    rejectPong = reject
+  })
+  const server = createServer()
+  attachWebSocketPingHandler({ server,
+    payload,
+    resolvePong,
+    rejectPong })
+  await listen(server)
 
   const address = server.address()
   const transport = new NativeWebSocketTransport({
@@ -354,7 +369,8 @@ test("the supported Node WebSocket client automatically answers server ping fram
     try {
       const pong = await Promise.race([
         pongReceived,
-        new Promise((_, reject) => {
+        new Promise((...args) => {
+          const [, reject] = args
           timeout = setTimeout(() => reject(new Error("Server did not receive the WebSocket pong")), 1_000)
         }),
       ])
@@ -364,7 +380,7 @@ test("the supported Node WebSocket client automatically answers server ping fram
     }
   } finally {
     await transport.close()
-    await new Promise((resolve) => server.close(resolve))
+    await closeServer(server)
   }
 })
 
@@ -412,7 +428,9 @@ test("socket close before opening rejects the connection and cleans listeners", 
   const connected = transport.connect()
   const rejection = assert.rejects(connected, /closed before opening/)
 
-  sockets[0].serverClose({ code: 1006, reason: "handshake failed", wasClean: false })
+  sockets[0].serverClose({ code: 1006,
+    reason: "handshake failed",
+    wasClean: false })
   sockets[0].receive("late message")
   await rejection
 
@@ -435,15 +453,17 @@ test("listener registration failure closes the socket and removes previously att
       socket = this
     }
 
-    addEventListener(type, listener, options) {
-      if (type === "message") throw new Error("message listener registration failed")
+    addEventListener(...args) {
+      const [type] = args
+      if (type === "message") {throw new Error("message listener registration failed")}
       registered.push(type)
-      return super.addEventListener(type, listener, options)
+      return super.addEventListener(...args)
     }
 
-    removeEventListener(type, listener, options) {
+    removeEventListener(...args) {
+      const [type] = args
       removed.push(type)
-      return super.removeEventListener(type, listener, options)
+      return super.removeEventListener(...args)
     }
   }
 
@@ -477,10 +497,11 @@ test("finalizes close and attempts every socket listener removal when one remove
       socket = this
     }
 
-    removeEventListener(type, listener, options) {
+    removeEventListener(...args) {
+      const [type] = args
       removed.push(type)
-      super.removeEventListener(type, listener, options)
-      if (type === "open") throw new Error("open listener removal failed")
+      super.removeEventListener(...args)
+      if (type === "open") {throw new Error("open listener removal failed")}
     }
   }
 
@@ -500,12 +521,16 @@ test("finalizes close and attempts every socket listener removal when one remove
   await connecting
 
   const closing = transport.close()
-  socket.serverClose({ code: 1000, reason: "finished", wasClean: true })
+  socket.serverClose({ code: 1000,
+    reason: "finished",
+    wasClean: true })
   await assert.doesNotReject(closing)
 
   assert.deepEqual(removed, ["open", "message", "error", "close"])
   assert.deepEqual(errors, ["open listener removal failed"])
-  assert.deepEqual(closes, [{ code: 1000, reason: "finished", wasClean: true }])
+  assert.deepEqual(closes, [{ code: 1000,
+    reason: "finished",
+    wasClean: true }])
   assert.equal(transport.state, "closed")
   assert.equal(clock.pendingCount, 0)
   assert.equal(await transport.close(), undefined)
@@ -601,7 +626,9 @@ test("readyState reflects the socket during connecting, open, and closed states"
   assert.equal(transport.readyState, FakeWebSocket.OPEN)
 
   const closing = transport.close()
-  sockets[0].serverClose({ code: 1000, reason: "finished", wasClean: true })
+  sockets[0].serverClose({ code: 1000,
+    reason: "finished",
+    wasClean: true })
   await closing
   assert.equal(transport.readyState, FakeWebSocket.CLOSED)
 })

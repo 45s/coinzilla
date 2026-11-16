@@ -21,23 +21,25 @@ if (!Number.isSafeInteger(eventTimeoutMs) || eventTimeoutMs < 1_000) {
   throw new RangeError("BINANCE_TESTNET_EVENT_TIMEOUT_MS must be an integer of at least 1000")
 }
 
-async function waitForStatus(statuses, type, startIndex = 0, timeoutMs = 30_000) {
+async function waitForStatus(...args) {
+  const [statuses, type, startIndex = 0, timeoutMs = 30_000] = args
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     const recent = statuses.slice(startIndex)
     const status = recent.find((item) => item.type === type)
-    if (status) return status
+    if (status) {return status}
     const failure = recent.find((item) => item.type === "recoveryFailed")
-    if (failure) throw new Error("Binance user-data recovery exhausted its retry budget")
+    if (failure) {throw new Error("Binance user-data recovery exhausted its retry budget")}
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
   throw new Error(`Timed out waiting for Binance user-data status: ${type}`)
 }
 
-async function waitForEvent(events, timeoutMs) {
+async function waitForEvent(...args) {
+  const [events, timeoutMs] = args
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
-    if (events.length > 0) return events[0]
+    if (events.length > 0) {return events[0]}
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
   throw new Error("Timed out waiting for a Binance TESTNET user-data event")
@@ -106,8 +108,10 @@ describe(
 
       const assets = await broker.getAssets()
       const openOrders = await broker.getOpenOrders()
-      const orderHistory = await broker.getOrderHistory({ symbol, limit: 1000 })
-      const trades = await broker.getMyTrades({ symbol, limit: 1000 })
+      const orderHistory = await broker.getOrderHistory({ symbol,
+limit: 1000 })
+      const trades = await broker.getMyTrades({ symbol,
+limit: 1000 })
 
       assert.equal(assets.ok, true, "account snapshot must succeed before reconciliation")
       assert.equal(openOrders.ok, true, "open-order snapshot must succeed before reconciliation")

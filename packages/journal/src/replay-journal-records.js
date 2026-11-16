@@ -14,8 +14,9 @@ export async function replayJournalRecords({ store, handler, ...options } = {}) 
     return toResult({ error: new TypeError("A replay handler is required") })
   }
 
-  const readResult = await readJournalRecords({ store, ...options })
-  if (!readResult.ok) return readResult
+  const readResult = await readJournalRecords({ store,
+...options })
+  if (!readResult.ok) {return readResult}
 
   let replayed = 0
   for (const record of readResult.records) {
@@ -33,9 +34,12 @@ export async function replayJournalRecords({ store, handler, ...options } = {}) 
       }
       replayed += 1
     } catch (error) {
-      return toResult({ error, replayed, failedRecordId: record.id })
+      return toResult({ error,
+replayed,
+failedRecordId: record.id })
     }
   }
 
-  return toResult({ replayed, count: readResult.count })
+  return toResult({ replayed,
+count: readResult.count })
 }

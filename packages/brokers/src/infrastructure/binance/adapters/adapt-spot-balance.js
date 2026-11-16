@@ -6,7 +6,8 @@ const normalizeAssetCode = ({ asset }) => {
   }
 
   const code = asset.trim().toUpperCase()
-  return new Asset({ id: code.toLowerCase(), code })
+  return new Asset({ id: code.toLowerCase(),
+code })
 }
 
 /**
@@ -34,9 +35,12 @@ export function adaptSpotBalance(input) {
     }
     seenAssets.add(asset.id)
 
-    const free = new Quantity({ amount: balance.free, asset })
-    const locked = new Quantity({ amount: balance.locked, asset })
+    const free = new Quantity({ amount: balance.free,
+asset })
+    const locked = new Quantity({ amount: balance.locked,
+asset })
 
-    return new Balance({ free, locked })
+    return new Balance({ free,
+locked })
   })
 }
