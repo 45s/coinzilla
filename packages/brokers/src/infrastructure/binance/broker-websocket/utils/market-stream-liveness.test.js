@@ -18,11 +18,15 @@ function createMonitor(options = {}) {
     setTimeoutFn: clock.setTimeout.bind(clock),
     clearTimeoutFn: clock.clearTimeout.bind(clock),
     resubscribe: async () => { recoveries.push(clock.now) },
-    onStatus: (status) => statuses.push(status),
+    onStatus: ({ status }) => statuses.push(status),
     onError: (error) => errors.push(error),
     ...options,
   })
-  return { monitor, clock, recoveries, statuses, errors }
+  return { monitor,
+    clock,
+    recoveries,
+    statuses,
+    errors }
 }
 
 test("does not classify a quiet market as a stalled aggTrade stream", () => {
@@ -51,7 +55,10 @@ test("does not classify a quiet market as a stalled aggTrade stream", () => {
 test("resubscribes aggTrade only when the independent ticker trade ID advances", async () => {
   const { monitor, clock, recoveries } = createMonitor()
   monitor.onAggTrade({ l: 10 })
-  monitor.onTicker({ s: "BTCUSDT", L: 11 })
+  monitor.onTicker({
+    s: "BTCUSDT",
+    L: 11,
+  })
 
   clock.advanceBy(49)
   assert.equal(
@@ -158,8 +165,14 @@ test("bounds repeated resubscription attempts and reports an exhausted stream", 
 
 test("ignores other symbols and malformed ticker trade IDs", () => {
   const { monitor, clock, recoveries } = createMonitor()
-  monitor.onTicker({ s: "ETHUSDT", L: 100 })
-  monitor.onTicker({ s: "BTCUSDT", L: "11" })
+  monitor.onTicker({
+    s: "ETHUSDT",
+    L: 100,
+  })
+  monitor.onTicker({
+    s: "BTCUSDT",
+    L: "11",
+  })
   clock.advanceBy(100)
 
   assert.equal(
