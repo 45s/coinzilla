@@ -1762,39 +1762,23 @@ test("does not construct, verify, or inject Operational State Store records even
   assert.equal(runtimeStarted, true, "A missing or malformed recovery directory must not block startup while recovery is disabled.")
 })
 
-test("retains Journal, EventBus, process lock and logger when strategy shutdown safety is unresolved", async () => {
-  const previousExitCode = process.exitCode
-  process.exitCode = 0
-  try {
-  const calls = []
+async function startProcessWithUnresolvedStrategyShutdown({ calls } = {}) {
   const signalHandlers = new Map()
   const unsafeShutdown = new Error("BTCUSDT owned BUY remains UNKNOWN")
   const eventBus = {
-    publish: () => ({
-      ok: true,
-    }),
-    flush: async () => ({
-      ok: true,
-    }),
+    publish: () => ({ ok: true }),
+    flush: async () => ({ ok: true }),
     close: async () => {
       calls.push("event-bus-close")
-      return {
-        ok: true,
-      }
+      return { ok: true }
     },
   }
   const journalService = {
-    ready: Promise.resolve({
-      ok: true,
-    }),
-    flush: async () => ({
-      ok: true,
-      durable: true,
-    }),
+    ready: Promise.resolve({ ok: true }),
+    flush: async () => ({ ok: true, durable: true }),
     close: async () => {
       calls.push("journal-close")
-      return { ok: true,
-        closed: true }
+      return { ok: true, closed: true }
     },
   }
   const logger = {
@@ -1802,7 +1786,6 @@ test("retains Journal, EventBus, process lock and logger when strategy shutdown 
     system() {},
     error: () => calls.push("logger-error"),
   }
-
   await runMain({
     createEventBus: () => eventBus,
     createJournalService: () => journalService,
@@ -1810,16 +1793,10 @@ test("retains Journal, EventBus, process lock and logger when strategy shutdown 
       ok: true,
       release: async () => {
         calls.push("process-lock-release")
-        return {
-          ok: true,
-          released: true,
-        }
+        return { ok: true, released: true }
       },
     }),
-    registerSignalHandler: (...args) => {
-      const [signal, handler] = args
-      signalHandlers.set(signal, handler)
-    },
+    registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
     closeLogger: async () => calls.push("logger-close"),
     start: async () => ({
       connected: true,
@@ -1834,24 +1811,31 @@ test("retains Journal, EventBus, process lock and logger when strategy shutdown 
     }),
     logger,
   })
+  return signalHandlers
+}
 
-  await signalHandlers.get("SIGINT")()
-  assert.equal(process.exitCode, 1, "An unproven strategy shutdown must fail the process exit status.")
-
-  assert.deepEqual(
-    calls.filter((call) => [
-      "event-bus-close",
-      "journal-close",
-      "process-lock-release",
-      "logger-close",
-    ].includes(call)),
-    [],
-    "An unresolved trading-safety proof must retain Journal, EventBus, the process lock and logging so recovery evidence remains available.",
-  )
-  assert.ok(
-    calls.includes("logger-error"),
-    "The failed shutdown attempt must report the exact safety blocker while leaving required runtime services connected.",
-  )
+test("retains Journal, EventBus, process lock and logger when strategy shutdown safety is unresolved", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    const signalHandlers = await startProcessWithUnresolvedStrategyShutdown({ calls })
+    await signalHandlers.get("SIGINT")()
+    assert.equal(process.exitCode, 1, "An unproven strategy shutdown must fail the process exit status.")
+    assert.deepEqual(
+      calls.filter((call) => [
+        "event-bus-close",
+        "journal-close",
+        "process-lock-release",
+        "logger-close",
+      ].includes(call)),
+      [],
+      "An unresolved trading-safety proof must retain Journal, EventBus, the process lock and logging so recovery evidence remains available.",
+    )
+    assert.ok(
+      calls.includes("logger-error"),
+      "The failed shutdown attempt must report the exact safety blocker while leaving required runtime services connected.",
+    )
   } finally {
     process.exitCode = previousExitCode
   }

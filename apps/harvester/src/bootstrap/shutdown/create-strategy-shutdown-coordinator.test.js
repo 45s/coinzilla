@@ -126,7 +126,7 @@ test("fails closed with the exact strategy and market blockers when one particip
     coordinator.waitUntilSafe(),
     (error) => {
       assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN")
-      const blocker = error.shutdownDiagnostics.strategyBlockers[0]
+      const [blocker] = error.shutdownDiagnostics.strategyBlockers
       assert.equal(blocker.strategyId, "RECOVERY_SELLER")
       assert.equal(blocker.markets[0].symbol, "LINKUSDT")
       assert.deepEqual(blocker.markets[0].blockers, ["RECOVERY_SELL_UNKNOWN"])
