@@ -5253,7 +5253,10 @@ test("records configuration and process boundaries before broker startup and aft
 
 test("fails closed when the effective configuration has no enabled markets", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-empty-effective-markets-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
   const operationalStateStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "empty-effective-markets-test",
@@ -5287,7 +5290,10 @@ test("fails closed when the effective configuration has no enabled markets", asy
 
 test("starts in observation-only mode after a clean prior process when restart recovery is disabled", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-restart-gate-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
   const firstStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "first-process-session",
@@ -5329,7 +5335,10 @@ test("starts in observation-only mode after a clean prior process when restart r
 
 test("starts in observation-only mode after an unclean prior process when restart recovery is disabled", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-crash-restart-gate-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
   const firstStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "crashed-process-session",
@@ -5998,9 +6007,15 @@ test("starts Telegram operator control without running process-restart recovery 
         return {
           start: async () => {
             operatorAdapterStarted = true
-            return { ok: true, started: true }
+            return {
+              ok: true,
+              started: true,
+            }
           },
-          stop: async () => ({ ok: true, stopped: true }),
+          stop: async () => ({
+            ok: true,
+            stopped: true,
+          }),
         }
       },
     })
