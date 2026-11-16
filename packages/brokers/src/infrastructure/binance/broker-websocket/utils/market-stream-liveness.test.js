@@ -85,7 +85,10 @@ test("resubscribes aggTrade only when the independent ticker trade ID advances",
 test("clears a suspected gap when aggTrade catches up before the grace period expires", () => {
   const { monitor, clock, recoveries } = createMonitor()
   monitor.onAggTrade({ l: 10 })
-  monitor.onTicker({ s: "BTCUSDT", L: 11 })
+  monitor.onTicker({
+    s: "BTCUSDT",
+    L: 11,
+  })
   clock.advanceBy(25)
   monitor.onAggTrade({ l: 11 })
   clock.advanceBy(50)
@@ -106,7 +109,10 @@ test("clears a suspected gap when aggTrade catches up before the grace period ex
 test("marks a stream recovered only after aggTrade covers the independent ticker trade ID", async () => {
   const { monitor, clock, recoveries, statuses } = createMonitor()
   monitor.onAggTrade({ l: 10 })
-  monitor.onTicker({ s: "BTCUSDT", L: 11 })
+  monitor.onTicker({
+    s: "BTCUSDT",
+    L: 11,
+  })
   clock.advanceBy(50)
   await flush()
 
@@ -138,7 +144,10 @@ test("marks a stream recovered only after aggTrade covers the independent ticker
 test("bounds repeated resubscription attempts and reports an exhausted stream", async () => {
   const { monitor, clock, recoveries, errors } = createMonitor()
   monitor.onAggTrade({ l: 10 })
-  monitor.onTicker({ s: "BTCUSDT", L: 11 })
+  monitor.onTicker({
+    s: "BTCUSDT",
+    L: 11,
+  })
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     clock.advanceBy(50)
@@ -192,7 +201,10 @@ test("dispose cancels pending checks and fences a recovery already in flight", a
     }),
   })
   monitor.onAggTrade({ l: 10 })
-  monitor.onTicker({ s: "BTCUSDT", L: 11 })
+  monitor.onTicker({
+    s: "BTCUSDT",
+    L: 11,
+  })
   clock.advanceBy(50)
   await flush()
 
