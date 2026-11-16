@@ -73,30 +73,32 @@ function calculateNetAllocatedQuoteProceeds({ allocationSide, quoteAssetId }) {
 }
 
 function calculateAllocationTotals({ canonicalFillAllocations, quoteAssetId }) {
-  return canonicalFillAllocations.reduce((totals, allocation) => ({
-    recoveryNetQuoteProceeds: addDecimal({
+  const totals = {
+    recoveryNetQuoteProceeds: "0",
+    legacyNetQuoteProceeds: "0",
+    legacyBaseDebit: "0",
+  }
+  for (const allocation of canonicalFillAllocations) {
+    totals.recoveryNetQuoteProceeds = addDecimal({
       left: totals.recoveryNetQuoteProceeds,
       right: calculateNetAllocatedQuoteProceeds({
         allocationSide: allocation.recovery,
         quoteAssetId,
       }),
-    }),
-    legacyNetQuoteProceeds: addDecimal({
+    })
+    totals.legacyNetQuoteProceeds = addDecimal({
       left: totals.legacyNetQuoteProceeds,
       right: calculateNetAllocatedQuoteProceeds({
         allocationSide: allocation.legacy,
         quoteAssetId,
       }),
-    }),
-    legacyBaseDebit: addDecimal({
+    })
+    totals.legacyBaseDebit = addDecimal({
       left: totals.legacyBaseDebit,
       right: allocation.legacy.baseDebit,
-    }),
-  }), {
-    recoveryNetQuoteProceeds: "0",
-    legacyNetQuoteProceeds: "0",
-    legacyBaseDebit: "0",
-  })
+    })
+  }
+  return Object.freeze(totals)
 }
 
 function calculateOrderProfitability({
@@ -164,6 +166,18 @@ function createAdditionalTrackedBaseQuantity({ state, balances, portfolio }) {
   })
 }
 
+function resolveRecoverySellerOrderOwnership({ registry, order }) {
+  const ownership = registry.getOwnership({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+  })
+  if (!ownership || ownership.strategyId !== StrategyId.RECOVERY_SELLER ||
+      ownership.purpose !== "RECOVERY_SELL") {
+    throw new Error("Recovery Seller terminal mixed SELL requires registered RS order ownership")
+  }
+  return ownership
+}
+
 function reconcileTerminalMixedSellTransition({
   state,
   reconciliation,
@@ -191,14 +205,10 @@ function reconcileTerminalMixedSellTransition({
     throw new Error("Recovery Seller terminal order did not become the canonical registered order state")
   }
 
-  const ownership = registryUpdate.registry.getOwnership({
-    clientOrderId: terminalRegisteredOrder.clientOrderId,
-    brokerOrderId: terminalRegisteredOrder.brokerOrderId,
+  const ownership = resolveRecoverySellerOrderOwnership({
+    registry: registryUpdate.registry,
+    order: terminalRegisteredOrder,
   })
-  if (!ownership || ownership.strategyId !== StrategyId.RECOVERY_SELLER ||
-      ownership.purpose !== "RECOVERY_SELL") {
-    throw new Error("Recovery Seller terminal mixed SELL requires registered RS order ownership")
-  }
   const legacyRecord = getLegacyPositionRecord({
     state,
     marketId: terminalRegisteredOrder.market.id,
