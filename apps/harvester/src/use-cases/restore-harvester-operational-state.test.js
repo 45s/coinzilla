@@ -224,7 +224,10 @@ test("preserves external account-wide open orders as evidence without adopting t
 })
 
 
-function createFirstCycleBuyExecutionRecords({ clientOrderId, fillId }) {
+function createFirstCycleBuyExecutionRecords({
+      clientOrderId,
+      fillId,
+    }) {
   return [
     record(5, "ORDER_SUBMISSION_INTENT", {
       clientOrderId,
