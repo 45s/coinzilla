@@ -540,12 +540,12 @@ test("rechecks the shutdown gate after durable intent and before broker placemen
 
   const result = await execute({ decision, marketMetadata })
 
-  assert.equal(result.ok, true)
-  assert.equal(result.data.deferred, true)
-  assert.equal(result.data.reason, "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE")
+  assert.equal(result.ok, true, "Expected result.ok to equal true in \"rechecks the shutdown gate after durable intent and before broker placement\".")
+  assert.equal(result.data.deferred, true, "Expected result.data.deferred to equal true in \"rechecks the shutdown gate after durable intent and before broker placement\".")
+  assert.equal(result.data.reason, "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE", "Expected result.data.reason to equal \"CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE\" in \"rechecks the shutdown gate after durable intent and before broker placement\".")
   assert.equal(calls.includes("broker"), false, "The broker must never receive a BUY after the shutdown gate activates.")
-  assert.ok(calls.indexOf("durable-intent") < calls.indexOf("durable-outcome:REJECTED"))
-  assert.ok(calls.indexOf("durable-outcome:REJECTED") < calls.indexOf("deferred:CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE"))
+  assert.ok(calls.indexOf("durable-intent") < calls.indexOf("durable-outcome:REJECTED"), "Expected condition (calls.indexOf(\"durable-intent\") < calls.indexOf(\"durable-outcome:) to be true in \"rechecks the shutdown gate after durable intent and before broker placement\".")
+  assert.ok(calls.indexOf("durable-outcome:REJECTED") < calls.indexOf("deferred:CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE"), "Expected condition (calls.indexOf(\"durable-outcome:REJECTED\") < calls.indexOf(\"deferr) to be true in \"rechecks the shutdown gate after durable intent and before broker placement\".")
 })
 
 test("does not call the broker and removes PENDING registration when durable order-intent acknowledgement fails", async () => {

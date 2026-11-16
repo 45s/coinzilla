@@ -10932,8 +10932,8 @@ test("keeps a market unsafe while an owned recovery SELL remains UNKNOWN", async
     coverageResult,
   })
 
-  assert.equal(safety.ok, true)
-  assert.equal(safety.data.markets[0].status, "UNSAFE")
+  assert.equal(safety.ok, true, "Expected safety.ok to equal true in \"keeps a market unsafe while an owned recovery SELL remains UNKNOWN\".")
+  assert.equal(safety.data.markets[0].status, "UNSAFE", "Expected safety.data.markets[0].status to equal \"UNSAFE\" in \"keeps a market unsafe while an owned recovery SELL remains UNKNOWN\".")
   assert.ok(
     safety.data.markets[0].blockers.includes("OWNED_SELL_ORDER_UNRESOLVED"),
     "An UNKNOWN owned recovery SELL must block shutdown even when no BUY remains.",
@@ -10974,7 +10974,7 @@ test("shutdown cancellation leaves external manual BUY orders untouched", async 
       executedOrder: externalOrder,
     },
   })
-  assert.equal(externalResult.ok, true)
+  assert.equal(externalResult.ok, true, "Expected externalResult.ok to equal true in \"shutdown cancellation leaves external manual BUY orders untouched\".")
 
   harness.engine.beginShutdown()
   const cancellation = await harness.engine.cancelOwnedBuyOrdersForShutdown()
@@ -11016,7 +11016,7 @@ test("invalidates and rechecks a safe market after a late owned SELL execution",
     journalDurable: true,
     coverageResult: initialCoverage,
   })
-  assert.equal(initialSafety.data.markets[0].status, "SAFE_TO_SHUTDOWN")
+  assert.equal(initialSafety.data.markets[0].status, "SAFE_TO_SHUTDOWN", "Expected initialSafety.data.markets[0].status to equal \"SAFE_TO_SHUTDOWN\" in \"invalidates and rechecks a safe market after a late owned SELL execution\".")
 
   const sellOrder = harness.engine.getOrders().find((order) =>
     order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status))

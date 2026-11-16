@@ -962,25 +962,25 @@ test("subscribes only enabled pairs for Binance trading", async () => {
       error() {}
     },
   })
-  assert.equal(result.connected, true)
-  assert.equal(result.tradingEnabled, true)
-  assert.equal(result.strategyMode, "conservative")
-  assert.deepEqual(result.subscriptions, ["BTCUSDT"])
-  assert.equal(result.getMarketMetadata({ symbol: "BTCUSDT" }).market.symbol, "BTCUSDT")
-  assert.ok(result.recoveredState)
-  assert.equal(result.recoveredState.requiresExchangeReconciliation, false)
-  assert.deepEqual(result.recoveredState.pausedMarkets, new Set())
-  assert.equal(result.recoveredState.orderRegistry.orders.length, 0)
-  assert.equal(result.userDataReady, true)
-  assert.equal(result.placeOrder, undefined)
-  assert.equal(result.broker, undefined)
+  assert.equal(result.connected, true, "Expected result.connected to equal true in \"subscribes only enabled pairs for Binance trading\".")
+  assert.equal(result.tradingEnabled, true, "Expected result.tradingEnabled to equal true in \"subscribes only enabled pairs for Binance trading\".")
+  assert.equal(result.strategyMode, "conservative", "Expected result.strategyMode to equal \"conservative\" in \"subscribes only enabled pairs for Binance trading\".")
+  assert.deepEqual(result.subscriptions, ["BTCUSDT"], "Expected result.subscriptions to match the expected structure in \"subscribes only enabled pairs for Binance trading\".")
+  assert.equal(result.getMarketMetadata({ symbol: "BTCUSDT" }).market.symbol, "BTCUSDT", "Expected result.getMarketMetadata({ symbol: \"BTCUSDT\" }).market.symbol to equal \"BTCUSDT\" in \"subscribes only enabled pairs for Binance trading\".")
+  assert.ok(result.recoveredState, "Expected condition (result.recoveredState) to be true in \"subscribes only enabled pairs for Binance trading\".")
+  assert.equal(result.recoveredState.requiresExchangeReconciliation, false, "Expected result.recoveredState.requiresExchangeReconciliation to equal false in \"subscribes only enabled pairs for Binance trading\".")
+  assert.deepEqual(result.recoveredState.pausedMarkets, new Set(), "Expected result.recoveredState.pausedMarkets to match the expected structure in \"subscribes only enabled pairs for Binance trading\".")
+  assert.equal(result.recoveredState.orderRegistry.orders.length, 0, "Expected result.recoveredState.orderRegistry.orders.length to equal 0 in \"subscribes only enabled pairs for Binance trading\".")
+  assert.equal(result.userDataReady, true, "Expected result.userDataReady to equal true in \"subscribes only enabled pairs for Binance trading\".")
+  assert.equal(result.placeOrder, undefined, "Expected result.placeOrder to equal undefined in \"subscribes only enabled pairs for Binance trading\".")
+  assert.equal(result.broker, undefined, "Expected result.broker to equal undefined in \"subscribes only enabled pairs for Binance trading\".")
   await result.stop()
   await result.stop()
   assert.deepEqual(calls, [
     "connect", "filters:BTCUSDT", "filters:ETHUSDT", "subscribe:user-data", "account:snapshot",
     "subscribe:book:BTCUSDT", "subscribe:BTCUSDT", "account:snapshot", "unsubscribe:user-data",
     "unsubscribe:book:BTCUSDT", "unsubscribe:BTCUSDT", "disconnect",
-  ])
+  ], "Expected calls to match the expected structure in \"subscribes only enabled pairs for Binance trading\".")
 })
 
 test("keeps external open orders audit-blocked but does not block startup or cancel them", async () => {
@@ -3595,13 +3595,13 @@ test("keeps Binance connected when the CLOSING snapshot durability barrier fails
     assert.match(error.message, /Unable to durably persist CLOSING account snapshot/)
     assert.equal(error.recoveryFailure?.category, "DURABILITY")
     return true
-  })
+  }, "Expected runtime.stop() to reject under the specified failure condition in \"keeps Binance connected when the CLOSING snapshot durability barrier fails\".")
 
   const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
-  assert.equal(flushCount, 4)
-  assert.equal(snapshots.length, 2)
-  assert.equal(snapshots[0].data.phase, "PREFLIGHT")
-  assert.equal(snapshots[1].data.phase, "CLOSING")
+  assert.equal(flushCount, 4, "Expected flushCount to equal 4 in \"keeps Binance connected when the CLOSING snapshot durability barrier fails\".")
+  assert.equal(snapshots.length, 2, "Expected snapshots.length to equal 2 in \"keeps Binance connected when the CLOSING snapshot durability barrier fails\".")
+  assert.equal(snapshots[0].data.phase, "PREFLIGHT", "Expected snapshots[0].data.phase to equal \"PREFLIGHT\" in \"keeps Binance connected when the CLOSING snapshot durability barrier fails\".")
+  assert.equal(snapshots[1].data.phase, "CLOSING", "Expected snapshots[1].data.phase to equal \"CLOSING\" in \"keeps Binance connected when the CLOSING snapshot durability barrier fails\".")
   assert.equal(
     calls.includes("disconnect"),
     false,
@@ -3725,8 +3725,8 @@ async function assertNoClosingAfterSafetyFailure({ snapshots, calls }) {
     1,
     "Only PREFLIGHT may be published when an owned order cannot be reconciled; CLOSING requires proven strategy safety.",
   )
-  assert.equal(calls.includes("disconnect"), false)
-  assert.equal(calls.includes("unsubscribe:user-data"), false)
+  assert.equal(calls.includes("disconnect"), false, "Expected calls.includes(\"disconnect\") to equal false in \"keeps Binance connected when the CLOSING snapshot durability barrier fails\".")
+  assert.equal(calls.includes("unsubscribe:user-data"), false, "Expected calls.includes(\"unsubscribe:user-data\") to equal false in \"keeps Binance connected when the CLOSING snapshot durability barrier fails\".")
 }
 
 
@@ -3761,14 +3761,14 @@ test("does not publish CLOSING or disconnect when owned-order REST reconciliatio
     price: "65000",
     timestamp: 1000,
   })
-  assert.ok(calls.includes("placeOrder:BUY"))
+  assert.ok(calls.includes("placeOrder:BUY"), "Expected condition (calls.includes(\"placeOrder:BUY\")) to be true in \"does not publish CLOSING or disconnect when owned-order REST reconciliation fails\".")
 
   const stopPromise = runtime.stop()
   await blockedQuery.openOrdersStarted
-  assert.equal(events.filter((event) => event.name === "account.snapshot_captured").length, 1)
-  assert.equal(calls.includes("disconnect"), false)
+  assert.equal(events.filter((event) => event.name === "account.snapshot_captured").length, 1, "Expected events.filter((event) => event.name === \"account.snapshot_capture to equal 1 in \"does not publish CLOSING or disconnect when owned-order REST reconciliation fails\".")
+  assert.equal(calls.includes("disconnect"), false, "Expected calls.includes(\"disconnect\") to equal false in \"does not publish CLOSING or disconnect when owned-order REST reconciliation fails\".")
   blockedQuery.releaseOpenOrders()
-  await assert.rejects(stopPromise, /shutdown safety could not be proven|Conservative shutdown safety is not proven/i)
+  await assert.rejects(stopPromise, /shutdown safety could not be proven|Conservative shutdown safety is not proven/i, "Expected stopPromise to reject under the specified failure condition in \"does not publish CLOSING or disconnect when owned-order REST reconciliation fails\".")
 
   const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
   await assertNoClosingAfterSafetyFailure({

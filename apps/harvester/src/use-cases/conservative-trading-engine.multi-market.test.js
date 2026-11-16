@@ -905,7 +905,7 @@ test("tracks Conservative shutdown safety independently for every market", async
   const dogeCancellation = await harness.engine.cancelOwnedBuyOrdersForShutdown({
     symbol: "DOGEUSDT",
   })
-  assert.equal(dogeCancellation.ok, true)
+  assert.equal(dogeCancellation.ok, true, "Expected dogeCancellation.ok to equal true in \"tracks Conservative shutdown safety independently for every market\".")
 
   const dogeCoverage = await harness.engine.auditShutdownRecoverySellCoverage({
     symbols: ["DOGEUSDT"],
@@ -926,8 +926,8 @@ test("tracks Conservative shutdown safety independently for every market", async
     coverageResult: solCoverage,
   })
 
-  assert.equal(dogeSafety.data.markets.find((market) => market.symbol === "DOGEUSDT").status, "SAFE_TO_SHUTDOWN")
-  assert.equal(solSafety.data.markets.find((market) => market.symbol === "SOLUSDT").status, "UNSAFE")
+  assert.equal(dogeSafety.data.markets.find((market) => market.symbol === "DOGEUSDT").status, "SAFE_TO_SHUTDOWN", "Expected dogeSafety.data.markets.find((market) => market.symbol === \"DOGEU to equal \"SAFE_TO_SHUTDOWN\" in \"tracks Conservative shutdown safety independently for every market\".")
+  assert.equal(solSafety.data.markets.find((market) => market.symbol === "SOLUSDT").status, "UNSAFE", "Expected solSafety.data.markets.find((market) => market.symbol === \"SOLUSD to equal \"UNSAFE\" in \"tracks Conservative shutdown safety independently for every market\".")
   assert.ok(
     solSafety.data.markets.find((market) => market.symbol === "SOLUSDT").blockers.includes("OWNED_BUY_ORDER_UNRESOLVED"),
     "The second market must retain its own unresolved BUY blocker.",
