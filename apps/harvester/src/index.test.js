@@ -111,7 +111,10 @@ test("injects the shared default Operational State Store when Telegram operator 
     },
   }
   const operationalStateStore = {
-    verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
+    verify: async () => ({
+          ok: true,
+          data: { valid: true, durableWriteSupported: true },
+        }),
     append: async () => ({ ok: true, data: { durable: true } }),
     readAll: async () => ({ ok: true, data: { durableWriteSupported: true, records: [] } }),
   }
@@ -936,7 +939,10 @@ test("releases the trading process lock only after runtime and Journal shutdown"
       env: { NODE_ENV: "development" },
       acquireProcessLock: async () => ({
         ok: true,
-        release: async () => { sequence.push("lock-release"); return { ok: true, released: true } },
+        release: async () => { sequence.push("lock-release"); return {
+            ok: true,
+            released: true,
+          } },
       }),
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
@@ -1798,7 +1804,7 @@ test("starts normal development runtime with outbound Telegram notifications and
 
   try {
     await main({
-      loadConfig: async () => appConfig,
+      loadConfig: async () => defaultAppConfig,
       env: {
         NODE_ENV: "development",
         TELEGRAM_BOT_TOKEN: "test-notification-token",
