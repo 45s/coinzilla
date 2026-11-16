@@ -1185,6 +1185,168 @@ async function runTelegramUpdatesForDiagnostics({ updates, operator, logger, sen
   }
 }
 
+test("routes all read-only keyboard actions and the balances command to their application queries", async () => {
+  const calls = []
+  const diagnostics = []
+  const updates = [
+    makeUpdate({
+      updateId: 1401,
+      text: "Status",
+    }),
+    makeUpdate({
+      updateId: 1402,
+      text: "Markets",
+    }),
+    makeUpdate({
+      updateId: 1403,
+      text: "Portfolio",
+    }),
+    makeUpdate({
+      updateId: 1404,
+      text: "Open Orders",
+    }),
+    makeUpdate({
+      updateId: 1405,
+      text: "/balances",
+    }),
+    makeCallbackUpdate({
+      updateId: 1406,
+      callbackId: "balance-nav-1406",
+      messageId: 1406,
+      data: "cc:nav:balances",
+    }),
+  ]
+  const operator = {
+    pauseMarket: async () => assert.fail("Read-only navigation must never pause a market."),
+    resumeMarket: async () => assert.fail("Read-only navigation must never resume a market."),
+    getStatus: async () => {
+      calls.push("getStatus")
+      return {
+        ok: true,
+        data: {
+          runtimeState: "RUNNING",
+          tradingEnabled: false,
+          userData: { ready: false },
+          readiness: { state: "TRADING_DISABLED", blockers: [] },
+          markets: { enabled: 0, configured: 0, blocked: 0 },
+          observedAt: 1700000000000,
+        },
+      }
+    },
+    getMarkets: async () => {
+      calls.push("getMarkets")
+      return {
+        ok: true,
+        data: { markets: [] },
+      }
+    },
+    getPositions: async () => {
+      calls.push("getPositions")
+      return {
+        ok: true,
+        data: {
+          positions: [],
+          observedAt: 1700000000000,
+        },
+      }
+    },
+    getOrders: async () => {
+      calls.push("getOrders")
+      return {
+        ok: true,
+        data: {
+          orders: [],
+          observedAt: 1700000000000,
+        },
+      }
+    },
+    getBalances: async () => {
+      calls.push("getBalances")
+      return {
+        ok: true,
+        data: {
+          balances: [],
+          sourceTime: 1700000000000,
+          ageMs: 0,
+          observedAt: 1700000000000,
+        },
+      }
+    },
+  }
+  const result = await runTelegramUpdatesForDiagnostics({
+    updates,
+    operator,
+    logger: {
+      debug: entry => diagnostics.push(entry),
+      info: entry => diagnostics.push(entry),
+      warn: entry => diagnostics.push(entry),
+      error: entry => diagnostics.push(entry),
+    },
+  })
+  assert.deepEqual(calls, [
+    "getStatus",
+    "getMarkets",
+    "getPositions",
+    "getOrders",
+    "getBalances",
+    "getBalances",
+  ])
+  assert.equal(result.sentMessages.length, 5)
+  assert.equal(result.callbackAnswers.length, 1)
+  assert.deepEqual(
+    diagnostics.filter(entry => entry.message === "Telegram interaction FAILED"),
+    [],
+  )
+})
+
+test("restores the persistent keyboard for both /start and /menu", async () => {
+  const result = await runTelegramUpdatesForDiagnostics({
+    updates: [
+      makeUpdate({
+        updateId: 1410,
+        text: "/start",
+      }),
+      makeUpdate({
+        updateId: 1411,
+        text: "/menu",
+      }),
+    ],
+    operator: {
+      pauseMarket: async () => assert.fail("Opening the menu must not invoke trading controls."),
+      resumeMarket: async () => assert.fail("Opening the menu must not invoke trading controls."),
+    },
+  })
+  assert.equal(result.sentMessages.length, 2)
+  for (const message of result.sentMessages) {
+    assert.equal(message.reply_markup.is_persistent, true)
+    assert.equal(message.reply_markup.one_time_keyboard, false)
+    assert.ok(Array.isArray(message.reply_markup.keyboard))
+  }
+})
+
+test("shows an explicit empty state when no enabled market can be paused", async () => {
+  const result = await runTelegramUpdatesForDiagnostics({
+    updates: [
+      makeUpdate({
+        updateId: 1412,
+        text: "Pause",
+      }),
+    ],
+    operator: {
+      pauseMarket: async () => assert.fail("An empty market selection must not invoke pauseMarket."),
+      getMarkets: async () => ({
+        ok: true,
+        data: {
+          markets: [],
+        },
+      }),
+    },
+  })
+  assert.match(result.sentMessages[0].text, /No enabled markets are currently available to pause/)
+  const buttons = result.sentMessages[0].reply_markup.inline_keyboard.flat()
+  assert.equal(buttons.some(button => button.callback_data?.startsWith("cc:ask:")), false)
+})
+
 test("preserves a thrown market-query failure in one correlated diagnostic", async () => {
   const internalCause = new TypeError("engine market snapshot unavailable")
   const queryError = Object.assign(
