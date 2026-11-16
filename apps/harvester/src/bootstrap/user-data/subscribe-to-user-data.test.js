@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { subscribeToUserData } from "./subscribe-to-user-data.js"
 
-const test = (name, ...args) => nodeTest(`[subscribe-to-user-data.test.js] ${  name}`, ...args)
+const test = (...args) => nodeTest(`[subscribe-to-user-data.test.js] ${args[0]}`, ...args.slice(1))
 
 const createState = (overrides = {}) => ({
   ready: false,
