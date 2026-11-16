@@ -10830,3 +10830,29 @@ test("adds only externally tracked legacy quote cash flow accrued after the acco
   assert.equal(result.data.submittedOrders.length, 1, "The 20 quote units of post-snapshot legacy proceeds must be available to the shared allocator.")
   assert.equal(result.data.submittedOrders[0].side, "BUY")
 })
+
+test("subtracts post-snapshot external legacy base debits before allocating another strategy SELL", async () => {
+  const seeded = makeSeededRecoveryState()
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "0.9",
+    portfolioBaseQuantityBaseline: "1",
+    additionalTrackedBaseQuantityBaseline: "0.5",
+    additionalTrackedBaseQuantity: [
+      { assetId: baseAsset.id, amount: "0.49" },
+    ],
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  assert.equal(result.ok, false, "The 0.01 legacy base debit since the snapshot must reduce shared free base below the CG SELL quantity.")
+  assert.match(result.errors[0].message, /available free base balance/, "The shared allocator must block a SELL that would consume base already debited by RS.")
+  assert.deepEqual(harness.orders, [], "A shared custody shortfall must be rejected before broker submission.")
+})
