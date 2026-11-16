@@ -431,6 +431,7 @@ test("Bitunix Spot order history rejects missing or inconsistent pagination meta
     { name: "fractional total", response: { total: 0.5, pageNum: "1", data: [] } },
     { name: "missing page number", response: { total: 0, data: [] } },
     { name: "invalid page number", response: { total: 0, pageNum: "one", data: [] } },
+    { name: "numeric page number conflicts with documented string type", response: { total: 0, pageNum: 1, data: [] } },
     { name: "wrong returned page", response: { total: 0, pageNum: "2", data: [] } },
     { name: "more rows than total", response: { total: 0, pageNum: "1", data: [order] } },
   ]
@@ -473,21 +474,4 @@ test("Bitunix Spot order history accepts an omitted data array only for an empty
   assert.equal(result.ok, true, "an omitted optional data array is valid when total is zero")
   assert.deepEqual(result.data, [], "an empty history page must normalize to an empty order array")
   assert.equal(calls.length, 1, "history validation must not trigger extra exchange requests")
-})
-
-test("Bitunix Spot order history accepts an exact numeric page number from the SDK-compatible response shape", async () => {
-  const { broker } = createBroker({
-    responses: {
-      "/api/spot/v1/order/history/page": {
-        total: 0,
-        pageNum: 1,
-        data: [],
-      },
-    },
-  })
-
-  const result = await broker.getOrderHistory({ symbol: "BTCUSDT" })
-
-  assert.equal(result.ok, true, "an integer page number is semantically equivalent to the documented numeric string")
-  assert.deepEqual(result.data, [], "a valid empty page must remain an empty order array")
 })
