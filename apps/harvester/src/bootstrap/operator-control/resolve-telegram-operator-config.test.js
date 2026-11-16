@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { resolveTelegramOperatorConfig, TelegramUserIdConfigurationError } from "./resolve-telegram-operator-config.js"
 
-const config = (ids = [], enabled = true) => ({ operatorControl: { telegram: { enabled,
+const config = ({ ids = [], enabled = true } = {}) => ({ operatorControl: { telegram: { enabled,
 allowedUserIds: ids } } })
 
 test("preserves config identity when operator control and TELEGRAM_USER_ID are both absent", () => {
@@ -12,7 +12,7 @@ env: {} }), input)
 })
 
 test("adds TELEGRAM_USER_ID to allowedUserIds and preserves configured IDs without mutation", () => {
-  const input = config(["11111"])
+  const input = config({ ids: ["11111"] })
   const result = resolveTelegramOperatorConfig({ appConfig: input,
 env: { TELEGRAM_USER_ID: "123456789" } })
   assert.deepEqual(result.operatorControl.telegram.allowedUserIds, ["11111", "123456789"])
@@ -20,14 +20,14 @@ env: { TELEGRAM_USER_ID: "123456789" } })
 })
 
 test("does not duplicate an environment user ID already in the allowlist", () => {
-  const result = resolveTelegramOperatorConfig({ appConfig: config(["12345"]),
+  const result = resolveTelegramOperatorConfig({ appConfig: config({ ids: ["12345"] }),
 env: { TELEGRAM_USER_ID: "12345" } })
   assert.deepEqual(result.operatorControl.telegram.allowedUserIds, ["12345"])
 })
 
 test("accepts an absent or empty environment value when a configured allowlist exists", () => {
   for (const value of [undefined, ""]) {
-    const result = resolveTelegramOperatorConfig({ appConfig: config(["12345"]),
+    const result = resolveTelegramOperatorConfig({ appConfig: config({ ids: ["12345"] }),
 env: { TELEGRAM_USER_ID: value } })
     assert.deepEqual(result.operatorControl.telegram.allowedUserIds, ["12345"])
   }
@@ -55,17 +55,17 @@ env: {} }),
 
 test("reports malformed configured IDs and duplicates precisely", () => {
   assert.throws(
-    () => resolveTelegramOperatorConfig({ appConfig: config(["bad"]) }),
+    () => resolveTelegramOperatorConfig({ appConfig: config({ ids: ["bad"] }) }),
     (error) => error.code === "TELEGRAM_OPERATOR_ALLOWLIST_INVALID" && error.message.includes("allowedUserIds[0]"),
   )
   assert.throws(
-    () => resolveTelegramOperatorConfig({ appConfig: config(["12345", "12345"]) }),
+    () => resolveTelegramOperatorConfig({ appConfig: config({ ids: ["12345", "12345"] }) }),
     (error) => error.code === "TELEGRAM_OPERATOR_ALLOWLIST_DUPLICATE",
   )
 })
 
 test("does not enable operator control merely because TELEGRAM_USER_ID is set", () => {
-  const result = resolveTelegramOperatorConfig({ appConfig: config([], false),
+  const result = resolveTelegramOperatorConfig({ appConfig: config({ ids: [], enabled: false }),
 env: { TELEGRAM_USER_ID: "12345" } })
   assert.equal(result.operatorControl.telegram.enabled, false)
   assert.deepEqual(result.operatorControl.telegram.allowedUserIds, ["12345"])
