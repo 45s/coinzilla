@@ -225,6 +225,35 @@ async function completeVolatilityRecovery({ logger, evaluateLatest, symbol, upda
   return undefined
 }
 
+function validateVolatilitySnapshotRequest({
+  isStopping,
+  isVolatilityProtectionEnabledForSymbol,
+  symbol,
+}) {
+  if (isStopping()) {
+    return toResult({
+      data: {
+        skipped: true,
+        reason: "STOPPING",
+      },
+    })
+  }
+  if (typeof symbol !== "string" || !symbol.trim()) {
+    return toResult({
+      error: new TypeError("processVolatilitySnapshot requires a symbol"),
+    })
+  }
+  if (!isVolatilityProtectionEnabledForSymbol(symbol)) {
+    return toResult({
+      data: {
+        skipped: true,
+        reason: "VOLATILITY_PROTECTION_DISABLED_FOR_PAIR",
+      },
+    })
+  }
+  return undefined
+}
+
 async function processVolatilitySnapshot({
   state,
   isStopping,
@@ -238,16 +267,13 @@ async function processVolatilitySnapshot({
   symbol,
   snapshot,
 }) {
-  if (isStopping()) {
-    return toResult({ data: { skipped: true, 
-      reason: "STOPPING" } })
-  }
-  if (typeof symbol !== "string" || !symbol.trim()) {
-    return toResult({ error: new TypeError("processVolatilitySnapshot requires a symbol") })
-  }
-  if (!isVolatilityProtectionEnabledForSymbol(symbol)) {
-    return toResult({ data: { skipped: true, 
-      reason: "VOLATILITY_PROTECTION_DISABLED_FOR_PAIR" } })
+  const validation = validateVolatilitySnapshotRequest({
+    isStopping,
+    isVolatilityProtectionEnabledForSymbol,
+    symbol,
+  })
+  if (validation) {
+    return validation
   }
 
   const currentSnapshot = readVolatilitySnapshot({ getVolatilityData, 
