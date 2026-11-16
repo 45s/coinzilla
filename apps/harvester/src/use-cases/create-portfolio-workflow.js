@@ -249,7 +249,7 @@ function logExecutionAccounted({ logger, fill, result, previousPosition, current
   })
 }
 
-function logExecutionRejected({ logger, fill, result, previousPortfolio, previousPosition, currentLedger }) {
+function logExecutionRejected({ logger, fill, result, previousPortfolio, currentLedger }) {
   logger.error?.({
     message: "accounting execution rejected",
     executionId: fill.id,
@@ -344,7 +344,6 @@ async function runUpdateTradingAccounting({
           fill,
           result,
           previousPortfolio,
-          previousPosition,
           currentLedger,
         })
       }
