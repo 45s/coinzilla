@@ -8,7 +8,7 @@ const test = (...args) => {
   return nodeTest(`[create-conservative-shutdown-participant.test.js] ${name}`, ...testArgs)
 }
 
-function createFakeEngine({ calls = [], unsafeSymbols = [], onAudit } = {}) {
+function createFakeEngineState() {
   const markets = new Map(["DOGEUSDT", "SOLUSDT"].map((symbol) => [
     symbol,
     {
@@ -19,38 +19,31 @@ function createFakeEngine({ calls = [], unsafeSymbols = [], onAudit } = {}) {
       revision: 0,
     },
   ]))
-  let revision = 0
-  let gateActive = false
-
+  const state = {
+    revision: 0,
+    gateActive: false,
+  }
   const snapshot = () => ({
-    revision,
+    revision: state.revision,
     markets: [...markets.values()].map((market) => ({
       ...market,
       blockers: [...market.blockers],
     })),
   })
-
   const invalidate = (symbol) => {
-    revision += 1
+    state.revision += 1
     const market = markets.get(symbol)
     if (market) {
       market.status = "UNSAFE"
       market.blockers = ["LATE_ORDER_EXECUTION_EVIDENCE"]
-      market.revision = revision
+      market.revision = state.revision
     }
   }
+  return { markets, state, snapshot, invalidate }
+}
 
+function createFakeEngineOrderOperations({ calls } = {}) {
   return {
-    beginShutdown() {
-      calls.push("buy-gate")
-      gateActive = true
-      for (const symbol of markets.keys()) {
-        invalidate(symbol)
-      }
-      return { ok: true }
-    },
-    getShutdownSafetySnapshot: snapshot,
-    invalidate,
     async cancelOwnedBuyOrdersForShutdown(options = {}) {
       const scope = options.symbol ? options.symbol : "all"
       calls.push(`cancel:${scope}`)
@@ -74,15 +67,15 @@ function createFakeEngine({ calls = [], unsafeSymbols = [], onAudit } = {}) {
         },
       }
     },
-    async auditShutdownSafety({
-      symbol,
-      reconciliationComplete,
-      journalDurable,
-      coverageResult,
-    }) {
+  }
+}
+
+function createFakeEngineSafetyOperations({ calls, unsafeSymbols, onAudit, markets, state, invalidate, snapshot } = {}) {
+  return {
+    async auditShutdownSafety({ symbol, reconciliationComplete, journalDurable, coverageResult }) {
       calls.push(`audit:${symbol}`)
       const blockers = []
-      if (!gateActive) {
+      if (!state.gateActive) {
         blockers.push("CONSERVATIVE_BUY_GATE_INACTIVE")
       }
       if (!reconciliationComplete) {
@@ -102,16 +95,42 @@ function createFakeEngine({ calls = [], unsafeSymbols = [], onAudit } = {}) {
         invalidate,
         markets,
       })
-      revision += 1
+      state.revision += 1
       const market = markets.get(symbol)
       market.status = blockers.length === 0 ? "SAFE_TO_SHUTDOWN" : "UNSAFE"
       market.blockers = blockers
-      market.revision = revision
+      market.revision = state.revision
       return {
         ok: true,
         data: snapshot(),
       }
     },
+  }
+}
+
+function createFakeEngine({ calls = [], unsafeSymbols = [], onAudit } = {}) {
+  const { markets, state, snapshot, invalidate } = createFakeEngineState()
+  return {
+    beginShutdown() {
+      calls.push("buy-gate")
+      state.gateActive = true
+      for (const symbol of markets.keys()) {
+        invalidate(symbol)
+      }
+      return { ok: true }
+    },
+    getShutdownSafetySnapshot: snapshot,
+    invalidate,
+    ...createFakeEngineOrderOperations({ calls }),
+    ...createFakeEngineSafetyOperations({
+      calls,
+      unsafeSymbols,
+      onAudit,
+      markets,
+      state,
+      invalidate,
+      snapshot,
+    }),
   }
 }
 
