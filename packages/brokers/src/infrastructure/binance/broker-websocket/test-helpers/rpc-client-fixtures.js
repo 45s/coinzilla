@@ -32,7 +32,10 @@ export function createClient(options = {}) {
     ...options,
   })
 
-  return { client, transport, sockets, clock }
+  return { client,
+transport,
+sockets,
+clock }
 }
 
 export async function connectClient(context) {
@@ -42,5 +45,7 @@ export async function connectClient(context) {
 }
 
 export function response(socket, id, result, status = 200) {
-  socket.receive(JSON.stringify({ id, status, result }))
+  socket.receive(JSON.stringify({ id,
+status,
+result }))
 }
