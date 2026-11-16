@@ -5,8 +5,8 @@ function parseVersion(value) {
 
 function isAtLeast(version, minimum) {
   for (let index = 0; index < minimum.length; index += 1) {
-    if (version[index] > minimum[index]) return true
-    if (version[index] < minimum[index]) return false
+    if (version[index] > minimum[index]) {return true}
+    if (version[index] < minimum[index]) {return false}
   }
 
   return true
@@ -20,7 +20,7 @@ function isAtLeast(version, minimum) {
  */
 export function isSafeUndiciVersion(value) {
   const version = parseVersion(value)
-  if (!version) return false
+  if (!version) {return false}
 
   const minimumByMajor = {
     6: [6, 29, 1],
