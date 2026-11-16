@@ -1,9 +1,9 @@
 import { createHmac } from "node:crypto"
 
 function normalizeValue(key, value) {
-  if (typeof value === "string") return value
-  if (typeof value === "boolean") return String(value)
-  if (typeof value === "number" && Number.isFinite(value)) return String(value)
+  if (typeof value === "string") {return value}
+  if (typeof value === "boolean") {return String(value)}
+  if (typeof value === "number" && Number.isFinite(value)) {return String(value)}
 
   throw new TypeError(
     `Binance signed parameter "${key}" must be a string, finite number, or boolean`,
