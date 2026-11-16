@@ -72,12 +72,12 @@ test("unsubscribe does not cancel an already accepted delivery", async () => {
 
   assert.equal(result.ok, true)
   assert.equal(bus.publish({ name: "work.started",
-source: "test" }).ok, true)
+    source: "test" }).ok, true)
   await started.promise
 
   assert.equal(result.subscription.unsubscribe().unsubscribed, true)
   assert.equal(bus.publish({ name: "work.started",
-source: "test" }).ok, true)
+    source: "test" }).ok, true)
 
   release.resolve()
   assert.equal((await bus.flush()).ok, true)
@@ -103,7 +103,7 @@ test("matching subscribers start independently for one accepted event", async ()
   }
 
   assert.equal(bus.publish({ name: "work.started",
-source: "test" }).ok, true)
+    source: "test" }).ok, true)
   await bothStarted.promise
   assert.deepEqual(started, ["first", "second"])
 
@@ -139,7 +139,7 @@ test("flush waits for nested publishes made after an async handler resumes", asy
   })
 
   assert.equal(bus.publish({ name: "workflow.started",
-source: "test" }).ok, true)
+    source: "test" }).ok, true)
   await started.promise
 
   const flushing = bus.flush()
@@ -152,7 +152,7 @@ source: "test" }).ok, true)
 
 test("re-entrant publish at capacity rejects the complete nested fan-out", async () => {
   const bus = new EventBus({ logger: {},
-maxPending: 2 })
+    maxPending: 2 })
   const release = deferred()
   const started = deferred()
   const nestedResults = []
@@ -185,7 +185,7 @@ maxPending: 2 })
   })
 
   assert.equal(bus.publish({ name: "outer.event",
-source: "test" }).ok, true)
+    source: "test" }).ok, true)
   await started.promise
   assert.equal(bus.getDiagnostics().pendingCount, 2)
 
