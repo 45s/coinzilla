@@ -158,11 +158,13 @@ function createHarnessEngine({
   volatilityProtectionEnabled,
   onUnownedExternalOrderObserved,
   initialState,
+  eventPublisher,
 } = {}) {
   return makeConservativeTradingEngine({
     broker,
     strategyPolicy,
     appConfig,
+    eventPublisher,
     getPortfolio: () => portfolio,
     getRecoveryLedger: ({ marketId }) =>
       recoveryLedgersByMarket.get(marketId) ?? RecoveryLedger.empty({ market: marketsById.get(marketId) }),
@@ -234,6 +236,7 @@ async function createHarness({
   volatilityProtectionEnabled = false,
   externalOrdersPolicyBySymbol = {},
   onUnownedExternalOrderObserved,
+  eventPublisher,
 } = {}) {
   const orders = []
   const pauses = []
@@ -257,6 +260,7 @@ async function createHarness({
     volatilityProtectionEnabled,
     onUnownedExternalOrderObserved,
     initialState,
+    eventPublisher,
   })
   await initializeHarnessBooks({ engine })
   return { engine,
