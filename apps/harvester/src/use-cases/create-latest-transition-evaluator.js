@@ -6,7 +6,23 @@ import { publishLifecycleEvent } from "../application/events/publish-lifecycle-e
 
 function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } = {}) {
   const { state, hasBlockingOpenOrdersForSymbol, isStopping, canTrade, isMarketPriceFresh } = dependencies
-  if (state.paused.has(symbol)) {
+  if (state.shutdownBuyGate === true && !shutdownRecoveryOnly) {
+    return toResult({
+      data: {
+        skipped: true,
+        reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
+      },
+    })
+  }
+  const recoveryManagedPause = shutdownRecoveryOnly &&
+    state.recoveryManagedPausedMarkets?.has(symbol) === true &&
+    state.durablePausedMarkets?.has(symbol) !== true &&
+    state.operatorPausedMarkets?.has(symbol) !== true &&
+    state.replacementIntents?.has(symbol) !== true &&
+    state.trailingBuyRepriceIntents?.has(symbol) !== true &&
+    ![...(state.recoveryManagedCancellationClientOrderIds ?? [])].some((clientOrderId) =>
+      state.registry.getOrder({ clientOrderId })?.market.symbol === symbol)
+  if (state.paused.has(symbol) && !recoveryManagedPause) {
     return toResult({ data: { skipped: true,
       reason: "PAIR_PAUSED" } })
   }

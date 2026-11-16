@@ -20,6 +20,7 @@ import { createUserDataEventHandler } from "./user-data/create-user-data-event-h
 import { createUserDataStatusHandler } from "./user-data/create-user-data-status-handler.js"
 import { createUserDataRecoveryHandler } from "./user-data/create-user-data-recovery-handler.js"
 import { createShutdownHandler } from "./shutdown/create-shutdown-handler.js"
+import { createConservativeShutdownParticipant } from "./shutdown/create-conservative-shutdown-participant.js"
 import { subscribeToMarketData } from "./subscriptions/subscribe-to-market-data.js"
 import { connectBroker } from "./broker/connect-broker.js"
 import { subscribeToUserData } from "./user-data/subscribe-to-user-data.js"
@@ -238,8 +239,10 @@ function createCommissionAssetPublisher({ accountSnapshotManagerRef }) {
     if (!accountSnapshotManagerRef.current) {
       throw new Error("Commission asset baseline manager is not ready")
     }
-    return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({ assetId,
-assetCode })
+    return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({
+      assetId,
+      assetCode,
+    })
   }
 }
 
@@ -262,6 +265,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     createOperationalStateStore,
     createTelegramOperatorAdapter: createTelegramOperatorAdapterFactory,
     telegramOperatorFetchImpl,
+    strategyShutdownParticipants = [],
   } = options
   const runtimeStartedAt = now()
   const resolved = await resolveHarvesterOptions({
@@ -311,6 +315,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     now,
     runtimeStartedAt,
     runtimeSessionId,
+    strategyShutdownParticipants,
     operatorControlLifecycle,
     operationalStateStore,
     accountSnapshotManagerRef,
@@ -629,7 +634,7 @@ async function startHarvesterMarketServices({ startup, portfolio, resources, fre
     processMarketBook: portfolio.processMarketBook,
     isMarketPriceFresh: freshness.isMarketPriceFresh,
     now: startup.now,
-    isStopped: () => resources.userDataState.stopped || resources.userDataState.shutdownRequested,
+    isStopped: () => resources.userDataState.marketIntakeStopped === true,
     onMarketPriceError: startup.onMarketPriceError,
     subscriptions: resources.subscriptions,
     bookSubscriptions: resources.bookSubscriptions,
@@ -695,9 +700,45 @@ resources })
   }
 }
 
-function createHarvesterRuntimeStop({ startup, resources, accountSnapshots } = {}) {
+function getConservativeShutdownBlockers(userDataState) {
+  const blockers = []
+  if (userDataState.accountingFailed === true) {
+    blockers.push("ACCOUNTING_FAILED")
+  }
+  if (userDataState.requiresReconciliation === true) {
+    blockers.push("USER_DATA_RECONCILIATION_REQUIRED")
+  }
+  if (userDataState.streamUnsafe === true) {
+    blockers.push("USER_DATA_STREAM_UNSAFE")
+  }
+  if (userDataState.pendingRecovery === true) {
+    blockers.push("USER_DATA_RECOVERY_PENDING")
+  }
+  if (userDataState.safetyHaltRequired === true) {
+    blockers.push("SAFETY_HALT_REQUIRED")
+  }
+  if (userDataState.retryableRecoveryFailure) {
+    blockers.push("RETRYABLE_RECOVERY_FAILURE_PENDING")
+  }
+  return blockers
+}
+
+function createHarvesterRuntimeStop({ startup, resources, accountSnapshots, userDataEvents } = {}) {
+  const strategyShutdownParticipants = [
+    ...(startup.strategyShutdownParticipants ?? []),
+    ...(startup.tradingEnabled
+      ? [createConservativeShutdownParticipant({
+        engine: resources.tradingEngine,
+        eventPublisher: startup.eventPublisher,
+        drainUserDataEvents: userDataEvents.drainUserDataEvents,
+        getShutdownBlockers: () => getConservativeShutdownBlockers(resources.userDataState),
+        logger: startup.logger,
+      })]
+      : []),
+  ]
   const stopRuntime = createShutdownHandler({
     state: resources.userDataState,
+    strategyShutdownParticipants,
     logger: startup.logger,
     tradingEnabled: startup.tradingEnabled,
     getTradingEngine: () => resources.tradingEngine,
@@ -753,36 +794,51 @@ export async function startHarvester(options = {}) {
   const startup = await createHarvesterStartupContext({ options })
   const portfolio = createHarvesterPortfolioContext({ startup })
   const resources = await createHarvesterRuntimeResources({ startup })
-  const accountSnapshots = createHarvesterAccountSnapshotRuntime({ startup,
-portfolio,
-resources })
-  const userDataEvents = createHarvesterUserDataEventRuntime({ startup,
-portfolio,
-resources,
-accountSnapshots })
-  const recoveryRuntime = createHarvesterUserDataRecoveryRuntime({ startup,
-resources,
-accountSnapshots,
-userDataEvents })
+  const accountSnapshots = createHarvesterAccountSnapshotRuntime({
+    startup,
+    portfolio,
+    resources,
+  })
+  const userDataEvents = createHarvesterUserDataEventRuntime({
+    startup,
+    portfolio,
+    resources,
+    accountSnapshots,
+  })
+  const recoveryRuntime = createHarvesterUserDataRecoveryRuntime({
+    startup,
+    resources,
+    accountSnapshots,
+    userDataEvents,
+  })
   const freshness = createHarvesterMarketDataFreshness({ startup })
-  const activateTradingEngine = createHarvesterTradingEngineActivator({ startup,
-portfolio,
-resources,
-freshness })
-  await startHarvesterServices({ startup,
-portfolio,
-resources,
-accountSnapshots,
-userDataEvents,
-recoveryRuntime,
-activateTradingEngine,
-freshness })
+  const activateTradingEngine = createHarvesterTradingEngineActivator({
+    startup,
+    portfolio,
+    resources,
+    freshness,
+  })
+  await startHarvesterServices({
+    startup,
+    portfolio,
+    resources,
+    accountSnapshots,
+    userDataEvents,
+    recoveryRuntime,
+    activateTradingEngine,
+    freshness,
+  })
   resources.userDataState.startupComplete = true
-  startPendingUserDataRecovery({ userDataState: resources.userDataState,
-startUserDataRecovery: recoveryRuntime.startUserDataRecovery })
-  const stop = createHarvesterRuntimeStop({ startup,
-resources,
-accountSnapshots })
+  startPendingUserDataRecovery({
+    userDataState: resources.userDataState,
+    startUserDataRecovery: recoveryRuntime.startUserDataRecovery,
+  })
+  const stop = createHarvesterRuntimeStop({
+    startup,
+    resources,
+    accountSnapshots,
+    userDataEvents,
+  })
   return createHarvesterRuntimeResult({
     startup,
     portfolio,
@@ -797,10 +853,12 @@ function resolveStrategyMarketDataPairs({
   hasUnownedOpenOrdersForSymbol,
   logger
 } = {}) {
-  const marketDataSubscriptionSymbols = new Set(strategyPolicy.getMarketDataSubscriptionSymbols({
-    pairs,
-    hasUnownedOpenOrdersForSymbol,
-  }))
+  const marketDataSubscriptionSymbols = new Set(
+    strategyPolicy.getMarketDataSubscriptionSymbols({
+      pairs,
+      hasUnownedOpenOrdersForSymbol,
+    }),
+  )
   const strategyBlockedMarketSymbols = Object.entries(pairs)
     .filter(([symbol, pairConfig]) => pairConfig.enabled === true && !marketDataSubscriptionSymbols.has(symbol))
     .map(([symbol]) => symbol)

@@ -1,657 +1,414 @@
-import nodeTest from "node:test"
 import assert from "node:assert/strict"
+import nodeTest from "node:test"
+
 import { createShutdownHandler } from "./create-shutdown-handler.js"
 
-const test = (...args) => nodeTest(`[create-shutdown-handler.test.js] ${args[0]}`, ...args.slice(1))
+const test = (...args) => {
+  const [name, ...testArgs] = args
+  return nodeTest(`[create-shutdown-handler.test.js] ${name}`, ...testArgs)
+}
 
-const createState = (overrides = {}) => ({
-  stopped: false,
-  shutdownRequested: false,
-  ready: true,
-  status: "READY",
-  eventQueue: Promise.resolve(),
-  intakeStopped: false,
-  accountingFailed: false,
-  requiresReconciliation: false,
-  ...overrides,
-})
+function createState(overrides = {}) {
+  return {
+    stopped: false,
+    shutdownRequested: false,
+    ready: true,
+    status: "READY",
+    eventQueue: Promise.resolve(),
+    intakeStopped: false,
+    accountingFailed: false,
+    requiresReconciliation: false,
+    safetyHaltRequired: false,
+    ...overrides,
+  }
+}
 
-const createShutdown = ({
+function createSafeParticipant({ strategyId, calls, waitUntilSafe } = {}) {
+  let safe = false
+  return {
+    strategyId,
+    beginShutdown: () => calls.push(`gate:${strategyId}`),
+    waitUntilSafe: async (options) => {
+      calls.push(`wait:${strategyId}`)
+      const result = waitUntilSafe
+        ? await waitUntilSafe(options)
+        : { ok: true }
+      if (result?.ok === true) { safe = true }
+      return result
+    },
+    isSafeToShutdown: () => safe,
+    getSafetySnapshot: () => ({
+      status: safe ? "SAFE_TO_SHUTDOWN" : "UNSAFE",
+      blockers: safe ? [] : ["TEST_SAFETY_NOT_PROVEN"],
+    }),
+  }
+}
+
+function createShutdown({
   state = createState(),
-  tradingEnabled = false,
-  engine,
-  disconnectBroker,
-  stopMarketIntake,
-  stopUserDataIntake,
-  publishAccountSnapshot,
+  calls = [],
+  tradingEnabled = true,
+  participants = [],
+  eventPublisher = {
+    flush: async () => ({
+      ok: true,
+      durable: true,
+    }),
+  },
+  publishAccountSnapshot = async () => ({ ok: true }),
+  stopUserDataIntake = async () => [],
+  stopMarketIntake = async () => [],
+  disconnectBroker = async () => [],
+  marketPriceIntake = new Map(),
   subscriptions = [],
   bookSubscriptions = [],
-  marketPriceIntake = new Map(),
   userDataSubscription = {},
-  calls = [],
   logger = {},
-  now,
-  runtimeSessionId
-} = {}) => {
-  const effectiveEngine = engine ? {
-    reconcileRecoverySellsForShutdown: async () => {
-      calls.push("reconcile-recovery-sells")
-      return {
-        ok: true,
-        data: { reconciledSymbols: [] }
-      }
-    },
-    auditShutdownRecoverySellCoverage: async () => {
-      calls.push("audit-recovery-sell-coverage")
-      return {
-        ok: true,
-        data: {
-        covered: true,
-        findings: []
-      }
-      }
-    },
-    ...engine,
-  } : engine
+  getTradingEngine = () => undefined,
+} = {}) {
   const stop = createShutdownHandler({
     state,
     logger,
-    now,
-    runtimeSessionId,
     tradingEnabled,
-    getTradingEngine: () => effectiveEngine,
+    strategyShutdownParticipants: participants,
+    getTradingEngine,
     subscriptions,
     bookSubscriptions,
     marketPriceIntake,
     getUserDataSubscription: () => userDataSubscription,
     broker: {},
     brokerName: "binance",
-    eventPublisher: {},
-    publishAccountSnapshot: async (input) => {
-      calls.push(`account-audit:${input.phase}`)
-      if (publishAccountSnapshot) {await publishAccountSnapshot(input, calls)}
+    eventPublisher: {
+      ...eventPublisher,
+      flush: async (...args) => {
+        calls.push("journal-flush")
+        return eventPublisher.flush(...args)
+      },
     },
-    stopMarketIntake: async () => {
+    publishAccountSnapshot: async (options) => {
+      calls.push(`closing-audit:${options.auditStatus}`)
+      return publishAccountSnapshot(options)
+    },
+    stopUserDataIntake: async (options) => {
+      calls.push("user-data-stop")
+      return stopUserDataIntake(options)
+    },
+    stopMarketIntake: async (options) => {
       calls.push("market-intake-stop")
-      return stopMarketIntake ? stopMarketIntake(calls) : []
+      return stopMarketIntake(options)
     },
-    stopUserDataIntake: async () => {
-      calls.push("user-data-intake-stop")
-      if (stopUserDataIntake) {return stopUserDataIntake(calls, userDataSubscription)}
-      if (typeof userDataSubscription?.disconnect === "function") {await userDataSubscription.disconnect()}
-      return []
-    },
-    disconnectBroker: async () => {
+    disconnectBroker: async (options) => {
       calls.push("broker-disconnect")
-      return disconnectBroker ? disconnectBroker(calls) : []
+      return disconnectBroker(options)
     },
   })
   return {
     stop,
     state,
-    calls
+    calls,
   }
 }
 
-test("drains market work, reconciles and cancels owned BUYs, audits CLOSING, then disconnects", async () => {
+test("activates strategy gates before shutdown context creation can fail", async () => {
   const calls = []
-  const marketPriceIntake = new Map()
-  const engine = {
-    reconcileOwnedOrders: async () => { calls.push("reconcile"); return { ok: true } },
-    cancelOwnedBuyOrdersForShutdown: async () => { calls.push("cancel-owned-buys"); return { ok: true } },
-    getOrders: () => [{
-      side: "SELL",
-      status: "OPEN"
-    }],
-  }
-  const state = createState()
-  const stop = createShutdown({
-    state,
+  const failure = new Error("Trading engine context is unavailable")
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
     calls,
-    tradingEnabled: true,
-    marketPriceIntake,
-    engine,
-    subscriptions: [{ unsubscribe: async () => calls.push("price-unsubscribe") }],
-    bookSubscriptions: [{ unsubscribe: async () => calls.push("book-unsubscribe") }],
-    userDataSubscription: { disconnect: async () => calls.push("user-data-disconnect") },
-    publishAccountSnapshot: async (input) => calls.push(`audit-status:${input.auditStatus}`),
-    disconnectBroker: async () => [],
-    stopMarketIntake: async () => [],
-    stopUserDataIntake: async (...args) => {
-      const [, subscription] = args
-      await subscription.disconnect()
+  })
+  const fixture = createShutdown({
+    participants: [participant],
+    calls,
+    getTradingEngine: () => {
+      calls.push("get-trading-engine")
+      throw failure
+    },
+  })
+
+  await assert.rejects(async () => fixture.stop(), (error) => error === failure)
+  assert.deepEqual(
+    calls.slice(0, 2),
+    ["gate:CONSERVATIVE", "get-trading-engine"],
+    "Every strategy BUY gate must activate before shutdown context creation can fail.",
+  )
+  assert.equal(calls.includes("user-data-stop"), false, "A context creation failure must not stop user-data intake.")
+  assert.equal(calls.includes("market-intake-stop"), false, "A context creation failure must not stop market intake.")
+  assert.equal(calls.includes("broker-disconnect"), false, "A context creation failure must not disconnect the broker.")
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE", "A failed shutdown context must be reported as incomplete, never STOPPED.")
+})
+
+test("activates every strategy gate before any shared service can stop", async () => {
+  const calls = []
+  const participants = [
+    createSafeParticipant({
+      strategyId: "CONSERVATIVE",
+      calls,
+    }),
+    createSafeParticipant({
+      strategyId: "RECOVERY_SELLER",
+      calls,
+    }),
+  ]
+  const fixture = createShutdown({
+    participants,
+    calls,
+  })
+  await fixture.stop({
+    beforeSharedServicesStop: async () => {
+      calls.push("operator-control-stop")
       return []
     },
   })
-  marketPriceIntake.set("BTCUSDT", {
-    latestWebSocketPriceTask: Promise.resolve().then(() => stop.calls.push("market-task-drained")),
-  })
 
-  await stop.stop()
-
-  const order = [
-    "market-intake-stop",
-    "market-task-drained",
-    "reconcile",
-    "cancel-owned-buys",
-    "user-data-intake-stop",
-    "user-data-disconnect",
-    "reconcile",
-    "reconcile-recovery-sells",
-    "reconcile",
-    "audit-recovery-sell-coverage",
-    "account-audit:CLOSING",
-    "audit-status:COMPLETE",
-    "broker-disconnect",
-  ]
-  for (let index = 0; index < order.length; index += 1) {
-    assert.equal(stop.calls[index], order[index], `Shutdown step ${index + 1} must preserve the safety-critical ordering.`)
+  assert.deepEqual(calls.slice(0, 4), [
+    "gate:CONSERVATIVE",
+    "gate:RECOVERY_SELLER",
+    "wait:CONSERVATIVE",
+    "wait:RECOVERY_SELLER",
+  ])
+  for (const strategyId of ["CONSERVATIVE", "RECOVERY_SELLER"]) {
+    assert.ok(calls.indexOf(`wait:${strategyId}`) < calls.indexOf("user-data-stop"))
+    assert.ok(calls.indexOf(`wait:${strategyId}`) < calls.indexOf("market-intake-stop"))
+    assert.ok(calls.indexOf(`wait:${strategyId}`) < calls.indexOf("broker-disconnect"))
   }
-  assert.equal(state.stopped, true, "The shutdown state must be terminal once shutdown begins.")
-  assert.equal(state.status, "STOPPED", "Successful shutdown must finish in the STOPPED state.")
+  assert.ok(calls.indexOf("closing-audit:COMPLETE") < calls.indexOf("user-data-stop"))
+  assert.ok(calls.indexOf("user-data-stop") < calls.indexOf("operator-control-stop"))
+  assert.ok(calls.indexOf("operator-control-stop") < calls.indexOf("market-intake-stop"))
+  assert.equal(fixture.state.status, "STOPPED")
 })
 
-
-
-function createShutdownRaceGate() {
-  let release
-  let signalStarted
-  const started = new Promise((resolve) => {
-    signalStarted = resolve
-  })
-  const gate = new Promise((resolve) => {
-    release = resolve
-  })
-  return {
-    started,
-    gate,
-    signalStarted,
-    release,
-  }
-}
-
-function createBuyFillShutdownEngine({ calls, initialGate, cancellationGate, appliedBuyFills }) {
-  let reconciliationCount = 0
-  return {
-    reconcileOwnedOrders: async () => {
-      reconciliationCount += 1
-      calls.push(`reconcile:${  reconciliationCount}`)
-      if (reconciliationCount === 1) {
-        initialGate.signalStarted()
-        await initialGate.gate
-      }
-      return {
-        ok: true,
-      }
-    },
-    cancelOwnedBuyOrdersForShutdown: async () => {
-      calls.push("buy-cancellation-started")
-      cancellationGate.signalStarted()
-      await cancellationGate.gate
-      return {
-        ok: true,
-      }
-    },
-    reconcileRecoverySellsForShutdown: async () => {
-      calls.push("recovery-sell-reconciliation")
-      assert.equal(appliedBuyFills.count, 3, "All fills from all shutdown race windows must be drained before SELL replanning.")
-      return {
-        ok: true,
-        data: {
-          reconciledSymbols: ["DOGEUSDT"],
-        },
-      }
-    },
-    auditShutdownRecoverySellCoverage: async () => ({
-      ok: true,
-      data: {
-        covered: true,
-        findings: [],
-      },
-    }),
-    getOrders: () => [],
-  }
-}
-
-function createFinalUserDataDrain({ state, calls, gate, appliedBuyFills }) {
-  return async () => {
-    state.eventQueue = new Promise((resolve) => {
-      gate.signalStarted()
-      gate.releaseFinal = () => {
-        appliedBuyFills.count += 1
-        calls.push("fill-during-final-user-data-drain")
-        resolve()
-      }
-    })
-    return []
-  }
-}
-
-function createBuyFillShutdownRace({ state, calls }) {
-  const initialGate = createShutdownRaceGate()
-  const cancellationGate = createShutdownRaceGate()
-  const finalDrainGate = createShutdownRaceGate()
-  const appliedBuyFills = {
-    count: 0,
-  }
-  return {
-    engine: createBuyFillShutdownEngine({
-      calls,
-      initialGate,
-      cancellationGate,
-      appliedBuyFills,
-    }),
-    stopUserDataIntake: createFinalUserDataDrain({
-      state,
-      calls,
-      gate: finalDrainGate,
-      appliedBuyFills,
-    }),
-    initialReconciliationStarted: initialGate.started,
-    releaseInitialReconciliation: initialGate.release,
-    buyCancellationStarted: cancellationGate.started,
-    releaseBuyCancellation: cancellationGate.release,
-    finalUserDataDrainStarted: finalDrainGate.started,
-    releaseFinalUserDataDrain: () => finalDrainGate.releaseFinal(),
-    applyInitialFill: () => {
-      appliedBuyFills.count += 1
-      calls.push("fill-during-initial-reconciliation")
-    },
-    applyCancellationFill: () => {
-      appliedBuyFills.count += 1
-      calls.push("fill-during-buy-cancellation")
-    },
-  }
-}
-
-test("drains BUY fills arriving during initial reconciliation, BUY cancellation, and user-data draining before recovery repair", async () => {
-  const state = createState()
+test("a safe strategy cannot release shared services while another strategy is unsafe", async () => {
   const calls = []
-  const race = createBuyFillShutdownRace({
-    state,
+  const participants = [
+    createSafeParticipant({ strategyId: "CONSERVATIVE",
+      calls }),
+    {
+      strategyId: "RECOVERY_SELLER",
+      beginShutdown: () => calls.push("gate:RECOVERY_SELLER"),
+      waitUntilSafe: async () => {
+        calls.push("wait:RECOVERY_SELLER")
+        throw new Error("Recovery SELL state is UNKNOWN")
+      },
+      isSafeToShutdown: () => false,
+      getSafetySnapshot: () => ({
+        status: "UNSAFE",
+        blockers: ["RECOVERY_SELL_UNKNOWN"],
+      }),
+    },
+  ]
+  const fixture = createShutdown({ participants,
+    calls })
+
+  await assert.rejects(fixture.stop(), (error) => {
+    assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN")
+    assert.equal(error.shutdownDiagnostics.strategyBlockers[0].strategyId, "RECOVERY_SELLER")
+    assert.equal(error.shutdownDiagnostics.strategyBlockers[0].safetySnapshot.status, "UNSAFE")
+    return true
+  })
+
+  assert.equal(calls.includes("user-data-stop"), false)
+  assert.equal(calls.includes("market-intake-stop"), false)
+  assert.equal(calls.includes("broker-disconnect"), false)
+  assert.equal(calls.includes("operator-control-stop"), false)
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE")
+})
+
+test("keeps every shared connection alive when the CLOSING Journal barrier fails", async () => {
+  const failure = new Error("Journal fsync failed")
+  const calls = []
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
     calls,
   })
   const fixture = createShutdown({
-    state,
+    participants: [participant],
     calls,
-    tradingEnabled: true,
-    engine: race.engine,
-    stopUserDataIntake: race.stopUserDataIntake,
+    publishAccountSnapshot: async () => ({
+      ok: false,
+      errors: [failure],
+    }),
+  })
+
+  await assert.rejects(fixture.stop(), (error) => error === failure)
+  assert.equal(calls.includes("user-data-stop"), false)
+  assert.equal(calls.includes("market-intake-stop"), false)
+  assert.equal(calls.includes("broker-disconnect"), false)
+  assert.equal(calls.includes("operator-control-stop"), false)
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE")
+})
+
+test("keeps market and user-data intake alive while accepted user-data work blocks safety", async () => {
+  let releaseQueue
+  const queue = new Promise((resolve) => {
+    releaseQueue = resolve
+  })
+  const state = createState({ eventQueue: queue })
+  const calls = []
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+    waitUntilSafe: async () => {
+      calls.push("wait-user-data-queue")
+      await state.eventQueue
+      return { ok: true }
+    },
+  })
+  const fixture = createShutdown({
+    state,
+    participants: [participant],
+    calls,
   })
 
   const stopping = fixture.stop()
-  await race.initialReconciliationStarted
-  state.eventQueue = Promise.resolve().then(race.applyInitialFill)
-  race.releaseInitialReconciliation()
+  await Promise.resolve()
+  assert.equal(calls.includes("user-data-stop"), false)
+  assert.equal(calls.includes("market-intake-stop"), false)
+  assert.equal(calls.includes("broker-disconnect"), false)
 
-  await race.buyCancellationStarted
-  state.eventQueue = Promise.resolve().then(race.applyCancellationFill)
-  race.releaseBuyCancellation()
-
-  await race.finalUserDataDrainStarted
-  race.releaseFinalUserDataDrain()
+  releaseQueue()
   await stopping
-
-  assert.equal(state.status, "STOPPED")
-  assert.ok(calls.indexOf("recovery-sell-reconciliation") > calls.indexOf("fill-during-final-user-data-drain"))
+  assert.ok(calls.indexOf("wait-user-data-queue") < calls.indexOf("user-data-stop"))
+  assert.ok(calls.indexOf("user-data-stop") < calls.indexOf("market-intake-stop"))
 })
 
-test("concurrent stop callers share one in-flight shutdown promise", async () => {
-  let resolveDisconnect
-  const disconnectGate = new Promise((resolve) => { resolveDisconnect = resolve })
-  let signalDisconnectStarted
-  const disconnectStarted = new Promise((resolve) => { signalDisconnectStarted = resolve })
+test("drains market work after safety is proven and before Binance disconnects", async () => {
+  const calls = []
+  const marketPriceIntake = new Map()
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+  })
+  let releaseMarketTask
+  const marketTask = new Promise((resolve) => {
+    releaseMarketTask = () => {
+      calls.push("market-task-drained")
+      resolve()
+    }
+  })
+  marketPriceIntake.set("BTCUSDT", {
+    latestWebSocketPriceTask: marketTask,
+  })
   const fixture = createShutdown({
-    disconnectBroker: async () => {
-      signalDisconnectStarted()
-      return disconnectGate.then(() => [])
+    participants: [participant],
+    calls,
+    marketPriceIntake,
+    stopMarketIntake: async () => {
+      releaseMarketTask()
+      return []
     },
+    subscriptions: [{ unsubscribe: async () => calls.push("price-unsubscribe") }],
+    bookSubscriptions: [{ unsubscribe: async () => calls.push("book-unsubscribe") }],
+  })
+
+  await fixture.stop()
+  assert.ok(calls.indexOf("wait:CONSERVATIVE") < calls.indexOf("market-intake-stop"))
+  assert.ok(calls.indexOf("market-intake-stop") < calls.indexOf("market-task-drained"))
+  assert.ok(calls.indexOf("market-task-drained") < calls.indexOf("broker-disconnect"))
+})
+
+test("shares one in-flight shutdown promise between concurrent callers", async () => {
+  let releaseSafety
+  const safety = new Promise((resolve) => {
+    releaseSafety = resolve
+  })
+  const calls = []
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+    waitUntilSafe: async () => {
+      await safety
+      return { ok: true }
+    },
+  })
+  const fixture = createShutdown({
+    participants: [participant],
+    calls,
   })
 
   const first = fixture.stop()
   const second = fixture.stop()
-  let firstSettled = false
-  let secondSettled = false
-  first.then(() => { firstSettled = true })
-  second.then(() => { secondSettled = true })
-  await disconnectStarted
-
-  assert.equal(fixture.calls.filter((call) => call === "broker-disconnect").length, 1, "Concurrent stop calls must not duplicate broker cleanup.")
-  assert.equal(firstSettled, false, "The first caller must remain pending until cleanup completes.")
-  assert.equal(secondSettled, false, "The second caller must await the same in-flight cleanup.")
-
-  resolveDisconnect()
-  await Promise.all([first, second])
-  assert.equal(firstSettled, true, "The first caller must resolve after shared cleanup completes.")
-  assert.equal(secondSettled, true, "The second caller must resolve after the same cleanup completes.")
+  assert.equal(first, second)
+  releaseSafety()
+  await first
 })
 
-test("aggregates intake and broker disconnect errors instead of hiding partial shutdown", async () => {
-  const fixture = createShutdown({
-    stopMarketIntake: async () => [new Error("market unsubscribe failed")],
-    disconnectBroker: async () => [new Error("broker disconnect failed")],
-  })
-
-  await assert.rejects(
-    fixture.stop(),
-    (error) => error instanceof AggregateError && error.errors.length === 2,
-    "Shutdown must report all intake and broker disconnect failures in one AggregateError.",
-  )
-  assert.equal(fixture.calls.includes("broker-disconnect"), true, "Broker disconnect must still be attempted after intake cleanup errors.")
-})
-
-
-function assertUnresolvedShutdownDiagnostics({ state, shutdownError, expectedRecoveryFailure }) {
-  assert.equal(
-    state.status,
-    "SHUTDOWN_INCOMPLETE",
-    "A failed CLOSING reconciliation must not expose the runtime as successfully STOPPED.",
-  )
-  assert.equal(
-    shutdownError.shutdownDiagnostics.previousStatus,
-    "AUTHORITATIVE_RECONCILIATION_REQUIRED",
-    "Shutdown diagnostics must preserve the readiness status that existed before STOPPING replaced it.",
-  )
-  assert.equal(
-    shutdownError.shutdownDiagnostics.userData.requiresReconciliation,
-    true,
-    "Shutdown diagnostics must identify that authoritative user-data reconciliation remained incomplete.",
-  )
-  assert.equal(
-    shutdownError.shutdownDiagnostics.userData.safetyHaltRequired,
-    true,
-    "Shutdown diagnostics must preserve the pending safety halt that blocked readiness.",
-  )
-  assert.deepEqual(
-    shutdownError.shutdownDiagnostics.userData.retryableRecoveryFailure,
-    expectedRecoveryFailure,
-    "Shutdown diagnostics must retain the exact retryable recovery category, stage, and generation.",
-  )
-  assert.deepEqual(
-    shutdownError.shutdownDiagnostics.stageFailures[0].failure,
-    {
-      category: "REST_RECONCILIATION",
-      stage: "TERMINAL_FILL_HISTORY",
-      retryable: true,
-    },
-    "Shutdown diagnostics must retain failure classification from the failed owned-order reconciliation stage.",
-  )
-  assert.equal(
-    shutdownError.shutdownDiagnostics.unresolvedOrders.length,
-    1,
-    "Shutdown diagnostics must list unresolved owned orders but must not classify a deliberately preserved open SELL as unresolved.",
-  )
-  assert.deepEqual(
-    shutdownError.shutdownDiagnostics.unresolvedOrders[0],
-    {
-      symbol: "LINKFDUSD",
-      side: "BUY",
-      clientOrderId: "h-buy-uncertain",
-      brokerOrderId: "616421435",
-      status: "UNKNOWN",
-      executedQuantity: "0.2",
-      originalQuantity: "1",
-    },
-    "The unresolved-order diagnostic must expose exact safe identity and execution quantities without dumping broker payloads.",
-  )
-}
-
-test("reports the exact unresolved shutdown state and does not claim STOPPED after incomplete reconciliation", async () => {
-  const unresolvedBuyOrder = {
-    clientOrderId: "h-buy-uncertain",
-    brokerOrderId: "616421435",
-    market: { symbol: "LINKFDUSD" },
-    side: "BUY",
-    status: "UNKNOWN",
-    originalQuantity: { amount: "1" },
-    executedQuantity: { amount: "0.2" },
-  }
-  const expectedRecoveryFailure = {
-    generation: 7,
-    category: "REST_RECONCILIATION",
-    stage: "TERMINAL_FILL_HISTORY",
-    retryable: true,
-  }
-  const state = createState({
-    status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
-    requiresReconciliation: true,
-    safetyHaltRequired: true,
-    retryableRecoveryFailure: expectedRecoveryFailure,
-    recoveryGeneration: 7,
-    lastAcknowledgedRecoveryGeneration: 6,
-  })
-  const fixture = createShutdown({
-    state,
-    tradingEnabled: true,
-    engine: {
-      reconcileOwnedOrders: async () => ({
-        ok: false,
-        errors: [new Error("canonical terminal fill history is incomplete")],
-        failure: expectedRecoveryFailure,
-      }),
-      cancelOwnedBuyOrdersForShutdown: async () => ({ ok: true }),
-      getOrders: () => [
-        unresolvedBuyOrder,
-        {
-          clientOrderId: "h-sell-preserved",
-          brokerOrderId: "616421436",
-          market: { symbol: "LINKFDUSD" },
-          side: "SELL",
-          status: "OPEN",
-          originalQuantity: { amount: "1" },
-          executedQuantity: { amount: "0" },
-        },
-      ],
-    },
-  })
-
-  let shutdownError
-  await assert.rejects(
-    fixture.stop(),
-    (error) => {
-      shutdownError = error
-      return error instanceof AggregateError
-    },
-    "An unresolved owned order and incomplete user-data reconciliation must reject graceful shutdown.",
-  )
-
-  assertUnresolvedShutdownDiagnostics({
-    state,
-    shutdownError,
-    expectedRecoveryFailure,
-  })
-})
-
-
-test("reconciles shutdown recovery SELLs and refuses CLOSING COMPLETE when final coverage is invalid", async () => {
+test("allows a new shutdown attempt after an earlier safety failure", async () => {
+  let attempts = 0
   const calls = []
-  let closingAudit
-  const engine = {
-    reconcileOwnedOrders: async () => { calls.push("reconcile"); return { ok: true } },
-    cancelOwnedBuyOrdersForShutdown: async () => { calls.push("cancel-owned-buys"); return { ok: true } },
-    reconcileRecoverySellsForShutdown: async () => { calls.push("reconcile-recovery-sells"); return { ok: true } },
-    auditShutdownRecoverySellCoverage: async () => {
-      calls.push("audit-recovery-sell-coverage")
-      return {
-        ok: false,
-        data: {
-          covered: false,
-          findings: [{
-            symbol: "ADAFDUSD",
-            reason: "RECOVERY_SELL_UNDERSIZED",
-            requiredQuantity: "389.9",
-            committedQuantity: "359.9",
-          }],
-        },
-      }
+  let safe = false
+  const participant = {
+    strategyId: "CONSERVATIVE",
+    beginShutdown: () => calls.push("gate:CONSERVATIVE"),
+    waitUntilSafe: async () => {
+      attempts += 1
+      if (attempts === 1) { throw new Error("Owned BUY is UNKNOWN") }
+      safe = true
+      return { ok: true }
     },
-    getOrders: () => [],
+    isSafeToShutdown: () => safe,
+    getSafetySnapshot: () => ({ status: safe ? "SAFE_TO_SHUTDOWN" : "UNSAFE" }),
   }
-  const fixture = createShutdown({
-    calls,
-    tradingEnabled: true,
-    engine,
-    publishAccountSnapshot: async (input) => { closingAudit = input },
-  })
+  const fixture = createShutdown({ participants: [participant],
+    calls })
 
-  await assert.rejects(
-    fixture.stop(),
-    (error) => error instanceof AggregateError,
-    "A final recovery SELL coverage failure must make shutdown incomplete.",
-  )
-
-  const firstReconcileIndex = calls.indexOf("reconcile")
-  const secondReconcileIndex = calls.indexOf("reconcile", firstReconcileIndex + 1)
-  const thirdReconcileIndex = calls.indexOf("reconcile", secondReconcileIndex + 1)
-  assert.ok(calls.indexOf("reconcile-recovery-sells") > secondReconcileIndex, "Recovery SELL repair must run only after final owned-order reconciliation.")
-  assert.ok(calls.indexOf("reconcile-recovery-sells") < thirdReconcileIndex, "Replacement SELLs must be verified by a post-replan reconciliation.")
-  assert.ok(calls.indexOf("audit-recovery-sell-coverage") > calls.indexOf("reconcile-recovery-sells"), "The final recovery SELL audit must follow the repair attempt.")
-  assert.equal(closingAudit.auditStatus, "INCOMPLETE", "CLOSING must not report COMPLETE with an undersized recovery SELL.")
-  assert.ok(closingAudit.auditReasons.includes("SHUTDOWN_RECOVERY_SELL_COVERAGE_INCOMPLETE"))
-  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE")
+  await assert.rejects(fixture.stop())
+  await fixture.stop()
+  assert.equal(attempts, 2)
+  assert.equal(fixture.state.status, "STOPPED")
+  assert.equal(calls.filter((call) => call === "gate:CONSERVATIVE").length, 1)
 })
 
-test("emits deterministic monotonic timings for shutdown phases and failures", async () => {
-  const logEntries = []
-  let tick = 0
-  const now = () => {
-    tick += 5
-    return tick
-  }
+test("fails closed when trading is enabled without a strategy shutdown participant", async () => {
   const fixture = createShutdown({
-    logger: {
-      system: (entry) => logEntries.push(entry),
-      error: (entry) => logEntries.push(entry),
-    },
-    now,
-    runtimeSessionId: "runtime-session-test",
     tradingEnabled: true,
-    engine: {
-      reconcileOwnedOrders: async () => ({ ok: true }),
-      cancelOwnedBuyOrdersForShutdown: async () => ({ ok: true }),
-      reconcileRecoverySellsForShutdown: async () => ({ ok: true }),
-      auditShutdownRecoverySellCoverage: async () => ({
-        ok: true,
-        data: {
-        covered: true,
-        findings: []
-      }
-      }),
-      getOrders: () => [],
-    },
+    participants: [],
+  })
+
+  await assert.rejects(fixture.stop(), (error) => {
+    assert.equal(error.code, "NO_STRATEGY_SHUTDOWN_PARTICIPANTS")
+    return true
+  })
+  assert.equal(fixture.calls.includes("user-data-stop"), false)
+  assert.equal(fixture.calls.includes("market-intake-stop"), false)
+  assert.equal(fixture.calls.includes("broker-disconnect"), false)
+})
+
+test("does not apply Conservative policy to a different strategy participant", async () => {
+  const calls = []
+  const recoverySeller = createSafeParticipant({
+    strategyId: "RECOVERY_SELLER",
+    calls,
+  })
+  const fixture = createShutdown({
+    participants: [recoverySeller],
+    calls,
+  })
+
+  await fixture.stop()
+  assert.ok(calls.includes("gate:RECOVERY_SELLER"))
+  assert.ok(calls.includes("wait:RECOVERY_SELLER"))
+  assert.equal(calls.includes("gate:CONSERVATIVE"), false)
+  assert.equal(fixture.state.status, "STOPPED")
+})
+
+test("accepts an AccountSnapshot return value after its CLOSING audit has been durably published", async () => {
+  const calls = []
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+  })
+  const fixture = createShutdown({
+    participants: [participant],
+    calls,
+    publishAccountSnapshot: async () => ({
+      sourceTime: 123,
+      balances: [],
+    }),
   })
 
   await fixture.stop()
 
-  const phases = logEntries.filter((entry) => entry.shutdownPhase)
-  const required = [
-    "SHUTDOWN_REQUESTED",
-    "STOP_STATE_ESTABLISHED",
-    "MARKET_WORK_DRAIN",
-    "INITIAL_RECONCILIATION",
-    "BUY_CANCELLATION",
-    "USER_DATA_DRAIN",
-    "FINAL_RECONCILIATION",
-    "RECOVERY_SELL_RECONCILIATION",
-    "RECOVERY_SELL_COVERAGE_AUDIT",
-    "CLOSING_AUDIT",
-    "RUNTIME_SHUTDOWN_COMPLETED",
-  ]
-  for (const phase of required) {
-    assert.ok(phases.some((entry) => entry.shutdownPhase === phase), `Missing structured shutdown phase ${phase}`)
-  }
-  const completed = phases.filter((entry) => entry.phaseStatus === "COMPLETED")
-  assert.ok(completed.length > 0, "Completed phases must emit timing records.")
-  for (const entry of completed) {
-    assert.equal(typeof entry.durationMs, "number", "Every completed phase must expose its monotonic duration.")
-    assert.equal(typeof entry.elapsedMs, "number", "Every completed phase must expose elapsed time since shutdown request.")
-    assert.equal(entry.shutdownCorrelationId, "runtime-session-test")
-  }
-})
-
-
-function createShutdownReplacementFailureScenario() {
-  const cause = new Error("broker rejected the replacement order")
-  cause.code = "BROKER_ORDER_REJECTED"
-  const replacementError = new Error("shutdown recovery replacement failed", { cause })
-  replacementError.code = "SHUTDOWN_RECOVERY_REPLACEMENT_UNCONFIRMED"
-  replacementError.recoveryFailure = {
-    category: "ORDER_TRANSITION",
-    stage: "SHUTDOWN_RECOVERY_REPLACEMENT",
-    retryable: true,
-  }
-  const logEntries = []
-  const fixture = createShutdown({
-    tradingEnabled: true,
-    logger: {
-      error: (entry) => logEntries.push(entry),
-      system: (entry) => logEntries.push(entry),
-    },
-    engine: {
-      reconcileOwnedOrders: async () => ({ ok: true }),
-      cancelOwnedBuyOrdersForShutdown: async () => ({ ok: true }),
-      reconcileRecoverySellsForShutdown: async () => ({
-        ok: false,
-        errors: [replacementError],
-        failure: {
-          category: "ORDER_TRANSITION",
-          stage: "SHUTDOWN_RECOVERY_SELL_RECONCILIATION",
-          retryable: true,
-        },
-      }),
-      getOrders: () => [],
-    },
-  })
-  return {
-    cause,
-    fixture,
-    logEntries,
-    replacementError,
-  }
-}
-
-function assertShutdownReplacementErrorSummary({ summary, cause, replacementError }) {
-  assert.equal(summary.message, replacementError.message)
-  assert.equal(summary.stack, replacementError.stack)
-  assert.equal(summary.cause.message, cause.message)
-  assert.equal(summary.cause.code, cause.code)
-}
-
-test("preserves nested shutdown replacement error messages, stacks, and causes", async () => {
-  const scenario = createShutdownReplacementFailureScenario()
-  let shutdownError
-  await assert.rejects(
-    scenario.fixture.stop(),
-    (error) => {
-      shutdownError = error
-      return error instanceof AggregateError
-    },
-    "A failed recovery SELL replacement must keep shutdown incomplete while retaining actionable error diagnostics.",
-  )
-
-  const failure = shutdownError.shutdownDiagnostics.stageFailures.find(
-    (entry) => entry.stage === "SHUTDOWN_RECOVERY_SELL_RECONCILIATION",
-  )
-  assert.ok(failure, "Shutdown diagnostics must retain the failed recovery SELL reconciliation stage.")
-  assertShutdownReplacementErrorSummary({
-    summary: failure.errors[0],
-    cause: scenario.cause,
-    replacementError: scenario.replacementError,
-  })
-
-  const loggedFailure = scenario.logEntries.find(
-    (entry) => entry.stage === "SHUTDOWN_RECOVERY_SELL_RECONCILIATION",
-  )
-  assert.ok(loggedFailure, "The shutdown logger must emit the failed recovery SELL stage.")
-  assertShutdownReplacementErrorSummary({
-    summary: loggedFailure.errors[0],
-    cause: scenario.cause,
-    replacementError: scenario.replacementError,
-  })
-  assert.equal(loggedFailure.originalErrors[0], scenario.replacementError)
-  assert.equal(
-    scenario.fixture.state.status,
-    "SHUTDOWN_INCOMPLETE",
-    "Preserving diagnostics must not weaken the incomplete-shutdown safety boundary.",
-  )
+  assert.equal(fixture.state.status, "STOPPED", "Expected fixture.state.status to equal \"STOPPED\" in \"accepts an AccountSnapshot return value after its CLOSING audit has been durably published\".")
+  assert.ok(calls.includes("closing-audit:COMPLETE"), "Expected condition (calls.includes(\"closing-audit:COMPLETE\")) to be true in \"accepts an AccountSnapshot return value after its CLOSING audit has been durably published\".")
+  assert.ok(calls.includes("journal-flush"), "Expected condition (calls.includes(\"journal-flush\")) to be true in \"accepts an AccountSnapshot return value after its CLOSING audit has been durably published\".")
 })

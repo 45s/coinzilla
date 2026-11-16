@@ -401,7 +401,7 @@ test("publishes process started and stopped events for Binance trading startup",
   await eventBus.close()
 })
 
-test("publishes failed process shutdown outcome when runtime.stop rejects", async () => {
+test("does not publish STOPPED when runtime.stop rejects", async () => {
   const eventBus = new EventBus()
   const events = []
   const handlers = {}
@@ -429,11 +429,10 @@ test("publishes failed process shutdown outcome when runtime.stop rejects", asyn
 
     await handlers.SIGINT()
     await eventBus.flush()
-    assert.equal(process.exitCode, 1)
-    assert.equal(events.at(-1).name, HARVESTER_EVENT_NAMES.STOPPED)
-    assert.equal(events.at(-1).data.reason, "SIGINT")
-    assert.equal(events.at(-1).data.outcome, "failed")
-    assert.equal(events.at(-1).data.error.message, "runtime stop failed")
+    assert.equal(process.exitCode, 1, "A failed runtime shutdown must set a non-zero process exit code.")
+    assert.equal(events.length, 2, "A failed runtime shutdown must retain startup events without publishing a false STOPPED event.")
+    assert.equal(events.at(-1).name, HARVESTER_EVENT_NAMES.STARTED, "The last lifecycle event must remain STARTED when runtime shutdown is unproven.")
+    assert.equal(events.some((event) => event.name === HARVESTER_EVENT_NAMES.STOPPED), false, "Harvester must never publish STOPPED when runtime safety was not confirmed.")
   } finally {
     process.exitCode = previousExitCode
     subscription.subscription.unsubscribe()
@@ -482,7 +481,10 @@ test("publishes stopped before closing Journal, then closes EventBus", async () 
     },
     close: async () => {
       operations.push("eventBus.close")
-      return { ok: true, closed: true }
+      return {
+        ok: true,
+        closed: true,
+      }
     },
   }
   const journalService = {
@@ -546,7 +548,7 @@ test("continues EventBus cleanup when Journal close fails", async () => {
         tradingEnabled: false,
         strategyMode: "read-only",
         subscriptions: [],
-        stop: async () => operations.push("runtime.stop"),
+        stop: async () => { operations.push("runtime.stop") },
       }),
       registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
       logger: { info() {}, debug() {}, error() {} },
@@ -586,7 +588,7 @@ test("reports EventBus timeout and preserves Journal close result", async () => 
         tradingEnabled: false,
         strategyMode: "read-only",
         subscriptions: [],
-        stop: async () => operations.push("runtime.stop"),
+        stop: async () => { operations.push("runtime.stop") },
       }),
       registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
       logger: { info() {}, debug() {}, error() {} },
@@ -740,7 +742,10 @@ test("refuses TESTNET trading when Journal startup fails", async () => {
       acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: false, errors: [new Error("disk unavailable")] }),
-        flush: async () => ({ ok: true, durable: true }),
+        flush: async () => ({
+      ok: true,
+      durable: true,
+    }),
         close: async () => ({ ok: true, closed: true }),
       }),
       start: async () => { started = true; return { connected: false } },
@@ -1763,3 +1768,87 @@ test("does not construct, verify, or inject Operational State Store records even
   assert.equal(runtimeStarted, true, "A missing or malformed recovery directory must not block startup while recovery is disabled.")
 })
 
+async function startProcessWithUnresolvedStrategyShutdown({ calls } = {}) {
+  const signalHandlers = new Map()
+  const unsafeShutdown = new Error("BTCUSDT owned BUY remains UNKNOWN")
+  const eventBus = {
+    publish: () => ({ ok: true }),
+    flush: async () => ({ ok: true }),
+    close: async () => {
+      calls.push("event-bus-close")
+      return { ok: true }
+    },
+  }
+  const journalService = {
+    ready: Promise.resolve({ ok: true }),
+    flush: async () => ({ ok: true, durable: true }),
+    close: async () => {
+      calls.push("journal-close")
+      return { ok: true, closed: true }
+    },
+  }
+  const logger = {
+    info() {},
+    system() {},
+    error: () => calls.push("logger-error"),
+  }
+  await runMain({
+    createEventBus: () => eventBus,
+    createJournalService: () => journalService,
+    acquireProcessLock: async () => ({
+      ok: true,
+      release: async () => {
+        calls.push("process-lock-release")
+        return {
+          ok: true,
+          released: true,
+        }
+      },
+    }),
+    registerSignalHandler: (...args) => {
+      const [signal, handler] = args
+      signalHandlers.set(signal, handler)
+    },
+    closeLogger: async () => calls.push("logger-close"),
+    start: async () => ({
+      connected: true,
+      brokerName: "binance",
+      tradingEnabled: true,
+      strategyMode: "conservative",
+      subscriptions: ["BTCUSDT"],
+      stop: async () => {
+        calls.push("runtime-stop")
+        throw unsafeShutdown
+      },
+    }),
+    logger,
+  })
+  return signalHandlers
+}
+
+test("retains Journal, EventBus, process lock and logger when strategy shutdown safety is unresolved", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    const signalHandlers = await startProcessWithUnresolvedStrategyShutdown({ calls })
+    await signalHandlers.get("SIGINT")()
+    assert.equal(process.exitCode, 1, "An unproven strategy shutdown must fail the process exit status.")
+    assert.deepEqual(
+      calls.filter((call) => [
+        "event-bus-close",
+        "journal-close",
+        "process-lock-release",
+        "logger-close",
+      ].includes(call)),
+      [],
+      "An unresolved trading-safety proof must retain Journal, EventBus, the process lock and logging so recovery evidence remains available.",
+    )
+    assert.ok(
+      calls.includes("logger-error"),
+      "The failed shutdown attempt must report the exact safety blocker while leaving required runtime services connected.",
+    )
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
