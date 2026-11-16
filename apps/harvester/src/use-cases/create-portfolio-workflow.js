@@ -183,7 +183,10 @@ function createOutstandingRecoveryAmountDelta({ nextPosition, previousPosition, 
       right: currentLedger.netSellProceeds,
     }),
   })
-  return subtractDecimal({ left: nextOutstanding, right: previousOutstanding })
+  return subtractDecimal({
+    left: nextOutstanding,
+    right: previousOutstanding,
+  })
 }
 
 function createRealizedNetProfitDelta({ nextPosition, previousPosition, nextLedger, currentLedger }) {
@@ -195,15 +198,34 @@ function createRealizedNetProfitDelta({ nextPosition, previousPosition, nextLedg
     left: currentLedger.netSellProceeds,
     right: previousPosition?.spent.amount ?? "0",
   })
-  return subtractDecimal({ left: nextProfit, right: previousProfit })
+  return subtractDecimal({
+    left: nextProfit,
+    right: previousProfit,
+  })
 }
 
 function createExecutionAccountingDelta({ nextPosition, previousPosition, nextLedger, currentLedger }) {
   return {
-    portfolioActiveBase: subtractPositionAmount({ nextPosition, previousPosition, field: "baseQuantity" }),
-    portfolioFreeBase: subtractPositionAmount({ nextPosition, previousPosition, field: "freeBaseQuantity" }),
-    portfolioQuoteCashFlow: subtractPositionAmount({ nextPosition, previousPosition, field: "quoteNetCashFlow" }),
-    positionSpent: subtractPositionAmount({ nextPosition, previousPosition, field: "spent" }),
+    portfolioActiveBase: subtractPositionAmount({
+      nextPosition,
+      previousPosition,
+      field: "baseQuantity",
+    }),
+    portfolioFreeBase: subtractPositionAmount({
+      nextPosition,
+      previousPosition,
+      field: "freeBaseQuantity",
+    }),
+    portfolioQuoteCashFlow: subtractPositionAmount({
+      nextPosition,
+      previousPosition,
+      field: "quoteNetCashFlow",
+    }),
+    positionSpent: subtractPositionAmount({
+      nextPosition,
+      previousPosition,
+      field: "spent",
+    }),
     netSellProceeds: subtractDecimal({
       left: nextLedger.netSellProceeds,
       right: currentLedger.netSellProceeds,
