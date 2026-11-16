@@ -4,9 +4,18 @@ import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/ent
 import { createFillFingerprint } from "../../fills/fill-fingerprint.js"
 import * as legacyPosition from "./legacy-position.js"
 
-const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
-const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-const feeAsset = new Asset({ id: "asset:BNB", code: "BNB" })
+const baseAsset = new Asset({
+  id: "asset:BTC",
+  code: "BTC",
+})
+const quoteAsset = new Asset({
+  id: "asset:USDT",
+  code: "USDT",
+})
+const feeAsset = new Asset({
+  id: "asset:BNB",
+  code: "BNB",
+})
 const market = new Market({
   venue: "binance",
   symbol: "BTCUSDT",
@@ -20,30 +29,64 @@ function makeLegacySellFill() {
     brokerOrderId: "legacy-order-1",
     market,
     side: "SELL",
-    price: new Money({ amount: "100", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "3", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "300", asset: quoteAsset }),
+    price: new Money({
+      amount: "100",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "3",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "300",
+      asset: quoteAsset,
+    }),
     commissions: [
-      new Commission({ amount: new Money({ amount: "0.03", asset: baseAsset }) }),
-      new Commission({ amount: new Money({ amount: "0.3", asset: quoteAsset }) }),
       new Commission({
-        amount: new Money({ amount: "0.03", asset: feeAsset }),
-        quoteValue: new Money({ amount: "0.15", asset: quoteAsset }),
+        amount: new Money({
+          amount: "0.03",
+          asset: baseAsset,
+        }),
+      }),
+      new Commission({
+        amount: new Money({
+          amount: "0.3",
+          asset: quoteAsset,
+        }),
+      }),
+      new Commission({
+        amount: new Money({
+          amount: "0.03",
+          asset: feeAsset,
+        }),
+        quoteValue: new Money({
+          amount: "0.15",
+          asset: quoteAsset,
+        }),
       }),
     ],
     commissionStatus: "COMPLETE",
   })
 }
 
-function makeLegacySellAllocation(fill, {
+function makeLegacySellAllocation({
+  fill,
   allocationFingerprint = "legacy-allocation-fingerprint-1",
   legacy = {
     grossBaseQuantity: "1",
     baseDebit: "1.01",
     quoteProceeds: "100",
     commissions: [
-      { assetId: baseAsset.id, assetCode: baseAsset.code, amount: "0.01" },
-      { assetId: quoteAsset.id, assetCode: quoteAsset.code, amount: "0.1" },
+      {
+        assetId: baseAsset.id,
+        assetCode: baseAsset.code,
+        amount: "0.01",
+      },
+      {
+        assetId: quoteAsset.id,
+        assetCode: quoteAsset.code,
+        amount: "0.1",
+      },
       {
         assetId: feeAsset.id,
         assetCode: feeAsset.code,
@@ -67,8 +110,16 @@ function makeLegacySellAllocation(fill, {
       baseDebit: "2.02",
       quoteProceeds: "200",
       commissions: [
-        { assetId: baseAsset.id, assetCode: baseAsset.code, amount: "0.02" },
-        { assetId: quoteAsset.id, assetCode: quoteAsset.code, amount: "0.2" },
+        {
+          assetId: baseAsset.id,
+          assetCode: baseAsset.code,
+          amount: "0.02",
+        },
+        {
+          assetId: quoteAsset.id,
+          assetCode: quoteAsset.code,
+          amount: "0.2",
+        },
         {
           assetId: feeAsset.id,
           assetCode: feeAsset.code,
@@ -218,7 +269,7 @@ test("applies legacy base debit, net proceeds and fixed-average-cost realized P&
   })
   const accounting = legacyPosition.createLegacyPositionAccounting()
   const fill = makeLegacySellFill()
-  const allocation = makeLegacySellAllocation(fill)
+  const allocation = makeLegacySellAllocation({ fill })
   const result = legacyPosition.applyLegacySellAllocation({
     position,
     accounting,
@@ -244,7 +295,7 @@ test("treats an identical legacy allocation replay as an immutable no-op", () =>
   })
   const accounting = legacyPosition.createLegacyPositionAccounting()
   const fill = makeLegacySellFill()
-  const allocation = makeLegacySellAllocation(fill)
+  const allocation = makeLegacySellAllocation({ fill })
   const first = legacyPosition.applyLegacySellAllocation({
     position,
     accounting,
@@ -270,7 +321,7 @@ test("rejects changed allocation facts for an already accounted legacy Fill", ()
   })
   const accounting = legacyPosition.createLegacyPositionAccounting()
   const fill = makeLegacySellFill()
-  const allocation = makeLegacySellAllocation(fill)
+  const allocation = makeLegacySellAllocation({ fill })
   const first = legacyPosition.applyLegacySellAllocation({
     position,
     accounting,
@@ -299,7 +350,7 @@ test("rejects a legacy SELL allocation whose actual base debit exceeds remaining
   })
   const accounting = legacyPosition.createLegacyPositionAccounting()
   const fill = makeLegacySellFill()
-  const allocation = makeLegacySellAllocation(fill)
+  const allocation = makeLegacySellAllocation({ fill })
   assert.throws(
     () => legacyPosition.applyLegacySellAllocation({
       position,
@@ -319,16 +370,29 @@ test("records recovery-only SELL fills without changing exhausted legacy invento
   })
   const accounting = legacyPosition.createLegacyPositionAccounting()
   const fill = makeLegacySellFill()
-  const allocation = makeLegacySellAllocation(fill, {
+  const allocation = makeLegacySellAllocation({
+    fill,
     allocationFingerprint: "recovery-only-allocation",
     legacy: {
       grossBaseQuantity: "0",
       baseDebit: "0",
       quoteProceeds: "0",
       commissions: [
-        { assetId: baseAsset.id, assetCode: baseAsset.code, amount: "0" },
-        { assetId: quoteAsset.id, assetCode: quoteAsset.code, amount: "0" },
-        { assetId: feeAsset.id, assetCode: feeAsset.code, amount: "0" },
+        {
+          assetId: baseAsset.id,
+          assetCode: baseAsset.code,
+          amount: "0",
+        },
+        {
+          assetId: quoteAsset.id,
+          assetCode: quoteAsset.code,
+          amount: "0",
+        },
+        {
+          assetId: feeAsset.id,
+          assetCode: feeAsset.code,
+          amount: "0",
+        },
       ],
     },
   })
