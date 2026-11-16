@@ -39,7 +39,8 @@ describe('adaptOrder', () => {
   })
 
   it('leaves clientOrderId undefined when Binance omits it', () => {
-    const { clientOrderId, ...orderWithoutClientId } = mockedBinanceOrder
+    const orderWithoutClientId = { ...mockedBinanceOrder }
+    delete orderWithoutClientId.clientOrderId
     const result = adaptOrder(orderWithoutClientId)
     assert.equal(result.clientOrderId, undefined)
     assert.equal('clientOrderId' in result.value, false)

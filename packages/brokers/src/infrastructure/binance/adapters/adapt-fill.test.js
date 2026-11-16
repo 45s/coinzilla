@@ -63,7 +63,9 @@ describe("adaptTrade", () => {
   })
 
   it("uses null for omitted optional commission asset and trade time", () => {
-    const { commissionAsset, time, ...tradeWithoutOptionalFields } = baseTrade
+    const tradeWithoutOptionalFields = { ...baseTrade }
+    delete tradeWithoutOptionalFields.commissionAsset
+    delete tradeWithoutOptionalFields.time
     const result = adaptTrade(tradeWithoutOptionalFields)
 
     assert.equal(result.commissionAsset, null)

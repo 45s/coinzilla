@@ -165,6 +165,7 @@ test("getOrderHistory supports cursor and bounded time-window queries", async ()
     endTime: 2000,
   })
 
+  assert.equal(timeResult.ok, true)
   assert.deepEqual(cursorResult.data, orders)
   assert.equal(cursorResult.data[0].updateTime, 900)
   assert.deepEqual(rpc.calls[0].params, {

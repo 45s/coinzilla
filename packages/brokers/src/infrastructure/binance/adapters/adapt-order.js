@@ -18,13 +18,13 @@ export function adaptOrder(binanceOrder) {
     side,
     symbol,
   } = binanceOrder
-  const quantity = +origQty - +executedQty
+  const quantity = Number(origQty) - Number(executedQty)
   const order = new Order({
     type,
     side,
     symbol,
     quantity,
-    price: +price,
+    price: Number(price),
     id: String(orderId),
     ...(clientOrderId ? { clientOrderId } : {}),
   })

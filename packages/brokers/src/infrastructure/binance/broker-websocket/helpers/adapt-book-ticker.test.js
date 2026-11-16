@@ -31,7 +31,8 @@ test("maps a matching book ticker into an immutable exact-string snapshot", () =
 })
 
 test("accepts the raw book ticker payload without an event type", () => {
-  const { e, ...message } = validMessage
+  const message = { ...validMessage }
+  delete message.e
   assert.equal(adaptBookTickerMessage({
     message,
 symbol: "BTCUSDT",
