@@ -472,14 +472,6 @@ test("Bitunix Spot order history rejects missing or inconsistent pagination meta
       },
     },
     {
-      name: "numeric page number conflicts with documented string type",
-      response: {
-        total: 0,
-        pageNum: 1,
-        data: [],
-      },
-    },
-    {
       name: "wrong returned page",
       response: {
         total: 0,
@@ -518,6 +510,23 @@ test("Bitunix Spot order history rejects missing or inconsistent pagination meta
     [],
     "history pages with missing, invalid, or inconsistent metadata must fail closed",
   )
+})
+
+test("Bitunix Spot order history accepts a numeric page number", async () => {
+  const { broker } = createBroker({
+    responses: {
+      "/api/spot/v1/order/history/page": {
+        total: 0,
+        pageNum: 1,
+        data: [],
+      },
+    },
+  })
+
+  const result = await broker.getOrderHistory({ symbol: "BTCUSDT" })
+
+  assert.equal(result.ok, true, "the official Spot WebSocket example uses a numeric pageNum")
+  assert.deepEqual(result.data, [], "a numeric pageNum must preserve the one-page order array contract")
 })
 
 test("Bitunix Spot order history accepts an omitted data array only for an empty result set", async () => {
