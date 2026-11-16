@@ -39,17 +39,18 @@ function resolveStoreDirectory({ env } = {}) {
 async function createProcessStore({ directory, runtimeSessionId, createOperationalStateStore } = {}) {
   let store
   try {
-    store = await createOperationalStateStore({ directory, runtimeSessionId })
+    store = await createOperationalStateStore({ directory,
+runtimeSessionId })
   } catch (cause) {
     throw new ProcessOperationalStateStartupError(
-      "Unable to construct process-owned ADR-0001 operational-state store at " + directory,
+      `Unable to construct process-owned ADR-0001 operational-state store at ${  directory}`,
       "PROCESS_OPERATIONAL_STATE_STORE_CREATE_FAILED",
       cause,
     )
   }
   if (store === null || typeof store !== "object") {
     throw new ProcessOperationalStateStartupError(
-      "Operational-state store factory returned an invalid store at " + directory,
+      `Operational-state store factory returned an invalid store at ${  directory}`,
       "PROCESS_OPERATIONAL_STATE_STORE_INVALID",
     )
   }
@@ -68,7 +69,7 @@ async function verifyProcessStore({ store, directory } = {}) {
     verification = await store.verify()
   } catch (cause) {
     throw new ProcessOperationalStateStartupError(
-      "Unable to verify existing ADR-0001 operational record ledger at " + directory,
+      `Unable to verify existing ADR-0001 operational record ledger at ${  directory}`,
       "PROCESS_OPERATIONAL_STATE_VERIFICATION_FAILED",
       cause,
     )
@@ -80,7 +81,7 @@ async function verifyProcessStore({ store, directory } = {}) {
   }
   const cause = verification?.errors?.[0] ?? new Error("Verification did not confirm a valid, durably writable ledger")
   throw new ProcessOperationalStateStartupError(
-    "Restart recovery requires an existing verified ADR-0001 operational record ledger at " + directory,
+    `Restart recovery requires an existing verified ADR-0001 operational record ledger at ${  directory}`,
     "PROCESS_OPERATIONAL_STATE_VERIFICATION_FAILED",
     cause,
   )
