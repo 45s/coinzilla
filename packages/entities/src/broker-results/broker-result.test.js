@@ -31,7 +31,7 @@ data })
   it("represents a definitive failure with errors and no data", () => {
     const error = new Error("Order rejected")
     const result = new BrokerResult({ status: "FAILURE",
-errors: [error] })
+      errors: [error] })
 
     assert.equal(result.ok, false)
     assert.equal(result.hasData, false)
@@ -56,7 +56,7 @@ errors: [error] })
   it("represents an unresolved operation outcome without pretending it failed", () => {
     const error = new Error("Connection closed after request was sent")
     const result = new BrokerResult({ status: "UNKNOWN",
-errors: [error] })
+      errors: [error] })
 
     assert.equal(result.status, "UNKNOWN")
     assert.equal(result.ok, false)
@@ -96,7 +96,7 @@ errors }), {
   it("rejects errors on successful results", () => {
     assert.throws(
       () => new BrokerResult({ status: "SUCCESS",
-errors: [new Error("unexpected")] }),
+        errors: [new Error("unexpected")] }),
       { message: brokerResultErrMsgs.successErrors },
     )
   })
@@ -113,14 +113,14 @@ errors: [new Error("unexpected")] }),
   it("rejects data on definitive failures and unknown outcomes", () => {
     assert.throws(
       () => new BrokerResult({ status: "FAILURE",
-data: {},
-errors: [new Error()] }),
+        data: {},
+          errors: [new Error()] }),
       { message: brokerResultErrMsgs.failureData },
     )
     assert.throws(
       () => new BrokerResult({ status: "UNKNOWN",
-data: {},
-errors: [new Error()] }),
+        data: {},
+          errors: [new Error()] }),
       { message: brokerResultErrMsgs.unknownData },
     )
   })
@@ -128,12 +128,12 @@ errors: [new Error()] }),
   it("requires both partial data and errors for incomplete results", () => {
     assert.throws(
       () => new BrokerResult({ status: "INCOMPLETE",
-errors: [new Error()] }),
+        errors: [new Error()] }),
       { message: brokerResultErrMsgs.incompleteData },
     )
     assert.throws(
       () => new BrokerResult({ status: "INCOMPLETE",
-data: [] }),
+        data: [] }),
       { message: brokerResultErrMsgs.incompleteErrors },
     )
   })
