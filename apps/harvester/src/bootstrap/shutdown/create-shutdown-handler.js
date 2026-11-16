@@ -342,7 +342,9 @@ async function drainUserDataQueue(context) {
   while (true) {
     const queuedEvents = context.state.eventQueue
     await queuedEvents
-    if (queuedEvents === context.state.eventQueue) return
+    if (queuedEvents === context.state.eventQueue) {
+      return
+    }
   }
 }
 
@@ -398,7 +400,6 @@ async function publishClosingAudit(context) {
   if (result?.ok === false) {
     context.snapshotError = result?.errors?.[0] ?? new Error("Closing account snapshot durability was not proven")
   }
-  return result
 }
 
 async function disconnectBroker(context) {
@@ -516,7 +517,9 @@ function finalizeShutdown({ context, cleanupErrors }) {
 }
 
 async function flushShutdownJournal(context) {
-  if (context.strategyShutdownCoordinator.getSafetySnapshot().length === 0) return
+  if (context.strategyShutdownCoordinator.getSafetySnapshot().length === 0) {
+    return
+  }
   if (typeof context.eventPublisher?.flush !== "function") {
     throw new Error("Shutdown Journal durability cannot be proven because EventPublisher.flush is unavailable")
   }
@@ -555,13 +558,17 @@ async function reproveStrategySafety(context) {
     await proveStrategySafety(context)
   } catch (error) {
     await publishClosingAudit(context)
-    if (context.snapshotError) throw context.snapshotError
+    if (context.snapshotError) {
+      throw context.snapshotError
+    }
     throw error
   }
 }
 
 async function stopOperatorControlAfterSafety(context) {
-  if (typeof context.beforeSharedServicesStop !== "function") return
+  if (typeof context.beforeSharedServicesStop !== "function") {
+    return
+  }
   const result = await context.failureRecorder.runPhaseSafely({
     phase: "OPERATOR_CONTROL_STOP",
     operation: () => context.beforeSharedServicesStop(),

@@ -646,12 +646,24 @@ async function startHarvesterServices({ startup, portfolio, resources, accountSn
 
 function getConservativeShutdownBlockers(userDataState) {
   const blockers = []
-  if (userDataState.accountingFailed === true) blockers.push("ACCOUNTING_FAILED")
-  if (userDataState.requiresReconciliation === true) blockers.push("USER_DATA_RECONCILIATION_REQUIRED")
-  if (userDataState.streamUnsafe === true) blockers.push("USER_DATA_STREAM_UNSAFE")
-  if (userDataState.pendingRecovery === true) blockers.push("USER_DATA_RECOVERY_PENDING")
-  if (userDataState.safetyHaltRequired === true) blockers.push("SAFETY_HALT_REQUIRED")
-  if (userDataState.retryableRecoveryFailure) blockers.push("RETRYABLE_RECOVERY_FAILURE_PENDING")
+  if (userDataState.accountingFailed === true) {
+    blockers.push("ACCOUNTING_FAILED")
+  }
+  if (userDataState.requiresReconciliation === true) {
+    blockers.push("USER_DATA_RECONCILIATION_REQUIRED")
+  }
+  if (userDataState.streamUnsafe === true) {
+    blockers.push("USER_DATA_STREAM_UNSAFE")
+  }
+  if (userDataState.pendingRecovery === true) {
+    blockers.push("USER_DATA_RECOVERY_PENDING")
+  }
+  if (userDataState.safetyHaltRequired === true) {
+    blockers.push("SAFETY_HALT_REQUIRED")
+  }
+  if (userDataState.retryableRecoveryFailure) {
+    blockers.push("RETRYABLE_RECOVERY_FAILURE_PENDING")
+  }
   return blockers
 }
 
@@ -744,10 +756,12 @@ function resolveStrategyMarketDataPairs({
   hasUnownedOpenOrdersForSymbol,
   logger
 } = {}) {
-  const marketDataSubscriptionSymbols = new Set(strategyPolicy.getMarketDataSubscriptionSymbols({
-    pairs,
-    hasUnownedOpenOrdersForSymbol,
-  }))
+  const marketDataSubscriptionSymbols = new Set(
+    strategyPolicy.getMarketDataSubscriptionSymbols({
+      pairs,
+      hasUnownedOpenOrdersForSymbol,
+    }),
+  )
   const strategyBlockedMarketSymbols = Object.entries(pairs)
     .filter(([symbol, pairConfig]) => pairConfig.enabled === true && !marketDataSubscriptionSymbols.has(symbol))
     .map(([symbol]) => symbol)
