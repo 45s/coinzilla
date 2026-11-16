@@ -75,7 +75,7 @@ The Bitunix Spot market catalog does not expose a complete canonical trading-rul
 - The .NET reference fixture includes `maxAmount`, `maxLimitOrderAmount`, and `maxMarketOrderAmount`, but the official Spot catalog does not document their semantics. Their presence is recorded only as unvalidated source metadata; they are not mapped into maximum trading rules.
 - Only an explicitly open market (`isOpen: "1"` or numeric `1`) advertises the documented `LIMIT` and `MARKET` order types. Closed or unknown market status advertises no supported order types. No `LIMIT_MAKER` or post-only support is inferred.
 
-This is a pure read-side mapping helper, not a broker adapter and not part of runtime composition. It does not enable Bitunix trading. The official evidence is in the [Bitunix Spot API documentation](https://www.bitunix.com/api-docs/spots/en_us/); the mapping deliberately does not reuse the .NET reference's undocumented maximum fields. Price/quantity increments remain unknown, so this metadata cannot pass the existing enabled-market trading-readiness gate.
+This pure read-side mapping helper is implemented in [PR #1209](https://github.com/45s/coinzilla/pull/1209); it is not a broker adapter and not part of runtime composition. It does not enable Bitunix trading. The official evidence is in the [Bitunix Spot API documentation](https://www.bitunix.com/api-docs/spots/en_us/); the mapping deliberately does not reuse the .NET reference's undocumented maximum fields. Price/quantity increments remain unknown, so this metadata cannot pass the existing enabled-market trading-readiness gate.
 
 ## Adding another exchange later
 
