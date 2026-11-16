@@ -11247,7 +11247,7 @@ async function prepareLateSellShutdownScenario({ fillFraction } = {}) {
 }
 
 test("maintains recovery SELL coverage when a late owned SELL fill leaves sellable quantity", async () => {
-  const { harness, sellOrder } = await prepareLateSellShutdownScenario({
+  const { harness } = await prepareLateSellShutdownScenario({
     fillFraction: "0.5",
   })
   const recoveryReconciliation = await harness.engine.reconcileRecoverySellsForShutdown({
