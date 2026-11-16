@@ -2,7 +2,7 @@ const MAX_PAGE_SIZE = 1000
 const MAX_TIME_WINDOW = 24 * 60 * 60 * 1000
 
 function normalizeNonNegativeInteger({ value, name }) {
-  if (value === undefined || value === null) return undefined
+  if (value === undefined || value === null) {return undefined}
 
   const normalized = typeof value === "string" && /^\d+$/.test(value)
     ? Number(value)
@@ -62,10 +62,14 @@ export function createMyTradesParams({
   limit,
 } = {}) {
   const normalizedSymbol = validateSymbol({ symbol })
-  const normalizedOrderId = normalizeNonNegativeInteger({ value: orderId, name: "orderId" })
-  const normalizedFromId = normalizeNonNegativeInteger({ value: fromId, name: "fromId" })
-  const normalizedStartTime = normalizeNonNegativeInteger({ value: startTime, name: "startTime" })
-  const normalizedEndTime = normalizeNonNegativeInteger({ value: endTime, name: "endTime" })
+  const normalizedOrderId = normalizeNonNegativeInteger({ value: orderId,
+name: "orderId" })
+  const normalizedFromId = normalizeNonNegativeInteger({ value: fromId,
+name: "fromId" })
+  const normalizedStartTime = normalizeNonNegativeInteger({ value: startTime,
+name: "startTime" })
+  const normalizedEndTime = normalizeNonNegativeInteger({ value: endTime,
+name: "endTime" })
 
   validateTimeWindow({
     startTime: normalizedStartTime,
@@ -79,7 +83,8 @@ export function createMyTradesParams({
 
   return {
     symbol: normalizedSymbol,
-    limit: validateLimit({ limit, defaultLimit: 1000 }),
+    limit: validateLimit({ limit,
+defaultLimit: 1000 }),
     ...(normalizedOrderId !== undefined ? { orderId: normalizedOrderId } : {}),
     ...(normalizedFromId !== undefined ? { fromId: normalizedFromId } : {}),
     ...(normalizedStartTime !== undefined ? { startTime: normalizedStartTime } : {}),
@@ -106,9 +111,12 @@ export function createOrderHistoryParams({
   limit,
 } = {}) {
   const normalizedSymbol = validateSymbol({ symbol })
-  const normalizedOrderId = normalizeNonNegativeInteger({ value: orderId, name: "orderId" })
-  const normalizedStartTime = normalizeNonNegativeInteger({ value: startTime, name: "startTime" })
-  const normalizedEndTime = normalizeNonNegativeInteger({ value: endTime, name: "endTime" })
+  const normalizedOrderId = normalizeNonNegativeInteger({ value: orderId,
+name: "orderId" })
+  const normalizedStartTime = normalizeNonNegativeInteger({ value: startTime,
+name: "startTime" })
+  const normalizedEndTime = normalizeNonNegativeInteger({ value: endTime,
+name: "endTime" })
 
   validateTimeWindow({
     startTime: normalizedStartTime,
@@ -122,7 +130,8 @@ export function createOrderHistoryParams({
 
   return {
     symbol: normalizedSymbol,
-    limit: validateLimit({ limit, defaultLimit: 100 }),
+    limit: validateLimit({ limit,
+defaultLimit: 100 }),
     ...(normalizedOrderId !== undefined ? { orderId: normalizedOrderId } : {}),
     ...(normalizedStartTime !== undefined ? { startTime: normalizedStartTime } : {}),
     ...(normalizedEndTime !== undefined ? { endTime: normalizedEndTime } : {}),
