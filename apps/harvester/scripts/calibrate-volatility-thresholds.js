@@ -416,15 +416,24 @@ export function analyzeVolatilityHistory({ symbol, candles, thresholds: threshol
     })
     latestMetrics = calculated.metrics ?? null
 
-    const observation = createVolatilityObservation({ calculated, thresholds })
-    recordVolatilityObservation({ observation, replay })
+    const observation = createVolatilityObservation({
+      calculated,
+      thresholds,
+    })
+    recordVolatilityObservation({
+      observation,
+      replay,
+    })
     const transition = transitionVolatilityProtection({
       state: replay.state,
       snapshot: observation.snapshot,
       activeBuyOrderCount: 0,
       thresholds,
     })
-    recordVolatilityTransition({ transition, replay })
+    recordVolatilityTransition({
+      transition,
+      replay,
+    })
   }
 
   if (replay.ratios.length === 0 || !latestMetrics) {
