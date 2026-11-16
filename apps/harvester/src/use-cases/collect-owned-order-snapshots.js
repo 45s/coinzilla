@@ -426,7 +426,8 @@ async function readOwnedOrderFills({ broker, ownedOrder, journalFillsById }) {
     
     
     
-    ;({ fromId } = cursor)
+    const { fromId: nextFromId } = cursor
+    fromId = nextFromId
     if (page === 9999) {
       throw new Error(`REST fill history exceeded the maximum supported pagination depth for owned order ${ownedOrder.brokerOrderId}`)
     }
