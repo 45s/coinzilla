@@ -4,6 +4,26 @@ import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { mapRecoveryCycleCompletedData, mapStrategyDecisionData } from "../application/events/lifecycle-event-dtos.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 
+function canEvaluateShutdownRecoveryThroughManagedPause({ state, symbol, shutdownRecoveryOnly } = {}) {
+  if (shutdownRecoveryOnly !== true ||
+      state.recoveryManagedPausedMarkets?.has(symbol) !== true) {
+    return false
+  }
+  if (
+    state.durablePausedMarkets?.has(symbol) === true ||
+    state.operatorPausedMarkets?.has(symbol) === true ||
+    state.replacementIntents?.has(symbol) === true ||
+    state.trailingBuyRepriceIntents?.has(symbol) === true ||
+    state.safetyHaltRequired === true ||
+    state.accountingFailed === true ||
+    state.requiresReconciliation === true
+  ) {
+    return false
+  }
+  return ![...(state.recoveryManagedCancellationClientOrderIds ?? [])].some((clientOrderId) =>
+    state.registry.getOrder({ clientOrderId })?.market.symbol === symbol)
+}
+
 function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } = {}) {
   const { state, hasBlockingOpenOrdersForSymbol, isStopping, canTrade, isMarketPriceFresh } = dependencies
   if (state.shutdownBuyGate === true && !shutdownRecoveryOnly) {
@@ -14,17 +34,11 @@ function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } 
       },
     })
   }
-  const recoveryManagedPause = shutdownRecoveryOnly &&
-    state.recoveryManagedPausedMarkets?.has(symbol) === true &&
-    state.durablePausedMarkets?.has(symbol) !== true &&
-    state.operatorPausedMarkets?.has(symbol) !== true &&
-    state.replacementIntents?.has(symbol) !== true &&
-    state.trailingBuyRepriceIntents?.has(symbol) !== true &&
-    state.safetyHaltRequired !== true &&
-    state.accountingFailed !== true &&
-    state.requiresReconciliation !== true &&
-    ![...(state.recoveryManagedCancellationClientOrderIds ?? [])].some((clientOrderId) =>
-      state.registry.getOrder({ clientOrderId })?.market.symbol === symbol)
+  const recoveryManagedPause = canEvaluateShutdownRecoveryThroughManagedPause({
+    state,
+    symbol,
+    shutdownRecoveryOnly,
+  })
   if (state.paused.has(symbol) && !recoveryManagedPause) {
     return toResult({ data: { skipped: true,
       reason: "PAIR_PAUSED" } })
