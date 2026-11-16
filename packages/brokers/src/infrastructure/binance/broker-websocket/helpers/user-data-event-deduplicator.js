@@ -1,12 +1,13 @@
 const DEFAULT_MAX_ENTRIES = 2048
 
 function unwrapUserDataEvent(message) {
-  if (!message || typeof message !== "object" || Array.isArray(message)) return null
+  if (!message || typeof message !== "object" || Array.isArray(message)) {return null}
   const event = message.event && typeof message.event === "object"
     ? message.event
     : message
-  if (!event || typeof event !== "object" || Array.isArray(event)) return null
-  return { subscriptionId: message.subscriptionId ?? null, event }
+  if (!event || typeof event !== "object" || Array.isArray(event)) {return null}
+  return { subscriptionId: message.subscriptionId ?? null,
+event }
 }
 
 function executionReportIdentity(event) {
@@ -28,7 +29,7 @@ function executionReportIdentity(event) {
  */
 export function getUserDataEventIdentity(message) {
   const unwrapped = unwrapUserDataEvent(message)
-  if (!unwrapped) return null
+  if (!unwrapped) {return null}
 
   const executionIdentity = executionReportIdentity(unwrapped.event)
   if (executionIdentity) {
@@ -59,8 +60,8 @@ export function createUserDataEventDeduplicator({ maxEntries = DEFAULT_MAX_ENTRI
   return {
     isDuplicate(message) {
       const identity = getUserDataEventIdentity(message)
-      if (identity === null) return false
-      if (identities.has(identity)) return true
+      if (identity === null) {return false}
+      if (identities.has(identity)) {return true}
 
       identities.add(identity)
       if (identities.size > maxEntries) {
