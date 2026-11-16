@@ -20,9 +20,6 @@ function validateInputs({
   portfolio,
   legacyPosition,
   legacyAccounting,
-  reconciliation,
-  terminalOrder,
-  orderRegistry,
   canonicalFills,
   canonicalFillAllocations,
 } = {}) {
@@ -210,9 +207,6 @@ export function applyReconciledMixedSellOrder({
     portfolio,
     legacyPosition,
     legacyAccounting,
-    reconciliation,
-    terminalOrder,
-    orderRegistry,
     canonicalFills,
     canonicalFillAllocations,
   })
