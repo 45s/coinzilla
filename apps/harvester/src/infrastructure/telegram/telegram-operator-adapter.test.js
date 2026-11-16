@@ -1356,98 +1356,118 @@ retryDelayMs: 1,
 })
 
 
-test("shows only enabled configured markets as inline pause or resume controls", async () => {
-  const update = makeCallbackUpdate({ updateId: 1001,
-data: "cc:nav:markets",
-messageId: 1001 })
-  const edits = []
-  const diagnosticEntries = []
+function createMarketControlsOperator() {
+  return {
+    pauseMarket: async () => assert.fail("Rendering market controls must not mutate trading state."),
+    getMarkets: async () => ({
+      ok: true,
+      data: {
+        markets: [
+          {
+            symbol: "LINKUSDT",
+            enabled: true,
+            readiness: "READY",
+            latestPrice: "10",
+            priceFresh: true,
+            operatorPaused: false,
+            blockers: [],
+          },
+          {
+            symbol: "BTCUSDT",
+            enabled: true,
+            readiness: "READY",
+            latestPrice: "20",
+            priceFresh: true,
+            operatorPaused: true,
+            blockers: [],
+          },
+          {
+            symbol: "ETHUSDT",
+            enabled: false,
+            readiness: "DISABLED",
+            latestPrice: null,
+            priceFresh: false,
+            operatorPaused: false,
+            blockers: [],
+          },
+        ],
+      },
+    }),
+  }
+}
+
+function createMarketControlsFetch({ update, edits }) {
   let pollCount = 0
   let finishSecondPoll
-  const secondPoll = new Promise(resolve => { finishSecondPoll = resolve })
+  const secondPoll = new Promise((resolve) => {
+    finishSecondPoll = resolve
+  })
   const fetchImpl = async (...telegramFetchArguments) => {
     const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
-    if (telegramApiMethod === "getMe") { return makeResponse({ ok: true,
-result: { username: "coinzilla_bot" } }) }
+    if (telegramApiMethod === "getMe") {
+      return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })
+    }
     if (telegramApiMethod === "getUpdates") {
       pollCount += 1
-      if (pollCount === 1) { return makeResponse({ ok: true,
-result: [update] }) }
+      if (pollCount === 1) {
+        return makeResponse({ ok: true, result: [update] })
+      }
       finishSecondPoll()
-      return new Promise((...args) => {
-        const [, reject] = args
-        telegramRequestOptions.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
+      return new Promise((...promiseArguments) => {
+        const [, reject] = promiseArguments
+        telegramRequestOptions.signal.addEventListener("abort", () => {
+          reject(new Error("poll aborted"))
+        }, { once: true })
       })
     }
-    if (telegramApiMethod === "answerCallbackQuery") { return makeResponse({ ok: true,
-result: true }) }
-    if (telegramApiMethod === "editMessageText") { edits.push(JSON.parse(telegramRequestOptions.body)); return makeResponse({ ok: true,
-result: true }) }
-    if (telegramApiMethod === "setMyCommands") { return makeResponse({ ok: true,
-result: true }) }
+    if (telegramApiMethod === "answerCallbackQuery" || telegramApiMethod === "setMyCommands") {
+      return makeResponse({ ok: true, result: true })
+    }
+    if (telegramApiMethod === "editMessageText") {
+      edits.push(JSON.parse(telegramRequestOptions.body))
+      return makeResponse({ ok: true, result: true })
+    }
     throw new Error(`Unexpected Telegram API method: ${telegramApiMethod}`)
   }
+  return { fetchImpl, secondPoll }
+}
+
+test("shows only enabled configured markets as inline pause or resume controls", async () => {
+  const update = makeCallbackUpdate({
+    updateId: 1001,
+    data: "cc:nav:markets",
+    messageId: 1001,
+  })
+  const edits = []
+  const diagnosticEntries = []
+  const { fetchImpl, secondPoll } = createMarketControlsFetch({ update, edits })
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
-allowedUserIds: ["12345"],
-    operator: {
-      pauseMarket: async () => assert.fail("Rendering market controls must not mutate trading state."),
-      getMarkets: async () => ({
-        ok: true,
-        data: {
-          markets: [
-            {
-              symbol: "LINKUSDT",
-              enabled: true,
-              readiness: "READY",
-              latestPrice: "10",
-              priceFresh: true,
-              operatorPaused: false,
-              blockers: [],
-            },
-            {
-              symbol: "BTCUSDT",
-              enabled: true,
-              readiness: "READY",
-              latestPrice: "20",
-              priceFresh: true,
-              operatorPaused: true,
-              blockers: [],
-            },
-            {
-              symbol: "ETHUSDT",
-              enabled: false,
-              readiness: "DISABLED",
-              latestPrice: null,
-              priceFresh: false,
-              operatorPaused: false,
-              blockers: [],
-            },
-          ],
-        },
-      }),
-    },
+    allowedUserIds: ["12345"],
+    operator: createMarketControlsOperator(),
     logger: {
-      debug: entry => diagnosticEntries.push(entry),
-      info: entry => diagnosticEntries.push(entry),
-      warn: entry => diagnosticEntries.push(entry),
-      error: entry => diagnosticEntries.push(entry),
+      debug: (entry) => diagnosticEntries.push(entry),
+      info: (entry) => diagnosticEntries.push(entry),
+      warn: (entry) => diagnosticEntries.push(entry),
+      error: (entry) => diagnosticEntries.push(entry),
     },
     fetchImpl,
-retryDelayMs: 1,
+    retryDelayMs: 1,
   })
   await adapter.start()
   await secondPoll
   await adapter.stop()
-  const interactionFailures = diagnosticEntries.filter(entry => entry.message === "Telegram interaction FAILED")
+
+  const interactionFailures = diagnosticEntries.filter((entry) =>
+    entry.message === "Telegram interaction FAILED"
+  )
   assert.deepEqual(interactionFailures, [], `Market navigation must not fail internally: ${JSON.stringify(interactionFailures)}`)
   const buttons = edits[0].reply_markup.inline_keyboard.flat()
-  assert.ok(buttons.some(button => button.callback_data === "cc:ask:PAUSE:LINKUSDT"), "An enabled unpaused market must offer only a pause request.")
-  assert.ok(buttons.some(button => button.callback_data === "cc:ask:RESUME:BTCUSDT"), "An enabled operator-paused market must offer only a resume request.")
-  assert.equal(buttons.some(button => button.callback_data?.includes("ETHUSDT")), false, "Disabled markets must not expose operator controls.")
+  assert.ok(buttons.some((button) => button.callback_data === "cc:ask:PAUSE:LINKUSDT"))
+  assert.ok(buttons.some((button) => button.callback_data === "cc:ask:RESUME:BTCUSDT"))
+  assert.equal(buttons.some((button) => button.callback_data?.includes("ETHUSDT")), false)
 })
-
 
 async function runTelegramUpdatesForDiagnostics({ updates, operator, logger, sendMessageError } = {}) {
   const sentMessages = []
