@@ -93,6 +93,37 @@ test("Bitunix Spot broker requires a symbol for open orders and history", async 
   assert.equal(calls.length, 0)
 })
 
+test("Bitunix Spot symbol-scoped order reads reject rows for a different symbol", async () => {
+  const foreignOrder = {
+    orderId: "foreign-order",
+    symbol: "ETHUSDT",
+    side: "2",
+    type: "1",
+    status: "1",
+    volume: "0.5",
+    dealVolume: "0",
+    price: "10",
+  }
+  const { broker } = createBroker({
+    responses: {
+      "/api/spot/v1/order/pending/list": [foreignOrder],
+      "/api/spot/v1/order/history/page": {
+        total: 1,
+        pageNum: "1",
+        data: [foreignOrder],
+      },
+    },
+  })
+
+  const pending = await broker.getOpenOrders({ symbol: "BTCUSDT" })
+  const history = await broker.getOrderHistory({ symbol: "BTCUSDT" })
+
+  assert.equal(pending.ok, false, "pending-order rows must match the requested symbol")
+  assert.equal(history.ok, false, "order-history rows must match the requested symbol")
+  assert.match(pending.errors[0].message, /symbol.*does not match/i)
+  assert.match(history.errors[0].message, /symbol.*does not match/i)
+})
+
 test("Bitunix Spot broker fetches pending orders for one symbol", async () => {
   const { broker, calls } = createBroker({
     responses: {
@@ -270,6 +301,31 @@ test("Bitunix Spot broker fetches canonical fills for a specific order", async (
     "/api/spot/v1/common/coin_pair/list",
     "/api/spot/v1/order/deal/list",
   ])
+})
+
+test("Bitunix Spot fill lookup rejects undocumented array matching-order responses", async () => {
+  const { broker } = createFillLookupBroker({
+    dealVolume: "0.5",
+    deals: [
+      {
+        id: "trade-1",
+        volume: "0.5",
+        price: "10",
+        fee: "0.001",
+        feeCoin: "BTC",
+        role: "1",
+        ctime: "2026-11-15T12:00:01Z",
+      },
+    ],
+  })
+
+  const result = await broker.getFills({
+    symbol: "BTCUSDT",
+    orderId: "123",
+  })
+
+  assert.equal(result.ok, false, "the documented matching-order response is one object, not an array")
+  assert.match(result.errors[0].message, /matching-order response must be an object/i)
 })
 
 test("Bitunix Spot broker never submits or cancels orders without safe identity and stream guarantees", async () => {

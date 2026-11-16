@@ -343,7 +343,7 @@ async function handleConfirmationCallback({
   answerCallback,
   editMessage,
   executeControl,
-  navigationKeyboard,
+  buildNavigationKeyboard,
 }) {
   const pending = pendingConfirmations.get(confirm[3])
   const valid = pending &&
@@ -374,7 +374,7 @@ async function handleConfirmationCallback({
       chatId: chat.id,
       messageId,
       text: "Confirmation expired or already used. No action was taken.",
-      replyMarkup: navigationKeyboard(),
+      replyMarkup: buildNavigationKeyboard(),
       signal,
       interaction,
     })
@@ -419,7 +419,7 @@ async function handleCancelCallback({
   pendingConfirmations,
   answerCallback,
   editMessage,
-  navigationKeyboard,
+  buildNavigationKeyboard,
 }) {
   const pending = pendingConfirmations.get(cancel[1])
   const canCancel = pending &&
@@ -450,7 +450,7 @@ async function handleCancelCallback({
     chatId: chat.id,
     messageId,
     text: "Control action cancelled. No action was taken.",
-    replyMarkup: navigationKeyboard(),
+    replyMarkup: buildNavigationKeyboard(),
     signal,
     interaction,
   })
@@ -468,7 +468,7 @@ async function respondToAuthorizedMessage({
   respondToReadCommand,
   executeControl,
   sendMessage,
-  navigationKeyboard,
+  buildNavigationKeyboard,
 }) {
   if (await respondToMenuCommand({ parsed, message, userId, signal, interaction })) {
     return
@@ -485,7 +485,7 @@ async function respondToAuthorizedMessage({
     await sendMessage({
       chatId: message.chat.id,
       text: "Unknown command. Use /help to see available commands.",
-      replyMarkup: navigationKeyboard(),
+      replyMarkup: buildNavigationKeyboard(),
       signal,
       interaction,
     })
@@ -631,7 +631,7 @@ export function parseTelegramOperatorCommand(text, { botUsername } = {}) {
 }
 
 
-function navigationKeyboard({ page = "home", markets = [], marketAction } = {}) {
+function buildNavigationKeyboard({ page = "home", markets = [], marketAction } = {}) {
   const rows = [
     [{ text: "Status", callback_data: "cc:nav:status" }, { text: "Markets", callback_data: "cc:nav:markets" }],
     [{ text: "Positions", callback_data: "cc:nav:positions" }, { text: "Orders", callback_data: "cc:nav:orders" }],
@@ -865,8 +865,8 @@ function createTelegramMessageApi({ callApi, logStage }) {
   }
 }
 
-async function readTelegramOperatorPage({ page, userId, interaction, operator, diagnostics, logStage, navigationKeyboard }) {
-    if (page === "home") { return { text: helpText(), keyboard: navigationKeyboard() } }
+async function readTelegramOperatorPage({ page, userId, interaction, operator, diagnostics, logStage, buildNavigationKeyboard }) {
+    if (page === "home") { return { text: helpText(), keyboard: buildNavigationKeyboard() } }
     const marketAction = resolveMarketAction(page)
     const queryPage = marketAction ? "markets" : page
     const method = PAGE_METHODS[queryPage]
@@ -878,7 +878,7 @@ async function readTelegramOperatorPage({ page, userId, interaction, operator, d
         classification: "OPERATOR_QUERY_UNAVAILABLE",
         message: `Read-only operator query is not available: ${queryPage}`,
       })
-      return { text: "This read-only query is not available in the current operator configuration.", keyboard: navigationKeyboard({ page: queryPage }) }
+      return { text: "This read-only query is not available in the current operator configuration.", keyboard: buildNavigationKeyboard({ page: queryPage }) }
     }
     interaction.operation = method
     const startedAt = Date.now()
@@ -905,7 +905,7 @@ async function readTelegramOperatorPage({ page, userId, interaction, operator, d
       })
       return {
         text: `Unable to read the Harvester ${PAGE_TITLES[queryPage]}. No trading state was changed; check Harvester diagnostics.`,
-        keyboard: navigationKeyboard({ page: queryPage }),
+        keyboard: buildNavigationKeyboard({ page: queryPage }),
       }
     }
     if (result?.ok !== true) {
@@ -928,7 +928,7 @@ async function readTelegramOperatorPage({ page, userId, interaction, operator, d
       }
       return {
         text: `Unable to read the Harvester ${PAGE_TITLES[queryPage]}. No trading state was changed; check Harvester diagnostics.`,
-        keyboard: navigationKeyboard({ page: queryPage }),
+        keyboard: buildNavigationKeyboard({ page: queryPage }),
       }
     }
     logStage({
@@ -946,7 +946,7 @@ async function readTelegramOperatorPage({ page, userId, interaction, operator, d
       balances: () => formatTelegramOperatorBalances({ snapshot: result.data }),
     })[queryPage]()
     const markets = queryPage === "markets" ? result.data.markets : []
-    const keyboard = navigationKeyboard({ page: queryPage, markets, marketAction })
+    const keyboard = buildNavigationKeyboard({ page: queryPage, markets, marketAction })
     if (!marketAction) { return { text, keyboard } }
     const eligibleMarkets = selectMarketsForAction({ markets, action: marketAction })
     logStage({
@@ -961,7 +961,7 @@ async function readTelegramOperatorPage({ page, userId, interaction, operator, d
     }
 }
 
-async function executeTelegramOperatorControl({ action, symbol, userId, requestId, chatId, messageId, signal, interaction, operator, diagnostics, logStage, sendMessage, editMessage, navigationKeyboard }) {
+async function executeTelegramOperatorControl({ action, symbol, userId, requestId, chatId, messageId, signal, interaction, operator, diagnostics, logStage, sendMessage, editMessage, buildNavigationKeyboard }) {
     const method = action === "RESUME" ? "resumeMarket" : "pauseMarket"
     interaction.action = action
     interaction.symbol = symbol
@@ -976,8 +976,8 @@ async function executeTelegramOperatorControl({ action, symbol, userId, requestI
         classification: "OPERATOR_CONTROL_UNAVAILABLE",
         message: `Operator control use case is unavailable: ${method}`,
       })
-      if (messageId !== undefined) { await editMessage({ chatId, messageId, text, replyMarkup: navigationKeyboard(), signal, interaction }) }
-      else { await sendMessage({ chatId, text, replyMarkup: navigationKeyboard(), signal, interaction }) }
+      if (messageId !== undefined) { await editMessage({ chatId, messageId, text, replyMarkup: buildNavigationKeyboard(), signal, interaction }) }
+      else { await sendMessage({ chatId, text, replyMarkup: buildNavigationKeyboard(), signal, interaction }) }
       return
     }
     const startedAt = Date.now()
@@ -1031,7 +1031,7 @@ async function executeTelegramOperatorControl({ action, symbol, userId, requestI
         chatId,
         messageId,
         text: reply,
-        replyMarkup: navigationKeyboard(),
+        replyMarkup: buildNavigationKeyboard(),
         signal,
         interaction,
       })
@@ -1039,7 +1039,7 @@ async function executeTelegramOperatorControl({ action, symbol, userId, requestI
       await sendMessage({
         chatId,
         text: reply,
-        replyMarkup: navigationKeyboard(),
+        replyMarkup: buildNavigationKeyboard(),
         signal,
         interaction,
       })
@@ -1200,7 +1200,7 @@ export function createTelegramOperatorAdapter({
     operator,
     diagnostics,
     logStage,
-    navigationKeyboard,
+    buildNavigationKeyboard,
   })
 
   const editPage = async ({ page, chatId, messageId, userId, signal, interaction }) => {
@@ -1215,7 +1215,7 @@ export function createTelegramOperatorAdapter({
     logStage,
     sendMessage,
     editMessage,
-    navigationKeyboard,
+    buildNavigationKeyboard,
   })
 
   const respondToCallback = async ({ update, signal, interaction }) => {
@@ -1293,7 +1293,7 @@ export function createTelegramOperatorAdapter({
       editMessage,
       editPage,
       executeControl,
-      navigationKeyboard,
+      buildNavigationKeyboard,
       pendingConfirmations,
       confirmationTtlMs: CONFIRMATION_TTL_MS,
     }
@@ -1353,7 +1353,7 @@ export function createTelegramOperatorAdapter({
     }
     if (parsed.type === "HELP") {
       logStage({ interaction, message: "Telegram command STARTED", stage: "COMMAND_STARTED" })
-      await sendMessage({ chatId: message.chat.id, text: helpText(), replyMarkup: navigationKeyboard(), signal, interaction })
+      await sendMessage({ chatId: message.chat.id, text: helpText(), replyMarkup: buildNavigationKeyboard(), signal, interaction })
       return true
     }
     if (parsed.type === "PAUSE_MENU" || parsed.type === "RESUME_MENU") {
@@ -1454,7 +1454,7 @@ export function createTelegramOperatorAdapter({
       respondToReadCommand,
       executeControl,
       sendMessage,
-      navigationKeyboard,
+      buildNavigationKeyboard,
     })
   }
 
