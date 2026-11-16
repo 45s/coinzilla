@@ -151,7 +151,11 @@ export class Fill {
     commissions = [],
     commissionStatus = "UNKNOWN",
   } = {}) {
-    validateFillIdentity({ tradeId, brokerOrderId, clientOrderId })
+    validateFillIdentity({
+      tradeId,
+      brokerOrderId,
+      clientOrderId,
+    })
     validateFillValues({
       market,
       side,
