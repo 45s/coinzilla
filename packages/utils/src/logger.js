@@ -79,7 +79,8 @@ function createConsoleTransport() {
     write({ timestamp, level, method, data, context }) {
       let logContent = data
       if (context && Object.keys(context).length > 0) {
-        logContent = { context, data }
+        logContent = { context,
+data }
       }
       console.log(
         colors.fg.gray,
@@ -138,7 +139,8 @@ export class Logger {
     }
 
     this.#onTransportError = onTransportError ?? (({ transport, error }) => {
-      console.error('Logger transport failed', { transport, error })
+      console.error('Logger transport failed', { transport,
+error })
     })
 
     for (const transport of transports) {
@@ -233,7 +235,8 @@ export class Logger {
       return false
     }
     this.#transports.delete(name)
-    await this.#closeTransport({ name, transport: configuration.transport })
+    await this.#closeTransport({ name,
+transport: configuration.transport })
     return true
   }
 
@@ -246,7 +249,8 @@ export class Logger {
     const transports = [...this.#transports]
     this.#transports.clear()
     await Promise.all(transports.map(([name, configuration]) =>
-      this.#closeTransport({ name, transport: configuration.transport }),
+      this.#closeTransport({ name,
+transport: configuration.transport }),
     ))
   }
 
@@ -256,7 +260,8 @@ export class Logger {
     }
     return Promise.resolve()
       .then(() => transport.close())
-      .catch((error) => this.#reportTransportError({ transport: name, error }))
+      .catch((error) => this.#reportTransportError({ transport: name,
+error }))
   }
 
   #reportTransportError(context) {
@@ -306,11 +311,13 @@ export class Logger {
         const result = transport.write(entry)
         if (result && typeof result.then === 'function') {
           Promise.resolve(result).catch((error) =>
-            this.#reportTransportError({ transport: name, error }),
+            this.#reportTransportError({ transport: name,
+error }),
           )
         }
       } catch (error) {
-        this.#reportTransportError({ transport: name, error })
+        this.#reportTransportError({ transport: name,
+error })
       }
     }
   }

@@ -8,7 +8,8 @@ describe('events', () => {
   })
 
   it('emits and receives events through the shared emitter', () => {
-    const payload = { symbol: 'BTCUSDT', price: 65000 }
+    const payload = { symbol: 'BTCUSDT',
+price: 65000 }
     const listener = (received) => {
       assert.deepEqual(received, payload)
     }

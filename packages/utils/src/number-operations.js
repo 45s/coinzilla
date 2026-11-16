@@ -22,7 +22,7 @@ export function roundNumber(number, decimals = 2) {
     return number
   }
 
-  return Number(Math.round(number + `e+${decimals}`) + `e-${decimals}`)
+  return Number(`${Math.round(`${number  }e+${decimals}`)  }e-${decimals}`)
 }
 
 /**

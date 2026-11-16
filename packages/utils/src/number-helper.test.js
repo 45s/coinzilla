@@ -24,7 +24,8 @@ describe(`_utils/${NH.name}`, () => {
       for (const decimals of [-1, 1.5, 101, NaN, Infinity, '2']) {
         assert.throws(
           () => NH.round(1.23456, decimals),
-          { name: 'RangeError', message: 'decimals must be an integer between 0 and 100' },
+          { name: 'RangeError',
+message: 'decimals must be an integer between 0 and 100' },
         )
       }
     })

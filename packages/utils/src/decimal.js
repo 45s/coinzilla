@@ -19,7 +19,7 @@ const INCREMENT_DIRECTIONS = new Set(["down", "up", "nearest"])
  */
 function validateScale(scale) {
   if (!Number.isInteger(scale) || scale < 0 || scale > MAX_DECIMAL_SCALE) {
-    throw new RangeError("scale must be an integer from 0 to " + MAX_DECIMAL_SCALE)
+    throw new RangeError(`scale must be an integer from 0 to ${  MAX_DECIMAL_SCALE}`)
   }
 }
 
@@ -48,25 +48,25 @@ function alignDecimals(left, right) {
  */
 export function parseDecimal({ value, field = "value" } = {}) {
   if (typeof value !== "string" && typeof value !== "bigint") {
-    throw new TypeError(field + " must be a decimal string or bigint")
+    throw new TypeError(`${field  } must be a decimal string or bigint`)
   }
 
   const decimal = String(value)
   const match = /^([+-]?)(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i.exec(decimal)
 
   if (!match) {
-    throw new TypeError(field + " has an invalid decimal format")
+    throw new TypeError(`${field  } has an invalid decimal format`)
   }
 
   const [, sign, whole, fraction = "", exponentText = "0"] = match
 
   if (whole.length + fraction.length > MAX_DECIMAL_DIGITS || exponentText.length > 4) {
-    throw new RangeError(field + " exceeds supported precision")
+    throw new RangeError(`${field  } exceeds supported precision`)
   }
 
   const exponent = Number(exponentText)
   if (!Number.isSafeInteger(exponent) || Math.abs(exponent) > MAX_DECIMAL_EXPONENT) {
-    throw new RangeError(field + " exponent exceeds supported range")
+    throw new RangeError(`${field  } exponent exceeds supported range`)
   }
 
   const scale = fraction.length - exponent
@@ -74,17 +74,19 @@ export function parseDecimal({ value, field = "value" } = {}) {
   const resultingDigits = digits.length + Math.max(0, -scale)
 
   if (scale > MAX_DECIMAL_SCALE || resultingDigits > MAX_DECIMAL_DIGITS) {
-    throw new RangeError(field + " exceeds supported precision")
+    throw new RangeError(`${field  } exceeds supported precision`)
   }
 
   let coefficient = BigInt((sign === "-" ? "-" : "") + digits)
 
   if (scale < 0) {
     coefficient *= 10n ** BigInt(-scale)
-    return { coefficient, scale: 0 }
+    return { coefficient,
+scale: 0 }
   }
 
-  return { coefficient, scale }
+  return { coefficient,
+scale }
 }
 
 /**
@@ -111,7 +113,7 @@ export function formatDecimalString({ coefficient, scale } = {}) {
   const digits = rawDigits.padStart(scale + 1, "0")
   const decimal = scale === 0
     ? digits
-    : digits.slice(0, -scale) + "." + digits.slice(-scale)
+    : `${digits.slice(0, -scale)  }.${  digits.slice(-scale)}`
   const normalized = decimal.includes(".")
     ? decimal.replace(/0+$/, "").replace(/\.$/, "")
     : decimal
@@ -127,17 +129,20 @@ export function formatDecimalString({ coefficient, scale } = {}) {
  */
 export function assertDecimalString({ value, field = "value" } = {}) {
   if (typeof value !== "string") {
-    throw new TypeError(field + " must be a decimal string")
+    throw new TypeError(`${field  } must be a decimal string`)
   }
-  parseDecimal({ value, field })
+  parseDecimal({ value,
+field })
   return value
 }
 
 /** @param {{ left: string|bigint, right: string|bigint }} options @returns {string} Exact sum. */
 export function addDecimal({ left, right } = {}) {
   const aligned = alignDecimals(
-    parseDecimal({ value: left, field: "left" }),
-    parseDecimal({ value: right, field: "right" }),
+    parseDecimal({ value: left,
+field: "left" }),
+    parseDecimal({ value: right,
+field: "right" }),
   )
   return formatDecimalString({
     coefficient: aligned.left + aligned.right,
@@ -148,8 +153,10 @@ export function addDecimal({ left, right } = {}) {
 /** @param {{ left: string|bigint, right: string|bigint }} options @returns {string} Exact difference. */
 export function subtractDecimal({ left, right } = {}) {
   const aligned = alignDecimals(
-    parseDecimal({ value: left, field: "left" }),
-    parseDecimal({ value: right, field: "right" }),
+    parseDecimal({ value: left,
+field: "left" }),
+    parseDecimal({ value: right,
+field: "right" }),
   )
   return formatDecimalString({
     coefficient: aligned.left - aligned.right,
@@ -164,8 +171,10 @@ export function subtractDecimal({ left, right } = {}) {
  * @throws {TypeError|RangeError} For invalid operands or excessive result scale.
  */
 export function multiplyDecimal({ left, right } = {}) {
-  const parsedLeft = parseDecimal({ value: left, field: "left" })
-  const parsedRight = parseDecimal({ value: right, field: "right" })
+  const parsedLeft = parseDecimal({ value: left,
+field: "left" })
+  const parsedRight = parseDecimal({ value: right,
+field: "right" })
   const scale = parsedLeft.scale + parsedRight.scale
 
   if (scale > MAX_DECIMAL_SCALE) {
@@ -179,19 +188,19 @@ export function multiplyDecimal({ left, right } = {}) {
 }
 
 function divideIntegers({ numerator, denominator, rounding } = {}) {
-  if (denominator === 0n) throw new RangeError("Cannot divide by zero")
+  if (denominator === 0n) {throw new RangeError("Cannot divide by zero")}
   if (!ROUNDING_MODES.has(rounding)) {
     throw new TypeError("rounding must be toward-zero, away-from-zero, or half-up")
   }
 
   const quotient = numerator / denominator
   const remainder = numerator % denominator
-  if (remainder === 0n || rounding === "toward-zero") return quotient
+  if (remainder === 0n || rounding === "toward-zero") {return quotient}
 
   const sameSign = (numerator < 0n) === (denominator < 0n)
   const adjustment = sameSign ? 1n : -1n
 
-  if (rounding === "away-from-zero") return quotient + adjustment
+  if (rounding === "away-from-zero") {return quotient + adjustment}
 
   const absoluteRemainder = remainder < 0n ? -remainder : remainder
   const absoluteDenominator = denominator < 0n ? -denominator : denominator
@@ -209,8 +218,10 @@ function divideIntegers({ numerator, denominator, rounding } = {}) {
  */
 export function divideDecimal({ left, right, scale, rounding } = {}) {
   validateScale(scale)
-  const parsedLeft = parseDecimal({ value: left, field: "left" })
-  const parsedRight = parseDecimal({ value: right, field: "right" })
+  const parsedLeft = parseDecimal({ value: left,
+field: "left" })
+  const parsedRight = parseDecimal({ value: right,
+field: "right" })
 
   let numerator = parsedLeft.coefficient
   let denominator = parsedRight.coefficient
@@ -223,7 +234,9 @@ export function divideDecimal({ left, right, scale, rounding } = {}) {
   }
 
   return formatDecimalString({
-    coefficient: divideIntegers({ numerator, denominator, rounding }),
+    coefficient: divideIntegers({ numerator,
+denominator,
+rounding }),
     scale,
   })
 }
@@ -231,8 +244,10 @@ export function divideDecimal({ left, right, scale, rounding } = {}) {
 /** @param {{ left: string|bigint, right: string|bigint }} options @returns {-1|0|1} */
 export function compareDecimal({ left, right } = {}) {
   const aligned = alignDecimals(
-    parseDecimal({ value: left, field: "left" }),
-    parseDecimal({ value: right, field: "right" }),
+    parseDecimal({ value: left,
+field: "left" }),
+    parseDecimal({ value: right,
+field: "right" }),
   )
   return aligned.left === aligned.right ? 0 : aligned.left > aligned.right ? 1 : -1
 }
@@ -257,14 +272,16 @@ export function negateDecimal({ value } = {}) {
 
 /** @param {{ left: string|bigint, right: string|bigint }} options @returns {string} Smaller canonical operand. */
 export function minDecimal({ left, right } = {}) {
-  return compareDecimal({ left, right }) <= 0
+  return compareDecimal({ left,
+right }) <= 0
     ? formatDecimalString(parseDecimal({ value: left }))
     : formatDecimalString(parseDecimal({ value: right }))
 }
 
 /** @param {{ left: string|bigint, right: string|bigint }} options @returns {string} Larger canonical operand. */
 export function maxDecimal({ left, right } = {}) {
-  return compareDecimal({ left, right }) >= 0
+  return compareDecimal({ left,
+right }) >= 0
     ? formatDecimalString(parseDecimal({ value: left }))
     : formatDecimalString(parseDecimal({ value: right }))
 }
@@ -310,8 +327,10 @@ export function roundDecimalToIncrement({ value, increment, direction } = {}) {
     throw new TypeError("direction must be down, up, or nearest")
   }
 
-  const parsedValue = parseDecimal({ value, field: "value" })
-  const parsedIncrement = parseDecimal({ value: increment, field: "increment" })
+  const parsedValue = parseDecimal({ value,
+field: "value" })
+  const parsedIncrement = parseDecimal({ value: increment,
+field: "increment" })
 
   if (parsedValue.coefficient < 0n || parsedIncrement.coefficient < 0n) {
     throw new RangeError("value and increment must be non-negative")
@@ -349,19 +368,19 @@ export function normalizeDecimalString({
   field = "Decimal amount",
 } = {}) {
   if (typeof value !== "string") {
-    throw new TypeError(field + " must be a decimal string")
+    throw new TypeError(`${field  } must be a decimal string`)
   }
 
   const input = value.trim()
   const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(input)
-  if (!match) throw new TypeError(field + " has an invalid decimal format")
+  if (!match) {throw new TypeError(`${field  } has an invalid decimal format`)}
 
   const [, sign, rawWhole, rawFraction = ""] = match
   if (
     rawWhole.length + rawFraction.length > MAX_DECIMAL_DIGITS ||
     rawFraction.length > MAX_DECIMAL_SCALE
   ) {
-    throw new RangeError(field + " exceeds supported precision")
+    throw new RangeError(`${field  } exceeds supported precision`)
   }
 
   const whole = rawWhole.replace(/^0+(?=\d)/, "")
@@ -369,9 +388,9 @@ export function normalizeDecimalString({
   const isZero = whole === "0" && fraction.length === 0
 
   if (sign === "-" && !allowNegative && !isZero) {
-    throw new RangeError(field + " must be non-negative")
+    throw new RangeError(`${field  } must be non-negative`)
   }
 
   const normalizedSign = sign === "-" && !isZero ? "-" : ""
-  return normalizedSign + whole + (fraction ? "." + fraction : "")
+  return normalizedSign + whole + (fraction ? `.${  fraction}` : "")
 }

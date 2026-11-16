@@ -10,8 +10,8 @@ const gitOutputs = ({
   workingTree = "",
 } = {}) => ({
   "rev-parse --show-toplevel": "C:/coinzilla\n",
-  "rev-parse HEAD": COMMIT_SHA + "\n",
-  "branch --show-current": branch + "\n",
+  "rev-parse HEAD": `${COMMIT_SHA  }\n`,
+  "branch --show-current": `${branch  }\n`,
   "log -1 --format=%s": "feat(utils): capture build provenance\n",
   "log -1 --format=%cI": "2026-11-08T22:00:00+00:00\n",
   "status --porcelain --untracked-files=all": workingTree,
@@ -125,17 +125,23 @@ test("keeps unavailable Git metadata explicit when no build environment is suppl
 
 test("rejects invalid build metadata capture inputs", () => {
   assert.throws(
-    () => captureMetadata({ application: "", version: "1.0.0", cwd: "C:/coinzilla" }),
+    () => captureMetadata({ application: "",
+version: "1.0.0",
+cwd: "C:/coinzilla" }),
     /application/,
     "build metadata capture must reject an empty application identifier",
   )
   assert.throws(
-    () => captureMetadata({ application: "harvester", version: "", cwd: "C:/coinzilla" }),
+    () => captureMetadata({ application: "harvester",
+version: "",
+cwd: "C:/coinzilla" }),
     /version/,
     "build metadata capture must reject an empty application version",
   )
   assert.throws(
-    () => captureMetadata({ application: "harvester", version: "1.0.0", cwd: "" }),
+    () => captureMetadata({ application: "harvester",
+version: "1.0.0",
+cwd: "" }),
     /cwd/,
     "build metadata capture must reject an empty working directory",
   )
@@ -185,8 +191,10 @@ test("replaces and clears logger context without retaining stale process identit
   })
 
   assert.equal(typeof logger.setContext, "function", "Logger must expose an explicit context replacement operation")
-  logger.setContext({ application: "harvester", runtimeSessionId: "session-1" })
-  logger.setContext({ application: "harvester", runtimeSessionId: "session-2" })
+  logger.setContext({ application: "harvester",
+runtimeSessionId: "session-1" })
+  logger.setContext({ application: "harvester",
+runtimeSessionId: "session-2" })
   logger.info({ message: "new process identity" })
   logger.setContext({})
   logger.info({ message: "context cleared" })

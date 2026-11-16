@@ -10,7 +10,7 @@ const GIT_EXECUTION_OPTIONS = Object.freeze({
 
 const requireNonEmptyString = ({ value, field }) => {
   if (typeof value !== "string" || value.trim() === "") {
-    throw new TypeError(field + " must be a non-empty string")
+    throw new TypeError(`${field  } must be a non-empty string`)
   }
   return value.trim()
 }
@@ -211,7 +211,7 @@ export function captureBuildMetadata({
   } else if (hasEnvironmentMetadata(environmentMetadata)) {
     metadataSource = "environment"
   }
-  const commit = selectedMetadata.commit
+  const {commit} = selectedMetadata
 
   return Object.freeze({
     application: normalizedApplication,

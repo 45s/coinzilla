@@ -14,8 +14,10 @@ import {
  * @returns {string} Exact decimal rate.
  */
 export function percentageToRate({ percent } = {}) {
-  assertDecimalString({ value: percent, field: "percent" })
-  return multiplyDecimal({ left: percent, right: "0.01" })
+  assertDecimalString({ value: percent,
+field: "percent" })
+  return multiplyDecimal({ left: percent,
+right: "0.01" })
 }
 
 /**
@@ -24,7 +26,8 @@ export function percentageToRate({ percent } = {}) {
  * @returns {string}
  */
 export function calculatePercentageOf({ value, percent } = {}) {
-  assertDecimalString({ value, field: "value" })
+  assertDecimalString({ value,
+field: "value" })
   return multiplyDecimal({
     left: value,
     right: percentageToRate({ percent }),
@@ -37,9 +40,12 @@ export function calculatePercentageOf({ value, percent } = {}) {
  * @returns {string}
  */
 export function applyPercentageChange({ value, percent } = {}) {
-  assertDecimalString({ value, field: "value" })
-  const change = calculatePercentageOf({ value, percent })
-  return addDecimal({ left: value, right: change })
+  assertDecimalString({ value,
+field: "value" })
+  const change = calculatePercentageOf({ value,
+percent })
+  return addDecimal({ left: value,
+right: change })
 }
 
 /**
@@ -50,22 +56,26 @@ export function applyPercentageChange({ value, percent } = {}) {
  * @throws {TypeError|RangeError} For invalid decimals, scale, rounding, or zero `from`.
  */
 export function calculatePercentageChange({ from, to, scale, rounding } = {}) {
-  assertDecimalString({ value: from, field: "from" })
-  assertDecimalString({ value: to, field: "to" })
+  assertDecimalString({ value: from,
+field: "from" })
+  assertDecimalString({ value: to,
+field: "to" })
   validateDecimalScale({ scale })
 
   if (scale > MAX_DECIMAL_SCALE - 2) {
     throw new RangeError(
-      "scale must not exceed " + (MAX_DECIMAL_SCALE - 2) + " for percentage calculations",
+      `scale must not exceed ${  MAX_DECIMAL_SCALE - 2  } for percentage calculations`,
     )
   }
 
-  const difference = subtractDecimal({ left: to, right: from })
+  const difference = subtractDecimal({ left: to,
+right: from })
   const ratio = divideDecimal({
     left: difference,
     right: from,
     scale: scale + 2,
     rounding,
   })
-  return multiplyDecimal({ left: ratio, right: "100" })
+  return multiplyDecimal({ left: ratio,
+right: "100" })
 }

@@ -13,7 +13,8 @@ describe('formatLogContent', () => {
   it('preserves Error diagnostics directly and when nested in objects and arrays', () => {
     const error = new TypeError('broker failed')
     const direct = JSON.parse(formatLogContent(error))
-    const nested = JSON.parse(formatLogContent({ error, errors: [error] }))
+    const nested = JSON.parse(formatLogContent({ error,
+errors: [error] }))
 
     assert.equal(direct.name, 'TypeError')
     assert.equal(direct.message, 'broker failed')
@@ -52,7 +53,8 @@ describe('formatLogContent', () => {
     const formatted = formatLogContent({
       symbol: 'BTCUSDT',
       accessToken: 'sensitive-token',
-      nested: { apiKey: 'sensitive-key', password: 'sensitive-password' },
+      nested: { apiKey: 'sensitive-key',
+password: 'sensitive-password' },
       error,
     })
     assert.match(formatted, /BTCUSDT/)
@@ -72,7 +74,8 @@ describe('formatLogContent', () => {
       ownKeys() { throw new Error('proxy blocked') },
     })
 
-    assert.match(formatLogContent({ hostileGetter, hostileProxy }), /Unreadable property/)
+    assert.match(formatLogContent({ hostileGetter,
+hostileProxy }), /Unreadable property/)
   })
 
   it('falls back for BigInt-containing objects and preserves non-Error thrown values', () => {

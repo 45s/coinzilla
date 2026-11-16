@@ -7,50 +7,73 @@ describe('calculateTimeDiff', () => {
 
   it('calculates differences in hours by default', () => {
     const end = new Date('2026-01-01T02:30:00.000Z')
-    assert.equal(calculateTimeDiff({ start, end }), 2.5)
+    assert.equal(calculateTimeDiff({ start,
+end }), 2.5)
   })
 
   it('supports seconds, minutes, and hours', () => {
     const end = new Date('2026-01-01T01:02:03.000Z')
-    assert.equal(calculateTimeDiff({ start, end, unit: 'second' }), 3723)
-    assert.equal(calculateTimeDiff({ start, end, unit: 'minute' }), 62.05)
-    assert.equal(calculateTimeDiff({ start, end, unit: 'hour' }), 1.0341666666666667)
+    assert.equal(calculateTimeDiff({ start,
+end,
+unit: 'second' }), 3723)
+    assert.equal(calculateTimeDiff({ start,
+end,
+unit: 'minute' }), 62.05)
+    assert.equal(calculateTimeDiff({ start,
+end,
+unit: 'hour' }), 1.0341666666666667)
   })
 
   it('rejects unsupported time units instead of returning NaN', () => {
     assert.throws(
-      () => calculateTimeDiff({ start, unit: 'day' }),
-      { name: 'RangeError', message: 'Unsupported time unit: day' },
+      () => calculateTimeDiff({ start,
+unit: 'day' }),
+      { name: 'RangeError',
+message: 'Unsupported time unit: day' },
     )
   })
 
   it('rejects inherited object property names as time units', () => {
     assert.throws(
-      () => calculateTimeDiff({ start, unit: 'toString' }),
-      { name: 'RangeError', message: 'Unsupported time unit: toString' },
+      () => calculateTimeDiff({ start,
+unit: 'toString' }),
+      { name: 'RangeError',
+message: 'Unsupported time unit: toString' },
     )
   })
 
   it('returns a negative difference when end is before start', () => {
     const end = new Date('2025-12-31T23:00:00.000Z')
-    assert.equal(calculateTimeDiff({ start, end }), -1)
+    assert.equal(calculateTimeDiff({ start,
+end }), -1)
   })
 
   it('preserves fractional units for sub-second intervals', () => {
     const start = new Date('2026-01-01T00:00:00.000Z')
     const end = new Date('2026-01-01T00:00:00.250Z')
-    assert.equal(calculateTimeDiff({ start, end, unit: 'second' }), 0.25)
-    assert.equal(calculateTimeDiff({ start, end, unit: 'minute' }), 0.25 / 60)
-    assert.equal(calculateTimeDiff({ start, end, unit: 'hour' }), 0.25 / 3600)
+    assert.equal(calculateTimeDiff({ start,
+end,
+unit: 'second' }), 0.25)
+    assert.equal(calculateTimeDiff({ start,
+end,
+unit: 'minute' }), 0.25 / 60)
+    assert.equal(calculateTimeDiff({ start,
+end,
+unit: 'hour' }), 0.25 / 3600)
   })
 
   it('rejects missing or non-Date inputs with a clear type error', () => {
-    assert.throws(() => calculateTimeDiff(), { name: 'TypeError', message: 'start must be a Date' })
-    assert.throws(() => calculateTimeDiff({ start: '2026-01-01' }), { name: 'TypeError', message: 'start must be a Date' })
+    assert.throws(() => calculateTimeDiff(), { name: 'TypeError',
+message: 'start must be a Date' })
+    assert.throws(() => calculateTimeDiff({ start: '2026-01-01' }), { name: 'TypeError',
+message: 'start must be a Date' })
   })
 
   it('rejects invalid Date instances instead of returning NaN', () => {
-    assert.throws(() => calculateTimeDiff({ start: new Date('invalid') }), { name: 'RangeError', message: 'start must be a valid Date' })
-    assert.throws(() => calculateTimeDiff({ start: new Date(), end: new Date('invalid') }), { name: 'RangeError', message: 'end must be a valid Date' })
+    assert.throws(() => calculateTimeDiff({ start: new Date('invalid') }), { name: 'RangeError',
+message: 'start must be a valid Date' })
+    assert.throws(() => calculateTimeDiff({ start: new Date(),
+end: new Date('invalid') }), { name: 'RangeError',
+message: 'end must be a valid Date' })
   })
 })
