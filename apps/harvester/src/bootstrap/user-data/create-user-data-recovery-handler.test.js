@@ -2,7 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { createUserDataRecoveryHandler } from "./create-user-data-recovery-handler.js"
 
-const test = (name, ...args) => nodeTest(`[create-user-data-recovery-handler.test.js] ${  name}`, ...args)
+const test = (...args) => nodeTest(`[create-user-data-recovery-handler.test.js] ${args[0]}`, ...args.slice(1))
 
 const createState = (overrides = {}) => ({
   ready: false,
