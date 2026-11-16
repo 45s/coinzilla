@@ -5,7 +5,7 @@
  */
 export const OPERATOR_CONTROL_CONFIG = Object.freeze({
   telegram: Object.freeze({
-    enabled: false,
+    enabled: true,
     allowedUserIds: Object.freeze(
       process.env.TELEGRAM_USER_ID ? [process.env.TELEGRAM_USER_ID] : [],
     ),
