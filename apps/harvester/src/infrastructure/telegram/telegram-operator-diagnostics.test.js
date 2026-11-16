@@ -205,3 +205,25 @@ test("handles primitive errors, missing loggers, and throwing error property acc
   assert.equal(entry.message, "Telegram update RECEIVED")
   assert.equal(entry.stage, "UPDATE_RECEIVED")
 })
+
+
+test("writes ordinary interaction lifecycle events at INFO for terminal visibility", () => {
+  const entries = []
+  const diagnostics = createTelegramOperatorDiagnostics({
+    logger: {
+      debug: entry => entries.push({ level: "debug", ...entry }),
+      info: entry => entries.push({ level: "info", ...entry }),
+    },
+  })
+
+  diagnostics.log({
+    message: "Telegram update RECEIVED",
+    fields: {
+      stage: "UPDATE_RECEIVED",
+    },
+  })
+
+  assert.equal(entries.length, 1)
+  assert.equal(entries[0].level, "info")
+  assert.equal(entries[0].stage, "UPDATE_RECEIVED")
+})

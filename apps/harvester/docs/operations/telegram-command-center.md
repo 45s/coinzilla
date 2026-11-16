@@ -49,6 +49,8 @@ The persistent keyboard has exactly six buttons: Pause, Resume, Status, Markets,
 
 Every update receives a correlation ID in the form `telegram:<update_id>`. The same ID is retained when Telegram redelivers an update. Search the terminal/log stream by that value to reconstruct one interaction.
 
+The interaction lifecycle is emitted at INFO and is therefore visible in the terminal; the structured DEBUG log retains the complete diagnostic record and exception details.
+
 The structured lifecycle includes:
 
 - `Telegram update RECEIVED`

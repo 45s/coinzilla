@@ -414,7 +414,7 @@ client-order-ID prefix.
 
 Inbound Telegram interactions use the existing Harvester logger through a structured diagnostic boundary. Every update is correlated by `telegram:<update_id>`; redelivered updates retain the same correlation ID. The interaction record identifies message versus callback, command/action, market symbol when relevant, application query/use-case, stage, and duration where applicable.
 
-The lifecycle events are `Telegram update RECEIVED`, `Telegram interaction AUTHORIZED` / `REJECTED`, `Telegram command STARTED`, `Telegram query STARTED` / `COMPLETED`, `Telegram callback ACKNOWLEDGED`, `Telegram application operation STARTED` / `COMPLETED`, `Telegram response SENT`, and `Telegram interaction FAILED`. There are no per-poll success logs.
+Telegram lifecycle records are emitted at INFO so they appear in the terminal as well as the structured DEBUG log; detailed exception stacks and nested causes remain available in the structured logs. The lifecycle events are `Telegram update RECEIVED`, `Telegram interaction AUTHORIZED` / `REJECTED`, `Telegram command STARTED`, `Telegram query STARTED` / `COMPLETED`, `Telegram callback ACKNOWLEDGED`, `Telegram application operation STARTED` / `COMPLETED`, `Telegram response SENT`, and `Telegram interaction FAILED`. There are no per-poll success logs.
 
 For state-changing actions, preserve the distinction between `applicationOperationInvoked`, `applicationOperationCompleted`, and `stateChanged`. A selection or confirmation page is not a successful pause/resume. A response-delivery failure after a completed application operation must not be reported as an application-operation failure.
 
