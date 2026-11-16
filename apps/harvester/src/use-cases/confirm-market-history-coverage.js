@@ -118,9 +118,11 @@ function createHistoryRetentionEvidence({ evidence }) {
 
 function validateMarketReconciliationReadiness({ reconciliation, evidence }) {
   if (reconciliation?.ok !== true) {
-    return toResult({
-      errors: reconciliation?.errors ?? [new Error("One-market recovery reconciliation failed")],
-    })
+    return {
+      result: toResult({
+        errors: reconciliation?.errors ?? [new Error("One-market recovery reconciliation failed")],
+      }),
+    }
   }
   const result = reconciliation.data
   if (result?.symbol !== evidence.symbol) {
@@ -133,15 +135,17 @@ function validateMarketReconciliationReadiness({ reconciliation, evidence }) {
     audit?.tradeHistory?.complete === true &&
     audit?.tradeHistory?.historyRetentionBaselineFactId === evidence.factId
   if (!auditReady) {
-    return toResult({
-      data: Object.freeze({
-        confirmed: false,
-        alreadyConfirmed: false,
-        status: result.status ?? "BLOCKED",
-        reason: result.reason ?? "RECOVERY_AUDIT_NOT_READY",
-        audit,
+    return {
+      result: toResult({
+        data: Object.freeze({
+          confirmed: false,
+          alreadyConfirmed: false,
+          status: result.status ?? "BLOCKED",
+          reason: result.reason ?? "RECOVERY_AUDIT_NOT_READY",
+          audit,
+        }),
       }),
-    })
+    }
   }
   return { audit }
 }
@@ -186,8 +190,8 @@ async function reconcileAndCommitCoverage({ operationalStateStore, reconcileMark
   const historyRetentionEvidence = createHistoryRetentionEvidence({ evidence })
   const reconciliation = await reconcileMarketState({ historyRetentionEvidence })
   const readiness = validateMarketReconciliationReadiness({ reconciliation, evidence })
-  if (readiness?.ok === false) {
-    return readiness
+  if (readiness.result) {
+    return readiness.result
   }
   return appendAndVerifyCoverage({
     operationalStateStore,
