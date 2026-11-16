@@ -1117,6 +1117,15 @@ test("per-market emergency BUY pause cancels only that market's owned BUY and le
   await startBothMarkets(engine)
 
   assert.equal(orders.length, 2, "The paused market must not submit another BUY while the other market's existing BUY remains active.")
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "99",
+      timestamp: 2000,
+    },
+  })
+  assert.equal(orders.length, 2, "A later price transition must not reprice or replace a BUY while the market emergency gate is active.")
 })
 
 test("global emergency BUY pause cancels all owned BUYs and suppresses new BUYs across markets", async () => {
