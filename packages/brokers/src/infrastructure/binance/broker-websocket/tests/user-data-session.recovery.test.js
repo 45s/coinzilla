@@ -10,7 +10,9 @@ describe("Binance user-data reconnect behavior", () => {
     const { broker, clients } = createBroker()
     await broker.connect()
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
 
     assert.equal(clients[0].listenerCount, 0)
     assert.equal(clients[0].errorListenerCount, 0)
@@ -44,7 +46,11 @@ describe("Binance user-data reconnect behavior", () => {
 
     clients[0].emitEvent({
       subscriptionId: first.data.subscriptionId,
-      event: { e: "balanceUpdate", a: "USDT", d: "1", T: 10, E: 11 },
+      event: { e: "balanceUpdate",
+a: "USDT",
+d: "1",
+T: 10,
+E: 11 },
     })
     assert.equal(firstEvents.length, 1)
     assert.equal(secondEvents.length, 1)
@@ -72,7 +78,9 @@ describe("Binance user-data reconnect behavior", () => {
     })
 
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
     assert.equal(clients[0].listenerCount, 0)
     assert.equal(clients[0].errorListenerCount, 0)
     assert.equal(clients[0].closeListenerCount, 0)
@@ -100,10 +108,13 @@ describe("Binance user-data reconnect behavior", () => {
     assert.equal(scheduler.pendingCount, 1)
 
     assert.equal(first.data.acknowledgeRecovery(), false)
-    const blocked = await broker.createOrder({ symbol: "BTCUSDT", quantity: "0.01", price: "50000" })
+    const blocked = await broker.createOrder({ symbol: "BTCUSDT",
+quantity: "0.01",
+price: "50000" })
     assert.equal(blocked.ok, false)
     assert.equal(clients[1].calls.some((call) => call.method === "order.place"), false)
-    const blockedCancel = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: 77 })
+    const blockedCancel = await broker.cancelOrder({ symbol: "BTCUSDT",
+orderId: 77 })
     const blockedCancelAll = await broker.cancelAllOpenOrders({ symbol: "BTCUSDT" })
     assert.equal(blockedCancel.ok, false)
     assert.equal(blockedCancelAll.ok, false)
@@ -118,16 +129,24 @@ describe("Binance user-data reconnect behavior", () => {
     assert.equal(scheduler.pendingCount, 0)
     assert.deepEqual(
       firstStatuses.filter((status) => status.type === "reconciled"),
-      [{ type: "reconciled", subscriptionId: 110, recoveryGeneration: 1, recoveryRequired: false }],
+      [{ type: "reconciled",
+subscriptionId: 110,
+recoveryGeneration: 1,
+recoveryRequired: false }],
     )
     assert.deepEqual(
       secondStatuses.filter((status) => status.type === "reconciled"),
-      [{ type: "reconciled", subscriptionId: 110, recoveryGeneration: 1, recoveryRequired: false }],
+      [{ type: "reconciled",
+subscriptionId: 110,
+recoveryGeneration: 1,
+recoveryRequired: false }],
     )
     assert.equal(second.data.acknowledgeRecovery(), false)
     assert.equal(firstStatuses.filter((status) => status.type === "reconciled").length, 1)
     assert.equal(secondStatuses.filter((status) => status.type === "reconciled").length, 1)
-    const placed = await broker.createOrder({ symbol: "BTCUSDT", quantity: "0.01", price: "50000" })
+    const placed = await broker.createOrder({ symbol: "BTCUSDT",
+quantity: "0.01",
+price: "50000" })
     assert.equal(clients[1].calls.some((call) => call.method === "order.place"), true)
     assert.equal(placed.ok, true)
 
@@ -155,7 +174,9 @@ describe("Binance user-data reconnect behavior", () => {
     })
 
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
     await scheduler.runNext()
 
     assert.equal(first.data.acknowledgeRecovery(), false)
@@ -165,7 +186,10 @@ describe("Binance user-data reconnect behavior", () => {
     assert.equal(scheduler.pendingCount, 0)
     assert.deepEqual(
       firstStatuses.filter((status) => status.type === "reconciled"),
-      [{ type: "reconciled", subscriptionId: 110, recoveryGeneration: 1, recoveryRequired: false }],
+      [{ type: "reconciled",
+subscriptionId: 110,
+recoveryGeneration: 1,
+recoveryRequired: false }],
     )
     assert.equal(secondStatuses.filter((status) => status.type === "reconciled").length, 0)
 
@@ -179,7 +203,7 @@ describe("Binance user-data reconnect behavior", () => {
     const rpc = createFakeRpcClient({
       "userDataStream.subscribe.signature": () => {
         subscriptionAttempts += 1
-        if (subscriptionAttempts === 2) throw new Error("resume subscribe rejected")
+        if (subscriptionAttempts === 2) {throw new Error("resume subscribe rejected")}
         return { subscriptionId: 9 + subscriptionAttempts }
       },
       "session.subscriptions": () => [],
@@ -190,7 +214,9 @@ describe("Binance user-data reconnect behavior", () => {
       apiSecret: "test-secret",
       tradingMode: "testnet",
       reconnectDelay: 10,
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => rpc,
       marketClientFactory: () => createFakeStreamsClient(),
@@ -206,7 +232,8 @@ describe("Binance user-data reconnect behavior", () => {
 
     rpc.emitEvent({
       subscriptionId: subscription.data.subscriptionId,
-      event: { e: "eventStreamTerminated", E: 123459 },
+      event: { e: "eventStreamTerminated",
+E: 123459 },
     })
     await broker.connect()
 
@@ -235,7 +262,8 @@ describe("Binance user-data reconnect behavior", () => {
 
     clients[0].emitEvent({
       subscriptionId: previousId,
-      event: { e: "eventStreamTerminated", E: 123458 },
+      event: { e: "eventStreamTerminated",
+E: 123458 },
     })
     assert.equal(scheduler.pendingCount, 1)
 
@@ -265,7 +293,8 @@ describe("Binance user-data reconnect behavior", () => {
 
     clients[0].emitEvent({
       subscriptionId: previousId,
-      event: { e: "eventStreamTerminated", E: 123456 },
+      event: { e: "eventStreamTerminated",
+E: 123456 },
     })
     assert.equal(broker.userDataUnavailable, true)
     await scheduler.runNext()
@@ -275,11 +304,19 @@ describe("Binance user-data reconnect behavior", () => {
     assert.ok(statuses.some((status) => status.type === "recovered"))
     clients[0].emitEvent({
       subscriptionId: previousId,
-      event: { e: "balanceUpdate", a: "USDT", d: "1", T: 1, E: 2 },
+      event: { e: "balanceUpdate",
+a: "USDT",
+d: "1",
+T: 1,
+E: 2 },
     })
     clients[0].emitEvent({
       subscriptionId: subscription.data.subscriptionId,
-      event: { e: "balanceUpdate", a: "USDT", d: "2", T: 3, E: 4 },
+      event: { e: "balanceUpdate",
+a: "USDT",
+d: "2",
+T: 3,
+E: 4 },
     })
     assert.equal(received.length, 2)
     assert.equal(received[1].event.balanceDelta, "2")
@@ -321,7 +358,11 @@ describe("Binance user-data reconnect behavior", () => {
 
     rpc.emitEvent({
       subscriptionId: first.data.subscriptionId,
-      event: { e: "balanceUpdate", a: "USDT", d: "7", T: 30, E: 31 },
+      event: { e: "balanceUpdate",
+a: "USDT",
+d: "7",
+T: 30,
+E: 31 },
     })
 
     assert.equal(received.length, 1)
@@ -344,7 +385,11 @@ describe("Binance user-data reconnect behavior", () => {
 
     clients[0].emitEvent({
       subscriptionId: first.data.subscriptionId,
-      event: { e: "balanceUpdate", a: "USDT", d: "5", T: 20, E: 21 },
+      event: { e: "balanceUpdate",
+a: "USDT",
+d: "5",
+T: 20,
+E: 21 },
     })
 
     assert.equal(received.length, 1)
@@ -361,11 +406,14 @@ describe("Binance user-data reconnect behavior", () => {
       assert.equal(subscription.ok, true, "The broker must establish a user-data subscription before the recovery scenario")
 
       clients[0].state = "closed"
-      clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+      clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
       await scheduler.runNext()
 
       assert.equal(broker.userDataUnavailable, true, "The broker must keep state-changing requests blocked until recovery is acknowledged")
-      const result = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: 77 })
+      const result = await broker.cancelOrder({ symbol: "BTCUSDT",
+orderId: 77 })
       assert.equal(result.ok, false, "A cancellation must be refused while user-data recovery is required")
       assert.equal(result.cancellationOutcome, "NOT_SENT", "The local readiness guard must prove the cancellation RPC was not invoked")
       assert.equal(clients[1].calls.some((call) => call.method === "order.cancel"), false, "The broker must make zero order.cancel RPC calls for a NOT_SENT result")
