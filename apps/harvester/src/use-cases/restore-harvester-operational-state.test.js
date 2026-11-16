@@ -495,7 +495,8 @@ function createCompletedCycleEvidence() {
       clientOrderId: firstSellClientOrderId,
       fillId: firstSellFillId,
     }),
-    ...createResolvedBlockerRecords({ count: 20, firstSequence: 11 }),
+    ...createResolvedBlockerRecords({ count: 20, 
+      firstSequence: 11 }),
     ...createCompletedCycleBoundaryRecords({
       cycleCompletedSequence,
       firstBuyFillId,
