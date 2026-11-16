@@ -9,9 +9,15 @@ test("summarizeResults counts file findings and rule occurrences", () => {
       errorCount: 2,
       warningCount: 1,
       messages: [
-        { ruleId: "no-undef" },
-        { ruleId: "no-undef" },
-        { ruleId: "eqeqeq" },
+          {
+          ruleId: "no-undef",
+        },
+        {
+          ruleId: "no-undef",
+        },
+        {
+          ruleId: "eqeqeq",
+        },
       ],
     },
     {
@@ -64,7 +70,9 @@ test("every tracked root scripts JavaScript file is linted without findings", as
     lintedFiles.add(path);
     errorCount += result.errorCount;
     warningCount += result.warningCount;
-    if (result.messages.length === 0) continue;
+    if (result.messages.length === 0) {
+      continue;
+    }
 
     findingsByFile[path] = result.messages.map((message) => ({
       ruleId: message.ruleId,
@@ -74,7 +82,9 @@ test("every tracked root scripts JavaScript file is linted without findings", as
       message: message.message,
     }));
     for (const finding of result.messages) {
-      if (!finding.ruleId) continue;
+      if (!finding.ruleId) {
+        continue;
+      }
       findingsByRule[finding.ruleId] = (findingsByRule[finding.ruleId] ?? 0) + 1;
     }
   }
