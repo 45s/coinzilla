@@ -198,6 +198,8 @@ export class NativeWebSocketTransport {
           }
         }
         this.#handlers = null
+        this.#diagnosticCleanup?.()
+        this.#diagnosticCleanup = null
         const socket = this.#socket
         this.#socket = null
         try {
