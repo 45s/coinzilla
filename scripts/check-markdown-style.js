@@ -282,7 +282,7 @@ export function checkChangedMarkdownStyle(baseSha) {
   const result = analyzeMarkdownStyleDocuments({ documents: changedDocuments, changesByPath })
 
   process.stdout.write(
-    `Changed Markdown style: scanned ${result.scannedFiles} maintained files; skipped ${result.skippedHistorical} historical files and ${ignoredPaths} generated/vendor paths.`,
+    `Changed Markdown style: scanned ${result.scannedFiles} maintained files; skipped ${result.skippedHistorical} historical files and ${ignoredPaths} generated/vendor paths.\n`,
   )
 
   const violationEntries = Object.entries(result.violations).filter(

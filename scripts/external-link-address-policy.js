@@ -91,17 +91,26 @@ function isInCidr({ addressValue, networkAddress, prefixLength, bitLength }) {
 }
 
 const IPV4_BLOCKED_NETWORKS = IPV4_BLOCKED_CIDRS.map(([network, prefix]) => ({
-  network: parseCidrNetwork({ address: network, family: 4 }),
+  network: parseCidrNetwork({
+    address: network,
+    family: 4,
+  }),
   prefix,
 }));
 
 const IPV6_GLOBAL_NETWORK = {
-  network: parseCidrNetwork({ address: IPV6_GLOBAL_UNICAST[0], family: 6 }),
+  network: parseCidrNetwork({
+    address: IPV6_GLOBAL_UNICAST[0],
+    family: 6,
+  }),
   prefix: IPV6_GLOBAL_UNICAST[1],
 };
 
 const IPV6_BLOCKED_NETWORKS = IPV6_BLOCKED_CIDRS.map(([network, prefix]) => ({
-  network: parseCidrNetwork({ address: network, family: 6 }),
+  network: parseCidrNetwork({
+    address: network,
+    family: 6,
+  }),
   prefix,
 }));
 
@@ -115,14 +124,29 @@ export function isPublicAddress(address) {
   const family = isIP(address);
   if (family === 4) {
     const value = ipv4ToBigInt(address);
-    return !IPV4_BLOCKED_NETWORKS.some(({ network, prefix }) => isInCidr({ addressValue: value, networkAddress: network, prefixLength: prefix, bitLength: 32 }));
+    return !IPV4_BLOCKED_NETWORKS.some(({ network, prefix }) => isInCidr({
+      addressValue: value,
+      networkAddress: network,
+      prefixLength: prefix,
+      bitLength: 32,
+    }));
   }
   if (family === 6) {
     const value = ipv6ToBigInt(address);
-    if (value === null || !isInCidr({ addressValue: value, networkAddress: IPV6_GLOBAL_NETWORK.network, prefixLength: IPV6_GLOBAL_NETWORK.prefix, bitLength: 128 })) {
+    if (value === null || !isInCidr({
+      addressValue: value,
+      networkAddress: IPV6_GLOBAL_NETWORK.network,
+      prefixLength: IPV6_GLOBAL_NETWORK.prefix,
+      bitLength: 128,
+    })) {
       return false;
     }
-    return !IPV6_BLOCKED_NETWORKS.some(({ network, prefix }) => isInCidr({ addressValue: value, networkAddress: network, prefixLength: prefix, bitLength: 128 }));
+    return !IPV6_BLOCKED_NETWORKS.some(({ network, prefix }) => isInCidr({
+      addressValue: value,
+      networkAddress: network,
+      prefixLength: prefix,
+      bitLength: 128,
+    }));
   }
   return false;
 }

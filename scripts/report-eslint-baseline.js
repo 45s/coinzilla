@@ -28,7 +28,8 @@ function summarizeResults(results) {
       ruleId,
       count,
     }))
-    .sort((...entries) => {\n      const [left, right] = entries;
+    .sort((...entries) => {
+      const [left, right] = entries;
       if (left.count !== right.count) {
         return right.count - left.count;
       }
