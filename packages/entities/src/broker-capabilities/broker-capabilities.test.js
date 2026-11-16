@@ -13,22 +13,22 @@ describe(BrokerCapabilities.name, () => {
     const capabilities = new BrokerCapabilities({
       capabilities: [
         { type: "PLACE_LIMIT_ORDER",
-status: "SUPPORTED" },
+          status: "SUPPORTED" },
         { type: "PLACE_MARKET_ORDER",
-status: "UNSUPPORTED" },
+          status: "UNSUPPORTED" },
         { type: "SUBSCRIBE_USER_DATA",
-status: "SUPPORTED" },
+          status: "SUPPORTED" },
       ],
     })
 
     assert.deepEqual(capabilities.value, {
       capabilities: [
         { type: "PLACE_LIMIT_ORDER",
-status: "SUPPORTED" },
+          status: "SUPPORTED" },
         { type: "PLACE_MARKET_ORDER",
-status: "UNSUPPORTED" },
+          status: "UNSUPPORTED" },
         { type: "SUBSCRIBE_USER_DATA",
-status: "SUPPORTED" },
+          status: "SUPPORTED" },
       ],
     })
     assert.equal(capabilities.getStatus({ type: "PLACE_LIMIT_ORDER" }), "SUPPORTED")
@@ -76,14 +76,14 @@ describe(`${BrokerCapabilities.name} validation`, () => {
     assert.throws(
       () => new BrokerCapabilities({
         capabilities: [{ type: "BINANCE_MARGIN_BORROW",
-status: "SUPPORTED" }],
+          status: "SUPPORTED" }],
       }),
       { message: brokerCapabilitiesErrMsgs.type },
     )
     assert.throws(
       () => new BrokerCapabilities({
         capabilities: [{ type: "READ_BALANCES",
-status: "MAYBE" }],
+          status: "MAYBE" }],
       }),
       { message: brokerCapabilitiesErrMsgs.status },
     )
@@ -94,9 +94,9 @@ status: "MAYBE" }],
       () => new BrokerCapabilities({
         capabilities: [
           { type: "READ_BALANCES",
-status: "SUPPORTED" },
+            status: "SUPPORTED" },
           { type: "READ_BALANCES",
-status: "UNSUPPORTED" },
+            status: "UNSUPPORTED" },
         ],
       }),
       { message: brokerCapabilitiesErrMsgs.duplicate },
@@ -119,7 +119,7 @@ describe(`${BrokerCapabilities.name} immutability`, () => {
   it("returns independent snapshots and immutable capability collections", () => {
     const capabilities = new BrokerCapabilities({
       capabilities: [{ type: "READ_BALANCES",
-status: "SUPPORTED" }],
+        status: "SUPPORTED" }],
     })
     const snapshot = capabilities.value
 
@@ -128,7 +128,7 @@ status: "SUPPORTED" }],
     assert.equal(capabilities.getStatus({ type: "READ_BALANCES" }), "SUPPORTED")
     assert.throws(() => {
       capabilities.capabilities.push({ type: "READ_ORDER",
-status: "SUPPORTED" })
+        status: "SUPPORTED" })
     }, TypeError)
     assert.throws(() => {
       capabilities.capabilities[0].status = "UNSUPPORTED"
