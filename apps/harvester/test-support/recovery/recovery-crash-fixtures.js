@@ -33,9 +33,9 @@ function requireMapped({ mapper, input, eventName, session, lineNumber }) {
   const result = mapper(input)
   if (result?.ok !== true) {
     const detail = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-    throw new Error("Unable to build " + eventName + " fixture: " + (detail || "DTO mapping failed"))
+    throw new Error(`Unable to build ${eventName} fixture: ${detail || "DTO mapping failed"}`)
   }
-  const id = session + ":" + lineNumber
+  const id = `${session}:${lineNumber}`
   return Object.freeze({
     id,
     payload: Object.freeze({
