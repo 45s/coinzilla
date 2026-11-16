@@ -971,7 +971,6 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
     state,
     pairs,
     runTransition,
-    hasBlockingOpenOrdersForSymbol,
   })
   let strategyEvaluationSequence = 0
   let marketPriceEventSequence = 0

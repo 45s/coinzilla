@@ -81,7 +81,6 @@ function getMarketSafetyBlockers({
   journalDurable,
   coverageResult,
   externalBlockers,
-  hasBlockingOpenOrdersForSymbol,
 } = {}) {
   const blockers = []
   if (state.shutdownBuyGate !== true) addBlocker(blockers, "CONSERVATIVE_BUY_GATE_INACTIVE")
@@ -89,9 +88,6 @@ function getMarketSafetyBlockers({
   if (journalDurable !== true) addBlocker(blockers, "JOURNAL_NOT_DURABLE")
   getCoverageBlockers({ coverageResult, symbol, blockers })
   getMarketOrderBlockers({ state, symbol, blockers })
-  if (hasBlockingOpenOrdersForSymbol({ symbol })) {
-    addBlocker(blockers, "UNOWNED_OPEN_ORDERS_PRESENT")
-  }
   for (const blocker of externalBlockers ?? []) {
     addBlocker(blockers, getExternalBlockerReason(blocker))
   }
@@ -132,7 +128,6 @@ export function createConservativeShutdownSafety({
   state,
   pairs,
   runTransition,
-  hasBlockingOpenOrdersForSymbol = () => false,
 } = {}) {
   const enabledSymbols = getEnabledSymbols({ pairs })
   state.shutdownSafetyBySymbol = createInitialSafetyMarkers({ pairs })
