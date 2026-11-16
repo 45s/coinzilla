@@ -331,6 +331,7 @@ function createHarnessBrokerState({ options } = {}) {
     quoteFreeBalance,
     quoteCashFlowBaseline,
     portfolioBaseQuantityBaseline,
+    additionalTrackedBaseQuantityBaseline,
     committedQuoteBalanceBaseline,
     committedBaseBalanceBaseline,
   } = options
@@ -369,6 +370,7 @@ function createHarnessBrokerState({ options } = {}) {
     quoteFreeBalance,
     quoteCashFlowBaseline,
     portfolioBaseQuantityBaseline,
+    additionalTrackedBaseQuantityBaseline,
     committedQuoteBalanceBaseline,
     committedBaseBalanceBaseline,
   })
