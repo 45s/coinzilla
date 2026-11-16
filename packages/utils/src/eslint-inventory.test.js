@@ -27,11 +27,17 @@ test("reports the complete packages/utils ESLint baseline", {
     }
   })
   const findings = files.filter((file) => file.errors > 0 || file.warnings > 0)
+  let errorCount = 0
+  let warningCount = 0
+  for (const result of results) {
+    errorCount += result.errorCount
+    warningCount += result.warningCount
+  }
   const report = {
     fileCount: results.length,
     filesWithFindings: findings.length,
-    errorCount: results.reduce((total, result) => total + result.errorCount, 0),
-    warningCount: results.reduce((total, result) => total + result.warningCount, 0),
+    errorCount,
+    warningCount,
     byFile: findings,
   }
 
