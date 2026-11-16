@@ -80,10 +80,10 @@ export function createFixture({
       })
       if (subscribeForCandles) {
         return subscribeForCandles({
-        symbol,
-        interval,
-        onCandle,
-        calls,
+          symbol,
+          interval,
+          onCandle,
+          calls,
         })
       }
       return {
