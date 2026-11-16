@@ -117,6 +117,7 @@ class MarketStreamLivenessMonitor {
     if (this.#pendingTradeId !== null && this.#lastAggTradeId >= this.#pendingTradeId) {
       this.#clearTimer()
       this.#pendingTradeId = null
+      this.#recoveryAttemptTimes.length = 0
       if (this.#state !== "healthy") {
         this.#state = "healthy"
         this.#reportStatus("recovered")
