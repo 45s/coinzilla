@@ -541,3 +541,23 @@ test("dispatches emergency BUY pause commands through the authenticated operator
   assert.equal(sentMessages.length, 4, "Every explicit BUY control command must receive an operator response.")
   assert.ok(sentMessages.every((message) => message.text.includes("BUY")), "Emergency BUY command replies must identify the BUY-side control rather than the legacy market pause.")
 })
+
+test("reports an active emergency BUY gate when owned-order cancellation is unresolved", async () => {
+  const { sentMessages } = await runAdapter({
+    updates: [makeUpdate({ updateId: 405, text: "/pauseallbuys" })],
+    operator: {
+      pauseMarket: async () => assert.fail("Global BUY pause must not invoke the legacy market pause."),
+      pauseAllBuys: async () => ({
+        ok: false,
+        errors: [{
+          code: "OPERATOR_BUY_CANCELLATION_INCOMPLETE",
+          message: "owned BUY cancellation is unresolved",
+        }],
+      }),
+    },
+  })
+
+  assert.match(sentMessages[0].text, /BUY pause is active across all markets/, "The response must make clear that the BUY gate is active.")
+  assert.match(sentMessages[0].text, /cancellation .* unresolved/i, "The response must not claim every owned BUY was canceled.")
+  assert.match(sentMessages[0].text, /New BUY submissions remain blocked/, "The response must state that new BUY exposure remains blocked.")
+})
