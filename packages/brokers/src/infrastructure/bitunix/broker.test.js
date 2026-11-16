@@ -272,6 +272,31 @@ test("Bitunix Spot broker fetches canonical fills for a specific order", async (
   ])
 })
 
+test("Bitunix Spot fill lookup rejects undocumented array matching-order responses", async () => {
+  const { broker } = createFillLookupBroker({
+    dealVolume: "0.5",
+    deals: [
+      {
+        id: "trade-1",
+        volume: "0.5",
+        price: "10",
+        fee: "0.001",
+        feeCoin: "BTC",
+        role: "1",
+        ctime: "2026-11-15T12:00:01Z",
+      },
+    ],
+  })
+
+  const result = await broker.getFills({
+    symbol: "BTCUSDT",
+    orderId: "123",
+  })
+
+  assert.equal(result.ok, false, "the documented matching-order response is one object, not an array")
+  assert.match(result.errors[0].message, /matching-order response must be an object/i)
+})
+
 test("Bitunix Spot broker never submits or cancels orders without safe identity and stream guarantees", async () => {
   const { broker, calls } = createBroker()
 
