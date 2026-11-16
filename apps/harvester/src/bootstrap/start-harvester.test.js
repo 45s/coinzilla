@@ -978,8 +978,8 @@ test("subscribes only enabled pairs for Binance trading", async () => {
   await result.stop()
   assert.deepEqual(calls, [
     "connect", "filters:BTCUSDT", "filters:ETHUSDT", "subscribe:user-data", "account:snapshot",
-    "subscribe:book:BTCUSDT", "subscribe:BTCUSDT", "unsubscribe:book:BTCUSDT", "unsubscribe:BTCUSDT",
-    "unsubscribe:user-data", "account:snapshot", "disconnect",
+    "subscribe:book:BTCUSDT", "subscribe:BTCUSDT", "account:snapshot", "unsubscribe:user-data",
+    "unsubscribe:book:BTCUSDT", "unsubscribe:BTCUSDT", "disconnect",
   ])
 })
 
@@ -3571,7 +3571,8 @@ test("keeps Binance connected when the CLOSING snapshot durability barrier fails
       flush: async () => {
         flushCount += 1
         calls.push("journal:flush:" + flushCount)
-        return flushCount < 3
+        // Two startup audit barriers and one per-market safety barrier precede CLOSING.
+        return flushCount < 4
           ? {
             ok: true,
             durable: true
@@ -3593,7 +3594,7 @@ test("keeps Binance connected when the CLOSING snapshot durability barrier fails
   await assert.rejects(runtime.stop(), /Harvester shutdown was incomplete/)
 
   const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
-  assert.equal(flushCount, 3)
+  assert.equal(flushCount, 4)
   assert.equal(snapshots.length, 2)
   assert.equal(snapshots[0].data.phase, "PREFLIGHT")
   assert.equal(snapshots[1].data.phase, "CLOSING")
