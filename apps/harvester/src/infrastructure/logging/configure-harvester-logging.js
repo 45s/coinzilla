@@ -140,9 +140,12 @@ async function createHarvesterFileTransport({
     }),
   ]
   const streamErrors = new Map()
-  streams.forEach((stream, index) => stream.on("error", (error) => streamErrors.set(index, error)))
+  for (const [index, stream] of streams.entries()) {
+    stream.on("error", (error) => streamErrors.set(index, error))
+  }
 
-  const openResults = await Promise.allSettled(streams.map((stream) => new Promise((resolve, reject) => {
+  const openResults = await Promise.allSettled(streams.map((stream) => new Promise((...callbacks) => {
+    const [resolve, reject] = callbacks
     stream.once("open", resolve)
     stream.once("error", reject)
   })))
@@ -150,6 +153,7 @@ async function createHarvesterFileTransport({
     .filter((result) => result.status === "rejected")
     .map((result) => result.reason)
   if (openErrors.length > 0) {
+    const [firstOpenError] = openErrors
     await Promise.allSettled(streams.map(async (stream) => {
       if (!stream.destroyed) {
         stream.destroy()
@@ -158,7 +162,7 @@ async function createHarvesterFileTransport({
         await once(stream, "close")
       }
     }))
-    throw openErrors[0]
+    throw firstOpenError
   }
 
   return {
@@ -175,7 +179,10 @@ async function createHarvesterFileTransport({
       } catch (error) {
         return Promise.reject(error)
       }
-      return Promise.all(streams.map((stream, index) => new Promise((resolve, reject) => {
+      return Promise.all(streams.map((...parameters) => {
+        const [stream, index] = parameters
+        return new Promise((...callbacks) => {
+          const [resolve, reject] = callbacks
         stream.write(`${serialized}\n`, (error) => {
           const currentError = error ?? streamErrors.get(index)
           if (currentError) {
@@ -184,7 +191,7 @@ async function createHarvesterFileTransport({
           }
           resolve()
         })
-      })))
+      }))
     },
     close: () => closeHarvesterLogStreams({ streams }),
   }
