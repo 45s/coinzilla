@@ -18,9 +18,10 @@ export async function recordProcessStopped({ operationalStateStore, reason, clea
       record.factType === "PROCESS_STARTED" && record.runtimeSessionId === sessionId)
     if (!started) { throw new Error("Process-stop boundary does not match a durable process-start session") }
     const result = await operationalStateStore.append({
-      factId: "process-stopped:" + sessionId,
+      factId: `process-stopped:${  sessionId}`,
       factType: "PROCESS_STOPPED",
-      data: { reason, clean },
+      data: { reason,
+clean },
     })
     if (result?.ok !== true || result.data?.durable !== true) {
       return toResult({ errors: result?.errors?.length ? result.errors : [new Error("Process-stop append did not confirm durable commitment")] })
