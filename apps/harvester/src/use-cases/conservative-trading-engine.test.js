@@ -11095,9 +11095,12 @@ test("continues recovery-only market evaluation after the shutdown BUY gate", as
 })
 
 function assertNoShutdownSafetyPauses({ harness } = {}) {
-  assertNoShutdownSafetyPauses({ harness })
+  assert.deepEqual(
+    harness.pauses,
+    [],
+    "The late owned SELL fill must not create a hard safety pause that blocks its own shutdown recovery replacement.",
+  )
 }
-
 async function applyLateRecoverySellFill({ harness, sellOrder } = {}) {
   const quantity = "0.1"
   const lateFill = makeSellFill({
@@ -11167,11 +11170,7 @@ test("invalidates and rechecks a safe market after a late owned SELL execution",
   const lateEvidence = await applyLateRecoverySellFill({ harness, sellOrder })
 
   assert.equal(lateEvidence.ok, true, lateEvidence.errors?.[0]?.message)
-  assert.deepEqual(
-    harness.pauses,
-    [],
-    "The late owned SELL fill must not create a hard safety pause that blocks its own shutdown recovery replacement.",
-  )
+  assertNoShutdownSafetyPauses({ harness })
   assert.equal(
     harness.engine.getShutdownSafetySnapshot().markets[0].status,
     "UNSAFE",
