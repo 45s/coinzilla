@@ -37,7 +37,7 @@ export function createResumeMarket({ engine, operationalStateStore } = {}) {
         // TEMPORARY: omit durable facts when CC recovery storage is disabled.
         ...(typeof operationalStateStore?.append === "function" ? {
           beforeApply: () => operationalStateStore.append({
-            factId: "operator-control:" + normalizedRequestId,
+            factId: `operator-control:${  normalizedRequestId}`,
             factType: "OPERATOR_MARKET_RESUMED",
             data: {
               requestId: normalizedRequestId,
