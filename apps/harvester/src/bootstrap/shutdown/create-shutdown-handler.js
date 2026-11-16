@@ -733,32 +733,78 @@ function reportShutdownFailure({ error, context, state, options, phaseRunner, sh
   throw error
 }
 
+function reportShutdownSetupFailure({ error, state, options, now, runtimeSessionId, strategyShutdownCoordinator } = {}) {
+  const shutdownStartedFromStatus = state.status
+  state.stopped = true
+  state.ready = false
+  const shutdownRequestedAt = now()
+  const phaseRunner = createPhaseRunner({
+    logger: options.logger,
+    now,
+    shutdownRequestedAt,
+    shutdownCorrelationId: runtimeSessionId ?? null,
+  })
+  return reportShutdownFailure({
+    error,
+    state,
+    options,
+    phaseRunner,
+    shutdownRequestedAt,
+    now,
+    context: {
+      shutdownStartedFromStatus,
+      shutdownCorrelationId: runtimeSessionId ?? null,
+      auditReasons: [],
+      recoverySellFindings: [],
+      stageFailures: [],
+      state,
+      unresolvedOrders: [],
+      strategyShutdownCoordinator,
+    },
+  })
+}
+
 function createStopHandler({ options, state, now, runtimeSessionId, strategyShutdownCoordinator } = {}) {
   let shutdownPromise
   return function stop(stopOptions = {}) {
     if (shutdownPromise) {
       return shutdownPromise
     }
-    const { context, phaseRunner, shutdownRequestedAt } = createShutdownRequestContext({
-      options,
-      state,
-      now,
-      runtimeSessionId,
-      strategyShutdownCoordinator,
-      stopOptions,
-    })
-    shutdownPromise = runShutdownLifecycle(context).catch((error) => {
-      shutdownPromise = undefined
-      return reportShutdownFailure({
-        error,
-        context,
-        state,
+    try {
+      strategyShutdownCoordinator.beginShutdown()
+      const { context, phaseRunner, shutdownRequestedAt } = createShutdownRequestContext({
         options,
-        phaseRunner,
-        shutdownRequestedAt,
+        state,
         now,
+        runtimeSessionId,
+        strategyShutdownCoordinator,
+        stopOptions,
       })
-    })
+      shutdownPromise = runShutdownLifecycle(context).catch((error) => {
+        shutdownPromise = undefined
+        return reportShutdownFailure({
+          error,
+          context,
+          state,
+          options,
+          phaseRunner,
+          shutdownRequestedAt,
+          now,
+        })
+      })
+    } catch (error) {
+      shutdownPromise = Promise.reject(error).catch((failure) => {
+        shutdownPromise = undefined
+        return reportShutdownSetupFailure({
+          error: failure,
+          state,
+          options,
+          now,
+          runtimeSessionId,
+          strategyShutdownCoordinator,
+        })
+      })
+    }
     return shutdownPromise
   }
 }
