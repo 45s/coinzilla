@@ -324,7 +324,7 @@ expectedMessage: "🚨 ACCOUNT SAFETY · N/A · user-data-stream-error · stream
       `The active Telegram event ${event.name} must render the exact icon selected for its notification.`,
     )
   }
-}))
+})
 
 test("keeps the existing icons for five notifications left undecided", () => {
   const examples = [
