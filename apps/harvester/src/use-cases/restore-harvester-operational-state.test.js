@@ -348,7 +348,7 @@ liquidityRole: "MAKER",
 commissionStatus: "COMPLETE",
 commissions: [],
     }, `execution-fill-applied:${  firstSellFillId}`),
-    ...Array.from({ length: 20 }, (_, index) => {
+    ...Array.from({ length: 20 }, (...[, index]) => {
       const reason = `TEST_EVIDENCE_${  index}`
       const evidenceDigest = String(index + 1).padStart(64, "0")
       const resolutionDigest = String(index + 101).padStart(64, "0")
