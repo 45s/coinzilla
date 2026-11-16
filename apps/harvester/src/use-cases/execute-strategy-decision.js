@@ -314,7 +314,7 @@ function classifyBrokerSubmissionFailure({ pendingOrder, brokerResult } = {}) {
   const errors = brokerResult?.errors ?? [
     new TypeError("Broker did not return an acknowledged canonical order"),
   ]
-  const submissionError = errors[0]
+  const [submissionError] = errors
   const definitePostOnlyRejection = pendingOrder.type === "LIMIT_MAKER" &&
     submissionError?.code === "POST_ONLY_WOULD_TAKE"
   const definiteFilterRejection = submissionError?.code === "DEFINITE_EXCHANGE_FILTER_REJECTED" &&
