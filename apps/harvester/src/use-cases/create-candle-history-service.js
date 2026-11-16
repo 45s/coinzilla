@@ -557,7 +557,7 @@ async function loadInitialHistory({ context, state }) {
   await state.observerQueue
 }
 
-async function startCandleHistoryService({ context, pairs, subscriptions = [] } = {}) {
+function startCandleHistoryService({ context, pairs, subscriptions = [] } = {}) {
   if (context.startPromise) {
     return context.startPromise
   }
