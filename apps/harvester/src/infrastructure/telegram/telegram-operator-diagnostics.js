@@ -260,7 +260,7 @@ function buildFailureFields({ details, stage, operation, symbol, interaction }) 
 }
 
 function createTelegramDiagnosticLogger({ logger }) {
-  return ({ interaction, message, level = "debug", fields = {} } = {}) => {
+  return ({ interaction, message, level = "info", fields = {} } = {}) => {
     const stage = fields.stage ?? interaction?.stage
     if (interaction && typeof stage === "string") {
       interaction.stage = stage

@@ -1,6 +1,15 @@
 import { createShutdownPhaseConsolePresentation } from "./create-shutdown-phase-console-presentation.js"
 
 const CONSOLE_DETAIL_KEYS = Object.freeze([
+  "correlationId",
+  "interactionType",
+  "stage",
+  "operation",
+  "applicationOperationInvoked",
+  "applicationOperationCompleted",
+  "stateChanged",
+  "failureClassification",
+  "durationMs",
   "errorCode",
   "symbol",
   "inventory",
