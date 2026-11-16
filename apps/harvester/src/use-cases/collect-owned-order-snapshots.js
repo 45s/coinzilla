@@ -337,7 +337,7 @@ function advanceOwnedFillCursor({ fills, lastTradeId, ownedOrder }) {
     if (nextTradeId !== undefined && tradeId <= nextTradeId) {
       throw new Error(`REST fill pagination did not advance strictly by trade ID for owned order ${ownedOrder.brokerOrderId}`)
     }
-    lastTradeId = tradeId
+    nextTradeId = tradeId
     pageLastTradeId = tradeId
   }
   if (pageLastTradeId === undefined) {
@@ -347,8 +347,10 @@ function advanceOwnedFillCursor({ fills, lastTradeId, ownedOrder }) {
   if (nextFromId > BigInt(Number.MAX_SAFE_INTEGER)) {
     throw new Error(`REST fill pagination trade ID exceeds the broker's safe cursor range for owned order ${ownedOrder.brokerOrderId}`)
   }
-  return { lastTradeId, 
-    fromId: nextFromId.toString() }
+  return {
+    lastTradeId: pageLastTradeId,
+    fromId: nextFromId.toString(),
+  }
 }
 
 function sortOwnedOrderFills({ fillsById }) {
@@ -424,7 +426,7 @@ async function readOwnedOrderFills({ broker, ownedOrder, journalFillsById }) {
     
     
     
-    fromId = cursor.fromId
+    ;({ fromId } = cursor)
     if (page === 9999) {
       throw new Error(`REST fill history exceeded the maximum supported pagination depth for owned order ${ownedOrder.brokerOrderId}`)
     }
