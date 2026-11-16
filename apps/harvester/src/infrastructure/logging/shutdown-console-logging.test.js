@@ -63,7 +63,9 @@ test("outer process-stop orchestration uses concise shutdown phase and milestone
     operatorControlLifecycle: {
       stop: async () => {},
     },
-    stopRuntime: async () => {},
+    stopRuntime: async ({ beforeSharedServicesStop }) => {
+      await beforeSharedServicesStop()
+    },
   })
 
   await stop()
@@ -166,8 +168,9 @@ test("outer process-stop callers continue sharing one in-flight stop promise", a
         return operatorStopGate
       },
     },
-    stopRuntime: async () => {
+    stopRuntime: async ({ beforeSharedServicesStop }) => {
       runtimeStopCalls += 1
+      await beforeSharedServicesStop()
     },
   })
 

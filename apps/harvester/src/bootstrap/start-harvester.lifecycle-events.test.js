@@ -27,13 +27,20 @@ const config = {
       settings: { conservative: { enabled: true },
 aggressive: { enabled: false } },
       pairs: {
-        BTCUSDT: { enabled: true,
-tradingEnvironment: "both",
-enableVolatilityProtection: true,
-investment: 100,
-orderQuantity: 0.01,
-makerPercent: 0,
-takerPercent: 0 },
+        BTCUSDT: {
+          enabled: true,
+          tradingEnvironment: "both",
+          enableVolatilityProtection: true,
+          investment: 100,
+          orderQuantity: 0.01,
+          keepQuantity: 0,
+          minProfit: 0.01,
+          priceStepPercent: 1,
+          pricePrecision: 2,
+          quantityPrecision: 3,
+          makerPercent: 0,
+          takerPercent: 0,
+        },
       },
     },
   },
@@ -300,7 +307,6 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
     HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
     HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED,
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
-    HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
   ])
   const configValidatedData = eventPublisher.events[0].data
   assert.deepEqual(configValidatedData.enabledMarkets, ["BTCUSDT"])

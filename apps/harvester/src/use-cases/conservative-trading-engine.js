@@ -12,6 +12,7 @@ import { makeOrderEventWorkflow } from "./order-event-workflow.js"
 import { makeVolatilityProtectionWorkflow } from "./volatility-protection-workflow.js"
 import { createSubmissionGate } from "./create-submission-gate.js"
 import { createShutdownRecoveryWorkflow } from "./create-shutdown-recovery-workflow.js"
+import { createConservativeShutdownSafety } from "./create-conservative-shutdown-safety.js"
 import { createLatestTransitionEvaluator } from "./create-latest-transition-evaluator.js"
 import { createMarketPriceTransitionHandler } from "./create-market-price-transition-handler.js"
 import { validateConservativeTradingEngineOptions } from "./validate-conservative-trading-engine-options.js"
@@ -934,7 +935,7 @@ function createOwnedOrderManagementHandlers({
       options,
     }),
   })
-  const cancelOwnedBuyOrdersForShutdown = () => cancelOwnedBuyOrders()
+  const cancelOwnedBuyOrdersForShutdown = (options = {}) => cancelOwnedBuyOrders(options)
   const cancelOwnedBuyOrdersForSafetyHalt = () => cancelOwnedBuyOrders({ reason: "ACCOUNT_INTEGRITY_FAILURE" })
   const reconcileOwnedOrders = (options = {}) => reconcileOwnedOrdersTransition({
     context: {
@@ -1126,6 +1127,11 @@ pairs })
 pairs,
 initialRegistry })
   const runTransition = createSerializedTransitionQueue()
+  const shutdownSafety = createConservativeShutdownSafety({
+    state,
+    pairs,
+    runTransition,
+  })
   let strategyEvaluationSequence = 0
   let marketPriceEventSequence = 0
   const recoveryCancellationState = createRecoveryManagedCancellationState({ state })
@@ -1148,6 +1154,7 @@ rememberProcessedFill })
     nextMarketPriceEventId: () => ++marketPriceEventSequence,
     ...recoveryCancellationState,
     ...executionFillAccounting,
+    ...shutdownSafety,
   }
 }
 
@@ -1458,33 +1465,98 @@ function createConservativeEngineProtectionContext({ context } = {}) {
   })
 }
 
-function createConservativeEngineRuntimeOperations({ context } = {}) {
-  const { dependencies } = context
+function getUserDataEventSymbol(event) {
+  return event?.executedOrder?.market?.symbol ??
+    event?.order?.market?.symbol ??
+    event?.fill?.market?.symbol ??
+    event?.market?.symbol ??
+    event?.symbol ??
+    event?.s
+}
+
+function createMarketEventOperations({ context } = {}) {
   context.processMarketPrice = async ({ symbol, priceEvent } = {}) => {
-    const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
-    if (!protection?.ok) {return protection}
+    if (context.state.shutdownBuyGate !== true) {
+      const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
+      if (!protection?.ok) {return protection}
+    }
     return context.runTransition({ task: () => context.processMarketPriceTransition({
       symbol,
       priceEvent,
     }) })
   }
   context.processBookTicker = async ({ symbol, bookTicker } = {}) => {
-    const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
-    if (!protection?.ok) {return protection}
+    if (context.state.shutdownBuyGate !== true) {
+      const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
+      if (!protection?.ok) {return protection}
+    }
     return context.runTransition({ task: () => context.processMarketBookTransition({
       symbol,
       bookTicker,
     }) })
   }
   context.processUserDataEvent = ({ event, recoveryMode = false } = {}) =>
-    context.runTransition({ task: () => context.processUserDataEventTransition({
-      event,
-      recoveryMode,
-    }) })
-  context.evaluateLatest = ({ symbol } = {}) =>
-    context.runTransition({ task: () => context.evaluateLatestTransition({ symbol }) })
+    context.runTransition({ task: async () => {
+      const symbol = getUserDataEventSymbol(event)
+      if (context.state.shutdownBuyGate === true) {
+        context.invalidateShutdownSafety({
+          ...(typeof symbol === "string" ? { symbol } : {}),
+          reason: "LATE_ORDER_EXECUTION_EVIDENCE",
+        })
+      }
+      return context.processUserDataEventTransition({
+        event,
+        recoveryMode,
+      })
+    } })
+  context.evaluateLatest = ({ symbol, shutdownRecoveryOnly = false } = {}) =>
+    context.runTransition({
+      task: () => context.evaluateLatestTransition({
+        symbol,
+        shutdownRecoveryOnly,
+      }),
+    })
+}
+
+function createShutdownSafetyOperations({ context } = {}) {
+  const {
+    reconcileOwnedOrders,
+    cancelOwnedBuyOrdersForShutdown,
+    reconcileRecoverySellsForShutdown,
+  } = context
+  context.reconcileOwnedOrders = (options = {}) => {
+    context.invalidateShutdownSafety({
+      ...(typeof options.symbol === "string" ? { symbol: options.symbol } : {}),
+      ...(Array.isArray(options.symbols) ? { symbols: options.symbols } : {}),
+      reason: "OWNED_ORDER_RECONCILIATION",
+    })
+    return reconcileOwnedOrders(options)
+  }
+  context.cancelOwnedBuyOrdersForShutdown = (options = {}) => {
+    context.invalidateShutdownSafety({
+      ...(typeof options.symbol === "string" ? { symbol: options.symbol } : {}),
+      reason: "OWNED_BUY_CANCELLATION",
+    })
+    return cancelOwnedBuyOrdersForShutdown(options)
+  }
+  context.reconcileRecoverySellsForShutdown = (options = {}) => {
+    context.invalidateShutdownSafety({
+      ...(Array.isArray(options.symbols) ? { symbols: options.symbols } : {}),
+      reason: "RECOVERY_SELL_RECONCILIATION",
+    })
+    return reconcileRecoverySellsForShutdown(options)
+  }
   context.resumeDeferredEvaluations = () => context.runTransition({
     task: async () => {
+      if (context.state.shutdownBuyGate === true) {
+        return toResult({
+          data: {
+            results: [],
+            skipped: true,
+            reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
+          },
+        })
+      }
       const results = []
       for (const symbol of [...context.state.deferredEvaluations]) {
         const result = await context.evaluateLatestTransition({ symbol })
@@ -1494,6 +1566,12 @@ result })
       return toResult({ data: { results } })
     },
   })
+}
+
+function createConservativeEngineRuntimeOperations({ context } = {}) {
+  createMarketEventOperations({ context })
+  createShutdownSafetyOperations({ context })
+  const { dependencies } = context
   context.getOperatorMarketSnapshots = createOperatorMarketSnapshotsGetter({
     state: context.state,
     pairs: context.pairs,
@@ -1509,6 +1587,9 @@ function createConservativeEnginePublicApi({ context } = {}) {
   return Object.freeze({
     processMarketPrice: context.processMarketPrice,
     processBookTicker: context.processBookTicker,
+    beginShutdown: context.beginShutdown,
+    auditShutdownSafety: context.auditShutdownSafety,
+    getShutdownSafetySnapshot: context.getShutdownSafetySnapshot,
     processUserDataEvent: context.processUserDataEvent,
     reconcileOwnedOrders: context.reconcileOwnedOrders,
     reconcileRecoverySellsForShutdown: context.reconcileRecoverySellsForShutdown,
@@ -2198,7 +2279,7 @@ function publishRecoverySellCancellationOutcome({ context, canceledOrder }) {
   })
 }
 
-async function applyRecoverySellCancellation({ context, order, canceledOrder, symbol }) {
+async function resolveRecoverySellCancellationOrder({ context, order, canceledOrder, symbol }) {
   const update = context.state.registry.applyUpdate({
     order: canceledOrder,
   })
@@ -2220,11 +2301,57 @@ async function applyRecoverySellCancellation({ context, order, canceledOrder, sy
       retryable: false,
     })
   }
-  context.state.registry = update.registry
+
   const terminalStatuses = new Set(["CANCELED", "FILLED", "EXPIRED", "REJECTED"])
-  if (!terminalStatuses.has(canceledOrder.status)) {
+  let effectiveCanceledOrder = canceledOrder
+  if (update.stale) {
+    const latestOrder = context.state.registry.getOrder({
+      clientOrderId: canceledOrder.clientOrderId,
+    })
+    if (!terminalStatuses.has(latestOrder?.status)) {
+      const error = new Error("Recovery SELL cancellation response was stale relative to a newer non-terminal order update")
+      context.publishOrderCancelFailed({
+        order,
+        outcome: "CANCELLATION_RESPONSE_STALE",
+        error,
+      })
+      await context.pause({
+        symbol,
+        reason: "RECOVERY_SELL_CANCELLATION_RESPONSE_STALE",
+        error,
+      })
+      return recoverySellFailure({
+        error,
+        category: "ORDER_TRANSITION",
+        stage: "RECOVERY_SELL_CANCELLATION_RESPONSE_STALE",
+        retryable: true,
+      })
+    }
+    effectiveCanceledOrder = latestOrder
+  }
+  context.state.registry = update.registry
+  return toResult({
+    data: {
+      canceledOrder: effectiveCanceledOrder,
+    },
+  })
+}
+
+async function applyRecoverySellCancellation({ context, order, canceledOrder, symbol }) {
+  const resolution = await resolveRecoverySellCancellationOrder({
+    context,
+    order,
+    canceledOrder,
+    symbol,
+  })
+  if (!resolution?.ok) {
+    return resolution
+  }
+  const effectiveCanceledOrder = resolution.data.canceledOrder
+  const terminalStatuses = new Set(["CANCELED", "FILLED", "EXPIRED", "REJECTED"])
+  if (!terminalStatuses.has(effectiveCanceledOrder.status)) {
     context.publishOrderCancelFailed({
-      order: canceledOrder,
+      order: effectiveCanceledOrder,
       outcome: "CANCELLATION_UNCONFIRMED",
       error: new Error("Recovery SELL did not reach an authoritative terminal state"),
     })
@@ -2238,28 +2365,28 @@ async function applyRecoverySellCancellation({ context, order, canceledOrder, sy
   }
   publishRecoverySellCancellationOutcome({
     context,
-    canceledOrder,
+    canceledOrder: effectiveCanceledOrder,
   })
   const terminalReconciliation = await context.reconcileTerminalOrderFills({
-    order: canceledOrder,
+    order: effectiveCanceledOrder,
   })
   if (!terminalReconciliation?.ok) {
     return terminalReconciliation
   }
-  context.state.reconciledTerminalOrderClientIds.add(canceledOrder.clientOrderId)
-  if (canceledOrder.status === "FILLED") {
-    context.state.completedOrderTransitions.add(canceledOrder.clientOrderId)
+  context.state.reconciledTerminalOrderClientIds.add(effectiveCanceledOrder.clientOrderId)
+  if (effectiveCanceledOrder.status === "FILLED") {
+    context.state.completedOrderTransitions.add(effectiveCanceledOrder.clientOrderId)
     context.state.completedRecoverySellSymbols.add(symbol)
-    context.state.completedRecoverySellOrdersBySymbol.set(symbol, canceledOrder)
+    context.state.completedRecoverySellOrdersBySymbol.set(symbol, effectiveCanceledOrder)
     return finishFilledRecoverySell({
       context,
-      order: canceledOrder,
+      order: effectiveCanceledOrder,
       symbol,
     })
   }
   if (compareDecimal({
-    left: canceledOrder.executedQuantity.amount,
-    right: canceledOrder.originalQuantity.amount,
+    left: effectiveCanceledOrder.executedQuantity.amount,
+    right: effectiveCanceledOrder.originalQuantity.amount,
   }) === 0) {
     await context.pause({
       symbol,
@@ -2743,7 +2870,40 @@ async function replaceTrailingBuy({ context, symbol, activeBuy, marketPrice, tri
   })
 }
 
+async function prepareTrailingBuyReplacement({ context, symbol, pairConfig, metadata, activeBuy, marketPrice } = {}) {
+  const refreshed = await refreshTrailingBuyMarketMetadata({
+    context,
+    symbol,
+    pairConfig,
+    metadata,
+  })
+  if (!refreshed.ok) {
+    return refreshed
+  }
+  const preflight = await preflightTrailingBuyReplacement({
+    context,
+    symbol,
+    activeBuy,
+    marketPrice,
+  })
+  if (!preflight.ok) {
+    return preflight
+  }
+  return getTrailingBuyPreflightSkip({
+    preflight,
+    activeBuy,
+  })
+}
+
 async function maybeReplaceTrailingBuyTransition({ context, symbol, marketPrice }) {
+  if (context.state.shutdownBuyGate === true) {
+    return toResult({
+      data: {
+        skipped: true,
+        reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
+      },
+    })
+  }
   const {
     metadata,
     pairConfig,
@@ -2785,30 +2945,16 @@ async function maybeReplaceTrailingBuyTransition({ context, symbol, marketPrice 
       },
     })
   }
-  const refreshed = await refreshTrailingBuyMarketMetadata({
+  const preparationFailure = await prepareTrailingBuyReplacement({
     context,
     symbol,
     pairConfig,
     metadata,
-  })
-  if (!refreshed.ok) {
-    return refreshed
-  }
-  const preflight = await preflightTrailingBuyReplacement({
-    context,
-    symbol,
     activeBuy,
     marketPrice,
   })
-  if (!preflight.ok) {
-    return preflight
-  }
-  const preflightSkip = getTrailingBuyPreflightSkip({
-    preflight,
-    activeBuy,
-  })
-  if (preflightSkip) {
-    return preflightSkip
+  if (preparationFailure) {
+    return preparationFailure
   }
   return replaceTrailingBuy({
     context,
@@ -3637,11 +3783,23 @@ async function collectAndApplyOwnedOrderSnapshots({ context, ownedOrders, symbol
   })
 }
 
+function matchesRequestedReconciliationMarket({ order, requestedSymbols } = {}) {
+  return requestedSymbols === null || requestedSymbols.has(order.market.symbol)
+}
+
 async function reconcileOwnedOrdersTransition({ context, options }) {
+  let requestedSymbols = null
+  if (Array.isArray(options.symbols)) {
+    requestedSymbols = new Set(options.symbols)
+  } else if (typeof options.symbol === "string") {
+    requestedSymbols = new Set([options.symbol])
+  }
   const initialOrdersResult = await context.runTransition({
     task: async () => toResult({
       data: {
-        ownedOrders: [...context.state.registry.orders],
+        ownedOrders: context.state.registry.orders.filter((order) =>
+          matchesRequestedReconciliationMarket({ order,
+            requestedSymbols })),
       },
     }),
   })
@@ -3659,7 +3817,9 @@ async function reconcileOwnedOrdersTransition({ context, options }) {
   const ownedOrdersResult = await context.runTransition({
     task: async () => toResult({
       data: {
-        ownedOrders: [...context.state.registry.orders],
+        ownedOrders: context.state.registry.orders.filter((order) =>
+          matchesRequestedReconciliationMarket({ order,
+            requestedSymbols })),
       },
     }),
   })
