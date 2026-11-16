@@ -123,15 +123,15 @@ test("renders Portfolio Stats as a concise readable summary instead of JSON", ()
     data: {
       message: "Portfolio Stats",
       strategyId: "CG_coinGrabber",
-      symbol: "ZROFDUSD",
+      symbol: "DOGEUSDT",
       inventory: {
-        activeBaseQuantity: "25 ZRO",
-        freeBaseQuantity: "0.15 ZRO",
-        totalBaseQuantity: "25.15 ZRO",
+        activeBaseQuantity: "0 DOGE",
+        freeBaseQuantity: "3.4 DOGE",
+        totalBaseQuantity: "3.4 DOGE",
       },
       accounting: {
-        spent: "13.835 FDUSD",
-        quoteNetCashFlow: "-13.835 FDUSD",
+        spent: "0 USDT",
+        quoteNetCashFlow: "0.02045485 USDT",
       },
     },
   })
@@ -144,7 +144,7 @@ test("renders Portfolio Stats as a concise readable summary instead of JSON", ()
   )
   assert.match(
     line,
-    /🪙 CG PORTFOLIO ZROFDUSD \| Amount: 25\.15 ZRO \| Earned: 0\.15 ZRO \| Spent: 13\.835 FDUSD \| Net: -13\.835 FDUSD/,
+    /🪙 CG PORTFOLIO DOGEUSDT: amount: 3\.4 \| earned: 3\.4 \| spent: 0 USDT \| net: 0\.020/,
     "The operator console must show total coins, retained coins earned from completed cycles, current-cycle spent quote, and cumulative net quote cash flow.",
   )
   assert.doesNotMatch(
