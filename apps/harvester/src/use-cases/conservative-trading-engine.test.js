@@ -269,6 +269,7 @@ const DEFAULT_HARNESS_OPTIONS = {
   baseFreeBalance: "0",
   quoteFreeBalance: "1000",
   quoteCashFlowBaseline: "0",
+  additionalTrackedQuoteCashFlow: [],
   portfolioBaseQuantityBaseline: "0",
   committedQuoteBalanceBaseline: "0",
   committedBaseBalanceBaseline: "0",
@@ -402,6 +403,7 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     accountingFailure,
     accountingApplied,
     recoveryCompletion,
+    additionalTrackedQuoteCashFlow,
     initialState,
   } = options
   const effectiveEventPublisher = createHarnessEventPublisher({ eventPublisher })
@@ -419,6 +421,7 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     onOperationalStateStrategyMarketPaused,
     eventPublisher: effectiveEventPublisher,
     appConfig: suppliedAppConfig ?? appConfig,
+    getAdditionalTrackedQuoteCashFlow: () => additionalTrackedQuoteCashFlow,
     ...createHarnessEngineCallbacks({
       getPortfolioOverride,
       getRecoveryLedgerOverride,
@@ -10795,3 +10798,35 @@ test("keeps local deferral processing non-blocking when best-effort Journal publ
     "A lost deferral event must remain observable as a Journal evidence gap.")
 })
 
+
+test("adds only externally tracked legacy quote cash flow accrued after the account snapshot", async () => {
+  const position = new Position({
+    positionId: createPositionId({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }),
+    strategyId: StrategyId.COIN_GRABBER,
+    market,
+    baseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    quoteNetCashFlow: new Money({ amount: "0", asset: quoteAsset }),
+  })
+  const harness = await createHarness({
+    initialPortfolio: new Portfolio({ positions: [position] }),
+    initialRecoveryLedger: RecoveryLedger.empty({ market }),
+    quoteFreeBalance: "80",
+    quoteCashFlowBaseline: "100",
+    additionalTrackedQuoteCashFlow: [
+      { assetId: quoteAsset.id, amount: "120" },
+    ],
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.submittedOrders.length, 1, "The 20 quote units of post-snapshot legacy proceeds must be available to the shared allocator.")
+  assert.equal(result.data.submittedOrders[0].side, "BUY")
+})
