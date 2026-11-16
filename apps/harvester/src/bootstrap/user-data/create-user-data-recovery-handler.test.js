@@ -853,7 +853,6 @@ test("does not publish the open-orders audit after recovery is superseded during
 })
 
 test("repeats account snapshot baseline capture when a user-data event crosses the REST audit window", async () => {
-  let fixture
   let snapshotReads = 0
   const snapshots = [
     { sourceTime: 100,
@@ -863,7 +862,7 @@ baselineVersion: "after-user-data-event" },
   ]
   const publishedSnapshots = []
   let accountAuditAttempts = 0
-  fixture = createRecovery({
+  const fixture = createRecovery({
     refreshAccountSnapshot: async () => snapshots[snapshotReads++],
     getOpenOrders: async () => ({ ok: true,
 data: [] }),
