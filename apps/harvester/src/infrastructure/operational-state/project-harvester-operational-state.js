@@ -480,7 +480,8 @@ data: record.data })
         (record.factType === "ACCOUNT_SNAPSHOT_CAPTURED" || record.factType === "ACCOUNT_OPEN_ORDERS_CAPTURED") &&
         record.data.phase === "PREFLIGHT")
       const remaining = session.facts.filter((record) => !preflight.includes(record))
-      const emit = (name, data) => {
+      const emit = (...parameters) => {
+    const [name, data] = parameters
         syntheticRecords.push(makeEventRecord({ sessionId: session.sessionId,
 lineNumber: lineNumber++,
 name,
