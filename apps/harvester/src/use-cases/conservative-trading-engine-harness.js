@@ -84,6 +84,7 @@ function createCancelOrderHandler({
   cancelFailure,
   cancelExecutedQuantity,
   cancelOrderStatus,
+  cancelUpdatedAt,
   market,
   baseAsset,
 } = {}) {
@@ -115,6 +116,9 @@ function createCancelOrderHandler({
     const resolvedStatus = typeof cancelOrderStatus === "function"
       ? cancelOrderStatus({ order })
       : cancelOrderStatus
+    const resolvedUpdatedAt = typeof cancelUpdatedAt === "function"
+      ? cancelUpdatedAt({ order })
+      : cancelUpdatedAt ?? Math.max(order.updatedAt ?? 0, 2) + 1
     return {
       ok: true,
       data: new CanonicalOrder({
@@ -130,7 +134,7 @@ function createCancelOrderHandler({
         status: resolvedStatus,
         createdAt: order.createdAt,
         acknowledgedAt: order.acknowledgedAt,
-        updatedAt: Math.max(order.updatedAt ?? 0, 2) + 1,
+        updatedAt: resolvedUpdatedAt,
         completedAt: 2,
       }),
     }
