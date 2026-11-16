@@ -36,7 +36,7 @@ The market-price handler itself publishes no lifecycle event, performs no broker
 
 - [x] Add direct offline characterization tests for receipt/freshness ordering, stale-cache preservation, accepted-price commit before dispatch, existing trailing-BUY eligibility gates, malformed-price rejection, and symbol-mismatch failure.
 - [x] Refactor only the handler's local orchestration into three explicit named stages: prepare/log, freshness acceptance/state commit, and accepted-price dispatch.
-- [ ] Re-run the direct handler tests and existing Conservative engine tests after the extraction on the implementation head.
+- [x] Re-run the direct handler tests and existing Conservative engine tests after the extraction on the implementation head.
 - [x] Reconcile the architecture guide with the source-backed stage sequence.
 
 Test-first evidence on commit `da359a83fabf6eeb80b577073cd60ba9abdff96a`:
@@ -48,6 +48,17 @@ Test-first evidence on commit `da359a83fabf6eeb80b577073cd60ba9abdff96a`:
 - Full workspace unit tests, workspace coverage and JavaScript Syntax were still running at this checkpoint; their final results are not inferred here.
 - The first changed-file ESLint run identified five `prefer-template` errors and one helper-length warning in the new test fixture. The next test-only correction splits fixture setup into focused helpers and uses template literals; no lint rules or assertions are suppressed.
 - The direct handler suite was extended with a malformed positive-decimal validation case; it proves invalid domain input is rejected before event-ID allocation, receipt logging or dispatch.
+
+
+Implementation verification on commit \`271d5fdcfca7e4be94a6da2a343d548bd030a80b\`:
+
+- Harvester unit suite: 1,659 passed, 0 failed; the nine direct handler characterization cases are included.
+- Harvester coverage: 80.76% lines, 81.65% branches, 82.04% functions.
+- Workspace unit-test matrix: all 10 package jobs passed.
+- Workspace coverage matrix: all 10 package jobs and the aggregate coverage gate passed.
+- Harvester targeted regressions: all five configured files passed. The direct market-price handler test is added to the targeted list in this commit so the next exact-head run exercises it directly.
+- JavaScript Syntax (including changed-file ESLint, Markdown style and agent-policy checks), actionlint, Utils Unit Tests, Dependency Audit and External Documentation Links passed.
+- The optional read-only TESTNET integration job was skipped by its workflow condition. No exchange operation was performed.
 
 The extraction adds no new runtime state, dependency, queue, broker call, event publication, persistence operation or domain rule. It does not change Conservative behavior or the status of the wider migration plan.
 
