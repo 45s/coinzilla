@@ -319,6 +319,7 @@ function createHarnessBrokerState({ options } = {}) {
     cancelWithFill,
     cancelExecutedQuantity,
     cancelOrderStatus,
+    cancelUpdatedAt,
     cancelOrderGate,
     onCancelOrderStarted,
     placeOrderThrow,
@@ -359,6 +360,7 @@ function createHarnessBrokerState({ options } = {}) {
     cancelExecutedQuantity: getHarnessCancelExecutedQuantity({ cancelWithFill,
 cancelExecutedQuantity }),
     cancelOrderStatus,
+    cancelUpdatedAt,
     cancelOrderGate,
     onCancelOrderStarted,
     placeOrderThrow,
@@ -11251,7 +11253,7 @@ function createLateSellScenarioAccounting({ portfolio, recoveryLedger } = {}) {
   }
 }
 
-async function prepareLateSellShutdownScenario({ fillFraction } = {}) {
+async function prepareLateSellShutdownScenario({ fillFraction, cancelUpdatedAt } = {}) {
   const seeded = makeSeededRecoveryState()
   let shutdownStarted = false
   let cancelSellExecutedQuantity = "0"
@@ -11266,6 +11268,7 @@ async function prepareLateSellShutdownScenario({ fillFraction } = {}) {
     baseFreeBalance: "1",
     cancelExecutedQuantity: ({ order }) =>
       order.side === "SELL" ? cancelSellExecutedQuantity : "0",
+    cancelUpdatedAt,
     isStopping: () => shutdownStarted,
   })
   await harness.engine.processMarketPrice({
@@ -11358,6 +11361,28 @@ test("maintains recovery SELL coverage when a late owned SELL fill leaves sellab
     coverageResult: finalCoverage,
   })
   assert.equal(recheckedSafety.data.markets[0].status, "SAFE_TO_SHUTDOWN")
+})
+
+test("does not treat a stale recovery SELL cancellation response as terminal", async () => {
+  const { harness } = await prepareLateSellShutdownScenario({
+    fillFraction: "0.5",
+    cancelUpdatedAt: () => 2,
+  })
+  const recoveryReconciliation = await harness.engine.reconcileRecoverySellsForShutdown({
+    symbols: ["DOGEUSDT"],
+  })
+
+  assert.equal(recoveryReconciliation.ok, false)
+  assert.match(
+    recoveryReconciliation.errors[0].message,
+    /stale relative to a newer non-terminal order update/i,
+  )
+  assert.ok(harness.pauses.includes("RECOVERY_SELL_CANCELLATION_RESPONSE_STALE"))
+  assert.equal(
+    harness.engine.getActiveOrders().filter((order) => order.side === "SELL").length,
+    1,
+    "The unresolved SELL must remain active until an authoritative terminal update arrives.",
+  )
 })
 
 test("does not submit a recovery SELL when a late fill exhausts sellable quantity above keepQuantity", async () => {
