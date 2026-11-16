@@ -1,6 +1,6 @@
 const MAX_ORDER_HISTORY_LIMIT = 1000
 
-function validateOrderId(orderId, index) {
+function validateOrderId({ orderId, index }) {
   const validStringId = typeof orderId === "string" && /^\\d+$/.test(orderId)
   const validNumericId = Number.isSafeInteger(orderId) && orderId >= 0
   if ((!validStringId && !validNumericId) || !Number.isSafeInteger(Number(orderId))) {
@@ -9,7 +9,7 @@ function validateOrderId(orderId, index) {
   return String(orderId)
 }
 
-function validateOrderFields(order, index, fields) {
+function validateOrderFields({ order, index, fields }) {
   for (const field of fields) {
     if (typeof order[field] !== "string" || order[field].length === 0) {
       throw new TypeError(`Binance order history item ${index} has an invalid ${field}`)
@@ -17,18 +17,18 @@ function validateOrderFields(order, index, fields) {
   }
 }
 
-function validateOrder(order, index) {
+function validateOrder({ order, index }) {
   if (!order || typeof order !== "object" || Array.isArray(order)) {
     throw new TypeError(`Binance order history item ${index} must be an object`)
   }
 
-  const orderId = validateOrderId(order.orderId, index)
+  const orderId = validateOrderId({ orderId: order.orderId, index })
   if (!Number.isSafeInteger(order.time) || order.time < 0) {
     throw new TypeError(`Binance order history item ${index} has an invalid time`)
   }
 
-  validateOrderFields(order, index, ["symbol", "side", "type", "status"])
-  validateOrderFields(order, index, ["price", "origQty", "executedQty", "cummulativeQuoteQty"])
+  validateOrderFields({ order, index, fields: ["symbol", "side", "type", "status"] })
+  validateOrderFields({ order, index, fields: ["price", "origQty", "executedQty", "cummulativeQuoteQty"] })
   if (order.clientOrderId !== undefined && typeof order.clientOrderId !== "string") {
     throw new TypeError(`Binance order history item ${index} has an invalid clientOrderId`)
   }
@@ -50,18 +50,6 @@ function validateOrder(order, index) {
 
 // Array.sort requires a two-argument comparator.
  // eslint-disable-next-line max-params
-function compareOrders(left, right) {
-  if (left.time !== right.time) {
-    return right.time - left.time
-  }
-  const leftId = BigInt(left.orderId)
-  const rightId = BigInt(right.orderId)
-  if (leftId === rightId) {
-    return 0
-  }
-  return leftId > rightId ? -1 : 1
-}
-
 export const normalizeOrderHistory = ({ orders, limit = 20 }) => {
   if (!Array.isArray(orders)) {
     throw new TypeError("Binance order history must be an array")
@@ -70,9 +58,24 @@ export const normalizeOrderHistory = ({ orders, limit = 20 }) => {
     throw new RangeError(`Order history limit must be an integer between 1 and ${MAX_ORDER_HISTORY_LIMIT}`)
   }
 
-  const normalizedOrders = orders.map(validateOrder)
-  normalizedOrders.sort(compareOrders)
-  return { orders: normalizedOrders.slice(0, limit) }
+  const normalizedOrders = orders.map((order, index) => ({
+    order: validateOrder({ order, index }),
+    index,
+  }))
+  normalizedOrders.sort((left, right) => {
+    const leftTime = left.order.time
+    const rightTime = right.order.time
+    if (leftTime !== rightTime) {
+      return rightTime - leftTime
+    }
+    const leftId = BigInt(left.order.orderId)
+    const rightId = BigInt(right.order.orderId)
+    if (leftId === rightId) {
+      return left.index - right.index
+    }
+    return leftId > rightId ? -1 : 1
+  })
+  return { orders: normalizedOrders.slice(0, limit).map(({ order }) => order) }
 }
 
 export const parseOrderHistoryArguments = ({ args = [] } = {}) => {
