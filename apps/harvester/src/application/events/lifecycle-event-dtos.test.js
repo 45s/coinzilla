@@ -1020,7 +1020,23 @@ test("maps all account assets into sorted exact-decimal snapshot facts", () => {
   const result = mapAccountSnapshotCapturedData({
     phase: "OPENING",
     snapshot: { sourceTime: 1730740000000,
-      balances: [balance({ code: "USDT", free: "12.3400", locked: "1.66" }), balance({ code: "DOGE", free: "12321", locked: "0" }), balance({ code: "BNB", free: "0.2", locked: "0.01" })] },
+      balances: [
+        balance({
+          code: "USDT",
+          free: "12.3400",
+          locked: "1.66",
+        }),
+        balance({
+          code: "DOGE",
+          free: "12321",
+          locked: "0",
+        }),
+        balance({
+          code: "BNB",
+          free: "0.2",
+          locked: "0.01",
+        }),
+      ] },
   })
   assert.equal(result.ok, true)
   assert.deepEqual(result.data.balances, [

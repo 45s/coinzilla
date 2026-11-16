@@ -1,7 +1,8 @@
 import nodeTest from "node:test"
-const test = (...args) => nodeTest(`[create-harvester-operator.test.js] ${args[0]}`, ...args.slice(1))
 import assert from "node:assert/strict"
 import { createHarvesterOperator } from "./create-harvester-operator.js"
+
+const test = (...args) => nodeTest(`[create-harvester-operator.test.js] ${args[0]}`, ...args.slice(1))
 
 const actor = Object.freeze({
   id: "telegram-user:12345",
