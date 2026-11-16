@@ -18,7 +18,7 @@ code: "USDT" }),
 const feeAsset = new Asset({ id: "binance:BNB",
 code: "BNB" })
 
-const record = (name, data, lineNumber) => ({
+const record = (...[name, data, lineNumber]) => ({
   id: `record-${  lineNumber}`,
   payload: { id: `record-${  lineNumber}`,
 name,
@@ -27,18 +27,12 @@ data },
 lineNumber },
 })
 
-const recoveryProjection = ({ freeQuantity = "0.01", thirdAssetCommission = false, includeCommissionBaseline = true } = {}) => {
+function createOpeningRecords() {
   const balances = [
-    { asset: "BTC",
-free: "0",
-locked: "0",
-total: "0" },
-    { asset: "USDT",
-free: "1000",
-locked: "0",
-total: "1000" },
+    { asset: "BTC", free: "0", locked: "0", total: "0" },
+    { asset: "USDT", free: "1000", locked: "0", total: "1000" },
   ]
-  const records = [
+  return [
     record("account.snapshot_captured", {
       phase: "PREFLIGHT",
       sourceTime: 1000,
@@ -71,42 +65,46 @@ total: "1000" },
       quantity: "0.5",
       status: "FILLED",
     }, 4),
-    ...(thirdAssetCommission && includeCommissionBaseline ? [record("account.snapshot_captured", {
-      phase: "COMMISSION_BASELINE",
-      sourceTime: 1000,
-      auditStatus: "COMPLETE",
-      balances: [{ asset: "BNB",
-free: "0.75",
-locked: "0.25",
-total: "1" }],
-      auditReasons: [],
-    }, 5)] : []),
-    record("execution.fill_applied", {
-      fillId: "binance:BTCUSDT:trade-1",
-      tradeId: "trade-1",
-      brokerOrderId: "9001",
-      clientOrderId: "h-BTCUSDT-buy-1",
-      symbol: "BTCUSDT",
-      side: "BUY",
-      price: "100",
-      quantity: "0.5",
-      quoteQuantity: "50",
-      liquidityRole: "MAKER",
-      commissions: [
-        { amount: "0.0004",
-assetId: "binance:BTC",
-asset: "BTC" },
-        ...(thirdAssetCommission ? [{
-          amount: "0.0001",
-          assetId: "binance:BNB",
-          asset: "BNB",
-          quoteValue: { amount: "0.01",
-assetId: "binance:USDT",
-asset: "USDT" },
-        }] : []),
-      ],
-      commissionStatus: "COMPLETE",
-    }, thirdAssetCommission ? 6 : 5),
+  ]
+}
+
+function createCommissionBaselineRecord() {
+  return record("account.snapshot_captured", {
+    phase: "COMMISSION_BASELINE",
+    sourceTime: 1000,
+    auditStatus: "COMPLETE",
+    balances: [{ asset: "BNB", free: "0.75", locked: "0.25", total: "1" }],
+    auditReasons: [],
+  }, 5)
+}
+
+function createBuyFillRecord({ thirdAssetCommission }) {
+  return record("execution.fill_applied", {
+    fillId: "binance:BTCUSDT:trade-1",
+    tradeId: "trade-1",
+    brokerOrderId: "9001",
+    clientOrderId: "h-BTCUSDT-buy-1",
+    symbol: "BTCUSDT",
+    side: "BUY",
+    price: "100",
+    quantity: "0.5",
+    quoteQuantity: "50",
+    liquidityRole: "MAKER",
+    commissions: [
+      { amount: "0.0004", assetId: "binance:BTC", asset: "BTC" },
+      ...(thirdAssetCommission ? [{
+        amount: "0.0001",
+        assetId: "binance:BNB",
+        asset: "BNB",
+        quoteValue: { amount: "0.01", assetId: "binance:USDT", asset: "USDT" },
+      }] : []),
+    ],
+    commissionStatus: "COMPLETE",
+  }, thirdAssetCommission ? 6 : 5)
+}
+
+function createSellCycleRecords({ freeQuantity, thirdAssetCommission }) {
+  return [
     record("order.submission_requested", {
       clientOrderId: "h-BTCUSDT-sell-1",
       symbol: "BTCUSDT",
@@ -148,28 +146,50 @@ asset: "USDT" },
       minProfit: "0.01",
       realizedNetProfit: thirdAssetCommission ? "0.24" : "0.25",
     }, thirdAssetCommission ? 10 : 9),
+  ]
+}
+
+function createClosingRecords({ thirdAssetCommission }) {
+  return [
     record("account.snapshot_captured", {
       phase: "CLOSING",
       sourceTime: 2000,
       auditStatus: "COMPLETE",
       balances: [
-        { asset: "BTC",
-free: "0.01",
-locked: "0",
-total: "0.01" },
-        { asset: "USDT",
-free: thirdAssetCommission ? "1000.24" : "1000.25",
-locked: "0",
-total: thirdAssetCommission ? "1000.24" : "1000.25" },
-        ...(thirdAssetCommission ? [{ asset: "BNB",
-free: "0.7499",
-locked: "0.25",
-total: "0.9999" }] : []),
+        { asset: "BTC", free: "0.01", locked: "0", total: "0.01" },
+        {
+          asset: "USDT",
+          free: thirdAssetCommission ? "1000.24" : "1000.25",
+          locked: "0",
+          total: thirdAssetCommission ? "1000.24" : "1000.25",
+        },
+        ...(thirdAssetCommission ? [{
+          asset: "BNB",
+          free: "0.7499",
+          locked: "0.25",
+          total: "0.9999",
+        }] : []),
       ],
       auditReasons: [],
     }, thirdAssetCommission ? 11 : 10),
-    record("harvester.stopped", { reason: "SIGTERM",
-outcome: "success" }, thirdAssetCommission ? 12 : 11),
+    record("harvester.stopped", {
+      reason: "SIGTERM",
+      outcome: "success",
+    }, thirdAssetCommission ? 12 : 11),
+  ]
+}
+
+const recoveryProjection = ({
+  freeQuantity = "0.01",
+  thirdAssetCommission = false,
+  includeCommissionBaseline = true,
+} = {}) => {
+  const records = [
+    ...createOpeningRecords(),
+    ...(thirdAssetCommission && includeCommissionBaseline ? [createCommissionBaselineRecord()] : []),
+    createBuyFillRecord({ thirdAssetCommission }),
+    ...createSellCycleRecords({ freeQuantity, thirdAssetCommission }),
+    ...createClosingRecords({ thirdAssetCommission }),
   ]
   return projectHarvesterJournalRecovery({ records })
 }
@@ -353,11 +373,11 @@ test("fails closed when the third-asset baseline is journaled after the applied 
     ...projection,
     data: {
       ...projection.data,
-      accountSnapshots: projection.data.accountSnapshots.map((snapshot) =>
-        snapshot.phase === "COMMISSION_BASELINE"
-          ? { ...snapshot,
+      accountSnapshots: projection.data.accountSnapshots.map((accountSnapshot) =>
+        accountSnapshot.phase === "COMMISSION_BASELINE"
+          ? { ...accountSnapshot,
 sequence: fill.sequence + 1 }
-          : snapshot
+          : accountSnapshot
       ),
     },
   }
@@ -592,12 +612,12 @@ test("rejects an incomplete durable PREFLIGHT baseline even when current balance
     ...projection,
     data: {
       ...projection.data,
-      accountSnapshots: projection.data.accountSnapshots.map((snapshot, index) =>
+      accountSnapshots: [...projection.data.accountSnapshots.entries()].map(([index, accountSnapshot]) =>
         index === 0
-          ? { ...snapshot,
+          ? { ...accountSnapshot,
 auditStatus: "INCOMPLETE",
 auditReasons: ["MISSING_ASSET_COVERAGE"] }
-          : snapshot
+          : accountSnapshot
       ),
     },
   }
