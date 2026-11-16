@@ -23,7 +23,8 @@ export const adaptUser = {
     canWithdraw: message.W,
     canDeposit: message.D,
     lastAccountUpdate: message.u,
-    balances: message.B.reduce((out, item) => {
+    balances: message.B.reduce((...args) => {
+      const [out, item] = args
       out[item.a] = { available: item.f,
 locked: item.l }
       return out

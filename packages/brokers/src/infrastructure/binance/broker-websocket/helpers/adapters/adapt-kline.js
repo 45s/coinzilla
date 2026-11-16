@@ -27,7 +27,8 @@ interval })
 interval }
 }
 
-function validateTimestamp(value, field) {
+function validateTimestamp(...args) {
+  const [value, field] = args
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new RangeError(`Binance candle ${  field  } must be a non-negative safe integer`)
   }

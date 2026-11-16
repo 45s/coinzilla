@@ -3,7 +3,8 @@ function parseVersion(value) {
   return match ? match.slice(1).map(Number) : null
 }
 
-function isAtLeast(version, minimum) {
+function isAtLeast(...args) {
+  const [version, minimum] = args
   for (let index = 0; index < minimum.length; index += 1) {
     if (version[index] > minimum[index]) {return true}
     if (version[index] < minimum[index]) {return false}
