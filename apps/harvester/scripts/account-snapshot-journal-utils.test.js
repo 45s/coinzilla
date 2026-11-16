@@ -4,24 +4,38 @@ import { addDecimal } from "@coinzilla/utils"
 import { reconcileJournalAccountSnapshotRecords } from "./account-snapshot-journal-utils.js"
 
 const balance = (asset, free, locked = "0") => ({
-  asset, free, locked, total: addDecimal({ left: free, right: locked }),
+  asset,
+free,
+locked,
+total: addDecimal({ left: free,
+right: locked }),
 })
 const event = (phase, sourceTime, balances, auditStatus = "COMPLETE", auditReasons = []) => ({
   name: "account.snapshot_captured",
-  data: { phase, sourceTime, balances, auditStatus, auditReasons },
+  data: { phase,
+sourceTime,
+balances,
+auditStatus,
+auditReasons },
 })
-const record = (fileName, payload) => ({ payload, position: { fileName, lineNumber: 1 } })
+const record = (fileName, payload) => ({ payload,
+position: { fileName,
+lineNumber: 1 } })
 
 test("pairs snapshots by Journal session and computes exact asset deltas", () => {
   const result = reconcileJournalAccountSnapshotRecords({
     records: [
       record("session-a.jsonl", event("PREFLIGHT", 100, [balance("DOGE", "10.0001"), balance("USDT", "20")])),
-      record("session-a.jsonl", { name: "bot.started", data: {} }),
-      record("session-a.jsonl", { name: "recovery.cycle_completed", data: { realizedNetProfit: "0.07808" } }),
-      record("session-a.jsonl", { name: "recovery.cycle_completed", data: { realizedNetProfit: "0.03285" } }),
+      record("session-a.jsonl", { name: "bot.started",
+data: {} }),
+      record("session-a.jsonl", { name: "recovery.cycle_completed",
+data: { realizedNetProfit: "0.07808" } }),
+      record("session-a.jsonl", { name: "recovery.cycle_completed",
+data: { realizedNetProfit: "0.03285" } }),
       record("session-a.jsonl", event("CLOSING", 200, [balance("DOGE", "10.1251"), balance("USDT", "19.5")])),
       record("session-b.jsonl", event("PREFLIGHT", 300, [balance("ZRO", "2")])),
-      record("session-b.jsonl", { name: "recovery.cycle_completed", data: { realizedNetProfit: "0.36335" } }),
+      record("session-b.jsonl", { name: "recovery.cycle_completed",
+data: { realizedNetProfit: "0.36335" } }),
       record("session-b.jsonl", event("CLOSING", 400, [balance("ZRO", "2.1")])),
     ],
   })
@@ -96,7 +110,8 @@ test("reports duplicate CLOSING endpoints as an incomplete session", () => {
 
 test("fails closed for malformed snapshot session, phase, and recovery profit records", () => {
   const missingSession = reconcileJournalAccountSnapshotRecords({
-    records: [{ payload: event("PREFLIGHT", 100, []), position: { lineNumber: 1 } }],
+    records: [{ payload: event("PREFLIGHT", 100, []),
+position: { lineNumber: 1 } }],
   })
   const invalidPhase = reconcileJournalAccountSnapshotRecords({
     records: [

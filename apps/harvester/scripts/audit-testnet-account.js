@@ -15,17 +15,20 @@ import { prepareOptionalJournal } from "../src/infrastructure/journal/prepare-op
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 
 const requireSuccess = ({ result, operation }) => {
-  if (result?.ok === true) return result
+  if (result?.ok === true) {return result}
   const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-  throw new Error(operation + (details ? ": " + details : ""))
+  throw new Error(operation + (details ? `: ${  details}` : ""))
 }
 
 const publishAndFlush = async ({ eventPublisher, eventName, dataResult }) => {
-  const published = publishLifecycleEvent({ eventPublisher, eventName, dataResult })
-  requireSuccess({ result: published, operation: "Unable to publish " + eventName })
+  const published = publishLifecycleEvent({ eventPublisher,
+eventName,
+dataResult })
+  requireSuccess({ result: published,
+operation: `Unable to publish ${  eventName}` })
   requireSuccess({
     result: await eventPublisher.flush(),
-    operation: "Unable to durably persist " + eventName,
+    operation: `Unable to durably persist ${  eventName}`,
   })
 }
 
@@ -103,7 +106,8 @@ export async function runTestnetAccountAudit({
     await publishAndFlush({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
-      dataResult: mapAccountSnapshotCapturedData({ phase: "PREFLIGHT", snapshot }),
+      dataResult: mapAccountSnapshotCapturedData({ phase: "PREFLIGHT",
+snapshot }),
     })
 
     const ordersResult = await broker.getOpenOrders({})
@@ -116,7 +120,7 @@ export async function runTestnetAccountAudit({
     }
     const orders = ordersResult.data
     const blockReasons = orders.length > 0
-      ? ["UNOWNED_OPEN_ORDERS:" + orders.length]
+      ? [`UNOWNED_OPEN_ORDERS:${  orders.length}`]
       : []
     await publishAndFlush({
       eventPublisher,

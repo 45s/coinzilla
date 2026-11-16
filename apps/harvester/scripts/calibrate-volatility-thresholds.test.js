@@ -60,7 +60,8 @@ test("parses Binance Spot kline CSV timestamps in milliseconds", () => {
     sourceFile: "BTCUSDT-1m-2023-11.csv",
     content: [
       "open_time,open,high,low,close,volume,close_time,quote_volume,trades,taker_base,taker_quote,ignore",
-      makeKlineRow({ openTime, closeTime: openTime + INTERVAL_MS - 1 }),
+      makeKlineRow({ openTime,
+closeTime: openTime + INTERVAL_MS - 1 }),
     ].join("\n"),
   })
 
@@ -103,7 +104,8 @@ test("merges chronological files and removes identical overlapping candle facts"
   const firstOpenTime = 1_700_000_040_000
   const first = {
     sourceFile: "BTCUSDT-1m-2023-11.csv",
-    candles: createCandleSeries({ count: 2, spikeAt: -1 }),
+    candles: createCandleSeries({ count: 2,
+spikeAt: -1 }),
   }
   const overlap = {
     sourceFile: "BTCUSDT-1m-2023-12.csv",
@@ -131,14 +133,17 @@ test("merges chronological files and removes identical overlapping candle facts"
 
 test("rejects conflicting duplicate candles instead of choosing one archive row", () => {
   const candle = createCandleSeries({ count: 1 })[0]
-  const conflicting = Object.freeze({ ...candle, close: "100.01" })
+  const conflicting = Object.freeze({ ...candle,
+close: "100.01" })
 
   assert.throws(
     () => mergeAndValidateCandles({
       symbol: "BTCUSDT",
       candleGroups: [
-        { sourceFile: "first.csv", candles: [candle] },
-        { sourceFile: "second.csv", candles: [conflicting] },
+        { sourceFile: "first.csv",
+candles: [candle] },
+        { sourceFile: "second.csv",
+candles: [conflicting] },
       ],
     }),
     /conflicting duplicate/i,
@@ -153,7 +158,8 @@ test("rejects missing one-minute intervals instead of interpolating historical c
   assert.throws(
     () => mergeAndValidateCandles({
       symbol: "BTCUSDT",
-      candleGroups: [{ sourceFile: "gapped.csv", candles: gapped }],
+      candleGroups: [{ sourceFile: "gapped.csv",
+candles: gapped }],
     }),
     /contiguous/i,
     "Historical calibration must fail when the source series contains a missing one-minute candle.",
@@ -165,7 +171,10 @@ test("validates threshold ordering and requires a positive stable-candle count",
 
   assert.deepEqual(
     defaults,
-    { warningRatio: "1.5", protectRatio: "2", recoverRatio: "1.3", requiredStableCandles: 3 },
+    { warningRatio: "1.5",
+protectRatio: "2",
+recoverRatio: "1.3",
+requiredStableCandles: 3 },
     "Calibration defaults must match the current Harvester runtime thresholds.",
   )
   assert.throws(
@@ -192,7 +201,8 @@ test("validates threshold ordering and requires a positive stable-candle count",
 
 test("analyzes historical volatility with the runtime ATR/NATR ratio and protection state machine", () => {
   const candles = createCandleSeries()
-  const report = analyzeVolatilityHistory({ symbol: "BTCUSDT", candles })
+  const report = analyzeVolatilityHistory({ symbol: "BTCUSDT",
+candles })
   const runtimeMetrics = calculateVolatilityMetrics({
     candles: candles.slice(-100),
     intervalMs: INTERVAL_MS,
@@ -214,7 +224,8 @@ test("analyzes historical volatility with the runtime ATR/NATR ratio and protect
 
 test("requires enough candles to reproduce the runtime startup history window", () => {
   assert.throws(
-    () => analyzeVolatilityHistory({ symbol: "BTCUSDT", candles: createCandleSeries({ count: 99 }) }),
+    () => analyzeVolatilityHistory({ symbol: "BTCUSDT",
+candles: createCandleSeries({ count: 99 }) }),
     /at least 100/i,
     "Calibration must reject a dataset shorter than the runtime's 100-candle startup history.",
   )
@@ -270,7 +281,8 @@ test("runs the offline CLI and writes a reproducible report without network acce
   const firstOpenTime = 1_700_000_040_000
   const csv = Array.from({ length: 100 }, (_, index) => {
     const openTime = firstOpenTime + index * INTERVAL_MS
-    return makeKlineRow({ openTime, closeTime: openTime + INTERVAL_MS - 1 })
+    return makeKlineRow({ openTime,
+closeTime: openTime + INTERVAL_MS - 1 })
   }).join("\n")
 
   try {
@@ -284,6 +296,7 @@ test("runs the offline CLI and writes a reproducible report without network acce
     assert.equal(report.markets[0].candleCount, 100, "The CLI must include all validated source candles.")
     assert.match(report.files[0].sha256, /^[a-f0-9]{64}$/, "The report must include a SHA-256 hash for every input CSV.")
   } finally {
-    rmSync(directory, { recursive: true, force: true })
+    rmSync(directory, { recursive: true,
+force: true })
   }
 })
