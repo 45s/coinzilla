@@ -52,8 +52,10 @@ const renderMenu = (selectedIndex) => {
 }
 
 const waitForKeypress = () => new Promise((resolve) => {
-  stdin.once("keypress", (character, key) => resolve({ character,
-key }))
+  stdin.once("keypress", (...keypressArguments) => resolve({
+    character: keypressArguments[0],
+    key: keypressArguments[1],
+  }))
 })
 
 const stderrWrite = (message) => process.stderr.write(message)
