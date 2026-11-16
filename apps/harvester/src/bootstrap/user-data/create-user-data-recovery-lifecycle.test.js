@@ -31,7 +31,9 @@ function createLifecycleTradingEngine({ reconciliationState, firstReconciliation
       if (reconciliationState.calls === 1) {
         return firstReconciliation
       }
-      return { ok: true, data: { reconciled: 2, symbols: ["DOGEUSDT"] } }
+      return { ok: true,
+data: { reconciled: 2,
+symbols: ["DOGEUSDT"] } }
     },
   }
 }
@@ -50,7 +52,8 @@ function createLifecycleSubscription({ state, acknowledgements, handlers }) {
         recoveryRequired: false,
         reconciliationRequired: false,
       })
-      return { accepted: true, completed: true }
+      return { accepted: true,
+completed: true }
     },
   }
 }
@@ -70,10 +73,12 @@ function createLifecycleRecoveryCoordinator({
     getUserDataSubscription: () => subscription,
     getTradingEngine: () => tradingEngine,
     tradingEnabled: true,
-    broker: { getOpenOrders: async () => ({ ok: true, data: [] }) },
+    broker: { getOpenOrders: async () => ({ ok: true,
+data: [] }) },
     drainUserDataEvents: async () => {},
     setCanonicalOwnershipReconciled: (value) => ownershipReconciliations.push(value),
-    refreshAccountSnapshot: async () => ({ ok: true, data: { sourceTime: 100 } }),
+    refreshAccountSnapshot: async () => ({ ok: true,
+data: { sourceTime: 100 } }),
     publishAccountSnapshot: async (input) => {
       accountAudits.push(input)
       return { ok: true }
@@ -120,7 +125,8 @@ function createLifecycleStatusHandler({
 
 function createRecoveryLifecycleFixture() {
   const state = createLifecycleState()
-  const logs = { info: [], error: [] }
+  const logs = { info: [],
+error: [] }
   const accountAudits = []
   const openOrdersAudits = []
   const acknowledgements = []
@@ -244,7 +250,8 @@ function assertLatestRecoveryCompleted({ fixture }) {
   assert.equal(openOrdersAudits.length, 1, "Only the latest recovery generation may publish the account-wide open-orders audit.")
   assert.deepEqual(
     acknowledgements,
-    [{ applicationGeneration: 2, brokerGeneration: 101 }],
+    [{ applicationGeneration: 2,
+brokerGeneration: 101 }],
     "Only the latest application and broker recovery generations may be acknowledged after both audits succeed.",
   )
   assert.deepEqual(
@@ -273,7 +280,8 @@ function assertLatestRecoveryCompleted({ fixture }) {
 test("a second disconnect during an in-flight recovery invalidates stale work and reconciles only the latest generation", async () => {
   const fixture = createRecoveryLifecycleFixture()
   const { state, statusHandler } = fixture
-  statusHandler({ type: "connectionClosed", recoveryRequired: true })
+  statusHandler({ type: "connectionClosed",
+recoveryRequired: true })
   statusHandler({
     type: "recovered",
     subscriptionId: 42,
@@ -287,7 +295,8 @@ test("a second disconnect during an in-flight recovery invalidates stale work an
     staleTask,
   })
 
-  statusHandler({ type: "connectionClosed", recoveryRequired: true })
+  statusHandler({ type: "connectionClosed",
+recoveryRequired: true })
   statusHandler({
     type: "recovered",
     subscriptionId: 42,
@@ -299,7 +308,9 @@ test("a second disconnect during an in-flight recovery invalidates stale work an
   assert.equal(state.requiresReconciliation, true, "The second disconnect must preserve the application reconciliation requirement for the new generation.")
   assert.equal(fixture.reconciliationCalls, 1, "A recovered reminder received while stale work is in flight must not start a concurrent recovery task.")
 
-  fixture.resolveFirstReconciliation({ ok: true, data: { reconciled: 2, symbols: ["DOGEUSDT"] } })
+  fixture.resolveFirstReconciliation({ ok: true,
+data: { reconciled: 2,
+symbols: ["DOGEUSDT"] } })
   await staleTask
   assertSupersededRecovery({ fixture })
 
