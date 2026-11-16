@@ -103,6 +103,9 @@ describe(`${TradingRules.name} constraints`, () => {
     })
   })
 
+})
+
+describe(`${TradingRules.name} status coverage`, () => {
   it("represents unsupported, dynamic, and unknown constraints explicitly", () => {
     const rules = new TradingRules({
       market,
@@ -136,6 +139,9 @@ describe(`${TradingRules.name} constraints`, () => {
     assert.deepEqual(rules.value.constraints, [])
   })
 
+})
+
+describe(`${TradingRules.name} input validation`, () => {
 })
 
 describe(`${TradingRules.name} input validation`, () => {
@@ -243,6 +249,9 @@ status,
     )
   })
 
+})
+
+describe(`${TradingRules.name} bound validation`, () => {
   it("rejects duplicate constraint types", () => {
     assert.throws(
       () => new TradingRules({
