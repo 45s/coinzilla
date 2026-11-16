@@ -35,7 +35,8 @@ rpc }
 describe("BinanceSdkBroker.getOrder client-order-ID lookup", () => {
   it("queries order.status with origClientOrderId and adapts the order", async () => {
     const { broker, rpc } = createBroker({
-      "order.status": (params, options) => {
+      "order.status": (...args) => {
+        const [params, options] = args
         assert.deepEqual(params, {
           symbol: "ETHUSDT",
           origClientOrderId: "harvester-client-123",

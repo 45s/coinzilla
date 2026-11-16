@@ -12,13 +12,16 @@ tradingMode: "testnet" })
   return { broker,
 rpc }
 }
-const rawOrder = (orderId, symbol = "BTCUSDT") => ({ orderId,
+const rawOrder = (...args) => {
+  const [orderId, symbol = "BTCUSDT"] = args
+  return ({ orderId,
 symbol,
 type: "LIMIT",
 side: "BUY",
 price: "10",
 origQty: "3",
 executedQty: "1" })
+}
 
 describe("BinanceSdkBroker.getOpenOrders", () => {
   it("passes the requested symbol and adapts remaining quantities", async () => {
