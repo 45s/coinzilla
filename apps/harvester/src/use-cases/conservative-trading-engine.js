@@ -442,25 +442,28 @@ function createOperatorMarketPauseHandler({ state, pairs, runTransition } = {}) 
         error.code = "INVALID_OPERATOR_MARKET"
         return toResult({ error })
       }
-      if (typeof beforeApply !== "function") {
-        return toResult({ error: new TypeError("Operator pause requires a Operational State Store commit callback") })
-      }
       if (state.operatorPausedMarkets.has(symbol)) {
-        return toResult({ data: { symbol, paused: true, alreadyPaused: true, durable: true } })
+        return toResult({ data: { symbol, paused: true, alreadyPaused: true, durable: typeof beforeApply === "function" } })
       }
-      let committed
-      try {
-        committed = await beforeApply({ symbol, action: "PAUSE" })
-      } catch (error) {
-        return toResult({ error })
-      }
-      if (committed?.ok !== true || committed?.data?.durable !== true) {
-        return committed?.ok === false
-          ? committed
-          : toResult({ error: new Error("Operator pause fact was not durably committed") })
+      let durable = false
+      if (typeof beforeApply === "function") {
+        let committed
+        try {
+          committed = await beforeApply({ symbol, action: "PAUSE" })
+        } catch (error) {
+          return toResult({ error })
+        }
+        if (committed?.ok !== true || committed?.data?.durable !== true) {
+          return committed?.ok === false
+            ? committed
+            : toResult({ error: new Error("Operator pause fact was not durably committed") })
+        }
+        durable = true
+      } else {
+        // TEMPORARY: with restart recovery disabled, CC pause is process-local only.
       }
       state.operatorPausedMarkets.add(symbol)
-      return toResult({ data: { symbol, paused: true, alreadyPaused: false, durable: true } })
+      return toResult({ data: { symbol, paused: true, alreadyPaused: false, durable } })
     },
   })
 }
@@ -499,22 +502,25 @@ function createOperatorMarketResumeHandler({
       if (!state.operatorPausedMarkets.has(symbol)) {
         return toResult({ data: { symbol, resumed: false, reason: "NOT_OPERATOR_PAUSED" } })
       }
-      if (typeof beforeApply !== "function") {
-        return toResult({ error: new TypeError("Operator resume requires a Operational State Store commit callback") })
-      }
-      let committed
-      try {
-        committed = await beforeApply({ symbol, action: "RESUME" })
-      } catch (error) {
-        return toResult({ error })
-      }
-      if (committed?.ok !== true || committed?.data?.durable !== true) {
-        return committed?.ok === false
-          ? committed
-          : toResult({ error: new Error("Operator resume fact was not durably committed") })
+      let durable = false
+      if (typeof beforeApply === "function") {
+        let committed
+        try {
+          committed = await beforeApply({ symbol, action: "RESUME" })
+        } catch (error) {
+          return toResult({ error })
+        }
+        if (committed?.ok !== true || committed?.data?.durable !== true) {
+          return committed?.ok === false
+            ? committed
+            : toResult({ error: new Error("Operator resume fact was not durably committed") })
+        }
+        durable = true
+      } else {
+        // TEMPORARY: with restart recovery disabled, CC resume is process-local only.
       }
       state.operatorPausedMarkets.delete(symbol)
-      return toResult({ data: { symbol, resumed: true, durable: true } })
+      return toResult({ data: { symbol, resumed: true, durable } })
     },
   })
 }
