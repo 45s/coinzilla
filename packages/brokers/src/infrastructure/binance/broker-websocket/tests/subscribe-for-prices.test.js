@@ -3,7 +3,7 @@ import { describe, it } from "node:test"
 import { BinanceSdkBroker } from "../broker.js"
 import { createFakeStreamsClient } from "../test-helpers/fake-broker-clients.js"
 
-function createBroker() {
+function createBroker(dependencies = {}) {
   const streams = createFakeStreamsClient()
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
@@ -13,7 +13,8 @@ tradingMode: "testnet",
 info() {},
 debug() {},
 warn() {} },
-  }, { marketClientFactory: () => streams })
+  }, { marketClientFactory: () => streams,
+    ...dependencies })
   return { broker,
 streams }
 }
@@ -63,6 +64,7 @@ lastId: 124,
     await result.data.unsubscribe()
     assert.equal(streams.calls.at(-1).method, "unsubscribe")
   })
+
 
   it("returns a structured error when the stream cannot be subscribed", async () => {
     const { broker, streams } = createBroker()

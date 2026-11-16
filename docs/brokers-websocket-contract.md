@@ -42,6 +42,8 @@ packages/brokers/src/
 │       │   │       ├── adapt-kline.js
 │       │   │       └── adapt-kline.test.js
 │       │   ├── tests/
+│       │   │   ├── subscribe-for-prices.test.js
+│       │   │   ├── subscribe-for-prices-liveness.test.js
 │       │   │   ├── user-data-session.setup.test.js
 │       │   │   ├── user-data-session.recovery.test.js
 │       │   │   ├── user-data-session.reconciliation.test.js
@@ -49,12 +51,19 @@ packages/brokers/src/
 │       │   │   └── user-data-session.integration.js
 │       │   ├── test-helpers/
 │       │   └── utils/
+│       │       ├── market-stream-liveness.js
+│       │       ├── market-stream-liveness.test.js
 │       │       ├── rpc-client.js
 │       │       ├── runtime.js
 │       │       ├── signature.js
 │       │       ├── streams-client.js
+│       │       ├── streams-client.heartbeat.test.js
+│       │       ├── streams-client.lifecycle.test.js
+│       │       ├── streams-client.protocol.test.js
 │       │       ├── streams-protocol.js
-│       │       └── transport.js
+│       │       ├── subscribe-for-prices.js
+│       │       ├── transport.js
+│       │       └── transport.heartbeat.test.js
 │       ├── index.js
 │       ├── user-data-client-adapter.js
 │       └── user-data-client-adapter.test.js
@@ -127,6 +136,30 @@ PR #1017 adds two optional market-data capabilities to BinanceWebSocketBroker. T
 - Historical isClosed is derived from Binance server time fetched immediately before the klines query. Live isClosed is copied from the Kline payload's x flag.
 - History must already be strictly ascending and unique by openTime. Malformed or out-of-order results fail; the broker does not fill gaps, sort rows or apply trading policy.
 - The implementation uses Binance's native WebSocket API and Streams only. No REST transport or third-party SDK is introduced.
+
+## Public market-data liveness and recovery
+
+The Binance public Streams connection has two distinct liveness layers. They are diagnostics and transport recovery only; Harvester retains ownership of the five-second price-freshness gate and all trading policy.
+
+### Connection heartbeat
+
+- Binance sends a WebSocket ping frame every 20 seconds. The native Node.js/Undici WebSocket transport observes the matching `undici:websocket:ping` diagnostics channel and forwards only frames belonging to its own socket instance.
+- The Streams client resets a 45-second heartbeat deadline on each server ping. If no ping arrives before the deadline, it closes that transport with a private recovery close code and enters the existing bounded reconnect/resubscribe lifecycle.
+- Generic transport errors remain diagnostic; they do not independently trigger blind reconnects. A transport close or heartbeat timeout is the recovery signal.
+- `BinanceStreamsClient.diagnostics` exposes connection state/generation, last ping time/age, and for each desired stream its confirmed state and last local message receipt time/age. Heartbeat timeout errors use `BINANCE_STREAM_HEARTBEAT_TIMEOUT` and include this per-stream snapshot.
+
+### Per-symbol aggTrade liveness
+
+- Each price subscription listens to the symbol's `aggTrade` stream and the shared all-market `!ticker_1h@arr` rolling-window ticker stream. The latter is one server-side stream subscription per Streams connection; its local listener filters by symbol.
+- Binance's rolling-window ticker payload exposes `L` (last raw trade ID); an `aggTrade` payload exposes `l` (last raw trade ID covered by that aggregate event). If ticker `L` advances beyond the latest aggTrade `l`, the monitor waits five seconds for normal delivery to catch up.
+- If aggTrade still has not covered that trade ID, the broker unsubscribes and resubscribes only that symbol's aggTrade stream. Healthy sibling streams and the shared ticker stream remain subscribed.
+- Recovery is bounded to three attempts in a 60-second window. Further attempts require a genuinely newer ticker last-trade ID; repeated rolling-ticker updates with the same `L` do not retry. A recovered aggTrade stream resets its attempt budget. After exhaustion, a new trade ID can re-arm recovery only after the 60-second window expires.
+- A successful SUBSCRIBE acknowledgement is not itself recovery: the monitor returns to healthy only after a subsequent aggTrade event covers the pending ticker trade ID. Exhaustion emits `BINANCE_AGG_TRADE_STREAM_STALLED` with the symbol and trade-ID context.
+- A quiet market does not trigger recovery: without a newer ticker last-trade ID there is no evidence that aggTrade missed a trade. No ticker price is substituted for aggTrade, no REST fallback is introduced, and no order is created, canceled, replaced or modified.
+
+### Limits and safety
+
+A server ping proves that the WebSocket transport is alive, not that every logical market-data stream is delivering. The per-symbol detector identifies an aggTrade gap only when the rolling ticker stream independently reports a newer trade ID. If both market-data streams stop while server pings continue, the broker cannot infer whether the market is inactive or the exchange data plane is stalled; the consumer's stale-price gate must remain fail-closed and operators need runtime evidence. User-data/accounting recovery remains separate.
 
 ## DDD responsibility map (current implementation and Phase 9 target boundaries)
 

@@ -11,6 +11,18 @@ The active Binance implementation is `BinanceWebSocketBroker`. It uses two indep
 
 The package does not use the Binance REST API or a third-party Binance SDK. Do not add REST fallbacks or automatically retry a state-changing request after an uncertain disconnect.
 
+## Binance public market-data liveness
+
+The public Streams client monitors both connection and logical market-stream delivery:
+
+- Binance server ping frames are observed through Undici's `undici:websocket:ping` diagnostics channel. If no server ping arrives for 45 seconds, the broker closes the stale transport and uses its existing bounded reconnect/resubscribe lifecycle. Generic transport errors are diagnostic and do not cause blind reconnects.
+- Each `subscribeForPrices()` subscription listens to the symbol's `aggTrade` stream and the shared `!ticker_1h@arr` all-market rolling-window ticker stream. It compares the ticker's last raw trade ID (`L`) with the aggregate stream's last covered trade ID (`l`).
+- If `L` advances beyond `l`, the broker waits five seconds for delivery to catch up. It then resubscribes only the affected symbol's `aggTrade` stream, with a maximum of three attempts per 60 seconds. Further attempts require a genuinely newer ticker trade ID; repeated updates with the same ID do not retry. A recovered stream resets its attempt budget.
+- No new ticker trade ID means no evidence of a missed trade, so an inactive market is not automatically treated as a broken stream. No ticker price fallback or REST fallback is used.
+- `BinanceStreamsClient.diagnostics` reports connection state/generation, heartbeat age, desired/confirmed subscriptions, and per-stream last-message receipt age. Harvester still owns the fail-closed price-freshness gate and all trading decisions.
+
+See the detailed [Binance WebSocket contract](../../docs/brokers-websocket-contract.md#public-market-data-liveness-and-recovery) for protocol details and known limits.
+
 ## Package exports
 
 The `@coinzilla/brokers` entry point exports:
@@ -156,7 +168,7 @@ The RPC client uses a 10,000 ms default request timeout and a 5,000 ms default `
 
 ## Public market-data streams
 
-`subscribeForPrices({ symbol, onPrice })` subscribes to the symbol's `aggTrade` stream and returns an unsubscribe function in its result data. The Streams client reconnects desired subscriptions after unexpected disconnection, paces control messages, limits a connection to 1,024 streams, batches subscribe/unsubscribe requests in groups of at most 200, and rotates a connection before the documented 24-hour connection lifetime.
+`subscribeForPrices({ symbol, onPrice })` subscribes to the symbol's `aggTrade` stream and the shared `!ticker_1h@arr` liveness stream, then returns an unsubscribe function in its result data. The Streams client reconnects desired subscriptions after unexpected disconnection, paces control messages, limits a connection to 1,024 streams, batches subscribe/unsubscribe requests in groups of at most 200, and rotates a connection before the documented 24-hour connection lifetime.
 
 `subscribeForBookTicker({ symbol, onBookTicker })` subscribes to the symbol's `bookTicker` stream and returns an unsubscribe function. Its immutable callback payload contains `symbol`, `bestBidPrice`, `bestBidQuantity`, `bestAskPrice`, `bestAskQuantity` (all price/quantity values remain exact decimal strings), and a local receipt `timestamp`. Malformed events and events for a different symbol are rejected; the timestamp records local receipt time because Binance's bookTicker event does not include an event timestamp.
 
