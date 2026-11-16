@@ -38,6 +38,73 @@ import {
   mapStrategyPausedData,
 } from "./lifecycle-event-dtos.js"
 
+const createFillTestMarket = () => {
+  const baseAsset = new Asset({
+    id: "asset:DOGE",
+    code: "DOGE",
+  })
+  const quoteAsset = new Asset({
+    id: "asset:USDT",
+    code: "USDT",
+  })
+  const feeAsset = new Asset({
+    id: "asset:BNB",
+    code: "BNB",
+  })
+  const market = new Market({
+    venue: "binance",
+    symbol: "DOGEUSDT",
+    baseAsset,
+    quoteAsset,
+  })
+  return {
+    baseAsset,
+    quoteAsset,
+    feeAsset,
+    market,
+  }
+}
+
+const createZeroTimestampOrder = () => {
+  const baseAsset = new Asset({
+    id: "asset:DOGE",
+    code: "DOGE",
+  })
+  const quoteAsset = new Asset({
+    id: "asset:USDT",
+    code: "USDT",
+  })
+  const market = new Market({
+    venue: "binance",
+    symbol: "DOGEUSDT",
+    baseAsset,
+    quoteAsset,
+  })
+  return new CanonicalOrder({
+    clientOrderId: "harvester-client-zero",
+    brokerOrderId: "broker-order-zero",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({
+      amount: "99.95",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    status: "OPEN",
+    createdAt: 0,
+    acknowledgedAt: 0,
+    updatedAt: 0,
+  })
+}
+
 const INVALID_TRANSACTION_TIMESTAMPS = Object.freeze([
   NaN,
   Infinity,
@@ -597,16 +664,7 @@ test("maps an unknown recovery SELL cancellation state safely", () => {
 
 
 test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", () => {
-  const baseAsset = new Asset({ id: "asset:DOGE",
-    code: "DOGE" })
-  const quoteAsset = new Asset({ id: "asset:USDT",
-    code: "USDT" })
-  const feeAsset = new Asset({ id: "asset:BNB",
-    code: "BNB" })
-  const market = new Market({ venue: "binance",
-    symbol: "DOGEUSDT",
-    baseAsset,
-    quoteAsset })
+  const { baseAsset, quoteAsset, feeAsset, market } = createFillTestMarket()
   const fill = new Fill({
     tradeId: "trade-42",
     brokerOrderId: "broker-order-42",
@@ -679,16 +737,7 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
 })
 
 test("rejects missing third-asset valuation and inconsistent asset identity", () => {
-  const baseAsset = new Asset({ id: "asset:DOGE",
-    code: "DOGE" })
-  const quoteAsset = new Asset({ id: "asset:USDT",
-    code: "USDT" })
-  const feeAsset = new Asset({ id: "asset:BNB",
-    code: "BNB" })
-  const market = new Market({ venue: "binance",
-    symbol: "DOGEUSDT",
-    baseAsset,
-    quoteAsset })
+  const { baseAsset, quoteAsset, feeAsset, market } = createFillTestMarket()
   const missingThirdAssetValuation = mapFillAppliedData({
     fill: new Fill({
       tradeId: "trade-43",
@@ -742,16 +791,7 @@ test("rejects missing third-asset valuation and inconsistent asset identity", ()
 })
 
 test("validates third-asset quote valuation and accepts zero fees", () => {
-  const baseAsset = new Asset({ id: "asset:DOGE",
-    code: "DOGE" })
-  const quoteAsset = new Asset({ id: "asset:USDT",
-    code: "USDT" })
-  const feeAsset = new Asset({ id: "asset:BNB",
-    code: "BNB" })
-  const market = new Market({ venue: "binance",
-    symbol: "DOGEUSDT",
-    baseAsset,
-    quoteAsset })
+  const { baseAsset, quoteAsset, feeAsset, market } = createFillTestMarket()
   const invalidQuoteValuation = (quoteValue) => mapFillAppliedData({
     fill: new Fill({
       tradeId: "trade-45",
@@ -1493,31 +1533,7 @@ test("rejects lossy account snapshot and open-order timestamps", () => {
 })
 
 test("preserves valid zero timestamps across application event DTOs", () => {
-  const baseAsset = new Asset({ id: "asset:DOGE",
-    code: "DOGE" })
-  const quoteAsset = new Asset({ id: "asset:USDT",
-    code: "USDT" })
-  const market = new Market({ venue: "binance",
-    symbol: "DOGEUSDT",
-    baseAsset,
-    quoteAsset })
-  const order = new CanonicalOrder({
-    clientOrderId: "harvester-client-zero",
-    brokerOrderId: "broker-order-zero",
-    market,
-    side: "BUY",
-    type: "LIMIT",
-    limitPrice: new Money({ amount: "99.95",
-      asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1",
-      asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0",
-      asset: baseAsset }),
-    status: "OPEN",
-    createdAt: 0,
-    acknowledgedAt: 0,
-    updatedAt: 0,
-  })
+  const order = createZeroTimestampOrder()
   const orderResult = mapOrderUpdatedData({
     order,
     evidence: { transactionTime: 0 },
@@ -1573,7 +1589,7 @@ test("preserves valid zero timestamps across application event DTOs", () => {
   )
 })
 
-test("omits negative-zero optional error and strategy diagnostics", () => {
+test("omits negative-zero optional broker error codes", () => {
   const connectionFailure = mapBrokerConnectionFailedData({
     broker: "binance",
     error: Object.assign(new Error("offline"), { code: -0 }),
@@ -1584,7 +1600,9 @@ test("omits negative-zero optional error and strategy diagnostics", () => {
     false,
     "A negative-zero optional error code must be omitted rather than serialized lossily.",
   )
+})
 
+test("omits negative-zero optional strategy decision inputs", () => {
   const decision = mapStrategyDecisionData({
     strategy: "CONSERVATIVE",
     symbol: "DOGEUSDT",
@@ -1618,7 +1636,9 @@ test("omits negative-zero optional error and strategy diagnostics", () => {
     0,
     "A valid zero count must remain present in the decision DTO.",
   )
+})
 
+test("rejects negative-zero broker status counters", () => {
   assert.equal(
     mapBrokerStatusChangedData({
       broker: "binance",
