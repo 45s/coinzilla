@@ -34,9 +34,9 @@ export function createPauseMarket({ engine, operationalStateStore } = {}) {
       const normalizedRequestId = requestId.trim()
       return await engine.pauseMarket({
         symbol: normalizedSymbol,
-        // TEMPORARY: CC commands are process-local; durable recovery facts are disabled.
-        ...(typeof operationalStateStore?.append === "function" ? {
-          beforeApply: () => operationalStateStore.append({
+        // TEMPORARY: no store means a process-local pause; no recovery fact is written.
+        beforeApply: () => typeof operationalStateStore?.append === "function"
+          ? operationalStateStore.append({
             factId: "operator-control:" + normalizedRequestId,
             factType: "OPERATOR_MARKET_PAUSED",
             data: {
@@ -44,8 +44,8 @@ export function createPauseMarket({ engine, operationalStateStore } = {}) {
               actorId: authorizedActor.id,
               symbol: normalizedSymbol,
             },
-          }),
-        } : {}),
+          })
+          : Promise.resolve({ ok: true, data: { durable: false, processLocal: true } }),
       })
     } catch (error) {
       return toResult({ error })
