@@ -62,6 +62,100 @@ export function calculatePositionFill({
 }
 
 
+function assertNonNegativeDecimal({ value, field, allowZero = true }) {
+  assertDecimalString({
+    value,
+    field,
+  })
+  const comparison = compareDecimal({
+    left: value,
+    right: "0",
+  })
+  if (comparison < 0 || (!allowZero && comparison === 0)) {
+    throw new RangeError(`${field} must be ${allowZero ? "non-negative" : "greater than zero"}`)
+  }
+}
+
+function calculateAllocatedCommission({ commission, market }) {
+  assertNonNegativeDecimal({
+    value: commission?.amount,
+    field: "allocation.commissions.amount",
+  })
+  if (compareDecimal({
+    left: commission.amount,
+    right: "0",
+  }) === 0) {
+    return Object.freeze({
+      baseCommission: "0",
+      quoteFees: "0",
+    })
+  }
+  if (typeof commission.assetId !== "string" ||
+      typeof commission.assetCode !== "string" ||
+      !commission.assetId.trim() ||
+      !commission.assetCode.trim()) {
+    throw new TypeError("Allocated commission requires an asset ID and code")
+  }
+  if (commission.assetId === market.baseAsset.id) {
+    if (commission.assetCode !== market.baseAsset.code) {
+      throw new TypeError("Allocated base commission asset identity does not match market base asset")
+    }
+    return Object.freeze({
+      baseCommission: commission.amount,
+      quoteFees: "0",
+    })
+  }
+  if (commission.assetId === market.quoteAsset.id) {
+    if (commission.assetCode !== market.quoteAsset.code) {
+      throw new TypeError("Allocated quote commission asset identity does not match market quote asset")
+    }
+    return Object.freeze({
+      baseCommission: "0",
+      quoteFees: commission.amount,
+    })
+  }
+  const quoteValue = commission.quoteValue
+  if (!quoteValue ||
+      quoteValue.assetId !== market.quoteAsset.id ||
+      quoteValue.assetCode !== market.quoteAsset.code) {
+    throw new TypeError("Allocated third-asset commission requires reliable quote-currency valuation")
+  }
+  assertNonNegativeDecimal({
+    value: quoteValue.amount,
+    field: "allocation.commissions.quoteValue.amount",
+  })
+  return Object.freeze({
+    baseCommission: "0",
+    quoteFees: quoteValue.amount,
+  })
+}
+
+function calculateAllocatedCommissionTotals({ market, commissions }) {
+  if (!Array.isArray(commissions)) {
+    throw new TypeError("Allocated SELL commissions must be an array")
+  }
+  let baseCommission = "0"
+  let quoteFees = "0"
+  for (const commission of commissions) {
+    const amounts = calculateAllocatedCommission({
+      commission,
+      market,
+    })
+    baseCommission = addDecimal({
+      left: baseCommission,
+      right: amounts.baseCommission,
+    })
+    quoteFees = addDecimal({
+      left: quoteFees,
+      right: amounts.quoteFees,
+    })
+  }
+  return Object.freeze({
+    baseCommission,
+    quoteFees,
+  })
+}
+
 /**
  * Purely calculate the next Position amounts from one already validated
  * allocation side of a canonical SELL Fill. No synthetic Fill is created.
@@ -84,7 +178,7 @@ export function calculatePositionSellAllocation({
   if (!market?.baseAsset?.id || !market?.quoteAsset?.id || !allocation) {
     throw new TypeError("calculatePositionSellAllocation requires market and allocation")
   }
-  assertDecimalString({
+  assertNonNegativeDecimal({
     value: baseQuantity,
     field: "baseQuantity",
   })
@@ -92,80 +186,33 @@ export function calculatePositionSellAllocation({
     value: quoteNetCashFlow,
     field: "quoteNetCashFlow",
   })
-  assertDecimalString({
+  assertNonNegativeDecimal({
     value: spent,
     field: "spent",
   })
-  assertDecimalString({
+  assertNonNegativeDecimal({
     value: allocation.grossBaseQuantity,
     field: "allocation.grossBaseQuantity",
+    allowZero: false,
   })
-  assertDecimalString({
+  assertNonNegativeDecimal({
     value: allocation.baseDebit,
     field: "allocation.baseDebit",
+    allowZero: false,
   })
-  assertDecimalString({
+  assertNonNegativeDecimal({
     value: allocation.quoteProceeds,
     field: "allocation.quoteProceeds",
   })
+  const { baseCommission, quoteFees } = calculateAllocatedCommissionTotals({
+    market,
+    commissions: allocation.commissions,
+  })
   if (compareDecimal({
-    left: allocation.grossBaseQuantity,
-    right: "0",
-  }) <= 0 || compareDecimal({
-    left: allocation.baseDebit,
-    right: "0",
-  }) <= 0 || compareDecimal({
-    left: allocation.quoteProceeds,
-    right: "0",
-  }) < 0) {
-    throw new RangeError("Allocated SELL quantities and proceeds must be non-negative, with positive base quantities")
-  }
-  if (!Array.isArray(allocation.commissions)) {
-    throw new TypeError("Allocated SELL commissions must be an array")
-  }
-  let baseCommission = "0"
-  let quoteFees = "0"
-  for (const commission of allocation.commissions) {
-    assertDecimalString({
-      value: commission?.amount,
-      field: "allocation.commissions.amount",
-    })
-    if (compareDecimal({
-      left: commission.amount,
-      right: "0",
-    }) < 0) {
-      throw new RangeError("Allocated commission amounts must be non-negative")
-    }
-    if (commission.assetId === market.baseAsset.id) {
-      baseCommission = addDecimal({
-        left: baseCommission,
-        right: commission.amount,
-      })
-    } else if (commission.assetId === market.quoteAsset.id) {
-      quoteFees = addDecimal({
-        left: quoteFees,
-        right: commission.amount,
-      })
-    } else {
-      if (!commission.quoteValue ||
-          commission.quoteValue.assetId !== market.quoteAsset.id) {
-        throw new TypeError("Allocated third-asset commission requires reliable quote-currency valuation")
-      }
-      assertDecimalString({
-        value: commission.quoteValue.amount,
-        field: "allocation.commissions.quoteValue.amount",
-      })
-      if (compareDecimal({
-        left: commission.quoteValue.amount,
-        right: "0",
-      }) < 0) {
-        throw new RangeError("Allocated third-asset quote valuation must be non-negative")
-      }
-      quoteFees = addDecimal({
-        left: quoteFees,
-        right: commission.quoteValue.amount,
-      })
-    }
+    left: baseCommission,
+    right: allocation.grossBaseQuantity,
+  }) > 0) {
+    throw new RangeError("Allocated base commission exceeds allocated gross base quantity")
   }
   const expectedBaseDebit = addDecimal({
     left: allocation.grossBaseQuantity,
