@@ -11,7 +11,7 @@ import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optiona
 import { acquireHarvesterProcessLocks } from "./infrastructure/process-lock/acquire-harvester-process-locks.js"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { publishLifecycleEvent } from "./application/events/publish-lifecycle-event.js"
-import { mapHarvesterProcessStartedData, mapHarvesterStartedData, mapHarvesterStartupFailedData, mapHarvesterStoppedData } from "./application/events/lifecycle-event-dtos.js"
+import { mapHarvesterProcessStartedData, mapHarvesterStartedData, mapHarvesterStartupFailedData } from "./application/events/lifecycle-event-dtos.js"
 import { defaultLogger } from "@coinzilla/utils"
 import { startHarvester } from "./bootstrap/start-harvester.js"
 import { loadAppConfig } from "./infrastructure/config/load-app-config.js"
