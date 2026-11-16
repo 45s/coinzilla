@@ -11,8 +11,8 @@ code: "BTC" })
   const otherBtc = new Asset({ id: "wrapped-bitcoin",
 code: "BTC" })
 
-  const quantity = (amount, asset = btc) => new Quantity({ amount,
-asset })
+  const quantity = (amount) => new Quantity({ amount,
+asset: btc })
 
   it("stores exact free and locked quantities and derives total", () => {
     const balance = new Balance({
@@ -81,8 +81,9 @@ locked }), {
   it("rejects quantities belonging to different canonical assets even when codes match", () => {
     assert.throws(
       () => new Balance({
-        free: quantity("1", btc),
-        locked: quantity("1", otherBtc),
+        free: quantity("1"),
+        locked: new Quantity({ amount: "1",
+asset: otherBtc }),
       }),
       { message: balanceErrMsgs.asset },
     )
