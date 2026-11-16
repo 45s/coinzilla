@@ -1,4 +1,4 @@
-import { addDecimal, subtractDecimal, multiplyDecimal, maxDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, subtractDecimal, multiplyDecimal, maxDecimal, toResult } from "@coinzilla/utils"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { mapRecoveryCycleCompletedData, mapStrategyDecisionData } from "../application/events/lifecycle-event-dtos.js"
@@ -242,11 +242,39 @@ function getPortfolioBalanceContext({ dependencies, context } = {}) {
     items: allPositions.filter((item) => item.market.quoteAsset.id === metadata.market.quoteAsset.id),
     getValue: (item) => item.quoteNetCashFlow.amount,
   })
+  const additionalTrackedQuoteCashFlow = dependencies.getAdditionalTrackedQuoteCashFlow?.({
+    balances: accountSnapshot.balances ?? [],
+    portfolio: portfolioBefore,
+  }) ?? []
+  if (!Array.isArray(additionalTrackedQuoteCashFlow)) {
+    throw new TypeError("getAdditionalTrackedQuoteCashFlow must return an array")
+  }
+  let additionalQuoteCashFlow = "0"
+  for (const item of additionalTrackedQuoteCashFlow) {
+    if (!item || typeof item.assetId !== "string" || !item.assetId.trim()) {
+      throw new TypeError("Additional tracked quote cash flow requires a canonical asset ID")
+    }
+    assertDecimalString({
+      value: item.amount,
+      field: "additionalTrackedQuoteCashFlow.amount",
+    })
+    if (item.assetId === metadata.market.quoteAsset.id) {
+      additionalQuoteCashFlow = addDecimal({
+        left: additionalQuoteCashFlow,
+        right: item.amount,
+      })
+    }
+  }
   const quoteCashFlowBaseline = accountSnapshot.getQuoteCashFlowBaseline?.({
     assetId: metadata.market.quoteAsset.id,
   }) ?? "0"
-  const quoteCashFlow = subtractDecimal({ left: portfolioQuoteCashFlow,
-    right: quoteCashFlowBaseline })
+  const quoteCashFlow = subtractDecimal({
+    left: addDecimal({
+      left: portfolioQuoteCashFlow,
+      right: additionalQuoteCashFlow,
+    }),
+    right: quoteCashFlowBaseline,
+  })
   const portfolioBaseBalance = sumDecimalValues({
     items: allPositions.filter((item) => item.market.baseAsset.id === metadata.market.baseAsset.id),
     getValue: (item) => item.totalBaseQuantity.amount,
@@ -284,6 +312,7 @@ function getPortfolioBalanceContext({ dependencies, context } = {}) {
     accountSnapshot,
     position,
     portfolioQuoteCashFlow,
+    additionalQuoteCashFlow,
     quoteCashFlowBaseline,
     quoteCashFlow,
     portfolioBaseBalance,
@@ -359,6 +388,7 @@ function logOrderAllocation({ dependencies, context, balances, allocation } = {}
     committedBaseBalance,
     quoteCashFlow,
     portfolioQuoteCashFlow,
+    additionalQuoteCashFlow,
     quoteCashFlowBaseline,
     accountSnapshot,
   } = balances
