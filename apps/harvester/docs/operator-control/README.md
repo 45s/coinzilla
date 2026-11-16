@@ -33,10 +33,10 @@ Do not use Journal as the control-state store. Do not claim that a pause survive
 - `/balances` — latest canonical exchange free/locked/total balances with source timestamp and age; these are account balances, not strategy-owned inventory.
 - `/pause <SYMBOL>` — suppress new strategy BUY intents and trailing-BUY repricing for one configured market.
 - `/resume <SYMBOL>` — remove only the operator-owned pause when the engine confirms no safety/recovery/volatility blocker is active.
-- `/pauseallbuys` — block all new BUYs and cancel active current-process-owned BUY orders across configured markets. 
-- `/resumeallbuys` — remove only the global emergency BUY pause. 
-- `/pausebuys <SYMBOL>` — block new BUYs and cancel active current-process-owned BUYs for one configured market. 
-- `/resumebuys <SYMBOL>` — remove only that market emergency BUY pause. 
+- `/pauseallbuys` — block all new BUYs and cancel active current-process-owned BUY orders across configured markets.
+- `/resumeallbuys` — remove only the global emergency BUY pause.
+- `/pausebuys <SYMBOL>` — block new BUYs and cancel active current-process-owned BUYs for one configured market.
+- `/resumebuys <SYMBOL>` — remove only that market emergency BUY pause.
 
 The existing `/pause SYMBOL` remains non-canceling: already-open exchange orders are not modified and a resting BUY may still fill. Emergency BUY pause is a separate control: it cancels only active BUY orders owned by the current Harvester process, after first blocking new BUY decisions and submissions. It never cancels recovery SELLs or startup-snapshot/manual/external orders. Cancellation-racing fills are reconciled through the existing engine workflow. If cancellation is unresolved, the BUY gate remains active and the command reports that it is not safe to assume all owned BUYs are gone. Global and per-market scopes are independent. Fill accounting and risk-reducing recovery SELL decisions continue. The status and market queries use process/engine snapshots without broker calls. The trading-visibility queries are also read-only: /orders performs an account-wide open-orders read, /balances reads the latest captured AccountSnapshot, and none of the queries changes trading state or adopts/modifies exchange orders.
 
