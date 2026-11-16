@@ -259,6 +259,30 @@ for (const scenario of evaluationOnlyScenarios) {
   })
 }
 
+test("returns a validation error for a malformed price before allocating an event identity", async () => {
+  const harness = createHarness()
+  const result = await harness.handler({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "0",
+      timestamp: 123,
+    },
+  })
+
+  assert.equal(result.ok, false, "A zero market price must fail domain validation before entering the accepted-price workflow.")
+  assert.match(
+    result.errors[0].message,
+    /positive decimal string/,
+    "The invalid-price result must preserve the domain validation reason.",
+  )
+  assert.deepEqual(
+    harness.trace,
+    [],
+    "A malformed price must not allocate an event identity, log an accepted event, or dispatch a strategy transition.",
+  )
+})
+
 test("returns a validation error for a subscription-symbol mismatch before allocating an event identity", async () => {
   const harness = createHarness()
   const result = await harness.handler({
