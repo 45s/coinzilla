@@ -151,11 +151,17 @@ test("does not repeat successful recovery attempts without new ticker trade acti
   clock.advanceBy(50)
   await flush()
   clock.advanceBy(5_000)
+  monitor.onTicker({
+    s: "BTCUSDT",
+    L: 11,
+  })
+  clock.advanceBy(50)
+  await flush()
 
   assert.equal(
     recoveries.length,
     1,
-    "a successful resubscription must not be retried while the market reports no newer trade ID",
+    "repeated ticker updates with the same trade ID must not trigger another recovery attempt",
   )
   assert.equal(
     monitor.diagnostics.state,
