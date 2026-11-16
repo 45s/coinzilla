@@ -268,10 +268,12 @@ function getAdditionalTrackedBaseBalance({
   portfolio,
   assetId,
 } = {}) {
-  const records = dependencies.getAdditionalTrackedBaseQuantity?.({
-    balances: accountSnapshot.balances ?? [],
-    portfolio,
-  }) ?? []
+  const records = typeof dependencies.getAdditionalTrackedBaseQuantity === "function"
+    ? dependencies.getAdditionalTrackedBaseQuantity({
+      balances: accountSnapshot.balances ?? [],
+      portfolio,
+    })
+    : []
   return sumAdditionalTrackedAmount({
     records,
     assetId,
@@ -286,10 +288,12 @@ function getAdditionalTrackedQuoteCashFlow({
   portfolio,
   assetId,
 } = {}) {
-  const records = dependencies.getAdditionalTrackedQuoteCashFlow?.({
-    balances: accountSnapshot.balances ?? [],
-    portfolio,
-  }) ?? []
+  const records = typeof dependencies.getAdditionalTrackedQuoteCashFlow === "function"
+    ? dependencies.getAdditionalTrackedQuoteCashFlow({
+      balances: accountSnapshot.balances ?? [],
+      portfolio,
+    })
+    : []
   return sumAdditionalTrackedAmount({
     records,
     assetId,
