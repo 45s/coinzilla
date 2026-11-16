@@ -1696,13 +1696,14 @@ test("rejects a PREFLIGHT open-order baseline written after trading activity", (
 })
 
 
-const harvesterRecord = (name, data, id = name) => ({
-  ...record(name, data, id),
-  payload: { id,
-source: "harvester",
-name,
-data },
-})
+const harvesterRecord = (...parameters) => {
+  const [name, data, id = name] = parameters
+  return ({
+    id,
+    payload: { id, name, data },
+    position: { fileName: "session.jsonl", lineNumber: 1 },
+  })
+}
 
 test("projects unowned-order evidence as a sticky safety blocker without a separate pause event", () => {
   const result = projectHarvesterJournalRecovery({
