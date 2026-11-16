@@ -6,25 +6,29 @@ test("publishes events and delegates durable flush", async () => {
   const events = []
   const publisher = makeEventPublisher({
     eventBus: { publish: (event) => { events.push(event); return { ok: true } } },
-    flush: async () => ({ ok: true, durable: true }),
+    flush: async () => ({ ok: true,
+      durable: true }),
     logger: { error() {} },
   })
   const event = { name: "account.snapshot_captured" }
   assert.deepEqual(publisher.publish(event), { ok: true })
   assert.deepEqual(events, [event])
-  assert.deepEqual(await publisher.flush(), { ok: true, durable: true })
+  assert.deepEqual(await publisher.flush(), { ok: true,
+    durable: true })
 })
 
 test("fails closed when durable flush is unavailable or fails", async () => {
   const eventBus = { publish: () => ({ ok: true }) }
-  const withoutFlush = makeEventPublisher({ eventBus, logger: { error() {} } })
+  const withoutFlush = makeEventPublisher({ eventBus,
+    logger: { error() {} } })
   const missing = await withoutFlush.flush()
   assert.equal(missing.ok, false)
   assert.match(missing.errors[0].message, /no durable flush capability/)
 
   const withFailedFlush = makeEventPublisher({
     eventBus,
-    flush: async () => ({ ok: false, errors: [new Error("fsync failed")] }),
+    flush: async () => ({ ok: false,
+      errors: [new Error("fsync failed")] }),
     logger: { error() {} },
   })
   const failed = await withFailedFlush.flush()
@@ -76,12 +80,14 @@ test("exposes structured failure reporting for lifecycle DTO mapping errors", ()
     eventBus: {
       publish: () => ({ ok: true }),
     },
-    flush: async () => ({ ok: true, durable: true }),
+    flush: async () => ({ ok: true,
+      durable: true }),
     logger: { error: (entry) => logs.push(entry) },
   })
   const error = new TypeError("broker transactionTime must be a non-negative safe integer")
 
-  publisher.reportFailure({ event: { name: "order.updated" }, error })
+  publisher.reportFailure({ event: { name: "order.updated" },
+    error })
 
   assert.equal(logs.length, 1, "A mapper failure must be sent through the event publisher's structured logger.")
   assert.equal(logs[0].eventName, "order.updated", "The diagnostic must identify the lifecycle event that could not be mapped.")
