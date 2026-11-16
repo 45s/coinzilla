@@ -46,8 +46,10 @@ Non-interactive output remains plain text. The terminal is intentionally a
 summary, not a second diagnostic dump: it prints the event message plus a
 small allowlist of actionable fields (including the stable `diagnosticId`
 for catalogued startup failures), omits stacks/fingerprints/audit internals,
-and caps each line at 200 characters. Consecutive identical
-summaries are suppressed and reported as a repeat count. Full structured
+and caps each line at 200 characters. The recovery SELL cancellation
+summary is rendered as `04:30:15 🪙 CG recovery SELL cancellation requested:
+DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL`, with the redundant
+`Harvester` prefix omitted and symbol/reason shown inline. Full structured
 entries—including stack traces and all other normalized fields—remain in the
 DEBUG/TRACE JSONL files. Each entry retains its timestamp, normalized
 severity, logging method, and redacted, JSON-safe structured data. A console
