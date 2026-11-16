@@ -425,19 +425,19 @@ function logRecoveryCycleCompleted({ logger, marketId, recoveryLedger, completio
 }
 
 function logRecoveryCycleStats({ logger, position, nextPosition }) {
-    const portfolioStatsChanged = [
-      [position.baseQuantity.amount, staged.nextPosition.baseQuantity.amount],
-      [position.freeBaseQuantity.amount, staged.nextPosition.freeBaseQuantity.amount],
-      [position.totalBaseQuantity.amount, staged.nextPosition.totalBaseQuantity.amount],
-      [position.spent.amount, staged.nextPosition.spent.amount],
-      [position.quoteNetCashFlow.amount, staged.nextPosition.quoteNetCashFlow.amount],
-    ].some(([previous, next]) => compareDecimal({ left: previous, right: next }) !== 0)
-    if (portfolioStatsChanged) {
-      const portfolioStats = createPortfolioStatsLogSummary({ position: staged.nextPosition })
-      if (portfolioStats) {
-        logger.info?.(portfolioStats)
-      }
+  const portfolioStatsChanged = [
+    [position.baseQuantity.amount, nextPosition.baseQuantity.amount],
+    [position.freeBaseQuantity.amount, nextPosition.freeBaseQuantity.amount],
+    [position.totalBaseQuantity.amount, nextPosition.totalBaseQuantity.amount],
+    [position.spent.amount, nextPosition.spent.amount],
+    [position.quoteNetCashFlow.amount, nextPosition.quoteNetCashFlow.amount],
+  ].some(([previous, next]) => compareDecimal({ left: previous, right: next }) !== 0)
+  if (portfolioStatsChanged) {
+    const portfolioStats = createPortfolioStatsLogSummary({ position: nextPosition })
+    if (portfolioStats) {
+      logger.info?.(portfolioStats)
     }
+  }
 }
 
 function logRecoveryCycleNotCompleted({ logger, marketId, recoveryLedger, position, completion }) {
