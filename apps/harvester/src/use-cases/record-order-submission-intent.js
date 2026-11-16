@@ -26,7 +26,10 @@ function validateSubmissionOrderFields({ order }) {
   if (typeof price !== "string" || typeof quantity !== "string") {
     throw new TypeError("Order-submission intent requires exact decimal price and quantity strings")
   }
-  return { price, quantity }
+  return {
+    price,
+    quantity,
+  }
 }
 
 function validateSubmissionIntent({ operationalStateStore, order, purpose }) {
