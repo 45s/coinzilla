@@ -40,7 +40,7 @@ export async function recordOrderSubmissionOutcome({
     if (!acknowledged && order.executedQuantity.amount !== "0") {
       throw new TypeError("Unacknowledged submission outcome cannot contain an execution")
     }
-    const market = order.market
+    const {market} = order
     const requiredMarketValues = [
       market?.id,
       market?.venue,
@@ -56,9 +56,9 @@ export async function recordOrderSubmissionOutcome({
       throw new TypeError("Order-submission outcome has an unsupported side or order type")
     }
 
-    const clientOrderId = order.clientOrderId
+    const {clientOrderId} = order
     const result = await operationalStateStore.append({
-      factId: "order-submission-outcome:" + clientOrderId + ":" + outcome,
+      factId: `order-submission-outcome:${  clientOrderId  }:${  outcome}`,
       factType: "ORDER_SUBMISSION_OUTCOME",
       data: {
         clientOrderId,
