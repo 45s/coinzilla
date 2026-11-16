@@ -78,16 +78,18 @@ export function createFixture({
         onCandle,
         calls,
       })
-      if (subscribeForCandles) return subscribeForCandles({
+      if (subscribeForCandles) {
+        return subscribeForCandles({
         symbol,
         interval,
         onCandle,
         calls,
-      })
+        })
+      }
       return {
         ok: true,
         data: {
-          stream: symbol.toLowerCase() + "@kline_1m",
+          stream: `${symbol.toLowerCase()}@kline_1m`,
           unsubscribe: async () => calls.push({
             method: "unsubscribe",
             symbol,
@@ -100,7 +102,9 @@ export function createFixture({
         method: "getCandles",
         ...input,
       })
-      if (getCandles) return getCandles(input, calls)
+      if (getCandles) {
+        return getCandles(input, calls)
+      }
       return {
         ok: true,
         data: historyBySymbol[input.symbol] ?? createHistory(input.symbol, 100, true),
