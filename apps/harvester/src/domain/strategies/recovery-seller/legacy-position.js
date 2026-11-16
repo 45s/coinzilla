@@ -174,7 +174,7 @@ function assertLegacyPositionAccounting({ accounting } = {}) {
     throw new TypeError("Legacy accounting Fill identity history is invalid")
   }
   const seenFillIds = new Set()
-  accounting.appliedFillFingerprints.forEach((item, index) => {
+  for (const [index, item] of accounting.appliedFillFingerprints.entries()) {
     if (!item ||
         typeof item.id !== "string" ||
         !item.id.trim() ||
@@ -187,7 +187,7 @@ function assertLegacyPositionAccounting({ accounting } = {}) {
       throw new TypeError("Legacy accounting Fill identity history is invalid")
     }
     seenFillIds.add(item.id)
-  })
+  }
   const expectedProfit = subtractDecimal({
     left: accounting.realizedQuoteProceeds,
     right: accounting.realizedCostBasis,
@@ -300,6 +300,68 @@ export function createLegacyPositionAccounting() {
   })
 }
 
+function applyZeroLegacySellAllocation({
+  position,
+  accounting,
+  fill,
+  allocation,
+  fillFingerprint,
+}) {
+  assertZeroLegacyAllocation({
+    allocation: allocation.legacy,
+  })
+  return Object.freeze({
+    position,
+    accounting: appendLegacyFillAccounting({
+      accounting,
+      fillId: fill.id,
+      fillFingerprint,
+      allocationFingerprint: allocation.allocationFingerprint,
+    }),
+    applied: true,
+    duplicate: false,
+  })
+}
+
+function applyNonZeroLegacySellAllocation({
+  position,
+  accounting,
+  fill,
+  allocation,
+  fillFingerprint,
+}) {
+  const result = calculatePositionSellAllocation({
+    market: fill.market,
+    baseQuantity: position.remainingQuantity,
+    quoteNetCashFlow: accounting.realizedQuoteProceeds,
+    spent: position.invested,
+    allocation: allocation.legacy,
+  })
+  const realizedCostBasis = addDecimal({
+    left: accounting.realizedCostBasis,
+    right: multiplyDecimal({
+      left: position.averageCost,
+      right: allocation.legacy.baseDebit,
+    }),
+  })
+  return Object.freeze({
+    position: Object.freeze({
+      ...position,
+      remainingQuantity: result.baseQuantity,
+    }),
+    accounting: appendLegacyFillAccounting({
+      accounting,
+      fillId: fill.id,
+      fillFingerprint,
+      allocationFingerprint: allocation.allocationFingerprint,
+      realizedQuoteProceeds: result.quoteNetCashFlow,
+      realizedCostBasis,
+    }),
+    applied: true,
+    duplicate: false,
+  })
+}
+
 /**
  * Apply only the legacy side of one canonical mixed SELL allocation.
  * The legacy inventory debit includes any base-denominated commission.
@@ -329,62 +391,33 @@ export function applyLegacySellAllocation({
       duplicate: true,
     })
   }
-  const { legacy } = allocation
   assertDecimalString({
-    value: legacy.grossBaseQuantity,
+    value: allocation.legacy.grossBaseQuantity,
     field: "allocation.legacy.grossBaseQuantity",
   })
   if (compareDecimal({
-    left: legacy.grossBaseQuantity,
+    left: allocation.legacy.grossBaseQuantity,
     right: "0",
   }) < 0) {
     throw new RangeError("Legacy allocated gross quantity must be non-negative")
   }
   if (compareDecimal({
-    left: legacy.grossBaseQuantity,
+    left: allocation.legacy.grossBaseQuantity,
     right: "0",
   }) === 0) {
-    assertZeroLegacyAllocation({ allocation: legacy })
-    return Object.freeze({
+    return applyZeroLegacySellAllocation({
       position,
-      accounting: appendLegacyFillAccounting({
-        accounting,
-        fillId: fill.id,
-        fillFingerprint,
-        allocationFingerprint: allocation.allocationFingerprint,
-      }),
-      applied: true,
-      duplicate: false,
+      accounting,
+      fill,
+      allocation,
+      fillFingerprint,
     })
   }
-  const result = calculatePositionSellAllocation({
-    market: fill.market,
-    baseQuantity: position.remainingQuantity,
-    quoteNetCashFlow: accounting.realizedQuoteProceeds,
-    spent: position.invested,
-    allocation: legacy,
-  })
-  const realizedCostBasis = addDecimal({
-    left: accounting.realizedCostBasis,
-    right: multiplyDecimal({
-      left: position.averageCost,
-      right: legacy.baseDebit,
-    }),
-  })
-  return Object.freeze({
-    position: Object.freeze({
-      ...position,
-      remainingQuantity: result.baseQuantity,
-    }),
-    accounting: appendLegacyFillAccounting({
-      accounting,
-      fillId: fill.id,
-      fillFingerprint,
-      allocationFingerprint: allocation.allocationFingerprint,
-      realizedQuoteProceeds: result.quoteNetCashFlow,
-      realizedCostBasis,
-    }),
-    applied: true,
-    duplicate: false,
+  return applyNonZeroLegacySellAllocation({
+    position,
+    accounting,
+    fill,
+    allocation,
+    fillFingerprint,
   })
 }
