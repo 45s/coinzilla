@@ -355,7 +355,7 @@ test("uses one named immutable source for supported external-order policy values
   )
 })
 
-test("composes enabled Telegram operator control and the environment-backed allowlist", () => {
+test("composes opt-in Telegram operator control independently from outbound notifications", () => {
   assert.equal(
     appConfig.operatorControl,
     OPERATOR_CONTROL_CONFIG,
@@ -363,8 +363,13 @@ test("composes enabled Telegram operator control and the environment-backed allo
   )
   assert.equal(
     OPERATOR_CONTROL_CONFIG.telegram.enabled,
+    false,
+    "Inbound Telegram operator control must remain opt-in so ordinary startup does not require its durable store.",
+  )
+  assert.equal(
+    appConfig.notifications.telegram.enabled,
     true,
-    "Inbound Telegram operator control must be enabled by default.",
+    "Disabling inbound operator control by default must not disable independently configured outbound notifications.",
   )
   assert.deepEqual(
     OPERATOR_CONTROL_CONFIG.telegram.allowedUserIds,
