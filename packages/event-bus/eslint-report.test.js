@@ -24,7 +24,12 @@ function groupMessages(messages) {
       count: findings.length,
       findings,
     }))
-    .sort((left, right) => left.ruleId.localeCompare(right.ruleId))
+    .sort()
+}
+
+function compareFiles(...items) {
+  const [left, right] = items
+  return left.file.localeCompare(right.file)
 }
 
 function createFileReport(result) {
@@ -41,11 +46,17 @@ test("prints a complete package ESLint report grouped by file and rule", async (
   const results = await eslint.lintFiles(["src/**/*.{js,mjs,cjs}"])
   const files = results
     .map(createFileReport)
-    .sort((left, right) => left.file.localeCompare(right.file))
+    .sort(compareFiles)
+  let errorCount = 0
+  let warningCount = 0
+  for (const result of results) {
+    errorCount += result.errorCount
+    warningCount += result.warningCount
+  }
   const report = {
     fileCount: results.length,
-    errorCount: results.reduce((total, result) => total + result.errorCount, 0),
-    warningCount: results.reduce((total, result) => total + result.warningCount, 0),
+    errorCount,
+    warningCount,
     files,
   }
 
