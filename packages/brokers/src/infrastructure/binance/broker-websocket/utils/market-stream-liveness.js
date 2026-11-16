@@ -135,8 +135,8 @@ class MarketStreamLivenessMonitor {
     }
 
     if (this.#lastTickerTradeId !== null && tradeId <= this.#lastTickerTradeId) {return}
+    this.#pruneRecoveryAttempts(this.#now())
     if (this.#state === "exhausted") {
-      this.#pruneRecoveryAttempts(this.#now())
       if (this.#recoveryAttemptTimes.length >= this.#maxRecoveryAttempts) {return}
       this.#state = "healthy"
     }
