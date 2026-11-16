@@ -2,7 +2,10 @@ import { toResult } from "@coinzilla/utils"
 import { authorizeOperatorActor } from "../../application/operator/authorize-operator-actor.js"
 import { OperatorQueryError } from "./errors/operator-query-error.js"
 
-function hasValidRuntimeMetadata({ snapshot, runtimeState }) {
+function hasValidRuntimeMetadata({
+    snapshot,
+    runtimeState,
+  }) {
   return snapshot !== null &&
     typeof snapshot === "object" &&
     !Array.isArray(snapshot) &&
