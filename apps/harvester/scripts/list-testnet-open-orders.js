@@ -1,7 +1,10 @@
 import { Console } from "node:console"
 import { getOpenOrders } from "./binance-testnet-api.js"
 
-const cliConsole = new Console({ stdout: process.stdout, stderr: process.stderr })
+const cliConsole = new Console({
+  stdout: process.stdout,
+  stderr: process.stderr,
+})
 
 const main = async () => {
   const { orders } = await getOpenOrders()
