@@ -3,7 +3,10 @@ import nodeTest from "node:test"
 
 import { createShutdownHandler } from "./create-shutdown-handler.js"
 
-const test = (name, ...args) => nodeTest("[create-shutdown-handler.test.js] " + name, ...args)
+const test = (...args) => {
+  const [name, ...testArgs] = args
+  return nodeTest(`[create-shutdown-handler.test.js] ${name}`, ...testArgs)
+}
 
 function createState(overrides = {}) {
   return {
@@ -24,9 +27,9 @@ function createSafeParticipant({ strategyId, calls, waitUntilSafe } = {}) {
   let safe = false
   return {
     strategyId,
-    beginShutdown: () => calls.push("gate:" + strategyId),
+    beginShutdown: () => calls.push(`gate:${strategyId}`),
     waitUntilSafe: async (options) => {
-      calls.push("wait:" + strategyId)
+      calls.push(`wait:${strategyId}`)
       const result = waitUntilSafe
         ? await waitUntilSafe(options)
         : { ok: true }
@@ -47,7 +50,10 @@ function createShutdown({
   tradingEnabled = true,
   participants = [],
   eventPublisher = {
-    flush: async () => ({ ok: true, durable: true }),
+    flush: async () => ({
+      ok: true,
+      durable: true,
+    }),
   },
   publishAccountSnapshot = async () => ({ ok: true }),
   stopUserDataIntake = async () => [],
@@ -79,7 +85,7 @@ function createShutdown({
       },
     },
     publishAccountSnapshot: async (options) => {
-      calls.push("closing-audit:" + options.auditStatus)
+      calls.push(`closing-audit:${options.auditStatus}`)
       return publishAccountSnapshot(options)
     },
     stopUserDataIntake: async (options) => {
@@ -95,16 +101,29 @@ function createShutdown({
       return disconnectBroker(options)
     },
   })
-  return { stop, state, calls }
+  return {
+    stop,
+    state,
+    calls,
+  }
 }
 
 test("activates every strategy gate before any shared service can stop", async () => {
   const calls = []
   const participants = [
-    createSafeParticipant({ strategyId: "CONSERVATIVE", calls }),
-    createSafeParticipant({ strategyId: "RECOVERY_SELLER", calls }),
+    createSafeParticipant({
+      strategyId: "CONSERVATIVE",
+      calls,
+    }),
+    createSafeParticipant({
+      strategyId: "RECOVERY_SELLER",
+      calls,
+    }),
   ]
-  const fixture = createShutdown({ participants, calls })
+  const fixture = createShutdown({
+    participants,
+    calls,
+  })
   await fixture.stop({
     beforeSharedServicesStop: async () => {
       calls.push("operator-control-stop")
@@ -119,7 +138,7 @@ test("activates every strategy gate before any shared service can stop", async (
     "wait:RECOVERY_SELLER",
   ])
   for (const strategyId of ["CONSERVATIVE", "RECOVERY_SELLER"]) {
-    assert.ok(calls.indexOf("wait:" + strategyId) < calls.indexOf("user-data-stop"))
+    assert.ok(calls.indexOf(`wait:${strategyId}`) < calls.indexOf("user-data-stop"))
     assert.ok(calls.indexOf("wait:" + strategyId) < calls.indexOf("market-intake-stop"))
     assert.ok(calls.indexOf("wait:" + strategyId) < calls.indexOf("broker-disconnect"))
   }
@@ -203,7 +222,11 @@ test("keeps market and user-data intake alive while accepted user-data work bloc
       return { ok: true }
     },
   })
-  const fixture = createShutdown({ state, participants: [participant], calls })
+  const fixture = createShutdown({
+    state,
+    participants: [participant],
+    calls,
+  })
 
   const stopping = fixture.stop()
   await Promise.resolve()
@@ -266,7 +289,10 @@ test("shares one in-flight shutdown promise between concurrent callers", async (
       return { ok: true }
     },
   })
-  const fixture = createShutdown({ participants: [participant], calls })
+  const fixture = createShutdown({
+    participants: [participant],
+    calls,
+  })
 
   const first = fixture.stop()
   const second = fixture.stop()

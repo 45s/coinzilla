@@ -15,7 +15,12 @@ function createDependencies({ recoverySubmissionAllowed = false } = {}) {
       paused: new Set(),
       operatorPausedMarkets: new Set(),
       volatilityProtection: new Map(),
-      prices: new Map([["DOGEUSDT", { price: "100", timestamp: 1 }]]),
+      prices: new Map([
+        ["DOGEUSDT", {
+          price: "100",
+          timestamp: 1,
+        }],
+      ]),
       books: new Map(),
     },
     isShutdownRecoverySubmissionAllowed: () => recoverySubmissionAllowed,
