@@ -743,9 +743,12 @@ function createOperatorPauseRecoveryPosition({ market }) {
     clientOrderId: "operator-pause-recovery-client",
     market,
     side: "BUY",
-    price: new Money({ amount: "100", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "1", asset: dogeAsset }),
-    quoteQuantity: new Money({ amount: "100", asset: quoteAsset }),
+    price: new Money({ amount: "100", 
+      asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1", 
+      asset: dogeAsset }),
+    quoteQuantity: new Money({ amount: "100", 
+      asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
     executedAt: 1,
@@ -758,7 +761,8 @@ function createOperatorPauseRecoveryPosition({ market }) {
     fill: recoveryFill,
     strategyId: StrategyId.COIN_GRABBER,
   }).ledger
-  return { portfolio, recoveryLedger }
+  return { portfolio, 
+    recoveryLedger }
 }
 
 function createOperatorPauseStrategyPolicy() {
@@ -808,7 +812,8 @@ test("operator pause preserves recovery SELL execution while suppressing the sam
   )
   const paused = await engine.pauseMarket({
     symbol: "DOGEUSDT",
-    beforeApply: async () => ({ ok: true, data: { durable: true } }),
+    beforeApply: async () => ({ ok: true, 
+      data: { durable: true } }),
   })
   assert.equal(
     paused.ok,
@@ -819,10 +824,13 @@ test("operator pause preserves recovery SELL execution while suppressing the sam
   await startBothMarkets(engine)
 
   assert.deepEqual(
-    orders.map(({ symbol, side }) => ({ symbol, side })),
+    orders.map(({ symbol, side }) => ({ symbol, 
+      side })),
     [
-      { symbol: "DOGEUSDT", side: "SELL" },
-      { symbol: "SOLUSDT", side: "BUY" },
+      { symbol: "DOGEUSDT", 
+        side: "SELL" },
+      { symbol: "SOLUSDT", 
+        side: "BUY" },
     ],
     "The paused market must retain its risk-reducing recovery SELL while suppressing only its new BUY; another market remains active.",
   )
