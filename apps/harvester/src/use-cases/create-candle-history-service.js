@@ -23,7 +23,7 @@ const INDICATOR_SCALE = 18
 const RATIO_SCALE = 8
 const MAX_BUFFERED_LIVE_EVENTS = 500
 
-function logSystem(logger, data) {
+function logSystem({ logger, data }) {
   if (typeof logger?.system === "function") {
     logger.system(data)
     return
@@ -31,7 +31,7 @@ function logSystem(logger, data) {
   logger?.info?.(data)
 }
 
-function logUnavailable(logger, state, reason, error) {
+function logUnavailable({ logger, state, reason, error }) {
   const changed = state.reason !== reason
   state.reason = reason
   if (!changed) {return}
@@ -67,7 +67,7 @@ function updateMetrics({ state, logger } = {}) {
   try {
     if (state.fatalReason) {
       state.metrics = null
-      logUnavailable(logger, state, state.fatalReason)
+      logUnavailable({ logger, state, reason: state.fatalReason })
       return
     }
     const result = calculateVolatilityMetrics({
@@ -80,23 +80,23 @@ function updateMetrics({ state, logger } = {}) {
     })
     state.metrics = result.metrics
     if (result.reason) {
-      logUnavailable(logger, state, result.reason)
+      logUnavailable({ logger, state, reason: result.reason })
       return
     }
     const becameReady = state.reason !== null
     state.reason = null
     if (becameReady) {
-      logSystem(logger, {
+      logSystem({ logger, data: {
         message: "Volatility candle indicators calculated",
         symbol: state.symbol,
         interval: CANDLE_INTERVAL,
         historyCount: state.candles.length,
         volatilityRatio: state.metrics.volatilityRatio,
-      })
+      } })
     }
   } catch (error) {
     state.metrics = null
-    logUnavailable(logger, state, "INVALID_HISTORY", error)
+    logUnavailable({ logger, state, reason: "INVALID_HISTORY", error })
   }
 }
 
@@ -201,7 +201,7 @@ snapshot: currentSnapshot }))
     if (fatal && !state.fatalReason) {state.fatalReason = reason}
     if (fatal) {state.pendingGapOpenTime = null}
     state.metrics = null
-    logUnavailable(logger, state, state.fatalReason ?? reason, error)
+    logUnavailable({ logger, state, reason: state.fatalReason ?? reason, error })
   }
 
   async function backfillGap({ state, incomingCandle, nextCandleOpenTime } = {}) {
@@ -491,7 +491,7 @@ error })
 logger })
       if (state.bufferOverflow) {
         state.metrics = null
-        logUnavailable(logger, state, "LIVE_BUFFER_OVERFLOW")
+        logUnavailable({ logger, state, reason: "LIVE_BUFFER_OVERFLOW" })
       }
     } catch (error) {
       state.candles = Object.freeze([])
