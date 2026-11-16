@@ -65,6 +65,25 @@ test("wraps store factory failures with stage, path and original cause", async (
   )
 })
 
+test("rejects invalid stores and stores without verification support", async () => {
+  await assert.rejects(
+    prepareProcessOperationalStateStore({
+      appConfig: config({ recovery: true }),
+      runtimeSessionId: "session",
+      createOperationalStateStore: () => null,
+    }),
+    (error) => error.code === "PROCESS_OPERATIONAL_STATE_STORE_INVALID",
+  )
+  await assert.rejects(
+    prepareProcessOperationalStateStore({
+      appConfig: config({ recovery: true }),
+      runtimeSessionId: "session",
+      createOperationalStateStore: () => ({}),
+    }),
+    (error) => error.code === "PROCESS_OPERATIONAL_STATE_VERIFY_UNAVAILABLE",
+  )
+})
+
 test("fails closed when recovery ledger verification fails or throws", async () => {
   const invalid = new Error("corrupt chain")
   await assert.rejects(
