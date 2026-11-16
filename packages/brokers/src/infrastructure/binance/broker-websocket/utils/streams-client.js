@@ -90,7 +90,8 @@ export class BinanceStreamsClient {
     nowFn = Date.now,
     onError = () => {},
   } = {}] = args
-    validateClientOptions({ url, transportFactory, ackTimeout, reconnectDelay, maxReconnectDelay, rotationDelay, onError })
+    validateClientOptions({ url, transportFactory, ackTimeout, reconnectDelay, maxReconnectDelay, rotationDelay,
+      onError })
 
 
     this.url = url
@@ -150,7 +151,8 @@ export class BinanceStreamsClient {
 
       const desiredStreams = [...this.#listeners.keys()]
       if (desiredStreams.length > MAX_STREAMS_PER_CONNECTION) {
-        this.#removeListenerFromStreams({ streams: addedListeners, listener })
+        this.#removeListenerFromStreams({ streams: addedListeners,
+          listener })
         throw new RangeError(`Binance allows at most ${MAX_STREAMS_PER_CONNECTION} streams per connection`)
       }
 
@@ -163,7 +165,8 @@ export class BinanceStreamsClient {
         const activatedStreams = []
         try {
           for (const batch of this.#chunk([...new Set(missingStreams)], MAX_STREAMS_PER_SUBSCRIBE)) {
-            await this.#request({ method: "SUBSCRIBE", streams: batch })
+            await this.#request({ method: "SUBSCRIBE",
+              streams: batch })
             for (const stream of batch) {
               this.#activeStreams.add(stream)
               activatedStreams.push(stream)
@@ -172,13 +175,15 @@ export class BinanceStreamsClient {
         } catch (error) {
           if (activatedStreams.length > 0) {
             for (const stream of activatedStreams) {this.#activeStreams.delete(stream)}
-            this.#request({ method: "UNSUBSCRIBE", streams: activatedStreams })
+            this.#request({ method: "UNSUBSCRIBE",
+              streams: activatedStreams })
               .catch((cleanupError) => this.#reportError(cleanupError))
           }
           throw error
         }
       } catch (error) {
-        this.#removeListenerFromStreams({ streams: addedListeners, listener })
+        this.#removeListenerFromStreams({ streams: addedListeners,
+          listener })
         throw error
       }
 
@@ -210,7 +215,8 @@ export class BinanceStreamsClient {
 
       if (removals.length > 0 && this.#state === "open") {
         for (const batch of this.#chunk(removals, MAX_STREAMS_PER_SUBSCRIBE)) {
-          await this.#request({ method: "UNSUBSCRIBE", streams: batch })
+          await this.#request({ method: "UNSUBSCRIBE",
+            streams: batch })
         }
       }
 
@@ -279,7 +285,9 @@ export class BinanceStreamsClient {
     }
 
     this.#transport = transport
-    this.#connectPromise = this.#initializeConnection({ transport, connectionStreams, isReconnect })
+    this.#connectPromise = this.#initializeConnection({ transport,
+      connectionStreams,
+      isReconnect })
     return this.#connectPromise
   }
 
@@ -322,7 +330,8 @@ export class BinanceStreamsClient {
 
       this.#state = "open"
       this.#scheduleRotation()
-      await this.#activateInitialStreams({ transport, connectionStreams })
+      await this.#activateInitialStreams({ transport,
+        connectionStreams })
       this.#ready = true
       this.#reconnectAttempts = 0
       return this
@@ -359,7 +368,8 @@ export class BinanceStreamsClient {
     const desiredStreams = new Set(this.#listeners.keys())
     const obsoleteInitialStreams = initialBatch.filter((stream) => !desiredStreams.has(stream))
     if (obsoleteInitialStreams.length > 0) {
-      await this.#request({ method: "UNSUBSCRIBE", streams: obsoleteInitialStreams })
+      await this.#request({ method: "UNSUBSCRIBE",
+        streams: obsoleteInitialStreams })
       if (this.#transport !== transport || this.#manualDisconnect || this.#state !== "open") {
         throw new Error("Binance Streams connection was superseded")
       }
@@ -372,7 +382,8 @@ export class BinanceStreamsClient {
       .slice(MAX_STREAMS_PER_SUBSCRIBE)
       .filter((stream) => desiredStreams.has(stream))
     for (const batch of this.#chunk(remainingStreams, MAX_STREAMS_PER_SUBSCRIBE)) {
-      await this.#request({ method: "SUBSCRIBE", streams: batch })
+      await this.#request({ method: "SUBSCRIBE",
+        streams: batch })
       if (this.#transport !== transport || this.#manualDisconnect || this.#state !== "open") {
         throw new Error("Binance Streams connection was superseded")
       }

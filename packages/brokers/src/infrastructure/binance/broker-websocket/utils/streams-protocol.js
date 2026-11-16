@@ -122,9 +122,11 @@ export function createStreamName(...args) {
     case "rollingWindowTicker":
       return createRollingWindowStream({ symbol: normalizedSymbol, windowSize: normalizedWindowSize })
     case "partialBookDepth":
-      return createPartialBookDepthStream({ symbol: normalizedSymbol, levels, speed })
+      return createPartialBookDepthStream({ symbol: normalizedSymbol, levels,
+        speed })
     case "diffBookDepth":
-      return createDiffBookDepthStream({ symbol: normalizedSymbol, speed })
+      return createDiffBookDepthStream({ symbol: normalizedSymbol,
+        speed })
     default:
       throw new TypeError(`Unsupported Binance stream type: ${type}`)
   }
@@ -143,9 +145,11 @@ function parseCombinedStream(parsed) {
     throw new TypeError("Malformed Binance combined-stream envelope")
   }
   if (parsed.stream === "!serverShutdown" && parsed.data.e === "serverShutdown") {
-    return { serverShutdown: true, data: parsed.data }
+    return { serverShutdown: true,
+      data: parsed.data }
   }
-  return { stream: validateStreamName(parsed.stream), data: parsed.data }
+  return { stream: validateStreamName(parsed.stream),
+    data: parsed.data }
 }
 
 function isBookTickerPayload(parsed) {
@@ -158,12 +162,14 @@ function parseRawStream(parsed) {
     return { acknowledgement: parsed }
   }
   if (parsed.e === "serverShutdown") {
-    return { serverShutdown: true, data: parsed }
+    return { serverShutdown: true,
+      data: parsed }
   }
   if ((typeof parsed.e !== "string" || parsed.e.length === 0) && !isBookTickerPayload(parsed)) {
     throw new TypeError("Binance raw stream event is missing its event type")
   }
-  return { stream: null, data: parsed }
+  return { stream: null,
+    data: parsed }
 }
 
 /**
@@ -179,7 +185,8 @@ export function parseStreamMessage(rawMessage) {
     if (!parsed.every((item) => item && typeof item === "object" && !Array.isArray(item))) {
       throw new TypeError("Binance all-market stream payload must contain objects")
     }
-    return { stream: null, data: parsed }
+    return { stream: null,
+      data: parsed }
   }
   if (!parsed || typeof parsed !== "object") {
     throw new TypeError("Binance stream message must be an object")

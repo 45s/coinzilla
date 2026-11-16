@@ -511,7 +511,8 @@ test("finalizes close and attempts every socket listener removal when one remove
 
   assert.deepEqual(removed, ["open", "message", "error", "close"])
   assert.deepEqual(errors, ["open listener removal failed"])
-  assert.deepEqual(closes, [{ code: 1000, reason: "finished", wasClean: true }])
+  assert.deepEqual(closes, [{ code: 1000, reason: "finished",
+    wasClean: true }])
   assert.equal(transport.state, "closed")
   assert.equal(clock.pendingCount, 0)
   assert.equal(await transport.close(), undefined)
@@ -607,7 +608,9 @@ test("readyState reflects the socket during connecting, open, and closed states"
   assert.equal(transport.readyState, FakeWebSocket.OPEN)
 
   const closing = transport.close()
-  sockets[0].serverClose({ code: 1000, reason: "finished", wasClean: true })
+  sockets[0].serverClose({ code: 1000,
+    reason: "finished",
+    wasClean: true })
   await closing
   assert.equal(transport.readyState, FakeWebSocket.CLOSED)
 })

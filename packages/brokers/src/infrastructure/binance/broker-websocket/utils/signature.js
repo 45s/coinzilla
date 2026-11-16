@@ -29,7 +29,8 @@ export function buildBinanceSignaturePayload(params) {
       if (left > right) return 1
       return 0
     })
-    .map((key) => `${key}=${normalizeValue({ key, value: params[key] })}`)
+    .map((key) => `${key}=${normalizeValue({ key,
+      value: params[key] })}`)
     .join("&")
 }
 

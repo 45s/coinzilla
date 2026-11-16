@@ -313,7 +313,10 @@ export class BinanceWebSocketApiClient {
         }))
       }, timeout)
 
-      this.#pending.set(key, { id, method, resolve, reject, timer, stateChanging })
+      this.#pending.set(key, { id, method, resolve,
+        reject,
+        timer,
+        stateChanging })
       try {
         this.transport.send(JSON.stringify(envelope))
       } catch (error) {
@@ -324,7 +327,9 @@ export class BinanceWebSocketApiClient {
         }
         reject(new BinanceRpcConnectionError(
           `Failed to send Binance WebSocket API request "${method}": ${error.message}`,
-          { requestId: id, method, stateChanging },
+          { requestId: id,
+            method,
+            stateChanging },
         ))
       }
     })
@@ -332,17 +337,23 @@ export class BinanceWebSocketApiClient {
 
   /** @param {(event: object) => void} listener @returns {() => boolean} */
   onEvent(listener) {
-    return this.#subscribe({ listeners: this.#eventListeners, listener, name: "event" })
+    return this.#subscribe({ listeners: this.#eventListeners,
+      listener,
+      name: "event" })
   }
 
   /** @param {(error: Error) => void} listener @returns {() => boolean} */
   onError(listener) {
-    return this.#subscribe({ listeners: this.#errorListeners, listener, name: "error" })
+    return this.#subscribe({ listeners: this.#errorListeners,
+      listener,
+      name: "error" })
   }
 
   /** @param {(event: object) => void} listener @returns {() => boolean} */
   onClose(listener) {
-    return this.#subscribe({ listeners: this.#closeListeners, listener, name: "close" })
+    return this.#subscribe({ listeners: this.#closeListeners,
+      listener,
+      name: "close" })
   }
 
   /** @returns {Promise<void>} Rejects pending requests and closes the transport. */
@@ -417,10 +428,14 @@ export class BinanceWebSocketApiClient {
     }
 
     if (payload.status >= 200 && payload.status < 300) {
-      this.#handleSuccessfulResponse({ key, pending, payload })
+      this.#handleSuccessfulResponse({ key,
+        pending,
+        payload })
       return
     }
-    this.#handleFailedResponse({ key, pending, payload })
+    this.#handleFailedResponse({ key,
+      pending,
+      payload })
   }
 
   #handleSuccessfulResponse({ key, pending, payload }) {
