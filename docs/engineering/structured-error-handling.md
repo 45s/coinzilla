@@ -19,7 +19,7 @@ The standard is adopted incrementally. New functionality MUST follow it from its
 
 The common base class is named `SystemCustomError`. There must be one shared implementation; packages and applications must not create competing copies of the base class.
 
-The owning shared module/package for this base is selected during the initial implementation stage after checking dependency direction, package ownership, and the [Shared Utilities Policy](SHARED_UTILITIES_POLICY.md). The base must not introduce dependency cycles or make domain packages depend on application code.
+The Utilities domain owns the single shared implementation in `@coinzilla/utils`, selected after checking dependency direction, package ownership, and the [Shared Utilities Policy](SHARED_UTILITIES_POLICY.md). This is accepted as cross-domain request [#1208](https://github.com/45s/coinzilla/issues/1208) under repository error initiative [#1028](https://github.com/45s/coinzilla/issues/1028). The base must not introduce dependency cycles or make domain packages depend on application code.
 
 The base should extend the native `Error`, set `name` to the concrete subclass name, and support the standard native `cause` option. It may expose the following structured fields where applicable:
 
