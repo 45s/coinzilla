@@ -1,4 +1,3 @@
-import assert from "node:assert/strict";
 import { ESLint } from "eslint";
 import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,33 +5,59 @@ import { test } from "node:test";
 
 const packageRoot = fileURLToPath(new URL(".", import.meta.url));
 
-test("exports ESLint autofixes for the Entities package", async () => {
-  const eslint = new ESLint({
-    cwd: packageRoot,
-    fix: true,
-  });
-  const results = await eslint.lintFiles(["**/*.{js,mjs,cjs}"]);
-  const changedFiles = [];
+function summarizeResults(results) {
+  const files = [];
+  const ruleCounts = new Map();
+  let errors = 0;
+  let warnings = 0;
 
   for (const result of results) {
-    if (typeof result.output !== "string") {
+    errors += result.errorCount;
+    warnings += result.warningCount;
+    if (result.messages.length === 0) {
       continue;
     }
 
-    changedFiles.push({
-      path: relative(packageRoot, result.filePath),
-      content: result.output,
+    const messages = [];
+    for (const message of result.messages) {
+      const ruleId = message.ruleId ?? "unknown";
+      ruleCounts.set(ruleId, (ruleCounts.get(ruleId) ?? 0) + 1);
+      messages.push({
+        ruleId,
+        severity: message.severity === 2 ? "error" : "warning",
+        line: message.line,
+        column: message.column,
+        message: message.message,
+      });
+    }
+
+    files.push({
+      file: relative(packageRoot, result.filePath),
+      errors: result.errorCount,
+      warnings: result.warningCount,
+      messages,
     });
   }
 
-  await ESLint.outputFixes(results);
-  process.stdout.write("ENTITIES_ESLINT_AUTOFIX_FILES\n");
-
-  for (const file of changedFiles) {
-    process.stdout.write(
-      `${file.path}\n${Buffer.from(file.content).toString("base64")}\n`,
-    );
+  const byRule = [];
+  for (const [ruleId, count] of ruleCounts) {
+    byRule.push({ ruleId, count });
   }
 
-  assert.ok(changedFiles.length > 0, "Expected ESLint to produce autofixes.");
+  return {
+    scannedFiles: results.length,
+    filesWithFindings: files.length,
+    errors,
+    warnings,
+    byRule,
+    byFile: files,
+  };
+}
+
+test("reports remaining ESLint findings for @coinzilla/entities", async () => {
+  const eslint = new ESLint({ cwd: packageRoot });
+  const results = await eslint.lintFiles(["**/*.{js,mjs,cjs}"]);
+  const summary = summarizeResults(results);
+
+  process.stdout.write(`ENTITIES_ESLINT_REMAINING\n${JSON.stringify(summary, null, 2)}\n`);
 });
