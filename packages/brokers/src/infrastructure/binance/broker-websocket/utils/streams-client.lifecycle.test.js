@@ -630,7 +630,10 @@ test("paces queued cleanup requests and clears the control pump timer on disconn
 
   const batchStreams = Array.from(
     { length: 201 },
-    (_, index) => `s${String(index).padStart(4, "0")}@aggTrade`,
+    (...args) => {
+      const [, index] = args
+      return `s${String(index).padStart(4, "0")}@aggTrade`
+    },
   )
   const batch = client.subscribe(batchStreams, () => {})
   await flush()

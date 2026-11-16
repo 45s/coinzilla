@@ -258,13 +258,15 @@ test("the supported Node WebSocket client automatically answers server ping fram
   const payload = Buffer.from("binance-ping")
   let resolvePong
   let rejectPong
-  const pongReceived = new Promise((resolve, reject) => {
+  const pongReceived = new Promise((...args) => {
+    const [resolve, reject] = args
     resolvePong = resolve
     rejectPong = reject
   })
   const server = createServer()
 
-  server.on("upgrade", (request, socket) => {
+  server.on("upgrade", (...args) => {
+    const [request, socket] = args
     const key = request.headers["sec-websocket-key"]
     const accept = createHash("sha1")
       .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
@@ -289,8 +291,7 @@ test("the supported Node WebSocket client automatically answers server ping fram
       received = Buffer.concat([received, chunk])
 
       while (received.length >= 2) {
-        const first = received[0]
-        const second = received[1]
+        const [first, second] = received
         const opcode = first & 0x0f
         const masked = (second & 0x80) !== 0
         let length = second & 0x7f
@@ -435,15 +436,17 @@ test("listener registration failure closes the socket and removes previously att
       socket = this
     }
 
-    addEventListener(type, listener, options) {
+    addEventListener(...args) {
+      const [type, listener, options] = args
       if (type === "message") throw new Error("message listener registration failed")
       registered.push(type)
-      return super.addEventListener(type, listener, options)
+      return super.addEventListener(...args)
     }
 
-    removeEventListener(type, listener, options) {
+    removeEventListener(...args) {
+      const [type, listener, options] = args
       removed.push(type)
-      return super.removeEventListener(type, listener, options)
+      return super.removeEventListener(...args)
     }
   }
 
@@ -479,7 +482,7 @@ test("finalizes close and attempts every socket listener removal when one remove
 
     removeEventListener(type, listener, options) {
       removed.push(type)
-      super.removeEventListener(type, listener, options)
+      super.removeEventListener(...args)
       if (type === "open") throw new Error("open listener removal failed")
     }
   }

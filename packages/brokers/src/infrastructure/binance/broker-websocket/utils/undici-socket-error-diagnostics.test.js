@@ -25,7 +25,8 @@ test("Undici does not emit a socket_error diagnostic for every abnormal 1006 clo
 
   const server = createServer()
   let serverSocket = null
-  server.on("upgrade", (request, socket) => {
+  server.on("upgrade", (...args) => {
+    const [request, socket] = args
     serverSocket = socket
     const accept = createHash("sha1")
       .update(request.headers["sec-websocket-key"] + WEBSOCKET_GUID)
@@ -43,7 +44,8 @@ test("Undici does not emit a socket_error diagnostic for every abnormal 1006 clo
     setTimeout(() => socket.destroy(), 25)
   })
 
-  await new Promise((resolve, reject) => {
+  await new Promise((...args) => {
+    const [resolve, reject] = args
     server.once("error", reject)
     server.listen(0, "127.0.0.1", resolve)
   })

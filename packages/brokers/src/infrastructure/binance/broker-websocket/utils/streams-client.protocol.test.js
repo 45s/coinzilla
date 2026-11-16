@@ -84,7 +84,10 @@ test("supports multiple stream subscriptions in one request", async () => {
 
 test("batches subscriptions above 200 streams and paces control messages", async () => {
   const { client, clock, transports } = createClient()
-  const streams = Array.from({ length: 201 }, (_, index) => `s${String(index).padStart(4, "0")}@aggTrade`)
+  const streams = Array.from({ length: 201 }, (...args) => {
+      const [, index] = args
+      return `s${String(index).padStart(4, "0")}@aggTrade`
+    })
   const subscription = client.subscribe(streams, () => {})
   await flush()
 
