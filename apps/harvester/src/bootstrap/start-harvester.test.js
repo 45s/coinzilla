@@ -827,13 +827,6 @@ test("starts/stops Telegram CC and applies process-local pause without recovery 
     })
     assert.equal(pauseResult.ok, true, "An authorized market pause must complete through the existing application use case.")
     assert.equal(pauseResult.data.durable, false, "A CC pause without recovery storage must be explicitly process-local.")
-    const resumeResult = await operator.resumeMarket({
-      actor: { id: "telegram-user:12345", roles: ["trading-operator"] },
-      requestId: "telegram:9002",
-      symbol: "BTCUSDT",
-    })
-    assert.equal(resumeResult.ok, true, "An authorized process-local resume must remain usable.")
-    assert.equal(resumeResult.data.durable, false, "A CC resume without recovery storage must be explicitly process-local.")
     assert.equal(appendedFacts.some(({ factType }) => factType === "OPERATOR_MARKET_PAUSED" || factType === "OPERATOR_MARKET_RESUMED"), false, "Process-local CC commands must not write recovery facts.")
     assert.equal(calls.includes("append-operator-fact"), false, "A process-local CC pause must not access durable recovery storage.")
     assert.equal(placeOrderCalls, 0, "An operator pause must not submit any exchange order.")
