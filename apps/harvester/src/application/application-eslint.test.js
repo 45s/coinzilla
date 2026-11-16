@@ -10,12 +10,15 @@ test("keeps every application-layer JavaScript file free of ESLint errors and wa
   const autofixResults = await new ESLint({
     cwd: workspaceRoot,
     fix: true,
-    overrideConfig: [{ rules: { indent: ["error", 2, { ignoredNodes: ["TemplateLiteral"] }], "object-curly-newline": ["error", { ObjectExpression: { minProperties: 2 } }] } }],
+    overrideConfig: [{ rules: { indent: ["error", 2, { ignoredNodes: ["TemplateLiteral"] }], "object-curly-newline": ["error", { ObjectExpression: { minProperties: 2 } }], "brace-style": ["error", "1tbs", { allowSingleLine: false }] } }],
   }).lintFiles(["apps/harvester/src/application"])
   for (const result of autofixResults) {
     if (typeof result.output === "string") {
       process.stderr.write(`\nAPPLICATION_ESLINT_AUTOFIX_BEGIN:${relative(workspaceRoot, result.filePath)}\n`)
-      process.stderr.write(result.output)
+      const formattedOutput = result.output
+        .replace(/[ \\t]+$/gm, "")
+        .replace(/\\$\\{\\s{2,}([^}\\n]*?)\\s{2,}\\}/g, "${$1}")
+      process.stderr.write(formattedOutput)
       process.stderr.write("\nAPPLICATION_ESLINT_AUTOFIX_END\n")
     }
   }
