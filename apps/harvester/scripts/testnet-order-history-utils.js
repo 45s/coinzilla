@@ -65,10 +65,14 @@ export const normalizeOrderHistory = ({ orders, limit = 20 }) => {
     const invertedId = normalizedId.replace(/\d/g, (digit) => String(9 - Number(digit)))
     const invertedIdLength = String(16 - normalizedId.length).padStart(2, "0")
     const sortKey = `${invertedTime}:${invertedIdLength}:${invertedId}:${String(index).padStart(8, "0")}`
-    return { normalized, sortKey }
+    return `${sortKey}| ${JSON.stringify(normalized)}`
   })
-  normalizedOrders.sort((left, right) => left.sortKey.localeCompare(right.sortKey))
-  return { orders: normalizedOrders.slice(0, limit).map(({ normalized }) => normalized) }
+  normalizedOrders.sort()
+  return {
+    orders: normalizedOrders
+      .slice(0, limit)
+      .map((entry) => JSON.parse(entry.slice(entry.indexOf("|") + 1))),
+  }
 }
 
 export const parseOrderHistoryArguments = ({ args = [] } = {}) => {
