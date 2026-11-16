@@ -170,7 +170,10 @@ originalUrls: [] };
       paths: link.paths.sort(),
       originalUrls: link.originalUrls.sort(),
     }))
-    .sort((left, right) => left.url.localeCompare(right.url));
+    .sort((...args) => {
+      const [left, right] = args;
+      return left.url.localeCompare(right.url);
+    });
 }
 
 /**
