@@ -4,7 +4,7 @@ import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { TRADING_ENVIRONMENTS } from "../../domain/trading-environment.js"
 import { resolveHarvesterOptions } from "./resolve-harvester-options.js"
 
-const test = (name, ...args) => nodeTest(`[resolve-harvester-options.test.js] ${  name}`, ...args)
+const test = (...args) => nodeTest(`[resolve-harvester-options.test.js] ${args[0]}`, ...args.slice(1))
 
 const config = ({
   enabledSymbols = ["BTCUSDT"],
