@@ -65,7 +65,7 @@ The credential-free `pnpm run config:symbol` generator reads public `exchangeInf
 
 ## Bitunix Spot partial mapping — read-only preparation
 
-The Bitunix Spot market catalog does not expose a complete canonical trading-rule set. The planned Harvester adapter maps only fields whose units are supported by the official Spot market metadata and order documentation:
+The Bitunix Spot market catalog does not expose a complete canonical trading-rule set. The pure Harvester adapter in `src/infrastructure/brokers/bitunix-market-metadata.js` maps only fields whose units are supported by the official Spot market metadata and order documentation:
 
 - `minVolume` is the minimum trading quantity and maps to canonical `MIN_QUANTITY` using the base asset.
 - `minPrice` is the minimum trading value and maps to canonical `MIN_NOTIONAL` using the quote asset.
@@ -75,7 +75,7 @@ The Bitunix Spot market catalog does not expose a complete canonical trading-rul
 - The .NET reference fixture includes `maxAmount`, `maxLimitOrderAmount`, and `maxMarketOrderAmount`, but the official Spot catalog does not document their semantics. They are not mapped into maximum trading rules.
 - Only an explicitly open market (`isOpen: "1"` or numeric `1`) advertises the documented `LIMIT` and `MARKET` order types. Closed or unknown market status advertises no supported order types. No `LIMIT_MAKER` or post-only support is inferred.
 
-This is a pure read-side mapping helper, not a broker adapter and not part of runtime composition. It does not enable Bitunix trading. Price/quantity increments remain unknown, so this metadata cannot pass the existing enabled-market trading-readiness gate.
+This is a pure read-side mapping helper, not a broker adapter and not part of runtime composition. It does not enable Bitunix trading. The official evidence is in the [Bitunix Spot API documentation](https://www.bitunix.com/api-docs/spots/en_us/); the mapping deliberately does not reuse the .NET reference's undocumented maximum fields. Price/quantity increments remain unknown, so this metadata cannot pass the existing enabled-market trading-readiness gate.
 
 ## Adding another exchange later
 

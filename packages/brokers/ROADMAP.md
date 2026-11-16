@@ -1024,6 +1024,7 @@ The following comparison resolves what the references actually implement; it doe
 - [x] Validate the order-history response envelope and returned page identity, accepting the documented REST string and official Spot WebSocket numeric `pageNum` forms — [PR #1202](https://github.com/45s/coinzilla/pull/1202).
 - [ ] Establish ordering, snapshot consistency, maximum page size, time-bound inclusivity, and reliable completion semantics before adding automatic pagination.
 - [x] Fail closed on order-detail `dealVolume` versus matching-order response-presence contradictions — [PR #1205](https://github.com/45s/coinzilla/pull/1205).
+- [x] Map documented Bitunix `minVolume`/`minPrice` into canonical Harvester `MIN_QUANTITY`/`MIN_NOTIONAL`; leave all unresolved increments/maxima UNKNOWN — [PR #1209](https://github.com/45s/coinzilla/pull/1209).
 - [ ] Resolve per-order fill completeness, execution-ID guarantees, and the unit of deal `volume`; only add fail-closed checks where the exchange contract makes the inconsistency unambiguous.
 
 ### Recommended implementation order

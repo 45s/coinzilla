@@ -205,4 +205,4 @@ For Conservative, order-type selection, POST-ONLY crossing constraints, and fail
 
 ## Bitunix Spot metadata boundary
 
-The current application broker port and runtime composition remain Binance-only. The Bitunix Spot market-metadata helper is a pure read-side transformation; it is not a broker adapter, does not satisfy the full Harvester broker port, and is not wired into bootstrap. Do not use it to enable Bitunix trading while issue #1185 remains open.
+The current application broker port and runtime composition remain Binance-only. The Bitunix Spot market-metadata helper (`src/infrastructure/brokers/bitunix-market-metadata.js`) is a pure read-side transformation; it is not a broker adapter, does not satisfy the full Harvester broker port, and is not wired into bootstrap. It maps only `minVolume` and `minPrice` into canonical minimum constraints; precision increments remain UNKNOWN. Do not use it to enable Bitunix trading while issue #1185 remains open.
