@@ -560,7 +560,8 @@ test("rejects enabled Telegram operator control without a bot token before conne
   assert.equal(brokerFactoryCalled, false, "Invalid operator-control configuration must fail before Binance adapter construction.")
 })
 
-test("uses the app-local Operational State Store default and fails closed when it is not initialized", async () => {
+test("fails closed before broker construction when explicitly enabled with an uninitialized store", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-operator-control-preflight-"))
   const config = {
     ...appConfig,
     operatorControl: { telegram: {
@@ -570,26 +571,33 @@ test("uses the app-local Operational State Store default and fails closed when i
   }
   let brokerFactoryCalled = false
 
-  await assert.rejects(
-    startHarvesterForTest({
-      loadConfig: async () => config,
-      env: {
-        ...binanceEnv,
-        TELEGRAM_BOT_TOKEN: "test-telegram-token"
+  try {
+    await assert.rejects(
+      startHarvesterForTest({
+        loadConfig: async () => config,
+        env: {
+          ...binanceEnv,
+          NODE_ENV: "production",
+          TELEGRAM_BOT_TOKEN: "test-telegram-token",
+          OPERATIONAL_STATE_DIRECTORY: directory,
+        },
+        runtimeSessionId: "telegram-default-directory-session",
+        brokerAdapterFactory: () => {
+          brokerFactoryCalled = true
+          throw new Error("Broker connection must not start before the Operational State Store is verified.")
+        },
+      }),
+      (error) => {
+        return error.code === "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID"
       },
-      runtimeSessionId: "telegram-default-directory-session",
-      brokerAdapterFactory: () => {
-        brokerFactoryCalled = true
-        throw new Error("Broker connection must not start before the Operational State Store is verified.")
-      },
-    }),
-    (error) => error.code === "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID",
-    "Telegram operator control must use the app-local default Operational State Store and fail closed until it is initialized.",
-  )
+      "Explicitly enabled operator control must fail closed in production when its Operational State Store is uninitialized.",
+    )
 
-  assert.equal(brokerFactoryCalled, false, "An uninitialized default Operational State Store must fail before connecting to Binance.")
+    assert.equal(brokerFactoryCalled, false, "An uninitialized Operational State Store must fail before connecting to Binance.")
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
 })
-
 test("verifies the existing Operational State Store before connecting when Telegram operator control is enabled", async () => {
   const config = {
     ...appConfig,
@@ -606,6 +614,7 @@ test("verifies the existing Operational State Store before connecting when Teleg
       loadConfig: async () => config,
       env: {
         ...binanceEnv,
+        NODE_ENV: "production",
         TELEGRAM_BOT_TOKEN: "test-telegram-token",
         OPERATIONAL_STATE_DIRECTORY: process.cwd()
       },
@@ -5259,7 +5268,10 @@ test("fails closed when the effective configuration has no enabled markets", asy
       },
     },
   }
-  const baseline = await recordConfigurationBaseline({ operationalStateStore, appConfig: disabledConfig })
+  const baseline = await recordConfigurationBaseline({
+    operationalStateStore,
+    appConfig: disabledConfig,
+  })
   assert.equal(baseline.ok, false, "A runtime baseline must not accept a configuration with no enabled markets.")
   assert.match(baseline.errors[0].message, /at least one enabled market/)
   const records = await operationalStateStore.readAll()
