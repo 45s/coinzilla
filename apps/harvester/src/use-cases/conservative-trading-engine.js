@@ -529,6 +529,20 @@ durable } })
   })
 }
 
+function isOperatorResumeBlocked({ state, symbol, volatilityProtectionEnabled, hasPendingRecoveryManagedCancellation }) {
+  const volatilityState = state.volatilityProtection.get(symbol)
+  const volatilityBlocked = volatilityProtectionEnabled &&
+    volatilityState !== undefined &&
+    volatilityState.mode !== VOLATILITY_PROTECTION_MODES.NORMAL
+  return state.paused.has(symbol) ||
+    state.durablePausedMarkets.has(symbol) ||
+    state.recoveryManagedPausedMarkets.has(symbol) ||
+    state.replacementIntents.has(symbol) ||
+    state.trailingBuyRepriceIntents.has(symbol) ||
+    hasPendingRecoveryManagedCancellation({ symbol }) ||
+    volatilityBlocked
+}
+
 function createOperatorMarketResumeHandler({
   state,
   pairs,
@@ -543,19 +557,12 @@ function createOperatorMarketResumeHandler({
         error.code = "INVALID_OPERATOR_MARKET"
         return toResult({ error })
       }
-      const volatilityState = state.volatilityProtection.get(symbol)
-      const volatilityBlocked = volatilityProtectionEnabled &&
-        volatilityState !== undefined &&
-        volatilityState.mode !== VOLATILITY_PROTECTION_MODES.NORMAL
-      const safetyBlocked =
-        state.paused.has(symbol) ||
-        state.durablePausedMarkets.has(symbol) ||
-        state.recoveryManagedPausedMarkets.has(symbol) ||
-        state.replacementIntents.has(symbol) ||
-        state.trailingBuyRepriceIntents.has(symbol) ||
-        hasPendingRecoveryManagedCancellation({ symbol }) ||
-        volatilityBlocked
-      if (safetyBlocked) {
+      if (isOperatorResumeBlocked({
+        state,
+        symbol,
+        volatilityProtectionEnabled,
+        hasPendingRecoveryManagedCancellation,
+      })) {
         const error = new Error("Market cannot be resumed while a safety or recovery blocker is active")
         error.code = "SAFETY_BLOCKER_ACTIVE"
         return toResult({ error })
