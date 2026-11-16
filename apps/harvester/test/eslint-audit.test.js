@@ -12,7 +12,7 @@ fix: true });
     if (result.output) {
       const filePath = relative(process.cwd(), result.filePath);
       const encodedOutput = Buffer.from(result.output).toString("base64");
-      console.log(`ESLINT_FIXED_FILE:${filePath}:${encodedOutput}`);
+      process.stdout.write(`ESLINT_FIXED_FILE:${filePath}:${encodedOutput}\n`);
     }
   }
 
@@ -28,7 +28,7 @@ fix: true });
     `${finding.filePath}:${finding.line}:${finding.column} ${finding.severity} ${finding.ruleId} ${finding.message}`
   )).join("\n");
   for (const finding of findings) {
-    console.log(`ESLINT_REMAINING:${finding.filePath}:${finding.line}:${finding.column} ${finding.severity} ${finding.ruleId} ${finding.message}`);
+    process.stdout.write(`ESLINT_REMAINING:${finding.filePath}:${finding.line}:${finding.column} ${finding.severity} ${finding.ruleId} ${finding.message}\n`);
   }
 
   assert.equal(

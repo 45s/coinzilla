@@ -757,7 +757,7 @@ async function startDeferredRecoveryScenario(fixture) {
     symbol: "ZROUSDT",
     priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
   });
-  const initialBuyIntent = submittedIntents[0];
+  const [initialBuyIntent] = submittedIntents;
   const initialBuy = new CanonicalOrder({
     clientOrderId: initialBuyIntent.clientOrderId,
     brokerOrderId: "1",
