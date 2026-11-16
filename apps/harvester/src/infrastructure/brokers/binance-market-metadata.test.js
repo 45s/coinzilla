@@ -160,7 +160,9 @@ scope: "SYMBOL" }],
 
 
 test("requires the adapter to provide an explicit unvalidated-constraint inventory", () => {
-  const { unvalidatedConstraints, ...incompleteSymbolFilters } = baseFilters;
+  const incompleteSymbolFilters = Object.fromEntries(
+    Object.entries(baseFilters).filter(([key]) => key !== "unvalidatedConstraints"),
+  );
 
   assert.throws(
     () => createBinanceMarketMetadata({ symbolFilters: incompleteSymbolFilters }),
