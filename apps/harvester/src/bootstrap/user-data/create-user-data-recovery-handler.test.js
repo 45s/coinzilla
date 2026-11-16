@@ -2,7 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { createUserDataRecoveryHandler } from "./create-user-data-recovery-handler.js"
 
-const test = (name, ...args) => nodeTest("[create-user-data-recovery-handler.test.js] " + name, ...args)
+const test = (name, ...args) => nodeTest(`[create-user-data-recovery-handler.test.js] ${  name}`, ...args)
 
 const createState = (overrides = {}) => ({
   ready: false,
@@ -21,8 +21,15 @@ const createState = (overrides = {}) => ({
 })
 
 const createRecovery = ({ state = createState(), reconcileOwnedOrders, getOpenOrders, refreshAccountSnapshot, publishAccountSnapshot, publishOpenOrdersSnapshot, acknowledgeRecovery, acknowledgeRecoveryResult, drainUserDataEvents, setCanonicalOwnershipReconciled } = {}) => {
-  const calls = { acknowledgements: 0, acknowledgementResults: 0, brokerRecoveryGenerations: [], accountAudits: [], orderAudits: [], drains: 0, ownershipReconciled: false }
-  const logs = { info: [], error: [] }
+  const calls = { acknowledgements: 0,
+acknowledgementResults: 0,
+brokerRecoveryGenerations: [],
+accountAudits: [],
+orderAudits: [],
+drains: 0,
+ownershipReconciled: false }
+  const logs = { info: [],
+error: [] }
   const userDataSubscription = {
     acknowledgeRecovery: () => {
       calls.acknowledgements += 1
@@ -37,18 +44,20 @@ const createRecovery = ({ state = createState(), reconcileOwnedOrders, getOpenOr
     } : {}),
   }
   const broker = {
-    getOpenOrders: async () => getOpenOrders ? getOpenOrders(calls, state) : ({ ok: true, data: [] }),
+    getOpenOrders: async () => getOpenOrders ? getOpenOrders(calls, state) : ({ ok: true,
+data: [] }),
   }
   const start = createUserDataRecoveryHandler({
     state,
     isStopped: () => false,
     getUserDataSubscription: () => userDataSubscription,
-    getTradingEngine: () => ({ reconcileOwnedOrders: reconcileOwnedOrders ?? (async () => ({ ok: true, data: { reconciled: 2 } })) }),
+    getTradingEngine: () => ({ reconcileOwnedOrders: reconcileOwnedOrders ?? (async () => ({ ok: true,
+data: { reconciled: 2 } })) }),
     tradingEnabled: true,
     broker,
     drainUserDataEvents: async () => {
       calls.drains += 1
-      if (drainUserDataEvents) await drainUserDataEvents(calls, state)
+      if (drainUserDataEvents) {await drainUserDataEvents(calls, state)}
     },
     setCanonicalOwnershipReconciled: (value) => {
       calls.ownershipReconciled = value
@@ -57,18 +66,21 @@ const createRecovery = ({ state = createState(), reconcileOwnedOrders, getOpenOr
     refreshAccountSnapshot: async () => refreshAccountSnapshot ? refreshAccountSnapshot(calls) : ({ sourceTime: 100 }),
     publishAccountSnapshot: async (input) => {
       calls.accountAudits.push(input)
-      if (publishAccountSnapshot) await publishAccountSnapshot(input, calls)
+      if (publishAccountSnapshot) {await publishAccountSnapshot(input, calls)}
     },
     publishOpenOrdersSnapshot: async (input) => {
       calls.orderAudits.push(input)
-      if (publishOpenOrdersSnapshot) await publishOpenOrdersSnapshot(input, calls)
+      if (publishOpenOrdersSnapshot) {await publishOpenOrdersSnapshot(input, calls)}
     },
     logger: {
       info: (entry) => { logs.info.push(entry) },
       error: (entry) => { logs.error.push(entry) },
     },
   })
-  return { start, state, calls, logs }
+  return { start,
+state,
+calls,
+logs }
 }
 
 test("waits for user-data startup completion before beginning recovery", () => {
@@ -100,7 +112,8 @@ test("acknowledges recovery only after owned-order reconciliation and durable ac
 
 test("records local acknowledgement but keeps readiness blocked until global reconciliation completes", async () => {
   const fixture = createRecovery({
-    acknowledgeRecoveryResult: () => ({ accepted: true, completed: false }),
+    acknowledgeRecoveryResult: () => ({ accepted: true,
+completed: false }),
   })
   fixture.start()
   await fixture.state.recoveryTask
@@ -117,7 +130,9 @@ test("records local acknowledgement but keeps readiness blocked until global rec
 test("does not call the result acknowledgement API when the broker generation token is missing", async () => {
   const fixture = createRecovery({
     state: createState({ recoveryBrokerGeneration: null }),
-    acknowledgeRecoveryResult: () => ({ accepted: false, completed: false, reason: "stale-recovery-generation" }),
+    acknowledgeRecoveryResult: () => ({ accepted: false,
+completed: false,
+reason: "stale-recovery-generation" }),
   })
   fixture.start()
   await fixture.state.recoveryTask
@@ -162,7 +177,8 @@ test("does not acknowledge a recovery generation superseded during order reconci
   const fixture = createRecovery({ reconcileOwnedOrders: () => reconciliation })
   fixture.start()
   fixture.state.recoveryGeneration += 1
-  resolveReconciliation({ ok: true, data: { reconciled: 2 } })
+  resolveReconciliation({ ok: true,
+data: { reconciled: 2 } })
   await fixture.state.recoveryTask
 
   assert.equal(fixture.state.requiresReconciliation, true, "A superseded generation must remain blocked.")
@@ -181,7 +197,8 @@ test("does not certify canonical ownership when accounting fails during owned-or
   const fixture = createRecovery({ reconcileOwnedOrders: () => reconciliation })
   fixture.start()
   fixture.state.accountingFailed = true
-  resolveReconciliation({ ok: true, data: { reconciled: 2 } })
+  resolveReconciliation({ ok: true,
+data: { reconciled: 2 } })
   await fixture.state.recoveryTask
 
   assert.equal(
@@ -231,8 +248,9 @@ test("repeats REST snapshots when a user-data event arrives during the audit win
   const fixture = createRecovery({
     getOpenOrders: async (_calls, state) => {
       openOrderReads += 1
-      if (openOrderReads === 1) state.eventSequence += 1
-      return { ok: true, data: [] }
+      if (openOrderReads === 1) {state.eventSequence += 1}
+      return { ok: true,
+data: [] }
     },
   })
   fixture.start()
@@ -379,7 +397,8 @@ test("does not mark another recovery request pending while reconciliation is alr
     "A reminder received during an active recovery task must not be mislabeled as a pre-startup pending request.",
   )
 
-  resolveReconciliation({ ok: true, data: { reconciled: 2 } })
+  resolveReconciliation({ ok: true,
+data: { reconciled: 2 } })
   await inFlightRecovery
 
   assert.equal(
@@ -533,7 +552,9 @@ test("keeps recovery blocked when owned-order reconciliation returns a failed re
     reconcileOwnedOrders: async () => ({
       ok: false,
       errors: [new Error("canonical owned-order history unavailable")],
-      failure: { category: "REST_RECONCILIATION", stage: "OWNED_ORDER_HISTORY_READ", retryable: true },
+      failure: { category: "REST_RECONCILIATION",
+stage: "OWNED_ORDER_HISTORY_READ",
+retryable: true },
     }),
   })
   fixture.start()
@@ -667,12 +688,15 @@ test("keeps recovery blocked when the canonical account balance snapshot cannot 
   const fixture = createRecovery({
     refreshAccountSnapshot: async () => {
       throw Object.assign(new Error("canonical account balance snapshot unavailable"), {
-        recoveryFailure: { category: "REST_RECONCILIATION", stage: "ACCOUNT_SNAPSHOT_READ", retryable: true },
+        recoveryFailure: { category: "REST_RECONCILIATION",
+stage: "ACCOUNT_SNAPSHOT_READ",
+retryable: true },
       })
     },
     getOpenOrders: async () => {
       openOrderReads += 1
-      return { ok: true, data: [] }
+      return { ok: true,
+data: [] }
     },
   })
   fixture.start()
@@ -729,7 +753,9 @@ test("keeps recovery blocked when the durable account open-orders audit fails", 
   const fixture = createRecovery({
     publishOpenOrdersSnapshot: async () => {
       throw Object.assign(new Error("durable account open-orders audit flush failed"), {
-        recoveryFailure: { category: "DURABILITY", stage: "RECOVERY_OPEN_ORDERS_AUDIT_FLUSH", retryable: true },
+        recoveryFailure: { category: "DURABILITY",
+stage: "RECOVERY_OPEN_ORDERS_AUDIT_FLUSH",
+retryable: true },
       })
     },
   })
@@ -829,18 +855,21 @@ test("repeats account snapshot baseline capture when a user-data event crosses t
   let fixture
   let snapshotReads = 0
   const snapshots = [
-    { sourceTime: 100, baselineVersion: "before-user-data-event" },
-    { sourceTime: 101, baselineVersion: "after-user-data-event" },
+    { sourceTime: 100,
+baselineVersion: "before-user-data-event" },
+    { sourceTime: 101,
+baselineVersion: "after-user-data-event" },
   ]
   const publishedSnapshots = []
   let accountAuditAttempts = 0
   fixture = createRecovery({
     refreshAccountSnapshot: async () => snapshots[snapshotReads++],
-    getOpenOrders: async () => ({ ok: true, data: [] }),
+    getOpenOrders: async () => ({ ok: true,
+data: [] }),
     publishAccountSnapshot: async ({ snapshot }) => {
       accountAuditAttempts += 1
       publishedSnapshots.push(snapshot)
-      if (accountAuditAttempts === 1) fixture.state.eventSequence += 1
+      if (accountAuditAttempts === 1) {fixture.state.eventSequence += 1}
     },
   })
   fixture.start()
@@ -917,11 +946,14 @@ test("recovers safely when a second disconnect supersedes a later retry", async 
         return {
           ok: false,
           errors: [new Error("temporary owned-order history failure")],
-          failure: { category: "REST_RECONCILIATION", stage: "OWNED_ORDER_HISTORY_READ", retryable: true },
+          failure: { category: "REST_RECONCILIATION",
+stage: "OWNED_ORDER_HISTORY_READ",
+retryable: true },
         }
       }
-      if (reconciliationCalls === 2) return secondReconciliation
-      return { ok: true, data: { reconciled: 2 } }
+      if (reconciliationCalls === 2) {return secondReconciliation}
+      return { ok: true,
+data: { reconciled: 2 } }
     },
   })
 
@@ -955,7 +987,8 @@ test("recovers safely when a second disconnect supersedes a later retry", async 
   )
 
   fixture.state.recoveryGeneration = 2
-  resolveSecondReconciliation({ ok: true, data: { reconciled: 2 } })
+  resolveSecondReconciliation({ ok: true,
+data: { reconciled: 2 } })
   await secondAttempt
 
   assert.equal(
@@ -1026,7 +1059,9 @@ test("retries application recovery after an account snapshot REST timeout releas
     {
       name: "RpcTimeoutError",
       code: "RPC_TIMEOUT",
-      recoveryFailure: { category: "REST_RECONCILIATION", stage: "ACCOUNT_SNAPSHOT_READ", retryable: true },
+      recoveryFailure: { category: "REST_RECONCILIATION",
+stage: "ACCOUNT_SNAPSHOT_READ",
+retryable: true },
     },
   )
   let accountSnapshotReads = 0
@@ -1034,12 +1069,13 @@ test("retries application recovery after an account snapshot REST timeout releas
   const fixture = createRecovery({
     refreshAccountSnapshot: async () => {
       accountSnapshotReads += 1
-      if (accountSnapshotReads === 1) throw timeout
+      if (accountSnapshotReads === 1) {throw timeout}
       return { sourceTime: 101 }
     },
     getOpenOrders: async () => {
       openOrderReads += 1
-      return { ok: true, data: [] }
+      return { ok: true,
+data: [] }
     },
   })
 
@@ -1143,15 +1179,18 @@ test("keeps recovery blocked and retries after an account-wide open-orders RPC t
   let openOrderReads = 0
   const timeout = Object.assign(
     new Error("account-wide open-orders RPC timed out"),
-    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
+    { name: "RpcTimeoutError",
+code: "RPC_TIMEOUT" },
   )
   const fixture = createRecovery({
     getOpenOrders: async () => {
       openOrderReads += 1
       if (openOrderReads === 1) {
-        return { ok: false, errors: [timeout] }
+        return { ok: false,
+errors: [timeout] }
       }
-      return { ok: true, data: [] }
+      return { ok: true,
+data: [] }
     },
   })
 
@@ -1254,7 +1293,9 @@ test("keeps recovery blocked and retries the same generation after a transient a
       if (accountFlushAttempts === 1) {
         throw Object.assign(
           new Error("Unable to durably persist RECOVERY account snapshot: simulated Journal file sync failure"),
-          { recoveryFailure: { category: "DURABILITY", stage: "RECOVERY_ACCOUNT_AUDIT_FLUSH", retryable: true } },
+          { recoveryFailure: { category: "DURABILITY",
+stage: "RECOVERY_ACCOUNT_AUDIT_FLUSH",
+retryable: true } },
         )
       }
     },
@@ -1373,7 +1414,8 @@ test("does not retry application recovery after a permanent Journal write failur
   const fixture = createRecovery({
     reconcileOwnedOrders: async () => {
       reconciliationCalls += 1
-      return { ok: true, data: { reconciled: 2 } }
+      return { ok: true,
+data: { reconciled: 2 } }
     },
     publishAccountSnapshot: async () => { throw permanentWriteFailure },
   })
@@ -1390,7 +1432,9 @@ test("does not retry application recovery after a permanent Journal write failur
   assert.equal(reconciliationCalls, 1, "The first attempt must perform one authoritative reconciliation.")
   assert.deepEqual(
     fixture.logs.error[0]?.error?.recoveryFailure,
-    { category: "DURABILITY", stage: "JOURNAL_WRITE_FAILURE", retryable: false },
+    { category: "DURABILITY",
+stage: "JOURNAL_WRITE_FAILURE",
+retryable: false },
     "The terminal Journal write-failure classification must survive recovery error handling.",
   )
 
