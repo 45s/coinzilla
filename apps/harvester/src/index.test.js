@@ -1914,3 +1914,65 @@ test("releases the process lock after operator-control preflight failure while p
   }
 })
 
+test("retains the process lock when a pre-broker failure cannot confirm Journal shutdown", async () => {
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  const startupError = new Error("Operator-control preflight failed before broker startup.")
+  startupError.code = "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID"
+  startupError.startupResourcesMayBeActive = false
+  const journalCloseError = new Error("Journal close was not confirmed.")
+  let processLockReleaseCalls = 0
+  const errorLogs = []
+
+  try {
+    await main({
+      loadConfig: async () => ({
+        operatorControl: {
+          telegram: {
+            enabled: true,
+            allowedUserIds: ["12345"],
+          },
+        },
+        strategies: {
+          CG_coinGrabber: {
+            settings: {
+              recovery: {
+                enabled: false,
+              },
+            },
+          },
+        },
+      }),
+      createJournalService: () => ({
+        ready: Promise.resolve({ ok: true }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => ({
+          ok: false,
+          closed: false,
+          errors: [journalCloseError],
+        }),
+      }),
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => {
+          processLockReleaseCalls += 1
+          return { ok: true, released: true }
+        },
+      }),
+      start: async () => { throw startupError },
+      logger: {
+        info() {},
+        system() {},
+        error: (entry) => errorLogs.push(entry),
+      },
+    })
+
+    assert.equal(processLockReleaseCalls, 0, "The process lock must remain held when Journal shutdown cannot be confirmed, even after a pre-broker failure.")
+    assert.equal(errorLogs.some((entry) => entry.message === "observability shutdown incomplete"), true, "Unconfirmed Journal shutdown must remain visible as an incomplete cleanup.")
+    assert.strictEqual(errorLogs.find((entry) => entry.message === "startup failed.")?.error, startupError, "The original pre-broker startup error must remain visible alongside cleanup failure.")
+    assert.equal(process.exitCode, 1, "Unconfirmed Journal shutdown must not turn startup failure into success.")
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+

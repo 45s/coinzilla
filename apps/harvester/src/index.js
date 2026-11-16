@@ -154,6 +154,11 @@ const describeError = (error) => {
 const resolveHostProcessLockDirectory = () =>
   path.join(os.homedir(), ".coinzilla", "harvester", "process-locks")
 
+const canReleaseProcessLockAfterStartupFailure = ({ runtimeStartAttempted, error }) => {
+  if (!runtimeStartAttempted) return true
+  return error?.startupResourcesMayBeActive === false
+}
+
 export async function main({
   start = startHarvester,
   logger = defaultLogger,
@@ -453,7 +458,7 @@ export async function main({
       journalService,
       eventBus,
       processLock,
-      allowProcessLockRelease: !runtimeStartAttempted || error?.startupResourcesMayBeActive === false,
+      allowProcessLockRelease: canReleaseProcessLockAfterStartupFailure({ runtimeStartAttempted, error }),
       logger,
     })
     if (cleanupErrors.length > 0) {
