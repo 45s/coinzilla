@@ -195,7 +195,7 @@ async function reconcileAndCommitCoverage({
  */
 export async function confirmMarketHistoryCoverage(options = {}) {
   try {
-    const { factId, evidence } = validateConfirmationInput(options)
+    const { evidence } = validateConfirmationInput(options)
     const existingResult = await readExistingCoverage({
       operationalStateStore: options.operationalStateStore,
       symbol: options.symbol,
@@ -207,7 +207,7 @@ export async function confirmMarketHistoryCoverage(options = {}) {
     return await reconcileAndCommitCoverage({
       operationalStateStore: options.operationalStateStore,
       reconcileMarketState: options.reconcileMarketState,
-      evidence: { ...evidence, factId },
+      evidence,
     })
   } catch (error) {
     return toResult({ error })
