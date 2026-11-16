@@ -17,6 +17,7 @@ import { createLatestTransitionEvaluator } from "./create-latest-transition-eval
 import { createMarketPriceTransitionHandler } from "./create-market-price-transition-handler.js"
 import { validateConservativeTradingEngineOptions } from "./validate-conservative-trading-engine-options.js"
 import { failureResult, recoveryFailureError, withFailure } from "./recovery-failure.js"
+import { OperatorBuyCancellationIncompleteError } from "./errors/operator-buy-cancellation-incomplete-error.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import {
   mapOrderCancelFailedData,
@@ -606,6 +607,146 @@ durable } })
   })
 }
 
+function isOperatorBuyPauseActive({ state, symbol } = {}) {
+  return state.operatorAllBuysPaused === true || state.operatorBuyPausedMarkets.has(symbol)
+}
+
+function getActiveOwnedBuyOrders({ state, symbol } = {}) {
+  return state.registry.getActiveOrders().filter((order) =>
+    order.side === "BUY" &&
+    (symbol === undefined || order.market.symbol === symbol))
+}
+
+function createOperatorBuyPauseHandler({ state, pairs, runTransition, cancelOwnedBuyOrders } = {}) {
+  return async ({ symbol, beforeApply } = {}) => {
+    const applied = await runTransition({
+      task: async () => {
+        if (symbol !== undefined && (typeof symbol !== "string" || !Object.hasOwn(pairs, symbol))) {
+          const error = new TypeError("Operator BUY pause requires a configured market symbol")
+          error.code = "INVALID_OPERATOR_MARKET"
+          return toResult({ error })
+        }
+        const alreadyPaused = symbol === undefined
+          ? state.operatorAllBuysPaused === true
+          : state.operatorBuyPausedMarkets.has(symbol)
+        if (!alreadyPaused && typeof beforeApply === "function") {
+          let committed
+          try {
+            committed = await beforeApply({
+              ...(symbol === undefined ? {} : { symbol }),
+              action: symbol === undefined ? "PAUSE_ALL_BUYS" : "PAUSE_BUYS",
+            })
+          } catch (error) {
+            return toResult({ error })
+          }
+          if (committed?.ok !== true || committed?.data?.durable !== true) {
+            return committed?.ok === false
+              ? committed
+              : toResult({ error: new Error("Operator BUY pause fact was not durably committed") })
+          }
+        }
+        if (symbol === undefined) {
+          state.operatorAllBuysPaused = true
+        } else {
+          state.operatorBuyPausedMarkets.add(symbol)
+        }
+        return toResult({
+          data: {
+            ...(symbol === undefined ? {} : { symbol }),
+            paused: true,
+            alreadyPaused,
+            durable: !alreadyPaused && typeof beforeApply === "function",
+          },
+        })
+      },
+    })
+    if (!applied?.ok) {
+      return applied
+    }
+
+    const cancellation = await cancelOwnedBuyOrders({
+      ...(symbol === undefined ? {} : { symbol }),
+      reason: "OPERATOR_BUY_PAUSE",
+    })
+    const unresolvedOrders = getActiveOwnedBuyOrders({ state, symbol })
+    if (!cancellation?.ok || unresolvedOrders.length > 0) {
+      return toResult({
+        error: new OperatorBuyCancellationIncompleteError({
+          symbol,
+          unresolvedOrderCount: unresolvedOrders.length,
+          cause: cancellation?.errors?.[0],
+        }),
+      })
+    }
+    return toResult({
+      data: {
+        ...applied.data,
+        canceled: cancellation.data?.canceled ?? 0,
+        reconciled: cancellation.data?.reconciled ?? 0,
+        unresolved: 0,
+      },
+    })
+  }
+}
+
+function createOperatorBuyResumeHandler({ state, pairs, runTransition } = {}) {
+  return ({ symbol, beforeApply } = {}) => runTransition({
+    task: async () => {
+      if (symbol !== undefined && (typeof symbol !== "string" || !Object.hasOwn(pairs, symbol))) {
+        const error = new TypeError("Operator BUY resume requires a configured market symbol")
+        error.code = "INVALID_OPERATOR_MARKET"
+        return toResult({ error })
+      }
+      const paused = symbol === undefined
+        ? state.operatorAllBuysPaused === true
+        : state.operatorBuyPausedMarkets.has(symbol)
+      if (!paused) {
+        return toResult({
+          data: {
+            ...(symbol === undefined ? {} : { symbol }),
+            resumed: false,
+            stillPaused: symbol === undefined
+              ? state.operatorBuyPausedMarkets.size > 0
+              : isOperatorBuyPauseActive({ state, symbol }),
+            reason: "NOT_OPERATOR_BUY_PAUSED",
+          },
+        })
+      }
+      if (typeof beforeApply === "function") {
+        let committed
+        try {
+          committed = await beforeApply({
+            ...(symbol === undefined ? {} : { symbol }),
+            action: symbol === undefined ? "RESUME_ALL_BUYS" : "RESUME_BUYS",
+          })
+        } catch (error) {
+          return toResult({ error })
+        }
+        if (committed?.ok !== true || committed?.data?.durable !== true) {
+          return committed?.ok === false
+            ? committed
+            : toResult({ error: new Error("Operator BUY resume fact was not durably committed") })
+        }
+      }
+      if (symbol === undefined) {
+        state.operatorAllBuysPaused = false
+      } else {
+        state.operatorBuyPausedMarkets.delete(symbol)
+      }
+      return toResult({
+        data: {
+          ...(symbol === undefined ? {} : { symbol }),
+          resumed: true,
+          stillPaused: symbol === undefined
+            ? state.operatorBuyPausedMarkets.size > 0
+            : isOperatorBuyPauseActive({ state, symbol }),
+          durable: typeof beforeApply === "function",
+        },
+      })
+    },
+  })
+}
+
 function createPendingOrderLifecycleHandler({ state, publishDurableIntent, pause, logger } = {}) {
   return async ({ order, purpose }) => {
     if (order.side === "SELL") {
@@ -847,6 +988,8 @@ function createInitialEngineState({ initialState, pairs, initialRegistry } = {})
     trailingBuy: new Map([...(initialState.trailingBuySymbols ?? [])].map((symbol) => [symbol, true])),
     paused: new Set(initialState.pausedMarkets ?? []),
     operatorPausedMarkets: new Set(initialState.operatorPausedMarkets ?? []),
+    operatorAllBuysPaused: false,
+    operatorBuyPausedMarkets: new Set(),
     durablePausedMarkets: new Set(initialState.durablePausedMarkets ?? []),
     recoveryManagedPausedMarkets: new Set(initialState.recoveryManagedPausedMarkets ?? []),
     recoveryManagedCancellationClientOrderIds: new Set(initialState.recoveryManagedCancellationClientOrderIds ?? []),
@@ -1463,6 +1606,17 @@ function createConservativeEngineProtectionContext({ context } = {}) {
     hasPendingRecoveryManagedCancellation: context.hasPendingRecoveryManagedCancellation,
     runTransition: context.runTransition,
   })
+  context.pauseBuys = createOperatorBuyPauseHandler({
+    state: context.state,
+    pairs: context.pairs,
+    runTransition: context.runTransition,
+    cancelOwnedBuyOrders: context.cancelOwnedBuyOrders,
+  })
+  context.resumeBuys = createOperatorBuyResumeHandler({
+    state: context.state,
+    pairs: context.pairs,
+    runTransition: context.runTransition,
+  })
 }
 
 function getUserDataEventSymbol(event) {
@@ -1606,14 +1760,22 @@ function createConservativeEnginePublicApi({ context } = {}) {
     getRecoveryIntents: () => Object.freeze({
       pausedMarkets: Object.freeze([...context.state.paused]),
       operatorPausedMarkets: Object.freeze([...context.state.operatorPausedMarkets]),
+      operatorAllBuysPaused: context.state.operatorAllBuysPaused,
+      operatorBuyPausedMarkets: Object.freeze([...context.state.operatorBuyPausedMarkets]),
       replacementIntents: Object.freeze([...context.state.replacementIntents]),
       trailingBuyRepriceIntents: Object.freeze([...context.state.trailingBuyRepriceIntents]),
       deferredEvaluations: Object.freeze([...context.state.deferredEvaluations]),
     }),
     getPausedMarkets: () => [...context.state.paused],
     getOperatorPausedMarkets: () => [...context.state.operatorPausedMarkets],
+    getOperatorBuyPauseState: () => Object.freeze({
+      allBuysPaused: context.state.operatorAllBuysPaused,
+      pausedMarkets: Object.freeze([...context.state.operatorBuyPausedMarkets]),
+    }),
     pauseMarket: context.pauseMarket,
     resumeMarket: context.resumeMarket,
+    pauseBuys: context.pauseBuys,
+    resumeBuys: context.resumeBuys,
     getLastBuyPrice: ({ symbol } = {}) => context.state.lastBuyPrices.get(symbol),
   })
 }
@@ -3137,6 +3299,9 @@ function getBuyCancellationReasonPrefix({ reason }) {
   }
   if (reason === "HIGH_VOLATILITY_PROTECTION") {
     return "VOLATILITY_PROTECTION"
+  }
+  if (reason === "OPERATOR_BUY_PAUSE") {
+    return "OPERATOR_BUY_PAUSE"
   }
   return "ACCOUNT_INTEGRITY_HALT"
 }
