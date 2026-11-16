@@ -232,6 +232,44 @@ fill };
   };
 }
 
+function createFixtureEngine({
+  broker,
+  appConfig,
+  marketMetadata,
+  accountSnapshot,
+  getPortfolio,
+  getRecoveryLedger,
+  updateTradingAccounting,
+  canTrade,
+  hasUnownedOpenOrdersForSymbol,
+  hasUnresolvedHarvesterOpenOrdersForSymbol,
+  isMarketPriceFresh,
+  isMarketBookFresh,
+  getVolatilityData,
+  pausedMarkets,
+}) {
+  return makeConservativeTradingEngine({
+    broker,
+    strategyPolicy: conservativeStrategyPolicy,
+    appConfig,
+    getPortfolio,
+    getRecoveryLedger,
+    getMarketMetadata: () => marketMetadata,
+    getAccountSnapshot: () => accountSnapshot,
+    updateTradingAccounting,
+    completeRecoveryCycle: () => toResult({ data: { eligible: true, freeQuantity: "1" } }),
+    canTrade,
+    hasUnownedOpenOrdersForSymbol,
+    hasUnresolvedHarvesterOpenOrdersForSymbol,
+    isMarketPriceFresh,
+    isMarketBookFresh,
+    getVolatilityData,
+    initialState: { pausedMarkets },
+    onPause: async () => {},
+    isStopping: () => false,
+  });
+}
+
 const createFixture = ({
   initiallyReady = true,
   deferFirstSell = false,
@@ -265,35 +303,28 @@ const createFixture = ({
   let recoveryLedger = RecoveryLedger.empty({ market });
   let ready = initiallyReady;
   const appConfig = createFixtureAppConfig(externalOrdersPolicy);
-  const engine = makeConservativeTradingEngine({
+  const engine = createFixtureEngine({
     broker,
-    strategyPolicy: conservativeStrategyPolicy,
     appConfig,
+    marketMetadata,
+    accountSnapshot,
     getPortfolio: () => portfolio,
     getRecoveryLedger: () => recoveryLedger,
-    getMarketMetadata: () => marketMetadata,
-    getAccountSnapshot: () => accountSnapshot,
     updateTradingAccounting: ({ fill } = {}) => {
-      const result = applyTradingAccounting({ portfolio,
-recoveryLedger,
-fill });
+      const result = applyTradingAccounting({ portfolio, recoveryLedger, fill });
       if (result.ok) {
         portfolio = result.data.portfolio;
         recoveryLedger = result.data.recoveryLedger;
       }
       return result;
     },
-    completeRecoveryCycle: () => toResult({ data: { eligible: true,
-freeQuantity: "1" } }),
     canTrade: () => ready,
     hasUnownedOpenOrdersForSymbol,
     hasUnresolvedHarvesterOpenOrdersForSymbol,
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData,
-    initialState: { pausedMarkets },
-    onPause: async () => {},
-    isStopping: () => false,
+    pausedMarkets,
   });
   return {
     engine,
@@ -852,7 +883,7 @@ asset: fixture.market.baseAsset }),
 pendingSellOrder };
 }
 
-async function completeDeferredRecoverySellCancellation(fixture, { secondBuy, pendingSellOrder }) {
+async function completeDeferredRecoverySellCancellation({ fixture, secondBuy, pendingSellOrder }) {
   const { engine, cancelStarted, pendingCancel, cancellations, setFillsForOrder } = fixture;
   const partialFill = engine.processUserDataEvent({
     event: fixture.createTradeEvent({
@@ -906,7 +937,7 @@ asset: fixture.market.baseAsset }),
   return { sellFillEvent };
 }
 
-function assertCanceledRecoverySellSequence(fixture, pendingSellOrder) {
+function assertCanceledRecoverySellSequence({ fixture, pendingSellOrder }) {
   const canceledRecoverySellOrders = fixture.engine.getOrders().filter(
     (order) => order.side === "SELL" && order.status === "CANCELED",
   );
@@ -927,7 +958,7 @@ function assertCanceledRecoverySellSequence(fixture, pendingSellOrder) {
   );
 }
 
-function assertReconciledFillAccounting(fixture, sellFillEvent) {
+function assertReconciledFillAccounting({ fixture, sellFillEvent }) {
   assert.equal(fixture.getPortfolio().appliedFillIds.length, 4, "Portfolio accounting must contain all four distinct executions.");
   assert.equal(fixture.getRecoveryLedger().appliedFillIds.length, 4, "The recovery ledger must mirror all four distinct executions.");
   assert.equal(
@@ -937,7 +968,7 @@ function assertReconciledFillAccounting(fixture, sellFillEvent) {
   );
 }
 
-async function assertDuplicateFillIsIdempotent(fixture, secondBuy) {
+async function assertDuplicateFillIsIdempotent({ fixture, secondBuy }) {
   await fixture.engine.processUserDataEvent({
     event: fixture.createTradeEvent({
       acknowledgedOrder: secondBuy,
@@ -966,10 +997,10 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
   const fixture = createFixture({ deferFirstSell: true,
 deferCancellation: true });
   const scenario = await startDeferredRecoveryScenario(fixture);
-  const { sellFillEvent } = await completeDeferredRecoverySellCancellation(fixture, scenario);
+  const { sellFillEvent } = await completeDeferredRecoverySellCancellation({ fixture, ...scenario });
 
-  assertCanceledRecoverySellSequence(fixture, scenario.pendingSellOrder);
-  assertReconciledFillAccounting(fixture, sellFillEvent);
-  await assertDuplicateFillIsIdempotent(fixture, scenario.secondBuy);
+  assertCanceledRecoverySellSequence({ fixture, pendingSellOrder: scenario.pendingSellOrder });
+  assertReconciledFillAccounting({ fixture, sellFillEvent });
+  await assertDuplicateFillIsIdempotent({ fixture, secondBuy: scenario.secondBuy });
   await assertFinalRecoverySellReplacement(fixture);
 });
