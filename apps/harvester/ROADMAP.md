@@ -76,6 +76,12 @@ Remaining safety and observability follow-ups #1103 and #1105 remain open; #1104
 3. [x] **CC-3 — Proactive alerts:** delivered in [PR #1087](https://github.com/45s/coinzilla/pull/1087): startup and subsequent user-data readiness transitions, reconnect-before-reconciliation and recovery-failure alerts, blocked recovery-cycle alerts, and Telegram delivery diagnostics. All eight exact-head workflows passed. Reuse `@coinzilla/notifiers`; delivery remains best-effort and never blocks trading transitions.
 4. [x] **CC-4 — Usability and hardening:** merged in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`. Delivers Telegram command-menu registration; allowlist-protected inline navigation/refresh; enabled-market pause/resume controls with five-minute, one-time confirmation; callback identity, malformed/replay rejection, best-effort menu registration, bounded pending-confirmation lifecycle and graceful shutdown. The operator runbook and all architecture/roadmap indexes are current. The exact PR head `afda070a565f42e546bfb0a76096939427451111` passed 1,479/1,479 Harvester tests, all required workspace unit/coverage/syntax/dependency/actionlint checks, and external documentation-link validation. No TESTNET/LIVE exchange operation was performed; the read-only integration workflow was skipped.
 
+### Follow-up — persistent Telegram reply keyboard — IN PROGRESS
+
+- [~] Add a persistent six-button Telegram reply keyboard for Pause, Resume, Status, Markets, Portfolio and Open Orders. Keep Telegram's existing command menu and inline navigation; route every button through the current authorized application queries and confirmation-gated market controls.
+- [ ] Verify /start and /menu keyboard registration, every button mapping, market eligibility filtering, unauthorized button handling, and the existing callback confirmation/retry/shutdown behavior.
+- [ ] Update the operator-control contract/runbook and complete exact-head Harvester tests and required CI. No exchange operations are authorized or needed.
+
 ### Engineering and safety gates
 
 - TDD/DDD: define application query contracts before transport formatting; keep Telegram as a thin adapter; do not read engine internals or call the broker from Telegram.
