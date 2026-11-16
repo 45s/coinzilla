@@ -18,8 +18,7 @@ export function getHttpStatus(response) {
 
 export function createHttpFailure({ payload, status, token }) {
   const description = typeof payload?.description === "string"
-    ? safeErrorMessage({ error: payload.description,
-token })
+    ? safeErrorMessage({ error: payload.description, token })
     : null
   const detail = description ? `: ${description}` : ""
   return new Error(
@@ -35,8 +34,7 @@ export function validateSuccessfulPayload({ payload, token }) {
     payload.ok !== true
   ) {
     const description = typeof payload?.description === "string"
-      ? safeErrorMessage({ error: payload.description,
-token })
+      ? safeErrorMessage({ error: payload.description, token })
       : "unknown Telegram API error"
     throw new Error(`Telegram API rejected sendMessage: ${description}`)
   }

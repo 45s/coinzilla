@@ -16,13 +16,11 @@ function normalizeRejectedError({ error, token }) {
   if (error instanceof Error) {
     return error
   }
-  return new Error(safeErrorMessage({ error,
-token }))
+  return new Error(safeErrorMessage({ error, token }))
 }
 
 function sanitizeCaughtError({ error, token }) {
-  error.message = safeErrorMessage({ error,
-token })
+  error.message = safeErrorMessage({ error, token })
   if (typeof token !== "string" || token.length < 6) {
     return
   }
@@ -45,13 +43,11 @@ async function readResponsePayload({ response, token, status }) {
     const payload = await Promise.resolve()
       .then(() => response.json())
       .catch((error) => {
-        throw normalizeRejectedError({ error,
-token })
+        throw normalizeRejectedError({ error, token })
       })
     return payload
   } catch (error) {
-    sanitizeCaughtError({ error,
-token })
+    sanitizeCaughtError({ error, token })
     if (!response.ok) {
       throw new Error(
         `Telegram API HTTP request failed with status ${status}`,
@@ -68,16 +64,11 @@ token })
 async function parseTelegramResponse({ response, token }) {
   assertHttpResponse(response)
   const status = getHttpStatus(response)
-  const payload = await readResponsePayload({ response,
-token,
-status })
+  const payload = await readResponsePayload({ response, token, status })
   if (!response.ok) {
-    throw createHttpFailure({ payload,
-status,
-token })
+    throw createHttpFailure({ payload, status, token })
   }
-  return validateSuccessfulPayload({ payload,
-token })
+  return validateSuccessfulPayload({ payload, token })
 }
 
 /**
@@ -91,8 +82,7 @@ export class TelegramNotifier {
   #timeoutMs
 
   constructor(options) {
-    const validated = validateTelegramOptions({ options,
-defaultFetchImpl: globalThis.fetch })
+    const validated = validateTelegramOptions({ options, defaultFetchImpl: globalThis.fetch })
     this.#token = validated.token
     this.#chatId = validated.chatId
     this.#fetch = validated.fetchImpl
@@ -109,24 +99,20 @@ defaultFetchImpl: globalThis.fetch })
         .then(() => this.#fetch(url, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ chat_id: this.#chatId,
-text: message }),
+          body: JSON.stringify({ chat_id: this.#chatId, text: message }),
           signal: AbortSignal.timeout(this.#timeoutMs),
         }))
         .catch((error) => {
-          throw normalizeRejectedError({ error,
-token: this.#token })
+          throw normalizeRejectedError({ error, token: this.#token })
         })
     } catch (error) {
-      sanitizeCaughtError({ error,
-token: this.#token })
+      sanitizeCaughtError({ error, token: this.#token })
       throw new Error(
         `Telegram Bot API request failed: ${error.message}`,
         { cause: error },
       )
     }
 
-    return parseTelegramResponse({ response,
-token: this.#token })
+    return parseTelegramResponse({ response, token: this.#token })
   }
 }

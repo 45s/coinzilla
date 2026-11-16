@@ -13,28 +13,18 @@ test("constructor validates required options and bounds", () => {
     null,
     [],
     {},
-    { token: 2,
-chatId: "y" },
+    { token: 2, chatId: "y" },
     { token: "x" },
-    { token: "x",
-chatId: "" },
-    { token: "x",
-chatId: {} },
-    { token: "x",
-chatId: "y",
-fetchImpl: 1 },
-    { token: "x",
-chatId: "y",
-timeoutMs: 0 },
-    { token: "x",
-chatId: "y",
-timeoutMs: 2_147_483_648 },
+    { token: "x", chatId: "" },
+    { token: "x", chatId: {} },
+    { token: "x", chatId: "y", fetchImpl: 1 },
+    { token: "x", chatId: "y", timeoutMs: 0 },
+    { token: "x", chatId: "y", timeoutMs: 2_147_483_648 },
   ]) {
     assert.throws(() => new TelegramNotifier(options))
   }
 
-  assert.doesNotThrow(() => new TelegramNotifier({ token: "123:secret",
-chatId: -100 }))
+  assert.doesNotThrow(() => new TelegramNotifier({ token: "123:secret", chatId: -100 }))
 })
 
 test("normalizes whitespace around credentials and sends a bounded request", async () => {
@@ -45,18 +35,15 @@ test("normalizes whitespace around credentials and sends a bounded request", asy
     timeoutMs: 1500,
     fetchImpl: async (...args) => {
       const [url, options] = args
-      captured = { url,
-options }
-      return response({ body: { ok: true,
-result: { message_id: 7 } } })
+      captured = { url, options }
+      return response({ body: { ok: true, result: { message_id: 7 } } })
     },
   })
 
   assert.deepEqual(await notifier.sendMessage("hello"), { message_id: 7 })
   assert.equal(captured.url, "https://api.telegram.org/bot123:secret-token/sendMessage")
   assert.equal(captured.options.method, "POST")
-  assert.deepEqual(JSON.parse(captured.options.body), { chat_id: "-100123",
-text: "hello" })
+  assert.deepEqual(JSON.parse(captured.options.body), { chat_id: "-100123", text: "hello" })
   assert.ok(captured.options.signal)
   assert.equal(captured.options.signal.aborted, false)
 })
@@ -115,9 +102,7 @@ test("reports HTTP status and Telegram rejection description without exposing to
   const unknownStatus = new TelegramNotifier({
     token: "x",
     chatId: "y",
-    fetchImpl: async () => response({ body: {},
-ok: false,
-status: null }),
+    fetchImpl: async () => response({ body: {}, ok: false, status: null }),
   })
   await assert.rejects(unknownStatus.sendMessage("hello"), /status unknown/)
 })
@@ -172,22 +157,16 @@ test("rejects malformed HTTP responses and malformed successful Bot API payloads
   ]
 
   for (const fetchImpl of malformedResponses.map((value) => async () => value)) {
-    const notifier = new TelegramNotifier({ token: "x",
-chatId: "y",
-fetchImpl })
+    const notifier = new TelegramNotifier({ token: "x", chatId: "y", fetchImpl })
     await assert.rejects(notifier.sendMessage("hello"), /invalid HTTP response/)
   }
 
   for (const payload of [
     { ok: true },
-    { ok: true,
-result: null },
-    { ok: true,
-result: {} },
-    { ok: true,
-result: { message_id: 0 } },
-    { ok: true,
-result: { message_id: "7" } },
+    { ok: true, result: null },
+    { ok: true, result: {} },
+    { ok: true, result: { message_id: 0 } },
+    { ok: true, result: { message_id: "7" } },
   ]) {
     const notifier = new TelegramNotifier({
       token: "x",
@@ -235,8 +214,7 @@ test("rejects array-shaped HTTP and Telegram success responses", async () => {
   const malformedResponses = [
     async () => [],
     async () => response({ body: [] }),
-    async () => response({ body: { ok: true,
-result: [] } }),
+    async () => response({ body: { ok: true, result: [] } }),
   ]
 
   for (const fetchImpl of malformedResponses) {
