@@ -11,8 +11,10 @@ import {
 } from "./canonical-order.js"
 
 describe(CanonicalOrder.name, () => {
-  const baseAsset = new Asset({ id: "dogecoin", code: "DOGE" })
-  const quoteAsset = new Asset({ id: "fdusd", code: "FDUSD" })
+  const baseAsset = new Asset({ id: "dogecoin",
+code: "DOGE" })
+  const quoteAsset = new Asset({ id: "fdusd",
+code: "FDUSD" })
   const market = new Market({
     venue: "binance",
     symbol: "DOGEFDUSD",
@@ -25,9 +27,12 @@ describe(CanonicalOrder.name, () => {
       market,
       side: "BUY",
       type: "LIMIT",
-      limitPrice: new Money({ amount: "0.1", asset: quoteAsset }),
-      originalQuantity: new Quantity({ amount: "100", asset: baseAsset }),
-      executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+      limitPrice: new Money({ amount: "0.1",
+asset: quoteAsset }),
+      originalQuantity: new Quantity({ amount: "100",
+asset: baseAsset }),
+      executedQuantity: new Quantity({ amount: "0",
+asset: baseAsset }),
       ...overrides,
     })
 
@@ -43,10 +48,14 @@ describe(CanonicalOrder.name, () => {
       market: market.value,
       side: "BUY",
       type: "LIMIT",
-      limitPrice: { amount: "0.1", asset: quoteAsset.value },
-      originalQuantity: { amount: "100", asset: baseAsset.value },
-      executedQuantity: { amount: "0", asset: baseAsset.value },
-      remainingQuantity: { amount: "100", asset: baseAsset.value },
+      limitPrice: { amount: "0.1",
+asset: quoteAsset.value },
+      originalQuantity: { amount: "100",
+asset: baseAsset.value },
+      executedQuantity: { amount: "0",
+asset: baseAsset.value },
+      remainingQuantity: { amount: "100",
+asset: baseAsset.value },
       status: "PENDING",
     })
   })
@@ -82,12 +91,14 @@ describe(CanonicalOrder.name, () => {
     const order = createOrder({
       brokerOrderId: "123456",
       status: "FILLED",
-      executedQuantity: new Quantity({ amount: "100", asset: baseAsset }),
+      executedQuantity: new Quantity({ amount: "100",
+asset: baseAsset }),
     })
 
     assert.equal(order.remainingQuantity.amount, "0")
     assert.throws(
-      () => createOrder({ brokerOrderId: "123456", status: "FILLED" }),
+      () => createOrder({ brokerOrderId: "123456",
+status: "FILLED" }),
       { message: canonicalOrderErrMsgs.filledExecution },
     )
   })
@@ -138,7 +149,8 @@ describe(CanonicalOrder.name, () => {
     for (const amount of ["0", "-0.01"]) {
       assert.throws(
         () => createOrder({
-          limitPrice: new Money({ amount, asset: quoteAsset }),
+          limitPrice: new Money({ amount,
+asset: quoteAsset }),
         }),
         { message: canonicalOrderErrMsgs.limitPricePositive },
       )
@@ -178,7 +190,8 @@ describe(CanonicalOrder.name, () => {
       () => createOrder({
         brokerOrderId: "123456",
         status: "OPEN",
-        executedQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+        executedQuantity: new Quantity({ amount: "1",
+asset: baseAsset }),
       }),
       { message: canonicalOrderErrMsgs.openExecution },
     )
@@ -192,7 +205,8 @@ describe(CanonicalOrder.name, () => {
     assert.throws(
       () => createOrder({
         status: "PENDING",
-        executedQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+        executedQuantity: new Quantity({ amount: "1",
+asset: baseAsset }),
       }),
       { message: canonicalOrderErrMsgs.pendingExecution },
     )
