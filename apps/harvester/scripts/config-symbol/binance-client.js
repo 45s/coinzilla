@@ -118,16 +118,16 @@ function validateSymbolTradingMetadata({
     throw new Error(`Binance did not return the requested symbol ${requestedSymbol}`)
   }
   if (symbolInfo.status !== "TRADING") {
-    throw new Error(`Binance symbol ${requestedSymbol} is not currently trading`")
+    throw new Error(`Binance symbol ${requestedSymbol} is not currently trading`)
   }
   if (symbolInfo.isSpotTradingAllowed !== true) {
-    throw new Error(`Binance symbol ${requestedSymbol} is not enabled for Spot trading`")
+    throw new Error(`Binance symbol ${requestedSymbol} is not enabled for Spot trading`)
   }
   if (typeof symbolInfo.baseAsset !== "string" || !symbolInfo.baseAsset || typeof symbolInfo.quoteAsset !== "string" || !symbolInfo.quoteAsset) {
-    throw new Error(`Binance symbol ${requestedSymbol} is missing base/quote asset metadata`")
+    throw new Error(`Binance symbol ${requestedSymbol} is missing base/quote asset metadata`)
   }
   if (!Array.isArray(symbolInfo.orderTypes)) {
-    throw new TypeError(`Binance symbol ${requestedSymbol} has malformed supported order types`")
+    throw new TypeError(`Binance symbol ${requestedSymbol} has malformed supported order types`)
   }
   const supportedOrderTypes = [...new Set(symbolInfo.orderTypes)]
   if (supportedOrderTypes.some((orderType) => typeof orderType !== "string" || !orderType.trim())) {
@@ -139,7 +139,7 @@ function validateSymbolTradingMetadata({
 function collectSymbolFilterMetadata({ symbolInfo, exchangeInfo, requestedSymbol }) {
   const {filters} = symbolInfo
   if (!Array.isArray(filters)) {
-    throw new TypeError(`Binance symbol ${requestedSymbol} has malformed exchange filters`")
+    throw new TypeError(`Binance symbol ${requestedSymbol} has malformed exchange filters`)
   }
   validateUniqueFilterTypes({
     filters,
@@ -241,7 +241,7 @@ function parseNotionalFilters({
   }) {
   for (const filterType of ["MIN_NOTIONAL", "NOTIONAL"]) {
     if (filters.filter((filter) => filter?.filterType === filterType).length > 1) {
-      throw new Error(`Binance exchangeInfo contains duplicate ${filterType} filters`")
+      throw new Error(`Binance exchangeInfo contains duplicate ${filterType} filters`)
     }
   }
   const notionalFilters = filters.filter(
