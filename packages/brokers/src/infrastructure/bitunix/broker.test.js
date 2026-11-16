@@ -635,8 +635,14 @@ test("Bitunix Spot broker exposes legacy Coin assets from free and locked accoun
 
   assert.equal(result.ok, true)
   assert.deepEqual(result.data, [
-    { ticker: "BTC", quantity: 0.25 },
-    { ticker: "USDT", quantity: 12.5 },
+    {
+      ticker: "BTC",
+      quantity: 0.25,
+    },
+    {
+      ticker: "USDT",
+      quantity: 12.5,
+    },
   ])
   assert.deepEqual(calls, [
     {
