@@ -11,7 +11,7 @@ const evidence = {
   verifiedBy: "operator-123",
 }
 
-function createStore(initialRecords = [], { readError, appendError } = {}) {
+function createStore(...[initialRecords = [], { readError, appendError } = {}]) {
   const records = [...initialRecords]
   const calls = []
   return {
