@@ -1,16 +1,22 @@
+import { Console } from "node:console"
 import { getOpenOrders } from "./binance-testnet-api.js"
+
+const cliConsole = new Console({
+  stdout: process.stdout,
+  stderr: process.stderr,
+})
 
 const main = async () => {
   const { orders } = await getOpenOrders()
 
-  console.log("\nBinance Spot TESTNET — Open Orders\n")
+  cliConsole.log("\nBinance Spot TESTNET — Open Orders\n")
 
   if (orders.length === 0) {
-    console.log("No open orders found.")
+    cliConsole.log("No open orders found.")
     return
   }
 
-  console.table(
+  cliConsole.table(
     orders.map((order) => ({
       symbol: order.symbol,
       orderId: order.orderId,
@@ -26,12 +32,12 @@ const main = async () => {
 
   const symbols = [...new Set(orders.map((order) => order.symbol))]
 
-  console.log(`\nTotal open orders: ${orders.length}`)
-  console.log(`Symbols: ${symbols.join(", ")}`)
+  cliConsole.log(`\nTotal open orders: ${orders.length}`)
+  cliConsole.log(`Symbols: ${symbols.join(", ")}`)
 }
 
 main().catch((error) => {
-  console.error("\nFailed to retrieve TESTNET open orders:")
-  console.error(error.message)
+  cliConsole.error("\nFailed to retrieve TESTNET open orders:")
+  cliConsole.error(error.message)
   process.exitCode = 1
 })

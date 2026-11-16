@@ -27,7 +27,8 @@ test("createSignedQuery signs the exact timestamped query with HMAC-SHA256", () 
 
 test("createSignedQuery rejects a missing secret", () => {
   assert.throws(
-    () => createSignedQuery({ timestamp: 123, apiSecret: "" }),
+    () => createSignedQuery({ timestamp: 123,
+apiSecret: "" }),
     /API secret is required/,
   )
 })

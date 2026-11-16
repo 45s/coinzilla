@@ -9,7 +9,9 @@ const metadata = {
   quoteAsset: "USDT",
   tickSize: "0.0001",
   stepSize: "0.01",
-  unvalidatedConstraints: [{ type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE" }],
+  unvalidatedConstraints: [{ type: "DYNAMIC_PRICE_BAND",
+scope: "SYMBOL",
+sourceFilterType: "PERCENT_PRICE" }],
 }
 
 function createAsk({ answers, prompts = [] }) {
@@ -26,7 +28,8 @@ test("fetches market metadata and writes only the shared token specification aft
   const metadataCalls = []
   const writes = []
   const result = await runConfigSymbol({
-    ask: createAsk({ answers: [" polusdt ", ""], prompts }),
+    ask: createAsk({ answers: [" polusdt ", ""],
+prompts }),
     writeLine: (line) => output.push(line),
     defaultEnvironment: "testnet",
     metadataFetcher: async (args) => {
@@ -43,7 +46,9 @@ test("fetches market metadata and writes only the shared token specification aft
   assert.equal(prompts.length, 2, "The generator should ask only for a market symbol and confirmation.")
   assert.match(prompts[0], /market symbol/i, "The first prompt must request the Binance market symbol.")
   assert.match(prompts[1], /add or refresh.*token specification/i, "The final prompt must confirm a token metadata update.")
-  assert.deepEqual(metadataCalls, [{ symbol: "POLUSDT", environment: "testnet", fetchImpl: globalThis.fetch }], "The generator must fetch metadata for the normalized symbol from the selected public endpoint.")
+  assert.deepEqual(metadataCalls, [{ symbol: "POLUSDT",
+environment: "testnet",
+fetchImpl: globalThis.fetch }], "The generator must fetch metadata for the normalized symbol from the selected public endpoint.")
   assert.equal(writes.length, 1, "Confirmation must trigger exactly one token-specification write.")
   assert.equal(writes[0].metadata, metadata, "The writer must receive the original validated exchange metadata.")
   assert.equal(writes[0].specificationPath, "/repo/apps/harvester/token-specification.json", "The writer must target the shared token metadata file.")
@@ -65,7 +70,10 @@ test("uses TRADING_MODE only to select the public metadata endpoint", async () =
     defaultEnvironment: "live",
     metadataFetcher: async (args) => {
       metadataCalls.push(args)
-      return { ...metadata, symbol: "APEUSDT", baseAsset: "APE", environment: "live" }
+      return { ...metadata,
+symbol: "APEUSDT",
+baseAsset: "APE",
+environment: "live" }
     },
   })
   assert.equal(metadataCalls[0].environment, "live", "The current trading mode must select the metadata host.")
@@ -102,8 +110,10 @@ test("rejects invalid symbols before requesting exchange metadata", async () => 
 
 test("rejects metadata for another symbol or environment without writing", async () => {
   for (const invalidMetadata of [
-    { ...metadata, symbol: "OTHER" },
-    { ...metadata, environment: "live" },
+    { ...metadata,
+symbol: "OTHER" },
+    { ...metadata,
+environment: "live" },
   ]) {
     let writes = 0
     await assert.rejects(
