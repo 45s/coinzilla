@@ -363,3 +363,31 @@ price: "NaN" },
     )
   }
 })
+
+test("rejects malformed and duplicate exchange-wide filter metadata", async () => {
+  const valid = createExchangeInfo()
+  const invalidResponses = [
+    {
+      ...valid,
+      exchangeFilters: {},
+    },
+    {
+      ...valid,
+      exchangeFilters: [
+        { filterType: "EXCHANGE_MAX_NUM_ORDERS", maxNumOrders: 200 },
+        { filterType: "EXCHANGE_MAX_NUM_ORDERS", maxNumOrders: 300 },
+      ],
+    },
+  ]
+
+  for (const exchangeInfo of invalidResponses) {
+    await assert.rejects(
+      fetchBinanceSpotMetadata({
+        symbol: "ADAFDUSD",
+        fetchImpl: async () => createResponse(exchangeInfo),
+      }),
+      /malformed exchangeFilters|duplicate EXCHANGE_MAX_NUM_ORDERS filters/i,
+      "Malformed or duplicate exchange-wide filters must fail closed.",
+    )
+  }
+})
