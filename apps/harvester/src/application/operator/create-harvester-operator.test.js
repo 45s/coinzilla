@@ -251,7 +251,9 @@ test("rejects a non-canonical actor identity before touching the engine or store
 
 test("pause and resume remain process-local when recovery storage is not supplied", async () => {
   const { calls, engine } = createHarness()
-  const operator = createHarvesterOperator({ engine })
+  const operator = createHarvesterOperator({
+    engine,
+  })
 
   const pause = await operator.pauseMarket({
     actor,
@@ -278,7 +280,10 @@ test("pause and resume remain process-local when recovery storage is not supplie
 
 test("pauseBuys authorizes the operator and commits a market-scoped BUY pause fact before applying it", async () => {
   const { calls, operationalStateStore, engine } = createHarness()
-  const operator = createHarvesterOperator({ operationalStateStore, engine })
+  const operator = createHarvesterOperator({
+    operationalStateStore,
+    engine,
+  })
 
   const result = await operator.pauseBuys({
     actor,
@@ -303,8 +308,14 @@ test("pauseAllBuys and resumeAllBuys use distinct global facts and remain proces
   const { calls, engine } = createHarness()
   const operator = createHarvesterOperator({ engine })
 
-  const paused = await operator.pauseAllBuys({ actor, requestId: "telegram:global-buy-pause:2002" })
-  const resumed = await operator.resumeAllBuys({ actor, requestId: "telegram:global-buy-resume:2003" })
+  const paused = await operator.pauseAllBuys({
+    actor,
+    requestId: "telegram:global-buy-pause:2002",
+  })
+  const resumed = await operator.resumeAllBuys({
+    actor,
+    requestId: "telegram:global-buy-resume:2003",
+  })
 
   assert.equal(paused.ok, true, "An authorized global BUY pause must be available without restart-recovery storage.")
   assert.equal(resumed.ok, true, "An authorized global BUY resume must be available without restart-recovery storage.")
@@ -318,7 +329,10 @@ test("resumeBuys rejects an unauthorized actor before touching the engine or Ope
   const operator = createHarvesterOperator({ operationalStateStore, engine })
 
   const result = await operator.resumeBuys({
-    actor: { id: "telegram-user:untrusted", roles: [] },
+    actor: {
+      id: "telegram-user:untrusted",
+      roles: [],
+    },
     requestId: "telegram:buy-resume:2004",
     symbol: "LINKUSDT",
   })
