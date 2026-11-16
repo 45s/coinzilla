@@ -6,10 +6,12 @@ import { Money } from "../money/money.js"
 import { Commission, commissionErrMsgs } from "./commission.js"
 
 describe(Commission.name, () => {
-  const asset = new Asset({ id: "bnb", code: "BNB" })
+  const asset = new Asset({ id: "bnb",
+code: "BNB" })
   const createCommission = (overrides = {}) =>
     new Commission({
-      amount: new Money({ amount: "0.01", asset }),
+      amount: new Money({ amount: "0.01",
+asset }),
       ...overrides,
     })
 
@@ -27,8 +29,10 @@ describe(Commission.name, () => {
   })
 
   it("preserves a reliable quote-currency valuation for third-asset commissions", () => {
-    const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
-    const quoteValue = new Money({ amount: "0.02", asset: quoteAsset })
+    const quoteAsset = new Asset({ id: "usdt",
+code: "USDT" })
+    const quoteValue = new Money({ amount: "0.02",
+asset: quoteAsset })
     const commission = createCommission({ quoteValue })
 
     assert.equal(commission.quoteValue.amount, "0.02")
@@ -38,7 +42,8 @@ describe(Commission.name, () => {
 
   it("accepts a zero amount", () => {
     const commission = createCommission({
-      amount: new Money({ amount: "0", asset }),
+      amount: new Money({ amount: "0",
+asset }),
     })
 
     assert.equal(commission.amount.amount, "0")
@@ -54,7 +59,8 @@ describe(Commission.name, () => {
   it("rejects negative amounts", () => {
     assert.throws(
       () => createCommission({
-        amount: new Money({ amount: "-0.01", asset }),
+        amount: new Money({ amount: "-0.01",
+asset }),
       }),
       { message: commissionErrMsgs.nonNegativeAmount },
     )
@@ -69,7 +75,8 @@ describe(Commission.name, () => {
     assert.equal(commission.amount.amount, "0.01")
     assert.notStrictEqual(commission.value, snapshot)
     assert.throws(() => {
-      commission.amount = new Money({ amount: "1", asset })
+      commission.amount = new Money({ amount: "1",
+asset })
     }, TypeError)
   })
 })
