@@ -1954,7 +1954,7 @@ asset: baseAsset }),
     acknowledgedAt: 1,
     updatedAt: 2,
   })
-  const fill = new Fill({
+  const fillRecord = new Fill({
     tradeId: "trade-1",
     brokerOrderId: "broker-order-1",
     clientOrderId: "harvester-client-1",
@@ -1974,10 +1974,10 @@ asset: quoteAsset }),
   const facts = [
     ["execution.unowned_order", mapExecutionUnownedOrderData({ order })],
     ["execution.invalid_fill", mapExecutionInvalidFillData({ order,
-fill,
+fill: fillRecord,
 reason: "IDENTITY_MISMATCH" })],
     ["execution.accounting_failed", mapExecutionAccountingFailedData({ order,
-fill,
+fill: fillRecord,
 error: new Error("accounting mismatch") })],
   ]
   const records = facts.map(([name, result]) => {
