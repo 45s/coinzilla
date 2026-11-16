@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createClient, connectClient, response } from "../test-helpers/rpc-client-fixtures.js"
+import { createClient, connectClient } from "../test-helpers/rpc-client-fixtures.js"
 import { BinanceWebSocketApiClient } from "./rpc-client.js"
 
 test("notifies close observers when the transport closes unexpectedly", async () => {

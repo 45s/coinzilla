@@ -4,6 +4,21 @@ import { BinanceSdkBroker } from "../broker.js"
 import { createScheduler } from "../test-helpers/user-data-session-fixtures.js"
 import { createFakeRpcClient, createFakeStreamsClient } from "../test-helpers/fake-broker-clients.js"
 
+async function assertListenerCleanup({ broker, client, logs, removals }) {
+  assert.equal(client.errorListenerCount, 0)
+  assert.equal(client.closeListenerCount, 0)
+  assert.ok(logs.some(([message]) => message === "Unable to detach Binance user-data listener"))
+  assert.ok(logs.some(([message]) => message === "Unable to detach Binance user-data close listener"))
+  await assert.doesNotReject(broker.disconnect())
+  assert.deepEqual(removals, { event: 1, error: 1, close: 2 })
+}
+
+async function disconnectSubscription({ subscription, broker, scheduler }) {
+  await subscription.data.disconnect()
+  assert.equal(scheduler.pendingCount, 0)
+  await broker.disconnect()
+}
+
 describe("Binance user-data listener setup cleanup", () => {
   it("rolls back listeners when a later listener registration throws", async () => {
     let client
@@ -147,15 +162,7 @@ close: 0 }
     assert.equal(removals.error, 1)
     assert.equal(removals.close, 2)
     assert.equal(client.listenerCount, 0)
-    assert.equal(client.errorListenerCount, 0)
-    assert.equal(client.closeListenerCount, 0)
-    assert.ok(logs.some(([message]) => message === "Unable to detach Binance user-data listener"))
-    assert.ok(logs.some(([message]) => message === "Unable to detach Binance user-data close listener"))
-
-    await assert.doesNotReject(broker.disconnect())
-    assert.deepEqual(removals, { event: 1,
-error: 1,
-close: 2 })
+    await assertListenerCleanup({ broker, client, logs, removals })
   })
 })
 
@@ -351,9 +358,7 @@ wasClean: false })
     assert.equal(clients[1].closeListenerCount, 0)
     assert.equal(scheduler.pendingCount, 1)
 
-    await subscription.data.disconnect()
-    assert.equal(scheduler.pendingCount, 0)
-    await broker.disconnect()
+    await disconnectSubscription({ subscription, broker, scheduler })
   })
 })
 
