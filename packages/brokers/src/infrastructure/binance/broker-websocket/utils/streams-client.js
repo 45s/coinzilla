@@ -178,7 +178,7 @@ export class BinanceStreamsClient {
           throw error
         }
       } catch (error) {
-        this.#removeListenerFromStreams(addedListeners, listener)
+        this.#removeListenerFromStreams({ streams: addedListeners, listener })
         throw error
       }
 
@@ -378,7 +378,7 @@ export class BinanceStreamsClient {
     return url.toString()
   }
 
-   #removeListenerFromStreams({ streams, listener }) {
+  #removeListenerFromStreams({ streams, listener }) {
     for (const stream of streams) {
       const listeners = this.#listeners.get(stream)
       listeners?.delete(listener)
@@ -387,7 +387,7 @@ export class BinanceStreamsClient {
     if (this.#listeners.size === 0) {this.#clearReconnectTimer()}
   }
 
-   #request({ method, streams }) {
+  #request({ method, streams }) {
     if (this.#state !== "open" || !this.#transport) {
       return Promise.reject(new Error(`Cannot ${method} streams while disconnected`))
     }
@@ -449,7 +449,7 @@ payload: JSON.stringify(request) })
     }
   }
 
-   #handleMessage(...args) {
+  #handleMessage(...args) {
     const [rawMessage, transport] = args
     if (this.#transport !== transport) {return}
 
@@ -491,8 +491,7 @@ payload: JSON.stringify(request) })
 
   #closeForServerShutdown(code) {
     this.#reportError(new Error("Binance Streams server is shutting down"))
-    const reason = code === 1000 ? "Binance server shutdown" : "Binance server shutdown"
-    this.#transport?.close(code, reason).catch((error) => this.#reportError(error))
+    this.#transport?.close(code, "Binance server shutdown").catch((error) => this.#reportError(error))
   }
 
   #handleDataMessages(parsed) {
@@ -516,7 +515,7 @@ payload: JSON.stringify(request) })
     }
   }
 
-   #handleClose(...args) {
+  #handleClose(...args) {
     const [event, transport] = args
     if (this.#transport !== transport) {return}
     this.#detachTransportListeners()
@@ -602,7 +601,7 @@ payload: JSON.stringify(request) })
     }
   }
 
-   #chunk(...args) {
+  #chunk(...args) {
     const [values, size] = args
     const chunks = []
     for (let index = 0; index < values.length; index += size) {
