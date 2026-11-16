@@ -892,7 +892,7 @@ function createAccountingParityFills({ bnbAsset }) {
 }
 
 function appendAccountingParityFillRecords({ records, fillValue }) {
-  const dto = mapFillAppliedData({ fillValue })
+  const dto = mapFillAppliedData({ fill: fillValue })
   assert.equal(dto.ok, true, dto.errors?.map(({ message }) => message).join("; "))
   const orderFacts = {
     clientOrderId: fillValue.clientOrderId,
@@ -911,7 +911,7 @@ function appendAccountingParityFillRecords({ records, fillValue }) {
     brokerOrderId: fillValue.brokerOrderId,
     status: fillValue.side === "SELL" ? "PARTIALLY_FILLED" : "NEW",
   }, `submitted-${fillValue.tradeId}`))
-  records.push(record("execution.fillValue_applied", dto.data, `fillValue-${fillValue.tradeId}`))
+  records.push(record("execution.fill_applied", dto.data, `fill-${fillValue.tradeId}`))
 }
 
 function assertAccountingParity({ livePortfolio, liveLedger, restored }) {
