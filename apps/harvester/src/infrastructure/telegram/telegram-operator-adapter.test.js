@@ -34,7 +34,7 @@ function makeUpdate({
 }
 
 test("parses help, start, pause and resume commands", () => {
-  assert.deepEqual(parseTelegramOperatorCommand("/start"), { type: "HELP" })
+  assert.deepEqual(parseTelegramOperatorCommand("/start"), { type: "START" })
   assert.deepEqual(parseTelegramOperatorCommand("/help"), { type: "HELP" })
   assert.deepEqual(parseTelegramOperatorCommand("/resume linkusdt"), { type: "RESUME", symbol: "LINKUSDT" })
   assert.deepEqual(parseTelegramOperatorCommand("/resume"), { type: "INVALID", command: "RESUME" })

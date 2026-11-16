@@ -6,7 +6,7 @@ This is the entry point for Harvester's operator-control capability.
 
 The engine/application foundation is implemented in [PR #1045](https://github.com/45s/coinzilla/pull/1045). Enabled-by-default runtime configuration, Telegram adapter startup/shutdown, and fail-closed bootstrap validation are implemented in [PR #1067](https://github.com/45s/coinzilla/pull/1067).
 
-The Telegram Command Center exposes `/start`, `/help`, `/status`, `/markets`, `/positions`, `/orders`, `/balances`, `/pause <SYMBOL>`, and `/resume <SYMBOL>`. CC-1 is merged in PRs #1079 and #1081. CC-2 adds authorized read-only trading visibility queries: canonical Portfolio positions keep active and retained inventory separate; open orders label Harvester registry orders versus unmatched exchange orders as external; balances report the exchange snapshot source timestamp and age. CC-2 is merged in PR #1086; all seven exact-head GitHub Actions workflows passed. CC-3 proactive alerts are merged in PR #1087. CC-4 usability and hardening is merged in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`; exact-head CI and external documentation-link validation passed. See the [Telegram operator runbook](../operations/telegram-command-center.md) for command-menu, inline-navigation and confirmation behavior.
+The Telegram Command Center exposes `/start`, `/menu`, `/help`, `/status`, `/markets`, `/positions`, `/orders`, `/balances`, `/pause <SYMBOL>`, and `/resume <SYMBOL>`. CC-1 is merged in PRs #1079 and #1081. CC-2 adds authorized read-only trading visibility queries: canonical Portfolio positions keep active and retained inventory separate; open orders label Harvester registry orders versus unmatched exchange orders as external; balances report the exchange snapshot source timestamp and age. CC-2 is merged in PR #1086; all seven exact-head GitHub Actions workflows passed. CC-3 proactive alerts are merged in PR #1087. CC-4 usability and hardening is merged in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`; exact-head CI and external documentation-link validation passed. The persistent reply keyboard adds Pause, Resume, Status, Markets, Portfolio and Open Orders. Pause/Resume open filtered market choices and still require the existing inline confirmation; Portfolio reuses the positions query and Open Orders reuses the orders query. `/start` displays the keyboard and `/menu` restores it. See the [Telegram operator runbook](../operations/telegram-command-center.md) for command-menu, keyboard, inline-navigation and confirmation behavior.
 
 The operator pause is **process-lifetime only**: the operator-control record is committed to the Operational State Store before the in-memory pause is applied, but the pause is not restored into a later process. ADR-0003 explicitly keeps this capability independent from full ADR-0001 restart recovery. The separate #654 startup fence currently blocks every second process start until recovery Steps 8–9 are accepted.
 
@@ -22,7 +22,9 @@ Do not use Journal as the control-state store. Do not claim that a pause survive
 
 ## Command Center commands
 
-- `/start` and `/help` — show the available command vocabulary and safety semantics.
+- `/start` — show the Command Center and persistent six-button keyboard.
+- `/menu` — restore the persistent keyboard when it has been hidden.
+- `/help` — show the available command vocabulary and safety semantics.
 - `/status` — read-only runtime lifecycle, trading mode, user-data readiness, blocker and freshness summary.
 - `/markets` — read-only configured-market state, latest price/source timestamp/freshness, pause ownership and volatility-protection blockers.
 - `/positions` — canonical Portfolio active/free/total inventory, invested quote and recovery-ledger context.
@@ -71,4 +73,5 @@ The operator facade and use cases belong to `apps/harvester`. Do not create a sh
 | Read-only `/positions`, `/orders`, and `/balances` application queries and Telegram formatting | Merged in PR #1086; offline contract tests and all seven exact-head workflows passed |
 | Proactive readiness, recovery-blocker and Telegram delivery-health alerts | Implemented in PR #1087; all eight exact-head workflows passed |
 | Telegram command menu, inline read-only navigation/refresh and confirmed inline pause/resume controls | Merged in PR #1088; 1,479 Harvester tests and exact-head CI passed |
+| Persistent six-button reply keyboard, `/menu` restore command and filtered Pause/Resume market selection | Implemented in the current PR; exact-head CI pending |
 | Process-restart restoration of operator pause state | Explicitly out of scope under ADR-0003; separate ADR-0001 / #654 workstream |
