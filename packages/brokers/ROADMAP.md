@@ -996,6 +996,12 @@ These are the concrete data/contract gaps to close—not a request to invent loc
 | Server time | Timestamp validation and freshness calculations | Documented Spot server clock or approved authoritative alternative. |
 | Isolated mutation environment | Safe place/cancel and lifecycle integration tests | Bitunix currently confirms no TESTNET. No live mutation tests are authorized; a separately isolated environment or explicit future safety decision is required. |
 
+### Phase 1 evidence — symbol-scoped order response identity
+
+- Both official [pending-order](https://www.bitunix.com/api-docs/spots/en_us/order/#6-query-current-orders) and [order-history](https://www.bitunix.com/api-docs/spots/en_us/order/#5-query-order-history) contracts require a `symbol` request parameter, and both response row schemas include `symbol`.
+- The broker validates every returned pending/history row against the requested symbol before adapting it. A response containing another market is rejected rather than leaking a foreign order into a symbol-scoped result.
+- This is request/response correlation validation only. It does not establish account-wide coverage, history completeness, or a coherent cross-market snapshot.
+
 ### Phase 1 evidence — account-wide open-order coverage
 
 - **Official Spot contract:** [Query current orders](https://www.bitunix.com/api-docs/spots/en_us/order/#6-query-current-orders) documents `POST /api/spot/v1/order/pending/list` with `symbol` marked required. It returns the pending-order array for that trading pair; no page, cursor, total count, account-wide mode, or cross-symbol snapshot token is documented.
