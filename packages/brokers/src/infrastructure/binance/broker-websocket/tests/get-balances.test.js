@@ -10,7 +10,8 @@ const createBroker = (handlers) => {
     apiKey: "test-key",
     apiSecret: "test-secret",
       tradingMode: "testnet",
-    logger: { error() {}, info() {} },
+    logger: { error() {},
+info() {} },
   })
   broker.tradingConnection = createFakeRpcClient(handlers)
   return broker
@@ -23,8 +24,12 @@ describe("BinanceSdkBroker.getBalances", () => {
         assert.deepEqual(params, { omitZeroBalances: false })
         return {
           balances: [
-            { asset: "BTC", free: "0.200000000000000001", locked: "0.050000000000000009" },
-            { asset: "USDT", free: "0", locked: "0" },
+            { asset: "BTC",
+free: "0.200000000000000001",
+locked: "0.050000000000000009" },
+            { asset: "USDT",
+free: "0",
+locked: "0" },
           ],
         }
       },
@@ -44,13 +49,15 @@ describe("BinanceSdkBroker.getBalances", () => {
       })),
       [
         {
-          asset: { id: "btc", code: "BTC" },
+          asset: { id: "btc",
+code: "BTC" },
           free: "0.200000000000000001",
           locked: "0.050000000000000009",
           total: "0.25000000000000001",
         },
         {
-          asset: { id: "usdt", code: "USDT" },
+          asset: { id: "usdt",
+code: "USDT" },
           free: "0",
           locked: "0",
           total: "0",
@@ -73,7 +80,8 @@ describe("BinanceSdkBroker.getBalances", () => {
   })
 
   it("returns a structured error for incomplete or malformed account snapshots", async () => {
-    for (const balances of [undefined, null, {}, [{ asset: "BTC", free: "1" }]]) {
+    for (const balances of [undefined, null, {}, [{ asset: "BTC",
+free: "1" }]]) {
       const instance = createBroker({
         "account.status": () => ({ balances }),
       })
@@ -89,8 +97,12 @@ describe("BinanceSdkBroker.getBalances", () => {
     const instance = createBroker({
       "account.status": () => ({
         balances: [
-          { asset: "BTC", free: "1", locked: "0" },
-          { asset: "btc", free: "2", locked: "0" },
+          { asset: "BTC",
+free: "1",
+locked: "0" },
+          { asset: "btc",
+free: "2",
+locked: "0" },
         ],
       }),
     })
