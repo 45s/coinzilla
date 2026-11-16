@@ -26,7 +26,7 @@ function summarizeResults(results) {
   const topRules = [...ruleCounts.entries()]
     .map(([ruleId, count]) => ({ ruleId,
 count }))
-    .sort((left, right) => {
+    .sort((...entries) => {\n      const [left, right] = entries;
       if (left.count !== right.count) {
         return right.count - left.count;
       }
@@ -54,9 +54,9 @@ async function main() {
   );
 
   if (summary.topRules.length > 0) {
-    console.log("Most frequent rules:");
+    process.stdout.write("Most frequent rules:\\n");
     for (const rule of summary.topRules) {
-      console.log(`- ${rule.ruleId}: ${rule.count}`);
+      process.stdout.write(`- ${rule.ruleId}: ${rule.count}\\n`);
     }
   }
 }
@@ -67,7 +67,7 @@ const isMainModule =
 
 if (isMainModule) {
   main().catch((error) => {
-    console.error(error);
+    process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\\n`);
     process.exitCode = 1;
   });
 }

@@ -32,7 +32,7 @@ function checkJavaScriptSyntax({ files }) {
     });
 
     if (result.error) {
-      console.error(`Could not check ${file}: ${result.error.message}`);
+      process.stderr.write(`Could not check ${file}: ${result.error.message}\n`);
       return false;
     }
 
@@ -41,7 +41,7 @@ function checkJavaScriptSyntax({ files }) {
     }
   }
 
-  console.log(`Checked ${files.length} JavaScript files.`);
+  process.stdout.write(`Checked ${files.length} JavaScript files.\n`);
   return true;
 }
 
