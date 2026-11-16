@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { subscribeToUserData } from "./subscribe-to-user-data.js"
 
-const test = (name, ...args) => nodeTest("[subscribe-to-user-data.test.js] " + name, ...args)
+const test = (name, ...args) => nodeTest(`[subscribe-to-user-data.test.js] ${  name}`, ...args)
 
 const createState = (overrides = {}) => ({
   ready: false,
@@ -24,8 +24,9 @@ const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state 
     broker: {
       subscribeForUserData: async (handlers) => {
         calls.push("subscribe")
-        if (subscribe) return subscribe(handlers, calls)
-        return { ok: true, data: subscription }
+        if (subscribe) {return subscribe(handlers, calls)}
+        return { ok: true,
+data: subscription }
       },
     },
     brokerName: "binance",
@@ -38,17 +39,21 @@ const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state 
     onEvent: () => {},
     onStatus: () => {},
     publishAccountSnapshot: async (input) => {
-      calls.push("account:" + input.phase)
-      if (publishAccountSnapshot) await publishAccountSnapshot(input, calls)
+      calls.push(`account:${  input.phase}`)
+      if (publishAccountSnapshot) {await publishAccountSnapshot(input, calls)}
     },
     publishOpenOrdersSnapshot: async (input) => {
-      calls.push("orders:" + input.phase)
-      if (publishOpenOrdersSnapshot) await publishOpenOrdersSnapshot(input, calls)
+      calls.push(`orders:${  input.phase}`)
+      if (publishOpenOrdersSnapshot) {await publishOpenOrdersSnapshot(input, calls)}
     },
     getAccountSnapshot: () => ({ sourceTime: 100 }),
     resumeDeferredStrategyEvaluations: () => calls.push("resume"),
   })
-  return { result, state, calls, events, subscription }
+  return { result,
+state,
+calls,
+events,
+subscription }
 }
 
 test("read-only startup subscribes, durably audits account and open orders, and stays non-trading", async () => {
@@ -74,7 +79,8 @@ test("trading startup opens readiness only after both PREFLIGHT audits and safe 
 
 test("rejects malformed subscriptions and publishes failure evidence", async () => {
   const fixture = createFixture({
-    subscribe: async () => ({ ok: false, errors: [new Error("stream unavailable")] }),
+    subscribe: async () => ({ ok: false,
+errors: [new Error("stream unavailable")] }),
   })
 
   await assert.rejects(
@@ -108,7 +114,8 @@ test("exposes the live subscription to bootstrap before PREFLIGHT audit work can
   await assert.rejects(
     subscribeToUserData({
       broker: {
-        subscribeForUserData: async () => ({ ok: true, data: subscription }),
+        subscribeForUserData: async () => ({ ok: true,
+data: subscription }),
       },
       brokerName: "binance",
       eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
