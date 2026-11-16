@@ -108,16 +108,22 @@ async function executeShutdown({
     status: "COMPLETED",
     startedAt: shutdownRequestedAt,
   })
-  const operatorStopError = await stopOperatorControl({
-    operatorControlLifecycle,
-    logShutdownPhase,
-  })
-  await stopRuntime({
+  const beforeSharedServicesStop = async () => {
+    const operatorStopError = await stopOperatorControl({
+      operatorControlLifecycle,
+      logShutdownPhase,
+    })
+    return operatorStopError ? [operatorStopError] : []
+  }
+  const runtimeResult = await stopRuntime({
     requestedAt: shutdownRequestedAt,
     requestLogged: true,
     stopStateEstablishedLogged: true,
-    preShutdownErrors: operatorStopError ? [operatorStopError] : [],
+    beforeSharedServicesStop,
   })
+  if (runtimeResult?.ok === false) {
+    throw runtimeResult.errors?.[0] ?? new Error("Runtime shutdown did not prove strategy safety")
+  }
   if (operationalStateStore) {
     await recordDurableProcessStop({
       operationalStateStore,
@@ -137,7 +143,10 @@ export function createHarvesterStop(dependencies = {}) {
   let stopPromise
   return () => {
     if (!stopPromise) {
-      stopPromise = executeShutdown(dependencies)
+      stopPromise = executeShutdown(dependencies).catch((error) => {
+        stopPromise = undefined
+        throw error
+      })
     }
     return stopPromise
   }

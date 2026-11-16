@@ -157,186 +157,74 @@ The production `main()` entry point verifies/projects the ADR-0001 durable-facts
 - A successful close reports `durable: true`. A failed write/sync/close reports errors and does not claim durability.
 - Disk-full, permission, or filesystem errors can therefore leave a session incomplete. The Journal does not automatically recover writes in that session; resolve the filesystem issue and start a new process session.
 
-## Normal shutdown
+## Strategy-owned normal shutdown
 
-> **P0 implementation gap — [issue #1186](https://github.com/45s/coinzilla/issues/1186):** The sequence and diagram below record the current implementation on `develop`; they are not the approved Conservative shutdown contract. The current handler stops market-price/book intake and performs initial owned-order reconciliation before cancelling BUYs. That order does **not** satisfy the owner-approved rule to block/cancel Conservative BUYs first and keep the market, user-data, operator/runtime, and broker services alive until every market is safe. The required contract is defined only in [the canonical Conservative specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md#conservative-graceful-shutdown--protect-trading-before-stopping-services). Safety is state-driven: evaluate immediately after authoritative reconciliation; there is no arbitrary 20-second wait or quiet-period timer. Do not treat the current sequence as proof that a Conservative market is safe to shut down. Implementation and regression coverage are tracked in #1186.
+> **Owner-approved shutdown contract — [issue #1186](https://github.com/45s/coinzilla/issues/1186), implementation [PR #1190](https://github.com/45s/coinzilla/pull/1190):** This section records the required Conservative shutdown sequence, not the older `develop` behavior. The prior implementation stopped market-price/book intake and reconciled orders before cancelling BUYs; that ordering is historical context only and is not the contract. The canonical rules are defined in [the Conservative specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md#conservative-graceful-shutdown--protect-trading-before-stopping-services). Safety is state-driven: evaluate immediately after authoritative reconciliation; there is no arbitrary 20-second wait or quiet-period timer.
 
-The sequence below is the implemented trading-enabled shutdown path. It is verified against
-`src/bootstrap/shutdown/create-shutdown-handler.js`, the Conservative engine's
-`cancelOwnedBuyOrdersForShutdown()` and `reconcileOwnedOrders()` workflows,
-`create-account-snapshot-manager.js`, and the process/lock cleanup in
-`src/index.js`. The diagram describes orchestration; the source remains authoritative.
+Shutdown is an application-level coordination process. The application coordinator knows only the strategy participant contract; each strategy owns its domain safety rules. Conservative owns its BUY gate, owned-order cancellation, fill/commission reconciliation and recovery SELL coverage. Other strategies register independent policies.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Signal as SIGINT or SIGTERM
-    participant Main as Process main
-    participant Stop as Shutdown handler
-    participant Market as Price and book streams
-    participant Engine as Trading engine
-    participant User as User-data stream and queue
-    participant Broker as Broker WebSocket API
-    participant Journal
-    participant Bus as EventBus
-    participant Telegram as Optional Telegram subscriber
-    participant Locks as Host and application locks
+The required order is:
 
-    Signal->>Main: shutdown(reason)
-    Main->>Stop: runtime.stop()
-    Stop->>Stop: stopped=true; ready=false; status=STOPPING
-    Stop->>Market: unsubscribe price and book subscriptions
-    Market-->>Stop: settle all unsubscribe attempts
-    Stop->>Stop: await accepted market-price tasks
-    Stop->>User: await current accepted event queue
-    Note over Stop,User: User-data intake remains connected through BUY cancellation and final owned-order reconciliation.
+1. **Activate every strategy shutdown gate synchronously.** No service is stopped before every participant has received the shutdown request.
+2. **Conservative immediately starts cancelling all Harvester-owned active BUYs.** It does not cancel manual/external orders. The final submission gate rejects every BUY path; only an explicitly authorized recovery SELL may be submitted.
+3. **Keep required services alive.** Market-price/book intake, Binance user-data intake, broker connectivity and operator control remain available while each market reconciles pending order identity, cancellation outcomes, racing fills and actual commissions. Accepted market-price events continue through recovery-only evaluation; no BUY, trailing-BUY replacement, retry or delayed BUY path may run.
+4. **Secure recovery SELL coverage per market.** Recalculate from final Position and RecoveryLedger facts. An old SELL must reach a confirmed terminal state and its complete fill history must be reconciled before replacement. Verify the final SELL against authoritative Binance order state and net financial coverage.
+5. **Mark each market SAFE_TO_SHUTDOWN immediately when all conditions are proven and Journal-durable.** A safe market does not release shared services while another market or strategy is unsafe. Late execution evidence invalidates the affected marker and triggers immediate re-evaluation. No quiet-period timer or arbitrary delay is used.
+6. **Publish and durably flush CLOSING.** The snapshot is not published as COMPLETE until every strategy participant is safe. A failed snapshot or Journal barrier keeps the required connections alive.
+7. **Stop user-data intake and drain accepted events.** Recheck strategy safety if late accepted execution evidence invalidated a marker, then flush the Journal again.
+8. **Stop operator control and market-price/book intake, drain accepted market work, then disconnect Binance.** The process publishes STOPPED and closes Journal/EventBus/releases locks only after runtime shutdown is confirmed.
 
-    alt Trading enabled
-        Stop->>Engine: reconcileOwnedOrders() before cancellation
-        Engine->>Broker: resolve pending client IDs; read owned open orders, order history and fills
-        Broker-->>Engine: canonical owned-order snapshots
-        Engine-->>Stop: initial reconciliation result
-        alt Initial reconciliation fails
-            Stop->>Stop: add OWNED_ORDER_RECONCILIATION_FAILED
-        end
+### Strategy and market safety markers
 
-        Stop->>Engine: cancelOwnedBuyOrdersForShutdown()
-        loop Each acknowledged owned OPEN or PARTIALLY_FILLED BUY
-            Engine->>Bus: publish order.cancel_requested
-            Bus->>Journal: deliver cancellation intent
-            Engine->>Journal: durable flush
-            alt Durable cancellation intent succeeds
-                Engine->>Broker: cancel BUY
-                Broker-->>Engine: canonical cancellation response
-                Engine->>Broker: getFills(orderId)
-                Broker-->>Engine: canonical execution history
-                Engine->>Engine: validate fill identity, deduplicate and verify executed-quantity parity
-                Engine->>Engine: apply cancellation-racing fills through normal accounting
-            else Intent, cancellation or fill reconciliation fails
-                Engine->>Engine: mark outcome unsafe and pause affected market
-            end
-        end
-        Note over Engine,User: Execution reports may arrive during WebSocket API cancellation; the stream remains active so accepted reports can be applied before the audit.
-        Stop->>User: await queued cancellation and execution-report work
-        Stop->>Engine: reconcileOwnedOrders() final verification
-        Engine->>Broker: reconcile registered owned orders against canonical WebSocket API request/response state
-        Broker-->>Engine: final canonical order and fill state
-        Engine-->>Stop: final reconciliation result
-        Note over Stop,Engine: This pass verifies BUY cancellation and all accepted fills. A still-open BUY is unresolved and fails shutdown.
-    else Read-only or no trading
-        Note over Stop,Engine: No owned-order cancellation and no trading CLOSING audit.
-    end
+Conservative tracks every configured market independently. A market is safe only when the BUY gate is active; no owned BUY is pending, open, partially filled or unknown; cancellation outcomes, fills and actual commissions are reconciled; no order/accounting transition remains ambiguous; recovery SELL coverage is authoritatively verified or no recovery obligation remains; and the Journal durability barrier succeeds.
 
-    Stop->>User: disconnect user-data subscription
-    User-->>Stop: intake-stop result
-    Stop->>Stop: intakeStopped=true; await final accepted event queue
+The marker is process-local. It is not trusted after restart; rebuild safety from the Journal and authoritative exchange state. An execution report, REST reconciliation result, newly discovered owned order, changed SELL state or accounting discrepancy invalidates the affected marker. A market is re-audited before the shared shutdown barrier can pass.
 
-    alt Trading enabled
-        Stop->>Engine: reconcileRecoverySellsForShutdown()
-        Engine->>Engine: validate final Position, keepQuantity, spent and confirmed net proceeds
-        opt Existing owned recovery SELL no longer covers the final recovery plan
-            Engine->>Bus: publish durable order.cancel_requested
-            Engine->>Broker: cancel owned recovery SELL
-            Broker-->>Engine: canonical terminal order
-            Engine->>Broker: reconcile complete terminal fill history
-            Engine->>Engine: apply cancellation-racing SELL fills exactly once
-            Engine->>Engine: submit SELL-only replacement when safe
-        end
-        Stop->>Engine: reconcileOwnedOrders() after recovery replan
-        Engine->>Broker: verify replacement acknowledgements and immediate fills
-        Broker-->>Engine: canonical owned-order state
-        Stop->>Engine: auditShutdownRecoverySellCoverage()
-        Engine-->>Stop: covered / findings
-        Stop->>Engine: inspect owned order statuses and accounting flags
-        Note over Stop,Engine: An open SELL is acceptable only when the final coverage audit proves sufficient remaining quantity and net proceeds. Unknown states or failed coverage make CLOSING incomplete.
-        alt Unresolved owned order, unsafe accounting, or incomplete SELL coverage
-            Stop->>Stop: add CLOSING audit reasons; classify audit INCOMPLETE
-        else Terminal orders and verified recovery SELL coverage
-            Stop->>Stop: classify audit COMPLETE
-        end
-        Stop->>Broker: getAccountSnapshot()
-        Broker-->>Stop: account balances
-        Stop->>Bus: publish account.snapshot_captured with phase CLOSING
-        Bus->>Journal: deliver CLOSING snapshot
-        Stop->>Journal: flush queued writes and filesystem sync
-        alt Durable flush confirmed
-            Journal-->>Stop: durable=true
-        else Snapshot query, publish or flush fails
-            Journal-->>Stop: error
-            Stop->>Stop: record shutdown failure; do not claim a durable CLOSING audit
-        end
-    end
+### Ambiguous orders and fail-closed behavior
 
-    Stop->>Broker: disconnect()
-    Broker-->>Stop: disconnect result
-    alt All shutdown and audit stages confirmed
-        Stop->>Stop: status=STOPPED
-    else Any shutdown or audit blocker remains
-        Stop->>Stop: status=SHUTDOWN_INCOMPLETE
-        Stop->>Stop: log and attach shutdownDiagnostics
-    end
-    Stop-->>Main: resolve or reject runtime.stop()
-    Main->>Bus: publish harvester.stopped; flush accepted events
-    opt Telegram notifications enabled
-        Main->>Telegram: close and drain accepted notifications
-        Telegram-->>Main: cleanup result
-    end
-    Main->>Journal: close and drain writes; sync and close session file
-    Main->>Bus: close with 5000 ms timeout
-    alt Runtime stop and Journal close both confirmed
-        Main->>Locks: release application lock, then broker-wide host lock
-        Locks-->>Main: release result
-    else Runtime stop or Journal close not confirmed
-        Note over Main,Locks: Retain the trading-process locks and exit non-zero.
-    end
-    Main->>Main: close logger transports
-```
+Keep the original client order ID for an ambiguous placement. Reconcile by canonical identity; never retry placement or submit a duplicate recovery SELL just because an acknowledgement timed out. Never cancel an order unless canonical ownership is proven. An external/manual open order is never adopted, canceled or modified; its presence alone does not block shutdown safety. An actual unowned execution or unresolved account-wide ownership/balance discrepancy remains a separate integrity blocker. If an owned BUY/SELL remains UNKNOWN, terminal fill history is incomplete, recovery coverage is insufficient, accounting is unsafe, or Journal durability cannot be proven, report the exact strategy/market/blocker, keep required services connected and do not publish STOPPED.
+
+A failure in one market does not erase another market's SAFE_TO_SHUTDOWN marker, but it prevents shared services from stopping. The coordinator waits for all strategy participants; it does not decide whether a Conservative order is safe.
 
 ### Ambiguous order acknowledgements during shutdown
 
-A placement request can have an uncertain local outcome even when Binance accepted the order. Harvester must retain the original client order ID and keep the order UNKNOWN; it must not retry placement. An authoritative user-data `executionReport` with the matching owned `clientOrderId` and exchange-assigned `brokerOrderId` resolves the identity. The first matching `NEW` report advances the registry from UNKNOWN to OPEN; duplicate reports are idempotent, and conflicting client/broker identities remain rejected.
+A placement request can have an uncertain local outcome even when Binance accepted the order. Keep the original client order ID and retain the order as UNKNOWN; never retry placement because an acknowledgement timed out. An authoritative user-data `executionReport` with the matching owned `clientOrderId` and exchange-assigned `brokerOrderId` resolves identity. The first matching `NEW` report advances UNKNOWN to OPEN; duplicates are idempotent and conflicting identities remain rejected.
 
-This identity recovery is important to shutdown: the initial `reconcileOwnedOrders()` can now see the exchange identity and the existing cancellation selector can cancel the acknowledged owned BUY. If identity reconciliation remains incomplete, shutdown must not guess an order ID or cancel an external order; it records an incomplete CLOSING audit, rejects shutdown, and the process entrypoint retains its locks. The recovery-SELL phase described below is separate from BUY cancellation and is limited to registered, Harvester-owned recovery SELLs. The broker requests Binance `newOrderRespType: "RESULT"` for canonical placement so `LIMIT_MAKER` acknowledgements contain the order facts required by the canonical adapter instead of Binance's minimal default ACK.
+Shutdown starts cancellation of known Harvester-owned BUYs immediately. Pending or UNKNOWN identities are reconciled while market-price, user-data and broker services remain connected; cancel an order only after canonical ownership is proven. Never guess an exchange order ID or cancel an external/manual order. The broker requests Binance `newOrderRespType: "RESULT"` for canonical placement so `LIMIT_MAKER` acknowledgements contain the order facts required by the canonical adapter instead of Binance's minimal default ACK.
 
-### Ordering and safety invariants
+### Shutdown-only recovery and safety pauses
 
-- The handler marks shutdown in progress (`stopped=true`, `ready=false`, `status=STOPPING`) before unsubscribing market streams. It unsubscribes both market-price and book-ticker subscriptions, waits for already accepted market-price tasks, and waits for the current user-data queue before touching owned orders. No new strategy decisions should be started by later market callbacks.
-- For trading-enabled runs, the first owned-order reconciliation resolves pending client-order identities and reads canonical order state before cancellation selection. The cancellation workflow selects only registered, acknowledged BUY orders in OPEN or PARTIALLY_FILLED state. Each broker cancellation is preceded by a durably flushed `order.cancel_requested` event. The canonical response must match the owned order and be terminal; canonical fills are then checked for identity, duplicates and cumulative executed-quantity parity before normal accounting applies them.
-- User-data intake remains active through BUY cancellation and the final pre-shutdown owned-order reconciliation. After that pass, the handler disconnects user-data intake, marks intake stopped, and drains the final accepted queue before changing recovery SELL orders. A still-open owned BUY is unresolved and fails closed.
-- Shutdown does not cancel SELLs as a generic cleanup action. It may cancel only a Harvester-owned recovery SELL that fails the final post-fill recovery plan. Before any replacement, the engine must durably record cancellation intent, confirm the canonical terminal order, reconcile every terminal fill and actual commission, and apply those fills exactly once. It may then submit a recovery SELL only; shutdown recovery cannot submit a standing BUY. Other valid owned SELLs remain resting, and external/manual orders are never adopted, canceled, or modified.
-- After recovery replanning, shutdown performs another canonical owned-order reconciliation and a final coverage audit. An OPEN or PARTIALLY_FILLED recovery SELL is acceptable only when its remaining quantity covers final strategy-owned active quantity above exact keepQuantity and its net proceeds cover the full accumulated Position.spent plus configured minProfit, accounting for confirmed net SELL proceeds and actual commission facts. A stale, unknown, under-sized, financially insufficient, or otherwise unverifiable SELL makes CLOSING INCOMPLETE.
-- Only trading-enabled runs capture a CLOSING account audit. The snapshot is fetched while broker WebSocket API is connected, filtered to configured market assets plus third-asset commission baselines actually used in the session, checked for required asset coverage, published as `account.snapshot_captured` with `phase: "CLOSING"`, and accepted only after the event publisher confirms a durable flush. Unrelated wallet assets remain excluded. An audit reason produces `auditStatus: "INCOMPLETE"`; a query, publish or flush failure means no durable CLOSING audit can be claimed. The CLOSING event is a balance snapshot, not an open-orders audit or a Portfolio import.
-- Broker disconnect is attempted after the CLOSING audit attempt, even when earlier shutdown stages recorded errors. The process then publishes `harvester.stopped`, flushes EventBus work, closes the optional Telegram subscriber, closes Journal, closes EventBus, and finally evaluates lock release.
+The shutdown-only recovery SELL path is a narrowly authorized exception, not a general pause override. The final submission gate permits it only while stopping, for a SELL with purpose `RECOVERY_SELL`, and while the explicit shutdown-recovery submission scope is active. That does not prove that every market pause is safe to bypass.
+
+The latest-transition evaluator and shutdown recovery workflow both reject a market in `state.paused`. Keep those guards: a hard strategy safety pause must never be bypassed by shutdown recovery. The shutdown safety auditor also treats a durable pause, or any non-recovery-managed pause, as an explicit `STRATEGY_SAFETY_PAUSED` blocker. Recovery-managed cancellation pauses remain separately identified and fail closed until their canonical cancellation/reconciliation facts are resolved.
+
+The PR #1190 regression fixture uses order-specific cancellation quantities: zero for BUY cancellation and the already-recorded cumulative fill quantity for the recovery SELL cancellation. This keeps terminal order quantity consistent with the complete distinct fill history. The important recovery boundary is the remaining sellable quantity above `keepQuantity`: when a late SELL fill leaves sellable quantity, shutdown must cancel/reconcile the stale SELL and submit a correctly sized replacement; when it consumes all sellable quantity, only the retained `keepQuantity` remains and no replacement is required. The workflow now bases `requiresSell` on sellable quantity, not on an outstanding cost balance that cannot be recovered from retained inventory. Hard and unresolved recovery-managed pauses remain fail-closed; no pause guard is bypassed.
+
+### Safety and lifecycle invariants
+
+- The strategy shutdown gate is activated before shutdown context construction or shared-service cleanup. It rejects initial BUYs, trailing-BUY replacements, retries, delayed evaluations and every final broker-boundary BUY submission.
+- Market-price/book intake, Binance user-data intake, operator control and broker connectivity remain available while owned BUY cancellation, pending identity resolution, cancellation outcomes, racing fills and actual commissions are reconciled. Accepted market-price events use recovery-only evaluation; only recovery SELL work is allowed.
+- Cancel only registered, Harvester-owned BUYs. Each broker cancellation is preceded by a durably flushed `order.cancel_requested` event. The canonical response must match the owned order and be terminal; canonical fills are checked for identity, duplicates and cumulative executed-quantity parity before normal accounting applies them.
+- User-data intake remains active through BUY cancellation and final owned-order reconciliation. After the CLOSING snapshot barrier, stop user-data intake and drain accepted events. If late accepted evidence invalidates a market marker, reconcile again, re-verify recovery SELL coverage and publish an updated CLOSING snapshot before shared cleanup.
+- Shutdown does not cancel SELLs as generic cleanup. It may cancel only a Harvester-owned recovery SELL that no longer covers the final recovery plan. Before replacement, durably record cancellation intent, confirm the canonical terminal order, reconcile complete terminal fill history and actual commissions, and apply those fills exactly once. Then submit a recovery SELL only; never submit a standing BUY or a blind duplicate. Other valid owned SELLs remain resting; external/manual orders are never adopted, canceled or modified.
+- After recovery replanning, perform another canonical owned-order reconciliation and final coverage audit. An OPEN or PARTIALLY_FILLED recovery SELL is acceptable only when its remaining quantity and net proceeds cover the final recovery obligation and configured profit target, including actual commission facts. UNKNOWN, stale, undersized, financially insufficient or otherwise unverifiable SELL state keeps the market unsafe.
+- Each market's SAFE_TO_SHUTDOWN marker is independent and process-local. It is set only after all order/fill/accounting facts are reconciled and the Journal evidence is durable. Late execution/order evidence invalidates the affected marker. A safe market cannot release shared services while another market or strategy participant is unsafe.
+- Only trading-enabled runs publish the CLOSING account audit. Fetch it while broker WebSocket API is connected; include configured market assets and third-asset commission baselines actually used in the session; validate required asset coverage; publish `account.snapshot_captured` with `phase: "CLOSING"`; and require a durable flush. Unrelated wallet assets remain excluded. The CLOSING event is a balance snapshot, not an open-orders audit or a Portfolio import.
+- Stop operator control and market-price/book intake, drain accepted market work, then disconnect Binance only after all strategy participants are safe and the CLOSING/Journal barrier is durable. Publish STOPPED only after runtime shutdown and cleanup are confirmed.
 
 ### Failure and process-lock behavior
 
-For trading-enabled runs, any owned-BUY cancellation failure, initial/final/post-replan owned-order reconciliation failure, recovery-SELL cancellation/fill-reconciliation failure, incomplete final recovery-SELL coverage, unresolved non-terminal/unknown owned order, or unsafe user-data/accounting state makes the CLOSING audit INCOMPLETE and rejects runtime shutdown. Market-intake unsubscribe errors, user-data-intake stop errors, CLOSING snapshot query/publish/flush errors, and broker-disconnect errors also make runtime shutdown fail. The process sets a non-zero exit status, still attempts later cleanup, and retains the trading-process locks because `runtime.stop()` was not confirmed. When shutdown is incomplete, the runtime status is `SHUTDOWN_INCOMPLETE`, never `STOPPED`. The thrown `AggregateError` exposes a `shutdownDiagnostics` object and the structured error log includes the same safe summary: the status before shutdown, all CLOSING audit reasons, stage-specific reconciliation failures with category/stage/retryability and error messages, cleanup failure names/messages, accounting/reconciliation/safety-halt flags, retryable recovery category/stage/generation, current and last-acknowledged recovery generations, and exact unresolved owned-order symbol, side, client/broker IDs, status, executed quantity and original quantity. OPEN/PARTIALLY_FILLED SELLs are excluded from the unresolved-order list only after the final recovery-SELL coverage audit confirms that they satisfy the shutdown recovery plan. Broker-disconnect and other post-snapshot cleanup failures are reported as cleanup failures, not retroactively added to the already-published CLOSING audit reasons. The diagnostics contain normalized identity/accounting facts rather than raw broker payloads. A successful shutdown sets `STOPPED` only after broker disconnect and all cleanup checks succeed.
+If BUY cancellation, identity resolution, order/fill reconciliation, actual-commission accounting, recovery SELL coverage, accepted user-data drain, CLOSING snapshot or its Journal barrier cannot be proven, keep the required trading and recovery services connected. Reject runtime shutdown, report the exact strategy/market/blocker, retain Journal/EventBus/process locks and never publish STOPPED. A late or UNKNOWN order is not a reason to disconnect.
 
-The process owns two Harvester locks: a broker-wide host lock and an
-application process lock. Both live under
-`~/.coinzilla/harvester/process-locks/`, outside the logs tree. Lock release
-is allowed only when runtime shutdown was confirmed and Journal close returned
-a successful result. If runtime shutdown is uncertain, or Journal
-close/drain/sync is not confirmed, both locks are retained. The release
-function removes the application lock first and only then the host lock; if
-application-lock release is uncertain, the host lock is deliberately
-retained. A failed lock release is reported and leaves the remaining lock in
-place.
+Post-safety cleanup failures (for example, an intake unsubscribe or broker-disconnect failure) are recorded separately and make runtime shutdown incomplete. Continue only cleanup that is safe after the strategy barrier; do not claim STOPPED. The thrown `AggregateError` exposes `shutdownDiagnostics` and the structured log includes the pre-shutdown status, CLOSING audit reasons, stage-specific reconciliation failures, cleanup errors, accounting/reconciliation/safety-halt flags, retryable recovery generation data and exact unresolved owned-order identities/status/quantities. An OPEN/PARTIALLY_FILLED recovery SELL is excluded from unresolved orders only after the final coverage audit proves it satisfies the plan. Diagnostics contain normalized identity/accounting facts, never raw broker payloads.
 
-Separately, the Journal package owns a hidden `.coinzilla-journal.lock` in the
-active session directory while its JSONL writer is open. Journal removes only
-the lock it acquired. This package-level writer lock is not one of the two
-Harvester process-ownership locks.
+The process owns two Harvester locks: a broker-wide host lock and an application process lock. Both live under `~/.coinzilla/harvester/process-locks/`, outside the logs tree. Release is allowed only when runtime shutdown was confirmed and Journal close returned a successful result. If runtime shutdown is uncertain, or Journal close/drain/sync is not confirmed, retain both locks. Release the application lock first and only then the host lock; if application-lock release is uncertain, deliberately retain the host lock. A failed lock release is reported and leaves the remaining lock in place.
 
-An EventBus close timeout (bounded at five seconds) still causes a non-zero process exit, but it does not by itself retain the trading lock when runtime shutdown and Journal close were both confirmed. Telegram/log-transport cleanup failures are also reported separately from the runtime-stop and Journal-close lock-release gates. This distinction prevents an ancillary delivery failure from being described as an unresolved trading state.
+Separately, the Journal package owns a hidden `.coinzilla-journal.lock` in the active session directory while its JSONL writer is open. Journal removes only the lock it acquired. This package-level writer lock is not one of the two Harvester process-ownership locks.
 
-The handler's shutdown ordering and basic success/error aggregation are covered by
-`create-shutdown-handler.test.js`. Process tests in `src/index.test.js` verify
-that runtime-stop failure and unconfirmed Journal close retain the process lock.
-The tests do not establish an additional post-reconciliation BUY-cancellation
-pass; the sequence above intentionally documents the implementation that exists.
+An EventBus close timeout (bounded at five seconds) causes a non-zero process exit, but does not by itself retain the trading lock when runtime shutdown and Journal close were both confirmed. Telegram/log-transport cleanup failures are reported separately from runtime-stop and Journal-close lock-release gates; an ancillary delivery failure must not be described as unresolved trading state.
 
-A process kill, machine crash, power loss, or failed filesystem sync can still lose recent records. The Journal is not an unconditional durability guarantee.
+The deterministic regression suite covers gate-before-cleanup ordering, per-market and per-strategy barriers, BUY submission races, recovery-only price evaluation, cancellation-racing fills, late evidence invalidation, recovery SELL coverage, incomplete shutdown and process-lock retention. A process kill, machine crash, power loss or failed filesystem sync can still lose recent records; the Journal is not an unconditional durability guarantee.
 
 ## Diagnosing a missing or incomplete session
 

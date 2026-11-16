@@ -132,6 +132,12 @@ function dispatchAcceptedMarketPriceTransition({
   transition,
 } = {}) {
   const { symbol, price, metadata } = transition
+  if (state.shutdownBuyGate === true) {
+    return evaluateLatestTransition({
+      symbol,
+      shutdownRecoveryOnly: true,
+    })
+  }
   if (!canTrade({ symbol }) || state.paused.has(symbol)) {
     return evaluateLatestTransition({ symbol })
   }

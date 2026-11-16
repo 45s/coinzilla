@@ -4,6 +4,7 @@ import {
   stopUserDataIntake as stopUserDataIntakeDefault,
   disconnectBroker as disconnectBrokerDefault,
 } from "../broker/cleanup-broker.js"
+import { createStrategyShutdownCoordinator } from "./create-strategy-shutdown-coordinator.js"
 
 function logSystem({ logger, ...data }) {
   if (typeof logger?.system === "function") {
@@ -250,6 +251,7 @@ function createShutdownContext({ options, stopOptions, shutdownRequestedAt }) {
     disconnectBroker: disconnectBrokerOperation = disconnectBrokerDefault,
     now,
     runtimeSessionId,
+    strategyShutdownCoordinator,
   } = options
   const shutdownCorrelationId = runtimeSessionId ?? null
   const context = {
@@ -271,6 +273,8 @@ function createShutdownContext({ options, stopOptions, shutdownRequestedAt }) {
     now,
     shutdownRequestedAt,
     shutdownCorrelationId,
+    strategyShutdownCoordinator,
+    beforeSharedServicesStop: stopOptions.beforeSharedServicesStop,
     shutdownStartedFromStatus: stopOptions.shutdownStartedFromStatus ?? state.status,
     preShutdownErrors: stopOptions.preShutdownErrors ?? [],
     auditReasons: (stopOptions.preShutdownErrors ?? []).length > 0
@@ -298,43 +302,8 @@ function getResultErrors({ result, fallbackMessage }) {
   return []
 }
 
-async function runRequiredEnginePhase({
-  context,
-  phase,
-  operation,
-  stage,
-  message,
-  auditReason,
-}) {
-  try {
-    const result = await context.phaseRunner.runPhase({
-      phase,
-      operation,
-    })
-    if (result?.ok !== true) {
-      context.auditReasons.push(auditReason)
-      context.failureRecorder.logShutdownFailure({
-        message,
-        stage,
-        result,
-      })
-    }
-    return result
-  } catch (error) {
-    context.auditReasons.push(auditReason)
-    context.failureRecorder.logShutdownFailure({
-      message,
-      stage,
-      error,
-    })
-    return {
-      ok: false,
-      errors: [error],
-    }
-  }
-}
-
 async function stopMarketIntakeAndDrain(context) {
+  context.state.marketIntakeStopped = true
   const result = await context.failureRecorder.runPhaseSafely({
     phase: "MARKET_INTAKE_STOP",
     operation: () => context.stopMarketIntake({
@@ -369,37 +338,18 @@ async function stopMarketIntakeAndDrain(context) {
   })
 }
 
-async function reconcileOrdersBeforeBuyCancellation(context) {
-  if (!context.tradingEnabled || !context.tradingEngine) {
-    return
+async function drainUserDataQueue(context) {
+  while (true) {
+    const queuedEvents = context.state.eventQueue
+    await queuedEvents
+    if (queuedEvents === context.state.eventQueue) {
+      return
+    }
   }
-  await runRequiredEnginePhase({
-    context,
-    phase: "INITIAL_RECONCILIATION",
-    operation: () => context.tradingEngine.reconcileOwnedOrders(),
-    stage: "BEFORE_BUY_CANCELLATION",
-    message: "Shutdown order reconciliation failed",
-    auditReason: "OWNED_ORDER_RECONCILIATION_FAILED",
-  })
-  await runRequiredEnginePhase({
-    context,
-    phase: "BUY_CANCELLATION",
-    operation: () => context.tradingEngine.cancelOwnedBuyOrdersForShutdown(),
-    stage: "CANCEL_OWNED_BUYS",
-    message: "Shutdown BUY cancellation failed",
-    auditReason: "OWNED_BUY_CANCELLATION_FAILED",
-  })
 }
 
 async function stopUserDataIntakeAndDrain(context) {
-  await context.failureRecorder.runPhaseSafely({
-    phase: "USER_DATA_DRAIN",
-    operation: () => context.state.eventQueue,
-    stage: "USER_DATA_DRAIN",
-    message: "Shutdown user-data drain failed",
-    auditReason: "USER_DATA_DRAIN_FAILED",
-  })
-  const result = await context.failureRecorder.runPhaseSafely({
+  const stopResult = await context.failureRecorder.runPhaseSafely({
     phase: "USER_DATA_INTAKE_STOP",
     operation: () => context.stopUserDataIntake({
       userDataSubscription: context.userDataSubscription,
@@ -409,115 +359,26 @@ async function stopUserDataIntakeAndDrain(context) {
     auditReason: "USER_DATA_INTAKE_SHUTDOWN_FAILED",
   })
   context.userDataIntakeErrors = getResultErrors({
-    result,
+    result: stopResult,
     fallbackMessage: "Shutdown user-data intake stop failed",
   })
-  context.state.intakeStopped = true
-  await context.failureRecorder.runPhaseSafely({
+  if (context.userDataIntakeErrors.length > 0) {
+    return context.userDataIntakeErrors
+  }
+
+  const finalDrain = await context.failureRecorder.runPhaseSafely({
     phase: "USER_DATA_DRAIN_FINAL",
-    operation: () => context.state.eventQueue,
+    operation: () => drainUserDataQueue(context),
     stage: "USER_DATA_DRAIN_FINAL",
     message: "Final shutdown user-data drain failed",
     auditReason: "USER_DATA_DRAIN_FAILED",
   })
-}
-
-async function reconcileFinalOwnedOrders(context) {
-  return runRequiredEnginePhase({
-    context,
-    phase: "FINAL_RECONCILIATION",
-    operation: () => context.tradingEngine.reconcileOwnedOrders(),
-    stage: "FINAL_OWNED_ORDER_RECONCILIATION",
-    message: "Final shutdown order reconciliation failed",
-    auditReason: "OWNED_ORDER_RECONCILIATION_FAILED",
-  })
-}
-
-async function reconcileShutdownRecoverySells(context) {
-  const result = await runRequiredEnginePhase({
-    context,
-    phase: "RECOVERY_SELL_RECONCILIATION",
-    operation: () => context.tradingEngine.reconcileRecoverySellsForShutdown(),
-    stage: "SHUTDOWN_RECOVERY_SELL_RECONCILIATION",
-    message: "Shutdown recovery SELL reconciliation failed",
-    auditReason: "SHUTDOWN_RECOVERY_SELL_RECONCILIATION_FAILED",
-  })
-  context.recoverySellReconciliation = result
-}
-
-async function reconcileOrdersAfterRecoveryReplan(context) {
-  return runRequiredEnginePhase({
-    context,
-    phase: "POST_REPLAN_RECONCILIATION",
-    operation: () => context.tradingEngine.reconcileOwnedOrders(),
-    stage: "POST_REPLAN_OWNED_ORDER_RECONCILIATION",
-    message: "Post-replan shutdown order reconciliation failed",
-    auditReason: "OWNED_ORDER_RECONCILIATION_FAILED",
-  })
-}
-
-async function auditShutdownRecoverySellCoverage(context) {
-  try {
-    const coverage = await context.phaseRunner.runPhase({
-      phase: "RECOVERY_SELL_COVERAGE_AUDIT",
-      operation: () => context.tradingEngine.auditShutdownRecoverySellCoverage(),
-      isFailure: (result) => result?.ok !== true || result.data?.covered !== true,
-    })
-    context.recoverySellFindings = coverage?.data?.findings ?? []
-    if (coverage?.ok === true && coverage.data?.covered === true) {
-      return
-    }
-    context.auditReasons.push("SHUTDOWN_RECOVERY_SELL_COVERAGE_INCOMPLETE")
-    for (const finding of context.recoverySellFindings) {
-      context.auditReasons.push(
-        `SHUTDOWN_RECOVERY_SELL_COVERAGE:${  finding.symbol  }:${  finding.reason 
-        }:required=${  finding.requiredQuantity ?? "unknown" 
-        }:committed=${  finding.committedQuantity ?? "unknown"}`,
-      )
-    }
-    context.failureRecorder.logShutdownFailure({
-      message: "Final recovery SELL coverage is incomplete",
-      stage: "SHUTDOWN_RECOVERY_SELL_COVERAGE_AUDIT",
-      result: coverage,
-    })
-  } catch (error) {
-    context.auditReasons.push("SHUTDOWN_RECOVERY_SELL_COVERAGE_INCOMPLETE")
-    context.failureRecorder.logShutdownFailure({
-      message: "Final recovery SELL coverage audit failed",
-      stage: "SHUTDOWN_RECOVERY_SELL_COVERAGE_AUDIT",
-      error,
-    })
+  if (finalDrain?.ok === false) {
+    context.userDataIntakeErrors.push(...(finalDrain.errors ?? [new Error("Final user-data drain failed")]))
+  } else {
+    context.state.intakeStopped = true
   }
-}
-
-function collectUnresolvedOrders(context) {
-  const terminalStatuses = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED", "EXPIRED_IN_MATCH"])
-  context.unresolvedOrders = context.tradingEngine.getOrders().filter((order) => {
-    if (terminalStatuses.has(order.status)) {
-      return false
-    }
-    if (order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
-      return false
-    }
-    return true
-  })
-  if (context.unresolvedOrders.length > 0) {
-    context.auditReasons.push(`UNRESOLVED_OWNED_ORDERS:${context.unresolvedOrders.length}`)
-  }
-  if (context.state.accountingFailed || context.state.requiresReconciliation || context.state.safetyHaltRequired) {
-    context.auditReasons.push("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")
-  }
-}
-
-async function reconcileRecoveryAndAuditCoverage(context) {
-  if (!context.tradingEnabled || !context.tradingEngine) {
-    return
-  }
-  await reconcileFinalOwnedOrders(context)
-  await reconcileShutdownRecoverySells(context)
-  await reconcileOrdersAfterRecoveryReplan(context)
-  await auditShutdownRecoverySellCoverage(context)
-  collectUnresolvedOrders(context)
+  return context.userDataIntakeErrors
 }
 
 async function publishClosingAudit(context) {
@@ -537,7 +398,7 @@ async function publishClosingAudit(context) {
     isFailure: (snapshotResult) => snapshotResult?.ok === false,
   })
   if (result?.ok === false) {
-    context.snapshotError = result.errors?.[0] ?? new Error("Closing account snapshot failed")
+    context.snapshotError = result?.errors?.[0] ?? new Error("Closing account snapshot durability was not proven")
   }
 }
 
@@ -605,6 +466,9 @@ function createShutdownDiagnostics({ context, cleanupErrors }) {
     }),
     unresolvedOrders: Object.freeze(context.unresolvedOrders.map((order) =>
       Object.freeze(summarizeUnresolvedOrder(order)))),
+    strategyBlockers: context.strategyShutdownError?.shutdownDiagnostics?.strategyBlockers ??
+      Object.freeze([]),
+    strategySafety: context.strategyShutdownCoordinator?.getSafetySnapshot?.() ?? Object.freeze([]),
   })
 }
 
@@ -652,12 +516,117 @@ function finalizeShutdown({ context, cleanupErrors }) {
   })
 }
 
+async function flushShutdownJournal(context) {
+  if (context.strategyShutdownCoordinator.getSafetySnapshot().length === 0) {
+    return
+  }
+  if (typeof context.eventPublisher?.flush !== "function") {
+    throw new Error("Shutdown Journal durability cannot be proven because EventPublisher.flush is unavailable")
+  }
+  const result = await context.eventPublisher.flush()
+  if (result?.ok !== true || result?.durable !== true) {
+    throw result?.errors?.[0] ?? new Error("Shutdown Journal durability was not proven")
+  }
+}
+
+async function proveStrategySafety(context) {
+  const participants = context.strategyShutdownCoordinator.getSafetySnapshot()
+  if (context.tradingEnabled && participants.length === 0) {
+    const error = new Error("Trading is enabled but no strategy shutdown participant is registered")
+    error.code = "NO_STRATEGY_SHUTDOWN_PARTICIPANTS"
+    throw error
+  }
+  const result = await context.failureRecorder.runPhaseSafely({
+    phase: "STRATEGY_SHUTDOWN_SAFETY",
+    operation: () => context.strategyShutdownCoordinator.waitUntilSafe(),
+    stage: "STRATEGY_SHUTDOWN_SAFETY",
+    message: "Strategy shutdown safety could not be proven",
+    auditReason: "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN",
+  })
+  if (result?.ok === false) {
+    throw result.errors?.[0] ?? new Error("Strategy shutdown safety could not be proven")
+  }
+  if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
+    const error = new Error("At least one strategy invalidated its shutdown safety marker")
+    error.code = "STRATEGY_SHUTDOWN_SAFETY_INVALIDATED"
+    throw error
+  }
+}
+
+async function reproveStrategySafety(context) {
+  try {
+    await proveStrategySafety(context)
+  } catch (error) {
+    await publishClosingAudit(context)
+    if (context.snapshotError) {
+      throw context.snapshotError
+    }
+    throw error
+  }
+}
+
+async function stopOperatorControlAfterSafety(context) {
+  if (typeof context.beforeSharedServicesStop !== "function") {
+    return
+  }
+  const result = await context.failureRecorder.runPhaseSafely({
+    phase: "OPERATOR_CONTROL_STOP",
+    operation: () => context.beforeSharedServicesStop(),
+    stage: "OPERATOR_CONTROL_STOP",
+    message: "Operator control shutdown failed",
+  })
+  context.preShutdownErrors.push(...getResultErrors({
+    result,
+    fallbackMessage: "Operator control shutdown failed",
+  }))
+}
+
 async function runShutdownLifecycle(context) {
-  await stopMarketIntakeAndDrain(context)
-  await reconcileOrdersBeforeBuyCancellation(context)
-  await stopUserDataIntakeAndDrain(context)
-  await reconcileRecoveryAndAuditCoverage(context)
+  await proveStrategySafety(context)
   await publishClosingAudit(context)
+  if (context.snapshotError) { throw context.snapshotError }
+  if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
+    await reproveStrategySafety(context)
+    await publishClosingAudit(context)
+    if (context.snapshotError) { throw context.snapshotError }
+  }
+
+  const userDataErrors = await stopUserDataIntakeAndDrain(context)
+  if (userDataErrors.length > 0) {
+    await publishClosingAudit(context)
+    if (context.snapshotError) { throw context.snapshotError }
+    throw new AggregateError(userDataErrors, "User-data intake could not be stopped and drained safely")
+  }
+
+  if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
+    await reproveStrategySafety(context)
+    await publishClosingAudit(context)
+    if (context.snapshotError) { throw context.snapshotError }
+  }
+  try {
+    await flushShutdownJournal(context)
+  } catch (error) {
+    context.auditReasons.push("JOURNAL_NOT_DURABLE")
+    await publishClosingAudit(context)
+    if (context.snapshotError) { throw context.snapshotError }
+    throw error
+  }
+  if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
+    await reproveStrategySafety(context)
+    await publishClosingAudit(context)
+    if (context.snapshotError) { throw context.snapshotError }
+    try {
+      await flushShutdownJournal(context)
+    } catch (error) {
+      context.auditReasons.push("JOURNAL_NOT_DURABLE")
+      await publishClosingAudit(context)
+      if (context.snapshotError) { throw context.snapshotError }
+      throw error
+    }
+  }
+
+  await stopOperatorControlAfterSafety(context)
+  await stopMarketIntakeAndDrain(context)
   await disconnectBroker(context)
   finalizeShutdown({
     context,
@@ -668,77 +637,196 @@ async function runShutdownLifecycle(context) {
 /**
  * Create an idempotent Harvester shutdown handler.
  *
- * The shutdown path drains accepted work, reconciles owned BUYs, stops user-data
- * intake, then reconciles and verifies recovery SELL coverage against the final
- * accounting state. Shutdown recovery can submit SELLs only; it cannot submit
- * a new standing BUY.
+ * The application coordinator waits for strategy-owned safety participants
+ * before stopping shared services. Conservative owns BUY gating, order/fill
+ * reconciliation and recovery SELL coverage; other strategies keep separate
+ * shutdown policies.
  */
+function createShutdownRequestContext({
+  options,
+  state,
+  now,
+  runtimeSessionId,
+  strategyShutdownCoordinator,
+  stopOptions,
+} = {}) {
+  const {
+    requestedAt,
+    requestLogged = false,
+    stopStateEstablishedLogged = false,
+    preShutdownErrors = [],
+    beforeSharedServicesStop,
+  } = stopOptions
+  const shutdownRequestedAt = requestedAt ?? now()
+  const shutdownCorrelationId = runtimeSessionId ?? null
+  const phaseRunner = createPhaseRunner({
+    logger: options.logger,
+    now,
+    shutdownRequestedAt,
+    shutdownCorrelationId,
+  })
+  if (!requestLogged) {
+    phaseRunner.logPhase({
+      phase: "SHUTDOWN_REQUESTED",
+      status: "COMPLETED",
+      durationMs: 0,
+    })
+  }
+
+  const shutdownStartedFromStatus = state.status
+  const stateEstablishedAt = now()
+  state.stopped = true
+  state.ready = false
+  state.status = "STOPPING"
+  if (!stopStateEstablishedLogged) {
+    phaseRunner.logPhase({
+      phase: "STOP_STATE_ESTABLISHED",
+      status: "COMPLETED",
+      durationMs: Math.max(0, stateEstablishedAt - shutdownRequestedAt),
+    })
+  }
+
+  const context = createShutdownContext({
+    options: {
+      ...options,
+      now,
+      runtimeSessionId,
+      strategyShutdownCoordinator,
+    },
+    stopOptions: {
+      preShutdownErrors,
+      shutdownStartedFromStatus,
+      beforeSharedServicesStop,
+    },
+    shutdownRequestedAt,
+  })
+  context.phaseRunner = phaseRunner
+  context.failureRecorder = createFailureRecorder({
+    context,
+    phaseRunner,
+  })
+  return {
+    context,
+    phaseRunner,
+    shutdownRequestedAt,
+  }
+}
+
+function reportShutdownFailure({ error, context, state, options, phaseRunner, shutdownRequestedAt, now } = {}) {
+  context.strategyShutdownError = error
+  state.status = "SHUTDOWN_INCOMPLETE"
+  const diagnostics = createShutdownDiagnostics({
+    context,
+    cleanupErrors: [error],
+  })
+  error.shutdownDiagnostics = {
+    ...diagnostics,
+    ...(error.shutdownDiagnostics ?? {}),
+    strategyBlockers: error.shutdownDiagnostics?.strategyBlockers ?? diagnostics.strategyBlockers,
+  }
+  options.logger?.error?.({
+    message: "Shutdown safety or durability was not proven; required runtime services remain connected",
+    ...error.shutdownDiagnostics,
+  })
+  phaseRunner.logPhase({
+    phase: "SHUTDOWN_FAILED",
+    status: "FAILED",
+    durationMs: Math.max(0, now() - shutdownRequestedAt),
+    failureReason: error.code ?? error.name ?? "SHUTDOWN_INCOMPLETE",
+  })
+  throw error
+}
+
+function reportShutdownSetupFailure({ error, state, options, now, runtimeSessionId, strategyShutdownCoordinator } = {}) {
+  const shutdownStartedFromStatus = state.status
+  state.stopped = true
+  state.ready = false
+  const shutdownRequestedAt = now()
+  const phaseRunner = createPhaseRunner({
+    logger: options.logger,
+    now,
+    shutdownRequestedAt,
+    shutdownCorrelationId: runtimeSessionId ?? null,
+  })
+  return reportShutdownFailure({
+    error,
+    state,
+    options,
+    phaseRunner,
+    shutdownRequestedAt,
+    now,
+    context: {
+      shutdownStartedFromStatus,
+      shutdownCorrelationId: runtimeSessionId ?? null,
+      auditReasons: [],
+      recoverySellFindings: [],
+      stageFailures: [],
+      state,
+      unresolvedOrders: [],
+      strategyShutdownCoordinator,
+    },
+  })
+}
+
+function createStopHandler({ options, state, now, runtimeSessionId, strategyShutdownCoordinator } = {}) {
+  let shutdownPromise
+  return function stop(stopOptions = {}) {
+    if (shutdownPromise) {
+      return shutdownPromise
+    }
+    try {
+      strategyShutdownCoordinator.beginShutdown()
+      const { context, phaseRunner, shutdownRequestedAt } = createShutdownRequestContext({
+        options,
+        state,
+        now,
+        runtimeSessionId,
+        strategyShutdownCoordinator,
+        stopOptions,
+      })
+      shutdownPromise = runShutdownLifecycle(context).catch((error) => {
+        shutdownPromise = undefined
+        return reportShutdownFailure({
+          error,
+          context,
+          state,
+          options,
+          phaseRunner,
+          shutdownRequestedAt,
+          now,
+        })
+      })
+    } catch (error) {
+      shutdownPromise = Promise.reject(error).catch((failure) => {
+        shutdownPromise = undefined
+        return reportShutdownSetupFailure({
+          error: failure,
+          state,
+          options,
+          now,
+          runtimeSessionId,
+          strategyShutdownCoordinator,
+        })
+      })
+    }
+    return shutdownPromise
+  }
+}
+
 export function createShutdownHandler(options = {}) {
   const {
     state,
     now = () => performance.now(),
     runtimeSessionId,
   } = options
-  let shutdownPromise
-  return function stop({
-    requestedAt,
-    requestLogged = false,
-    stopStateEstablishedLogged = false,
-    preShutdownErrors = [],
-  } = {}) {
-    if (shutdownPromise) {
-      return shutdownPromise
-    }
-    if (state.stopped) {
-      return Promise.resolve()
-    }
-
-    const shutdownRequestedAt = requestedAt ?? now()
-    const shutdownCorrelationId = runtimeSessionId ?? null
-    const phaseRunner = createPhaseRunner({
-      logger: options.logger,
-      now,
-      shutdownRequestedAt,
-      shutdownCorrelationId,
-    })
-    if (!requestLogged) {
-      phaseRunner.logPhase({
-        phase: "SHUTDOWN_REQUESTED",
-        status: "COMPLETED",
-        durationMs: 0,
-      })
-    }
-    const shutdownStartedFromStatus = state.status
-    const stateEstablishedAt = now()
-    state.stopped = true
-    state.ready = false
-    state.status = "STOPPING"
-    if (!stopStateEstablishedLogged) {
-      phaseRunner.logPhase({
-        phase: "STOP_STATE_ESTABLISHED",
-        status: "COMPLETED",
-        durationMs: Math.max(0, stateEstablishedAt - shutdownRequestedAt),
-      })
-    }
-
-    const context = createShutdownContext({
-      options: {
-        ...options,
-        now,
-        runtimeSessionId,
-      },
-      stopOptions: {
-        preShutdownErrors,
-        shutdownStartedFromStatus,
-      },
-      shutdownRequestedAt,
-    })
-    context.phaseRunner = phaseRunner
-    context.failureRecorder = createFailureRecorder({
-      context,
-      phaseRunner,
-    })
-    shutdownPromise = runShutdownLifecycle(context)
-    return shutdownPromise
-  }
+  const strategyShutdownCoordinator = createStrategyShutdownCoordinator({
+    participants: options.strategyShutdownParticipants ?? [],
+  })
+  return createStopHandler({
+    options,
+    state,
+    now,
+    runtimeSessionId,
+    strategyShutdownCoordinator,
+  })
 }

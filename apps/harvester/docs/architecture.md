@@ -557,19 +557,28 @@ unreconciled quantities. This covers the ordinary cancel/replace path without
 claiming durable restart or stream-recovery reconciliation.
 
 During graceful shutdown, BUY fills do not invoke the ordinary strategy
-evaluator. The event workflow records a per-market recovery-replan request, and
-the shutdown coordinator processes it only after BUY cancellation, user-data
-intake stop and final fill reconciliation. The final owned SELL is compared
+evaluator. The event workflow records a per-market recovery-replan request. The
+Conservative participant keeps user-data intake alive while it cancels owned
+BUYs and reconciles pending identities, cancellation outcomes, racing fills and
+actual commissions. It then recalculates and verifies recovery SELL coverage
+from the resulting Position and RecoveryLedger. The final owned SELL is compared
 with the policy plan using authoritative `Position.spent` (accumulated BUY
 cost, including actual commissions) and `RecoveryLedger.netSellProceeds`
 (confirmed net SELL proceeds), plus retained quantity, minimum profit and
-existing owned SELL commitments. The legacy `RecoveryLedger.buyCost` mirror is checked for consistency
-with `Position.spent`, but is never used to calculate the recovery plan. A stale SELL is canceled and its terminal fills reconciled before
-a SELL-only replacement is submitted. If the pair is paused, market data is
-stale, cancellation/submission is unresolved, or the replacement cannot be
+existing owned SELL commitments. The legacy `RecoveryLedger.buyCost` mirror is
+checked for consistency with `Position.spent`, but is never used to calculate
+the recovery plan. A stale SELL is canceled and its terminal fills reconciled
+before a SELL-only replacement is submitted. If the pair is paused, market data
+is stale, cancellation/submission is unresolved, or the replacement cannot be
 verified, the final coverage audit fails and CLOSING cannot report COMPLETE.
-External orders remain unowned and untouched; `EXTERNAL_ORDERS_POLICIES.IGNORE`
-is preserved.
+The application coordinator stops user-data intake only after every strategy
+participant is safe, then drains accepted events. Any late evidence invalidates
+the affected market's safety marker and triggers reconciliation and recovery
+SELL replanning before the shared shutdown barrier can pass. External/manual
+orders remain unowned and untouched; their presence alone does not block
+shutdown safety. Actual unowned executions or unresolved account-wide
+ownership/balance discrepancies remain fail-closed.
+`EXTERNAL_ORDERS_POLICIES.IGNORE` is preserved.
 
 ## Trailing BUY lifecycle
 
@@ -607,7 +616,7 @@ The Journal is not trading-state authority and ordinary event delivery remains a
 - Conservative evaluation is composed from ordered gates, decision preparation, dust completion, portfolio allocation, preflight validation and submission-result handling. Submission gating is composed from separate state, volatility, and market-book checks; the extraction preserves the existing gate order and fail-closed outcomes. Shutdown orchestration is delegated to a lifecycle helper that retains stop-promise idempotency, operator-control cleanup, runtime drain and the durable process-stop boundary. Structured phase records use a monotonic clock and shared runtime-session correlation ID. They expose phase/status, elapsed time from shutdown request, phase duration and a bounded failure reason; the CLOSING Journal durability barrier is timed separately. The historical 2026-11-13 delay of 128.047 seconds remains unexplained because the raw evidence artifacts are not stored in the repository; do not infer a cause from the summary report.
 - Only selected strategy decisions and meaningful order/execution/state transitions should be published. Do not publish every market-price update.
 - Publish small serializable DTOs with stable order/fill identifiers and exact decimal strings. Do not pass domain class instances, SDK objects, raw exchange payloads, credentials, or whole account snapshots.
-- On normal shutdown, record the request and establish the stop state before operator-control cleanup; the stop state disables new market work and trading while user-data intake remains active. Stop market-price/book intake and drain accepted market work; perform initial owned-order reconciliation; cancel only acknowledged, strategy-owned BUYs; drain events that race cancellation; stop user-data intake and drain again; perform final owned-order reconciliation; then reconcile recovery SELL coverage. BUY fills received while stopping are applied through the idempotent Portfolio/RecoveryLedger transition and schedule deferred recovery replanning; they never trigger ordinary strategy evaluation. The shutdown replan validates remaining SELL quantity and financial sufficiency against final active Position, retained `keepQuantity`, actual commission-adjusted recovery cost/proceeds, minimum profit and owned SELL commitments. It confirms cancellation of stale owned SELLs before submitting a SELL-only replacement; it never submits a new BUY and never mutates external orders. A post-replan owned-order reconciliation and final coverage audit must pass before CLOSING. An open SELL is intentional only when its remaining quantity and proceeds satisfy the final plan; otherwise CLOSING is INCOMPLETE and shutdown remains SHUTDOWN_INCOMPLETE. Unresolved cancellation/submission outcomes, unavailable planning inputs, or failed coverage remain fail-closed. A failed Journal close must not skip broker/resource cleanup.
+- Conservative shutdown follows the strategy-participant protocol in [Journal Operations](./JOURNAL_OPERATIONS.md#strategy-owned-normal-shutdown) and the [canonical specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md#conservative-graceful-shutdown--protect-trading-before-stopping-services): activate strategy BUY gates first; keep market-price/user-data intake, operator control and Binance connectivity available while orders and recovery SELL coverage are reconciled; route accepted price updates through recovery-only evaluation while BUY paths remain blocked; stop shared services only after every participant is safe.
 - Document possible capture gaps before Journal becomes ready, after capacity/write failures, and on abrupt process or machine termination. Do not claim exactly-once delivery or unconditional durability.
 
 Package composition, event publication, and shutdown ordering are defined by Harvester's own architecture and application contracts. Broker-connected startup intentionally fails closed when Journal readiness or the durable PREFLIGHT audit is unavailable; order and cancellation intents likewise require a durable pre-write barrier.
@@ -805,7 +814,7 @@ process-global state.
 
 The source-verified shutdown sequence, cancellation/fill-race handling,
 CLOSING account audit, resource cleanup, and process-lock retention are defined
-in [Journal Operations — Normal shutdown](./JOURNAL_OPERATIONS.md#normal-shutdown).
+in [Journal Operations — Normal shutdown](./JOURNAL_OPERATIONS.md#strategy-owned-normal-shutdown).
 
 ## Runtime API and process boundary
 
@@ -907,3 +916,17 @@ The shutdown-recovery inventory, conservative evaluation stages and operational-
 The ordinary TRADE startup regression fixture is split into market/config, broker-port, fill and assertion helpers. This is test-structure-only; the original startup, fill, accounting and shutdown assertions are retained.
 
 Completed SELL recovery-cycle publication receives the same injected workflow dependencies as the completion audit, preserving durable lifecycle evidence and state cleanup.
+
+## Strategy-owned shutdown coordination
+
+The application layer coordinates shutdown across independently running strategies. It uses a small participant contract: strategyId, beginShutdown(), waitUntilSafe(), isSafeToShutdown(), and a safety snapshot. On SIGINT/SIGTERM, the coordinator calls every participant's beginShutdown() synchronously before awaiting any participant. It waits for all participants and rechecks their current safety markers before shared cleanup.
+
+A strategy participant owns its domain-specific shutdown policy. The Conservative participant owns the BUY gate, Harvester-owned BUY cancellation, order/fill/commission reconciliation, per-market safety markers and recovery SELL coverage. A future Recovery Seller participant must own its own gate, order policy and safety proof. The coordinator must not import strategy accounting, order ownership or recovery calculations.
+
+Conservative markets are audited independently. A market becomes SAFE_TO_SHUTDOWN only when all required evidence is reconciled and Journal-durable. Late execution evidence invalidates the affected marker. The coordinator cannot release shared services while any enabled market or strategy participant remains unsafe. Market-price intake, user-data intake, operator control and Binance connectivity remain available until the strategy-level barrier passes. Accepted market-price events continue recovery-only SELL evaluation; all BUY paths remain blocked.
+
+### Why this is not Express middleware
+
+Express middleware is a request/response pipeline: one request passes through ordered handlers and usually proceeds to the next handler. Shutdown is not one request with a fixed linear path. Multiple strategies own independent safety policies, may reconcile external exchange state concurrently, and can have previously safe state invalidated by late events.
+
+A middleware chain would blur strategy ownership and encourage a single generic shutdown policy. DDD application orchestration with strategy-owned participants is a better fit: the coordinator manages ordering and the shared-service barrier; each strategy's application/domain workflow proves its own safety. A small sequential pipeline can still be used for ordinary cleanup steps after all strategies are safe, but it must not decide trading safety.
