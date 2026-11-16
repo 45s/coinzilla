@@ -29,8 +29,8 @@ async function waitForTestSignal(...args) {
   try {
     await Promise.race([
       promise,
-      new Promise((...args) => {
-        const [, reject] = args
+      new Promise((...executorArgs) => {
+        const [, reject] = executorArgs
         timeout = setTimeout(() => {
           reject(new Error(
             `${label  } was not observed within ${  timeoutMs  }ms; diagnostics: ${ 
@@ -451,8 +451,8 @@ const makeVolatilityReadyBroker = (...args) => {
   } = {}) => ({
     ok: true,
     data: symbols.includes(symbol)
-      ? Array.from({ length: Math.min(limit ?? 100, 100) }, (...args) => {
-        const [, index] = args
+      ? Array.from({ length: Math.min(limit ?? 100, 100) }, (...callbackArgs) => {
+        const [, index] = callbackArgs
         return createCandle({
           symbol,
           openTime: index * 60_000
