@@ -48,7 +48,11 @@ const IPV6_BLOCKED_CIDRS = [
 
 function ipv4ToBigInt(address) {
   if (isIP(address) !== 4) {return null;}
-  let value = 0n;\n  for (const octet of address.split('.')) {\n    value = (value << 8n) | BigInt(octet);\n  }\n  return value;
+  let value = 0n;
+  for (const octet of address.split('.')) {
+    value = (value << 8n) | BigInt(octet);
+  }
+  return value;
 }
 
 function ipv6ToBigInt(address) {
@@ -78,7 +82,11 @@ function ipv6ToBigInt(address) {
   }
 
   if (groups.length !== 8 || groups.some((group) => !/^[0-9a-f]{1,4}$/.test(group))) {return null;}
-  let value = 0n;\n  for (const group of groups) {\n    value = (value << 16n) | BigInt(`0x${group}`);\n  }\n  return value;
+  let value = 0n;
+  for (const group of groups) {
+    value = (value << 16n) | BigInt(`0x${group}`);
+  }
+  return value;
 }
 
 function parseCidrNetwork({ address, family }) {
