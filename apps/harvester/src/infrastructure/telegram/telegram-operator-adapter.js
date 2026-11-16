@@ -72,43 +72,11 @@ function normalizeTelegramUserId(value) {
 }
 
 
-function createTelegramInteraction({ update }) {
-  return {
-    correlationId: `telegram:${update.update_id}`,
-    interactionType: update.callback_query ? "callback" : "message",
-    action: "UNKNOWN",
-    stage: "UPDATE_RECEIVED",
-    applicationOperationInvoked: false,
-    applicationOperationCompleted: false,
-    stateChanged: false,
-    failed: false,
-    rejected: false,
-    loggedErrors: new Set(),
-  }
-}
-
-function resolveCallbackAction(data) {
-  const control = /^cc:(?:ask|confirm):(PAUSE|RESUME):([A-Z0-9]{2,30})(?::\d+)?$/.exec(data ?? "")
-  if (control) { return { action: control[1], symbol: control[2] } }
-  const navigation = /^cc:(?:nav|refresh):(home|status|markets|pause|resume|positions|orders|balances)$/.exec(data ?? "")
-  if (navigation) { return { action: navigation[2] === "home" ? "MENU" : navigation[2].toUpperCase() } }
-  if (/^cc:cancel:\d+$/.test(data ?? "")) { return { action: "CANCEL" } }
-  return { action: "UNKNOWN" }
-}
-
-function callbackAuthorizationFailure({ callback, chat, userId, chatId, allowedUsers }) {
-  if (!callback || callback.from?.is_bot === true) { return "INVALID_CALLBACK_SENDER" }
-  if (chat?.type !== "private") { return "PRIVATE_CHAT_REQUIRED" }
-  if (!userId || chatId !== userId) { return "PRIVATE_CHAT_IDENTITY_MISMATCH" }
-  if (!allowedUsers.has(userId)) { return "USER_NOT_ALLOWLISTED" }
-  return undefined
-}
-
-function messageAuthorizationFailure({ message, userId, chatId }) {
-  if (message.chat?.type !== "private") { return "PRIVATE_CHAT_REQUIRED" }
-  if (message.from?.is_bot === true) { return "BOT_SENDER_NOT_ALLOWED" }
-  if (!userId || chatId !== userId) { return "PRIVATE_CHAT_IDENTITY_MISMATCH" }
-  return undefined
+function resolveMessageAction(parsed) {
+  if (parsed.type === "PAUSE_MENU") { return "PAUSE" }
+  if (parsed.type === "RESUME_MENU") { return "RESUME" }
+  if (parsed.type === "INVALID" && parsed.command) { return parsed.command }
+  return parsed.type
 }
 
 function createTelegramInteraction({ update, botUsername }) {
@@ -128,9 +96,7 @@ function createTelegramInteraction({ update, botUsername }) {
     Object.assign(interaction, resolveCallbackAction(update.callback_query.data))
   } else if (update.message) {
     const parsed = parseTelegramOperatorCommand(update.message.text, { botUsername })
-    interaction.action = parsed.type === "PAUSE_MENU" ? "PAUSE"
-      : parsed.type === "RESUME_MENU" ? "RESUME"
-        : parsed.type === "INVALID" && parsed.command ? parsed.command : parsed.type
+    interaction.action = resolveMessageAction(parsed)
     interaction.symbol = parsed.symbol
   }
   return interaction
@@ -1235,9 +1201,7 @@ export function createTelegramOperatorAdapter({
       })
       return
     }
-    interaction.action = parsed.type === "PAUSE_MENU" ? "PAUSE"
-      : parsed.type === "RESUME_MENU" ? "RESUME"
-        : parsed.type === "INVALID" && parsed.command ? parsed.command : parsed.type
+    interaction.action = resolveMessageAction(parsed)
     interaction.symbol = parsed.symbol
     if (!allowedUsers.has(userId)) {
       logStage({
