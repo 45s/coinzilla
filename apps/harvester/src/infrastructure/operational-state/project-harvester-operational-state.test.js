@@ -277,7 +277,7 @@ test("projects cancellation outcomes in a later process session against the orig
   assert.equal(result.data.orders[0].brokerOrderId, "broker-order-1")
 })
 
-test("projects a durable completed recovery cycle only after its full SELL execution fact", () => {
+function createCompletedRecoveryCycleProjectionRecords() {
   const sellIntent = record(5, "ORDER_SUBMISSION_INTENT", {
     clientOrderId: "harvester-recovery-sell-1",
     marketId: "binance:BTCUSDT",
@@ -346,10 +346,22 @@ test("projects a durable completed recovery cycle only after its full SELL execu
     keepQuantity: "0.01",
     freeQuantity: "0.01",
     inventoryDisposition: null,
-  }, `recovery-cycle-completed:binance:BTCUSDT:${  "c".repeat(64)}`)
-  const result = projectHarvesterOperationalState({
-    records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"), baseline(), started(), sellIntent, sellOutcome, sellFill, cycle],
-  })
+  }, `recovery-cycle-completed:binance:BTCUSDT:${"c".repeat(64)}`)
+  const records = [
+    record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+    baseline(),
+    started(),
+    sellIntent,
+    sellOutcome,
+    sellFill,
+    cycle,
+  ]
+  return { records, cycle }
+}
+
+test("projects a durable completed recovery cycle only after its full SELL execution fact", () => {
+  const { records, cycle } = createCompletedRecoveryCycleProjectionRecords()
+  const result = projectHarvesterOperationalState({ records })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
   assert.equal(result.data.recoveryCycles.length, 1, "The durable completion fact must be projected only after the fully filled SELL.")
