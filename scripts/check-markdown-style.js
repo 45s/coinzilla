@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
+import process from "node:process"
 
 import { findMarkdownDocuments } from "./check-agent-policy.js"
 import { collectMarkdownStyleBaseline } from "./markdown-style-baseline.js"
@@ -56,7 +57,7 @@ const FINDING_LABELS = Object.freeze({
   listSpacing: "list blocks without blank-line separation",
 })
 
-function matchesAny(path, patterns) {
+function matchesAny({ path, patterns }) {
   return patterns.some((pattern) => pattern.test(path))
 }
 
@@ -66,7 +67,10 @@ function matchesAny(path, patterns) {
  * @returns {boolean}
  */
 export function isHistoricalPath(path) {
-  return typeof path === "string" && matchesAny(path, HISTORICAL_PATHS)
+  return typeof path === "string" && matchesAny({
+    path,
+    patterns: HISTORICAL_PATHS,
+  })
 }
 
 /**
@@ -91,15 +95,23 @@ export function parseChangedMarkdownDiff(diffText) {
       const match = line.match(/^diff --git a\/(.+) b\/(.+)$/)
       const path = match?.[2]
       currentChange = path && /\.mdx?$/i.test(path)
-        ? { lines: new Set(), isNewFile: false, removedHeading: false }
+        ? {
+            lines: new Set(),
+            isNewFile: false,
+            removedHeading: false,
+          }
         : null
 
-      if (currentChange) changes.set(path, currentChange)
+      if (currentChange) {
+        changes.set(path, currentChange)
+      }
       inHunk = false
       continue
     }
 
-    if (!currentChange) continue
+    if (!currentChange) {
+      continue
+    }
 
     if (line.startsWith("new file mode ") || line === "--- /dev/null") {
       currentChange.isNewFile = true
@@ -113,7 +125,9 @@ export function parseChangedMarkdownDiff(diffText) {
       continue
     }
 
-    if (!inHunk || line.startsWith("\\")) continue
+    if (!inHunk || line.startsWith("\\")) {
+      continue
+    }
 
     if (line.startsWith("+")) {
       currentChange.lines.add(newLineNumber)
@@ -151,7 +165,7 @@ export function parseChangedMarkdownDiff(diffText) {
  * @param {Map<string, {lines: Set<number>, isNewFile: boolean, removedHeading?: boolean}>} changesByPath
  * @returns {{scannedFiles: number, skippedHistorical: number, violations: Record<string, Array<{path: string, count: number, lines: number[]}>>}}
  */
-export function analyzeMarkdownStyleDocuments(documents, changesByPath) {
+export function analyzeMarkdownStyleDocuments({ documents, changesByPath }) {
   if (!Array.isArray(documents)) {
     throw new TypeError("Markdown documents must be an array")
   }
@@ -174,20 +188,23 @@ export function analyzeMarkdownStyleDocuments(documents, changesByPath) {
   )
 
   for (const [name, entries] of Object.entries(baseline.findings)) {
-    if (REPORT_ONLY_FINDINGS.has(name)) continue
+    if (REPORT_ONLY_FINDINGS.has(name)) {continue}
     for (const entry of entries) {
       const change = changesByPath.get(entry.path)
       const document = documentsByPath.get(entry.path)
-      if (!change || !document) continue
+      if (!change || !document) {continue}
 
       if (
         HEADING_FINDINGS.has(name) &&
-        matchesAny(entry.path, TEMPLATE_HEADING_EXEMPTIONS)
+        matchesAny({
+          path: entry.path,
+          patterns: TEMPLATE_HEADING_EXEMPTIONS,
+        })
       ) {
         continue
       }
 
-      let isRelevant = false
+      let isRelevant
 
       if (FILE_LEVEL_FINDINGS.has(name)) {
         isRelevant = true
@@ -219,7 +236,9 @@ export function analyzeMarkdownStyleDocuments(documents, changesByPath) {
         )
       }
 
-      if (isRelevant) violations[name].push(entry)
+      if (isRelevant) {
+        violations[name].push(entry)
+      }
     }
   }
 
@@ -254,7 +273,11 @@ export function checkChangedMarkdownStyle(baseSha) {
       "*.md",
       "*.mdx",
     ],
-    { cwd: repositoryRoot, encoding: "utf8", maxBuffer: GIT_DIFF_MAX_BUFFER_BYTES },
+    {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+      maxBuffer: GIT_DIFF_MAX_BUFFER_BYTES,
+    },
   )
   const changesByPath = parseChangedMarkdownDiff(diffText)
   const discoveredDocuments = findMarkdownDocuments(repositoryRoot)
@@ -262,17 +285,20 @@ export function checkChangedMarkdownStyle(baseSha) {
     changesByPath.has(path),
   )
   const ignoredPaths = changesByPath.size - changedDocuments.length
-  const result = analyzeMarkdownStyleDocuments(changedDocuments, changesByPath)
+  const result = analyzeMarkdownStyleDocuments({
+    documents: changedDocuments,
+    changesByPath,
+  })
 
-  console.log(
-    `Changed Markdown style: scanned ${result.scannedFiles} maintained files; skipped ${result.skippedHistorical} historical files and ${ignoredPaths} generated/vendor paths.`,
+  process.stdout.write(
+    `Changed Markdown style: scanned ${result.scannedFiles} maintained files; skipped ${result.skippedHistorical} historical files and ${ignoredPaths} generated/vendor paths.\n`,
   )
 
   const violationEntries = Object.entries(result.violations).filter(
     ([, entries]) => entries.length > 0,
   )
   if (violationEntries.length === 0) {
-    console.log("Changed maintained Markdown lines satisfy the style standard.")
+    process.stdout.write("Changed maintained Markdown lines satisfy the style standard.\n")
     return result
   }
 
@@ -281,8 +307,8 @@ export function checkChangedMarkdownStyle(baseSha) {
       const lineDetail = entry.lines.length > 0
         ? ` (lines ${entry.lines.join(", ")})`
         : ""
-      console.error(
-        `- ${entry.path}: ${FINDING_LABELS[name]}${lineDetail}`,
+      process.stderr.write(
+        `- ${entry.path}: ${FINDING_LABELS[name]}${lineDetail}\n`,
       )
     }
   }
@@ -294,7 +320,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     checkChangedMarkdownStyle(process.argv[2])
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error))
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
     process.exitCode = 1
   }
 }

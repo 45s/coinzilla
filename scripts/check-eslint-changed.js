@@ -45,12 +45,14 @@ function parseChangedFileNames(output) {
       const previousPath = fields[index];
       const currentPath = fields[index + 1];
       index += 2;
-      changes.push({ path: currentPath, basePath: previousPath });
+      changes.push({ path: currentPath,
+basePath: previousPath });
     } else {
       const path = fields[index];
       index += 1;
       if (status[0] !== "D") {
-        changes.push({ path, basePath: status[0] === "A" ? null : path });
+        changes.push({ path,
+basePath: status[0] === "A" ? null : path });
       }
     }
   }
@@ -132,7 +134,8 @@ async function lintChangedFiles({ baseSha }) {
       if (remaining > 0) {
         baseline.set(key, remaining - 1);
       } else {
-        introduced.push({ filePath: change.path, message });
+        introduced.push({ filePath: change.path,
+message });
       }
     }
   }

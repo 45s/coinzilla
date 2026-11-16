@@ -14,7 +14,8 @@ import {
   shouldFailOnBroken,
 } from './check-external-links.js';
 
-function response(status, headers = {}) {
+function response(...args) {
+  const [status, headers = {}] = args;
   const values = new Map(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]));
   return {
     status,
@@ -23,7 +24,8 @@ function response(status, headers = {}) {
   };
 }
 
-function candidate(url, path = 'README.md') {
+function candidate(...args) {
+  const [url, path = 'README.md'] = args;
   return {
     status: 'candidate',
     url: new URL(url).href,
@@ -44,10 +46,10 @@ test('extracts inline, reference, autolink and bare HTTP(S) destinations outside
       '[reference]: <https://reference.example/guide>',
       '<https://auto.example/path>',
       'Plain URL: https://bare.example/path.',
-      tick.repeat(3) + 'md',
+      `${tick.repeat(3)  }md`,
       '[fenced](https://fenced.example/)',
       tick.repeat(3),
-      tick + '[inline code](https://inline-code.example/)' + tick,
+      `${tick  }[inline code](https://inline-code.example/)${  tick}`,
       '<!-- [comment](https://comment.example/) -->',
     ].join('\n'),
   }];
@@ -65,8 +67,10 @@ test('extracts inline, reference, autolink and bare HTTP(S) destinations outside
 
 test('deduplicates URL fragments and retains every source path', () => {
   const links = extractExternalLinks([
-    { path: 'README.md', content: '[one](https://same.example/path#one)' },
-    { path: 'docs/guide.md', content: '[two](https://same.example/path#two)' },
+    { path: 'README.md',
+content: '[one](https://same.example/path#one)' },
+    { path: 'docs/guide.md',
+content: '[two](https://same.example/path#two)' },
   ]);
 
   assert.equal(links.length, 1);
@@ -105,10 +109,13 @@ test('rejects and redacts credential-like query parameters without requesting th
   assert.ok(links.every((link) => link.status === 'invalid'));
   assert.doesNotMatch(JSON.stringify(links), /secret-(?:access|api|signature)/);
 
-  const extracted = extractExternalLinks(secrets.map((url, index) => ({
-    path: 'docs/' + index + '.md',
-    content: '[credential](<' + url + '>)',
-  })));
+  const extracted = extractExternalLinks(secrets.map((...args) => {
+    const [url, index] = args;
+    return {
+      path: `docs/${  index  }.md`,
+      content: `[credential](<${  url  }>)`,
+    };
+  }));
   assert.ok(extracted.every((link) => link.status === 'invalid'));
   assert.doesNotMatch(JSON.stringify(extracted), /secret-(?:access|api|signature)/);
 
@@ -125,7 +132,10 @@ test('rejects and redacts credential-like query parameters without requesting th
 test('keeps GET 404/410 unverifiable when HEAD first reports access control', async () => {
   for (const headStatus of [401, 403]) {
     const result = await checkExternalLink(candidate('https://access-controlled.example/'), {
-      fetchImpl: async (_url, options) => response(options.method === 'HEAD' ? headStatus : 404),
+      fetchImpl: async (...args) => {
+        const [, options] = args;
+        return response(options.method === 'HEAD' ? headStatus : 404);
+      },
       sleep: noDelay,
       minHostIntervalMs: 0,
     });
@@ -138,7 +148,8 @@ test('keeps GET 404/410 unverifiable when HEAD first reports access control', as
 test('HEAD success is sufficient and avoids a GET request', async () => {
   const methods = [];
   const result = await checkExternalLink(candidate('https://ok.example/'), {
-    fetchImpl: async (_url, options) => {
+    fetchImpl: async (...args) => {
+      const [, options] = args;
       methods.push(options.method);
       return response(200);
     },
@@ -153,8 +164,11 @@ test('HEAD success is sufficient and avoids a GET request', async () => {
 test('falls back to a ranged GET when HEAD is unsupported', async () => {
   const calls = [];
   const result = await checkExternalLink(candidate('https://head-blocked.example/'), {
-    fetchImpl: async (url, options) => {
-      calls.push({ url, method: options.method, range: options.headers.range });
+    fetchImpl: async (...args) => {
+      const [url, options] = args;
+      calls.push({ url,
+method: options.method,
+range: options.headers.range });
       return response(options.method === 'HEAD' ? 405 : 200);
     },
     sleep: noDelay,
@@ -168,12 +182,18 @@ test('falls back to a ranged GET when HEAD is unsupported', async () => {
 
 test('requires GET confirmation before classifying HEAD 404/410 as broken', async () => {
   const broken = await checkExternalLink(candidate('https://gone.example/'), {
-    fetchImpl: async (_url, options) => response(options.method === 'HEAD' ? 404 : 410),
+    fetchImpl: async (...args) => {
+      const [, options] = args;
+      return response(options.method === 'HEAD' ? 404 : 410);
+    },
     sleep: noDelay,
     minHostIntervalMs: 0,
   });
   const recovered = await checkExternalLink(candidate('https://head-false-positive.example/'), {
-    fetchImpl: async (_url, options) => response(options.method === 'HEAD' ? 404 : 200),
+    fetchImpl: async (...args) => {
+      const [, options] = args;
+      return response(options.method === 'HEAD' ? 404 : 200);
+    },
     sleep: noDelay,
     minHostIntervalMs: 0,
   });
@@ -348,8 +368,9 @@ test('checks host groups and returns stable results', async () => {
     candidate('https://other.example/c'),
   ];
   const results = await checkExternalLinks(links, {
-    fetchImpl: async (url, options) => {
-      calls.push(new URL(url).hostname + ':' + options.method);
+    fetchImpl: async (...args) => {
+      const [url, options] = args;
+      calls.push(`${new URL(url).hostname  }:${  options.method}`);
       return response(200);
     },
     sleep: noDelay,
@@ -363,9 +384,12 @@ test('checks host groups and returns stable results', async () => {
 
 test('changed-document selection excludes historical evidence paths', () => {
   const documents = [
-    { path: 'README.md', content: '[a](https://a.example)' },
-    { path: 'docs/guide.md', content: '[b](https://b.example)' },
-    { path: 'docs/audits/old.md', content: '[c](https://c.example)' },
+    { path: 'README.md',
+content: '[a](https://a.example)' },
+    { path: 'docs/guide.md',
+content: '[b](https://b.example)' },
+    { path: 'docs/audits/old.md',
+content: '[c](https://c.example)' },
   ];
   const selected = selectChangedMarkdownDocuments(documents, [
     'README.md',
@@ -387,7 +411,7 @@ test('classifies public IPv4 and rejects private, shared, reserved, and metadata
   assert.equal(typeof isPublicAddress, 'function', 'The checker must expose its deterministic IP-address policy for focused tests.');
 
   for (const address of ['8.8.8.8', '1.1.1.1', '93.184.216.34', '192.31.196.1', '192.52.193.1', '192.175.48.1']) {
-    assert.equal(isPublicAddress(address), true, address + ' is a globally routable IPv4 destination.');
+    assert.equal(isPublicAddress(address), true, `${address  } is a globally routable IPv4 destination.`);
   }
   for (const address of [
     '0.0.0.0', '10.0.0.1', '100.64.0.1', '100.100.100.200',
@@ -396,7 +420,7 @@ test('classifies public IPv4 and rejects private, shared, reserved, and metadata
     '198.51.100.1', '203.0.113.1', '224.0.0.1', '240.0.0.1',
     '255.255.255.255', '168.63.129.16',
   ]) {
-    assert.equal(isPublicAddress(address), false, address + ' is private, shared, reserved, multicast, link-local, or metadata-related and must never be requested.');
+    assert.equal(isPublicAddress(address), false, `${address  } is private, shared, reserved, multicast, link-local, or metadata-related and must never be requested.`);
   }
 });
 
@@ -411,7 +435,7 @@ test('classifies global IPv6 and rejects loopback, mapped, ULA, link-local, mult
     'fe80::1', 'ff02::1', '100::1', '100:0:0:1::1', '2001:1::1', '2001:2::1', '2001:3::1', '2001:4:112::1', '2001:20::1', '2001:30::1', '2001:db8::1',
     '2002:0808:0808::1', '3fff::1', '5f00::1', '64:ff9b::a9fe:a9fe',
   ]) {
-    assert.equal(isPublicAddress(address), false, address + ' is not an eligible globally routable IPv6 destination.');
+    assert.equal(isPublicAddress(address), false, `${address  } is not an eligible globally routable IPv6 destination.`);
   }
 });
 
@@ -420,20 +444,26 @@ test('validates every DNS answer and rejects mixed public/private answer sets', 
 
   const resolved = await resolvePublicAddresses('docs.example.com', {
     resolveHost: async () => [
-      { address: '8.8.8.8', family: 4 },
-      { address: '2606:4700:4700::1111', family: 6 },
+      { address: '8.8.8.8',
+family: 4 },
+      { address: '2606:4700:4700::1111',
+family: 6 },
     ],
   });
   assert.deepEqual(resolved, [
-    { address: '8.8.8.8', family: 4 },
-    { address: '2606:4700:4700::1111', family: 6 },
+    { address: '8.8.8.8',
+family: 4 },
+    { address: '2606:4700:4700::1111',
+family: 6 },
   ], 'Every vetted A/AAAA answer must be retained for connection pinning.');
 
   await assert.rejects(
     resolvePublicAddresses('mixed.example.com', {
       resolveHost: async () => [
-        { address: '8.8.8.8', family: 4 },
-        { address: '10.0.0.7', family: 4 },
+        { address: '8.8.8.8',
+family: 4 },
+        { address: '10.0.0.7',
+family: 4 },
       ],
     }),
     (error) => error.code === 'ERR_EXTERNAL_LINK_UNSAFE_ADDRESS',
@@ -454,26 +484,36 @@ test('pins socket lookup to vetted answers without resolving the hostname again'
       resolverCalls += 1;
       return resolverCalls === 1
         ? [
-          { address: '8.8.8.8', family: 4 },
-          { address: '2606:4700:4700::1111', family: 6 },
+          { address: '8.8.8.8',
+family: 4 },
+          { address: '2606:4700:4700::1111',
+family: 6 },
         ]
-        : [{ address: '127.0.0.1', family: 4 }];
+        : [{ address: '127.0.0.1',
+family: 4 }];
     },
-    requestImpl: (url, options, onResponse) => {
-      options.lookup(url.hostname, { all: true }, (error, addresses) => {
+    requestImpl: (...args) => {
+      const [url, options, onResponse] = args;
+      options.lookup(url.hostname, { all: true }, (...lookupArgs) => {
+        const [error, addresses] = lookupArgs;
         assert.equal(error, null, 'The socket lookup must return only addresses that passed DNS validation.');
         connectedAddresses = addresses;
       });
-      queueMicrotask(() => onResponse({ statusCode: 200, headers: {}, resume() {} }));
-      return { on() { return this; }, end() {} };
+      queueMicrotask(() => onResponse({ statusCode: 200,
+headers: {},
+resume() {} }));
+      return { on() { return this; },
+end() {} };
     },
   });
 
   assert.equal(result.status, 200, 'The pinned transport must preserve the HTTP response status.');
   assert.equal(resolverCalls, 1, 'A single request must not perform a second DNS lookup after validation.');
   assert.deepEqual(connectedAddresses, [
-    { address: '8.8.8.8', family: 4 },
-    { address: '2606:4700:4700::1111', family: 6 },
+    { address: '8.8.8.8',
+family: 4 },
+    { address: '2606:4700:4700::1111',
+family: 6 },
   ], 'The socket lookup must receive the complete vetted A/AAAA set and never the later private rebinding answer.');
 });
 
@@ -482,12 +522,15 @@ test('revalidates DNS for every redirect and blocks a redirect to a private addr
 
   const requestedHosts = [];
   const result = await checkExternalLink(candidate('https://public.example.com/start'), {
-    fetchImpl: (url, init) => fetchPinned(url, init, {
+    fetchImpl: (...fetchArguments) => {
+      const [url, init] = fetchArguments;
+      return fetchPinned(url, init, {
       resolveHost: async (hostname) => [{
         address: hostname === 'public.example.com' ? '8.8.8.8' : '127.0.0.1',
         family: 4,
       }],
-      requestImpl: (requestUrl, options, onResponse) => {
+      requestImpl: (...requestArguments) => {
+        const [requestUrl, options, onResponse] = requestArguments;
         requestedHosts.push(requestUrl.hostname);
         options.lookup(requestUrl.hostname, {}, (error) => {
           assert.equal(error, null, 'Only the already-vetted public redirect source may reach the socket lookup.');
@@ -497,9 +540,11 @@ test('revalidates DNS for every redirect and blocks a redirect to a private addr
           headers: { location: 'https://private-redirect.example.com/metadata' },
           resume() {},
         }));
-        return { on() { return this; }, end() {} };
+        return { on() { return this; },
+end() {} };
       },
-    }),
+      });
+    },
     sleep: noDelay,
     minHostIntervalMs: 0,
   });
@@ -512,16 +557,21 @@ test('revalidates DNS for every redirect and blocks a redirect to a private addr
 test('blocks an initial public-looking hostname when any DNS answer is private before opening a socket', async () => {
   let openedConnections = 0;
   const result = await checkExternalLink(candidate('https://mixed-answer.example.com/start'), {
-    fetchImpl: (url, init) => fetchPinned(url, init, {
+    fetchImpl: (...fetchArguments) => {
+      const [url, init] = fetchArguments;
+      return fetchPinned(url, init, {
       resolveHost: async () => [
-        { address: '8.8.8.8', family: 4 },
-        { address: '10.0.0.7', family: 4 },
+        { address: '8.8.8.8',
+family: 4 },
+        { address: '10.0.0.7',
+family: 4 },
       ],
       requestImpl: () => {
         openedConnections += 1;
         throw new Error('An unsafe DNS answer must be rejected before the request implementation is called.');
       },
-    }),
+      });
+    },
     sleep: noDelay,
     minHostIntervalMs: 0,
   });
@@ -563,7 +613,8 @@ test('does not start DNS resolution after the request signal has already expired
       signal: controller.signal,
       resolveHost: async () => {
         resolverCalls += 1;
-        return [{ address: '8.8.8.8', family: 4 }];
+        return [{ address: '8.8.8.8',
+family: 4 }];
       },
     }),
     (error) => error.message === 'request timeout already elapsed',
