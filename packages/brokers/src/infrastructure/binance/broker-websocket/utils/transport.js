@@ -4,7 +4,8 @@ const DEFAULT_CONNECT_TIMEOUT = 10_000
 const DEFAULT_CLOSE_TIMEOUT = 5_000
 const MAX_DIAGNOSTIC_TEXT_LENGTH = 256
 
-function safeDiagnosticText(value, maxLength = MAX_DIAGNOSTIC_TEXT_LENGTH) {
+function safeDiagnosticText(...args) {
+  const [value, maxLength = MAX_DIAGNOSTIC_TEXT_LENGTH] = args
   if (typeof value !== "string" || value.length === 0) return null
   return value
     .slice(0, maxLength)
@@ -22,7 +23,8 @@ function readHttpUpgradeStatus(...sources) {
   return null
 }
 
-function createWebSocketError(event, phase) {
+function createWebSocketError(...args) {
+  const [event, phase] = args
   const source = event?.error instanceof Error ? event.error : null
   const causeMessage = safeDiagnosticText(source?.message) ?? "Underlying WebSocket error"
   const cause = source ? new Error(causeMessage) : undefined
@@ -131,7 +133,8 @@ export class NativeWebSocketTransport {
       return Promise.reject(error)
     }
 
-    this.#connectPromise = new Promise((resolve, reject) => {
+    this.#connectPromise = new Promise((...args) => {
+      const [resolve, reject] = args
       this.#rejectConnect = reject
       this.#handlers = {
         open: () => {
@@ -230,7 +233,8 @@ export class NativeWebSocketTransport {
    * @param {string} [reason=""] - WebSocket close reason.
    * @returns {Promise<void>}
    */
-  close(code = 1000, reason = "") {
+  close(...args) {
+    const [code = 1000, reason = ""] = args
     if (this.#state === "closed") return Promise.resolve()
     if (this.#closePromise) return this.#closePromise
 
@@ -253,11 +257,12 @@ export class NativeWebSocketTransport {
   }
 
   /** @param {number} [code=1000] @param {string} [reason=""] @returns {Promise<void>} */
-  disconnect(code = 1000, reason = "") {
-    return this.close(code, reason)
+  disconnect(...args) {
+    return this.close(...args)
   }
 
-  #subscribe(type, listener) {
+  #subscribe(...args) {
+    const [type, listener] = args
     if (typeof listener !== "function") {
       throw new TypeError(`WebSocket ${type} listener must be a function`)
     }
@@ -267,7 +272,8 @@ export class NativeWebSocketTransport {
     return () => this.#listeners[type].delete(listener)
   }
 
-  #emit(type, value) {
+  #emit(...args) {
+    const [type, value] = args
     for (const listener of this.#listeners[type]) {
       try {
         listener(value)
@@ -277,7 +283,8 @@ export class NativeWebSocketTransport {
     }
   }
 
-  #beginClosing(code = 1000, reason = "") {
+  #beginClosing(...args) {
+    const [code = 1000, reason = ""] = args
     if (this.#state === "closed" || this.#state === "closing") return
     this.#state = "closing"
     this.#clearConnectTimer()
