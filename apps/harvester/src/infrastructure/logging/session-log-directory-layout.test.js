@@ -106,7 +106,9 @@ test("keeps structured logs and Journal records together while cumulative logs s
     await journal.close()
     await eventBus.close()
     await logging.close()
-    await rm(directory, { recursive: true,
-force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
