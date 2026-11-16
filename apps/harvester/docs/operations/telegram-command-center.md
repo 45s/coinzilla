@@ -2,11 +2,11 @@
 
 ## Scope and safety
 
-The Harvester Telegram Command Center is an optional operator interface. Inbound control defaults enabled in `operatorControl.telegram`; startup remains fail-closed and requires a valid private-chat user-ID allowlist and `TELEGRAM_BOT_TOKEN` in the runtime environment.
+The Harvester Telegram Command Center is an inbound operator interface, enabled by default in `operatorControl.telegram`. Startup remains fail-closed and requires a valid private-chat user-ID allowlist and `TELEGRAM_BOT_TOKEN` in the runtime environment.
 
 The Command Center is not an exchange kill switch. It cannot place, cancel, adopt or modify exchange orders; change strategies or configuration; bypass safety/recovery/volatility blockers; or execute arbitrary commands. A market pause suppresses new strategy BUYs and trailing-BUY replacements for that market only. Existing orders remain open and may still fill; fill accounting and recovery SELLs continue. User-data disconnect/reconnect and reconciliation do not clear an active operator pause. Operator pauses last only for the current process and are not restored after restart.
 
-## Enabling the Command Center
+## Configuring the Command Center
 
 1. `operatorControl.telegram.enabled` is `true` by default in `config/operator-control.js`.
 2. Set `TELEGRAM_USER_ID` in the runtime environment to your numeric Telegram sender user ID. The config module seeds `operatorControl.telegram.allowedUserIds` from this value; bootstrap validates it and merges it with any explicitly configured IDs. Invalid or missing values leave no usable allowlist and stop startup with a specific error.
