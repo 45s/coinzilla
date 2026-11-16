@@ -361,6 +361,7 @@ function createPortfolioStatsConsoleLine({ time, strategyPrefix, details } = {})
     ? portfolioLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3).concat("...")
     : portfolioLine
 }
+
 function formatStartupConsoleMessage(message) {
   const subscriptionMatch = /^Connected; subscribed to (\d+) enabled market\(s\)\. (.+)$/.exec(message)
   if (subscriptionMatch) {
