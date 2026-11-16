@@ -90,7 +90,8 @@ test("uses explicit build environment metadata when Git is unavailable", () => {
       COINZILLA_BUILD_COMMIT_DATE: "2026-11-08T22:00:00Z",
       COINZILLA_BUILD_WORKING_TREE: "clean",
     },
-    execFileSync: createGitRunner({ outputs: {}, failure: "rev-parse --show-toplevel" }),
+    execFileSync: createGitRunner({ outputs: {},
+      failure: "rev-parse --show-toplevel" }),
   })
 
   assert.deepEqual(metadata.source, {
@@ -110,7 +111,8 @@ test("keeps unavailable Git metadata explicit when no build environment is suppl
     version: "1.0.001",
     cwd: "C:/coinzilla",
     env: {},
-    execFileSync: createGitRunner({ outputs: {}, failure: "rev-parse --show-toplevel" }),
+    execFileSync: createGitRunner({ outputs: {},
+      failure: "rev-parse --show-toplevel" }),
   })
 
   assert.deepEqual(metadata.source, {
@@ -265,12 +267,12 @@ test("rejects malformed Git commit identifiers and falls back without inventing 
     execFileSync: (...parameters) => {
       const [, args] = parameters
       switch (args.join(" ")) {
-        case "rev-parse --show-toplevel":
-          return "C:/coinzilla"
-        case "rev-parse HEAD":
-          return "not-a-commit-sha"
-        default:
-          return assert.fail("Git capture must stop after rejecting an invalid HEAD identifier")
+      case "rev-parse --show-toplevel":
+        return "C:/coinzilla"
+      case "rev-parse HEAD":
+        return "not-a-commit-sha"
+      default:
+        return assert.fail("Git capture must stop after rejecting an invalid HEAD identifier")
       }
     },
   })

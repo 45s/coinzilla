@@ -51,28 +51,28 @@ function assertSupportedItemRules({ items }) {
 }
 
 function getValidationMessage({
-        value,
-        rule,
-      }) {
+  value,
+  rule,
+}) {
   switch (rule) {
-    case VR.required:
-      return value ? undefined : EM.required()
-    case VR.notEmptyString:
-      return typeof value !== 'string' || !value.trim() ? EM.emptyString() : undefined
-    case VR.num:
-      return typeof value !== 'number' || !Number.isFinite(value) ? EM.notNumber() : undefined
-    case VR.str:
-      return typeof value !== 'string' ? EM.notString() : undefined
-    case VR.fn:
-      return typeof value !== 'function' ? EM.notFunction() : undefined
-    case VR.notUndefined:
-      return typeof value === 'undefined' ? EM.undefined() : undefined
-    case VR.arr:
-      return !Array.isArray(value) ? EM.arr() : undefined
-    case VR.notEmptyArr:
-      return !Array.isArray(value) || value.length === 0 ? EM.emptyArray() : undefined
-    default:
-      return undefined
+  case VR.required:
+    return value ? undefined : EM.required()
+  case VR.notEmptyString:
+    return typeof value !== 'string' || !value.trim() ? EM.emptyString() : undefined
+  case VR.num:
+    return typeof value !== 'number' || !Number.isFinite(value) ? EM.notNumber() : undefined
+  case VR.str:
+    return typeof value !== 'string' ? EM.notString() : undefined
+  case VR.fn:
+    return typeof value !== 'function' ? EM.notFunction() : undefined
+  case VR.notUndefined:
+    return typeof value === 'undefined' ? EM.undefined() : undefined
+  case VR.arr:
+    return !Array.isArray(value) ? EM.arr() : undefined
+  case VR.notEmptyArr:
+    return !Array.isArray(value) || value.length === 0 ? EM.emptyArray() : undefined
+  default:
+    return undefined
   }
 }
 
@@ -83,7 +83,8 @@ function collectValidationErrors({ items }) {
     const messages = []
 
     for (const rule of rules) {
-      const message = getValidationMessage({ value, rule })
+      const message = getValidationMessage({ value,
+        rule })
       if (message !== undefined) {
         messages.push(message)
       }

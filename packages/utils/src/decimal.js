@@ -139,8 +139,10 @@ export function assertDecimalString({ value, field = "value" } = {}) {
 /** @param {{ left: string|bigint, right: string|bigint }} options @returns {string} Exact sum. */
 export function addDecimal({ left, right } = {}) {
   const aligned = alignDecimals({
-    left: parseDecimal({ value: left, field: "left" }),
-    right: parseDecimal({ value: right, field: "right" }),
+    left: parseDecimal({ value: left,
+      field: "left" }),
+    right: parseDecimal({ value: right,
+      field: "right" }),
   })
   return formatDecimalString({
     coefficient: aligned.left + aligned.right,
@@ -151,8 +153,10 @@ export function addDecimal({ left, right } = {}) {
 /** @param {{ left: string|bigint, right: string|bigint }} options @returns {string} Exact difference. */
 export function subtractDecimal({ left, right } = {}) {
   const aligned = alignDecimals({
-    left: parseDecimal({ value: left, field: "left" }),
-    right: parseDecimal({ value: right, field: "right" }),
+    left: parseDecimal({ value: left,
+      field: "left" }),
+    right: parseDecimal({ value: right,
+      field: "right" }),
   })
   return formatDecimalString({
     coefficient: aligned.left - aligned.right,
@@ -246,8 +250,10 @@ export function divideDecimal({ left, right, scale, rounding } = {}) {
 /** @param {{ left: string|bigint, right: string|bigint }} options @returns {-1|0|1} */
 export function compareDecimal({ left, right } = {}) {
   const aligned = alignDecimals({
-    left: parseDecimal({ value: left, field: "left" }),
-    right: parseDecimal({ value: right, field: "right" }),
+    left: parseDecimal({ value: left,
+      field: "left" }),
+    right: parseDecimal({ value: right,
+      field: "right" }),
   })
   if (aligned.left === aligned.right) {
     return 0
@@ -346,7 +352,8 @@ export function roundDecimalToIncrement({ value, increment, direction } = {}) {
     return formatDecimalString(parsedValue)
   }
 
-  const aligned = alignDecimals({ left: parsedValue, right: parsedIncrement })
+  const aligned = alignDecimals({ left: parsedValue,
+    right: parsedIncrement })
   const quotient = aligned.left / aligned.right
   const remainder = aligned.left % aligned.right
   let units = quotient

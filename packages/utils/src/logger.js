@@ -2,7 +2,8 @@ import { Console } from 'node:console'
 import { isProdMode, isTestingMode } from './environment-mode.js'
 import { formatLogContent, normalizeLogData } from './format-log-content.js'
 
-const outputConsole = new Console({ stdout: process.stdout, stderr: process.stderr })
+const outputConsole = new Console({ stdout: process.stdout,
+  stderr: process.stderr })
 
 const colors = {
   reset: '\x1b[0m',

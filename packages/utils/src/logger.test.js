@@ -120,7 +120,9 @@ describe('Logger transports and severity levels', () => {
   it('filters every standard severity at its configured threshold', () => {
     const entries = []
     const logger = new Logger({
-      transports: [createTransport({ name: 'capture', level: 'trace', entries })],
+      transports: [createTransport({ name: 'capture',
+        level: 'trace',
+        entries })],
     })
 
     for (const level of ['trace', 'debug', 'info', 'warn', 'error']) {
@@ -139,7 +141,9 @@ describe('Logger transports and severity levels', () => {
       const threshold = levels[index]
       const entries = []
       const logger = new Logger({
-        transports: [createTransport({ name: 'capture', level: threshold, entries })],
+        transports: [createTransport({ name: 'capture',
+          level: threshold,
+          entries })],
       })
 
       for (const level of levels) {
@@ -157,7 +161,9 @@ describe('Logger transports and severity levels', () => {
   it('assigns INFO severity to success and system semantic methods', () => {
     const entries = []
     const logger = new Logger({
-      transports: [createTransport({ name: 'capture', level: 'info', entries })],
+      transports: [createTransport({ name: 'capture',
+        level: 'info',
+        entries })],
     })
 
     logger.success({ message: 'completed' })
@@ -172,9 +178,15 @@ describe('Logger transports and severity levels', () => {
     const diagnosticEntries = []
     const logger = new Logger({
       transports: [
-        createTransport({ name: 'console', level: 'info', entries: consoleEntries }),
-        createTransport({ name: 'development-file', level: 'debug', entries: fileEntries }),
-        createTransport({ name: 'diagnostic-file', level: 'trace', entries: diagnosticEntries }),
+        createTransport({ name: 'console',
+          level: 'info',
+          entries: consoleEntries }),
+        createTransport({ name: 'development-file',
+          level: 'debug',
+          entries: fileEntries }),
+        createTransport({ name: 'diagnostic-file',
+          level: 'trace',
+          entries: diagnosticEntries }),
       ],
     })
 
@@ -195,8 +207,12 @@ describe('Logger transport configuration', () => {
     const fileEntries = []
     const logger = new Logger({
       transports: [
-        createTransport({ name: 'console', level: 'info', entries: consoleEntries }),
-        createTransport({ name: 'file', level: 'debug', entries: fileEntries }),
+        createTransport({ name: 'console',
+          level: 'info',
+          entries: consoleEntries }),
+        createTransport({ name: 'file',
+          level: 'debug',
+          entries: fileEntries }),
       ],
     })
 
@@ -223,7 +239,8 @@ describe('Logger transport configuration', () => {
 
   it('rejects invalid levels and unknown transport identifiers', () => {
     const logger = new Logger({
-      transports: [createTransport({ name: 'console', level: 'info' })],
+      transports: [createTransport({ name: 'console',
+        level: 'info' })],
     })
 
     assert.throws(() => logger.setLevel({ transport: 'console',
@@ -231,7 +248,8 @@ describe('Logger transport configuration', () => {
     assert.throws(() => logger.setLevel({ transport: 'missing',
       level: 'debug' }), /Unknown transport/)
     assert.throws(() => new Logger({
-      transports: [createTransport({ name: 'bad', level: 'verbose' })],
+      transports: [createTransport({ name: 'bad',
+        level: 'verbose' })],
     }), /Invalid log level/)
   })
 
@@ -240,7 +258,9 @@ describe('Logger transport configuration', () => {
     const closed = []
     const logger = new Logger({ transports: [] })
     const transport = {
-      ...createTransport({ name: 'temporary', level: 'trace', entries }),
+      ...createTransport({ name: 'temporary',
+        level: 'trace',
+        entries }),
       close() {
         closed.push('temporary')
       },
@@ -262,7 +282,9 @@ describe('Logger transport delivery', () => {
   it('provides consistent timestamp, severity, and redacted structured data to transports', () => {
     const entries = []
     const logger = new Logger({
-      transports: [createTransport({ name: 'capture', level: 'trace', entries })],
+      transports: [createTransport({ name: 'capture',
+        level: 'trace',
+        entries })],
     })
     const error = new TypeError('request failed', {
       cause: { message: 'nested failure',
@@ -308,7 +330,9 @@ describe('Logger transport delivery', () => {
             return Promise.reject(new Error('async failure'))
           },
         },
-        createTransport({ name: 'healthy', level: 'trace', entries: successfulEntries }),
+        createTransport({ name: 'healthy',
+          level: 'trace',
+          entries: successfulEntries }),
       ],
       onTransportError: ({ transport, error }) => errors.push({ transport,
         error }),
@@ -338,13 +362,17 @@ describe('Logger console output and cleanup', () => {
       logger.warn({ message: 'warn' })
       logger.error({ message: 'error' })
 
-      assert.equal(hasMessage({ lines: calls, message: '"message": "info"' }), true)
-      assert.equal(hasMessage({ lines: calls, message: '"message": "error"' }), true)
+      assert.equal(hasMessage({ lines: calls,
+        message: '"message": "info"' }), true)
+      assert.equal(hasMessage({ lines: calls,
+        message: '"message": "error"' }), true)
       if (process.env.NODE_ENV === 'production') {
-        assert.equal(hasMessage({ lines: calls, message: '"message": "debug"' }), false)
+        assert.equal(hasMessage({ lines: calls,
+          message: '"message": "debug"' }), false)
       }
       if (process.env.NODE_ENV === 'testing') {
-        assert.equal(hasMessage({ lines: calls, message: '"message": "warn"' }), false)
+        assert.equal(hasMessage({ lines: calls,
+          message: '"message": "warn"' }), false)
       }
     } finally {
       output.restore()

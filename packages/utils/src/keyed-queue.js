@@ -54,7 +54,8 @@ export function createKeyedQueue(options = {}) {
       if (!onError) {
         throw error
       }
-      return onError({ key, error })
+      return onError({ key,
+        error })
     })
 
     const tail = execution
@@ -74,5 +75,6 @@ export function createKeyedQueue(options = {}) {
     await Promise.all([...queues.values()])
   }
 
-  return Object.freeze({ enqueue, drain })
+  return Object.freeze({ enqueue,
+    drain })
 }
