@@ -31,7 +31,8 @@ const createShutdown = ({
   calls = [],
   logger = {},
   now,
-  runtimeSessionId
+  runtimeSessionId,
+  strategyShutdownParticipants = [],
 } = {}) => {
   const effectiveEngine = engine ? {
     reconcileRecoverySellsForShutdown: async () => {
@@ -59,6 +60,7 @@ const createShutdown = ({
     now,
     runtimeSessionId,
     tradingEnabled,
+    strategyShutdownParticipants,
     getTradingEngine: () => effectiveEngine,
     subscriptions,
     bookSubscriptions,
@@ -644,5 +646,178 @@ test("preserves nested shutdown replacement error messages, stacks, and causes",
     scenario.fixture.state.status,
     "SHUTDOWN_INCOMPLETE",
     "Preserving diagnostics must not weaken the incomplete-shutdown safety boundary.",
+  )
+})
+
+
+function createDeferredShutdownSafety() {
+  let resolve
+  const promise = new Promise((complete) => {
+    resolve = complete
+  })
+  return {
+    promise,
+    resolve,
+  }
+}
+
+test("activates every strategy shutdown gate before stopping any shared service", async () => {
+  const calls = []
+  const strategyShutdownParticipants = [
+    {
+      strategyId: "CONSERVATIVE",
+      beginShutdown: () => calls.push("conservative-buy-gate"),
+      waitUntilSafe: async () => {
+        calls.push("conservative-safe")
+        return { ok: true }
+      },
+    },
+    {
+      strategyId: "RECOVERY_SELLER",
+      beginShutdown: () => calls.push("recovery-seller-gate"),
+      waitUntilSafe: async () => {
+        calls.push("recovery-seller-safe")
+        return { ok: true }
+      },
+    },
+  ]
+  const fixture = createShutdown({
+    calls,
+    strategyShutdownParticipants,
+  })
+
+  await fixture.stop()
+
+  assert.deepEqual(
+    calls.slice(0, 2),
+    ["conservative-buy-gate", "recovery-seller-gate"],
+    "Every enabled strategy must activate its own shutdown policy synchronously before shared cleanup starts.",
+  )
+  assert.ok(
+    calls.indexOf("conservative-safe") < calls.indexOf("market-intake-stop") &&
+      calls.indexOf("recovery-seller-safe") < calls.indexOf("market-intake-stop"),
+    "Market intake must remain available until every strategy participant has independently proven safety.",
+  )
+  assert.ok(
+    calls.indexOf("conservative-safe") < calls.indexOf("broker-disconnect") &&
+      calls.indexOf("recovery-seller-safe") < calls.indexOf("broker-disconnect"),
+    "The shared broker connection must remain available until every strategy participant is safe.",
+  )
+})
+
+test("a safe strategy cannot release shared services while another strategy remains unsafe", async () => {
+  const calls = []
+  const unsafeStrategySafety = createDeferredShutdownSafety()
+  const conservativeSafe = createDeferredShutdownSafety()
+  const strategyShutdownParticipants = [
+    {
+      strategyId: "CONSERVATIVE",
+      beginShutdown: () => calls.push("conservative-buy-gate"),
+      waitUntilSafe: () => {
+        calls.push("conservative-safety-check")
+        return conservativeSafe.promise
+      },
+    },
+    {
+      strategyId: "RECOVERY_SELLER",
+      beginShutdown: () => calls.push("recovery-seller-gate"),
+      waitUntilSafe: () => {
+        calls.push("recovery-safety-check")
+        return unsafeStrategySafety.promise
+      },
+    },
+  ]
+  const fixture = createShutdown({
+    calls,
+    strategyShutdownParticipants,
+  })
+
+  const stopping = fixture.stop()
+  conservativeSafe.resolve({ ok: true })
+  await Promise.resolve()
+  await Promise.resolve()
+
+  assert.equal(
+    calls.includes("market-intake-stop"),
+    false,
+    "One safe strategy must not stop market intake while another strategy is still proving its own safety.",
+  )
+  assert.equal(
+    calls.includes("broker-disconnect"),
+    false,
+    "One safe strategy must not disconnect the shared broker while another strategy remains unsafe.",
+  )
+
+  unsafeStrategySafety.resolve({ ok: true })
+  await stopping
+
+  assert.ok(
+    calls.indexOf("market-intake-stop") > calls.indexOf("recovery-safety-check"),
+    "Shared market services may stop only after the last strategy participant has completed its safety check.",
+  )
+})
+
+test("keeps all recovery services connected when a strategy cannot prove shutdown safety", async () => {
+  const calls = []
+  const state = createState()
+  const strategyShutdownParticipants = [
+    {
+      strategyId: "CONSERVATIVE",
+      beginShutdown: () => calls.push("conservative-buy-gate"),
+      waitUntilSafe: async () => ({
+        ok: false,
+        blockers: [
+          {
+            symbol: "BTCUSDT",
+            reason: "OWNED_BUY_ORDER_UNKNOWN",
+          },
+        ],
+      }),
+    },
+  ]
+  const fixture = createShutdown({
+    calls,
+    state,
+    strategyShutdownParticipants,
+  })
+
+  await assert.rejects(
+    fixture.stop(),
+    (error) => {
+      assert.deepEqual(
+        error.shutdownDiagnostics?.strategyBlockers,
+        [
+          {
+            strategyId: "CONSERVATIVE",
+            symbol: "BTCUSDT",
+            reason: "OWNED_BUY_ORDER_UNKNOWN",
+          },
+        ],
+        "An unsafe participant must report the exact strategy, market and blocker.",
+      )
+      return true
+    },
+    "A strategy safety failure must reject shutdown instead of releasing recovery services.",
+  )
+
+  assert.equal(
+    calls.includes("market-intake-stop"),
+    false,
+    "Market-price and order-book intake must remain alive while a strategy has an unresolved owned BUY.",
+  )
+  assert.equal(
+    calls.includes("user-data-intake-stop"),
+    false,
+    "Binance user-data intake must remain alive while a strategy has an unresolved owned BUY.",
+  )
+  assert.equal(
+    calls.includes("broker-disconnect"),
+    false,
+    "Binance must remain connected while a strategy has an unresolved owned BUY.",
+  )
+  assert.notEqual(
+    state.status,
+    "STOPPED",
+    "The process must never report STOPPED when any strategy shutdown participant remains unsafe.",
   )
 })
