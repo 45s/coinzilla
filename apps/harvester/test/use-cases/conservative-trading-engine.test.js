@@ -257,7 +257,12 @@ function createFixtureEngine({
     getMarketMetadata: () => marketMetadata,
     getAccountSnapshot: () => accountSnapshot,
     updateTradingAccounting,
-    completeRecoveryCycle: () => toResult({ data: { eligible: true, freeQuantity: "1" } }),
+    completeRecoveryCycle: () => toResult({
+      data: {
+        eligible: true,
+        freeQuantity: "1",
+      },
+    }),
     canTrade,
     hasUnownedOpenOrdersForSymbol,
     hasUnresolvedHarvesterOpenOrdersForSymbol,
@@ -311,7 +316,11 @@ const createFixture = ({
     getPortfolio: () => portfolio,
     getRecoveryLedger: () => recoveryLedger,
     updateTradingAccounting: ({ fill } = {}) => {
-      const result = applyTradingAccounting({ portfolio, recoveryLedger, fill });
+      const result = applyTradingAccounting({
+        portfolio,
+        recoveryLedger,
+        fill,
+      });
       if (result.ok) {
         ({ portfolio, recoveryLedger } = result.data);
       }
@@ -995,13 +1004,27 @@ async function assertFinalRecoverySellReplacement(fixture) {
 }
 
 test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel its exact ID and replace from latest fills", async () => {
-  const fixture = createFixture({ deferFirstSell: true,
-deferCancellation: true });
+  const fixture = createFixture({
+    deferFirstSell: true,
+    deferCancellation: true,
+  });
   const scenario = await startDeferredRecoveryScenario(fixture);
-  const { sellFillEvent } = await completeDeferredRecoverySellCancellation({ fixture, ...scenario });
+  const { sellFillEvent } = await completeDeferredRecoverySellCancellation({
+    fixture,
+    ...scenario,
+  });
 
-  assertCanceledRecoverySellSequence({ fixture, pendingSellOrder: scenario.pendingSellOrder });
-  assertReconciledFillAccounting({ fixture, sellFillEvent });
-  await assertDuplicateFillIsIdempotent({ fixture, secondBuy: scenario.secondBuy });
+  assertCanceledRecoverySellSequence({
+    fixture,
+    pendingSellOrder: scenario.pendingSellOrder,
+  });
+  assertReconciledFillAccounting({
+    fixture,
+    sellFillEvent,
+  });
+  await assertDuplicateFillIsIdempotent({
+    fixture,
+    secondBuy: scenario.secondBuy,
+  });
   await assertFinalRecoverySellReplacement(fixture);
 });
