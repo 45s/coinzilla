@@ -65,14 +65,14 @@ describe("normalizeDecimalString", () => {
   it("rejects negative values when the caller requires a non-negative amount", () => {
     assert.equal(
       normalizeDecimalString({ value: "-0.01",
-allowNegative: false }).ok,
+        allowNegative: false }).ok,
       false,
     )
     assert.deepEqual(
       normalizeDecimalString({ value: "-0.00",
-allowNegative: false }),
+        allowNegative: false }),
       { value: "0",
-ok: true },
+        ok: true },
     )
   })
 
@@ -81,7 +81,7 @@ ok: true },
     const result = normalizeDecimalString(input)
 
     assert.deepEqual(result, { value: "1.23",
-ok: true })
+      ok: true })
     assert.deepEqual(input, { value: " 01.2300 " })
   })
 })
