@@ -58,7 +58,7 @@ Historical completion uses Binance server time sampled immediately before the kl
 
 ### Accepted cross-domain market-stream liveness work — Harvester issue #760 / Brokers issue #1270
 
-**Status: IMPLEMENTED IN PR #1272; awaiting merge and final exact-head CI.** This is a coordinated Brokers-owned transport capability with Harvester-owned freshness/trading policy.
+**Status: IMPLEMENTED IN PR #1272; awaiting merge.** This is a coordinated Brokers-owned transport capability with Harvester-owned freshness/trading policy.
 
 - [x] Observe Binance server ping frames through Undici's `undici:websocket:ping` diagnostics channel, filter by the owned socket instance, and release the diagnostic subscription on close/setup failure.
 - [x] Add a 45-second server-heartbeat watchdog. Missing pings close the public Streams transport and use the existing bounded reconnect/resubscribe lifecycle; generic transport errors remain diagnostic and do not cause blind reconnects.
@@ -69,7 +69,7 @@ Historical completion uses Binance server time sampled immediately before the kl
 - [x] Add fake-clock tests for ping timeout/reconnect, heartbeat reset, per-stream receipt diagnostics, quiet markets, trade-ID gaps, targeted resubscription, recovery acknowledgement, retry exhaustion, and disposal races.
 - [x] Update [the WebSocket contract](../../docs/brokers-websocket-contract.md#public-market-data-liveness-and-recovery) and [package operations README](./README.md#binance-public-market-data-liveness).
 
-**Verification evidence:** the implementation passed Brokers unit tests and coverage thresholds, JavaScript syntax/lint, Harvester targeted tests, Utils unit tests, and dependency audit on code head `7d9a8f3cd409af4ad41e8a06e292e8b88e546cf1`. Documentation-only follow-up commits are being checked on the final PR head. No TESTNET/LIVE connection or order activity was performed.
+**Verification evidence:** Brokers unit tests and coverage thresholds, JavaScript syntax/lint, Harvester targeted tests, Utils unit tests, external documentation links, and dependency audit passed on code head `14edd73cab3071cc7966d8c2892ad2e828d8d531`. A final documentation-only clarification is included in the PR and will be rechecked before merge. No TESTNET/LIVE connection or order activity was performed.
 
 **Known limit:** a WebSocket ping proves transport liveness, not delivery of every logical stream. The per-symbol detector requires the rolling ticker to report a newer trade ID. If aggTrade and ticker delivery both stop while server pings continue, the broker cannot safely infer an exchange data-plane outage; the consumer stale-price gate remains fail-closed and operators need runtime evidence.
 
