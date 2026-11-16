@@ -11167,7 +11167,10 @@ test("invalidates and rechecks a safe market after a late owned SELL execution",
   const sellOrder = harness.engine.getOrders().find((order) =>
     order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
   assert.ok(sellOrder, "The safe market must retain an acknowledged recovery SELL.")
-  const lateEvidence = await applyLateRecoverySellFill({ harness, sellOrder })
+  const lateEvidence = await applyLateRecoverySellFill({
+    harness,
+    sellOrder,
+  })
 
   assert.equal(lateEvidence.ok, true, lateEvidence.errors?.[0]?.message)
   assertNoShutdownSafetyPauses({ harness })
