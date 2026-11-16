@@ -21,7 +21,8 @@ export function resolveTelegramOperatorConfig({ appConfig, env = process.env } =
     return appConfig
   }
   const operatorControl = appConfig.operatorControl ?? {}
-  const telegram = operatorControl.telegram ?? { enabled: false, allowedUserIds: [] }
+  const telegram = operatorControl.telegram ?? { enabled: false,
+allowedUserIds: [] }
   const configuredIds = telegram.allowedUserIds
   if (!Array.isArray(configuredIds)) {
     throw new TelegramUserIdConfigurationError(
@@ -32,7 +33,7 @@ export function resolveTelegramOperatorConfig({ appConfig, env = process.env } =
   for (const [index, id] of configuredIds.entries()) {
     if (!isCanonicalTelegramUserId(id)) {
       throw new TelegramUserIdConfigurationError(
-        "Invalid app config at operatorControl.telegram.allowedUserIds[" + index + "]: expected a canonical positive decimal Telegram user ID string",
+        `Invalid app config at operatorControl.telegram.allowedUserIds[${  index  }]: expected a canonical positive decimal Telegram user ID string`,
         "TELEGRAM_OPERATOR_ALLOWLIST_INVALID",
       )
     }
@@ -60,6 +61,8 @@ export function resolveTelegramOperatorConfig({ appConfig, env = process.env } =
   }
   return {
     ...appConfig,
-    operatorControl: { ...operatorControl, telegram: { ...telegram, allowedUserIds } },
+    operatorControl: { ...operatorControl,
+telegram: { ...telegram,
+allowedUserIds } },
   }
 }
