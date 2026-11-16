@@ -68,7 +68,9 @@ function updateMetrics({ state, logger } = {}) {
   try {
     if (state.fatalReason) {
       state.metrics = null
-      logUnavailable({ logger, state, reason: state.fatalReason })
+      logUnavailable({ logger, 
+        state, 
+        reason: state.fatalReason })
       return
     }
     const result = calculateVolatilityMetrics({
@@ -81,7 +83,9 @@ function updateMetrics({ state, logger } = {}) {
     })
     state.metrics = result.metrics
     if (result.reason) {
-      logUnavailable({ logger, state, reason: result.reason })
+      logUnavailable({ logger, 
+        state, 
+        reason: result.reason })
       return
     }
     const becameReady = state.reason !== null
@@ -100,7 +104,10 @@ function updateMetrics({ state, logger } = {}) {
     }
   } catch (error) {
     state.metrics = null
-    logUnavailable({ logger, state, reason: "INVALID_HISTORY", error })
+    logUnavailable({ logger, 
+      state, 
+      reason: "INVALID_HISTORY", 
+      error })
   }
 }
 
@@ -112,7 +119,8 @@ function appendCompletedCandles({ context, state, candles }) {
     state.pendingGapOpenTime = null
   }
   state.bufferOverflow = false
-  updateMetrics({ state, logger: context.logger })
+  updateMetrics({ state, 
+    logger: context.logger })
 }
 
 function createSnapshot({ context, symbol }) {
@@ -169,9 +177,11 @@ function createSnapshot({ context, symbol }) {
 }
 
 function notifySnapshot({ context, state }) {
-  const currentSnapshot = createSnapshot({ context, symbol: state.symbol })
+  const currentSnapshot = createSnapshot({ context, 
+    symbol: state.symbol })
   state.observerQueue = state.observerQueue
-    .then(() => context.snapshotObserver({ symbol: state.symbol, snapshot: currentSnapshot }))
+    .then(() => context.snapshotObserver({ symbol: state.symbol, 
+      snapshot: currentSnapshot }))
     .catch((error) => {
       context.logger.error?.({
         message: "Volatility snapshot observer failed",
@@ -207,7 +217,9 @@ async function backfillGap({ context, state, incomingCandle, nextCandleOpenTime 
     : Math.max(state.pendingGapOpenTime, lastMissingOpenTime)
   const missingCount = (nextOpenTime - expectedOpenTime) / CANDLE_INTERVAL_MS
   if (missingCount > MAX_BACKFILL_CANDLES) {
-    failMarket({ context, state, reason: "GAP_TOO_LARGE" })
+    failMarket({ context, 
+      state, 
+      reason: "GAP_TOO_LARGE" })
     return false
   }
 
@@ -221,7 +233,10 @@ async function backfillGap({ context, state, incomingCandle, nextCandleOpenTime 
       endTime: nextOpenTime - 1,
     })
   } catch (error) {
-    failMarket({ context, state, reason: "GAP_DETECTED", error })
+    failMarket({ context, 
+      state, 
+      reason: "GAP_DETECTED", 
+      error })
     return false
   }
   if (!result?.ok || !Array.isArray(result.data)) {
@@ -251,10 +266,15 @@ async function backfillGap({ context, state, incomingCandle, nextCandleOpenTime 
     const restoredCandles = incomingCandle
       ? [...backfill, incomingCandle]
       : backfill
-    appendCompletedCandles({ context, state, candles: restoredCandles })
+    appendCompletedCandles({ context, 
+      state, 
+      candles: restoredCandles })
     return true
   } catch (error) {
-    failMarket({ context, state, reason: "GAP_DETECTED", error })
+    failMarket({ context, 
+      state, 
+      reason: "GAP_DETECTED", 
+      error })
     return false
   }
 }
@@ -272,33 +292,46 @@ async function processLiveCandle({ context, state, candle, receivedAt }) {
 
   if (!validated.isClosed) {
     if (existing?.isClosed) {
-      failMarket({ context, state, reason: "CANDLE_CONFLICT", fatal: true })
+      failMarket({ context, 
+        state, 
+        reason: "CANDLE_CONFLICT", 
+        fatal: true })
       return
     }
     if (latest && validated.openTime < latest.openTime) {
       if (validated.openTime < oldest.openTime) {
         return
       }
-      failMarket({ context, state, reason: "OUT_OF_ORDER_CANDLE", fatal: true })
+      failMarket({ context, 
+        state, 
+        reason: "OUT_OF_ORDER_CANDLE", 
+        fatal: true })
       return
     }
 
     state.lastEventAt = receivedAt
     if (latest && validated.openTime > latest.openTime + CANDLE_INTERVAL_MS) {
-      await backfillGap({ context, state, nextCandleOpenTime: validated.openTime })
+      await backfillGap({ context, 
+        state, 
+        nextCandleOpenTime: validated.openTime })
     }
     return
   }
 
   if (state.candles.length === 0) {
     state.lastEventAt = receivedAt
-    appendCompletedCandles({ context, state, candles: [validated] })
+    appendCompletedCandles({ context, 
+      state, 
+      candles: [validated] })
     return
   }
 
   if (existing) {
     if (!areCandlesEqual(existing, validated)) {
-      failMarket({ context, state, reason: "CANDLE_CONFLICT", fatal: true })
+      failMarket({ context, 
+        state, 
+        reason: "CANDLE_CONFLICT", 
+        fatal: true })
     } else if (existing.openTime === latest.openTime) {
       state.lastEventAt = receivedAt
     }
@@ -309,18 +342,25 @@ async function processLiveCandle({ context, state, candle, receivedAt }) {
     if (validated.openTime < oldest.openTime) {
       return
     }
-    failMarket({ context, state, reason: "OUT_OF_ORDER_CANDLE", fatal: true })
+    failMarket({ context, 
+      state, 
+      reason: "OUT_OF_ORDER_CANDLE", 
+      fatal: true })
     return
   }
 
   state.lastEventAt = receivedAt
   const missingCount = (validated.openTime - latest.openTime) / CANDLE_INTERVAL_MS - 1
   if (missingCount > 0) {
-    await backfillGap({ context, state, incomingCandle: validated })
+    await backfillGap({ context, 
+      state, 
+      incomingCandle: validated })
     return
   }
 
-  appendCompletedCandles({ context, state, candles: [validated] })
+  appendCompletedCandles({ context, 
+    state, 
+    candles: [validated] })
 }
 
 function receiveCandle({ context, state, candle }) {
@@ -332,10 +372,14 @@ function receiveCandle({ context, state, candle }) {
   if (!state.initialized) {
     if (state.bufferedEvents.length >= MAX_BUFFERED_LIVE_EVENTS) {
       state.bufferOverflow = true
-      failMarket({ context, state, reason: "LIVE_BUFFER_OVERFLOW" })
-      return notifySnapshot({ context, state })
+      failMarket({ context, 
+        state, 
+        reason: "LIVE_BUFFER_OVERFLOW" })
+      return notifySnapshot({ context, 
+        state })
     }
-    state.bufferedEvents.push({ candle, receivedAt })
+    state.bufferedEvents.push({ candle, 
+      receivedAt })
     return Promise.resolve()
   }
 
@@ -354,9 +398,17 @@ function receiveCandle({ context, state, candle }) {
   }
 
   state.queue = state.queue
-    .then(() => processLiveCandle({ context, state, candle, receivedAt }))
-    .catch((error) => failMarket({ context, state, reason: "INVALID_CANDLE", error, fatal: true }))
-    .then(() => notifySnapshot({ context, state }))
+    .then(() => processLiveCandle({ context, 
+      state, 
+      candle, 
+      receivedAt }))
+    .catch((error) => failMarket({ context, 
+      state, 
+      reason: "INVALID_CANDLE", 
+      error, 
+      fatal: true }))
+    .then(() => notifySnapshot({ context, 
+      state }))
   return state.queue
 }
 
@@ -374,10 +426,15 @@ async function subscribeMarket({ context, state, subscriptions }) {
     result = await context.broker.subscribeForCandles({
       symbol: state.symbol,
       interval: CANDLE_INTERVAL,
-      onCandle: (candle) => receiveCandle({ context, state, candle }),
+      onCandle: (candle) => receiveCandle({ context, 
+        state, 
+        candle }),
     })
   } catch (error) {
-    failMarket({ context, state, reason: "SUBSCRIPTION_FAILED", error })
+    failMarket({ context, 
+      state, 
+      reason: "SUBSCRIPTION_FAILED", 
+      error })
     return
   }
   if (!result?.ok || typeof result.data?.unsubscribe !== "function") {
@@ -432,7 +489,10 @@ async function loadInitialHistory({ context, state }) {
     })
   } catch (error) {
     state.initialized = true
-    failMarket({ context, state, reason: "HISTORY_UNAVAILABLE", error })
+    failMarket({ context, 
+      state, 
+      reason: "HISTORY_UNAVAILABLE", 
+      error })
     return
   }
   if (!result?.ok || !Array.isArray(result.data)) {
@@ -456,15 +516,21 @@ async function loadInitialHistory({ context, state }) {
     const completed = historical.filter((candle) => candle.isClosed).slice(-HISTORY_SIZE)
     state.candles = Object.freeze(completed)
     state.initialized = true
-    updateMetrics({ state, logger: context.logger })
+    updateMetrics({ state, 
+      logger: context.logger })
     if (state.bufferOverflow) {
       state.metrics = null
-      logUnavailable({ logger: context.logger, state, reason: "LIVE_BUFFER_OVERFLOW" })
+      logUnavailable({ logger: context.logger, 
+        state, 
+        reason: "LIVE_BUFFER_OVERFLOW" })
     }
   } catch (error) {
     state.candles = Object.freeze([])
     state.initialized = true
-    failMarket({ context, state, reason: "INVALID_HISTORY", error })
+    failMarket({ context, 
+      state, 
+      reason: "INVALID_HISTORY", 
+      error })
   }
 
   const { bufferedEvents } = state
@@ -477,11 +543,17 @@ async function loadInitialHistory({ context, state }) {
         candle: event.candle,
         receivedAt: event.receivedAt,
       }))
-      .catch((error) => failMarket({ context, state, reason: "INVALID_CANDLE", error, fatal: true }))
-      .then(() => notifySnapshot({ context, state }))
+      .catch((error) => failMarket({ context, 
+        state, 
+        reason: "INVALID_CANDLE", 
+        error, 
+        fatal: true }))
+      .then(() => notifySnapshot({ context, 
+        state }))
   }
   await state.queue
-  notifySnapshot({ context, state })
+  notifySnapshot({ context, 
+    state })
   await state.observerQueue
 }
 
@@ -505,17 +577,21 @@ async function startCandleHistoryService({ context, pairs, subscriptions = [] } 
 
   context.startPromise = (async () => {
     await Promise.all(enabledSymbols.map((symbol) =>
-      subscribeMarket({ context, state: context.markets.get(symbol), subscriptions })
+      subscribeMarket({ context, 
+        state: context.markets.get(symbol), 
+        subscriptions })
     ))
     await Promise.all(enabledSymbols.map((symbol) =>
-      loadInitialHistory({ context, state: context.markets.get(symbol) })
+      loadInitialHistory({ context, 
+        state: context.markets.get(symbol) })
     ))
     if (enabledSymbols.some((symbol) => context.markets.get(symbol)?.subscriptionReady) &&
         context.hasSnapshotObserver && !context.freshnessMonitor) {
       context.freshnessMonitor = setInterval(() => {
         for (const state of context.markets.values()) {
           if (state.subscriptionReady && !state.stopped) {
-            notifySnapshot({ context, state })
+            notifySnapshot({ context, 
+              state })
           }
         }
       }, 1_000)
@@ -568,7 +644,10 @@ export function createCandleHistoryService({
     freshnessMonitor: undefined,
   }
   return {
-    start: ({ pairs, subscriptions = [] } = {}) => startCandleHistoryService({ context, pairs, subscriptions }),
-    getSnapshot: ({ symbol } = {}) => createSnapshot({ context, symbol }),
+    start: ({ pairs, subscriptions = [] } = {}) => startCandleHistoryService({ context, 
+      pairs, 
+      subscriptions }),
+    getSnapshot: ({ symbol } = {}) => createSnapshot({ context, 
+      symbol }),
   }
 }
