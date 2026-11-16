@@ -25,6 +25,18 @@ const ENTRY_COMMAND_TYPES = Object.freeze({
   "/menu": "MENU",
   "/help": "HELP",
 })
+const READ_ONLY_COMMAND_TYPES = Object.freeze({
+  "/status": "STATUS",
+  "/markets": "MARKETS",
+  "/positions": "POSITIONS",
+  "/orders": "ORDERS",
+  "/balances": "BALANCES",
+})
+const GLOBAL_BUY_COMMAND_TYPES = Object.freeze({
+  "/pauseallbuys": "PAUSE_ALL_BUYS",
+  "/resumeallbuys": "RESUME_ALL_BUYS",
+})
+const MARKET_SYMBOL_PATTERN = /^[A-Za-z0-9]{2,30}$/
 
 function parseEntryCommand({ command, argumentsList }) {
   const type = ENTRY_COMMAND_TYPES[command]
@@ -188,17 +200,15 @@ function buildControlFailureReply({ action, symbol, result, method, interaction,
   return `${action.startsWith("RESUME") ? "Resume" : "Pause"} was not acknowledged; check Harvester logs and retry.`
 }
 
-function buildControlSuccessReply({ action, symbol, result, method, interaction, diagnostics }) {
-  const isBuyPause = action === "PAUSE_BUYS" || action === "PAUSE_ALL_BUYS"
-  const isBuyResume = action === "RESUME_BUYS" || action === "RESUME_ALL_BUYS"
+function buildBuyControlSuccessReply({ action, symbol, result, interaction } = {}) {
   const buyScope = symbol ? `for ${symbol}` : "across all markets"
-  if (isBuyPause && result.data?.paused === true) {
+  if ((action === "PAUSE_BUYS" || action === "PAUSE_ALL_BUYS") && result.data?.paused === true) {
     interaction.applicationOperationCompleted = true
     interaction.stateChanged = result.data.alreadyPaused !== true || result.data.canceled > 0
     const prefix = result.data.alreadyPaused === true ? "BUY pause remains active" : "BUY pause activated"
     return `${prefix} ${buyScope}. Cancelled ${result.data.canceled ?? 0} Harvester-owned BUY order(s); reconciled ${result.data.reconciled ?? 0} fill(s). Recovery SELLs and accounting continue. External/manual and prior-process orders are untouched; check /orders. This pause is process-local and is not restored after restart.`
   }
-  if (isBuyResume && result.data?.resumed === true) {
+  if ((action === "RESUME_BUYS" || action === "RESUME_ALL_BUYS") && result.data?.resumed === true) {
     interaction.applicationOperationCompleted = true
     interaction.stateChanged = true
     const remaining = result.data.stillPaused === true
@@ -206,7 +216,7 @@ function buildControlSuccessReply({ action, symbol, result, method, interaction,
       : " New BUYs may resume when all other safety gates allow."
     return `BUY pause removed ${buyScope}.${remaining}`
   }
-  if (isBuyResume && result.data?.resumed === false) {
+  if ((action === "RESUME_BUYS" || action === "RESUME_ALL_BUYS") && result.data?.resumed === false) {
     interaction.applicationOperationCompleted = true
     interaction.stateChanged = false
     const remaining = result.data.stillPaused === true
@@ -214,6 +224,10 @@ function buildControlSuccessReply({ action, symbol, result, method, interaction,
       : ""
     return `No BUY pause was active ${buyScope}.${remaining}`
   }
+  return undefined
+}
+
+function buildLegacyControlSuccessReply({ action, symbol, result, method, interaction, diagnostics }) {
   if (action === "RESUME" && result.data?.resumed === true) {
     interaction.applicationOperationCompleted = true
     interaction.stateChanged = true
@@ -241,6 +255,10 @@ function buildControlSuccessReply({ action, symbol, result, method, interaction,
     message: `Operator control use case returned an invalid success result: ${method}`,
   })
   return `${action === "RESUME" ? "Resume" : "Pause"} was not acknowledged; check Harvester logs and retry.`
+}
+
+function buildControlSuccessReply(options) {
+  return buildBuyControlSuccessReply(options) ?? buildLegacyControlSuccessReply(options)
 }
 
 function buildControlReply(options) {
@@ -538,11 +556,7 @@ interaction })) {
     return
   }
   if (parsed.type === "INVALID") {
-    const text = ["PAUSEBUYS", "RESUMEBUYS"].includes(parsed.command)
-      ? `Usage: /${String(parsed.command).toLowerCase()} <SYMBOL>. Use /help for commands.`
-      : ["PAUSE", "RESUME"].includes(parsed.command)
-        ? `Usage: /${parsed.command.toLowerCase()} <SYMBOL>. Use /help for commands.`
-        : `Usage: /${String(parsed.command ?? "command").toLowerCase()} with no arguments. Use /help for commands.`
+    const text = getInvalidCommandUsage(parsed.command)
     await sendMessage({
       chatId: message.chat.id,
       text,
@@ -639,6 +653,70 @@ function waitForRetry({ milliseconds, signal }) {
   })
 }
 
+function parseReadOnlyCommand({ command, argumentsList } = {}) {
+  const type = READ_ONLY_COMMAND_TYPES[command]
+  if (!type) {
+    return undefined
+  }
+  if (argumentsList.length !== 0) {
+    return Object.freeze({
+      type: "INVALID",
+      command: command.slice(1).toUpperCase(),
+    })
+  }
+  return Object.freeze({ type })
+}
+
+function parseEmergencyBuyCommand({ command, argumentsList } = {}) {
+  const globalType = GLOBAL_BUY_COMMAND_TYPES[command]
+  if (globalType) {
+    if (argumentsList.length !== 0) {
+      return Object.freeze({
+        type: "INVALID",
+        command: command.slice(1).toUpperCase(),
+      })
+    }
+    return Object.freeze({ type: globalType })
+  }
+  if (command !== "/pausebuys" && command !== "/resumebuys") {
+    return undefined
+  }
+  if (argumentsList.length !== 1 || !MARKET_SYMBOL_PATTERN.test(argumentsList[0])) {
+    return Object.freeze({
+      type: "INVALID",
+      command: command.slice(1).toUpperCase(),
+    })
+  }
+  return Object.freeze({
+    type: command === "/pausebuys" ? "PAUSE_BUYS" : "RESUME_BUYS",
+    symbol: argumentsList[0].toUpperCase(),
+  })
+}
+
+function parseMarketPauseCommand({ command, argumentsList } = {}) {
+  if (command !== "/pause" && command !== "/resume") {
+    return undefined
+  }
+  if (argumentsList.length !== 1 || !MARKET_SYMBOL_PATTERN.test(argumentsList[0])) {
+    return Object.freeze({
+      type: "INVALID",
+      command: command.slice(1).toUpperCase(),
+    })
+  }
+  return Object.freeze({
+    type: command === "/pause" ? "PAUSE" : "RESUME",
+    symbol: argumentsList[0].toUpperCase(),
+  })
+}
+
+function getInvalidCommandUsage(command) {
+  const normalizedCommand = String(command ?? "command").toLowerCase()
+  if (["PAUSEBUYS", "RESUMEBUYS", "PAUSE", "RESUME"].includes(command)) {
+    return `Usage: /${normalizedCommand} <SYMBOL>. Use /help for commands.`
+  }
+  return `Usage: /${normalizedCommand} with no arguments. Use /help for commands.`
+}
+
 /**
  * Parse the deliberately small initial Telegram command vocabulary.
  *
@@ -657,56 +735,34 @@ export function parseTelegramOperatorCommand(...args) {
     return KEYBOARD_ACTIONS[normalizedText.toLowerCase()] ?? Object.freeze({ type: "IGNORE" })
   }
 
-  const [commandToken, ...argumentsList] = normalizedText.split(/\s+/)
+  const [commandToken, ...argumentsList] = normalizedText.split(/\\s+/)
   const commandParts = commandToken.split("@")
-  if (commandParts.length > 2) {return Object.freeze({ type: "INVALID" })}
+  if (commandParts.length > 2) {
+    return Object.freeze({ type: "INVALID" })
+  }
   const [command, targetUsername] = commandParts
   if (targetUsername !== undefined &&
       (typeof botUsername !== "string" || targetUsername.toLowerCase() !== botUsername.toLowerCase())) {
     return Object.freeze({ type: "IGNORE" })
   }
-  const entryCommand = parseEntryCommand({ command,
-argumentsList })
-  if (entryCommand) { return entryCommand }
-  if (["/status", "/markets", "/positions", "/orders", "/balances"].includes(command)) {
-    if (argumentsList.length !== 0) {
-      return Object.freeze({ type: "INVALID",
-command: command.slice(1).toUpperCase() })
-    }
-    return Object.freeze({ type: ({ "/status": "STATUS",
-"/markets": "MARKETS",
-"/positions": "POSITIONS",
-"/orders": "ORDERS",
-"/balances": "BALANCES" })[command] })
-  }
-  const globalBuyCommands = Object.freeze({
-    "/pauseallbuys": "PAUSE_ALL_BUYS",
-    "/resumeallbuys": "RESUME_ALL_BUYS",
+  const entryCommand = parseEntryCommand({
+    command,
+    argumentsList,
   })
-  if (Object.hasOwn(globalBuyCommands, command)) {
-    if (argumentsList.length !== 0) {
-      return Object.freeze({ type: "INVALID", command: command.slice(1).toUpperCase() })
-    }
-    return Object.freeze({ type: globalBuyCommands[command] })
+  if (entryCommand) {
+    return entryCommand
   }
-  if (command === "/pausebuys" || command === "/resumebuys") {
-    if (argumentsList.length !== 1 || !/^[A-Za-z0-9]{2,30}$/.test(argumentsList[0])) {
-      return Object.freeze({ type: "INVALID", command: command.slice(1).toUpperCase() })
-    }
-    return Object.freeze({
-      type: command === "/pausebuys" ? "PAUSE_BUYS" : "RESUME_BUYS",
-      symbol: argumentsList[0].toUpperCase(),
-    })
-  }
-  if (command !== "/pause" && command !== "/resume") {return Object.freeze({ type: "UNSUPPORTED" })}
-  if (argumentsList.length !== 1 || !/^[A-Za-z0-9]{2,30}$/.test(argumentsList[0])) {
-    return Object.freeze({ type: "INVALID",
-command: command.slice(1).toUpperCase() })
-  }
-  return Object.freeze({ type: command === "/pause" ? "PAUSE" : "RESUME",
-symbol: argumentsList[0].toUpperCase() })
+  return parseReadOnlyCommand({
+    command,
+    argumentsList,
+  }) ?? parseEmergencyBuyCommand({
+    command,
+    argumentsList,
+  }) ?? parseMarketPauseCommand({
+    command,
+    argumentsList,
+  }) ?? Object.freeze({ type: "UNSUPPORTED" })
 }
-
 
 function createNavigationKeyboard({ page = "home", markets = [], marketAction } = {}) {
   const rows = [
