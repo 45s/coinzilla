@@ -13,6 +13,7 @@ test("exports safe ESLint autofixes for the Utilities package", {
   const eslint = new ESLint({
     cwd: repositoryRoot,
     fix: true,
+    overrideConfig: [{ rules: { indent: ["error", 2] } }],
   })
   const results = await eslint.lintFiles(["packages/utils/**/*.{js,mjs,cjs}"])
   const fixedFiles = results.filter((result) => (
