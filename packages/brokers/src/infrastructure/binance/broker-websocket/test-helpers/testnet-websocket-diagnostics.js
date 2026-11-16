@@ -37,6 +37,27 @@ function blockedByHostFrom(response) {
   }
 }
 
+function handleHttpUpgradeResponse({ name, response, finish }) {
+  const chunks = []
+  let size = 0
+  response.on("data", (chunk) => {
+    if (size >= 512) return
+    const bounded = chunk.subarray(0, 512 - size)
+    chunks.push(bounded)
+    size += bounded.length
+  })
+  response.on("end", () => {
+    finish({
+      endpoint: name,
+      reachable: true,
+      httpUpgradeStatus: response.statusCode ?? null,
+      upgraded: false,
+      responseMessage: safeText(Buffer.concat(chunks).toString("utf8")),
+      blockedByHost: blockedByHostFrom(response),
+    })
+  })
+}
+
 function probeHttpReachability(...args) {
   const [name, websocketUrl] = args
   return new Promise((resolve) => {
@@ -62,28 +83,7 @@ function probeHttpReachability(...args) {
         "Sec-WebSocket-Key": key,
         "Sec-WebSocket-Version": "13",
       },
-    }, (response) => {
-      const chunks = []
-      let size = 0
-      response.on("data", (chunk) => {
-        if (size >= 512) {return}
-        const remaining = 512 - size
-        const bounded = chunk.subarray(0, remaining)
-        chunks.push(bounded)
-        size += bounded.length
-      })
-      response.on("end", () => {
-        const blockedByHost = blockedByHostFrom(response)
-        finish({
-          endpoint: name,
-          reachable: true,
-          httpUpgradeStatus: response.statusCode ?? null,
-          upgraded: false,
-          responseMessage: safeText(Buffer.concat(chunks).toString("utf8")),
-          blockedByHost,
-        })
-      })
-    })
+    }, (response) => handleHttpUpgradeResponse({ name, response, finish }))
 
     request.on("upgrade", (...args) => {
       const [response, socket] = args
@@ -133,20 +133,35 @@ function createProbeDetails(name) {
   }
 }
 
+function armDiagnosticTimeout({ socket, state, details, finish, delay }) {
+  clearTimeout(state.timer)
+  state.timer = setTimeout(() => {
+    if (state.opened) {
+      details.closeTimedOut = true
+    } else {
+      details.errorMessage ??= "WebSocket handshake timed out"
+      try {
+        socket.close()
+      } catch {
+        // A timed-out diagnostic must still finish without affecting the workflow.
+      }
+    }
+    finish()
+  }, delay)
+}
+
 function probeEndpoint(...args) {
   const [name, url] = args
   return new Promise((resolve) => {
     let socket
-    let opened = false
-    let settled = false
-    let timer
+    const state = { opened: false, settled: false, timer: undefined }
     const details = createProbeDetails(name)
 
     const finish = () => {
-      if (settled) {return}
-      settled = true
-      clearTimeout(timer)
-      details.opened = opened
+      if (state.settled) {return}
+      state.settled = true
+      clearTimeout(state.timer)
+      details.opened = state.opened
       resolve(details)
     }
 
@@ -162,26 +177,17 @@ function probeEndpoint(...args) {
       return
     }
 
-    const armTimeout = (delay) => {
-      clearTimeout(timer)
-      timer = setTimeout(() => {
-        if (opened) {
-          details.closeTimedOut = true
-        } else {
-          details.errorMessage ??= "WebSocket handshake timed out"
-          try {
-            socket.close()
-          } catch {
-            // A timed-out diagnostic must still finish without affecting the workflow.
-          }
-        }
-        finish()
-      }, delay)
-    }
+    const armTimeout = (delay) => armDiagnosticTimeout({
+      socket,
+      state,
+      details,
+      finish,
+      delay,
+    })
     armTimeout(5_000)
 
     socket.addEventListener("open", () => {
-      opened = true
+      state.opened = true
       details.closeRequested = true
       try {
         socket.close(1000, "read-only diagnostic complete")
