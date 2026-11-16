@@ -247,7 +247,11 @@ function assertBrokerOrderRequestSequence(dogeTradingReplay) {
 runDogeTradingReplayTest("submits the recovery SELL before the next standing BUY after the actual BUY fill", async (dogeTradingReplay) => {
   const { recoverySellOrder, nextStandingBuyOrder } =
     await submitFirstBuyAndWaitForRecoveryOrders(dogeTradingReplay);
-  assertRecoveryOrders({ dogeTradingReplay, recoverySellOrder, nextStandingBuyOrder });
+  assertRecoveryOrders({
+    dogeTradingReplay,
+    recoverySellOrder,
+    nextStandingBuyOrder,
+  });
   assertBuyExecutionReport(dogeTradingReplay);
   assertBrokerOrderRequestSequence(dogeTradingReplay);
 });
