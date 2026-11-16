@@ -235,6 +235,60 @@ test("Resume opens only currently operator-paused markets and never resumes befo
   )
 })
 
+test("routes Status, Markets, Portfolio and Open Orders through existing read-only queries", async () => {
+  const updates = [
+    makeUpdate({ updateId: 301, text: "Status" }),
+    makeUpdate({ updateId: 302, text: "Markets" }),
+    makeUpdate({ updateId: 303, text: "Portfolio" }),
+    makeUpdate({ updateId: 304, text: "Open Orders" }),
+  ]
+  const methods = []
+  const actorIds = []
+  const observe = (method) => async ({ actor }) => {
+    methods.push(method)
+    actorIds.push(actor.id)
+    const data = {
+      status: {
+        runtimeState: "RUNNING",
+        readiness: { state: "READY", blockers: [] },
+        userData: { ready: true, status: "READY", ageMs: 0 },
+        markets: { enabled: 1, configured: 1, blocked: 0 },
+        observedAt: 1700000000,
+      },
+      markets: { markets: [], observedAt: 1700000000 },
+      positions: { positions: [], observedAt: 1700000000 },
+      orders: { orders: [], observedAt: 1700000000 },
+    }[method]
+    return { ok: true, data }
+  }
+  const { sentMessages } = await runAdapter({
+    updates,
+    operator: {
+      pauseMarket: async () => assert.fail("Read-only keyboard actions must never invoke pauseMarket."),
+      getStatus: observe("status"),
+      getMarkets: observe("markets"),
+      getPositions: observe("positions"),
+      getOrders: observe("orders"),
+    },
+  })
+
+  assert.deepEqual(
+    methods,
+    ["status", "markets", "positions", "orders"],
+    "Each read-only button must dispatch to its existing application query in the expected order.",
+  )
+  assert.deepEqual(
+    sentMessages.map((message) => message.text.split("\\n")[0]),
+    ["Harvester status", "Harvester markets", "Harvester positions", "Harvester orders"],
+    "Each button must render the corresponding existing Command Center page.",
+  )
+  assert.deepEqual(
+    actorIds,
+    ["telegram-user:12345", "telegram-user:12345", "telegram-user:12345", "telegram-user:12345"],
+    "Every button must use the authenticated Telegram operator actor.",
+  )
+})
+
 test("rejects an unauthorized persistent-keyboard action before reading market state", async () => {
   const updates = [makeUpdate({ updateId: 203, userId: 99999, text: "Pause" })]
   const marketQueries = []

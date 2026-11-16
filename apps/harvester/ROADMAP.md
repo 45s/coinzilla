@@ -78,7 +78,7 @@ Remaining safety and observability follow-ups #1103 and #1105 remain open; #1104
 
 ### Follow-up — persistent Telegram reply keyboard — IN PROGRESS
 
-- [x] Add RED regressions for all six button labels, /start and /menu keyboard markup, filtered market selection, and unauthorized button handling. The initial Harvester unit run failed only on the six expected missing behaviors on PR #1194 test head `8c924288415c2957a1f8072f020ae5ed0d5616c9`.
+- [x] Add RED regressions for all six button labels, /start and /menu keyboard markup, filtered market selection, and unauthorized button handling. The initial Harvester unit run failed only on the six expected missing behaviors on PR #1194 test head `8c924288415c2957a1f8072f020ae5ed0d5616c9`. GREEN coverage also verifies Status, Markets, Portfolio and Open Orders dispatch to their existing authorized read-only application queries.
 - [~] Implement the persistent six-button reply keyboard for Pause, Resume, Status, Markets, Portfolio and Open Orders. Keep the existing command menu and inline navigation; route every button through current authorized application queries and confirmation-gated market controls.
 - [ ] Complete exact-head Harvester tests and required CI. No exchange operations are authorized or needed.
 
