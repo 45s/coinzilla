@@ -11343,10 +11343,20 @@ test("maintains recovery SELL coverage when a late owned SELL fill leaves sellab
   const recoveryReconciliation = await harness.engine.reconcileRecoverySellsForShutdown({
     symbols: ["DOGEUSDT"],
   })
+  const activeOrders = harness.engine.getActiveOrders().map((order) => ({
+    side: order.side,
+    status: order.status,
+    executed: order.executedQuantity.amount,
+    remaining: order.remainingQuantity.amount,
+  }))
+  const position = accounting.getPortfolio().getPosition({
+    strategyId: StrategyId.COIN_GRABBER,
+    marketId: market.id,
+  })?.value
   assert.equal(
     recoveryReconciliation.ok,
     true,
-    `Shutdown must replan remaining sellable quantity. Errors: ${recoveryReconciliation.errors?.map((error) => error.message).join("; ") ?? "none"}. Pause reasons: ${JSON.stringify(harness.pauses)}. Active orders: ${JSON.stringify(harness.engine.getActiveOrders().map((order) => ({ side: order.side, status: order.status, executed: order.executedQuantity.amount, remaining: order.remainingQuantity.amount })))}. Position: ${JSON.stringify(accounting.getPortfolio().getPosition({ strategyId: StrategyId.COIN_GRABBER, marketId: market.id })?.value)}`,
+    `Shutdown must replan remaining sellable quantity. Errors: ${recoveryReconciliation.errors?.map((error) => error.message).join("; ") ?? "none"}. Pause reasons: ${JSON.stringify(harness.pauses)}. Active orders: ${JSON.stringify(activeOrders)}. Position: ${JSON.stringify(position)}`,
   )
 
   const activeRecoverySells = harness.engine.getActiveOrders().filter((order) =>
