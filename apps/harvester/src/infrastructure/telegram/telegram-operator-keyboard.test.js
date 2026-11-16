@@ -540,6 +540,7 @@ test("dispatches emergency BUY pause commands through the authenticated operator
   assert.ok(registeredCommands[0].commands.some((command) => command.command === "pausebuys"), "Telegram's registered command list must expose the market BUY pause.")
   assert.equal(sentMessages.length, 4, "Every explicit BUY control command must receive an operator response.")
   assert.ok(sentMessages.every((message) => message.text.includes("BUY")), "Emergency BUY command replies must identify the BUY-side control rather than the legacy market pause.")
+  assert.ok(sentMessages[0].text.includes("External/manual and prior-process orders are untouched"), "A successful emergency pause must not imply external exchange orders were canceled.")
 })
 
 test("reports an active emergency BUY gate when owned-order cancellation is unresolved", async () => {
