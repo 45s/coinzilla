@@ -503,13 +503,21 @@ test("rejects an unauthorized persistent-keyboard action before reading market s
   assert.equal(sentMessages[0].text, "Not authorized.", "An unauthorized keyboard action must receive the existing authorization response.")
 })
 
-test("TEMPORARY: report ESLint findings for the complete Harvester infrastructure directory", async (t) => {
+test("TEMPORARY: export ESLint autofix output for the complete Harvester infrastructure directory", async (t) => {
   const { ESLint } = await import("eslint")
-  const eslint = new ESLint()
+  const eslint = new ESLint({ fix: true })
   const results = await eslint.lintFiles(["src/infrastructure/**/*.js"])
+  for (const result of results) {
+    if (typeof result.output === "string") {
+      t.diagnostic("HARVESTER_ESLINT_FIXED_FILE "+JSON.stringify({
+        path: result.filePath.slice(process.cwd().length + 1),
+        content: result.output,
+      }))
+    }
+  }
   const findings = results.flatMap(({ filePath, messages }) =>
     messages.map(({ ruleId, severity, line, column, message }) => ({
-      filePath,
+      filePath: filePath.slice(process.cwd().length + 1),
       ruleId,
       severity,
       line,
@@ -517,12 +525,9 @@ test("TEMPORARY: report ESLint findings for the complete Harvester infrastructur
       message,
     }))
   )
-  const errorCount = findings.filter(({ severity }) => severity === 2).length
-  const warningCount = findings.filter(({ severity }) => severity === 1).length
-  t.diagnostic("HARVESTER_INFRASTRUCTURE_ESLINT_REPORT "+JSON.stringify({
-    fileCount: results.length,
-    errorCount,
-    warningCount,
+  t.diagnostic("HARVESTER_ESLINT_AFTER_FIX "+JSON.stringify({
+    errorCount: findings.filter(({ severity }) => severity === 2).length,
+    warningCount: findings.filter(({ severity }) => severity === 1).length,
     findings,
   }))
 })
