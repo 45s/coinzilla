@@ -30,8 +30,14 @@ test("migrations run in ascending version order and are recorded", async () => {
       database.prepare("SELECT version, name FROM schema_migrations ORDER BY version").all()
         .map((row) => ({ ...row })),
       [
-        { version: 1, name: "create-records" },
-        { version: 2, name: "add-status" },
+        {
+          version: 1,
+          name: "create-records",
+        },
+        {
+          version: 2,
+          name: "add-status",
+        },
       ],
     )
     assert.deepEqual(database.prepare("PRAGMA table_info(records)").all().map(({ name }) => name), [
@@ -108,12 +114,24 @@ test("migrations reject duplicate or invalid versions before changing the databa
 
   try {
     await assert.rejects(database.migrate([
-      { version: 1, name: "one", up() {} },
-      { version: 1, name: "duplicate", up() {} },
+      {
+        version: 1,
+        name: "one",
+        up() {},
+      },
+      {
+        version: 1,
+        name: "duplicate",
+        up() {},
+      },
     ]), /unique positive integer versions/)
 
     await assert.rejects(database.migrate([
-      { version: 0, name: "zero", up() {} },
+      {
+        version: 0,
+        name: "zero",
+        up() {},
+      },
     ]), /positive safe integer/)
 
     assert.throws(() => database.prepare("SELECT * FROM schema_migrations"), /no such table/)
@@ -128,11 +146,18 @@ test("migrations reject missing names and migration functions", async () => {
 
   try {
     await assert.rejects(database.migrate([
-      { version: 1, name: "", up() {} },
+      {
+        version: 1,
+        name: "",
+        up() {},
+      },
     ]), /name/)
 
     await assert.rejects(database.migrate([
-      { version: 1, name: "missing-up" },
+      {
+        version: 1,
+        name: "missing-up",
+      },
     ]), /up function/)
 
     assert.throws(() => database.prepare("SELECT * FROM schema_migrations"), /no such table/)
