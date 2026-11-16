@@ -364,7 +364,7 @@ function applyThirdAssetCommission({
 
 function applyThirdAssetCommissionDeltas({
   recoveredState,
-  marketsById,
+  marketsBySymbol,
   baselineByAsset,
   baselineSequenceByAsset,
   expectedDeltas,
@@ -372,7 +372,7 @@ function applyThirdAssetCommissionDeltas({
   const commissionAssetIdByCode = new Map()
   const commissionAssetCodeById = new Map()
   const thirdAssetCommissionCodes = new Set()
-  for (const market of marketsById.values()) {
+  for (const market of marketsBySymbol.values()) {
     for (const asset of [market.baseAsset, market.quoteAsset]) {
       registerCommissionAssetIdentity({
         asset,
@@ -382,11 +382,21 @@ function applyThirdAssetCommissionDeltas({
     }
   }
   for (const fill of recoveredState.journalFills) {
-    const market = marketsById.get(fill.marketId)
+    if (typeof fill?.symbol !== "string" || !Array.isArray(fill.commissions)) {
+      throw new TypeError("Recovered Journal fill is missing symbol or commission facts")
+    }
+    const market = marketsBySymbol.get(fill.symbol)
     if (!market) {
-      throw new Error(`Canonical Market metadata is missing for recovered fill ${fill.fillId}`)
+      throw new Error(`Canonical Market metadata is missing for recovered fill ${fill.symbol}`)
     }
     for (const commission of fill.commissions) {
+      const amount = requireAmount({
+        value: commission?.amount,
+        field: `${fill.symbol}.commission.amount`,
+      })
+      if (compareDecimal({ left: amount, right: "0" }) < 0) {
+        throw new Error(`Recovered commission amount cannot be negative for ${fill.symbol}`)
+      }
       const isThirdAsset = validateCommissionIdentity({
         commission,
         market,
@@ -397,7 +407,7 @@ function applyThirdAssetCommissionDeltas({
         continue
       }
       applyThirdAssetCommission({
-        commission,
+        commission: { ...commission, amount },
         fill,
         market,
         baselineByAsset,
@@ -791,7 +801,7 @@ function prepareExpectedAccountBalances({
   const marketContext = createMarketContext({ recoveredState, markets, targetMarket })
   const thirdAssetCommissionCodes = applyThirdAssetCommissionDeltas({
     recoveredState,
-    marketsById: marketContext.marketsById,
+    marketsBySymbol: marketContext.marketsBySymbol,
     baselineByAsset: accountBalances.baselineByAsset,
     baselineSequenceByAsset: accountBalances.baselineSequenceByAsset,
     expectedDeltas: marketContext.expectedDeltas,
