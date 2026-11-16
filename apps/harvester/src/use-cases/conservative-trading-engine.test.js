@@ -11485,4 +11485,5 @@ test("failed owned BUY cancellation leaves the emergency BUY gate active and rep
   assert.equal(paused.ok, false, "The operator must not receive a successful emergency-stop acknowledgement while an owned BUY cancellation is unresolved.")
   assert.equal(harness.engine.getOperatorBuyPauseState().pausedMarkets.includes("DOGEUSDT"), true, "A failed cancellation must never roll back the market BUY gate.")
   assert.equal(harness.engine.getActiveOrders().some((order) => order.side === "BUY"), true, "The unresolved owned BUY must remain visible for reconciliation.")
+  assert.equal(harness.pauses.length, 0, "The emergency BUY-only pause must not convert an unresolved cancellation into a broad strategy pause.")
 })
