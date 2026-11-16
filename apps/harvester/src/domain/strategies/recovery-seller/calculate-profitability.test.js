@@ -57,11 +57,12 @@ test("continues recovery-only eligibility after the authorized legacy inventory 
   assert.equal(result.eligible, true, "Recovery-only eligibility must depend on the recovery gate after legacy exhaustion.")
 })
 
-test("includes base-denominated SELL commission in the legacy historical cost basis", () => {
+test("includes the legacy-allocated base SELL commission in the historical cost basis", () => {
+  const legacyBaseDebitIncludingAllocatedCommission = "0.0101"
   const result = calculateProfitability({
     recoveryNetQuoteProceeds: "10.2",
     minProfit: "0.2",
-    legacyBaseDebit: "0.0101",
+    legacyBaseDebit: legacyBaseDebitIncludingAllocatedCommission,
     legacyNetQuoteProceeds: "0.0201",
   })
 

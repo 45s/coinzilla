@@ -153,7 +153,8 @@ function calculateLegacyProfitability({
  *
  * Net proceeds must already include quote-denominated SELL commissions and
  * reliably valued third-asset commissions. legacyBaseDebit must include the
- * legacy gross base allocation plus any base-denominated SELL commission.
+ * legacy gross base allocation plus the base-denominated SELL commission
+ * quantity allocated to legacy.
  * recoveryCostBasis must include the recovery tranche's BUY costs and fees.
  *
  * @param {object} options
