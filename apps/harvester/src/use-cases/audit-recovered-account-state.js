@@ -785,8 +785,7 @@ function createAuditResult({
  * coverage or unexplained commitments fail closed. This function performs no
  * broker calls and no exchange mutations.
  */
-export function auditRecoveredAccountState(options = {}) {
-  try {
+function runRecoveredAccountAudit(options) {
     const {
       projection,
       recoveredState,
@@ -874,6 +873,12 @@ export function auditRecoveredAccountState(options = {}) {
       tradeHistoryAudit,
       currentAccountSnapshot,
     })
+
+}
+
+export function auditRecoveredAccountState(options = {}) {
+  try {
+    return runRecoveredAccountAudit(options)
   } catch (error) {
     return toResult({ error })
   }
