@@ -334,7 +334,7 @@ async function runUpdateTradingAccounting({
   })
 }
 
-function createRecoveryCompletionInput({ marketId, position, recoveryLedger, keepQuantity, minProfit, inventoryDisposition }) {
+function createRecoveryCompletionInput({ position, recoveryLedger, keepQuantity, minProfit, inventoryDisposition }) {
   return {
     sellOrderFullyFilled: true,
     spent: position.spent.amount,
@@ -405,7 +405,7 @@ async function persistRecoveryCycleOutcome({
   return undefined
 }
 
-function logRecoveryCycleCompleted({ logger, marketId, recoveryLedger, position, completion, staged }) {
+function logRecoveryCycleCompleted({ logger, marketId, recoveryLedger, completion, staged }) {
   logger.debug?.({
     message: "Recovery cycle completed",
     marketId,
@@ -421,19 +421,23 @@ function logRecoveryCycleCompleted({ logger, marketId, recoveryLedger, position,
     previousRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: staged.previousLedger }),
     nextRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: staged.nextRecoveryLedgers.get(marketId) }),
   })
-  const portfolioStatsChanged = [
-    [position.baseQuantity.amount, staged.nextPosition.baseQuantity.amount],
-    [position.freeBaseQuantity.amount, staged.nextPosition.freeBaseQuantity.amount],
-    [position.totalBaseQuantity.amount, staged.nextPosition.totalBaseQuantity.amount],
-    [position.spent.amount, staged.nextPosition.spent.amount],
-    [position.quoteNetCashFlow.amount, staged.nextPosition.quoteNetCashFlow.amount],
-  ].some(([previous, next]) => compareDecimal({ left: previous, right: next }) !== 0)
-  if (portfolioStatsChanged) {
-    const portfolioStats = createPortfolioStatsLogSummary({ position: staged.nextPosition })
-    if (portfolioStats) {
-      logger.info?.(portfolioStats)
+
+}
+
+function logRecoveryCycleStats({ logger, position, nextPosition }) {
+    const portfolioStatsChanged = [
+      [position.baseQuantity.amount, staged.nextPosition.baseQuantity.amount],
+      [position.freeBaseQuantity.amount, staged.nextPosition.freeBaseQuantity.amount],
+      [position.totalBaseQuantity.amount, staged.nextPosition.totalBaseQuantity.amount],
+      [position.spent.amount, staged.nextPosition.spent.amount],
+      [position.quoteNetCashFlow.amount, staged.nextPosition.quoteNetCashFlow.amount],
+    ].some(([previous, next]) => compareDecimal({ left: previous, right: next }) !== 0)
+    if (portfolioStatsChanged) {
+      const portfolioStats = createPortfolioStatsLogSummary({ position: staged.nextPosition })
+      if (portfolioStats) {
+        logger.info?.(portfolioStats)
+      }
     }
-  }
 }
 
 function logRecoveryCycleNotCompleted({ logger, marketId, recoveryLedger, position, completion }) {
@@ -481,7 +485,6 @@ async function runCompleteRecoveryCycle({
   try {
     assertTerminalRecoverySellOrder({ sellOrder, marketId })
     const completionInput = createRecoveryCompletionInput({
-      marketId,
       position,
       recoveryLedger,
       keepQuantity,
@@ -525,9 +528,10 @@ async function runCompleteRecoveryCycle({
       if (durableFailure) {
         return durableFailure
       }
-      logRecoveryCycleCompleted({ logger, marketId, recoveryLedger, position, completion, staged })
+      logRecoveryCycleCompleted({ logger, marketId, recoveryLedger, completion, staged })
       state.portfolio = staged.nextPortfolio
       state.recoveryLedgers = staged.nextRecoveryLedgers
+      logRecoveryCycleStats({ logger, position, nextPosition: staged.nextPosition })
     } else {
       const durableFailure = await persistRecoveryCycleOutcome({
         callback: onOperationalStateRecoveryCycleNotCompleted,
@@ -606,14 +610,24 @@ export const createPortfolioWorkflow = ({
     onCommissionAsset,
     onOperationalStateExecutionFill,
   })
-  const completeRecoveryCycle = (options = {}) => enqueueAccountingTransition({
+  const completeRecoveryCycle = ({
+    marketId,
+    keepQuantity,
+    minProfit,
+    inventoryDisposition,
+    sellOrder,
+  } = {}) => enqueueAccountingTransition({
     state,
     transition: () => runCompleteRecoveryCycle({
       state,
+      marketId,
+      keepQuantity,
+      minProfit,
+      inventoryDisposition,
+      sellOrder,
       logger,
       onOperationalStateRecoveryCycleCompleted,
       onOperationalStateRecoveryCycleNotCompleted,
-      ...options,
     }),
   })
 
