@@ -334,7 +334,7 @@ recoveryRequired: true })
     }
   }
 
-   #bindClient({ client, includeUserData = true } = {}) {
+  #bindClient({ client, includeUserData = true } = {}) {
     this.#detachClientListeners()
     const removers = []
     const port = this.#portFor(client)
@@ -474,7 +474,7 @@ recoveryRequired: true })
     }
   }
 
-   #notifySubscriber({ subscriber, status }) {
+  #notifySubscriber({ subscriber, status }) {
     if (!subscriber.active || typeof subscriber.onStatus !== "function") {return}
     try {
       subscriber.onStatus(status)
@@ -604,7 +604,7 @@ recoveryRequired: true })
     return result.accepted && result.completed
   }
 
-   #acknowledgeRecoveryResult({ id, recoveryGeneration }) {
+  #acknowledgeRecoveryResult({ id, recoveryGeneration }) {
     const subscriber = this.#subscribers.get(id)
     if (!subscriber || !subscriber.active) {
       return {
