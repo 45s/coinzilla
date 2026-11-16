@@ -1,6 +1,6 @@
 import { StrategyId } from "../strategy-ids.js"
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest(`[strategy.test.js] ${  name}`, ...args)
+const test = (...args) => nodeTest(`[strategy.test.js] ${  args[0]}`, ...args.slice(1))
 import assert from "node:assert/strict"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../../portfolio/portfolio.js"

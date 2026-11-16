@@ -1,5 +1,5 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest(`[sell-fee-rate.test.js] ${  name}`, ...args)
+const test = (...args) => nodeTest(`[sell-fee-rate.test.js] ${  args[0]}`, ...args.slice(1))
 import assert from "node:assert/strict"
 import { calculateSellFeeRate } from "./sell-fee-rate.js"
 
