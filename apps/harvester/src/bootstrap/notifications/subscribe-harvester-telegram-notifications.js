@@ -7,20 +7,24 @@ import { HARVESTER_EVENT_NAMES, HARVESTER_EVENT_SOURCE } from "../../application
 import { resolveTelegramNotificationPolicy } from "./resolve-telegram-notification-policy.js"
 
 const EVENT_MAPPINGS = Object.freeze({
-  [HARVESTER_EVENT_NAMES.STARTED]: () => ({ name: "bot.started", data: {} }),
+  [HARVESTER_EVENT_NAMES.STARTED]: () => ({ name: "bot.started",
+data: {} }),
   [HARVESTER_EVENT_NAMES.STOPPED]: ({ data }) => ({
     name: "bot.stopped",
-    data: { reason: data.reason, outcome: data.outcome },
+    data: { reason: data.reason,
+outcome: data.outcome },
   }),
   [HARVESTER_EVENT_NAMES.STARTUP_FAILED]: ({ data }) => ({
     name: "bot.startup_failed",
-    data: { stage: data.stage, error: data.error },
+    data: { stage: data.stage,
+error: data.error },
   }),
   [HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED]: ({ data }) => {
     if (data.ready === true) {
       return {
         name: "bot.user_data_ready",
-        data: { broker: data.broker, status: data.status },
+        data: { broker: data.broker,
+status: data.status },
       }
     }
     return {
@@ -62,19 +66,21 @@ const EVENT_MAPPINGS = Object.freeze({
   },
   [HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED]: ({ data }) => ({
     name: "broker.disconnected",
-    data: { broker: data.broker, error: data.error },
+    data: { broker: data.broker,
+error: data.error },
   }),
   [HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED]: ({ data }) => ({
     name: "account.safety_alert",
     data: {
       ...(data.market === undefined ? {} : { symbol: data.market }),
       category: "broker-subscription-failed",
-      message: data.broker + " " + data.stream + " subscription failed: " + (data.error?.message ?? "unknown error"),
+      message: `${data.broker  } ${  data.stream  } subscription failed: ${  data.error?.message ?? "unknown error"}`,
     },
   }),
   [HARVESTER_EVENT_NAMES.STRATEGY_PAUSED]: ({ data }) => ({
     name: "bot.pair_paused",
-    data: { symbol: data.symbol, reason: data.reason },
+    data: { symbol: data.symbol,
+reason: data.reason },
   }),
   [HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_FAILED]: ({ data }) => ({
     name: "order.failed",
@@ -101,14 +107,16 @@ const EVENT_MAPPINGS = Object.freeze({
     data: {
       symbol: data.symbol,
       side: data.side,
-      fill: { price: data.price, quantity: data.quantity, tradeId: data.tradeId },
+      fill: { price: data.price,
+quantity: data.quantity,
+tradeId: data.tradeId },
     },
   }),
   [HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_COMPLETED]: ({ data }) => ({
     name: "bot.recovery_completed",
     data: {
-      message: data.symbol + " recovery completed; net profit " + data.realizedNetProfit +
-        "; retained quantity " + data.freeQuantity,
+      message: `${data.symbol  } recovery completed; net profit ${  data.realizedNetProfit 
+        }; retained quantity ${  data.freeQuantity}`,
     },
   }),
   [HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_NOT_COMPLETED]: ({ data }) => {
@@ -124,14 +132,14 @@ const EVENT_MAPPINGS = Object.freeze({
   },
   [HARVESTER_EVENT_NAMES.EXECUTION_ACCOUNTING_FAILED]: ({ data }) => ({
     name: "bot.recovery_failed",
-    data: { message: data.symbol + " execution accounting failed: " + data.error?.message },
+    data: { message: `${data.symbol  } execution accounting failed: ${  data.error?.message}` },
   }),
   [HARVESTER_EVENT_NAMES.EXECUTION_UNOWNED_ORDER]: ({ data }) => ({
     name: "account.safety_alert",
     data: {
       symbol: data.symbol,
       category: "unowned-order",
-      message: "An unowned or external order event was detected for " + data.symbol,
+      message: `An unowned or external order event was detected for ${  data.symbol}`,
     },
   }),
   [HARVESTER_EVENT_NAMES.EXECUTION_INVALID_FILL]: ({ data }) => ({
@@ -139,7 +147,7 @@ const EVENT_MAPPINGS = Object.freeze({
     data: {
       symbol: data.symbol,
       category: "invalid-fill",
-      message: data.symbol + " execution could not be safely reconciled: " + (data.error?.message ?? data.reason),
+      message: `${data.symbol  } execution could not be safely reconciled: ${  data.error?.message ?? data.reason}`,
     },
   }),
   [HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED]: ({ data }) => {
@@ -150,7 +158,7 @@ const EVENT_MAPPINGS = Object.freeze({
       data: {
         ...(symbols.length === 1 ? { symbol: symbols[0] } : {}),
         category: "account-open-orders-blocked",
-        message: `Account-wide open-orders audit is BLOCKED (${data.orderCount} open order(s))${symbols.length > 0 ? ": " + symbols.join(", ") : ""}. ${(data.blockReasons ?? []).join("; ")}`,
+        message: `Account-wide open-orders audit is BLOCKED (${data.orderCount} open order(s))${symbols.length > 0 ? `: ${  symbols.join(", ")}` : ""}. ${(data.blockReasons ?? []).join("; ")}`,
       },
     }
   },
@@ -172,7 +180,8 @@ export async function subscribeHarvesterTelegramNotifications({
     subscribe: ({ name, handler }) => eventBus.subscribe({
       name,
       handler: (event) => {
-        if (!policy.shouldNotify({ name: event.name, data: event.data })) {return}
+        if (!policy.shouldNotify({ name: event.name,
+data: event.data })) {return}
         return handler(event)
       },
     }),
