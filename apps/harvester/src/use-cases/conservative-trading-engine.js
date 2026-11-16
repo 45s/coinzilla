@@ -666,11 +666,16 @@ function createOperatorBuyPauseHandler({ state, pairs, runTransition, cancelOwne
       return applied
     }
 
-    const cancellation = await cancelOwnedBuyOrders({
-      ...(symbol === undefined ? {} : { symbol }),
-      reason: "OPERATOR_BUY_PAUSE",
-      pauseOnFailure: false,
-    })
+    let cancellation
+    try {
+      cancellation = await cancelOwnedBuyOrders({
+        ...(symbol === undefined ? {} : { symbol }),
+        reason: "OPERATOR_BUY_PAUSE",
+        pauseOnFailure: false,
+      })
+    } catch (error) {
+      cancellation = toResult({ error })
+    }
     const unresolvedOrders = getActiveOwnedBuyOrders({
       state,
       symbol,
