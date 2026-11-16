@@ -4,7 +4,10 @@ import { existsSync, readFileSync, statSync, appendFileSync } from "node:fs"
 import { isAbsolute, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
-const cliConsole = new Console({ stdout: process.stdout, stderr: process.stderr })
+const cliConsole = new Console({
+  stdout: process.stdout,
+  stderr: process.stderr,
+})
 
 const packageDirectory = fileURLToPath(new URL("../", import.meta.url))
 const packageJsonPath = resolve(packageDirectory, "package.json")
@@ -26,12 +29,12 @@ const colorEnabled =
 const color = (code, value) =>
   colorEnabled ? `\u001B[${  code  }m${  value  }\u001B[0m` : value
 
-const green = (value) => color("32", value)
-const red = (value) => color("31", value)
-const yellow = (value) => color("33", value)
-const cyan = (value) => color("36", value)
-const gray = (value) => color("90", value)
-const bold = (value) => color("1", value)
+const green = (value) => color({ code: "32", value })
+const red = (value) => color({ code: "31", value })
+const yellow = (value) => color({ code: "33", value })
+const cyan = (value) => color({ code: "36", value })
+const gray = (value) => color({ code: "90", value })
+const bold = (value) => color({ code: "1", value })
 
 function logSection(title) {
   cliConsole.log(`\n${  cyan(bold(`  ${  title}`))}`)
@@ -50,7 +53,7 @@ function formatDuration(milliseconds) {
   return `${(milliseconds / 1000).toFixed(2)  }s`
 }
 
-function reportConfigurationError(message, filePath = "") {
+function reportConfigurationError({ message, filePath = "" }) {
   configurationErrors += 1
   cliConsole.error(red("✖ CONFIGURATION ERROR: ") + message)
   cliConsole.error(gray(`  Package: ${  packageJsonPath}`))
@@ -70,9 +73,9 @@ cliConsole.log(`Package manifest: ${  packageJsonPath}`)
 cliConsole.log(`Per-file timeout: ${  formatDuration(perFileTimeoutMs)}`)
 
 if (!Array.isArray(configuredFiles) || configuredFiles.length === 0) {
-  reportConfigurationError(
-    "No targeted test files configured. Add paths to config.targetedTestFiles in apps/harvester/package.json.",
-  )
+  reportConfigurationError({
+    message: "No targeted test files configured. Add paths to config.targetedTestFiles in apps/harvester/package.json.",
+  })
   logSection("FINAL RESULT")
   cliConsole.error("RESULT: FAILED — no test files were configured.")
   process.exit(1)
@@ -91,10 +94,10 @@ for (let index = 0; index < configuredFiles.length; index += 1) {
     configuredPath.trim() === "" ||
     isAbsolute(configuredPath)
   ) {
-    reportConfigurationError(
-      "Path must be a non-empty relative string.",
-      String(configuredPath),
-    )
+    reportConfigurationError({
+      message: "Path must be a non-empty relative string.",
+      filePath: String(configuredPath),
+    })
     results.push({
       path: String(configuredPath),
       status: "INVALID PATH",
@@ -114,10 +117,10 @@ for (let index = 0; index < configuredFiles.length; index += 1) {
     isAbsolute(packageRelativePath) ||
     !configuredPath.endsWith(".test.js")
   ) {
-    reportConfigurationError(
-      "Path must remain inside the Harvester package and end with .test.js.",
-      configuredPath,
-    )
+    reportConfigurationError({
+      message: "Path must remain inside the Harvester package and end with .test.js.",
+      filePath: configuredPath,
+    })
     results.push({
       path: configuredPath,
       absolutePath,
@@ -128,7 +131,10 @@ for (let index = 0; index < configuredFiles.length; index += 1) {
   }
 
   if (seen.has(configuredPath)) {
-    reportConfigurationError("Duplicate test path.", configuredPath)
+    reportConfigurationError({
+      message: "Duplicate test path.",
+      filePath: configuredPath,
+    })
     results.push({
       path: configuredPath,
       absolutePath,
@@ -140,10 +146,10 @@ for (let index = 0; index < configuredFiles.length; index += 1) {
   seen.add(configuredPath)
 
   if (!existsSync(absolutePath)) {
-    reportConfigurationError(
-      "Test file does not exist at the resolved path.",
-      configuredPath,
-    )
+    reportConfigurationError({
+      message: "Test file does not exist at the resolved path.",
+      filePath: configuredPath,
+    })
     results.push({
       path: configuredPath,
       absolutePath,
@@ -155,10 +161,10 @@ for (let index = 0; index < configuredFiles.length; index += 1) {
 
   const fileStats = statSync(absolutePath)
   if (!fileStats.isFile()) {
-    reportConfigurationError(
-      "Resolved path exists but is not a regular file.",
-      configuredPath,
-    )
+    reportConfigurationError({
+      message: "Resolved path exists but is not a regular file.",
+      filePath: configuredPath,
+    })
     results.push({
       path: configuredPath,
       absolutePath,
@@ -248,7 +254,7 @@ FORCE_COLOR: colorEnabled ? "1" : "0" },
 
 const finishedAt = new Date()
 const totalDurationMs = results.reduce(
-  (sum, result) => sum + result.durationMs,
+  (...values) => values[0] + values[1].durationMs,
   0,
 )
 const passed = results.filter((result) => result.status === "PASS").length
