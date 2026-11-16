@@ -31,12 +31,14 @@ export function makeVolatilityProtectionWorkflow({
 } = {}) {
   const transitionVolatilityProtection = transitionVolatilityProtectionPolicy
   const processVolatilitySnapshot = async ({ symbol, snapshot } = {}) => {
-    if (isStopping()) {return toResult({ data: { skipped: true, reason: "STOPPING" } })}
+    if (isStopping()) {return toResult({ data: { skipped: true,
+reason: "STOPPING" } })}
     if (typeof symbol !== "string" || !symbol.trim()) {
       return toResult({ error: new TypeError("processVolatilitySnapshot requires a symbol") })
     }
     if (!isVolatilityProtectionEnabledForSymbol(symbol)) {
-      return toResult({ data: { skipped: true, reason: "VOLATILITY_PROTECTION_DISABLED_FOR_PAIR" } })
+      return toResult({ data: { skipped: true,
+reason: "VOLATILITY_PROTECTION_DISABLED_FOR_PAIR" } })
     }
 
     let currentSnapshot = snapshot
@@ -194,7 +196,8 @@ export function makeVolatilityProtectionWorkflow({
               activeBuyOrderCount,
             })
             state.volatilityProtection.set(symbol, transition.state)
-            return { recovered: transition.recovered, state: transition.state }
+            return { recovered: transition.recovered,
+state: transition.state }
           },
         })
       } catch (error) {
@@ -246,8 +249,10 @@ export function makeVolatilityProtectionWorkflow({
     const needsRefresh = unavailableReason
       ? current.reason !== unavailableReason
       : current.lastEvaluatedCandleOpenTime !== candleOpenTime
-    if (!needsRefresh) {return toResult({ data: { skipped: true, state: current } })}
-    return processVolatilitySnapshot({ symbol, snapshot })
+    if (!needsRefresh) {return toResult({ data: { skipped: true,
+state: current } })}
+    return processVolatilitySnapshot({ symbol,
+snapshot })
   }
 
   return Object.freeze({
