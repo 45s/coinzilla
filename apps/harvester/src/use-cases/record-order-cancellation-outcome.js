@@ -38,9 +38,9 @@ export async function recordOrderCancellationOutcome({
     } else if (canceledOrder !== undefined) {
       throw new TypeError("Unconfirmed cancellation outcome must not include an untrusted canonical response")
     }
-    const market = order.market
+    const {market} = order
     const result = await operationalStateStore.append({
-      factId: "order-cancellation-outcome:" + order.clientOrderId + ":" + reason + ":" + outcome,
+      factId: `order-cancellation-outcome:${  order.clientOrderId  }:${  reason  }:${  outcome}`,
       factType: "ORDER_CANCELLATION_OUTCOME",
       data: {
         clientOrderId: order.clientOrderId,
