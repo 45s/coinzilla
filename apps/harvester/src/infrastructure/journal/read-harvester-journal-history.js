@@ -562,13 +562,16 @@ async function discoverRootSessionDirectories({
         details: { directory: sessionsDirectory },
       })
     }
-    const discovered = await discoverSessionDirectories({
+    const {
+      directories,
+      directoriesVisited: discoveredDirectoriesVisited,
+    } = await discoverSessionDirectories({
       sessionsRoot: sessionsDirectory,
       maxDirectories,
       maxSessions,
     })
-    sessionDirectories.push(...discovered.directories)
-    directoriesVisited = discovered.directoriesVisited
+    sessionDirectories.push(...directories)
+    directoriesVisited = discoveredDirectoriesVisited
   }
   return { sessionDirectories,
 directoriesVisited }
