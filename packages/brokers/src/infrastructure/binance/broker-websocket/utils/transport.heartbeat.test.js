@@ -20,7 +20,8 @@ function createTransport() {
     setTimeoutFn: clock.setTimeout.bind(clock),
     clearTimeoutFn: clock.clearTimeout.bind(clock),
   })
-  return { transport, sockets }
+  return { transport,
+    sockets }
 }
 
 test("forwards Undici ping frames only for its own WebSocket", async () => {
