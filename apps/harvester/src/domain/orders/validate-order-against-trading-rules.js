@@ -32,7 +32,7 @@ export function validateOrderAgainstTradingRules({ order, tradingRules } = {}) {
   for (const type of REQUIRED_RULES) {
     const rule = constraints.get(type)
     if (!rule || rule.status !== "SUPPORTED") {
-      throw new Error("Required exchange trading rule is unavailable: " + type)
+      throw new Error(`Required exchange trading rule is unavailable: ${  type}`)
     }
   }
 
@@ -51,14 +51,17 @@ export function validateOrderAgainstTradingRules({ order, tradingRules } = {}) {
     direction: "down",
   })
 
-  if (compareDecimal({ left: roundedPrice, right: price }) !== 0) {
+  if (compareDecimal({ left: roundedPrice,
+right: price }) !== 0) {
     throw new RangeError("Order price does not align with exchange PRICE_INCREMENT")
   }
-  if (compareDecimal({ left: roundedQuantity, right: quantity }) !== 0) {
+  if (compareDecimal({ left: roundedQuantity,
+right: quantity }) !== 0) {
     throw new RangeError("Order quantity does not align with exchange QUANTITY_INCREMENT")
   }
 
-  const notional = multiplyDecimal({ left: price, right: quantity })
+  const notional = multiplyDecimal({ left: price,
+right: quantity })
   const checks = [
     ["MIN_PRICE", price, "below"],
     ["MAX_PRICE", price, "above"],
@@ -69,11 +72,12 @@ export function validateOrderAgainstTradingRules({ order, tradingRules } = {}) {
   ]
   for (const [type, actual, direction] of checks) {
     const rule = constraints.get(type)
-    if (!rule || rule.status !== "SUPPORTED") continue
-    const comparison = compareDecimal({ left: actual, right: rule.value.amount })
+    if (!rule || rule.status !== "SUPPORTED") {continue}
+    const comparison = compareDecimal({ left: actual,
+right: rule.value.amount })
     if ((direction === "below" && comparison < 0) ||
         (direction === "above" && comparison > 0)) {
-      throw new RangeError("Order violates exchange " + type)
+      throw new RangeError(`Order violates exchange ${  type}`)
     }
   }
 

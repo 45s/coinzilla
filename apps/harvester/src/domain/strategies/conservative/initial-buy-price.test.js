@@ -1,5 +1,5 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest("[initial-buy-price.test.js] " + name, ...args)
+const test = (name, ...args) => nodeTest(`[initial-buy-price.test.js] ${  name}`, ...args)
 import assert from "node:assert/strict"
 import { calculateInitialBuyPrice } from "./initial-buy-price.js"
 
@@ -36,11 +36,21 @@ test("does not round a price up when the calculated value is between ticks", () 
 test("rejects invalid or missing decimal inputs", () => {
   for (const input of [
     {},
-    { lastTradePrice: "0", priceStepPercent: "0.05", priceTickSize: "0.00001" },
-    { lastTradePrice: "1", priceStepPercent: "0", priceTickSize: "0.00001" },
-    { lastTradePrice: "1", priceStepPercent: "100", priceTickSize: "0.00001" },
-    { lastTradePrice: "1", priceStepPercent: "0.05", priceTickSize: "0" },
-    { lastTradePrice: "1", priceStepPercent: "-0.05", priceTickSize: "0.00001" },
+    { lastTradePrice: "0",
+priceStepPercent: "0.05",
+priceTickSize: "0.00001" },
+    { lastTradePrice: "1",
+priceStepPercent: "0",
+priceTickSize: "0.00001" },
+    { lastTradePrice: "1",
+priceStepPercent: "100",
+priceTickSize: "0.00001" },
+    { lastTradePrice: "1",
+priceStepPercent: "0.05",
+priceTickSize: "0" },
+    { lastTradePrice: "1",
+priceStepPercent: "-0.05",
+priceTickSize: "0.00001" },
   ]) {
     assert.throws(() => calculateInitialBuyPrice(input))
   }

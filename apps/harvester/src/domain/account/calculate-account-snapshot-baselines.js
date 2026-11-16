@@ -4,9 +4,10 @@ import { Portfolio } from "../portfolio/portfolio.js"
 
 function addAmount({ values, assetId, amount, field }) {
   if (typeof assetId !== "string" || !assetId.trim()) {
-    throw new TypeError(field + " requires a non-empty asset ID")
+    throw new TypeError(`${field  } requires a non-empty asset ID`)
   }
-  values.set(assetId, addDecimal({ left: values.get(assetId) ?? "0", right: amount }))
+  values.set(assetId, addDecimal({ left: values.get(assetId) ?? "0",
+right: amount }))
 }
 
 function addAdditionalTrackedBaseQuantity({ values, item } = {}) {
@@ -37,7 +38,8 @@ function addAdditionalTrackedBaseQuantity({ values, item } = {}) {
 function toRecords(values) {
   return Object.freeze([...values]
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([assetId, amount]) => Object.freeze({ assetId, amount })))
+    .map(([assetId, amount]) => Object.freeze({ assetId,
+amount })))
 }
 
 /**
@@ -97,7 +99,7 @@ export function calculateAccountSnapshotBaselines({ portfolio, activeOrders, add
       }
       if (order.side === "BUY") {
         if (!order.limitPrice) {
-          throw new Error("Cannot capture an active BUY commitment without a canonical limit price: " + order.clientOrderId)
+          throw new Error(`Cannot capture an active BUY commitment without a canonical limit price: ${  order.clientOrderId}`)
         }
         addAmount({
           values: committedQuoteBalance,

@@ -4,7 +4,8 @@ import { validateCancellationEligibility } from "./validate-cancellation-eligibi
 
 test("allows only broker-acknowledged open and partially-filled orders", () => {
   for (const status of ["OPEN", "PARTIALLY_FILLED"]) {
-    const order = { status, brokerOrderId: "12345" }
+    const order = { status,
+brokerOrderId: "12345" }
     const result = validateCancellationEligibility({ order })
     assert.equal(result.ok, true)
     assert.equal(result.data.order, order)
@@ -14,7 +15,8 @@ test("allows only broker-acknowledged open and partially-filled orders", () => {
 test("rejects pending, unknown, and terminal order states", () => {
   for (const status of ["PENDING", "UNKNOWN", "FILLED", "CANCELED", "REJECTED", "EXPIRED"]) {
     const result = validateCancellationEligibility({
-      order: { status, brokerOrderId: "12345" },
+      order: { status,
+brokerOrderId: "12345" },
     })
     assert.equal(result.ok, false, status)
     assert.match(result.errors[0].message, /not cancellable/)
@@ -24,7 +26,8 @@ test("rejects pending, unknown, and terminal order states", () => {
 test("rejects missing or malformed broker acknowledgement IDs", () => {
   for (const brokerOrderId of [undefined, null, "", "   ", 123]) {
     const result = validateCancellationEligibility({
-      order: { status: "OPEN", brokerOrderId },
+      order: { status: "OPEN",
+brokerOrderId },
     })
     assert.equal(result.ok, false)
     assert.match(result.errors[0].message, /broker-acknowledged/)

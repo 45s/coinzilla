@@ -46,25 +46,31 @@ export function validateCandle({ candle, symbol, interval, intervalMs } = {}) {
 
   const decimalFields = ["open", "high", "low", "close", "volume"]
   for (const field of decimalFields) {
-    assertDecimalString({ value: candle[field], field: "candle " + field })
+    assertDecimalString({ value: candle[field],
+field: `candle ${  field}` })
   }
   for (const field of ["open", "high", "low", "close"]) {
-    if (compareDecimal({ left: candle[field], right: "0" }) <= 0) {
-      throw new RangeError("candle " + field + " must be positive")
+    if (compareDecimal({ left: candle[field],
+right: "0" }) <= 0) {
+      throw new RangeError(`candle ${  field  } must be positive`)
     }
   }
-  if (compareDecimal({ left: candle.volume, right: "0" }) < 0) {
+  if (compareDecimal({ left: candle.volume,
+right: "0" }) < 0) {
     throw new RangeError("candle volume must be non-negative")
   }
-  if (compareDecimal({ left: candle.high, right: candle.low }) < 0) {
+  if (compareDecimal({ left: candle.high,
+right: candle.low }) < 0) {
     throw new RangeError("candle high must not be below candle low")
   }
   for (const field of ["open", "close"]) {
     if (
-      compareDecimal({ left: candle[field], right: candle.low }) < 0 ||
-      compareDecimal({ left: candle[field], right: candle.high }) > 0
+      compareDecimal({ left: candle[field],
+right: candle.low }) < 0 ||
+      compareDecimal({ left: candle[field],
+right: candle.high }) > 0
     ) {
-      throw new RangeError("candle " + field + " must be within its high-low range")
+      throw new RangeError(`candle ${  field  } must be within its high-low range`)
     }
   }
 
@@ -80,7 +86,10 @@ export function validateCandleSeries({ candles, symbol, interval, intervalMs } =
   const validated = []
   let previousOpenTime = null
   for (let index = 0; index < candles.length; index += 1) {
-    const candle = validateCandle({ candle: candles[index], symbol, interval, intervalMs })
+    const candle = validateCandle({ candle: candles[index],
+symbol,
+interval,
+intervalMs })
     if (!candle.isClosed && index !== candles.length - 1) {
       throw new RangeError("only the final historical candle may still be forming")
     }
@@ -140,7 +149,8 @@ export function calculateVolatilityMetrics({
     throw new RangeError("volatility ratioScale must be an integer from 0 to 100")
   }
   if (candles.length < period + referenceObservations) {
-    return { metrics: null, reason: "INSUFFICIENT_HISTORY" }
+    return { metrics: null,
+reason: "INSUFFICIENT_HISTORY" }
   }
 
   const indicatorInput = {
@@ -156,7 +166,8 @@ export function calculateVolatilityMetrics({
   const reference = natrSeries.slice(-referenceObservations - 1, -1)
 
   const referenceTotal = reference.reduce(
-    (total, observation) => addDecimal({ left: total, right: observation.value }),
+    (total, observation) => addDecimal({ left: total,
+right: observation.value }),
     "0",
   )
   const referenceNatr = divideDecimal({
@@ -165,8 +176,10 @@ export function calculateVolatilityMetrics({
     scale: indicatorScale,
     rounding: "half-up",
   })
-  if (compareDecimal({ left: referenceNatr, right: "0" }) <= 0) {
-    return { metrics: null, reason: "ZERO_REFERENCE_VOLATILITY" }
+  if (compareDecimal({ left: referenceNatr,
+right: "0" }) <= 0) {
+    return { metrics: null,
+reason: "ZERO_REFERENCE_VOLATILITY" }
   }
 
   const volatilityRatio = calculateVolatilityRatio({
@@ -183,5 +196,6 @@ export function calculateVolatilityMetrics({
     referenceObservations,
     volatilityRatio,
   })
-  return { metrics, reason: null }
+  return { metrics,
+reason: null }
 }

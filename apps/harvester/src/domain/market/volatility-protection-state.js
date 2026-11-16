@@ -81,8 +81,10 @@ export function transitionVolatilityProtection({
     })
   } else {
     const ratio = metrics.volatilityRatio
-    const aboveProtect = compareDecimal({ left: ratio, right: thresholds.protectRatio }) >= 0
-    warning = compareDecimal({ left: ratio, right: thresholds.warningRatio }) >= 0
+    const aboveProtect = compareDecimal({ left: ratio,
+right: thresholds.protectRatio }) >= 0
+    warning = compareDecimal({ left: ratio,
+right: thresholds.warningRatio }) >= 0
 
     if (aboveProtect) {
       next = Object.freeze({
@@ -109,7 +111,8 @@ export function transitionVolatilityProtection({
         atr: metrics.atr,
       })
     } else {
-      const belowRecovery = compareDecimal({ left: ratio, right: thresholds.recoverRatio }) <= 0
+      const belowRecovery = compareDecimal({ left: ratio,
+right: thresholds.recoverRatio }) <= 0
       const isNewCompletedCandle = state.lastEvaluatedCandleOpenTime === null ||
         metrics.openTime > state.lastEvaluatedCandleOpenTime
       const stableCandleCount = belowRecovery

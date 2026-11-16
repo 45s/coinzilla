@@ -1,13 +1,19 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest("[recovery-fill-accounting.test.js] " + name, ...args)
+const test = (name, ...args) => nodeTest(`[recovery-fill-accounting.test.js] ${  name}`, ...args)
 import assert from "node:assert/strict"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { calculateRecoveryFillAccounting } from "./recovery-fill-accounting.js"
 
-const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
-const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-const thirdAsset = new Asset({ id: "asset:BNB", code: "BNB" })
-const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({ id: "asset:DOGE",
+code: "DOGE" })
+const quoteAsset = new Asset({ id: "asset:USDT",
+code: "USDT" })
+const thirdAsset = new Asset({ id: "asset:BNB",
+code: "BNB" })
+const market = new Market({ venue: "binance",
+symbol: "DOGEUSDT",
+baseAsset,
+quoteAsset })
 
 function makeFill({
   side = "BUY",
@@ -21,9 +27,12 @@ function makeFill({
     brokerOrderId: "order-1",
     market,
     side,
-    price: new Money({ amount: "0.1", asset: quoteAsset }),
-    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
-    quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+    price: new Money({ amount: "0.1",
+asset: quoteAsset }),
+    quantity: new Quantity({ amount: quantity,
+asset: baseAsset }),
+    quoteQuantity: new Money({ amount: quoteQuantity,
+asset: quoteAsset }),
     commissions,
     commissionStatus,
   })
@@ -32,10 +41,12 @@ function makeFill({
 test("adds actual quote commission to BUY recovery cost", () => {
   const fill = makeFill({
     commissions: [
-      new Commission({ amount: new Money({ amount: "0.02", asset: quoteAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.02",
+asset: quoteAsset }) }),
     ],
   })
-  assert.deepEqual(calculateRecoveryFillAccounting({ market, fill }), {
+  assert.deepEqual(calculateRecoveryFillAccounting({ market,
+fill }), {
     buyCost: "10.02",
     netSellProceeds: "0",
   }, "BUY recovery cost must include the actual quote commission exactly once.")
@@ -44,10 +55,12 @@ test("adds actual quote commission to BUY recovery cost", () => {
 test("does not convert base BUY commission into quote recovery cost", () => {
   const fill = makeFill({
     commissions: [
-      new Commission({ amount: new Money({ amount: "0.1", asset: baseAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.1",
+asset: baseAsset }) }),
     ],
   })
-  assert.deepEqual(calculateRecoveryFillAccounting({ market, fill }), {
+  assert.deepEqual(calculateRecoveryFillAccounting({ market,
+fill }), {
     buyCost: "10",
     netSellProceeds: "0",
   }, "Base BUY commission changes inventory but must not be converted into quote recovery cost.")
@@ -58,10 +71,12 @@ test("credits SELL proceeds net of actual quote commission", () => {
     side: "SELL",
     quoteQuantity: "12",
     commissions: [
-      new Commission({ amount: new Money({ amount: "0.03", asset: quoteAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.03",
+asset: quoteAsset }) }),
     ],
   })
-  assert.deepEqual(calculateRecoveryFillAccounting({ market, fill }), {
+  assert.deepEqual(calculateRecoveryFillAccounting({ market,
+fill }), {
     buyCost: "0",
     netSellProceeds: "11.97",
   }, "SELL recovery proceeds must subtract the actual quote commission exactly once.")
@@ -72,10 +87,12 @@ test("does not deduct base SELL commission from quote recovery proceeds", () => 
     side: "SELL",
     quoteQuantity: "12",
     commissions: [
-      new Commission({ amount: new Money({ amount: "0.1", asset: baseAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.1",
+asset: baseAsset }) }),
     ],
   })
-  assert.deepEqual(calculateRecoveryFillAccounting({ market, fill }), {
+  assert.deepEqual(calculateRecoveryFillAccounting({ market,
+fill }), {
     buyCost: "0",
     netSellProceeds: "12",
   }, "Base SELL commission must reduce base inventory, not quote recovery proceeds.")
@@ -95,7 +112,8 @@ test("rejects incomplete commission data and unvalued third-asset fees", () => {
       market,
       fill: makeFill({
         commissions: [
-          new Commission({ amount: new Money({ amount: "0.01", asset: thirdAsset }) }),
+          new Commission({ amount: new Money({ amount: "0.01",
+asset: thirdAsset }) }),
         ],
       }),
     }),
@@ -112,7 +130,8 @@ test("rejects quote commission greater than SELL proceeds", () => {
         side: "SELL",
         quoteQuantity: "0.01",
         commissions: [
-          new Commission({ amount: new Money({ amount: "0.02", asset: quoteAsset }) }),
+          new Commission({ amount: new Money({ amount: "0.02",
+asset: quoteAsset }) }),
         ],
       }),
     }),
@@ -129,7 +148,8 @@ test("rejects base commission greater than SELL execution quantity", () => {
       fill: makeFill({
         side: "SELL",
         commissions: [
-          new Commission({ amount: new Money({ amount: "100.01", asset: baseAsset }) }),
+          new Commission({ amount: new Money({ amount: "100.01",
+asset: baseAsset }) }),
         ],
       }),
     }),
@@ -145,7 +165,8 @@ test("rejects quote commission greater than BUY quote notional", () => {
       fill: makeFill({
         quoteQuantity: "0.01",
         commissions: [
-          new Commission({ amount: new Money({ amount: "0.02", asset: quoteAsset }) }),
+          new Commission({ amount: new Money({ amount: "0.02",
+asset: quoteAsset }) }),
         ],
       }),
     }),
@@ -161,8 +182,10 @@ test("checks aggregated commissions against the executed amount", () => {
       fill: makeFill({
         quoteQuantity: "1",
         commissions: [
-          new Commission({ amount: new Money({ amount: "0.6", asset: quoteAsset }) }),
-          new Commission({ amount: new Money({ amount: "0.6", asset: quoteAsset }) }),
+          new Commission({ amount: new Money({ amount: "0.6",
+asset: quoteAsset }) }),
+          new Commission({ amount: new Money({ amount: "0.6",
+asset: quoteAsset }) }),
         ],
       }),
     }),
@@ -173,19 +196,30 @@ test("checks aggregated commissions against the executed amount", () => {
 
 test("aggregates multiple base and quote commission entries for BUY cost and SELL proceeds", () => {
   const commissions = [
-    new Commission({ amount: new Money({ amount: "0.1", asset: baseAsset }) }),
-    new Commission({ amount: new Money({ amount: "0.2", asset: baseAsset }) }),
-    new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
-    new Commission({ amount: new Money({ amount: "0.02", asset: quoteAsset }) }),
+    new Commission({ amount: new Money({ amount: "0.1",
+asset: baseAsset }) }),
+    new Commission({ amount: new Money({ amount: "0.2",
+asset: baseAsset }) }),
+    new Commission({ amount: new Money({ amount: "0.01",
+asset: quoteAsset }) }),
+    new Commission({ amount: new Money({ amount: "0.02",
+asset: quoteAsset }) }),
   ]
-  const buyFill = makeFill({ quantity: "1", quoteQuantity: "0.1", commissions })
-  const sellFill = makeFill({ side: "SELL", quantity: "1", quoteQuantity: "0.2", commissions })
+  const buyFill = makeFill({ quantity: "1",
+quoteQuantity: "0.1",
+commissions })
+  const sellFill = makeFill({ side: "SELL",
+quantity: "1",
+quoteQuantity: "0.2",
+commissions })
 
-  assert.deepEqual(calculateRecoveryFillAccounting({ market, fill: buyFill }), {
+  assert.deepEqual(calculateRecoveryFillAccounting({ market,
+fill: buyFill }), {
     buyCost: "0.13",
     netSellProceeds: "0",
   }, "BUY recovery cost must add both quote commission entries (0.01 + 0.02) while excluding base commissions from quote cost.")
-  assert.deepEqual(calculateRecoveryFillAccounting({ market, fill: sellFill }), {
+  assert.deepEqual(calculateRecoveryFillAccounting({ market,
+fill: sellFill }), {
     buyCost: "0",
     netSellProceeds: "0.17",
   }, "SELL recovery proceeds must subtract both quote commission entries (0.01 + 0.02) while base commissions remain inventory-only.")
@@ -196,13 +230,16 @@ test("rejects base commission entries whose aggregate exceeds executed quantity"
     quantity: "1",
     quoteQuantity: "0.1",
     commissions: [
-      new Commission({ amount: new Money({ amount: "0.6", asset: baseAsset }) }),
-      new Commission({ amount: new Money({ amount: "0.6", asset: baseAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.6",
+asset: baseAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.6",
+asset: baseAsset }) }),
     ],
   })
 
   assert.throws(
-    () => calculateRecoveryFillAccounting({ market, fill }),
+    () => calculateRecoveryFillAccounting({ market,
+fill }),
     /base commission exceeds executed base quantity/i,
     "Two individually valid 0.6 base commissions must be aggregated and rejected when their 1.2 total exceeds the 1 base execution.",
   )
@@ -212,14 +249,18 @@ test("rejects negative commission amounts before accounting", () => {
   const fill = {
     market,
     side: "BUY",
-    quantity: new Quantity({ amount: "1", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "0.1", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1",
+asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "0.1",
+asset: quoteAsset }),
     commissionStatus: "COMPLETE",
-    commissions: [{ amount: { amount: "-0.01", asset: quoteAsset } }],
+    commissions: [{ amount: { amount: "-0.01",
+asset: quoteAsset } }],
   }
 
   assert.throws(
-    () => calculateRecoveryFillAccounting({ market, fill }),
+    () => calculateRecoveryFillAccounting({ market,
+fill }),
     /Commission amount must be non-negative/,
     "Negative commission facts must be rejected before they can change recovery accounting.",
   )
@@ -228,24 +269,30 @@ test("rejects negative commission amounts before accounting", () => {
 test("rejects third-asset quote valuation with a wrong asset or non-positive amount", () => {
   const wrongAssetFill = makeFill({
     commissions: [new Commission({
-      amount: new Money({ amount: "0.01", asset: thirdAsset }),
-      quoteValue: new Money({ amount: "0.03", asset: baseAsset }),
+      amount: new Money({ amount: "0.01",
+asset: thirdAsset }),
+      quoteValue: new Money({ amount: "0.03",
+asset: baseAsset }),
     })],
   })
   assert.throws(
-    () => calculateRecoveryFillAccounting({ market, fill: wrongAssetFill }),
+    () => calculateRecoveryFillAccounting({ market,
+fill: wrongAssetFill }),
     /Third-asset commission quote value must use the market quote asset/,
     "A third-asset valuation denominated in the base asset must be rejected instead of being added to quote accounting.",
   )
 
   const zeroValueFill = makeFill({
     commissions: [new Commission({
-      amount: new Money({ amount: "0.01", asset: thirdAsset }),
-      quoteValue: new Money({ amount: "0", asset: quoteAsset }),
+      amount: new Money({ amount: "0.01",
+asset: thirdAsset }),
+      quoteValue: new Money({ amount: "0",
+asset: quoteAsset }),
     })],
   })
   assert.throws(
-    () => calculateRecoveryFillAccounting({ market, fill: zeroValueFill }),
+    () => calculateRecoveryFillAccounting({ market,
+fill: zeroValueFill }),
     /Third-asset commission quote value must be greater than zero/,
     "A third-asset commission with a zero quote valuation must fail closed.",
   )
@@ -257,11 +304,14 @@ test("deducts a reliable third-asset quote valuation from SELL proceeds", () => 
     side: "SELL",
     quoteQuantity: "12",
     commissions: [new Commission({
-      amount: new Money({ amount: "0.01", asset: thirdAsset }),
-      quoteValue: new Money({ amount: "0.03", asset: quoteAsset }),
+      amount: new Money({ amount: "0.01",
+asset: thirdAsset }),
+      quoteValue: new Money({ amount: "0.03",
+asset: quoteAsset }),
     })],
   })
-  assert.deepEqual(calculateRecoveryFillAccounting({ market, fill }), {
+  assert.deepEqual(calculateRecoveryFillAccounting({ market,
+fill }), {
     buyCost: "0",
     netSellProceeds: "11.97",
   }, "A valid third-asset quote valuation must reduce SELL proceeds by its supplied quote value.")

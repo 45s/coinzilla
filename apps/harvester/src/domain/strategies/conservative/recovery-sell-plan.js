@@ -50,30 +50,42 @@ export function calculateRecoverySellPlan({
   }
 
   for (const [field, value] of Object.entries(values)) {
-    assertDecimalString({ value, field })
+    assertDecimalString({ value,
+field })
   }
 
   if (
-    compareDecimal({ left: activeQuantity, right: "0" }) <= 0 ||
-    compareDecimal({ left: keepQuantity, right: "0" }) < 0 ||
-    compareDecimal({ left: positionSpent, right: "0" }) < 0 ||
-    compareDecimal({ left: saleProceeds, right: "0" }) < 0 ||
-    compareDecimal({ left: minProfit, right: "0.01" }) < 0 ||
-    compareDecimal({ left: feeRate, right: "0" }) < 0 ||
-    compareDecimal({ left: feeRate, right: "1" }) >= 0 ||
-    compareDecimal({ left: priceTickSize, right: "0" }) <= 0 ||
-    compareDecimal({ left: quantityStepSize, right: "0" }) <= 0
+    compareDecimal({ left: activeQuantity,
+right: "0" }) <= 0 ||
+    compareDecimal({ left: keepQuantity,
+right: "0" }) < 0 ||
+    compareDecimal({ left: positionSpent,
+right: "0" }) < 0 ||
+    compareDecimal({ left: saleProceeds,
+right: "0" }) < 0 ||
+    compareDecimal({ left: minProfit,
+right: "0.01" }) < 0 ||
+    compareDecimal({ left: feeRate,
+right: "0" }) < 0 ||
+    compareDecimal({ left: feeRate,
+right: "1" }) >= 0 ||
+    compareDecimal({ left: priceTickSize,
+right: "0" }) <= 0 ||
+    compareDecimal({ left: quantityStepSize,
+right: "0" }) <= 0
   ) {
     throw new RangeError("Invalid Conservative recovery SELL plan inputs")
   }
 
   const sellableQuantity = maxDecimal({
     left: "0",
-    right: subtractDecimal({ left: activeQuantity, right: keepQuantity }),
+    right: subtractDecimal({ left: activeQuantity,
+right: keepQuantity }),
   })
   const quantityBeforeStep = divideDecimal({
     left: sellableQuantity,
-    right: addDecimal({ left: "1", right: feeRate }),
+    right: addDecimal({ left: "1",
+right: feeRate }),
     scale: 36,
     rounding: "toward-zero",
   })
@@ -85,12 +97,14 @@ export function calculateRecoverySellPlan({
   const requiredNetProceeds = maxDecimal({
     left: "0",
     right: subtractDecimal({
-      left: addDecimal({ left: positionSpent, right: minProfit }),
+      left: addDecimal({ left: positionSpent,
+right: minProfit }),
       right: saleProceeds,
     }),
   })
 
-  if (compareDecimal({ left: quantity, right: "0" }) <= 0) {
+  if (compareDecimal({ left: quantity,
+right: "0" }) <= 0) {
     return Object.freeze({
       quantity: "0",
       price: null,
@@ -98,11 +112,15 @@ export function calculateRecoverySellPlan({
     })
   }
 
-  if (compareDecimal({ left: requiredNetProceeds, right: "0" }) === 0) {
-    return Object.freeze({ quantity, price: null, requiredNetProceeds })
+  if (compareDecimal({ left: requiredNetProceeds,
+right: "0" }) === 0) {
+    return Object.freeze({ quantity,
+price: null,
+requiredNetProceeds })
   }
 
-  const netSellRate = subtractDecimal({ left: "1", right: feeRate })
+  const netSellRate = subtractDecimal({ left: "1",
+right: feeRate })
   const netQuotePerBase = multiplyDecimal({
     left: quantity,
     right: netSellRate,
@@ -119,5 +137,7 @@ export function calculateRecoverySellPlan({
     direction: "up",
   })
 
-  return Object.freeze({ quantity, price, requiredNetProceeds })
+  return Object.freeze({ quantity,
+price,
+requiredNetProceeds })
 }
