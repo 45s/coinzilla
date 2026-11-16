@@ -51,4 +51,14 @@ test("prints a complete package ESLint report grouped by file and rule", async (
 
   process.stdout.write(`EVENT_BUS_ESLINT_REPORT_START\n${JSON.stringify(report, null, 2)}\nEVENT_BUS_ESLINT_REPORT_END\n`)
   assert.ok(results.length > 0, "The package ESLint report must inspect JavaScript files.")
+
+  const fixer = new ESLint({ fix: true })
+  const fixedResults = await fixer.lintFiles(["src/**/*.{js,mjs,cjs}"])
+  const fixedFiles = fixedResults
+    .filter((result) => typeof result.output === "string")
+    .map((result) => ({
+      file: relative(process.cwd(), result.filePath),
+      content: result.output,
+    }))
+  process.stdout.write(`EVENT_BUS_ESLINT_AUTOFIX_START\n${JSON.stringify(fixedFiles)}\nEVENT_BUS_ESLINT_AUTOFIX_END\n`)
 })
