@@ -274,7 +274,8 @@ async function discoverSessionDirectories({
   let directoriesVisited = 0
   let sessionsDiscovered = 0
 
-  async function walk(directory, { isRoot = false } = {}) {
+  async function walk(...parameters) {
+    const [directory, { isRoot = false } = {}] = parameters
     directoriesVisited += 1
     if (directoriesVisited > maxDirectories) {
       throw createHistoryError({
