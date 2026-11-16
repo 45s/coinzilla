@@ -8,7 +8,6 @@
   "license": "ISC",
   "type": "module",
   "scripts": {
-    "pretest": "node eslint-fix.js",
     "test": "node --test",
     "test:coverage": "node --experimental-test-coverage --test --test-coverage-include=src/domain/**/*.js --test-coverage-include=src/application/**/*.js --test-coverage-include=src/infrastructure/**/*.js --test-coverage-exclude=src/infrastructure/binance/broker-websocket/**/*.integration.js --test-coverage-exclude=src/infrastructure/binance/broker-websocket/test-helpers/**/*.js --test-coverage-exclude=src/domain/**/*.test.js --test-coverage-exclude=src/application/**/*.test.js --test-coverage-exclude=src/infrastructure/**/*.test.js --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=80",
     "test:watch": "node --test --watch",
