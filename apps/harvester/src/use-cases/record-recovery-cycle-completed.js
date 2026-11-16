@@ -23,16 +23,22 @@ function validateRecoveryCycleCompletion({ operationalStateStore, recoveryLedger
 }
 
 function validateRecoveryCycleAccounting({ recoveryLedger, position, completion, minProfit }) {
-  if (compareDecimal({ left: position.spent.amount, right: recoveryLedger.buyCost }) !== 0) {
+  if (compareDecimal({ left: position.spent.amount, 
+    right: recoveryLedger.buyCost }) !== 0) {
     throw new TypeError("Recovery-cycle authoritative Position.spent must match RecoveryLedger buyCost")
   }
-  if (compareDecimal({ left: completion.realizedNetProfit, right: recoveryLedger.realizedNetProfit }) !== 0 ||
-      compareDecimal({ left: completion.realizedNetProfit, right: minProfit }) < 0) {
+  if (compareDecimal({ left: completion.realizedNetProfit, 
+    right: recoveryLedger.realizedNetProfit }) !== 0 ||
+      compareDecimal({ left: completion.realizedNetProfit, 
+        right: minProfit }) < 0) {
     throw new TypeError("Recovery-cycle completion profit must match the ledger and satisfy minProfit")
   }
-  if (compareDecimal({ left: completion.activeQuantity, right: position.baseQuantity.amount }) !== 0 ||
-      compareDecimal({ left: completion.freeQuantity, right: completion.activeQuantity }) !== 0 ||
-      compareDecimal({ left: completion.minProfit, right: minProfit }) !== 0) {
+  if (compareDecimal({ left: completion.activeQuantity, 
+    right: position.baseQuantity.amount }) !== 0 ||
+      compareDecimal({ left: completion.freeQuantity, 
+        right: completion.activeQuantity }) !== 0 ||
+      compareDecimal({ left: completion.minProfit, 
+        right: minProfit }) !== 0) {
     throw new TypeError("Recovery-cycle quantities and minProfit must match the canonical completion input")
   }
 }
@@ -65,7 +71,9 @@ function createRecoveryCycleIdentity({ market, sellOrder, recoveryLedger, positi
     canonicalInventoryDisposition,
   ])
   const cycleId = createHash("sha256").update(cycleIdentity).digest("hex")
-  return { appliedFillIds, inventoryDisposition, cycleId }
+  return { appliedFillIds, 
+    inventoryDisposition, 
+    cycleId }
 }
 
 /** Persist an eligible recovery-cycle boundary before Portfolio/RecoveryLedger reset is committed. */
