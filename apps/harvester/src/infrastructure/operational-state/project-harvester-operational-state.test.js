@@ -277,6 +277,29 @@ test("projects cancellation outcomes in a later process session against the orig
   assert.equal(result.data.orders[0].brokerOrderId, "broker-order-1")
 })
 
+function createCompletedRecoveryCycleFact() {
+  return record(8, "RECOVERY_CYCLE_COMPLETED", {
+    cycleId: "c".repeat(64),
+    marketId: "binance:BTCUSDT",
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAssetId: "asset:BTC",
+    quoteAssetId: "asset:USDT",
+    appliedFillIds: ["binance:BTCUSDT:recovery-trade-1"],
+    sellOrderClientId: "harvester-recovery-sell-1",
+    sellOrderBrokerOrderId: "broker-recovery-sell-1",
+    buyCost: "39.75",
+    spent: "39.75",
+    netSellProceeds: "40",
+    realizedNetProfit: "0.25",
+    minProfit: "0.01",
+    activeQuantity: "0.01",
+    keepQuantity: "0.01",
+    freeQuantity: "0.01",
+    inventoryDisposition: null,
+  }, `recovery-cycle-completed:binance:BTCUSDT:${"c".repeat(64)}`)
+}
+
 function createCompletedRecoveryCycleProjectionRecords() {
   const sellIntent = record(5, "ORDER_SUBMISSION_INTENT", {
     clientOrderId: "harvester-recovery-sell-1",
@@ -327,26 +350,7 @@ function createCompletedRecoveryCycleProjectionRecords() {
     commissionStatus: "COMPLETE",
     commissions: [],
   }, "execution-fill-applied:binance:BTCUSDT:recovery-trade-1")
-  const cycle = record(8, "RECOVERY_CYCLE_COMPLETED", {
-    cycleId: "c".repeat(64),
-    marketId: "binance:BTCUSDT",
-    venue: "binance",
-    symbol: "BTCUSDT",
-    baseAssetId: "asset:BTC",
-    quoteAssetId: "asset:USDT",
-    appliedFillIds: ["binance:BTCUSDT:recovery-trade-1"],
-    sellOrderClientId: "harvester-recovery-sell-1",
-    sellOrderBrokerOrderId: "broker-recovery-sell-1",
-    buyCost: "39.75",
-    spent: "39.75",
-    netSellProceeds: "40",
-    realizedNetProfit: "0.25",
-    minProfit: "0.01",
-    activeQuantity: "0.01",
-    keepQuantity: "0.01",
-    freeQuantity: "0.01",
-    inventoryDisposition: null,
-  }, `recovery-cycle-completed:binance:BTCUSDT:${"c".repeat(64)}`)
+  const cycle = createCompletedRecoveryCycleFact()
   const records = [
     record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
     baseline(),
