@@ -30,7 +30,13 @@ lineNumber },
 function createOpeningRecords() {
   const balances = [
     { asset: "BTC", 
+      
+      
+      
       free: "0", 
+   
+         
+      
       locked: "0", 
       total: "0" },
     { asset: "USDT", 
@@ -74,6 +80,9 @@ function createOpeningRecords() {
   ]
 }
 
+  
+  
+  
 function createCommissionBaselineRecord() {
   return record("account.snapshot_captured", {
     phase: "COMMISSION_BASELINE",
@@ -92,11 +101,15 @@ function createBuyFillRecord({ thirdAssetCommission }) {
     fillId: "binance:BTCUSDT:trade-1",
     tradeId: "trade-1",
     brokerOrderId: "9001",
+    
+    
     clientOrderId: "h-BTCUSDT-buy-1",
     symbol: "BTCUSDT",
     side: "BUY",
     price: "100",
     quantity: "0.5",
+    
+    
     quoteQuantity: "50",
     liquidityRole: "MAKER",
     commissions: [
@@ -157,6 +170,9 @@ function createSellCycleRecords({ freeQuantity, thirdAssetCommission }) {
       freeQuantity,
       keepQuantity: "0.01",
       minProfit: "0.01",
+      
+      
+      
       realizedNetProfit: thirdAssetCommission ? "0.24" : "0.25",
     }, thirdAssetCommission ? 10 : 9),
   ]
@@ -189,6 +205,7 @@ function createClosingRecords({ thirdAssetCommission }) {
       auditReasons: [],
     }, thirdAssetCommission ? 11 : 10),
     record("harvester.stopped", {
+      
       reason: "SIGTERM",
       outcome: "success",
     }, thirdAssetCommission ? 12 : 11),
