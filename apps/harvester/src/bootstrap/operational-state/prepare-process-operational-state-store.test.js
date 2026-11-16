@@ -10,15 +10,15 @@ const config = ({ recovery = false, operator = false } = {}) => ({
 })
 const store = () => ({ verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }) })
 
-test("skips store creation when neither recovery nor operator control requires it", async () => {
+test("skips store creation for Telegram CC while restart recovery is disabled", async () => {
   let calls = 0
   assert.equal(await prepareProcessOperationalStateStore({
-    appConfig: config(), runtimeSessionId: "session", createOperationalStateStore: () => { calls += 1 },
+    appConfig: config({ recovery: true }), runtimeSessionId: "session", createOperationalStateStore: () => { calls += 1 },
   }), undefined)
   assert.equal(calls, 0)
 })
 
-test("uses the documented default directory for Telegram operator control", async () => {
+test("uses the documented default directory when restart recovery is enabled", async () => {
   let options
   const expected = store()
   const actual = await prepareProcessOperationalStateStore({
