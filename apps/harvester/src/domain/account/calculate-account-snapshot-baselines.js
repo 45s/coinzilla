@@ -170,32 +170,11 @@ export function calculateAccountSnapshotBaselines({
       })
     }
 
-    for (const order of activeOrders) {
-      if (!["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status)) {
-        throw new TypeError("calculateAccountSnapshotBaselines activeOrders must contain only active orders")
-      }
-      if (order.side === "BUY") {
-        if (!order.limitPrice) {
-          throw new Error(`Cannot capture an active BUY commitment without a canonical limit price: ${  order.clientOrderId}`)
-        }
-        addAmount({
-          values: committedQuoteBalance,
-          assetId: order.market.quoteAsset.id,
-          amount: multiplyDecimal({
-            left: order.remainingQuantity.amount,
-            right: order.limitPrice.amount,
-          }),
-          field: "Active BUY quote commitment",
-        })
-        continue
-      }
-      addAmount({
-        values: committedBaseBalance,
-        assetId: order.market.baseAsset.id,
-        amount: order.remainingQuantity.amount,
-        field: "Active SELL base commitment",
-      })
-    }
+    addActiveOrderCommitments({
+      activeOrders,
+      committedQuoteBalance,
+      committedBaseBalance,
+    })
 
     return toResult({
       data: Object.freeze({

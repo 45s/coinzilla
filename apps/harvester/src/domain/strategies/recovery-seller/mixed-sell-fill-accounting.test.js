@@ -240,10 +240,11 @@ test("commits every partial canonical Fill only after the complete terminal orde
     orderRegistry: openRegistry,
   })
   for (const allocation of allocations) {
-    reconciliation = stageMixedSellFillAllocation({
+    const { reconciliation: nextReconciliation } = stageMixedSellFillAllocation({
       reconciliation,
       allocation,
-    }).reconciliation
+    })
+    reconciliation = nextReconciliation
   }
 
   const result = applyReconciledMixedSellOrder({

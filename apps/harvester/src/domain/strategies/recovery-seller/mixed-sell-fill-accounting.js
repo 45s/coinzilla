@@ -208,6 +208,21 @@ function applyProjections({
   }
 }
 
+function applyAtomicProjections(input) {
+  try {
+    return applyProjections(input)
+  } catch (cause) {
+    if (cause instanceof MixedSellFillReconciliationError) {
+      throw cause
+    }
+    fail({
+      code: "RS_MIXED_SELL_RECONCILIATION_PROJECTION_APPLY_FAILED",
+      message: `The recovery and legacy projections could not be applied atomically: ${cause?.message ?? String(cause)}.`,
+      cause,
+    })
+  }
+}
+
 /**
  * Commit one fully reconciled mixed SELL to both immutable RS accounting
  * projections. The caller publishes the returned Portfolio and legacy
@@ -282,26 +297,14 @@ export function applyReconciledMixedSellOrder({
     reconciliation: terminalResult.reconciliation,
   })
 
-  let projections
-  try {
-    projections = applyProjections({
-      portfolio,
-      legacyPosition,
-      legacyAccounting,
-      reconciliation: terminalResult.reconciliation,
-      canonicalFillAllocations,
-      fillsById,
-    })
-  } catch (cause) {
-    if (cause instanceof MixedSellFillReconciliationError) {
-      throw cause
-    }
-    fail({
-      code: "RS_MIXED_SELL_RECONCILIATION_PROJECTION_APPLY_FAILED",
-      message: `The recovery and legacy projections could not be applied atomically: ${cause?.message ?? String(cause)}.`,
-      cause,
-    })
-  }
+  const projections = applyAtomicProjections({
+    portfolio,
+    legacyPosition,
+    legacyAccounting,
+    reconciliation: terminalResult.reconciliation,
+    canonicalFillAllocations,
+    fillsById,
+  })
 
   if (duplicate &&
       (projections.portfolio !== portfolio ||

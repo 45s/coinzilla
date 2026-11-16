@@ -235,22 +235,22 @@ function sumAdditionalTrackedAmount({
   allowNegative,
 } = {}) {
   if (!Array.isArray(records)) {
-    throw new TypeError(`$\{field\} provider must return an array`)
+    throw new TypeError(`${field} provider must return an array`)
   }
   let total = "0"
   for (const item of records) {
     if (!item || typeof item.assetId !== "string" || !item.assetId.trim()) {
-      throw new TypeError(`$\{field\} requires a canonical asset ID`)
+      throw new TypeError(`${field} requires a canonical asset ID`)
     }
     assertDecimalString({
       value: item.amount,
-      field: `$\{field\}.amount`,
+      field: `${field}.amount`,
     })
     if (!allowNegative && compareDecimal({
       left: item.amount,
       right: "0",
     }) < 0) {
-      throw new RangeError(`$\{field\}.amount must be non-negative`)
+      throw new RangeError(`${field}.amount must be non-negative`)
     }
     if (item.assetId === assetId) {
       total = addDecimal({
