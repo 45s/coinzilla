@@ -190,7 +190,10 @@ test("enforces every existing style rule for new maintained documents", () => {
     { lines: new Set(getLineNumbers(content)),
       isNewFile: true },
   ]))
-  const result = analyzeMarkdownStyleDocuments({ documents, changesByPath: changes })
+  const result = analyzeMarkdownStyleDocuments({
+    documents,
+    changesByPath: changes,
+  })
 
   const expected = {
     trailingWhitespace: "docs/trailing.md",
