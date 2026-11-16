@@ -353,3 +353,251 @@ test("conserves total base inventory across BUY fills, free allocation, and SELL
   assert.equal(firstBuy.totalBaseQuantity.amount, "99.75", "Later immutable Position transitions must not change the original post-BUY snapshot.")
   assert.equal(afterAllocation.totalBaseQuantity.amount, "99.75", "Later fills must not mutate the immutable post-allocation snapshot.")
 })
+
+
+const makeSellAllocation = ({
+  grossBaseQuantity = "2",
+  baseDebit = "2.01",
+  quoteProceeds = "240",
+  commissions = [
+    {
+      assetId: baseAsset.id,
+      assetCode: baseAsset.code,
+      amount: "0.01",
+    },
+    {
+      assetId: quoteAsset.id,
+      assetCode: quoteAsset.code,
+      amount: "0.1",
+    },
+    {
+      assetId: "asset:BNB",
+      assetCode: "BNB",
+      amount: "0.01",
+      quoteValue: {
+        assetId: quoteAsset.id,
+        assetCode: quoteAsset.code,
+        amount: "0.05",
+      },
+    },
+  ],
+} = {}) => ({
+  grossBaseQuantity,
+  baseDebit,
+  quoteProceeds,
+  commissions,
+})
+
+test("applies allocated SELL base debit and quote-valued fees without creating a synthetic Fill", () => {
+  const funded = Position.empty({
+    market,
+    strategyId: StrategyId.COIN_GRABBER,
+  }).applyFill({
+    fill: makeFill({
+      quantity: "10",
+      quoteQuantity: "1000",
+      price: "100",
+    }),
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  const sold = funded.applySellAllocation({
+    allocation: makeSellAllocation(),
+  })
+  assert.equal(sold.baseQuantity.amount, "7.99", "Allocated SELL must debit gross base plus the base commission.")
+  assert.equal(sold.spent.amount, "1000", "Allocated SELL must preserve the original BUY cost basis.")
+  assert.equal(sold.quoteNetCashFlow.amount, "-760.15", "Allocated SELL must add proceeds net of quote and valued third-asset commissions.")
+  assert.equal(sold.freeBaseQuantity.amount, "0", "Allocated SELL must not change the retained free-inventory bucket.")
+  assert.equal(funded.baseQuantity.amount, "10", "An allocated SELL must preserve the original immutable Position snapshot.")
+})
+
+test("rejects an allocated SELL whose base debit exceeds active inventory", () => {
+  const funded = Position.empty({
+    market,
+    strategyId: StrategyId.COIN_GRABBER,
+  }).applyFill({
+    fill: makeFill({
+      quantity: "2",
+      quoteQuantity: "200",
+    }),
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  assert.throws(
+    () => funded.applySellAllocation({
+      allocation: makeSellAllocation(),
+    }),
+    /base quantity negative/,
+    "An allocated SELL must not consume more active base inventory than the Position owns.",
+  )
+})
+
+test("rejects an allocated SELL with an unvalued third-asset commission", () => {
+  const funded = Position.empty({
+    market,
+    strategyId: StrategyId.COIN_GRABBER,
+  }).applyFill({
+    fill: makeFill({
+      quantity: "10",
+      quoteQuantity: "1000",
+      price: "100",
+    }),
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  assert.throws(
+    () => funded.applySellAllocation({
+      allocation: makeSellAllocation({
+        commissions: [
+          {
+            assetId: "asset:BNB",
+            assetCode: "BNB",
+            amount: "0.01",
+          },
+        ],
+      }),
+    }),
+    /requires reliable quote-currency valuation/,
+    "A third-asset fee must have a reliable quote-currency valuation before allocation accounting.",
+  )
+})
+
+test("rejects allocated SELL base debit inconsistent with gross quantity and base commissions", () => {
+  const funded = Position.empty({
+    market,
+    strategyId: StrategyId.COIN_GRABBER,
+  }).applyFill({
+    fill: makeFill({
+      quantity: "10",
+      quoteQuantity: "1000",
+      price: "100",
+    }),
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  assert.throws(
+    () => funded.applySellAllocation({
+      allocation: makeSellAllocation({
+        baseDebit: "2",
+      }),
+    }),
+    /base debit must equal gross quantity plus base commissions/,
+    "Allocated base debit must conserve the actual base quantity consumed by the Fill.",
+  )
+})
+
+
+test("ignores zero-value commission entries without requiring a third-asset quote valuation", () => {
+  const funded = Position.empty({
+    market,
+    strategyId: StrategyId.COIN_GRABBER,
+  }).applyFill({
+    fill: makeFill({
+      quantity: "10",
+      quoteQuantity: "1000",
+      price: "100",
+    }),
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  const sold = funded.applySellAllocation({
+    allocation: makeSellAllocation({
+      baseDebit: "2",
+      commissions: [
+        {
+          assetId: "asset:BNB",
+          assetCode: "BNB",
+          amount: "0",
+        },
+      ],
+    }),
+  })
+  assert.equal(sold.baseQuantity.amount, "8", "A zero base fee must not increase actual base debit.")
+  assert.equal(sold.quoteNetCashFlow.amount, "-760", "A zero third-asset fee must not require or invent a quote valuation.")
+})
+
+test("rejects a base commission greater than allocated gross base quantity", () => {
+  const funded = Position.empty({
+    market,
+    strategyId: StrategyId.COIN_GRABBER,
+  }).applyFill({
+    fill: makeFill({
+      quantity: "10",
+      quoteQuantity: "1000",
+      price: "100",
+    }),
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  assert.throws(
+    () => funded.applySellAllocation({
+      allocation: makeSellAllocation({
+        baseDebit: "4.1",
+        commissions: [
+          {
+            assetId: baseAsset.id,
+            assetCode: baseAsset.code,
+            amount: "2.1",
+          },
+        ],
+      }),
+    }),
+    /Allocated base commission exceeds allocated gross base quantity/,
+    "Base commission cannot consume more base than the gross SELL allocation.",
+  )
+})
+
+test("rejects allocated quote fees greater than allocated quote proceeds", () => {
+  const funded = Position.empty({
+    market,
+    strategyId: StrategyId.COIN_GRABBER,
+  }).applyFill({
+    fill: makeFill({
+      quantity: "10",
+      quoteQuantity: "1000",
+      price: "100",
+    }),
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  assert.throws(
+    () => funded.applySellAllocation({
+      allocation: makeSellAllocation({
+        baseDebit: "2",
+        quoteProceeds: "0.1",
+        commissions: [
+          {
+            assetId: quoteAsset.id,
+            assetCode: quoteAsset.code,
+            amount: "0.2",
+          },
+        ],
+      }),
+    }),
+    /Allocated quote commissions exceed allocated quote proceeds/,
+    "Allocated quote fees cannot exceed the gross quote proceeds.",
+  )
+})
+
+test("rejects commission asset codes that do not match canonical market assets", () => {
+  const funded = Position.empty({
+    market,
+    strategyId: StrategyId.COIN_GRABBER,
+  }).applyFill({
+    fill: makeFill({
+      quantity: "10",
+      quoteQuantity: "1000",
+      price: "100",
+    }),
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  assert.throws(
+    () => funded.applySellAllocation({
+      allocation: makeSellAllocation({
+        baseDebit: "2",
+        commissions: [
+          {
+            assetId: quoteAsset.id,
+            assetCode: "WRONG",
+            amount: "0.1",
+          },
+        ],
+      }),
+    }),
+    /Allocated quote commission asset identity does not match market quote asset/,
+    "Fee identity must use the canonical market asset ID and code.",
+  )
+})

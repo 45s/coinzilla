@@ -31,7 +31,7 @@ The initial operator-pause capability is **process-lifetime only**.
 - The initial runtime does not project or replay operator pause facts during startup.
 - After a process restart, the operator pause is **not restored**. Harvester starts without the previous operator-owned pause; the operator must issue `/pause <SYMBOL>` again if the market should remain paused.
 - Existing exchange orders remain untouched by pause. They may still fill; fill accounting and risk-reducing recovery SELL behavior continue. Other markets remain unaffected.
-- Disabled-by-default configuration, actor authorization, durable append wiring and adapter lifecycle must still be validated before inbound runtime control is enabled. These requirements do not depend on completing recovery Steps 7–9.
+- Enabled-by-default configuration, actor authorization, durable append wiring and adapter lifecycle must still be validated before inbound runtime control is enabled. These requirements do not depend on completing recovery Steps 7–9.
 - Full restart restoration and trading-state reconciliation remain a separate workstream under [ADR-0001](./0001-application-owned-recovery-facts.md) and [issue #654](https://github.com/45s/coinzilla/issues/654).
 
 ## Consequences

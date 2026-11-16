@@ -1,4 +1,4 @@
-import { assertDecimalString, handleErr, toResult } from "@coinzilla/utils"
+import { assertDecimalString, compareDecimal, handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { BitunixRestClient } from "./api/rest-client.js"
 import { adaptBalances } from "./adapters/adapt-balances.js"
@@ -84,6 +84,30 @@ function normalizeDeals({ value }) {
   return [value]
 }
 
+function getExecutedQuantityComparison({ dealVolume }) {
+  const executedQuantity = assertDecimalString({
+    value: dealVolume,
+    field: "Bitunix Spot order detail dealVolume",
+  })
+  const comparison = compareDecimal({
+    left: executedQuantity,
+    right: "0",
+  })
+  if (comparison < 0) {
+    throw new TypeError("Bitunix Spot order detail dealVolume must be non-negative")
+  }
+  return comparison
+}
+
+function validateFillResponsePresence({ executedQuantityComparison, deals }) {
+  if (executedQuantityComparison > 0 && deals.length === 0) {
+    throw new Error("Bitunix Spot order reports positive dealVolume but matching-order response is empty")
+  }
+  if (executedQuantityComparison === 0 && deals.length > 0) {
+    throw new Error("Bitunix Spot order reports zero executed quantity but matching-order response contains data")
+  }
+}
+
 function isOpenMarket({ symbolInfo }) {
   return symbolInfo?.isOpen === "1" || symbolInfo?.isOpen === 1
 }
@@ -113,6 +137,45 @@ function applyHistoryFilters({ body, status, side, type }) {
     }
     body[field] = codes[value]
   }
+}
+
+function normalizeOrderHistoryPage({ value, requestedPage }) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("Bitunix Spot order history response must be an object")
+  }
+  if (!Number.isSafeInteger(value.total) || value.total < 0) {
+    throw new TypeError("Bitunix Spot order history total must be a non-negative safe integer")
+  }
+  const pageNumIsNumber = typeof value.pageNum === "number" && Number.isSafeInteger(value.pageNum)
+  const pageNumIsString = typeof value.pageNum === "string" && /^[0-9]+$/.test(value.pageNum)
+  if (!pageNumIsNumber && !pageNumIsString) {
+    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
+  }
+
+  const returnedPage = Number(value.pageNum)
+  if (!Number.isSafeInteger(returnedPage) || returnedPage < 1) {
+    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
+  }
+  if (returnedPage !== requestedPage) {
+    throw new TypeError("Bitunix Spot order history returned pageNum does not match the requested page")
+  }
+
+  let rows
+  if (value.data === undefined) {
+    if (value.total !== 0) {
+      throw new TypeError("Bitunix Spot order history data is required when total is positive")
+    }
+    rows = []
+  } else {
+    rows = requireArray({
+      value: value.data,
+      operation: "order history",
+    })
+  }
+  if (rows.length > value.total) {
+    throw new TypeError("Bitunix Spot order history data row count exceeds total")
+  }
+  return rows
 }
 
 function createHistoryRequest({ input }) {
@@ -320,13 +383,11 @@ export class BitunixSpotBroker extends CoreBroker {
         path: API.orderHistory,
         body,
       })
-      const rows = response.data?.data
-      return toResult({
-        data: requireArray({
-          value: rows,
-          operation: "order history",
-        }).map(adaptOrder),
+      const rows = normalizeOrderHistoryPage({
+        value: response.data,
+        requestedPage: body.page,
       })
+      return toResult({ data: rows.map(adaptOrder) })
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.getOrderHistory()",
@@ -418,6 +479,9 @@ export class BitunixSpotBroker extends CoreBroker {
           String(order.symbol).toUpperCase() !== normalizedSymbol) {
         throw new TypeError("Bitunix Spot fill lookup order identity does not match the request")
       }
+      const executedQuantityComparison = getExecutedQuantityComparison({
+        dealVolume: order.dealVolume,
+      })
       const marketResponse = await this.restClient.request({
         method: "GET",
         path: API.markets,
@@ -448,6 +512,10 @@ export class BitunixSpotBroker extends CoreBroker {
         },
       })
       const deals = normalizeDeals({ value: dealsResponse.data })
+      validateFillResponsePresence({
+        executedQuantityComparison,
+        deals,
+      })
       return toResult({
         data: deals.map((trade) => adaptCanonicalFill({
           trade: {

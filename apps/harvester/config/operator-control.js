@@ -1,10 +1,13 @@
 /**
  * Default inbound operator-control configuration.
- * Credentials remain environment-only; inbound control is disabled by default.
+ * Inbound control is enabled by default; outbound Telegram notifications are configured independently.
+ * Telegram bot credentials remain environment-only; trusted user IDs come from the runtime environment.
  */
 export const OPERATOR_CONTROL_CONFIG = Object.freeze({
   telegram: Object.freeze({
-    enabled: false,
-    allowedUserIds: Object.freeze([]),
+    enabled: true,
+    allowedUserIds: Object.freeze(
+      process.env.TELEGRAM_USER_ID ? [process.env.TELEGRAM_USER_ID] : [],
+    ),
   }),
 });

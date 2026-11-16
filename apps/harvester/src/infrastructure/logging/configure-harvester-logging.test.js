@@ -123,15 +123,15 @@ test("renders Portfolio Stats as a concise readable summary instead of JSON", ()
     data: {
       message: "Portfolio Stats",
       strategyId: "CG_coinGrabber",
-      symbol: "ZROFDUSD",
+      symbol: "DOGEUSDT",
       inventory: {
-        activeBaseQuantity: "25 ZRO",
-        freeBaseQuantity: "0.15 ZRO",
-        totalBaseQuantity: "25.15 ZRO",
+        activeBaseQuantity: "0 DOGE",
+        freeBaseQuantity: "3.4 DOGE",
+        totalBaseQuantity: "3.4 DOGE",
       },
       accounting: {
-        spent: "13.835 FDUSD",
-        quoteNetCashFlow: "-13.835 FDUSD",
+        spent: "0 USDT",
+        quoteNetCashFlow: "0.02045485 USDT",
       },
     },
   })
@@ -144,8 +144,8 @@ test("renders Portfolio Stats as a concise readable summary instead of JSON", ()
   )
   assert.match(
     line,
-    /🪙 CG PORTFOLIO ZROFDUSD \| Inventory: 25\.15 ZRO \| Spent: 13\.835 FDUSD \| Net: -13\.835 FDUSD/,
-    "The operator console must show the market, total inventory, spent quote and net quote flow in a readable compact Portfolio summary.",
+    /🪙 CG PORTFOLIO DOGEUSDT: amount: 3\.4 \| earned: 3\.4 \| spent: 0 \| net: 0\.020$/,
+    "The operator console must show total coins, retained coins earned from completed cycles, current-cycle spent value, and cumulative net quote cash flow.",
   )
   assert.doesNotMatch(
     line,
@@ -156,6 +156,30 @@ test("renders Portfolio Stats as a concise readable summary instead of JSON", ()
     line.length <= 200,
     "The concise Portfolio summary must fit the ordinary terminal line budget.",
   )
+  output.destroy()
+})
+
+test("prints every enabled market symbol in the subscriptions-ready summary", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+
+  transport.write({
+    timestamp: "2026-11-16T01:17:01.000Z",
+    level: "info",
+    data: {
+      message: "Market data subscriptions ready",
+      enabledSymbols: ["LINKUSDT", "ZROUSDT", "DOGEUSDT", "ADAUSDT"],
+    },
+  })
+
+  assert.match(written, /"enabledSymbols":\["LINKUSDT","ZROUSDT","DOGEUSDT","ADAUSDT"\]/)
   output.destroy()
 })
 
@@ -504,7 +528,11 @@ test("appends cumulative files while isolating and flushing consecutive process 
   try {
     for (const [index, processIdentity] of sessionIdentities.entries()) {
       const logger = createLogger();
-      const logging = await configureHarvesterLogging({ logger, directory, processIdentity });
+      const logging = await configureHarvesterLogging({
+        logger,
+        directory,
+        processIdentity,
+      });
       const debugEntry = {
         timestamp: processIdentity.startedAt,
         level: "debug",
@@ -646,6 +674,7 @@ test("keeps strategy-owned order facts on compact single-space lifecycle lines",
       side: "SELL",
       quantity: "4.98",
       price: "1.393",
+      detail: "Client order ID: h-325e71ba16494aeb875e6e-3",
     },
   })
   transport.write({
@@ -805,3 +834,35 @@ test("identifies the Binance market-data stream when trading is not enabled", ()
   output.destroy()
 })
 
+test("renders recovery SELL cancellation requests in the requested compact console format", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+
+  transport.write({
+    timestamp: "2026-11-16T04:30:15.000Z",
+    level: "info",
+    method: "info",
+    data: {
+      message: "Harvester recovery SELL cancellation requested",
+      strategyId: "CG_coinGrabber",
+      symbol: "DOGEUSDT",
+      reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      clientOrderId: "h-test",
+      brokerOrderId: "1323350",
+    },
+  })
+
+  assert.equal(
+    written.trim(),
+    "04:30:15 🪙 CG recovery SELL cancellation requested: DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+    "the recovery SELL cancellation console line must match the requested concise operator format",
+  )
+  output.destroy()
+})

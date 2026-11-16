@@ -39,6 +39,16 @@ function summarizeConsoleData({ data, shutdownPresentation } = {}) {
 
   const message = String(data.message ?? "Harvester event")
     .replace(/[\r\n]+/g, " ")
+  if (
+    message === "Harvester recovery SELL cancellation requested"
+    && typeof data.symbol === "string"
+    && typeof data.reason === "string"
+  ) {
+    return {
+      message: `recovery SELL cancellation requested: ${data.symbol}, reason ${data.reason}`,
+      details: {},
+    }
+  }
   const details = Object.fromEntries(
     CONSOLE_DETAIL_KEYS
       .filter((key) => data[key] !== undefined && data[key] !== null)
@@ -51,7 +61,7 @@ function summarizeConsoleData({ data, shutdownPresentation } = {}) {
           }
         }
         if (Array.isArray(value)) {
-          return [key, value.slice(0, 3)]
+          return [key, key === "enabledSymbols" ? value : value.slice(0, 3)]
         }
         return [key, value]
       }),

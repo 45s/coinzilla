@@ -46,8 +46,10 @@ Non-interactive output remains plain text. The terminal is intentionally a
 summary, not a second diagnostic dump: it prints the event message plus a
 small allowlist of actionable fields (including the stable `diagnosticId`
 for catalogued startup failures), omits stacks/fingerprints/audit internals,
-and caps each line at 200 characters. Consecutive identical
-summaries are suppressed and reported as a repeat count. Full structured
+and caps each line at 200 characters. The recovery SELL cancellation
+summary is rendered as `04:30:15 🪙 CG recovery SELL cancellation requested:
+DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL`, with the redundant
+`Harvester` prefix omitted and symbol/reason shown inline. Full structured
 entries—including stack traces and all other normalized fields—remain in the
 DEBUG/TRACE JSONL files. Each entry retains its timestamp, normalized
 severity, logging method, and redacted, JSON-safe structured data. A console
@@ -160,10 +162,20 @@ keep the console allowlist in sync with any new fields intended for INFO.
 ### Portfolio Stats
 
 Portfolio Stats remains a structured event in DEBUG/TRACE. The operator
-console renders only a compact summary: market symbol, total base inventory,
-quote spent, and quote net cash flow. It must not print nested inventory or
-accounting JSON, and the line must remain within the ordinary 200-character
-console budget. Example: `🪙 CG PORTFOLIO ZROUSDT | Inventory: 9.99 ZRO | Spent: 13.835 USDT | Net: -13.835 USDT`.
+console renders one compact line:
+
+`🪙 CG PORTFOLIO DOGEUSDT: amount: 3.4 | earned: 3.4 | spent: 0 | net: 0.020`
+
+- `amount` — total base quantity: active trading inventory plus retained coins.
+- `earned` — retained/free base quantity accumulated from completed recovery cycles.
+- `spent` — BUY cost for the current recovery cycle. It resets to zero when that
+  cycle completes; it is not lifetime spend.
+- `net` — cumulative quote net cash flow from confirmed BUY/SELL fills, including
+  applicable commissions, rounded to three decimal places.
+
+The base-coin unit is implied by the market symbol. The line must not print nested
+inventory/accounting JSON and must remain within the ordinary 200-character
+console budget.
 
 ### Startup connection summary
 

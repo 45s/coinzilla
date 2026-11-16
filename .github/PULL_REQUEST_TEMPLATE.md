@@ -40,6 +40,14 @@ Examples:
 - **Canonical source of truth:** <!-- Identify the authoritative document(s) affected. -->
 - **Historical evidence / migration:** <!-- State how evidence, links and provenance are preserved, or N/A. -->
 
+## Task continuity and commit quality
+
+- **Tracking issue:** <!-- Link the live task contract and acceptance criteria. -->
+- **Commit sequence:** <!-- Summarize the meaningful test/implementation/docs increments; no unrelated or opaque bulk commit. -->
+- **Current checkpoint:** <!-- What is complete, what remains, and the next action? -->
+- **Handoff readiness:** <!-- Can another agent resume from this issue, PR, branch and canonical docs alone? Link the latest checkpoint comment. -->
+- **Known blockers / decisions:** <!-- State evidence and safe boundaries, or None. -->
+
 ## Completion report
 
 - **Implementation:** <!-- Concise summary and affected files. -->

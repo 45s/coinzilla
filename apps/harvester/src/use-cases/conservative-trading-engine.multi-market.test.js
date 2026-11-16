@@ -532,6 +532,20 @@ test("operator pause blocks new BUY exposure only for the selected market", asyn
   )
 })
 
+test("supports process-local operator pause and resume when recovery storage is disabled", async () => {
+  const { engine } = await createHarness()
+
+  const paused = await engine.pauseMarket({ symbol: "DOGEUSDT" })
+  assert.equal(paused.ok, true)
+  assert.equal(paused.data.durable, false)
+  assert.deepEqual(engine.getOperatorPausedMarkets(), ["DOGEUSDT"])
+
+  const resumed = await engine.resumeMarket({ symbol: "DOGEUSDT" })
+  assert.equal(resumed.ok, true)
+  assert.equal(resumed.data.durable, false)
+  assert.deepEqual(engine.getOperatorPausedMarkets(), [])
+})
+
 test("operator pause does not change in-memory state when the durable fact commit fails", async () => {
   const { engine, orders } = await createHarness()
 

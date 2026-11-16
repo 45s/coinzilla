@@ -1,6 +1,5 @@
 import { toResult } from "@coinzilla/utils"
 import { authorizeOperatorActor } from "../../application/operator/authorize-operator-actor.js"
-import { assertOperationalStatePort } from "../../application/ports/operational-state.port.js"
 
 /**
  * Create the transport-independent use case for pausing one configured market.
@@ -17,7 +16,6 @@ export function createPauseMarket({ engine, operationalStateStore } = {}) {
   if (typeof engine?.pauseMarket !== "function") {
     throw new TypeError("createPauseMarket requires the trading engine pauseMarket boundary")
   }
-  assertOperationalStatePort({ operationalStateStore })
 
   return async ({ actor, requestId, symbol } = {}) => {
     try {
@@ -36,15 +34,18 @@ export function createPauseMarket({ engine, operationalStateStore } = {}) {
       const normalizedRequestId = requestId.trim()
       return await engine.pauseMarket({
         symbol: normalizedSymbol,
-        beforeApply: () => operationalStateStore.append({
-          factId: "operator-control:" + normalizedRequestId,
-          factType: "OPERATOR_MARKET_PAUSED",
-          data: {
-            requestId: normalizedRequestId,
-            actorId: authorizedActor.id,
-            symbol: normalizedSymbol,
-          },
-        }),
+        // TEMPORARY: omit durable facts when CC recovery storage is disabled.
+        ...(typeof operationalStateStore?.append === "function" ? {
+          beforeApply: () => operationalStateStore.append({
+            factId: "operator-control:" + normalizedRequestId,
+            factType: "OPERATOR_MARKET_PAUSED",
+            data: {
+              requestId: normalizedRequestId,
+              actorId: authorizedActor.id,
+              symbol: normalizedSymbol,
+            },
+          }),
+        } : {}),
       })
     } catch (error) {
       return toResult({ error })
