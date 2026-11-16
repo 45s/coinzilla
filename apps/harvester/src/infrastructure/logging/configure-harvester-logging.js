@@ -381,10 +381,10 @@ function formatConsoleDetailValue(value) {
     return value.map((item) => (
       item && typeof item === "object"
         ? JSON.stringify(item)
-        : String(item).replace(/[\\r\\n]+/g, " ")
+        : String(item).replace(/[\r\n]+/g, " ")
     )).join(", ")
   }
-  return String(value).replace(/[\\r\\n]+/g, " ")
+  return String(value).replace(/[\r\n]+/g, " ")
 }
 
 function appendConsoleDetail({ parts, key, value } = {}) {

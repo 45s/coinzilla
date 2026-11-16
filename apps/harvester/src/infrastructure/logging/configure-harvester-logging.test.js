@@ -131,12 +131,12 @@ test("renders strategy cancellation details as readable inline text without the 
   const line = written.trim()
   assert.match(
     line,
-    /^\\d{2}:\\d{2}:\\d{2} 🪙 CG recovery SELL cancellation requested: DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL$/,
+    /^\d{2}:\d{2}:\d{2} 🪙 CG recovery SELL cancellation requested: DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL$/,
     "The operator line must omit the redundant application prefix and render the symbol and reason as concise inline details.",
   )
   assert.doesNotMatch(
     line,
-    /Harvester|clientOrderId|brokerOrderId|\\{|\\}/,
+    /Harvester|clientOrderId|brokerOrderId|\{|\}/,
     "The terminal must omit the application label, unallowlisted order identifiers, and JSON delimiters.",
   )
   output.destroy()
@@ -162,7 +162,7 @@ test("renders allowlisted details as key-value text when no symbol is present", 
 
   assert.match(
     written.trim(),
-    /^\\d{2}:\\d{2}:\\d{2} broker connection failed: errorCode BROKER_CONNECTION_FAILED, broker Binance$/,
+    /^\d{2}:\d{2}:\d{2} broker connection failed: errorCode BROKER_CONNECTION_FAILED, broker Binance$/,
     "Without a symbol, every allowlisted detail must retain its field name in readable inline form.",
   )
   output.destroy()
