@@ -188,3 +188,16 @@ test("rejects context accessors and symbol keys without invoking getters", () =>
     "Context keys must be stable string identifiers.",
   )
 })
+
+test("preserves native non-enumerable cause options", () => {
+  const cause = new Error("underlying failure")
+  const options = {}
+  Object.defineProperty(options, "cause", {
+    value: cause,
+    enumerable: false,
+  })
+
+  const error = new SystemCustomError("operation failed", options)
+
+  assert.strictEqual(error.cause, cause)
+})
