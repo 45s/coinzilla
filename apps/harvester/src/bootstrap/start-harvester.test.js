@@ -3714,21 +3714,18 @@ async function startOwnedOrderReconciliationFailureRuntime({ broker, events }) {
   })
 }
 
-async function assertIncompleteClosingReconciliation({ snapshots, calls }) {
-  assert.equal(snapshots.length, 2)
-  assert.equal(snapshots[1].data.phase, "CLOSING")
-  assert.equal(snapshots[1].data.auditStatus, "INCOMPLETE")
-  assert.ok(snapshots[1].data.auditReasons.includes("OWNED_ORDER_RECONCILIATION_FAILED"))
+async function assertNoClosingAfterSafetyFailure({ snapshots, calls }) {
   assert.equal(
-    snapshots[1].data.auditReasons.includes("UNRESOLVED_OWNED_ORDERS:1"),
-    false,
-    "the cancellation pass must resolve the BUY order even though the earlier REST reconciliation failure keeps the CLOSING audit incomplete",
+    snapshots.length,
+    1,
+    "Only PREFLIGHT may be published when an owned order cannot be reconciled; CLOSING requires proven strategy safety.",
   )
-  assert.ok(calls.indexOf("disconnect") > calls.lastIndexOf("account:snapshot"))
+  assert.equal(calls.includes("disconnect"), false)
+  assert.equal(calls.includes("unsubscribe:user-data"), false)
 }
 
 
-test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliation fails", async () => {
+test("does not publish CLOSING or disconnect when owned-order REST reconciliation fails", async () => {
   const calls = []
   const broker = createBroker(calls)
   const events = []
@@ -3766,10 +3763,10 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
   assert.equal(events.filter((event) => event.name === "account.snapshot_captured").length, 1)
   assert.equal(calls.includes("disconnect"), false)
   blockedQuery.releaseOpenOrders()
-  await assert.rejects(stopPromise, /Harvester shutdown was incomplete/)
+  await assert.rejects(stopPromise, /shutdown safety could not be proven|Conservative shutdown safety is not proven/i)
 
   const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
-  await assertIncompleteClosingReconciliation({
+  await assertNoClosingAfterSafetyFailure({
     snapshots,
     calls,
   })

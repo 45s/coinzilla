@@ -899,3 +899,19 @@ The shutdown-recovery inventory, conservative evaluation stages and operational-
 The ordinary TRADE startup regression fixture is split into market/config, broker-port, fill and assertion helpers. This is test-structure-only; the original startup, fill, accounting and shutdown assertions are retained.
 
 Completed SELL recovery-cycle publication receives the same injected workflow dependencies as the completion audit, preserving durable lifecycle evidence and state cleanup.
+
+
+## Strategy-owned shutdown coordination
+
+The application layer coordinates shutdown across independently running strategies. It uses a small participant contract: strategyId, beginShutdown(), waitUntilSafe(), isSafeToShutdown(), and a safety snapshot. On SIGINT/SIGTERM, the coordinator calls every participant's beginShutdown() synchronously before awaiting any participant. It waits for all participants and rechecks their current safety markers before shared cleanup.
+
+A strategy participant owns its domain-specific shutdown policy. The Conservative participant owns the BUY gate, Harvester-owned BUY cancellation, order/fill/commission reconciliation, per-market safety markers and recovery SELL coverage. A future Recovery Seller participant must own its own gate, order policy and safety proof. The coordinator must not import strategy accounting, order ownership or recovery calculations.
+
+Conservative markets are audited independently. A market becomes SAFE_TO_SHUTDOWN only when all required evidence is reconciled and Journal-durable. Late execution evidence invalidates the affected marker. The coordinator cannot release shared services while any enabled market or strategy participant remains unsafe. Market-price intake, user-data intake, operator control and Binance connectivity remain available until the strategy-level barrier passes.
+
+### Why this is not Express middleware
+
+Express middleware is a request/response pipeline: one request passes through ordered handlers and usually proceeds to the next handler. Shutdown is not one request with a fixed linear path. Multiple strategies own independent safety policies, may reconcile external exchange state concurrently, and can have previously safe state invalidated by late events.
+
+A middleware chain would blur strategy ownership and encourage a single generic shutdown policy. DDD application orchestration with strategy-owned participants is a better fit: the coordinator manages ordering and the shared-service barrier; each strategy's application/domain workflow proves its own safety. A small sequential pipeline can still be used for ordinary cleanup steps after all strategies are safe, but it must not decide trading safety.
+
