@@ -10,7 +10,7 @@ test("keeps every application-layer JavaScript file free of ESLint errors and wa
   const autofixResults = await new ESLint({
     cwd: workspaceRoot,
     fix: true,
-    overrideConfig: [{ rules: { indent: ["error", 2] } }],
+    overrideConfig: [{ rules: { indent: ["error", 2, { ignoredNodes: ["TemplateLiteral"] }], "object-curly-newline": ["error", { ObjectExpression: { minProperties: 2 } }] } }],
   }).lintFiles(["apps/harvester/src/application"])
   for (const result of autofixResults) {
     if (typeof result.output === "string") {
