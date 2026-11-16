@@ -154,4 +154,3 @@
 ## Bitunix Spot broker development
 
 Bitunix Spot remains a read-only broker foundation with unresolved lifecycle and exchange-contract blockers tracked in [issue #1185](https://github.com/45s/coinzilla/issues/1185) and the [Brokers roadmap](packages/brokers/ROADMAP.md). Future Bitunix Spot implementation tasks must follow the mandatory reference-first audit in [Brokers AGENTS.md](packages/brokers/AGENTS.md#bitunix-spot-development--mandatory-reference-audit): inspect [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net) as the primary C# Spot implementation and its tests, cross-check [bitunix-mcp](https://github.com/samanzamani/bitunix-mcp) for TypeScript examples, then verify against official Bitunix documentation. Reimplement the audited behavior in Coinzilla's JavaScript architecture; do not copy unverified assumptions or enable mutations while issue #1185 guarantees remain unresolved.
-
