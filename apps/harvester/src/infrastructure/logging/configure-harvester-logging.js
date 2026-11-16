@@ -191,6 +191,7 @@ async function createHarvesterFileTransport({
           }
           resolve()
         })
+        })
       }))
     },
     close: () => closeHarvesterLogStreams({ streams }),
