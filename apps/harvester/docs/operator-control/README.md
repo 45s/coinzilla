@@ -4,7 +4,7 @@ This is the entry point for Harvester's operator-control capability.
 
 ## Current status
 
-The engine/application foundation is implemented in [PR #1045](https://github.com/45s/coinzilla/pull/1045). Initial runtime configuration, Telegram adapter startup/shutdown, and fail-closed bootstrap validation were implemented in [PR #1067](https://github.com/45s/coinzilla/pull/1067). The current default is opt-in per ADR-0005; explicit enablement retains the same checks.
+The engine/application foundation is implemented in [PR #1045](https://github.com/45s/coinzilla/pull/1045). Initial runtime configuration, Telegram adapter startup/shutdown, and fail-closed bootstrap validation were implemented in [PR #1067](https://github.com/45s/coinzilla/pull/1067). Telegram control is enabled by default; startup still requires the configured allowlist, bot token and verified durable store.
 
 The Telegram Command Center exposes `/start`, `/menu`, `/help`, `/status`, `/markets`, `/positions`, `/orders`, `/balances`, `/pause <SYMBOL>`, and `/resume <SYMBOL>`. CC-1 is merged in PRs #1079 and #1081. CC-2 adds authorized read-only trading visibility queries: canonical Portfolio positions keep active and retained inventory separate; open orders label Harvester registry orders versus unmatched exchange orders as external; balances report the exchange snapshot source timestamp and age. CC-2 is merged in PR #1086; all seven exact-head GitHub Actions workflows passed. CC-3 proactive alerts are merged in PR #1087. CC-4 usability and hardening is merged in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`; exact-head CI and external documentation-link validation passed. The persistent reply keyboard adds Pause, Resume, Status, Markets, Portfolio and Open Orders. Pause/Resume open filtered market choices and still require the existing inline confirmation; Portfolio reuses the positions query and Open Orders reuses the orders query. `/start` displays the keyboard and `/menu` restores it. See the [Telegram operator runbook](../operations/telegram-command-center.md) for command-menu, keyboard, inline-navigation and confirmation behavior.
 
@@ -67,7 +67,7 @@ The operator facade and use cases belong to `apps/harvester`. Do not create a sh
 | Engine pause/resume boundary and market-scoped behavior | Implemented in PR #1045; regression-tested |
 | Actor authorization and durable-before-apply application use cases | Implemented in PR #1045; port-tested |
 | Telegram parser, private-chat allowlist and serial polling | Implemented in PR #1045; mocked-transport tested |
-| Opt-in-by-default runtime configuration and lifecycle wiring | Updated in PR #1197; regression-tested |
+| Enabled-by-default runtime configuration and recovery-off startup behavior | Updated in PR #1197; regression-tested |
 | Telegram `/start`, `/help`, `/pause`, and safe `/resume` | Implemented in PR #1079; merged |
 | Read-only `/status` and `/markets` application queries and Telegram formatting | Implemented in PR #1081; regression-tested |
 | Read-only `/positions`, `/orders`, and `/balances` application queries and Telegram formatting | Merged in PR #1086; offline contract tests and all seven exact-head workflows passed |
