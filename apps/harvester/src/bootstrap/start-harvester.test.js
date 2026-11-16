@@ -5346,7 +5346,7 @@ test("starts in observation-only mode after a clean prior process when restart r
   await createPriorProcessHistory({
     directory,
     runtimeSessionId: "first-process-session",
-    appConfig,
+    priorAppConfig: appConfig,
     clean: true,
   })
 
@@ -5373,7 +5373,7 @@ test("starts in observation-only mode after an unclean prior process when restar
   await createPriorProcessHistory({
     directory,
     runtimeSessionId: "crashed-process-session",
-    appConfig,
+    priorAppConfig: appConfig,
   })
 
   const restartStore = createFileOperationalStateStore({
@@ -5989,7 +5989,7 @@ test("starts Telegram operator control without running process-restart recovery 
     await createPriorProcessHistory({
       directory,
       runtimeSessionId: "previous-process-session",
-      appConfig: config,
+      priorAppConfig: config,
     })
 
     const currentStore = createFileOperationalStateStore({
