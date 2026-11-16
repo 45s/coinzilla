@@ -70,7 +70,7 @@ export async function confirmMarketHistoryCoverage({
       throw new TypeError("confirmMarketHistoryCoverage requires a one-market reconciliation callback")
     }
 
-    const factId = "market-history-coverage:" + symbol + ":baseline"
+    const factId = `market-history-coverage:${  symbol  }:baseline`
     const evidence = {
       factId,
       symbol,
@@ -95,13 +95,15 @@ export async function confirmMarketHistoryCoverage({
       record.data?.symbol === symbol
     )
     if (existingCoverage.length > 0) {
-      const currentResult = await readMarketHistoryCoverage({ operationalStateStore, symbol })
+      const currentResult = await readMarketHistoryCoverage({ operationalStateStore,
+symbol })
       if (currentResult?.ok !== true) {
         return toResult({
           errors: currentResult?.errors ?? [new Error("Existing market-history coverage could not be verified")],
         })
       }
-      if (matchesCoverage({ coverage: currentResult.data, evidence })) {
+      if (matchesCoverage({ coverage: currentResult.data,
+evidence })) {
         return toResult({
           data: Object.freeze({
             confirmed: true,
@@ -112,7 +114,7 @@ export async function confirmMarketHistoryCoverage({
       }
       return toResult({
         error: createError(
-          "A different market-history baseline is already confirmed for " + symbol,
+          `A different market-history baseline is already confirmed for ${  symbol}`,
           "MARKET_HISTORY_COVERAGE_ALREADY_CONFIRMED",
         ),
       })
@@ -137,7 +139,7 @@ export async function confirmMarketHistoryCoverage({
     if (result?.symbol !== symbol) {
       throw new Error("One-market reconciliation returned evidence for a different market")
     }
-    const audit = result.audit
+    const {audit} = result
     const auditReady = result.ready === true &&
       audit?.skipped !== true &&
       audit?.targetMarketBlocked !== true &&
@@ -170,13 +172,15 @@ export async function confirmMarketHistoryCoverage({
         : toResult({ error: new Error("Market-history coverage fact was not durably committed") })
     }
 
-    const readback = await readMarketHistoryCoverage({ operationalStateStore, symbol })
+    const readback = await readMarketHistoryCoverage({ operationalStateStore,
+symbol })
     if (readback?.ok !== true) {
       return toResult({
         errors: readback?.errors ?? [new Error("Committed market-history coverage could not be read back")],
       })
     }
-    if (!matchesCoverage({ coverage: readback.data, evidence })) {
+    if (!matchesCoverage({ coverage: readback.data,
+evidence })) {
       throw new Error("Committed market-history coverage does not match the reviewed evidence")
     }
 
