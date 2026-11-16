@@ -137,7 +137,6 @@ function validateAuditInput({
 function auditTradeHistory({
   requireCompleteTradeHistory,
   tradeHistoryScope,
-  projection,
   recoveredState,
   exchangeTradeHistory,
   targetMarket,
@@ -816,7 +815,6 @@ export function auditRecoveredAccountState(options = {}) {
     const tradeHistoryAudit = auditTradeHistory({
       requireCompleteTradeHistory,
       tradeHistoryScope,
-      projection,
       recoveredState,
       exchangeTradeHistory,
       targetMarket,
