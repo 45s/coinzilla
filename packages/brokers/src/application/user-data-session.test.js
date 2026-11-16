@@ -63,7 +63,8 @@ describe("Application user-data session", () => {
       /onEvent callback must be a function/,
     )
     await assert.rejects(
-      session.subscribe({ onEvent() {}, onStatus: null }),
+      session.subscribe({ onEvent() {},
+onStatus: null }),
       /onStatus callback must be a function/,
     )
     assert.equal(portFactoryCalls, 0)
@@ -95,7 +96,9 @@ describe("Application user-data session", () => {
   it("coordinates user-data subscriptions through the injected port, not a raw RPC client", async () => {
     const rawClient = {}
     const calls = []
-    const listeners = { event: new Set(), error: new Set(), close: new Set() }
+    const listeners = { event: new Set(),
+error: new Set(),
+close: new Set() }
     const port = {
       state: "open",
       async connect() {},
@@ -197,7 +200,7 @@ function createRecoveryFixture({ failReconnect = false } = {}) {
       },
       close() {
         this.state = "closed"
-        for (const listener of [...listeners.close]) listener({ code: 1006 })
+        for (const listener of [...listeners.close]) {listener({ code: 1006 })}
       },
     }
   }
@@ -341,7 +344,8 @@ function createRecoveryFixture({ failReconnect = false } = {}) {
     )
     assert.deepEqual(
       first.data.acknowledgeRecoveryResult(firstRecoveryGeneration),
-      { accepted: true, completed: false },
+      { accepted: true,
+completed: false },
       "The first subscriber may acknowledge only the generation it actually reconciled.",
     )
 
@@ -370,12 +374,14 @@ function createRecoveryFixture({ failReconnect = false } = {}) {
     )
     assert.deepEqual(
       first.data.acknowledgeRecoveryResult(secondRecoveryGeneration),
-      { accepted: true, completed: false },
+      { accepted: true,
+completed: false },
       "The current generation must remain pending until every active subscriber acknowledges it.",
     )
     assert.deepEqual(
       second.data.acknowledgeRecoveryResult(secondRecoveryGeneration),
-      { accepted: true, completed: true },
+      { accepted: true,
+completed: true },
       "Only the final current-generation acknowledgement may complete shared recovery.",
     )
     assert.deepEqual(
