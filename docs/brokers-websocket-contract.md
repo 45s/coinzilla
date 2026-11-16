@@ -100,7 +100,7 @@ The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The curren
 | `getOrderHistory({ symbol, status?, side?, type?, startTime?, endTime?, page?, limit? })` | `POST /api/spot/v1/order/history/page` | Symbol required; no exact order-ID filter. Canonical statuses (`OPEN`, `FILLED`, `PARTIALLY_FILLED`, `CANCELED`, `PARTIALLY_FILLED_CANCELED`), sides (`BUY`, `SELL`) and types (`LIMIT`, `MARKET`) are translated to Bitunix numeric codes inside the adapter. Validates non-negative safe-integer `total`, positive integer `pageNum` (string or number) matching the requested page, and the `data[]` shape; omitted `data` is accepted only when `total` is zero. Returns the requested page only; no automatic pagination or sorting is claimed. |
 | `getOrder({ symbol, orderId })` | `GET /api/spot/v1/order/detail` | Response identity is validated. |
 | `getPrices({ symbol })` | `GET /api/spot/v1/market/last_price` | Request/response lookup only; maps the returned price string to `{ symbol, price }`. |
-| `getFills({ symbol, orderId })` | `POST /api/spot/v1/order/deal/list` | Normalizes the documented single matching-order object. The docs do not establish pagination or completeness for orders with multiple executions; this is not yet a proven complete execution-history contract. |
+| `getFills({ symbol, orderId })` | `POST /api/spot/v1/order/deal/list` | Requires an exact non-negative order-detail `dealVolume`; rejects positive quantity with empty matching-order data and zero quantity with non-empty data. This is only a presence-consistency guard; pagination and completeness for multiple executions remain unproven. |
 
 Mutations and lifecycle-dependent methods are deliberately unavailable:
 

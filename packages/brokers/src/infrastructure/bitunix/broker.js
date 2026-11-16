@@ -1,4 +1,4 @@
-import { assertDecimalString, handleErr, toResult } from "@coinzilla/utils"
+import { assertDecimalString, compareDecimal, handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { BitunixRestClient } from "./api/rest-client.js"
 import { adaptBalances } from "./adapters/adapt-balances.js"
@@ -82,6 +82,30 @@ function normalizeDeals({ value }) {
     return value
   }
   return [value]
+}
+
+function getExecutedQuantityComparison({ dealVolume }) {
+  const executedQuantity = assertDecimalString({
+    value: dealVolume,
+    field: "Bitunix Spot order detail dealVolume",
+  })
+  const comparison = compareDecimal({
+    left: executedQuantity,
+    right: "0",
+  })
+  if (comparison < 0) {
+    throw new TypeError("Bitunix Spot order detail dealVolume must be non-negative")
+  }
+  return comparison
+}
+
+function validateFillResponsePresence({ executedQuantityComparison, deals }) {
+  if (executedQuantityComparison > 0 && deals.length === 0) {
+    throw new Error("Bitunix Spot order reports positive dealVolume but matching-order response is empty")
+  }
+  if (executedQuantityComparison === 0 && deals.length > 0) {
+    throw new Error("Bitunix Spot order reports zero executed quantity but matching-order response contains data")
+  }
 }
 
 function isOpenMarket({ symbolInfo }) {
@@ -455,6 +479,9 @@ export class BitunixSpotBroker extends CoreBroker {
           String(order.symbol).toUpperCase() !== normalizedSymbol) {
         throw new TypeError("Bitunix Spot fill lookup order identity does not match the request")
       }
+      const executedQuantityComparison = getExecutedQuantityComparison({
+        dealVolume: order.dealVolume,
+      })
       const marketResponse = await this.restClient.request({
         method: "GET",
         path: API.markets,
@@ -485,6 +512,10 @@ export class BitunixSpotBroker extends CoreBroker {
         },
       })
       const deals = normalizeDeals({ value: dealsResponse.data })
+      validateFillResponsePresence({
+        executedQuantityComparison,
+        deals,
+      })
       return toResult({
         data: deals.map((trade) => adaptCanonicalFill({
           trade: {
