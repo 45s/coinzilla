@@ -1,294 +1,292 @@
 import assert from "node:assert/strict"
-import { describe, it } from "node:test"
+import { it } from "node:test"
 import { BinanceSdkBroker } from "../broker.js"
 import { createScheduler } from "../test-helpers/user-data-session-fixtures.js"
 import { createFakeRpcClient, createFakeStreamsClient } from "../test-helpers/fake-broker-clients.js"
 
 
-describe("Binance user-data subscription setup", () => {
-  it("awaits asynchronous scheduled callbacks before advancing", async () => {
-    const scheduler = createScheduler()
-    let completed = false
+it("awaits asynchronous scheduled callbacks before advancing", async () => {
+  const scheduler = createScheduler()
+  let completed = false
 
-    scheduler.setTimeout(async () => {
-      await Promise.resolve()
-      completed = true
-    }, 0)
+  scheduler.setTimeout(async () => {
+    await Promise.resolve()
+    completed = true
+  }, 0)
 
-    await scheduler.runNext()
+  await scheduler.runNext()
 
-    assert.equal(completed, true)
-    assert.equal(scheduler.pendingCount, 0)
+  assert.equal(completed, true)
+  assert.equal(scheduler.pendingCount, 0)
+})
+
+
+it("retries when a subscribe response arrives after its socket has closed", async () => {
+  const scheduler = createScheduler()
+  const clients = []
+  let resolveDelayedSubscribe
+  let markDelayedSubscribeStarted
+  const delayedSubscribeStarted = new Promise((resolve) => {
+    markDelayedSubscribeStarted = resolve
   })
-
-
-  it("retries when a subscribe response arrives after its socket has closed", async () => {
-    const scheduler = createScheduler()
-    const clients = []
-    let resolveDelayedSubscribe
-    let markDelayedSubscribeStarted
-    const delayedSubscribeStarted = new Promise((resolve) => {
-      markDelayedSubscribeStarted = resolve
-    })
-    const broker = new BinanceSdkBroker({
-      apiKey: "test-key",
-      apiSecret: "test-secret",
-      tradingMode: "testnet",
-      reconnectDelay: 10,
-      logger: { error() {},
+  const broker = new BinanceSdkBroker({
+    apiKey: "test-key",
+    apiSecret: "test-secret",
+    tradingMode: "testnet",
+    reconnectDelay: 10,
+    logger: { error() {},
 info() {},
 warn() {} },
-    }, {
-      apiClientFactory: () => {
-        const index = clients.length
-        let subscribe
-        if (index === 0) {
-          subscribe = () => ({ subscriptionId: 10 })
-        } else if (index === 1) {
-          subscribe = () => new Promise((resolve) => {
-            resolveDelayedSubscribe = resolve
-            markDelayedSubscribeStarted()
-          })
-        } else {
-          subscribe = () => ({ subscriptionId: index * 100 + 10 })
-        }
-        const client = createFakeRpcClient({
-          "userDataStream.subscribe.signature": subscribe,
-          "userDataStream.unsubscribe": () => ({}),
+  }, {
+    apiClientFactory: () => {
+      const index = clients.length
+      let subscribe
+      if (index === 0) {
+        subscribe = () => ({ subscriptionId: 10 })
+      } else if (index === 1) {
+        subscribe = () => new Promise((resolve) => {
+          resolveDelayedSubscribe = resolve
+          markDelayedSubscribeStarted()
         })
-        clients.push(client)
-        return client
-      },
-      marketClientFactory: () => createFakeStreamsClient(),
-      setTimeoutFn: scheduler.setTimeout,
-      clearTimeoutFn: scheduler.clearTimeout,
-    })
-    await broker.connect()
-    const statuses = []
-    const subscription = await broker.subscribeForUserData({
-      onEvent() {},
-      onStatus: (status) => statuses.push(status),
-    })
+      } else {
+        subscribe = () => ({ subscriptionId: index * 100 + 10 })
+      }
+      const client = createFakeRpcClient({
+        "userDataStream.subscribe.signature": subscribe,
+        "userDataStream.unsubscribe": () => ({}),
+      })
+      clients.push(client)
+      return client
+    },
+    marketClientFactory: () => createFakeStreamsClient(),
+    setTimeoutFn: scheduler.setTimeout,
+    clearTimeoutFn: scheduler.clearTimeout,
+  })
+  await broker.connect()
+  const statuses = []
+  const subscription = await broker.subscribeForUserData({
+    onEvent() {},
+    onStatus: (status) => statuses.push(status),
+  })
 
-    clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006,
+  clients[0].state = "closed"
+  clients[0].emitClose({ code: 1006,
 reason: "network lost",
 wasClean: false })
-    const recovery = scheduler.runNext()
-    await delayedSubscribeStarted
-    assert.equal(typeof resolveDelayedSubscribe, "function")
+  const recovery = scheduler.runNext()
+  await delayedSubscribeStarted
+  assert.equal(typeof resolveDelayedSubscribe, "function")
 
-    clients[1].state = "closed"
-    clients[1].emitClose({ code: 1006,
+  clients[1].state = "closed"
+  clients[1].emitClose({ code: 1006,
 reason: "closed during subscribe",
 wasClean: false })
-    resolveDelayedSubscribe({ subscriptionId: 110 })
-    await recovery
+  resolveDelayedSubscribe({ subscriptionId: 110 })
+  await recovery
 
-    assert.equal(scheduler.pendingCount, 1)
-    await scheduler.runNext()
-    assert.equal(clients.length, 3)
-    assert.equal(subscription.data.subscriptionId, 210)
-    assert.ok(statuses.some((status) => status.type === "recovered"))
+  assert.equal(scheduler.pendingCount, 1)
+  await scheduler.runNext()
+  assert.equal(clients.length, 3)
+  assert.equal(subscription.data.subscriptionId, 210)
+  assert.ok(statuses.some((status) => status.type === "recovered"))
 
-    await subscription.data.disconnect()
-    await broker.disconnect()
+  await subscription.data.disconnect()
+  await broker.disconnect()
+})
+
+
+it("verifies a malformed subscribe response against the active session", async () => {
+  const rpc = createFakeRpcClient({
+    "userDataStream.subscribe.signature": () => ({ subscriptionId: "malformed" }),
+    "session.subscriptions": () => [{ subscriptionId: 59 }],
+    "userDataStream.unsubscribe": () => ({}),
   })
-
-
-  it("verifies a malformed subscribe response against the active session", async () => {
-    const rpc = createFakeRpcClient({
-      "userDataStream.subscribe.signature": () => ({ subscriptionId: "malformed" }),
-      "session.subscriptions": () => [{ subscriptionId: 59 }],
-      "userDataStream.unsubscribe": () => ({}),
-    })
-    const broker = new BinanceSdkBroker({
-      apiKey: "test-key",
-      apiSecret: "test-secret",
-      tradingMode: "testnet",
-      logger: { error() {},
+  const broker = new BinanceSdkBroker({
+    apiKey: "test-key",
+    apiSecret: "test-secret",
+    tradingMode: "testnet",
+    logger: { error() {},
 info() {},
 warn() {} },
-    }, {
-      apiClientFactory: () => rpc,
-      marketClientFactory: () => createFakeStreamsClient(),
-    })
-    await broker.connect()
-
-    const result = await broker.subscribeForUserData({ onEvent() {} })
-
-    assert.equal(result.ok, true)
-    assert.equal(result.data.subscriptionId, 59)
-    assert.deepEqual(rpc.calls.map((call) => call.method), [
-      "userDataStream.subscribe.signature",
-      "session.subscriptions",
-    ])
-    await result.data.disconnect()
-    await broker.disconnect()
+  }, {
+    apiClientFactory: () => rpc,
+    marketClientFactory: () => createFakeStreamsClient(),
   })
+  await broker.connect()
 
-  it("resolves an uncertain subscribe response through session.subscriptions", async () => {
-    const rpc = createFakeRpcClient({
-      "userDataStream.subscribe.signature": async () => {
-        throw new Error("subscription response timed out")
-      },
-      "session.subscriptions": () => [{ subscriptionId: 42 }],
-      "userDataStream.unsubscribe": () => ({}),
-    })
-    const broker = new BinanceSdkBroker({
-      apiKey: "test-key",
-      apiSecret: "test-secret",
-      tradingMode: "testnet",
-      logger: { error() {},
+  const result = await broker.subscribeForUserData({ onEvent() {} })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.subscriptionId, 59)
+  assert.deepEqual(rpc.calls.map((call) => call.method), [
+    "userDataStream.subscribe.signature",
+    "session.subscriptions",
+  ])
+  await result.data.disconnect()
+  await broker.disconnect()
+})
+
+it("resolves an uncertain subscribe response through session.subscriptions", async () => {
+  const rpc = createFakeRpcClient({
+    "userDataStream.subscribe.signature": async () => {
+      throw new Error("subscription response timed out")
+    },
+    "session.subscriptions": () => [{ subscriptionId: 42 }],
+    "userDataStream.unsubscribe": () => ({}),
+  })
+  const broker = new BinanceSdkBroker({
+    apiKey: "test-key",
+    apiSecret: "test-secret",
+    tradingMode: "testnet",
+    logger: { error() {},
 info() {},
 warn() {} },
-    }, {
-      apiClientFactory: () => rpc,
-      marketClientFactory: () => createFakeStreamsClient(),
-    })
-    await broker.connect()
-
-    const result = await broker.subscribeForUserData({ onEvent() {} })
-
-    assert.equal(result.ok, true)
-    assert.equal(result.data.subscriptionId, 42)
-    assert.deepEqual(rpc.calls.map((call) => call.method), [
-      "userDataStream.subscribe.signature",
-      "session.subscriptions",
-    ])
-    await result.data.disconnect()
-    await broker.disconnect()
+  }, {
+    apiClientFactory: () => rpc,
+    marketClientFactory: () => createFakeStreamsClient(),
   })
+  await broker.connect()
+
+  const result = await broker.subscribeForUserData({ onEvent() {} })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.subscriptionId, 42)
+  assert.deepEqual(rpc.calls.map((call) => call.method), [
+    "userDataStream.subscribe.signature",
+    "session.subscriptions",
+  ])
+  await result.data.disconnect()
+  await broker.disconnect()
+})
 
 
-  it("does not guess when session.subscriptions reports multiple active subscriptions", async () => {
-    const rpc = createFakeRpcClient({
-      "userDataStream.subscribe.signature": async () => {
-        throw new Error("subscription response timed out")
-      },
-      "session.subscriptions": () => [
-        { subscriptionId: 41 },
-        { subscriptionId: 42 },
-      ],
-    })
-    const broker = new BinanceSdkBroker({
-      apiKey: "test-key",
-      apiSecret: "test-secret",
-      tradingMode: "testnet",
-      logger: { error() {},
+it("does not guess when session.subscriptions reports multiple active subscriptions", async () => {
+  const rpc = createFakeRpcClient({
+    "userDataStream.subscribe.signature": async () => {
+      throw new Error("subscription response timed out")
+    },
+    "session.subscriptions": () => [
+      { subscriptionId: 41 },
+      { subscriptionId: 42 },
+    ],
+  })
+  const broker = new BinanceSdkBroker({
+    apiKey: "test-key",
+    apiSecret: "test-secret",
+    tradingMode: "testnet",
+    logger: { error() {},
 info() {},
 warn() {} },
-    }, {
-      apiClientFactory: () => rpc,
-      marketClientFactory: () => createFakeStreamsClient(),
-    })
-    await broker.connect()
-
-    const result = await broker.subscribeForUserData({ onEvent() {} })
-
-    assert.equal(result.ok, false)
-    assert.match(result.errors[0].message, /multiple active subscriptions/)
-    assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.subscribe.signature").length, 1)
-    await broker.disconnect()
+  }, {
+    apiClientFactory: () => rpc,
+    marketClientFactory: () => createFakeStreamsClient(),
   })
+  await broker.connect()
 
-  it("does not select a valid ID from a lookup containing malformed subscription entries", async () => {
-    const rpc = createFakeRpcClient({
-      "userDataStream.subscribe.signature": async () => {
-        throw new Error("subscription response timed out")
-      },
-      "session.subscriptions": () => [
-        { subscriptionId: 59 },
-        {},
-      ],
-      "userDataStream.unsubscribe": () => ({}),
-    })
-    const broker = new BinanceSdkBroker({
-      apiKey: "test-key",
-      apiSecret: "test-secret",
-      tradingMode: "testnet",
-      logger: { error() {},
+  const result = await broker.subscribeForUserData({ onEvent() {} })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /multiple active subscriptions/)
+  assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.subscribe.signature").length, 1)
+  await broker.disconnect()
+})
+
+it("does not select a valid ID from a lookup containing malformed subscription entries", async () => {
+  const rpc = createFakeRpcClient({
+    "userDataStream.subscribe.signature": async () => {
+      throw new Error("subscription response timed out")
+    },
+    "session.subscriptions": () => [
+      { subscriptionId: 59 },
+      {},
+    ],
+    "userDataStream.unsubscribe": () => ({}),
+  })
+  const broker = new BinanceSdkBroker({
+    apiKey: "test-key",
+    apiSecret: "test-secret",
+    tradingMode: "testnet",
+    logger: { error() {},
 info() {},
 warn() {} },
-    }, {
-      apiClientFactory: () => rpc,
-      marketClientFactory: () => createFakeStreamsClient(),
-    })
-    await broker.connect()
-
-    const result = await broker.subscribeForUserData({ onEvent() {} })
-
-    assert.equal(result.ok, false)
-    assert.match(result.errors[0].message, /malformed subscription state/)
-    assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.subscribe.signature").length, 1)
-    assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.unsubscribe").length, 0)
-    await broker.disconnect()
+  }, {
+    apiClientFactory: () => rpc,
+    marketClientFactory: () => createFakeStreamsClient(),
   })
+  await broker.connect()
 
-  it("cleans up a remote subscription that resolves after intentional shutdown", async () => {
-    let resolveSubscribe
-    const rpc = createFakeRpcClient({
-      "userDataStream.subscribe.signature": () => new Promise((resolve) => {
-        resolveSubscribe = resolve
-      }),
-      "userDataStream.unsubscribe": () => ({}),
-    })
-    const broker = new BinanceSdkBroker({
-      apiKey: "test-key",
-      apiSecret: "test-secret",
-      tradingMode: "testnet",
-      logger: { error() {},
+  const result = await broker.subscribeForUserData({ onEvent() {} })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /malformed subscription state/)
+  assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.subscribe.signature").length, 1)
+  assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.unsubscribe").length, 0)
+  await broker.disconnect()
+})
+
+it("cleans up a remote subscription that resolves after intentional shutdown", async () => {
+  let resolveSubscribe
+  const rpc = createFakeRpcClient({
+    "userDataStream.subscribe.signature": () => new Promise((resolve) => {
+      resolveSubscribe = resolve
+    }),
+    "userDataStream.unsubscribe": () => ({}),
+  })
+  const broker = new BinanceSdkBroker({
+    apiKey: "test-key",
+    apiSecret: "test-secret",
+    tradingMode: "testnet",
+    logger: { error() {},
 info() {},
 warn() {} },
-    }, {
-      apiClientFactory: () => rpc,
-      marketClientFactory: () => createFakeStreamsClient(),
-    })
-    await broker.connect()
-
-    const pendingSubscription = broker.subscribeForUserData({ onEvent() {} })
-    await Promise.resolve()
-    assert.equal(typeof resolveSubscribe, "function")
-
-    await broker.disconnect()
-    resolveSubscribe({ subscriptionId: 55 })
-    const result = await pendingSubscription
-
-    assert.equal(result.ok, false)
-    assert.match(result.errors[0].message, /canceled during setup/)
-    assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.unsubscribe").length, 1)
+  }, {
+    apiClientFactory: () => rpc,
+    marketClientFactory: () => createFakeStreamsClient(),
   })
+  await broker.connect()
 
-  it("isolates throwing status callbacks and reports the diagnostic", async () => {
-    const logs = []
-    const rpc = createFakeRpcClient({
-      "userDataStream.subscribe.signature": () => ({ subscriptionId: 56 }),
-      "userDataStream.unsubscribe": () => ({}),
-    })
-    const broker = new BinanceSdkBroker({
-      apiKey: "test-key",
-      apiSecret: "test-secret",
-      tradingMode: "testnet",
-      logger: { error: (...args) => logs.push(args),
+  const pendingSubscription = broker.subscribeForUserData({ onEvent() {} })
+  await Promise.resolve()
+  assert.equal(typeof resolveSubscribe, "function")
+
+  await broker.disconnect()
+  resolveSubscribe({ subscriptionId: 55 })
+  const result = await pendingSubscription
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /canceled during setup/)
+  assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.unsubscribe").length, 1)
+})
+
+it("isolates throwing status callbacks and reports the diagnostic", async () => {
+  const logs = []
+  const rpc = createFakeRpcClient({
+    "userDataStream.subscribe.signature": () => ({ subscriptionId: 56 }),
+    "userDataStream.unsubscribe": () => ({}),
+  })
+  const broker = new BinanceSdkBroker({
+    apiKey: "test-key",
+    apiSecret: "test-secret",
+    tradingMode: "testnet",
+    logger: { error: (...args) => logs.push(args),
 info() {},
 warn() {} },
-    }, {
-      apiClientFactory: () => rpc,
-      marketClientFactory: () => createFakeStreamsClient(),
-    })
-    await broker.connect()
-    const subscription = await broker.subscribeForUserData({
-      onEvent() {},
-      onStatus() { throw new Error("status consumer failed") },
-    })
+  }, {
+    apiClientFactory: () => rpc,
+    marketClientFactory: () => createFakeStreamsClient(),
+  })
+  await broker.connect()
+  const subscription = await broker.subscribeForUserData({
+    onEvent() {},
+    onStatus() { throw new Error("status consumer failed") },
+  })
 
-    rpc.state = "closed"
-    rpc.emitClose({ code: 1006,
+  rpc.state = "closed"
+  rpc.emitClose({ code: 1006,
 reason: "network lost",
 wasClean: false })
 
-    assert.ok(logs.some(([message]) => message === "Binance user-data status callback failed"))
-    await subscription.data.disconnect()
-    await broker.disconnect()
-  })
+  assert.ok(logs.some(([message]) => message === "Binance user-data status callback failed"))
+  await subscription.data.disconnect()
+  await broker.disconnect()
 })
