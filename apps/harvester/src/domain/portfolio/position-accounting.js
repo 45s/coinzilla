@@ -1,4 +1,4 @@
-import { addDecimal, subtractDecimal, negateDecimal } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal, negateDecimal } from "@coinzilla/utils"
 import { validateFillCommissions } from "../fills/validate-fill-commissions.js"
 
 /**
