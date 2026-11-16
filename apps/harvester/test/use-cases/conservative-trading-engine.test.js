@@ -132,7 +132,9 @@ function createFixtureBroker({ market, baseAsset, quoteAsset, deferFirstSell, de
     cancelStarted,
     submittedIntents,
     cancellations,
-    setFillsForOrder: ({ orderId, fills } = {}) => fillsByOrder.set(orderId, fills),
+    setFillsForOrder: ({ orderId, fills } = {}) => {
+      fillsByOrder.set(orderId, fills);
+    },
   };
 }
 
@@ -740,7 +742,7 @@ timestamp: 1 },
 
 async function startDeferredRecoveryScenario(fixture) {
   const { engine, submittedIntents, pendingSell, pendingSellStarted } = fixture;
-  const bookTicker = {
+  const createBookTickerEvent = () => ({
     symbol: "ZROUSDT",
     bookTicker: {
       symbol: "ZROUSDT",
@@ -750,9 +752,9 @@ async function startDeferredRecoveryScenario(fixture) {
       bestAskQuantity: "1",
       timestamp: 1,
     },
-  };
-  await engine.processBookTicker(bookTicker);
-  await engine.processBookTicker(bookTicker);
+  });
+  await engine.processBookTicker(createBookTickerEvent());
+  await engine.processBookTicker(createBookTickerEvent());
   await engine.processMarketPrice({
     symbol: "ZROUSDT",
     priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
