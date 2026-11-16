@@ -201,7 +201,10 @@ async function appendAndVerifyCoverage({ operationalStateStore, evidence, audit 
 async function reconcileAndCommitCoverage({ operationalStateStore, reconcileMarketState, evidence }) {
   const historyRetentionEvidence = createHistoryRetentionEvidence({ evidence })
   const reconciliation = await reconcileMarketState({ historyRetentionEvidence })
-  const readiness = validateMarketReconciliationReadiness({ reconciliation, evidence })
+  const readiness = validateMarketReconciliationReadiness({
+    reconciliation,
+    evidence,
+  })
   if (readiness.result) {
     return readiness.result
   }
