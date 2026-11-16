@@ -1,4 +1,5 @@
 import { pathToFileURL } from "node:url"
+import { describeProcessError } from "./infrastructure/process/describe-process-error.js"
 import { createHarvesterProcessIdentity } from "./infrastructure/process/create-harvester-process-identity.js"
 import os from "node:os"
 import path from "node:path"
@@ -126,29 +127,6 @@ async function closeObservability({ journalService, eventBus, processLock, allow
     }
   }
   return errors
-}
-
-const describeError = (error) => {
-  if (error instanceof AggregateError) {
-    return {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-      errors: [...error.errors].map(describeError),
-    }
-  }
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      code: error.code,
-      symbol: error.symbol,
-      details: error.details,
-      message: error.message,
-      stack: error.stack,
-      cause: error.cause ? describeError(error.cause) : undefined,
-    }
-  }
-  return { message: String(error) }
 }
 
 const resolveHostProcessLockDirectory = () =>
@@ -618,7 +596,7 @@ function logStartupFailure({ error, logger } = {}) {
       errorMessage: error?.message ?? String(error),
       symbol: error?.symbol,
       sourceFilterTypes: error?.constraints?.map((constraint) => constraint.sourceFilterType),
-      errorDetails: describeError(error),
+      errorDetails: describeProcessError(error),
     })
   } catch {
     // Logging failure must not hide the original startup failure.
