@@ -18,7 +18,9 @@ describe("Binance user-data reconciliation and recovery races", () => {
     })
 
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
     await scheduler.runNext()
 
     const secondStatuses = []
@@ -44,13 +46,17 @@ describe("Binance user-data reconciliation and recovery races", () => {
     const second = await broker.subscribeForUserData({ onEvent() {} })
 
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006, reason: "first outage", wasClean: false })
+    clients[0].emitClose({ code: 1006,
+reason: "first outage",
+wasClean: false })
     await scheduler.runNext()
     assert.equal(first.data.acknowledgeRecovery(), false)
     assert.equal(second.data.acknowledgeRecovery(), true)
 
     clients[1].state = "closed"
-    clients[1].emitClose({ code: 1006, reason: "second outage", wasClean: false })
+    clients[1].emitClose({ code: 1006,
+reason: "second outage",
+wasClean: false })
     await scheduler.runNext()
 
     assert.equal(broker.userDataUnavailable, true)
@@ -74,7 +80,9 @@ describe("Binance user-data reconciliation and recovery races", () => {
     const second = await broker.subscribeForUserData({ onEvent() {} })
 
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
     await scheduler.runNext()
 
     assert.equal(first.data.acknowledgeRecovery(), false)
@@ -96,15 +104,17 @@ describe("Binance user-data reconciliation and recovery races", () => {
       apiSecret: "test-secret",
       tradingMode: "testnet",
       reconnectDelay: 10,
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => {
         const index = clients.length
         const client = createFakeRpcClient({
           "userDataStream.subscribe.signature": () => {
-            if (index === 0) return { subscriptionId: 10 }
+            if (index === 0) {return { subscriptionId: 10 }}
             resubscribeAttempts += 1
-            if (resubscribeAttempts <= 2) throw new Error("resubscribe rejected")
+            if (resubscribeAttempts <= 2) {throw new Error("resubscribe rejected")}
             return { subscriptionId: 11 }
           },
           "session.subscriptions": () => [],
@@ -126,7 +136,9 @@ describe("Binance user-data reconciliation and recovery races", () => {
     })
 
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
     await scheduler.runNext()
     assert.equal(scheduler.pendingCount, 1)
     await scheduler.runNext()
@@ -164,7 +176,9 @@ describe("Binance user-data reconciliation and recovery races", () => {
       apiSecret: "test-secret",
       tradingMode: "testnet",
       reconnectDelay: 10,
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => {
         const index = clients.length
@@ -192,7 +206,9 @@ describe("Binance user-data reconciliation and recovery races", () => {
     const subscription = await broker.subscribeForUserData({ onEvent() {} })
 
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
     const recovery = scheduler.runNext()
     await reconnectStarted
 
@@ -224,7 +240,9 @@ describe("Binance user-data reconciliation and recovery races", () => {
       apiSecret: "test-secret",
       tradingMode: "testnet",
       reconnectDelay: 10,
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => {
         const client = createFakeRpcClient({
@@ -251,7 +269,9 @@ describe("Binance user-data reconciliation and recovery races", () => {
     const subscription = await broker.subscribeForUserData({ onEvent() {} })
 
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
     const recovery = scheduler.runNext()
     await reconnectStarted
     assert.equal(typeof finishReconnect, "function")
@@ -271,7 +291,9 @@ describe("Binance user-data reconciliation and recovery races", () => {
     const subscription = await broker.subscribeForUserData({ onEvent() {} })
 
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
     assert.equal(scheduler.pendingCount, 1)
 
     await subscription.data.disconnect()
@@ -293,7 +315,9 @@ describe("Binance user-data reconciliation and recovery races", () => {
       apiSecret: "test-secret",
       tradingMode: "testnet",
       reconnectDelay: 10,
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => {
         const index = clients.length
@@ -321,7 +345,9 @@ describe("Binance user-data reconciliation and recovery races", () => {
     const subscription = await broker.subscribeForUserData({ onEvent() {} })
 
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
     const recovery = scheduler.runNext()
     await reconnectStarted
 
@@ -352,7 +378,9 @@ describe("Binance user-data reconciliation and recovery races", () => {
       apiSecret: "test-secret",
       tradingMode: "testnet",
       reconnectDelay: 10,
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => {
         const index = clients.length
@@ -377,7 +405,9 @@ describe("Binance user-data reconciliation and recovery races", () => {
     const subscription = await broker.subscribeForUserData({ onEvent() {} })
 
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
     const recovery = scheduler.runNext()
     await resubscribeStarted
 
@@ -403,7 +433,9 @@ describe("Binance user-data reconciliation and recovery races", () => {
       apiSecret: "test-secret",
       tradingMode: "testnet",
       reconnectDelay: 10,
-      logger: { error() {}, info() {}, warn() {} },
+      logger: { error() {},
+info() {},
+warn() {} },
     }, {
       apiClientFactory: () => {
         const client = createFakeRpcClient({
@@ -434,7 +466,9 @@ describe("Binance user-data reconciliation and recovery races", () => {
     })
 
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
     await scheduler.runNext()
     assert.equal(scheduler.pendingCount, 1)
     await scheduler.runNext()
@@ -463,16 +497,24 @@ describe("Binance user-data reconciliation and recovery races", () => {
     await broker.connect()
     const received = []
     const subscription = await broker.subscribeForUserData({ onEvent: (event) => received.push(event) })
-    const duplicate = { e: "balanceUpdate", a: "USDT", d: "1", T: 10, E: 11 }
-    clients[0].emitEvent({ subscriptionId: subscription.data.subscriptionId, event: duplicate })
+    const duplicate = { e: "balanceUpdate",
+a: "USDT",
+d: "1",
+T: 10,
+E: 11 }
+    clients[0].emitEvent({ subscriptionId: subscription.data.subscriptionId,
+event: duplicate })
 
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
     await scheduler.runNext()
 
     clients[1].emitEvent({
       subscriptionId: subscription.data.subscriptionId - 1,
-      event: { ...duplicate, d: "stale" },
+      event: { ...duplicate,
+d: "stale" },
     })
     clients[1].emitEvent({
       subscriptionId: subscription.data.subscriptionId,
@@ -480,7 +522,10 @@ describe("Binance user-data reconciliation and recovery races", () => {
     })
     clients[1].emitEvent({
       subscriptionId: subscription.data.subscriptionId,
-      event: { ...duplicate, d: "2", T: 12, E: 13 },
+      event: { ...duplicate,
+d: "2",
+T: 12,
+E: 13 },
     })
 
     assert.equal(received.length, 2)
