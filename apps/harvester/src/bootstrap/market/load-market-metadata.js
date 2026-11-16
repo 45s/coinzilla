@@ -3,7 +3,7 @@ import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { publishLifecycleEvent } from "../../application/events/publish-lifecycle-event.js"
 import { mapMarketTradingRulesCapturedData } from "../../application/events/lifecycle-event-dtos.js"
 
-function logSystem(logger, data) {
+function logSystem({ logger, ...data }) {
   if (typeof logger?.system === "function") {
     logger.system(data)
     return
@@ -49,7 +49,7 @@ export async function loadMarketMetadata({
       }
       if (!pairConfig.enabled) {
         marketMetadata.set(symbol, filtersResult.data)
-        logSystem(logger, {
+        logSystem({ logger,
           message: "Configured disabled market asset metadata loaded",
           symbol,
           baseAsset: market.baseAsset.code,
@@ -69,7 +69,7 @@ export async function loadMarketMetadata({
         eventName: HARVESTER_EVENT_NAMES.MARKET_TRADING_RULES_CAPTURED,
         dataResult: mapMarketTradingRulesCapturedData({ metadata: validatedMetadata }),
       })
-      logSystem(logger, {
+      logSystem({ logger,
         message: "Supported exchange trading rules validated",
         symbol,
         unvalidatedConstraintCount: validatedMetadata.unvalidatedConstraints.length,
