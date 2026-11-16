@@ -33,6 +33,7 @@ apps/harvester/src/
     operator-control/
       pause-market.js
       resume-market.js
+      buy-controls.js
   infrastructure/
     telegram/
       telegram-operator-adapter.js       # implemented; optional runtime wiring is active
@@ -188,6 +189,25 @@ The application returns the repository's structured result envelope. A successfu
 
 A rejected request uses a stable error code, for example `OPERATOR_UNAUTHORIZED`, `INVALID_OPERATOR_REQUEST_ID`, `INVALID_OPERATOR_MARKET` or `SAFETY_BLOCKER_ACTIVE`. Transport adapters map these codes to concise messages; they must not expose stack traces or internal storage details.
 
+A successful emergency BUY pause additionally reports the number of confirmed owned BUY cancellations and reconciled fills:
+
+```js
+{
+  ok: true,
+  data: {
+    symbol: "LINKUSDT", // omitted for the global scope
+    paused: true,
+    alreadyPaused: false,
+    canceled: 2,
+    reconciled: 1,
+    unresolved: 0
+  },
+  errors: []
+}
+```
+
+If cancellation cannot be confirmed, the result uses `OPERATOR_BUY_CANCELLATION_INCOMPLETE`; the gate remains active and the Telegram adapter warns that cancellation is unresolved.
+
 ## Existing market pause semantics
 
 The existing `pauseMarket` / Telegram `/pause SYMBOL` control is market-scoped and separate from safety/recovery pause ownership.
@@ -283,7 +303,8 @@ Typed `/pause SYMBOL` and `/resume SYMBOL` remain explicit command invocations a
 | Unknown configured market | Engine rejects before applying state. |
 | Durable fact write failed or uncertain (when a store is supplied) | No state transition and no successful acknowledgement. |
 | Process restart after a pause | The initial scope does not replay operator facts. The process starts without the operator pause; the operator must issue `/pause <SYMBOL>` again if needed. |
-| Existing BUY fills after `/pause SYMBOL` | Apply the fill normally; continue risk-reducing recovery SELL behavior; suppress new BUY intents. |\n| Emergency BUY cancellation is unresolved | Keep the requested BUY gate active; return `OPERATOR_BUY_CANCELLATION_INCOMPLETE`; tell the operator to inspect `/orders` and diagnostics. Never claim the emergency pause fully canceled all owned BUYs. |\n| Global/market BUY pauses overlap | Effective BUY gate remains active until both applicable scopes are resumed. |
+| Existing BUY fills after `/pause SYMBOL` | Apply the fill normally; continue risk-reducing recovery SELL behavior; suppress new BUY intents. |
+| Emergency BUY cancellation is unresolved | Keep the requested BUY gate active; return `OPERATOR_BUY_CANCELLATION_INCOMPLETE`; tell the operator to inspect `/orders` and diagnostics. Never claim the emergency pause fully canceled all owned BUYs. |\n| Global/market BUY pauses overlap | Effective BUY gate remains active until both applicable scopes are resumed. |
 | Resume while safety/recovery blocker exists | Reject before writing a resume fact; preserve the blocker. |
 | Telegram transport failure | Log actionable diagnostics; never mutate trading state outside the application use case. |
 
@@ -303,7 +324,8 @@ Typed `/pause SYMBOL` and `/resume SYMBOL` remain explicit command invocations a
 
 ## References
 
-- [ADR-0002 — Transport-independent operator control](./decisions/0002-transport-independent-operator-control.md)\n- [ADR-0005 — Emergency BUY pause](./decisions/0005-emergency-buy-pause.md)\n- [ADR-0001 — Application-owned durable facts](./decisions/0001-application-owned-recovery-facts.md)
+- [ADR-0002 — Transport-independent operator control](./decisions/0002-transport-independent-operator-control.md)
+- [ADR-0005 — Emergency BUY pause](./decisions/0005-emergency-buy-pause.md)\n- [ADR-0001 — Application-owned durable facts](./decisions/0001-application-owned-recovery-facts.md)
 - [Harvester roadmap](../../ROADMAP.md)
 - [Harvester architecture](../architecture.md)
 - [Harvester documentation index](../README.md)
