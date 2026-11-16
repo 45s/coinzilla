@@ -12,27 +12,27 @@ const isSafeInteger = (value) => Number.isSafeInteger(value) && !Object.is(value
 const isNonNegativeSafeInteger = (value) => isSafeInteger(value) && value >= 0
 
 const requireSafeInteger = ({ value, field }) => {
-  if (!isSafeInteger(value)) throw new TypeError(field + " must be a safe integer other than negative zero")
+  if (!isSafeInteger(value)) {throw new TypeError(`${field} must be a safe integer other than negative zero`)}
   return value
 }
 
 const requireNonNegativeSafeInteger = ({ value, field }) => {
   if (!isNonNegativeSafeInteger(value)) {
-    throw new TypeError(field + " must be a non-negative safe integer other than negative zero")
+    throw new TypeError(`${field} must be a non-negative safe integer other than negative zero`)
   }
   return value
 }
 
 const requireString = ({ value, field }) => {
   if (typeof value !== "string" || value.trim() === "") {
-    throw new TypeError(field + " must be a non-empty string")
+    throw new TypeError(`${field} must be a non-empty string`)
   }
   return value.trim()
 }
 
 const requireBoolean = ({ value, field }) => {
   if (typeof value !== "boolean") {
-    throw new TypeError(field + " must be a boolean")
+    throw new TypeError(`${field} must be a boolean`)
   }
   return value
 }
@@ -63,7 +63,8 @@ const requireMarkets = ({ value }) => {
     throw new TypeError("enabledMarkets must be an array")
   }
   const markets = value.map((symbol, index) =>
-    requireString({ value: symbol, field: "enabledMarkets[" + index + "]" })
+    requireString({ value: symbol,
+      field: `enabledMarkets[${index}]` })
   )
   if (new Set(markets).size !== markets.length) {
     throw new TypeError("enabledMarkets must not contain duplicates")
@@ -87,12 +88,15 @@ const safeError = ({ error }) => {
   const code = typeof error.code === "string" || isSafeInteger(error.code)
     ? { code: typeof error.code === "string" ? error.code.slice(0, 80) : error.code }
     : {}
-  return { name, message, ...code }
+  return { name,
+    message,
+    ...code }
 }
 
 const mapData = (input, operation, mapper) => {
   try {
-    assertObjectInput({ input, operation })
+    assertObjectInput({ input,
+      operation })
     return toResult({ data: mapper(input) })
   } catch (error) {
     return toResult({ error })
@@ -103,9 +107,9 @@ const BUILD_METADATA_SOURCES = Object.freeze(["git", "environment", "unavailable
 const WORKING_TREE_STATES = Object.freeze(["clean", "dirty", "unknown"])
 
 const requireNullableBuildText = ({ value, field, maxLength }) => {
-  if (value === null) return null
+  if (value === null) {return null}
   if (typeof value !== "string" || value.trim() === "") {
-    throw new TypeError(field + " must be a non-empty string or null")
+    throw new TypeError(`${field} must be a non-empty string or null`)
   }
   return value.trim()
     .replace(/[\r\n]+/g, " ")
@@ -116,14 +120,23 @@ const requireNullableBuildText = ({ value, field, maxLength }) => {
 }
 
 const requireBuildSource = ({ value }) => {
-  assertObjectInput({ input: value, operation: "Harvester process-start source mapping" })
-  const branch = requireNullableBuildText({ value: value.branch, field: "source.branch", maxLength: 160 })
-  const commit = requireNullableBuildText({ value: value.commit, field: "source.commit", maxLength: 64 })
+  assertObjectInput({ input: value,
+    operation: "Harvester process-start source mapping" })
+  const branch = requireNullableBuildText({ value: value.branch,
+    field: "source.branch",
+    maxLength: 160 })
+  const commit = requireNullableBuildText({ value: value.commit,
+    field: "source.commit",
+    maxLength: 64 })
   if (commit !== null && !/^[a-f0-9]{40,64}$/i.test(commit)) {
     throw new TypeError("source.commit must be a 40–64 character hexadecimal SHA or null")
   }
-  const commitMessage = requireNullableBuildText({ value: value.commitMessage, field: "source.commitMessage", maxLength: 240 })
-  const commitDate = requireNullableBuildText({ value: value.commitDate, field: "source.commitDate", maxLength: 64 })
+  const commitMessage = requireNullableBuildText({ value: value.commitMessage,
+    field: "source.commitMessage",
+    maxLength: 240 })
+  const commitDate = requireNullableBuildText({ value: value.commitDate,
+    field: "source.commitDate",
+    maxLength: 64 })
   if (commitDate !== null && Number.isNaN(Date.parse(commitDate))) {
     throw new TypeError("source.commitDate must be a valid timestamp or null")
   }
@@ -157,7 +170,8 @@ export const mapHarvesterProcessStartedData = (input = {}) =>
     startedAt,
     source,
   }) => {
-    const normalizedStartedAt = requireString({ value: startedAt, field: "startedAt" })
+    const normalizedStartedAt = requireString({ value: startedAt,
+      field: "startedAt" })
     const startedAtDate = new Date(normalizedStartedAt)
     if (Number.isNaN(startedAtDate.getTime()) || startedAtDate.toISOString() !== normalizedStartedAt) {
       throw new TypeError("startedAt must be a canonical UTC ISO timestamp")
@@ -166,9 +180,12 @@ export const mapHarvesterProcessStartedData = (input = {}) =>
       throw new TypeError("processId must be a positive safe integer")
     }
     return {
-      application: requireString({ value: application, field: "application" }).slice(0, 80),
-      version: requireString({ value: version, field: "version" }).slice(0, 80),
-      runtimeSessionId: requireString({ value: runtimeSessionId, field: "runtimeSessionId" }).slice(0, 128),
+      application: requireString({ value: application,
+        field: "application" }).slice(0, 80),
+      version: requireString({ value: version,
+        field: "version" }).slice(0, 80),
+      runtimeSessionId: requireString({ value: runtimeSessionId,
+        field: "runtimeSessionId" }).slice(0, 128),
       processId,
       startedAt: new Date(normalizedStartedAt).toISOString(),
       source: requireBuildSource({ value: source }),
@@ -183,16 +200,19 @@ export const mapHarvesterStartedData = (input = {}) =>
     enabledMarkets,
     tradingEnabled,
   }) => ({
-    broker: requireString({ value: broker, field: "broker" }),
+    broker: requireString({ value: broker,
+      field: "broker" }),
     strategyMode: requireStrategyMode({ value: strategyMode }),
     enabledMarkets: requireMarkets({ value: enabledMarkets }),
-    tradingEnabled: requireBoolean({ value: tradingEnabled, field: "tradingEnabled" }),
+    tradingEnabled: requireBoolean({ value: tradingEnabled,
+      field: "tradingEnabled" }),
   }))
 
 /** Map a startup failure without exposing stack traces, causes, or raw Error objects. */
 export const mapHarvesterStartupFailedData = (input = {}) =>
   mapData(input, "Harvester startup-failed event mapping", ({ stage, error }) => ({
-    stage: requireString({ value: stage, field: "stage" }),
+    stage: requireString({ value: stage,
+      field: "stage" }),
     error: safeError({ error }),
   }))
 
@@ -203,7 +223,8 @@ export const mapHarvesterStoppedData = (input = {}) =>
       throw new TypeError("outcome must be success or failed")
     }
     return {
-      reason: requireString({ value: reason, field: "reason" }),
+      reason: requireString({ value: reason,
+        field: "reason" }),
       outcome,
       ...(error === undefined ? {} : { error: safeError({ error }) }),
     }
@@ -222,17 +243,20 @@ export const mapConfigValidatedData = (input = {}) =>
     strategyMode: requireStrategyMode({ value: strategyMode }),
     tradingMode: requireTradingMode({ value: tradingMode }),
     configurationFingerprint: requireConfigurationFingerprint({ value: configurationFingerprint }),
-    tradingEnabled: requireBoolean({ value: tradingEnabled, field: "tradingEnabled" }),
+    tradingEnabled: requireBoolean({ value: tradingEnabled,
+      field: "tradingEnabled" }),
   }))
 
 export const mapBrokerConnectedData = (input = {}) =>
   mapData(input, "Broker-connected event mapping", ({ broker }) => ({
-    broker: requireString({ value: broker, field: "broker" }),
+    broker: requireString({ value: broker,
+      field: "broker" }),
   }))
 
 export const mapBrokerConnectionFailedData = (input = {}) =>
   mapData(input, "Broker-connection-failed event mapping", ({ broker, error }) => ({
-    broker: requireString({ value: broker, field: "broker" }),
+    broker: requireString({ value: broker,
+      field: "broker" }),
     error: safeError({ error }),
   }))
 
@@ -242,7 +266,8 @@ export const mapBrokerDisconnectedData = (input = {}) =>
       throw new TypeError("outcome must be success or failed")
     }
     return {
-      broker: requireString({ value: broker, field: "broker" }),
+      broker: requireString({ value: broker,
+        field: "broker" }),
       outcome,
       ...(error === undefined ? {} : { error: safeError({ error }) }),
     }
@@ -259,7 +284,8 @@ const requireStream = ({ value }) => {
 
 const optionalMarket = ({ value, stream }) => {
   if (stream === "market-price") {
-    return requireString({ value, field: "market" })
+    return requireString({ value,
+      field: "market" })
   }
   if (value !== undefined) {
     throw new TypeError("market is only valid for market-price streams")
@@ -270,9 +296,11 @@ const optionalMarket = ({ value, stream }) => {
 export const mapBrokerSubscriptionEstablishedData = (input = {}) =>
   mapData(input, "Broker-subscription-established event mapping", ({ broker, stream, market }) => {
     const normalizedStream = requireStream({ value: stream })
-    const normalizedMarket = optionalMarket({ value: market, stream: normalizedStream })
+    const normalizedMarket = optionalMarket({ value: market,
+      stream: normalizedStream })
     return {
-      broker: requireString({ value: broker, field: "broker" }),
+      broker: requireString({ value: broker,
+        field: "broker" }),
       stream: normalizedStream,
       ...(normalizedMarket === undefined ? {} : { market: normalizedMarket }),
     }
@@ -281,9 +309,11 @@ export const mapBrokerSubscriptionEstablishedData = (input = {}) =>
 export const mapBrokerSubscriptionFailedData = (input = {}) =>
   mapData(input, "Broker-subscription-failed event mapping", ({ broker, stream, market, error }) => {
     const normalizedStream = requireStream({ value: stream })
-    const normalizedMarket = optionalMarket({ value: market, stream: normalizedStream })
+    const normalizedMarket = optionalMarket({ value: market,
+      stream: normalizedStream })
     return {
-      broker: requireString({ value: broker, field: "broker" }),
+      broker: requireString({ value: broker,
+        field: "broker" }),
       stream: normalizedStream,
       ...(normalizedMarket === undefined ? {} : { market: normalizedMarket }),
       error: safeError({ error }),
@@ -304,12 +334,16 @@ export const mapBrokerStatusChangedData = (input = {}) =>
     if (typeof recoveryRequired !== "boolean") {
       throw new TypeError("recoveryRequired must be a boolean")
     }
-    if (attempt !== undefined) requireNonNegativeSafeInteger({ value: attempt, field: "attempt" })
-    if (code !== undefined && code !== null) requireSafeInteger({ value: code, field: "code" })
+    if (attempt !== undefined) {requireNonNegativeSafeInteger({ value: attempt,
+      field: "attempt" })}
+    if (code !== undefined && code !== null) {requireSafeInteger({ value: code,
+      field: "code" })}
     return {
-      broker: requireString({ value: broker, field: "broker" }),
+      broker: requireString({ value: broker,
+        field: "broker" }),
       stream: normalizedStream,
-      status: requireString({ value: status, field: "status" }),
+      status: requireString({ value: status,
+        field: "status" }),
       recoveryRequired,
       ...(attempt === undefined ? {} : { attempt }),
       ...(code === undefined || code === null ? {} : { code }),
@@ -319,8 +353,9 @@ export const mapBrokerStatusChangedData = (input = {}) =>
 
 
 const requireDecimalString = ({ value, field }) => {
-  if (typeof value !== "string") throw new TypeError(field + " must be a decimal string")
-  assertDecimalString({ value, field })
+  if (typeof value !== "string") {throw new TypeError(`${field} must be a decimal string`)}
+  assertDecimalString({ value,
+    field })
   return value
 }
 
@@ -329,18 +364,24 @@ const requireOrderFacts = ({ order }) => {
     throw new TypeError("order must contain canonical market facts")
   }
   return {
-    clientOrderId: requireString({ value: order.clientOrderId, field: "clientOrderId" }),
-    symbol: requireString({ value: order.market.symbol, field: "symbol" }),
+    clientOrderId: requireString({ value: order.clientOrderId,
+      field: "clientOrderId" }),
+    symbol: requireString({ value: order.market.symbol,
+      field: "symbol" }),
     side: order.side === "BUY" || order.side === "SELL"
       ? order.side
       : (() => { throw new TypeError("order.side must be BUY or SELL") })(),
-    type: requireString({ value: order.type, field: "type" }),
-    price: requireDecimalString({ value: order.limitPrice?.amount, field: "price" }),
-    quantity: requireDecimalString({ value: order.originalQuantity?.amount, field: "quantity" }),
+    type: requireString({ value: order.type,
+      field: "type" }),
+    price: requireDecimalString({ value: order.limitPrice?.amount,
+      field: "price" }),
+    quantity: requireDecimalString({ value: order.originalQuantity?.amount,
+      field: "quantity" }),
   }
 }
 
-const requireCount = ({ value, field }) => requireNonNegativeSafeInteger({ value, field })
+const requireCount = ({ value, field }) => requireNonNegativeSafeInteger({ value,
+  field })
 
 const mapStrategyDecisionInputs = (inputs) => {
   if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) {
@@ -355,16 +396,17 @@ const mapStrategyDecisionInputs = (inputs) => {
     "makerPercent", "takerPercent", "minProfit",
   ]) {
     const value = inputs[field]
-    if (value === undefined) continue
+    if (value === undefined) {continue}
     if (field === "lastBuyPrice" && value === null) {
       mapped[field] = null
       continue
     }
-    if (typeof value === "number" && (!Number.isFinite(value) || Object.is(value, -0))) continue
+    if (typeof value === "number" && (!Number.isFinite(value) || Object.is(value, -0))) {continue}
     const decimal = typeof value === "number" ? String(value) : value
-    if (typeof decimal !== "string") continue
+    if (typeof decimal !== "string") {continue}
     try {
-      assertDecimalString({ value: decimal, field: "inputs." + field })
+      assertDecimalString({ value: decimal,
+        field: `inputs.${field}` })
       mapped[field] = decimal
     } catch {
       // Preserve valid decision inputs without letting malformed optional diagnostics hide the decision.
@@ -372,7 +414,7 @@ const mapStrategyDecisionInputs = (inputs) => {
   }
   for (const field of ["activeOrderCount", "activeBuyCount", "activeSellCount"]) {
     const value = inputs[field]
-    if (isNonNegativeSafeInteger(value)) mapped[field] = value
+    if (isNonNegativeSafeInteger(value)) {mapped[field] = value}
   }
   return mapped
 }
@@ -380,25 +422,31 @@ const mapStrategyDecisionInputs = (inputs) => {
 /** Map an actionable strategy decision; NO_ACTION evaluations are not journal events. */
 export const mapStrategyDecisionData = (input = {}) =>
   mapData(input, "Strategy-decision event mapping", ({ strategy, symbol, referencePrice, reason, inputs, actions }) => {
-    if (strategy !== "CONSERVATIVE") throw new TypeError("strategy must be CONSERVATIVE")
+    if (strategy !== "CONSERVATIVE") {throw new TypeError("strategy must be CONSERVATIVE")}
     if (!Array.isArray(actions) || actions.length === 0) {
       throw new TypeError("strategy decision must contain at least one actionable order")
     }
     return {
       strategy,
-      symbol: requireString({ value: symbol, field: "symbol" }),
-      referencePrice: requireDecimalString({ value: referencePrice, field: "referencePrice" }),
+      symbol: requireString({ value: symbol,
+        field: "symbol" }),
+      referencePrice: requireDecimalString({ value: referencePrice,
+        field: "referencePrice" }),
       ...(typeof reason === "string" && reason.trim() ? { reason: reason.trim().slice(0, 160) } : {}),
       ...(inputs === undefined ? {} : { inputs: mapStrategyDecisionInputs(inputs) }),
       actions: actions.map((action, index) => ({
         side: action?.side === "BUY" || action?.side === "SELL"
           ? action.side
-          : (() => { throw new TypeError("actions[" + index + "].side must be BUY or SELL") })(),
-        type: requireString({ value: action?.type, field: "actions[" + index + "].type" }),
-        price: requireDecimalString({ value: action?.price, field: "actions[" + index + "].price" }),
-        quantity: requireDecimalString({ value: action?.quantity, field: "actions[" + index + "].quantity" }),
+          : (() => { throw new TypeError(`actions[${index}].side must be BUY or SELL`) })(),
+        type: requireString({ value: action?.type,
+          field: `actions[${index}].type` }),
+        price: requireDecimalString({ value: action?.price,
+          field: `actions[${index}].price` }),
+        quantity: requireDecimalString({ value: action?.quantity,
+          field: `actions[${index}].quantity` }),
         ...(action?.reason === undefined ? {} : {
-          reason: requireString({ value: action.reason, field: "actions[" + index + "].reason" }),
+          reason: requireString({ value: action.reason,
+            field: `actions[${index}].reason` }),
         }),
       })),
     }
@@ -408,15 +456,18 @@ export const mapStrategyDecisionData = (input = {}) =>
 export const mapOrderSubmissionRequestedData = (input = {}) =>
   mapData(input, "Order-submission-requested event mapping", ({ order }) => ({
     ...requireOrderFacts({ order }),
-    status: requireString({ value: order.status, field: "order.status" }),
+    status: requireString({ value: order.status,
+      field: "order.status" }),
   }))
 
 /** Map only a broker-acknowledged canonical order. */
 export const mapOrderSubmittedData = (input = {}) =>
   mapData(input, "Order-submitted event mapping", ({ order }) => ({
     ...requireOrderFacts({ order }),
-    brokerOrderId: requireString({ value: order.brokerOrderId, field: "brokerOrderId" }),
-    status: requireString({ value: order.status, field: "order.status" }),
+    brokerOrderId: requireString({ value: order.brokerOrderId,
+      field: "brokerOrderId" }),
+    status: requireString({ value: order.status,
+      field: "order.status" }),
   }))
 
 /** Map a rejected or unknown submission without retaining raw errors or SDK data. */
@@ -426,8 +477,10 @@ export const mapOrderSubmissionFailedData = (input = {}) =>
       throw new TypeError("outcome must be REJECTED, REJECTED_OR_UNKNOWN, or UNKNOWN")
     }
     return {
-      clientOrderId: requireString({ value: order?.clientOrderId, field: "clientOrderId" }),
-      symbol: requireString({ value: order?.market?.symbol, field: "symbol" }),
+      clientOrderId: requireString({ value: order?.clientOrderId,
+        field: "clientOrderId" }),
+      symbol: requireString({ value: order?.market?.symbol,
+        field: "symbol" }),
       side: order?.side === "BUY" || order?.side === "SELL"
         ? order.side
         : (() => { throw new TypeError("order.side must be BUY or SELL") })(),
@@ -440,8 +493,10 @@ export const mapOrderSubmissionFailedData = (input = {}) =>
 /** Map the first transition of a strategy pair into its paused state. */
 export const mapStrategyPausedData = (input = {}) =>
   mapData(input, "Strategy-paused event mapping", ({ symbol, reason, error }) => ({
-    symbol: requireString({ value: symbol, field: "symbol" }),
-    reason: requireString({ value: reason, field: "reason" }),
+    symbol: requireString({ value: symbol,
+      field: "symbol" }),
+    reason: requireString({ value: reason,
+      field: "reason" }),
     ...(error === undefined ? {} : { error: safeError({ error }) }),
   }))
 
@@ -454,13 +509,15 @@ export const mapOrderCancellationRequestedData = (input = {}) =>
     }
     return {
       ...facts,
-      brokerOrderId: requireString({ value: order.brokerOrderId, field: "brokerOrderId" }),
+      brokerOrderId: requireString({ value: order.brokerOrderId,
+        field: "brokerOrderId" }),
       executedQuantity: requireDecimalString({
         value: order.executedQuantity?.amount,
         field: "executedQuantity",
       }),
       status: order.status,
-      reason: requireString({ value: reason, field: "reason" }),
+      reason: requireString({ value: reason,
+        field: "reason" }),
     }
   })
 
@@ -468,10 +525,11 @@ export const mapOrderCancellationRequestedData = (input = {}) =>
 export const mapOrderCancelledData = (input = {}) =>
   mapData(input, "Order-cancelled event mapping", ({ order }) => {
     const facts = requireOrderFacts({ order })
-    if (order.status !== "CANCELED") throw new TypeError("order.status must be CANCELED")
+    if (order.status !== "CANCELED") {throw new TypeError("order.status must be CANCELED")}
     return {
       ...facts,
-      brokerOrderId: requireString({ value: order.brokerOrderId, field: "brokerOrderId" }),
+      brokerOrderId: requireString({ value: order.brokerOrderId,
+        field: "brokerOrderId" }),
       executedQuantity: requireDecimalString({
         value: order.executedQuantity?.amount,
         field: "executedQuantity",
@@ -487,15 +545,18 @@ export const mapOrderCancelFailedData = (input = {}) =>
       throw new TypeError("outcome must describe an unconfirmed or unsuccessful cancellation")
     }
     return {
-      clientOrderId: requireString({ value: order?.clientOrderId, field: "clientOrderId" }),
-      symbol: requireString({ value: order?.market?.symbol, field: "symbol" }),
+      clientOrderId: requireString({ value: order?.clientOrderId,
+        field: "clientOrderId" }),
+      symbol: requireString({ value: order?.market?.symbol,
+        field: "symbol" }),
       side: order?.side === "BUY" || order?.side === "SELL"
         ? order.side
         : (() => { throw new TypeError("order.side must be BUY or SELL") })(),
       ...(typeof order?.brokerOrderId === "string" && order.brokerOrderId.trim()
         ? { brokerOrderId: order.brokerOrderId.trim() }
         : {}),
-      status: requireString({ value: order?.status, field: "order.status" }),
+      status: requireString({ value: order?.status,
+        field: "order.status" }),
       outcome,
       ...(error === undefined ? {} : { error: safeError({ error }) }),
     }
@@ -505,37 +566,47 @@ export const mapOrderCancelFailedData = (input = {}) =>
 /** Map a canonical Fill only after both accounting projections were committed. */
 export const mapFillAppliedData = (input = {}) =>
   mapData(input, "Fill-applied event mapping", ({ fill }) => {
-    if (!(fill instanceof Fill)) throw new TypeError("fill must be a canonical Fill")
+    if (!(fill instanceof Fill)) {throw new TypeError("fill must be a canonical Fill")}
     return {
-      fillId: requireString({ value: fill.id, field: "fillId" }),
-      tradeId: requireString({ value: fill.tradeId, field: "tradeId" }),
-      brokerOrderId: requireString({ value: fill.brokerOrderId, field: "brokerOrderId" }),
+      fillId: requireString({ value: fill.id,
+        field: "fillId" }),
+      tradeId: requireString({ value: fill.tradeId,
+        field: "tradeId" }),
+      brokerOrderId: requireString({ value: fill.brokerOrderId,
+        field: "brokerOrderId" }),
       ...(fill.clientOrderId === undefined ? {} : {
-        clientOrderId: requireString({ value: fill.clientOrderId, field: "clientOrderId" }),
+        clientOrderId: requireString({ value: fill.clientOrderId,
+          field: "clientOrderId" }),
       }),
-      symbol: requireString({ value: fill.market.symbol, field: "symbol" }),
+      symbol: requireString({ value: fill.market.symbol,
+        field: "symbol" }),
       side: fill.side === "BUY" || fill.side === "SELL"
         ? fill.side
         : (() => { throw new TypeError("fill.side must be BUY or SELL") })(),
-      price: requireDecimalString({ value: fill.price?.amount, field: "price" }),
-      quantity: requireDecimalString({ value: fill.quantity?.amount, field: "quantity" }),
-      quoteQuantity: requireDecimalString({ value: fill.quoteQuantity?.amount, field: "quoteQuantity" }),
-      liquidityRole: requireString({ value: fill.liquidityRole, field: "liquidityRole" }),
+      price: requireDecimalString({ value: fill.price?.amount,
+        field: "price" }),
+      quantity: requireDecimalString({ value: fill.quantity?.amount,
+        field: "quantity" }),
+      quoteQuantity: requireDecimalString({ value: fill.quoteQuantity?.amount,
+        field: "quoteQuantity" }),
+      liquidityRole: requireString({ value: fill.liquidityRole,
+        field: "liquidityRole" }),
       ...(fill.executedAt === undefined ? {} : {
-        executedAt: requireNonNegativeSafeInteger({ value: fill.executedAt, field: "fill.executedAt" }),
+        executedAt: requireNonNegativeSafeInteger({ value: fill.executedAt,
+          field: "fill.executedAt" }),
       }),
       commissions: fill.commissions.map((commission, index) => {
         const amount = requireDecimalString({
           value: commission.amount?.amount,
-          field: "commissions[" + index + "].amount",
+          field: `commissions[${index}].amount`,
         })
         const assetId = requireString({
           value: commission.amount?.asset?.id,
-          field: "commissions[" + index + "].assetId",
+          field: `commissions[${index}].assetId`,
         })
         const asset = requireString({
           value: commission.amount?.asset?.code,
-          field: "commissions[" + index + "].asset",
+          field: `commissions[${index}].asset`,
         })
         const isBaseAsset = assetId === fill.market.baseAsset?.id
         const isQuoteAsset = assetId === fill.market.quoteAsset?.id
@@ -546,7 +617,8 @@ export const mapFillAppliedData = (input = {}) =>
           throw new TypeError("Commission asset ID and code do not match the market asset identity")
         }
         const isThirdAsset = !isBaseAsset && !isQuoteAsset
-        const hasPositiveCommission = compareDecimal({ left: amount, right: "0" }) > 0
+        const hasPositiveCommission = compareDecimal({ left: amount,
+          right: "0" }) > 0
         if (isThirdAsset && hasPositiveCommission && commission.quoteValue === undefined) {
           throw new TypeError("Third-asset commission requires historical quote valuation")
         }
@@ -554,24 +626,28 @@ export const mapFillAppliedData = (input = {}) =>
         if (commission.quoteValue !== undefined) {
           const quoteAmount = requireDecimalString({
             value: commission.quoteValue?.amount,
-            field: "commissions[" + index + "].quoteValue.amount",
+            field: `commissions[${index}].quoteValue.amount`,
           })
           const quoteAssetId = requireString({
             value: commission.quoteValue?.asset?.id,
-            field: "commissions[" + index + "].quoteValue.assetId",
+            field: `commissions[${index}].quoteValue.assetId`,
           })
           const quoteAsset = requireString({
             value: commission.quoteValue?.asset?.code,
-            field: "commissions[" + index + "].quoteValue.asset",
+            field: `commissions[${index}].quoteValue.asset`,
           })
           if (quoteAssetId !== fill.market.quoteAsset?.id || quoteAsset !== fill.market.quoteAsset?.code) {
             throw new TypeError("Commission quote valuation must use the market quote asset")
           }
-          if (compareDecimal({ left: quoteAmount, right: "0" }) < 0 ||
-              (isThirdAsset && hasPositiveCommission && compareDecimal({ left: quoteAmount, right: "0" }) === 0)) {
+          if (compareDecimal({ left: quoteAmount,
+            right: "0" }) < 0 ||
+              (isThirdAsset && hasPositiveCommission && compareDecimal({ left: quoteAmount,
+                right: "0" }) === 0)) {
             throw new RangeError("Commission quote valuation must be positive for a non-zero third-asset fee")
           }
-          quoteValue = { amount: quoteAmount, assetId: quoteAssetId, asset: quoteAsset }
+          quoteValue = { amount: quoteAmount,
+            assetId: quoteAssetId,
+            asset: quoteAsset }
         }
         return {
           amount,
@@ -580,31 +656,38 @@ export const mapFillAppliedData = (input = {}) =>
           ...(quoteValue === undefined ? {} : { quoteValue }),
         }
       }),
-      commissionStatus: requireString({ value: fill.commissionStatus, field: "commissionStatus" }),
+      commissionStatus: requireString({ value: fill.commissionStatus,
+        field: "commissionStatus" }),
     }
   })
 
 
 const requireExecutionOrderFacts = ({ order }) => {
-  if (!(order instanceof CanonicalOrder)) throw new TypeError("order must be a canonical Harvester order")
-  if (order.side !== "BUY" && order.side !== "SELL") throw new TypeError("order.side must be BUY or SELL")
+  if (!(order instanceof CanonicalOrder)) {throw new TypeError("order must be a canonical Harvester order")}
+  if (order.side !== "BUY" && order.side !== "SELL") {throw new TypeError("order.side must be BUY or SELL")}
   return {
-    clientOrderId: requireString({ value: order.clientOrderId, field: "clientOrderId" }),
+    clientOrderId: requireString({ value: order.clientOrderId,
+      field: "clientOrderId" }),
     ...(typeof order.brokerOrderId === "string" && order.brokerOrderId.trim()
       ? { brokerOrderId: order.brokerOrderId.trim() }
       : {}),
-    symbol: requireString({ value: order.market?.symbol, field: "symbol" }),
+    symbol: requireString({ value: order.market?.symbol,
+      field: "symbol" }),
     side: order.side,
-    status: requireString({ value: order.status, field: "status" }),
+    status: requireString({ value: order.status,
+      field: "status" }),
   }
 }
 
 const requireExecutionFillFacts = ({ fill }) => {
-  if (!(fill instanceof Fill)) throw new TypeError("fill must be a canonical Fill")
+  if (!(fill instanceof Fill)) {throw new TypeError("fill must be a canonical Fill")}
   return {
-    fillId: requireString({ value: fill.id, field: "fillId" }),
-    fillBrokerOrderId: requireString({ value: fill.brokerOrderId, field: "fillBrokerOrderId" }),
-    fillSymbol: requireString({ value: fill.market?.symbol, field: "fillSymbol" }),
+    fillId: requireString({ value: fill.id,
+      field: "fillId" }),
+    fillBrokerOrderId: requireString({ value: fill.brokerOrderId,
+      field: "fillBrokerOrderId" }),
+    fillSymbol: requireString({ value: fill.market?.symbol,
+      field: "fillSymbol" }),
     fillSide: fill.side === "BUY" || fill.side === "SELL"
       ? fill.side
       : (() => { throw new TypeError("fill.side must be BUY or SELL") })(),
@@ -644,25 +727,36 @@ export const mapExecutionAccountingFailedData = (input = {}) =>
 /** Map an idempotent duplicate Fill without implying a second accounting application. */
 export const mapDuplicateFillData = (input = {}) => {
   const fillResult = mapFillAppliedData(input)
-  if (!fillResult.ok) return fillResult
-  return toResult({ data: { ...fillResult.data, duplicate: true } })
+  if (!fillResult.ok) {return fillResult}
+  return toResult({ data: { ...fillResult.data,
+    duplicate: true } })
 }
 
 const mapRecoveryDustData = ({ dust }) => {
-  if (dust === undefined) return undefined
-  if (!dust || dust.status !== "EXCHANGE_CONSTRAINED_DUST") throw new TypeError("dust.status must be EXCHANGE_CONSTRAINED_DUST")
-  if (!["MIN_QUANTITY", "MIN_NOTIONAL", "QUANTITY_INCREMENT"].includes(dust.reason)) throw new TypeError("dust.reason must identify the limiting exchange filter")
-  const mapped = { status: "EXCHANGE_CONSTRAINED_DUST", quantity: requireDecimalString({ value: dust.quantity, field: "dust.quantity" }), reason: dust.reason }
-  const fields = { MIN_QUANTITY: ["minimumQuantity", "evaluatedQuantity"], MIN_NOTIONAL: ["minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional"], QUANTITY_INCREMENT: ["quantityStepSize", "evaluatedQuantity"] }[dust.reason]
-  for (const field of fields) mapped[field] = requireDecimalString({ value: dust[field], field: "dust." + field })
-  if (compareDecimal({ left: mapped.quantity, right: "0" }) <= 0) throw new RangeError("dust.quantity must be positive")
+  if (dust === undefined) {return undefined}
+  if (!dust || dust.status !== "EXCHANGE_CONSTRAINED_DUST") {throw new TypeError("dust.status must be EXCHANGE_CONSTRAINED_DUST")}
+  if (!["MIN_QUANTITY", "MIN_NOTIONAL", "QUANTITY_INCREMENT"].includes(dust.reason)) {throw new TypeError("dust.reason must identify the limiting exchange filter")}
+  const mapped = { status: "EXCHANGE_CONSTRAINED_DUST",
+    quantity: requireDecimalString({ value: dust.quantity,
+      field: "dust.quantity" }),
+    reason: dust.reason }
+  const fields = { MIN_QUANTITY: ["minimumQuantity", "evaluatedQuantity"],
+    MIN_NOTIONAL: ["minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional"],
+    QUANTITY_INCREMENT: ["quantityStepSize", "evaluatedQuantity"] }[dust.reason]
+  for (const field of fields) {mapped[field] = requireDecimalString({ value: dust[field],
+    field: `dust.${field}` })}
+  if (compareDecimal({ left: mapped.quantity,
+    right: "0" }) <= 0) {throw new RangeError("dust.quantity must be positive")}
   if (dust.reason === "MIN_QUANTITY" &&
-      compareDecimal({ left: mapped.evaluatedQuantity, right: mapped.minimumQuantity }) >= 0) {
+      compareDecimal({ left: mapped.evaluatedQuantity,
+        right: mapped.minimumQuantity }) >= 0) {
     throw new RangeError("dust MIN_QUANTITY evidence does not prove the quantity is below the minimum")
   }
   if (dust.reason === "MIN_NOTIONAL" &&
-      (compareDecimal({ left: mapped.evaluatedQuantity, right: mapped.minimumQuantity }) < 0 ||
-       compareDecimal({ left: mapped.evaluatedNotional, right: mapped.minimumNotional }) >= 0)) {
+      (compareDecimal({ left: mapped.evaluatedQuantity,
+        right: mapped.minimumQuantity }) < 0 ||
+       compareDecimal({ left: mapped.evaluatedNotional,
+         right: mapped.minimumNotional }) >= 0)) {
     throw new RangeError("dust MIN_NOTIONAL evidence does not prove the notional is below the minimum")
   }
   if (dust.reason === "QUANTITY_INCREMENT" && mapped.evaluatedQuantity !== "0") {
@@ -674,21 +768,32 @@ const mapRecoveryDustData = ({ dust }) => {
 /** Map a completed recovery cycle with its profit threshold and exact retained-inventory evidence. */
 export const mapRecoveryCycleCompletedData = (input = {}) =>
   mapData(input, "Recovery-cycle-completed event mapping", ({ symbol, marketId, freeQuantity, keepQuantity, minProfit, realizedNetProfit, dust }) => {
-    const mappedKeepQuantity = requireDecimalString({ value: keepQuantity, field: "keepQuantity" })
-    const mappedMinProfit = requireDecimalString({ value: minProfit, field: "minProfit" })
-    const mappedFreeQuantity = requireDecimalString({ value: freeQuantity, field: "freeQuantity" })
-    const mappedRealizedNetProfit = requireDecimalString({ value: realizedNetProfit, field: "realizedNetProfit" })
-    if (compareDecimal({ left: mappedKeepQuantity, right: "0" }) < 0) throw new RangeError("keepQuantity must be non-negative")
-    if (compareDecimal({ left: mappedMinProfit, right: "0.01" }) < 0) throw new RangeError("minProfit must be at least 0.01")
-    if (compareDecimal({ left: mappedRealizedNetProfit, right: mappedMinProfit }) < 0) throw new RangeError("realizedNetProfit must meet minProfit")
+    const mappedKeepQuantity = requireDecimalString({ value: keepQuantity,
+      field: "keepQuantity" })
+    const mappedMinProfit = requireDecimalString({ value: minProfit,
+      field: "minProfit" })
+    const mappedFreeQuantity = requireDecimalString({ value: freeQuantity,
+      field: "freeQuantity" })
+    const mappedRealizedNetProfit = requireDecimalString({ value: realizedNetProfit,
+      field: "realizedNetProfit" })
+    if (compareDecimal({ left: mappedKeepQuantity,
+      right: "0" }) < 0) {throw new RangeError("keepQuantity must be non-negative")}
+    if (compareDecimal({ left: mappedMinProfit,
+      right: "0.01" }) < 0) {throw new RangeError("minProfit must be at least 0.01")}
+    if (compareDecimal({ left: mappedRealizedNetProfit,
+      right: mappedMinProfit }) < 0) {throw new RangeError("realizedNetProfit must meet minProfit")}
     const mappedDust = dust === undefined ? undefined : mapRecoveryDustData({ dust })
-    const expectedFreeQuantity = addDecimal({ left: mappedKeepQuantity, right: mappedDust?.quantity ?? "0" })
-    if (compareDecimal({ left: mappedFreeQuantity, right: expectedFreeQuantity }) !== 0) {
+    const expectedFreeQuantity = addDecimal({ left: mappedKeepQuantity,
+      right: mappedDust?.quantity ?? "0" })
+    if (compareDecimal({ left: mappedFreeQuantity,
+      right: expectedFreeQuantity }) !== 0) {
       throw new RangeError("freeQuantity must equal keepQuantity plus validated exchange-constrained dust")
     }
     return {
-      symbol: requireString({ value: symbol, field: "symbol" }),
-      marketId: requireString({ value: marketId, field: "marketId" }),
+      symbol: requireString({ value: symbol,
+        field: "symbol" }),
+      marketId: requireString({ value: marketId,
+        field: "marketId" }),
       freeQuantity: mappedFreeQuantity,
       keepQuantity: mappedKeepQuantity,
       minProfit: mappedMinProfit,
@@ -708,7 +813,8 @@ export const mapRecoveryCycleNotCompletedData = (input = {}) =>
     if (!["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(outcome)) {
       throw new TypeError("outcome must be CONTINUE_SELL_THROUGH or BLOCKED")
     }
-    const mappedReason = requireString({ value: reason, field: "reason" })
+    const mappedReason = requireString({ value: reason,
+      field: "reason" })
     const continueReasons = ["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"]
     if (outcome === "CONTINUE_SELL_THROUGH" && !continueReasons.includes(mappedReason)) {
       throw new TypeError("CONTINUE_SELL_THROUGH requires a recognized residual sell-through reason")
@@ -716,32 +822,47 @@ export const mapRecoveryCycleNotCompletedData = (input = {}) =>
     if (outcome === "BLOCKED" && continueReasons.includes(mappedReason)) {
       throw new TypeError("BLOCKED cannot use a residual sell-through reason")
     }
-    const mappedRealizedNetProfit = requireDecimalString({ value: realizedNetProfit, field: "realizedNetProfit" })
-    const mappedActiveQuantity = requireDecimalString({ value: activeQuantity, field: "activeQuantity" })
-    const mappedKeepQuantity = requireDecimalString({ value: keepQuantity, field: "keepQuantity" })
-    const mappedMinProfit = requireDecimalString({ value: minProfit, field: "minProfit" })
-    if (compareDecimal({ left: mappedActiveQuantity, right: "0" }) < 0 || compareDecimal({ left: mappedKeepQuantity, right: "0" }) < 0) {
+    const mappedRealizedNetProfit = requireDecimalString({ value: realizedNetProfit,
+      field: "realizedNetProfit" })
+    const mappedActiveQuantity = requireDecimalString({ value: activeQuantity,
+      field: "activeQuantity" })
+    const mappedKeepQuantity = requireDecimalString({ value: keepQuantity,
+      field: "keepQuantity" })
+    const mappedMinProfit = requireDecimalString({ value: minProfit,
+      field: "minProfit" })
+    if (compareDecimal({ left: mappedActiveQuantity,
+      right: "0" }) < 0 || compareDecimal({ left: mappedKeepQuantity,
+      right: "0" }) < 0) {
       throw new RangeError("activeQuantity and keepQuantity must be non-negative")
     }
-    if (compareDecimal({ left: mappedMinProfit, right: "0.01" }) < 0) throw new RangeError("minProfit must be at least 0.01")
-    if (outcome === "CONTINUE_SELL_THROUGH" && compareDecimal({ left: mappedActiveQuantity, right: mappedKeepQuantity }) <= 0) {
+    if (compareDecimal({ left: mappedMinProfit,
+      right: "0.01" }) < 0) {throw new RangeError("minProfit must be at least 0.01")}
+    if (outcome === "CONTINUE_SELL_THROUGH" && compareDecimal({ left: mappedActiveQuantity,
+      right: mappedKeepQuantity }) <= 0) {
       throw new RangeError("CONTINUE_SELL_THROUGH requires active inventory above keepQuantity")
     }
-    if (mappedReason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" && compareDecimal({ left: mappedRealizedNetProfit, right: mappedMinProfit }) >= 0) {
+    if (mappedReason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" && compareDecimal({ left: mappedRealizedNetProfit,
+      right: mappedMinProfit }) >= 0) {
       throw new RangeError("RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY requires realized profit below minProfit")
     }
-    if (mappedReason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" && compareDecimal({ left: mappedRealizedNetProfit, right: mappedMinProfit }) < 0) {
+    if (mappedReason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" && compareDecimal({ left: mappedRealizedNetProfit,
+      right: mappedMinProfit }) < 0) {
       throw new RangeError("RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH requires realized profit to meet minProfit")
     }
     if (outcome === "BLOCKED" && mappedReason === "RECOVERY_SELL_FAILED_MIN_PROFIT" &&
-        compareDecimal({ left: mappedRealizedNetProfit, right: mappedMinProfit }) >= 0) {
+        compareDecimal({ left: mappedRealizedNetProfit,
+          right: mappedMinProfit }) >= 0) {
       throw new RangeError("RECOVERY_SELL_FAILED_MIN_PROFIT requires realized profit below minProfit")
     }
     return {
-      symbol: requireString({ value: symbol, field: "symbol" }),
-      marketId: requireString({ value: marketId, field: "marketId" }),
-      sellOrderClientId: requireString({ value: sellOrderClientId, field: "sellOrderClientId" }),
-      sellOrderBrokerOrderId: requireString({ value: sellOrderBrokerOrderId, field: "sellOrderBrokerOrderId" }),
+      symbol: requireString({ value: symbol,
+        field: "symbol" }),
+      marketId: requireString({ value: marketId,
+        field: "marketId" }),
+      sellOrderClientId: requireString({ value: sellOrderClientId,
+        field: "sellOrderClientId" }),
+      sellOrderBrokerOrderId: requireString({ value: sellOrderBrokerOrderId,
+        field: "sellOrderBrokerOrderId" }),
       outcome,
       reason: mappedReason,
       realizedNetProfit: mappedRealizedNetProfit,
@@ -757,9 +878,10 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
   mapData(input, "Account-open-orders-captured event mapping", ({
     phase, observedAt, orders, readiness, blockReasons = [],
   }) => {
-    if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(phase)) throw new TypeError("phase must be OPENING, PREFLIGHT, or RECOVERY")
-    const normalizedObservedAt = requireNonNegativeSafeInteger({ value: observedAt, field: "observedAt" })
-    if (!Array.isArray(orders)) throw new TypeError("orders must be an array")
+    if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(phase)) {throw new TypeError("phase must be OPENING, PREFLIGHT, or RECOVERY")}
+    const normalizedObservedAt = requireNonNegativeSafeInteger({ value: observedAt,
+      field: "observedAt" })
+    if (!Array.isArray(orders)) {throw new TypeError("orders must be an array")}
     if (!["READY", "RECONCILED", "BLOCKED"].includes(readiness)) {
       throw new TypeError("readiness must be READY or BLOCKED")
     }
@@ -768,7 +890,7 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
     }
     const mappedOrders = orders.map((order, index) => {
       if (!order || typeof order !== "object") {
-        throw new TypeError("orders[" + index + "] must be a normalized broker order")
+        throw new TypeError(`orders[${index}] must be a normalized broker order`)
       }
       const symbol = order.market?.symbol ?? order.symbol
       const brokerOrderId = order.brokerOrderId ?? order.id
@@ -779,27 +901,33 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
         ...(typeof order.clientOrderId === "string" && order.clientOrderId.trim()
           ? { clientOrderId: order.clientOrderId.trim() }
           : {}),
-        brokerOrderId: requireString({ value: brokerOrderId, field: "orders[" + index + "].brokerOrderId" }),
-        symbol: requireString({ value: symbol, field: "orders[" + index + "].symbol" }),
+        brokerOrderId: requireString({ value: brokerOrderId,
+          field: `orders[${index}].brokerOrderId` }),
+        symbol: requireString({ value: symbol,
+          field: `orders[${index}].symbol` }),
         side: order.side === "BUY" || order.side === "SELL"
           ? order.side
-          : (() => { throw new TypeError("orders[" + index + "].side must be BUY or SELL") })(),
-        type: requireString({ value: order.type, field: "orders[" + index + "].type" }),
+          : (() => { throw new TypeError(`orders[${index}].side must be BUY or SELL`) })(),
+        type: requireString({ value: order.type,
+          field: `orders[${index}].type` }),
         ...(price === undefined ? {} : {
-          price: requireDecimalString({ value: price, field: "orders[" + index + "].price" }),
+          price: requireDecimalString({ value: price,
+            field: `orders[${index}].price` }),
         }),
-        quantity: requireDecimalString({ value: quantity, field: "orders[" + index + "].quantity" }),
+        quantity: requireDecimalString({ value: quantity,
+          field: `orders[${index}].quantity` }),
         executedQuantity: requireDecimalString({
           value: executedQuantity,
-          field: "orders[" + index + "].executedQuantity",
+          field: `orders[${index}].executedQuantity`,
         }),
-        status: requireString({ value: order.status, field: "orders[" + index + "].status" }),
+        status: requireString({ value: order.status,
+          field: `orders[${index}].status` }),
       }
     }).sort((left, right) =>
       left.symbol.localeCompare(right.symbol) ||
       left.brokerOrderId.localeCompare(right.brokerOrderId)
     )
-    const identities = mappedOrders.map(({ symbol, brokerOrderId }) => symbol + ":" + brokerOrderId)
+    const identities = mappedOrders.map(({ symbol, brokerOrderId }) => `${symbol}:${brokerOrderId}`)
     if (new Set(identities).size !== identities.length) {
       throw new TypeError("orders must not contain duplicate symbol/brokerOrderId identities")
     }
@@ -830,11 +958,12 @@ export const mapAccountSnapshotCapturedData = (input = {}) =>
     if (!["OPENING", "CLOSING", "PREFLIGHT", "RECOVERY", "COMMISSION_BASELINE"].includes(phase)) {
       throw new TypeError("phase must be OPENING, CLOSING, PREFLIGHT, RECOVERY, or COMMISSION_BASELINE")
     }
-    if (!["COMPLETE", "INCOMPLETE"].includes(auditStatus)) throw new TypeError("auditStatus must be COMPLETE or INCOMPLETE")
+    if (!["COMPLETE", "INCOMPLETE"].includes(auditStatus)) {throw new TypeError("auditStatus must be COMPLETE or INCOMPLETE")}
     if (!snapshot || !Array.isArray(snapshot.balances)) {
       throw new TypeError("snapshot must contain sourceTime and canonical balances")
     }
-    const sourceTime = requireNonNegativeSafeInteger({ value: snapshot.sourceTime, field: "snapshot.sourceTime" })
+    const sourceTime = requireNonNegativeSafeInteger({ value: snapshot.sourceTime,
+      field: "snapshot.sourceTime" })
     if (!Array.isArray(auditReasons) || auditReasons.some((reason) => typeof reason !== "string" || !reason.trim())) {
       throw new TypeError("auditReasons must contain non-empty strings")
     }
@@ -848,20 +977,32 @@ export const mapAccountSnapshotCapturedData = (input = {}) =>
     if (allowedAssets !== undefined && selectedBalances.length !== allowedAssets.size) {
       const found = new Set(selectedBalances.map((balance) => balance.asset.code))
       const missing = [...allowedAssets].filter((code) => !found.has(code))
-      throw new TypeError("snapshot is missing configured assets: " + missing.join(", "))
+      throw new TypeError(`snapshot is missing configured assets: ${missing.join(", ")}`)
     }
     const balances = selectedBalances.map((balance, index) => {
-      const asset = requireString({ value: balance?.asset?.code, field: "balances[" + index + "].asset.code" })
-      const free = requireDecimalString({ value: balance?.free?.amount, field: "balances[" + index + "].free" })
-      const locked = requireDecimalString({ value: balance?.locked?.amount, field: "balances[" + index + "].locked" })
-      return { asset, free, locked, total: addDecimal({ left: free, right: locked }) }
+      const asset = requireString({ value: balance?.asset?.code,
+        field: `balances[${index}].asset.code` })
+      const free = requireDecimalString({ value: balance?.free?.amount,
+        field: `balances[${index}].free` })
+      const locked = requireDecimalString({ value: balance?.locked?.amount,
+        field: `balances[${index}].locked` })
+      return { asset,
+        free,
+        locked,
+        total: addDecimal({ left: free,
+          right: locked }) }
     }).sort((left, right) => left.asset.localeCompare(right.asset))
     if (new Set(balances.map(({ asset }) => asset)).size !== balances.length) {
       throw new TypeError("snapshot must not contain duplicate asset codes")
     }
-    if (auditStatus === "COMPLETE" && auditReasons.length > 0) throw new TypeError("COMPLETE snapshot cannot contain auditReasons")
-    if (auditStatus === "INCOMPLETE" && auditReasons.length === 0) throw new TypeError("INCOMPLETE snapshot requires auditReasons")
-    return { phase, auditStatus, sourceTime, assetCount: balances.length, balances, auditReasons: [...auditReasons] }
+    if (auditStatus === "COMPLETE" && auditReasons.length > 0) {throw new TypeError("COMPLETE snapshot cannot contain auditReasons")}
+    if (auditStatus === "INCOMPLETE" && auditReasons.length === 0) {throw new TypeError("INCOMPLETE snapshot requires auditReasons")}
+    return { phase,
+      auditStatus,
+      sourceTime,
+      assetCount: balances.length,
+      balances,
+      auditReasons: [...auditReasons] }
   })
 
 
@@ -872,30 +1013,34 @@ export const mapBrokerExecutionReportData = (input = {}) =>
         evidence.schemaVersion !== 1 || evidence.source !== "binance.spot.userData.executionReport") {
       throw new TypeError("evidence must be a version 1 Binance Spot executionReport")
     }
-    const data = { schemaVersion: 1, source: "binance.spot.userData.executionReport" }
+    const data = { schemaVersion: 1,
+      source: "binance.spot.userData.executionReport" }
     for (const field of ["symbol", "clientOrderId", "originalClientOrderId", "side", "orderType", "timeInForce", "executionType", "orderStatus", "rejectReason", "selfTradePreventionMode", "matchType"]) {
       if (evidence[field] !== undefined) {
-        if (typeof evidence[field] !== "string") throw new TypeError("evidence." + field + " must be a string")
+        if (typeof evidence[field] !== "string") {throw new TypeError(`evidence.${field} must be a string`)}
         data[field] = evidence[field].slice(0, 256)
       }
     }
     if (evidence.commissionAsset !== undefined) {
-      if (evidence.commissionAsset !== null && typeof evidence.commissionAsset !== "string") throw new TypeError("evidence.commissionAsset must be a string or null")
+      if (evidence.commissionAsset !== null && typeof evidence.commissionAsset !== "string") {throw new TypeError("evidence.commissionAsset must be a string or null")}
       data.commissionAsset = evidence.commissionAsset
     }
     for (const field of ["orderId", "orderListId", "tradeId", "executionId", "tradeGroupId"]) {
-      if (evidence[field] !== undefined) data[field] = String(evidence[field])
+      if (evidence[field] !== undefined) {data[field] = String(evidence[field])}
     }
     for (const field of ["orderQuantity", "orderPrice", "stopPrice", "icebergQuantity", "quoteOrderQuantity", "lastExecutedQuantity", "cumulativeExecutedQuantity", "lastExecutedPrice", "commissionAmount", "cumulativeQuoteQuantity", "lastQuoteQuantity"]) {
-      if (evidence[field] !== undefined) data[field] = requireDecimalString({ value: evidence[field], field: "evidence." + field })
+      if (evidence[field] !== undefined) {data[field] = requireDecimalString({ value: evidence[field],
+        field: `evidence.${field}` })}
     }
     for (const field of ["eventTime", "transactionTime", "orderCreationTime", "workingTime"]) {
       if (evidence[field] !== undefined) {
-        data[field] = requireNonNegativeSafeInteger({ value: evidence[field], field: "evidence." + field })
+        data[field] = requireNonNegativeSafeInteger({ value: evidence[field],
+          field: `evidence.${field}` })
       }
     }
     for (const field of ["isMaker", "working"]) {
-      if (evidence[field] !== undefined) data[field] = requireBoolean({ value: evidence[field], field: "evidence." + field })
+      if (evidence[field] !== undefined) {data[field] = requireBoolean({ value: evidence[field],
+        field: `evidence.${field}` })}
     }
     return data
   })
@@ -903,17 +1048,23 @@ export const mapBrokerExecutionReportData = (input = {}) =>
 /** Record an applied canonical order-state transition with exact cumulative quantities. */
 export const mapOrderUpdatedData = (input = {}) =>
   mapData(input, "Order-updated event mapping", ({ order, executionType, evidence }) => {
-    if (!(order instanceof CanonicalOrder)) throw new TypeError("order must be a canonical Harvester order")
+    if (!(order instanceof CanonicalOrder)) {throw new TypeError("order must be a canonical Harvester order")}
     return {
       ...requireExecutionOrderFacts({ order }),
-      originalQuantity: requireDecimalString({ value: order.originalQuantity?.amount, field: "originalQuantity" }),
-      executedQuantity: requireDecimalString({ value: order.executedQuantity?.amount, field: "executedQuantity" }),
-      ...(order.limitPrice === undefined ? {} : { price: requireDecimalString({ value: order.limitPrice.amount, field: "price" }) }),
+      originalQuantity: requireDecimalString({ value: order.originalQuantity?.amount,
+        field: "originalQuantity" }),
+      executedQuantity: requireDecimalString({ value: order.executedQuantity?.amount,
+        field: "executedQuantity" }),
+      ...(order.limitPrice === undefined ? {} : { price: requireDecimalString({ value: order.limitPrice.amount,
+        field: "price" }) }),
       ...(order.updatedAt === undefined ? {} : {
-        updatedAt: requireNonNegativeSafeInteger({ value: order.updatedAt, field: "order.updatedAt" }),
+        updatedAt: requireNonNegativeSafeInteger({ value: order.updatedAt,
+          field: "order.updatedAt" }),
       }),
-      ...(executionType === undefined ? {} : { executionType: requireString({ value: executionType, field: "executionType" }) }),
-      ...(typeof evidence?.cumulativeQuoteQuantity === "string" ? { cumulativeQuoteQuantity: requireDecimalString({ value: evidence.cumulativeQuoteQuantity, field: "cumulativeQuoteQuantity" }) } : {}),
+      ...(executionType === undefined ? {} : { executionType: requireString({ value: executionType,
+        field: "executionType" }) }),
+      ...(typeof evidence?.cumulativeQuoteQuantity === "string" ? { cumulativeQuoteQuantity: requireDecimalString({ value: evidence.cumulativeQuoteQuantity,
+        field: "cumulativeQuoteQuantity" }) } : {}),
       ...(evidence?.transactionTime === undefined ? {} : {
         brokerTransactionTime: requireNonNegativeSafeInteger({
           value: evidence.transactionTime,
@@ -936,19 +1087,29 @@ export const mapMarketTradingRulesCapturedData = (input = {}) =>
       throw new TypeError("metadata.supportedOrderTypes must be a non-empty array")
     }
     return {
-      venue: requireString({ value: market.venue, field: "market.venue" }),
-      symbol: requireString({ value: market.symbol, field: "market.symbol" }),
-      baseAsset: requireString({ value: market.baseAsset?.code, field: "market.baseAsset.code" }),
-      quoteAsset: requireString({ value: market.quoteAsset?.code, field: "market.quoteAsset.code" }),
-      orderType: requireString({ value: metadata.orderType, field: "metadata.orderType" }),
+      venue: requireString({ value: market.venue,
+        field: "market.venue" }),
+      symbol: requireString({ value: market.symbol,
+        field: "market.symbol" }),
+      baseAsset: requireString({ value: market.baseAsset?.code,
+        field: "market.baseAsset.code" }),
+      quoteAsset: requireString({ value: market.quoteAsset?.code,
+        field: "market.quoteAsset.code" }),
+      orderType: requireString({ value: metadata.orderType,
+        field: "metadata.orderType" }),
       supportedOrderTypes: metadata.supportedOrderTypes.map((type, index) =>
-        requireString({ value: type, field: "supportedOrderTypes[" + index + "]" })),
+        requireString({ value: type,
+          field: `supportedOrderTypes[${index}]` })),
       constraints: tradingRules.constraints.map((constraint, index) => ({
-        type: requireString({ value: constraint?.type, field: "constraints[" + index + "].type" }),
-        status: requireString({ value: constraint?.status, field: "constraints[" + index + "].status" }),
+        type: requireString({ value: constraint?.type,
+          field: `constraints[${index}].type` }),
+        status: requireString({ value: constraint?.status,
+          field: `constraints[${index}].status` }),
         ...(constraint?.value === undefined ? {} : {
-          amount: requireDecimalString({ value: constraint.value.amount, field: "constraints[" + index + "].amount" }),
-          asset: requireString({ value: constraint.value.asset?.code, field: "constraints[" + index + "].asset" }),
+          amount: requireDecimalString({ value: constraint.value.amount,
+            field: `constraints[${index}].amount` }),
+          asset: requireString({ value: constraint.value.asset?.code,
+            field: `constraints[${index}].asset` }),
         }),
       })),
     }
