@@ -242,62 +242,76 @@ function addMarkdownHeadingAnchor({ rawHeading, anchors, inlineCodePattern }) {
   anchors.add(slug)
 }
 
+function prepareMarkdownHeadingLine({ line, index, state, fencePattern }) {
+  let normalizedLine = line
+
+  if (state.inFrontMatter) {
+    if (index > 0 && line.trim() === '---') {state.inFrontMatter = false}
+    return { line: normalizedLine, skip: true }
+  }
+
+  if (state.inHtmlComment) {
+    if (line.includes('-->')) {state.inHtmlComment = false}
+    return { line: normalizedLine, skip: true }
+  }
+
+  if (line.includes('<!--')) {
+    if (!line.includes('-->')) {
+      state.inHtmlComment = true
+      return { line: normalizedLine, skip: true }
+    }
+    normalizedLine = line.replace(/<!--.*?-->/g, '')
+  }
+
+  const fenceMatch = normalizedLine.match(fencePattern)
+  if (state.activeFence) {
+    const isClosingFence = fenceMatch &&
+      fenceMatch[1][0] === state.activeFence.character &&
+      fenceMatch[1].length >= state.activeFence.length &&
+      /^[ \t]*$/.test(fenceMatch[2])
+    if (isClosingFence) {state.activeFence = null}
+    return { line: normalizedLine, skip: true }
+  }
+
+  if (fenceMatch) {
+    state.activeFence = {
+      character: fenceMatch[1][0],
+      length: fenceMatch[1].length,
+    }
+    return { line: normalizedLine, skip: true }
+  }
+
+  return { line: normalizedLine, skip: false }
+}
+
 function collectMarkdownHeadingAnchors(content) {
   const anchors = new Set()
   const lines = content.split(/\r?\n/)
   const codeCharacter = String.fromCharCode(96)
-  const fencePattern = new RegExp(`^ {0,3}(${codeCharacter}{3,}|~{3,})(.*)$`)
-  const inlineCodePattern = new RegExp(`${codeCharacter}+([^${codeCharacter}]*?)${codeCharacter}+`, 'g')
+  const fencePattern = new RegExp(\`^ {0,3}(\${codeCharacter}{3,}|~{3,})(.*)$\`)
+  const inlineCodePattern = new RegExp(\`\${codeCharacter}+([^\${codeCharacter}]*?)\${codeCharacter}+\`, 'g')
   const explicitIdPattern = /\b(?:id|name)\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/gi
-  let activeFence = null
-  let inHtmlComment = false
-  let inFrontMatter = lines[0]?.trim() === '---'
+  const state = {
+    activeFence: null,
+    inHtmlComment: false,
+    inFrontMatter: lines[0]?.trim() === '---',
+  }
 
   for (let index = 0; index < lines.length; index += 1) {
-    let line = lines[index]
+    const preparedLine = prepareMarkdownHeadingLine({
+      line: lines[index],
+      index,
+      state,
+      fencePattern,
+    })
+    if (preparedLine.skip) {continue}
 
-    if (inFrontMatter) {
-      if (index > 0 && line.trim() === '---') {inFrontMatter = false}
-      continue
-    }
-
-    if (inHtmlComment) {
-      if (line.includes('-->')) {inHtmlComment = false}
-      continue
-    }
-
-    if (line.includes('<!--')) {
-      if (!line.includes('-->')) {
-        inHtmlComment = true
-        continue
-      }
-      line = line.replace(/<!--.*?-->/g, '')
-    }
-
-    const fenceMatch = line.match(fencePattern)
-    if (activeFence) {
-      const isClosingFence = fenceMatch &&
-        fenceMatch[1][0] === activeFence.character &&
-        fenceMatch[1].length >= activeFence.length &&
-        /^[ \t]*$/.test(fenceMatch[2])
-      if (isClosingFence) {activeFence = null}
-      continue
-    }
-
-    if (fenceMatch) {
-      activeFence = {
-        character: fenceMatch[1][0],
-        length: fenceMatch[1].length,
-      }
-      continue
-    }
-
-    for (const match of line.matchAll(explicitIdPattern)) {
+    for (const match of preparedLine.line.matchAll(explicitIdPattern)) {
       const identifier = match[1] ?? match[2] ?? match[3]
       if (identifier) {anchors.add(identifier)}
     }
 
-    const atxHeading = line.match(/^ {0,3}#{1,6}(?:[ \t]+|$)(.*)$/)
+    const atxHeading = preparedLine.line.match(/^ {0,3}#{1,6}(?:[ \t]+|$)(.*)$/)
     if (atxHeading) {
       addMarkdownHeadingAnchor({
         rawHeading: atxHeading[1].replace(/[ \t]+#+[ \t]*$/, ''),
@@ -307,7 +321,7 @@ function collectMarkdownHeadingAnchors(content) {
       continue
     }
 
-    if (/^ {0,3}(=+|-+)[ \t]*$/.test(line) && index > 0) {
+    if (/^ {0,3}(=+|-+)[ \t]*$/.test(preparedLine.line) && index > 0) {
       const setextHeading = lines[index - 1].trim()
       if (setextHeading && !setextHeading.startsWith('>') && !setextHeading.startsWith('|')) {
         addMarkdownHeadingAnchor({
@@ -496,7 +510,11 @@ function skipQuotedJavaScript({ source, output, startIndex, quote }) {
     }
     index += 1
   }
-  blankJavaScriptSource({ output, start: startIndex, end: index })
+  blankJavaScriptSource({
+    output,
+    start: startIndex,
+    end: index,
+  })
   return index
 }
 
@@ -519,14 +537,22 @@ function skipRegexJavaScript({ source, output, startIndex }) {
     }
     index += 1
   }
-  blankJavaScriptSource({ output, start: startIndex, end: index })
+  blankJavaScriptSource({
+    output,
+    start: startIndex,
+    end: index,
+  })
   return index
 }
 
 function skipLineComment({ source, output, startIndex }) {
   let index = startIndex
   while (index < source.length && source[index] !== '\n') {index += 1}
-  blankJavaScriptSource({ output, start: startIndex, end: index })
+  blankJavaScriptSource({
+    output,
+    start: startIndex,
+    end: index,
+  })
   return index
 }
 
@@ -536,25 +562,41 @@ function skipBlockComment({ source, output, startIndex }) {
     index += 1
   }
   index = Math.min(source.length, index + 2)
-  blankJavaScriptSource({ output, start: startIndex, end: index })
+  blankJavaScriptSource({
+    output,
+    start: startIndex,
+    end: index,
+  })
   return index
 }
 
 function scanJavaScriptTemplate({ source, output, startIndex }) {
   let index = startIndex
   let segmentStart = index - 1
-  blankJavaScriptSource({ output, start: segmentStart, end: index })
+  blankJavaScriptSource({
+    output,
+    start: segmentStart,
+    end: index,
+  })
   while (index < source.length) {
     if (source[index] === '\\') {
       index += 2
       continue
     }
     if (source[index] === String.fromCharCode(96)) {
-      blankJavaScriptSource({ output, start: segmentStart, end: index + 1 })
+      blankJavaScriptSource({
+        output,
+        start: segmentStart,
+        end: index + 1,
+      })
       return index + 1
     }
     if (source[index] === '$' && source[index + 1] === '{') {
-      blankJavaScriptSource({ output, start: segmentStart, end: index + 2 })
+      blankJavaScriptSource({
+        output,
+        start: segmentStart,
+        end: index + 2,
+      })
       index = scanJavaScriptCode({
         source,
         output,
@@ -566,7 +608,11 @@ function scanJavaScriptTemplate({ source, output, startIndex }) {
     }
     index += 1
   }
-  blankJavaScriptSource({ output, start: segmentStart, end: index })
+  blankJavaScriptSource({
+    output,
+    start: segmentStart,
+    end: index,
+  })
   return index
 }
 
@@ -579,7 +625,10 @@ function readJavaScriptIdentifier({ source, startIndex }) {
   }
 }
 
-function isRegexStart({ character, previousToken }) {
+function isRegexStart({
+      character,
+      previousToken,
+    }) {
   return character === '/' && (
     previousToken === '' || REGEX_PREFIX_TOKENS.has(previousToken)
   )
@@ -596,7 +645,11 @@ function scanJavaScriptCode({ source, output, startIndex, stopAtTemplateBrace = 
 
     if (stopAtTemplateBrace && character === '}') {
       if (nestedBraces === 0) {
-        blankJavaScriptSource({ output, start: index, end: index + 1 })
+        blankJavaScriptSource({
+          output,
+          start: index,
+          end: index + 1,
+        })
         return index + 1
       }
       nestedBraces -= 1
@@ -605,25 +658,49 @@ function scanJavaScriptCode({ source, output, startIndex, stopAtTemplateBrace = 
     }
 
     if (character === "'" || character === '"') {
-      index = skipQuotedJavaScript({ source, output, startIndex: index, quote: character })
+      index = skipQuotedJavaScript({
+        source,
+        output,
+        startIndex: index,
+        quote: character,
+      })
       previousToken = 'value'
       continue
     }
     if (character === String.fromCharCode(96)) {
-      index = scanJavaScriptTemplate({ source, output, startIndex: index + 1 })
+      index = scanJavaScriptTemplate({
+        source,
+        output,
+        startIndex: index + 1,
+      })
       previousToken = 'value'
       continue
     }
     if (character === '/' && next === '/') {
-      index = skipLineComment({ source, output, startIndex: index })
+      index = skipLineComment({
+        source,
+        output,
+        startIndex: index,
+      })
       continue
     }
     if (character === '/' && next === '*') {
-      index = skipBlockComment({ source, output, startIndex: index })
+      index = skipBlockComment({
+        source,
+        output,
+        startIndex: index,
+      })
       continue
     }
-    if (isRegexStart({ character, previousToken })) {
-      index = skipRegexJavaScript({ source, output, startIndex: index })
+    if (isRegexStart({
+      character,
+      previousToken,
+    })) {
+      index = skipRegexJavaScript({
+        source,
+        output,
+        startIndex: index,
+      })
       previousToken = 'value'
       continue
     }
@@ -636,7 +713,10 @@ function scanJavaScriptCode({ source, output, startIndex, stopAtTemplateBrace = 
     }
 
     if (/[A-Za-z_$]/.test(character)) {
-      const identifier = readJavaScriptIdentifier({ source, startIndex: index })
+      const identifier = readJavaScriptIdentifier({
+        source,
+        startIndex: index,
+      })
       previousToken = identifier.token
       index = identifier.nextIndex
       continue
@@ -651,7 +731,11 @@ function scanJavaScriptCode({ source, output, startIndex, stopAtTemplateBrace = 
 
 function maskJavaScriptNonCode(source) {
   const output = source.split('')
-  scanJavaScriptCode({ source, output, startIndex: 0 })
+  scanJavaScriptCode({
+    source,
+    output,
+    startIndex: 0,
+  })
   return output.join('')
 }
 
