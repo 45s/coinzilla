@@ -2,6 +2,10 @@ import { defaultLogger } from "@coinzilla/utils"
 import { resolveOperationalStateDirectory } from "../infrastructure/operational-state/resolve-operational-state-directory.js"
 import { initializeHarvesterOperationalStateStore } from "./initialize-operational-state-store.js"
 
+function hasExplicitConfirmation({ args }) {
+  return Array.isArray(args) && args.length === 1 && args[0] === "--confirm-initialize"
+}
+
 /**
  * Run the one-time initializer with exactly one confirmation argument.
  * The app-local default or the same configured override is used by runtime.
@@ -19,7 +23,7 @@ export async function runInitializeOperationalState({
   initialize = initializeHarvesterOperationalStateStore,
   logger = defaultLogger,
 } = {}) {
-  if (!Array.isArray(args) || args.length !== 1 || args[0] !== "--confirm-initialize") {
+  if (!hasExplicitConfirmation({ args })) {
     logger.error?.({
       message: "Operational State Store initialization requires exactly --confirm-initialize; unknown arguments are not accepted.",
     })
