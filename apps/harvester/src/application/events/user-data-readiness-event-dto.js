@@ -1,9 +1,11 @@
 import { assertObjectInput, toResult } from "@coinzilla/utils"
 
-const mapData = (input, operation, mapper) => {
+const mapData = ({ input, operation, mapper }) => {
   try {
-    assertObjectInput({ input,
-      operation })
+    assertObjectInput({
+      input,
+      operation,
+    })
     return toResult({ data: mapper(input) })
   } catch (error) {
     return toResult({ error })
@@ -26,18 +28,22 @@ const requireBoolean = ({ value, field }) => {
 
 /** Map an application readiness transition after the user-data status handler applies it. */
 export const mapUserDataReadinessChangedData = (input = {}) =>
-  mapData(input, "User-data-readiness-changed event mapping", ({ broker, ready, status, trigger }) => {
-    const data = {
-      broker: requireString({ value: broker,
-        field: "broker" }),
-      ready: requireBoolean({ value: ready,
-        field: "ready" }),
-      status: requireString({ value: status,
-        field: "status" }),
-    }
-    if (trigger !== undefined) {
-      data.trigger = requireString({ value: trigger,
-        field: "trigger" })
-    }
-    return data
+  mapData({
+    input,
+    operation: "User-data-readiness-changed event mapping",
+    mapper: ({ broker, ready, status, trigger }) => {
+      const data = {
+        broker: requireString({ value: broker,
+          field: "broker" }),
+        ready: requireBoolean({ value: ready,
+          field: "ready" }),
+        status: requireString({ value: status,
+          field: "status" }),
+      }
+      if (trigger !== undefined) {
+        data.trigger = requireString({ value: trigger,
+          field: "trigger" })
+      }
+      return data
+    },
   })
