@@ -201,9 +201,19 @@ export async function runTestnetAccountAudit({
     })
     await broker.connect()
 
-    const snapshot = await captureAccountSnapshot({ broker, eventPublisher })
-    const orders = await captureOpenOrders({ broker, eventPublisher, now })
-    outcome = createAuditOutcome({ snapshot, orders })
+    const snapshot = await captureAccountSnapshot({
+      broker,
+      eventPublisher,
+    })
+    const orders = await captureOpenOrders({
+      broker,
+      eventPublisher,
+      now,
+    })
+    outcome = createAuditOutcome({
+      snapshot,
+      orders,
+    })
     logger.info?.({
       message: "TESTNET account preflight audit durably journaled",
       assetCount: outcome.data.assetCount,
