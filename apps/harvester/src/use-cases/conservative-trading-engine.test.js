@@ -10994,12 +10994,14 @@ test("shutdown cancellation leaves external manual BUY orders untouched", async 
 test("invalidates and rechecks a safe market after a late owned SELL execution", async () => {
   const seeded = makeSeededRecoveryState()
   let shutdownStarted = false
+  let terminalSellFills = []
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
     accountingApplied: true,
     isStopping: () => shutdownStarted,
+    getTerminalFills: () => terminalSellFills,
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -11035,6 +11037,7 @@ test("invalidates and rechecks a safe market after a late owned SELL execution",
     }),
     commissionAmount: "0.02",
   })
+  terminalSellFills = [lateFill]
   const lateEvidence = await harness.engine.processUserDataEvent({
     event: {
       executionType: "TRADE",

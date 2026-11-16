@@ -515,7 +515,7 @@ test("rechecks the shutdown gate after durable intent and before broker placemen
     canSubmit: () => {
       gateChecks += 1
       calls.push("gate:" + gateChecks)
-      return gateChecks <= 3
+      return gateChecks <= 2
         ? true
         : {
           allowed: false,

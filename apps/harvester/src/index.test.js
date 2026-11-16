@@ -1763,6 +1763,9 @@ test("does not construct, verify, or inject Operational State Store records even
 })
 
 test("retains Journal, EventBus, process lock and logger when strategy shutdown safety is unresolved", async () => {
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
   const calls = []
   const signalHandlers = new Map()
   const unsafeShutdown = new Error("BTCUSDT owned BUY remains UNKNOWN")
@@ -1832,6 +1835,7 @@ test("retains Journal, EventBus, process lock and logger when strategy shutdown 
   })
 
   await signalHandlers.get("SIGINT")()
+  assert.equal(process.exitCode, 1, "An unproven strategy shutdown must fail the process exit status.")
 
   assert.deepEqual(
     calls.filter((call) => [
@@ -1847,4 +1851,7 @@ test("retains Journal, EventBus, process lock and logger when strategy shutdown 
     calls.includes("logger-error"),
     "The failed shutdown attempt must report the exact safety blocker while leaving required runtime services connected.",
   )
+  } finally {
+    process.exitCode = previousExitCode
+  }
 })
