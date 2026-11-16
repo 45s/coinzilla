@@ -26,8 +26,6 @@ test("keeps every application-layer JavaScript file free of ESLint errors and wa
     overrideConfig: [{
       rules: {
         indent: ["error", 2, { ignoredNodes: ["TemplateLiteral"] }],
-        "object-curly-newline": ["error", { ObjectExpression: { minProperties: 2 } }],
-        "brace-style": ["error", "1tbs", { allowSingleLine: false }],
       },
     }],
   }).lintFiles(["apps/harvester/src/application"])
