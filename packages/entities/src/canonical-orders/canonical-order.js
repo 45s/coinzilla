@@ -206,8 +206,16 @@ export class CanonicalOrder {
     updatedAt,
     completedAt,
   } = {}) {
-    validateOrderIdentity({ clientOrderId, brokerOrderId })
-    validateOrderType({ market, side, type, status })
+    validateOrderIdentity({
+      clientOrderId,
+      brokerOrderId,
+    })
+    validateOrderType({
+      market,
+      side,
+      type,
+      status,
+    })
 
     const normalizedLimitPrice = normalizeLimitPrice({
       type,
