@@ -8,6 +8,18 @@ import { ESLint } from "eslint"
 const workspaceRoot = fileURLToPath(new URL("../../../../", import.meta.url))
 
 test("keeps every application-layer JavaScript file free of ESLint errors and warnings", async () => {
+  const autofixFiles = new Set([
+    "apps/harvester/src/application/events/event-publisher.js",
+    "apps/harvester/src/application/events/event-publisher.test.js",
+    "apps/harvester/src/application/events/lifecycle-event-dtos.js",
+    "apps/harvester/src/application/events/lifecycle-event-dtos.test.js",
+    "apps/harvester/src/application/events/publish-lifecycle-event.js",
+    "apps/harvester/src/application/events/publish-lifecycle-event.test.js",
+    "apps/harvester/src/application/events/user-data-readiness-event-dto.js",
+    "apps/harvester/src/application/logging/trading-state-log-summary.js",
+    "apps/harvester/src/application/operator/create-harvester-operator.js",
+    "apps/harvester/src/application/operator/create-harvester-operator.test.js",
+  ])
   const autofixResults = await new ESLint({
     cwd: workspaceRoot,
     fix: true,
@@ -19,17 +31,18 @@ test("keeps every application-layer JavaScript file free of ESLint errors and wa
       },
     }],
   }).lintFiles(["apps/harvester/src/application"])
+  let fileIndex = 0
   for (const result of autofixResults) {
-    if (typeof result.output === "string") {
-      const file = relative(workspaceRoot, result.filePath)
-      const formattedOutput = result.output
-        .replace(/[ \\t]+$/gm, "")
-        .replace(/\\$\\{\\s{2,}([^}\\n]*?)\\s{2,}\\}/g, "${$1}")
-      const encodedOutput = Buffer.from(formattedOutput).toString("base64")
-      for (let offset = 0; offset < encodedOutput.length; offset += 1000) {
-        process.stderr.write(`APPLICATION_ESLINT_AUTOFIX_CHUNK:${file}:${offset}:${encodedOutput.slice(offset, offset + 1000)}\\n`)
-      }
+    const file = relative(workspaceRoot, result.filePath)
+    if (typeof result.output !== "string" || !autofixFiles.has(file)) {
+      continue
     }
+    process.stderr.write(`APPLICATION_ESLINT_AUTOFIX_FILE:${fileIndex}:${file}\\n`)
+    const encodedOutput = Buffer.from(result.output).toString("base64")
+    for (let offset = 0; offset < encodedOutput.length; offset += 100) {
+      process.stderr.write(`APPLICATION_ESLINT_AUTOFIX_CHUNK:${fileIndex}:${offset}:${encodedOutput.slice(offset, offset + 100)}\\n`)
+    }
+    fileIndex += 1
   }
 
   const eslint = new ESLint({ cwd: workspaceRoot })
