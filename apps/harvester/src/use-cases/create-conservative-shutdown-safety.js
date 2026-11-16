@@ -86,8 +86,14 @@ function getMarketSafetyBlockers({
   return blockers
 }
 
+function getEnabledSymbols({ pairs } = {}) {
+  return Object.entries(pairs)
+    .filter(([, pairConfig]) => pairConfig.enabled === true)
+    .map(([symbol]) => symbol)
+}
+
 function createInitialSafetyMarkers({ pairs } = {}) {
-  return new Map(Object.keys(pairs).map((symbol) => [symbol, {
+  return new Map(getEnabledSymbols({ pairs }).map((symbol) => [symbol, {
     status: "UNSAFE",
     blockers: ["SHUTDOWN_NOT_REQUESTED"],
     revision: 0,
@@ -97,7 +103,7 @@ function createInitialSafetyMarkers({ pairs } = {}) {
 function createSafetySnapshot({ state, pairs } = {}) {
   return Object.freeze({
     revision: state.shutdownSafetyRevision,
-    markets: Object.freeze(Object.keys(pairs).map((symbol) => {
+    markets: Object.freeze(getEnabledSymbols({ pairs }).map((symbol) => {
       const marker = state.shutdownSafetyBySymbol.get(symbol)
       return Object.freeze({
         symbol,
@@ -116,6 +122,7 @@ export function createConservativeShutdownSafety({
   runTransition,
   hasBlockingOpenOrdersForSymbol = () => false,
 } = {}) {
+  const enabledSymbols = getEnabledSymbols({ pairs })
   state.shutdownSafetyBySymbol = createInitialSafetyMarkers({ pairs })
   state.shutdownSafetyRevision = 0
   state.shutdownBuyGate = false
@@ -130,7 +137,7 @@ export function createConservativeShutdownSafety({
       ? [symbol]
       : Array.isArray(requestedSymbols)
         ? requestedSymbols
-        : Object.keys(pairs)
+        : enabledSymbols
     const revision = notifyRevision()
     for (const targetSymbol of symbols) {
       if (!Object.hasOwn(pairs, targetSymbol)) continue
@@ -158,8 +165,8 @@ export function createConservativeShutdownSafety({
     externalBlockers = [],
   } = {}) => runTransition({
     task: async () => {
-      const symbols = typeof symbol === "string" ? [symbol] : Object.keys(pairs)
-      if (symbols.some((targetSymbol) => !Object.hasOwn(pairs, targetSymbol))) {
+      const symbols = typeof symbol === "string" ? [symbol] : enabledSymbols
+      if (symbols.some((targetSymbol) => !enabledSymbols.includes(targetSymbol))) {
         return { ok: false, errors: [new Error("Conservative shutdown audit received an unknown market")] }
       }
       for (const targetSymbol of symbols) {

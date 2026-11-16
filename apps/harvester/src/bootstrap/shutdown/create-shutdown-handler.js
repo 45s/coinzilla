@@ -338,19 +338,15 @@ async function stopMarketIntakeAndDrain(context) {
   })
 }
 
-async function stopUserDataIntakeAndDrain(context) {
-  const initialDrain = await context.failureRecorder.runPhaseSafely({
-    phase: "USER_DATA_DRAIN",
-    operation: () => context.state.eventQueue,
-    stage: "USER_DATA_DRAIN",
-    message: "Shutdown user-data drain failed",
-    auditReason: "USER_DATA_DRAIN_FAILED",
-  })
-  if (initialDrain?.ok === false) {
-    context.userDataIntakeErrors.push(...(initialDrain.errors ?? [new Error("Initial user-data drain failed")]))
-    return context.userDataIntakeErrors
+async function drainUserDataQueue(context) {
+  while (true) {
+    const queuedEvents = context.state.eventQueue
+    await queuedEvents
+    if (queuedEvents === context.state.eventQueue) return
   }
+}
 
+async function stopUserDataIntakeAndDrain(context) {
   const stopResult = await context.failureRecorder.runPhaseSafely({
     phase: "USER_DATA_INTAKE_STOP",
     operation: () => context.stopUserDataIntake({
@@ -370,7 +366,7 @@ async function stopUserDataIntakeAndDrain(context) {
 
   const finalDrain = await context.failureRecorder.runPhaseSafely({
     phase: "USER_DATA_DRAIN_FINAL",
-    operation: () => context.state.eventQueue,
+    operation: () => drainUserDataQueue(context),
     stage: "USER_DATA_DRAIN_FINAL",
     message: "Final shutdown user-data drain failed",
     auditReason: "USER_DATA_DRAIN_FAILED",

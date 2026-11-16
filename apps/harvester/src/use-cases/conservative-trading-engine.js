@@ -1303,16 +1303,20 @@ function createConservativeEngineProtectionContext({ context } = {}) {
 function createConservativeEngineRuntimeOperations({ context } = {}) {
   const { dependencies } = context
   context.processMarketPrice = async ({ symbol, priceEvent } = {}) => {
-    const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
-    if (!protection?.ok) {return protection}
+    if (context.state.shutdownBuyGate !== true) {
+      const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
+      if (!protection?.ok) {return protection}
+    }
     return context.runTransition({ task: () => context.processMarketPriceTransition({
       symbol,
       priceEvent,
     }) })
   }
   context.processBookTicker = async ({ symbol, bookTicker } = {}) => {
-    const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
-    if (!protection?.ok) {return protection}
+    if (context.state.shutdownBuyGate !== true) {
+      const protection = await context.refreshVolatilityProtectionIfNeeded({ symbol })
+      if (!protection?.ok) {return protection}
+    }
     return context.runTransition({ task: () => context.processMarketBookTransition({
       symbol,
       bookTicker,
