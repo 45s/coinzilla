@@ -72,8 +72,18 @@ export function createFixture({
         interval,
       })
       candleHandlers.set(symbol, onCandle)
-      await onSubscribe?.({ symbol, interval, onCandle, calls })
-      if (subscribeForCandles) return subscribeForCandles({ symbol, interval, onCandle, calls })
+      await onSubscribe?.({
+        symbol,
+        interval,
+        onCandle,
+        calls,
+      })
+      if (subscribeForCandles) return subscribeForCandles({
+        symbol,
+        interval,
+        onCandle,
+        calls,
+      })
       return {
         ok: true,
         data: {
