@@ -568,7 +568,7 @@ export function createCandleHistoryService({
     freshnessMonitor: undefined,
   }
   return {
-    start: (options = {}) => startCandleHistoryService({ context, ...options }),
+    start: ({ pairs, subscriptions = [] } = {}) => startCandleHistoryService({ context, pairs, subscriptions }),
     getSnapshot: ({ symbol } = {}) => createSnapshot({ context, symbol }),
   }
 }
