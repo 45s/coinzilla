@@ -7,6 +7,7 @@ import { BinanceWebSocketApiClient } from "./utils/rpc-client.js"
 import { adaptPublicStreamMessage } from "./helpers/public-stream-adapters.js"
 import { createStreamName } from "./utils/streams-protocol.js"
 import { BinanceStreamsClient } from "./utils/streams-client.js"
+import { subscribeForPrices as subscribeForMarketPrices } from "./utils/subscribe-for-prices.js"
 import { NativeWebSocketTransport } from "./utils/transport.js"
 import { UserDataSession } from "../../../application/user-data-session.js"
 import { createMyTradesParams, createOrderHistoryParams } from "./helpers/history-query-params.js"
@@ -323,7 +324,7 @@ function createUserDataEventForwarder({ broker, onEvent, onStatus, logger }) {
 export class BinanceWebSocketBroker extends CoreBroker {
   /**
    * @param {{apiKey: string, apiSecret: string, websocketApiUrl?: string, websocketStreamsUrl?: string, reconnectDelay?: number, logger?: object}} [input]
-   * @param {{apiClientFactory?: (config: BinanceWebSocketConfig) => BinanceWebSocketApiClient, marketClientFactory?: (config: BinanceWebSocketConfig, logger: object) => BinanceStreamsClient, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void, userDataRecoveryWarningThreshold?: number}} [dependencies]
+   * @param {{apiClientFactory?: (config: BinanceWebSocketConfig) => BinanceWebSocketApiClient, marketClientFactory?: (config: BinanceWebSocketConfig, logger: object) => BinanceStreamsClient, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void, nowFn?: () => number, marketStreamStallTimeoutMs?: number, marketStreamRecoveryWindowMs?: number, marketStreamMaxRecoveryAttempts?: number, userDataRecoveryWarningThreshold?: number}} [dependencies]
    */
   constructor(...args) {
     const [input = {}, dependencies = {}] = args
@@ -332,6 +333,10 @@ export class BinanceWebSocketBroker extends CoreBroker {
       marketClientFactory = createMarketClient,
       setTimeoutFn = setTimeout,
       clearTimeoutFn = clearTimeout,
+      nowFn = Date.now,
+      marketStreamStallTimeoutMs = 5_000,
+      marketStreamRecoveryWindowMs = 60_000,
+      marketStreamMaxRecoveryAttempts = 3,
       userDataRecoveryWarningThreshold = 5,
     } = dependencies
     super(input)
@@ -340,6 +345,12 @@ export class BinanceWebSocketBroker extends CoreBroker {
     this.apiClientFactory = apiClientFactory
     this.tradingConnection = apiClientFactory(this.config)
     this.marketConnection = marketClientFactory(this.config, this.logger)
+    this.setTimeout = setTimeoutFn
+    this.clearTimeout = clearTimeoutFn
+    this.now = nowFn
+    this.marketStreamStallTimeoutMs = marketStreamStallTimeoutMs
+    this.marketStreamRecoveryWindowMs = marketStreamRecoveryWindowMs
+    this.marketStreamMaxRecoveryAttempts = marketStreamMaxRecoveryAttempts
     this.connected = false
     this.userDataUnavailable = false
     this.canonicalMarkets = new Map()
@@ -890,20 +901,20 @@ error })
    * @returns {Promise<BrokerResult<{stream: string, unsubscribe: () => Promise<unknown>}>>}
    */
   async subscribeForPrices({ symbol, onPrice }) {
-    let stream
     try {
-      validateCallback(onPrice, "onPrice")
-      if (!this.connected) {throw new Error("Binance broker must be connected before subscribing to prices")}
-      stream = createStreamName("aggTrade", { symbol })
-      const listener = (message) => onPrice(adaptPublicStreamMessage(message))
-      await this.marketConnection.subscribe(stream, listener)
-
-      return toResult({
-        data: {
-          stream,
-          unsubscribe: () => this.marketConnection.unsubscribe(stream, listener),
-        },
+      const data = await subscribeForMarketPrices({
+        marketConnection: this.marketConnection,
+        logger: this.logger,
+        symbol,
+        onPrice,
+        nowFn: this.now,
+        setTimeoutFn: this.setTimeout,
+        clearTimeoutFn: this.clearTimeout,
+        stallTimeoutMs: this.marketStreamStallTimeoutMs,
+        recoveryWindowMs: this.marketStreamRecoveryWindowMs,
+        maxRecoveryAttempts: this.marketStreamMaxRecoveryAttempts,
       })
+      return toResult({ data })
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.subscribeForPrices()",
 error })

@@ -11,6 +11,18 @@ The active Binance implementation is `BinanceWebSocketBroker`. It uses two indep
 
 The package does not use the Binance REST API or a third-party Binance SDK. Do not add REST fallbacks or automatically retry a state-changing request after an uncertain disconnect.
 
+## Binance public market-data liveness
+
+The public Streams client monitors both connection and logical market-stream delivery:
+
+- Binance server ping frames are observed through Undici's `undici:websocket:ping` diagnostics channel. If no server ping arrives for 45 seconds, the broker closes the stale transport and uses its existing bounded reconnect/resubscribe lifecycle. Generic transport errors are diagnostic and do not cause blind reconnects.
+- Each `subscribeForPrices()` subscription listens to the symbol's `aggTrade` stream and the shared `!ticker_1h@arr` all-market rolling-window ticker stream. It compares the ticker's last raw trade ID (`L`) with the aggregate stream's last covered trade ID (`l`).
+- If `L` advances beyond `l`, the broker waits five seconds for delivery to catch up. It then resubscribes only the affected symbol's `aggTrade` stream, with a maximum of three attempts per 60 seconds. Recovery is confirmed only after aggTrade catches up.
+- No new ticker trade ID means no evidence of a missed trade, so an inactive market is not automatically treated as a broken stream. No ticker price fallback or REST fallback is used.
+- `BinanceStreamsClient.diagnostics` reports connection state/generation, heartbeat age, desired/confirmed subscriptions, and per-stream last-message receipt age. Harvester still owns the fail-closed price-freshness gate and all trading decisions.
+
+See the detailed [Binance WebSocket contract](../../docs/brokers-websocket-contract.md#public-market-data-liveness-and-recovery) for protocol details and known limits.
+
 ## Package exports
 
 The `@coinzilla/brokers` entry point exports:

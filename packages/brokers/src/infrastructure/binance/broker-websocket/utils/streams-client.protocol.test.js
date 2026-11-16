@@ -153,6 +153,30 @@ c: "4" },
   await client.disconnect()
 })
 
+test("dispatches all-market rolling-window ticker events with their trade IDs", async () => {
+  const { client, transports } = createClient()
+  const tickerEvents = []
+  const subscription = client.subscribe("!ticker_1h@arr", (event) => tickerEvents.push(event))
+  await flush()
+  acknowledge(transports[0], 0, { result: ["!ticker_1h@arr"] })
+  await subscription
+
+  const ticker = {
+    e: "1hTicker",
+    s: "BTCUSDT",
+    E: 123,
+    L: 456,
+  }
+  transports[0].receive([ticker])
+
+  assert.deepEqual(
+    tickerEvents,
+    [ticker],
+    "the all-market rolling ticker stream must deliver its per-symbol last trade ID",
+  )
+  await client.disconnect()
+})
+
 test("rejects Binance subscription errors and times out missing acknowledgements", async () => {
   const { client, clock, transports } = createClient()
   const failed = client.subscribe("btcusdt@aggTrade", () => {})

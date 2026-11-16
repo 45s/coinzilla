@@ -1,4 +1,7 @@
+import { channel } from "node:diagnostics_channel"
 import { assertNativeWebSocketRuntime } from "./runtime.js"
+
+const undiciPingChannel = channel("undici:websocket:ping")
 
 const DEFAULT_CONNECT_TIMEOUT = 10_000
 const DEFAULT_CLOSE_TIMEOUT = 5_000
@@ -70,8 +73,10 @@ export class NativeWebSocketTransport {
     message: new Set(),
     error: new Set(),
     close: new Set(),
+    ping: new Set(),
   }
   #handlers = null
+  #diagnosticCleanup = null
 
   /**
    * @param {{url: string, WebSocketCtor?: new (url: string) => object, connectTimeout?: number, closeTimeout?: number, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void}} options
@@ -130,7 +135,10 @@ export class NativeWebSocketTransport {
 
     try {
       this.#socket = new this.WebSocketCtor(this.url)
+      this.#attachPingDiagnostics(this.#socket)
     } catch (error) {
+      this.#diagnosticCleanup?.()
+      this.#diagnosticCleanup = null
       this.#state = "closed"
       return Promise.reject(error)
     }
@@ -190,6 +198,8 @@ export class NativeWebSocketTransport {
           }
         }
         this.#handlers = null
+        this.#diagnosticCleanup?.()
+        this.#diagnosticCleanup = null
         const socket = this.#socket
         this.#socket = null
         try {
@@ -228,6 +238,11 @@ export class NativeWebSocketTransport {
     return this.#subscribe("close", listener)
   }
 
+  /** @param {(payload: Buffer|undefined) => void} listener @returns {() => boolean} Removes the ping-frame listener. */
+  onPing(listener) {
+    return this.#subscribe("ping", listener)
+  }
+
   /**
    * Close the socket and resolve after its close event or bounded close timeout.
    *
@@ -263,6 +278,16 @@ export class NativeWebSocketTransport {
   /** @param {number} [code=1000] @param {string} [reason=""] @returns {Promise<void>} */
   disconnect(...args) {
     return this.close(...args)
+  }
+
+  #attachPingDiagnostics(socket) {
+    const listener = ({ websocket, payload }) => {
+      if (websocket === socket && this.#socket === socket && this.#state === "open") {
+        this.#emit("ping", payload)
+      }
+    }
+    undiciPingChannel.subscribe(listener)
+    this.#diagnosticCleanup = () => undiciPingChannel.unsubscribe(listener)
   }
 
   #subscribe(...args) {
@@ -353,6 +378,8 @@ export class NativeWebSocketTransport {
       this.#rejectConnect = null
     }
     this.#connectError = null
+    this.#diagnosticCleanup?.()
+    this.#diagnosticCleanup = null
 
     if (this.#handlers && this.#socket) {
       for (const [type, handler] of Object.entries(this.#handlers)) {
@@ -368,6 +395,7 @@ export class NativeWebSocketTransport {
     this.#listeners.message.clear()
     this.#listeners.error.clear()
     this.#listeners.close.clear()
+    this.#listeners.ping.clear()
     this.#resolveClose?.()
     this.#resolveClose = null
   }

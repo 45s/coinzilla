@@ -196,6 +196,8 @@ transportFactory: null }), /transportFactory must be a function/)
   assert.throws(() => new BinanceStreamsClient({ ...valid,
 ackTimeout: 0 }), /ackTimeout must be a positive integer/)
   assert.throws(() => new BinanceStreamsClient({ ...valid,
+heartbeatTimeout: 0 }), /heartbeatTimeout must be a positive integer/)
+  assert.throws(() => new BinanceStreamsClient({ ...valid,
 reconnectDelay: 0 }), /reconnectDelay must be a positive integer/)
   assert.throws(() => new BinanceStreamsClient({ ...valid,
 reconnectDelay: 10,
