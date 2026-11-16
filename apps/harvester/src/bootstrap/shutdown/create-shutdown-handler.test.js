@@ -64,13 +64,14 @@ function createShutdown({
   bookSubscriptions = [],
   userDataSubscription = {},
   logger = {},
+  getTradingEngine = () => undefined,
 } = {}) {
   const stop = createShutdownHandler({
     state,
     logger,
     tradingEnabled,
     strategyShutdownParticipants: participants,
-    getTradingEngine = () => undefined,
+    getTradingEngine,
     subscriptions,
     bookSubscriptions,
     marketPriceIntake,
