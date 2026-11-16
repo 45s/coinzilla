@@ -32,6 +32,14 @@ function getSubmissionStateBlocker({
     return defer({ symbol,
       reason: "OPERATOR_MARKET_PAUSED" })
   }
+  if (order.side === "BUY" && state.operatorAllBuysPaused === true) {
+    return defer({ symbol,
+      reason: "OPERATOR_ALL_BUYS_PAUSED" })
+  }
+  if (order.side === "BUY" && state.operatorBuyPausedMarkets.has(symbol)) {
+    return defer({ symbol,
+      reason: "OPERATOR_MARKET_BUYS_PAUSED" })
+  }
   if (hasBlockingOpenOrdersForSymbol({ symbol })) {
     return defer({ symbol,
       reason: "UNOWNED_OPEN_ORDERS_PRESENT" })
