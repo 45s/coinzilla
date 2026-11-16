@@ -79,7 +79,7 @@ id })
       () => new ExecutedOrder({ symbol,
 type,
 side,
-quantity: NaN,
+  quantity: NaN,
 price,
 id }),
       { message: "Order.quantity should be a number" },
@@ -90,14 +90,14 @@ id }),
   it("preserves explicitly supplied null execution metadata", () => {
     const order = new ExecutedOrder({
       symbol: "BTCUSDT",
-type: "LIMIT",
-side: "BUY",
-quantity: 1,
-price: 10,
-id: "test-id",
+        type: "LIMIT",
+          side: "BUY",
+            quantity: 1,
+              price: 10,
+                id: "test-id",
       status: null,
-commission: null,
-commissionAsset: null,
+        commission: null,
+          commissionAsset: null,
     })
     assert.equal(order.value.status, null)
     assert.equal(order.value.commission, null)
