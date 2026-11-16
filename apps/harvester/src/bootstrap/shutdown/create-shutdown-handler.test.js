@@ -139,8 +139,8 @@ test("activates every strategy gate before any shared service can stop", async (
   ])
   for (const strategyId of ["CONSERVATIVE", "RECOVERY_SELLER"]) {
     assert.ok(calls.indexOf(`wait:${strategyId}`) < calls.indexOf("user-data-stop"))
-    assert.ok(calls.indexOf("wait:" + strategyId) < calls.indexOf("market-intake-stop"))
-    assert.ok(calls.indexOf("wait:" + strategyId) < calls.indexOf("broker-disconnect"))
+    assert.ok(calls.indexOf(`wait:${strategyId}`) < calls.indexOf("market-intake-stop"))
+    assert.ok(calls.indexOf(`wait:${strategyId}`) < calls.indexOf("broker-disconnect"))
   }
   assert.ok(calls.indexOf("closing-audit:COMPLETE") < calls.indexOf("user-data-stop"))
   assert.ok(calls.indexOf("user-data-stop") < calls.indexOf("operator-control-stop"))

@@ -584,43 +584,43 @@ async function stopOperatorControlAfterSafety(context) {
 async function runShutdownLifecycle(context) {
   await proveStrategySafety(context)
   await publishClosingAudit(context)
-  if (context.snapshotError) throw context.snapshotError
+  if (context.snapshotError) { throw context.snapshotError }
   if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
     await reproveStrategySafety(context)
     await publishClosingAudit(context)
-    if (context.snapshotError) throw context.snapshotError
+    if (context.snapshotError) { throw context.snapshotError }
   }
 
   const userDataErrors = await stopUserDataIntakeAndDrain(context)
   if (userDataErrors.length > 0) {
     await publishClosingAudit(context)
-    if (context.snapshotError) throw context.snapshotError
+    if (context.snapshotError) { throw context.snapshotError }
     throw new AggregateError(userDataErrors, "User-data intake could not be stopped and drained safely")
   }
 
   if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
     await reproveStrategySafety(context)
     await publishClosingAudit(context)
-    if (context.snapshotError) throw context.snapshotError
+    if (context.snapshotError) { throw context.snapshotError }
   }
   try {
     await flushShutdownJournal(context)
   } catch (error) {
     context.auditReasons.push("JOURNAL_NOT_DURABLE")
     await publishClosingAudit(context)
-    if (context.snapshotError) throw context.snapshotError
+    if (context.snapshotError) { throw context.snapshotError }
     throw error
   }
   if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
     await reproveStrategySafety(context)
     await publishClosingAudit(context)
-    if (context.snapshotError) throw context.snapshotError
+    if (context.snapshotError) { throw context.snapshotError }
     try {
       await flushShutdownJournal(context)
     } catch (error) {
       context.auditReasons.push("JOURNAL_NOT_DURABLE")
       await publishClosingAudit(context)
-      if (context.snapshotError) throw context.snapshotError
+      if (context.snapshotError) { throw context.snapshotError }
       throw error
     }
   }

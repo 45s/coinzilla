@@ -514,7 +514,7 @@ test("rechecks the shutdown gate after durable intent and before broker placemen
     },
     canSubmit: () => {
       gateChecks += 1
-      calls.push("gate:" + gateChecks)
+      calls.push(`gate:${gateChecks}`)
       return gateChecks <= 2
         ? true
         : {
@@ -528,11 +528,11 @@ test("rechecks the shutdown gate after durable intent and before broker placemen
       return { ok: true, data: { durable: true } }
     },
     onDurableSubmissionOutcome: async ({ outcome }) => {
-      calls.push("durable-outcome:" + outcome)
+      calls.push(`durable-outcome:${outcome}`)
       return { ok: true, data: { durable: true } }
     },
     onSubmissionDeferred: async ({ reason }) => {
-      calls.push("deferred:" + reason)
+      calls.push(`deferred:${reason}`)
     },
     onAcknowledgedOrder: async () => assert.fail("A blocked order must not be acknowledged."),
     onSubmissionFailure: async () => assert.fail("A locally deferred order is not a broker failure."),
