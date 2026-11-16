@@ -734,15 +734,7 @@ function validateRecoveryCycleCompletedAmounts({ canonicalData }) {
   }
 }
 
-function validateRecoveryCycleInventoryDisposition({ canonicalData }) {
-  if (canonicalData.inventoryDisposition === null) {
-    if (compareDecimal({ left: canonicalData.freeQuantity, right: canonicalData.keepQuantity }) !== 0) {
-      throw new TypeError("Recovery-cycle free quantity must equal keepQuantity when no dust is recorded")
-    }
-    return
-  }
-
-  const dust = canonicalData.inventoryDisposition
+function validateRecoveryCycleDustMetadata({ dust }) {
   const dustFields = new Set([
     "status",
     "quantity",
@@ -764,11 +756,17 @@ function validateRecoveryCycleInventoryDisposition({ canonicalData }) {
   ) {
     throw new TypeError("Recovery-cycle inventory disposition must be validated exchange-constrained dust")
   }
+}
+
+function validateRecoveryCycleDustDecimalEvidence({ dust }) {
   for (const field of ["minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional", "quantityStepSize"]) {
     if (dust[field] !== undefined && !isCanonicalDecimalString({ value: dust[field] })) {
       throw new TypeError(`Recovery-cycle dust ${field} must be an exact decimal string`)
     }
   }
+}
+
+function validateRecoveryCycleDustReasonEvidence({ dust }) {
   if (
     dust.reason === "MIN_QUANTITY" &&
     (dust.minimumQuantity === undefined || dust.evaluatedQuantity === undefined)
@@ -792,6 +790,9 @@ function validateRecoveryCycleInventoryDisposition({ canonicalData }) {
   ) {
     throw new TypeError("QUANTITY_INCREMENT dust requires exact step-size evidence and zero evaluated quantity")
   }
+}
+
+function validateRecoveryCycleDustQuantity({ canonicalData, dust }) {
   if (
     compareDecimal({
       left: canonicalData.activeQuantity,
@@ -803,6 +804,20 @@ function validateRecoveryCycleInventoryDisposition({ canonicalData }) {
   ) {
     throw new TypeError("Recovery-cycle dust quantity must exactly reconcile the retained inventory allocation")
   }
+}
+
+function validateRecoveryCycleInventoryDisposition({ canonicalData }) {
+  if (canonicalData.inventoryDisposition === null) {
+    if (compareDecimal({ left: canonicalData.freeQuantity, right: canonicalData.keepQuantity }) !== 0) {
+      throw new TypeError("Recovery-cycle free quantity must equal keepQuantity when no dust is recorded")
+    }
+    return
+  }
+  const dust = canonicalData.inventoryDisposition
+  validateRecoveryCycleDustMetadata({ dust })
+  validateRecoveryCycleDustDecimalEvidence({ dust })
+  validateRecoveryCycleDustReasonEvidence({ dust })
+  validateRecoveryCycleDustQuantity({ canonicalData, dust })
 }
 
 function validateRecoveryCycleCompletedIdentityDigest({ canonicalData, identity }) {
@@ -1571,92 +1586,137 @@ function createOperationalStateStoreCoordination({ store }) {
   return { assertNoUncertainWrite, serialize, syncStreams }
 }
 
+async function assertOperationalStateStoreDirectoryIsSafe({ store }) {
+  const directoryStat = await store.fileSystem.lstat(store.absoluteDirectory)
+  if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
+    throw new Error("Operational State Store record directory must be a real directory, not a symlink")
+  }
+  if (
+    supportsPosixModeBits &&
+    ((directoryStat.mode & 0o077) !== 0 || (directoryStat.mode & 0o700) !== 0o700)
+  ) {
+    throw new Error("Operational State Store record directory permissions must be private (0700)")
+  }
+  const entries = await store.fileSystem.readdir(store.absoluteDirectory)
+  const unexpectedEntries = entries.filter((entry) =>
+    ![FACTS_FILE_NAME, MANIFEST_FILE_NAME].includes(entry)
+  )
+  if (unexpectedEntries.length > 0) {
+    throw new Error("Operational State Store record directory contains an unresolved temporary or unexpected file")
+  }
+}
+
+async function assertOperationalStateStoreStreamsAreSafe({ store }) {
+  const [logStat, manifestStat] = await Promise.all([
+    store.fileSystem.lstat(store.logPath),
+    store.fileSystem.lstat(store.manifestPath),
+  ])
+  if (
+    logStat.isSymbolicLink() ||
+    !logStat.isFile() ||
+    manifestStat.isSymbolicLink() ||
+    !manifestStat.isFile()
+  ) {
+    throw new Error("Operational State Store record streams must be regular files, not symlinks")
+  }
+  if (
+    supportsPosixModeBits &&
+    [logStat, manifestStat].some((stat) =>
+      (stat.mode & 0o077) !== 0 || (stat.mode & 0o600) !== 0o600
+    )
+  ) {
+    throw new Error("Operational State Store record streams must use private file permissions (0600)")
+  }
+}
+
+async function readOperationalStateStoreStreams({ store }) {
+  const [rawLog, rawManifest] = await Promise.all([
+    store.fileSystem.readFile(store.logPath, "utf8"),
+    store.fileSystem.readFile(store.manifestPath, "utf8"),
+  ])
+  return { rawLog, rawManifest }
+}
+
+function validateOperationalStateStoreStreams({ store, rawLog, rawManifest }) {
+  const records = parseJsonLines({
+    source: rawLog,
+    label: "Operational State Store record log",
+  })
+  const checkpoints = parseJsonLines({
+    source: rawManifest,
+    label: "Committed-head manifest journal",
+  })
+  if (checkpoints.length < records.length) {
+    throw new Error("Operational State record exists beyond the committed-head manifest journal")
+  }
+  if (checkpoints.length > records.length) {
+    throw new Error("Committed-head manifest journal is ahead of the Operational State Store record log")
+  }
+  const factIds = new Set()
+  let previousFactDigest = null
+  let previousManifestDigest = null
+  for (let index = 0; index < records.length; index += 1) {
+    const expectedSequence = BigInt(index).toString()
+    const record = records[index]
+    validateFactRecord({
+      record,
+      schemaVersion: store.schemaVersion,
+      expectedSequence,
+      previousDigest: previousFactDigest,
+      index,
+    })
+    if (factIds.has(record.factId)) {
+      throw new Error("Operational State record identity is duplicated in the append-only stream")
+    }
+    factIds.add(record.factId)
+    const checkpoint = checkpoints[index]
+    validateManifestCheckpoint({
+      checkpoint,
+      schemaVersion: store.schemaVersion,
+      factRecord: record,
+      expectedSequence,
+      previousManifestDigest,
+      index,
+    })
+    previousFactDigest = record.digest
+    previousManifestDigest = checkpoint.digest
+  }
+  return {
+    records,
+    checkpoints,
+    manifest: checkpoints.at(-1),
+    lastRecord: records.at(-1),
+  }
+}
+
 function createOperationalStateStoreVerifier({ store }) {
   return async function verifyState() {
-    const directoryStat = await store.fileSystem.lstat(store.absoluteDirectory)
-    if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
-      throw new Error("Operational State Store record directory must be a real directory, not a symlink")
-    }
-    if (
-      supportsPosixModeBits &&
-      ((directoryStat.mode & 0o077) !== 0 || (directoryStat.mode & 0o700) !== 0o700)
-    ) {
-      throw new Error("Operational State Store record directory permissions must be private (0700)")
-    }
-    const entries = await store.fileSystem.readdir(store.absoluteDirectory)
-    const unexpectedEntries = entries.filter((entry) =>
-      ![FACTS_FILE_NAME, MANIFEST_FILE_NAME].includes(entry)
-    )
-    if (unexpectedEntries.length > 0) {
-      throw new Error("Operational State Store record directory contains an unresolved temporary or unexpected file")
-    }
-    const [logStat, manifestStat] = await Promise.all([
-      store.fileSystem.lstat(store.logPath),
-      store.fileSystem.lstat(store.manifestPath),
-    ])
-    if (
-      logStat.isSymbolicLink() ||
-      !logStat.isFile() ||
-      manifestStat.isSymbolicLink() ||
-      !manifestStat.isFile()
-    ) {
-      throw new Error("Operational State Store record streams must be regular files, not symlinks")
-    }
-    if (
-      supportsPosixModeBits &&
-      [logStat, manifestStat].some((stat) =>
-        (stat.mode & 0o077) !== 0 || (stat.mode & 0o600) !== 0o600
-      )
-    ) {
-      throw new Error("Operational State Store record streams must use private file permissions (0600)")
-    }
-    const [rawLog, rawManifest] = await Promise.all([
-      store.fileSystem.readFile(store.logPath, "utf8"),
-      store.fileSystem.readFile(store.manifestPath, "utf8"),
-    ])
-    const records = parseJsonLines({ source: rawLog, label: "Operational State Store record log" })
-    const checkpoints = parseJsonLines({ source: rawManifest, label: "Committed-head manifest journal" })
-    if (checkpoints.length < records.length) {
-      throw new Error("Operational State record exists beyond the committed-head manifest journal")
-    }
-    if (checkpoints.length > records.length) {
-      throw new Error("Committed-head manifest journal is ahead of the Operational State Store record log")
-    }
-    const factIds = new Set()
-    let previousFactDigest = null
-    let previousManifestDigest = null
-    for (let index = 0; index < records.length; index += 1) {
-      const expectedSequence = BigInt(index).toString()
-      const record = records[index]
-      validateFactRecord({
-        record,
-        schemaVersion: store.schemaVersion,
-        expectedSequence,
-        previousDigest: previousFactDigest,
-        index,
-      })
-      if (factIds.has(record.factId)) {
-        throw new Error("Operational State record identity is duplicated in the append-only stream")
-      }
-      factIds.add(record.factId)
-      const checkpoint = checkpoints[index]
-      validateManifestCheckpoint({
-        checkpoint,
-        schemaVersion: store.schemaVersion,
-        factRecord: record,
-        expectedSequence,
-        previousManifestDigest,
-        index,
-      })
-      previousFactDigest = record.digest
-      previousManifestDigest = checkpoint.digest
-    }
-    return {
-      records,
-      checkpoints,
-      manifest: checkpoints.at(-1),
-      lastRecord: records.at(-1),
-    }
+    await assertOperationalStateStoreDirectoryIsSafe({ store })
+    await assertOperationalStateStoreStreamsAreSafe({ store })
+    const { rawLog, rawManifest } = await readOperationalStateStoreStreams({ store })
+    return validateOperationalStateStoreStreams({ store, rawLog, rawManifest })
+  }
+}
+
+async function writeOperationalStateGenesisFact({ store, genesisRecord, writeState }) {
+  const logHandle = await store.fileSystem.open(store.logPath, "wx", 0o600)
+  try {
+    writeState.factWriteStarted = true
+    await logHandle.writeFile(`${canonicalStringifyOperationalStateValue(genesisRecord)}\\n`, "utf8")
+    await logHandle.sync()
+  } finally {
+    await logHandle.close()
+  }
+}
+
+async function writeOperationalStateGenesisManifest({ store, genesisCheckpointBody, writeState }) {
+  const manifestHandle = await store.fileSystem.open(store.manifestPath, "wx", 0o600)
+  try {
+    writeState.manifestWriteStarted = true
+    await manifestHandle.writeFile(`${canonicalStringifyOperationalStateValue(genesisCheckpointBody)}\\n`, "utf8")
+    await manifestHandle.sync()
+  } finally {
+    await manifestHandle.close()
   }
 }
 
@@ -1668,11 +1728,13 @@ function createOperationalStateStoreInitializer({
   verifyState,
 }) {
   return () => serialize(async () => {
-    let factWriteStarted = false
-    let manifestWriteStarted = false
+    const writeState = { factWriteStarted: false, manifestWriteStarted: false }
     try {
       assertNoUncertainWrite()
-      await store.fileSystem.mkdir(store.absoluteDirectory, { recursive: true, mode: 0o700 })
+      await store.fileSystem.mkdir(store.absoluteDirectory, {
+        recursive: true,
+        mode: 0o700,
+      })
       const directoryStat = await store.fileSystem.lstat(store.absoluteDirectory)
       if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
         throw new Error("Operational State Store record initialization requires a real directory")
@@ -1700,27 +1762,13 @@ function createOperationalStateStoreInitializer({
         ...genesisBody,
         digest: digestOperationalStateRecord(genesisBody),
       }
-      const logHandle = await store.fileSystem.open(store.logPath, "wx", 0o600)
-      try {
-        factWriteStarted = true
-        await logHandle.writeFile(`${canonicalStringifyOperationalStateValue(genesisRecord)}\n`, "utf8")
-        await logHandle.sync()
-      } finally {
-        await logHandle.close()
-      }
+      await writeOperationalStateGenesisFact({ store, genesisRecord, writeState })
       const genesisCheckpointBody = createManifestCheckpoint({
         schemaVersion: store.schemaVersion,
         record: genesisRecord,
         previousManifestDigest: null,
       })
-      const manifestHandle = await store.fileSystem.open(store.manifestPath, "wx", 0o600)
-      try {
-        manifestWriteStarted = true
-        await manifestHandle.writeFile(`${canonicalStringifyOperationalStateValue(genesisCheckpointBody)}\n`, "utf8")
-        await manifestHandle.sync()
-      } finally {
-        await manifestHandle.close()
-      }
+      await writeOperationalStateGenesisManifest({ store, genesisCheckpointBody, writeState })
       await syncStreams()
       const verified = await verifyState()
       return toResult({
@@ -1732,7 +1780,7 @@ function createOperationalStateStoreInitializer({
         },
       })
     } catch (error) {
-      if (factWriteStarted || manifestWriteStarted) {
+      if (writeState.factWriteStarted || writeState.manifestWriteStarted) {
         store.writeUncertain = true
         error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
       } else if (!error.code) {
