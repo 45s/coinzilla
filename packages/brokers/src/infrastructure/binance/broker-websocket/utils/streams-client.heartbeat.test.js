@@ -3,13 +3,20 @@ import test from "node:test"
 import { createClient, flush, acknowledge } from "../test-helpers/streams-client-fixtures.js"
 
 test("reconnects the public Streams connection after server heartbeat frames stop", async () => {
-  const { client, clock, transports, errors } = createClient({
+  const errors = []
+  const { client, clock, transports } = createClient({
     heartbeatTimeout: 60,
+    onError: (error) => errors.push(error),
   })
   const subscription = client.subscribe("btcusdt@aggTrade", () => {})
   await flush()
   acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
   await subscription
+  transports[0].receive({
+    e: "aggTrade",
+    s: "BTCUSDT",
+    p: "1.00",
+  })
 
   clock.advanceBy(59)
   assert.equal(
@@ -25,10 +32,15 @@ test("reconnects the public Streams connection after server heartbeat frames sto
     4000,
     "a missing Binance server heartbeat must close the stale transport to enter the existing reconnect lifecycle",
   )
-  assert.match(
-    errors[0],
-    /heartbeat timed out/i,
-    "heartbeat expiry must be reported with an actionable diagnostic",
+  assert.equal(
+    errors[0].code,
+    "BINANCE_STREAM_HEARTBEAT_TIMEOUT",
+    "heartbeat expiry must use a stable diagnostic code",
+  )
+  assert.equal(
+    errors[0].context.streams[0].messageAgeMs,
+    60,
+    "heartbeat diagnostics must include the age of the last message for each desired stream",
   )
 
   clock.advanceBy(10)
