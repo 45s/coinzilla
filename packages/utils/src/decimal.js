@@ -245,12 +245,10 @@ export function divideDecimal({ left, right, scale, rounding } = {}) {
 
 /** @param {{ left: string|bigint, right: string|bigint }} options @returns {-1|0|1} */
 export function compareDecimal({ left, right } = {}) {
-  const aligned = alignDecimals(
-    parseDecimal({ value: left,
-      field: "left" }),
-    parseDecimal({ value: right,
-      field: "right" }),
-  )
+  const aligned = alignDecimals({
+    left: parseDecimal({ value: left, field: "left" }),
+    right: parseDecimal({ value: right, field: "right" }),
+  })
   if (aligned.left === aligned.right) {
     return 0
   }
