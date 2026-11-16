@@ -16,8 +16,10 @@ const context = {
   markets: [{
     venue: "BINANCE",
     symbol: "LINKUSDT",
-    baseAsset: { id: "binance:LINK", code: "LINK" },
-    quoteAsset: { id: "binance:USDT", code: "USDT" },
+    baseAsset: { id: "binance:LINK",
+code: "LINK" },
+    quoteAsset: { id: "binance:USDT",
+code: "USDT" },
   }],
   coverage: {
     coveredFromTime: 100,
@@ -26,7 +28,8 @@ const context = {
     verifiedBy: "operator-review",
   },
   exchange: {
-    currentAccountSnapshot: { sourceTime: 300, balances: [] },
+    currentAccountSnapshot: { sourceTime: 300,
+balances: [] },
     openOrders: [],
     ownedOrderHistory: [],
     tradeHistory: {
@@ -55,8 +58,14 @@ const readyContext = {
           auditStatus: "COMPLETE",
           auditReasons: [],
           balances: [
-            { asset: "LINK", free: "0", locked: "0", total: "0" },
-            { asset: "USDT", free: "100", locked: "0", total: "100" },
+            { asset: "LINK",
+free: "0",
+locked: "0",
+total: "0" },
+            { asset: "USDT",
+free: "100",
+locked: "0",
+total: "100" },
           ],
         },
       },
@@ -75,8 +84,14 @@ const readyContext = {
     currentAccountSnapshot: {
       sourceTime: 300,
       balances: [
-        { assetId: "binance:LINK", asset: "LINK", free: "0", locked: "0" },
-        { assetId: "binance:USDT", asset: "USDT", free: "100", locked: "0" },
+        { assetId: "binance:LINK",
+asset: "LINK",
+free: "0",
+locked: "0" },
+        { assetId: "binance:USDT",
+asset: "USDT",
+free: "100",
+locked: "0" },
       ],
     },
   },
@@ -85,7 +100,9 @@ const readyContext = {
 test("CLI argument parser requires a context and accepts explicit confirmation", () => {
   assert.deepEqual(
     parseRecoveryMarketArguments(["--context", "evidence.json", "--confirm"]),
-    { confirm: true, help: false, contextPath: "evidence.json" },
+    { confirm: true,
+help: false,
+contextPath: "evidence.json" },
   )
   assert.throws(() => parseRecoveryMarketArguments([]), /--context is required/)
   assert.throws(() => parseRecoveryMarketArguments(["--context"]), /requires a file path/)
@@ -169,12 +186,13 @@ test("CLI explicitly confirms a READY offline audit against an already initializ
     assert.equal(readback.ok, true)
     assert.equal(readback.data.records.filter((record) => record.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED").length, 1)
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
 test("CLI never initializes a missing Operational State Store record directory during confirmation", async () => {
-  const directory = path.join(tmpdir(), "coinzilla-recovery-cli-missing-" + process.pid)
+  const directory = path.join(tmpdir(), `coinzilla-recovery-cli-missing-${  process.pid}`)
   const exitCode = await runRecoveryMarketCommand({
     args: ["--context", "evidence.json", "--confirm"],
     env: { OPERATIONAL_STATE_DIRECTORY: directory },
@@ -207,6 +225,7 @@ test("CLI accepts the canonical Operational State Store directory override", asy
     assert.equal(exitCode, 0)
     assert.equal(JSON.parse(output[0]).data.confirmation.confirmed, true)
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })

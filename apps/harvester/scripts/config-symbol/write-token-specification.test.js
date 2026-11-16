@@ -19,9 +19,11 @@ async function withSpecification({ run, initial = {} }) {
   const specificationPath = path.join(directory, "token-specification.json")
   await writeFile(specificationPath, `${JSON.stringify(initial, null, 2)}\n`, "utf8")
   try {
-    await run({ directory, specificationPath })
+    await run({ directory,
+specificationPath })
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 }
 
@@ -30,13 +32,16 @@ test("atomically adds a market under its base token and preserves other specific
     POL: {
       baseAsset: "POL",
       markets: {
-        POLUSDT: { quoteAsset: "USDT", pricePrecision: 4, quantityPrecision: 1 },
+        POLUSDT: { quoteAsset: "USDT",
+pricePrecision: 4,
+quantityPrecision: 1 },
       },
     },
   }
   await withSpecification({
     run: async ({ directory, specificationPath }) => {
-      const result = await writeTokenSpecificationAtomically({ specificationPath, metadata: metadata() })
+      const result = await writeTokenSpecificationAtomically({ specificationPath,
+metadata: metadata() })
       const written = JSON.parse(await readFile(specificationPath, "utf8"))
       assert.equal(result, specificationPath, "The writer must return the exact token specification path it updated.")
       assert.deepEqual(written.LINK.markets.LINKUSDT, {
@@ -56,8 +61,12 @@ test("updates one existing market without replacing sibling markets", async () =
     LINK: {
       baseAsset: "LINK",
       markets: {
-        LINKUSDT: { quoteAsset: "USDT", pricePrecision: 3, quantityPrecision: 2 },
-        LINKFDUSD: { quoteAsset: "FDUSD", pricePrecision: 3, quantityPrecision: 2 },
+        LINKUSDT: { quoteAsset: "USDT",
+pricePrecision: 3,
+quantityPrecision: 2 },
+        LINKFDUSD: { quoteAsset: "FDUSD",
+pricePrecision: 3,
+quantityPrecision: 2 },
       },
     },
   }
@@ -82,7 +91,8 @@ test("fails closed when another metadata generator owns the registry lock", asyn
       await writeFile(lockPath, "owned", "utf8")
       const before = await readFile(specificationPath, "utf8")
       await assert.rejects(
-        writeTokenSpecificationAtomically({ specificationPath, metadata: metadata() }),
+        writeTokenSpecificationAtomically({ specificationPath,
+metadata: metadata() }),
         /token specification lock/i,
         "Concurrent token registry updates must not race.",
       )
@@ -98,7 +108,8 @@ test("creates a missing registry and removes stale temporary files while holding
   const staleTemporaryPath = path.join(directory, ".token-specification.json.stale.tmp.json")
   try {
     await writeFile(staleTemporaryPath, "stale", "utf8")
-    await writeTokenSpecificationAtomically({ specificationPath, metadata: metadata() })
+    await writeTokenSpecificationAtomically({ specificationPath,
+metadata: metadata() })
     const written = JSON.parse(await readFile(specificationPath, "utf8"))
     assert.deepEqual(written.LINK.markets.LINKUSDT, {
       quoteAsset: "USDT",
@@ -107,13 +118,15 @@ test("creates a missing registry and removes stale temporary files while holding
     }, "The writer must create a valid registry when the target file does not exist.")
     assert.deepEqual(await readdir(directory), ["token-specification.json"], "Stale temporary files and the active lock must be removed after an atomic write.")
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
 test("rejects an empty specification path before acquiring a lock", async () => {
   await assert.rejects(
-    writeTokenSpecificationAtomically({ specificationPath: " ", metadata: metadata() }),
+    writeTokenSpecificationAtomically({ specificationPath: " ",
+metadata: metadata() }),
     /specificationPath.*non-empty/i,
     "The writer must reject an invalid destination before filesystem changes."
   )
@@ -124,7 +137,8 @@ test("rejects malformed existing JSON without replacing the operator's file", as
     run: async ({ specificationPath }) => {
       await writeFile(specificationPath, "{", "utf8")
       await assert.rejects(
-        writeTokenSpecificationAtomically({ specificationPath, metadata: metadata() }),
+        writeTokenSpecificationAtomically({ specificationPath,
+metadata: metadata() }),
         /unable to read|valid JSON/i,
         "Malformed registry JSON must be surfaced rather than silently replaced.",
       )

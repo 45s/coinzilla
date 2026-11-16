@@ -38,7 +38,8 @@ function normalizeArchiveTimestamp(value, { field, sourceFile, lineNumber } = {}
   if (!Number.isSafeInteger(timestamp)) {
     throw new RangeError(`${sourceFile} line ${lineNumber}: normalized ${field} is outside the safe timestamp range`)
   }
-  return { timestamp, unit }
+  return { timestamp,
+unit }
 }
 
 /** Parse one official Binance Spot 1m Kline CSV file into normalized closed candles. */
@@ -51,7 +52,7 @@ export function parseBinanceSpotKlineCsv({ content, symbol, sourceFile = "input.
   }
 
   const rows = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
-  if (rows[0]?.split(",")[0]?.trim().toLowerCase() === "open_time") rows.shift()
+  if (rows[0]?.split(",")[0]?.trim().toLowerCase() === "open_time") {rows.shift()}
   if (rows.length === 0) {
     throw new RangeError(`${sourceFile}: Binance Kline CSV contains no candle rows`)
   }
@@ -173,14 +174,18 @@ export function validateCalibrationThresholds(overrides = {}) {
     ...overrides,
   }
   for (const field of ["recoverRatio", "warningRatio", "protectRatio"]) {
-    assertDecimalString({ value: thresholds[field], field: "calibration " + field })
-    if (compareDecimal({ left: thresholds[field], right: "0" }) <= 0) {
+    assertDecimalString({ value: thresholds[field],
+field: `calibration ${  field}` })
+    if (compareDecimal({ left: thresholds[field],
+right: "0" }) <= 0) {
       throw new RangeError(`calibration ${field} must be positive`)
     }
   }
   if (
-    compareDecimal({ left: thresholds.recoverRatio, right: thresholds.warningRatio }) >= 0 ||
-    compareDecimal({ left: thresholds.warningRatio, right: thresholds.protectRatio }) >= 0
+    compareDecimal({ left: thresholds.recoverRatio,
+right: thresholds.warningRatio }) >= 0 ||
+    compareDecimal({ left: thresholds.warningRatio,
+right: thresholds.protectRatio }) >= 0
   ) {
     throw new RangeError("recovery threshold must be below warning, which must be below protection")
   }
@@ -190,7 +195,7 @@ export function validateCalibrationThresholds(overrides = {}) {
   return Object.freeze(thresholds)
 }
 
-function percentile(sortedValues, percent) {
+function percentile({ sortedValues, percent }) {
   const rank = Math.max(1, Math.ceil((percent / 100) * sortedValues.length))
   return sortedValues[rank - 1]
 }
@@ -249,16 +254,20 @@ export function analyzeVolatilityHistory({ symbol, candles, thresholds: threshol
       snapshot = {
         ok: true,
         data: {
-          status: { isReady: false, reason: calculated.reason ?? "VOLATILITY_METRICS_UNAVAILABLE" },
+          status: { isReady: false,
+reason: calculated.reason ?? "VOLATILITY_METRICS_UNAVAILABLE" },
           metrics: null,
         },
       }
     } else {
       const ratio = calculated.metrics.volatilityRatio
       ratios.push(ratio)
-      if (compareDecimal({ left: ratio, right: thresholds.warningRatio }) >= 0) thresholdCounts.warning += 1
-      if (compareDecimal({ left: ratio, right: thresholds.protectRatio }) >= 0) thresholdCounts.protection += 1
-      if (compareDecimal({ left: ratio, right: thresholds.recoverRatio }) <= 0) thresholdCounts.recovery += 1
+      if (compareDecimal({ left: ratio,
+right: thresholds.warningRatio }) >= 0) {thresholdCounts.warning += 1}
+      if (compareDecimal({ left: ratio,
+right: thresholds.protectRatio }) >= 0) {thresholdCounts.protection += 1}
+      if (compareDecimal({ left: ratio,
+right: thresholds.recoverRatio }) <= 0) {thresholdCounts.recovery += 1}
       snapshot = {
         ok: true,
         data: {
@@ -281,11 +290,11 @@ export function analyzeVolatilityHistory({ symbol, candles, thresholds: threshol
     })
     state = transition.state
     stateCounts[state.mode] += 1
-    if (transition.enteredProtected) protectionEntries += 1
-    if (transition.recovered) recoveryTransitions += 1
+    if (transition.enteredProtected) {protectionEntries += 1}
+    if (transition.recovered) {recoveryTransitions += 1}
 
     if (state.mode !== VOLATILITY_PROTECTION_MODES.NORMAL) {
-      if (currentProtectedRun === 0) protectionRuns += 1
+      if (currentProtectedRun === 0) {protectionRuns += 1}
       currentProtectedRun += 1
       longestProtectedRunMinutes = Math.max(longestProtectedRunMinutes, currentProtectedRun)
     } else {
@@ -296,7 +305,8 @@ export function analyzeVolatilityHistory({ symbol, candles, thresholds: threshol
   if (ratios.length === 0 || !latestMetrics) {
     throw new RangeError("historical calibration produced no valid volatility-ratio observations")
   }
-  const sortedRatios = [...ratios].sort((left, right) => compareDecimal({ left, right }))
+  const sortedRatios = [...ratios].sort((left, right) => compareDecimal({ left,
+right }))
   const protectedObservations =
     stateCounts[VOLATILITY_PROTECTION_MODES.PROTECTED] +
     stateCounts[VOLATILITY_PROTECTION_MODES.RECOVERING]
@@ -316,10 +326,14 @@ export function analyzeVolatilityHistory({ symbol, candles, thresholds: threshol
     thresholds,
     thresholdCounts: Object.freeze(thresholdCounts),
     ratioPercentiles: Object.freeze({
-      p50: percentile(sortedRatios, 50),
-      p90: percentile(sortedRatios, 90),
-      p95: percentile(sortedRatios, 95),
-      p99: percentile(sortedRatios, 99),
+      p50: percentile({ sortedValues: sortedRatios,
+percent: 50 }),
+      p90: percentile({ sortedValues: sortedRatios,
+percent: 90 }),
+      p95: percentile({ sortedValues: sortedRatios,
+percent: 95 }),
+      p99: percentile({ sortedValues: sortedRatios,
+percent: 99 }),
     }),
     maximumRatio: sortedRatios.at(-1),
     stateCounts: Object.freeze(stateCounts),
@@ -341,7 +355,7 @@ export function analyzeVolatilityHistory({ symbol, candles, thresholds: threshol
 }
 
 export function parseCalibrationArguments(args = []) {
-  if (!Array.isArray(args)) throw new TypeError("calibration CLI arguments must be an array")
+  if (!Array.isArray(args)) {throw new TypeError("calibration CLI arguments must be an array")}
   const inputPaths = []
   const thresholdOverrides = {}
   let outputPath = null
@@ -357,13 +371,13 @@ export function parseCalibrationArguments(args = []) {
     if (!value || value.startsWith("--")) {
       throw new TypeError(`missing value for ${argument}`)
     }
-    if (argument === "--input") inputPaths.push(value)
-    else if (argument === "--output") outputPath = value
-    else if (argument === "--warning-ratio") thresholdOverrides.warningRatio = value
-    else if (argument === "--protect-ratio") thresholdOverrides.protectRatio = value
-    else if (argument === "--recover-ratio") thresholdOverrides.recoverRatio = value
-    else if (argument === "--stable-candles") thresholdOverrides.requiredStableCandles = Number(value)
-    else throw new TypeError(`unknown calibration argument: ${argument}`)
+    if (argument === "--input") {inputPaths.push(value)}
+    else if (argument === "--output") {outputPath = value}
+    else if (argument === "--warning-ratio") {thresholdOverrides.warningRatio = value}
+    else if (argument === "--protect-ratio") {thresholdOverrides.protectRatio = value}
+    else if (argument === "--recover-ratio") {thresholdOverrides.recoverRatio = value}
+    else if (argument === "--stable-candles") {thresholdOverrides.requiredStableCandles = Number(value)}
+    else {throw new TypeError(`unknown calibration argument: ${argument}`)}
     index += 1
   }
 
@@ -403,7 +417,7 @@ function symbolFromArchiveFilename(filePath) {
 export function runCalibrationCli(args = process.argv.slice(2)) {
   const options = parseCalibrationArguments(args)
   if (options.help) {
-    process.stdout.write(printUsage() + "\n")
+    process.stdout.write(`${printUsage()  }\n`)
     return
   }
 
@@ -434,8 +448,11 @@ export function runCalibrationCli(args = process.argv.slice(2)) {
   }
 
   const markets = [...groupsBySymbol.entries()].map(([symbol, groups]) => {
-    const candles = mergeAndValidateCandles({ symbol, candleGroups: groups })
-    return analyzeVolatilityHistory({ symbol, candles, thresholds: options.thresholds })
+    const candles = mergeAndValidateCandles({ symbol,
+candleGroups: groups })
+    return analyzeVolatilityHistory({ symbol,
+candles,
+thresholds: options.thresholds })
   })
   const report = Object.freeze({
     dataSource: "Binance Spot Public Data archive (data.binance.vision)",
@@ -450,9 +467,9 @@ export function runCalibrationCli(args = process.argv.slice(2)) {
       "No runtime threshold is changed by this command.",
     ]),
   })
-  const serialized = JSON.stringify(report, null, 2) + "\n"
-  if (options.outputPath) writeFileSync(resolve(options.outputPath), serialized, "utf8")
-  else process.stdout.write(serialized)
+  const serialized = `${JSON.stringify(report, null, 2)  }\n`
+  if (options.outputPath) {writeFileSync(resolve(options.outputPath), serialized, "utf8")}
+  else {process.stdout.write(serialized)}
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

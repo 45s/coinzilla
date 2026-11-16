@@ -36,7 +36,7 @@ export async function forwardChildOutput({
     const pendingDrains = []
 
     for (const destination of destinations()) {
-      if (!destination || destination.destroyed || destination.writableEnded) continue
+      if (!destination || destination.destroyed || destination.writableEnded) {continue}
       if (!destination.write(chunk)) {
         pendingDrains.push(once(destination, "drain"))
       }
@@ -47,7 +47,7 @@ export async function forwardChildOutput({
     }
 
     for (const destination of bestEffortDestinations()) {
-      if (!destination || destination.destroyed || destination.writableEnded) continue
+      if (!destination || destination.destroyed || destination.writableEnded) {continue}
       if (destination.writableNeedDrain) {
         droppedChunks += 1
         continue

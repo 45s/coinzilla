@@ -45,9 +45,14 @@ test("parseOrderHistoryArguments rejects invalid symbols, limits, and extra argu
 test("normalizeOrderHistory returns newest orders first and preserves exact exchange values", () => {
   const { orders } = normalizeOrderHistory({
     orders: [
-      createOrder({ orderId: 101, time: 1_700_000_000_100, status: "CANCELED" }),
-      createOrder({ orderId: 99, time: 1_700_000_000_000 }),
-      createOrder({ orderId: 102, time: 1_700_000_000_100, status: "PARTIALLY_FILLED" }),
+      createOrder({ orderId: 101,
+time: 1_700_000_000_100,
+status: "CANCELED" }),
+      createOrder({ orderId: 99,
+time: 1_700_000_000_000 }),
+      createOrder({ orderId: 102,
+time: 1_700_000_000_100,
+status: "PARTIALLY_FILLED" }),
     ],
     limit: 2,
   })
@@ -69,7 +74,8 @@ test("normalizeOrderHistory supports exact numeric or string Binance order IDs",
 
 test("normalizeOrderHistory rejects malformed responses and invalid limits", () => {
   assert.throws(() => normalizeOrderHistory({ orders: null }), /must be an array/)
-  assert.throws(() => normalizeOrderHistory({ orders: [], limit: 1001 }), /limit/)
+  assert.throws(() => normalizeOrderHistory({ orders: [],
+limit: 1001 }), /limit/)
   assert.throws(
     () => normalizeOrderHistory({ orders: [createOrder({ orderId: Number.MAX_SAFE_INTEGER + 1 })] }),
     /invalid orderId/,

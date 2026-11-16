@@ -11,7 +11,7 @@ test("normalizes a valid Binance symbol and rejects malformed symbols", () => {
     assert.throws(
       () => normalizeSymbolInput(value),
       /symbol/i,
-      "Malformed symbols must be rejected instead of being sent to Binance: " + String(value),
+      `Malformed symbols must be rejected instead of being sent to Binance: ${  String(value)}`,
     )
   }
 })
