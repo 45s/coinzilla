@@ -275,6 +275,17 @@ test("re-arms a bounded recovery window after fresh ticker activity following ex
     s: "BTCUSDT",
     L: 15,
   })
+  assert.equal(
+    monitor.diagnostics.pendingTradeId,
+    15,
+    "new ticker trade evidence must remain visible even while recovery attempts are exhausted",
+  )
+  monitor.onAggTrade({ l: 14 })
+  assert.equal(
+    monitor.diagnostics.state,
+    "exhausted",
+    "aggTrade must not be considered recovered while it remains behind the latest ticker trade ID",
+  )
   clock.advanceBy(1_000)
   monitor.onTicker({
     s: "BTCUSDT",
