@@ -54,7 +54,12 @@ function validateConfirmationInput({
   const factId = `market-history-coverage:${symbol}:baseline`
   return {
     factId,
-    evidence: { factId, symbol, coveredFromTime, verifiedAt, evidenceDigest, verifiedBy },
+    evidence: { factId, 
+      symbol, 
+      coveredFromTime, 
+      verifiedAt, 
+      evidenceDigest, 
+      verifiedBy },
   }
 }
 
@@ -77,13 +82,15 @@ async function readExistingCoverage({ operationalStateStore, symbol, evidence })
     return undefined
   }
 
-  const currentResult = await readMarketHistoryCoverage({ operationalStateStore, symbol })
+  const currentResult = await readMarketHistoryCoverage({ operationalStateStore, 
+    symbol })
   if (currentResult?.ok !== true) {
     return toResult({
       errors: currentResult?.errors ?? [new Error("Existing market-history coverage could not be verified")],
     })
   }
-  if (matchesCoverage({ coverage: currentResult.data, evidence })) {
+  if (matchesCoverage({ coverage: currentResult.data, 
+    evidence })) {
     return toResult({
       data: Object.freeze({
         confirmed: true,
@@ -161,7 +168,8 @@ async function reconcileAndCommitCoverage({
       errors: readback?.errors ?? [new Error("Committed market-history coverage could not be read back")],
     })
   }
-  if (!matchesCoverage({ coverage: readback.data, evidence })) {
+  if (!matchesCoverage({ coverage: readback.data, 
+    evidence })) {
     throw new Error("Committed market-history coverage does not match the reviewed evidence")
   }
 
