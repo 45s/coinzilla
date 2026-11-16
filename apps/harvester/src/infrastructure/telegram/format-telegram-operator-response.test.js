@@ -1,5 +1,8 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest(`[format-telegram-operator-response.test.js] ${  name}`, ...args)
+const test = (...args) => {
+  const [name, ...testArguments] = args
+  return nodeTest(`[format-telegram-operator-response.test.js] ${  name}`, ...testArguments)
+}
 import assert from "node:assert/strict"
 import {
   formatTelegramOperatorPositions,
