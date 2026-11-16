@@ -5,7 +5,8 @@ import { createTelegramOperatorAdapter } from "../../infrastructure/telegram/tel
 
 export class OperatorControlStartupError extends Error {
   constructor(message, code, cause) {
-    super(message, { cause })
+    const detail = cause?.message
+    super(detail ? `${message}: ${detail}` : message, { cause })
     this.name = "OperatorControlStartupError"
     this.code = code
   }
@@ -73,8 +74,7 @@ export async function prepareTelegramOperatorControl({
   }
   if (verification?.ok !== true || verification.data?.valid !== true || verification.data?.durableWriteSupported !== true) {
     const cause = verification?.errors?.[0] ?? new Error("Operational State Store verification did not confirm a valid durable store")
-    const detail = cause?.message ?? String(cause)
-    throw new OperatorControlStartupError(`Configured Operational State Store is invalid: ${detail}`, "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
+    throw new OperatorControlStartupError("Configured Operational State Store is missing, uninitialized, corrupt or not durably writable", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
   }
   let adapter
   return Object.freeze({
