@@ -40,7 +40,12 @@ function getVolatilitySnapshotContext({ state, symbol, currentSnapshot }) {
   const observedAt = Number.isSafeInteger(data?.status?.observedAt)
     ? data.status.observedAt
     : Date.now()
-  return { current, activeBuyOrders, data, candleKey, hasCancellableBuy, observedAt }
+  return { current, 
+    activeBuyOrders, 
+    data, 
+    candleKey, 
+    hasCancellableBuy, 
+    observedAt }
 }
 
 function createVolatilitySnapshotSignature({ data, activeBuyOrders, candleKey, hasCancellableBuy, observedAt }) {
@@ -89,7 +94,9 @@ function logVolatilityTransition({ logger, symbol, current, transition, data, me
 }
 
 function applyVolatilitySnapshotTransition({ state, symbol, currentSnapshot, transitionPolicy, logger }) {
-  const context = getVolatilitySnapshotContext({ state, symbol, currentSnapshot })
+  const context = getVolatilitySnapshotContext({ state, 
+    symbol, 
+    currentSnapshot })
   const { current, activeBuyOrders, data, candleKey, hasCancellableBuy, observedAt } = context
   const signature = createVolatilitySnapshotSignature(context)
   if (state.volatilitySnapshotSignatureBySymbol.get(symbol) === signature) {
@@ -126,7 +133,12 @@ function applyVolatilitySnapshotTransition({ state, symbol, currentSnapshot, tra
   }
 
   const metricChanged = current.volatilityRatio !== transition.state.volatilityRatio
-  logVolatilityTransition({ logger, symbol, current, transition, data, metricChanged })
+  logVolatilityTransition({ logger, 
+    symbol, 
+    current, 
+    transition, 
+    data, 
+    metricChanged })
   return {
     skipped: false,
     shouldCancel,
@@ -184,7 +196,8 @@ async function settleVolatilityTransition({ runTransition, state, symbol, curren
         activeBuyOrderCount,
       })
       state.volatilityProtection.set(symbol, transition.state)
-      return { recovered: transition.recovered, state: transition.state }
+      return { recovered: transition.recovered, 
+        state: transition.state }
     },
   })
 }
@@ -226,16 +239,20 @@ async function processVolatilitySnapshot({
   snapshot,
 }) {
   if (isStopping()) {
-    return toResult({ data: { skipped: true, reason: "STOPPING" } })
+    return toResult({ data: { skipped: true, 
+      reason: "STOPPING" } })
   }
   if (typeof symbol !== "string" || !symbol.trim()) {
     return toResult({ error: new TypeError("processVolatilitySnapshot requires a symbol") })
   }
   if (!isVolatilityProtectionEnabledForSymbol(symbol)) {
-    return toResult({ data: { skipped: true, reason: "VOLATILITY_PROTECTION_DISABLED_FOR_PAIR" } })
+    return toResult({ data: { skipped: true, 
+      reason: "VOLATILITY_PROTECTION_DISABLED_FOR_PAIR" } })
   }
 
-  const currentSnapshot = readVolatilitySnapshot({ getVolatilityData, symbol, snapshot })
+  const currentSnapshot = readVolatilitySnapshot({ getVolatilityData, 
+    symbol, 
+    snapshot })
   let update
   try {
     update = await runInitialVolatilityTransition({
@@ -256,9 +273,12 @@ async function processVolatilitySnapshot({
     return toResult({ data: update })
   }
 
-  let settled = { recovered: update.recovered, state: update.state }
+  let settled = { recovered: update.recovered, 
+    state: update.state }
   if (update.shouldCancel) {
-    await cancelVolatilityBuyOrders({ cancelOwnedBuyOrders, logger, symbol })
+    await cancelVolatilityBuyOrders({ cancelOwnedBuyOrders, 
+      logger, 
+      symbol })
     try {
       settled = await settleVolatilityTransition({
         runTransition,
@@ -306,7 +326,8 @@ async function refreshVolatilityProtectionIfNeeded({
   if (!isVolatilityProtectionEnabledForSymbol(symbol)) {
     return toResult({ data: { skipped: true } })
   }
-  const snapshot = readVolatilitySnapshot({ getVolatilityData, symbol })
+  const snapshot = readVolatilitySnapshot({ getVolatilityData, 
+    symbol })
   const data = snapshot?.ok ? snapshot.data : null
   const unavailableReason = !data?.status?.isReady
     ? data?.status?.reason ?? "VOLATILITY_DATA_UNAVAILABLE"
@@ -318,9 +339,11 @@ async function refreshVolatilityProtectionIfNeeded({
     ? current.reason !== unavailableReason
     : current.lastEvaluatedCandleOpenTime !== candleOpenTime
   if (!needsRefresh) {
-    return toResult({ data: { skipped: true, state: current } })
+    return toResult({ data: { skipped: true, 
+      state: current } })
   }
-  return processSnapshot({ symbol, snapshot })
+  return processSnapshot({ symbol, 
+    snapshot })
 }
 
 /**
