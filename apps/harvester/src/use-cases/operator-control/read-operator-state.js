@@ -45,7 +45,8 @@ function createMarketReadModels({ markets, runtime }) {
         message: "Harvester operator market snapshot is invalid",
         code: "HARVESTER_OPERATOR_MARKET_SNAPSHOT_INVALID",
         cause,
-        context: { operation: "READ_MARKETS", symbol: market?.symbol ?? "unknown" },
+        context: { operation: "READ_MARKETS",
+symbol: market?.symbol ?? "unknown" },
       })
     }
     const blockers = [...market.blockers]
@@ -144,7 +145,8 @@ export function createReadOperatorState({ engine, getRuntimeSnapshot } = {}) {
       return toResult({
         data: Object.freeze({
           runtime,
-          markets: createMarketReadModels({ markets: sourceMarkets, runtime }),
+          markets: createMarketReadModels({ markets: sourceMarkets,
+runtime }),
         }),
       })
     } catch (error) {
@@ -163,7 +165,8 @@ export function createReadOperatorState({ engine, getRuntimeSnapshot } = {}) {
   }
 
   const getStatus = async ({ actor } = {}) => {
-    const snapshotResult = await readSnapshot({ actor, operation: "READ_STATUS" })
+    const snapshotResult = await readSnapshot({ actor,
+operation: "READ_STATUS" })
     if (!snapshotResult?.ok) {return snapshotResult}
     const { runtime, markets } = snapshotResult.data
     const blockers = []
@@ -189,7 +192,8 @@ export function createReadOperatorState({ engine, getRuntimeSnapshot } = {}) {
         strategyMode: runtime.strategyMode,
         stopping: runtime.stopping,
         userData: runtime.userData,
-        readiness: Object.freeze({ state, blockers: Object.freeze(blockers) }),
+        readiness: Object.freeze({ state,
+blockers: Object.freeze(blockers) }),
         markets: Object.freeze({
           configured: markets.length,
           enabled: markets.filter(({ enabled }) => enabled).length,
@@ -200,7 +204,8 @@ export function createReadOperatorState({ engine, getRuntimeSnapshot } = {}) {
   }
 
   const getMarkets = async ({ actor } = {}) => {
-    const snapshotResult = await readSnapshot({ actor, operation: "READ_MARKETS" })
+    const snapshotResult = await readSnapshot({ actor,
+operation: "READ_MARKETS" })
     if (!snapshotResult?.ok) {return snapshotResult}
     const { runtime, markets } = snapshotResult.data
     return toResult({
@@ -214,5 +219,6 @@ export function createReadOperatorState({ engine, getRuntimeSnapshot } = {}) {
     })
   }
 
-  return Object.freeze({ getStatus, getMarkets })
+  return Object.freeze({ getStatus,
+getMarkets })
 }
