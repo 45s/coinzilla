@@ -5,7 +5,7 @@
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
 **Last reviewed:** 2026-11-16
-**Last source-verified develop checkpoint:** `011af1c66958a3106a6d06d2c9fd6cb5b2eae252` (2026-11-16; current remote `develop` at documentation update).
+**Last source-verified develop checkpoint:** `69259bcf691b8cb7ad2b3ec5d6a6cc2315cccffe` (2026-11-16; current remote `develop` at documentation update).
 
 ## Repository-wide agent workflow continuity
 
