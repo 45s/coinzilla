@@ -133,9 +133,9 @@ test("SQLite file databases persist data after closing and reopening", async () 
     }
   } finally {
     await rm(directory, {
-     recursive: true,
-     force: true,
-   })
+      recursive: true,
+      force: true,
+    })
   }
 })
 
