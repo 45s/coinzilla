@@ -528,7 +528,11 @@ test("appends cumulative files while isolating and flushing consecutive process 
   try {
     for (const [index, processIdentity] of sessionIdentities.entries()) {
       const logger = createLogger();
-      const logging = await configureHarvesterLogging({ logger, directory, processIdentity });
+      const logging = await configureHarvesterLogging({
+        logger,
+        directory,
+        processIdentity,
+      });
       const debugEntry = {
         timestamp: processIdentity.startedAt,
         level: "debug",
@@ -830,3 +834,35 @@ test("identifies the Binance market-data stream when trading is not enabled", ()
   output.destroy()
 })
 
+test("renders recovery SELL cancellation requests in the requested compact console format", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+
+  transport.write({
+    timestamp: "2026-11-16T04:30:15.000Z",
+    level: "info",
+    method: "info",
+    data: {
+      message: "Harvester recovery SELL cancellation requested",
+      strategyId: "CG_coinGrabber",
+      symbol: "DOGEUSDT",
+      reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      clientOrderId: "h-test",
+      brokerOrderId: "1323350",
+    },
+  })
+
+  assert.equal(
+    written.trim(),
+    "04:30:15 🪙 CG recovery SELL cancellation requested: DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+    "the recovery SELL cancellation console line must match the requested concise operator format",
+  )
+  output.destroy()
+})
