@@ -23,36 +23,39 @@ const quantity = 1_000
 
 let broker
 
+async function connectTestBroker() {
+  const config = new BinanceWebSocketConfig({
+    apiKey: process.env.BINANCE_API_KEY,
+    apiSecret: process.env.BINANCE_API_SECRET_KEY,
+    tradingMode: "testnet",
+  })
+
+  assert.match(
+    config.websocketApiUrl,
+    /^wss:\/\/ws-api\.testnet\.binance\.vision\//,
+    "Broker integration tests must never connect to the production WebSocket API",
+  )
+  assert.match(
+    config.websocketStreamsUrl,
+    /^wss:\/\/stream\.testnet\.binance\.vision\//,
+    "Broker integration tests must never connect to production WebSocket Streams",
+  )
+
+  broker = new BinanceWebSocketBroker(config)
+  await broker.connect()
+}
+
+async function disconnectTestBroker() {
+  await broker?.disconnect()
+}
+
 describe(
   "BinanceWebSocketBroker native WebSocket integration (TESTNET)",
   { skip: !(isExplicitlyOptedIn && hasTestnetCredentials) &&
       "Set BINANCE_TESTNET_INTEGRATION=1 and non-placeholder Binance TESTNET credentials to run these tests" },
   () => {
-    before(async () => {
-      const config = new BinanceWebSocketConfig({
-        apiKey: process.env.BINANCE_API_KEY,
-        apiSecret: process.env.BINANCE_API_SECRET_KEY,
-        tradingMode: "testnet",
-      })
-
-      assert.match(
-        config.websocketApiUrl,
-        /^wss:\/\/ws-api\.testnet\.binance\.vision\//,
-        "Broker integration tests must never connect to the production WebSocket API",
-      )
-      assert.match(
-        config.websocketStreamsUrl,
-        /^wss:\/\/stream\.testnet\.binance\.vision\//,
-        "Broker integration tests must never connect to production WebSocket Streams",
-      )
-
-      broker = new BinanceWebSocketBroker(config)
-      await broker.connect()
-    })
-
-    after(async () => {
-      await broker?.disconnect()
-    })
+    before(connectTestBroker)
+    after(disconnectTestBroker)
 
     it("fetches account assets", async () => {
       const { ok, data: assets } = await broker.getAssets()
