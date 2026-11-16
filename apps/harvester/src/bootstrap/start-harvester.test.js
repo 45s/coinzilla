@@ -5363,7 +5363,7 @@ test("starts in observation-only mode after an unclean prior process when restar
 })
 
 
-function createSharedOperatorRuntimeFixture({ broker, operationalStateStore, runtimeSessionId }) {
+async function createSharedOperatorRuntimeFixture({ broker, operationalStateStore, runtimeSessionId }) {
   let resolveRecoveryAcknowledgement
   const recoveryAcknowledged = new Promise((resolve) => {
     resolveRecoveryAcknowledgement = resolve
