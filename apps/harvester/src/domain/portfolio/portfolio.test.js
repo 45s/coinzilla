@@ -4,24 +4,33 @@ import assert from "node:assert/strict"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "./portfolio.js"
 
-const baseAsset = new Asset({ id: "asset:ETH", code: "ETH" })
-const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "ETHUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({ id: "asset:ETH",
+code: "ETH" })
+const quoteAsset = new Asset({ id: "asset:USDT",
+code: "USDT" })
+const market = new Market({ venue: "binance",
+symbol: "ETHUSDT",
+baseAsset,
+quoteAsset })
 const makeFill = ({ tradeId = "trade-1", side = "BUY", quantity = "1", quoteQuantity = "100", commissions = [] } = {}) => new Fill({
   tradeId,
   brokerOrderId: "order-1",
   market,
   side,
-  price: new Money({ amount: "100", asset: quoteAsset }),
-  quantity: new Quantity({ amount: quantity, asset: baseAsset }),
-  quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+  price: new Money({ amount: "100",
+asset: quoteAsset }),
+  quantity: new Quantity({ amount: quantity,
+asset: baseAsset }),
+  quoteQuantity: new Money({ amount: quoteQuantity,
+asset: quoteAsset }),
   commissions,
   commissionStatus: "COMPLETE",
 })
 
 test("creates a Position from a fill without mutating the original Portfolio", () => {
   const original = new Portfolio()
-  const result = original.applyFill({ fill: makeFill(), strategyId: StrategyId.COIN_GRABBER })
+  const result = original.applyFill({ fill: makeFill(),
+strategyId: StrategyId.COIN_GRABBER })
   assert.equal(result.applied, true)
   assert.equal(original.positions.length, 0)
   assert.equal(result.portfolio.positions.length, 1)
@@ -29,8 +38,10 @@ test("creates a Position from a fill without mutating the original Portfolio", (
 })
 
 test("deduplicates a fill by canonical market-scoped identity", () => {
-  const portfolio = new Portfolio().applyFill({ fill: makeFill(), strategyId: StrategyId.COIN_GRABBER }).portfolio
-  const duplicate = portfolio.applyFill({ fill: makeFill(), strategyId: StrategyId.COIN_GRABBER })
+  const {portfolio} = new Portfolio().applyFill({ fill: makeFill(),
+strategyId: StrategyId.COIN_GRABBER })
+  const duplicate = portfolio.applyFill({ fill: makeFill(),
+strategyId: StrategyId.COIN_GRABBER })
   assert.equal(duplicate.duplicate, true)
   assert.equal(duplicate.applied, false)
   assert.equal(duplicate.portfolio, portfolio)
@@ -38,8 +49,10 @@ test("deduplicates a fill by canonical market-scoped identity", () => {
 })
 
 test("keeps exact fill accounting isolated when different markets reuse the same trade ID", () => {
-  const ethFill = makeFill({ tradeId: "shared-trade-id", quantity: "1" })
-  const solBaseAsset = new Asset({ id: "asset:SOL", code: "SOL" })
+  const ethFill = makeFill({ tradeId: "shared-trade-id",
+quantity: "1" })
+  const solBaseAsset = new Asset({ id: "asset:SOL",
+code: "SOL" })
   const solMarket = new Market({
     venue: "binance",
     symbol: "SOLUSDT",
@@ -51,15 +64,20 @@ test("keeps exact fill accounting isolated when different markets reuse the same
     brokerOrderId: "sol-order",
     market: solMarket,
     side: "BUY",
-    price: new Money({ amount: "100", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "2", asset: solBaseAsset }),
-    quoteQuantity: new Money({ amount: "200", asset: quoteAsset }),
+    price: new Money({ amount: "100",
+asset: quoteAsset }),
+    quantity: new Quantity({ amount: "2",
+asset: solBaseAsset }),
+    quoteQuantity: new Money({ amount: "200",
+asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  const portfolio = new Portfolio()
-    .applyFill({ fill: ethFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
-    .applyFill({ fill: solFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+  const {portfolio} = new Portfolio()
+    .applyFill({ fill: ethFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: solFill,
+strategyId: StrategyId.COIN_GRABBER })
   const ethPosition = portfolio.getPosition({ symbol: "ETHUSDT" })
   const solPosition = portfolio.getPosition({ symbol: "SOLUSDT" })
 
@@ -112,11 +130,13 @@ test("keeps exact fill accounting isolated when different markets reuse the same
 
 test("allocates free inventory through the matching shared Position only", () => {
   const initial = new Portfolio().applyFill({
-    fill: makeFill({ quantity: "100" }), strategyId: StrategyId.COIN_GRABBER
+    fill: makeFill({ quantity: "100" }),
+strategyId: StrategyId.COIN_GRABBER
   }).portfolio
   const allocated = initial.allocateFreeQuantity({
     marketId: market.id,
-    quantity: "1", strategyId: StrategyId.COIN_GRABBER
+    quantity: "1",
+strategyId: StrategyId.COIN_GRABBER
   })
   const position = allocated.getPosition({ marketId: market.id })
 
@@ -130,19 +150,24 @@ test("does not permit free allocation for an unknown market", () => {
   assert.throws(
     () => new Portfolio().allocateFreeQuantity({
       marketId: "missing-market",
-      quantity: "1", strategyId: StrategyId.COIN_GRABBER
+      quantity: "1",
+strategyId: StrategyId.COIN_GRABBER
     }),
     /no Position/,
   )
 })
 
 test("rejects a reused Fill ID when execution facts differ without mutating Portfolio accounting", () => {
-  const originalFill = makeFill({ tradeId: "reused-trade", quantity: "1" })
-  const portfolio = new Portfolio().applyFill({ fill: originalFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+  const originalFill = makeFill({ tradeId: "reused-trade",
+quantity: "1" })
+  const {portfolio} = new Portfolio().applyFill({ fill: originalFill,
+strategyId: StrategyId.COIN_GRABBER })
 
   assert.throws(
     () => portfolio.applyFill({
-      fill: makeFill({ tradeId: "reused-trade", quantity: "2" }), strategyId: StrategyId.COIN_GRABBER
+      fill: makeFill({ tradeId: "reused-trade",
+quantity: "2" }),
+strategyId: StrategyId.COIN_GRABBER
     }),
     /Conflicting execution facts reused Fill ID/,
     "Reusing one canonical fill identity with different execution facts must be rejected.",
@@ -164,20 +189,24 @@ test("rejects a reused Fill ID when commission amount differs without mutating P
   const acceptedFill = makeFill({
     tradeId: "commission-conflict",
     commissions: [
-      new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.01",
+asset: quoteAsset }) }),
     ],
   })
-  const portfolio = new Portfolio().applyFill({ fill: acceptedFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+  const {portfolio} = new Portfolio().applyFill({ fill: acceptedFill,
+strategyId: StrategyId.COIN_GRABBER })
   const originalState = portfolio.value
   const conflictingFill = makeFill({
     tradeId: "commission-conflict",
     commissions: [
-      new Commission({ amount: new Money({ amount: "0.02", asset: quoteAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.02",
+asset: quoteAsset }) }),
     ],
   })
 
   assert.throws(
-    () => portfolio.applyFill({ fill: conflictingFill, strategyId: StrategyId.COIN_GRABBER }),
+    () => portfolio.applyFill({ fill: conflictingFill,
+strategyId: StrategyId.COIN_GRABBER }),
     /Conflicting execution facts reused Fill ID/,
     "A reused execution identity with a different actual quote commission must be rejected.",
   )
@@ -189,17 +218,23 @@ test("rejects a reused Fill ID when commission amount differs without mutating P
 })
 
 test("deduplicates equivalent history-response and user-data stream fills in either delivery order", () => {
-  const historyResponseDelivery = makeFill({ tradeId: "binance-trade-10259", quantity: "4.995" })
-  const userDataStreamDelivery = makeFill({ tradeId: "binance-trade-10259", quantity: "4.995" })
+  const historyResponseDelivery = makeFill({ tradeId: "binance-trade-10259",
+quantity: "4.995" })
+  const userDataStreamDelivery = makeFill({ tradeId: "binance-trade-10259",
+quantity: "4.995" })
 
-  const historyThenStream = new Portfolio().applyFill({ fill: historyResponseDelivery, strategyId: StrategyId.COIN_GRABBER }).portfolio
-  const duplicateStream = historyThenStream.applyFill({ fill: userDataStreamDelivery, strategyId: StrategyId.COIN_GRABBER })
+  const historyThenStream = new Portfolio().applyFill({ fill: historyResponseDelivery,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
+  const duplicateStream = historyThenStream.applyFill({ fill: userDataStreamDelivery,
+strategyId: StrategyId.COIN_GRABBER })
   assert.equal(duplicateStream.applied, false)
   assert.equal(duplicateStream.duplicate, true)
   assert.equal(duplicateStream.portfolio.getPosition({ symbol: "ETHUSDT" }).baseQuantity.amount, "4.995")
 
-  const streamThenHistory = new Portfolio().applyFill({ fill: userDataStreamDelivery, strategyId: StrategyId.COIN_GRABBER }).portfolio
-  const duplicateHistory = streamThenHistory.applyFill({ fill: historyResponseDelivery, strategyId: StrategyId.COIN_GRABBER })
+  const streamThenHistory = new Portfolio().applyFill({ fill: userDataStreamDelivery,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
+  const duplicateHistory = streamThenHistory.applyFill({ fill: historyResponseDelivery,
+strategyId: StrategyId.COIN_GRABBER })
   assert.equal(duplicateHistory.applied, false)
   assert.equal(duplicateHistory.duplicate, true)
   assert.equal(duplicateHistory.portfolio.getPosition({ symbol: "ETHUSDT" }).baseQuantity.amount, "4.995")
@@ -275,18 +310,23 @@ test("rejects applying one canonical fill to a different strategy Position", () 
 
 test("rejects ambiguous market lookup when multiple strategy Positions exist", () => {
   const { portfolio: coinGrabberPortfolio } = new Portfolio().applyFill({
-    fill: makeFill({ tradeId: "ambiguous-cg", quantity: "10", quoteQuantity: "1000" }),
+    fill: makeFill({ tradeId: "ambiguous-cg",
+quantity: "10",
+quoteQuantity: "1000" }),
     positionId: "position:cg:ethusdt",
     strategyId: StrategyId.COIN_GRABBER,
   })
   const { portfolio } = coinGrabberPortfolio.applyFill({
-    fill: makeFill({ tradeId: "ambiguous-rs", quantity: "3", quoteQuantity: "600" }),
+    fill: makeFill({ tradeId: "ambiguous-rs",
+quantity: "3",
+quoteQuantity: "600" }),
     positionId: "position:rs:ethusdt",
     strategyId: StrategyId.RECOVERY_SELLER,
   })
 
   assert.equal(
-    portfolio.getPosition({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }).id,
+    portfolio.getPosition({ marketId: market.id,
+strategyId: StrategyId.COIN_GRABBER }).id,
     "position:cg:ethusdt",
     "A strategy-scoped market lookup must return that strategy's independent Position.",
   )
@@ -301,12 +341,16 @@ test("allocates retained inventory only from the explicitly selected strategy Po
   const coinGrabberPositionId = "position:cg:ethusdt"
   const recoverySellerPositionId = "position:rs:ethusdt"
   const { portfolio: coinGrabberPortfolio } = new Portfolio().applyFill({
-    fill: makeFill({ tradeId: "allocation-cg", quantity: "10", quoteQuantity: "1000" }),
+    fill: makeFill({ tradeId: "allocation-cg",
+quantity: "10",
+quoteQuantity: "1000" }),
     positionId: coinGrabberPositionId,
     strategyId: StrategyId.COIN_GRABBER,
   })
   const { portfolio } = coinGrabberPortfolio.applyFill({
-    fill: makeFill({ tradeId: "allocation-rs", quantity: "3", quoteQuantity: "600" }),
+    fill: makeFill({ tradeId: "allocation-rs",
+quantity: "3",
+quoteQuantity: "600" }),
     positionId: recoverySellerPositionId,
     strategyId: StrategyId.RECOVERY_SELLER,
   })
@@ -328,12 +372,16 @@ test("keeps legacy and recovery acquisition tranches as separate same-market Pos
   const firstPositionId = "position:rs:legacy"
   const secondPositionId = "position:rs:cycle-1"
   const { portfolio: legacyPortfolio } = new Portfolio().applyFill({
-    fill: makeFill({ tradeId: "rs-legacy-buy", quantity: "50", quoteQuantity: "100" }),
+    fill: makeFill({ tradeId: "rs-legacy-buy",
+quantity: "50",
+quoteQuantity: "100" }),
     positionId: firstPositionId,
     strategyId: StrategyId.RECOVERY_SELLER,
   })
   const { portfolio } = legacyPortfolio.applyFill({
-    fill: makeFill({ tradeId: "rs-cycle-buy", quantity: "10", quoteQuantity: "20" }),
+    fill: makeFill({ tradeId: "rs-cycle-buy",
+quantity: "10",
+quoteQuantity: "20" }),
     positionId: secondPositionId,
     strategyId: StrategyId.RECOVERY_SELLER,
   })

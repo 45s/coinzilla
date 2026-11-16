@@ -1,5 +1,5 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest("[trailing-buy-repricing.test.js] " + name, ...args)
+const test = (...args) => nodeTest(`[trailing-buy-repricing.test.js] ${  args[0]}`, ...args.slice(1))
 import assert from "node:assert/strict"
 import { evaluateTrailingBuyRepricing } from "./trailing-buy-repricing.js"
 
@@ -39,10 +39,18 @@ test("uses the latest replacement reference for the next upward step", () => {
 test("rejects invalid prices and percentage values", () => {
   for (const input of [
     {},
-    { marketPrice: "0", referencePrice: "100", priceStepPercent: "0.05" },
-    { marketPrice: "100", referencePrice: "0", priceStepPercent: "0.05" },
-    { marketPrice: "100", referencePrice: "100", priceStepPercent: "0" },
-    { marketPrice: "100", referencePrice: "100", priceStepPercent: "100" },
+    { marketPrice: "0",
+referencePrice: "100",
+priceStepPercent: "0.05" },
+    { marketPrice: "100",
+referencePrice: "0",
+priceStepPercent: "0.05" },
+    { marketPrice: "100",
+referencePrice: "100",
+priceStepPercent: "0" },
+    { marketPrice: "100",
+referencePrice: "100",
+priceStepPercent: "100" },
   ]) {
     assert.throws(() => evaluateTrailingBuyRepricing(input))
   }

@@ -15,13 +15,18 @@ export function evaluateTrailingBuyRepricing({
     referencePrice,
     priceStepPercent,
   })) {
-    assertDecimalString({ value, field })
+    assertDecimalString({ value,
+field })
   }
   if (
-    compareDecimal({ left: marketPrice, right: "0" }) <= 0 ||
-    compareDecimal({ left: referencePrice, right: "0" }) <= 0 ||
-    compareDecimal({ left: priceStepPercent, right: "0" }) <= 0 ||
-    compareDecimal({ left: priceStepPercent, right: "100" }) >= 0
+    compareDecimal({ left: marketPrice,
+right: "0" }) <= 0 ||
+    compareDecimal({ left: referencePrice,
+right: "0" }) <= 0 ||
+    compareDecimal({ left: priceStepPercent,
+right: "0" }) <= 0 ||
+    compareDecimal({ left: priceStepPercent,
+right: "100" }) >= 0
   ) {
     throw new RangeError("Trailing BUY repricing inputs must be positive and priceStepPercent less than 100")
   }
@@ -31,7 +36,8 @@ export function evaluateTrailingBuyRepricing({
     percent: priceStepPercent,
   })
   return Object.freeze({
-    shouldReplace: compareDecimal({ left: marketPrice, right: adjustmentThreshold }) >= 0,
+    shouldReplace: compareDecimal({ left: marketPrice,
+right: adjustmentThreshold }) >= 0,
     adjustmentThreshold,
   })
 }
