@@ -24,11 +24,11 @@ export async function loadMarketMetadata({
       if (!filtersResult?.ok || !filtersResult.data) {
         const details = filtersResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
         throw new Error(
-          "Unable to load exchange market metadata for configured pair " + symbol +
-          (details ? ": " + details : ""),
+          `Unable to load exchange market metadata for configured pair ${  symbol 
+          }${details ? `: ${  details}` : ""}`,
         )
       }
-      const market = filtersResult.data.market
+      const {market} = filtersResult.data
       logger?.trace?.({
         message: "Exchange market metadata received",
         component: "market-metadata-bootstrap",
@@ -45,7 +45,7 @@ export async function loadMarketMetadata({
         !market.baseAsset?.code ||
         !market.quoteAsset?.code
       ) {
-        throw new Error("Configured pair " + symbol + " does not expose canonical base/quote asset metadata")
+        throw new Error(`Configured pair ${  symbol  } does not expose canonical base/quote asset metadata`)
       }
       if (!pairConfig.enabled) {
         marketMetadata.set(symbol, filtersResult.data)
