@@ -19,7 +19,8 @@ test("uses the default logger when options are empty or omit logger", () => {
 test("accepts supported options and preserves supplied references", () => {
   const logger = { error() {} }
   const onError = () => {}
-  const result = validateOptions({ logger, onError }, defaultLogger)
+  const result = validateOptions({ logger,
+onError }, defaultLogger)
 
   assert.equal(result.logger, logger)
   assert.equal(result.onError, onError)
@@ -46,7 +47,8 @@ test("rejects non-plain constructor options", () => {
   ]) {
     assert.throws(
       () => validateOptions(options, defaultLogger),
-      { name: "TypeError", message: "EventBus options must be a plain object" },
+      { name: "TypeError",
+message: "EventBus options must be a plain object" },
     )
   }
 })
