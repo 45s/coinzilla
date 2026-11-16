@@ -14,7 +14,7 @@ resolve }
 
 test("diagnostics expose immutable snapshots of pending capacity and lifecycle", async () => {
   const bus = new EventBus({ logger: {},
-maxPending: 2 })
+    maxPending: 2 })
   const release = deferred()
   const started = deferred()
 
@@ -33,7 +33,7 @@ maxPending: 2 })
   })
 
   assert.equal(bus.publish({ name: "task.started",
-source: "test" }).ok, true)
+    source: "test" }).ok, true)
   await started.promise
 
   const pending = bus.getDiagnostics()
@@ -73,7 +73,7 @@ test("close timeout leaves the bus closed and allows a later drain", async () =>
   })
 
   assert.equal(bus.publish({ name: "task.started",
-source: "test" }).ok, true)
+    source: "test" }).ok, true)
   await started.promise
 
   const timedOut = await bus.close({ timeoutMs: 10 })
@@ -86,7 +86,7 @@ source: "test" }).ok, true)
     closed: true,
   })
   assert.equal(bus.publish({ name: "task.started",
-source: "test" }).ok, false)
+    source: "test" }).ok, false)
   assert.equal(subscriptionResult.subscription.unsubscribe().unsubscribed, false)
 
   release.resolve()
@@ -119,7 +119,7 @@ test("concurrent close callers both observe a completed drain", async () => {
     },
   })
   assert.equal(bus.publish({ name: "task.started",
-source: "test" }).ok, true)
+    source: "test" }).ok, true)
   await started.promise
 
   const firstClose = bus.close()
@@ -140,14 +140,14 @@ source: "test" }).ok, true)
 
 test("diagnostics remain accurate when fan-out is rejected atomically", async () => {
   const bus = new EventBus({ logger: {},
-maxPending: 1 })
+    maxPending: 1 })
   bus.subscribe({ name: "task.started",
-handler: () => {} })
+    handler: () => {} })
   bus.subscribe({ name: "task.started",
-handler: () => {} })
+    handler: () => {} })
 
   const rejected = bus.publish({ name: "task.started",
-source: "test" })
+    source: "test" })
   assert.equal(rejected.ok, false)
   assert.equal(bus.getDiagnostics().pendingCount, 0)
 
@@ -173,7 +173,7 @@ test("close rejects nested publishes attempted by handlers during shutdown", asy
   })
 
   assert.equal(bus.publish({ name: "task.started",
-source: "test" }).ok, true)
+    source: "test" }).ok, true)
   await started.promise
 
   const closing = bus.close()
@@ -186,7 +186,7 @@ source: "test" }).ok, true)
 
 test("slow handlers retain capacity until settlement and capacity recovers afterward", async () => {
   const bus = new EventBus({ logger: {},
-maxPending: 1 })
+    maxPending: 1 })
   const started = deferred()
   const release = deferred()
   let calls = 0
@@ -201,17 +201,17 @@ maxPending: 1 })
   })
 
   assert.equal(bus.publish({ name: "slow.event",
-source: "test" }).ok, true)
+    source: "test" }).ok, true)
   await started.promise
   assert.equal(bus.getDiagnostics().pendingCount, 1)
   assert.equal(bus.publish({ name: "slow.event",
-source: "test" }).ok, false)
+    source: "test" }).ok, false)
 
   release.resolve()
   assert.equal((await bus.flush()).ok, true)
   assert.equal(bus.getDiagnostics().pendingCount, 0)
   assert.equal(bus.publish({ name: "slow.event",
-source: "test" }).ok, true)
+    source: "test" }).ok, true)
   assert.equal((await bus.flush()).ok, true)
   assert.equal(calls, 2)
   assert.equal((await bus.close()).ok, true)
@@ -236,7 +236,7 @@ test("error reporter rejection becomes a process warning, not an unhandled rejec
   })
 
   assert.equal(bus.publish({ name: "handler.failed",
-source: "test" }).ok, true)
+    source: "test" }).ok, true)
   assert.equal((await bus.flush()).ok, true)
 
   const emittedWarning = await warning
