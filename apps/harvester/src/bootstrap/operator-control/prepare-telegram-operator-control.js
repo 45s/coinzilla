@@ -13,8 +13,10 @@ export class OperatorControlStartupError extends Error {
 const disabledLifecycle = Object.freeze({
   enabled: false,
   operationalStateStore: undefined,
-  async start() { return Object.freeze({ started: false, disabled: true }) },
-  async stop() { return Object.freeze({ stopped: true, alreadyStopped: true }) },
+  async start() { return Object.freeze({ started: false,
+disabled: true }) },
+  async stop() { return Object.freeze({ stopped: true,
+alreadyStopped: true }) },
 })
 
 /**
@@ -43,19 +45,31 @@ export async function prepareTelegramOperatorControl({
   let adapter
   return Object.freeze({
     enabled: true,
-    operationalStateStore: operationalStateStore,
+    operationalStateStore,
     async start({ engine, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders } = {}) {
       if (adapter) {
-        return Object.freeze({ started: true, alreadyStarted: true })
+        return Object.freeze({ started: true,
+alreadyStarted: true })
       }
-      const operator = createHarvesterOperator({ engine, operationalStateStore, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders })
+      const operator = createHarvesterOperator({ engine,
+operationalStateStore,
+getRuntimeSnapshot,
+getPortfolio,
+getRecoveryLedger,
+getAccountSnapshot,
+getOpenOrders })
       try {
-        adapter = createAdapter({ botToken, allowedUserIds: telegramConfig.allowedUserIds, operator, fetchImpl, logger })
+        adapter = createAdapter({ botToken,
+allowedUserIds: telegramConfig.allowedUserIds,
+operator,
+fetchImpl,
+logger })
         if (typeof adapter?.start !== "function" || typeof adapter?.stop !== "function") {
           throw new TypeError("Telegram operator adapter must expose start() and stop()")
         }
         await adapter.start()
-        return Object.freeze({ started: true, alreadyStarted: false })
+        return Object.freeze({ started: true,
+alreadyStarted: false })
       } catch (cause) {
         let failure = cause
         let cleanupConfirmed = false
@@ -75,7 +89,8 @@ export async function prepareTelegramOperatorControl({
     },
     async stop() {
       if (!adapter) {
-        return Object.freeze({ stopped: true, alreadyStopped: true })
+        return Object.freeze({ stopped: true,
+alreadyStopped: true })
       }
       const activeAdapter = adapter
       try {
