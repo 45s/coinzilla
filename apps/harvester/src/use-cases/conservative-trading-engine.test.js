@@ -11426,14 +11426,21 @@ test("market emergency BUY pause reconciles fills that race with cancellation ex
   const harness = await createHarness({
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
     cancelWithFill: true,
     accountingApplied: true,
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
   })
   const initialBuy = harness.engine.getActiveOrders().find((order) => order.side === "BUY")
   assert.ok(initialBuy, "The test must begin with one acknowledged Harvester-owned BUY to exercise cancellation.")
@@ -11447,7 +11454,11 @@ test("market emergency BUY pause reconciles fills that race with cancellation ex
 
   const terminalOrder = harness.engine.getOrders().find((order) => order.clientOrderId === initialBuy.clientOrderId)
   const duplicate = await harness.engine.processUserDataEvent({
-    event: { executionType: "TRADE", executedOrder: terminalOrder, fill: harness.accountedFills[0] },
+    event: {
+      executionType: "TRADE",
+      executedOrder: terminalOrder,
+      fill: harness.accountedFills[0],
+    },
   })
   assert.equal(duplicate.ok, true, "A later duplicate user-data report for the cancellation-racing fill must remain a harmless event.")
   assert.equal(harness.accountedFills.length, 1, "The same cancellation-racing fill must never be applied to accounting twice.")
@@ -11457,7 +11468,10 @@ test("failed owned BUY cancellation leaves the emergency BUY gate active and rep
   const harness = await createHarness({
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
     cancelFailure: true,
   })
