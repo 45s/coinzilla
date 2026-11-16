@@ -7,7 +7,7 @@ import { assertUserDataClientPort } from "./ports/user-data-client-port.js"
  * @typedef {{accepted: true, completed: boolean}|{accepted: false, completed: false, reason: "stale-or-inactive"|"recovery-not-pending"|"stale-recovery-generation"}} UserDataRecoveryAcknowledgementResult
  */
 
-function logSafely(logger, level, ...args) {
+function logSafely({ logger, level, args }) {
   try {
     logger?.[level]?.(...args)
   } catch {
@@ -15,7 +15,7 @@ function logSafely(logger, level, ...args) {
   }
 }
 
-function validateCallback(callback, name) {
+function validateCallback({ callback, name }) {
   if (typeof callback !== "function") {
     throw new TypeError(`${name} callback must be a function`)
   }
@@ -108,7 +108,7 @@ export class UserDataSession {
   onConnected() {
     const client = this.getClient()
     if (!this.#stopped && client && this.#portFor(client).state === "open") {
-      this.#bindClient(client, { includeUserData: false })
+      this.#bindClient({ client, includeUserData: false })
     }
   }
 
@@ -116,7 +116,10 @@ export class UserDataSession {
   async resume() {
     if (this.#stopped || this.#subscribers.size === 0) {return}
     this.#clearReconnectTimer()
-    if (this.#reconnectPromise) {return this.#reconnectPromise}
+    if (this.#reconnectPromise) {
+      await this.#reconnectPromise
+      return
+    }
     try {
       await this.#ensureRemoteSubscription()
     } catch (error) {
@@ -137,8 +140,8 @@ recoveryRequired: true })
    * @returns {Promise<{data: {acknowledgeRecovery: () => boolean, acknowledgeRecoveryResult: (recoveryGeneration: number) => UserDataRecoveryAcknowledgementResult, disconnect: () => Promise<void>, subscriptionId: number|null}} >}
    */
   async subscribe({ onEvent, onStatus }) {
-    validateCallback(onEvent, "onEvent")
-    if (onStatus !== undefined) {validateCallback(onStatus, "onStatus")}
+    validateCallback({ callback: onEvent, name: "onEvent" })
+    if (onStatus !== undefined) {validateCallback({ callback: onStatus, name: "onStatus" })}
     if (this.#stopped) {throw new Error("User-data session is stopped")}
 
     const id = ++this.#nextSubscriberId
@@ -171,7 +174,7 @@ recoveryRequired: true })
 
     const data = {
       acknowledgeRecovery: () => this.#acknowledgeRecovery(id),
-      acknowledgeRecoveryResult: (recoveryGeneration) => this.#acknowledgeRecoveryResult(id, recoveryGeneration),
+      acknowledgeRecoveryResult: (recoveryGeneration) => this.#acknowledgeRecoveryResult({ id, recoveryGeneration }),
       disconnect: () => this.#removeSubscriber(id),
     }
     Object.defineProperty(data, "subscriptionId", {
@@ -224,27 +227,27 @@ recoveryRequired: true })
     }
 
     this.setUnavailable(true)
-    this.#bindClient(client)
+    this.#bindClient({ client })
     this.#subscribePromise = (async () => {
       let subscriptionId
       try {
         subscriptionId = await port.subscribe()
       } catch (error) {
-        subscriptionId = await this.#findExistingSubscription(port, error)
+        subscriptionId = await this.#findExistingSubscription({ port, originalError: error })
       }
 
       if (!Number.isSafeInteger(subscriptionId) || subscriptionId < 0) {
-        subscriptionId = await this.#findExistingSubscription(
+        subscriptionId = await this.#findExistingSubscription({
           port,
-          new Error("Binance user-data subscription response did not include a valid subscriptionId"),
-        )
+          originalError: new Error("Binance user-data subscription response did not include a valid subscriptionId"),
+        })
       }
       if (this.#stopped || generation !== this.#generation || this.#subscribers.size === 0 ||
           this.getClient() !== client || port.state !== "open") {
         try {
-          await this.#unsubscribeRemoteSubscription(port, subscriptionId)
+          await this.#unsubscribeRemoteSubscription({ port, subscriptionId })
         } catch (error) {
-          logSafely(this.logger, "warn", "Unable to clean up an unused Binance user-data subscription", error)
+          logSafely({ logger: this.logger, level: "warn", args: ["Unable to clean up an unused Binance user-data subscription", error] })
         }
         return subscriptionId
       }
@@ -262,12 +265,12 @@ recoveryRequired: true })
     return this.#subscribePromise
   }
 
-  async #findExistingSubscription(port, originalError) {
+  async #findExistingSubscription({ port, originalError }) {
     let ids
     try {
       ids = await port.listSubscriptions()
     } catch (lookupError) {
-      logSafely(this.logger, "warn", "Unable to verify Binance user-data subscription after an uncertain response", lookupError)
+      logSafely({ logger: this.logger, level: "warn", args: ["Unable to verify Binance user-data subscription after an uncertain response", lookupError] })
       throw originalError
     }
 
@@ -286,7 +289,7 @@ recoveryRequired: true })
     throw originalError
   }
 
-  async #unsubscribeRemoteSubscription(port, subscriptionId) {
+  async #unsubscribeRemoteSubscription({ port, subscriptionId }) {
     try {
       await port.unsubscribe(subscriptionId)
       return
@@ -295,7 +298,7 @@ recoveryRequired: true })
       try {
         activeIds = await port.listSubscriptions()
       } catch (lookupError) {
-        logSafely(this.logger, "warn", "Unable to verify Binance user-data unsubscribe outcome", lookupError)
+        logSafely({ logger: this.logger, level: "warn", args: ["Unable to verify Binance user-data unsubscribe outcome", lookupError] })
         throw originalError
       }
 
@@ -314,9 +317,13 @@ recoveryRequired: true })
       try {
         await port.unsubscribe(subscriptionId)
       } catch (retryError) {
-        logSafely(this.logger, "warn", "Binance user-data subscription remains active after verified unsubscribe retry", {
-          subscriptionId,
-          error: retryError,
+        logSafely({
+          logger: this.logger,
+          level: "warn",
+          args: ["Binance user-data subscription remains active after verified unsubscribe retry", {
+            subscriptionId,
+            error: retryError,
+          }],
         })
         throw new AggregateError(
           [originalError, retryError],
@@ -327,7 +334,7 @@ recoveryRequired: true })
     }
   }
 
-  #bindClient(client, { includeUserData = true } = {}) {
+   #bindClient({ client, includeUserData = true } = {}) {
     this.#detachClientListeners()
     const removers = []
     const port = this.#portFor(client)
@@ -357,7 +364,7 @@ recoveryRequired: true })
         try {
           remove()
         } catch (cleanupError) {
-          logSafely(this.logger, "warn", "Unable to roll back Binance user-data listener setup", cleanupError)
+          logSafely({ logger: this.logger, level: "warn", args: ["Unable to roll back Binance user-data listener setup", cleanupError] })
         }
       }
       this.#removeEventListener = null
@@ -372,8 +379,12 @@ recoveryRequired: true })
         message?.subscriptionId !== this.#subscriptionId) {return}
 
     if (message.type === "terminated") {
-      logSafely(this.logger, "warn", "Binance user-data subscription terminated", {
-        subscriptionId: message.subscriptionId,
+      logSafely({
+        logger: this.logger,
+        level: "warn",
+        args: ["Binance user-data subscription terminated", {
+          subscriptionId: message.subscriptionId,
+        }],
       })
       this.#subscriptionId = null
       this.#markRecoveryRequired()
@@ -410,13 +421,13 @@ recoveryRequired: true })
       try {
         subscriber.onEvent({ event })
       } catch (error) {
-        logSafely(this.logger, "error", "Binance user-data event callback failed", error)
+        logSafely({ logger: this.logger, level: "error", args: ["Binance user-data event callback failed", error] })
       }
     }
   }
 
   #handleError(error) {
-    logSafely(this.logger, "error", "Binance user data stream error", error)
+    logSafely({ logger: this.logger, level: "error", args: ["Binance user data stream error", error] })
     this.#notify({ type: "rpcError",
 error,
 recoveryRequired: false })
@@ -432,9 +443,13 @@ recoveryRequired: false })
     }
     this.#subscriptionId = null
     this.#markRecoveryRequired()
-    logSafely(this.logger, "error", "Binance user-data API connection closed", {
-      code: event?.code ?? null,
-      reason: event?.reason ?? "",
+    logSafely({
+      logger: this.logger,
+      level: "error",
+      args: ["Binance user-data API connection closed", {
+        code: event?.code ?? null,
+        reason: event?.reason ?? "",
+      }],
     })
     this.#notify({
       type: "connectionClosed",
@@ -459,18 +474,18 @@ recoveryRequired: true })
     }
   }
 
-  #notifySubscriber(subscriber, status) {
+   #notifySubscriber({ subscriber, status }) {
     if (!subscriber.active || typeof subscriber.onStatus !== "function") {return}
     try {
       subscriber.onStatus(status)
     } catch (error) {
-      logSafely(this.logger, "error", "Binance user-data status callback failed", error)
+      logSafely({ logger: this.logger, level: "error", args: ["Binance user-data status callback failed", error] })
     }
   }
 
   #notify(status) {
     for (const subscriber of [...this.#subscribers.values()]) {
-      this.#notifySubscriber(subscriber, status)
+      this.#notifySubscriber({ subscriber, status })
     }
   }
 
@@ -519,8 +534,11 @@ recoveryRequired: true })
       } catch (error) {
         if (this.#stopped || generation !== this.#generation) {return}
         this.setUnavailable(true)
-        logSafely(this.logger, "error", "Binance user-data recovery attempt failed", { attempt,
-error })
+        logSafely({
+          logger: this.logger,
+          level: "error",
+          args: ["Binance user-data recovery attempt failed", { attempt, error }],
+        })
         this.#notify({ type: "recovering",
 attempt,
 error,
@@ -582,11 +600,11 @@ recoveryRequired: true })
   }
 
   #acknowledgeRecovery(id) {
-    const result = this.#acknowledgeRecoveryResult(id, this.#recoveryGeneration)
+    const result = this.#acknowledgeRecoveryResult({ id, recoveryGeneration: this.#recoveryGeneration })
     return result.accepted && result.completed
   }
 
-  #acknowledgeRecoveryResult(id, recoveryGeneration) {
+   #acknowledgeRecoveryResult({ id, recoveryGeneration }) {
     const subscriber = this.#subscribers.get(id)
     if (!subscriber || !subscriber.active) {
       return {
@@ -677,7 +695,7 @@ recoveryRequired: true })
       try {
         remove?.()
       } catch (error) {
-        logSafely(this.logger, "warn", "Unable to detach Binance user-data listener", error)
+        logSafely({ logger: this.logger, level: "warn", args: ["Unable to detach Binance user-data listener", error] })
       }
     }
   }
@@ -689,7 +707,7 @@ recoveryRequired: true })
     try {
       removeCloseListener?.()
     } catch (error) {
-      logSafely(this.logger, "warn", "Unable to detach Binance user-data close listener", error)
+      logSafely({ logger: this.logger, level: "warn", args: ["Unable to detach Binance user-data close listener", error] })
     }
   }
 
