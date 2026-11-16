@@ -27,7 +27,18 @@ function readHttpUpgradeStatus(...sources) {
   return null
 }
 
-function probeHttpReachability(name, websocketUrl) {
+function blockedByHostFrom(response) {
+  const blockedByLink = response.headers.link?.match(/<([^>]+)>\\s*;\\s*rel=[\"']?blocked-by[\"']?/i)?.[1]
+  if (!blockedByLink) return null
+  try {
+    return new URL(blockedByLink).host
+  } catch {
+    return null
+  }
+}
+
+function probeHttpReachability(...args) {
+  const [name, websocketUrl] = args
   return new Promise((resolve) => {
     const endpoint = new URL(websocketUrl)
     endpoint.protocol = "https:"
@@ -62,15 +73,7 @@ function probeHttpReachability(name, websocketUrl) {
         size += bounded.length
       })
       response.on("end", () => {
-        const blockedByLink = response.headers.link?.match(/<([^>]+)>\s*;\s*rel=["']?blocked-by["']?/i)?.[1]
-        let blockedByHost = null
-        if (blockedByLink) {
-          try {
-            blockedByHost = new URL(blockedByLink).host
-          } catch {
-            blockedByHost = null
-          }
-        }
+        const blockedByHost = blockedByHostFrom(response)
         finish({
           endpoint: name,
           reachable: true,
@@ -82,7 +85,8 @@ function probeHttpReachability(name, websocketUrl) {
       })
     })
 
-    request.on("upgrade", (response, socket) => {
+    request.on("upgrade", (...args) => {
+      const [response, socket] = args
       const expectedAccept = createHash("sha1")
         .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
         .digest("base64")
@@ -114,24 +118,29 @@ function probeHttpReachability(name, websocketUrl) {
   })
 }
 
-function probeEndpoint(name, url) {
+function createProbeDetails(name) {
+  return {
+    endpoint: name,
+    opened: false,
+    httpUpgradeStatus: null,
+    errorMessage: null,
+    underlyingError: null,
+    closeCode: null,
+    closeReason: null,
+    wasClean: null,
+    closeRequested: false,
+    closeTimedOut: false,
+  }
+}
+
+function probeEndpoint(...args) {
+  const [name, url] = args
   return new Promise((resolve) => {
     let socket
     let opened = false
     let settled = false
     let timer
-    const details = {
-      endpoint: name,
-      opened: false,
-      httpUpgradeStatus: null,
-      errorMessage: null,
-      underlyingError: null,
-      closeCode: null,
-      closeReason: null,
-      wasClean: null,
-      closeRequested: false,
-      closeTimedOut: false,
-    }
+    const details = createProbeDetails(name)
 
     const finish = () => {
       if (settled) {return}
@@ -242,4 +251,4 @@ if (report.runtime.guard === "passed") {
 if (report.httpUpgradeProbes.some((endpoint) =>
   !endpoint.reachable || !endpoint.upgraded || endpoint.acceptHeaderValid === false
 )) {process.exitCode = 1}
-console.log(JSON.stringify(report, null, 2))
+process.stdout.write(`${JSON.stringify(report, null, 2)}\n`)
