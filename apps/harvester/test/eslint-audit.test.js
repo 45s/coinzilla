@@ -27,6 +27,9 @@ fix: true });
   const summary = findings.map((finding) => (
     `${finding.filePath}:${finding.line}:${finding.column} ${finding.severity} ${finding.ruleId} ${finding.message}`
   )).join("\n");
+  for (const finding of findings) {
+    console.log(`ESLINT_REMAINING:${finding.filePath}:${finding.line}:${finding.column} ${finding.severity} ${finding.ruleId} ${finding.message}`);
+  }
 
   assert.equal(
     findings.length,
