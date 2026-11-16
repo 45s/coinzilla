@@ -17,12 +17,18 @@ const FILTERS_NOT_APPLICABLE_TO_SUPPORTED_LIMIT_ORDERS = new Set([
 ])
 
 const FILTER_CONSTRAINTS = Object.freeze({
-  PERCENT_PRICE: { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL" },
-  PERCENT_PRICE_BY_SIDE: { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL" },
-  MAX_POSITION: { type: "BASE_ASSET_POSITION_LIMIT", scope: "ACCOUNT" },
-  MAX_NUM_ORDERS: { type: "OPEN_ORDER_COUNT_PER_MARKET", scope: "ACCOUNT" },
-  EXCHANGE_MAX_NUM_ORDERS: { type: "OPEN_ORDER_COUNT_EXCHANGE_WIDE", scope: "EXCHANGE" },
-  MAX_ASSET: { type: "ASSET_ORDER_LIMIT", scope: "ACCOUNT" },
+  PERCENT_PRICE: { type: "DYNAMIC_PRICE_BAND",
+scope: "SYMBOL" },
+  PERCENT_PRICE_BY_SIDE: { type: "DYNAMIC_PRICE_BAND",
+scope: "SYMBOL" },
+  MAX_POSITION: { type: "BASE_ASSET_POSITION_LIMIT",
+scope: "ACCOUNT" },
+  MAX_NUM_ORDERS: { type: "OPEN_ORDER_COUNT_PER_MARKET",
+scope: "ACCOUNT" },
+  EXCHANGE_MAX_NUM_ORDERS: { type: "OPEN_ORDER_COUNT_EXCHANGE_WIDE",
+scope: "EXCHANGE" },
+  MAX_ASSET: { type: "ASSET_ORDER_LIMIT",
+scope: "ACCOUNT" },
 })
 
 function collectUnvalidatedConstraints({ symbolFilters, exchangeFilters, assetFilters }) {
@@ -41,13 +47,16 @@ function collectUnvalidatedConstraints({ symbolFilters, exchangeFilters, assetFi
   }
 
   for (const filter of symbolFilters) {
-    add({ filter, scope: "SYMBOL" })
+    add({ filter,
+scope: "SYMBOL" })
   }
   for (const filter of exchangeFilters) {
-    add({ filter, scope: "EXCHANGE" })
+    add({ filter,
+scope: "EXCHANGE" })
   }
   for (const filter of assetFilters) {
-    add({ filter, scope: "ACCOUNT" })
+    add({ filter,
+scope: "ACCOUNT" })
   }
 
   const unique = new Map()
