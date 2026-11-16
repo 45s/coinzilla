@@ -29,14 +29,13 @@ function readMarketMetadata({ symbol, marketMetadata }) {
 }
 
 function readRequiredConstraints({ symbol, tradingRules }) {
-  const constraints = new Map(tradingRules.constraints.map((item) => [item.type, item]))
   for (const type of REQUIRED_RULE_TYPES) {
-    const constraint = constraints.get(type)
+    const constraint = tradingRules.constraints.find((item) => item.type === type)
     if (!constraint || constraint.status !== "SUPPORTED") {
       throw new Error(`Required exchange trading rule is unavailable: ${type} for ${symbol}`)
     }
   }
-  return constraints
+  return new Map(tradingRules.constraints.map((item) => [item.type, item]))
 }
 
 function validatePositivePairSettings({ pairConfig }) {
