@@ -39,13 +39,14 @@ function createAuditFlushError({
   message,
   stage,
 }) {
-  const failure = resolveAuditFlushFailure({ flushed, stage })
+  const failure = resolveAuditFlushFailure({ flushed,
+stage })
   const cause = flushed?.errors?.find?.((error) => error instanceof Error)
   const error = cause ? new Error(message, {
     cause,
   }) : new Error(message)
   return withRecoveryFailure({
-  error: error,
+  error,
   category: failure.category,
   stage: failure.stage,
   retryable: failure.retryable,
@@ -78,7 +79,7 @@ function createAccountSnapshotAuditPayload({
     })
   } catch (error) {
     throw withRecoveryFailure({
-  error: error,
+  error,
   category: "ACCOUNTING_INTEGRITY",
   stage: "ACCOUNT_SNAPSHOT_AUDIT_PAYLOAD",
   retryable: false,
@@ -169,7 +170,7 @@ function throwAccountSnapshotFlushException({ error, isClosing, logger, runtimeS
     })
   }
   throw withRecoveryFailure({
-  error: error,
+  error,
   category: "DURABILITY",
   stage: "ACCOUNT_SNAPSHOT_AUDIT_FLUSH_UNCLASSIFIED",
   retryable: false,
@@ -299,7 +300,7 @@ async function readAccountSnapshotFromBroker({ broker }) {
     return await broker.getAccountSnapshot()
   } catch (error) {
     throw withRecoveryFailure({
-  error: error,
+  error,
   category: "ACCOUNTING_INTEGRITY",
   stage: "ACCOUNT_SNAPSHOT_READ_EXCEPTION",
   retryable: false,
@@ -354,7 +355,7 @@ function getAccountSnapshotBaselines({ context, balances }) {
     })
   } catch (error) {
     throw withRecoveryFailure({
-  error: error,
+  error,
   category: "ACCOUNTING_INTEGRITY",
   stage: "ACCOUNT_SNAPSHOT_BASELINE",
   retryable: false,
@@ -425,7 +426,7 @@ async function refreshAccountSnapshot({ context, capturePreflightBaseline = fals
       })
     } catch (error) {
       throw withRecoveryFailure({
-  error: error,
+  error,
   category: "ACCOUNTING_INTEGRITY",
   stage: "ACCOUNT_SNAPSHOT_VALIDATION",
   retryable: false,
@@ -441,7 +442,7 @@ async function refreshAccountSnapshot({ context, capturePreflightBaseline = fals
     })
   } catch (error) {
     throw withRecoveryFailure({
-  error: error,
+  error,
   category: "ACCOUNTING_INTEGRITY",
   stage: "ACCOUNT_SNAPSHOT_VALIDATION",
   retryable: false,
@@ -473,7 +474,7 @@ async function readAccountOpenOrders({ broker, suppliedOrders }) {
     result = await broker.getOpenOrders({})
   } catch (error) {
     throw withRecoveryFailure({
-  error: error,
+  error,
   category: "ACCOUNTING_INTEGRITY",
   stage: "ACCOUNT_WIDE_OPEN_ORDERS_READ_EXCEPTION",
   retryable: false,
@@ -653,7 +654,7 @@ function createOpenOrdersAuditPayload({ phase, orders, classification, now }) {
     })
   } catch (error) {
     throw withRecoveryFailure({
-  error: error,
+  error,
   category: "ACCOUNTING_INTEGRITY",
   stage: "ACCOUNT_OPEN_ORDERS_AUDIT_PAYLOAD",
   retryable: false,
@@ -719,7 +720,7 @@ async function publishOpenOrdersAuditEvent({ eventPublisher, dataResult }) {
     flushed = await eventPublisher.flush()
   } catch (error) {
     throw withRecoveryFailure({
-  error: error,
+  error,
   category: "DURABILITY",
   stage: "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_UNCLASSIFIED",
   retryable: false,
