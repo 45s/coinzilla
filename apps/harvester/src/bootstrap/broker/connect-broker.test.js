@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { connectBroker } from "./connect-broker.js"
 
-const test = (name, ...args) => nodeTest(`[connect-broker.test.js] ${  name}`, ...args)
+const test = (...args) => nodeTest(`[connect-broker.test.js] ${args[0]}`, ...args.slice(1))
 
 const createFixture = ({ connect, disconnect } = {}) => {
   const calls = []
