@@ -88,9 +88,9 @@ value: { amount: minimumNotional } }
   return rule
 }
 
-function createDustMarketMetadata({ market, priceIncrement, quantityIncrement, minQuantity, minNotional }) {
+function createDustMarketMetadata({ market: dustMarket, priceIncrement, quantityIncrement, minQuantity, minNotional }) {
   return {
-    market,
+    market: dustMarket,
     orderType: "LIMIT",
     tradingRules: {
       constraints: [
@@ -111,16 +111,16 @@ value: { amount: minNotional } },
   }
 }
 
-function applyDustFill({ state, market, baseAsset, side, tradeId, brokerOrderId, price, quantity, quoteQuantity, commissionAmount, commissionAsset }) {
+function applyDustFill({ state, market: dustMarket, baseAsset: dustBaseAsset, side, tradeId, brokerOrderId, price, quantity, quoteQuantity, commissionAmount, commissionAsset }) {
   const fill = new Fill({
     tradeId,
     brokerOrderId,
-    market,
+    market: dustMarket,
     side,
     price: new Money({ amount: price,
 asset: quoteAsset }),
     quantity: new Quantity({ amount: quantity,
-asset: baseAsset }),
+asset: dustBaseAsset }),
     quoteQuantity: new Money({ amount: quoteQuantity,
 asset: quoteAsset }),
     commissions: commissionAmount === "0" ? [] : [
@@ -142,14 +142,14 @@ asset: commissionAsset }) }),
 }
 
 function createDogeDustScenario() {
-  const baseAsset = new Asset({ id: "asset:DOGE",
+  const dustBaseAsset = new Asset({ id: "asset:DOGE",
 code: "DOGE" })
-  const market = new Market({ venue: "binance",
+  const dustMarket = new Market({ venue: "binance",
 symbol: "DOGEUSDT",
-baseAsset,
+baseAsset: dustBaseAsset,
 quoteAsset })
   const metadata = createDustMarketMetadata({
-    market,
+    market: dustMarket,
     priceIncrement: "0.00001",
     quantityIncrement: "1",
     minQuantity: "1",
@@ -157,7 +157,7 @@ quoteAsset })
   })
   let state = {
     portfolio: new Portfolio(),
-    recoveryLedger: RecoveryLedger.empty({ market }),
+    recoveryLedger: RecoveryLedger.empty({ market: dustMarket }),
   }
   for (const [tradeId, price, quote] of [
     ["221733", "0.07157", "28.628"],
@@ -166,8 +166,8 @@ quoteAsset })
   ]) {
     state = applyDustFill({
       state,
-      market,
-      baseAsset,
+      market: dustMarket,
+      baseAsset: dustBaseAsset,
       side: "BUY",
       tradeId,
       brokerOrderId: `DOGE-BUY-${tradeId}`,
@@ -175,7 +175,7 @@ quoteAsset })
       quantity: "400",
       quoteQuantity: quote,
       commissionAmount: "0.4",
-      commissionAsset: baseAsset,
+      commissionAsset: dustBaseAsset,
     })
   }
   for (const [tradeId, quantity, quote, commission] of [
@@ -184,8 +184,8 @@ quoteAsset })
   ]) {
     state = applyDustFill({
       state,
-      market,
-      baseAsset,
+      market: dustMarket,
+      baseAsset: dustBaseAsset,
       side: "SELL",
       tradeId,
       brokerOrderId: "1276698",
@@ -200,14 +200,14 @@ quoteAsset })
 }
 
 function createZroDustScenario() {
-  const baseAsset = new Asset({ id: "asset:ZRO",
+  const dustBaseAsset = new Asset({ id: "asset:ZRO",
 code: "ZRO" })
-  const market = new Market({ venue: "binance",
+  const dustMarket = new Market({ venue: "binance",
 symbol: "ZROUSDT",
-baseAsset,
+baseAsset: dustBaseAsset,
 quoteAsset })
   const metadata = createDustMarketMetadata({
-    market,
+    market: dustMarket,
     priceIncrement: "0.001",
     quantityIncrement: "0.01",
     minQuantity: "0.01",
@@ -215,7 +215,7 @@ quoteAsset })
   })
   let state = {
     portfolio: new Portfolio(),
-    recoveryLedger: RecoveryLedger.empty({ market }),
+    recoveryLedger: RecoveryLedger.empty({ market: dustMarket }),
   }
   for (const [tradeId, price, quote] of [
     ["11658", "1.604", "8.02"],
@@ -229,8 +229,8 @@ quoteAsset })
   ]) {
     state = applyDustFill({
       state,
-      market,
-      baseAsset,
+      market: dustMarket,
+      baseAsset: dustBaseAsset,
       side: "BUY",
       tradeId,
       brokerOrderId: `ZRO-BUY-${tradeId}`,
@@ -238,13 +238,13 @@ quoteAsset })
       quantity: "5",
       quoteQuantity: quote,
       commissionAmount: "0.005",
-      commissionAsset: baseAsset,
+      commissionAsset: dustBaseAsset,
     })
   }
   state = applyDustFill({
     state,
-    market,
-    baseAsset,
+    market: dustMarket,
+    baseAsset: dustBaseAsset,
     side: "SELL",
     tradeId: "11666",
     brokerOrderId: "727904",
@@ -254,7 +254,7 @@ quoteAsset })
     commissionAmount: "0.06409546",
     commissionAsset: quoteAsset,
   })
-  return { ...state, metadata, market }
+  return { ...state, metadata, market: dustMarket }
 }
 
 test("creates the initial BUY below last traded price and rounds down to tick", () => {
@@ -1089,7 +1089,7 @@ timestamp: 100 },
 })
 
 test("reconciles actual ZRO fills and keeps the 0.04 excess as MIN_NOTIONAL dust", () => {
-  const { portfolio, recoveryLedger, metadata, market } = createZroDustScenario()
+  const { portfolio, recoveryLedger, metadata, market: dustMarket } = createZroDustScenario()
   const position = portfolio.getPosition({ symbol: "ZROUSDT" })
   assert.equal(position.quantity.amount, "0.05", "After the eight ZRO BUY fills and SELL recovery, active quantity must match the retained strategy position.")
   assert.equal(position.spent.amount, "64.02", "The eight ZRO BUY fills must accumulate their exact quote notional in Position cost basis.")
@@ -1124,7 +1124,7 @@ timestamp: 100 },
     portfolio,
     recoveryLedger,
     marketMetadata: metadata,
-    activeOrders: [{ market,
+    activeOrders: [{ market: dustMarket,
 side: "BUY",
 status: "OPEN" }],
   })
