@@ -273,13 +273,13 @@ function replayPortfolioEvents({ events, marketMetadata }) {
     completedCycleSequenceBySymbol: new Map(),
   }
   for (const event of events) {
-    const item = event.value
+    const { value: item, sequence, type } = event
     const market = requireMarket({ marketMetadata, symbol: item.symbol })
-    if (event.type === "fill") {
-      replayFillEvent({ item, sequence: event.sequence, market, state })
+    if (type === "fill") {
+      replayFillEvent({ item, sequence, market, state })
       continue
     }
-    replayRecoveryCycleEvent({ item, sequence: event.sequence, market, state })
+    replayRecoveryCycleEvent({ item, sequence, market, state })
   }
   return state
 }
