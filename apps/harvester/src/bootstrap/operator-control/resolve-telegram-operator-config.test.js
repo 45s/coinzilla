@@ -65,7 +65,8 @@ test("reports malformed configured IDs and duplicates precisely", () => {
 })
 
 test("does not enable operator control merely because TELEGRAM_USER_ID is set", () => {
-  const result = resolveTelegramOperatorConfig({ appConfig: config({ ids: [], enabled: false }),
+  const result = resolveTelegramOperatorConfig({ appConfig: config({ ids: [],
+enabled: false }),
 env: { TELEGRAM_USER_ID: "12345" } })
   assert.equal(result.operatorControl.telegram.enabled, false)
   assert.deepEqual(result.operatorControl.telegram.allowedUserIds, ["12345"])
