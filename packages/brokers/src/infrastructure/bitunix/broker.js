@@ -1,8 +1,7 @@
-import { assertDecimalString, compareDecimal, handleErr, toResult } from "@coinzilla/utils"
+import { assertDecimalString, handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { BitunixRestClient } from "./api/rest-client.js"
 import { adaptBalances } from "./adapters/adapt-balances.js"
-import { adaptCanonicalFill } from "./adapters/adapt-canonical-fill.js"
 import { adaptOrder } from "./adapters/adapt-order.js"
 import { createCanonicalMarket, getBitunixSymbol } from "./adapters/create-canonical-market.js"
 import { BitunixSpotConfig } from "./config/bitunix-spot-config.js"
@@ -13,7 +12,6 @@ const API = Object.freeze({
   pendingOrders: "/api/spot/v1/order/pending/list",
   orderHistory: "/api/spot/v1/order/history/page",
   orderDetail: "/api/spot/v1/order/detail",
-  orderDeals: "/api/spot/v1/order/deal/list",
   lastPrice: "/api/spot/v1/market/last_price",
 })
 
@@ -71,50 +69,6 @@ function adaptSymbolOrderRows({ rows, symbol, operation }) {
     }
     return adaptOrder(row)
   })
-}
-
-function normalizeOrderSide({ side }) {
-  if (String(side) === "2") {
-    return "BUY"
-  }
-  if (String(side) === "1") {
-    return "SELL"
-  }
-  throw new TypeError("Bitunix Spot order side is unsupported")
-}
-
-function normalizeDeals({ value }) {
-  if (value === null || value === undefined) {
-    return []
-  }
-  if (typeof value !== "object" || Array.isArray(value)) {
-    throw new TypeError("Bitunix Spot matching-order response must be an object")
-  }
-  return [value]
-}
-
-function getExecutedQuantityComparison({ dealVolume }) {
-  const executedQuantity = assertDecimalString({
-    value: dealVolume,
-    field: "Bitunix Spot order detail dealVolume",
-  })
-  const comparison = compareDecimal({
-    left: executedQuantity,
-    right: "0",
-  })
-  if (comparison < 0) {
-    throw new TypeError("Bitunix Spot order detail dealVolume must be non-negative")
-  }
-  return comparison
-}
-
-function validateFillResponsePresence({ executedQuantityComparison, deals }) {
-  if (executedQuantityComparison > 0 && deals.length === 0) {
-    throw new Error("Bitunix Spot order reports positive dealVolume but matching-order response is empty")
-  }
-  if (executedQuantityComparison === 0 && deals.length > 0) {
-    throw new Error("Bitunix Spot order reports zero executed quantity but matching-order response contains data")
-  }
 }
 
 function isOpenMarket({ symbolInfo }) {
@@ -479,81 +433,13 @@ export class BitunixSpotBroker extends CoreBroker {
     }
   }
 
-  async getFills({ symbol, orderId } = {}) {
-    try {
-      const normalizedSymbol = requireSymbol({
-        symbol,
+  async getFills() {
+    return toResult({
+      errors: [unsupported({
         operation: "getFills()",
-      })
-      if ((typeof orderId !== "string" && typeof orderId !== "number") || !String(orderId).trim()) {
-        throw new TypeError("Bitunix Spot getFills() requires a broker orderId")
-      }
-
-      const orderResponse = await this.restClient.request({
-        method: "GET",
-        path: API.orderDetail,
-        queryParams: { orderId: String(orderId) },
-      })
-      const order = orderResponse.data
-      if (!order || typeof order !== "object" || Array.isArray(order) ||
-          String(order.orderId) !== String(orderId) ||
-          String(order.symbol).toUpperCase() !== normalizedSymbol) {
-        throw new TypeError("Bitunix Spot fill lookup order identity does not match the request")
-      }
-      const executedQuantityComparison = getExecutedQuantityComparison({
-        dealVolume: order.dealVolume,
-      })
-      const marketResponse = await this.restClient.request({
-        method: "GET",
-        path: API.markets,
-      })
-      const marketRows = requireArray({
-        value: marketResponse.data,
-        operation: "market catalog",
-      })
-      const symbolInfo = marketRows.find((row) =>
-        getBitunixSymbol({ symbolInfo: row }) === normalizedSymbol,
-      )
-      if (!symbolInfo) {
-        throw new Error(`Bitunix Spot market ${normalizedSymbol} was not found for fill lookup`)
-      }
-      const market = this.canonicalMarkets.get(normalizedSymbol) ??
-        createCanonicalMarket({
-          symbolInfo,
-          allowClosed: true,
-        })
-      this.canonicalMarkets.set(normalizedSymbol, market)
-
-      const dealsResponse = await this.restClient.request({
-        method: "POST",
-        path: API.orderDeals,
-        body: {
-          orderId: String(orderId),
-          symbol: normalizedSymbol,
-        },
-      })
-      const deals = normalizeDeals({ value: dealsResponse.data })
-      validateFillResponsePresence({
-        executedQuantityComparison,
-        deals,
-      })
-      return toResult({
-        data: deals.map((trade) => adaptCanonicalFill({
-          trade: {
-            ...trade,
-            orderId: String(orderId),
-          },
-          side: normalizeOrderSide({ side: order.side }),
-          market,
-        })),
-      })
-    } catch (error) {
-      handleErr({
-        where: "BitunixSpotBroker.getFills()",
-        error,
-      })
-      return toResult({ errors: [error] })
-    }
+        reason: "the Spot matching-order response does not define quantity denomination, complete partial-execution coverage, or stable and unique execution identity",
+      })],
+    })
   }
 
   async getPrice(input = {}) {
