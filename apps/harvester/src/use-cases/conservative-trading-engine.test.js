@@ -4608,7 +4608,7 @@ async function runTerminalRecoverySellStatusScenario({ status }) {
   let currentPortfolio = seeded.portfolio
   let currentRecoveryLedger = seeded.recoveryLedger
   const accountedFills = []
-  let sellFill
+  const sellFill
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
