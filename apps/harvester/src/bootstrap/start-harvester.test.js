@@ -5204,7 +5204,10 @@ test("fails closed when the effective configuration has no enabled markets", asy
         ...appConfig.strategies.CG_coinGrabber,
         pairs: Object.fromEntries(Object.entries(appConfig.strategies.CG_coinGrabber.pairs).map(([symbol, pair]) => [
           symbol,
-          { ...pair, enabled: false },
+          {
+            ...pair,
+            enabled: false,
+          },
         ])),
       },
     },
@@ -5966,6 +5969,9 @@ test("starts Telegram operator control without running process-restart recovery 
     })
   } finally {
     await runtime?.stop?.()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
