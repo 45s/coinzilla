@@ -60,29 +60,38 @@ asset: market.baseAsset }),
   })
 }
 
-test("aggregates Portfolio and active-order baselines by shared exchange asset", () => {
-  const {portfolio} = new Portfolio()
-    .applyFill({ fill: makeBuyFill({ market: btcMarket,
+function createSharedAssetPortfolio() {
+  const { portfolio } = new Portfolio()
+    .applyFill({
+      fill: makeBuyFill({ market: btcMarket,
 tradeId: "btc-buy",
 quantity: "10",
 quoteQuantity: "100" }),
-strategyId: StrategyId.COIN_GRABBER }).portfolio
-    .applyFill({ fill: makeBuyFill({ market: ethMarket,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).portfolio
+    .applyFill({
+      fill: makeBuyFill({ market: ethMarket,
 tradeId: "eth-buy",
 quantity: "5",
 quoteQuantity: "50" }),
-strategyId: StrategyId.COIN_GRABBER }).portfolio
-    .applyFill({ fill: makeBuyFill({ market: btcFdusdMarket,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).portfolio
+    .applyFill({
+      fill: makeBuyFill({ market: btcFdusdMarket,
 tradeId: "btc-fdusd-buy",
 quantity: "5",
 quoteQuantity: "25" }),
-strategyId: StrategyId.COIN_GRABBER })
-  const portfolioWithRetainedFreeBase = portfolio.allocateFreeQuantity({
+      strategyId: StrategyId.COIN_GRABBER,
+    })
+  return portfolio.allocateFreeQuantity({
     marketId: btcMarket.id,
     quantity: "2",
-strategyId: StrategyId.COIN_GRABBER
+    strategyId: StrategyId.COIN_GRABBER,
   })
-  const activeOrders = [
+}
+
+function createSharedAssetActiveOrders() {
+  return [
     makeOrder({ market: btcMarket,
 clientOrderId: "btc-buy-open",
 side: "BUY",
@@ -114,9 +123,15 @@ originalQuantity: "3",
 executedQuantity: "1",
 limitPrice: "6" }),
   ]
+}
 
-  const result = calculateAccountSnapshotBaselines({ portfolio: portfolioWithRetainedFreeBase,
-activeOrders })
+test("aggregates Portfolio and active-order baselines by shared exchange asset", () => {
+  const portfolioWithRetainedFreeBase = createSharedAssetPortfolio()
+  const activeOrders = createSharedAssetActiveOrders()
+  const result = calculateAccountSnapshotBaselines({
+    portfolio: portfolioWithRetainedFreeBase,
+    activeOrders,
+  })
 
   assert.equal(result.ok, true, "Canonical Portfolio and active orders must produce a complete accounting baseline.")
   assert.deepEqual(result.data.quoteCashFlowBaseline, [
