@@ -35,7 +35,7 @@ export class FakeClock {
         .sort((...args) => {
           const [left, right] = args
           return left[1].dueAt - right[1].dueAt || left[0] - right[0]
-        })[0]
+        })
 
       if (!next) {break}
 
