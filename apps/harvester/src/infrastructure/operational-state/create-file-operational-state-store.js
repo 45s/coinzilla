@@ -1499,15 +1499,14 @@ function parseJsonLines({ source, label }) {
  * @param {object} [options.fileSystem] - Injectable Node fs/promises-compatible adapter.
  * @returns {Readonly<object>} Operational State Store records application port.
  */
-export function createFileOperationalStateStore({
+function createOperationalStateStoreContext({
   directory,
   runtimeSessionId,
   schemaVersion = DEFAULT_SCHEMA_VERSION,
   now = () => new Date(),
   fileSystem = nodeFileSystem,
-} = {}) {
-  const resolvedDirectory = requireNonEmptyString({ value: directory,
-field: "directory" })
+}) {
+  const resolvedDirectory = requireNonEmptyString({ value: directory, field: "directory" })
   const resolvedRuntimeSessionId = requireNonEmptyString({
     value: runtimeSessionId,
     field: "runtimeSessionId",
@@ -1516,18 +1515,31 @@ field: "directory" })
   if (!Number.isSafeInteger(schemaVersion) || schemaVersion < 1) {
     throw new TypeError("Operational State Store record schemaVersion must be a positive safe integer")
   }
-  if (typeof now !== "function") {throw new TypeError("Operational State Store record now must be a function")}
+  if (typeof now !== "function") {
+    throw new TypeError("Operational State Store record now must be a function")
+  }
   for (const method of ["mkdir", "open", "readFile", "readdir", "lstat", "chmod"]) {
-    if (typeof fileSystem?.[method] !== "function") {throw new TypeError(`Operational State Store record fileSystem requires ${  method}`)}
+    if (typeof fileSystem?.[method] !== "function") {
+      throw new TypeError(`Operational State Store record fileSystem requires ${method}`)
+    }
   }
 
   const absoluteDirectory = path.resolve(resolvedDirectory)
-  const logPath = path.join(absoluteDirectory, FACTS_FILE_NAME)
-  const manifestPath = path.join(absoluteDirectory, MANIFEST_FILE_NAME)
-  let writeUncertain = false
+  return {
+    runtimeSessionId: resolvedRuntimeSessionId,
+    schemaVersion,
+    now,
+    fileSystem,
+    absoluteDirectory,
+    logPath: path.join(absoluteDirectory, FACTS_FILE_NAME),
+    manifestPath: path.join(absoluteDirectory, MANIFEST_FILE_NAME),
+    writeUncertain: false,
+  }
+}
 
+function createOperationalStateStoreCoordination({ store }) {
   const assertNoUncertainWrite = () => {
-    if (writeUncertain) {
+    if (store.writeUncertain) {
       throw createError(
         "A previous Operational State Store record write has an uncertain commit outcome; create a fresh store instance and verify before proceeding",
         "DURABLE_FACTS_COMMIT_UNCERTAIN",
@@ -1536,14 +1548,14 @@ field: "directory" })
   }
 
   const serialize = (task) => {
-    const previous = operationQueues.get(absoluteDirectory) ?? Promise.resolve()
+    const previous = operationQueues.get(store.absoluteDirectory) ?? Promise.resolve()
     const next = previous.then(task, task)
-    operationQueues.set(absoluteDirectory, next.then(() => undefined, () => undefined))
+    operationQueues.set(store.absoluteDirectory, next.then(() => undefined, () => undefined))
     return next
   }
 
   const syncFile = async (filePath) => {
-    const handle = await fileSystem.open(filePath, "r+")
+    const handle = await store.fileSystem.open(filePath, "r+")
     try {
       await handle.sync()
     } finally {
@@ -1552,44 +1564,58 @@ field: "directory" })
   }
 
   const syncStreams = async () => {
-    await syncFile(logPath)
-    await syncFile(manifestPath)
+    await syncFile(store.logPath)
+    await syncFile(store.manifestPath)
   }
 
-  const verifyState = async () => {
-    const directoryStat = await fileSystem.lstat(absoluteDirectory)
+  return { assertNoUncertainWrite, serialize, syncStreams }
+}
+
+function createOperationalStateStoreVerifier({ store }) {
+  return async function verifyState() {
+    const directoryStat = await store.fileSystem.lstat(store.absoluteDirectory)
     if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
       throw new Error("Operational State Store record directory must be a real directory, not a symlink")
     }
-    if (supportsPosixModeBits &&
-        ((directoryStat.mode & 0o077) !== 0 || (directoryStat.mode & 0o700) !== 0o700)) {
+    if (
+      supportsPosixModeBits &&
+      ((directoryStat.mode & 0o077) !== 0 || (directoryStat.mode & 0o700) !== 0o700)
+    ) {
       throw new Error("Operational State Store record directory permissions must be private (0700)")
     }
-    const entries = await fileSystem.readdir(absoluteDirectory)
-    const unexpectedEntries = entries.filter((entry) => ![FACTS_FILE_NAME, MANIFEST_FILE_NAME].includes(entry))
+    const entries = await store.fileSystem.readdir(store.absoluteDirectory)
+    const unexpectedEntries = entries.filter((entry) =>
+      ![FACTS_FILE_NAME, MANIFEST_FILE_NAME].includes(entry)
+    )
     if (unexpectedEntries.length > 0) {
       throw new Error("Operational State Store record directory contains an unresolved temporary or unexpected file")
     }
     const [logStat, manifestStat] = await Promise.all([
-      fileSystem.lstat(logPath),
-      fileSystem.lstat(manifestPath),
+      store.fileSystem.lstat(store.logPath),
+      store.fileSystem.lstat(store.manifestPath),
     ])
-    if (logStat.isSymbolicLink() || !logStat.isFile() ||
-        manifestStat.isSymbolicLink() || !manifestStat.isFile()) {
+    if (
+      logStat.isSymbolicLink() ||
+      !logStat.isFile() ||
+      manifestStat.isSymbolicLink() ||
+      !manifestStat.isFile()
+    ) {
       throw new Error("Operational State Store record streams must be regular files, not symlinks")
     }
-    if (supportsPosixModeBits && [logStat, manifestStat].some((stat) =>
-      (stat.mode & 0o077) !== 0 || (stat.mode & 0o600) !== 0o600)) {
+    if (
+      supportsPosixModeBits &&
+      [logStat, manifestStat].some((stat) =>
+        (stat.mode & 0o077) !== 0 || (stat.mode & 0o600) !== 0o600
+      )
+    ) {
       throw new Error("Operational State Store record streams must use private file permissions (0600)")
     }
     const [rawLog, rawManifest] = await Promise.all([
-      fileSystem.readFile(logPath, "utf8"),
-      fileSystem.readFile(manifestPath, "utf8"),
+      store.fileSystem.readFile(store.logPath, "utf8"),
+      store.fileSystem.readFile(store.manifestPath, "utf8"),
     ])
-    const records = parseJsonLines({ source: rawLog,
-label: "Operational State Store record log" })
-    const checkpoints = parseJsonLines({ source: rawManifest,
-label: "Committed-head manifest journal" })
+    const records = parseJsonLines({ source: rawLog, label: "Operational State Store record log" })
+    const checkpoints = parseJsonLines({ source: rawManifest, label: "Committed-head manifest journal" })
     if (checkpoints.length < records.length) {
       throw new Error("Operational State record exists beyond the committed-head manifest journal")
     }
@@ -1604,17 +1630,19 @@ label: "Committed-head manifest journal" })
       const record = records[index]
       validateFactRecord({
         record,
-        schemaVersion,
+        schemaVersion: store.schemaVersion,
         expectedSequence,
         previousDigest: previousFactDigest,
         index,
       })
-      if (factIds.has(record.factId)) {throw new Error("Operational State record identity is duplicated in the append-only stream")}
+      if (factIds.has(record.factId)) {
+        throw new Error("Operational State record identity is duplicated in the append-only stream")
+      }
       factIds.add(record.factId)
       const checkpoint = checkpoints[index]
       validateManifestCheckpoint({
         checkpoint,
-        schemaVersion,
+        schemaVersion: store.schemaVersion,
         factRecord: record,
         expectedSequence,
         previousManifestDigest,
@@ -1630,52 +1658,65 @@ label: "Committed-head manifest journal" })
       lastRecord: records.at(-1),
     }
   }
+}
 
-  const initialize = () => serialize(async () => {
+function createOperationalStateStoreInitializer({
+  store,
+  serialize,
+  assertNoUncertainWrite,
+  syncStreams,
+  verifyState,
+}) {
+  return () => serialize(async () => {
     let factWriteStarted = false
     let manifestWriteStarted = false
     try {
       assertNoUncertainWrite()
-      await fileSystem.mkdir(absoluteDirectory, { recursive: true,
-mode: 0o700 })
-      const directoryStat = await fileSystem.lstat(absoluteDirectory)
+      await store.fileSystem.mkdir(store.absoluteDirectory, { recursive: true, mode: 0o700 })
+      const directoryStat = await store.fileSystem.lstat(store.absoluteDirectory)
       if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
         throw new Error("Operational State Store record initialization requires a real directory")
       }
-      const entries = await fileSystem.readdir(absoluteDirectory)
-      if (entries.length > 0) {throw new Error("Operational State Store record initialization refuses to overwrite an existing directory")}
-      if (supportsPosixModeBits) {await fileSystem.chmod(absoluteDirectory, 0o700)}
-      const recordedAt = normalizeOperationalStateRecordedAt(now())
+      const entries = await store.fileSystem.readdir(store.absoluteDirectory)
+      if (entries.length > 0) {
+        throw new Error("Operational State Store record initialization refuses to overwrite an existing directory")
+      }
+      if (supportsPosixModeBits) {
+        await store.fileSystem.chmod(store.absoluteDirectory, 0o700)
+      }
+      const recordedAt = normalizeOperationalStateRecordedAt(store.now())
       const genesisBody = {
         formatVersion: FORMAT_VERSION,
-        schemaVersion,
+        schemaVersion: store.schemaVersion,
         sequence: "0",
         factId: "durable-facts:genesis",
         factType: "LEDGER_INITIALIZED",
-        runtimeSessionId: resolvedRuntimeSessionId,
+        runtimeSessionId: store.runtimeSessionId,
         recordedAt,
         previousDigest: null,
-        data: { schemaVersion },
+        data: { schemaVersion: store.schemaVersion },
       }
-      const genesisRecord = { ...genesisBody,
-digest: digestOperationalStateRecord(genesisBody) }
-      const logHandle = await fileSystem.open(logPath, "wx", 0o600)
+      const genesisRecord = {
+        ...genesisBody,
+        digest: digestOperationalStateRecord(genesisBody),
+      }
+      const logHandle = await store.fileSystem.open(store.logPath, "wx", 0o600)
       try {
         factWriteStarted = true
-        await logHandle.writeFile(`${canonicalStringifyOperationalStateValue(genesisRecord)  }\n`, "utf8")
+        await logHandle.writeFile(`${canonicalStringifyOperationalStateValue(genesisRecord)}\n`, "utf8")
         await logHandle.sync()
       } finally {
         await logHandle.close()
       }
       const genesisCheckpointBody = createManifestCheckpoint({
-        schemaVersion,
+        schemaVersion: store.schemaVersion,
         record: genesisRecord,
         previousManifestDigest: null,
       })
-      const manifestHandle = await fileSystem.open(manifestPath, "wx", 0o600)
+      const manifestHandle = await store.fileSystem.open(store.manifestPath, "wx", 0o600)
       try {
         manifestWriteStarted = true
-        await manifestHandle.writeFile(`${canonicalStringifyOperationalStateValue(genesisCheckpointBody)  }\n`, "utf8")
+        await manifestHandle.writeFile(`${canonicalStringifyOperationalStateValue(genesisCheckpointBody)}\n`, "utf8")
         await manifestHandle.sync()
       } finally {
         await manifestHandle.close()
@@ -1692,7 +1733,7 @@ digest: digestOperationalStateRecord(genesisBody) }
       })
     } catch (error) {
       if (factWriteStarted || manifestWriteStarted) {
-        writeUncertain = true
+        store.writeUncertain = true
         error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
       } else if (!error.code) {
         error.code = "DURABLE_FACTS_INITIALIZATION_FAILED"
@@ -1700,108 +1741,177 @@ digest: digestOperationalStateRecord(genesisBody) }
       return toResult({ error })
     }
   })
+}
 
-  const append = (fact) => serialize(async () => {
-    let factWriteStarted = false
-    let manifestWriteStarted = false
-    let syncFailed = false
-    let integrityFailed = false
+async function synchronizeOperationalStateBeforeAppend({ syncStreams, writeState }) {
+  try {
+    await syncStreams()
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      writeState.syncFailed = true
+    }
+    throw error
+  }
+}
+
+async function verifyOperationalStateBeforeAppend({ verifyState, writeState }) {
+  try {
+    return await verifyState()
+  } catch (error) {
+    writeState.integrityFailed = true
+    throw error
+  }
+}
+
+function assertDuplicateOperationalStateFactMatches({ existing, input }) {
+  if (
+    existing.factType !== input.factType ||
+    canonicalStringifyOperationalStateValue(existing.data) !== canonicalStringifyOperationalStateValue(input.data)
+  ) {
+    throw createError("Operational State record ID was reused with a different payload", "DURABLE_FACT_ID_CONFLICT")
+  }
+}
+
+function validateMarketHistoryCoverageProgress({ state, input, recordedAt }) {
+  if (input.factType !== "MARKET_HISTORY_COVERAGE_CONFIRMED") {
+    return
+  }
+  const nowTime = new Date(recordedAt).getTime()
+  if (!Number.isSafeInteger(nowTime) || input.data.verifiedAt > nowTime) {
+    throw new Error("Market-history coverage verification timestamp cannot be in the future")
+  }
+  const previousCoverageRecords = state.records.filter((record) =>
+    record.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED" &&
+    record.data.symbol === input.data.symbol
+  )
+  let previousCoverage
+  for (const record of previousCoverageRecords) {
+    if (previousCoverage && record.data.coveredFromTime > previousCoverage.data.coveredFromTime) {
+      throw new Error(`Existing durable market-history coverage narrows the verified history window for ${input.data.symbol}`)
+    }
+    if (previousCoverage && record.data.verifiedAt < previousCoverage.data.verifiedAt) {
+      throw new Error(`Existing durable market-history coverage verification timestamp regresses for ${input.data.symbol}`)
+    }
+    previousCoverage = record
+  }
+  if (previousCoverage && input.data.coveredFromTime > previousCoverage.data.coveredFromTime) {
+    throw new Error(`Market-history coverage must not narrow the verified history window for ${input.data.symbol}`)
+  }
+  if (previousCoverage && input.data.verifiedAt < previousCoverage.data.verifiedAt) {
+    throw new Error(`Market-history coverage verification timestamp must be monotonic for ${input.data.symbol}`)
+  }
+}
+
+function createOperationalStateAppendRecord({ store, state, input, recordedAt }) {
+  const sequence = (BigInt(state.manifest.sequence) + 1n).toString()
+  const body = {
+    formatVersion: FORMAT_VERSION,
+    schemaVersion: store.schemaVersion,
+    sequence,
+    factId: input.factId,
+    factType: input.factType,
+    runtimeSessionId: input.runtimeSessionId,
+    recordedAt,
+    previousDigest: state.lastRecord.digest,
+    data: input.data,
+  }
+  const record = { ...body, digest: digestOperationalStateRecord(body) }
+  const line = canonicalStringifyOperationalStateValue(record)
+  if (Buffer.byteLength(line, "utf8") > MAX_RECORD_BYTES) {
+    throw new RangeError(`Operational State record exceeds the ${MAX_RECORD_BYTES} byte limit`)
+  }
+  return { record, line }
+}
+
+async function writeOperationalStateFactRecord({ store, line, writeState }) {
+  const logHandle = await store.fileSystem.open(store.logPath, "a", 0o600)
+  try {
+    writeState.factWriteStarted = true
+    await logHandle.writeFile(`${line}\n`, "utf8")
+    await logHandle.sync()
+  } finally {
+    await logHandle.close()
+  }
+}
+
+async function writeOperationalStateManifestCheckpoint({ store, state, record, writeState }) {
+  const checkpoint = createManifestCheckpoint({
+    schemaVersion: store.schemaVersion,
+    record,
+    previousManifestDigest: state.manifest.digest,
+  })
+  const manifestLine = canonicalStringifyOperationalStateValue(checkpoint)
+  if (Buffer.byteLength(manifestLine, "utf8") > MAX_RECORD_BYTES) {
+    throw new RangeError(`Committed-head manifest checkpoint exceeds the ${MAX_RECORD_BYTES} byte limit`)
+  }
+  const manifestHandle = await store.fileSystem.open(store.manifestPath, "a", 0o600)
+  try {
+    writeState.manifestWriteStarted = true
+    await manifestHandle.writeFile(`${manifestLine}\n`, "utf8")
+    await manifestHandle.sync()
+  } finally {
+    await manifestHandle.close()
+  }
+}
+
+function handleOperationalStateAppendFailure({ store, writeState, error }) {
+  if (
+    writeState.factWriteStarted ||
+    writeState.manifestWriteStarted ||
+    writeState.syncFailed ||
+    writeState.integrityFailed
+  ) {
+    store.writeUncertain = true
+    error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
+  } else if (!error.code) {
+    error.code = "DURABLE_FACTS_APPEND_FAILED"
+  }
+  return toResult({ error })
+}
+
+function createOperationalStateStoreAppender({
+  store,
+  serialize,
+  assertNoUncertainWrite,
+  syncStreams,
+  verifyState,
+}) {
+  return (fact) => serialize(async () => {
+    const writeState = {
+      factWriteStarted: false,
+      manifestWriteStarted: false,
+      syncFailed: false,
+      integrityFailed: false,
+    }
     try {
       assertNoUncertainWrite()
-      try {
-        await syncStreams()
-      } catch (error) {
-        if (error.code !== "ENOENT") {syncFailed = true}
-        throw error
-      }
-      let state
-      try {
-        state = await verifyState()
-      } catch (error) {
-        integrityFailed = true
-        throw error
-      }
-      const input = validateFactInput({ fact,
-runtimeSessionId: resolvedRuntimeSessionId })
+      await synchronizeOperationalStateBeforeAppend({ syncStreams, writeState })
+      const state = await verifyOperationalStateBeforeAppend({ verifyState, writeState })
+      const input = validateFactInput({
+        fact,
+        runtimeSessionId: store.runtimeSessionId,
+      })
       const existing = state.records.find((record) => record.factId === input.factId)
       if (existing) {
-        if (existing.factType !== input.factType || canonicalStringifyOperationalStateValue(existing.data) !== canonicalStringifyOperationalStateValue(input.data)) {
-          throw createError("Operational State record ID was reused with a different payload", "DURABLE_FACT_ID_CONFLICT")
-        }
-        return toResult({ data: { durable: true,
-duplicate: true,
-record: existing } })
+        assertDuplicateOperationalStateFactMatches({ existing, input })
+        return toResult({
+          data: {
+            durable: true,
+            duplicate: true,
+            record: existing,
+          },
+        })
       }
-      const recordedAt = normalizeOperationalStateRecordedAt(now())
-      if (input.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
-        const nowTime = new Date(recordedAt).getTime()
-        if (!Number.isSafeInteger(nowTime) || input.data.verifiedAt > nowTime) {
-          throw new Error("Market-history coverage verification timestamp cannot be in the future")
-        }
-        const previousCoverageRecords = state.records.filter((record) =>
-          record.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED" &&
-          record.data.symbol === input.data.symbol
-        )
-        let previousCoverage
-        for (const record of previousCoverageRecords) {
-          if (previousCoverage && record.data.coveredFromTime > previousCoverage.data.coveredFromTime) {
-            throw new Error(`Existing durable market-history coverage narrows the verified history window for ${  input.data.symbol}`)
-          }
-          if (previousCoverage && record.data.verifiedAt < previousCoverage.data.verifiedAt) {
-            throw new Error(`Existing durable market-history coverage verification timestamp regresses for ${  input.data.symbol}`)
-          }
-          previousCoverage = record
-        }
-        if (previousCoverage && input.data.coveredFromTime > previousCoverage.data.coveredFromTime) {
-          throw new Error(`Market-history coverage must not narrow the verified history window for ${  input.data.symbol}`)
-        }
-        if (previousCoverage && input.data.verifiedAt < previousCoverage.data.verifiedAt) {
-          throw new Error(`Market-history coverage verification timestamp must be monotonic for ${  input.data.symbol}`)
-        }
-      }
-      const sequence = (BigInt(state.manifest.sequence) + 1n).toString()
-      const body = {
-        formatVersion: FORMAT_VERSION,
-        schemaVersion,
-        sequence,
-        factId: input.factId,
-        factType: input.factType,
-        runtimeSessionId: input.runtimeSessionId,
+      const recordedAt = normalizeOperationalStateRecordedAt(store.now())
+      validateMarketHistoryCoverageProgress({ state, input, recordedAt })
+      const { record, line } = createOperationalStateAppendRecord({
+        store,
+        state,
+        input,
         recordedAt,
-        previousDigest: state.lastRecord.digest,
-        data: input.data,
-      }
-      const record = { ...body,
-digest: digestOperationalStateRecord(body) }
-      const line = canonicalStringifyOperationalStateValue(record)
-      if (Buffer.byteLength(line, "utf8") > MAX_RECORD_BYTES) {
-        throw new RangeError(`Operational State record exceeds the ${  MAX_RECORD_BYTES  } byte limit`)
-      }
-      const logHandle = await fileSystem.open(logPath, "a", 0o600)
-      try {
-        factWriteStarted = true
-        await logHandle.writeFile(`${line  }\n`, "utf8")
-        await logHandle.sync()
-      } finally {
-        await logHandle.close()
-      }
-      const checkpoint = createManifestCheckpoint({
-        schemaVersion,
-        record,
-        previousManifestDigest: state.manifest.digest,
       })
-      const manifestLine = canonicalStringifyOperationalStateValue(checkpoint)
-      if (Buffer.byteLength(manifestLine, "utf8") > MAX_RECORD_BYTES) {
-        throw new RangeError(`Committed-head manifest checkpoint exceeds the ${  MAX_RECORD_BYTES  } byte limit`)
-      }
-      const manifestHandle = await fileSystem.open(manifestPath, "a", 0o600)
-      try {
-        manifestWriteStarted = true
-        await manifestHandle.writeFile(`${manifestLine  }\n`, "utf8")
-        await manifestHandle.sync()
-      } finally {
-        await manifestHandle.close()
-      }
+      await writeOperationalStateFactRecord({ store, line, writeState })
+      await writeOperationalStateManifestCheckpoint({ store, state, record, writeState })
       const verified = await verifyState()
       return toResult({
         data: {
@@ -1813,17 +1923,19 @@ digest: digestOperationalStateRecord(body) }
         },
       })
     } catch (error) {
-      if (factWriteStarted || manifestWriteStarted || syncFailed || integrityFailed) {
-        writeUncertain = true
-        error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
-      } else if (!error.code) {
-        error.code = "DURABLE_FACTS_APPEND_FAILED"
-      }
-      return toResult({ error })
+      return handleOperationalStateAppendFailure({ store, writeState, error })
     }
   })
+}
 
-  const verify = () => serialize(async () => {
+function createOperationalStateStoreVerificationOperation({
+  store,
+  serialize,
+  assertNoUncertainWrite,
+  syncStreams,
+  verifyState,
+}) {
+  return () => serialize(async () => {
     try {
       assertNoUncertainWrite()
       await syncStreams()
@@ -1839,14 +1951,22 @@ digest: digestOperationalStateRecord(body) }
       })
     } catch (error) {
       if (error.code !== "ENOENT" && error.code !== "DURABLE_FACTS_COMMIT_UNCERTAIN") {
-        writeUncertain = true
+        store.writeUncertain = true
         error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
       }
       return toResult({ error })
     }
   })
+}
 
-  const readAll = () => serialize(async () => {
+function createOperationalStateStoreReadAllOperation({
+  store,
+  serialize,
+  assertNoUncertainWrite,
+  syncStreams,
+  verifyState,
+}) {
+  return () => serialize(async () => {
     try {
       assertNoUncertainWrite()
       await syncStreams()
@@ -1861,16 +1981,31 @@ digest: digestOperationalStateRecord(body) }
       })
     } catch (error) {
       if (error.code !== "ENOENT" && error.code !== "DURABLE_FACTS_COMMIT_UNCERTAIN") {
-        writeUncertain = true
+        store.writeUncertain = true
         error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
       }
       return toResult({ error })
     }
   })
+}
 
-  return Object.freeze({ runtimeSessionId,
-initialize,
-append,
-verify,
-readAll })
+function createOperationalStateStoreOperations({ store }) {
+  const coordination = createOperationalStateStoreCoordination({ store })
+  const verifyState = createOperationalStateStoreVerifier({ store })
+  const initialize = createOperationalStateStoreInitializer({ store, ...coordination, verifyState })
+  const append = createOperationalStateStoreAppender({ store, ...coordination, verifyState })
+  const verify = createOperationalStateStoreVerificationOperation({ store, ...coordination, verifyState })
+  const readAll = createOperationalStateStoreReadAllOperation({ store, ...coordination, verifyState })
+  return Object.freeze({
+    runtimeSessionId: store.runtimeSessionId,
+    initialize,
+    append,
+    verify,
+    readAll,
+  })
+}
+
+export function createFileOperationalStateStore(options = {}) {
+  const store = createOperationalStateStoreContext(options)
+  return createOperationalStateStoreOperations({ store })
 }
