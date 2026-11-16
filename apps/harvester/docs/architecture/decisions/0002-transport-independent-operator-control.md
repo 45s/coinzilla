@@ -162,3 +162,7 @@ No HTTP server, webhook, web session, generic command framework or extra Telegra
 - [x] **Out of scope for the initial rollout:** restore operator pause state after restart or complete recovery Steps 8–9. Step 7's offline one-market audit/confirmation implementation is complete; the remaining restart-restoration work stays in the separate process-restart recovery workstream under issue #654.
 - [x] Exact-head required CI passed on PR #1067: workspace unit tests/coverage, syntax/lint, documentation links, dependency audit, actionlint, and Linux/Windows process-lock checks. The read-only Binance TESTNET integration was skipped.
 - [ ] User review and merge.
+
+## Later emergency BUY control boundary
+
+The accepted market-pause behavior in this ADR remains unchanged: `pauseMarket` / `/pause SYMBOL` blocks new strategy BUY intents but leaves existing exchange orders untouched. The distinct emergency BUY capability is defined by [ADR-0005](./0005-emergency-buy-pause.md); it uses separate global/market gates and cancels only current-process-owned BUY orders through the existing engine cancellation workflow. Recovery SELLs continue, and startup-snapshot/manual/external orders remain untouched.

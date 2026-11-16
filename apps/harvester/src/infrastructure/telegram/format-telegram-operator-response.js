@@ -57,6 +57,7 @@ function appendMarketDetails({
     lines.push(`Price updated: ${formatTimestamp(market.priceTimestamp)}`)
   }
   lines.push(`Operator pause: ${market.operatorPaused ? "ACTIVE" : "OFF"}`)
+  lines.push(`BUY pause: ${market.operatorBuysPaused ? "ACTIVE" : "OFF"}`)
   lines.push(`Safety pause: ${market.safetyPaused ? "ACTIVE" : "OFF"}`)
   lines.push(`Recovery pause: ${market.recoveryManagedPaused ? "ACTIVE" : "OFF"}`)
   const volatilityLine = formatMarketVolatilityLine({ market })

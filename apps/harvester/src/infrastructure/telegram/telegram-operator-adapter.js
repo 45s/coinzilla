@@ -25,6 +25,18 @@ const ENTRY_COMMAND_TYPES = Object.freeze({
   "/menu": "MENU",
   "/help": "HELP",
 })
+const READ_ONLY_COMMAND_TYPES = Object.freeze({
+  "/status": "STATUS",
+  "/markets": "MARKETS",
+  "/positions": "POSITIONS",
+  "/orders": "ORDERS",
+  "/balances": "BALANCES",
+})
+const GLOBAL_BUY_COMMAND_TYPES = Object.freeze({
+  "/pauseallbuys": "PAUSE_ALL_BUYS",
+  "/resumeallbuys": "RESUME_ALL_BUYS",
+})
+const MARKET_SYMBOL_PATTERN = /^[A-Za-z0-9]{2,30}$/
 
 function parseEntryCommand({ command, argumentsList }) {
   const type = ENTRY_COMMAND_TYPES[command]
@@ -176,10 +188,68 @@ function buildControlFailureReply({ action, symbol, result, method, interaction,
   if (code === "SAFETY_BLOCKER_ACTIVE") {
     return `Cannot resume ${symbol}: a safety, recovery, or volatility blocker is still active. The blocker was not changed.`
   }
-  return `${action === "RESUME" ? "Resume" : "Pause"} was not acknowledged; check Harvester logs and retry.`
+  if (code === "OPERATOR_BUY_CANCELLATION_INCOMPLETE") {
+    interaction.applicationOperationCompleted = true
+    interaction.stateChanged = true
+    const scope = symbol ? `for ${symbol}` : "across all markets"
+    return `BUY pause is active ${scope}, but cancellation of one or more Harvester-owned BUY orders is unresolved. New BUY submissions remain blocked. Check /orders and Harvester diagnostics before assuming the market is clear.`
+  }
+  if (code === "INVALID_OPERATOR_SCOPE") {
+    return "Global BUY commands do not accept a market symbol."
+  }
+  return `${action.startsWith("RESUME") ? "Resume" : "Pause"} was not acknowledged; check Harvester logs and retry.`
 }
 
-function buildControlSuccessReply({ action, symbol, result, method, interaction, diagnostics }) {
+function buildPauseBuySuccessReply({ buyScope, result, interaction }) {
+  if (result.data?.paused !== true) {
+    return undefined
+  }
+  interaction.applicationOperationCompleted = true
+  interaction.stateChanged = result.data.alreadyPaused !== true || result.data.canceled > 0
+  const prefix = result.data.alreadyPaused === true ? "BUY pause remains active" : "BUY pause activated"
+  return `${prefix} ${buyScope}. Cancelled ${result.data.canceled ?? 0} Harvester-owned BUY order(s); reconciled ${result.data.reconciled ?? 0} fill(s). Recovery SELLs and accounting continue. External/manual and prior-process orders are untouched; check /orders. This pause is process-local and is not restored after restart.`
+}
+
+function buildResumeBuySuccessReply({ buyScope, result, interaction }) {
+  if (result.data?.resumed === true) {
+    interaction.applicationOperationCompleted = true
+    interaction.stateChanged = true
+    const remaining = result.data.stillPaused === true
+      ? " Another BUY pause scope is still active."
+      : " New BUYs may resume when all other safety gates allow."
+    return `BUY pause removed ${buyScope}.${remaining}`
+  }
+  if (result.data?.resumed === false) {
+    interaction.applicationOperationCompleted = true
+    interaction.stateChanged = false
+    const remaining = result.data.stillPaused === true
+      ? " Another BUY pause scope remains active."
+      : ""
+    return `No BUY pause was active ${buyScope}.${remaining}`
+  }
+  return undefined
+}
+
+function buildBuyControlSuccessReply({ action, symbol, result, interaction } = {}) {
+  const buyScope = symbol ? `for ${symbol}` : "across all markets"
+  if (action === "PAUSE_BUYS" || action === "PAUSE_ALL_BUYS") {
+    return buildPauseBuySuccessReply({
+      buyScope,
+      result,
+      interaction,
+    })
+  }
+  if (action === "RESUME_BUYS" || action === "RESUME_ALL_BUYS") {
+    return buildResumeBuySuccessReply({
+      buyScope,
+      result,
+      interaction,
+    })
+  }
+  return undefined
+}
+
+function buildLegacyControlSuccessReply({ action, symbol, result, method, interaction, diagnostics }) {
   if (action === "RESUME" && result.data?.resumed === true) {
     interaction.applicationOperationCompleted = true
     interaction.stateChanged = true
@@ -207,6 +277,10 @@ function buildControlSuccessReply({ action, symbol, result, method, interaction,
     message: `Operator control use case returned an invalid success result: ${method}`,
   })
   return `${action === "RESUME" ? "Resume" : "Pause"} was not acknowledged; check Harvester logs and retry.`
+}
+
+function buildControlSuccessReply(options) {
+  return buildBuyControlSuccessReply(options) ?? buildLegacyControlSuccessReply(options)
 }
 
 function buildControlReply(options) {
@@ -504,9 +578,7 @@ interaction })) {
     return
   }
   if (parsed.type === "INVALID") {
-    const text = parsed.command === "RESUME" || parsed.command === "PAUSE"
-      ? `Usage: /${parsed.command.toLowerCase()} <SYMBOL>. Use /help for commands.`
-      : `Usage: /${String(parsed.command ?? "command").toLowerCase()} with no arguments. Use /help for commands.`
+    const text = getInvalidCommandUsage(parsed.command)
     await sendMessage({
       chatId: message.chat.id,
       text,
@@ -515,7 +587,7 @@ interaction })) {
     })
     return
   }
-  const action = parsed.type === "RESUME" ? "RESUME" : "PAUSE"
+  const action = parsed.type
   await executeControl({
     action,
     symbol: parsed.symbol,
@@ -603,6 +675,70 @@ function waitForRetry({ milliseconds, signal }) {
   })
 }
 
+function parseReadOnlyCommand({ command, argumentsList } = {}) {
+  const type = READ_ONLY_COMMAND_TYPES[command]
+  if (!type) {
+    return undefined
+  }
+  if (argumentsList.length !== 0) {
+    return Object.freeze({
+      type: "INVALID",
+      command: command.slice(1).toUpperCase(),
+    })
+  }
+  return Object.freeze({ type })
+}
+
+function parseEmergencyBuyCommand({ command, argumentsList } = {}) {
+  const globalType = GLOBAL_BUY_COMMAND_TYPES[command]
+  if (globalType) {
+    if (argumentsList.length !== 0) {
+      return Object.freeze({
+        type: "INVALID",
+        command: command.slice(1).toUpperCase(),
+      })
+    }
+    return Object.freeze({ type: globalType })
+  }
+  if (command !== "/pausebuys" && command !== "/resumebuys") {
+    return undefined
+  }
+  if (argumentsList.length !== 1 || !MARKET_SYMBOL_PATTERN.test(argumentsList[0])) {
+    return Object.freeze({
+      type: "INVALID",
+      command: command.slice(1).toUpperCase(),
+    })
+  }
+  return Object.freeze({
+    type: command === "/pausebuys" ? "PAUSE_BUYS" : "RESUME_BUYS",
+    symbol: argumentsList[0].toUpperCase(),
+  })
+}
+
+function parseMarketPauseCommand({ command, argumentsList } = {}) {
+  if (command !== "/pause" && command !== "/resume") {
+    return undefined
+  }
+  if (argumentsList.length !== 1 || !MARKET_SYMBOL_PATTERN.test(argumentsList[0])) {
+    return Object.freeze({
+      type: "INVALID",
+      command: command.slice(1).toUpperCase(),
+    })
+  }
+  return Object.freeze({
+    type: command === "/pause" ? "PAUSE" : "RESUME",
+    symbol: argumentsList[0].toUpperCase(),
+  })
+}
+
+function getInvalidCommandUsage(command) {
+  const normalizedCommand = String(command ?? "command").toLowerCase()
+  if (["PAUSEBUYS", "RESUMEBUYS", "PAUSE", "RESUME"].includes(command)) {
+    return `Usage: /${normalizedCommand} <SYMBOL>. Use /help for commands.`
+  }
+  return `Usage: /${normalizedCommand} with no arguments. Use /help for commands.`
+}
+
 /**
  * Parse the deliberately small initial Telegram command vocabulary.
  *
@@ -623,35 +759,32 @@ export function parseTelegramOperatorCommand(...args) {
 
   const [commandToken, ...argumentsList] = normalizedText.split(/\s+/)
   const commandParts = commandToken.split("@")
-  if (commandParts.length > 2) {return Object.freeze({ type: "INVALID" })}
+  if (commandParts.length > 2) {
+    return Object.freeze({ type: "INVALID" })
+  }
   const [command, targetUsername] = commandParts
   if (targetUsername !== undefined &&
       (typeof botUsername !== "string" || targetUsername.toLowerCase() !== botUsername.toLowerCase())) {
     return Object.freeze({ type: "IGNORE" })
   }
-  const entryCommand = parseEntryCommand({ command,
-argumentsList })
-  if (entryCommand) { return entryCommand }
-  if (["/status", "/markets", "/positions", "/orders", "/balances"].includes(command)) {
-    if (argumentsList.length !== 0) {
-      return Object.freeze({ type: "INVALID",
-command: command.slice(1).toUpperCase() })
-    }
-    return Object.freeze({ type: ({ "/status": "STATUS",
-"/markets": "MARKETS",
-"/positions": "POSITIONS",
-"/orders": "ORDERS",
-"/balances": "BALANCES" })[command] })
+  const entryCommand = parseEntryCommand({
+    command,
+    argumentsList,
+  })
+  if (entryCommand) {
+    return entryCommand
   }
-  if (command !== "/pause" && command !== "/resume") {return Object.freeze({ type: "UNSUPPORTED" })}
-  if (argumentsList.length !== 1 || !/^[A-Za-z0-9]{2,30}$/.test(argumentsList[0])) {
-    return Object.freeze({ type: "INVALID",
-command: command.slice(1).toUpperCase() })
-  }
-  return Object.freeze({ type: command === "/pause" ? "PAUSE" : "RESUME",
-symbol: argumentsList[0].toUpperCase() })
+  return parseReadOnlyCommand({
+    command,
+    argumentsList,
+  }) ?? parseEmergencyBuyCommand({
+    command,
+    argumentsList,
+  }) ?? parseMarketPauseCommand({
+    command,
+    argumentsList,
+  }) ?? Object.freeze({ type: "UNSUPPORTED" })
 }
-
 
 function createNavigationKeyboard({ page = "home", markets = [], marketAction } = {}) {
   const rows = [
@@ -716,10 +849,16 @@ function helpText() {
     "/balances — latest exchange free and locked balances with snapshot age",
     "/pause SYMBOL — request a market-scoped operator pause",
     "/resume SYMBOL — request removal of the operator-owned pause",
+    "/pauseallbuys — stop all BUY submissions and cancel active Harvester-owned BUY orders",
+    "/resumeallbuys — remove the global emergency BUY pause",
+    "/pausebuys SYMBOL — stop BUYs and cancel active Harvester-owned BUYs for one market",
+    "/resumebuys SYMBOL — remove one market emergency BUY pause",
     "/help — show this help",
     "",
     "Inline pause/resume buttons always require confirmation. Text control commands are explicit requests.",
     "Operator pause does not cancel existing orders. Existing orders may still fill; accounting and recovery SELLs continue.",
+    "Emergency BUY pause cancels only current-process-owned BUYs. Recovery SELLs and accounting continue; manual/external orders are untouched.",
+    "Emergency BUY commands execute immediately after private-chat authorization; they do not use the market-button confirmation flow.",
     "Operator pause lasts only for this process and is not restored after restart.",
   ].join("\n")
 }
@@ -997,12 +1136,19 @@ text }),
 }
 
 async function executeTelegramOperatorControl({ action, symbol, userId, requestId, chatId, messageId, signal, interaction, operator, diagnostics, logStage, sendMessage, editMessage, buildNavigationKeyboard }) {
-    const method = action === "RESUME" ? "resumeMarket" : "pauseMarket"
+    const method = ({
+      PAUSE: "pauseMarket",
+      RESUME: "resumeMarket",
+      PAUSE_BUYS: "pauseBuys",
+      RESUME_BUYS: "resumeBuys",
+      PAUSE_ALL_BUYS: "pauseAllBuys",
+      RESUME_ALL_BUYS: "resumeAllBuys",
+    })[action]
     interaction.action = action
     interaction.symbol = symbol
     interaction.operation = method
     if (typeof operator[method] !== "function") {
-      const text = action === "RESUME" ? "Resume is not available in this operator adapter configuration." : "Pause is not available in this operator adapter configuration."
+      const text = action.startsWith("RESUME") ? "Resume is not available in this operator adapter configuration." : "Pause is not available in this operator adapter configuration."
       diagnostics.report({
         interaction,
         stage: "APPLICATION_OPERATION_UNAVAILABLE",
@@ -1066,7 +1212,7 @@ interaction }) }
         level: "info",
         fields: {
           durationMs: Date.now() - startedAt,
-          result: action === "PAUSE" ? "PAUSED" : "RESUME_PROCESSED",
+          result: action.startsWith("PAUSE") ? "PAUSED" : "RESUME_PROCESSED",
         },
       })
     }
@@ -1627,6 +1773,22 @@ interaction })
                 {
                   command: "resume",
                   description: "Request removal of an operator pause",
+                },
+                {
+                  command: "pauseallbuys",
+                  description: "Pause all BUYs and cancel Harvester-owned BUY orders",
+                },
+                {
+                  command: "resumeallbuys",
+                  description: "Resume BUYs globally",
+                },
+                {
+                  command: "pausebuys",
+                  description: "Pause BUYs for one market",
+                },
+                {
+                  command: "resumebuys",
+                  description: "Resume BUYs for one market",
                 },
               ] },
               signal: nextController.signal,

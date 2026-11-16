@@ -1,5 +1,11 @@
 import { createPauseMarket } from "../../use-cases/operator-control/pause-market.js"
 import { createResumeMarket } from "../../use-cases/operator-control/resume-market.js"
+import {
+  createPauseAllBuys,
+  createPauseBuys,
+  createResumeAllBuys,
+  createResumeBuys,
+} from "../../use-cases/operator-control/buy-controls.js"
 import { createReadOperatorState } from "../../use-cases/operator-control/read-operator-state.js"
 import { createReadOperatorTradingState } from "../../use-cases/operator-control/read-operator-trading-state.js"
 
@@ -20,6 +26,14 @@ export function createHarvesterOperator({ engine, operationalStateStore, getRunt
     pauseMarket: createPauseMarket({ engine,
       operationalStateStore }),
     resumeMarket: createResumeMarket({ engine,
+      operationalStateStore }),
+    pauseBuys: createPauseBuys({ engine,
+      operationalStateStore }),
+    resumeBuys: createResumeBuys({ engine,
+      operationalStateStore }),
+    pauseAllBuys: createPauseAllBuys({ engine,
+      operationalStateStore }),
+    resumeAllBuys: createResumeAllBuys({ engine,
       operationalStateStore }),
   }
   if (getRuntimeSnapshot !== undefined) {
