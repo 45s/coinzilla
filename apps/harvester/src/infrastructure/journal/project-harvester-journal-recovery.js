@@ -181,7 +181,9 @@ field: "liquidityRole" })
   const commissionStatus = requireString({ value: data.commissionStatus,
 field: "commissionStatus" })
   if (!Array.isArray(data.commissions)) {throw new TypeError("fill commissions must be an array")}
-  const commissions = data.commissions.map((commission, index) => ({
+  const commissions = data.commissions.map((...args) => {
+    const [commission, index] = args
+    return ({
     amount: requireDecimal({ value: commission?.amount,
 field: `commissions[${  index  }].amount` }),
     assetId: requireString({ value: commission?.assetId,
@@ -204,7 +206,8 @@ field: `commissions[${  index  }].asset` }),
         }),
       },
     }),
-  }))
+    })
+  })
   if (data.duplicate !== undefined && typeof data.duplicate !== "boolean") {
     throw new TypeError("fill duplicate marker must be a boolean")
   }
@@ -227,7 +230,9 @@ field: `commissions[${  index  }].asset` }),
 }
 
 function fillFingerprint({ fill }) {
-  const { duplicate, ...facts } = fill
+  const facts = Object.fromEntries(
+    Object.entries(fill).filter(([key]) => key !== "duplicate"),
+  )
   return JSON.stringify(facts)
 }
 
@@ -353,7 +358,8 @@ field: "harvester.stopped reason" })
         }
         session.lastAccountSnapshotSourceTime = data.sourceTime
         if (!Array.isArray(data.balances) || !Array.isArray(data.auditReasons)) {throw new TypeError("Account snapshot balances and auditReasons must be arrays")}
-        const balances = data.balances.map((balance, index) => {
+        const balances = data.balances.map((...args) => {
+          const [balance, index] = args
           const asset = requireString({ value: balance?.asset,
 field: `balances[${  index  }].asset` })
           const free = requireDecimal({ value: balance?.free,
@@ -374,10 +380,10 @@ total })
         if (new Set(balances.map(({ asset }) => asset)).size !== balances.length) {
           throw new Error("Account snapshot contains duplicate asset balances")
         }
-        const auditReasons = data.auditReasons.map((reason, index) =>
-          requireString({ value: reason,
-field: `auditReasons[${  index  }]` }),
-        )
+        const auditReasons = data.auditReasons.map((...args) => {
+          const [reason, index] = args
+          return requireString({ value: reason, field: `auditReasons[${  index  }]` })
+        })
         if (data.auditStatus === "COMPLETE" && auditReasons.length > 0) {
           throw new Error("COMPLETE account snapshot cannot contain audit reasons")
         }
@@ -422,7 +428,8 @@ field: `auditReasons[${  index  }]` }),
         if (!["READY", "RECONCILED", "BLOCKED"].includes(data.readiness)) {throw new TypeError("Open-order snapshot readiness is invalid")}
         if (!Array.isArray(data.orders) || !Array.isArray(data.blockReasons)) {throw new TypeError("Open-order snapshot orders and blockReasons must be arrays")}
         if (data.orderCount !== data.orders.length) {throw new Error("Open-order snapshot orderCount does not match orders")}
-        const orders = data.orders.map((order, index) => {
+        const orders = data.orders.map((...args) => {
+          const [order, index] = args
           const brokerOrderId = requireString({ value: order?.brokerOrderId,
 field: `orders[${  index  }].brokerOrderId` })
           const symbol = requireString({ value: order?.symbol,
@@ -456,10 +463,10 @@ field: `orders[${  index  }].status` }),
         })
         const identities = orders.map(({ symbol, brokerOrderId }) => `${symbol  }:${  brokerOrderId}`)
         if (new Set(identities).size !== identities.length) {throw new Error("Open-order snapshot contains duplicate order identities")}
-        const blockReasons = data.blockReasons.map((reason, index) =>
-          requireString({ value: reason,
-field: `blockReasons[${  index  }]` }),
-        )
+        const blockReasons = data.blockReasons.map((...args) => {
+          const [reason, index] = args
+          return requireString({ value: reason, field: `blockReasons[${  index  }]` })
+        })
         if (data.readiness === "READY" && (orders.length > 0 || blockReasons.length > 0)) {
           throw new Error("READY open-order snapshot requires no orders and no block reasons")
         }
