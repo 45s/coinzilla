@@ -167,3 +167,10 @@ data: { durable: true } }
   assert.equal(result.data.confirmation.status, "SKIPPED", "The skipped state must remain visible to the operator.")
   assert.deepEqual(calls, ["readAll"], "A skipped audit may verify the existing ledger but must never append or initialize it.")
 })
+
+test("offline context adapter rejects a non-boolean confirmation flag before evidence processing", async () => {
+  const result = await runOfflineMarketRecovery({ context, confirm: "true" })
+
+  assert.equal(result.ok, false, "Confirmation must require an explicit boolean rather than a truthy operator value.")
+  assert.match(result.errors[0].message, /confirm must be a boolean/i, "The invalid confirmation flag must be reported before recovery processing.")
+})
