@@ -190,7 +190,7 @@ export function validateCalibrationThresholds(overrides = {}) {
   return Object.freeze(thresholds)
 }
 
-function percentile(sortedValues, percent) {
+function percentile({ sortedValues, percent }) {
   const rank = Math.max(1, Math.ceil((percent / 100) * sortedValues.length))
   return sortedValues[rank - 1]
 }
@@ -316,10 +316,10 @@ export function analyzeVolatilityHistory({ symbol, candles, thresholds: threshol
     thresholds,
     thresholdCounts: Object.freeze(thresholdCounts),
     ratioPercentiles: Object.freeze({
-      p50: percentile(sortedRatios, 50),
-      p90: percentile(sortedRatios, 90),
-      p95: percentile(sortedRatios, 95),
-      p99: percentile(sortedRatios, 99),
+      p50: percentile({ sortedValues: sortedRatios, percent: 50 }),
+      p90: percentile({ sortedValues: sortedRatios, percent: 90 }),
+      p95: percentile({ sortedValues: sortedRatios, percent: 95 }),
+      p99: percentile({ sortedValues: sortedRatios, percent: 99 }),
     }),
     maximumRatio: sortedRatios.at(-1),
     stateCounts: Object.freeze(stateCounts),

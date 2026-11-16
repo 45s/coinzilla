@@ -28,7 +28,7 @@ const collectArguments = async (action) => {
       ? { symbol: "DOGEUSDT", limit: "1000" }[key] ?? value
       : value
     const answer = await prompt(`${label}${actionDefault ? ` [${actionDefault}]` : ""}: `)
-    answers[key] = normalizePromptAnswer(answer, actionDefault)
+    answers[key] = normalizePromptAnswer({ answer, fallback: actionDefault })
   }
   return buildTestnetMenuArguments({ actionId: action.id, answers })
 }
