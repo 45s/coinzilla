@@ -2,7 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { isMarketDataFresh } from "./is-market-data-fresh.js"
 
-const test = (name, ...args) => nodeTest(`[is-market-data-fresh.test.js] ${  name}`, ...args)
+const test = (...args) => nodeTest(`[is-market-data-fresh.test.js] ${  args[0]}`, ...args.slice(1))
 
 test("accepts timestamps at both inclusive freshness boundaries", () => {
   assert.equal(isMarketDataFresh({ timestamp: 5_000,
