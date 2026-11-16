@@ -230,7 +230,7 @@ async function handleNavigationCallback({
     interaction,
   })
   await editPage({
-    page: navigation[1],
+    page: navigation[2],
     chatId: chat.id,
     messageId,
     userId,
@@ -453,6 +453,7 @@ async function respondToAuthorizedMessage({
   userId,
   signal,
   interaction,
+  logStage,
   respondToMenuCommand,
   respondToReadCommand,
   executeControl,
@@ -465,6 +466,11 @@ async function respondToAuthorizedMessage({
   if (await respondToReadCommand({ parsed, message, userId, signal, interaction })) {
     return
   }
+  logStage({
+    interaction,
+    message: "Telegram command STARTED",
+    stage: "COMMAND_STARTED",
+  })
   if (parsed.type === "UNSUPPORTED") {
     await sendMessage({
       chatId: message.chat.id,
@@ -1231,6 +1237,7 @@ export function createTelegramOperatorAdapter({
       userId,
       signal,
       interaction,
+      logStage,
       respondToMenuCommand,
       respondToReadCommand,
       executeControl,
