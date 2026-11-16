@@ -64,6 +64,15 @@ function normalizeOrderRows({ value }) {
   throw new TypeError("Bitunix Spot pending orders response must contain order rows")
 }
 
+function adaptSymbolOrderRows({ rows, symbol, operation }) {
+  return rows.map((row) => {
+    if (typeof row?.symbol !== "string" || row.symbol.trim().toUpperCase() !== symbol) {
+      throw new TypeError(`Bitunix Spot ${operation} response symbol does not match the requested symbol`)
+    }
+    return adaptOrder(row)
+  })
+}
+
 function normalizeOrderSide({ side }) {
   if (String(side) === "2") {
     return "BUY"
@@ -365,7 +374,13 @@ export class BitunixSpotBroker extends CoreBroker {
         body: { symbol: normalizedSymbol },
       })
       const rows = normalizeOrderRows({ value: response.data })
-      return toResult({ data: rows.map(adaptOrder) })
+      return toResult({
+        data: adaptSymbolOrderRows({
+          rows,
+          symbol: normalizedSymbol,
+          operation: "open orders",
+        }),
+      })
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.getOpenOrders()",
@@ -387,7 +402,13 @@ export class BitunixSpotBroker extends CoreBroker {
         value: response.data,
         requestedPage: body.page,
       })
-      return toResult({ data: rows.map(adaptOrder) })
+      return toResult({
+        data: adaptSymbolOrderRows({
+          rows,
+          symbol: body.symbol,
+          operation: "order history",
+        }),
+      })
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.getOrderHistory()",
