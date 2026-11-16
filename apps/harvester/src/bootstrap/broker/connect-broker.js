@@ -64,6 +64,7 @@ error }),
       throw new AggregateError(
         [error, disconnectError],
         "Harvester broker connection failed and disconnect cleanup also failed",
+        { cause: error },
       )
     }
     throw error
