@@ -239,7 +239,10 @@ function createCommissionAssetHandler({ accountSnapshotManagerRef } = {}) {
     if (!accountSnapshotManagerRef.current) {
       throw new Error("Commission asset baseline manager is not ready")
     }
-    return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({ assetId, assetCode })
+    return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({
+      assetId,
+      assetCode,
+    })
   }
 }
 
@@ -791,16 +794,51 @@ export async function startHarvester(options = {}) {
   const startup = await createHarvesterStartupContext({ options })
   const portfolio = createHarvesterPortfolioContext({ startup })
   const resources = await createHarvesterRuntimeResources({ startup })
-  const accountSnapshots = createHarvesterAccountSnapshotRuntime({ startup, portfolio, resources })
-  const userDataEvents = createHarvesterUserDataEventRuntime({ startup, portfolio, resources, accountSnapshots })
-  const recoveryRuntime = createHarvesterUserDataRecoveryRuntime({ startup, resources, accountSnapshots, userDataEvents })
+  const accountSnapshots = createHarvesterAccountSnapshotRuntime({
+    startup,
+    portfolio,
+    resources,
+  })
+  const userDataEvents = createHarvesterUserDataEventRuntime({
+    startup,
+    portfolio,
+    resources,
+    accountSnapshots,
+  })
+  const recoveryRuntime = createHarvesterUserDataRecoveryRuntime({
+    startup,
+    resources,
+    accountSnapshots,
+    userDataEvents,
+  })
   const freshness = createHarvesterMarketDataFreshness({ startup })
-  const activateTradingEngine = createHarvesterTradingEngineActivator({ startup, portfolio, resources, freshness })
-  await startHarvesterServices({ startup, portfolio, resources, accountSnapshots, userDataEvents, recoveryRuntime, activateTradingEngine, freshness })
+  const activateTradingEngine = createHarvesterTradingEngineActivator({
+    startup,
+    portfolio,
+    resources,
+    freshness,
+  })
+  await startHarvesterServices({
+    startup,
+    portfolio,
+    resources,
+    accountSnapshots,
+    userDataEvents,
+    recoveryRuntime,
+    activateTradingEngine,
+    freshness,
+  })
   resources.userDataState.startupComplete = true
-  startPendingUserDataRecovery({ userDataState: resources.userDataState, startUserDataRecovery: recoveryRuntime.startUserDataRecovery })
-  const stop = createHarvesterRuntimeStop({ startup, resources, accountSnapshots,
-    userDataEvents })
+  startPendingUserDataRecovery({
+    userDataState: resources.userDataState,
+    startUserDataRecovery: recoveryRuntime.startUserDataRecovery,
+  })
+  const stop = createHarvesterRuntimeStop({
+    startup,
+    resources,
+    accountSnapshots,
+    userDataEvents,
+  })
   return createHarvesterRuntimeResult({
     startup,
     portfolio,
