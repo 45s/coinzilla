@@ -334,7 +334,6 @@ This roadmap is owned by `packages/event-bus/`. Read [the local agent instructio
 
 Use short-lived task branches from `develop`; do not create permanent per-domain branches. Keep event-bus implementation, tests, and roadmap changes within this domain. Route consumer requests and cross-package contract needs through [the cross-domain request process](../../docs/engineering/CROSS_DOMAIN_REQUESTS.md). Mark roadmap items complete only after the focused PR is merged into `develop` and required checks pass.
 
-
 ## Active maintenance
 
 - [~] Eliminate the package's existing ESLint errors and warnings without changing runtime behavior; track evidence and verification in [issue #1230](https://github.com/45s/coinzilla/issues/1230).
