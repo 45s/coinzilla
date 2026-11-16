@@ -300,3 +300,21 @@ closeTime: openTime + INTERVAL_MS - 1 })
 force: true })
   }
 })
+
+test("reports complete observation and protection-state totals for a validated history", () => {
+  const candles = createCandleSeries({ count: 300, spikeAt: 120 })
+  const report = analyzeVolatilityHistory({ symbol: "BTCUSDT", candles })
+  const protectedObservations =
+    report.stateCounts.PROTECTED + report.stateCounts.RECOVERING
+  const stateObservationCount = Object.values(report.stateCounts)
+    .reduce((total, count) => total + count, 0)
+
+  assert.equal(report.observationCount, 201, "A 300-candle history must produce 201 rolling 100-candle observations.")
+  assert.equal(report.ratioObservations + report.unavailableObservations, report.observationCount, "Every analyzed observation must be classified as either a valid ratio or unavailable.")
+  assert.equal(stateObservationCount, report.observationCount, "Every analyzed observation must contribute to exactly one protection-state count.")
+  assert.equal(report.protectedPercent, Number(((protectedObservations / report.observationCount) * 100).toFixed(2)), "Protected occupancy must include both PROTECTED and RECOVERING observations.")
+  assert.equal(report.latestMetrics.openTime, candles.at(-1).openTime, "The final metrics must correspond to the last validated candle.")
+  assert.deepEqual(Object.keys(report.ratioPercentiles), ["p50", "p90", "p95", "p99"], "The report must retain all four documented ratio percentiles.")
+  assert.ok(Object.isFrozen(report.thresholdCounts), "Threshold-frequency results must remain immutable.")
+  assert.ok(Object.isFrozen(report.stateCounts), "Protection-state totals must remain immutable.")
+})
