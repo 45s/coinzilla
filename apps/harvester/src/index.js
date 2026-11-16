@@ -163,7 +163,7 @@ export async function main({
   loadConfig = loadAppConfig,
   configSource,
   env = process.env,
-  registerSignalHandler = (signal, handler) => process.once(signal, handler),
+  registerSignalHandler = (signal, handler) => process.on(signal, handler),
   closeLogger = async () => {},
   createTelegramNotifier = (options) => new TelegramNotifier(options),
   createOperationalStateStore,
@@ -353,7 +353,7 @@ export async function main({
               shutdownError = stopResult?.errors?.[0]
                 ?? new Error("Harvester runtime stop did not confirm shutdown")
               process.exitCode = 1
-              logger.error({ message: "shutdown was not confirmed.", error: shutdownError })
+              logger.error({ message: "shutdown was not confirmed; required runtime services remain connected.", error: shutdownError })
             } else {
               logSystem(logger, "Shutdown completed.")
             }
@@ -361,10 +361,14 @@ export async function main({
             shutdownError = error
             process.exitCode = 1
             try {
-              logger.error({ message: "shutdown failed.", error })
+              logger.error({ message: "shutdown failed; required runtime services remain connected.", error, shutdownDiagnostics: error?.shutdownDiagnostics })
             } catch {
               // Logging failure must not prevent the shutdown event attempt.
             }
+          }
+          if (!runtimeStopped) {
+            shutdownPromise = undefined
+            return
           }
           publishLifecycleEvent({
             eventPublisher,

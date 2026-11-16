@@ -502,6 +502,52 @@ test("durably records the exact order submission intent before calling the broke
   assert.equal(calls[0].purpose, null, "An order without an explicit strategy purpose must persist a canonical null purpose.")
 })
 
+test("rechecks the shutdown gate after durable intent and before broker placement", async () => {
+  const calls = []
+  let gateChecks = 0
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async () => {
+        calls.push("broker")
+        return { ok: true, data: makeAcknowledgement(decision.actions[0]) }
+      },
+    },
+    canSubmit: () => {
+      gateChecks += 1
+      calls.push("gate:" + gateChecks)
+      return gateChecks <= 3
+        ? true
+        : {
+          allowed: false,
+          reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
+        }
+    },
+    onPendingOrder: async () => calls.push("pending"),
+    onDurableSubmissionIntent: async () => {
+      calls.push("durable-intent")
+      return { ok: true, data: { durable: true } }
+    },
+    onDurableSubmissionOutcome: async ({ outcome }) => {
+      calls.push("durable-outcome:" + outcome)
+      return { ok: true, data: { durable: true } }
+    },
+    onSubmissionDeferred: async ({ reason }) => {
+      calls.push("deferred:" + reason)
+    },
+    onAcknowledgedOrder: async () => assert.fail("A blocked order must not be acknowledged."),
+    onSubmissionFailure: async () => assert.fail("A locally deferred order is not a broker failure."),
+  })
+
+  const result = await execute({ decision, marketMetadata })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.deferred, true)
+  assert.equal(result.data.reason, "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE")
+  assert.equal(calls.includes("broker"), false, "The broker must never receive a BUY after the shutdown gate activates.")
+  assert.ok(calls.indexOf("durable-intent") < calls.indexOf("durable-outcome:REJECTED"))
+  assert.ok(calls.indexOf("durable-outcome:REJECTED") < calls.indexOf("deferred:CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE"))
+})
+
 test("does not call the broker and removes PENDING registration when durable order-intent acknowledgement fails", async () => {
   let brokerCalls = 0
   const deferredRegistrations = []
