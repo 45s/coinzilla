@@ -260,8 +260,8 @@ async function fetchWithRetries(...args) {
   const maxRetryAfterMs = options.maxRetryAfterMs ?? 30_000;
   const sleep = options.sleep ?? defaultSleep;
   const now = options.now ?? Date.now;
-  const fetchImpl = options.fetchImpl ?? ((...args) => {
-    const [target, init] = args;
+  const fetchImpl = options.fetchImpl ?? ((...fetchArguments) => {
+    const [target, init] = fetchArguments;
     return fetchPinned(target, init, options);
   });
   const {hostLimiter} = options;
@@ -467,8 +467,8 @@ hostLimiter }));
     }
   }));
 
-  return results.sort((...args) => {
-    const [left, right] = args;
+  return results.sort((...sortArguments) => {
+    const [left, right] = sortArguments;
     return left.url.localeCompare(right.url);
   });
 }
