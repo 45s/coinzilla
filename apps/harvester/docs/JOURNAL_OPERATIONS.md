@@ -186,7 +186,6 @@ Keep the original client order ID for an ambiguous placement. Reconcile by canon
 
 A failure in one market does not erase another market's SAFE_TO_SHUTDOWN marker, but it prevents shared services from stopping. The coordinator waits for all strategy participants; it does not decide whether a Conservative order is safe.
 
-
 ### Ambiguous order acknowledgements during shutdown
 
 A placement request can have an uncertain local outcome even when Binance accepted the order. Keep the original client order ID and retain the order as UNKNOWN; never retry placement because an acknowledgement timed out. An authoritative user-data `executionReport` with the matching owned `clientOrderId` and exchange-assigned `brokerOrderId` resolves identity. The first matching `NEW` report advances UNKNOWN to OPEN; duplicates are idempotent and conflicting identities remain rejected.
