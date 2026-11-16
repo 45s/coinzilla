@@ -6,15 +6,27 @@ import {
 } from "@coinzilla/utils"
 
 function assertNonNegative({ value, field }) {
-  assertDecimalString({ value, field })
-  if (compareDecimal({ left: value, right: "0" }) < 0) {
+  assertDecimalString({
+    value,
+    field,
+  })
+  if (compareDecimal({
+    left: value,
+    right: "0",
+  }) < 0) {
     throw new RangeError(`${field} must be non-negative`)
   }
 }
 
 function assertPositive({ value, field, message = `${field} must be positive` }) {
-  assertNonNegative({ value, field })
-  if (compareDecimal({ left: value, right: "0" }) <= 0) {
+  assertNonNegative({
+    value,
+    field,
+  })
+  if (compareDecimal({
+    left: value,
+    right: "0",
+  }) <= 0) {
     throw new RangeError(message)
   }
 }
