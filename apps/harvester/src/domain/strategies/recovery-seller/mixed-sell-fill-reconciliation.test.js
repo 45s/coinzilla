@@ -141,9 +141,7 @@ function makeAllocation({ fill, orderRegistry, recoveryQuantity, legacyQuantity 
   })
 }
 
-function hasCode(error, code) {
-  return error instanceof MixedSellFillReconciliationError && error.code === code
-}
+const hasCode = (expectedCode) => (error) => error instanceof MixedSellFillReconciliationError && error.code === expectedCode
 
 test("creates an empty immutable reconciliation from registered Recovery Seller order ownership", () => {
   const { order, orderRegistry } = makeOrderContext()
@@ -260,7 +258,7 @@ test("rejects a repeated Fill ID when its allocation split changes", () => {
       reconciliation: state,
       allocation: conflict,
     }),
-    (error) => hasCode(error, "RS_MIXED_SELL_RECONCILIATION_ALLOCATION_CONFLICT"),
+    (error) => hasCode("RS_MIXED_SELL_RECONCILIATION_ALLOCATION_CONFLICT")(error),
     "One canonical Fill ID cannot be staged with two different recovery/legacy splits.",
   )
 })
@@ -298,7 +296,7 @@ test("rejects a staged allocation owned by another Recovery Seller cycle", () =>
       reconciliation: state,
       allocation: other,
     }),
-    (error) => hasCode(error, "RS_MIXED_SELL_RECONCILIATION_ORDER_OWNERSHIP_MISMATCH"),
+    (error) => hasCode("RS_MIXED_SELL_RECONCILIATION_ORDER_OWNERSHIP_MISMATCH")(error),
     "A reconciliation must not mix fills from different RS cycles.",
   )
 })
@@ -336,7 +334,7 @@ test("rejects aggregate staged quantity above the registered order quantity", ()
       reconciliation: state,
       allocation: excess,
     }),
-    (error) => hasCode(error, "RS_MIXED_SELL_RECONCILIATION_ORDER_QUANTITY_EXCEEDED"),
+    (error) => hasCode("RS_MIXED_SELL_RECONCILIATION_ORDER_QUANTITY_EXCEEDED")(error),
     "Staged distinct Fill quantity must not exceed registered original order quantity.",
   )
 })
@@ -352,7 +350,7 @@ test("rejects an order without registered Recovery Seller ownership", () => {
       order,
       orderRegistry,
     }),
-    (error) => hasCode(error, "RS_MIXED_SELL_RECONCILIATION_ORDER_OWNERSHIP_MISMATCH"),
+    (error) => hasCode("RS_MIXED_SELL_RECONCILIATION_ORDER_OWNERSHIP_MISMATCH")(error),
     "An unowned order must not receive Recovery Seller reconciliation state.",
   )
 })
