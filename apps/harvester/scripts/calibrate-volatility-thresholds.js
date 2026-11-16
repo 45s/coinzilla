@@ -25,7 +25,7 @@ const REFERENCE_OBSERVATIONS = 60
 const INDICATOR_SCALE = 18
 const RATIO_SCALE = 8
 
-function normalizeArchiveTimestamp(value, { field, sourceFile, lineNumber } = {}) {
+function normalizeArchiveTimestamp({ value, field, sourceFile, lineNumber }) {
   if (!/^\d+$/.test(value)) {
     throw new TypeError(`${sourceFile} line ${lineNumber}: ${field} must be an integer timestamp`)
   }
@@ -68,12 +68,14 @@ export function parseBinanceSpotKlineCsv({ content, symbol, sourceFile = "input.
       throw new RangeError(`${sourceFile} line ${lineNumber}: expected 12 Binance Spot Kline columns, received ${fields.length}`)
     }
 
-    const openTime = normalizeArchiveTimestamp(fields[0], {
+    const openTime = normalizeArchiveTimestamp({
+      value: fields[0],
       field: "openTime",
       sourceFile,
       lineNumber,
     })
-    const closeTime = normalizeArchiveTimestamp(fields[6], {
+    const closeTime = normalizeArchiveTimestamp({
+      value: fields[6],
       field: "closeTime",
       sourceFile,
       lineNumber,
@@ -151,7 +153,7 @@ export function mergeAndValidateCandles({ symbol, candleGroups } = {}) {
 
   const candles = [...byOpenTime.values()]
     .map(({ candle }) => candle)
-    .sort((left, right) => left.openTime - right.openTime)
+    .sort((...values) => values[0].openTime - values[1].openTime)
   if (candles.length === 0) {
     throw new RangeError("historical candle merge contains no candles")
   }
@@ -204,7 +206,10 @@ function percentile({ sortedValues, percent }) {
  * Replay the production volatility metric and state-transition functions over
  * validated history. This is a threshold diagnostic, not an execution backtest.
  */
-function createVolatilityObservation({ calculated, thresholds }) {
+function createVolatilityObservation({
+      calculated,
+      thresholds,
+    }) {
   const metrics = calculated.metrics ?? null
   if (!metrics) {
     return {
@@ -227,9 +232,18 @@ function createVolatilityObservation({ calculated, thresholds }) {
   return {
     ratio,
     thresholdCounts: {
-      warning: compareDecimal({ left: ratio, right: thresholds.warningRatio }) >= 0 ? 1 : 0,
-      protection: compareDecimal({ left: ratio, right: thresholds.protectRatio }) >= 0 ? 1 : 0,
-      recovery: compareDecimal({ left: ratio, right: thresholds.recoverRatio }) <= 0 ? 1 : 0,
+      warning: compareDecimal({
+        left: ratio,
+        right: thresholds.warningRatio,
+      }) >= 0 ? 1 : 0,
+      protection: compareDecimal({
+        left: ratio,
+        right: thresholds.protectRatio,
+      }) >= 0 ? 1 : 0,
+      recovery: compareDecimal({
+        left: ratio,
+        right: thresholds.recoverRatio,
+      }) <= 0 ? 1 : 0,
     },
     snapshot: {
       ok: true,
@@ -269,7 +283,10 @@ function createVolatilityReplay({ symbol }) {
   }
 }
 
-function recordVolatilityObservation({ observation, replay }) {
+function recordVolatilityObservation({
+      observation,
+      replay,
+    }) {
   if (observation.ratio === null) {
     replay.unavailableObservations += 1
     return
@@ -281,7 +298,10 @@ function recordVolatilityObservation({ observation, replay }) {
   replay.thresholdCounts.recovery += observation.thresholdCounts.recovery
 }
 
-function recordVolatilityTransition({ transition, replay }) {
+function recordVolatilityTransition({
+      transition,
+      replay,
+    }) {
   replay.state = transition.state
   replay.stateCounts[replay.state.mode] += 1
   if (transition.enteredProtected) {
@@ -306,7 +326,10 @@ function recordVolatilityTransition({ transition, replay }) {
 }
 
 function createVolatilityHistoryReport({ symbol, history, thresholds, replay, latestMetrics }) {
-  const sortedRatios = [...replay.ratios].sort((left, right) => compareDecimal({ left, right }))
+  const sortedRatios = [...replay.ratios].sort((...values) => compareDecimal({
+    left: values[0],
+    right: values[1],
+  }))
   const protectedObservations =
     replay.stateCounts[VOLATILITY_PROTECTION_MODES.PROTECTED] +
     replay.stateCounts[VOLATILITY_PROTECTION_MODES.RECOVERING]
@@ -326,10 +349,22 @@ function createVolatilityHistoryReport({ symbol, history, thresholds, replay, la
     thresholds,
     thresholdCounts: Object.freeze(replay.thresholdCounts),
     ratioPercentiles: Object.freeze({
-      p50: percentile({ sortedValues: sortedRatios, percent: 50 }),
-      p90: percentile({ sortedValues: sortedRatios, percent: 90 }),
-      p95: percentile({ sortedValues: sortedRatios, percent: 95 }),
-      p99: percentile({ sortedValues: sortedRatios, percent: 99 }),
+      p50: percentile({
+        sortedValues: sortedRatios,
+        percent: 50,
+      }),
+      p90: percentile({
+        sortedValues: sortedRatios,
+        percent: 90,
+      }),
+      p95: percentile({
+        sortedValues: sortedRatios,
+        percent: 95,
+      }),
+      p99: percentile({
+        sortedValues: sortedRatios,
+        percent: 99,
+      }),
     }),
     maximumRatio: sortedRatios.at(-1),
     stateCounts: Object.freeze(replay.stateCounts),
@@ -363,7 +398,7 @@ export function analyzeVolatilityHistory({ symbol, candles, thresholds: threshol
     intervalMs: CANDLE_INTERVAL_MS,
   })
   if (history.length < STARTUP_HISTORY_CANDLES) {
-    throw new RangeError("historical calibration requires at least " + STARTUP_HISTORY_CANDLES + " contiguous completed candles")
+    throw new RangeError(`historical calibration requires at least ${STARTUP_HISTORY_CANDLES} contiguous completed candles`)
   }
 
   const replay = createVolatilityReplay({ symbol })
