@@ -94,3 +94,17 @@ test("rejects invalid or negative profitability inputs", () => {
     /non-negative|invalid/i,
   )
 })
+
+test("rejects a recovery tranche with no acquired cost basis", () => {
+  assert.throws(
+    () => calculateRecoverySellerProfitability({
+      recoveryCostBasis: "0",
+      recoveryNetQuoteProceeds: "1",
+      minProfit: "0.1",
+      legacyAverageCost: "0",
+      legacyBaseDebit: "0",
+      legacyNetQuoteProceeds: "0",
+    }),
+    /recoveryCostBasis.*positive/i,
+  )
+})
