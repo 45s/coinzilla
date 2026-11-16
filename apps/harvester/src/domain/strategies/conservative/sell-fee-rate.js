@@ -17,25 +17,35 @@ import {
  * @returns {{ feeRate: string, reservedPercent: string, reservedRole: string }}
  */
 export function calculateSellFeeRate({ makerPercent, takerPercent, orderType } = {}) {
-  const percentages = { makerPercent, takerPercent }
+  const percentages = { makerPercent,
+takerPercent }
   for (const [field, value] of Object.entries(percentages)) {
-    assertDecimalString({ value, field })
+    assertDecimalString({ value,
+field })
     if (
-      compareDecimal({ left: value, right: "0" }) < 0 ||
-      compareDecimal({ left: value, right: "100" }) >= 0
+      compareDecimal({ left: value,
+right: "0" }) < 0 ||
+      compareDecimal({ left: value,
+right: "100" }) >= 0
     ) {
-      throw new RangeError(field + " must be from 0 inclusive to 100 exclusive")
+      throw new RangeError(`${field  } must be from 0 inclusive to 100 exclusive`)
     }
   }
 
-  const reservedRole = orderType === "LIMIT_MAKER"
-    ? "MAKER"
-    : compareDecimal({ left: makerPercent, right: takerPercent }) >= 0
-      ? "MAKER"
-      : "TAKER"
-  const reservedPercent = orderType === "LIMIT_MAKER"
-    ? makerPercent
-    : maxDecimal({ left: makerPercent, right: takerPercent })
+  let reservedRole
+  let reservedPercent
+  if (orderType === "LIMIT_MAKER") {
+    reservedRole = "MAKER"
+    reservedPercent = makerPercent
+  } else if (compareDecimal({ left: makerPercent,
+right: takerPercent }) >= 0) {
+    reservedRole = "MAKER"
+    reservedPercent = makerPercent
+  } else {
+    reservedRole = "TAKER"
+    reservedPercent = maxDecimal({ left: makerPercent,
+right: takerPercent })
+  }
 
   return Object.freeze({
     feeRate: percentageToRate({ percent: reservedPercent }),

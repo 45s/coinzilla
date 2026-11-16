@@ -1,12 +1,17 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest("[recovery-ledger.test.js] " + name, ...args)
+const test = (...args) => nodeTest(`[recovery-ledger.test.js] ${  args[0]}`, ...args.slice(1))
 import assert from "node:assert/strict"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { RecoveryLedger } from "./recovery-ledger.js"
 
-const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
-const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({ id: "asset:DOGE",
+code: "DOGE" })
+const quoteAsset = new Asset({ id: "asset:USDT",
+code: "USDT" })
+const market = new Market({ venue: "binance",
+symbol: "DOGEUSDT",
+baseAsset,
+quoteAsset })
 
 function makeFill({
   tradeId,
@@ -17,12 +22,15 @@ function makeFill({
 } = {}) {
   return new Fill({
     tradeId,
-    brokerOrderId: "order-" + tradeId,
+    brokerOrderId: `order-${  tradeId}`,
     market,
     side,
-    price: new Money({ amount: "0.1", asset: quoteAsset }),
-    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
-    quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+    price: new Money({ amount: "0.1",
+asset: quoteAsset }),
+    quantity: new Quantity({ amount: quantity,
+asset: baseAsset }),
+    quoteQuantity: new Money({ amount: quoteQuantity,
+asset: quoteAsset }),
     commissions,
     commissionStatus: "COMPLETE",
   })
@@ -33,7 +41,8 @@ test("accumulates BUY costs and confirmed net SELL proceeds across replacement o
     fill: makeFill({
       tradeId: "buy-1",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.02", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.02",
+asset: quoteAsset }) }),
       ],
     }),
   }).ledger
@@ -45,7 +54,8 @@ test("accumulates BUY costs and confirmed net SELL proceeds across replacement o
       quantity: "40",
       quoteQuantity: "4.5",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01",
+asset: quoteAsset }) }),
       ],
     }),
   }).ledger
@@ -58,7 +68,8 @@ test("accumulates BUY costs and confirmed net SELL proceeds across replacement o
       quantity: "59",
       quoteQuantity: "6",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01",
+asset: quoteAsset }) }),
       ],
     }),
   }).ledger
@@ -71,9 +82,9 @@ test("accumulates BUY costs and confirmed net SELL proceeds across replacement o
 })
 
 test("deduplicates the same canonical fill without changing recovery accounting", () => {
-  const ledger = RecoveryLedger.empty({ market }).applyFill({
+  const {ledger} = RecoveryLedger.empty({ market }).applyFill({
     fill: makeFill({ tradeId: "buy-1" }),
-  }).ledger
+  })
   const duplicate = ledger.applyFill({ fill: makeFill({ tradeId: "buy-1" }) })
 
   assert.equal(duplicate.applied, false)
@@ -82,16 +93,23 @@ test("deduplicates the same canonical fill without changing recovery accounting"
 })
 
 test("rejects fills for another market", () => {
-  const otherBase = new Asset({ id: "asset:ETH", code: "ETH" })
-  const otherMarket = new Market({ venue: "binance", symbol: "ETHUSDT", baseAsset: otherBase, quoteAsset })
+  const otherBase = new Asset({ id: "asset:ETH",
+code: "ETH" })
+  const otherMarket = new Market({ venue: "binance",
+symbol: "ETHUSDT",
+baseAsset: otherBase,
+quoteAsset })
   const otherFill = new Fill({
     tradeId: "eth-buy",
     brokerOrderId: "eth-order",
     market: otherMarket,
     side: "BUY",
-    price: new Money({ amount: "10", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "1", asset: otherBase }),
-    quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+    price: new Money({ amount: "10",
+asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1",
+asset: otherBase }),
+    quoteQuantity: new Money({ amount: "10",
+asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -103,13 +121,17 @@ test("rejects fills for another market", () => {
 })
 
 test("rejects a reused Fill ID when recovery execution facts differ", () => {
-  const ledger = RecoveryLedger.empty({ market }).applyFill({
-    fill: makeFill({ tradeId: "reused-trade", quantity: "100", quoteQuantity: "10" }),
-  }).ledger
+  const {ledger} = RecoveryLedger.empty({ market }).applyFill({
+    fill: makeFill({ tradeId: "reused-trade",
+quantity: "100",
+quoteQuantity: "10" }),
+  })
 
   assert.throws(
     () => ledger.applyFill({
-      fill: makeFill({ tradeId: "reused-trade", quantity: "99", quoteQuantity: "9.9" }),
+      fill: makeFill({ tradeId: "reused-trade",
+quantity: "99",
+quoteQuantity: "9.9" }),
     }),
     /Conflicting execution facts reused Fill ID/,
   )
@@ -119,15 +141,17 @@ test("rejects a reused Fill ID when commission asset differs without mutating Re
   const acceptedFill = makeFill({
     tradeId: "commission-asset-conflict",
     commissions: [
-      new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.01",
+asset: quoteAsset }) }),
     ],
   })
-  const ledger = RecoveryLedger.empty({ market }).applyFill({ fill: acceptedFill }).ledger
+  const {ledger} = RecoveryLedger.empty({ market }).applyFill({ fill: acceptedFill })
   const originalState = ledger.value
   const conflictingFill = makeFill({
     tradeId: "commission-asset-conflict",
     commissions: [
-      new Commission({ amount: new Money({ amount: "0.01", asset: baseAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.01",
+asset: baseAsset }) }),
     ],
   })
 
@@ -155,7 +179,9 @@ test("resets cycle totals while preserving fill identities for deduplication", (
       quoteQuantity: "11",
     }),
   }).ledger
-  const reset = withSell.resetCycle({ minProfit: "0.01", spent: new Money({ amount: "10", asset: quoteAsset }) })
+  const reset = withSell.resetCycle({ minProfit: "0.01",
+spent: new Money({ amount: "10",
+asset: quoteAsset }) })
 
   assert.equal(reset.buyCost, "0")
   assert.equal(reset.netSellProceeds, "0")
@@ -178,7 +204,8 @@ test("requires an explicit minimum profit before resetting a recovery cycle", ()
   const originalState = ledger.value
 
   assert.throws(
-    () => ledger.resetCycle({ spent: new Money({ amount: "10", asset: quoteAsset }) }),
+    () => ledger.resetCycle({ spent: new Money({ amount: "10",
+asset: quoteAsset }) }),
     /minProfit/i,
     "A recovery cycle must not be reset without the strategy's explicit minimum-profit threshold.",
   )
@@ -194,7 +221,9 @@ test("does not reset a recovered cycle before the configured minimum profit is r
   const originalState = ledger.value
 
   assert.throws(
-    () => ledger.resetCycle({ minProfit: "0.01", spent: new Money({ amount: "10", asset: quoteAsset }) }),
+    () => ledger.resetCycle({ minProfit: "0.01",
+spent: new Money({ amount: "10",
+asset: quoteAsset }) }),
     /minimum profit/i,
     "Recovering invested capital is not enough when realized profit is below the configured minimum.",
   )
@@ -210,7 +239,9 @@ test("does not reset a recovery cycle while invested quote capital remains outst
   const originalState = ledger.value
 
   assert.throws(
-    () => ledger.resetCycle({ minProfit: "0.01", spent: new Money({ amount: "10", asset: quoteAsset }) }),
+    () => ledger.resetCycle({ minProfit: "0.01",
+spent: new Money({ amount: "10",
+asset: quoteAsset }) }),
     /minimum profit/i,
     "A cycle with unrecovered invested capital must never be reset.",
   )
@@ -245,7 +276,8 @@ test("rejects reset when authoritative Position.spent disagrees with the compati
   assert.throws(
     () => ledger.resetCycle({
       minProfit: "0.01",
-      spent: new Money({ amount: "10", asset: quoteAsset }),
+      spent: new Money({ amount: "10",
+asset: quoteAsset }),
     }),
     /compatibility mirror/i,
     "The reset must detect divergence from authoritative Position.spent instead of calculating profit from the legacy buyCost mirror.",
@@ -264,7 +296,8 @@ test("rejects reset when authoritative Position.spent belongs to a different ass
   assert.throws(
     () => ledger.resetCycle({
       minProfit: "0.01",
-      spent: new Money({ amount: "10", asset: baseAsset }),
+      spent: new Money({ amount: "10",
+asset: baseAsset }),
     }),
     /quote asset/i,
     "Recovery cost basis must be denominated in the market's canonical quote asset.",

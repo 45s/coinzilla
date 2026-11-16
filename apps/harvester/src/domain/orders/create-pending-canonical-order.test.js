@@ -3,9 +3,14 @@ import assert from "node:assert/strict"
 import { Asset, CanonicalOrder, Market } from "@coinzilla/entities"
 import { createPendingCanonicalOrder } from "./create-pending-canonical-order.js"
 
-const baseAsset = new Asset({ id: "doge", code: "DOGE" })
-const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({ id: "doge",
+code: "DOGE" })
+const quoteAsset = new Asset({ id: "usdt",
+code: "USDT" })
+const market = new Market({ venue: "binance",
+symbol: "DOGEUSDT",
+baseAsset,
+quoteAsset })
 const order = {
   symbol: "DOGEUSDT",
   side: "BUY",
@@ -32,7 +37,8 @@ test("creates an immutable PENDING canonical order without broker identity", () 
 
 test("defaults to the exchange-validated post-only type when type is omitted", () => {
   const result = createPendingCanonicalOrder({
-    order: { ...order, type: undefined },
+    order: { ...order,
+type: undefined },
     market,
     clientOrderId: "h-12345678901234567890123456789012",
     supportedOrderTypes: ["LIMIT_MAKER"],
@@ -48,23 +54,28 @@ test("rejects invalid order intent, exchange capability and decimal values", () 
   }
   assert.throws(() => createPendingCanonicalOrder({
     ...common,
-    order: { ...order, side: "HOLD" },
+    order: { ...order,
+side: "HOLD" },
   }), /side must be BUY or SELL/)
   assert.throws(() => createPendingCanonicalOrder({
     ...common,
-    order: { ...order, type: "MARKET" },
+    order: { ...order,
+type: "MARKET" },
   }), /only supports LIMIT/)
   assert.throws(() => createPendingCanonicalOrder({
     ...common,
-    order: { ...order, type: "LIMIT" },
+    order: { ...order,
+type: "LIMIT" },
     supportedOrderTypes: ["LIMIT_MAKER"],
   }), /does not support order type LIMIT/)
   assert.throws(() => createPendingCanonicalOrder({
     ...common,
-    order: { ...order, quantity: 100 },
+    order: { ...order,
+quantity: 100 },
   }))
   assert.throws(() => createPendingCanonicalOrder({
     ...common,
-    order: { ...order, price: "0" },
+    order: { ...order,
+price: "0" },
   }), /limitPrice should be greater than zero/)
 })
