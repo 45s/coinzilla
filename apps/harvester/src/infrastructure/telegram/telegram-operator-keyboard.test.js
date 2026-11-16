@@ -503,7 +503,11 @@ test("rejects an unauthorized persistent-keyboard action before reading market s
   assert.equal(sentMessages[0].text, "Not authorized.", "An unauthorized keyboard action must receive the existing authorization response.")
 })
 
-const infrastructureJavaScriptFiles = [
+
+test("temporary ESLint autofix preview", async () => {
+  const { ESLint } = await import("eslint");
+  const eslint = new ESLint({ fix: true });
+  const results = await eslint.lintFiles([
   "src/infrastructure/brokers/binance-broker-adapter.js",
   "src/infrastructure/brokers/binance-broker-adapter.test.js",
   "src/infrastructure/brokers/binance-market-metadata.js",
@@ -556,53 +560,17 @@ const infrastructureJavaScriptFiles = [
   "src/infrastructure/telegram/telegram-operator-adapter.js",
   "src/infrastructure/telegram/telegram-operator-adapter.test.js",
   "src/infrastructure/telegram/telegram-operator-diagnostics.js",
-  "src/infrastructure/telegram/telegram-operator-diagnostics.test.js",
-  "src/infrastructure/telegram/telegram-operator-keyboard.test.js"
-];
-const infrastructureDirectories = ["brokers","config","journal","logging","operational-state","process-lock","process","telegram"];
-
-for (const directory of infrastructureDirectories) {
-  test("temporary ESLint baseline for infrastructure/" + directory, async () => {
-    const { ESLint } = await import("eslint");
-    const eslint = new ESLint();
-    const directoryFiles = infrastructureJavaScriptFiles.filter((filePath) => filePath.includes("/" + directory + "/"));
-    const results = await eslint.lintFiles(directoryFiles);
-    const findings = [];
-
-    for (const result of results) {
-      if (result.errorCount === 0 && result.warningCount === 0) {
-        continue;
-      }
-      const rules = {};
-      for (const message of result.messages) {
-        const rule = message.ruleId ?? "fatal";
-        rules[rule] = (rules[rule] ?? 0) + 1;
-      }
-      findings.push({
-        file: result.filePath.split("/apps/harvester/").pop(),
-        errors: result.errorCount,
-        warnings: result.warningCount,
-        rules,
-      });
-    }
-
-    let errorCount = 0;
-    let warningCount = 0;
-    for (const finding of findings) {
-      errorCount += finding.errors;
-      warningCount += finding.warnings;
-    }
-
-    assert.equal(
-      errorCount + warningCount,
-      0,
-      JSON.stringify({
-        directory,
-        filesWithFindings: findings.length,
-        errorCount,
-        warningCount,
-        findings,
-      }, null, 2),
-    );
-  });
-}
+  "src/infrastructure/telegram/telegram-operator-diagnostics.test.js"
+]);
+  const changed = results
+    .filter((result) => typeof result.output === "string")
+    .map((result) => ({
+      path: result.filePath.split("/apps/harvester/").pop(),
+      content: result.output,
+    }));
+  assert.equal(
+    changed.length,
+    0,
+    JSON.stringify({ files: changed }, null, 2),
+  );
+});
