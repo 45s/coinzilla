@@ -89,7 +89,7 @@ Remaining safety and observability follow-ups #1103 and #1105 remain open; #1104
 - TDD/DDD: define application query contracts before transport formatting; keep Telegram as a thin adapter; do not read engine internals or call the broker from Telegram.
 - Named exports only; no default exports. Reuse existing application workflows and notifier infrastructure; no speculative shared packages or command bus.
 - Each implementation commit includes focused tests and relevant docs/roadmap updates. Each phase is a focused PR into `develop`; phase completion requires merge and successful required checks on the exact PR head.
-- Telegram inbound control defaults disabled; private-chat allowlist and application actor authorization remain mandatory when explicitly enabled. `TELEGRAM_USER_ID` supplies the default allowlist entry but does not enable control, while `TELEGRAM_BOT_TOKEN` remains environment-only.
+- Telegram inbound control defaults enabled; private-chat allowlist and application actor authorization remain mandatory. `TELEGRAM_USER_ID` supplies the default allowlist entry, while `TELEGRAM_BOT_TOKEN` remains environment-only.
 - No order placement, cancellation, adoption, arbitrary broker mutation, configuration editing, strategy mutation, or safety bypass.
 - No TESTNET/LIVE exchange operation is authorized or needed for CC.
 - ADR-0001 Steps 8–9 are deferred; the current operator-pause process-lifetime limitation remains explicit until a separate proven restoration change is completed.
