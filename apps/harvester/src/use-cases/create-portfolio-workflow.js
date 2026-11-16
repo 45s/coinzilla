@@ -161,53 +161,64 @@ function hasPortfolioStatsChanged({ previousPosition, nextPosition }) {
   }) !== 0)
 }
 
+function subtractPositionAmount({ nextPosition, previousPosition, field }) {
+  return subtractDecimal({
+    left: nextPosition?.[field]?.amount ?? "0",
+    right: previousPosition?.[field]?.amount ?? "0",
+  })
+}
+
+function createOutstandingRecoveryAmountDelta({ nextPosition, previousPosition, nextLedger, currentLedger }) {
+  const nextOutstanding = maxDecimal({
+    left: "0",
+    right: subtractDecimal({
+      left: nextPosition?.spent.amount ?? "0",
+      right: nextLedger.netSellProceeds,
+    }),
+  })
+  const previousOutstanding = maxDecimal({
+    left: "0",
+    right: subtractDecimal({
+      left: previousPosition?.spent.amount ?? "0",
+      right: currentLedger.netSellProceeds,
+    }),
+  })
+  return subtractDecimal({ left: nextOutstanding, right: previousOutstanding })
+}
+
+function createRealizedNetProfitDelta({ nextPosition, previousPosition, nextLedger, currentLedger }) {
+  const nextProfit = subtractDecimal({
+    left: nextLedger.netSellProceeds,
+    right: nextPosition?.spent.amount ?? "0",
+  })
+  const previousProfit = subtractDecimal({
+    left: currentLedger.netSellProceeds,
+    right: previousPosition?.spent.amount ?? "0",
+  })
+  return subtractDecimal({ left: nextProfit, right: previousProfit })
+}
+
 function createExecutionAccountingDelta({ nextPosition, previousPosition, nextLedger, currentLedger }) {
   return {
-    portfolioActiveBase: subtractDecimal({
-      left: nextPosition?.baseQuantity.amount ?? "0",
-      right: previousPosition?.baseQuantity.amount ?? "0",
-    }),
-    portfolioFreeBase: subtractDecimal({
-      left: nextPosition?.freeBaseQuantity.amount ?? "0",
-      right: previousPosition?.freeBaseQuantity.amount ?? "0",
-    }),
-    portfolioQuoteCashFlow: subtractDecimal({
-      left: nextPosition?.quoteNetCashFlow.amount ?? "0",
-      right: previousPosition?.quoteNetCashFlow.amount ?? "0",
-    }),
-    positionSpent: subtractDecimal({
-      left: nextPosition?.spent.amount ?? "0",
-      right: previousPosition?.spent.amount ?? "0",
-    }),
+    portfolioActiveBase: subtractPositionAmount({ nextPosition, previousPosition, field: "baseQuantity" }),
+    portfolioFreeBase: subtractPositionAmount({ nextPosition, previousPosition, field: "freeBaseQuantity" }),
+    portfolioQuoteCashFlow: subtractPositionAmount({ nextPosition, previousPosition, field: "quoteNetCashFlow" }),
+    positionSpent: subtractPositionAmount({ nextPosition, previousPosition, field: "spent" }),
     netSellProceeds: subtractDecimal({
       left: nextLedger.netSellProceeds,
       right: currentLedger.netSellProceeds,
     }),
-    outstandingRecoveryAmount: subtractDecimal({
-      left: maxDecimal({
-        left: "0",
-        right: subtractDecimal({
-          left: nextPosition?.spent.amount ?? "0",
-          right: nextLedger.netSellProceeds,
-        }),
-      }),
-      right: maxDecimal({
-        left: "0",
-        right: subtractDecimal({
-          left: previousPosition?.spent.amount ?? "0",
-          right: currentLedger.netSellProceeds,
-        }),
-      }),
+    outstandingRecoveryAmount: createOutstandingRecoveryAmountDelta({
+      nextPosition,
+      previousPosition,
+      nextLedger,
+      currentLedger,
     }),
-    realizedNetProfit: subtractDecimal({
-      left: subtractDecimal({
-        left: nextLedger.netSellProceeds,
-        right: nextPosition?.spent.amount ?? "0",
-      }),
-      right: subtractDecimal({
-        left: currentLedger.netSellProceeds,
-        right: previousPosition?.spent.amount ?? "0",
-      }),
+    realizedNetProfit: createRealizedNetProfitDelta({
+      nextPosition,
+      previousPosition,
+      nextLedger,
+      currentLedger,
     }),
   }
 }
