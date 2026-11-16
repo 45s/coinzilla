@@ -49,7 +49,7 @@ function getInitialTradingSnapshot({ projection }) {
   )
   if (snapshots.length === 0) {return undefined}
 
-  const initial = snapshots[0]
+  const [initial] = snapshots
   const balancesByAsset = new Map()
   const auditReasons = new Set()
   let auditStatus = "COMPLETE"
@@ -77,7 +77,10 @@ function getInitialTradingSnapshot({ projection }) {
     ...initial,
     auditStatus,
     auditReasons: [...auditReasons],
-    balances: [...balancesByAsset.values()].sort((left, right) => left.asset.localeCompare(right.asset)),
+    balances: [...balancesByAsset.values()].sort((...balances) => {
+      const [left, right] = balances
+      return left.asset.localeCompare(right.asset)
+    }),
   }
 }
 
@@ -155,9 +158,9 @@ reason: "NO_PRIOR_TRADING_STATE" }) })
         throw new Error("Market-history retention baseline was verified after the current account snapshot")
       }
     }
-    const latestRecordedSourceTime = projection.data.accountSnapshots.reduce(
-      (latest, snapshot) => Math.max(latest, snapshot.sourceTime),
+    const latestRecordedSourceTime = Math.max(
       baseline.sourceTime,
+      ...projection.data.accountSnapshots.map(({ sourceTime }) => sourceTime),
     )
     if (currentAccountSnapshot.sourceTime < latestRecordedSourceTime) {
       throw new Error("Current exchange account snapshot is older than the latest durable Journal account snapshot")
@@ -572,9 +575,10 @@ right: expected }) !== 0) {
         balancesChecked: assetCodes.size,
         openOrdersChecked: openOrders.length,
         reservationsChecked: expectedLocked.size,
-        unownedOpenOrders: Object.freeze(unownedOpenOrders.sort((left, right) =>
-          left.symbol.localeCompare(right.symbol) || left.brokerOrderId.localeCompare(right.brokerOrderId)
-        )),
+        unownedOpenOrders: Object.freeze(unownedOpenOrders.sort((...orders) => {
+          const [left, right] = orders
+          return left.symbol.localeCompare(right.symbol) || left.brokerOrderId.localeCompare(right.brokerOrderId)
+        })),
         blockedMarkets: Object.freeze([...blockedMarkets].sort()),
         targetMarketBlocked: targetMarket ? blockedMarkets.has(targetMarket.symbol) : undefined,
         ...(tradeHistoryAudit ? { tradeHistory: tradeHistoryAudit.data } : {}),
