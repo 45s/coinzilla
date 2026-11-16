@@ -114,9 +114,21 @@ function assertFillParity({ journalFill, exchangeFill }) {
   const mismatch = (field) => {
     throw new Error(`Account trade history conflicts with durable Journal ${field} for execution ${journalFill.fillId}`)
   }
-  assertFillIdentityParity({ journalFill, exchangeFill, mismatch })
-  assertFillAmountParity({ journalFill, exchangeFill, mismatch })
-  assertFillCommissionParity({ journalFill, exchangeFill, mismatch })
+  assertFillIdentityParity({
+    journalFill,
+    exchangeFill,
+    mismatch,
+  })
+  assertFillAmountParity({
+    journalFill,
+    exchangeFill,
+    mismatch,
+  })
+  assertFillCommissionParity({
+    journalFill,
+    exchangeFill,
+    mismatch,
+  })
 }
 
 function validateMarketPaginationEvidence({
@@ -186,8 +198,15 @@ function validateScopeEvidence({
   if (marketUniverseComplete === true) {
     throw new Error("Single-market trade history cannot prove account-wide market-universe completeness")
   }
-  validateMarketPaginationEvidence({ historyEvidence, market })
-  validateMarketRetentionEvidence({ historyRetentionEvidence, historyEvidence, market })
+  validateMarketPaginationEvidence({
+    historyEvidence,
+    market,
+  })
+  validateMarketRetentionEvidence({
+    historyRetentionEvidence,
+    historyEvidence,
+    market,
+  })
 }
 
 function selectScopeRecords({ journalFills, exchangeFills, ownedOrders, scope, market }) {
