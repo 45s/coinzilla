@@ -26,12 +26,18 @@ test("reconciles current PREFLIGHT/CLOSING snapshots", () => {
     openingSnapshot: snapshot({
       phase: "PREFLIGHT",
       sourceTime: 100,
-      balances: [balance({ asset: "DOGE", free: "10", locked: "0", total: "10" })],
+      balances: [balance({ asset: "DOGE",
+free: "10",
+locked: "0",
+total: "10" })],
     }),
     closingSnapshot: snapshot({
       phase: "CLOSING",
       sourceTime: 200,
-      balances: [balance({ asset: "DOGE", free: "11", locked: "0", total: "11" })],
+      balances: [balance({ asset: "DOGE",
+free: "11",
+locked: "0",
+total: "11" })],
     }),
   })
 
@@ -46,12 +52,30 @@ test("reconciles exact per-asset wallet deltas and assets appearing/disappearing
     openingSnapshot: snapshot({
       phase: "OPENING",
 sourceTime: 100,
-      balances: [balance({ asset: "DOGE", free: "100", locked: "0", total: "100" }), balance({ asset: "USDT", free: "10", locked: "2", total: "12" }), balance({ asset: "FDUSD", free: "5", locked: "0", total: "5" })],
+      balances: [balance({ asset: "DOGE",
+free: "100",
+locked: "0",
+total: "100" }), balance({ asset: "USDT",
+free: "10",
+locked: "2",
+total: "12" }), balance({ asset: "FDUSD",
+free: "5",
+locked: "0",
+total: "5" })],
     }),
     closingSnapshot: snapshot({
       phase: "CLOSING",
 sourceTime: 200,
-      balances: [balance({ asset: "DOGE", free: "101.25", locked: "0", total: "101.25" }), balance({ asset: "USDT", free: "8.5", locked: "1", total: "9.5" }), balance({ asset: "BNB", free: "0.01", locked: "0", total: "0.01" })],
+      balances: [balance({ asset: "DOGE",
+free: "101.25",
+locked: "0",
+total: "101.25" }), balance({ asset: "USDT",
+free: "8.5",
+locked: "1",
+total: "9.5" }), balance({ asset: "BNB",
+free: "0.01",
+locked: "0",
+total: "0.01" })],
     }),
   })
   assert.equal(result.ok, true)
@@ -123,7 +147,10 @@ test("returns the exact failure and leaves both snapshots unchanged for invalid 
   const openingSnapshot = snapshot({
     phase: "OPENING",
     sourceTime: 100,
-    balances: [balance({ asset: "USDT", free: "1", locked: "0", total: "1" })],
+    balances: [balance({ asset: "USDT",
+free: "1",
+locked: "0",
+total: "1" })],
   })
   const cases = [
     {
@@ -150,7 +177,10 @@ total: "1" }],
       closingSnapshot: snapshot({
         phase: "CLOSING",
         sourceTime: 200,
-        balances: [balance({ asset: "USDT", free: "-1", locked: "0", total: "-1" })],
+        balances: [balance({ asset: "USDT",
+free: "-1",
+locked: "0",
+total: "-1" })],
       }),
       expectedError: "CLOSING snapshot balance cannot be negative: USDT.free",
     },
@@ -159,7 +189,13 @@ total: "1" }],
       closingSnapshot: snapshot({
         phase: "CLOSING",
         sourceTime: 200,
-        balances: [balance({ asset: "USDT", free: "1", locked: "0", total: "1" }), balance({ asset: "USDT", free: "2", locked: "0", total: "2" })],
+        balances: [balance({ asset: "USDT",
+free: "1",
+locked: "0",
+total: "1" }), balance({ asset: "USDT",
+free: "2",
+locked: "0",
+total: "2" })],
       }),
       expectedError: "CLOSING snapshot contains duplicate asset USDT",
     },
@@ -208,12 +244,18 @@ test("rejects negative and negative-zero exchange snapshot timestamps", () => {
       openingSnapshot: snapshot({
         phase: "PREFLIGHT",
         sourceTime,
-        balances: [balance({ asset: "DOGE", free: "10", locked: "0", total: "10" })],
+        balances: [balance({ asset: "DOGE",
+free: "10",
+locked: "0",
+total: "10" })],
       }),
       closingSnapshot: snapshot({
         phase: "CLOSING",
         sourceTime: 200,
-        balances: [balance({ asset: "DOGE", free: "11", locked: "0", total: "11" })],
+        balances: [balance({ asset: "DOGE",
+free: "11",
+locked: "0",
+total: "11" })],
       }),
     })
 

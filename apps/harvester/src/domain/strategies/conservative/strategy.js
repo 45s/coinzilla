@@ -90,16 +90,28 @@ function validateStrategyInput({
     throw new TypeError("Conservative strategy activeOrders must be an array")
   }
 
-  const priceTickSize = getRequiredRuleAmount({ marketMetadata, type: "PRICE_INCREMENT" })
-  const quantityStepSize = getRequiredRuleAmount({ marketMetadata, type: "QUANTITY_INCREMENT" })
-  const minQuantity = getRequiredRuleAmount({ marketMetadata, type: "MIN_QUANTITY" })
-  const minNotional = getRequiredRuleAmount({ marketMetadata, type: "MIN_NOTIONAL" })
-  const minPrice = getOptionalRuleAmount({ marketMetadata, type: "MIN_PRICE" })
-  const maxPrice = getOptionalRuleAmount({ marketMetadata, type: "MAX_PRICE" })
-  const maxQuantity = getOptionalRuleAmount({ marketMetadata, type: "MAX_QUANTITY" })
-  const maxNotional = getOptionalRuleAmount({ marketMetadata, type: "MAX_NOTIONAL" })
-  const hasActiveBuy = hasActiveOrder({ activeOrders, symbol: marketPrice.symbol, side: "BUY" })
-  const hasActiveSell = hasActiveOrder({ activeOrders, symbol: marketPrice.symbol, side: "SELL" })
+  const priceTickSize = getRequiredRuleAmount({ marketMetadata,
+type: "PRICE_INCREMENT" })
+  const quantityStepSize = getRequiredRuleAmount({ marketMetadata,
+type: "QUANTITY_INCREMENT" })
+  const minQuantity = getRequiredRuleAmount({ marketMetadata,
+type: "MIN_QUANTITY" })
+  const minNotional = getRequiredRuleAmount({ marketMetadata,
+type: "MIN_NOTIONAL" })
+  const minPrice = getOptionalRuleAmount({ marketMetadata,
+type: "MIN_PRICE" })
+  const maxPrice = getOptionalRuleAmount({ marketMetadata,
+type: "MAX_PRICE" })
+  const maxQuantity = getOptionalRuleAmount({ marketMetadata,
+type: "MAX_QUANTITY" })
+  const maxNotional = getOptionalRuleAmount({ marketMetadata,
+type: "MAX_NOTIONAL" })
+  const hasActiveBuy = hasActiveOrder({ activeOrders,
+symbol: marketPrice.symbol,
+side: "BUY" })
+  const hasActiveSell = hasActiveOrder({ activeOrders,
+symbol: marketPrice.symbol,
+side: "SELL" })
   const hasUnacknowledgedRecoverySell = activeOrders.some((order) =>
     order?.market?.symbol === marketPrice.symbol &&
     order.side === "SELL" &&
@@ -345,11 +357,13 @@ function createRecoverySellDecision({ context, accounting }) {
     return {}
   }
 
-  const sellPlan = createRecoverySellPlanForPosition({ context, accounting })
+  const sellPlan = createRecoverySellPlanForPosition({ context,
+accounting })
   if (compareDecimal({ left: sellPlan.quantity,
 right: "0" }) <= 0) {
     return {
-      inventoryDisposition: createQuantityIncrementDustDisposition({ context, accounting }),
+      inventoryDisposition: createQuantityIncrementDustDisposition({ context,
+accounting }),
     }
   }
 
@@ -485,7 +499,9 @@ function createStandingBuyDecision({ context, accounting, inventoryDisposition, 
     return {}
   }
 
-  const buyPrice = calculateStandingBuyPrice({ context, accounting, lastBuyPrice })
+  const buyPrice = calculateStandingBuyPrice({ context,
+accounting,
+lastBuyPrice })
   const buyQuantity = roundDecimalToIncrement({
     value: String(context.pairConfig.orderQuantity),
     increment: context.quantityStepSize,
@@ -575,8 +591,10 @@ export function evaluateConservativeStrategy({
     marketMetadata,
     activeOrders,
   })
-  const accounting = resolveAccountingState({ context, recoveryLedger })
-  const sellDecision = createRecoverySellDecision({ context, accounting })
+  const accounting = resolveAccountingState({ context,
+recoveryLedger })
+  const sellDecision = createRecoverySellDecision({ context,
+accounting })
   const buyDecision = createStandingBuyDecision({
     context,
     accounting,

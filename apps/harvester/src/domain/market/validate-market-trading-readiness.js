@@ -25,7 +25,10 @@ function readMarketMetadata({ symbol, marketMetadata }) {
   if (!Array.isArray(unvalidatedConstraints)) {
     throw new TypeError("Market metadata unvalidatedConstraints must be an array")
   }
-  return { market, tradingRules, supportedOrderTypes, unvalidatedConstraints }
+  return { market,
+tradingRules,
+supportedOrderTypes,
+unvalidatedConstraints }
 }
 
 function readRequiredConstraints({ symbol, tradingRules }) {
@@ -122,8 +125,10 @@ export function validateMarketTradingReadiness({
     throw new TypeError("validateMarketTradingReadiness requires marketMetadata")
   }
 
-  const metadata = readMarketMetadata({ symbol, marketMetadata })
-  const constraints = readRequiredConstraints({ symbol, tradingRules: metadata.tradingRules })
+  const metadata = readMarketMetadata({ symbol,
+marketMetadata })
+  const constraints = readRequiredConstraints({ symbol,
+tradingRules: metadata.tradingRules })
   validatePositivePairSettings({ pairConfig })
   validateEffectiveOrderQuantity({
     symbol,

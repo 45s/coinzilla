@@ -37,7 +37,8 @@ right: "0" })
       return undefined
     }
   }
-  return { quantity, reason }
+  return { quantity,
+reason }
 }
 
 function normalizeMinimumQuantityDust({ inventoryDisposition, quantity, reason }) {
@@ -116,13 +117,16 @@ function normalizeDustDisposition({ inventoryDisposition, activeQuantity, keepQu
     return undefined
   }
   if (evidence.reason === "MIN_QUANTITY") {
-    return normalizeMinimumQuantityDust({ inventoryDisposition, ...evidence })
+    return normalizeMinimumQuantityDust({ inventoryDisposition,
+...evidence })
   }
   if (evidence.reason === "MIN_NOTIONAL") {
-    return normalizeMinimumNotionalDust({ inventoryDisposition, ...evidence })
+    return normalizeMinimumNotionalDust({ inventoryDisposition,
+...evidence })
   }
   if (evidence.reason === "QUANTITY_INCREMENT") {
-    return normalizeQuantityIncrementDust({ inventoryDisposition, ...evidence })
+    return normalizeQuantityIncrementDust({ inventoryDisposition,
+...evidence })
   }
   return undefined
 }

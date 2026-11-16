@@ -196,7 +196,8 @@ quoteAsset })
       commissionAsset: quoteAsset,
     })
   }
-  return { ...state, metadata }
+  return { ...state,
+metadata }
 }
 
 function createZroDustScenario() {
@@ -254,7 +255,9 @@ quoteAsset })
     commissionAmount: "0.06409546",
     commissionAsset: quoteAsset,
   })
-  return { ...state, metadata, market: dustMarket }
+  return { ...state,
+metadata,
+market: dustMarket }
 }
 
 test("creates the initial BUY below last traded price and rounds down to tick", () => {

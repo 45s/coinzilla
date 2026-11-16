@@ -125,7 +125,8 @@ test("base-asset SELL commission and quantity-step rounding preserve keepQuantit
     commissionAmount: "0.1",
   })
   const position = completed.portfolio.getPosition({ marketId: market.id })
-  const completion = evaluateCompletion({ state: completed, minProfit: "1.021" })
+  const completion = evaluateCompletion({ state: completed,
+minProfit: "1.021" })
 
   assert.equal(position.baseQuantity.amount, "1", "The base commission and SELL quantity must leave exactly keepQuantity active.")
   assert.equal(completed.recoveryLedger.netSellProceeds, "10.01", "Base-asset SELL commission must not reduce quote recovery proceeds.")
@@ -140,7 +141,8 @@ test("base-asset SELL commission and quantity-step rounding preserve keepQuantit
     commissionAsset: baseAsset,
     commissionAmount: "0.101",
   })
-  const overdrawnCompletion = evaluateCompletion({ state: oneStepTooMuch, minProfit: "1.021" })
+  const overdrawnCompletion = evaluateCompletion({ state: oneStepTooMuch,
+minProfit: "1.021" })
 
   assert.equal(oneStepTooMuch.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, "0.899", "One additional quantity step must leave less than keepQuantity after base commission.")
   assert.equal(overdrawnCompletion.eligible, false, "Completion must be rejected when active inventory is below keepQuantity.")
@@ -161,7 +163,8 @@ test("quote-asset SELL commission and price-tick rounding meet the net-profit bo
     commissionAsset: quoteAsset,
     commissionAmount: quoteCommission,
   })
-  const completion = evaluateCompletion({ state: completed, minProfit: "1.021" })
+  const completion = evaluateCompletion({ state: completed,
+minProfit: "1.021" })
 
   assert.equal(completed.recoveryLedger.netSellProceeds, "9.9099", "The 10.01 quote proceeds less the independently supplied 0.1001 commission must equal 9.9099.")
   assert.equal(completion.eligible, false, "Residual active inventory must prevent recovery completion even after the profit target is met.")
@@ -177,7 +180,8 @@ test("quote-asset SELL commission and price-tick rounding meet the net-profit bo
     commissionAsset: quoteAsset,
     commissionAmount: "0.1",
   })
-  const belowCompletion = evaluateCompletion({ state: belowTick, minProfit: "1.021" })
+  const belowCompletion = evaluateCompletion({ state: belowTick,
+minProfit: "1.021" })
 
   assert.equal(belowTick.recoveryLedger.netSellProceeds, "9.9", "At the one-tick-lower price, 10 quote proceeds less 0.1 commission must equal 9.9.")
   assert.equal(belowCompletion.eligible, false, "A net profit below the configured 1.021 target must not complete recovery.")
@@ -190,7 +194,8 @@ test("exact minProfit equality remains eligible after actual quote commission", 
   assert.equal(plan.price, "1", "Exact minProfit equality must require the 1.000 quote price.")
   assert.equal(plan.requiredNetProceeds, "9.9", "The required net proceeds must equal the 8.88 cost plus 1.02 profit.")
 
-  const initial = createInitialAccounting({ tradeId: "exact-profit-buy", baseCommission: "0.1" })
+  const initial = createInitialAccounting({ tradeId: "exact-profit-buy",
+baseCommission: "0.1" })
   const completed = applySellFill({ state: initial,
     tradeId: "exact-profit-sell",
     quoteQuantity: "10",
@@ -198,7 +203,8 @@ test("exact minProfit equality remains eligible after actual quote commission", 
     commissionAsset: quoteAsset,
     commissionAmount: "0.1",
   })
-  const completion = evaluateCompletion({ state: completed, minProfit: "1.02" })
+  const completion = evaluateCompletion({ state: completed,
+minProfit: "1.02" })
 
   assert.equal(completed.recoveryLedger.netSellProceeds, "9.9", "Gross proceeds of 10 less the 0.1 actual quote commission must equal 9.9 net.")
   assert.equal(completion.eligible, true, "Recovery must accept exact equality with the 1.02 minimum profit.")

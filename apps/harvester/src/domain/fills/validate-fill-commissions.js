@@ -143,6 +143,7 @@ export function validateFillCommissions({ market, fill } = {}) {
       totals,
     })
   }
-  validateCommissionTotals({ fill, totals })
+  validateCommissionTotals({ fill,
+totals })
   return Object.freeze(totals)
 }

@@ -72,7 +72,10 @@ right: candle.high }) > 0) {
 
 /** Validate one normalized candle for the requested market and timeframe. */
 export function validateCandle({ candle, symbol, interval, intervalMs } = {}) {
-  validateCandleIdentity({ candle, symbol, interval, intervalMs })
+  validateCandleIdentity({ candle,
+symbol,
+interval,
+intervalMs })
   validateCandlePrices({ candle })
   return Object.freeze({ ...candle })
 }

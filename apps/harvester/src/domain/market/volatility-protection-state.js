@@ -150,7 +150,10 @@ right: thresholds.warningRatio }) >= 0
     }
   }
   return {
-    state: createRecoveryState({ state, metrics, thresholds, activeBuyOrderCount }),
+    state: createRecoveryState({ state,
+metrics,
+thresholds,
+activeBuyOrderCount }),
     warning,
   }
 }
@@ -182,11 +185,14 @@ export function transitionVolatilityProtection({
   }
 
   const { status, metrics } = readVolatilitySnapshot({ snapshot })
-  const unavailableReason = getUnavailableReason({ status, metrics })
+  const unavailableReason = getUnavailableReason({ status,
+metrics })
   let next
   let warning = false
   if (unavailableReason) {
-    next = createProtectedState({ state, reason: unavailableReason, metrics })
+    next = createProtectedState({ state,
+reason: unavailableReason,
+metrics })
   } else {
     const transition = transitionAvailableVolatility({
       state,

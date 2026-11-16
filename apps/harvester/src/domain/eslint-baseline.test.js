@@ -8,7 +8,9 @@ test("Harvester domain source has no ESLint violations", () => {
     fixOutput = execFileSync(
       "pnpm",
       ["exec", "eslint", "src/domain", "--fix-dry-run", "--format", "json"],
-      { cwd: process.cwd(), encoding: "utf8", maxBuffer: 20 * 1024 * 1024 },
+      { cwd: process.cwd(),
+encoding: "utf8",
+maxBuffer: 20 * 1024 * 1024 },
     )
   } catch (error) {
     fixOutput = error.stdout?.toString() ?? ""
@@ -27,7 +29,9 @@ test("Harvester domain source has no ESLint violations", () => {
     output = execFileSync(
       "pnpm",
       ["exec", "eslint", "src/domain", "--format", "json"],
-      { cwd: process.cwd(), encoding: "utf8", maxBuffer: 20 * 1024 * 1024 },
+      { cwd: process.cwd(),
+encoding: "utf8",
+maxBuffer: 20 * 1024 * 1024 },
     );
   } catch (error) {
     output = error.stdout;
@@ -38,7 +42,7 @@ test("Harvester domain source has no ESLint violations", () => {
   for (const result of results) {
     for (const message of result.messages) {
       findings.push({
-        file: result.filePath.replace(process.cwd() + "/", ""),
+        file: result.filePath.replace(`${process.cwd()  }/`, ""),
         line: message.line,
         column: message.column,
         rule: message.ruleId ?? "fatal",
