@@ -589,6 +589,7 @@ test("fails closed before broker construction when explicitly enabled with an un
       }),
       (error) => {
         assert.equal(error.startupResourcesMayBeActive, false, "An Operational State Store preflight failure must report that broker resources were never activated.")
+        assert.equal(Object.prototype.propertyIsEnumerable.call(error, "startupResourcesMayBeActive"), false, "Internal startup-stage metadata must not leak into structured error details.")
         return error.code === "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID"
       },
       "Explicitly enabled operator control must fail closed in production when its Operational State Store is uninitialized.",

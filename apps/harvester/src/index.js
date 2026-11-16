@@ -453,7 +453,7 @@ export async function main({
       journalService,
       eventBus,
       processLock,
-      allowProcessLockRelease: !runtimeStartAttempted,
+      allowProcessLockRelease: !runtimeStartAttempted || error?.startupResourcesMayBeActive === false,
       logger,
     })
     if (cleanupErrors.length > 0) {

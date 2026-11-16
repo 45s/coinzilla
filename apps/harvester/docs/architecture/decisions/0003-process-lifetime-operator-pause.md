@@ -14,6 +14,8 @@ created: 2026-11-12
 
 > **Terminology note (2026-11-14):** This accepted ADR retains the original durable-fact vocabulary as historical architectural terminology. The current application-facing name for the shared persistence component is **Operational State Store**; see the current [operator-control documentation](../../operator-control/README.md) for supported configuration and commands.
 
+> **Configuration-default update (2026-11-16):** The initial enabled-by-default setting referenced in this ADR is superseded by [ADR-0005](./0005-operator-control-opt-in-startup.md). This ADR's process-lifetime pause and durable-before-apply semantics remain unchanged.
+
 ## Context
 
 The operator-pause capability and process-restart trading recovery solve different problems.
