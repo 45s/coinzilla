@@ -72,7 +72,9 @@ async function runRecoveryStage({ category, stage, retryable, task }) {
   } catch (error) {
     throw createRecoveryFailureError({
       error,
-      failure: { category, stage, retryable },
+      failure: { category,
+stage,
+retryable },
     })
   }
 }
@@ -81,7 +83,9 @@ async function reconcileOwnedOrders({ context }) {
   const { tradingEnabled, tradingEngine, drainUserDataEvents, state } = context
   if (!tradingEnabled) {
     return {
-      reconciliation: { ok: true, data: { reconciled: 0, symbols: [] } },
+      reconciliation: { ok: true,
+data: { reconciled: 0,
+symbols: [] } },
       hasCanonicalOwnershipReconciliation: false,
     }
   }
@@ -94,7 +98,8 @@ async function reconcileOwnedOrders({ context }) {
   })
   assertCurrentRecoveryGeneration({ context })
   assertNoRecoveryAccountingFailure({ state })
-  assertNoRetryableRecoveryFailure({ state, generation: context.generation })
+  assertNoRetryableRecoveryFailure({ state,
+generation: context.generation })
   if (!reconciliation?.ok) {
     const failure = resolveRecoveryFailure(reconciliation?.failure)
     if (failure.retryable && !state.accountingFailed) {
@@ -114,7 +119,8 @@ async function reconcileOwnedOrders({ context }) {
       failure,
     })
   }
-  assertNoRetryableRecoveryFailure({ state, generation: context.generation })
+  assertNoRetryableRecoveryFailure({ state,
+generation: context.generation })
   context.setCanonicalOwnershipReconciled(true)
   return {
     reconciliation,
@@ -189,7 +195,8 @@ async function publishRecoveryAccountAudit({ context, snapshot }) {
     category: "ACCOUNTING_INTEGRITY",
     stage: "RECOVERY_ACCOUNT_AUDIT_VALIDATION",
     retryable: false,
-    task: () => context.publishAccountSnapshot({ phase: "RECOVERY", snapshot }),
+    task: () => context.publishAccountSnapshot({ phase: "RECOVERY",
+snapshot }),
   })
 }
 
@@ -217,7 +224,7 @@ async function captureConsistentRecoverySnapshots({
   const { state } = context
   while (true) {
     await drainAndValidateRecoveryEvents({ context })
-    const eventSequence = state.eventSequence
+    const {eventSequence} = state
     const snapshot = await runRecoveryStage({
       category: "ACCOUNTING_INTEGRITY",
       stage: "ACCOUNT_SNAPSHOT_VALIDATION",
@@ -231,10 +238,12 @@ async function captureConsistentRecoverySnapshots({
       continue
     }
 
-    await publishRecoveryAccountAudit({ context, snapshot })
+    await publishRecoveryAccountAudit({ context,
+snapshot })
     assertCurrentRecoveryGeneration({ context })
     assertNoRecoveryAccountingFailure({ state })
-    assertNoRetryableRecoveryFailure({ state, generation: context.generation })
+    assertNoRetryableRecoveryFailure({ state,
+generation: context.generation })
     await drainAndValidateRecoveryEvents({ context })
     if (eventSequence !== state.eventSequence) {
       continue
@@ -247,7 +256,8 @@ async function captureConsistentRecoverySnapshots({
     })
     assertCurrentRecoveryGeneration({ context })
     assertNoRecoveryAccountingFailure({ state })
-    assertNoRetryableRecoveryFailure({ state, generation: context.generation })
+    assertNoRetryableRecoveryFailure({ state,
+generation: context.generation })
     await drainAndValidateRecoveryEvents({ context })
     if (eventSequence === state.eventSequence) {
       return
@@ -310,7 +320,8 @@ function acknowledgeRecoveryResult({ context, userDataSubscription, brokerRecove
     })
   }
   if (!acknowledgement.completed) {
-    logRecoveryAcknowledgementPending({ context, reconciliation })
+    logRecoveryAcknowledgementPending({ context,
+reconciliation })
     return false
   }
   return true
@@ -361,7 +372,8 @@ function acknowledgeBrokerRecovery({ context, reconciliation }) {
       reconciliation,
     })
   }
-  return acknowledgeLegacyRecovery({ context, userDataSubscription })
+  return acknowledgeLegacyRecovery({ context,
+userDataSubscription })
 }
 
 function getRecoveryErrorDetails({ error }) {
@@ -440,11 +452,16 @@ function logCurrentRecoveryFailure({ context, error, details }) {
 function handleRecoveryFailure({ context, error }) {
   const details = getRecoveryErrorDetails({ error })
   if (!isCurrentRecoveryGeneration(context)) {
-    logStaleRecoveryFailure({ context, error, details })
+    logStaleRecoveryFailure({ context,
+error,
+details })
     return
   }
-  applyCurrentRecoveryFailure({ context, error })
-  logCurrentRecoveryFailure({ context, error, details })
+  applyCurrentRecoveryFailure({ context,
+error })
+  logCurrentRecoveryFailure({ context,
+error,
+details })
 }
 
 async function executeRecoveryAttempt({ context }) {
@@ -458,7 +475,8 @@ async function executeRecoveryAttempt({ context }) {
       context,
       hasCanonicalOwnershipReconciliation,
     })
-    const completed = acknowledgeBrokerRecovery({ context, reconciliation })
+    const completed = acknowledgeBrokerRecovery({ context,
+reconciliation })
     if (!completed) {
       return
     }
@@ -468,7 +486,8 @@ async function executeRecoveryAttempt({ context }) {
       reconciledOrders: reconciliation.data?.reconciled ?? 0,
     })
   } catch (error) {
-    handleRecoveryFailure({ context, error })
+    handleRecoveryFailure({ context,
+error })
   }
 }
 
@@ -572,7 +591,8 @@ export function createUserDataRecoveryHandler({
     if (isRecoveryAlreadyHandled({ state })) {
       return
     }
-    if (!hasRecoveryAcknowledgement({ userDataSubscription, logger })) {
+    if (!hasRecoveryAcknowledgement({ userDataSubscription,
+logger })) {
       return
     }
     const brokerRecoveryGeneration = state.recoveryBrokerGeneration
