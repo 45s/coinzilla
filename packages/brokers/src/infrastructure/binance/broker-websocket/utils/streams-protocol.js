@@ -52,31 +52,31 @@ export function createStreamName(type, options = {}) {
   switch (type) {
     case "trade":
     case "aggTrade":
-      if (!normalizedSymbol) throw new TypeError(`symbol is required for ${type}`)
+      if (!normalizedSymbol) {throw new TypeError(`symbol is required for ${type}`)}
       return validateStreamName(`${normalizedSymbol}@${type}`)
     case "miniTicker":
     case "ticker":
       return validateStreamName(normalizedSymbol ? `${normalizedSymbol}@${type}` : `!${type}@arr`)
     case "bookTicker":
-      if (!normalizedSymbol) throw new TypeError("symbol is required for bookTicker")
+      if (!normalizedSymbol) {throw new TypeError("symbol is required for bookTicker")}
       return validateStreamName(`${normalizedSymbol}@bookTicker`)
     case "kline":
-      if (!normalizedSymbol) throw new TypeError("symbol is required for kline")
-      if (!INTERVALS.has(interval)) throw new TypeError("interval is not a supported Binance kline interval")
+      if (!normalizedSymbol) {throw new TypeError("symbol is required for kline")}
+      if (!INTERVALS.has(interval)) {throw new TypeError("interval is not a supported Binance kline interval")}
       return validateStreamName(`${normalizedSymbol}@kline_${interval}`)
     case "rollingWindowTicker":
-      if (!ROLLING_WINDOWS.has(normalizedWindowSize)) throw new TypeError("windowSize must be 1h or 4h")
+      if (!ROLLING_WINDOWS.has(normalizedWindowSize)) {throw new TypeError("windowSize must be 1h or 4h")}
       return validateStreamName(normalizedSymbol
         ? `${normalizedSymbol}@ticker_${normalizedWindowSize}`
         : `!ticker_${normalizedWindowSize}@arr`)
     case "partialBookDepth":
-      if (!normalizedSymbol) throw new TypeError("symbol is required for partialBookDepth")
-      if (!DEPTH_LEVELS.has(Number(levels))) throw new TypeError("levels must be 5, 10, or 20")
-      if (!UPDATE_SPEEDS.has(speed)) throw new TypeError("speed must be 100ms or 1000ms")
+      if (!normalizedSymbol) {throw new TypeError("symbol is required for partialBookDepth")}
+      if (!DEPTH_LEVELS.has(Number(levels))) {throw new TypeError("levels must be 5, 10, or 20")}
+      if (!UPDATE_SPEEDS.has(speed)) {throw new TypeError("speed must be 100ms or 1000ms")}
       return validateStreamName(`${normalizedSymbol}@depth${levels}@${speed}`)
     case "diffBookDepth":
-      if (!normalizedSymbol) throw new TypeError("symbol is required for diffBookDepth")
-      if (!UPDATE_SPEEDS.has(speed)) throw new TypeError("speed must be 100ms or 1000ms")
+      if (!normalizedSymbol) {throw new TypeError("symbol is required for diffBookDepth")}
+      if (!UPDATE_SPEEDS.has(speed)) {throw new TypeError("speed must be 100ms or 1000ms")}
       return validateStreamName(`${normalizedSymbol}@depth@${speed}`)
     default:
       throw new TypeError(`Unsupported Binance stream type: ${type}`)
@@ -102,7 +102,8 @@ export function parseStreamMessage(rawMessage) {
     if (!parsed.every((item) => item && typeof item === "object" && !Array.isArray(item))) {
       throw new TypeError("Binance all-market stream payload must contain objects")
     }
-    return { stream: null, data: parsed }
+    return { stream: null,
+data: parsed }
   }
 
   if (!parsed || typeof parsed !== "object") {
@@ -114,9 +115,11 @@ export function parseStreamMessage(rawMessage) {
       throw new TypeError("Malformed Binance combined-stream envelope")
     }
     if (parsed.stream === "!serverShutdown" && parsed.data.e === "serverShutdown") {
-      return { serverShutdown: true, data: parsed.data }
+      return { serverShutdown: true,
+data: parsed.data }
     }
-    return { stream: validateStreamName(parsed.stream), data: parsed.data }
+    return { stream: validateStreamName(parsed.stream),
+data: parsed.data }
   }
 
   if (typeof parsed.id === "string" || typeof parsed.id === "number") {
@@ -124,7 +127,8 @@ export function parseStreamMessage(rawMessage) {
   }
 
   if (parsed.e === "serverShutdown") {
-    return { serverShutdown: true, data: parsed }
+    return { serverShutdown: true,
+data: parsed }
   }
 
   if (typeof parsed.e !== "string" || parsed.e.length === 0) {
@@ -135,5 +139,6 @@ export function parseStreamMessage(rawMessage) {
     }
   }
 
-  return { stream: null, data: parsed }
+  return { stream: null,
+data: parsed }
 }
