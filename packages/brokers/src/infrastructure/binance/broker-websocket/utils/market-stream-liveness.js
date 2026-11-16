@@ -262,6 +262,12 @@ class MarketStreamLivenessMonitor {
 
     if (this.#disposed || this.#generation !== recoveryGeneration) {return}
     this.#recovering = false
+    if (this.#pendingTradeId === null ||
+        this.#lastAggTradeId !== null && this.#lastAggTradeId >= this.#pendingTradeId) {
+      this.#pendingTradeId = null
+      this.#state = "healthy"
+      return
+    }
     if (recoveryError) {
       this.#reportError(recoveryError)
       this.#state = "recovery-failed"
@@ -270,12 +276,6 @@ class MarketStreamLivenessMonitor {
         return
       }
       this.#scheduleCheck()
-      return
-    }
-    if (this.#pendingTradeId === null ||
-        this.#lastAggTradeId !== null && this.#lastAggTradeId >= this.#pendingTradeId) {
-      this.#pendingTradeId = null
-      this.#state = "healthy"
       return
     }
     this.#state = "awaiting-aggTrade"
