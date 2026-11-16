@@ -24,8 +24,10 @@ function summarizeResults(results) {
     (result) => result.errorCount > 0 || result.warningCount > 0,
   ).length;
   const topRules = [...ruleCounts.entries()]
-    .map(([ruleId, count]) => ({ ruleId,
-count }))
+    .map(([ruleId, count]) => ({
+      ruleId,
+      count,
+    }))
     .sort((...entries) => {\n      const [left, right] = entries;
       if (left.count !== right.count) {
         return right.count - left.count;
@@ -49,14 +51,14 @@ async function main() {
   const results = await eslint.lintFiles(["."]);
   const summary = summarizeResults(results);
 
-  console.log(
-    `ESLint inventory: ${summary.filesWithFindings}/${summary.fileCount} files with findings; ${summary.errorCount} errors; ${summary.warningCount} warnings.`,
+  process.stdout.write(
+    `ESLint inventory: ${summary.filesWithFindings}/${summary.fileCount} files with findings; ${summary.errorCount} errors; ${summary.warningCount} warnings.\n`,
   );
 
   if (summary.topRules.length > 0) {
-    process.stdout.write("Most frequent rules:\\n");
+    process.stdout.write("Most frequent rules:\n");
     for (const rule of summary.topRules) {
-      process.stdout.write(`- ${rule.ruleId}: ${rule.count}\\n`);
+      process.stdout.write(`- ${rule.ruleId}: ${rule.count}\n`);
     }
   }
 }
@@ -67,7 +69,7 @@ const isMainModule =
 
 if (isMainModule) {
   main().catch((error) => {
-    process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\\n`);
+    process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
     process.exitCode = 1;
   });
 }
