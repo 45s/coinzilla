@@ -5,7 +5,7 @@ import { recordMarketHistoryCoverage } from "./record-market-history-coverage.js
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
 
-function createError(message, code) {
+function createError({ message, code }) {
   const error = new Error(message)
   error.code = code
   return error
@@ -18,6 +18,161 @@ function matchesCoverage({ coverage, evidence }) {
     coverage.verifiedAt === evidence.verifiedAt &&
     coverage.evidenceDigest === evidence.evidenceDigest &&
     coverage.verifiedBy === evidence.verifiedBy
+}
+
+function validateConfirmationInput({
+  operationalStateStore,
+  symbol,
+  coveredFromTime,
+  verifiedAt,
+  evidenceDigest,
+  verifiedBy,
+  reconcileMarketState,
+}) {
+  if (typeof operationalStateStore?.readAll !== "function" ||
+      typeof operationalStateStore?.append !== "function") {
+    throw new TypeError("confirmMarketHistoryCoverage requires the ADR-0001 Operational State Store records read/append port")
+  }
+  if (typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol)) {
+    throw new TypeError("Market-history coverage symbol must be canonical uppercase alphanumeric")
+  }
+  if (!isCanonicalNonNegativeSafeInteger(coveredFromTime) ||
+      !isCanonicalNonNegativeSafeInteger(verifiedAt) ||
+      verifiedAt < coveredFromTime) {
+    throw new TypeError("Market-history coverage timestamps must be non-negative safe integers other than negative zero with verifiedAt >= coveredFromTime")
+  }
+  if (typeof evidenceDigest !== "string" || !SHA256_PATTERN.test(evidenceDigest)) {
+    throw new TypeError("Market-history coverage evidenceDigest must be a SHA-256 digest")
+  }
+  if (typeof verifiedBy !== "string" || !verifiedBy.trim() || verifiedBy !== verifiedBy.trim()) {
+    throw new TypeError("Market-history coverage verifiedBy must be a canonical non-empty string")
+  }
+  if (typeof reconcileMarketState !== "function") {
+    throw new TypeError("confirmMarketHistoryCoverage requires a one-market reconciliation callback")
+  }
+
+  const factId = `market-history-coverage:${symbol}:baseline`
+  return {
+    factId,
+    evidence: { factId, symbol, coveredFromTime, verifiedAt, evidenceDigest, verifiedBy },
+  }
+}
+
+async function readExistingCoverage({ operationalStateStore, symbol, evidence }) {
+  const ledgerResult = await operationalStateStore.readAll()
+  if (ledgerResult?.ok !== true) {
+    return toResult({
+      errors: ledgerResult?.errors ?? [new Error("Operational State Store could not be verified")],
+    })
+  }
+  const records = ledgerResult.data?.records
+  if (!Array.isArray(records)) {
+    throw new TypeError("Operational State Store record read result must contain a records array")
+  }
+  const existingCoverage = records.filter((record) =>
+    record?.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED" &&
+    record.data?.symbol === symbol
+  )
+  if (existingCoverage.length === 0) {
+    return undefined
+  }
+
+  const currentResult = await readMarketHistoryCoverage({ operationalStateStore, symbol })
+  if (currentResult?.ok !== true) {
+    return toResult({
+      errors: currentResult?.errors ?? [new Error("Existing market-history coverage could not be verified")],
+    })
+  }
+  if (matchesCoverage({ coverage: currentResult.data, evidence })) {
+    return toResult({
+      data: Object.freeze({
+        confirmed: true,
+        alreadyConfirmed: true,
+        coverage: currentResult.data,
+      }),
+    })
+  }
+  return toResult({
+    error: createError({
+      message: `A different market-history baseline is already confirmed for ${symbol}`,
+      code: "MARKET_HISTORY_COVERAGE_ALREADY_CONFIRMED",
+    }),
+  })
+}
+
+async function reconcileAndCommitCoverage({
+  operationalStateStore,
+  reconcileMarketState,
+  evidence,
+}) {
+  const historyRetentionEvidence = {
+    factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
+    baselineFactId: evidence.factId,
+    symbol: evidence.symbol,
+    coveredFromTime: evidence.coveredFromTime,
+    verifiedAt: evidence.verifiedAt,
+    evidenceDigest: evidence.evidenceDigest,
+    verifiedBy: evidence.verifiedBy,
+  }
+  const reconciliation = await reconcileMarketState({ historyRetentionEvidence })
+  if (reconciliation?.ok !== true) {
+    return toResult({
+      errors: reconciliation?.errors ?? [new Error("One-market recovery reconciliation failed")],
+    })
+  }
+  const result = reconciliation.data
+  if (result?.symbol !== evidence.symbol) {
+    throw new Error("One-market reconciliation returned evidence for a different market")
+  }
+  const { audit } = result
+  const auditReady = result.ready === true &&
+    audit?.skipped !== true &&
+    audit?.targetMarketBlocked !== true &&
+    audit?.tradeHistory?.complete === true &&
+    audit?.tradeHistory?.historyRetentionBaselineFactId === evidence.factId
+  if (!auditReady) {
+    return toResult({
+      data: Object.freeze({
+        confirmed: false,
+        alreadyConfirmed: false,
+        status: result.status ?? "BLOCKED",
+        reason: result.reason ?? "RECOVERY_AUDIT_NOT_READY",
+        audit,
+      }),
+    })
+  }
+
+  const appendResult = await recordMarketHistoryCoverage({
+    operationalStateStore,
+    ...evidence,
+  })
+  if (appendResult?.ok !== true || appendResult.data?.durable !== true) {
+    return appendResult?.ok === false
+      ? appendResult
+      : toResult({ error: new Error("Market-history coverage fact was not durably committed") })
+  }
+
+  const readback = await readMarketHistoryCoverage({
+    operationalStateStore,
+    symbol: evidence.symbol,
+  })
+  if (readback?.ok !== true) {
+    return toResult({
+      errors: readback?.errors ?? [new Error("Committed market-history coverage could not be read back")],
+    })
+  }
+  if (!matchesCoverage({ coverage: readback.data, evidence })) {
+    throw new Error("Committed market-history coverage does not match the reviewed evidence")
+  }
+
+  return toResult({
+    data: Object.freeze({
+      confirmed: true,
+      alreadyConfirmed: false,
+      audit,
+      coverage: readback.data,
+    }),
+  })
 }
 
 /**
@@ -38,159 +193,21 @@ function matchesCoverage({ coverage, evidence }) {
  * @param {Function} options.reconcileMarketState - One-market read-only reconciliation use case.
  * @returns {Promise<object>} Confirmation outcome; no fact is appended unless reconciliation is ready.
  */
-export async function confirmMarketHistoryCoverage({
-  operationalStateStore,
-  symbol,
-  coveredFromTime,
-  verifiedAt,
-  evidenceDigest,
-  verifiedBy,
-  reconcileMarketState,
-} = {}) {
+export async function confirmMarketHistoryCoverage(options = {}) {
   try {
-    if (typeof operationalStateStore?.readAll !== "function" ||
-        typeof operationalStateStore?.append !== "function") {
-      throw new TypeError("confirmMarketHistoryCoverage requires the ADR-0001 Operational State Store records read/append port")
-    }
-    if (typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol)) {
-      throw new TypeError("Market-history coverage symbol must be canonical uppercase alphanumeric")
-    }
-    if (!isCanonicalNonNegativeSafeInteger(coveredFromTime) ||
-        !isCanonicalNonNegativeSafeInteger(verifiedAt) ||
-        verifiedAt < coveredFromTime) {
-      throw new TypeError("Market-history coverage timestamps must be non-negative safe integers other than negative zero with verifiedAt >= coveredFromTime")
-    }
-    if (typeof evidenceDigest !== "string" || !SHA256_PATTERN.test(evidenceDigest)) {
-      throw new TypeError("Market-history coverage evidenceDigest must be a SHA-256 digest")
-    }
-    if (typeof verifiedBy !== "string" || !verifiedBy.trim() || verifiedBy !== verifiedBy.trim()) {
-      throw new TypeError("Market-history coverage verifiedBy must be a canonical non-empty string")
-    }
-    if (typeof reconcileMarketState !== "function") {
-      throw new TypeError("confirmMarketHistoryCoverage requires a one-market reconciliation callback")
-    }
-
-    const factId = `market-history-coverage:${  symbol  }:baseline`
-    const evidence = {
-      factId,
-      symbol,
-      coveredFromTime,
-      verifiedAt,
-      evidenceDigest,
-      verifiedBy,
-    }
-
-    const ledgerResult = await operationalStateStore.readAll()
-    if (ledgerResult?.ok !== true) {
-      return toResult({
-        errors: ledgerResult?.errors ?? [new Error("Operational State Store could not be verified")],
-      })
-    }
-    const records = ledgerResult.data?.records
-    if (!Array.isArray(records)) {
-      throw new TypeError("Operational State Store record read result must contain a records array")
-    }
-    const existingCoverage = records.filter((record) =>
-      record?.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED" &&
-      record.data?.symbol === symbol
-    )
-    if (existingCoverage.length > 0) {
-      const currentResult = await readMarketHistoryCoverage({ operationalStateStore,
-symbol })
-      if (currentResult?.ok !== true) {
-        return toResult({
-          errors: currentResult?.errors ?? [new Error("Existing market-history coverage could not be verified")],
-        })
-      }
-      if (matchesCoverage({ coverage: currentResult.data,
-evidence })) {
-        return toResult({
-          data: Object.freeze({
-            confirmed: true,
-            alreadyConfirmed: true,
-            coverage: currentResult.data,
-          }),
-        })
-      }
-      return toResult({
-        error: createError(
-          `A different market-history baseline is already confirmed for ${  symbol}`,
-          "MARKET_HISTORY_COVERAGE_ALREADY_CONFIRMED",
-        ),
-      })
-    }
-
-    const historyRetentionEvidence = {
-      factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
-      baselineFactId: factId,
-      symbol,
-      coveredFromTime,
-      verifiedAt,
-      evidenceDigest,
-      verifiedBy,
-    }
-    const reconciliation = await reconcileMarketState({ historyRetentionEvidence })
-    if (reconciliation?.ok !== true) {
-      return toResult({
-        errors: reconciliation?.errors ?? [new Error("One-market recovery reconciliation failed")],
-      })
-    }
-    const result = reconciliation.data
-    if (result?.symbol !== symbol) {
-      throw new Error("One-market reconciliation returned evidence for a different market")
-    }
-    const {audit} = result
-    const auditReady = result.ready === true &&
-      audit?.skipped !== true &&
-      audit?.targetMarketBlocked !== true &&
-      audit?.tradeHistory?.complete === true &&
-      audit?.tradeHistory?.historyRetentionBaselineFactId === factId
-    if (!auditReady) {
-      return toResult({
-        data: Object.freeze({
-          confirmed: false,
-          alreadyConfirmed: false,
-          status: result.status ?? "BLOCKED",
-          reason: result.reason ?? "RECOVERY_AUDIT_NOT_READY",
-          audit,
-        }),
-      })
-    }
-
-    const appendResult = await recordMarketHistoryCoverage({
-      operationalStateStore,
-      factId,
-      symbol,
-      coveredFromTime,
-      verifiedAt,
-      evidenceDigest,
-      verifiedBy,
+    const { factId, evidence } = validateConfirmationInput(options)
+    const existingResult = await readExistingCoverage({
+      operationalStateStore: options.operationalStateStore,
+      symbol: options.symbol,
+      evidence,
     })
-    if (appendResult?.ok !== true || appendResult.data?.durable !== true) {
-      return appendResult?.ok === false
-        ? appendResult
-        : toResult({ error: new Error("Market-history coverage fact was not durably committed") })
+    if (existingResult) {
+      return existingResult
     }
-
-    const readback = await readMarketHistoryCoverage({ operationalStateStore,
-symbol })
-    if (readback?.ok !== true) {
-      return toResult({
-        errors: readback?.errors ?? [new Error("Committed market-history coverage could not be read back")],
-      })
-    }
-    if (!matchesCoverage({ coverage: readback.data,
-evidence })) {
-      throw new Error("Committed market-history coverage does not match the reviewed evidence")
-    }
-
-    return toResult({
-      data: Object.freeze({
-        confirmed: true,
-        alreadyConfirmed: false,
-        audit,
-        coverage: readback.data,
-      }),
+    return await reconcileAndCommitCoverage({
+      operationalStateStore: options.operationalStateStore,
+      reconcileMarketState: options.reconcileMarketState,
+      evidence: { ...evidence, factId },
     })
   } catch (error) {
     return toResult({ error })
