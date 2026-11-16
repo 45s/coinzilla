@@ -68,7 +68,9 @@ function getAuditStatus({ audit }) {
     reason = "TARGET_MARKET_BLOCKED"
   }
 
-  return { ready, status, ...(reason ? { reason } : {}) }
+  return { ready, 
+    status, 
+    ...(reason ? { reason } : {}) }
 }
 
 async function runMarketReconciliation({
@@ -106,8 +108,10 @@ async function runMarketReconciliation({
     result: currentAccountSnapshotResult,
     field: "Fresh account snapshot",
   })
-  const openOrders = unwrapResult({ result: openOrdersResult, field: "Fresh account-wide open orders" })
-  const history = unwrapResult({ result: historyResult, field: "Target-market trade history" })
+  const openOrders = unwrapResult({ result: openOrdersResult, 
+    field: "Fresh account-wide open orders" })
+  const history = unwrapResult({ result: historyResult, 
+    field: "Target-market trade history" })
   if (!Array.isArray(openOrders)) {
     throw new TypeError("Account-wide open-order read must return an array")
   }
@@ -121,7 +125,8 @@ async function runMarketReconciliation({
     currentAccountSnapshot,
     openOrders,
     markets,
-    exchangeTradeHistory: { ...history, historyRetentionEvidence },
+    exchangeTradeHistory: { ...history, 
+      historyRetentionEvidence },
     requireCompleteTradeHistory: true,
     tradeHistoryScope: "MARKET",
     targetMarket,
