@@ -13,27 +13,17 @@ function logSystem({ logger, ...data }) {
   logger?.info?.(data)
 }
 
-function logUserDataStreamTransition({ state, logger, status } = {}) {
-  const {error} = status
-  const cause = error?.cause
-  const authenticationExpired = status.authenticationExpired === true ||
-    status.reason === "authentication_expired" ||
-    error?.code === "AUTHENTICATION_EXPIRED"
-
-  let key
-  let message
-  let details
-  let level = "system"
-
-  if (authenticationExpired) {
-    key = [
-      "authentication-expired",
-      status.code ?? error?.code ?? "",
-      error?.message ?? status.reason ?? "",
-    ].join(":")
-    message = "User-data stream authentication expired"
-    level = "error"
-    details = {
+function getAuthenticationExpiredTransition({ status, error }) {
+  const key = [
+    "authentication-expired",
+    status.code ?? error?.code ?? "",
+    error?.message ?? status.reason ?? "",
+  ].join(":")
+  return {
+    key,
+    message: "User-data stream authentication expired",
+    level: "error",
+    details: {
       statusType: status.type,
       reason: status.reason,
       code: status.code ?? error?.code,
@@ -41,68 +31,89 @@ function logUserDataStreamTransition({ state, logger, status } = {}) {
       errorName: error?.name ?? "Error",
       errorMessage: error?.message ?? "User-data stream authentication expired",
       errorStack: error?.stack,
-    }
-  } else if (status.type === "connectionClosed" || status.type === "terminated") {
-    key = "disconnected"
-    message = "User-data stream disconnected"
-    details = {
+    },
+  }
+}
+
+function getDisconnectedTransition({ status }) {
+  return {
+    key: "disconnected",
+    message: "User-data stream disconnected",
+    details: {
       reason: status.reason ?? (status.type === "terminated" ? "terminated" : undefined),
       code: status.code,
-    }
-  } else if (status.type === "recovering") {
-    key = `reconnecting:${  status.attempt ?? "unknown"}`
-    message = "User-data stream reconnecting"
-    details = { attempt: status.attempt }
-  } else if (status.type === "recovered") {
-    key = `reconnected:${  status.recoveryGeneration ?? status.subscriptionId ?? status.attempt ?? "unknown"}`
-    message = "User-data stream reconnected"
-    details = {
+    },
+  }
+}
+
+function getRecoveringTransition({ status }) {
+  return {
+    key: `reconnecting:${status.attempt ?? "unknown"}`,
+    message: "User-data stream reconnecting",
+    details: { attempt: status.attempt },
+  }
+}
+
+function getRecoveredTransition({ status }) {
+  return {
+    key: `reconnected:${status.recoveryGeneration ?? status.subscriptionId ?? status.attempt ?? "unknown"}`,
+    message: "User-data stream reconnected",
+    details: {
       attempt: status.attempt,
       subscriptionId: status.subscriptionId,
       recoveryGeneration: status.recoveryGeneration,
-    }
-  } else if (
-    status.type === "reconciled" &&
+    },
+  }
+}
+
+function isRestoredSubscription({ state, status }) {
+  return status.type === "reconciled" &&
     status.recoveryRequired !== true &&
     status.reconciliationRequired !== true &&
     status.subscriptionId === state.recoverySubscriptionId &&
     status.recoveryGeneration === state.recoveryBrokerGeneration &&
     Number.isSafeInteger(state.recoveryBrokerGeneration) &&
     state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration
-  ) {
-    key = `restored:${  status.recoveryGeneration ?? status.subscriptionId ?? "unknown"}`
-    message = "User-data stream subscription restored"
-    details = {
+}
+
+function getRestoredTransition({ status }) {
+  return {
+    key: `restored:${status.recoveryGeneration ?? status.subscriptionId ?? "unknown"}`,
+    message: "User-data stream subscription restored",
+    details: {
       subscriptionId: status.subscriptionId,
       recoveryGeneration: status.recoveryGeneration,
-    }
-  } else if (
-    ["rpcError", "recoveryFailed", "executionNormalizationFailed"].includes(status.type)
-  ) {
-    level = "error"
-    message = "User-data stream error"
-    key = [
-      "error",
-      status.type,
-      error?.code ?? status.code ?? "",
-      error?.name ?? "",
-      error?.message ?? "",
-      typeof error?.stack === "string" ? error.stack.slice(0, 1024) : "",
-      cause?.code ?? "",
-      cause?.name ?? "",
-      typeof cause?.message === "string"
-        ? cause.message
-        : cause === undefined ? "" : String(cause),
-      typeof cause?.stack === "string" ? cause.stack.slice(0, 1024) : "",
-      status.recoveryRequired === true,
-      status.recoveryRequired === false,
-      status.reconciliationRequired === true,
-      status.reconciliationRequired === false,
-      status.symbol ?? "",
-      status.brokerOrderId ?? "",
-      status.executionId ?? "",
-    ].join(":")
-    details = {
+    },
+  }
+}
+
+function getStreamErrorTransition({ status, error, cause }) {
+  const key = [
+    "error",
+    status.type,
+    error?.code ?? status.code ?? "",
+    error?.name ?? "",
+    error?.message ?? "",
+    typeof error?.stack === "string" ? error.stack.slice(0, 1024) : "",
+    cause?.code ?? "",
+    cause?.name ?? "",
+    typeof cause?.message === "string"
+      ? cause.message
+      : cause === undefined ? "" : String(cause),
+    typeof cause?.stack === "string" ? cause.stack.slice(0, 1024) : "",
+    status.recoveryRequired === true,
+    status.recoveryRequired === false,
+    status.reconciliationRequired === true,
+    status.reconciliationRequired === false,
+    status.symbol ?? "",
+    status.brokerOrderId ?? "",
+    status.executionId ?? "",
+  ].join(":")
+  return {
+    key,
+    message: "User-data stream error",
+    level: "error",
+    details: {
       statusType: status.type,
       attempt: status.attempt,
       code: status.code ?? error?.code,
@@ -121,20 +132,229 @@ function logUserDataStreamTransition({ state, logger, status } = {}) {
         ? (cause.message || "(empty cause message)")
         : cause === undefined ? undefined : String(cause),
       causeStack: cause instanceof Error ? cause.stack : undefined,
-    }
-  } else {
+    },
+  }
+}
+
+function resolveUserDataStreamTransition({ state, status }) {
+  const { error } = status
+  const cause = error?.cause
+  const authenticationExpired = status.authenticationExpired === true ||
+    status.reason === "authentication_expired" ||
+    error?.code === "AUTHENTICATION_EXPIRED"
+
+  if (authenticationExpired) {
+    return getAuthenticationExpiredTransition({ status, error })
+  }
+  if (status.type === "connectionClosed" || status.type === "terminated") {
+    return getDisconnectedTransition({ status })
+  }
+  if (status.type === "recovering") {
+    return getRecoveringTransition({ status })
+  }
+  if (status.type === "recovered") {
+    return getRecoveredTransition({ status })
+  }
+  if (isRestoredSubscription({ state, status })) {
+    return getRestoredTransition({ status })
+  }
+  if (["rpcError", "recoveryFailed", "executionNormalizationFailed"].includes(status.type)) {
+    return getStreamErrorTransition({ status, error, cause })
+  }
+  return null
+}
+
+function logUserDataStreamTransition({ state, logger, status } = {}) {
+  const transition = resolveUserDataStreamTransition({ state, status })
+  if (!transition || state.lastLoggedStreamLifecycleKey === transition.key) {
     return
   }
-
-  if (state.lastLoggedStreamLifecycleKey === key) {return}
-  state.lastLoggedStreamLifecycleKey = key
-  const entry = { message,
-...details }
-  if (level === "error") {
+  state.lastLoggedStreamLifecycleKey = transition.key
+  const entry = { message: transition.message, ...transition.details }
+  if (transition.level === "error") {
     logger?.error?.(entry)
     return
   }
   logSystem({ logger, ...entry })
+}
+
+function publishBrokerEvidence({ eventPublisher, status }) {
+  if (!status.brokerEvidence) {
+    return
+  }
+  publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.BROKER_EXECUTION_REPORT,
+    dataResult: mapBrokerExecutionReportData({ evidence: status.brokerEvidence }),
+  })
+}
+
+function shouldSkipAcknowledgedRecovery({ state, status }) {
+  return status.type === "recovered" &&
+    state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration
+}
+
+function publishBrokerStatusChanged({ state, status, eventPublisher, brokerName }) {
+  const repeatedRecoveredReminder = status.type === "recovered" &&
+    state.lastReportedRecoveredGeneration === state.recoveryGeneration
+  if (status.type === "recovered" && !repeatedRecoveredReminder) {
+    state.lastReportedRecoveredGeneration = state.recoveryGeneration
+  }
+  const reportableStatuses = [
+    "connectionClosed",
+    "recovering",
+    "recoveryFailed",
+    "recovered",
+    "reconciled",
+    "terminated",
+    "rpcError",
+    "executionNormalizationFailed",
+  ]
+  if (!repeatedRecoveredReminder && reportableStatuses.includes(status.type)) {
+    publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED,
+      dataResult: mapBrokerStatusChangedData({
+        broker: brokerName,
+        stream: "user-data",
+        status: status.type,
+        recoveryRequired: status.recoveryRequired === true || status.reconciliationRequired === true,
+        attempt: status.attempt,
+        code: status.code,
+        error: status.error,
+      }),
+    })
+  }
+  return repeatedRecoveredReminder
+}
+
+function isDiagnosticOnlyRpcError({ status }) {
+  return status.type === "rpcError" &&
+    status.recoveryRequired === false &&
+    (status.reconciliationRequired === undefined || status.reconciliationRequired === false)
+}
+
+function markAccountingFailure({ state, status, logger, cancelOwnedBuysAfterAccountingFailure }) {
+  if (status.type !== "executionNormalizationFailed") {
+    return
+  }
+  state.accountingFailed = true
+  state.ready = false
+  state.status = "EXECUTION_NORMALIZATION_FAILED"
+  void cancelOwnedBuysAfterAccountingFailure()
+}
+
+function updateRecoveryGeneration({ state, status, diagnosticOnlyRpcError }) {
+  if (!diagnosticOnlyRpcError && status.type === "reconciled" &&
+      status.recoveryRequired !== true && status.reconciliationRequired !== true) {
+    state.streamUnsafe = false
+    if (
+      status.subscriptionId !== undefined &&
+      status.subscriptionId !== null &&
+      status.subscriptionId === state.recoverySubscriptionId &&
+      status.recoveryGeneration === state.recoveryBrokerGeneration &&
+      Number.isSafeInteger(state.recoveryBrokerGeneration) &&
+      state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration &&
+      !state.accountingFailed &&
+      (!state.retryableRecoveryFailure ||
+        state.retryableRecoveryFailure.generation !== state.recoveryGeneration)
+    ) {
+      state.requiresReconciliation = false
+    }
+  }
+  const invalidatingStatuses = [
+    "connectionClosed",
+    "recovering",
+    "recoveryFailed",
+    "terminated",
+    "rpcError",
+    "executionNormalizationFailed",
+  ]
+  if (!diagnosticOnlyRpcError && invalidatingStatuses.includes(status.type)) {
+    state.recoveryGeneration += 1
+    state.recoverySubscriptionId = null
+    state.recoveryBrokerGeneration = null
+  }
+  if (!diagnosticOnlyRpcError && status.type === "recovered") {
+    state.recoverySubscriptionId = status.subscriptionId ?? null
+    state.recoveryBrokerGeneration = Number.isSafeInteger(status.recoveryGeneration)
+      ? status.recoveryGeneration
+      : null
+  }
+}
+
+function updateUserDataReadiness({
+  state,
+  status,
+  diagnosticOnlyRpcError,
+  connectionUnsafe,
+  tradingEnabled,
+  resumeDeferredStrategyEvaluations,
+}) {
+  if (diagnosticOnlyRpcError) {
+    return
+  }
+  if (status.recoveryRequired === true || status.reconciliationRequired === true || connectionUnsafe) {
+    state.streamUnsafe = true
+    state.requiresReconciliation = true
+    state.ready = false
+    state.status = status.type === "executionNormalizationFailed"
+      ? "EXECUTION_NORMALIZATION_FAILED"
+      : state.accountingFailed
+        ? "EXECUTION_ACCOUNTING_FAILED"
+        : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+    return
+  }
+  if (state.requiresReconciliation) {
+    state.ready = false
+    state.status = state.accountingFailed
+      ? "EXECUTION_ACCOUNTING_FAILED"
+      : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+    return
+  }
+  if (state.accountingFailed) {
+    state.ready = false
+    state.status = "EXECUTION_ACCOUNTING_FAILED"
+    return
+  }
+  if (state.initialAccountSnapshotReady && tradingEnabled) {
+    state.ready = true
+    state.status = "READY"
+    resumeDeferredStrategyEvaluations()
+    return
+  }
+  if (!state.initialAccountSnapshotReady) {
+    state.ready = false
+    state.status = "INITIAL_ACCOUNT_SNAPSHOT_PENDING"
+  }
+}
+
+function startRequiredUserDataRecovery({ state, status, diagnosticOnlyRpcError, startUserDataRecovery }) {
+  if (!diagnosticOnlyRpcError && status.type === "recovered" && status.recoveryRequired === true) {
+    if (state.startupComplete) {
+      startUserDataRecovery()
+    } else {
+      state.pendingRecovery = true
+    }
+  }
+}
+
+function reportUserDataStatus({
+  state,
+  status,
+  logger,
+  onUserDataStatus,
+  cancelOwnedBuysAfterAccountingFailure,
+}) {
+  try {
+    onUserDataStatus({ status, ready: state.ready })
+  } catch (error) {
+    state.ready = false
+    state.accountingFailed = true
+    state.status = "STATUS_HANDLER_FAILED"
+    logger.error?.({ message: "user-data status handler failed", error })
+    void cancelOwnedBuysAfterAccountingFailure()
+  }
 }
 
 /**
@@ -142,154 +362,75 @@ function logUserDataStreamTransition({ state, logger, status } = {}) {
  * Stream-level recovery never clears the application reconciliation gate by itself.
  */
 export function createUserDataStatusHandler({
-  state, isStopped, eventPublisher, brokerName, logger, tradingEnabled,
-  startUserDataRecovery, cancelOwnedBuysAfterAccountingFailure,
-  resumeDeferredStrategyEvaluations, onUserDataStatus,
+  state,
+  isStopped,
+  eventPublisher,
+  brokerName,
+  logger,
+  tradingEnabled,
+  startUserDataRecovery,
+  cancelOwnedBuysAfterAccountingFailure,
+  resumeDeferredStrategyEvaluations,
+  onUserDataStatus,
 } = {}) {
   return (status = {}) => {
-    if (isStopped()) {return}
-    if (status.brokerEvidence) {
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.BROKER_EXECUTION_REPORT,
-        dataResult: mapBrokerExecutionReportData({ evidence: status.brokerEvidence }),
+    if (isStopped()) {
+      return
+    }
+    publishBrokerEvidence({ eventPublisher, status })
+    if (shouldSkipAcknowledgedRecovery({ state, status })) {
+      return
+    }
+    const repeatedRecoveredReminder = publishBrokerStatusChanged({
+      state,
+      status,
+      eventPublisher,
+      brokerName,
+    })
+    logUserDataStreamTransition({ state, logger, status })
+
+    const diagnosticOnlyRpcError = isDiagnosticOnlyRpcError({ status })
+    if (!diagnosticOnlyRpcError) {
+      state.status = status.type ?? "UNKNOWN"
+    }
+    if (!diagnosticOnlyRpcError) {
+      markAccountingFailure({
+        state,
+        status,
+        logger,
+        cancelOwnedBuysAfterAccountingFailure,
       })
     }
-    if (status.type === "recovered" &&
-        state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration) {return}
-    const isRepeatedRecoveredReminder = status.type === "recovered" &&
-      state.lastReportedRecoveredGeneration === state.recoveryGeneration
-    if (status.type === "recovered" && !isRepeatedRecoveredReminder) {
-      state.lastReportedRecoveredGeneration = state.recoveryGeneration
-    }
-    if (!isRepeatedRecoveredReminder && [
+    const connectionUnsafe = !diagnosticOnlyRpcError && [
       "connectionClosed",
       "recovering",
-      "recoveryFailed",
       "recovered",
-      "reconciled",
+      "recoveryFailed",
       "terminated",
       "rpcError",
       "executionNormalizationFailed",
-    ].includes(status.type)) {
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED,
-        dataResult: mapBrokerStatusChangedData({
-          broker: brokerName,
-          stream: "user-data",
-          status: status.type,
-          recoveryRequired: status.recoveryRequired === true || status.reconciliationRequired === true,
-          attempt: status.attempt,
-          code: status.code,
-          error: status.error,
-        }),
-      })
-    }
-    logUserDataStreamTransition({ state,
-logger,
-status })
-    const isDiagnosticOnlyRpcError = status.type === "rpcError" &&
-      status.recoveryRequired === false &&
-      (status.reconciliationRequired === undefined || status.reconciliationRequired === false)
-
-    // A broker rpcError explicitly marked as not requiring recovery is
-    // diagnostic-only. Preserve the existing readiness and generation state;
-    // an actual connectionClosed status owns transport recovery invalidation.
-    if (!isDiagnosticOnlyRpcError) {
-      state.status = status.type ?? "UNKNOWN"
-    }
-    if (!isDiagnosticOnlyRpcError && status.type === "executionNormalizationFailed") {
-      state.accountingFailed = true
-      state.ready = false
-      state.status = "EXECUTION_NORMALIZATION_FAILED"
-      void cancelOwnedBuysAfterAccountingFailure()
-    }
-    const connectionUnsafe = !isDiagnosticOnlyRpcError && [
-      "connectionClosed", "recovering", "recovered", "recoveryFailed", "terminated", "rpcError",
-      "executionNormalizationFailed",
     ].includes(status.type)
-    if (
-      status.type === "reconciled" &&
-      status.recoveryRequired !== true &&
-      status.reconciliationRequired !== true
-    ) {
-      // Transport recovery is complete even when application reconciliation
-      // is still pending; keep the two readiness facts independent.
-      state.streamUnsafe = false
-      if (
-        status.subscriptionId !== undefined &&
-        status.subscriptionId !== null &&
-        status.subscriptionId === state.recoverySubscriptionId &&
-        status.recoveryGeneration === state.recoveryBrokerGeneration &&
-        Number.isSafeInteger(state.recoveryBrokerGeneration) &&
-        state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration &&
-        !state.accountingFailed &&
-        (!state.retryableRecoveryFailure ||
-          state.retryableRecoveryFailure.generation !== state.recoveryGeneration)
-      ) {
-        // Only the global completion for this acknowledged subscription may
-        // clear the application reconciliation gate.
-        state.requiresReconciliation = false
-      }
-    }
-    const recoveryInvalidated = !isDiagnosticOnlyRpcError && [
-      "connectionClosed", "recovering", "recoveryFailed", "terminated", "rpcError",
-      "executionNormalizationFailed",
-    ].includes(status.type)
-    if (recoveryInvalidated) {
-      state.recoveryGeneration += 1
-      state.recoverySubscriptionId = null
-      state.recoveryBrokerGeneration = null
-    }
-    if (!isDiagnosticOnlyRpcError && status.type === "recovered") {
-      state.recoverySubscriptionId = status.subscriptionId ?? null
-      state.recoveryBrokerGeneration = Number.isSafeInteger(status.recoveryGeneration)
-        ? status.recoveryGeneration
-        : null
-    }
-    if (!isDiagnosticOnlyRpcError &&
-        (status.recoveryRequired === true || status.reconciliationRequired === true || connectionUnsafe)) {
-      state.streamUnsafe = true
-      state.requiresReconciliation = true
-      state.ready = false
-      state.status = status.type === "executionNormalizationFailed"
-        ? "EXECUTION_NORMALIZATION_FAILED"
-        : state.accountingFailed
-          ? "EXECUTION_ACCOUNTING_FAILED"
-          : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-    } else if (!isDiagnosticOnlyRpcError && state.requiresReconciliation) {
-      // A stream-level status cannot clear the application gate unless the
-      // application has completed reconciliation and acknowledged recovery.
-      state.ready = false
-      state.status = state.accountingFailed
-        ? "EXECUTION_ACCOUNTING_FAILED"
-        : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-    } else if (!isDiagnosticOnlyRpcError && state.accountingFailed) {
-      state.ready = false
-      state.status = "EXECUTION_ACCOUNTING_FAILED"
-    } else if (!isDiagnosticOnlyRpcError && state.initialAccountSnapshotReady && tradingEnabled) {
-      state.ready = true
-      state.status = "READY"
-      resumeDeferredStrategyEvaluations()
-    } else if (!isDiagnosticOnlyRpcError && !state.initialAccountSnapshotReady) {
-      state.ready = false
-      state.status = "INITIAL_ACCOUNT_SNAPSHOT_PENDING"
-    }
-    if (!isDiagnosticOnlyRpcError && status.type === "recovered" && status.recoveryRequired === true) {
-      if (state.startupComplete) {startUserDataRecovery()}
-      else {state.pendingRecovery = true}
-    }
-    try {
-      onUserDataStatus({ status,
-ready: state.ready })
-    } catch (error) {
-      state.ready = false
-      state.accountingFailed = true
-      state.status = "STATUS_HANDLER_FAILED"
-      logger.error?.({ message: "user-data status handler failed",
-error })
-      void cancelOwnedBuysAfterAccountingFailure()
-    }
+    updateRecoveryGeneration({ state, status, diagnosticOnlyRpcError })
+    updateUserDataReadiness({
+      state,
+      status,
+      diagnosticOnlyRpcError,
+      connectionUnsafe,
+      tradingEnabled,
+      resumeDeferredStrategyEvaluations,
+    })
+    startRequiredUserDataRecovery({
+      state,
+      status,
+      diagnosticOnlyRpcError,
+      startUserDataRecovery,
+    })
+    reportUserDataStatus({
+      state,
+      status,
+      logger,
+      onUserDataStatus,
+      cancelOwnedBuysAfterAccountingFailure,
+    })
   }
 }
