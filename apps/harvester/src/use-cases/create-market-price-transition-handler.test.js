@@ -206,6 +206,11 @@ test("commits a fresh price before delegating an eligible active BUY to trailing
     "The trailing replacement workflow must observe the exact accepted decimal-string price.",
   )
   assert.equal(
+    Object.isFrozen(harness.state.prices.get("DOGEUSDT")),
+    true,
+    "The accepted market-price value must remain immutable after the state-commit stage.",
+  )
+  assert.equal(
     harness.state.marketPriceEventIds.get("DOGEUSDT"),
     8,
     "The accepted market-price event identity must be committed before trailing replacement begins.",

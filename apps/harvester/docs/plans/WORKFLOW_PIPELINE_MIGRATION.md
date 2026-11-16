@@ -47,16 +47,16 @@ Test-first evidence on commit `da359a83fabf6eeb80b577073cd60ba9abdff96a`:
 - Utils Unit Tests, Dependency Audit, and External Documentation Links passed.
 - Full workspace unit tests, workspace coverage and JavaScript Syntax were still running at this checkpoint; their final results are not inferred here.
 - The first changed-file ESLint run identified five `prefer-template` errors and one helper-length warning in the new test fixture. The next test-only correction splits fixture setup into focused helpers and uses template literals; no lint rules or assertions are suppressed.
+- The first final-head Markdown style check after registering the targeted test identified one repeated blank line in this plan. This follow-up removes it without changing or suppressing any style rule.
 - The direct handler suite was extended with a malformed positive-decimal validation case; it proves invalid domain input is rejected before event-ID allocation, receipt logging or dispatch.
 
-
-Implementation verification on commit \`271d5fdcfca7e4be94a6da2a343d548bd030a80b\`:
+Implementation verification on commit `271d5fdcfca7e4be94a6da2a343d548bd030a80b`:
 
 - Harvester unit suite: 1,659 passed, 0 failed; the nine direct handler characterization cases are included.
 - Harvester coverage: 80.76% lines, 81.65% branches, 82.04% functions.
 - Workspace unit-test matrix: all 10 package jobs passed.
 - Workspace coverage matrix: all 10 package jobs and the aggregate coverage gate passed.
-- Harvester targeted regressions: all five configured files passed. The direct market-price handler test is added to the targeted list in this commit so the next exact-head run exercises it directly.
+- Harvester targeted regressions: all five configured files passed on this checkpoint. The direct market-price handler test was added to the configured targeted list in follow-up commit `b27aeb6cb23337686ccbb971a35b854f2e2280e4`.
 - JavaScript Syntax (including changed-file ESLint, Markdown style and agent-policy checks), actionlint, Utils Unit Tests, Dependency Audit and External Documentation Links passed.
 - The optional read-only TESTNET integration job was skipped by its workflow condition. No exchange operation was performed.
 
