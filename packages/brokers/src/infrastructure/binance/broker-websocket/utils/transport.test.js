@@ -252,19 +252,7 @@ test("runtime gate requires the approved Node floor and patched Undici", () => {
 })
 
 
-test("the supported Node WebSocket client automatically answers server ping frames", {
-  skip: typeof globalThis.WebSocket !== "function",
-}, async () => {
-  const payload = Buffer.from("binance-ping")
-  let resolvePong
-  let rejectPong
-  const pongReceived = new Promise((...args) => {
-    const [resolve, reject] = args
-    resolvePong = resolve
-    rejectPong = reject
-  })
-  const server = createServer()
-
+function attachWebSocketPingHandler({ server, payload, resolvePong, rejectPong }) {
   server.on("upgrade", (...args) => {
     const [request, socket] = args
     const key = request.headers["sec-websocket-key"]
@@ -280,23 +268,17 @@ test("the supported Node WebSocket client automatically answers server ping fram
       "",
       "",
     ].join("\r\n"))
-
-    socket.write(Buffer.concat([
-      Buffer.from([0x89, payload.length]),
-      payload,
-    ]))
+    socket.write(Buffer.concat([Buffer.from([0x89, payload.length]), payload]))
 
     let received = Buffer.alloc(0)
     socket.on("data", (chunk) => {
       received = Buffer.concat([received, chunk])
-
       while (received.length >= 2) {
         const [first, second] = received
         const opcode = first & 0x0f
         const masked = (second & 0x80) !== 0
         let length = second & 0x7f
         let offset = 2
-
         if (length === 126) {
           if (received.length < 4) return
           length = received.readUInt16BE(2)
@@ -314,7 +296,6 @@ test("the supported Node WebSocket client automatically answers server ping fram
 
         const maskLength = masked ? 4 : 0
         if (received.length < offset + maskLength + length) return
-
         let framePayload = received.subarray(offset + maskLength, offset + maskLength + length)
         if (masked) {
           const mask = received.subarray(offset, offset + 4)
@@ -327,20 +308,40 @@ test("the supported Node WebSocket client automatically answers server ping fram
         received = received.subarray(offset + maskLength + length)
         if (opcode === 0x0a) resolvePong(framePayload)
         if (opcode === 0x08) {
-          socket.write(Buffer.concat([
-            Buffer.from([0x88, framePayload.length]),
-            framePayload,
-          ]))
+          socket.write(Buffer.concat([Buffer.from([0x88, framePayload.length]), framePayload]))
           socket.end()
         }
       }
     })
   })
+}
 
-  await new Promise((resolve, reject) => {
+function listen(server) {
+  return new Promise((...args) => {
+    const [resolve, reject] = args
     server.once("error", reject)
     server.listen(0, "127.0.0.1", resolve)
   })
+}
+
+function closeServer(server) {
+  return new Promise((resolve) => server.close(resolve))
+}
+
+test("the supported Node WebSocket client automatically answers server ping frames", {
+  skip: typeof globalThis.WebSocket !== "function",
+}, async () => {
+  const payload = Buffer.from("binance-ping")
+  let resolvePong
+  let rejectPong
+  const pongReceived = new Promise((...args) => {
+    const [resolve, reject] = args
+    resolvePong = resolve
+    rejectPong = reject
+  })
+  const server = createServer()
+  attachWebSocketPingHandler({ server, payload, resolvePong, rejectPong })
+  await listen(server)
 
   const address = server.address()
   const transport = new NativeWebSocketTransport({
@@ -365,7 +366,7 @@ test("the supported Node WebSocket client automatically answers server ping fram
     }
   } finally {
     await transport.close()
-    await new Promise((resolve) => server.close(resolve))
+    await closeServer(server)
   }
 })
 
