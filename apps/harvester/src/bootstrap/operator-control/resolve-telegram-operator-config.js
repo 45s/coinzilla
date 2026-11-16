@@ -79,13 +79,16 @@ export function resolveTelegramOperatorConfig({ appConfig, env = process.env } =
   }
 
   const operatorControl = appConfig.operatorControl ?? {}
-  const telegram = operatorControl.telegram ?? { enabled: false, allowedUserIds: [] }
+  const telegram = operatorControl.telegram ?? { enabled: false,
+allowedUserIds: [] }
   const configuredIds = telegram.allowedUserIds
   validateConfiguredUserIds({ configuredIds })
   validateEnvironmentUserId({ environmentUserId })
 
-  const allowedUserIds = resolveAllowedUserIds({ configuredIds, environmentUserId })
-  assertEnabledAllowlist({ telegram, allowedUserIds })
+  const allowedUserIds = resolveAllowedUserIds({ configuredIds,
+environmentUserId })
+  assertEnabledAllowlist({ telegram,
+allowedUserIds })
 
   return {
     ...appConfig,
