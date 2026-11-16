@@ -8,7 +8,8 @@ const main = async () => {
   const { symbol, limit } = parseOrderHistoryArguments({
     args: process.argv.slice(2),
   })
-  const { orders: responseOrders } = await getOrderHistory({ symbol, limit })
+  const { orders: responseOrders } = await getOrderHistory({ symbol,
+limit })
   const { orders } = normalizeOrderHistory({
     orders: responseOrders,
     limit,

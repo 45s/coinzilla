@@ -8,7 +8,9 @@ const main = async () => {
   const { symbol, limit, fromId } = parseTradeHistoryArguments({
     args: process.argv.slice(2),
   })
-  const { trades: responseTrades } = await getMyTrades({ symbol, limit, fromId })
+  const { trades: responseTrades } = await getMyTrades({ symbol,
+limit,
+fromId })
   const { trades } = normalizeTradeHistory({ trades: responseTrades })
 
   console.log(`\nBinance Spot TESTNET — Actual Trades: ${symbol}\n`)
