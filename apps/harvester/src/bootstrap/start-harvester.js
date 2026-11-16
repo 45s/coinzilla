@@ -238,7 +238,8 @@ function createCommissionAssetPublisher({ accountSnapshotManagerRef }) {
     if (!accountSnapshotManagerRef.current) {
       throw new Error("Commission asset baseline manager is not ready")
     }
-    return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({ assetId, assetCode })
+    return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({ assetId,
+assetCode })
   }
 }
 
