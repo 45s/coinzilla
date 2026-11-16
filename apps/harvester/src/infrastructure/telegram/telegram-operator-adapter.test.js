@@ -1132,7 +1132,7 @@ async function runTelegramUpdatesForDiagnostics({ updates, operator, logger, sen
         result: true,
       })
     }
-    throw new Error(\`Unexpected Telegram API method: \${method}\`)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
@@ -1359,7 +1359,7 @@ test("retains a confirmation when callback acknowledgement fails and retries the
         result: true,
       })
     }
-    throw new Error(\`Unexpected Telegram API method: \${method}\`)
+    throw new Error(`Unexpected Telegram API method: ${method}`)
   }
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",

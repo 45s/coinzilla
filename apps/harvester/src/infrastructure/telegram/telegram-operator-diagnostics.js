@@ -16,10 +16,7 @@ function readProperty({ value, key }) {
 }
 
 function sanitizeText({ value, botToken }) {
-  if (typeof value !== "string") {
-    return undefined
-  }
-  let sanitized = value
+  let sanitized = String(value)
   if (typeof botToken === "string" && botToken.length > 0) {
     sanitized = sanitized.split(botToken).join("[REDACTED]")
   }
@@ -35,9 +32,15 @@ function normalizeSafeContext({ context, botToken }) {
   }
   const normalized = {}
   for (const key of SAFE_CONTEXT_FIELDS) {
-    const value = readProperty({ value: context, key })
+    const value = readProperty({
+      value: context,
+      key,
+    })
     if (typeof value === "string" && value.length > 0) {
-      normalized[key] = sanitizeText({ value, botToken })
+      normalized[key] = sanitizeText({
+        value,
+        botToken,
+      })
     }
   }
   return Object.keys(normalized).length > 0 ? normalized : undefined
@@ -45,41 +48,89 @@ function normalizeSafeContext({ context, botToken }) {
 
 function describeErrorValue({ error, botToken, seen, depth }) {
   if (error === null || error === undefined) {
-    return { message: String(error) }
+    return {
+      message: String(error),
+    }
   }
   if (typeof error !== "object") {
-    return { message: sanitizeText({ value: String(error), botToken }) }
+    return {
+      message: sanitizeText({
+        value: error,
+        botToken,
+      }),
+    }
   }
   if (seen.has(error)) {
-    return { message: "[Circular error cause]" }
+    return {
+      message: "[Circular error cause]",
+    }
   }
   if (depth >= 5) {
-    return { message: "[Error cause depth limit reached]" }
+    return {
+      message: "[Error cause depth limit reached]",
+    }
   }
   seen.add(error)
-  const name = readProperty({ value: error, key: "name" })
-  const code = readProperty({ value: error, key: "code" })
-  const message = readProperty({ value: error, key: "message" })
-  const stack = readProperty({ value: error, key: "stack" })
-  const cause = readProperty({ value: error, key: "cause" })
-  const nestedErrors = readProperty({ value: error, key: "errors" })
+  const name = readProperty({
+    value: error,
+    key: "name",
+  })
+  const code = readProperty({
+    value: error,
+    key: "code",
+  })
+  const message = readProperty({
+    value: error,
+    key: "message",
+  })
+  const stack = readProperty({
+    value: error,
+    key: "stack",
+  })
+  const cause = readProperty({
+    value: error,
+    key: "cause",
+  })
+  const nestedErrors = readProperty({
+    value: error,
+    key: "errors",
+  })
   const context = normalizeSafeContext({
-    context: readProperty({ value: error, key: "context" }),
+    context: readProperty({
+      value: error,
+      key: "context",
+    }),
     botToken,
   })
   const details = {
-    name: typeof name === "string" ? sanitizeText({ value: name, botToken }) : "Error",
+    name: typeof name === "string"
+      ? sanitizeText({
+          value: name,
+          botToken,
+        })
+      : "Error",
     ...(typeof code === "string" || typeof code === "number"
-      ? { code: String(code) }
+      ? {
+          code: String(code),
+        }
       : {}),
     message: sanitizeText({
       value: typeof message === "string" ? message : String(error),
       botToken,
     }),
     ...(typeof stack === "string"
-      ? { stack: sanitizeText({ value: stack, botToken }) }
+      ? {
+          stack: sanitizeText({
+            value: stack,
+            botToken,
+          }),
+        }
       : {}),
-    ...(context ? { context } : {}),
+    ...(context
+      ? {
+          context,
+        }
+      : {}),
     ...(cause !== undefined
       ? {
           cause: describeErrorValue({
@@ -179,9 +230,21 @@ export function createTelegramOperatorDiagnostics({ logger, botToken } = {}) {
             correlationId: interaction.correlationId,
             interactionType: interaction.interactionType,
             action: interaction.action,
-            ...(interaction.symbol ? { symbol: interaction.symbol } : {}),
-            ...(interaction.operation ? { operation: interaction.operation } : {}),
-            ...(typeof stage === "string" ? { stage } : {}),
+            ...(interaction.symbol
+              ? {
+                  symbol: interaction.symbol,
+                }
+              : {}),
+            ...(interaction.operation
+              ? {
+                  operation: interaction.operation,
+                }
+              : {}),
+            ...(typeof stage === "string"
+              ? {
+                  stage,
+                }
+              : {}),
             applicationOperationInvoked: interaction.applicationOperationInvoked === true,
             applicationOperationCompleted: interaction.applicationOperationCompleted === true,
             stateChanged: interaction.stateChanged === true,
@@ -198,10 +261,16 @@ export function createTelegramOperatorDiagnostics({ logger, botToken } = {}) {
   }
 
   const fail = ({ interaction, error, stage, operation, symbol, level = "error" } = {}) => {
-    if (!markFailure({ interaction, error })) {
+    if (!markFailure({
+      interaction,
+      error,
+    })) {
       return false
     }
-    const details = describeError({ error, botToken })
+    const details = describeError({
+      error,
+      botToken,
+    })
     log({
       interaction,
       message: "Telegram interaction FAILED",
@@ -220,6 +289,9 @@ export function createTelegramOperatorDiagnostics({ logger, botToken } = {}) {
   return Object.freeze({
     log,
     fail,
-    describeError: (error) => describeError({ error, botToken }),
+    describeError: error => describeError({
+      error,
+      botToken,
+    }),
   })
 }
