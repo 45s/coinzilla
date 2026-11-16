@@ -554,3 +554,48 @@ test("rejects allocated SELL quantity greater than the canonical Fill quantity",
     "An allocated Position share must not exceed the original canonical Fill quantity.",
   )
 })
+
+
+test("rejects changed allocated Position facts even when the full allocation fingerprint is reused", () => {
+  const positionId = "position:allocated-sell-side-conflict"
+  const strategyId = StrategyId.COIN_GRABBER
+  const buyFill = makeFill({
+    tradeId: "allocated-buy-side-conflict",
+    quantity: "10",
+    quoteQuantity: "1000",
+  })
+  const sellFill = makeFill({
+    tradeId: "allocated-sell-side-conflict",
+    side: "SELL",
+    quantity: "3",
+    quoteQuantity: "300",
+  })
+  const initial = new Portfolio().applyFill({
+    fill: buyFill,
+    positionId,
+    strategyId,
+  }).portfolio
+  const first = initial.applySellAllocation({
+    fill: sellFill,
+    allocationFingerprint: "allocation-fingerprint-side-conflict",
+    allocationSide: makeSellAllocationSide(),
+    positionId,
+    strategyId,
+  })
+  assert.throws(
+    () => first.portfolio.applySellAllocation({
+      fill: sellFill,
+      allocationFingerprint: "allocation-fingerprint-side-conflict",
+      allocationSide: makeSellAllocationSide({
+        grossBaseQuantity: "1",
+        baseDebit: "1",
+        quoteProceeds: "100",
+        commissions: [],
+      }),
+      positionId,
+      strategyId,
+    }),
+    /Conflicting allocation side reused Fill ID/,
+    "A canonical Fill replay cannot change its Position share while reusing the full allocation fingerprint.",
+  )
+})
