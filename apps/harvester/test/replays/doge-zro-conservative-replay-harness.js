@@ -388,7 +388,10 @@ function createDogeReplayBrokerFactory(state) {
     broker.connect = async () => { broker.connected = true; };
     broker.disconnect = async () => { broker.connected = false; };
     broker.tradingConnection.request = createDogeReplayTradingRequest(state);
-    broker.createCanonicalOrder = createDogeReplayCanonicalOrderCreator({ state, broker });
+    broker.createCanonicalOrder = createDogeReplayCanonicalOrderCreator({
+      state,
+      broker,
+    });
     broker.getOpenOrders = async ({ symbol: requestedSymbol } = {}) => ({
       ok: true,
       data: [...state.exchangeOpenOrders.values()]
@@ -591,7 +594,13 @@ side,
 occurrence });
     },
     waitForRecoveryCycleCompletion: () => waitForRecoveryCycleCompletion(state),
-    publishMarketPrice: (price) => publishDogeReplayMarketPrice({ state, price }),
-    publishFullOrderFill: (fillOptions) => publishDogeReplayFullOrderFill({ state, ...fillOptions }),
+    publishMarketPrice: (price) => publishDogeReplayMarketPrice({
+      state,
+      price,
+    }),
+    publishFullOrderFill: (fillOptions) => publishDogeReplayFullOrderFill({
+      state,
+      ...fillOptions,
+    }),
   };
 }
