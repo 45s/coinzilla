@@ -34,7 +34,10 @@ test("reports the complete ESLint inventory for the notifiers package", async ()
 
   const groupedFindings = [...groups.values()]
   const filesWithFindings = new Set(groupedFindings.map(({ filePath }) => filePath))
-  const findingCount = groupedFindings.reduce((total, group) => total + group.count, 0)
+  let findingCount = 0
+  for (const group of groupedFindings) {
+    findingCount += group.count
+  }
 
   process.stdout.write(`${JSON.stringify({
     filesScanned: results.length,
