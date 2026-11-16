@@ -27,7 +27,7 @@ Every AI agent and automated contributor must follow the canonical documents bel
 
 **`develop` is the only target for feature, fix, refactor, maintenance, and documentation task PRs. `main` is not a task branch or a task-PR target. The only permitted PR into `main` is the final release PR with source `develop` and target `main`. Never create, retarget, or merge a task PR directly into `main`, even for a small fix or an urgent change. Start every task branch from the latest `develop`.
 
-The authoritative detailed rules are in [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md#2-branch-model). This is a hard rule for every AI agent, coding assistant, human contributor, and automation.
+The AI agent—not the user—owns branch freshness for the entire task. Agents MUST keep task branches synchronized with the latest `develop`, resolve routine conflicts themselves, and never ask the user to update a branch. The mandatory procedure is defined in [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md#6-branch-freshness-and-conflict-handling--required-on-every-pr-update).
 
 JavaScript control-flow style (including braces on all control statements and no nested ternary operators) is defined in [ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md#javascript-control-flow). Follow that canonical rule in all applications and packages.
 
