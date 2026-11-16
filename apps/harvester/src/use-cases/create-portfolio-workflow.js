@@ -290,7 +290,11 @@ function logExecutionRejected({ logger, fill, result, previousPortfolio, current
   })
 }
 
-function prepareTradingAccounting({ state, fill, logger }) {
+function prepareTradingAccounting({
+        state,
+        fill,
+        logger,
+      }) {
   if (!(fill instanceof Fill)) {
     logger.error?.({
       message: "accounting rejected non-canonical fill",
