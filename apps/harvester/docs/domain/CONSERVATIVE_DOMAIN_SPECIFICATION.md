@@ -337,7 +337,6 @@ flowchart TD
 
 **Change control:** Amend this document only when the owner explicitly changes a rule. Update implementation, tests, reference documents, and GitHub records to conform. Never create a competing Conservative rule definition.
 
-
 ## 9. Conservative graceful shutdown — protect trading before stopping services
 
 This contract applies to the Conservative strategy only. Every other strategy must own a separate shutdown policy and safety participant. The application-level shutdown coordinator must not contain Conservative-specific order or accounting rules.
