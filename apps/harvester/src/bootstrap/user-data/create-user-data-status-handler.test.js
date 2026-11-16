@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { createUserDataStatusHandler } from "./create-user-data-status-handler.js"
 
-const test = (name, ...args) => nodeTest(`[create-user-data-status-handler.test.js] ${  name}`, ...args)
+const test = (...args) => nodeTest(`[create-user-data-status-handler.test.js] ${args[0]}`, ...args.slice(1))
 
 const createState = (overrides = {}) => ({
   ready: false,
