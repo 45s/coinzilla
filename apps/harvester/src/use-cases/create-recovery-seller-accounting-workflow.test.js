@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, Balance, CanonicalOrder, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { addDecimal } from "@coinzilla/utils"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { createOrderOwnership } from "../domain/orders/order-ownership.js"
@@ -33,7 +34,7 @@ const market = new Market({
 const positionId = "rs-position-1"
 const strategyId = StrategyId.RECOVERY_SELLER
 
-function makeFill({ tradeId = "sell-1", quantity = "5.01", quoteQuantity = "10.5" } = {}) {
+function makeFill({ tradeId = "sell-1", quantity = "5.01", quoteQuantity = "10.5", commissions = [] } = {}) {
   return new Fill({
     tradeId,
     brokerOrderId: "broker-sell-1",
@@ -52,7 +53,7 @@ function makeFill({ tradeId = "sell-1", quantity = "5.01", quoteQuantity = "10.5
       amount: quoteQuantity,
       asset: quoteAsset,
     }),
-    commissions: [],
+    commissions,
     commissionStatus: "COMPLETE",
   })
 }
@@ -101,7 +102,7 @@ function makeRegistry(order) {
   })
 }
 
-function makeContext() {
+function makeContext({ fill = makeFill() } = {}) {
   const buyFill = new Fill({
     tradeId: "buy-1",
     brokerOrderId: "broker-buy-1",
@@ -135,7 +136,6 @@ function makeContext() {
   })
   const openRegistry = makeRegistry(openOrder)
   const terminalRegistry = makeRegistry(terminalOrder)
-  const fill = makeFill()
   const allocation = createMixedSellFillAllocation({
     fill,
     orderRegistry: terminalRegistry,
@@ -371,4 +371,63 @@ test("commits actual fills even when the independent legacy profitability gate f
     "Actual legacy base debit must still be recorded after a loss-making execution.")
   assert.equal(workflow.getActiveOrders().length, 0,
     "A fully reconciled terminal order releases its reservation even when realized profitability is below its gate.")
+})
+
+test("allocates quote, base and valued third-asset commissions before independent profitability", async () => {
+  const feeAsset = new Asset({
+    id: "binance:BNB",
+    code: "BNB",
+  })
+  const fill = makeFill({
+    commissions: [
+      new Commission({
+        amount: new Money({
+          amount: "0.001",
+          asset: quoteAsset,
+        }),
+      }),
+      new Commission({
+        amount: new Money({
+          amount: "0.001",
+          asset: baseAsset,
+        }),
+      }),
+      new Commission({
+        amount: new Money({
+          amount: "0.01",
+          asset: feeAsset,
+        }),
+        quoteValue: new Money({
+          amount: "0.02",
+          asset: quoteAsset,
+        }),
+      }),
+    ],
+  })
+  const context = makeContext({ fill })
+  const workflow = makeWorkflow(context)
+  const result = await workflow.reconcileTerminalMixedSell({
+    reconciliation: context.reconciliation,
+    terminalOrder: context.terminalOrder,
+    canonicalFills: [context.fill],
+    canonicalFillAllocations: [context.allocation],
+    minProfit: "0.2",
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.profitability.legacy.baseDebit, "0.010001996007984031936127744510978044",
+    "Legacy historical cost must include the exact proportional base commission debit.")
+  assert.equal(
+    addDecimal({
+      left: result.data.profitability.recovery.netQuoteProceeds,
+      right: result.data.profitability.legacy.netQuoteProceeds,
+    }),
+    "10.479",
+    "Combined net proceeds must subtract the actual quote fee and reliably valued third-asset fee exactly once.",
+  )
+  assert.equal(
+    result.data.legacyAccounting.realizedQuoteProceeds,
+    result.data.profitability.legacy.netQuoteProceeds,
+    "The legacy accounting projection and profitability calculation must use the same allocated net quote proceeds.",
+  )
 })
