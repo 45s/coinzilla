@@ -73,7 +73,8 @@ function validateMarketFill({ fill, market, startTime, lastTradeId, lastExecuted
   if (!(fill instanceof Fill) || fill.market.symbol !== market.symbol) {
     throw new TypeError(`Account trade history returned a non-canonical or wrong-market fill for ${market.symbol}`)
   }
-  const numericTradeId = requireSafeTradeId({ fill, symbol: market.symbol })
+  const numericTradeId = requireSafeTradeId({ fill, 
+    symbol: market.symbol })
   if (state.fillIds.has(fill.id)) {
     throw new Error(`Account trade history contains duplicate execution identity ${fill.id}`)
   }
@@ -90,7 +91,8 @@ function validateMarketFill({ fill, market, startTime, lastTradeId, lastExecuted
   if (fill.executedAt < startTime) {
     throw new Error(`Account trade history returned an execution before the requested baseline for ${market.symbol}`)
   }
-  return { numericTradeId, tradeKey }
+  return { numericTradeId, 
+    tradeKey }
 }
 
 async function fetchMarketTradeHistory({
@@ -119,7 +121,9 @@ async function fetchMarketTradeHistory({
     }
     const result = await broker.getFills(query)
     state.requestCount += 1
-    const page = validateTradeHistoryPage({ result, market, limit })
+    const page = validateTradeHistoryPage({ result, 
+      market, 
+      limit })
 
     for (const fill of page) {
       const { numericTradeId, tradeKey } = validateMarketFill({
