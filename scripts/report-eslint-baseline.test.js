@@ -88,6 +88,11 @@ test("every tracked root scripts JavaScript file is linted without findings", as
   assert.equal(
     errorCount + warningCount,
     0,
-    \`Root scripts ESLint must report zero errors and warnings. Found \${errorCount} errors and \${warningCount} warnings.\\nBy rule: \${JSON.stringify(findingsByRule, null, 2)}\\nBy file: \${JSON.stringify(findingsByFile, null, 2)}\`,
+    JSON.stringify({
+      errorCount,
+      warningCount,
+      findingsByRule,
+      findingsByFile,
+    }, null, 2),
   );
 });
