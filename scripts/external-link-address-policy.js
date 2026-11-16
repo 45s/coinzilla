@@ -81,11 +81,11 @@ function ipv6ToBigInt(address) {
   let value = 0n;\n  for (const group of groups) {\n    value = (value << 16n) | BigInt(`0x${group}`);\n  }\n  return value;
 }
 
-function parseCidrNetwork(address, family) {
+function parseCidrNetwork({ address, family }) {
   return family === 4 ? ipv4ToBigInt(address) : ipv6ToBigInt(address);
 }
 
-function isInCidr(addressValue, networkAddress, prefixLength, bitLength) {
+function isInCidr({ addressValue, networkAddress, prefixLength, bitLength }) {
   const mask = ((1n << BigInt(prefixLength)) - 1n) << BigInt(bitLength - prefixLength);
   return (addressValue & mask) === (networkAddress & mask);
 }
