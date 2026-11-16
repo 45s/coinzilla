@@ -209,6 +209,26 @@ function createCoinGrabberMarketPriceErrorHandler({ logger } = {}) {
   }
 }
 
+async function resolveStartupOptionsForProcessRecovery({ resolved, operationalStateStore, logger } = {}) {
+  const recoveryEnabled = resolved.appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
+  const operationalState = await verifyOperationalStateStore({
+    operationalStateStore,
+    recoveryEnabled,
+  })
+  const tradingEnabled = resolved.tradingEnabled && operationalState.previousProcessStarted !== true
+  const startupOptions = tradingEnabled === resolved.tradingEnabled
+    ? resolved
+    : Object.freeze({ ...resolved, tradingEnabled })
+  if (resolved.tradingEnabled && !tradingEnabled) {
+    logger.info?.({
+      message: "Trading disabled because process-restart recovery is disabled and prior process history exists",
+      reason: "PROCESS_RESTART_RECOVERY_DISABLED",
+      tradingEnabled: false,
+    })
+  }
+  return startupOptions
+}
+
 async function createHarvesterStartupContext({ options } = {}) {
   const {
     configSource,
@@ -238,7 +258,6 @@ async function createHarvesterStartupContext({ options } = {}) {
     eventPublisher,
     logger,
   })
-  const restartRecoveryEnabled = resolved.appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
   const operatorControlLifecycle = await prepareTelegramOperatorControl({
     telegramConfig: resolved.appConfig.operatorControl?.telegram,
     env,
@@ -250,21 +269,11 @@ async function createHarvesterStartupContext({ options } = {}) {
     logger,
   })
   const operationalStateStore = suppliedOperationalStateStore ?? operatorControlLifecycle.operationalStateStore
-  const operationalState = await verifyOperationalStateStore({
+  const startupOptions = await resolveStartupOptionsForProcessRecovery({
+    resolved,
     operationalStateStore,
-    recoveryEnabled: restartRecoveryEnabled,
+    logger,
   })
-  const tradingEnabled = resolved.tradingEnabled && operationalState.previousProcessStarted !== true
-  const startupOptions = tradingEnabled === resolved.tradingEnabled
-    ? resolved
-    : Object.freeze({ ...resolved, tradingEnabled })
-  if (resolved.tradingEnabled && !tradingEnabled) {
-    logger.info?.({
-      message: "Trading disabled because process-restart recovery is disabled and prior process history exists",
-      reason: "PROCESS_RESTART_RECOVERY_DISABLED",
-      tradingEnabled: false,
-    })
-  }
   await persistHarvesterProcessStart({
     operationalStateStore,
     appConfig: startupOptions.appConfig,
