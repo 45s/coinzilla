@@ -268,7 +268,8 @@ test("dispatches resume through the application facade and preserves safety bloc
       pollCount += 1
       if (pollCount === 1) {return makeResponse({ ok: true, result: [update] })}
       finishSecondPoll()
-      return new Promise((resolve, reject) => {
+      return new Promise(promiseArgs => {
+        const [, reject] = promiseArgs
         options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
@@ -1510,7 +1511,6 @@ test("does not report a resume when the application confirms no operator pause e
       }),
     },
     logger: {
-      debug: entry => entries.push(entry),
       debug: entry => entries.push({ ...entry, loggedAtLevel: "debug" }),
       info: entry => entries.push({ ...entry, loggedAtLevel: "info" }),
       error: entry => entries.push(entry),

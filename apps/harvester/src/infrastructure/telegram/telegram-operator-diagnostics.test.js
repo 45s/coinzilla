@@ -211,8 +211,14 @@ test("writes ordinary interaction lifecycle events at INFO for terminal visibili
   const entries = []
   const diagnostics = createTelegramOperatorDiagnostics({
     logger: {
-      debug: entry => entries.push({ level: "debug", ...entry }),
-      info: entry => entries.push({ level: "info", ...entry }),
+      debug: entry => entries.push({
+        level: "debug",
+        ...entry,
+      }),
+      info: entry => entries.push({
+        level: "info",
+        ...entry,
+      }),
     },
   })
 
