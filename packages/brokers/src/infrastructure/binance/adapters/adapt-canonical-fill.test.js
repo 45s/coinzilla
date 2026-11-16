@@ -4,8 +4,10 @@ import { describe, it } from "node:test"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { adaptCanonicalFill } from "./adapt-canonical-fill.js"
 
-const baseAsset = new Asset({ id: "btc", code: "BTC" })
-const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
+const baseAsset = new Asset({ id: "btc",
+code: "BTC" })
+const quoteAsset = new Asset({ id: "usdt",
+code: "USDT" })
 const market = new Market({
   venue: "binance",
   symbol: "BTCUSDT",
@@ -28,7 +30,8 @@ const trade = {
 
 describe("adaptCanonicalFill", () => {
   it("maps exact Binance execution values into canonical Fill and Commission entities", () => {
-    const fill = adaptCanonicalFill({ trade, market })
+    const fill = adaptCanonicalFill({ trade,
+market })
 
     assert.ok(fill instanceof Fill)
     assert.equal(fill.id, "binance:BTCUSDT:42")
@@ -50,13 +53,16 @@ describe("adaptCanonicalFill", () => {
     assert.equal(fill.commissions[0].amount.asset.id, "bnb")
     assert.deepEqual(fill.value.commissions[0].amount, {
       amount: "0.00000001",
-      asset: { id: "bnb", code: "BNB" },
+      asset: { id: "bnb",
+code: "BNB" },
     })
   })
 
   it("reuses market asset identity for commissions paid in a market asset", () => {
     const fill = adaptCanonicalFill({
-      trade: { ...trade, commission: "0.00000001", commissionAsset: "BTC" },
+      trade: { ...trade,
+commission: "0.00000001",
+commissionAsset: "BTC" },
       market,
     })
 
@@ -65,7 +71,9 @@ describe("adaptCanonicalFill", () => {
 
   it("represents a confirmed zero commission as complete with no fee entries", () => {
     const fill = adaptCanonicalFill({
-      trade: { ...trade, commission: "0", commissionAsset: null },
+      trade: { ...trade,
+commission: "0",
+commissionAsset: null },
       market,
     })
 
@@ -75,7 +83,9 @@ describe("adaptCanonicalFill", () => {
 
   it("does not invent a fee asset when a positive commission lacks its asset", () => {
     const fill = adaptCanonicalFill({
-      trade: { ...trade, commission: "0.01", commissionAsset: null },
+      trade: { ...trade,
+commission: "0.01",
+commissionAsset: null },
       market,
     })
 
@@ -85,7 +95,9 @@ describe("adaptCanonicalFill", () => {
 
   it("uses UNKNOWN for missing maker/taker metadata and omits absent timestamps", () => {
     const fill = adaptCanonicalFill({
-      trade: { ...trade, isMaker: undefined, time: undefined },
+      trade: { ...trade,
+isMaker: undefined,
+time: undefined },
       market,
     })
 
@@ -95,15 +107,32 @@ describe("adaptCanonicalFill", () => {
 
   it("rejects malformed trade identity, side, values, and market input", () => {
     for (const input of [
-      { trade: null, market },
-      { trade: { ...trade, id: null }, market },
-      { trade: { ...trade, orderId: null }, market },
-      { trade: { ...trade, isBuyer: "true" }, market },
-      { trade: { ...trade, price: "not-a-price" }, market },
-      { trade: { ...trade, qty: "-1" }, market },
-      { trade: { ...trade, quoteQty: "0" }, market },
-      { trade: { ...trade, commission: "-0.01", commissionAsset: null }, market },
-      { trade, market: {} },
+      { trade: null,
+market },
+      { trade: { ...trade,
+id: null },
+market },
+      { trade: { ...trade,
+orderId: null },
+market },
+      { trade: { ...trade,
+isBuyer: "true" },
+market },
+      { trade: { ...trade,
+price: "not-a-price" },
+market },
+      { trade: { ...trade,
+qty: "-1" },
+market },
+      { trade: { ...trade,
+quoteQty: "0" },
+market },
+      { trade: { ...trade,
+commission: "-0.01",
+commissionAsset: null },
+market },
+      { trade,
+market: {} },
     ]) {
       assert.throws(() => adaptCanonicalFill(input))
     }
@@ -160,7 +189,8 @@ describe("REST and WebSocket canonical fill parity", () => {
       Y: trade.quoteQty,
     })
 
-    const restFill = adaptCanonicalFill({ trade, market })
+    const restFill = adaptCanonicalFill({ trade,
+market })
     const websocketFill = adaptCanonicalFill({
       market,
       trade: {
