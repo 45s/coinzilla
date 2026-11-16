@@ -36,7 +36,7 @@ function getSubmissionStateBlocker({
     return defer({ symbol,
       reason: "OPERATOR_ALL_BUYS_PAUSED" })
   }
-  if (order.side === "BUY" && state.operatorBuyPausedMarkets.has(symbol)) {
+  if (order.side === "BUY" && state.operatorBuyPausedMarkets?.has(symbol) === true) {
     return defer({ symbol,
       reason: "OPERATOR_MARKET_BUYS_PAUSED" })
   }
