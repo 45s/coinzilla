@@ -180,7 +180,7 @@ The marker is process-local. It is not trusted after restart; rebuild safety fro
 
 ### Ambiguous orders and fail-closed behavior
 
-Keep the original client order ID for an ambiguous placement. Reconcile by canonical identity; never retry placement or submit a duplicate recovery SELL just because an acknowledgement timed out. Never cancel an order unless canonical ownership is proven. If an owned BUY/SELL remains UNKNOWN, terminal fill history is incomplete, recovery coverage is insufficient, accounting is unsafe, or Journal durability cannot be proven, report the exact strategy/market/blocker, keep required services connected and do not publish STOPPED.
+Keep the original client order ID for an ambiguous placement. Reconcile by canonical identity; never retry placement or submit a duplicate recovery SELL just because an acknowledgement timed out. Never cancel an order unless canonical ownership is proven. An external/manual open order is never adopted, canceled or modified; its presence alone does not block shutdown safety. An actual unowned execution or unresolved account-wide ownership/balance discrepancy remains a separate integrity blocker. If an owned BUY/SELL remains UNKNOWN, terminal fill history is incomplete, recovery coverage is insufficient, accounting is unsafe, or Journal durability cannot be proven, report the exact strategy/market/blocker, keep required services connected and do not publish STOPPED.
 
 A failure in one market does not erase another market's SAFE_TO_SHUTDOWN marker, but it prevents shared services from stopping. The coordinator waits for all strategy participants; it does not decide whether a Conservative order is safe.
 

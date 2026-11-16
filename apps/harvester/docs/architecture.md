@@ -560,8 +560,7 @@ with `Position.spent`, but is never used to calculate the recovery plan. A stale
 a SELL-only replacement is submitted. If the pair is paused, market data is
 stale, cancellation/submission is unresolved, or the replacement cannot be
 verified, the final coverage audit fails and CLOSING cannot report COMPLETE.
-External orders remain unowned and untouched; `EXTERNAL_ORDERS_POLICIES.IGNORE`
-is preserved.
+External/manual orders remain unowned and untouched; their presence alone does not block shutdown safety. Actual unowned executions or unresolved account-wide ownership/balance discrepancies remain fail-closed. `EXTERNAL_ORDERS_POLICIES.IGNORE` is preserved.
 
 
 During graceful shutdown, BUY fills do not invoke the ordinary strategy
