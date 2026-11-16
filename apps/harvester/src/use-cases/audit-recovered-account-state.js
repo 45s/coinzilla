@@ -563,8 +563,7 @@ function validateUnownedOpenOrder({
     throw new Error(`Canonical Market metadata is missing for unowned open order ${symbol}`)
   }
   
-  const actualStatus = normalizeOrderStatus({ st
-    atus: order.status })
+  const actualStatus = normalizeOrderStatus({ status: order.status })
   if (!["OPEN", "PARTIALLY_FILLED"].includes(actualStatus)) {
     throw new Error(`Unowned exchange order has an unsupported open status: ${brokerOrderId}`)
   }
