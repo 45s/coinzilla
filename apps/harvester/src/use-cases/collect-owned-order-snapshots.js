@@ -27,7 +27,8 @@ function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
     ["quantity", fill.quantity.amount, journalFill.quantity],
     ["quoteQuantity", fill.quoteQuantity.amount, journalFill.quoteQuantity],
   ]) {
-    if (compareDecimal({ left: actual, right: expected }) !== 0) {
+    if (compareDecimal({ left: actual, 
+      right: expected }) !== 0) {
       mismatch(field)
     }
   }
@@ -58,7 +59,8 @@ function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
     if (
       actual.assetId !== expected.assetId ||
       actual.asset !== expected.asset ||
-      compareDecimal({ left: actual.amount, right: expected.amount }) !== 0
+      compareDecimal({ left: actual.amount, 
+        right: expected.amount }) !== 0
     ) {
       mismatch("commission facts")
     }
@@ -189,7 +191,8 @@ async function readCanonicalOrderHistory({ broker, ownedOrder }) {
     )
   }
   const [historyOrder] = historyResult.data
-  validateCanonicalOrderHistory({ historyOrder, ownedOrder })
+  validateCanonicalOrderHistory({ historyOrder, 
+    ownedOrder })
   return historyOrder
 }
 
@@ -220,10 +223,14 @@ function readMatchingOpenOrder({ openOrdersBySymbol, symbol, ownedOrder, history
   }
   if (openOrder && (
     !["NEW", "PARTIALLY_FILLED"].includes(openOrder.status) ||
-    (openOrder.status === "NEW" && compareDecimal({ left: openOrder.executedQuantity, right: "0" }) !== 0) ||
-    (openOrder.status === "PARTIALLY_FILLED" && compareDecimal({ left: openOrder.executedQuantity, right: "0" }) === 0) ||
-    compareDecimal({ left: openOrder.originalQuantity, right: ownedOrder.originalQuantity.amount }) !== 0 ||
-    compareDecimal({ left: openOrder.executedQuantity, right: historyOrder.executedQuantity.amount }) > 0
+    (openOrder.status === "NEW" && compareDecimal({ left: openOrder.executedQuantity, 
+      right: "0" }) !== 0) ||
+    (openOrder.status === "PARTIALLY_FILLED" && compareDecimal({ left: openOrder.executedQuantity, 
+      right: "0" }) === 0) ||
+    compareDecimal({ left: openOrder.originalQuantity, 
+      right: ownedOrder.originalQuantity.amount }) !== 0 ||
+    compareDecimal({ left: openOrder.executedQuantity, 
+      right: historyOrder.executedQuantity.amount }) > 0
   )) {
     throw recoveryFailureError(
       new Error(`Open-order snapshot conflicts with canonical history for ${ownedOrder.brokerOrderId}`),
@@ -301,7 +308,9 @@ function validateOwnedOrderFill({ fill, ownedOrder, journalFillsById, fillsById 
   }
   const journalFill = journalFillsById.get(fill.id)
   if (journalFill) {
-    assertJournalFillParity({ fill, ownedOrder, journalFill })
+    assertJournalFillParity({ fill, 
+      ownedOrder, 
+      journalFill })
   }
   const previous = fillsById.get(fill.id)
   if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
@@ -330,7 +339,8 @@ function advanceOwnedFillCursor({ fills, lastTradeId, ownedOrder }) {
   if (nextFromId > BigInt(Number.MAX_SAFE_INTEGER)) {
     throw new Error(`REST fill pagination trade ID exceeds the broker's safe cursor range for owned order ${ownedOrder.brokerOrderId}`)
   }
-  return { lastTradeId, fromId: nextFromId.toString() }
+  return { lastTradeId, 
+    fromId: nextFromId.toString() }
 }
 
 function sortOwnedOrderFills({ fillsById }) {
@@ -356,7 +366,8 @@ function validateOwnedOrderFillCoverage({ fillsById, fills, journalFillsById, hi
   const reconciledQuantity = fills.reduce(
     (...entries) => {
       const [total, fill] = entries
-      return addDecimal({ left: total, right: fill.quantity.amount })
+      return addDecimal({ left: total, 
+        right: fill.quantity.amount })
     },
     "0",
   )
@@ -382,13 +393,18 @@ async function readOwnedOrderFills({ broker, ownedOrder, journalFillsById }) {
       fillPageLimit,
     })
     for (const fill of pageFills) {
-      validateOwnedOrderFill({ fill, ownedOrder, journalFillsById, fillsById })
+      validateOwnedOrderFill({ fill, 
+        ownedOrder, 
+        journalFillsById, 
+        fillsById })
     }
     if (pageFills.length < fillPageLimit) {
       fillsComplete = true
       break
     }
-    const cursor = advanceOwnedFillCursor({ fills: pageFills, lastTradeId, ownedOrder })
+    const cursor = advanceOwnedFillCursor({ fills: pageFills, 
+      lastTradeId, 
+      ownedOrder })
     lastTradeId = cursor.lastTradeId
     fromId = cursor.fromId
     if (page === 9999) {
@@ -399,13 +415,18 @@ async function readOwnedOrderFills({ broker, ownedOrder, journalFillsById }) {
     throw new Error(`REST fill history could not be proven complete for owned order ${ownedOrder.brokerOrderId}`)
   }
   const fills = sortOwnedOrderFills({ fillsById })
-  return { fillsById, fills }
+  return { fillsById, 
+    fills }
 }
 
 async function createOwnedOrderSnapshot({ broker, ownedOrder, openOrdersBySymbol, journalFillsById }) {
   const { symbol } = ownedOrder.market
-  const historyOrder = await readCanonicalOrderHistory({ broker, ownedOrder })
-  readMatchingOpenOrder({ openOrdersBySymbol, symbol, ownedOrder, historyOrder })
+  const historyOrder = await readCanonicalOrderHistory({ broker, 
+    ownedOrder })
+  readMatchingOpenOrder({ openOrdersBySymbol, 
+    symbol, 
+    ownedOrder, 
+    historyOrder })
   const { fillsById, fills } = await readOwnedOrderFills({
     broker,
     ownedOrder,
@@ -418,7 +439,10 @@ async function createOwnedOrderSnapshot({ broker, ownedOrder, openOrdersBySymbol
     historyOrder,
     ownedOrder,
   })
-  return { ownedOrder, historyOrder, fills, fillIds: new Set(fillsById.keys()) }
+  return { ownedOrder, 
+    historyOrder, 
+    fills, 
+    fillIds: new Set(fillsById.keys()) }
 }
 
 async function collectOwnedOrderSnapshots({ broker, journalFillsById, ownedOrders }) {
@@ -429,7 +453,8 @@ async function collectOwnedOrderSnapshots({ broker, journalFillsById, ownedOrder
     const openOrdersBySymbol = new Map()
     for (const symbol of symbols) {
       affectedSymbol = symbol
-      openOrdersBySymbol.set(symbol, await readOpenOrders({ broker, symbol }))
+      openOrdersBySymbol.set(symbol, await readOpenOrders({ broker, 
+        symbol }))
     }
 
     const snapshots = []
@@ -443,7 +468,8 @@ async function collectOwnedOrderSnapshots({ broker, journalFillsById, ownedOrder
         journalFillsById,
       }))
     }
-    return { snapshots, symbols }
+    return { snapshots, 
+      symbols }
   } catch (caught) {
     const recoveryError = caught instanceof Error ? caught : new Error(String(caught), { cause: caught })
     recoveryError.reconciliationSymbol = affectedSymbol
