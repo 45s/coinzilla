@@ -1659,24 +1659,7 @@ test("retains a confirmation when callback acknowledgement fails and retries the
 
 
 
-test("does not consume a pending confirmation when Telegram reports an expired callback acknowledgement", async () => {
-  const askUpdate = makeCallbackUpdate({
-    updateId: 1501,
-    messageId: 1501,
-    data: "cc:ask:PAUSE:LINKUSDT",
-  })
-  const expiredConfirmation = makeCallbackUpdate({
-    updateId: 1502,
-    messageId: 1501,
-    data: "cc:confirm:PAUSE:LINKUSDT:1501",
-  })
-  const retriedConfirmation = makeCallbackUpdate({
-    updateId: 1503,
-    messageId: 1501,
-    data: "cc:confirm:PAUSE:LINKUSDT:1501",
-  })
-  const operatorCalls = []
-  const diagnostics = []
+function createExpiredCallbackAcknowledgementFetch({ updates }) {
   let pollCount = 0
   let callbackAckCount = 0
   let finishSecondPoll
@@ -1692,7 +1675,7 @@ test("does not consume a pending confirmation when Telegram reports an expired c
         result: { username: "coinzilla_bot" },
       })
     }
-    if (method === "setMyCommands") {
+    if (method === "setMyCommands" || method === "editMessageText") {
       return makeResponse({
         ok: true,
         result: true,
@@ -1703,11 +1686,12 @@ test("does not consume a pending confirmation when Telegram reports an expired c
       if (pollCount === 1) {
         return makeResponse({
           ok: true,
-          result: [askUpdate, expiredConfirmation, retriedConfirmation],
+          result: updates,
         })
       }
       finishSecondPoll()
-      return new Promise((resolve, reject) => {
+      return new Promise(promiseArgs => {
+        const [, reject] = promiseArgs
         options.signal.addEventListener("abort", () => reject(new Error("poll aborted")), { once: true })
       })
     }
@@ -1724,14 +1708,36 @@ test("does not consume a pending confirmation when Telegram reports an expired c
         result: true,
       })
     }
-    if (method === "editMessageText") {
-      return makeResponse({
-        ok: true,
-        result: true,
-      })
-    }
-    throw new Error(`Unexpected Telegram API method: ${method}`)
+    throw new Error(\`Unexpected Telegram API method: \${method}\`)
   }
+  return {
+    fetchImpl,
+    secondPoll,
+    getCallbackAckCount: () => callbackAckCount,
+  }
+}
+
+test("does not consume a pending confirmation when Telegram reports an expired callback acknowledgement", async () => {
+  const updates = [
+    makeCallbackUpdate({
+      updateId: 1501,
+      messageId: 1501,
+      data: "cc:ask:PAUSE:LINKUSDT",
+    }),
+    makeCallbackUpdate({
+      updateId: 1502,
+      messageId: 1501,
+      data: "cc:confirm:PAUSE:LINKUSDT:1501",
+    }),
+    makeCallbackUpdate({
+      updateId: 1503,
+      messageId: 1501,
+      data: "cc:confirm:PAUSE:LINKUSDT:1501",
+    }),
+  ]
+  const operatorCalls = []
+  const diagnostics = []
+  const mock = createExpiredCallbackAcknowledgementFetch({ updates })
   const adapter = createTelegramOperatorAdapter({
     botToken: "test-token",
     allowedUserIds: ["12345"],
@@ -1754,14 +1760,14 @@ test("does not consume a pending confirmation when Telegram reports an expired c
       warn: entry => diagnostics.push(entry),
       error: entry => diagnostics.push(entry),
     },
-    fetchImpl,
+    fetchImpl: mock.fetchImpl,
     retryDelayMs: 1,
   })
   await adapter.start()
-  await secondPoll
+  await mock.secondPoll
   await adapter.stop()
 
-  assert.equal(callbackAckCount, 3)
+  assert.equal(mock.getCallbackAckCount(), 3)
   assert.equal(operatorCalls.length, 1)
   assert.equal(operatorCalls[0].symbol, "LINKUSDT")
   const expired = diagnostics.find(entry =>
@@ -1773,3 +1779,4 @@ test("does not consume a pending confirmation when Telegram reports an expired c
   assert.equal(completion?.applicationOperationCompleted, true)
   assert.equal(completion?.stateChanged, true)
 })
+
