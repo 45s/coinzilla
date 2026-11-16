@@ -14,19 +14,20 @@ function createLogger() {
     transports,
     levels,
     addTransport(transport) {
-      if (transports.has(transport.name)) throw new Error("duplicate transport")
+      if (transports.has(transport.name)) {throw new Error("duplicate transport")}
       transports.set(transport.name, transport)
     },
     async removeTransport(name) {
       const transport = transports.get(name)
-      if (!transport) return false
+      if (!transport) {return false}
       transports.delete(name)
       await transport.close?.()
       return true
     },
     setLevel(input) {
       levels.push(input)
-      return { transports: [...transports.values()].map(({ name, level }) => ({ name, level })) }
+      return { transports: [...transports.values()].map(({ name, level }) => ({ name,
+level })) }
     },
   }
 }
@@ -35,8 +36,12 @@ test("configures independent DEBUG and TRACE JSONL files and INFO console thresh
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-logs-"))
   const logger = createLogger()
   try {
-    const logging = await configureHarvesterLogging({ logger, directory, processIdentity: { startedAt: "2026-11-05T12:00:00.000Z", runtimeSessionId: "session-one" } })
-    assert.deepEqual(logger.levels, [{ transport: "console", level: "info" }])
+    const logging = await configureHarvesterLogging({ logger,
+directory,
+processIdentity: { startedAt: "2026-11-05T12:00:00.000Z",
+runtimeSessionId: "session-one" } })
+    assert.deepEqual(logger.levels, [{ transport: "console",
+level: "info" }])
     assert.equal(logger.transports.get("console").level, "info")
     assert.equal(logger.transports.get("harvester-debug-file").level, "debug")
     assert.equal(logger.transports.get("harvester-trace-file").level, "trace")
@@ -45,10 +50,12 @@ test("configures independent DEBUG and TRACE JSONL files and INFO console thresh
       timestamp: "2026-11-05T12:00:00.000Z",
       level: "debug",
       method: "debug",
-      data: { message: "diagnostic", symbol: "ZROUSDT" },
+      data: { message: "diagnostic",
+symbol: "ZROUSDT" },
     }
     await logger.transports.get("harvester-debug-file").write(entry)
-    await logger.transports.get("harvester-trace-file").write({ ...entry, level: "trace" })
+    await logger.transports.get("harvester-trace-file").write({ ...entry,
+level: "trace" })
 
     const debugLines = (await readFile(path.join(directory, "cumulative", "harvester.log"), "utf8")).trim().split("\n")
     const traceLines = (await readFile(path.join(directory, "cumulative", "trace.log"), "utf8")).trim().split("\n")
@@ -67,13 +74,15 @@ test("configures independent DEBUG and TRACE JSONL files and INFO console thresh
     )
     assert.deepEqual([...logger.transports.keys()], ["console"])
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
 test("fails clearly when the shared logger transport API is unavailable", async () => {
   await assert.rejects(
-    configureHarvesterLogging({ logger: {}, directory: os.tmpdir() }),
+    configureHarvesterLogging({ logger: {},
+directory: os.tmpdir() }),
     /shared utils dependency first/,
   )
 })
@@ -193,13 +202,20 @@ test("suppresses consecutive duplicate console entries and reports their count",
   const entry = {
     timestamp: "2026-11-05T12:00:00.000Z",
     level: "info",
-    data: { message: "Market data ready", symbol: "ZROUSDT", price: "1.70" },
+    data: { message: "Market data ready",
+symbol: "ZROUSDT",
+price: "1.70" },
   }
 
   transport.write(entry)
-  transport.write({ ...entry, timestamp: "2026-11-05T12:00:01.000Z" })
-  transport.write({ ...entry, timestamp: "2026-11-05T12:00:02.000Z" })
-  transport.write({ ...entry, timestamp: "2026-11-05T12:00:03.000Z", data: { ...entry.data, price: "1.71" } })
+  transport.write({ ...entry,
+timestamp: "2026-11-05T12:00:01.000Z" })
+  transport.write({ ...entry,
+timestamp: "2026-11-05T12:00:02.000Z" })
+  transport.write({ ...entry,
+timestamp: "2026-11-05T12:00:03.000Z",
+data: { ...entry.data,
+price: "1.71" } })
   transport.close()
 
   assert.equal((written.match(/Market data ready/g) ?? []).length, 2)
@@ -274,7 +290,8 @@ test("colors INFO blue and DEBUG magenta when terminal colors are enabled", () =
   output.on("data", (chunk) => {
     written += chunk.toString()
   })
-  const transport = createHarvesterConsoleTransport({ output, color: true })
+  const transport = createHarvesterConsoleTransport({ output,
+color: true })
 
   transport.write({
     timestamp: "2026-11-05T12:00:00.000Z",
@@ -321,7 +338,8 @@ test("renders semantic SUCCESS and SYSTEM methods with distinct colors without r
   output.on("data", (chunk) => {
     written += chunk.toString()
   })
-  const transport = createHarvesterConsoleTransport({ output, color: true })
+  const transport = createHarvesterConsoleTransport({ output,
+color: true })
   const data = { message: "Lifecycle event" }
 
   transport.write({
@@ -359,7 +377,8 @@ test("keeps colored semantic labels within the configured console line limit", (
   output.on("data", (chunk) => {
     written += chunk.toString()
   })
-  const transport = createHarvesterConsoleTransport({ output, color: true })
+  const transport = createHarvesterConsoleTransport({ output,
+color: true })
 
   transport.write({
     timestamp: "2026-11-05T12:00:00.000Z",
@@ -410,14 +429,24 @@ test("appends cumulative logs while keeping separate timestamped session histori
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-log-sessions-"))
   try {
     const firstLogger = createLogger()
-    const firstSession = await configureHarvesterLogging({ logger: firstLogger, directory, processIdentity: { startedAt: "2026-11-05T12:00:00.000Z", runtimeSessionId: "first-session" } })
-    const firstEntry = { timestamp: "2026-11-05T12:00:01.000Z", level: "debug", data: { message: "first run" } }
+    const firstSession = await configureHarvesterLogging({ logger: firstLogger,
+directory,
+processIdentity: { startedAt: "2026-11-05T12:00:00.000Z",
+runtimeSessionId: "first-session" } })
+    const firstEntry = { timestamp: "2026-11-05T12:00:01.000Z",
+level: "debug",
+data: { message: "first run" } }
     await firstLogger.transports.get("harvester-debug-file").write(firstEntry)
     await firstSession.close()
 
     const secondLogger = createLogger()
-    const secondSession = await configureHarvesterLogging({ logger: secondLogger, directory, processIdentity: { startedAt: "2026-11-05T13:00:00.000Z", runtimeSessionId: "second-session" } })
-    const secondEntry = { timestamp: "2026-11-05T13:00:01.000Z", level: "debug", data: { message: "second run" } }
+    const secondSession = await configureHarvesterLogging({ logger: secondLogger,
+directory,
+processIdentity: { startedAt: "2026-11-05T13:00:00.000Z",
+runtimeSessionId: "second-session" } })
+    const secondEntry = { timestamp: "2026-11-05T13:00:01.000Z",
+level: "debug",
+data: { message: "second run" } }
     await secondLogger.transports.get("harvester-debug-file").write(secondEntry)
     await secondSession.close()
 
@@ -428,7 +457,8 @@ test("appends cumulative logs while keeping separate timestamped session histori
     assert.deepEqual(firstEntries, [firstEntry], "the first session file must contain only first-run diagnostics")
     assert.deepEqual(secondEntries, [secondEntry], "the second session file must contain only second-run diagnostics")
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -458,7 +488,9 @@ test("preserves pre-existing transports after partial logging setup failure", as
     await writeFile(sessionPaths.trace, "preserve trace session\\n")
 
     await assert.rejects(
-      configureHarvesterLogging({ logger, directory, processIdentity }),
+      configureHarvesterLogging({ logger,
+directory,
+processIdentity }),
       /EEXIST/,
       "a TRACE session collision must fail setup",
     )
@@ -480,7 +512,8 @@ test("preserves pre-existing transports after partial logging setup failure", as
       "failed setup must preserve the colliding session file",
     )
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -515,15 +548,18 @@ test("rejects an existing session file before registering transports or leaking 
       "failed setup must close its cumulative stream while preserving the pre-existing session file inside the session grouping directory",
     );
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true,
+force: true });
   }
 });
 
 test("appends cumulative files while isolating and flushing consecutive process sessions", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-log-restarts-"));
   const sessionIdentities = [
-    { startedAt: "2026-11-09T12:00:00.000Z", runtimeSessionId: "first-run" },
-    { startedAt: "2026-11-09T12:01:00.000Z", runtimeSessionId: "second-run" },
+    { startedAt: "2026-11-09T12:00:00.000Z",
+runtimeSessionId: "first-run" },
+    { startedAt: "2026-11-09T12:01:00.000Z",
+runtimeSessionId: "second-run" },
   ];
   try {
     for (const [index, processIdentity] of sessionIdentities.entries()) {
@@ -537,9 +573,11 @@ test("appends cumulative files while isolating and flushing consecutive process 
         timestamp: processIdentity.startedAt,
         level: "debug",
         method: "debug",
-        data: { message: "session diagnostic " + (index + 1) },
+        data: { message: `session diagnostic ${  index + 1}` },
       };
-      const traceEntry = { ...debugEntry, level: "trace", method: "trace" };
+      const traceEntry = { ...debugEntry,
+level: "trace",
+method: "trace" };
       await logger.transports.get("harvester-debug-file").write(debugEntry);
       await logger.transports.get("harvester-trace-file").write(traceEntry);
       await logging.close();
@@ -577,7 +615,8 @@ test("appends cumulative files while isolating and flushing consecutive process 
       assert.equal(traceEntries.length, 1, "each TRACE session file must contain only its own process entries");
     }
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true,
+force: true });
   }
 });
 
@@ -589,13 +628,16 @@ test("closes the already-open DEBUG streams when TRACE session creation fails", 
     startedAt: "2026-11-09T12:05:00.000Z",
     runtimeSessionId: "trace-collision",
   };
-  const sessionPaths = createHarvesterLogSessionPaths({ directory, ...processIdentity });
+  const sessionPaths = createHarvesterLogSessionPaths({ directory,
+...processIdentity });
   const traceSessionFile = sessionPaths.trace;
   try {
     await mkdir(sessionPaths.sessionDirectory, { recursive: true });
     await writeFile(traceSessionFile, "preserve trace history\n");
     await assert.rejects(
-      configureHarvesterLogging({ logger, directory, processIdentity }),
+      configureHarvesterLogging({ logger,
+directory,
+processIdentity }),
       /EEXIST/,
       "TRACE session collision must abort setup after cleaning up the already-open DEBUG transport",
     );
@@ -616,7 +658,8 @@ test("closes the already-open DEBUG streams when TRACE session creation fails", 
       "failed partial setup must close every stream without deleting any created or pre-existing log file",
     );
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true,
+force: true });
   }
 });
 

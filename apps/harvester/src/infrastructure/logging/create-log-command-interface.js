@@ -13,7 +13,8 @@ export function createLogCommandInterface({
   output = process.stdout,
 } = {}) {
   if (!input?.isTTY || typeof logger?.setLevel !== "function") {
-    return Object.freeze({ enabled: false, close() {} })
+    return Object.freeze({ enabled: false,
+close() {} })
   }
 
   const commandInterface = readline.createInterface({
@@ -25,7 +26,7 @@ export function createLogCommandInterface({
   commandInterface.on("line", (line) => {
     const [command, action, extra] = line.trim().split(/\s+/)
 
-    if (command !== "/log") return
+    if (command !== "/log") {return}
 
     if (extra || !action || !["info", "debug", "trace", "status"].includes(action)) {
       output.write("Usage: /log info|debug|trace|status\n")
@@ -33,16 +34,17 @@ export function createLogCommandInterface({
     }
 
     if (action === "status") {
-      output.write(JSON.stringify(logger.getConfig(), null, 2) + "\n")
+      output.write(`${JSON.stringify(logger.getConfig(), null, 2)  }\n`)
       return
     }
 
     try {
-      const config = logger.setLevel({ transport: "console", level: action })
-      output.write("Console log level: " + action + "\n")
-      if (!config) output.write(JSON.stringify(logger.getConfig()) + "\n")
+      const config = logger.setLevel({ transport: "console",
+level: action })
+      output.write(`Console log level: ${  action  }\n`)
+      if (!config) {output.write(`${JSON.stringify(logger.getConfig())  }\n`)}
     } catch (error) {
-      output.write("Unable to change console log level: " + error.message + "\n")
+      output.write(`Unable to change console log level: ${  error.message  }\n`)
     }
   })
 

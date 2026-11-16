@@ -320,12 +320,12 @@ function writeOrderLifecycleRecord({ output, color, timestamp, level, method, da
     timestamp,
     data,
   })
-  output.write(formatConsoleLine({
+  output.write(`${formatConsoleLine({
     line,
     level,
     method,
     color,
-  }) + "\n")
+  })  }\n`)
 }
 
 function formatPortfolioBaseQuantity(value) {
@@ -397,12 +397,12 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
       strategyPrefix,
       details: summary.details ?? {},
     })
-    output.write(formatConsoleLine({
+    output.write(`${formatConsoleLine({
       line,
       level,
       method,
       color,
-    }) + "\n")
+    })  }\n`)
     return
   }
 
@@ -421,12 +421,12 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
   const boundedLine = plainLine.length > MAX_CONSOLE_LINE_LENGTH
     ? `${plainLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3)}...`
     : plainLine
-  output.write(formatConsoleLine({
+  output.write(`${formatConsoleLine({
     line: boundedLine,
     level,
     method,
     color,
-  }) + "\n")
+  })  }\n`)
 }
 
 function writeSuppressedConsoleRecord({ output, color, timestamp, count } = {}) {
@@ -437,11 +437,11 @@ function writeSuppressedConsoleRecord({ output, color, timestamp, count } = {}) 
     hour12: false,
   })
   const line = `${time} Previous identical log entry repeated ${count} additional time(s)`
-  output.write(formatConsoleLine({
+  output.write(`${formatConsoleLine({
     line,
     level: "info",
     color,
-  }) + "\n")
+  })  }\n`)
 }
 
 export function createHarvesterConsoleTransport({
@@ -455,7 +455,7 @@ export function createHarvesterConsoleTransport({
   let suppressedCount = 0
 
   const flushSuppressed = () => {
-    if (suppressedCount === 0) return
+    if (suppressedCount === 0) {return}
     writeSuppressedConsoleRecord({
       output,
       color,

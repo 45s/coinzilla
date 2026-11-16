@@ -20,7 +20,7 @@ export function createHarvesterLogSessionPaths({ directory, startedAt, runtimeSe
     .replace("T", "_")
     .replaceAll(":", "-")
   const sessionId = runtimeSessionId.replace(/[^a-zA-Z0-9_-]/g, "-")
-  const sessionDirectory = path.join(directory, "sessions", timestamp + "-" + sessionId)
+  const sessionDirectory = path.join(directory, "sessions", `${timestamp  }-${  sessionId}`)
   return Object.freeze({
     sessionDirectory,
     debug: path.join(sessionDirectory, "harvester.log"),

@@ -17,7 +17,7 @@ function createLogger() {
     },
     async removeTransport(name) {
       const transport = transports.get(name)
-      if (!transport) return false
+      if (!transport) {return false}
       transports.delete(name)
       await transport.close?.()
       return true
@@ -109,6 +109,7 @@ test("keeps structured logs and Journal records together while cumulative logs s
     await journal.close()
     await eventBus.close()
     await logging.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
