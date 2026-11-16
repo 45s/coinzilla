@@ -4,23 +4,24 @@ import { generateUUID } from "@coinzilla/utils"
 import { Order } from "./order.js"
 import { errMsgs } from "./err-msgs.js"
 
-describe(`${Order.name}`, () => {
-  const symbol = "btcusdt"
-  const quantity = 0.1
-  const type = "LIMIT"
-  const side = "BUY"
-  const price = 23_456
-  const id = generateUUID()
+const symbol = "btcusdt"
+const quantity = 0.1
+const type = "LIMIT"
+const side = "BUY"
+const price = 23_456
+const id = generateUUID()
+const validOrder = (overrides = {}) =>
+  new Order({
+    symbol,
+    type,
+    side,
+    quantity,
+    price,
+    id,
+    ...overrides,
+  })
 
-  const validOrder = (overrides = {}) =>
-    new Order({ symbol,
-type,
-side,
-quantity,
-price,
-id,
-...overrides })
-
+describe(`${Order.name} normalization`, () => {
   it("should normalize and expose all order fields", () => {
     const clientOrderId = "FR_BTC_0001"
     const o = validOrder({ symbol: "  btcusdt  ",
@@ -67,6 +68,9 @@ clientOrderId })
     }
   })
 
+})
+
+describe(`${Order.name} identity validation`, () => {
   it("should support every declared order type", () => {
     for (const supportedType of ["LIMIT", "LIMIT_MAKER", "MARKET"]) {
       assert.strictEqual(validOrder({ type: supportedType }).type, supportedType)
@@ -100,6 +104,9 @@ clientOrderId })
     }
   })
 
+})
+
+describe(`${Order.name} numeric validation`, () => {
   it("should reject invalid quantities", () => {
     for (const invalidQuantity of [
       undefined,
@@ -143,6 +150,9 @@ clientOrderId })
     }
   })
 
+})
+
+describe(`${Order.name} snapshots`, () => {
   it("allows zero remaining quantity for a fully filled order", () => {
     assert.equal(validOrder({ quantity: 0 }).quantity, 0)
   })
