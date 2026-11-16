@@ -408,3 +408,16 @@ submission), display `#pending` in the order-ID column and append the raw client
 order ID at the end of that same line. Do not add `Client:`, `Client order ID:`,
 or a separate indented line. The logger never derives strategy identity from a
 client-order-ID prefix.
+
+
+## Telegram Command Center interaction diagnostics
+
+Inbound Telegram interactions use the existing Harvester logger through a structured diagnostic boundary. Every update is correlated by `telegram:<update_id>`; redelivered updates retain the same correlation ID. The interaction record identifies message versus callback, command/action, market symbol when relevant, application query/use-case, stage, and duration where applicable.
+
+The lifecycle events are `Telegram update RECEIVED`, `Telegram interaction AUTHORIZED` / `REJECTED`, `Telegram command STARTED`, `Telegram query STARTED` / `COMPLETED`, `Telegram callback ACKNOWLEDGED`, `Telegram application operation STARTED` / `COMPLETED`, `Telegram response SENT`, and `Telegram interaction FAILED`. There are no per-poll success logs.
+
+For state-changing actions, preserve the distinction between `applicationOperationInvoked`, `applicationOperationCompleted`, and `stateChanged`. A selection or confirmation page is not a successful pause/resume. A response-delivery failure after a completed application operation must not be reported as an application-operation failure.
+
+Thrown errors are logged once at the appropriate interaction boundary with their original name, code, message, stack, and nested cause details. Non-exception failures use a stable `failureClassification` and safe `errorMessage`; do not manufacture an exception merely to label a failed result. Read-only query failures are distinct from application-operation failures.
+
+Never log full Telegram updates, callback payloads, bot tokens, allowlist IDs, API credentials, or full account/order payloads. Redact the configured bot token from messages and stacks. Do not log the same exception at every layer; preserve it while adding context at the boundary that owns the interaction. See the [Telegram Command Center runbook](operations/telegram-command-center.md) for stage interpretation and operator response.

@@ -1,76 +1,85 @@
-# Telegram Command Center operator runbook
+# Telegram Command Center
 
-## Scope and safety
+## Scope and configuration
 
-The Harvester Telegram Command Center is enabled by default in `operatorControl.telegram`. Startup remains fail-closed and requires a valid private-chat user-ID allowlist and `TELEGRAM_BOT_TOKEN`. A verified Operational State Store is required only when restart recovery is enabled or a store is explicitly supplied; Telegram-only control does not require one.
+The Telegram Command Center is an optional transport adapter over Harvester's existing operator-control application facade. It does not own trading rules, call the broker directly, or use Journal/EventBus as control-state persistence.
 
-The Command Center is not an exchange kill switch. It cannot place, cancel, adopt or modify exchange orders; change strategies or configuration; bypass safety/recovery/volatility blockers; or execute arbitrary commands. A market pause suppresses new strategy BUYs and trailing-BUY replacements for that market only. Existing orders remain open and may still fill; fill accounting and recovery SELLs continue. User-data disconnect/reconnect and reconciliation do not clear an active operator pause. Operator pauses last only for the current process and are not restored after restart.
+Inbound control is enabled by default when configured. The bot token remains environment-only in `TELEGRAM_BOT_TOKEN`; `TELEGRAM_USER_ID` seeds the private-chat allowlist. Startup fails closed when the token or a valid allowlisted user is missing. Set `operatorControl.telegram.enabled: false` only when inbound control should be disabled. This configuration is independent from `notifications.telegram`.
 
-## Configuring the Command Center
+Telegram-only control does not require or initialize the Operational State Store when restart recovery is disabled and no store is explicitly supplied. When restart recovery is enabled or a store is supplied, the application uses the same process-owned Operational State Store described in [the operator-control README](../operator-control/README.md). Its default is `apps/harvester/recovery-facts/`, resolved relative to the Harvester package; `OPERATIONAL_STATE_DIRECTORY` is the supported optional absolute-path override. Existing data is not moved or migrated automatically.
 
-1. Leave `operatorControl.telegram.enabled` at its default `true` in `config/operator-control.js`. Set it to `false` only when intentionally disabling inbound commands.
-2. Set `TELEGRAM_USER_ID` in the runtime environment to your numeric Telegram sender user ID. The config module seeds `operatorControl.telegram.allowedUserIds` from this value; bootstrap validates it and merges it with any explicitly configured IDs. Invalid or missing values leave no usable allowlist and stop startup with a specific error.
-3. Set `TELEGRAM_BOT_TOKEN` in the runtime environment. Do not put the token in application configuration or commit it.
-4. If `strategies.CG_coinGrabber.settings.recovery.enabled` is `true`, initialize the ADR-0001 Operational State Store once while Harvester is stopped, following the [Operational State Store setup](../../README.md#operational-state-store-adr-0001-step-8). The default directory is `apps/harvester/recovery-facts/` inside the Harvester application package; the initializer and runtime resolve this same path, so no directory variable is required. For a custom absolute path, set `OPERATIONAL_STATE_DIRECTORY` in both environments. The former home-directory recovery-data location is not a supported default or fallback. This cleanup does not move, delete, initialize, overwrite, or repair existing runtime data. If restart recovery is disabled and Telegram is the only operator-control consumer, no Operational State Store is created or required.
-5. When restart recovery is enabled, a verified ledger containing a prior `PROCESS_STARTED` record keeps trading disabled until the recovery workflow completes. Telegram-only process-local pause state is not replayed after restart. Do not delete or reinitialize an existing ledger to bypass recovery restrictions.
+## Authorization and safety
 
-Set the flag to false only when inbound commands are not needed. Outbound Telegram notifications remain independently configured under `notifications.telegram`.
+Every inbound interaction must be from a non-bot sender in a private chat, with `message.from.id` matching the private chat ID and present in the configured allowlist. Display names, chat titles, message text, and caller-supplied roles never authorize an interaction.
 
-With `recovery.enabled` false, Telegram-only startup does not compose or verify an Operational State Store and operator pause/resume state remains in memory for the current process. With restart recovery enabled, bootstrap composes and verifies the initialized ADR-0001 store before broker-capable startup. A prior process session then follows the recovery workflow; it is not silently treated as a clean new trading state.
+Pause and resume remain market-scoped application use cases:
 
-## Command menu and navigation
+- Inline Pause/Resume buttons show eligible markets, then a confirmation page. Only the confirmation callback invokes the application use case.
+- Explicit `/pause SYMBOL` and `/resume SYMBOL` commands remain available to an authorized operator.
+- Pause suppresses new strategy BUY intents and trailing-BUY repricing for that market. It does not cancel or modify existing exchange orders; a resting BUY may still fill.
+- Fill accounting, reconciliation, and risk-reducing recovery SELL decisions continue.
+- Operator pause is process-lifetime only and is not restored after restart. Reissue `/pause SYMBOL` after restart if the market must remain paused.
 
-Use `/start` to open the Command Center and display its persistent keyboard. Use `/menu` to restore the keyboard if it has been hidden. Telegram's built-in command menu remains available and mirrors the slash commands. The six persistent buttons are arranged in three rows:
+## Supported commands and buttons
 
-| Button | Behavior |
-| --- | --- |
-| Pause | Opens market selection with only enabled markets that are not operator-paused. |
-| Resume | Opens market selection with only enabled markets that currently have an operator pause. |
-| Status | Runs the existing read-only runtime status query. |
-| Markets | Runs the existing read-only market snapshot query and shows eligible inline controls. |
-| Portfolio | Runs the existing read-only positions/recovery-accounting query. |
-| Open Orders | Runs the existing read-only open-orders query. |
+| Surface | Action | Application behavior |
+| --- | --- | --- |
+| `/start` | Start | Displays the persistent six-button keyboard |
+| `/menu` | Menu | Restores the persistent keyboard |
+| `/help` | Help | Displays the supported command vocabulary and safety semantics |
+| Keyboard: Status | Status | Calls the read-only `getStatus` query |
+| Keyboard: Markets | Markets | Calls the read-only `getMarkets` query |
+| Keyboard: Portfolio | Portfolio | Calls the read-only `getPositions` query |
+| Keyboard: Open Orders | Open Orders | Calls the read-only `getOrders` query |
+| Inline navigation: Balances; `/balances` | Balances | Calls the read-only `getBalances` query |
+| `/status` | Status | Calls `getStatus` |
+| `/markets` | Markets | Calls `getMarkets` |
+| `/positions` | Positions | Calls `getPositions` |
+| `/orders` | Orders | Calls `getOrders` |
+| `/pause SYMBOL` | Pause | Invokes the existing market-scoped `pauseMarket` use case |
+| `/resume SYMBOL` | Resume | Invokes the existing market-scoped `resumeMarket` use case |
+| Keyboard: Pause | Pause selection | Shows enabled, currently unpaused markets; selection opens confirmation |
+| Keyboard: Resume | Resume selection | Shows enabled, currently paused markets; selection opens confirmation |
+| Inline Refresh | Refresh | Re-runs the current read-only page or market selection |
+| Inline Cancel/Main menu | Navigation | Cancels the pending confirmation or returns to the menu |
 
-The keyboard buttons are bounded text aliases, not a second command system. They use the same private-chat allowlist and application actor authorization as slash commands. Pause/Resume only display eligible market choices; selecting a market opens the existing one-time confirmation prompt, and only its authorized confirmation callback invokes the existing application use case. Disabled markets never expose controls. Inline navigation and refresh remain available for status, markets, positions, orders and balances. Refresh re-runs the corresponding authorized application query; it does not reuse stale display data or perform a trading action. Return-to-menu controls only change the displayed page.
+The persistent keyboard has exactly six buttons: Pause, Resume, Status, Markets, Portfolio, and Open Orders. Balances remains available through inline navigation and `/balances`.
 
-## Status semantics
+## Interaction diagnostics
 
-`/status` reports the Harvester process lifecycle and readiness. The process remains `RUNNING` while one or more markets are operator-paused; this is not an application-wide `PAUSED` lifecycle state. Use `/markets` to see exactly which configured markets have `Operator pause: ACTIVE`.
+Every update receives a correlation ID in the form `telegram:<update_id>`. The same ID is retained when Telegram redelivers an update. Search the terminal/log stream by that value to reconstruct one interaction.
 
-When the Harvester process is stopped, its Telegram poller is also stopped, so it cannot answer a live `/status` request. A missing Telegram reply is not proof that Harvester is stopped because Telegram transport failures can also prevent replies.
+The structured lifecycle includes:
 
-Text commands remain available:
+- `Telegram update RECEIVED`
+- `Telegram interaction AUTHORIZED` or `Telegram interaction REJECTED`
+- `Telegram command STARTED`
+- `Telegram query STARTED` and `Telegram query COMPLETED`
+- `Telegram callback ACKNOWLEDGED`
+- `Telegram application operation STARTED` and `Telegram application operation COMPLETED`
+- `Telegram response SENT`
+- `Telegram interaction FAILED`
 
-- `/status`, `/markets`, `/positions`, `/orders`, and `/balances` are read-only.
-- `/pause SYMBOL` and `/resume SYMBOL` are explicit text requests and call the existing application use case directly; inline market controls require a separate confirmation.
-- `/start` displays the persistent six-button keyboard.
-- `/menu` restores the persistent keyboard.
-- `/help` shows the command reference and safety notes.
+Entries carry the interaction type, action, market symbol when relevant, application query/use-case name, stage, correlation ID, and duration where applicable. Application-operation diagnostics distinguish `applicationOperationInvoked`, `applicationOperationCompleted`, and `stateChanged`. Failures include a classification and, for real exceptions, the original error name/code/message/stack plus nested cause details.
 
-## Confirming a control
+Do not log complete Telegram updates, callback payloads, bot tokens, allowlist IDs, API credentials, or full broker/account/order payloads. Only safe identifiers and the minimum fields needed to diagnose the interaction are logged. See [Harvester logging](../LOGGING.md) for the shared logging contract.
 
-An inline pause or resume request first displays the exact action and market. No operator use case or operational-state record commit occurs at this stage. Confirm executes the existing application pause/resume use case; cancel dismisses the pending request. Typed `/pause SYMBOL` and `/resume SYMBOL` remain explicit commands and execute the existing application use case directly. Confirmation callbacks are bound to the originating allowlisted private-chat user and message, are one-time and short-lived, and are rejected when stale, replayed, malformed or issued by another user.
+## Interpreting failures
 
-A confirmed pause is acknowledged only after the application reports the resulting operator state. When an Operational State Store is supplied, its durable append must succeed before in-memory state changes; without a store, the change is process-local. A confirmed resume can remove only the operator-owned pause; any safety, recovery or volatility blocker remains authoritative. A failed or uncertain durable append is never presented as success.
+| Last completed stage / flags | Meaning | Operator response |
+| --- | --- | --- |
+| Query failed; `applicationOperationInvoked=false` | A read-only query failed. No pause/resume use case was invoked. | Inspect the original query error and retry the read after the underlying issue is understood |
+| `CALLBACK_ACKNOWLEDGEMENT`; `applicationOperationInvoked=false` | Telegram did not acknowledge the callback. The update offset is not advanced; the same update is retried. | Do not manually repeat the callback while the poller is retrying |
+| Application operation invoked but not completed | The use case was called but did not confirm completion. The state outcome may need inspection. | Check current market state before repeating the command |
+| `applicationOperationCompleted=true`, `stateChanged=true`, then response delivery failed | The application state change completed; only the Telegram response failed. | Verify state with `/markets` before considering any repeat operation |
+| Response delivered after a market selection | Only the selection/confirmation page was displayed. | This is not evidence that the market was paused or resumed |
 
-## Authorization and delivery
+The historical message `Telegram operator read query returned a failure` came from the generic read-only query failure path. That path discarded the underlying exception details before emitting the generic message. The historical one-line log does not identify which query failed or preserve the original exception, so that exact exception cannot be reconstructed retrospectively. It is not proof that a pause operation ran.
 
-Only a non-bot sender in a private chat whose Telegram user ID matches the private chat ID and the configured allowlist may use the Command Center. Application actor authorization remains mandatory. Callback data is not an identity credential.
+Likewise, the historical `LINKUSDT` pause state cannot be determined from that message. No live pause/resume was performed as part of this diagnostic work. To establish current state, inspect the live `/markets` result in the running Harvester process; do not infer state or repeat a state-changing command from the old generic error.
 
-The adapter processes updates serially and advances the Telegram update offset only after handling an update. A pending confirmation is retained until its Telegram callback acknowledgement succeeds, so a transient acknowledgement failure can retry without losing the confirmation or invoking the application operation prematurely. Query formatting failures use stage QUERY_FORMATTING; callback acknowledgement failures use stage CALLBACK_ACKNOWLEDGEMENT; Telegram response delivery failures use stage RESPONSE_DELIVERY. Inspect errorName, errorCode, errorMessage, errorStack, and errorCause on the correlated failure entry. A pending confirmation is retained until its Telegram callback acknowledgement succeeds, so a transient acknowledgement failure can retry without losing the confirmation or invoking the application operation prematurely. Query formatting failures use stage QUERY_FORMATTING; Telegram response delivery failures use stage RESPONSE_DELIVERY. A pending confirmation is retained until its Telegram callback acknowledgement succeeds, so a transient acknowledgement failure can retry without losing the confirmation or invoking the application operation prematurely. Query formatting failures use stage QUERY_FORMATTING; Telegram response delivery failures use stage RESPONSE_DELIVERY. A pending confirmation is retained until its Telegram callback acknowledgement succeeds, so a transient acknowledgement failure can retry without losing the confirmation or invoking the application operation prematurely. The application request ID is stable across retries. Durable deduplication is provided by the Operational State Store only when that store is supplied; Telegram-only operation otherwise relies on the current process's operator-pause state and is not restart-durable. Menu registration is best-effort; a menu-registration failure is logged and does not grant access or disable text commands. Polling and callback transport failures are retried with bounded backoff. Shutdown aborts long polling and waits for the poller to finish before returning.
+## Verification status
 
-## Troubleshooting
+Automated tests use mocked Telegram transport and application ports. They cover the read-only command inventory, menu restoration, pause/resume selection and confirmation, callback acknowledgement failure/retry, authorization rejection, stale callbacks, query/use-case failures, Telegram API failures, and safe error diagnostics.
 
-- **Not authorized:** verify the sender's numeric Telegram user ID is present in `operatorControl.telegram.allowedUserIds`; do not use usernames or display names.
-- **Persistent keyboard hidden:** send `/menu` to display it again. The built-in command menu remains available separately.
-- **Slash-command menu missing:** use `/help`; Telegram command registration is best-effort and may be retried on a later adapter startup.
-- **Snapshot unavailable:** treat the page as unavailable, not healthy. Check Harvester structured logs and source readiness.
-- **Confirmation expired or invalid:** reopen the markets page and start a new inline control request; stale confirmation callbacks never execute.
-- **Pause/resume not acknowledged:** search the terminal and session DEBUG/TRACE logs for the interaction correlation ID (telegram:<update_id>). Inspect action, symbol, operation, stage, errorCode, errorMessage and errorCause. Check applicationOperationInvoked, applicationOperationCompleted and stateChanged before deciding whether the operation ran.
-- **Telegram reply failed after a confirmed operation:** if the same correlation ID shows APPLICATION_OPERATION_COMPLETED with stateChanged: true, followed by Telegram interaction FAILED at RESPONSE_DELIVERY, the application state changed but Telegram did not deliver the reply. Verify current state with /markets in the same running process; do not repeat the command blindly.
-- **Telegram outage:** text commands and inline controls are unavailable while transport is down. Trading behavior does not depend on Telegram delivery.
-- **Shutdown failure:** Harvester must preserve its existing fail-closed shutdown/ownership behavior; do not force process termination to bypass an unconfirmed adapter stop.
-
-## Acceptance evidence
-
-The CC-4 regression matrix is maintained in `telegram-operator-adapter.test.js`; the persistent-keyboard contract is covered in `telegram-operator-keyboard.test.js`. End-to-end lifecycle/error diagnostics and secret redaction are covered by `telegram-operator-diagnostics.test.js` and the expanded adapter tests. It covers successful and failed command-menu registration, callback update polling, private-chat authorization and identity matching, confirmation-before-control, one-time callback handling, read-only navigation/refresh, enabled/disabled market controls, malformed callback rejection, retry identity and graceful shutdown. Merged in [PR #1088](https://github.com/45s/coinzilla/pull/1088) as `966141fbc1217d38f40e6e5faf84629251894a8c`; exact PR head `afda070a565f42e546bfb0a76096939427451111` passed 1,479/1,479 Harvester tests, all required workspace unit/coverage/syntax/dependency/actionlint checks, and external documentation-link validation. The read-only Binance TESTNET integration was skipped and no exchange operations or live Telegram credentials were used.
+A live Telegram smoke test and live `LINKUSDT` state inspection remain operator-controlled and have not been performed by this change. Runtime verification must not be marked complete until an authorized operator performs those checks.

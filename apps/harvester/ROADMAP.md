@@ -175,26 +175,27 @@ The current coverage workflow includes shared workspace dependencies, so it cann
 
 ---
 
-## Operator control — initial Telegram pause
+## Operator control — Telegram Command Center
 
-**Status: IMPLEMENTED AND MERGED in [PR #1067](https://github.com/45s/coinzilla/pull/1067); engine/adapter foundation merged in [PR #1045](https://github.com/45s/coinzilla/pull/1045); process-lifetime scope/docs clarified in [PR #1065](https://github.com/45s/coinzilla/pull/1065); tracking issue [#1066](https://github.com/45s/coinzilla/issues/1066) is closed as completed.** The accepted contract is [ADR-0002](./docs/architecture/decisions/0002-transport-independent-operator-control.md), with the initial process-lifetime scope clarified in [ADR-0003](./docs/architecture/decisions/0003-process-lifetime-operator-pause.md) and implementation detail in the [operator-control design](./docs/architecture/OPERATOR_CONTROL_DESIGN.md).
+**Status: engine/application foundation and CC-1 through CC-4 are merged; the persistent six-button keyboard is merged in [PR #1194](https://github.com/45s/coinzilla/pull/1194), with delivery documentation in [PR #1196](https://github.com/45s/coinzilla/pull/1196). Correlated interaction diagnostics and callback-acknowledgement retry are in progress in [issue #1214](https://github.com/45s/coinzilla/issues/1214) / [draft PR #1215](https://github.com/45s/coinzilla/pull/1215).** The accepted contract is [ADR-0002](./docs/architecture/decisions/0002-transport-independent-operator-control.md), with process-lifetime scope in [ADR-0003](./docs/architecture/decisions/0003-process-lifetime-operator-pause.md) and current implementation detail in the [operator-control design](./docs/architecture/OPERATOR_CONTROL_DESIGN.md).
 
-- Telegram Command Center commands: `/start`, `/help`, `/status`, `/markets`, `/pause <SYMBOL>`, and `/resume <SYMBOL>`. Read commands are immutable application snapshots; state changes remain limited to the existing safe pause/resume use cases.
-- Pause is market-scoped and separate from safety/recovery pauses. It suppresses new strategy BUYs and trailing-BUY replacements only; existing exchange orders remain untouched and may still fill. Fill accounting, reconciliation and recovery SELLs continue.
-- The engine commits an operator-control record to the Operational State Store (ADR-0001 append-only ledger) before applying in-memory state. Journal is not the control-state store.
-- **Process-lifetime limitation:** operator pause state is not restored after a process restart. The process starts without the previous operator pause; reissue `/pause <SYMBOL>` if it must remain paused. This is an explicit scope boundary, not a claim that restart recovery is complete.
-- Telegram accepts only private-chat messages from configured allowlisted user IDs, processes updates serially and uses stable update IDs for retry idempotency. Outbound notification policy remains independent.
-- [x] Engine pause/resume boundary, application actor authorization and append-only commit ordering — PR #1045.
-- [x] Telegram `/pause` parser, private-chat allowlist and serial polling adapter — PR #1045.
-- [x] TDD RED/GREEN: configuration-boundary regressions cover disabled-by-default behavior, canonical allowlists and malformed configuration; startup regressions cover missing credentials/path and invalid Operational State Store verification — PR #1067.
-- [x] Runtime composition: verify the initialized Operational State Store before broker connection; start the allowlisted Telegram poller before trading subscriptions; stop polling before broker shutdown; abort startup and retry poller cleanup on Telegram identity failure — PR #1067. Process-session identity is passed from the process composition root and regression-tested.
-- [x] Exact-head workspace CI passed on PR #1067 head `baf21f7ca4a42b6622d2282dda53e7d5c7c03699`: workspace tests/coverage, Harvester regressions, syntax/lint, docs links, dependency audit, actionlint, and Linux/Windows process-lock checks. The optional read-only Binance TESTNET integration was skipped. PR #1067 merged at `96293daa5ee3b831e55c49b56af22ce1857f936c`; no exchange operation was performed.
-- [x] Telegram CC-1 command expansion merged in PR #1079; roadmap status correction merged in PR #1080.
-- [x] Read-only runtime/market application queries, serialized immutable engine market snapshots, Telegram `/status` + `/markets`, and bootstrap/adapter regression coverage delivered in PR #1081. No exchange operation is performed.
+- Supported slash commands: `/start`, `/menu`, `/help`, `/status`, `/markets`, `/positions`, `/orders`, `/balances`, `/pause <SYMBOL>`, and `/resume <SYMBOL>`.
+- Persistent keyboard buttons: Pause, Resume, Status, Markets, Portfolio and Open Orders. Inline navigation also exposes Balances, Refresh and Main menu.
+- Read-only application queries are immutable snapshots. Portfolio positions keep active and retained inventory separate; open orders distinguish Harvester registry orders from unmatched external exchange orders; balances preserve the AccountSnapshot source timestamp and age.
+- Pause is market-scoped and separate from safety/recovery pauses. It suppresses new strategy BUY intents and trailing-BUY repricing only; existing exchange orders remain untouched and may still fill. Fill accounting, reconciliation and recovery SELLs continue.
+- The engine commits an operator-control record to the Operational State Store before applying in-memory state when a store is supplied. Journal is not the control-state store.
+- **Process-lifetime limitation:** operator pause state is not restored after a process restart. Telegram-only control with recovery disabled does not create or require the Operational State Store; pause/resume remains process-local.
+- Telegram accepts private-chat messages only from configured allowlisted user IDs and processes updates serially. The bot token remains environment-only.
+- [x] Engine pause/resume boundary, actor authorization and optional durable-before-apply ordering — PR #1045.
+- [x] Runtime composition, enabled-by-default configuration and Telegram startup/shutdown lifecycle — PRs #1067 and #1197; Telegram-only startup without a store — PR #1211.
+- [x] CC-1 command expansion — PRs #1079 and #1081.
+- [x] CC-2 read-only status, markets, positions, orders and balances queries — PR #1086.
+- [x] CC-3 proactive readiness/recovery alerts — PR #1087.
+- [x] CC-4 command menu, inline navigation, refresh and confirmation-gated pause/resume — PR #1088.
+- [x] Persistent six-button keyboard and `/menu` restore — PR #1194; documentation delivery — PR #1196.
+- [ ] Correlated per-interaction diagnostics, original/nested error preservation, explicit application-vs-Telegram delivery outcomes, callback-ack retry and full command/action regression matrix — issue #1214 / draft PR #1215. Automated tests are mocked; live Telegram runtime verification and the historical LINKUSDT state are not verified.
 
-**Out of scope:** projecting operator facts into startup state and restoring a pause after restart. These remain part of the separate ADR-0001 / issue #654 Steps 8–9 workstream and do not block the delivered process-lifetime operator-control capability.
-
----
+**Out of scope:** restoring operator pause after restart. This remains part of the separate ADR-0001 / issue #654 Steps 8–9 workstream. Do not infer a live market's pause state from a historical generic Telegram query error.
 
 ## High-volatility protection — issue #1016
 

@@ -297,3 +297,12 @@ Typed `/pause SYMBOL` and `/resume SYMBOL` remain explicit command invocations a
 The adapter correlates each update as telegram:<update_id> and records the lifecycle from update reception and authorization through query/control execution, callback acknowledgement and Telegram response delivery. The event names, field contract, severity policy and troubleshooting procedure are maintained in [Harvester logging](../LOGGING.md#telegram-command-center-interaction-diagnostics) and the [Telegram Command Center runbook](../operations/telegram-command-center.md#troubleshooting).
 
 A selection or confirmation prompt never counts as a successful pause/resume. The diagnostic fields applicationOperationInvoked, applicationOperationCompleted and stateChanged distinguish a use case that was invoked, a use case that completed, and a confirmed state change. If Telegram delivery fails after the application operation completed, the same correlation ID retains the completed-operation flags and records stage RESPONSE_DELIVERY. Error diagnostics retain the original error classification and nested causes while excluding Telegram identities and credentials.
+
+
+## Telegram interaction diagnostics
+
+The Telegram adapter owns transport-level interaction diagnostics; the application facade remains the authority for read-only queries and pause/resume state changes. Each inbound update is correlated as `telegram:<update_id>`, including retries of the same update. The adapter records authorization, query/application invocation, callback acknowledgement, and response-delivery stages without moving business logic into Telegram.
+
+For state-changing interactions, diagnostics distinguish whether the application use case was invoked, whether it completed, and whether the state changed. A failed callback acknowledgement before operation invocation is retried without advancing the update offset. A failed Telegram response after a completed application operation is reported as a delivery failure, not as an application-operation failure. Original thrown exceptions and nested causes are retained at the interaction boundary; non-exception failures carry a stable classification.
+
+The exact lifecycle events, safe fields, failure interpretation and operational verification limits are documented in the [Telegram Command Center runbook](../operations/telegram-command-center.md) and [Harvester logging standard](../LOGGING.md).
