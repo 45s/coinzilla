@@ -259,3 +259,12 @@ test("rejects non-enumerable context facts", () => {
     /enumerable data properties/i,
   )
 })
+
+test("preserves an explicit non-retryable classification", () => {
+  const error = new SystemCustomError("permanent validation failure", {
+    retryable: false,
+  })
+
+  assert.equal(Object.hasOwn(error, "retryable"), true)
+  assert.equal(error.retryable, false)
+})
