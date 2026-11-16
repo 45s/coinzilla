@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { createUserDataRecoveryHandler } from "./create-user-data-recovery-handler.js"
 import { createUserDataStatusHandler } from "./create-user-data-status-handler.js"
 
-const test = (name, ...args) => nodeTest(`[create-user-data-recovery-lifecycle.test.js] ${  name}`, ...args)
+const test = (...args) => nodeTest(`[create-user-data-recovery-lifecycle.test.js] ${args[0]}`, ...args.slice(1))
 
 test("a second disconnect during an in-flight recovery invalidates stale work and reconciles only the latest generation", async () => {
   const state = {
