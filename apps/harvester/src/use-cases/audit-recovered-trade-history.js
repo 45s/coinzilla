@@ -80,6 +80,7 @@ function assertFillParity({ journalFill, exchangeFill }) {
     ["quoteQuantity", exchangeFill.quoteQuantity.amount, journalFill.quoteQuantity],
   ]) {
     if (compareDecimal({ left: actual, 
+      
       right: expected }) !== 0) {
       mismatch(field)
     }
@@ -150,12 +151,16 @@ function validateScopeEvidence({
   }
 }
 
-function selectScopeRecords({ journalFills, exchangeFills, ownedOrders, scope, market }) {
+function selectScopeRecords({ journalFills, exchangeFills, owned
+  Orders, scope, market }) {
   const allJournalRecords = requireArray({ value: journalFills, 
+    
     field: "journalFills" })
+  
   const allExchangeRecords = requireArray({ value: exchangeFills, 
     field: "exchangeFills" })
-  const allOwnedOrderRecords = requireArray({ value: ownedOrders, 
+  const allOwnedOrderRecords = requireArray
+  ({ value: ownedOrders, 
     field: "ownedOrders" })
   if (scope === "MARKET") {
     for (const [index, fill] of allJournalRecords.entries()) {
@@ -205,7 +210,9 @@ function createOwnedOrdersByBrokerId({ ownedOrderRecords }) {
   return ownedOrdersByBrokerId
 }
 
+  
 function createJournalFillIndexes({ journalRecords }) {
+  
   const journalById = new Map()
   const journalTradeIds = new Map()
   for (const [index, fill] of journalRecords.entries()) {
@@ -217,6 +224,7 @@ function createJournalFillIndexes({ journalRecords }) {
     if (journalById.has(fillId)) {
       throw new Error(`Journal contains duplicate execution identity ${fillId}`)
     }
+    
     if (journalTradeIds.has(tradeKey)) {
       throw new Error(`Journal maps one exchange trade ID to multiple execution identities ${tradeKey}`)
     }
@@ -237,6 +245,7 @@ function createExchangeFillIndexes({ exchangeRecords }) {
     if (exchangeById.has(fill.id)) {
       throw new Error(`Exchange trade history contains duplicate execution identity ${fill.id}`)
     }
+    
     const tradeKey = `${fill.market.symbol}:${fill.tradeId}`
     if (exchangeTradeIds.has(tradeKey)) {
       throw new Error(`Exchange trade history maps one trade ID to multiple execution identities ${tradeKey}`)
@@ -257,7 +266,8 @@ function reconcileExchangeFills({ exchangeById, journalById, ownedOrdersByBroker
       if (
         !ownedOrder ||
         ownedOrder.market.symbol !== exchangeFill.market.symbol ||
-        ownedOrder.side !== exchangeFill.side ||
+        ownedOrder.side !== exchange
+      Fill.side ||
         (exchangeFill.clientOrderId !== undefined &&
           exchangeFill.clientOrderId !== ownedOrder.clientOrderId)
       ) {
