@@ -4,8 +4,10 @@ import { Asset } from "../assets/asset.js"
 import { Market, marketErrMsgs } from "./market.js"
 
 describe(Market.name, () => {
-  const baseAsset = new Asset({ id: "dogecoin", code: "DOGE" })
-  const quoteAsset = new Asset({ id: "fdusd", code: "FDUSD" })
+  const baseAsset = new Asset({ id: "dogecoin",
+code: "DOGE" })
+  const quoteAsset = new Asset({ id: "fdusd",
+code: "FDUSD" })
 
   const createMarket = (overrides = {}) =>
     new Market({
@@ -28,8 +30,10 @@ describe(Market.name, () => {
       id: "binance:DOGEFDUSD",
       venue: "binance",
       symbol: "DOGEFDUSD",
-      baseAsset: { id: "dogecoin", code: "DOGE" },
-      quoteAsset: { id: "fdusd", code: "FDUSD" },
+      baseAsset: { id: "dogecoin",
+code: "DOGE" },
+      quoteAsset: { id: "fdusd",
+code: "FDUSD" },
     })
   })
 
@@ -75,7 +79,8 @@ describe(Market.name, () => {
   })
 
   it("requires canonical Asset instances for both sides", () => {
-    assert.throws(() => createMarket({ baseAsset: { id: "dogecoin", code: "DOGE" } }), {
+    assert.throws(() => createMarket({ baseAsset: { id: "dogecoin",
+code: "DOGE" } }), {
       message: marketErrMsgs.baseAsset,
     })
     assert.throws(() => createMarket({ quoteAsset: null }), {
@@ -84,10 +89,12 @@ describe(Market.name, () => {
   })
 
   it("rejects a market that quotes an asset against itself", () => {
-    const sameAsset = new Asset({ id: "dogecoin", code: "DOGE" })
+    const sameAsset = new Asset({ id: "dogecoin",
+code: "DOGE" })
 
     assert.throws(
-      () => createMarket({ baseAsset: sameAsset, quoteAsset: sameAsset }),
+      () => createMarket({ baseAsset: sameAsset,
+quoteAsset: sameAsset }),
       { message: marketErrMsgs.sameAssets },
     )
   })
