@@ -437,7 +437,7 @@ export class BitunixSpotBroker extends CoreBroker {
     return toResult({
       errors: [unsupported({
         operation: "getFills()",
-        reason: "the Spot matching-order response does not define quantity denomination, complete partial-execution coverage, or stable and unique execution identity",
+        reason: "the Spot matching-order response does not define quantity denomination, execution completeness for partial fills, or stable and unique execution identity",
       })],
     })
   }
