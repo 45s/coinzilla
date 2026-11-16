@@ -736,29 +736,33 @@ side: "BUY" }],
 })
 
 
-test("operator pause preserves recovery SELL execution while suppressing the same market's BUY", async () => {
-  const dogeMarket = marketsBySymbol.get("DOGEUSDT")
+function createOperatorPauseRecoveryPosition({ market }) {
   const recoveryFill = new Fill({
     tradeId: "operator-pause-recovery-buy",
     brokerOrderId: "operator-pause-recovery-order",
     clientOrderId: "operator-pause-recovery-client",
-    market: dogeMarket,
+    market,
     side: "BUY",
-    price: new Money({ amount: "100",
-asset: quoteAsset }),
-    quantity: new Quantity({ amount: "1",
-asset: dogeAsset }),
-    quoteQuantity: new Money({ amount: "100",
-asset: quoteAsset }),
+    price: new Money({ amount: "100", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1", asset: dogeAsset }),
+    quoteQuantity: new Money({ amount: "100", asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
     executedAt: 1,
   })
-  const {portfolio} = new Portfolio().applyFill({ fill: recoveryFill,
-strategyId: StrategyId.COIN_GRABBER })
-  const recoveryLedger = RecoveryLedger.empty({ market: dogeMarket }).applyFill({ fill: recoveryFill,
-strategyId: StrategyId.COIN_GRABBER }).ledger
-  const strategyPolicy = {
+  const { portfolio } = new Portfolio().applyFill({
+    fill: recoveryFill,
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  const recoveryLedger = RecoveryLedger.empty({ market }).applyFill({
+    fill: recoveryFill,
+    strategyId: StrategyId.COIN_GRABBER,
+  }).ledger
+  return { portfolio, recoveryLedger }
+}
+
+function createOperatorPauseStrategyPolicy() {
+  return {
     evaluate: ({ marketPrice }) => {
       const buy = {
         side: "BUY",
@@ -785,6 +789,12 @@ strategyId: StrategyId.COIN_GRABBER }).ledger
     },
     evaluateTrailingBuyRepricing: conservativeStrategyPolicy.evaluateTrailingBuyRepricing,
   }
+}
+
+test("operator pause preserves recovery SELL execution while suppressing the same market's BUY", async () => {
+  const dogeMarket = marketsBySymbol.get("DOGEUSDT")
+  const { portfolio, recoveryLedger } = createOperatorPauseRecoveryPosition({ market: dogeMarket })
+  const strategyPolicy = createOperatorPauseStrategyPolicy()
   const { engine, orders } = await createHarness({
     portfolio,
     strategyPolicy,
@@ -798,8 +808,7 @@ strategyId: StrategyId.COIN_GRABBER }).ledger
   )
   const paused = await engine.pauseMarket({
     symbol: "DOGEUSDT",
-    beforeApply: async () => ({ ok: true,
-data: { durable: true } }),
+    beforeApply: async () => ({ ok: true, data: { durable: true } }),
   })
   assert.equal(
     paused.ok,
@@ -810,13 +819,10 @@ data: { durable: true } }),
   await startBothMarkets(engine)
 
   assert.deepEqual(
-    orders.map(({ symbol, side }) => ({ symbol,
-side })),
+    orders.map(({ symbol, side }) => ({ symbol, side })),
     [
-      { symbol: "DOGEUSDT",
-side: "SELL" },
-      { symbol: "SOLUSDT",
-side: "BUY" },
+      { symbol: "DOGEUSDT", side: "SELL" },
+      { symbol: "SOLUSDT", side: "BUY" },
     ],
     "The paused market must retain its risk-reducing recovery SELL while suppressing only its new BUY; another market remains active.",
   )
