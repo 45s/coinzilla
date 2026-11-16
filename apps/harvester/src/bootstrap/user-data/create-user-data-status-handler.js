@@ -5,7 +5,7 @@ import {
   mapBrokerStatusChangedData,
 } from "../../application/events/lifecycle-event-dtos.js"
 
-function logSystem(logger, data) {
+function logSystem({ logger, ...data }) {
   if (typeof logger?.system === "function") {
     logger.system(data)
     return
@@ -134,7 +134,7 @@ function logUserDataStreamTransition({ state, logger, status } = {}) {
     logger?.error?.(entry)
     return
   }
-  logSystem(logger, entry)
+  logSystem({ logger, ...entry })
 }
 
 /**
