@@ -26,7 +26,7 @@ const colorEnabled =
   process.env.FORCE_COLOR !== "0" &&
   (process.stdout.isTTY || process.stderr.isTTY || Boolean(process.env.CI))
 
-const color = (code, value) =>
+const color = ({ code, value }) =>
   colorEnabled ? `\u001B[${  code  }m${  value  }\u001B[0m` : value
 
 const green = (value) => color({ code: "32", value })
