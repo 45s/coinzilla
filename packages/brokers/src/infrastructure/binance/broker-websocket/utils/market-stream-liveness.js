@@ -135,12 +135,12 @@ class MarketStreamLivenessMonitor {
     }
 
     if (this.#lastTickerTradeId !== null && tradeId <= this.#lastTickerTradeId) {return}
+    this.#lastTickerTradeId = tradeId
     this.#pruneRecoveryAttempts(this.#now())
     if (this.#state === "exhausted") {
       if (this.#recoveryAttemptTimes.length >= this.#maxRecoveryAttempts) {return}
       this.#state = "healthy"
     }
-    this.#lastTickerTradeId = tradeId
     if (this.#lastAggTradeId !== null && tradeId <= this.#lastAggTradeId) {return}
     if (this.#pendingTradeId === null || tradeId > this.#pendingTradeId) {
       this.#pendingTradeId = tradeId
