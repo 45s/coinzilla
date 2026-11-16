@@ -201,3 +201,61 @@ test("preserves native non-enumerable cause options", () => {
 
   assert.strictEqual(error.cause, cause)
 })
+
+test("accepts null-prototype context records and falls back for anonymous subclasses", () => {
+  const context = Object.create(null)
+  context.symbol = "BTCUSDT"
+  const error = new SystemCustomError("operation failed", { context })
+  const anonymousError = new (class extends SystemCustomError {})("anonymous failure")
+
+  assert.deepEqual(error.context, { symbol: "BTCUSDT" })
+  assert.equal(anonymousError.name, "SystemCustomError")
+})
+
+test("rejects option accessors, symbol options, and unreadable records", () => {
+  let getterCalls = 0
+  const accessorOptions = {}
+  Object.defineProperty(accessorOptions, "code", {
+    enumerable: true,
+    get() {
+      getterCalls += 1
+      return "UNSAFE_CODE"
+    },
+  })
+
+  assert.throws(
+    () => new SystemCustomError("operation failed", accessorOptions),
+    TypeError,
+  )
+  assert.equal(getterCalls, 0)
+
+  const symbolOptions = { code: "VALID_CODE" }
+  symbolOptions[Symbol("unknown")] = true
+  assert.throws(
+    () => new SystemCustomError("operation failed", symbolOptions),
+    /unsupported option/i,
+  )
+
+  const unreadableOptions = new Proxy({}, {
+    getPrototypeOf() {
+      throw new Error("proxy trap")
+    },
+  })
+  assert.throws(
+    () => new SystemCustomError("operation failed", unreadableOptions),
+    /readable plain record/i,
+  )
+})
+
+test("rejects non-enumerable context facts", () => {
+  const context = {}
+  Object.defineProperty(context, "symbol", {
+    value: "BTCUSDT",
+    enumerable: false,
+  })
+
+  assert.throws(
+    () => new SystemCustomError("operation failed", { context }),
+    /enumerable data properties/i,
+  )
+})
