@@ -10,7 +10,7 @@ import {
   getSnapshot,
 } from "../../test-support/candle-history-service-fixture.js"
 
-const test = (name, ...args) => nodeTest(`[create-candle-history-service.stream.test.js] ${  name}`, ...args)
+const test = (...[name, ...args]) => nodeTest(`[create-candle-history-service.stream.test.js] ${  name}`, ...args)
 
 test("appends a completed live candle but never stores a still-forming candle", async () => {
   const fixture = createFixture()
