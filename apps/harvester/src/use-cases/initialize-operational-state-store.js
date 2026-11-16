@@ -38,7 +38,8 @@ async function acquireInitializationLock({ acquireProcessLock, processLockDirect
 }
 
 async function initializeStore({ createStore, directory, runtimeSessionId }) {
-  const store = createStore({ directory, runtimeSessionId })
+  const store = createStore({ directory, 
+    runtimeSessionId })
   if (typeof store?.initialize !== "function") {
     throw new TypeError("Operational State Store initializer requires the explicit store.initialize capability")
   }
@@ -135,7 +136,8 @@ export async function initializeHarvesterOperationalStateStore({
 
   const releaseError = await releaseInitializationLock({ processLock })
   if (releaseError) {
-    return includeReleaseError({ initializationResult, releaseError })
+    return includeReleaseError({ initializationResult, 
+      releaseError })
   }
   return initializationResult ?? toResult({
     error: new Error("Operational State Store initialization did not produce a result"),
