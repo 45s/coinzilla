@@ -11141,7 +11141,6 @@ test("invalidates and rechecks a safe market after a late owned SELL execution",
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
     accountingApplied: true,
-    cancelExecutedQuantity: "0.1",
     isStopping: () => shutdownStarted,
   })
   await harness.engine.processMarketPrice({
