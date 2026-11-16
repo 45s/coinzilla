@@ -159,9 +159,10 @@ function selectScopeRecords({ journalFills, exchangeFills, owned
   
   const allExchangeRecords = requireArray({ value: exchangeFills, 
     field: "exchangeFills" })
-  const allOwnedOrderRecords = requireArray
-  ({ value: ownedOrders, 
-    field: "ownedOrders" })
+  const allOwnedOrderRecords = requireArray({
+    value: ownedOrders,
+    field: "ownedOrders",
+  })
   if (scope === "MARKET") {
     for (const [index, fill] of allJournalRecords.entries()) {
       requireString({ value: fill?.symbol, 
