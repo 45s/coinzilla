@@ -3,8 +3,13 @@ import assert from "node:assert/strict"
 import { makePlaceOrder } from "./place-order.js"
 
 test("submits an approved order through the injected broker port", async () => {
-  const order = { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "50000" }
-  const brokerResult = { ok: true, data: { orderId: "123" } }
+  const order = { symbol: "BTCUSDT",
+side: "BUY",
+type: "LIMIT",
+quantity: "0.01",
+price: "50000" }
+  const brokerResult = { ok: true,
+data: { orderId: "123" } }
   const calls = []
   const placeOrder = makePlaceOrder({
     broker: {
