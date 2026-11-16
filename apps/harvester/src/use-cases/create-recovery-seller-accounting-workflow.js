@@ -6,6 +6,7 @@ import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { calculateVerifiedLegacySpotAllocation } from "../domain/strategies/recovery-seller/legacy-spot-allocation.js"
 import { applyReconciledMixedSellOrder } from "../domain/strategies/recovery-seller/mixed-sell-fill-accounting.js"
 import { calculateRecoverySellerProfitability } from "../domain/strategies/recovery-seller/calculate-profitability.js"
+import { createLegacyPosition } from "../domain/strategies/recovery-seller/legacy-position.js"
 
 const TERMINAL_ORDER_STATUSES = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED"])
 
@@ -39,6 +40,16 @@ function assertLegacyPositionRecord(record) {
   }) > 0) {
     throw new RangeError("Recovery Seller legacy remaining quantity must be within its original authorized quantity")
   }
+  const originalPosition = createLegacyPosition({
+    invested: record.position.invested,
+    quantity: record.position.originalQuantity,
+  })
+  if (compareDecimal({
+    left: record.position.averageCost,
+    right: originalPosition.averageCost,
+  }) !== 0) {
+    throw new RangeError("Recovery Seller legacy average cost must remain the original invested/quantity basis")
+  }
 
   for (const field of ["realizedQuoteProceeds", "realizedCostBasis", "realizedProfit"]) {
     assertDecimalString({
@@ -51,6 +62,15 @@ function assertLegacyPositionRecord(record) {
       record.accounting.appliedFillIds.length !== record.accounting.appliedFillFingerprints.length) {
     throw new TypeError("Recovery Seller legacy Fill identity history is invalid")
   }
+  if (compareDecimal({
+    left: record.accounting.realizedQuoteProceeds,
+    right: "0",
+  }) < 0 || compareDecimal({
+    left: record.accounting.realizedCostBasis,
+    right: "0",
+  }) < 0) {
+    throw new RangeError("Recovery Seller legacy proceeds and cost basis must be non-negative")
+  }
   const expectedProfit = subtractDecimal({
     left: record.accounting.realizedQuoteProceeds,
     right: record.accounting.realizedCostBasis,
@@ -60,6 +80,21 @@ function assertLegacyPositionRecord(record) {
     right: expectedProfit,
   }) !== 0) {
     throw new RangeError("Recovery Seller legacy realized profit does not match its proceeds and cost basis")
+  }
+  const seenFillIds = new Set()
+  for (const [index, item] of record.accounting.appliedFillFingerprints.entries()) {
+    if (!item ||
+        typeof item.id !== "string" ||
+        !item.id.trim() ||
+        typeof item.fillFingerprint !== "string" ||
+        !item.fillFingerprint.trim() ||
+        typeof item.allocationFingerprint !== "string" ||
+        !item.allocationFingerprint.trim() ||
+        item.id !== record.accounting.appliedFillIds[index] ||
+        seenFillIds.has(item.id)) {
+      throw new TypeError("Recovery Seller legacy Fill identity history is invalid")
+    }
+    seenFillIds.add(item.id)
   }
 }
 
