@@ -34,115 +34,79 @@ resolve,
 reject }
 }
 
-const createFixture = ({
-  initiallyReady = true,
-  deferFirstSell = false,
-  deferCancellation = false,
-  isMarketPriceFresh = () => true,
-  isMarketBookFresh = () => true,
-  hasUnownedOpenOrdersForSymbol = () => false,
-  hasUnresolvedHarvesterOpenOrdersForSymbol = () => false,
-  externalOrdersPolicy,
-  getVolatilityData,
-  pausedMarkets = [],
-} = {}) => {
-  const baseAsset = new Asset({ id: "asset-zro",
-code: "ZRO" })
-  const quoteAsset = new Asset({ id: "asset-usdt",
-code: "USDT" })
-  const market = new Market({
-    venue: "binance",
-    symbol: "ZROUSDT",
-    baseAsset,
-    quoteAsset,
-  })
+function createMarketFixture() {
+  const baseAsset = new Asset({ id: "asset-zro", code: "ZRO" });
+  const quoteAsset = new Asset({ id: "asset-usdt", code: "USDT" });
+  const market = new Market({ venue: "binance", symbol: "ZROUSDT", baseAsset, quoteAsset });
   const tradingRules = new TradingRules({
     market,
     constraints: [
-      { type: "PRICE_INCREMENT",
-status: "SUPPORTED",
-value: new Money({ amount: "0.001",
-asset: quoteAsset }) },
-      { type: "QUANTITY_INCREMENT",
-status: "SUPPORTED",
-value: new Quantity({ amount: "0.01",
-asset: baseAsset }) },
-      { type: "MIN_QUANTITY",
-status: "SUPPORTED",
-value: new Quantity({ amount: "0.01",
-asset: baseAsset }) },
-      { type: "MIN_NOTIONAL",
-status: "SUPPORTED",
-value: new Money({ amount: "1",
-asset: quoteAsset }) },
+      { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.001", asset: quoteAsset }) },
+      { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.01", asset: baseAsset }) },
+      { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "0.01", asset: baseAsset }) },
+      { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "1", asset: quoteAsset }) },
     ],
-  })
+  });
   const marketMetadata = {
     market,
     tradingRules,
     supportedOrderTypes: ["LIMIT_MAKER"],
     orderType: "LIMIT_MAKER",
-  }
+  };
   const accountSnapshot = new AccountSnapshot({
     sourceTime: 1,
     balances: [
       new Balance({
-        free: new Quantity({ amount: "1000",
-asset: quoteAsset }),
-        locked: new Quantity({ amount: "0",
-asset: quoteAsset }),
+        free: new Quantity({ amount: "1000", asset: quoteAsset }),
+        locked: new Quantity({ amount: "0", asset: quoteAsset }),
       }),
       new Balance({
-        free: new Quantity({ amount: "0",
-asset: baseAsset }),
-        locked: new Quantity({ amount: "0",
-asset: baseAsset }),
+        free: new Quantity({ amount: "0", asset: baseAsset }),
+        locked: new Quantity({ amount: "0", asset: baseAsset }),
       }),
     ],
-  })
-  let portfolio = new Portfolio()
-  let recoveryLedger = RecoveryLedger.empty({ market })
-  let ready = initiallyReady
-  let orderSequence = 0
-  let deferSell = deferFirstSell
-  const pendingSell = createDeferred()
-  const pendingSellStarted = createDeferred()
-  const pendingCancel = createDeferred()
-  const cancelStarted = createDeferred()
-  let deferCancel = deferCancellation
-  const fillsByOrder = new Map()
-  const submittedIntents = []
-  const cancellations = []
+  });
+  return { baseAsset, quoteAsset, market, marketMetadata, accountSnapshot };
+}
+
+function createFixtureBroker({ market, baseAsset, quoteAsset, deferFirstSell, deferCancellation }) {
+  let orderSequence = 0;
+  let deferSell = deferFirstSell;
+  let deferCancel = deferCancellation;
+  const fillsByOrder = new Map();
+  const submittedIntents = [];
+  const cancellations = [];
+  const pendingSell = createDeferred();
+  const pendingSellStarted = createDeferred();
+  const pendingCancel = createDeferred();
+  const cancelStarted = createDeferred();
   const broker = {
     placeOrder: async ({ order } = {}) => {
-      submittedIntents.push(order)
+      submittedIntents.push(order);
       const acknowledgedOrder = new CanonicalOrder({
         clientOrderId: order.clientOrderId,
         brokerOrderId: String(++orderSequence),
         market,
         side: order.side,
         type: order.type,
-        limitPrice: new Money({ amount: order.price,
-asset: quoteAsset }),
-        originalQuantity: new Quantity({ amount: order.quantity,
-asset: baseAsset }),
-        executedQuantity: new Quantity({ amount: "0",
-asset: baseAsset }),
+        limitPrice: new Money({ amount: order.price, asset: quoteAsset }),
+        originalQuantity: new Quantity({ amount: order.quantity, asset: baseAsset }),
+        executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
         status: "OPEN",
-      })
+      });
       if (order.side === "SELL" && deferSell) {
-        deferSell = false
-        pendingSellStarted.resolve(acknowledgedOrder)
-        return pendingSell.promise
+        deferSell = false;
+        pendingSellStarted.resolve(acknowledgedOrder);
+        return pendingSell.promise;
       }
-      return toResult({ data: acknowledgedOrder })
+      return toResult({ data: acknowledgedOrder });
     },
     cancelOrder: async ({ order } = {}) => {
-      cancellations.push(order.brokerOrderId)
+      cancellations.push(order.brokerOrderId);
       if (deferCancel) {
-        deferCancel = false
-        cancelStarted.resolve(order)
-        return pendingCancel.promise
+        deferCancel = false;
+        cancelStarted.resolve(order);
+        return pendingCancel.promise;
       }
       return toResult({
         data: new CanonicalOrder({
@@ -156,33 +120,116 @@ asset: baseAsset }),
           executedQuantity: order.executedQuantity,
           status: "CANCELED",
         }),
-      })
+      });
     },
     getFills: async ({ orderId } = {}) => toResult({ data: fillsByOrder.get(orderId) ?? [] }),
-  }
-  const appConfig = {
+  };
+  return {
+    broker,
+    pendingSell,
+    pendingSellStarted,
+    pendingCancel,
+    cancelStarted,
+    submittedIntents,
+    cancellations,
+    setFillsForOrder: ({ orderId, fills } = {}) => fillsByOrder.set(orderId, fills),
+  };
+}
+
+function createFixtureAppConfig(externalOrdersPolicy) {
+  return {
     strategies: {
       CG_coinGrabber: {
         enabled: true,
-        settings: { conservative: { enabled: true },
-aggressive: { enabled: false } },
+        settings: {
+          conservative: { enabled: true },
+          aggressive: { enabled: false },
+        },
         pairs: {
-      ZROUSDT: {
-        enabled: true,
-        enableVolatilityProtection: true,
-        ...(externalOrdersPolicy === undefined ? {} : { externalOrdersPolicy }),
-        priceStepPercent: 0.5,
-        orderQuantity: 10,
-        keepQuantity: 1,
-        minProfit: 0.01,
-        makerPercent: 0,
-        takerPercent: 0,
-        investment: 1000,
+          ZROUSDT: {
+            enabled: true,
+            enableVolatilityProtection: true,
+            ...(externalOrdersPolicy === undefined ? {} : { externalOrdersPolicy }),
+            priceStepPercent: 0.5,
+            orderQuantity: 10,
+            keepQuantity: 1,
+            minProfit: 0.01,
+            makerPercent: 0,
+            takerPercent: 0,
+            investment: 1000,
+          },
         },
       },
     },
-    },
-  }
+  };
+}
+
+function createTradeEventFactory({ market, baseAsset, quoteAsset }) {
+  return ({ acknowledgedOrder, tradeId, quantity, executedQuantity, status }) => {
+    const fill = new Fill({
+      tradeId,
+      brokerOrderId: acknowledgedOrder.brokerOrderId,
+      clientOrderId: acknowledgedOrder.clientOrderId,
+      market,
+      side: acknowledgedOrder.side,
+      price: acknowledgedOrder.limitPrice,
+      quantity: new Quantity({ amount: quantity, asset: baseAsset }),
+      quoteQuantity: new Money({
+        amount: String(Number(acknowledgedOrder.limitPrice.amount) * Number(quantity)),
+        asset: quoteAsset,
+      }),
+      liquidityRole: "MAKER",
+      commissionStatus: "COMPLETE",
+      executedAt: Number(tradeId.replace(/\D/g, "")) || 1,
+    });
+    const executedOrder = new CanonicalOrder({
+      clientOrderId: acknowledgedOrder.clientOrderId,
+      brokerOrderId: acknowledgedOrder.brokerOrderId,
+      market,
+      side: acknowledgedOrder.side,
+      type: acknowledgedOrder.type,
+      limitPrice: acknowledgedOrder.limitPrice,
+      originalQuantity: acknowledgedOrder.originalQuantity,
+      executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+      status,
+    });
+    return { eventType: "executionReport", executionType: "TRADE", executedOrder, fill };
+  };
+}
+
+const createFixture = ({
+  initiallyReady = true,
+  deferFirstSell = false,
+  deferCancellation = false,
+  isMarketPriceFresh = () => true,
+  isMarketBookFresh = () => true,
+  hasUnownedOpenOrdersForSymbol = () => false,
+  hasUnresolvedHarvesterOpenOrdersForSymbol = () => false,
+  externalOrdersPolicy,
+  getVolatilityData,
+  pausedMarkets = [],
+} = {}) => {
+  const { baseAsset, quoteAsset, market, marketMetadata, accountSnapshot } = createMarketFixture();
+  const brokerState = createFixtureBroker({
+    market,
+    baseAsset,
+    quoteAsset,
+    deferFirstSell,
+    deferCancellation,
+  });
+  const {
+    broker,
+    pendingSell,
+    pendingSellStarted,
+    pendingCancel,
+    cancelStarted,
+    submittedIntents,
+    cancellations,
+  } = brokerState;
+  let portfolio = new Portfolio();
+  let recoveryLedger = RecoveryLedger.empty({ market });
+  let ready = initiallyReady;
+  const appConfig = createFixtureAppConfig(externalOrdersPolicy);
   const engine = makeConservativeTradingEngine({
     broker,
     strategyPolicy: conservativeStrategyPolicy,
@@ -192,17 +239,14 @@ aggressive: { enabled: false } },
     getMarketMetadata: () => marketMetadata,
     getAccountSnapshot: () => accountSnapshot,
     updateTradingAccounting: ({ fill } = {}) => {
-      const result = applyTradingAccounting({ portfolio,
-recoveryLedger,
-fill })
+      const result = applyTradingAccounting({ portfolio, recoveryLedger, fill });
       if (result.ok) {
-        portfolio = result.data.portfolio
-        recoveryLedger = result.data.recoveryLedger
+        portfolio = result.data.portfolio;
+        recoveryLedger = result.data.recoveryLedger;
       }
-      return result
+      return result;
     },
-    completeRecoveryCycle: () => toResult({ data: { eligible: true,
-freeQuantity: "1" } }),
+    completeRecoveryCycle: () => toResult({ data: { eligible: true, freeQuantity: "1" } }),
     canTrade: () => ready,
     hasUnownedOpenOrdersForSymbol,
     hasUnresolvedHarvesterOpenOrdersForSymbol,
@@ -212,46 +256,7 @@ freeQuantity: "1" } }),
     initialState: { pausedMarkets },
     onPause: async () => {},
     isStopping: () => false,
-  })
-
-  const createTradeEvent = ({ acknowledgedOrder, tradeId, quantity, executedQuantity, status }) => {
-    const fill = new Fill({
-      tradeId,
-      brokerOrderId: acknowledgedOrder.brokerOrderId,
-      clientOrderId: acknowledgedOrder.clientOrderId,
-      market,
-      side: acknowledgedOrder.side,
-      price: acknowledgedOrder.limitPrice,
-      quantity: new Quantity({ amount: quantity,
-asset: baseAsset }),
-      quoteQuantity: new Money({
-        amount: String(Number(acknowledgedOrder.limitPrice.amount) * Number(quantity)),
-        asset: quoteAsset,
-      }),
-      liquidityRole: "MAKER",
-      commissionStatus: "COMPLETE",
-      executedAt: Number(tradeId.replace(/\D/g, "")) || 1,
-    })
-    const executedOrder = new CanonicalOrder({
-      clientOrderId: acknowledgedOrder.clientOrderId,
-      brokerOrderId: acknowledgedOrder.brokerOrderId,
-      market,
-      side: acknowledgedOrder.side,
-      type: acknowledgedOrder.type,
-      limitPrice: acknowledgedOrder.limitPrice,
-      originalQuantity: acknowledgedOrder.originalQuantity,
-      executedQuantity: new Quantity({ amount: executedQuantity,
-asset: baseAsset }),
-      status,
-    })
-    return {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder,
-      fill,
-    }
-  }
-
+  });
   return {
     engine,
     market,
@@ -263,13 +268,13 @@ asset: baseAsset }),
     pendingSellStarted,
     pendingCancel,
     cancelStarted,
-    setFillsForOrder: ({ orderId, fills } = {}) => { fillsByOrder.set(orderId, fills) },
-    createTradeEvent,
-    setReady: ({ value } = {}) => { ready = value },
+    setFillsForOrder: brokerState.setFillsForOrder,
+    createTradeEvent: createTradeEventFactory({ market, baseAsset, quoteAsset }),
+    setReady: ({ value } = {}) => { ready = value; },
     getPortfolio: () => portfolio,
     getRecoveryLedger: () => recoveryLedger,
-  }
-}
+  };
+};
 
 test("readiness closing after PENDING registration removes the local order without calling the broker", async () => {
   const fixture = createFixture()
@@ -733,24 +738,9 @@ timestamp: 1 },
   assert.equal(submittedIntents.filter(({ side }) => side === "BUY").length, 1)
 })
 
-test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel its exact ID and replace from latest fills", async () => {
-  const fixture = createFixture({ deferFirstSell: true,
-deferCancellation: true })
-  const {
-    engine,
-    submittedIntents,
-    cancellations,
-    pendingSell,
-    pendingSellStarted,
-    pendingCancel,
-    cancelStarted,
-    setFillsForOrder,
-    createTradeEvent,
-    getPortfolio,
-    getRecoveryLedger,
-  } = fixture
-
-  await engine.processBookTicker({
+async function startDeferredRecoveryScenario(fixture) {
+  const { engine, submittedIntents, pendingSell, pendingSellStarted } = fixture;
+  const bookTicker = {
     symbol: "ZROUSDT",
     bookTicker: {
       symbol: "ZROUSDT",
@@ -760,120 +750,94 @@ deferCancellation: true })
       bestAskQuantity: "1",
       timestamp: 1,
     },
-  })
-  await engine.processBookTicker({
-    symbol: "ZROUSDT",
-    bookTicker: {
-      symbol: "ZROUSDT",
-      bestBidPrice: "0.5",
-      bestBidQuantity: "1",
-      bestAskPrice: "1.5",
-      bestAskQuantity: "1",
-      timestamp: 1,
-    },
-  })
+  };
+  await engine.processBookTicker(bookTicker);
+  await engine.processBookTicker(bookTicker);
   await engine.processMarketPrice({
     symbol: "ZROUSDT",
-    priceEvent: { symbol: "ZROUSDT",
-price: "1",
-timestamp: 1 },
-  })
-  const initialBuyIntent = submittedIntents[0]
+    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+  });
+  const initialBuyIntent = submittedIntents[0];
   const initialBuy = new CanonicalOrder({
     clientOrderId: initialBuyIntent.clientOrderId,
     brokerOrderId: "1",
     market: fixture.market,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: initialBuyIntent.price,
-asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: initialBuyIntent.quantity,
-asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0",
-asset: fixture.market.baseAsset }),
+    limitPrice: new Money({ amount: initialBuyIntent.price, asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: initialBuyIntent.quantity, asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
     status: "OPEN",
-  })
-
+  });
   await engine.processUserDataEvent({
-    event: createTradeEvent({
+    event: fixture.createTradeEvent({
       acknowledgedOrder: initialBuy,
       tradeId: "trade-1",
       quantity: "10",
       executedQuantity: "10",
       status: "FILLED",
     }),
-  })
-
-  const placingRecoveryOrders = engine.evaluateLatest({ symbol: "ZROUSDT" })
-  const pendingSellOrder = await pendingSellStarted.promise
+  });
+  const placingRecoveryOrders = engine.evaluateLatest({ symbol: "ZROUSDT" });
+  const pendingSellOrder = await pendingSellStarted.promise;
   assert.equal(
     submittedIntents.some((intent) => intent.side === "BUY" && intent.clientOrderId !== initialBuy.clientOrderId),
     false,
-    "A second BUY must not be submitted while the initial recovery SELL acknowledgement is still pending.",
-  )
-
-  pendingSell.resolve(toResult({ data: pendingSellOrder }))
-  await placingRecoveryOrders
-
-  const secondBuyIntent = submittedIntents.find((intent) => intent.side === "BUY" && intent.clientOrderId !== initialBuy.clientOrderId)
-  assert.ok(
-    secondBuyIntent,
-    "The next standing BUY should be submitted only after the initial recovery SELL has been acknowledged.",
-  )
+    "A second BUY must not be submitted while the initial recovery SELL acknowledgement is pending.",
+  );
+  pendingSell.resolve(toResult({ data: pendingSellOrder }));
+  await placingRecoveryOrders;
+  const secondBuyIntent = submittedIntents.find((intent) => intent.side === "BUY" && intent.clientOrderId !== initialBuy.clientOrderId);
+  assert.ok(secondBuyIntent, "The next standing BUY must wait until the initial recovery SELL is acknowledged.");
   const secondBuy = new CanonicalOrder({
     clientOrderId: secondBuyIntent.clientOrderId,
     brokerOrderId: "3",
     market: fixture.market,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: secondBuyIntent.price,
-asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: secondBuyIntent.quantity,
-asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0",
-asset: fixture.market.baseAsset }),
+    limitPrice: new Money({ amount: secondBuyIntent.price, asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: secondBuyIntent.quantity, asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
     status: "OPEN",
-  })
+  });
+  return { secondBuy, pendingSellOrder };
+}
 
+async function completeDeferredRecoverySellCancellation(fixture, { secondBuy, pendingSellOrder }) {
+  const { engine, cancelStarted, pendingCancel, cancellations, setFillsForOrder } = fixture;
   const partialFill = engine.processUserDataEvent({
-    event: createTradeEvent({
+    event: fixture.createTradeEvent({
       acknowledgedOrder: secondBuy,
       tradeId: "trade-2",
       quantity: "5",
       executedQuantity: "5",
       status: "PARTIALLY_FILLED",
     }),
-  })
+  });
   const finalFill = engine.processUserDataEvent({
-    event: createTradeEvent({
+    event: fixture.createTradeEvent({
       acknowledgedOrder: secondBuy,
       tradeId: "trade-3",
       quantity: "5",
       executedQuantity: "10",
       status: "FILLED",
     }),
-  })
-
-  // The partial BUY fill starts recovery SELL cancellation and remains
-  // serialized until the broker confirms it. Observe the cancellation before
-  // resolving the broker promise; awaiting partialFill first would deadlock.
-  await cancelStarted.promise
+  });
+  await cancelStarted.promise;
   assert.deepEqual(
     cancellations,
     [pendingSellOrder.brokerOrderId],
-    "The first BUY fill must cancel the exact broker order ID of the acknowledged recovery SELL, not another SELL or a client ID.",
-  )
-
-  const sellFillEvent = createTradeEvent({
+    "The first BUY fill must cancel the acknowledged recovery SELL by its exact broker order ID.",
+  );
+  const sellFillEvent = fixture.createTradeEvent({
     acknowledgedOrder: pendingSellOrder,
     tradeId: "trade-4",
     quantity: "2",
     executedQuantity: "2",
     status: "PARTIALLY_FILLED",
-  })
-  setFillsForOrder({ orderId: pendingSellOrder.brokerOrderId,
-fills: [sellFillEvent.fill] })
-  const delayedSellReport = engine.processUserDataEvent({ event: sellFillEvent })
+  });
+  setFillsForOrder({ orderId: pendingSellOrder.brokerOrderId, fills: [sellFillEvent.fill] });
+  const delayedSellReport = engine.processUserDataEvent({ event: sellFillEvent });
   pendingCancel.resolve(toResult({
     data: new CanonicalOrder({
       clientOrderId: pendingSellOrder.clientOrderId,
@@ -883,91 +847,77 @@ fills: [sellFillEvent.fill] })
       type: pendingSellOrder.type,
       limitPrice: pendingSellOrder.limitPrice,
       originalQuantity: pendingSellOrder.originalQuantity,
-      executedQuantity: new Quantity({ amount: "2",
-asset: fixture.market.baseAsset }),
+      executedQuantity: new Quantity({ amount: "2", asset: fixture.market.baseAsset }),
       status: "CANCELED",
     }),
-  }))
-  await Promise.all([partialFill, finalFill, delayedSellReport])
+  }));
+  await Promise.all([partialFill, finalFill, delayedSellReport]);
+  return { sellFillEvent };
+}
 
-  // Both serialized BUY-fill transitions must cancel the recovery SELL
-  // that was active at that point. Other SELL registry entries may remain
-  // from subsequent replacement/deferred evaluations.
-  const canceledRecoverySellOrders = engine.getOrders().filter(
+function assertCanceledRecoverySellSequence(fixture, pendingSellOrder) {
+  const canceledRecoverySellOrders = fixture.engine.getOrders().filter(
     (order) => order.side === "SELL" && order.status === "CANCELED",
-  )
-  assert.equal(
-    canceledRecoverySellOrders.length,
-    2,
-    `Exactly two earlier recovery SELL orders should be canceled: the initial protection order and the interim replacement created after the partial BUY fill. Actual canceled orders: ${  JSON.stringify(canceledRecoverySellOrders.map((order) => order.value))  }; broker cancellations: ${  JSON.stringify(cancellations)}`,
-  )
+  );
+  assert.equal(canceledRecoverySellOrders.length, 2, "Exactly two superseded recovery SELL orders must be canceled.");
   const replacementSellOrder = canceledRecoverySellOrders.find(
     (order) => order.clientOrderId !== pendingSellOrder.clientOrderId,
-  )
-  assert.ok(
-    replacementSellOrder,
-    "After the initial recovery SELL is canceled, the partial BUY fill must result in a distinct interim recovery SELL that is itself canceled when the final BUY fill arrives.",
-  )
+  );
+  assert.ok(replacementSellOrder, "The interim recovery SELL must be replaced after the final BUY fill.");
   assert.deepEqual(
-    cancellations,
+    fixture.cancellations,
     canceledRecoverySellOrders.map((order) => order.brokerOrderId),
-    "Every canceled recovery SELL must have exactly one matching broker cancellation request, with no unrelated cancellation.",
-  )
+    "Each canceled recovery SELL must have one matching broker cancellation request.",
+  );
   assert.deepEqual(
-    cancellations,
+    fixture.cancellations,
     [pendingSellOrder.brokerOrderId, replacementSellOrder.brokerOrderId],
-    "The cancellation sequence must target the initial recovery SELL first and the interim replacement second, using each acknowledged broker order ID.",
-  )
-  assert.equal(
-    getPortfolio().appliedFillIds.length,
-    4,
-    "Portfolio accounting must contain each of the four distinct BUY and SELL executions exactly once after reconciliation.",
-  )
-  assert.equal(
-    getRecoveryLedger().appliedFillIds.length,
-    4,
-    "The recovery ledger must mirror all four distinct BUY and SELL executions after reconciliation.",
-  )
-  assert.equal(
-    getPortfolio().appliedFillIds.filter((id) => id === sellFillEvent.fill.id).length,
-    1,
-    "The partial recovery SELL execution must be applied once even though it arrives both as a stream event and during terminal cancellation reconciliation.",
-  )
+    "Recovery SELL cancellations must use the acknowledged broker IDs in order.",
+  );
+}
 
-  await engine.processUserDataEvent({
-    event: createTradeEvent({
+function assertReconciledFillAccounting(fixture, sellFillEvent) {
+  assert.equal(fixture.getPortfolio().appliedFillIds.length, 4, "Portfolio accounting must contain all four distinct executions.");
+  assert.equal(fixture.getRecoveryLedger().appliedFillIds.length, 4, "The recovery ledger must mirror all four distinct executions.");
+  assert.equal(
+    fixture.getPortfolio().appliedFillIds.filter((id) => id === sellFillEvent.fill.id).length,
+    1,
+    "The partial recovery SELL must be applied once across stream delivery and cancellation reconciliation.",
+  );
+}
+
+async function assertDuplicateFillIsIdempotent(fixture, secondBuy) {
+  await fixture.engine.processUserDataEvent({
+    event: fixture.createTradeEvent({
       acknowledgedOrder: secondBuy,
       tradeId: "trade-3",
       quantity: "5",
       executedQuantity: "10",
       status: "FILLED",
     }),
-  })
-  assert.equal(
-    getPortfolio().appliedFillIds.length,
-    4,
-    "Replaying the final BUY execution must not add a duplicate fill to Portfolio accounting.",
-  )
-  assert.equal(
-    getRecoveryLedger().appliedFillIds.length,
-    4,
-    "Replaying the final BUY execution must not add a duplicate fill to the recovery ledger.",
-  )
+  });
+  assert.equal(fixture.getPortfolio().appliedFillIds.length, 4, "Replaying the final BUY execution must not duplicate portfolio accounting.");
+  assert.equal(fixture.getRecoveryLedger().appliedFillIds.length, 4, "Replaying the final BUY execution must not duplicate recovery-ledger accounting.");
+}
 
-  await engine.evaluateLatest({ symbol: "ZROUSDT" })
-  const recoverySellSubmissionIntents = submittedIntents.filter(
-    ({ side }) => side === "SELL",
-  )
-  assert.equal(
-    recoverySellSubmissionIntents.length,
-    3,
-    `Expected exactly three recovery SELL submissions: initial protection after the first BUY; interim protection after the second BUY's partial fill; and final protection after its remaining fill plus the canceled SELL's partial execution were reconciled. Each distinct BUY-fill state requires its own protected inventory quantity. Actual SELL submissions: ${  JSON.stringify(recoverySellSubmissionIntents.map(({ clientOrderId, quantity, price }) => ({ clientOrderId,
-quantity,
-price })))}`,
-  )
+async function assertFinalRecoverySellReplacement(fixture) {
+  await fixture.engine.evaluateLatest({ symbol: "ZROUSDT" });
+  const recoverySellSubmissionIntents = fixture.submittedIntents.filter(({ side }) => side === "SELL");
+  assert.equal(recoverySellSubmissionIntents.length, 3, "The initial, interim, and final inventory states must each produce one protected recovery SELL.");
   assert.equal(
     recoverySellSubmissionIntents[2].quantity,
     "17",
-    `The final recovery SELL (third submission) must protect the latest reconciled inventory: 10 initial BUY + 10 later BUY - 2 partial SELL - 1 retained keepQuantity = 17. Actual SELL submissions: ${  JSON.stringify(recoverySellSubmissionIntents.map(({ quantity }) => quantity))}`,
-  )
-})
+    "The final recovery SELL must protect 10 + 10 - 2 - 1 = 17 units after reconciliation.",
+  );
+}
+
+test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel its exact ID and replace from latest fills", async () => {
+  const fixture = createFixture({ deferFirstSell: true, deferCancellation: true });
+  const scenario = await startDeferredRecoveryScenario(fixture);
+  const { sellFillEvent } = await completeDeferredRecoverySellCancellation(fixture, scenario);
+
+  assertCanceledRecoverySellSequence(fixture, scenario.pendingSellOrder);
+  assertReconciledFillAccounting(fixture, sellFillEvent);
+  await assertDuplicateFillIsIdempotent(fixture, scenario.secondBuy);
+  await assertFinalRecoverySellReplacement(fixture);
+});
