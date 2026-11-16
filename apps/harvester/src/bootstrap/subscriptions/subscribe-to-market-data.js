@@ -34,7 +34,7 @@ function logMarketPriceEvaluation({ logger, symbol, priceEvent, processed }) {
 
 function createMarketPriceErrorReporter({ logger, onMarketPriceError }) {
   return (details) => {
-    const [rejection] = details?.errors ?? []
+    const [rejection] = Array.isArray(details?.errors) ? details.errors : [details?.errors?.[0]]
     const expectedPostOnlyRejection = details?.errors?.length === 1 &&
       rejection?.code === "POST_ONLY_WOULD_TAKE"
     if (expectedPostOnlyRejection) {
