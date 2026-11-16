@@ -1,6 +1,7 @@
 import { Fill } from "@coinzilla/entities"
 import { Portfolio } from "../../portfolio/portfolio.js"
 import { StrategyId } from "../strategy-ids.js"
+import { createMixedSellFillAllocation } from "./mixed-sell-fill-allocation.js"
 import {
   applyLegacySellAllocation,
 } from "./legacy-position.js"
@@ -40,7 +41,7 @@ function validateInputs({
   }
 }
 
-function indexCanonicalFills({ canonicalFills, canonicalFillAllocations }) {
+function indexCanonicalFills({ canonicalFills, canonicalFillAllocations, orderRegistry }) {
   if (canonicalFills.length !== canonicalFillAllocations.length) {
     fail({
       code: "RS_MIXED_SELL_RECONCILIATION_FILL_HISTORY_MISMATCH",
@@ -66,12 +67,29 @@ function indexCanonicalFills({ canonicalFills, canonicalFillAllocations }) {
         message: "Every mixed SELL allocation must resolve to its original canonical Fill.",
       })
     }
+    const fill = fillsById.get(allocation.fillId)
+    const expected = createMixedSellFillAllocation({
+      fill,
+      orderRegistry,
+      recoveryQuantity: allocation.recovery?.grossBaseQuantity,
+      legacyQuantity: allocation.legacy?.grossBaseQuantity,
+    })
+    if (expected.fillFingerprint !== allocation.fillFingerprint ||
+        expected.allocationFingerprint !== allocation.allocationFingerprint ||
+        JSON.stringify(expected.recovery) !== JSON.stringify(allocation.recovery) ||
+        JSON.stringify(expected.legacy) !== JSON.stringify(allocation.legacy)) {
+      fail({
+        code: "RS_MIXED_SELL_RECONCILIATION_ALLOCATION_CONFLICT",
+        message: `Canonical Fill ${fill.id} allocation facts do not match a fresh allocation from its execution facts.`,
+      })
+    }
   }
 
   return fillsById
 }
 
-function findProjectionHistory({ portfolio, legacyAccounting, fillId }) {
+function findProjectionHistory({ portfolio, legacyAccounting, allocation, reconciliation }) {
+  const { fillId } = allocation
   const portfolioHistory = portfolio.appliedFillFingerprints.find((item) => item.id === fillId)
   const legacyHistory = legacyAccounting.appliedFillFingerprints.find((item) => item.id === fillId)
   const portfolioApplied = portfolioHistory !== undefined
@@ -88,9 +106,13 @@ function findProjectionHistory({ portfolio, legacyAccounting, fillId }) {
     return false
   }
 
-  if (portfolioHistory.allocationFingerprint === undefined ||
-      portfolioHistory.allocationFingerprint !== legacyHistory.allocationFingerprint ||
-      portfolioHistory.fingerprint !== legacyHistory.fillFingerprint) {
+  if (portfolioHistory.positionId !== reconciliation.orderOwnership.positionId ||
+      portfolioHistory.strategyId !== reconciliation.orderOwnership.strategyId ||
+      portfolioHistory.allocationFingerprint !== allocation.allocationFingerprint ||
+      portfolioHistory.allocationSideFingerprint !== JSON.stringify(allocation.recovery) ||
+      portfolioHistory.fingerprint !== allocation.fillFingerprint ||
+      legacyHistory.allocationFingerprint !== allocation.allocationFingerprint ||
+      legacyHistory.fillFingerprint !== allocation.fillFingerprint) {
     fail({
       code: "RS_MIXED_SELL_RECONCILIATION_PROJECTION_HISTORY_MISMATCH",
       message: `Recovery Portfolio and legacy accounting contain conflicting allocation identity for Fill ${fillId}.`,
@@ -104,13 +126,15 @@ function assertProjectionHistoryParity({
   portfolio,
   legacyAccounting,
   canonicalFillAllocations,
+  reconciliation,
 }) {
   let appliedCount = 0
   for (const allocation of canonicalFillAllocations) {
     if (findProjectionHistory({
       portfolio,
       legacyAccounting,
-      fillId: allocation.fillId,
+      allocation,
+      reconciliation,
     })) {
       appliedCount += 1
     }
@@ -227,6 +251,7 @@ export function applyReconciledMixedSellOrder({
   const fillsById = indexCanonicalFills({
     canonicalFills,
     canonicalFillAllocations,
+    orderRegistry,
   })
 
   if (canonicalFillAllocations.length === 0) {
@@ -244,6 +269,7 @@ export function applyReconciledMixedSellOrder({
     portfolio,
     legacyAccounting,
     canonicalFillAllocations,
+    reconciliation: terminalResult.reconciliation,
   })
 
   if (duplicate) {
