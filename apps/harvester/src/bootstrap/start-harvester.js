@@ -233,6 +233,15 @@ tradingEnabled })
   return startupOptions
 }
 
+function createCommissionAssetPublisher({ accountSnapshotManagerRef }) {
+  return ({ assetId, assetCode } = {}) => {
+    if (!accountSnapshotManagerRef.current) {
+      throw new Error("Commission asset baseline manager is not ready")
+    }
+    return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({ assetId, assetCode })
+  }
+}
+
 async function createHarvesterStartupContext({ options } = {}) {
   const {
     configSource,
@@ -287,13 +296,7 @@ async function createHarvesterStartupContext({ options } = {}) {
   })
   const operationalStateCallbacks = createHarvesterOperationalStateCallbacks({ operationalStateStore })
   const accountSnapshotManagerRef = { current: null }
-  const onCommissionAsset = ({ assetId, assetCode } = {}) => {
-    if (!accountSnapshotManagerRef.current) {
-      throw new Error("Commission asset baseline manager is not ready")
-    }
-    return accountSnapshotManagerRef.current.publishCommissionAssetBaseline({ assetId,
-assetCode })
-  }
+  const onCommissionAsset = createCommissionAssetPublisher({ accountSnapshotManagerRef })
   return {
     ...startupOptions,
     env,
