@@ -234,7 +234,7 @@ tradingEnabled })
   return startupOptions
 }
 
-function createCommissionAssetHandler({ accountSnapshotManagerRef } = {}) {
+function createCommissionAssetPublisher({ accountSnapshotManagerRef }) {
   return ({ assetId, assetCode } = {}) => {
     if (!accountSnapshotManagerRef.current) {
       throw new Error("Commission asset baseline manager is not ready")
@@ -301,7 +301,7 @@ async function createHarvesterStartupContext({ options } = {}) {
   })
   const operationalStateCallbacks = createHarvesterOperationalStateCallbacks({ operationalStateStore })
   const accountSnapshotManagerRef = { current: null }
-  const onCommissionAsset = createCommissionAssetHandler({ accountSnapshotManagerRef })
+  const onCommissionAsset = createCommissionAssetPublisher({ accountSnapshotManagerRef })
   return {
     ...startupOptions,
     env,
