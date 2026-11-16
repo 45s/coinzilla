@@ -1793,7 +1793,9 @@ test("retains Journal, EventBus, process lock and logger when strategy shutdown 
     }),
     close: async () => {
       calls.push("event-bus-close")
-      return { ok: true }
+      return {
+        ok: true,
+      }
     },
   }
   const journalService = {
@@ -1822,7 +1824,10 @@ test("retains Journal, EventBus, process lock and logger when strategy shutdown 
       ok: true,
       release: async () => {
         calls.push("process-lock-release")
-        return { ok: true, released: true }
+        return {
+          ok: true,
+          released: true,
+        }
       },
     }),
     registerSignalHandler: (...args) => {
