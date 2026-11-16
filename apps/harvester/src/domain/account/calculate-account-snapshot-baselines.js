@@ -36,10 +36,19 @@ function addAdditionalTrackedBaseQuantity({ values, item } = {}) {
 }
 
 function toRecords(values) {
-  return Object.freeze([...values]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([assetId, amount]) => Object.freeze({ assetId,
-amount })))
+  const assetIds = []
+  for (const assetId of values.keys()) {
+    const insertionIndex = assetIds.findIndex((existing) => existing.localeCompare(assetId) > 0)
+    if (insertionIndex < 0) {
+      assetIds.push(assetId)
+    } else {
+      assetIds.splice(insertionIndex, 0, assetId)
+    }
+  }
+  return Object.freeze(assetIds.map((assetId) => Object.freeze({
+    assetId,
+    amount: values.get(assetId),
+  })))
 }
 
 /**
