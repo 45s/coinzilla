@@ -183,6 +183,48 @@ test("does not repeat successful recovery attempts without new ticker trade acti
   monitor.dispose()
 })
 
+test("resets the recovery budget after aggTrade catches up", async () => {
+  const { monitor, clock, recoveries } = createMonitor()
+  monitor.onAggTrade({ l: 10 })
+  monitor.onTicker({
+    s: "BTCUSDT",
+    L: 11,
+  })
+  clock.advanceBy(50)
+  await flush()
+  monitor.onTicker({
+    s: "BTCUSDT",
+    L: 12,
+  })
+  clock.advanceBy(50)
+  await flush()
+
+  monitor.onAggTrade({ l: 12 })
+  assert.equal(
+    monitor.diagnostics.state,
+    "healthy",
+    "aggTrade catching up must restore the stream to healthy",
+  )
+  assert.equal(
+    monitor.diagnostics.recoveryAttempts,
+    0,
+    "a recovered stream must receive a fresh bounded recovery budget",
+  )
+
+  monitor.onTicker({
+    s: "BTCUSDT",
+    L: 13,
+  })
+  clock.advanceBy(50)
+  await flush()
+  assert.equal(
+    recoveries.length,
+    3,
+    "a later independent stall must be eligible for a new recovery attempt",
+  )
+  monitor.dispose()
+})
+
 test("bounds repeated resubscription attempts and reports an exhausted stream", async () => {
   const { monitor, clock, recoveries, errors } = createMonitor()
   monitor.onAggTrade({ l: 10 })
