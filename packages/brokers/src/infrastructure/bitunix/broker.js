@@ -122,7 +122,7 @@ function normalizeOrderHistoryPage({ value, requestedPage }) {
   if (!Number.isSafeInteger(value.total) || value.total < 0) {
     throw new TypeError("Bitunix Spot order history total must be a non-negative safe integer")
   }
-  if (typeof value.pageNum !== "string" || !/^\\d+$/.test(value.pageNum)) {
+  if (typeof value.pageNum !== "string" || !/^[0-9]+$/.test(value.pageNum)) {
     throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string")
   }
 
