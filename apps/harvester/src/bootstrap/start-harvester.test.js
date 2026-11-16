@@ -1047,12 +1047,17 @@ function createTwoMarketStartupConfig() {
 
 function createDelayedFirstTickerBroker({ broker, calls }) {
   let resolveFirstTicker
+  let resolveFirstTickerRequested
   const firstTicker = new Promise((resolve) => {
     resolveFirstTicker = resolve
+  })
+  const firstTickerRequested = new Promise((resolve) => {
+    resolveFirstTickerRequested = resolve
   })
   broker.getPrices = async ({ symbol }) => {
     calls.push(`prices:${  symbol}`)
     if (symbol === "BTCUSDT") {
+      resolveFirstTickerRequested()
       return firstTicker
     }
     return {
@@ -1111,15 +1116,26 @@ function createDelayedFirstTickerBroker({ broker, calls }) {
   }
   return {
     secondSubscription,
+    firstTickerRequested,
     resolveFirstTicker,
     getPlaceOrderCalls: () => placeOrderCalls,
   }
 }
 
-async function assertSecondMarketSubscribedBeforeTicker({ calls, secondSubscription }) {
+async function assertSecondMarketSubscribedBeforeTicker({
+  calls,
+  secondSubscription,
+  firstTickerRequested,
+}) {
   await waitForTestSignal(
     secondSubscription,
     "second enabled market subscription",
+    () => ({ calls }),
+    2000,
+  )
+  await waitForTestSignal(
+    firstTickerRequested,
+    "first market REST ticker request",
     () => ({ calls }),
     2000,
   )
@@ -1156,6 +1172,7 @@ test("subscribes every enabled market before waiting for the first market's REST
   await assertSecondMarketSubscribedBeforeTicker({
     calls,
     secondSubscription: race.secondSubscription,
+    firstTickerRequested: race.firstTickerRequested,
   })
   race.resolveFirstTicker({
     ok: true,
