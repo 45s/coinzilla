@@ -2,6 +2,10 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## Internal process entry-point refactor
+
+- [~] Refactor `src/index.js` into cohesive process-composition, lifecycle, and diagnostic modules without changing the exported `main()` contract, startup/shutdown ordering, trading behavior, or safety gates. Extracted recursive process-error diagnostics and the signal-shutdown lifecycle; existing `index.test.js` integration coverage remains the compatibility baseline, with focused diagnostic tests added. No exchange operations are part of this work. The first exact-head CI run exposed five `object-property-newline` violations in the extracted shutdown module; all were corrected without suppressions or rule changes, and changed-file lint is being re-run.
+
 ## Current safety priorities — LIVE-session audit findings
 
 The 2026-11-12/13 and 2026-11-13 LIVE session evidence is preserved in the [2026-11-12/13 audit](./docs/audits/sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md) and [2026-11-13 audit](./docs/audits/sessions/AUDIT_SESSION_2026-11-13_15-50-59Z.md). These findings are current safety priorities; historical reports remain immutable evidence.
