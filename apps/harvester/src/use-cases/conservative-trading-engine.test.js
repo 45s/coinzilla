@@ -1504,7 +1504,7 @@ test("rejects a stream fill whose optional clientOrderId conflicts with its regi
       timestamp: 1
     },
   })
-  const order = harness.engine.getOrders()[0]
+  const [order] = harness.engine.getOrders()
   const fillQuantity = "0.1"
   const fill = new Fill({
     tradeId: "wrong-client-fill",
@@ -1574,7 +1574,7 @@ test("treats decimal-formatted zero as no execution in terminal CANCELED order e
       timestamp: 1
     },
   })
-  const order = harness.engine.getOrders()[0]
+  const [order] = harness.engine.getOrders()
   const canceledOrder = new CanonicalOrder({
     clientOrderId: order.clientOrderId,
     brokerOrderId: order.brokerOrderId,
@@ -2221,7 +2221,7 @@ test("publishes a Fill only after the accounting workflow commits it", async () 
       timestamp: 1
     },
   })
-  const order = engine.getOrders()[0]
+  const [order] = engine.getOrders()
   fillRef.current = makePartialFill({ order })
   const result = await engine.processUserDataEvent({
     event: {
@@ -2267,7 +2267,7 @@ test("does not publish a Fill when accounting reports an idempotent duplicate", 
       timestamp: 1
     },
   })
-  const order = engine.getOrders()[0]
+  const [order] = engine.getOrders()
   const result = await engine.processUserDataEvent({
     event: {
       executedOrder: makePartiallyFilledOrder({ order }),
@@ -2301,7 +2301,7 @@ test("Fill event publication failure cannot interrupt successful accounting", as
       timestamp: 1
     },
   })
-  const order = engine.getOrders()[0]
+  const [order] = engine.getOrders()
   const fill = makePartialFill({ order })
   const result = await engine.processUserDataEvent({
     event: {
@@ -2328,7 +2328,7 @@ test("publishes missing and mismatched Fill diagnostics without raw execution da
     timestamp: 1
   }
   })
-  const order = engine.getOrders()[0]
+  const [order] = engine.getOrders()
   const executedOrder = makePartiallyFilledOrder({ order })
   const missing = await engine.processUserDataEvent({
     event: {
@@ -2441,7 +2441,7 @@ test("publishes accounting failures and preserves pair pause behavior", async ()
     timestamp: 1
   }
   })
-  const order = engine.getOrders()[0]
+  const [order] = engine.getOrders()
   const result = await engine.processUserDataEvent({
     event: {
       executedOrder: makePartiallyFilledOrder({ order }),
@@ -2484,7 +2484,7 @@ test("EventBus failure cannot interrupt accounting failure pause handling", asyn
     timestamp: 1
   }
   })
-  const order = engine.getOrders()[0]
+  const [order] = engine.getOrders()
   const result = await engine.processUserDataEvent({
     event: {
       executedOrder: makePartiallyFilledOrder({ order }),
@@ -6611,7 +6611,7 @@ test("retains acknowledged broker identity after conflicting REST fill metadata 
     },
   })
   assert.equal(failed.ok, false)
-  const tracked = engine.getOrders()[0]
+  const [tracked] = engine.getOrders()
   assert.equal(tracked.status, "UNKNOWN")
   assert.ok(tracked.brokerOrderId)
   assert.ok(pauses.includes("ACKNOWLEDGED_FILL_IDENTITY_MISMATCH"))
@@ -6943,7 +6943,7 @@ test("reconciles an accepted order after its submission acknowledgement is lost"
   })
 
   assert.equal(submission.ok, false)
-  const pendingOrder = harness.engine.getOrders()[0]
+  const [pendingOrder] = harness.engine.getOrders()
   assert.equal(pendingOrder.status, "UNKNOWN")
   assert.equal(pendingOrder.brokerOrderId, undefined)
 
@@ -7020,7 +7020,7 @@ test("does not adopt a client-order lookup response with a mismatched client ID"
       timestamp: 1
     },
   })
-  const pendingOrder = harness.engine.getOrders()[0]
+  const [pendingOrder] = harness.engine.getOrders()
   const foreignOrder = new CanonicalOrder({
     clientOrderId: "foreign-client-id",
     brokerOrderId: "foreign-broker-order",
@@ -7061,7 +7061,7 @@ test("does not attach a client-ID lookup that changes immutable order intent", a
       timestamp: 1
     },
   })
-  const pendingOrder = harness.engine.getOrders()[0]
+  const [pendingOrder] = harness.engine.getOrders()
   const conflictingOrder = new CanonicalOrder({
     clientOrderId: pendingOrder.clientOrderId,
     brokerOrderId: "conflicting-broker-order",
