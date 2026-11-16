@@ -1123,7 +1123,10 @@ async function assertSecondMarketSubscribedBeforeTicker({ calls, secondSubscript
     () => ({ calls }),
     2000,
   )
-  assert.ok(calls.indexOf("subscribe:ETHUSDT") < calls.indexOf("prices:BTCUSDT"))
+  assert.ok(
+    calls.indexOf("subscribe:ETHUSDT") < calls.indexOf("prices:BTCUSDT"),
+    `Expected ETH subscription before BTC ticker seed; calls: ${calls.join(", ")}`,
+  )
   assert.ok(calls.includes("subscribe:book:BTCUSDT"))
   assert.ok(calls.includes("subscribe:book:ETHUSDT"))
 }
