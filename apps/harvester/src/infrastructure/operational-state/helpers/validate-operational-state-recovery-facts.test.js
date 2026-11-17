@@ -251,64 +251,32 @@ test("rejects completed recovery accounting that is inexact or internally incons
   }
 })
 
-test("rejects invalid exchange dust metadata, missing evidence, and unreconciled dust quantities", () => {
-  const valid = makeCompletedFact({
-    inventoryDisposition: {
-      status: "EXCHANGE_CONSTRAINED_DUST",
-      quantity: "0.2",
-      reason: "MIN_QUANTITY",
-      minimumQuantity: "0.1",
-      evaluatedQuantity: "0.2",
-    },
-  })
-
-  const invalidDispositions = [
+function createInvalidDustDispositions({ valid }) {
+  return [
     [
-      {
-        ...valid.canonicalData.inventoryDisposition,
-        status: "UNKNOWN",
-      },
+      { ...valid.canonicalData.inventoryDisposition, status: "UNKNOWN" },
       /validated exchange-constrained dust/,
     ],
     [
-      {
-        ...valid.canonicalData.inventoryDisposition,
-        reason: "UNKNOWN",
-      },
+      { ...valid.canonicalData.inventoryDisposition, reason: "UNKNOWN" },
       /validated exchange-constrained dust/,
     ],
     [
-      {
-        ...valid.canonicalData.inventoryDisposition,
-        quantity: "0",
-      },
+      { ...valid.canonicalData.inventoryDisposition, quantity: "0" },
       /validated exchange-constrained dust/,
     ],
     [
-      {
-        ...valid.canonicalData.inventoryDisposition,
-        minimumQuantity: "01",
-      },
+      { ...valid.canonicalData.inventoryDisposition, minimumQuantity: "01" },
       /exact decimal string/,
     ],
     [
-      {
-        ...valid.canonicalData.inventoryDisposition,
-        evaluatedQuantity: undefined,
-      },
+      { ...valid.canonicalData.inventoryDisposition, evaluatedQuantity: undefined },
       /MIN_QUANTITY dust requires/,
     ],
   ]
+}
 
-  for (const [inventoryDisposition, expectedError] of invalidDispositions) {
-    const fact = makeCompletedFact({ inventoryDisposition })
-    assert.throws(
-      () => validateCompleted(fact),
-      expectedError,
-      `An invalid dust disposition must be rejected: ${expectedError}.`,
-    )
-  }
-
+function assertDustQuantityReconcilesExactly() {
   const mismatchedQuantity = makeCompletedFact({
     inventoryDisposition: {
       status: "EXCHANGE_CONSTRAINED_DUST",
@@ -323,6 +291,28 @@ test("rejects invalid exchange dust metadata, missing evidence, and unreconciled
     /dust quantity must exactly reconcile/,
     "The recorded dust quantity must exactly reconcile active and retained inventory.",
   )
+}
+
+test("rejects invalid exchange dust metadata, missing evidence, and unreconciled dust quantities", () => {
+  const valid = makeCompletedFact({
+    inventoryDisposition: {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.2",
+      reason: "MIN_QUANTITY",
+      minimumQuantity: "0.1",
+      evaluatedQuantity: "0.2",
+    },
+  })
+  const invalidDispositions = createInvalidDustDispositions({ valid })
+  for (const [inventoryDisposition, expectedError] of invalidDispositions) {
+    const fact = makeCompletedFact({ inventoryDisposition })
+    assert.throws(
+      () => validateCompleted(fact),
+      expectedError,
+      `An invalid dust disposition must be rejected: ${expectedError}.`,
+    )
+  }
+  assertDustQuantityReconcilesExactly()
 })
 
 test("accepts each supported recovery non-completion outcome and reason combination", () => {
@@ -357,29 +347,8 @@ test("accepts each supported recovery non-completion outcome and reason combinat
   }
 })
 
-test("rejects recovery non-completion identity, accounting, and outcome contradictions", () => {
-  const valid = makeNotCompletedFact()
-  assert.throws(
-    () => validateNotCompleted({
-      ...valid,
-      canonicalData: {
-        ...valid.canonicalData,
-        unsupported: true,
-      },
-    }),
-    /unsupported fields/,
-    "A non-completion payload must reject fields outside its durable schema.",
-  )
-  assert.throws(
-    () => validateNotCompleted({
-      ...valid,
-      factId: "recovery-cycle-not-completed:wrong-identity",
-    }),
-    /identity or reason is not canonical/,
-    "The non-completion fact ID must bind its market and evaluation identity.",
-  )
-
-  const invalidCases = [
+function createInvalidRecoveryNonCompletionCases() {
+  return [
     ["unapproved continuation reason", {
       outcome: "CONTINUE_SELL_THROUGH",
       reason: "EXTERNAL_ORDER_REQUIRES_REVIEW",
@@ -418,7 +387,31 @@ test("rejects recovery non-completion identity, accounting, and outcome contradi
       realizedNetProfit: "2",
     }],
   ]
+}
 
+function assertInvalidRecoveryNonCompletionIdentityRejected({ valid }) {
+  assert.throws(
+    () => validateNotCompleted({
+      ...valid,
+      canonicalData: { ...valid.canonicalData, unsupported: true },
+    }),
+    /unsupported fields/,
+    "A non-completion payload must reject fields outside its durable schema.",
+  )
+  assert.throws(
+    () => validateNotCompleted({
+      ...valid,
+      factId: "recovery-cycle-not-completed:wrong-identity",
+    }),
+    /identity or reason is not canonical/,
+    "The non-completion fact ID must bind its market and evaluation identity.",
+  )
+}
+
+test("rejects recovery non-completion identity, accounting, and outcome contradictions", () => {
+  const valid = makeNotCompletedFact()
+  assertInvalidRecoveryNonCompletionIdentityRejected({ valid })
+  const invalidCases = createInvalidRecoveryNonCompletionCases()
   for (const [description, options] of invalidCases) {
     assert.throws(
       () => validateNotCompleted(makeNotCompletedFact(options)),
