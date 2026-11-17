@@ -15,7 +15,7 @@ const createState = (overrides = {}) => ({
   ...overrides,
 })
 
-const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state = createState(), subscribe, publishAccountSnapshot, publishOpenOrdersSnapshot, logger = {}, providerInstanceId } = {}) => {
+const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state = createState(), subscribe, publishAccountSnapshot, publishOpenOrdersSnapshot, logger = {} } = {}) => {
   const calls = []
   const events = []
   const subscription = { disconnect: async () => calls.push("disconnect") }
@@ -30,7 +30,6 @@ data: subscription }
       },
     },
     brokerName: "binance",
-    providerInstanceId,
     eventPublisher,
     logger,
     state,
@@ -66,14 +65,6 @@ test("read-only startup subscribes, durably audits account and open orders, and 
   assert.equal(fixture.state.initialAccountSnapshotReady, true, "The initial account snapshot gate must open after its audit completes.")
   assert.equal(fixture.state.ready, false, "Read-only mode must not mark trading readiness true.")
   assert.equal(fixture.events[0].name, HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED, "Successful subscription must publish lifecycle evidence.")
-})
-
-test("tags the user-data subscription with its owning provider instance", async () => {
-  const fixture = createFixture({ providerInstanceId: "binancePrimary" })
-  const subscription = await fixture.result
-  assert.equal(subscription.providerInstanceId, "binancePrimary")
-  await subscription.disconnect()
-  assert.ok(fixture.calls.includes("disconnect"), "The owned subscription must retain its cleanup operation.")
 })
 
 test("trading startup opens readiness only after both PREFLIGHT audits and safe stream state", async () => {

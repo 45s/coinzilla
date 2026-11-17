@@ -59,7 +59,6 @@ const createFixture = ({
   processMarketPrice,
   processMarketBook,
   isStopped = () => false,
-  providerInstanceId,
 } = {}) => {
   const calls = []
   const events = []
@@ -76,7 +75,6 @@ const createFixture = ({
   const result = subscribeToMarketData({
     broker,
     brokerName: "binance",
-    providerInstanceId,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
     logger,
     tradingEnabled,
@@ -113,13 +111,6 @@ test("establishes all enabled book/price streams before WebSocket API ticker.pri
   assert.equal(result.marketPriceIntake.has("BTCUSDT"), true, "Per-market WebSocket intake state must be retained.")
 })
 
-
-test("associates market-price and book subscriptions with their provider instance", async () => {
-  const fixture = createFixture({ tradingEnabled: true, providerInstanceId: "binancePrimary" })
-  await fixture.result
-  assert.equal(fixture.subscriptions[0].providerInstanceId, "binancePrimary")
-  assert.equal(fixture.bookSubscriptions[0].providerInstanceId, "binancePrimary")
-})
 
 test("tracks accepted book-ticker work in the per-market shutdown intake state", async () => {
   let releaseBookTask

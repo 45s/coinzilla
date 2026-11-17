@@ -163,7 +163,6 @@ function getSubscriptionFailure({ result, symbol, streamLabel }) {
 
 async function subscribeToBookTicker({
   broker,
-  providerInstanceId,
   symbol,
   logger,
   isStopped,
@@ -193,7 +192,6 @@ async function subscribeToBookTicker({
     throw new Error(`Unable to subscribe to book ticker for ${symbol}${details ? `: ${details}` : ""}`)
   }
   bookSubscriptions.push({
-    ...(providerInstanceId ? { providerInstanceId } : {}),
     symbol,
     unsubscribe: result.data.unsubscribe,
   })
@@ -247,7 +245,6 @@ function registerMarketPriceSubscription({ data, logger, symbol, subscriptions }
     }),
   })
   subscriptions.push({
-    ...(data.providerInstanceId ? { providerInstanceId: data.providerInstanceId } : {}),
     symbol,
     unsubscribe: data.unsubscribe,
   })
@@ -262,7 +259,6 @@ function registerMarketPriceSubscription({ data, logger, symbol, subscriptions }
 async function subscribeToMarketPrice({
   broker,
   brokerName,
-  providerInstanceId,
   eventPublisher,
   logger,
   symbol,
@@ -308,7 +304,6 @@ async function subscribeToMarketPrice({
       ...data,
       eventPublisher,
       brokerName,
-      providerInstanceId,
     },
     logger,
     symbol,
@@ -317,7 +312,7 @@ async function subscribeToMarketPrice({
 }
 
 async function subscribeToEnabledMarkets({ context, reportPriceError }) {
-  const { pairs, tradingEnabled, broker, providerInstanceId, bookSubscriptions } = context
+  const { pairs, tradingEnabled, broker, bookSubscriptions } = context
   for (const [symbol, pairConfig] of Object.entries(pairs)) {
     if (!pairConfig.enabled) {
       continue
@@ -325,7 +320,6 @@ async function subscribeToEnabledMarkets({ context, reportPriceError }) {
     if (tradingEnabled) {
       await subscribeToBookTicker({
         broker,
-        providerInstanceId,
         symbol,
         logger: context.logger,
         isStopped: context.isStopped,
@@ -431,7 +425,6 @@ async function seedMissingInitialPrices({ context, reportPriceError }) {
 export async function subscribeToMarketData({
   broker,
   brokerName,
-  providerInstanceId,
   eventPublisher,
   logger,
   tradingEnabled,
@@ -453,7 +446,6 @@ export async function subscribeToMarketData({
   const context = {
     broker,
     brokerName,
-    providerInstanceId,
     eventPublisher,
     logger,
     tradingEnabled,

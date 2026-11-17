@@ -23,6 +23,7 @@ import { createShutdownHandler } from "./shutdown/create-shutdown-handler.js"
 import { createConservativeShutdownParticipant } from "./shutdown/create-conservative-shutdown-participant.js"
 import { subscribeToMarketData } from "./subscriptions/subscribe-to-market-data.js"
 import { createProviderRegistry } from "./broker/provider-registry.js"
+import { associateProviderInstance, associateProviderInstances } from "./broker/provider-subscription-ownership.js"
 import { subscribeToUserData } from "./user-data/subscribe-to-user-data.js"
 import { recordOrderSubmissionIntent } from "../use-cases/record-order-submission-intent.js"
 import { recordOrderSubmissionOutcome } from "../use-cases/record-order-submission-outcome.js"
@@ -389,7 +390,6 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
       throw new AggregateError(
         [error, cleanupError],
         "Harvester provider startup failed and operator-control cleanup also failed",
-        { cause: error },
       )
     }
     throw error
@@ -415,7 +415,6 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
   resources.candleHistoryService = createHarvesterCandleHistoryService({
     createCandleHistoryService,
     broker,
-    providerInstanceId: startup.providerInstanceId,
     logger: startup.logger,
     now: startup.now,
     getTradingEngine: () => resources.tradingEngine,
@@ -615,10 +614,9 @@ async function startHarvesterPreflightServices({ startup, portfolio, resources, 
     onOperationalStateRecoveryCycleCompleted: startup.onOperationalStateRecoveryCycleCompleted,
     onOperationalStateRecoveryCycleNotCompleted: startup.onOperationalStateRecoveryCycleNotCompleted,
   })
-  resources.userDataSubscription = await subscribeToUserData({
+  const userDataSubscription = await subscribeToUserData({
     broker: resources.broker,
     brokerName: startup.brokerName,
-    providerInstanceId: startup.providerInstanceId,
     eventPublisher: startup.eventPublisher,
     logger: startup.logger,
     state: resources.userDataState,
@@ -627,11 +625,20 @@ async function startHarvesterPreflightServices({ startup, portfolio, resources, 
     enabledSymbols: startup.enabledSymbols,
     onEvent: userDataEvents.handleUserDataEvent,
     onStatus: recoveryRuntime.handleUserDataStatus,
-    onSubscriptionEstablished: (subscription) => { resources.userDataSubscription = subscription },
+    onSubscriptionEstablished: (subscription) => {
+      resources.userDataSubscription = associateProviderInstance({
+        subscription,
+        providerInstanceId: startup.providerInstanceId,
+      })
+    },
     publishAccountSnapshot: accountSnapshots.publishAccountSnapshot,
     publishOpenOrdersSnapshot: accountSnapshots.publishOpenOrdersSnapshot,
     getAccountSnapshot: portfolio.getAccountSnapshot,
     resumeDeferredStrategyEvaluations: accountSnapshots.resumeDeferredStrategyEvaluations,
+  })
+  resources.userDataSubscription = associateProviderInstance({
+    subscription: userDataSubscription,
+    providerInstanceId: startup.providerInstanceId,
   })
   resources.lastReportedUserDataReady = resources.userDataState.ready
   publishInitialUserDataReadiness({
@@ -646,7 +653,6 @@ async function startHarvesterMarketServices({ startup, portfolio, resources, fre
   await subscribeToMarketData({
     broker: resources.broker,
     brokerName: startup.brokerName,
-    providerInstanceId: startup.providerInstanceId,
     eventPublisher: startup.eventPublisher,
     logger: startup.logger,
     tradingEnabled: startup.tradingEnabled,
@@ -674,6 +680,14 @@ async function startHarvesterMarketServices({ startup, portfolio, resources, fre
       hasUnownedOpenOrdersForSymbol: startup.accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
     }),
     subscriptions: resources.subscriptions,
+  })
+  resources.subscriptions = associateProviderInstances({
+    subscriptions: resources.subscriptions,
+    providerInstanceId: startup.providerInstanceId,
+  })
+  resources.bookSubscriptions = associateProviderInstances({
+    subscriptions: resources.bookSubscriptions,
+    providerInstanceId: startup.providerInstanceId,
   })
 }
 

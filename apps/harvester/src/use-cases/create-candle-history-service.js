@@ -449,7 +449,6 @@ async function subscribeMarket({ context, state, subscriptions }) {
 
   state.subscriptionReady = true
   subscriptions.push({
-    ...(context.providerInstanceId ? { providerInstanceId: context.providerInstanceId } : {}),
     symbol: state.symbol,
     kind: "candle",
     unsubscribe: async () => {
@@ -615,7 +614,6 @@ function startCandleHistoryService({ context, pairs, subscriptions = [] } = {}) 
  */
 export function createCandleHistoryService({
   broker,
-  providerInstanceId,
   logger = {},
   now = Date.now,
   onSnapshot,
@@ -637,7 +635,6 @@ export function createCandleHistoryService({
   }
   const context = {
     broker,
-    providerInstanceId,
     logger,
     now,
     snapshotObserver: onSnapshot ?? (async () => {}),
