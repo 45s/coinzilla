@@ -56,11 +56,8 @@ function createOperationalStateStoreContext({
   now = () => new Date(),
   fileSystem = nodeFileSystem,
 }) {
-  const resolvedDirectory = requireNonEmptyString({
-    value: directory,
-field: "directory"
-  ,
-  })
+  const resolvedDirectory = requireNonEmptyString({ value: directory,
+field: "directory" })
   const resolvedRuntimeSessionId = requireNonEmptyString({
     value: runtimeSessionId,
     field: "runtimeSessionId",
@@ -122,12 +119,9 @@ function createOperationalStateStoreCoordination({ store }) {
     await syncFile(store.manifestPath)
   }
 
-  return {
-    assertNoUncertainWrite,
+  return { assertNoUncertainWrite,
 serialize,
-syncStreams
-  ,
-  }
+syncStreams }
 }
 
 async function assertOperationalStateStoreDirectoryIsSafe({ store }) {
@@ -178,19 +172,11 @@ async function readOperationalStateStoreStreams({ store }) {
     store.fileSystem.readFile(store.logPath, "utf8"),
     store.fileSystem.readFile(store.manifestPath, "utf8"),
   ])
-  return {
-    rawLog,
-rawManifest
-  ,
-  }
+  return { rawLog,
+rawManifest }
 }
 
-function validateOperationalStateStoreStreams({
-  store,
-  rawLog,
-  rawManifest
-,
-}) {
+function validateOperationalStateStoreStreams({ store, rawLog, rawManifest }) {
   const records = parseJsonLines({
     source: rawLog,
     label: "Operational State Store record log",
@@ -246,26 +232,14 @@ function createOperationalStateStoreVerifier({ store }) {
   return async function verifyState() {
     await assertOperationalStateStoreDirectoryIsSafe({ store })
     await assertOperationalStateStoreStreamsAreSafe({ store })
-    const {
-      rawLog,
-      rawManifest
-    ,
-    } = await readOperationalStateStoreStreams({ store })
-    return validateOperationalStateStoreStreams({
-      store,
+    const { rawLog, rawManifest } = await readOperationalStateStoreStreams({ store })
+    return validateOperationalStateStoreStreams({ store,
 rawLog,
-rawManifest
-    ,
-    })
+rawManifest })
   }
 }
 
-async function writeOperationalStateGenesisFact({
-  store,
-  genesisRecord,
-  writeState
-,
-}) {
+async function writeOperationalStateGenesisFact({ store, genesisRecord, writeState }) {
   const logHandle = await store.fileSystem.open(store.logPath, "wx", 0o600)
   try {
     writeState.factWriteStarted = true
@@ -276,12 +250,7 @@ async function writeOperationalStateGenesisFact({
   }
 }
 
-async function writeOperationalStateGenesisManifest({
-  store,
-  genesisCheckpointBody,
-  writeState
-,
-}) {
+async function writeOperationalStateGenesisManifest({ store, genesisCheckpointBody, writeState }) {
   const manifestHandle = await store.fileSystem.open(store.manifestPath, "wx", 0o600)
   try {
     writeState.manifestWriteStarted = true
@@ -329,13 +298,7 @@ function createOperationalStateGenesisRecord({ store }) {
   }
 }
 
-async function initializeOperationalStateStore({
-  store,
-  assertNoUncertainWrite,
-  syncStreams,
-  verifyState
-,
-}) {
+async function initializeOperationalStateStore({ store, assertNoUncertainWrite, syncStreams, verifyState }) {
   const writeState = {
     factWriteStarted: false,
     manifestWriteStarted: false,
@@ -344,23 +307,13 @@ async function initializeOperationalStateStore({
     assertNoUncertainWrite()
     await prepareOperationalStateDirectory({ store })
     const genesisRecord = createOperationalStateGenesisRecord({ store })
-    await writeOperationalStateGenesisFact({
-      store,
-      genesisRecord,
-      writeState
-    ,
-    })
+    await writeOperationalStateGenesisFact({ store, genesisRecord, writeState })
     const genesisCheckpointBody = createManifestCheckpoint({
       schemaVersion: store.schemaVersion,
       record: genesisRecord,
       previousManifestDigest: null,
     })
-    await writeOperationalStateGenesisManifest({
-      store,
-      genesisCheckpointBody,
-      writeState
-    ,
-    })
+    await writeOperationalStateGenesisManifest({ store, genesisCheckpointBody, writeState })
     await syncStreams()
     const verified = await verifyState()
     return toResult({
@@ -397,11 +350,7 @@ function createOperationalStateStoreInitializer({
   }))
 }
 
-async function synchronizeOperationalStateBeforeAppend({
-  syncStreams,
-  writeState
-,
-}) {
+async function synchronizeOperationalStateBeforeAppend({ syncStreams, writeState }) {
   try {
     await syncStreams()
   } catch (error) {
@@ -412,11 +361,7 @@ async function synchronizeOperationalStateBeforeAppend({
   }
 }
 
-async function verifyOperationalStateBeforeAppend({
-  verifyState,
-  writeState
-,
-}) {
+async function verifyOperationalStateBeforeAppend({ verifyState, writeState }) {
   try {
     return await verifyState()
   } catch (error) {
@@ -425,11 +370,7 @@ async function verifyOperationalStateBeforeAppend({
   }
 }
 
-function assertDuplicateOperationalStateFactMatches({
-  existing,
-  input
-,
-}) {
+function assertDuplicateOperationalStateFactMatches({ existing, input }) {
   if (
     existing.factType !== input.factType ||
     canonicalStringifyOperationalStateValue(existing.data) !== canonicalStringifyOperationalStateValue(input.data)
@@ -438,12 +379,7 @@ function assertDuplicateOperationalStateFactMatches({
   }
 }
 
-function validateMarketHistoryCoverageProgress({
-  state,
-  input,
-  recordedAt
-,
-}) {
+function validateMarketHistoryCoverageProgress({ state, input, recordedAt }) {
   if (input.factType !== "MARKET_HISTORY_COVERAGE_CONFIRMED") {
     return
   }
@@ -473,13 +409,7 @@ function validateMarketHistoryCoverageProgress({
   }
 }
 
-function createOperationalStateAppendRecord({
-  store,
-  state,
-  input,
-  recordedAt
-,
-}) {
+function createOperationalStateAppendRecord({ store, state, input, recordedAt }) {
   const sequence = (BigInt(state.manifest.sequence) + 1n).toString()
   const body = {
     formatVersion: FORMAT_VERSION,
@@ -492,28 +422,17 @@ function createOperationalStateAppendRecord({
     previousDigest: state.lastRecord.digest,
     data: input.data,
   }
-  const record = {
-    ...body,
-digest: digestOperationalStateRecord(body)
-  ,
-  }
+  const record = { ...body,
+digest: digestOperationalStateRecord(body) }
   const line = canonicalStringifyOperationalStateValue(record)
   if (Buffer.byteLength(line, "utf8") > MAX_RECORD_BYTES) {
     throw new RangeError(`Operational State record exceeds the ${MAX_RECORD_BYTES} byte limit`)
   }
-  return {
-    record,
-line
-  ,
-  }
+  return { record,
+line }
 }
 
-async function writeOperationalStateFactRecord({
-  store,
-  line,
-  writeState
-,
-}) {
+async function writeOperationalStateFactRecord({ store, line, writeState }) {
   const logHandle = await store.fileSystem.open(store.logPath, "a", 0o600)
   try {
     writeState.factWriteStarted = true
@@ -524,13 +443,7 @@ async function writeOperationalStateFactRecord({
   }
 }
 
-async function writeOperationalStateManifestCheckpoint({
-  store,
-  state,
-  record,
-  writeState
-,
-}) {
+async function writeOperationalStateManifestCheckpoint({ store, state, record, writeState }) {
   const checkpoint = createManifestCheckpoint({
     schemaVersion: store.schemaVersion,
     record,
@@ -550,12 +463,7 @@ async function writeOperationalStateManifestCheckpoint({
   }
 }
 
-function handleOperationalStateAppendFailure({
-  store,
-  writeState,
-  error
-,
-}) {
+function handleOperationalStateAppendFailure({ store, writeState, error }) {
   if (
     writeState.factWriteStarted ||
     writeState.manifestWriteStarted ||
@@ -592,14 +500,7 @@ function createCommittedOperationalStateAppendResult({ verified }) {
   })
 }
 
-async function appendOperationalStateFact({
-  store,
-  assertNoUncertainWrite,
-  syncStreams,
-  verifyState,
-  fact
-,
-}) {
+async function appendOperationalStateFact({ store, assertNoUncertainWrite, syncStreams, verifyState, fact }) {
   const writeState = {
     factWriteStarted: false,
     manifestWriteStarted: false,
@@ -608,68 +509,31 @@ async function appendOperationalStateFact({
   }
   try {
     assertNoUncertainWrite()
-    await synchronizeOperationalStateBeforeAppend({
-      syncStreams,
-      writeState
-    ,
-    })
-    const state = await verifyOperationalStateBeforeAppend({
-      verifyState,
-      writeState
-    ,
-    })
+    await synchronizeOperationalStateBeforeAppend({ syncStreams, writeState })
+    const state = await verifyOperationalStateBeforeAppend({ verifyState, writeState })
     const input = validateFactInput({
       fact,
       runtimeSessionId: store.runtimeSessionId,
     })
     const existing = state.records.find((record) => record.factId === input.factId)
     if (existing) {
-      assertDuplicateOperationalStateFactMatches({
-        existing,
-        input
-      ,
-      })
+      assertDuplicateOperationalStateFactMatches({ existing, input })
       return createDuplicateOperationalStateAppendResult({ existing })
     }
     const recordedAt = normalizeOperationalStateRecordedAt(store.now())
-    validateMarketHistoryCoverageProgress({
-      state,
-      input,
-      recordedAt
-    ,
-    })
-    const {
-      record,
-      line
-    ,
-    } = createOperationalStateAppendRecord({
+    validateMarketHistoryCoverageProgress({ state, input, recordedAt })
+    const { record, line } = createOperationalStateAppendRecord({
       store,
       state,
       input,
       recordedAt,
     })
-    await writeOperationalStateFactRecord({
-      store,
-      line,
-      writeState
-    ,
-    })
-    await writeOperationalStateManifestCheckpoint({
-      store,
-      state,
-      record,
-      writeState
-    ,
-    })
+    await writeOperationalStateFactRecord({ store, line, writeState })
+    await writeOperationalStateManifestCheckpoint({ store, state, record, writeState })
     const verified = await verifyState()
     return createCommittedOperationalStateAppendResult({ verified })
   } catch (error) {
-    return handleOperationalStateAppendFailure({
-      store,
-      writeState,
-      error
-    ,
-    })
+    return handleOperationalStateAppendFailure({ store, writeState, error })
   }
 }
 
@@ -753,30 +617,18 @@ function createOperationalStateStoreReadAllOperation({
 function createOperationalStateStoreOperations({ store }) {
   const coordination = createOperationalStateStoreCoordination({ store })
   const verifyState = createOperationalStateStoreVerifier({ store })
-  const initialize = createOperationalStateStoreInitializer({
-    store,
+  const initialize = createOperationalStateStoreInitializer({ store,
 ...coordination,
-verifyState
-  ,
-  })
-  const append = createOperationalStateStoreAppender({
-    store,
+verifyState })
+  const append = createOperationalStateStoreAppender({ store,
 ...coordination,
-verifyState
-  ,
-  })
-  const verify = createOperationalStateStoreVerificationOperation({
-    store,
+verifyState })
+  const verify = createOperationalStateStoreVerificationOperation({ store,
 ...coordination,
-verifyState
-  ,
-  })
-  const readAll = createOperationalStateStoreReadAllOperation({
-    store,
+verifyState })
+  const readAll = createOperationalStateStoreReadAllOperation({ store,
 ...coordination,
-verifyState
-  ,
-  })
+verifyState })
   return Object.freeze({
     runtimeSessionId: store.runtimeSessionId,
     initialize,
