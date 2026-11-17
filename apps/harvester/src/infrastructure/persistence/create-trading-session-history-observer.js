@@ -4,13 +4,11 @@ import { transitionTradingSession } from "../../use-cases/transition-trading-ses
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 
 function reportFailure({ logger, stage, error }) {
-  const errorName = typeof error?.name === "string" ? error.name : "Error"
-  const errorCode = typeof error?.code === "string" ? error.code : "UNKNOWN"
   const entry = {
     message: "Ordinary trading-session history observer failed",
     persistenceStage: stage,
-    errorName,
-    errorCode,
+    errorName: typeof error?.name === "string" ? error.name : "Error",
+    errorCode: typeof error?.code === "string" ? error.code : "UNKNOWN",
   }
   try {
     logger?.error?.(entry)
@@ -18,7 +16,7 @@ function reportFailure({ logger, stage, error }) {
     // Historical reporting must never affect the EventBus or trading lifecycle.
   }
   const safeError = new Error(`Trading-session history failed during ${stage}`)
-  safeError.code = errorCode
+  safeError.code = entry.errorCode
   return safeError
 }
 
@@ -41,21 +39,29 @@ function createEventHandler({ enqueue, createSession, transitionSession }) {
     if (event.name === HARVESTER_EVENT_NAMES.CONFIG_VALIDATED) {
       enqueue({
         stage: "create",
-        operation: () => createSession({ configuration: event.data }),
+        operation: () => createSession({
+          configuration: event.data,
+        }),
       })
       return
     }
     if (event.name === HARVESTER_EVENT_NAMES.STARTED) {
       enqueue({
         stage: "transition-running",
-        operation: () => transitionSession({ status: "RUNNING", event }),
+        operation: () => transitionSession({
+          status: "RUNNING",
+          event,
+        }),
       })
       return
     }
     if (event.name === HARVESTER_EVENT_NAMES.STARTUP_FAILED) {
       enqueue({
         stage: "transition-startup-failed",
-        operation: () => transitionSession({ status: "STARTUP_FAILED", event }),
+        operation: () => transitionSession({
+          status: "STARTUP_FAILED",
+          event,
+        }),
       })
       return
     }
@@ -65,40 +71,45 @@ function createEventHandler({ enqueue, createSession, transitionSession }) {
     ) {
       enqueue({
         stage: "transition-stopped",
-        operation: () => transitionSession({ status: "STOPPED", event }),
+        operation: () => transitionSession({
+          status: "STOPPED",
+          event,
+        }),
       })
     }
   }
 }
 
-export function createTradingSessionHistoryObserver({
-  eventBus,
-  repository,
-  processIdentity,
-  runtimeConfig,
-  logger,
-} = {}) {
-  assertTradingSessionRepository({ repository })
-  if (typeof eventBus?.subscribeAll !== "function") {
-    throw new TypeError("Trading-session history observer requires an EventBus")
-  }
-  if (typeof processIdentity?.runtimeSessionId !== "string") {
-    throw new TypeError("Trading-session history observer requires a process identity")
-  }
-  if (typeof runtimeConfig?.brokerName !== "string") {
-    throw new TypeError("Trading-session history observer requires a validated broker identity")
-  }
-
-  let sessionCreated = false
-  let closed = false
+function createObserverQueue({ logger }) {
   let queue = Promise.resolve()
   const errors = []
 
   function enqueue({ stage, operation }) {
     queue = queue.then(operation).catch((error) => {
-      errors.push(reportFailure({ logger, stage, error }))
+      errors.push(reportFailure({
+        logger,
+        stage,
+        error,
+      }))
     })
   }
+
+  async function flush() {
+    await queue
+    return {
+      ok: errors.length === 0,
+      errors: [...errors],
+    }
+  }
+
+  return {
+    enqueue,
+    flush,
+  }
+}
+
+function createSessionOperations({ repository, processIdentity, runtimeConfig }) {
+  let sessionCreated = false
 
   async function createSession({ configuration }) {
     await createTradingSession({
@@ -120,33 +131,25 @@ export function createTradingSessionHistoryObserver({
       repository,
       id: processIdentity.runtimeSessionId,
       status,
-      ...(status === "RUNNING" ? {} : { endedAt: event.timestamp }),
+      ...(status === "RUNNING" ? {} : {
+        endedAt: event.timestamp,
+      }),
     })
   }
 
-  const subscriptionResult = eventBus.subscribeAll({
-    handler: createEventHandler({
-      enqueue,
-      createSession,
-      transitionSession,
-    }),
-  })
-  if (subscriptionResult?.ok !== true || typeof subscriptionResult.subscription?.unsubscribe !== "function") {
-    throw new Error("Unable to subscribe the trading-session history observer to lifecycle events")
+  return {
+    createSession,
+    transitionSession,
   }
+}
 
-  async function flush() {
-    await queue
-    return {
-      ok: errors.length === 0,
-      errors: [...errors],
-    }
-  }
+function createObserverHandle({ subscription, flush }) {
+  let closed = false
 
   async function close() {
     if (!closed) {
       closed = true
-      subscriptionResult.subscription.unsubscribe()
+      subscription.unsubscribe()
     }
     return flush()
   }
@@ -154,5 +157,48 @@ export function createTradingSessionHistoryObserver({
   return Object.freeze({
     flush,
     close,
+  })
+}
+
+export function createTradingSessionHistoryObserver({
+  eventBus,
+  repository,
+  processIdentity,
+  runtimeConfig,
+  logger,
+} = {}) {
+  assertTradingSessionRepository({ repository })
+  if (typeof eventBus?.subscribeAll !== "function") {
+    throw new TypeError("Trading-session history observer requires an EventBus")
+  }
+  if (typeof processIdentity?.runtimeSessionId !== "string") {
+    throw new TypeError("Trading-session history observer requires a process identity")
+  }
+  if (typeof runtimeConfig?.brokerName !== "string") {
+    throw new TypeError("Trading-session history observer requires a validated broker identity")
+  }
+
+  const queue = createObserverQueue({ logger })
+  const operations = createSessionOperations({
+    repository,
+    processIdentity,
+    runtimeConfig,
+  })
+  const subscriptionResult = eventBus.subscribeAll({
+    handler: createEventHandler({
+      enqueue: queue.enqueue,
+      createSession: operations.createSession,
+      transitionSession: operations.transitionSession,
+    }),
+  })
+  if (
+    subscriptionResult?.ok !== true ||
+    typeof subscriptionResult.subscription?.unsubscribe !== "function"
+  ) {
+    throw new Error("Unable to subscribe the trading-session history observer to lifecycle events")
+  }
+  return createObserverHandle({
+    subscription: subscriptionResult.subscription,
+    flush: queue.flush,
   })
 }
