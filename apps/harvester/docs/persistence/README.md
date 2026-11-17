@@ -107,7 +107,7 @@ Example (illustrative values):
 | `environment` | Explicit `testnet` or `live`; never inferred from `NODE_ENV` |
 | `broker` | Canonical configured broker identity; initially `binance` |
 | `strategyId`, `strategyMode` | Harvester-owned strategy identity and validated mode |
-| `configurationFingerprint` | Existing non-secret SHA-256 effective-configuration digest; raw configuration and credentials are not stored |
+| `configurationFingerprint` | Existing canonical SHA-256 effective-configuration digest; the fingerprint builder rejects secret-bearing configuration keys, and raw configuration/credentials are not stored |
 | `enabledMarkets` | Unique canonical symbols, sorted before persistence |
 | `buildProvenance` | Allowlisted, bounded process/build provenance from the existing sanitized process identity DTO |
 | `startedAt`, `endedAt` | Canonical UTC ISO-8601 timestamps with milliseconds |
