@@ -89,8 +89,12 @@ function validateRecoveryCycleCompletedIdentity({ canonicalData, factId }) {
     throw new TypeError("Recovery-cycle completion identity is not canonical")
   }
   validateRecoveryCycleSymbolAndAssets({ canonicalData })
-  validateRecoveryCycleAppliedFillIds({ canonicalData, completed: true })
-  return { cycleId, marketId, sellOrderClientId, sellOrderBrokerOrderId }
+  validateRecoveryCycleAppliedFillIds({ canonicalData,
+completed: true })
+  return { cycleId,
+marketId,
+sellOrderClientId,
+sellOrderBrokerOrderId }
 }
 
 function validateRecoveryCycleCompletedAmounts({ canonicalData }) {
@@ -314,8 +318,13 @@ function validateRecoveryCycleNotCompletedIdentity({ canonicalData, factId }) {
     throw new TypeError("Recovery-cycle non-completion identity or reason is not canonical")
   }
   validateRecoveryCycleSymbolAndAssets({ canonicalData })
-  validateRecoveryCycleAppliedFillIds({ canonicalData, completed: false })
-  return { evaluationId, marketId, sellOrderClientId, sellOrderBrokerOrderId, reason }
+  validateRecoveryCycleAppliedFillIds({ canonicalData,
+completed: false })
+  return { evaluationId,
+marketId,
+sellOrderClientId,
+sellOrderBrokerOrderId,
+reason }
 }
 
 function validateRecoveryCycleNotCompletedAmounts({ canonicalData }) {
