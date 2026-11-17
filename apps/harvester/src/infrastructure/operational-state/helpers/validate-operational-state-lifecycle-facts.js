@@ -86,42 +86,53 @@ maxLength: 256 })
   }
 }
 
-export function validateSafetyBlockerRaisedFact({ factType, canonicalData, factId }) {
-  if (factType === "SAFETY_BLOCKER_RAISED") {
-    const allowedFields = new Set(["blockerId", "scope", "symbol", "reason", "evidenceDigest"])
-    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
-      throw new TypeError("Safety-blocker fact contains unsupported fields")
-    }
-    if (canonicalData.scope !== "ACCOUNT" && canonicalData.scope !== "MARKET") {
-      throw new TypeError("Safety-blocker scope must be ACCOUNT or MARKET")
-    }
-    if (canonicalData.scope === "ACCOUNT" && canonicalData.symbol !== null) {
-      throw new TypeError("Account-scoped safety blockers must not name a market symbol")
-    }
-    if (canonicalData.scope === "MARKET" &&
-        (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol))) {
-      throw new TypeError("Market-scoped safety blockers require a canonical symbol")
-    }
-    const reason = requireNonEmptyString({ value: canonicalData.reason,
-field: "data.reason",
-maxLength: 128 })
-    if (!/^[A-Z][A-Z0-9_]{1,127}$/.test(reason)) {
-      throw new TypeError("Safety-blocker reason must be a canonical uppercase reason code")
-    }
-    if (typeof canonicalData.evidenceDigest !== "string" || !SHA256_PATTERN.test(canonicalData.evidenceDigest)) {
-      throw new TypeError("Safety-blocker evidenceDigest must be a SHA-256 digest")
-    }
-    const expectedBlockerId = sha256OperationalStateValue([
-      canonicalData.scope,
-      canonicalData.symbol ?? "",
-      reason,
-      canonicalData.evidenceDigest,
-    ].join("\0"))
-    if (canonicalData.blockerId !== expectedBlockerId ||
-        factId !== `safety-blocker-raised:${  expectedBlockerId}`) {
-      throw new TypeError("Safety-blocker identity must match its scope, reason, and immutable evidence digest")
-    }
+function validateSafetyBlockerScope({ canonicalData }) {
+  if (canonicalData.scope !== "ACCOUNT" && canonicalData.scope !== "MARKET") {
+    throw new TypeError("Safety-blocker scope must be ACCOUNT or MARKET")
   }
+  if (canonicalData.scope === "ACCOUNT" && canonicalData.symbol !== null) {
+    throw new TypeError("Account-scoped safety blockers must not name a market symbol")
+  }
+  if (canonicalData.scope === "MARKET" &&
+      (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol))) {
+    throw new TypeError("Market-scoped safety blockers require a canonical symbol")
+  }
+}
+
+function validateSafetyBlockerReason({ reason }) {
+  if (!/^[A-Z][A-Z0-9_]{1,127}$/.test(reason)) {
+    throw new TypeError("Safety-blocker reason must be a canonical uppercase reason code")
+  }
+}
+
+function validateSafetyBlockerIdentity({ canonicalData, factId, reason }) {
+  if (typeof canonicalData.evidenceDigest !== "string" || !SHA256_PATTERN.test(canonicalData.evidenceDigest)) {
+    throw new TypeError("Safety-blocker evidenceDigest must be a SHA-256 digest")
+  }
+  const expectedBlockerId = sha256OperationalStateValue([
+    canonicalData.scope,
+    canonicalData.symbol ?? "",
+    reason,
+    canonicalData.evidenceDigest,
+  ].join("\\0"))
+  if (canonicalData.blockerId !== expectedBlockerId ||
+      factId !== `safety-blocker-raised:${expectedBlockerId}`) {
+    throw new TypeError("Safety-blocker identity must match its scope, reason, and immutable evidence digest")
+  }
+}
+
+export function validateSafetyBlockerRaisedFact({ factType, canonicalData, factId }) {
+  if (factType !== "SAFETY_BLOCKER_RAISED") {
+    return
+  }
+  const allowedFields = new Set(["blockerId", "scope", "symbol", "reason", "evidenceDigest"])
+  if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+    throw new TypeError("Safety-blocker fact contains unsupported fields")
+  }
+  validateSafetyBlockerScope({ canonicalData })
+  const reason = requireNonEmptyString({ value: canonicalData.reason, field: "data.reason", maxLength: 128 })
+  validateSafetyBlockerReason({ reason })
+  validateSafetyBlockerIdentity({ canonicalData, factId, reason })
 }
 
 export function validateSafetyBlockerResolvedFact({ factType, canonicalData, factId }) {
