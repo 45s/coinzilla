@@ -1,6 +1,7 @@
 import {
   applyRecoverySellerStopGate,
   createRecoverySellerStopDecision,
+  latchRecoverySellerStop,
   RECOVERY_SELLER_LIFECYCLE_OUTCOMES,
 } from "./stop-decision.js"
 
@@ -198,4 +199,50 @@ export function applyRecoverySellerLifecycleTransition({
   }
 
   return gated
+}
+
+
+/**
+ * Latch the first global STOP observation while retaining a separate
+ * non-trading RECONCILE decision for the original unresolved order.
+ *
+ * This is the required path for a lost/unknown submission acknowledgement:
+ * STOP blocks every new BUY/SELL, but the original order identity remains
+ * available for canonical broker reconciliation. A missing brokerOrderId is
+ * valid here because the clientOrderId is the original Harvester identity.
+ *
+ * @param {object} input
+ * @param {object} input.stopState Current immutable global STOP state.
+ * @param {{clientOrderId: string, brokerOrderId?: string}} input.orderIdentity Existing unresolved order identity.
+ * @param {string} input.explanation Diagnostic evidence for operator review.
+ * @returns {{stopState: object, stopDecision: object, decision: object}} Immutable STOP and reconciliation result.
+ */
+export function createRecoverySellerStopAndReconcileDecision({
+  stopState,
+  orderIdentity,
+  explanation,
+} = {}) {
+  const stopDecision = createRecoverySellerStopDecision({
+    explanation,
+  })
+  const latchedState = latchRecoverySellerStop({
+    state: stopState,
+    decision: stopDecision,
+  })
+  const reconcileDecision = createRecoverySellerLifecycleDecision({
+    outcome: RECOVERY_SELLER_LIFECYCLE_OUTCOMES.RECONCILE,
+    reasonCode: "RECONCILIATION_REQUIRED_AFTER_GLOBAL_STOP",
+    explanation,
+    orderIdentity,
+  })
+  const gated = applyRecoverySellerLifecycleTransition({
+    stopState: latchedState,
+    nextDecision: reconcileDecision,
+  })
+
+  return Object.freeze({
+    stopState: gated.stopState,
+    stopDecision: gated.stopState.decision,
+    decision: gated.decision,
+  })
 }
