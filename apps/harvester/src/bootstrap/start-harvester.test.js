@@ -5993,7 +5993,7 @@ test("starts Telegram operator control without running process-restart recovery 
       currentStore,
       setOperator: (value) => { operator = value },
     })
-    runtime = started.runtime
+    ({ runtime } = started)
     assert.equal(started.operatorAdapterStarted, true)
     assert.equal(runtime.connected, true)
     assert.equal(runtime.tradingEnabled, false)
