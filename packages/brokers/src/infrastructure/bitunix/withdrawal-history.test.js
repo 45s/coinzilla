@@ -74,6 +74,8 @@ test("Bitunix Spot broker retrieves one filtered withdrawal-history page", async
   assert.deepEqual(calls[0], {
     method: "POST",
     path: WITHDRAWAL_PATH,
+    authenticated: true,
+    stateChanging: false,
     body: {
       id: withdrawal.id,
       outBizId: withdrawal.outBizId,
