@@ -10,8 +10,22 @@ export class ProviderRegistryError extends SystemCustomError {
   }
 }
 
-function createRegistryError({ message, code = "HARVESTER_PROVIDER_REGISTRY_INVALID", context = {} }) {
-  return new ProviderRegistryError(message, { code, context })
+function createRegistryError({ message, code = "HARVESTER_PROVIDER_REGISTRY_INVALID", context = {}, cause }) {
+  const options = { code, context }
+  if (cause !== undefined) {
+    options.cause = cause
+  }
+  return new ProviderRegistryError(message, options)
+}
+
+function isDeeplyFrozen({ value } = {}) {
+  if (value === null || typeof value !== "object") {
+    return true
+  }
+  if (!Object.isFrozen(value)) {
+    return false
+  }
+  return Object.values(value).every((nestedValue) => isDeeplyFrozen({ value: nestedValue }))
 }
 
 function validateIdentifier({ value, field }) {
@@ -55,8 +69,9 @@ function validateProviderDescriptor({ provider } = {}) {
   } catch (cause) {
     throw createRegistryError({
       message: "Provider registry entry must implement the Harvester BrokerPort",
-      context: { providerInstanceId },
-    }, cause)
+      context: { field: "broker" },
+      cause,
+    })
   }
 
   const capabilities = broker.capabilities
@@ -64,7 +79,7 @@ function validateProviderDescriptor({ provider } = {}) {
   const validCapabilities = capabilities !== null &&
     typeof capabilities === "object" &&
     !Array.isArray(capabilities) &&
-    Object.isFrozen(capabilities) &&
+    isDeeplyFrozen({ value: capabilities }) &&
     Number.isInteger(capabilities.contractVersion) &&
     capabilities.contractVersion > 0 &&
     capabilities.provider === providerType &&
@@ -130,7 +145,7 @@ function createProviderEntry({ descriptor }) {
       return Promise.reject(createRegistryError({
         message: "Provider instance cannot connect from its current lifecycle state",
         code: "HARVESTER_PROVIDER_LIFECYCLE_INVALID",
-        context: { providerInstanceId, status: lifecycle.status },
+        context: { status: lifecycle.status },
       }))
     }
 
@@ -233,7 +248,7 @@ export function createProviderRegistry({ providers } = {}) {
         message: "Requested provider instance is not registered",
         code: "HARVESTER_PROVIDER_INSTANCE_NOT_FOUND",
         context: {
-          providerInstanceId: typeof providerInstanceId === "string" ? providerInstanceId : null,
+          field: "providerInstanceId",
         },
       })
     }
