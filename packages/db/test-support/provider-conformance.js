@@ -549,7 +549,7 @@ function registerPersistenceTest({ name, createDatabase }) {
  *
  * @param {{name: string, createDatabase: (options: {storageKey: string}) => object}} options
  */
-export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
+function registerCrudAndQueryTests({ name, createDatabase }) {
   registerStandardTest({
     name,
     description: "CRUD operations preserve records and collection isolation",
@@ -583,6 +583,9 @@ export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
     createDatabase,
     verify: verifyPagination,
   })
+}
+
+function registerTransactionTests({ name, createDatabase }) {
   registerStandardTest({
     name,
     description: "missing updates and deletes use non-exception results",
@@ -613,6 +616,9 @@ export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
     createDatabase,
     verify: verifyCapabilities,
   })
+}
+
+function registerLifecycleTests({ name, createDatabase }) {
   test(`${name}: closing the database prevents new work and releases the provider`, async () => {
     await verifyLifecycle({
       createDatabase,
@@ -622,4 +628,22 @@ export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
     name,
     createDatabase,
   })
+}
+
+/**
+ * Register the provider-neutral contract tests for a database provider.
+ *
+ * The factory receives an opaque storageKey. Use isolated storage for each test
+ * and reuse the supplied key when testing persistence across connections.
+ *
+ * @param {{name: string, createDatabase: (options: {storageKey: string}) => object}} options
+ */
+export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
+  const options = {
+    name,
+    createDatabase,
+  }
+  registerCrudAndQueryTests(options)
+  registerTransactionTests(options)
+  registerLifecycleTests(options)
 }
