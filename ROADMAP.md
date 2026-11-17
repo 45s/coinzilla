@@ -99,10 +99,10 @@
    - **Remaining:** close the scoped coverage and negative architecture/contract gaps recorded by the package owner.
    - **Owner:** [Entities roadmap](packages/entities/ROADMAP.md).
 
-9. **First real database consumer and operational procedure.**
-   - **Why:** SQLite lifecycle support is implemented, but no application-owned persistence workflow currently proves the end-to-end contract.
-   - **Remaining:** select a real domain-owned repository use case before adding schema or generic repository abstractions; specify transactions, concurrency, migration, backup and restore as part of that consumer.
-   - **Owner:** [Database roadmap](packages/db/ROADMAP.md).
+9. **Provider-neutral database API and Harvester persistence (#1327).**
+   - **Database infrastructure:** `packages/db` owns generic CRUD/provider contracts and adapters; Node.js built-in SQLite is the first provider. Its roadmap contains no application-specific business models or workflows.
+   - **Harvester consumer:** Harvester owns all trading repositories, data models, environment isolation, mapping and operational safety requirements. See the [Harvester persistence roadmap](apps/harvester/ROADMAP.md#persistence--provider-agnostic-database-integration-1327).
+   - **Owner/status:** [Database roadmap](packages/db/ROADMAP.md); tracking [issue #1327](https://github.com/45s/coinzilla/issues/1327).
 
 10. **Structured, package-owned errors with a shared `SystemCustomError` base ([#1028](https://github.com/45s/coinzilla/issues/1028)) — IN PROGRESS; the Utilities-owned base is implemented in merged [PR #1262](https://github.com/45s/coinzilla/pull/1262); gradual adoption remains with consuming domains.**
    - **Why:** generic errors and inconsistent wrapping make it difficult to identify the failing component/operation and preserve the underlying cause.

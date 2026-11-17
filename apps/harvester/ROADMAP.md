@@ -2,6 +2,84 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## Persistence — provider-agnostic database integration (#1327)
+
+**Goal:** persist Harvester's trading and operational history through application-owned repository contracts. Harvester must not know whether the database provider is SQLite, PostgreSQL, or MongoDB. The generic database API and provider adapters belong to `@coinzilla/db`; all trading-specific persistence requirements belong here.
+
+### DDD ownership and dependency direction
+
+- Harvester owns its domain entities, application use cases, repository ports, business invariants, persistence mapping, and business data model.
+- Harvester infrastructure implements those repository ports using the public provider-neutral API from `@coinzilla/db`.
+- `packages/db` owns generic database CRUD contracts and provider adapters only. It must not contain Harvester concepts or repositories.
+- The concrete provider is selected and configured only in Harvester's outer composition root. Domain, strategy, and application code must never branch on provider identity or import database drivers, SQL, or provider-specific types.
+- Do not create a generic CRUD repository in Harvester's domain. Define narrow repositories around actual Harvester use cases.
+- Do not use a SQL-shaped abstraction in Harvester. Harvester depends on its own repository contracts; the adapter translates those contracts to the selected database API.
+
+### Environment isolation
+
+Production and Testnet must use separate database files and independent database lifecycles when SQLite is selected, for example:
+
+```text
+apps/harvester/data/
+  production/harvester.db
+  testnet/harvester.db
+```
+
+Resolve the environment from validated explicit `TRADING_MODE`, never `NODE_ENV`. Validate configured paths and prevent accidental cross-environment file sharing. Keep runtime data out of Git.
+
+### Persistence scope
+
+Implement the following as Harvester-owned repositories and infrastructure adapters, in focused vertical slices:
+
+1. **Trading sessions:** unique process/session identity, environment, broker, strategy/config fingerprint, enabled markets, build provenance, start/end timestamps, lifecycle status, and bounded non-secret metadata.
+2. **Orders:** canonical broker order identity, client identity, market, side, type, price/quantity, status and lifecycle timestamps.
+3. **Order lifecycle events:** append-only event history, preserving event ordering and source identity.
+4. **Executions/fills:** individual fills, including broker execution identity, exact price/quantity/quote quantity, commission, fee asset, liquidity role and timestamps. One order may have multiple fills; never reconstruct fill history from terminal order status.
+5. **Account snapshots:** balances and open-order snapshots with phase, timestamp and provenance.
+6. **Operational/reporting metadata:** only the bounded facts needed for historical inspection and reporting.
+
+Preserve canonical broker identities and idempotency. Duplicate delivery of the same fact must be harmless; conflicting reuse of an identity with different business facts must fail as an integrity error. Store financial quantities and prices without floating-point loss (canonical decimal strings or explicitly scaled integers; never SQLite REAL).
+
+### Operational State safety boundary
+
+Harvester's ADR-0001 Operational State Store is authoritative recovery evidence and is not interchangeable with reporting/trading history or the Journal.
+
+- Preserve append acknowledgement, global sequence, committed-head/hash-chain integrity, stable fact identities, conflict detection, fail-closed verification, explicit genesis, private file permissions, and mandatory Journal barriers.
+- Do not silently replace, weaken, dual-write, or automatically fall back between the existing file store and a database.
+- Assess any database-backed Operational State adapter as a separate gated change. It must prove complete ADR-0001 contract parity, including crash/torn-write behavior, durability acknowledgement, integrity verification, initialization, disk-full/error handling, backup/restore, and process ownership.
+- Coordinate any cutover with [restart-recovery issue #654](https://github.com/45s/coinzilla/issues/654). Restart restoration remains disabled until its independent readiness and reconciliation gates are complete.
+- Existing Journal barriers and Journal's observer-only role remain unchanged unless a separate accepted decision explicitly supersedes them.
+
+### Delivery plan
+
+1. Audit Harvester's current session identity, Journal, Operational State Store, repositories/ports, consumers, configuration and tests. Decide which history belongs in the new reporting database and which remains authoritative in ADR-0001.
+2. Implement the first trading-session repository through a Harvester-owned port and infrastructure adapter using only the public `@coinzilla/db` contract. Prove restart persistence, uniqueness, lifecycle updates, rollback, failure propagation and resource cleanup.
+3. Add orders, order events, executions/fills and account snapshots as separate TDD vertical slices.
+4. Prove Production/Testnet isolation and two real processes writing concurrently to their respective databases. Test same-file SQLite writer serialization, busy timeout, rollback, process termination and reopen behavior.
+5. Separately assess any Operational State migration; require an explicit accepted/superseding ADR, complete parity evidence, rollback plan and #654 owner approval before cutover.
+6. Provide explicit historical import, integrity/count/digest verification, backup/restore, corruption/disk-full procedures and rollback documentation before persistent deployment.
+7. Add architecture tests proving domain/application imports do not depend on a concrete provider. Provider changes must be confined to infrastructure composition and adapters.
+
+### Acceptance criteria
+
+- Harvester domain/application depend only on Harvester-owned repository ports.
+- Harvester infrastructure uses the public `@coinzilla/db` provider-neutral API; no SQLite/SQL/driver imports leak beyond its provider adapter.
+- Production and Testnet use independent database files when SQLite is selected.
+- Trading sessions, orders, order events, individual fills and account snapshots persist with correct identity and exact values.
+- Real multi-process tests prove environment isolation and concurrency behavior.
+- ADR-0001 and Journal guarantees remain unchanged; no restart restoration is enabled by this work.
+- Backup, restore, import verification and rollback procedures are documented before persistent deployment.
+- Tests and CI pass on exact PR heads; no unverified validation claims.
+
+### Explicit exclusions
+
+- No strategy redesign or trading economics changes.
+- No live or TESTNET exchange operations.
+- No automatic restart restoration enablement.
+- No weakening or replacement of ADR-0001/Journal guarantees.
+- No provider-specific imports in Harvester domain/application.
+- No Harvester business models or repositories in `packages/db`.
+
 ## Repository-wide quality baseline
 
 - [x] **Workspace ESLint — COMPLETE.** Strict `pnpm lint` runs as `eslint . --max-warnings 0` in the required `Check JavaScript syntax` workflow. PR #1288 completed the full-workspace zero-error/zero-warning baseline; PR #1311 hardened `no-console` and `no-implicit-coercion` with policy regression tests. The former Harvester cleanup inventory (#1092 and child issues) is superseded and closed. Preserve the strict gate and fix future violations in the change that introduces them.
