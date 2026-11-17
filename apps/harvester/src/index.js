@@ -77,17 +77,25 @@ function createDefaultJournalService({ eventBus, logger, processIdentity }) {
     processIdentity })
 }
 
-async function closeObservability({ journalService, eventBus, processLock, allowProcessLockRelease = true, logger }) {
+function getCleanupErrors({ result, fallbackError } = {}) {
+  return Array.isArray(result?.errors) && result.errors.length > 0
+    ? result.errors
+    : [fallbackError]
+}
+
+async function closeJournalService({ journalService } = {}) {
   const errors = []
   let journalClosed = !journalService
+
   if (typeof journalService?.close === "function") {
     try {
       const result = await journalService.close()
       journalClosed = result?.ok === true
-      if (result?.ok !== true) {
-        errors.push(...(Array.isArray(result?.errors) && result.errors.length > 0
-          ? result.errors
-          : [new Error("Journal close did not complete successfully")]))
+      if (!journalClosed) {
+        errors.push(...getCleanupErrors({
+          result,
+          fallbackError: new Error("Journal close did not complete successfully"),
+        }))
       }
     } catch (error) {
       journalClosed = false
@@ -96,51 +104,89 @@ async function closeObservability({ journalService, eventBus, processLock, allow
   } else if (journalService) {
     errors.push(new Error("Journal close capability is unavailable; trading process lock will be retained"))
   }
-  if (typeof eventBus?.close === "function") {
-    try {
-      const result = await eventBus.close({ timeoutMs: EVENT_BUS_CLOSE_TIMEOUT_MS })
-      if (result?.ok !== true) {
-        errors.push(...(Array.isArray(result?.errors) && result.errors.length > 0
-          ? result.errors
-          : [new Error(result?.timedOut === true
-            ? "EventBus close timed out"
-            : "EventBus close did not complete successfully")]))
-      }
-    } catch (error) {
-      errors.push(error)
-    }
+
+  return { journalClosed, errors }
+}
+
+async function closeEventBus({ eventBus } = {}) {
+  if (typeof eventBus?.close !== "function") {
+    return []
   }
-  if (processLock) {
-    if (allowProcessLockRelease && journalClosed) {
-      try {
-        const result = await processLock.release()
-        if (result?.ok !== true) {
-          errors.push(...(Array.isArray(result?.errors) && result.errors.length > 0
-            ? result.errors
-            : [new Error("Harvester trading process lock release failed")]))
-        }
-      } catch (error) {
-        errors.push(error)
-      }
-    } else {
-      errors.push(new Error(
-        !allowProcessLockRelease
-          ? "Harvester trading process lock retained because runtime shutdown was not confirmed"
-          : "Harvester trading process lock retained because Journal shutdown was not confirmed",
-      ))
+
+  try {
+    const result = await eventBus.close({ timeoutMs: EVENT_BUS_CLOSE_TIMEOUT_MS })
+    if (result?.ok === true) {
+      return []
     }
+    return getCleanupErrors({
+      result,
+      fallbackError: new Error(result?.timedOut === true
+        ? "EventBus close timed out"
+        : "EventBus close did not complete successfully"),
+    })
+  } catch (error) {
+    return [error]
   }
-  if (errors.length > 0) {
-    try {
-      logger?.error?.({
-        message: "observability shutdown incomplete",
-        errorCount: errors.length,
-        errors,
-      })
-    } catch {
-      // Cleanup diagnostics must not interrupt remaining shutdown work.
+}
+
+async function releaseProcessLock({ processLock, allowProcessLockRelease, journalClosed } = {}) {
+  if (!processLock) {
+    return []
+  }
+
+  if (!allowProcessLockRelease || !journalClosed) {
+    return [new Error(
+      !allowProcessLockRelease
+        ? "Harvester trading process lock retained because runtime shutdown was not confirmed"
+        : "Harvester trading process lock retained because Journal shutdown was not confirmed",
+    )]
+  }
+
+  try {
+    const result = await processLock.release()
+    if (result?.ok === true) {
+      return []
     }
+    return getCleanupErrors({
+      result,
+      fallbackError: new Error("Harvester trading process lock release failed"),
+    })
+  } catch (error) {
+    return [error]
   }
+}
+
+function reportObservabilityCleanupErrors({ errors, logger } = {}) {
+  if (errors.length === 0) {
+    return
+  }
+
+  try {
+    logger?.error?.({
+      message: "observability shutdown incomplete",
+      errorCount: errors.length,
+      errors,
+    })
+  } catch {
+    // Cleanup diagnostics must not interrupt remaining shutdown work.
+  }
+}
+
+async function closeObservability({ journalService, eventBus, processLock, allowProcessLockRelease = true, logger } = {}) {
+  const journalResult = await closeJournalService({ journalService })
+  const eventBusErrors = await closeEventBus({ eventBus })
+  const processLockErrors = await releaseProcessLock({
+    processLock,
+    allowProcessLockRelease,
+    journalClosed: journalResult.journalClosed,
+  })
+  const errors = [
+    ...journalResult.errors,
+    ...eventBusErrors,
+    ...processLockErrors,
+  ]
+
+  reportObservabilityCleanupErrors({ errors, logger })
   return errors
 }
 
@@ -496,7 +542,7 @@ export async function main(options = {}) {
     loadConfig = loadAppConfig,
     configSource,
     env = process.env,
-    registerSignalHandler = (signal, handler) => process.on(signal, handler),
+    registerSignalHandler = (...args) => process.on(...args),
     closeLogger = async () => {},
     createTelegramNotifier = (notifierOptions) => new TelegramNotifier(notifierOptions),
     createOperationalStateStore,
@@ -543,6 +589,7 @@ export async function main(options = {}) {
     await cleanupProcessStartupFailure({ error,
       options: dependencies,
       resources })
+    return undefined
   }
 }
 const isDirectExecution = process.argv[1]
