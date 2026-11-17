@@ -47,6 +47,50 @@ function createState({
   return state
 }
 
+function createTransitionActionPorts({ state, trace }) {
+  const assertAcceptedPrice = () => {
+    assert.equal(
+      state.prices.get("DOGEUSDT")?.price,
+      "100.25",
+      "The accepted market price must be committed before a transition is invoked.",
+    )
+    assert.equal(
+      state.marketPriceEventIds.get("DOGEUSDT"),
+      8,
+      "The accepted event identity must be committed before a transition is invoked.",
+    )
+  }
+  return {
+    maybeReplaceTrailingBuy: async () => {
+      assertAcceptedPrice()
+      trace.push("trailing-buy")
+      return { ok: true, data: { route: "trailing-buy" } }
+    },
+    evaluateLatestTransition: async () => {
+      assertAcceptedPrice()
+      trace.push("evaluate")
+      return { ok: true, data: { route: "evaluate" } }
+    },
+    nextMarketPriceEventId: () => {
+      trace.push("event-id")
+      return 8
+    },
+  }
+}
+
+function createTransitionLogger(trace) {
+  return {
+    debug: ({ message } = {}) => {
+      if (message === "Harvester market price event received") {
+        trace.push("received")
+      }
+      if (message === "Harvester market price event skipped") {
+        trace.push("stale")
+      }
+    },
+  }
+}
+
 function createHandler({ state, trace, isFresh, canTrade } = {}) {
   return createMarketPriceTransitionHandler({
     state,
@@ -54,77 +98,14 @@ function createHandler({ state, trace, isFresh, canTrade } = {}) {
       trace.push("freshness")
       return isFresh
     },
-    getCurrentMarketMetadata: () => ({
-      market: {
-        id: "doge-market",
-      },
-    }),
-    logger: {
-      debug: ({ message } = {}) => {
-        if (message === "Harvester market price event received") {
-          trace.push("received")
-        }
-        if (message === "Harvester market price event skipped") {
-          trace.push("stale")
-        }
-      },
-    },
-    getPortfolio: () => ({
-      value: {
-        snapshot: "portfolio",
-      },
-    }),
-    getRecoveryLedger: () => ({
-      value: {
-        snapshot: "recovery-ledger",
-      },
-    }),
+    getCurrentMarketMetadata: () => ({ market: { id: "doge-market" } }),
+    logger: createTransitionLogger(trace),
+    getPortfolio: () => ({ value: { snapshot: "portfolio" } }),
+    getRecoveryLedger: () => ({ value: { snapshot: "recovery-ledger" } }),
     canTrade: () => canTrade,
-    maybeReplaceTrailingBuy: async () => {
-      assert.equal(
-        state.prices.get("DOGEUSDT")?.price,
-        "100.25",
-        "The accepted market price must be committed before trailing replacement is invoked.",
-      )
-      assert.equal(
-        state.marketPriceEventIds.get("DOGEUSDT"),
-        8,
-        "The accepted event identity must be committed before trailing replacement is invoked.",
-      )
-      trace.push("trailing-buy")
-      return {
-        ok: true,
-        data: {
-          route: "trailing-buy",
-        },
-      }
-    },
-    evaluateLatestTransition: async () => {
-      assert.equal(
-        state.prices.get("DOGEUSDT")?.price,
-        "100.25",
-        "The accepted market price must be committed before normal strategy evaluation is invoked.",
-      )
-      assert.equal(
-        state.marketPriceEventIds.get("DOGEUSDT"),
-        8,
-        "The accepted event identity must be committed before normal strategy evaluation is invoked.",
-      )
-      trace.push("evaluate")
-      return {
-        ok: true,
-        data: {
-          route: "evaluate",
-        },
-      }
-    },
-    nextMarketPriceEventId: () => {
-      trace.push("event-id")
-      return 8
-    },
+    ...createTransitionActionPorts({ state, trace }),
   })
 }
-
 function createHarness(options = {}) {
   const trace = []
   const state = createState(options)

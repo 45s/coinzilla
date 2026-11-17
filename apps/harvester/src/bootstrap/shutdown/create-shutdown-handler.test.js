@@ -79,28 +79,52 @@ function createShutdownPorts({
   }
 }
 
-function createShutdown({
-  state = createState(),
-  calls = [],
-  tradingEnabled = true,
-  participants = [],
-  eventPublisher = {
-    flush: async () => ({
-      ok: true,
-      durable: true,
-    }),
-  },
-  publishAccountSnapshot = async () => ({ ok: true }),
-  stopUserDataIntake = async () => [],
-  stopMarketIntake = async () => [],
-  disconnectBroker = async () => [],
-  marketPriceIntake = new Map(),
-  subscriptions = [],
-  bookSubscriptions = [],
-  userDataSubscription = {},
-  logger = {},
-  getTradingEngine = () => undefined,
-} = {}) {
+function createShutdownDefaults() {
+  return {
+    state: createState(),
+    calls: [],
+    tradingEnabled: true,
+    participants: [],
+    eventPublisher: {
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+    },
+    publishAccountSnapshot: async () => ({ ok: true }),
+    stopUserDataIntake: async () => [],
+    stopMarketIntake: async () => [],
+    disconnectBroker: async () => [],
+    marketPriceIntake: new Map(),
+    subscriptions: [],
+    bookSubscriptions: [],
+    userDataSubscription: {},
+    logger: {},
+    getTradingEngine: () => undefined,
+  }
+}
+
+function createShutdown(input = {}) {
+  const {
+    state,
+    calls,
+    tradingEnabled,
+    participants,
+    eventPublisher,
+    publishAccountSnapshot,
+    stopUserDataIntake,
+    stopMarketIntake,
+    disconnectBroker,
+    marketPriceIntake,
+    subscriptions,
+    bookSubscriptions,
+    userDataSubscription,
+    logger,
+    getTradingEngine,
+  } = {
+    ...createShutdownDefaults(),
+    ...input,
+  }
   const ports = createShutdownPorts({
     calls,
     eventPublisher,
@@ -123,11 +147,12 @@ function createShutdown({
     brokerName: "binance",
     ...ports,
   })
-  return { stop,
+  return {
+    stop,
     state,
-    calls }
+    calls,
+  }
 }
-
 test("activates strategy gates before shutdown context creation can fail", async () => {
   const calls = []
   const failure = new Error("Trading engine context is unavailable")
