@@ -71,17 +71,17 @@ Every RS policy evaluation returns exactly one of these outcomes:
 | `BLOCK` | The current evaluation does not permit a new trading action. Known policy limits may produce a non-STOP BLOCK; unexpected or unsupported conditions must use the global STOP reason and latch STOP. | No order identity is required unless the blocked condition concerns an existing order. |
 | `RECONCILE` | Only non-trading reconciliation of an already-submitted order may proceed because its authoritative outcome is not yet known. The original reservation and ownership remain intact; blind resubmission is forbidden. | The original `clientOrderId` is required; `brokerOrderId` is included when known. |
 
-The valid transitions within one recovery cycle are:
+The valid transitions below apply to one **order lifecycle**, not to the whole recovery cycle:
 
-| Previous outcome | Allowed next outcomes |
+| Previous outcome for this order | Allowed next outcomes |
 |---|---|
-| No previous decision (new cycle context) | `SUBMIT`, `WAIT`, `BLOCK`, `RECONCILE` |
+| No previous decision (new order-intent context) | `SUBMIT`, `WAIT`, `BLOCK`, `RECONCILE` |
 | `SUBMIT` | `WAIT`, `RECONCILE`, `BLOCK` |
 | `WAIT` | `WAIT`, `RECONCILE`, `BLOCK` |
 | `RECONCILE` | `RECONCILE`, `WAIT`, `BLOCK` |
 | `BLOCK` | `BLOCK`, `WAIT`, `RECONCILE` |
 
-A second `SUBMIT` is never a direct continuation of an existing cycle decision. A new `SUBMIT` requires a fresh cycle context after the previous cycle reaches its separately approved terminal state. A terminal partial/canceled/expired/rejected SELL does not authorize that reset; the cycle remains unresolved.
+A direct second `SUBMIT` within the same order lifecycle is forbidden. A later BUY tranche may start a distinct order lifecycle in the same recovery cycle only after the previous BUY order is authoritatively terminal and all its canonical fills/commissions and commitments are reconciled. The caller must supply a fresh order-lifecycle context only after proving that condition. This does not authorize a second SELL: the separate cycle contract allows exactly one SELL order lifecycle per recovery cycle. A terminal partial/canceled/expired/rejected SELL does not close the cycle or authorize another SELL or a new BUY cycle; the unresolved remainder stays blocked pending an approved recovery policy.
 
 When global STOP is latched, only valid `WAIT` and `RECONCILE` outcomes may proceed. They do not clear STOP. Every `SUBMIT`, ordinary `BLOCK`, missing/invalid decision, or unsupported transition retains the original sticky STOP decision. The first STOP evidence remains authoritative; no automatic clear operation exists. A future clear path requires a separately approved and evidenced resolution contract.
 
