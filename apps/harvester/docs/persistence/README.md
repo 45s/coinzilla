@@ -189,7 +189,7 @@ await database.connect()
 const repository = createTradingSessionRepository({ database })
 ```
 
-The repository uses `create`, `readOne`, `update`, and `transaction`. It does not issue SQL or use SQLite prepared statements. Database composition and lifecycle are owned by Harvester infrastructure.
+The repository uses `create`, `readOne`, `update`, and `transaction`. It does not issue SQL or use SQLite prepared statements. Database composition and lifecycle are owned by Harvester infrastructure. The default production composition supplies this preparer automatically. A caller that injects a custom `start` adapter into `main` must also supply an explicit `prepareTradingSessionPersistence` implementation to enable history; otherwise Harvester logs a warning and skips this optional projection. Tests use that seam to avoid creating shared runtime database files.
 
 ## 6. Production/Testnet file isolation
 
