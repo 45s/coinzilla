@@ -10,6 +10,16 @@
 
 **Goal:** persist Harvester's trading and operational history through application-owned repository contracts. Harvester must not know whether the database provider is SQLite, PostgreSQL, or MongoDB. The generic database API and provider adapters belong to `@coinzilla/db`; all trading-specific persistence requirements belong here.
 
+### Current implementation status — 2026-11-17
+
+**First slice: trading-session repository — IN PROGRESS in [PR #1369](https://github.com/45s/coinzilla/pull/1369).**
+
+The source audit is complete. The first independently testable slice is the Harvester-owned trading-session repository over the public `@coinzilla/db` API. It uses the existing process/session UUID, validated `TRADING_MODE`, configured broker/strategy identity, effective configuration fingerprint, enabled markets, sanitized build provenance, and lifecycle timestamps.
+
+The history record is a best-effort projection of existing lifecycle events. It does not write to or replace ADR-0001 Operational State Store facts, is not consulted for restart recovery, and does not change Journal durability or trading-readiness behavior. Production and Testnet use separately validated SQLite paths selected only by `TRADING_MODE`; `NODE_ENV` is not involved.
+
+The first slice remains **in progress** until the exact PR head passes required CI, is merged into `develop`, and the merged commit is verified. Orders, events, fills, account snapshots, imports, operations, and architecture enforcement remain separate follow-up slices.
+
 ### DDD ownership and dependency direction
 
 - Harvester owns its domain entities, application use cases, repository ports, business invariants, persistence mapping, and business data model.
