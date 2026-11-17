@@ -392,6 +392,7 @@ function createLifecycleResult({
   decision,
   action,
   cycleState,
+  submittedCycleState,
   sellDisposition,
   sellPlan,
 }) {
@@ -404,7 +405,9 @@ function createLifecycleResult({
     stopState: gated.stopState,
     ...(gated.stopState.status === "STOPPED" ? { stopDecision: gated.stopState.decision } : {}),
     decision: gated.decision,
-    cycleState,
+    cycleState: gated.decision.outcome === RECOVERY_SELLER_LIFECYCLE_OUTCOMES.SUBMIT && submittedCycleState
+      ? submittedCycleState
+      : cycleState,
     ...(gated.decision.outcome === RECOVERY_SELLER_LIFECYCLE_OUTCOMES.SUBMIT && action
       ? { action }
       : {}),
@@ -612,7 +615,8 @@ export function evaluateRecoverySellerSellDecision({
       stopState,
       previousDecision,
       decision,
-      cycleState: nextCycleState,
+      cycleState,
+      submittedCycleState: nextCycleState,
       sellPlan,
       action: Object.freeze({
         side: "SELL",
