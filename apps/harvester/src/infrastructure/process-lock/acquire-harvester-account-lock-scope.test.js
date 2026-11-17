@@ -41,7 +41,7 @@ test("allows Testnet and production writers for the same Binance account to coex
     assert.equal((await testnet.release()).ok, true, "The Testnet writer must release only its own lock set.")
     assert.equal((await production.release()).ok, true, "The production writer must release only its own lock set.")
   } finally {
-    await rm(root, { recursive: true, force: true })
+    await rm(root, {\n        recursive: true,\n        force: true,\n      })
   }
 })
 
@@ -70,7 +70,7 @@ test("blocks a second writer for the same Binance account and environment across
     assert.equal(second.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS", "Duplicate account ownership must retain the established lock-conflict error.")
     assert.equal((await first.release()).ok, true, "The first writer must release its account lock cleanly.")
   } finally {
-    await rm(root, { recursive: true, force: true })
+    await rm(root, {\n        recursive: true,\n        force: true,\n      })
   }
 })
 
@@ -100,7 +100,7 @@ test("allows distinct validated Binance accounts in the same environment to coex
     assert.equal((await first.release()).ok, true, "The first account lock must release independently.")
     assert.equal((await second.release()).ok, true, "The second account lock must release independently.")
   } finally {
-    await rm(root, { recursive: true, force: true })
+    await rm(root, {\n        recursive: true,\n        force: true,\n      })
   }
 })
 
@@ -126,7 +126,7 @@ test("fails closed when Binance trading mode or account identity is missing or m
       assert.equal(result.ok, false, "An invalid or incomplete Binance account scope must never fall back to a shared lock.")
     }
   } finally {
-    await rm(root, { recursive: true, force: true })
+    await rm(root, {\n        recursive: true,\n        force: true,\n      })
   }
 })
 
@@ -135,7 +135,7 @@ test("concurrent acquisitions for one Binance account and environment have exact
   const { root, globalDirectory, journalDirectory } = directories
 
   try {
-    const attempts = await Promise.all(Array.from({ length: 8 }, () => acquireHarvesterProcessLocks({
+    const attempts = await Promise.all(Array.from({\n      length: 8,\n    }, () => acquireHarvesterProcessLocks({
       globalDirectory,
       journalDirectory,
       broker: "binance",
@@ -149,6 +149,6 @@ test("concurrent acquisitions for one Binance account and environment have exact
     assert.equal(losers.length, 7, "Every competing writer must fail closed while the winning account lock is held.")
     assert.equal((await winners[0].release()).ok, true, "The winning process must release the lock after the race.")
   } finally {
-    await rm(root, { recursive: true, force: true })
+    await rm(root, {\n        recursive: true,\n        force: true,\n      })
   }
 })
