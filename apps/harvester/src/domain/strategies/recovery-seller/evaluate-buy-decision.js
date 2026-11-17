@@ -276,7 +276,9 @@ function resolveExistingOrder({
         stopState,
         orderIdentity: {
           clientOrderId: identity.clientOrderId,
-          ...(order.brokerOrderId ? { brokerOrderId: order.brokerOrderId } : {}),
+          ...((order.brokerOrderId ?? identity.brokerOrderId)
+            ? { brokerOrderId: order.brokerOrderId ?? identity.brokerOrderId }
+            : {}),
         },
         explanation: "Recovery Seller cycle SELL acknowledgement or execution outcome remains unresolved",
       })
