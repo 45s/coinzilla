@@ -54,7 +54,10 @@ async function withRepository({ callback }) {
   try {
     await callback(cwd);
   } finally {
-    await rm(cwd, {\n      recursive: true,\n      force: true,\n    });
+    await rm(cwd, {
+      recursive: true,
+      force: true,
+    });
   }
 }
 
