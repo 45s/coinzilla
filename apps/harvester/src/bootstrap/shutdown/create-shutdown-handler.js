@@ -120,7 +120,18 @@ async function runShutdownPhaseSafely({ context, phaseRunner, logShutdownFailure
         context.auditReasons.push(auditReason)
       }
       const errors = Array.isArray(result)
-        ? result.flatMap((entry) => entry?.status === "rejected" ? [entry.reason] : [entry])
+        ? result.flatMap((entry) => {
+          if (entry?.status === "rejected") {
+            return [entry.reason ?? new Error(message)]
+          }
+          if (entry?.status === "fulfilled") {
+            return getResultErrors({
+              result: entry.value,
+              fallbackMessage: message,
+            })
+          }
+          return [entry]
+        })
         : result?.errors ?? []
       logShutdownFailure({
         message,
@@ -302,6 +313,22 @@ function getResultErrors({ result, fallbackMessage }) {
   return []
 }
 
+function getSettledMarketTaskErrors({ results, fallbackMessage }) {
+  return results.flatMap((entry) => {
+    if (entry.status === "rejected") {
+      return [entry.reason ?? new Error(fallbackMessage)]
+    }
+    if (entry.status === "fulfilled") {
+      return getResultErrors({
+        result: entry.value,
+        fallbackMessage,
+      })
+    }
+    return [new Error(fallbackMessage)]
+  })
+}
+
+
 async function drainAcceptedMarketWork({
   context,
   marketPhase,
@@ -322,10 +349,16 @@ async function drainAcceptedMarketWork({
     stage: marketPhase,
     message: "Shutdown market-work drain failed",
     auditReason: "MARKET_WORK_DRAIN_FAILED",
-    isFailure: (results) => results.some((entry) => entry.status === "rejected"),
+    isFailure: (results) => getSettledMarketTaskErrors({
+      results,
+      fallbackMessage: "Shutdown market-work drain failed",
+    }).length > 0,
   })
   const marketWorkErrors = Array.isArray(marketWorkResult)
-    ? marketWorkResult.flatMap((entry) => entry.status === "rejected" ? [entry.reason] : [])
+    ? getSettledMarketTaskErrors({
+      results: marketWorkResult,
+      fallbackMessage: "Shutdown market-work drain failed",
+    })
     : getResultErrors({
       result: marketWorkResult,
       fallbackMessage: "Shutdown market-work drain failed",
