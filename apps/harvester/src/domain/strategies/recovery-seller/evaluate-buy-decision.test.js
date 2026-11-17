@@ -133,6 +133,7 @@ test("prices the next tranche from the reconciled completed-BUY VWAP, not the cu
       price: "2.5",
     },
     recoveryPosition: {
+      quantity: "10",
       spent: "20",
     },
     lastBuyPrice: "2.1",
@@ -151,6 +152,7 @@ test("blocks the next BUY when the RS per-pair investment limit would be exceede
       investment: "15",
     },
     recoveryPosition: {
+      quantity: "5",
       spent: "10",
     },
     lastBuyPrice: "2",
@@ -499,4 +501,53 @@ test("reports QUANTITY_INCREMENT when the configured BUY tranche rounds down to 
   assert.equal(result.buyDisposition.configuredQuantity, "0.005")
   assert.equal(result.buyDisposition.quantityStepSize, "0.01")
   assert.equal(result.action, undefined)
+})
+
+
+test("uses current market price for an initial BUY even if a stale prior-cycle VWAP is supplied", () => {
+  const result = evaluate({
+    lastBuyPrice: "2.5",
+  })
+
+  assert.equal(result.action.price, "1.999",
+    "A new cycle's initial BUY must reference the current market price, not a stale prior-cycle BUY VWAP.")
+})
+
+test("fails closed when recovery Position quantity and spent basis are inconsistent or missing", () => {
+  const missingQuantity = evaluate({
+    recoveryPosition: {
+      spent: "20",
+    },
+    lastBuyPrice: "2.1",
+  })
+  const missingSpent = evaluate({
+    recoveryPosition: {
+      quantity: "10",
+      spent: "0",
+    },
+    lastBuyPrice: "2.1",
+  })
+
+  assert.equal(missingQuantity.stopState.status, "STOPPED",
+    "A recovery Position without authoritative quantity must latch STOP.")
+  assert.equal(missingSpent.stopState.status, "STOPPED",
+    "An active recovery quantity without positive spent basis must latch STOP.")
+  assert.equal(missingQuantity.action, undefined)
+  assert.equal(missingSpent.action, undefined)
+})
+
+test("fails closed when an accumulating cycle already has SELL proceeds", () => {
+  const result = evaluate({
+    recoveryPosition: {
+      quantity: "10",
+      spent: "20",
+    },
+    cumulativeNetSellProceeds: "1",
+    lastBuyPrice: "2.1",
+  })
+
+  assert.equal(result.stopState.status, "STOPPED",
+    "SELL proceeds inside an accumulating one-SELL cycle contradict its cycle state.")
+  assert.equal(result.action, undefined,
+    "A contradictory cycle accounting snapshot must not create another BUY.")
 })
