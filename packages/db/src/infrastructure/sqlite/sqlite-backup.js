@@ -158,7 +158,7 @@ function createProgressReporter({ progress, onFailure }) {
   }
 }
 
-async function runBackup({ sourceConnection, destinationFilename, rate, progress }) {
+async function runBackup({ sourceConnection, destinationFilename, rate, progress, timeout }) {
   let progressError = null
   let temporaryDirectory
   let operationError = null
@@ -185,7 +185,7 @@ async function runBackup({ sourceConnection, destinationFilename, rate, progress
     )
     await verifyDatabaseFile({
       filename: temporaryFilename,
-      timeout: DEFAULT_TIMEOUT_MS,
+      timeout,
     })
     await rename(temporaryFilename, destinationFilename)
   } catch (error) {
@@ -253,14 +253,14 @@ export async function backupSqliteDatabase({
     throw new TypeError("SQLite backup cannot start while a transaction is active")
   }
 
+  await mkdir(dirname(destinationFilename), {
+    recursive: true,
+  })
+
   if (sourceFilename !== ":memory:") {
     await assertDifferentFiles({
       sourceFilename: resolve(sourceFilename),
       destinationFilename,
-    })
-  } else {
-    await mkdir(dirname(destinationFilename), {
-      recursive: true,
     })
   }
 
@@ -269,6 +269,7 @@ export async function backupSqliteDatabase({
     destinationFilename,
     rate,
     progress,
+    timeout,
   })
 }
 
@@ -332,6 +333,9 @@ export async function restoreSqliteDatabase({
     rate,
   })
 
+  await mkdir(dirname(destinationFilename), {
+    recursive: true,
+  })
   await assertDifferentFiles({
     sourceFilename,
     destinationFilename,
