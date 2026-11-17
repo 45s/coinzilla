@@ -607,3 +607,36 @@ test("accepts an AccountSnapshot return value after its CLOSING audit has been d
   assert.ok(calls.includes("closing-audit:COMPLETE"), "Expected condition (calls.includes(\"closing-audit:COMPLETE\")) to be true in \"accepts an AccountSnapshot return value after its CLOSING audit has been durably published\".")
   assert.ok(calls.includes("journal-flush"), "Expected condition (calls.includes(\"journal-flush\")) to be true in \"accepts an AccountSnapshot return value after its CLOSING audit has been durably published\".")
 })
+
+test("fails closed when an accepted market callback resolves with an unsuccessful result", async () => {
+  const calls = []
+  const failure = new Error("Market-price processing returned an unsuccessful result")
+  const marketPriceIntake = new Map([
+    ["DOGEUSDT", {
+      latestWebSocketPriceTask: Promise.resolve({
+        ok: false,
+        errors: [failure],
+      }),
+    }],
+  ])
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+  })
+  const fixture = createShutdown({
+    participants: [participant],
+    calls,
+    marketPriceIntake,
+  })
+
+  await assert.rejects(fixture.stop(), (error) => {
+    assert.ok(error instanceof AggregateError, "An unsuccessful accepted market result must block shutdown.")
+    assert.ok(error.errors.includes(failure), "Shutdown diagnostics must preserve the original market-processing failure.")
+    return true
+  })
+  assert.equal(calls.includes("market-intake-stop"), false, "Market feeds must remain connected when accepted work returns an unsuccessful result.")
+  assert.equal(calls.includes("user-data-stop"), false, "User-data intake must remain connected while market work is unresolved.")
+  assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected while market work is unresolved.")
+  assert.equal(fixture.state.marketIntakeStopped, false, "Market callback intake must resume after a failed pre-unsubscribe drain.")
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE", "A failed market-work drain must never report STOPPED.")
+})
