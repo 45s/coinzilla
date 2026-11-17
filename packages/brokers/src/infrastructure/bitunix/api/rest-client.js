@@ -77,7 +77,7 @@ function parseResponseText({ text, path }) {
     return JSON.parse(text)
   }
   const losslessText = text.replace(
-    /("(?:balance|balanceLocked)"\\s*:\\s*)(-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)(?=\\s*[,}])/g,
+    /("(?:balance|balanceLocked)"\s*:\s*)(-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)(?=\\s*[,}])/g,
     (...matches) => {
       const [, prefix, amount] = matches
       return prefix + JSON.stringify(amount)
