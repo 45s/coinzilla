@@ -685,7 +685,7 @@ function registerTransactionTests({ name, createDatabase, storageMode }) {
 }
 
 function registerLifecycleTests({ name, createDatabase, storageMode }) {
-  test(`${name} (${storageMode}): closing the database prevents new work and releases the provider`, async () => {
+  test(`${name} (${storageMode}): closing the database prevents new work`, async () => {
     await verifyLifecycle({
       createDatabase,
       storageMode,
@@ -701,10 +701,10 @@ function registerLifecycleTests({ name, createDatabase, storageMode }) {
 /**
  * Register the provider-neutral contract tests for a database provider.
  *
- * The factory receives an opaque storageKey. Use isolated storage for each test
- * and reuse the supplied key when testing persistence across connections.
+ * The factory receives an opaque storageKey and a declared storageMode. Each test
+ * receives an isolated key; persistence tests reuse that key across connections.
  *
- * @param {{name: string, createDatabase: (options: {storageKey: string}) => object}} options
+ * @param {{name: string, createDatabase: (options: {storageKey: string, storageMode?: string}) => object}} options
  */
 export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
   const capabilityProbe = createDatabase({
@@ -728,13 +728,4 @@ export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
     registerTransactionTests(options)
     registerLifecycleTests(options)
   }
-}
-export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
-  const options = {
-    name,
-    createDatabase,
-  }
-  registerCrudAndQueryTests(options)
-  registerTransactionTests(options)
-  registerLifecycleTests(options)
 }
