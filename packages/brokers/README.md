@@ -29,7 +29,16 @@ The `@coinzilla/brokers` entry point exports:
 
 - `BinanceWebSocketBroker` — the concrete Binance WebSocket API/Streams broker.
 - `BinanceWebSocketConfig` — validated Binance broker configuration.
-- `CoreBroker` — the existing compatibility base class; it is not a formal application-owned broker port.
+- `BitunixSpotBroker` and `BitunixSpotConfig` — the current read-only Bitunix Spot implementation and its validated configuration.
+- `CoreBroker`
+
+### Provider instances and routing ownership
+
+The package exposes exchange-specific broker implementations; it does not select which exchange a strategy or market should use. A consuming application owns its application port and composition root, constructs the named provider instances it needs, and owns any strategy/market execution routing and independent market-data routing.
+
+Multiple instances of one provider type may represent different accounts or supported environments. Keep provider-specific options and endpoint selection inside the matching implementation. Binance requires explicit `TRADING_MODE=testnet|live`; this rule does not define another exchange's environment support.
+
+Harvester's accepted target is described in [ADR-0003: Multi-provider routing](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and tracked by [issue #1339](https://github.com/45s/coinzilla/issues/1339). That target is not yet implemented. Current Harvester runtime composition remains Binance-only. The Bitunix Spot class is read-only and is not a Harvester execution provider; do not infer order capability from the public class or `CoreBroker` methods. — the existing compatibility base class; it is not a formal application-owned broker port.
 - `normalizeBinanceId` — exact non-negative Binance identifier normalization, also used by the Harvester infrastructure adapter.
 
 Keep exchange-specific operations behind the Binance adapter. Consumers should depend on their own narrow application port rather than treating `CoreBroker` as a complete cross-exchange contract.
