@@ -43,7 +43,7 @@ const createCapabilities = ({ selectedMode = "testnet" } = {}) => Object.freeze(
 function createClient({ capabilities } = {}) {
   const client = Object.fromEntries(CLIENT_METHODS.map((method) => [
     method,
-    async () => ({ ok: true, data: [] }),
+    async () => undefined,
   ]))
   if (capabilities !== undefined) {
     client.capabilities = capabilities
