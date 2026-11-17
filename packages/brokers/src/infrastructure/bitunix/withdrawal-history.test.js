@@ -166,7 +166,10 @@ test("Bitunix Spot broker rejects malformed withdrawal rows without returning pa
     [createWithdrawalRecord({ toEmail: 12 })],
     [createWithdrawalRecord({ toUid: Number.MAX_SAFE_INTEGER + 1 })],
     [createWithdrawalRecord({ status: "" })],
-    [createWithdrawalRecord({ address: "address-a", toAddress: "address-b" })],
+    [createWithdrawalRecord({
+      address: "address-a",
+      toAddress: "address-b",
+    })],
   ]
   const results = await Promise.all(malformedResponses.map(async (response) => {
     const { broker } = createBroker({ response })
