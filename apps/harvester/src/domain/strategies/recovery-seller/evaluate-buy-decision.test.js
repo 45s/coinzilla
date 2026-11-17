@@ -118,6 +118,7 @@ function evaluate(overrides = {}) {
     marketMetadata,
     activeOrders: [],
     cycleState: createRecoverySellerCycleState({ cycleId: "rs-cycle-1" }),
+    positionId: "rs-position-1",
     strategyStopped: false,
     marketPaused: false,
     reconciliationComplete: true,
