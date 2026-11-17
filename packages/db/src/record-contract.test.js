@@ -77,12 +77,18 @@ test("records require JSON-safe plain objects and immutable string identifiers",
     "Record identifiers must be strings rather than provider-dependent numeric keys",
   )
   assert.throws(
-    () => serializeRecord({ id: "record-1", amount: Number.NaN }),
+    () => serializeRecord({
+      id: "record-1",
+      amount: Number.NaN,
+    }),
     TypeError,
     "Non-finite numbers must be rejected because they are not valid JSON values",
   )
   assert.throws(
-    () => serializeRecord({ id: "record-1", amount: 1n }),
+    () => serializeRecord({
+      id: "record-1",
+      amount: 1n,
+    }),
     TypeError,
     "BigInt values must be rejected rather than silently changing during JSON storage",
   )
@@ -214,9 +220,34 @@ test("read query validation rejects unsupported filters, sorts, and pagination",
     { filter: { value: { gt: 1 } } },
     { filter: { value: Number.POSITIVE_INFINITY } },
     { sort: {} },
-    { sort: [{ field: "nested.field", direction: "asc" }] },
-    { sort: [{ field: "name", direction: "sideways" }] },
-    { sort: [{ field: "name", direction: "asc" }, { field: "name", direction: "desc" }] },
+    {
+      sort: [
+        {
+          field: "nested.field",
+          direction: "asc",
+        },
+      ],
+    },
+    {
+      sort: [
+        {
+          field: "name",
+          direction: "sideways",
+        },
+      ],
+    },
+    {
+      sort: [
+        {
+          field: "name",
+          direction: "asc",
+        },
+        {
+          field: "name",
+          direction: "desc",
+        },
+      ],
+    },
     { limit: 0 },
     { limit: 1.5 },
     { offset: -1 },
