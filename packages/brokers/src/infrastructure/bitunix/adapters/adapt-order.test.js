@@ -11,6 +11,8 @@ const validOrder = {
   volume: "0.300000000000000001",
   dealVolume: "0.1",
   price: "10.25",
+  ctime: "2026-11-15T12:00:00Z",
+  utime: "2026-11-15T12:00:01Z",
 }
 
 test("adaptOrder preserves exact original, executed and remaining quantities", () => {
@@ -61,5 +63,39 @@ test("adaptOrder preserves safely representable numeric broker order IDs", () =>
     order.id,
     String(safeNumericOrderId),
     "A safely representable numeric broker order ID must retain its exact integer identity.",
+  )
+})
+
+test("adaptOrder rejects missing or malformed required exchange timestamps", () => {
+  for (const [field, invalidValue] of [
+    ["ctime", undefined],
+    ["ctime", null],
+    ["ctime", 1_794_744_000_000],
+    ["ctime", ""],
+    ["utime", undefined],
+    ["utime", null],
+    ["utime", 1_794_744_000_000],
+    ["utime", ""],
+  ]) {
+    assert.throws(
+      () => adaptOrder({ ...validOrder, [field]: invalidValue }),
+      /ctime.*non-empty string|utime.*non-empty string/i,
+      `Bitunix order ${field} must be rejected when its documented timestamp field is missing or malformed.`,
+    )
+  }
+})
+
+test("adaptOrder preserves documented exchange timestamp strings without reinterpreting them", () => {
+  const order = adaptOrder(validOrder)
+
+  assert.equal(
+    order.createdAt,
+    validOrder.ctime,
+    "The exchange creation timestamp must be preserved exactly without timezone or precision assumptions.",
+  )
+  assert.equal(
+    order.updatedAt,
+    validOrder.utime,
+    "The exchange update timestamp must be preserved exactly without timezone or precision assumptions.",
   )
 })
