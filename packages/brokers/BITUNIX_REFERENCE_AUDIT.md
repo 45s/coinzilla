@@ -322,7 +322,6 @@ A package's README is a discovery aid, not source proof. If the reference has no
 
 The Coinzilla method validates all supplied filters before I/O, sends only supplied filters, validates the entire response before returning it, preserves exact identifier/amount text, and never mutates account state. It does not fetch deposit addresses, withdrawals, transfers, or any order operation.
 
-
 ## 9. Bitunix Spot withdrawal-history read (2026-11-17)
 
 **Decision:** Implemented as a Bitunix-only, signed, read-only extension in issue/PR [#1387](https://github.com/45s/coinzilla/pull/1387). It does not close or weaken issue #1185 and is not Binance parity.

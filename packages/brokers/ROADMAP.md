@@ -1215,7 +1215,6 @@ The audit is the detailed evidence source; this roadmap records status and next 
 
 **Next candidate:** audit Spot order/deal history against #1185. Do not expose canonical fills until quantity denomination, execution identity and completeness are supported by authoritative evidence.
 
-
 ## 2026-11-17 — Bitunix Spot withdrawal-history extension (#1387 / PR #1387)
 
 - [x] Audited official `POST /api/spot/v1/withdraw_transfer/page` against JKorf interface, implementation, model and fixture.
