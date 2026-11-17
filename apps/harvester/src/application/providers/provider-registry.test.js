@@ -177,6 +177,7 @@ testCase("serializes concurrent connection requests and performs one successful 
     registry.disconnect("binanceTestnet"),
     registry.disconnect("binanceTestnet"),
   ])
+  await registry.disconnect("binanceTestnet")
   assert.deepEqual(calls, ["connect", "disconnect"],
     "Concurrent cleanup requests must share one underlying disconnect attempt.")
   assert.equal(registry.get("binanceTestnet").status, "disconnected",
