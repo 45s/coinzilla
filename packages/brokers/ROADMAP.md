@@ -1076,7 +1076,7 @@ The following comparison resolves what the references actually implement; it doe
 - [x] Validate Spot latest-price values as strictly positive after exact decimal parsing; preserve the original decimal string without Number conversion — [PR #1279](https://github.com/45s/coinzilla/pull/1279).
 - [x] Reject missing or `null` symbol-scoped pending-order response data instead of reporting an unsupported empty result; preserve explicit empty arrays and documented object/array row forms — [PR #1280](https://github.com/45s/coinzilla/pull/1280).
 - [x] Reject unsafe numeric Bitunix broker order IDs at both response adaptation and order-detail request boundaries while retaining string IDs and safe-integer compatibility — [PR #1290](https://github.com/45s/coinzilla/pull/1290), merged as `56097e527f44cfd9bddfd10f8078346695092607`.
-- [~] Reject unsafe numeric order-history `page` and `limit` values before REST I/O while preserving the existing one-page contract; no maximum page size is inferred — [PR #1299](https://github.com/45s/coinzilla/pull/1299).
+- [x] Reject unsafe numeric order-history `page` and `limit` values before REST I/O while preserving the existing one-page contract; no maximum page size is inferred — [PR #1299](https://github.com/45s/coinzilla/pull/1299), merged as `0c801593efac9adc27fe2669c239209a663b50bf`.
 - [ ] Resolve per-order fill completeness, execution-ID guarantees, and the unit of deal `volume`; only add fail-closed checks where the exchange contract makes the inconsistency unambiguous.
 
 ### Recommended implementation order
