@@ -231,10 +231,13 @@ The first slice uses the real SQLite provider for repository CRUD and persistenc
 - valid and invalid lifecycle transitions;
 - immutable identity preservation;
 - reopen/re-read of historical session data;
+- domain validation, canonical identity, and secret-field allowlisting;
 - transaction rollback;
 - closed-database lifecycle failure;
 - provider-neutral create/read/transaction error propagation;
 - lifecycle event projection and unsuccessful-shutdown handling;
+- provider preparation, observer/database close ordering, and partial-cleanup failures;
+- symlink/hard-link path overlap rejection;
 - two-process Production/Testnet isolation.
 
 Mocks are used only to inject a provider failure at the observer/repository boundary. CRUD, uniqueness, transactions, rollback, and reopen behavior are exercised against real SQLite.
