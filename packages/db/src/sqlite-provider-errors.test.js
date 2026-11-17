@@ -71,3 +71,38 @@ test("SQLite lock failures use the provider-neutral error contract", async () =>
     })
   }
 })
+
+test("SQLite statement preparation failures use the provider-neutral error contract", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-statement-error-"))
+  const filename = join(directory, "records.sqlite")
+  const database = createDatabase({
+    provider: createSqliteProvider({
+      filename,
+    }),
+  })
+  await database.connect()
+
+  const externalConnection = new DatabaseSync(filename)
+
+  try {
+    externalConnection.exec("DROP TABLE db_records")
+
+    await assert.rejects(
+      database.readOne({
+        collection: "people",
+        id: "missing-1",
+      }),
+      (error) => error instanceof DatabaseProviderError
+        && error.code === "DB_PROVIDER_OPERATION_FAILED"
+        && error.cause instanceof Error,
+      "A SQLite statement preparation failure must be normalized before it reaches the generic consumer",
+    )
+  } finally {
+    externalConnection.close()
+    await database.close()
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
