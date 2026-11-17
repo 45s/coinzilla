@@ -32,14 +32,62 @@ const marketMetadata = {
   orderType: "LIMIT_MAKER",
   tradingRules: {
     constraints: [
-      { type: "PRICE_INCREMENT", status: "SUPPORTED", value: { amount: "0.001" } },
-      { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: { amount: "0.01" } },
-      { type: "MIN_QUANTITY", status: "SUPPORTED", value: { amount: "0.01" } },
-      { type: "MIN_NOTIONAL", status: "SUPPORTED", value: { amount: "5" } },
-      { type: "MAX_QUANTITY", status: "SUPPORTED", value: { amount: "100" } },
-      { type: "MAX_NOTIONAL", status: "SUPPORTED", value: { amount: "1000" } },
-      { type: "MIN_PRICE", status: "SUPPORTED", value: { amount: "0.001" } },
-      { type: "MAX_PRICE", status: "SUPPORTED", value: { amount: "100" } },
+      {
+        type: "PRICE_INCREMENT",
+        status: "SUPPORTED",
+        value: {
+          amount: "0.001",
+        },
+      },
+      {
+        type: "QUANTITY_INCREMENT",
+        status: "SUPPORTED",
+        value: {
+          amount: "0.01",
+        },
+      },
+      {
+        type: "MIN_QUANTITY",
+        status: "SUPPORTED",
+        value: {
+          amount: "0.01",
+        },
+      },
+      {
+        type: "MIN_NOTIONAL",
+        status: "SUPPORTED",
+        value: {
+          amount: "5",
+        },
+      },
+      {
+        type: "MAX_QUANTITY",
+        status: "SUPPORTED",
+        value: {
+          amount: "100",
+        },
+      },
+      {
+        type: "MAX_NOTIONAL",
+        status: "SUPPORTED",
+        value: {
+          amount: "1000",
+        },
+      },
+      {
+        type: "MIN_PRICE",
+        status: "SUPPORTED",
+        value: {
+          amount: "0.001",
+        },
+      },
+      {
+        type: "MAX_PRICE",
+        status: "SUPPORTED",
+        value: {
+          amount: "100",
+        },
+      },
     ],
   },
 }
@@ -202,7 +250,12 @@ test("returns an ordinary BLOCK for an exchange-filter-constrained BUY", () => {
       tradingRules: {
         constraints: marketMetadata.tradingRules.constraints.map((rule) =>
           rule.type === "MIN_NOTIONAL"
-            ? { ...rule, value: { amount: "20" } }
+            ? {
+              ...rule,
+              value: {
+                amount: "20",
+              },
+            }
             : rule),
       },
     },
