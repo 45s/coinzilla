@@ -655,11 +655,16 @@ test("accepts an AccountSnapshot return value after its CLOSING audit has been d
 test("fails closed when an accepted market callback resolves with an unsuccessful result", async () => {
   const calls = []
   const failure = new Error("Market-price processing returned an unsuccessful result")
+  const bookFailure = new Error("Book-ticker processing returned an unsuccessful result")
   const marketPriceIntake = new Map([
     ["DOGEUSDT", {
       latestWebSocketPriceTask: Promise.resolve({
         ok: false,
         errors: [failure],
+      }),
+      latestWebSocketBookTask: Promise.resolve({
+        ok: false,
+        errors: [bookFailure],
       }),
     }],
   ])
@@ -676,6 +681,7 @@ test("fails closed when an accepted market callback resolves with an unsuccessfu
   await assert.rejects(fixture.stop(), (error) => {
     assert.ok(error instanceof AggregateError, "An unsuccessful accepted market result must block shutdown.")
     assert.ok(error.errors.includes(failure), "Shutdown diagnostics must preserve the original market-processing failure.")
+    assert.ok(error.errors.includes(bookFailure), "Shutdown diagnostics must preserve the original book-processing failure.")
     return true
   })
   assert.equal(calls.includes("market-intake-stop"), false, "Market feeds must remain connected when accepted work returns an unsuccessful result.")
