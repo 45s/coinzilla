@@ -6,6 +6,8 @@ import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { createStrictESLint, getChangedFiles } from "./lint-changed.js";
 
+// These integration tests deliberately use the root canonical ESLint configuration.
+
 const repositoryRoot = resolve(new URL("..", import.meta.url).pathname);
 
 function git({ cwd, args }) {
