@@ -1,4 +1,4 @@
-import { CanonicalOrder, Market } from "@coinzilla/entities"
+import { CanonicalOrder, Fill, Market } from "@coinzilla/entities"
 import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
@@ -253,6 +253,7 @@ function resolveRecoverySellerBuyOrderOwnership({ registry, fill }) {
   }
   const order = registry.getOrder({ clientOrderId: fill.clientOrderId })
   if (!order ||
+      order.status === "REJECTED" ||
       order.side !== "BUY" ||
       order.market.id !== fill.market.id ||
       order.brokerOrderId !== fill.brokerOrderId) {
