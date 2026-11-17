@@ -721,7 +721,10 @@ function createVolatilityTestState() {
   }
 }
 
-function createVolatilityOrderSubmission({ metadataBySymbol, state }) {
+function createVolatilityOrderSubmission({
+      metadataBySymbol,
+      state,
+    }) {
   return async ({ order } = {}) => {
     const { market } = metadataBySymbol.get(order.symbol)
     state.submittedSymbols.push(order.symbol)
