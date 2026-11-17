@@ -1110,7 +1110,7 @@ test("acquires the process lock before starting Journal and releases it after cl
       env: {
         NODE_ENV: "development",
       },
-      acquireProcessLock: async ({ journalDirectory, globalDirectory, broker, tradingMode, tradingMode }) => {
+      acquireProcessLock: async ({ journalDirectory, globalDirectory, broker, tradingMode }) => {
         sequence.push("lock")
         assert.equal(typeof journalDirectory, "string")
         assert.ok(pathIsAbsolute(journalDirectory))
