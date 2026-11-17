@@ -383,7 +383,10 @@ test("fails closed when an explicit readiness flag is missing", () => {
 
 test("blocks another BUY after a terminal partial or canceled SELL leaves the cycle unresolved", () => {
   const submitted = recordRecoverySellerCycleSellSubmission({
-    state: createRecoverySellerCycleState({ cycleId: "rs-cycle-1" }),
+    state: createRecoverySellerCycleState({
+      cycleId: "rs-cycle-1",
+      positionId: "rs-position-1",
+    }),
     orderIdentity: { clientOrderId: "rs-sell-1" },
   })
   const unresolved = reconcileRecoverySellerCycleSell({
@@ -409,7 +412,10 @@ test("blocks another BUY after a terminal partial or canceled SELL leaves the cy
 
 test("latches STOP and reconciles the recorded sole SELL when its active-order evidence is missing", () => {
   const cycleState = recordRecoverySellerCycleSellSubmission({
-    state: createRecoverySellerCycleState({ cycleId: "rs-cycle-1" }),
+    state: createRecoverySellerCycleState({
+      cycleId: "rs-cycle-1",
+      positionId: "rs-position-1",
+    }),
     orderIdentity: {
       clientOrderId: "rs-sell-1",
       brokerOrderId: "exchange-sell-1",
@@ -434,7 +440,10 @@ test("latches STOP and reconciles the recorded sole SELL when its active-order e
 
 test("waits on the cycle's existing SELL without canceling or replacing it", () => {
   const cycleState = recordRecoverySellerCycleSellSubmission({
-    state: createRecoverySellerCycleState({ cycleId: "rs-cycle-1" }),
+    state: createRecoverySellerCycleState({
+      cycleId: "rs-cycle-1",
+      positionId: "rs-position-1",
+    }),
     orderIdentity: {
       clientOrderId: "rs-sell-1",
     },
@@ -464,7 +473,10 @@ test("waits on the cycle's existing SELL without canceling or replacing it", () 
 
 test("allows the next BUY only after the previous cycle is closed and a new cycle state is created", () => {
   const submitted = recordRecoverySellerCycleSellSubmission({
-    state: createRecoverySellerCycleState({ cycleId: "rs-cycle-1" }),
+    state: createRecoverySellerCycleState({
+      cycleId: "rs-cycle-1",
+      positionId: "rs-position-1",
+    }),
     orderIdentity: { clientOrderId: "rs-sell-1" },
   })
   const closed = reconcileRecoverySellerCycleSell({
