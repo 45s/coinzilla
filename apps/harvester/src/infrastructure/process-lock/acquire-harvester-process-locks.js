@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { toResult } from "@coinzilla/utils"
 import { acquireHarvesterProcessLock } from "./acquire-harvester-process-lock.js"
 
