@@ -132,7 +132,7 @@ function createLockScopeFingerprint({ broker, tradingMode }) {
 }
 
 /**
- * Acquire the account-scoped host lock before the application lock.
+ * Acquire the environment-scoped host lock before the application lock.
  * Both locks remain held whenever release is uncertain.
  */
 export async function acquireHarvesterProcessLocks({
@@ -165,7 +165,7 @@ acquireLock })
 
     const journalLock = await acquireLock({
       directory: journalDirectory,
-      lockFileName: `.harvester-trading-${accountFingerprint}.lock`,
+      lockFileName: `.harvester-trading-${environmentFingerprint}.lock`,
     })
     if (journalLock?.ok !== true || typeof journalLock.release !== "function") {
       return handleJournalLockFailure({ journalLock,
