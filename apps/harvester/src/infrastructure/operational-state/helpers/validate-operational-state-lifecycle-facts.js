@@ -8,29 +8,18 @@ import {
   SHA256_PATTERN,
 } from "./operational-state-fact-schema.js"
 
-export function validateOperatorMarketControlFact({
-  factType,
-  canonicalData,
-  factId
-,
-}) {
+export function validateOperatorMarketControlFact({ factType, canonicalData, factId }) {
   if (factType === "OPERATOR_MARKET_PAUSED" || factType === "OPERATOR_MARKET_RESUMED") {
     const allowedFields = new Set(["requestId", "actorId", "symbol"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
       throw new TypeError("Operator market-control fact contains unsupported fields")
     }
-    const requestId = requireNonEmptyString({
-      value: canonicalData.requestId,
+    const requestId = requireNonEmptyString({ value: canonicalData.requestId,
 field: "data.requestId",
-maxLength: MAX_FACT_ID_LENGTH
-    ,
-    })
-    requireNonEmptyString({
-      value: canonicalData.actorId,
+maxLength: MAX_FACT_ID_LENGTH })
+    requireNonEmptyString({ value: canonicalData.actorId,
 field: "data.actorId",
-maxLength: MAX_FACT_ID_LENGTH
-    ,
-    })
+maxLength: MAX_FACT_ID_LENGTH })
     if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
       throw new TypeError("Operator market-control symbol must be canonical uppercase alphanumeric")
     }
@@ -40,12 +29,7 @@ maxLength: MAX_FACT_ID_LENGTH
   }
 }
 
-export function validateOperatorBuyControlFact({
-  factType,
-  canonicalData,
-  factId
-,
-}) {
+export function validateOperatorBuyControlFact({ factType, canonicalData, factId }) {
   const globalTypes = new Set([
     "OPERATOR_ALL_BUYS_PAUSED",
     "OPERATOR_ALL_BUYS_RESUMED",
@@ -83,12 +67,7 @@ export function validateOperatorBuyControlFact({
   }
 }
 
-export function validateStrategyMarketControlFact({
-  factType,
-  canonicalData,
-  factId
-,
-}) {
+export function validateStrategyMarketControlFact({ factType, canonicalData, factId }) {
   if (factType === "STRATEGY_MARKET_PAUSED" || factType === "STRATEGY_MARKET_RESUMED") {
     const allowedFields = new Set(["symbol", "reason"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
@@ -97,12 +76,9 @@ export function validateStrategyMarketControlFact({
     if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
       throw new TypeError("Strategy market-control symbol must be canonical uppercase alphanumeric")
     }
-    requireNonEmptyString({
-      value: canonicalData.reason,
+    requireNonEmptyString({ value: canonicalData.reason,
 field: "data.reason",
-maxLength: 256
-    ,
-    })
+maxLength: 256 })
     const prefix = factType === "STRATEGY_MARKET_PAUSED" ? "strategy-market-paused:" : "strategy-market-resumed:"
     if (!factId.startsWith(prefix) || factId.length === prefix.length) {
       throw new TypeError("Strategy market-control factId must include its unique transition identity")
@@ -129,12 +105,7 @@ function validateSafetyBlockerReason({ reason }) {
   }
 }
 
-function validateSafetyBlockerIdentity({
-  canonicalData,
-  factId,
-  reason
-,
-}) {
+function validateSafetyBlockerIdentity({ canonicalData, factId, reason }) {
   if (typeof canonicalData.evidenceDigest !== "string" || !SHA256_PATTERN.test(canonicalData.evidenceDigest)) {
     throw new TypeError("Safety-blocker evidenceDigest must be a SHA-256 digest")
   }
@@ -150,12 +121,7 @@ function validateSafetyBlockerIdentity({
   }
 }
 
-export function validateSafetyBlockerRaisedFact({
-  factType,
-  canonicalData,
-  factId
-,
-}) {
+export function validateSafetyBlockerRaisedFact({ factType, canonicalData, factId }) {
   if (factType !== "SAFETY_BLOCKER_RAISED") {
     return
   }
@@ -164,27 +130,12 @@ export function validateSafetyBlockerRaisedFact({
     throw new TypeError("Safety-blocker fact contains unsupported fields")
   }
   validateSafetyBlockerScope({ canonicalData })
-  const reason = requireNonEmptyString({
-    value: canonicalData.reason,
-    field: "data.reason",
-    maxLength: 128
-  ,
-  })
+  const reason = requireNonEmptyString({ value: canonicalData.reason, field: "data.reason", maxLength: 128 })
   validateSafetyBlockerReason({ reason })
-  validateSafetyBlockerIdentity({
-    canonicalData,
-    factId,
-    reason
-  ,
-  })
+  validateSafetyBlockerIdentity({ canonicalData, factId, reason })
 }
 
-export function validateSafetyBlockerResolvedFact({
-  factType,
-  canonicalData,
-  factId
-,
-}) {
+export function validateSafetyBlockerResolvedFact({ factType, canonicalData, factId }) {
   if (factType === "SAFETY_BLOCKER_RESOLVED") {
     const allowedFields = new Set(["blockerId", "resolvedBy", "resolution", "evidenceDigest"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
@@ -194,12 +145,9 @@ export function validateSafetyBlockerResolvedFact({
         factId !== `safety-blocker-resolved:${  canonicalData.blockerId}`) {
       throw new TypeError("Safety-blocker resolution factId must match its blocker identity")
     }
-    requireNonEmptyString({
-      value: canonicalData.resolvedBy,
+    requireNonEmptyString({ value: canonicalData.resolvedBy,
 field: "data.resolvedBy",
-maxLength: MAX_FACT_ID_LENGTH
-    ,
-    })
+maxLength: MAX_FACT_ID_LENGTH })
     if (!["AUTHORITATIVE_RECONCILIATION", "OPERATOR_ACTION"].includes(canonicalData.resolution)) {
       throw new TypeError("Safety-blocker resolution must identify authoritative reconciliation or operator action")
     }
@@ -209,23 +157,14 @@ maxLength: MAX_FACT_ID_LENGTH
   }
 }
 
-export function validateLedgerInitializedFact({
-  factType,
-  canonicalData
-,
-}) {
+export function validateLedgerInitializedFact({ factType, canonicalData }) {
   if (factType === "LEDGER_INITIALIZED" &&
       (!Number.isSafeInteger(canonicalData.schemaVersion) || canonicalData.schemaVersion < 1)) {
     throw new TypeError("Ledger genesis schemaVersion is unsupported")
   }
 }
 
-export function validateConfigurationBaselineFact({
-  factType,
-  canonicalData,
-  factId
-,
-}) {
+export function validateConfigurationBaselineFact({ factType, canonicalData, factId }) {
   if (factType === "CONFIGURATION_BASELINE") {
     const allowedFields = new Set(["schemaVersion", "strategyName", "markets", "fingerprint"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
@@ -235,12 +174,9 @@ export function validateConfigurationBaselineFact({
         typeof canonicalData.fingerprint !== "string" || !SHA256_PATTERN.test(canonicalData.fingerprint)) {
       throw new TypeError("Configuration baseline requires the supported schema and SHA-256 fingerprint")
     }
-    requireNonEmptyString({
-      value: canonicalData.strategyName,
+    requireNonEmptyString({ value: canonicalData.strategyName,
 field: "data.strategyName",
-maxLength: 64
-    ,
-    })
+maxLength: 64 })
     if (!Array.isArray(canonicalData.markets) || canonicalData.markets.length === 0 ||
         canonicalData.markets.some((symbol) => typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol)) ||
         canonicalData.markets.join("\\0") !== [...new Set(canonicalData.markets)].sort().join("\\0")) {
@@ -252,13 +188,7 @@ maxLength: 64
   }
 }
 
-export function validateProcessStartedFact({
-  factType,
-  canonicalData,
-  factId,
-  runtimeSessionId
-,
-}) {
+export function validateProcessStartedFact({ factType, canonicalData, factId, runtimeSessionId }) {
   if (factType === "PROCESS_STARTED") {
     const allowedFields = new Set(["configurationFingerprint", "strategyName", "markets", "tradingEnabled"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
@@ -268,12 +198,9 @@ export function validateProcessStartedFact({
         !SHA256_PATTERN.test(canonicalData.configurationFingerprint)) {
       throw new TypeError("Process-start fact requires a SHA-256 configuration fingerprint")
     }
-    requireNonEmptyString({
-      value: canonicalData.strategyName,
+    requireNonEmptyString({ value: canonicalData.strategyName,
 field: "data.strategyName",
-maxLength: 64
-    ,
-    })
+maxLength: 64 })
     if (typeof canonicalData.tradingEnabled !== "boolean") {
       throw new TypeError("Process-start fact tradingEnabled must be boolean")
     }
@@ -288,24 +215,15 @@ maxLength: 64
   }
 }
 
-export function validateProcessStoppedFact({
-  factType,
-  canonicalData,
-  factId,
-  runtimeSessionId
-,
-}) {
+export function validateProcessStoppedFact({ factType, canonicalData, factId, runtimeSessionId }) {
   if (factType === "PROCESS_STOPPED") {
     const allowedFields = new Set(["reason", "clean"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
       throw new TypeError("Process-stop fact contains unsupported fields")
     }
-    const reason = requireNonEmptyString({
-      value: canonicalData.reason,
+    const reason = requireNonEmptyString({ value: canonicalData.reason,
 field: "data.reason",
-maxLength: 64
-    ,
-    })
+maxLength: 64 })
     if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(reason) || typeof canonicalData.clean !== "boolean") {
       throw new TypeError("Process-stop reason and clean marker are invalid")
     }
