@@ -4,11 +4,16 @@ import { toResult } from "@coinzilla/utils"
 import { createPendingCanonicalOrder } from "../domain/orders/create-pending-canonical-order.js"
 import { validateOrderAgainstTradingRules } from "../domain/orders/validate-order-against-trading-rules.js"
 
+function getOwnershipMetadata({ ownership } = {}) {
+  return ownership === undefined ? {} : { ownership }
+}
+
 function createSubmissionDeferralResolver({ canSubmit } = {}) {
-  return ({ order, purpose } = {}) => {
+  return ({ order, purpose, ownership } = {}) => {
     const gate = canSubmit({
       order,
       purpose,
+      ...getOwnershipMetadata({ ownership }),
     })
     if (gate === true) {return null}
     if (gate === false) {return { reason: "SUBMISSION_NOT_ALLOWED" }}
@@ -93,10 +98,19 @@ function createPendingOrderCandidate({ action, marketMetadata, clientOrderId } =
     clientOrderId,
     supportedOrderTypes: marketMetadata.supportedOrderTypes,
   })
+  const ownership = action.strategyId || action.positionId || action.cycleId
+    ? Object.freeze({
+      strategyId: action.strategyId,
+      positionId: action.positionId,
+      purpose: action.purpose,
+      cycleId: action.cycleId,
+    })
+    : undefined
   return Object.freeze({
     orderIntent,
     pendingOrder,
     purpose: action.purpose ?? null,
+    ...getOwnershipMetadata({ ownership }),
   })
 }
 
@@ -125,6 +139,7 @@ async function validateDecision({ context, decision, marketMetadata, notifyValid
           await context.onOrderValidationFailure({
             order: candidate.pendingOrder,
             error,
+            ...getOwnershipMetadata({ ownership: candidate.ownership }),
           })
         }
         throw error
@@ -132,6 +147,7 @@ async function validateDecision({ context, decision, marketMetadata, notifyValid
       const deferral = context.getSubmissionDeferral({
         order: candidate.pendingOrder,
         purpose: candidate.purpose,
+        ...getOwnershipMetadata({ ownership: candidate.ownership }),
       })
       if (deferral) {
         return toResult({
@@ -173,7 +189,7 @@ async function createPendingOrderCandidates({ context, decision, marketMetadata 
   }))
 }
 
-async function persistDurableSubmissionOutcome({ context, order, outcome, purpose } = {}) {
+async function persistDurableSubmissionOutcome({ context, order, outcome, purpose, ownership } = {}) {
   if (!context.onDurableSubmissionOutcome) {
     return toResult({ data: { skipped: true } })
   }
@@ -182,6 +198,7 @@ async function persistDurableSubmissionOutcome({ context, order, outcome, purpos
       order,
       outcome,
       purpose,
+      ...getOwnershipMetadata({ ownership }),
     })
     if (result?.ok !== true || result.data?.durable !== true) {
       return toResult({
@@ -196,11 +213,12 @@ async function persistDurableSubmissionOutcome({ context, order, outcome, purpos
   }
 }
 
-async function persistDurableSubmissionIntent({ context, pendingOrder, purpose } = {}) {
+async function persistDurableSubmissionIntent({ context, pendingOrder, purpose, ownership } = {}) {
   try {
     const result = await context.onDurableSubmissionIntent({
       order: pendingOrder,
       purpose,
+      ...getOwnershipMetadata({ ownership }),
     })
     if (result?.ok !== true || result.data?.durable !== true) {
       return toResult({
@@ -217,28 +235,31 @@ async function persistDurableSubmissionIntent({ context, pendingOrder, purpose }
 
 async function deferAfterDurableSubmissionIntent({
   context,
-  pendingOrder,
-  purpose,
+  candidate,
   deferral,
   error,
 } = {}) {
+  const { pendingOrder, purpose, ownership } = candidate
   const durableOutcome = await persistDurableSubmissionOutcome({
     context,
     order: pendingOrder,
     outcome: "REJECTED",
     purpose,
+    ownership,
   })
   if (!durableOutcome.ok) {
     await context.onSubmissionFailure({
       order: pendingOrder,
       errors: durableOutcome.errors,
       outcome: "UNKNOWN",
+      ...getOwnershipMetadata({ ownership }),
     })
     return durableOutcome
   }
   await context.onSubmissionDeferred({
     order: pendingOrder,
     purpose,
+    ...getOwnershipMetadata({ ownership }),
     registered: true,
     ...deferral,
   })
@@ -250,11 +271,13 @@ async function deferAfterDurableSubmissionIntent({
   })
 }
 
-async function deferRegisteredSubmission({ context, order, purpose, errors, reason } = {}) {
+async function deferRegisteredSubmission({ context, candidate, errors, reason } = {}) {
+  const { pendingOrder: order, purpose, ownership } = candidate
   try {
     await context.onSubmissionDeferred({
       order,
       purpose,
+      ...getOwnershipMetadata({ ownership }),
       registered: true,
       reason: reason ?? "DURABLE_SUBMISSION_INTENT_NOT_COMMITTED",
     })
@@ -271,15 +294,17 @@ async function deferRegisteredSubmission({ context, order, purpose, errors, reas
 }
 
 async function preparePendingSubmission({ context, candidate } = {}) {
-  const { pendingOrder, purpose } = candidate
+  const { pendingOrder, purpose, ownership } = candidate
   const initialDeferral = context.getSubmissionDeferral({
     order: pendingOrder,
     purpose,
+    ...getOwnershipMetadata({ ownership }),
   })
   if (initialDeferral) {
     await context.onSubmissionDeferred({
       order: pendingOrder,
       purpose,
+      ...getOwnershipMetadata({ ownership }),
       registered: false,
       ...initialDeferral,
     })
@@ -293,6 +318,7 @@ async function preparePendingSubmission({ context, candidate } = {}) {
   const pendingResult = context.onPendingOrder({
     order: pendingOrder,
     purpose,
+    ...getOwnershipMetadata({ ownership }),
   })
   if (pendingResult && typeof pendingResult.then === "function") {
     await pendingResult
@@ -302,6 +328,7 @@ async function preparePendingSubmission({ context, candidate } = {}) {
     dispatchDeferral = context.getSubmissionDeferral({
       order: pendingOrder,
       purpose,
+      ...getOwnershipMetadata({ ownership }),
     })
   } catch (error) {
     await context.onSubmissionDeferred({
@@ -330,14 +357,12 @@ async function preparePendingSubmission({ context, candidate } = {}) {
   if (context.onDurableSubmissionIntent) {
     const durableIntent = await persistDurableSubmissionIntent({
       context,
-      pendingOrder,
-      purpose,
+      candidate,
     })
     if (!durableIntent.ok) {
       return deferRegisteredSubmission({
         context,
-        order: pendingOrder,
-        purpose,
+        candidate,
         errors: durableIntent.errors,
       })
     }
@@ -366,7 +391,8 @@ function classifyBrokerSubmissionFailure({ pendingOrder, brokerResult } = {}) {
   }
 }
 
-async function handleBrokerPlacementException({ context, pendingOrder, purpose, error } = {}) {
+async function handleBrokerPlacementException({ context, candidate, error } = {}) {
+  const { pendingOrder, purpose, ownership } = candidate
   const durableOutcome = await persistDurableSubmissionOutcome({
     context,
     order: pendingOrder,
@@ -389,7 +415,8 @@ async function handleBrokerPlacementException({ context, pendingOrder, purpose, 
   return toResult({ error })
 }
 
-async function handleBrokerFailureResult({ context, pendingOrder, purpose, brokerResult } = {}) {
+async function handleBrokerFailureResult({ context, candidate, brokerResult } = {}) {
+  const { pendingOrder, purpose, ownership } = candidate
   const { errors, outcome } = classifyBrokerSubmissionFailure({
     pendingOrder,
     brokerResult,
@@ -416,7 +443,8 @@ async function handleBrokerFailureResult({ context, pendingOrder, purpose, broke
   return toResult({ errors })
 }
 
-async function handleMismatchedAcknowledgement({ context, pendingOrder, purpose } = {}) {
+async function handleMismatchedAcknowledgement({ context, candidate } = {}) {
+  const { pendingOrder, purpose, ownership } = candidate
   const error = new Error("Broker acknowledgement clientOrderId does not match submitted order")
   const durableOutcome = await persistDurableSubmissionOutcome({
     context,
@@ -440,7 +468,8 @@ async function handleMismatchedAcknowledgement({ context, pendingOrder, purpose 
   return toResult({ error })
 }
 
-async function handleBrokerAcknowledgement({ context, pendingOrder, purpose, acknowledgedOrder } = {}) {
+async function handleBrokerAcknowledgement({ context, candidate, acknowledgedOrder } = {}) {
+  const { pendingOrder, purpose, ownership } = candidate
   const durableOutcome = await persistDurableSubmissionOutcome({
     context,
     order: acknowledgedOrder,
@@ -469,18 +498,18 @@ async function handleBrokerAcknowledgement({ context, pendingOrder, purpose, ack
 }
 
 async function submitBrokerOrder({ context, candidate } = {}) {
-  const { orderIntent, pendingOrder, purpose } = candidate
+  const { orderIntent, pendingOrder, purpose, ownership } = candidate
   let finalDeferral
   try {
     finalDeferral = context.getSubmissionDeferral({
       order: pendingOrder,
       purpose,
+      ...getOwnershipMetadata({ ownership }),
     })
   } catch (error) {
     return deferAfterDurableSubmissionIntent({
       context,
-      pendingOrder,
-      purpose,
+      candidate,
       deferral: {
         reason: "SUBMISSION_GATE_ERROR",
         details: { errorName: error.name },
@@ -502,16 +531,14 @@ async function submitBrokerOrder({ context, candidate } = {}) {
   } catch (error) {
     return handleBrokerPlacementException({
       context,
-      pendingOrder,
-      purpose,
+      candidate,
       error,
     })
   }
   if (!brokerResult?.ok || !(brokerResult.data instanceof CanonicalOrder)) {
     return handleBrokerFailureResult({
       context,
-      pendingOrder,
-      purpose,
+      candidate,
       brokerResult,
     })
   }
@@ -519,8 +546,7 @@ async function submitBrokerOrder({ context, candidate } = {}) {
   if (acknowledgedOrder.clientOrderId !== pendingOrder.clientOrderId) {
     return handleMismatchedAcknowledgement({
       context,
-      pendingOrder,
-      purpose,
+      candidate,
     })
   }
   return handleBrokerAcknowledgement({
