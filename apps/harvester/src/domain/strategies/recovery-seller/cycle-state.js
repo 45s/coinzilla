@@ -34,46 +34,89 @@ function validateOrderIdentity(orderIdentity) {
   })
 }
 
-function assertCycleState(state) {
+function assertBaseCycleState(state) {
   if (!state || typeof state !== "object" || Array.isArray(state) ||
       !isNonEmptyString(state.cycleId) ||
       !CYCLE_STATUSES.has(state.status)) {
     throw new TypeError("Recovery Seller requires a valid cycle state")
   }
+}
 
-  if (state.status === "ACCUMULATING") {
-    if (state.sellOrderIdentity !== null ||
-        state.terminalOrderStatus !== null ||
-        state.terminalReconciled !== false ||
-        state.profitabilityEligible !== null) {
-      throw new TypeError("Recovery Seller accumulating cycle state is inconsistent")
-    }
-    return
+function assertAccumulatingCycleState(state) {
+  if (state.sellOrderIdentity !== null ||
+      state.terminalOrderStatus !== null ||
+      state.terminalReconciled !== false ||
+      state.profitabilityEligible !== null) {
+    throw new TypeError("Recovery Seller accumulating cycle state is inconsistent")
   }
+}
 
+function assertSubmittedCycleState(state) {
   validateOrderIdentity(state.sellOrderIdentity)
-  if (state.status === "SELL_SUBMITTED" &&
-      (state.terminalOrderStatus !== null ||
-       state.terminalReconciled !== false ||
-       state.profitabilityEligible !== null)) {
+  if (state.terminalOrderStatus !== null ||
+      state.terminalReconciled !== false ||
+      state.profitabilityEligible !== null) {
     throw new TypeError("Recovery Seller submitted cycle state is inconsistent")
   }
-  if (state.status === "RECONCILIATION_REQUIRED" &&
-      (state.terminalOrderStatus !== null && !TERMINAL_ORDER_STATUSES.has(state.terminalOrderStatus))) {
-    throw new TypeError("Recovery Seller reconciliation cycle state has an unsupported terminal status")
+}
+
+function assertReconciliationRequiredCycleState(state) {
+  validateOrderIdentity(state.sellOrderIdentity)
+  if ((state.terminalOrderStatus !== null &&
+       !TERMINAL_ORDER_STATUSES.has(state.terminalOrderStatus)) ||
+      state.terminalReconciled !== false ||
+      state.profitabilityEligible !== null) {
+    throw new TypeError("Recovery Seller reconciliation cycle state is inconsistent")
   }
-  if (state.status === "UNRESOLVED" &&
-      (!TERMINAL_ORDER_STATUSES.has(state.terminalOrderStatus) ||
-       state.terminalReconciled !== true ||
-       typeof state.profitabilityEligible !== "boolean")) {
+}
+
+function assertUnresolvedCycleState(state) {
+  validateOrderIdentity(state.sellOrderIdentity)
+  if (!TERMINAL_ORDER_STATUSES.has(state.terminalOrderStatus) ||
+      state.terminalReconciled !== true ||
+      typeof state.profitabilityEligible !== "boolean") {
     throw new TypeError("Recovery Seller unresolved cycle state is inconsistent")
   }
-  if (state.status === "CLOSED" &&
-      (state.terminalOrderStatus !== "FILLED" ||
-       state.terminalReconciled !== true ||
-       state.profitabilityEligible !== true)) {
+}
+
+function assertClosedCycleState(state) {
+  validateOrderIdentity(state.sellOrderIdentity)
+  if (state.terminalOrderStatus !== "FILLED" ||
+      state.terminalReconciled !== true ||
+      state.profitabilityEligible !== true) {
     throw new TypeError("Recovery Seller closed cycle state requires a reconciled profitable FILLED SELL")
   }
+}
+
+function assertCycleState(state) {
+  assertBaseCycleState(state)
+  switch (state.status) {
+    case "ACCUMULATING":
+      assertAccumulatingCycleState(state)
+      break
+    case "SELL_SUBMITTED":
+      assertSubmittedCycleState(state)
+      break
+    case "RECONCILIATION_REQUIRED":
+      assertReconciliationRequiredCycleState(state)
+      break
+    case "UNRESOLVED":
+      assertUnresolvedCycleState(state)
+      break
+    case "CLOSED":
+      assertClosedCycleState(state)
+      break
+    default:
+      throw new TypeError("Recovery Seller requires a valid cycle state")
+  }
+}
+
+function mergeTerminalOrderIdentity({ terminalIdentity, previousIdentity }) {
+  const brokerOrderId = terminalIdentity.brokerOrderId ?? previousIdentity.brokerOrderId
+  return Object.freeze({
+    clientOrderId: terminalIdentity.clientOrderId,
+    ...(brokerOrderId === undefined ? {} : { brokerOrderId }),
+  })
 }
 
 /**
@@ -183,13 +226,9 @@ export function reconcileRecoverySellerCycleSell({
     throw new TypeError("Recovery Seller terminal reconciliation requires explicit and internally consistent reconciliation/profitability results")
   }
 
-  const sellOrderIdentity = Object.freeze({
-    clientOrderId: terminalIdentity.clientOrderId,
-    ...(terminalIdentity.brokerOrderId === undefined
-      ? (state.sellOrderIdentity.brokerOrderId === undefined
-        ? {}
-        : { brokerOrderId: state.sellOrderIdentity.brokerOrderId })
-      : { brokerOrderId: terminalIdentity.brokerOrderId }),
+  const sellOrderIdentity = mergeTerminalOrderIdentity({
+    terminalIdentity,
+    previousIdentity: state.sellOrderIdentity,
   })
 
   if (!reconciliationComplete) {
