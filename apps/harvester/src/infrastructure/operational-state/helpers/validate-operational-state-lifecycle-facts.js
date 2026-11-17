@@ -114,7 +114,7 @@ function validateSafetyBlockerIdentity({ canonicalData, factId, reason }) {
     canonicalData.symbol ?? "",
     reason,
     canonicalData.evidenceDigest,
-  ].join("\\0"))
+  ].join("\0"))
   if (canonicalData.blockerId !== expectedBlockerId ||
       factId !== `safety-blocker-raised:${expectedBlockerId}`) {
     throw new TypeError("Safety-blocker identity must match its scope, reason, and immutable evidence digest")
