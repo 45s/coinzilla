@@ -12,6 +12,7 @@ function submittedCycle() {
   return recordRecoverySellerCycleSellSubmission({
     state: createRecoverySellerCycleState({
       cycleId: "rs-cycle-1",
+      positionId: "rs-position-1",
     }),
     orderIdentity: {
       clientOrderId: "rs-sell-1",
@@ -22,10 +23,12 @@ function submittedCycle() {
 test("creates an immutable accumulating cycle before its single SELL is submitted", () => {
   const state = createRecoverySellerCycleState({
     cycleId: "rs-cycle-1",
+    positionId: "rs-position-1",
   })
 
   assert.deepEqual(state, {
     cycleId: "rs-cycle-1",
+    positionId: "rs-position-1",
     status: "ACCUMULATING",
     sellOrderIdentity: null,
     terminalOrderStatus: null,
@@ -169,6 +172,8 @@ test("starts a new recovery cycle only from a closed, profitable and reconciled 
     nextCycleId: "rs-cycle-2",
   })
 
+  assert.equal(next.positionId, "rs-position-1",
+    "A next cycle must retain the stable recovery Position unless a new Position identity is explicitly supplied.")
   assert.equal(next.cycleId, "rs-cycle-2",
     "A new cycle must have a distinct stable identity.")
   assert.equal(next.status, "ACCUMULATING",
@@ -216,4 +221,16 @@ test("rejects mismatched order identity and incomplete terminal evidence", () =>
     }),
     /terminalOrderStatus must be one of FILLED, CANCELED, REJECTED, EXPIRED/,
     "A non-terminal order status must not be accepted as terminal reconciliation evidence.")
+})
+
+
+test("requires a stable Position identity for every recovery cycle", () => {
+  assert.throws(
+    () => createRecoverySellerCycleState({
+      cycleId: "rs-cycle-missing-position",
+      positionId: "",
+    }),
+    /positionId must be a non-empty string/,
+    "A cycle without a stable Position identity must not be created.",
+  )
 })
