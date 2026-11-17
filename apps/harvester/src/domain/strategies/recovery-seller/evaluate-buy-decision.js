@@ -163,10 +163,15 @@ function createStopResult({ stopState, explanation }) {
 }
 
 function findBlockingOrders({ activeOrders, symbol }) {
-  return activeOrders.filter((order) =>
-    order?.market?.symbol === symbol &&
-    ACTIVE_ORDER_STATUSES.has(order.status),
+  const marketOrders = activeOrders.filter((order) => order?.market?.symbol === symbol)
+  const unsupportedOrder = marketOrders.find((order) =>
+    !ACTIVE_ORDER_STATUSES.has(order.status) ||
+    !["BUY", "SELL"].includes(order.side),
   )
+  if (unsupportedOrder) {
+    throw new Error("Recovery Seller received an unsupported active-order status or side")
+  }
+  return marketOrders
 }
 
 function resolveExistingOrder({ stopState, activeOrders, symbol }) {
@@ -328,24 +333,34 @@ export function evaluateRecoverySellerBuyDecision({
     throw new TypeError("Recovery Seller BUY policy requires a valid STOP state")
   }
 
-  const existingOrderResult = resolveExistingOrder({
-    stopState,
-    activeOrders,
-    symbol: marketPrice?.symbol,
-  })
-  if (existingOrderResult) {
-    if (existingOrderResult.stopState.status === "STOPPED") {
+  try {
+    const existingOrderResult = resolveExistingOrder({
+      stopState,
+      activeOrders,
+      symbol: marketPrice?.symbol,
+    })
+    if (existingOrderResult) {
+      if (existingOrderResult.stopState.status === "STOPPED") {
+        return Object.freeze({
+          ...existingOrderResult,
+          ...(existingOrderResult.decision.outcome === RECOVERY_SELLER_LIFECYCLE_OUTCOMES.BLOCK
+            ? { stopDecision: existingOrderResult.stopState.decision }
+            : {}),
+        })
+      }
+      return existingOrderResult
+    }
+    if (stopState.status === "STOPPED") {
+      const gated = applyRecoverySellerStopGate({
+        stopState,
+      })
       return Object.freeze({
-        ...existingOrderResult,
-        ...(existingOrderResult.decision.outcome === RECOVERY_SELLER_LIFECYCLE_OUTCOMES.BLOCK
-          ? { stopDecision: existingOrderResult.stopState.decision }
-          : {}),
+        stopState: gated.stopState,
+        stopDecision: gated.stopState.decision,
+        decision: gated.decision,
       })
     }
-    return existingOrderResult
-  }
 
-  try {
     const rules = validateInput({
       marketPrice,
       pairConfig,
