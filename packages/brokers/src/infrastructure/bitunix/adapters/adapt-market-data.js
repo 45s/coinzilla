@@ -32,7 +32,7 @@ function requirePositiveDecimal({ value, field }) {
 
 function requireKlineTimestamp({ value }) {
   if (typeof value !== "string" ||
-      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) ||
       !Number.isFinite(Date.parse(value))) {
     throw new TypeError("Bitunix Spot kline timestamp must be an ISO 8601 string")
   }
