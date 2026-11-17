@@ -307,6 +307,9 @@ async function drainAcceptedMarketWork({
   marketPhase,
   userDataPhase,
 } = {}) {
+  // Subscription callbacks register their latest task synchronously. The
+  // engine serializes price and book transitions, so each latest task covers
+  // all earlier accepted tasks from that stream.
   const pendingMarketTasks = [...context.marketPriceIntake.values()]
     .flatMap(({ latestWebSocketPriceTask, latestWebSocketBookTask }) => [
       latestWebSocketPriceTask,
