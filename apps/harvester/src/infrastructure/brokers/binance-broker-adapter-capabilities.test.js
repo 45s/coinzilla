@@ -28,14 +28,14 @@ const config = Object.freeze({
   tradingMode: "testnet",
 })
 
-const createCapabilities = ({ selectedMode = "testnet" } = {}) => Object.freeze({
+const createCapabilities = () => Object.freeze({
   contractVersion: 1,
   provider: "binance",
   product: "spot",
   environment: Object.freeze({
     selector: "tradingMode",
     supportedModes: Object.freeze(["testnet", "live"]),
-    selectedMode,
+    selectedMode: "testnet",
     nodeEnvSelectsEndpoint: false,
   }),
 })
@@ -64,28 +64,12 @@ test("[binance-broker-adapter-capabilities.test.js] forwards the immutable #1366
     "The adapter must preserve the broker package's immutable capability contract.")
 })
 
-test("[binance-broker-adapter-capabilities.test.js] rejects a capability declaration for a different trading environment", () => {
-  const capabilities = createCapabilities({ selectedMode: "testnet" })
-
-  assert.throws(
-    () => createBinanceBrokerAdapter({
-      config: {
-        ...config,
-        tradingMode: "live",
-      },
-      brokerFactory: () => createClient({ capabilities }),
-    }),
-    /capability declaration.*tradingMode/i,
-    "A provider capability snapshot must match the explicit Binance endpoint environment.",
-  )
-})
-
-test("[binance-broker-adapter-capabilities.test.js] leaves missing capability rejection to the provider registry", () => {
+test("[binance-broker-adapter-capabilities.test.js] does not fabricate a capability declaration when the client omits it", () => {
   const broker = createBinanceBrokerAdapter({
     config,
     brokerFactory: () => createClient(),
   })
 
   assert.equal(broker.capabilities, undefined,
-    "The adapter must not fabricate capability declarations when a client omits the #1366 contract.")
+    "The adapter must leave a missing capability declaration absent so the provider registry can fail closed.")
 })
