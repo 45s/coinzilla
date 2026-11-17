@@ -197,14 +197,7 @@ function orderSessionsByChronology({ sessions }) {
   return orderedSessions
 }
 
-export function validateAndOrderSessions(sessions) {
-  if (sessions.length <= 1) {
-    if (sessions.length === 1) {
-      sessions[0].chronologySource = "SINGLE_SESSION"
-    }
-    return sessions
-  }
-
+function validateSessionChronologyAvailability({ sessions }) {
   const sources = new Set(sessions.map((session) => session.chronologySource))
   if (sources.has("UNAVAILABLE")) {
     throw createHistoryError({
@@ -219,7 +212,9 @@ export function validateAndOrderSessions(sessions) {
       },
     })
   }
+}
 
+function validateUniqueSessionChronology({ sessions }) {
   const identities = new Set()
   const timestamps = new Set()
   for (const session of sessions) {
@@ -235,7 +230,6 @@ export function validateAndOrderSessions(sessions) {
       })
     }
     timestamps.add(session.chronologyTimestamp)
-
     if (session.runtimeSessionId !== null) {
       if (identities.has(session.runtimeSessionId)) {
         throw createHistoryError({
@@ -247,9 +241,9 @@ export function validateAndOrderSessions(sessions) {
       identities.add(session.runtimeSessionId)
     }
   }
+}
 
-  const orderedSessions = orderSessionsByChronology({ sessions })
-
+function validateOrderedSessionRanges({ orderedSessions }) {
   for (let index = 1; index < orderedSessions.length; index += 1) {
     const previous = orderedSessions[index - 1]
     const current = orderedSessions[index]
@@ -270,6 +264,18 @@ export function validateAndOrderSessions(sessions) {
       })
     }
   }
+}
 
+export function validateAndOrderSessions(sessions) {
+  if (sessions.length <= 1) {
+    if (sessions.length === 1) {
+      sessions[0].chronologySource = "SINGLE_SESSION"
+    }
+    return sessions
+  }
+  validateSessionChronologyAvailability({ sessions })
+  validateUniqueSessionChronology({ sessions })
+  const orderedSessions = orderSessionsByChronology({ sessions })
+  validateOrderedSessionRanges({ orderedSessions })
   return orderedSessions
 }
