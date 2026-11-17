@@ -40,6 +40,18 @@ test("grosses up quote commission before rounding SELL price upward", () => {
   assert.equal(plan.price, "10.12")
 })
 
+
+test("adds quote commission to the full recovery plus legacy plus minProfit target", () => {
+  const plan = calculateRecoverySellerSellPlan({
+    ...validInput,
+    quoteFeeRate: "0.01",
+  })
+
+  assert.equal(plan.requiredNetQuoteProceeds, "10.21")
+  assert.equal(plan.grossQuoteProceeds, "10.313131313131313131313131313131313132")
+  assert.equal(plan.price, "10.22")
+})
+
 test("adds a reliably quote-valued third-asset commission to gross proceeds", () => {
   const plan = calculateRecoverySellerSellPlan({
     ...validInput,
