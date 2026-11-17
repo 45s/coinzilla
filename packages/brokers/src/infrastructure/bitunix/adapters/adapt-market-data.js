@@ -32,7 +32,7 @@ function requirePositiveDecimal({ value, field }) {
 
 function requireKlineTimestamp({ value }) {
   if (typeof value !== "string" ||
-      !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$/.test(value) ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) ||
       !Number.isFinite(Date.parse(value))) {
     throw new TypeError("Bitunix Spot kline timestamp must be an ISO 8601 string")
   }
@@ -74,7 +74,7 @@ function normalizeDepthLevels({ value, side }) {
  * exchange's precision parameter or changing its source timestamp units.
  *
  * @param {{value: object, symbol: string}} input
- * @returns {{symbol: string, timestamp: string, asks: object[], bids: object[]}}
+ * @returns {{symbol: string, timestamp?: string, asks: object[], bids: object[]}}
  */
 export function adaptBitunixOrderBook({ value, symbol }) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -206,7 +206,7 @@ export function createBitunixKlineHistoryQuery({ input }) {
     }),
   }
   if (input.endTime !== undefined) {
-    const endTime = typeof input.endTime === "string" && /^\\d+$/.test(input.endTime)
+    const endTime = typeof input.endTime === "string" && /^\d+$/.test(input.endTime)
       ? Number(input.endTime)
       : input.endTime
     if (!Number.isSafeInteger(endTime) || endTime < 1) {
