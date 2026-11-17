@@ -69,7 +69,11 @@ function validateOrderSubmissionIntentFields({ canonicalData }) {
   return clientOrderId
 }
 
-function validateOrderSubmissionIntentSemantics({ canonicalData, factId, clientOrderId }) {
+function validateOrderSubmissionIntentSemantics({
+    canonicalData,
+    factId,
+    clientOrderId,
+  }) {
   if (factIdForOrderIntent(clientOrderId) !== factId) {
     throw new TypeError("Order-submission intent factId must match its stable clientOrderId identity")
   }
@@ -102,7 +106,11 @@ export function validateOrderSubmissionIntentFact({ factType, canonicalData, fac
   validateOrderSubmissionIntentSemantics({ canonicalData, factId, clientOrderId })
 }
 
-function validateOrderSubmissionOutcomeIdentity({ canonicalData, factId, clientOrderId }) {
+function validateOrderSubmissionOutcomeIdentity({
+    canonicalData,
+    factId,
+    clientOrderId,
+  }) {
   if (factIdForOrderOutcome(clientOrderId, canonicalData.outcome) !== factId) {
     throw new TypeError("Order-submission outcome factId must match its stable clientOrderId and outcome identity")
   }
@@ -319,7 +327,12 @@ function validateOrderCancellationFields({ canonicalData, outcome }) {
     field: "data.reason",
     maxLength: 64,
   })
-  return { clientOrderId, marketId, venue, reason }
+  return {
+    clientOrderId,
+    marketId,
+    venue,
+    reason,
+  }
 }
 
 export function validateOrderCancellationIntentFact({ factType, canonicalData, factId }) {
@@ -352,6 +365,9 @@ export function validateOrderCancellationOutcomeFact({ factType, canonicalData, 
     expectedFactId: factIdForCancellationOutcome(clientOrderId, reason, canonicalData.outcome),
     outcome: canonicalData.outcome,
   })
-  validateCancellationOrderFields({ canonicalData, outcome: canonicalData.outcome })
+  validateCancellationOrderFields({
+    canonicalData,
+    outcome: canonicalData.outcome,
+  })
   validateCancellationOutcomeState({ canonicalData })
 }
