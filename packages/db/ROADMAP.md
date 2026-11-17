@@ -6,93 +6,135 @@ type: roadmap
 owner: db
 ---
 
-## Priority execution plan — current develop direction (2026-11-08)
+## Purpose
 
-No current production defect in this package was established by the repository audit. The priorities below are deliberate groundwork, not a reason to introduce persistence abstractions before a real consumer needs them.
+`@coinzilla/db` provides a provider-neutral record CRUD and transaction API. Node.js built-in `node:sqlite` is the first concrete provider. The package owns generic persistence infrastructure contracts only; application domains own their business entities, schemas and repository interfaces.
 
-### IMPORTANT — first production persistence use
+## Current priority — provider-neutral CRUD API
 
-1. **Integrate one domain-owned repository contract with a real consumer.**
-   - **Why:** the package currently provides a provider-neutral SQLite lifecycle boundary but does not yet demonstrate a complete application-owned persistence workflow. Designing generic repositories without a real aggregate risks coupling the database package to business concepts.
-   - **Do:** select one concrete consumer and define its repository interface in that domain. Keep SQL, connection management and migrations in the DB adapter; keep domain invariants and transaction boundaries in the owning application/domain. Add only the schema and operations required by that use case.
-   - **Verify:** integration tests against a temporary SQLite database prove create/read/update behavior, transaction rollback, uniqueness, restart persistence and deterministic cleanup. Keep package unit tests independent of a developer's local database.
+<badge></badge>
 
-2. **Define transaction, concurrency and failure behavior for the first consumer.**
-   - **Why:** persistence correctness depends on what happens when writes race, locks occur, a transaction partially fails or the process closes with work pending.
-   - **Do:** document transaction ownership, busy/lock timeout policy, idempotent write semantics, migration compatibility and shutdown behavior as part of the selected consumer contract.
-   - **Verify:** test lock contention, rollback, interrupted writes, duplicate commands and close during pending work. Do not promise cross-process guarantees SQLite configuration does not provide.
+**In progress:** [Issue #1340](https://github.com/45s/coinzilla/issues/1340) · [PR #1342](https://github.com/45s/coinzilla/pull/1342)
 
-3. **Document backup, restore and operational ownership before persistent deployment.**
-   - **Why:** a database that cannot be safely backed up or restored is not an operationally complete persistence solution.
-   - **Do:** document database location, file permissions, backup consistency, restore validation, schema migration/rollback limits and retention responsibility for the first deployed consumer.
-   - **Verify:** perform a temporary-database backup/restore test and compare restored records and schema version.
+The approved design is:
 
-### DEFERRED — evidence-driven only
+```text
+Consumer / composition root
+          |
+          v
+   createDatabase({ provider })
+          |
+          v
+ Provider-neutral CRUD facade
+          |
+          v
+   Database provider port
+          |
+          v
+ Concrete infrastructure adapter
+       (SQLite first)
+```
 
-4. **Reassess PostgreSQL or MongoDB only when requirements outgrow SQLite.**
-   - **Why:** changing providers now adds deployment and operational complexity without demonstrated scale, concurrency or query pressure.
-   - **Do:** record measurable requirements (concurrent writers, dataset size, availability, query patterns, deployment topology) before selecting another provider.
-   - **Verify:** provide benchmark/operational evidence and a migration/rollback plan before adding a second adapter.
+The package defines what database operations mean. Each provider implements how those operations work. Provider-specific configuration is supplied only at composition. Consumers use the same CRUD and transaction methods regardless of provider.
 
-5. **Add domain-specific repositories and migrations only alongside the owning bounded context.**
-   - **Why:** schema ownership should follow the data's business meaning; a generic DB package must not become the owner of Harvester or other domain rules.
-   - **Do:** version migrations, keep repository ports in the domain/application package and add adapters here only for concrete persistence needs.
-   - **Verify:** migration-upgrade tests and domain-level contract tests run in CI.
+### Implementation steps
 
-**Owner:** Database Infrastructure domain (`packages/db/`)
-**Package:** `@coinzilla/db`
-**Purpose:** provide reliable embedded SQL persistence while preserving DDD dependency direction.
+1. **Provider-neutral contract and composition**
+   - Define JSON record identity/shape, collection names, exact-match filters, sorting, pagination, operation results, error classes, transaction context and capability declarations.
+   - Preserve the existing `createDatabase({ adapter })` lifecycle facade and `createSqliteDatabase(...)` low-level SQL/migration API.
+   - Keep the new `createDatabase({ provider })` facade provider-neutral.
+   - Verify invalid input, duplicate identifiers, missing records and capability snapshots.
 
-Read [package instructions](./AGENTS.md) and the [domain ownership guide](../../docs/engineering/DOMAIN_OWNERSHIP.md).
+2. **SQLite provider**
+   - Use only built-in `node:sqlite`, prepared statements and bound parameters.
+   - Support file-backed and in-memory storage.
+   - Store generic JSON records by collection and string identifier; do not introduce application schemas.
+   - Preserve current WAL, foreign-key, timeout, synchronous transaction and resource lifecycle behavior.
 
-## Principles
+3. **Provider conformance suite**
+   - Reusable tests cover CREATE/READ/UPDATE/DELETE, collection isolation, filtering, sorting, pagination, identifiers, duplicates, error semantics, transaction commit/rollback, lifecycle, reconnect persistence and cleanup.
+   - The SQLite provider must pass the complete applicable suite.
+   - Future providers must run the same suite; provider-specific capability differences must be declared rather than silently emulated.
 
-- This package's domain is database infrastructure: database lifecycle and immutable schema migrations.
-- Business bounded contexts own their business aggregates and repository contracts.
-- Application use cases depend on the database provider port, not SQLite connections.
-- SQLite infrastructure owns SQL, driver APIs, transaction mechanics, and migration persistence.
-- Keep database lifecycle, transaction, and migration behavior explicit.
-- Use prepared statements and bound parameters for values.
-- Do not build a generic CRUD/query API or ORM abstraction.
-- Keep SQLite-specific types and SQL out of domain and application policy.
-- Add another provider only when actual consumer requirements demonstrate the need.
+4. **Documentation and hardening**
+   - Publish copy-paste examples for provider composition, CRUD, query, transaction and error handling.
+   - Verify public exports contain no driver objects, SQL statements or provider-native errors.
+   - Run package tests/coverage, workspace tests, full lint, agent-policy checks and required CI on the exact PR head.
 
-## Roadmap
+### Explicit boundaries
 
-- [x] Establish the `@coinzilla/db` package and provider adapter lifecycle boundary.
-- [x] Implement Node.js built-in `node:sqlite` persistence without an external driver or ORM.
-- [x] Support in-memory and file-backed databases, foreign-key enforcement, WAL for file databases, and configurable lock timeout.
-- [x] Implement explicit synchronous transactions with commit/rollback and nested/async callback rejection.
-- [x] Implement ordered, atomic, versioned schema migrations and migration-history validation.
-- [x] Add deterministic integration tests using real in-memory and temporary file-backed SQLite databases.
-- [x] Separate the database infrastructure domain model, application provider port/use case, and SQLite infrastructure adapter without changing the public API.
-- [ ] Integrate the first domain-owned repository contract with a real application consumer.
-- [ ] Add domain-specific repositories and schema migrations alongside their owning bounded contexts.
-- [ ] Reassess PostgreSQL or MongoDB only if deployment, concurrency, scale, or query requirements outgrow embedded SQLite.
-- [ ] Document backup/restore and operational procedures for the first persistent application deployment.
+- No ORM, query builder, schema generator or universal SQL abstraction.
+- No trading, Harvester, Journal, Operational State Store, order, fill, execution or portfolio entities/repositories/schemas.
+- No speculative PostgreSQL or MongoDB adapter implementation.
+- No consumer integration in this task. A real application's repository contract remains owned by that application's bounded context and its roadmap.
 
-## Architecture status
+## Provider-neutral API contract
 
-The database lifecycle aggregate owns provider-independent lifecycle state and transaction draining. Immutable migration entities own schema-change identity; a pure migration-history service enforces the rule that an applied version cannot be removed or renamed. SQLite-specific SQL and `node:sqlite` behavior live under `src/infrastructure/sqlite/`. The package does not own business aggregates or generic repositories.
+The intended public composition is:
 
-## Implemented public API
+```js
+const database = createDatabase({
+  provider: createSqliteProvider({
+    filename: "./data/app.db",
+  }),
+})
 
-- `createSqliteDatabase({ filename, timeout })`: create a SQLite database; the storage filename is required, and `:memory:` must be selected explicitly for ephemeral use.
-- `connect()` / `close()`: explicit resource lifecycle.
-- `exec(sql)` / `prepare(sql)`: execute SQL and create parameterized statements while connected.
-- `transaction(work)`: run synchronous SQL work atomically using `BEGIN IMMEDIATE`.
-- `migrate(migrations)`: apply ordered synchronous migrations and record versions in `schema_migrations`.
-- `state`: read-only lifecycle state from the shared database facade.
-- `createDatabase({ adapter })`: lower-level provider lifecycle boundary retained for future adapters.
+await database.connect()
+await database.create("users", { id: "user-1", name: "John" })
+const user = await database.readOne("users", "user-1")
+await database.update("users", "user-1", { name: "Peter" })
+await database.delete("users", "user-1")
+await database.close()
+```
 
-## Runtime constraints
+- Records are JSON-safe plain objects with non-empty string identifiers.
+- Identifiers are unique within a collection.
+- READ ONE returns a record or `null`; UPDATE returns the updated record or `null`; DELETE returns a boolean.
+- Duplicate identifiers raise a provider-neutral conflict error.
+- READ MANY supports exact equality filters, ordered sorting and offset/limit pagination.
+- Transactions expose the same CRUD methods, never provider-native transaction objects.
+- Provider capabilities are exposed as a frozen, provider-neutral snapshot.
 
-Node's built-in SQLite API is synchronous, so SQL calls and transactions block the event loop while executing. Transaction callbacks and migration functions must be synchronous. Do not put network calls, timers, or awaited work inside a transaction. SQLite is an embedded database, not a network database server.
+See the [README](./README.md) for the current detailed contract, examples and SQLite runtime constraints. Implementation status remains in the issue/PR; do not mark roadmap steps complete until the PR is merged and required checks pass.
 
-## Explicit non-goals
+## Existing SQLite functionality — preserved
 
-This package does not own domain aggregates, domain repository interfaces, generic CRUD, an ORM, a universal SQL abstraction, or an application-wide data model. It does not yet migrate an application or claim that an application is using persistent storage.
+The package already provides and must retain:
+
+- Node.js built-in `node:sqlite`, with no external driver or ORM.
+- File-backed and explicit `:memory:` databases.
+- Foreign-key enforcement, WAL for file-backed databases and configurable lock timeout.
+- Explicit connection lifecycle and close-time transaction draining.
+- Synchronous SQLite transactions with commit/rollback and nested/async callback rejection.
+- Ordered, atomic, versioned schema migrations and migration-history validation.
+- Deterministic tests using real in-memory and temporary file-backed SQLite databases.
+
+The low-level public API remains available:
+
+- `createSqliteDatabase({ filename, timeout })`
+- `connect()` / `close()`
+- `exec(sql)` / `prepare(sql)`
+- `transaction(work)`
+- `migrate(migrations)`
+- `state`
+- Legacy `createDatabase({ adapter })` lifecycle composition
+
+## Deferred — evidence-driven
+
+1. **First application-owned repository integration**
+   - The consumer owns its repository contract, business schema and migrations.
+   - Integrate only after this generic infrastructure contract is stable and the owning domain approves the consumer task.
+   - Verify restart persistence, transaction behavior, concurrency, migration compatibility and deterministic cleanup in that consumer's tests.
+
+2. **Backup and restore operations**
+   - Document database location, permissions, consistent backup, restore validation, schema version and retention for the first persistent consumer.
+   - Test backup/restore against an isolated temporary database before persistent deployment.
+
+3. **Additional providers**
+   - Reassess PostgreSQL or MongoDB only when measured deployment topology, concurrent writers, availability, dataset size or query requirements justify them.
+   - A new adapter must pass the provider conformance suite and declare any capability differences.
+   - Do not claim portability for guarantees a provider cannot provide.
 
 ## Completion policy
 
-A roadmap item is complete only after implementation is merged into `develop` and required validation passes.
+A roadmap item is complete only after implementation is merged into `develop`, relevant tests and coverage pass, required CI passes on the exact final PR head, and affected living documentation is current.
