@@ -5,7 +5,7 @@
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
 **Last reviewed:** 2026-11-17
-**Last source-verified develop checkpoint:** `abaf922daf9ceb72607b87035f7bdba8683be4a7` (2026-11-17; verified `develop` baseline before progressive changed-file enforcement).
+**Last source-verified develop checkpoint:** `1ff9e16083f067802ed17533da419874f958d32c` (2026-11-17; progressive strict ESLint enforcement merged and verified on `develop`).
 
 ## Multi-provider Harvester execution and market-data routing — #1339
 
