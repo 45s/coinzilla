@@ -172,8 +172,8 @@ test("activates every strategy gate before any shared service can stop", async (
     assert.ok(calls.indexOf(`wait:${strategyId}`) < calls.indexOf("broker-disconnect"))
   }
   assert.ok(calls.indexOf("closing-audit:COMPLETE") < calls.indexOf("user-data-stop"))
+  assert.ok(calls.indexOf("market-intake-stop") < calls.indexOf("user-data-stop"))
   assert.ok(calls.indexOf("user-data-stop") < calls.indexOf("operator-control-stop"))
-  assert.ok(calls.indexOf("operator-control-stop") < calls.indexOf("market-intake-stop"))
   assert.equal(fixture.state.status, "STOPPED")
 })
 
@@ -267,8 +267,8 @@ test("keeps market and user-data intake alive while accepted user-data work bloc
 
   releaseQueue()
   await stopping
-  assert.ok(calls.indexOf("wait-user-data-queue") < calls.indexOf("user-data-stop"))
-  assert.ok(calls.indexOf("user-data-stop") < calls.indexOf("market-intake-stop"))
+  assert.ok(calls.indexOf("wait-user-data-queue") < calls.indexOf("market-intake-stop"))
+  assert.ok(calls.indexOf("market-intake-stop") < calls.indexOf("user-data-stop"))
 })
 
 test("drains market work after safety is proven and before Binance disconnects", async () => {
@@ -303,7 +303,8 @@ test("drains market work after safety is proven and before Binance disconnects",
   await fixture.stop()
   assert.ok(calls.indexOf("wait:CONSERVATIVE") < calls.indexOf("market-intake-stop"))
   assert.ok(calls.indexOf("market-intake-stop") < calls.indexOf("market-task-drained"))
-  assert.ok(calls.indexOf("market-task-drained") < calls.indexOf("broker-disconnect"))
+  assert.ok(calls.indexOf("market-task-drained") < calls.indexOf("user-data-stop"))
+  assert.ok(calls.indexOf("user-data-stop") < calls.indexOf("broker-disconnect"))
 })
 
 
