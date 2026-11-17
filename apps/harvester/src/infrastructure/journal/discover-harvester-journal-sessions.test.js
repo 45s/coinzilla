@@ -134,6 +134,7 @@ test("rejects directories masquerading as JSONL files", async (t) => {
 
 test("rejects empty process-session directories and file-bearing session containers", async (t) => {
   const emptyRoot = path.join(await createRoot(t, "empty-session"), "sessions")
+  await mkdir(emptyRoot, { recursive: true })
   await mkdir(path.join(emptyRoot, "empty-session"))
   await assertDiscoveryError(
     discoverHarvesterJournalSessions({
