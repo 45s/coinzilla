@@ -8,6 +8,7 @@ import {
   subtractDecimal,
 } from "@coinzilla/utils"
 import { calculateInitialBuyPrice } from "../conservative/initial-buy-price.js"
+import { StrategyId } from "../strategy-ids.js"
 import { assertRecoverySellerCycleState } from "./cycle-state.js"
 import {
   applyRecoverySellerLifecycleTransition,
@@ -298,7 +299,7 @@ function createStopAndReconcileIfOrderExists({
 }) {
   if (Array.isArray(activeOrders)) {
     const [existingOrder] = activeOrders.filter((order) =>
-      order?.ownership?.strategyId === "RECOVERY_SELLER" &&
+      order?.ownership?.strategyId === StrategyId.RECOVERY_SELLER &&
       order?.market?.symbol === symbol &&
       typeof order.clientOrderId === "string" &&
       order.clientOrderId.trim(),
@@ -328,7 +329,7 @@ function hasValidOrderOwnership({ order, cycleState }) {
   const expectedPurpose = order.side === "BUY" ? "RECOVERY_BUY" : "RECOVERY_SELL"
   return Boolean(
     order.ownership &&
-    order.ownership.strategyId === "RECOVERY_SELLER" &&
+    order.ownership.strategyId === StrategyId.RECOVERY_SELLER &&
     order.ownership.cycleId === cycleState.cycleId &&
     order.ownership.positionId === cycleState.positionId &&
     typeof order.ownership.positionId === "string" &&
