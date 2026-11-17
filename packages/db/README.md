@@ -93,23 +93,26 @@ The methods have consistent provider-neutral results:
 `readMany(collection, query)` accepts a plain object:
 
 ```js
-const page = await database.readMany("users", {
-  filter: {
-    status: "active",
-    verified: true,
+const page = await database.readMany({
+  collection: "users",
+  query: {
+    filter: {
+      status: "active",
+      verified: true,
+    },
+    sort: [
+      {
+        field: "name",
+        direction: "asc",
+      },
+      {
+        field: "createdAt",
+        direction: "desc",
+      },
+    ],
+    limit: 25,
+    offset: 50,
   },
-  sort: [
-    {
-      field: "name",
-      direction: "asc",
-    },
-    {
-      field: "createdAt",
-      direction: "desc",
-    },
-  ],
-  limit: 25,
-  offset: 50,
 })
 ```
 
@@ -172,23 +175,26 @@ A future provider must declare its own actual guarantees. The package will not s
 Future provider packages can reuse the same public contract suite instead of writing a separate interpretation of CRUD behavior:
 
 ```js
+import { basename } from "node:path"
+
 import { createDatabase } from "@coinzilla/db"
 import { runDatabaseProviderConformanceTests } from "@coinzilla/db/testing"
 
 runDatabaseProviderConformanceTests({
   name: "PostgreSQL provider",
-  createDatabase: ({ storageKey }) => createDatabase({
+  createDatabase: ({ storageKey, storageMode }) => createDatabase({
     provider: createPostgresProvider({
       connectionString: process.env.DATABASE_URL,
-      testDatabase: storageKey,
+      testDatabase: `coinzilla_test_${basename(storageKey, ".sqlite")}`,
+      storageMode,
     }),
   }),
 })
 ```
 
-The example is illustrative; no PostgreSQL provider is included. The factory receives an opaque `storageKey`. It must create an isolated store for each in-memory test and reuse the supplied key for persistence tests. A server provider can map the key to a temporary database or namespace; SQLite maps it to a temporary file. Providers that cannot support a particular test must declare the capability difference explicitly and the suite will mark that test skipped with a reason; do not silently skip a contract.
+The example is illustrative; no PostgreSQL provider is included. The factory receives a unique `storageKey` and one declared `storageMode`. The suite runs the contract against every mode in `database.capabilities.storage.modes`, using an isolated key for each test. For `file` and `server` modes it reuses the same key across a new connection to verify persistence; the reconnect test is explicitly skipped for `memory` mode. A server adapter can derive a temporary database or namespace name from the key and must release that resource when the composed database is closed. SQLite maps `memory` to `:memory:` and `file` to the isolated temporary file path. Providers must not silently skip a declared storage mode or a supported contract.
 
-The suite verifies CRUD and collection isolation, duplicate handling, each declared query capability, missing-record results, transaction commit/rollback, the declared synchronous/asynchronous callback mode, immutable capability snapshots, and persistence across a new connection. Query and persistence cases are explicitly skipped with a reason only when the provider declares the corresponding capability unavailable. Add provider-specific lifecycle, lock/concurrency and cleanup tests where the generic contract cannot express the provider's operational guarantees.
+The suite verifies CRUD and collection isolation, duplicate handling, every declared storage mode, each declared query capability, missing-record results, transaction commit/rollback, the declared synchronous/asynchronous callback mode, immutable capability snapshots, lifecycle closure, and persistence across a new connection where storage is persistent. Query cases are skipped with a reason only when the provider declares the corresponding capability unavailable. The in-memory reconnect-persistence case is skipped because that storage mode is explicitly ephemeral. Add provider-specific lifecycle, lock/concurrency and cleanup tests where the generic contract cannot express the provider's operational guarantees.
 
 ## Provider composition
 
