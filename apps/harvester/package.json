@@ -50,6 +50,7 @@
       "src/domain/strategies/recovery-seller/calculate-profitability.test.js",
       "src/domain/account/calculate-account-snapshot-baselines.test.js",
       "src/bootstrap/account/create-account-snapshot-manager.test.js",
+      "src/use-cases/create-recovery-seller-accounting-workflow.test.js",
       "src/use-cases/conservative-trading-engine.test.js",
       "src/use-cases/conservative-trading-engine.multi-market.test.js",
       "src/application/operator/create-harvester-operator.test.js",
