@@ -295,7 +295,6 @@ A package's README is a discovery aid, not source proof. If the reference has no
 
 **Safety invariant:** Bitunix Spot remains read-only and not Harvester-ready while [issue #1185](https://github.com/45s/coinzilla/issues/1185) remains unresolved. Reference coverage is not authorization to enable a mutation.
 
-
 ## 8. Bitunix Spot deposit-history read (2026-11-17)
 
 **Decision:** Implemented as a Bitunix-only, signed, read-only REST extension in issue [#1384](https://github.com/45s/coinzilla/issues/1384) / PR [#1385](https://github.com/45s/coinzilla/pull/1385). It is not a Binance-parity method and does not change the read-only/Harvester-readiness gate in #1185.

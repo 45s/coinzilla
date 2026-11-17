@@ -1204,7 +1204,6 @@ The purpose is to translate an already implemented and tested Spot behavior into
 
 The audit is the detailed evidence source; this roadmap records status and next actions. Future agents must search additional GitHub packages when the primary .NET/TypeScript references do not cover a capability or disagree. The source-discovery rule is in [Brokers AGENTS.md](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit).
 
-
 ## 2026-11-17 — Bitunix Spot deposit-history extension (#1384 / PR #1385)
 
 - [x] Audit the official `POST /api/spot/v1/deposit/page` contract against JKorf interface, implementation, model and response fixture.
