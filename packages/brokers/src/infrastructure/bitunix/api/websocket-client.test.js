@@ -344,7 +344,7 @@ test("Bitunix Spot WebSocket client fails all pending RPCs on an unparseable mes
   await client.connect()
 
   const pending = client.getAccount()
-  transport.receive("{not-json")
+  transport.receiveText("{not-json")
   await assert.rejects(
     pending,
     /response JSON is invalid/i,
