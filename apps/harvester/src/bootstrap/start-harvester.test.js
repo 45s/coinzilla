@@ -1,5 +1,8 @@
 import nodeTest from "node:test"
-import { TEST_BINANCE_CAPABILITIES } from "../../test-support/binance-test-capabilities.js"
+import {
+  createTestBinanceCapabilities,
+  TEST_BINANCE_CAPABILITIES,
+} from "../../test-support/binance-test-capabilities.js"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -396,6 +399,7 @@ function createBrokerUserDataPorts({ calls, state }) {
 const createBroker = (...args) => {
   const [calls = [], options = {}] = args
   const {
+    capabilities = TEST_BINANCE_CAPABILITIES,
     subscribeResult,
     subscribeResultBySymbol = {},
     externalOpenOrders = [],
@@ -404,7 +408,7 @@ const createBroker = (...args) => {
     externalOpenOrders,
   })
   return {
-    capabilities: TEST_BINANCE_CAPABILITIES,
+    capabilities,
     connect: async () => calls.push("connect"),
     disconnect: async () => calls.push("disconnect"),
     ...createBrokerOrderPorts({
@@ -1279,7 +1283,11 @@ test("passes live TRADING_MODE to the Binance broker factory during startup", as
     },
     brokerAdapterFactory: ({ config }) => {
       brokerConfig = config
-      return createBroker()
+      return createBroker([], {
+        capabilities: createTestBinanceCapabilities({
+          tradingMode: "live",
+        }),
+      })
     },
     logger: {
       info() {},

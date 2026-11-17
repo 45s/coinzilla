@@ -5,6 +5,9 @@ import { createProviderRegistry } from "./provider-registry.js"
 const capabilities = Object.freeze({
   contractVersion: 1,
   provider: "binance",
+  environment: Object.freeze({
+    selectedMode: "testnet",
+  }),
   marketData: Object.freeze({
     oneShotPrice: Object.freeze({ status: "supported" }),
     priceStream: Object.freeze({ status: "supported" }),
@@ -351,4 +354,25 @@ test("constructs a registered non-Binance provider without provider-specific reg
   assert.equal(registry.getBrokerPort({
     instanceId: "futureExchangePrimary",
   }).providerInstanceId, "futureExchangePrimary")
+})
+
+test("rejects environment-dependent capabilities for a different selected mode", async () => {
+  const broker = createBroker()
+  broker.capabilities = Object.freeze({
+    ...capabilities,
+    environment: Object.freeze({
+      selectedMode: "live",
+    }),
+  })
+  await assert.rejects(
+    createProviderRegistry({
+      providerInstances: [createDescriptor()],
+      selections,
+      adapterFactories: {
+        binance: () => broker,
+      },
+      env: {},
+    }),
+    /capability environment does not match configured mode/,
+  )
 })

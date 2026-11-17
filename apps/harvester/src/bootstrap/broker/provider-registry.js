@@ -132,18 +132,28 @@ function getCapability({ declaration, path }) {
   return capability
 }
 
-function isCapabilityEnvironmentValid({
-    descriptor,
+function hasEnvironmentDependentRequiredCapability({ declaration }) {
+  return REQUIRED_CAPABILITIES.some((path) =>
+    getCapability({
+      declaration,
+      path,
+    })?.status === "environment-dependent")
+}
+
+function isCapabilityEnvironmentValid({ descriptor, declaration }) {
+  if (!hasEnvironmentDependentRequiredCapability({
     declaration,
-  }) {
-  const selectedMode = declaration.environment?.selectedMode
-  return !descriptor.tradingMode || selectedMode === undefined || selectedMode === descriptor.tradingMode
+  })) {
+    return true
+  }
+  return Boolean(descriptor.tradingMode) &&
+    declaration.environment?.selectedMode === descriptor.tradingMode
 }
 
 function isCapabilityAvailable({
-      capability,
-      path,
-    }) {
+  capability,
+  path,
+}) {
   const isMutation = path[0] === "orders" &&
     ["placement", "cancellation"].includes(path[1])
   return capability?.status === "supported" ||
