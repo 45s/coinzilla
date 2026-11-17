@@ -112,6 +112,8 @@ The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The curren
 | `getPrices({ symbol })` | `GET /api/spot/v1/market/last_price` | Request/response lookup only; requires a strictly positive decimal string and preserves it exactly in `{ symbol, price }`. No source timestamp is provided. |
 | `getFills({ symbol, orderId })` | Blocked; no request is sent | The documented matching-order response does not define quantity denomination, complete partial-execution coverage, or stable/unique execution identity. No canonical `Fill` is emitted until Bitunix clarifies these semantics. |
 
+All adapted Bitunix Spot order rows from pending orders, order history, and order detail must contain non-empty string `ctime` and `utime` fields. The adapter preserves both source strings verbatim; it does not parse or infer timezone, precision, or timestamp ordering because the official order-history schema does not specify those details.
+
 ### REST error and response validation
 
 The Bitunix REST client throws `BitunixRestError`, which extends the shared `SystemCustomError` base. The stable broker-owned `code` identifies the local failure category; `kind` is one of `transport`, `http`, `exchange`, or `response`. The exchange's API error code is kept separately in `exchangeCode` and remains opaque unless Bitunix publishes an authoritative Spot-specific mapping. No retryability or permanent-failure meaning is inferred from an unknown code.
