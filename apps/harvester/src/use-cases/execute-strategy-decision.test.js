@@ -747,6 +747,15 @@ marketMetadata })
 })
 
 
+function createOwnedDecision({ ownership } = {}) {
+  return {
+    actions: [{
+      ...decision.actions[0],
+      ...ownership,
+    }],
+  }
+}
+
 test("propagates RS OrderOwnership metadata through shared execution callbacks without leaking it to the broker", async () => {
   const ownership = {
     strategyId: StrategyId.RECOVERY_SELLER,
@@ -807,15 +816,7 @@ test("propagates RS OrderOwnership metadata through shared execution callbacks w
       }
     },
   })
-  const rsDecision = {
-    actions: [{
-      ...decision.actions[0],
-      strategyId: ownership.strategyId,
-      positionId: ownership.positionId,
-      purpose: ownership.purpose,
-      cycleId: ownership.cycleId,
-    }],
-  }
+  const rsDecision = createOwnedDecision({ ownership })
 
   const validation = await execute.validate({
     decision: rsDecision,
