@@ -51,6 +51,7 @@
       "src/domain/strategies/recovery-seller/calculate-sell-plan.test.js",
       "src/domain/strategies/recovery-seller/stop-decision.test.js",
       "src/domain/strategies/recovery-seller/lifecycle-decision.test.js",
+      "src/domain/strategies/recovery-seller/evaluate-buy-decision.test.js",
       "src/domain/account/calculate-account-snapshot-baselines.test.js",
       "src/bootstrap/account/create-account-snapshot-manager.test.js",
       "src/use-cases/create-recovery-seller-accounting-workflow.test.js",
