@@ -1,4 +1,5 @@
 import nodeTest from "node:test"
+import { TEST_BINANCE_CAPABILITIES } from "../../test-support/binance-test-capabilities.js"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"

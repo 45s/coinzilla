@@ -462,7 +462,7 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
       throw new AggregateError(
         [error, cleanupError],
         "Harvester provider startup failed and operator-control cleanup also failed",
-        { cause: error },
+        { cause: cleanupError },
       )
     }
     throw error

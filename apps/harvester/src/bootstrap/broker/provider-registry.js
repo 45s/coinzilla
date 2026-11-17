@@ -140,13 +140,24 @@ function getCapability({ declaration, path }) {
   return capability
 }
 
+function isCapabilityEnvironmentValid({ descriptor, declaration }) {
+  const selectedMode = declaration.environment?.selectedMode
+  return !descriptor.tradingMode || selectedMode === undefined || selectedMode === descriptor.tradingMode
+}
+
+function isCapabilityAvailable({ capability, path }) {
+  const isMutation = path[0] === "orders" &&
+    ["placement", "cancellation"].includes(path[1])
+  return capability?.status === "supported" ||
+    (isMutation && capability?.status === "environment-dependent")
+}
+
 function assertCapabilities({ descriptor, broker }) {
   const declaration = broker.capabilities
   if (!declaration || declaration.contractVersion !== 1 || declaration.provider !== descriptor.provider) {
     throw new TypeError(`Provider instance "${descriptor.id}" has no compatible verified capability declaration`)
   }
-  const selectedMode = declaration.environment?.selectedMode
-  if (descriptor.tradingMode && selectedMode !== undefined && selectedMode !== descriptor.tradingMode) {
+  if (!isCapabilityEnvironmentValid({ descriptor, declaration })) {
     throw new TypeError(`Provider instance "${descriptor.id}" capability environment does not match configured mode`)
   }
   for (const path of REQUIRED_CAPABILITIES) {
@@ -154,11 +165,7 @@ function assertCapabilities({ descriptor, broker }) {
       declaration,
       path,
     })
-    const isMutation = path[0] === "orders" &&
-      ["placement", "cancellation"].includes(path[1])
-    const supported = capability?.status === "supported"
-    const environmentDependent = isMutation && capability?.status === "environment-dependent"
-    if (!supported && !environmentDependent) {
+    if (!isCapabilityAvailable({ capability, path })) {
       throw new TypeError(`Provider instance "${descriptor.id}" declares capability "${path.join(".")}" as "${capability?.status ?? "missing"}"`)
     }
   }
@@ -391,7 +398,7 @@ function createConnectAll({ entries, disconnectAll, eventPublisher, logger, life
               error,
               cleanupError,
             ], "Provider connection and cleanup both failed", {
-              cause: error,
+              cause: cleanupError,
             })
           }
           throw error
