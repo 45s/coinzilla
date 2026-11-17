@@ -585,6 +585,11 @@ test("applies RS BUY fills to the registered Position exactly once and rejects m
   const second = await workflow.applyBuyFill({ fill: secondFill })
   const portfolioAfterFills = workflow.getPortfolio()
   const duplicate = await workflow.applyBuyFill({ fill: firstFill })
+  const replayedWorkflow = createRecoverySellerAccountingWorkflow({
+    initialPortfolio: portfolioAfterFills,
+    initialOrderRegistry: workflow.getOrderRegistry(),
+  })
+  const replayed = await replayedWorkflow.applyBuyFill({ fill: firstFill })
   const mismatched = await workflow.applyBuyFill({
     fill: makeRecoveryBuyFill({
       tradeId: "rs-buy-fill-wrong-broker",
@@ -604,6 +609,10 @@ test("applies RS BUY fills to the registered Position exactly once and rejects m
   assert.equal(duplicate.data.duplicate, true)
   assert.equal(duplicate.data.portfolio, portfolioAfterFills,
     "Replaying an identical canonical BUY Fill must preserve the exact Portfolio snapshot.")
+  assert.equal(replayed.ok, true, replayed.errors?.[0]?.message)
+  assert.equal(replayed.data.duplicate, true,
+    "Restoring the Portfolio and OrderRegistry before replay must not account the same Fill twice.")
+  assert.equal(replayed.data.portfolio, portfolioAfterFills)
   assert.equal(position.strategyId, strategyId)
   assert.equal(position.baseQuantity.amount, "5.01")
   assert.equal(position.spent.amount, "10.02",
