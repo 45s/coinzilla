@@ -2,7 +2,7 @@
 
 ## Binance single-writer lock isolation — #1307
 
-- [~] Scope both host-shared Harvester process locks by Binance provider, explicit trading environment and canonical account UID. Preserve atomic exclusive creation, ownership-token release, conservative dead-PID recovery, and process-lock retention on uncertain shutdown. Testnet and LIVE must coexist; duplicate writers for one account/environment remain blocked across worktrees. The runtime requires `BINANCE_ACCOUNT_ID`; configure the same canonical Binance UID for every API key belonging to an account in `.env.development` and `.env`. See [Journal Operations — Trading process ownership locks](./docs/JOURNAL_OPERATIONS.md#trading-process-ownership-locks) and [issue #1307](https://github.com/45s/coinzilla/issues/1307).
+- [~] Scope both host-shared Harvester process locks by Binance provider and explicit trading environment. Preserve atomic exclusive creation, ownership-token release, conservative dead-PID recovery, and process-lock retention on uncertain shutdown. Testnet and LIVE must coexist; duplicate writers in one environment remain blocked across worktrees. No account UID or additional account configuration is required. See [Journal Operations — Trading process ownership locks](./docs/JOURNAL_OPERATIONS.md#trading-process-ownership-locks) and [issue #1307](https://github.com/45s/coinzilla/issues/1307).
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
