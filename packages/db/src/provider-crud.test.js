@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createDatabase, createSqliteProvider } from "../src/index.js"
+import { createDatabase, createSqliteProvider } from "./index.js"
 
 test("provider-neutral database API creates, reads, updates, and deletes records", async () => {
   const database = createDatabase({
@@ -12,21 +12,25 @@ test("provider-neutral database API creates, reads, updates, and deletes records
   await database.connect()
 
   try {
-    const createdRecord = await database.create("people", {
+    const record = {
       id: "person-1",
       name: "Morty",
+    }
+    const createdRecord = await database.create({
+      collection: "people",
+      record,
     })
 
     assert.deepEqual(
       createdRecord,
-      {
-        id: "person-1",
-        name: "Morty",
-      },
+      record,
       "CREATE must return the stored provider-neutral record without changing its fields",
     )
 
-    const readRecord = await database.readOne("people", "person-1")
+    const readRecord = await database.readOne({
+      collection: "people",
+      id: "person-1",
+    })
 
     assert.deepEqual(
       readRecord,
@@ -34,8 +38,12 @@ test("provider-neutral database API creates, reads, updates, and deletes records
       "READ ONE must return the record stored under the requested identifier",
     )
 
-    const updatedRecord = await database.update("people", "person-1", {
-      name: "Summer",
+    const updatedRecord = await database.update({
+      collection: "people",
+      id: "person-1",
+      changes: {
+        name: "Summer",
+      },
     })
 
     assert.deepEqual(
@@ -47,7 +55,9 @@ test("provider-neutral database API creates, reads, updates, and deletes records
       "UPDATE must return the complete updated record while preserving its identifier",
     )
 
-    const records = await database.readMany("people")
+    const records = await database.readMany({
+      collection: "people",
+    })
 
     assert.deepEqual(
       records,
@@ -55,7 +65,10 @@ test("provider-neutral database API creates, reads, updates, and deletes records
       "READ MANY without filters must return every record in the collection",
     )
 
-    const wasDeleted = await database.delete("people", "person-1")
+    const wasDeleted = await database.delete({
+      collection: "people",
+      id: "person-1",
+    })
 
     assert.equal(
       wasDeleted,
@@ -63,7 +76,10 @@ test("provider-neutral database API creates, reads, updates, and deletes records
       "DELETE must report that the requested existing record was removed",
     )
 
-    const missingRecord = await database.readOne("people", "person-1")
+    const missingRecord = await database.readOne({
+      collection: "people",
+      id: "person-1",
+    })
 
     assert.equal(
       missingRecord,
