@@ -55,7 +55,8 @@ function validateCapabilityDeclaration({ broker, providerType, environment }) {
     isDeeplyFrozen({ value: capabilities }) &&
     capabilities.contractVersion === 1 &&
     capabilities.provider === providerType &&
-    (selectedMode === undefined || selectedMode === environment)
+    typeof selectedMode === "string" &&
+    selectedMode === environment
   if (!valid) {
     throw createRegistryError({
       message: "Provider capability declaration must be immutable and match its registered provider identity",
