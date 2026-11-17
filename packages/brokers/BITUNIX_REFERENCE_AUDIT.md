@@ -237,7 +237,7 @@ It validates symbol, interval, decimals, OHLC invariants and timezone-qualified 
 
 **Priority 1 — remaining Bitunix-specific public metadata extension (not Binance parity):**
 
-- `getExchangeRates()` is in progress in [PR #1370](https://github.com/45s/coinzilla/pull/1370) for [issue #1331](https://github.com/45s/coinzilla/issues/1331); its source audit and stricter Coinzilla response contract are recorded above.
+- `getExchangeRates()` is implemented and merged in [PR #1370](https://github.com/45s/coinzilla/pull/1370); its source audit and stricter Coinzilla response contract are recorded above. Do not duplicate this capability.
 - `getTokenMetadata()` (or a domain-appropriate name) remains a separate candidate for `GET /api/spot/v1/common/coin/coin_network/list`, returning token and network metadata such as deposit/withdraw availability, memo requirement, network name, minimums and address validation pattern. Define a real consumer contract before implementation.
 
 These are Bitunix-only public extensions, not Binance parity methods. Keep exact decimal fields as strings; do not treat descriptive precision fields as tick/step filters. Token/network metadata is not authorization to implement transfers or withdrawals.
