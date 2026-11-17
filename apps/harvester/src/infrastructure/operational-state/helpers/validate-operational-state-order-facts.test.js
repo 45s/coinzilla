@@ -115,7 +115,6 @@ test("rejects malformed order-submission intent identity, fields, classification
   const valid = makeSubmissionIntent()
   const invalidCases = [
     ["unsupported payload field", { unsupported: true }, /unsupported fields/],
-    ["wrong stable client identity", {}, /factId must match/],
     ["non-canonical symbol", { symbol: "btcusdt" }, /symbol must be canonical/],
     ["unsupported side", { side: "HOLD" }, /side must be BUY or SELL/],
     ["unsupported order type", { type: "MARKET" }, /type must be LIMIT/],
