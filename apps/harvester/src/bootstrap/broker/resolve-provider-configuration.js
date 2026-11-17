@@ -128,16 +128,19 @@ function resolveProviderSelections({ selection, instances }) {
  * compatibility boundary; explicit selections never fall back to Binance.
  */
 export function resolveProviderConfiguration({ brokers, tradingMode } = {}) {
-  const configuration = brokers ?? LEGACY_CONFIGURATION
+  const configuration = brokers === undefined ? LEGACY_CONFIGURATION : brokers
+  assertRecord({
+    value: configuration,
+    path: "brokers",
+  })
+  if (tradingMode !== undefined && !["testnet", "live"].includes(tradingMode)) {
+    throw new TypeError("Harvester provider configuration requires a supported trading environment")
+  }
   for (const key of Object.keys(configuration)) {
     if (key !== "instances" && key !== "selection") {
       throw new TypeError(`Harvester provider configuration field "${key}" is unsupported`)
     }
   }
-  assertRecord({
-    value: configuration,
-    path: "brokers",
-  })
   assertRecord({
     value: configuration.instances,
     path: "brokers.instances",

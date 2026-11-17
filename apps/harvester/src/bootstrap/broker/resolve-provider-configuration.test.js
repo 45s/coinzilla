@@ -173,3 +173,13 @@ test("allows provider-specific credential references without storing secret valu
     apiPassphrase: "BITUNIX_API_PASSPHRASE",
   })
 })
+
+test("does not treat an explicitly null broker configuration as legacy configuration", () => {
+  assert.throws(
+    () => resolveProviderConfiguration({
+      brokers: null,
+      tradingMode: "testnet",
+    }),
+    /brokers.*must be an object/,
+  )
+})
