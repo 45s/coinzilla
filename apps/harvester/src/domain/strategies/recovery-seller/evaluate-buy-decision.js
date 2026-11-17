@@ -910,7 +910,7 @@ function evaluateBuyCandidate({
   }
 }
 
-function createBuySubmitResult({ stopState, previousDecision, marketMetadata, plan }) {
+function createBuySubmitResult({ stopState, previousDecision, marketMetadata, cycleState, plan }) {
   const decision = createRecoverySellerLifecycleDecision({
     outcome: RECOVERY_SELLER_LIFECYCLE_OUTCOMES.SUBMIT,
     reasonCode: "BUY_TRANCHE_ELIGIBLE",
@@ -922,6 +922,8 @@ function createBuySubmitResult({ stopState, previousDecision, marketMetadata, pl
     decision,
     action: Object.freeze({
       side: "BUY",
+      purpose: "RECOVERY_BUY",
+      cycleId: cycleState.cycleId,
       type: marketMetadata.orderType,
       price: plan.buyPrice,
       quantity: plan.buyQuantity,
@@ -1007,6 +1009,7 @@ export function evaluateRecoverySellerBuyDecision({
       stopState,
       previousDecision,
       marketMetadata,
+      cycleState,
       plan: candidate.plan,
     })
   } catch (error) {
