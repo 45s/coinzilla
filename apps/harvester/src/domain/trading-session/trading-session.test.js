@@ -16,7 +16,7 @@ const BUILD_PROVENANCE = Object.freeze({
     branch: "develop",
     commit: "a".repeat(40),
     shortCommit: "a".repeat(8),
-    commitMessage: "test build",
+    commitMessage: "must-not-persist",
     commitDate: "2026-11-17T15:00:00.000Z",
     workingTree: "clean",
     metadataSource: "git",
@@ -51,6 +51,7 @@ test("creates a bounded allowlisted session record with canonical identity", () 
   assert.deepEqual(record.metadata, { recordKind: "ordinary-trading-history" }, "Only the fixed non-secret history classification may be persisted as metadata.")
   assert.deepEqual(Object.keys(record.buildProvenance).sort(), ["application", "processId", "source", "version"], "Build provenance must contain only its allowlisted top-level fields.")
   assert.equal(JSON.stringify(record).includes("must-not-persist"), false, "Unknown credentials and secret-bearing fields must never leak into the historical record.")
+  assert.equal("commitMessage" in record.buildProvenance.source, false, "Free-form Git commit messages must not be persisted because they can contain accidental secrets.")
 })
 
 test("rejects invalid environment, identity, configuration, markets, timestamps and provenance", () => {
