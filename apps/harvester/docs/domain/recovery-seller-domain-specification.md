@@ -44,7 +44,6 @@ No independent fixed 1% market-rise wait is required merely to release the confi
 - Actual holdings change only from confirmed canonical fills. A price, order intent, acknowledgement, cancellation request, or operator authorization is not an execution.
 - RS is independent of CG_coinGrabber. It must not change Conservative behavior or its canonical specification.
 
-
 ### 2.1 Global fail-closed rule — owner-approved
 
 **STOP whenever actual conditions do not match an explicitly covered and approved RS scenario.** This is a global RS invariant, not a SELL-only profitability rule.
