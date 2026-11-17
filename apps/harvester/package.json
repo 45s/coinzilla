@@ -5,7 +5,7 @@
   "description": "Harvester application workspace",
   "scripts": {
     "test": "node --test --test-reporter=spec",
-    "test:coverage": "node --test --experimental-test-coverage",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/**/*.js --test-coverage-exclude=src/**/*.test.js --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80",
     "start": "node --env-file=.env src/index.js",
     "dev": "node --env-file=.env.development scripts/run-dev-with-log.js",
     "testnet:orders": "node --env-file=.env.development scripts/list-testnet-open-orders.js",
@@ -58,6 +58,13 @@
       "src/application/operator/create-harvester-operator.test.js",
       "src/infrastructure/operational-state/operational-state-control.test.js",
       "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
+      "src/infrastructure/operational-state/operational-state-record-validation.test.js",
+      "src/infrastructure/operational-state/helpers/operational-state-decimal-validation.test.js",
+      "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-facts.test.js",
+      "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.test.js",
+      "src/infrastructure/operational-state/helpers/validate-operational-state-execution-facts.test.js",
+      "src/infrastructure/journal/helpers/resolve-session-chronology.test.js",
+      "src/infrastructure/journal/discover-harvester-journal-sessions.test.js",
       "src/infrastructure/telegram/format-telegram-operator-response.test.js"
     ]
   }
