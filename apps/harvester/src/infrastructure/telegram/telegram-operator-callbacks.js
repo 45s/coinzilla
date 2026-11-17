@@ -30,6 +30,17 @@ export async function handleNavigationCallback({
   })
 }
 
+function prunePendingConfirmations({ pendingConfirmations, now }) {
+  for (const [token, pending] of pendingConfirmations) {
+    if (pending.expiresAt < now) {
+      pendingConfirmations.delete(token)
+    }
+  }
+  while (pendingConfirmations.size >= 1000) {
+    pendingConfirmations.delete(pendingConfirmations.keys().next().value)
+  }
+}
+
 export async function handleMarketSelectionCallback({
   ask,
   update,
@@ -55,17 +66,10 @@ export async function handleMarketSelectionCallback({
   })
   const token = String(update.update_id)
   const now = Date.now()
-  for (const [pendingToken, pending] of pendingConfirmations) {
-    if (pending.expiresAt < now) {
-      pendingConfirmations.delete(pendingToken)
-    }
-  }
-  while (pendingConfirmations.size >= 1000) {
-    pendingConfirmations.delete(pendingConfirmations.keys().next().value)
-  }
+  prunePendingConfirmations({ pendingConfirmations, now })
   pendingConfirmations.set(token, {
-    action: ask[1],
-    symbol: ask[2],
+    action,
+    symbol,
     userId,
     chatId: String(chat.id),
     messageId,
@@ -81,32 +85,22 @@ export async function handleMarketSelectionCallback({
     interaction,
     message: "Telegram confirmation REQUESTED",
     stage: "CONFIRMATION_REQUESTED",
-    fields: {
-      confirmationExpiresInMs: confirmationTtlMs,
-    },
+    fields: { confirmationExpiresInMs: confirmationTtlMs },
   })
   await editMessage({
     chatId: chat.id,
     messageId,
-    text: `Confirm ${ask[1].toLowerCase()} of ${ask[2]}? No action has been taken yet.`,
+    text: `Confirm ${action.toLowerCase()} of ${symbol}? No action has been taken yet.`,
     replyMarkup: {
       inline_keyboard: [
         [
           {
-            text: `Confirm ${ask[1].toLowerCase()}`,
-            callback_data: `cc:confirm:${ask[1]}:${ask[2]}:${token}`,
+            text: `Confirm ${action.toLowerCase()}`,
+            callback_data: `cc:confirm:${action}:${symbol}:${token}`,
           },
-          {
-            text: "Cancel",
-            callback_data: `cc:cancel:${token}`,
-          },
+          { text: "Cancel", callback_data: `cc:cancel:${token}` },
         ],
-        [
-          {
-            text: "Main menu",
-            callback_data: "cc:nav:home",
-          },
-        ],
+        [{ text: "Main menu", callback_data: "cc:nav:home" }],
       ],
     },
     signal,

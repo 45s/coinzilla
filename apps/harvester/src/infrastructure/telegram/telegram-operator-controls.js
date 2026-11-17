@@ -129,103 +129,121 @@ export function buildControlReply(options) {
 }
 
 
-export async function executeTelegramOperatorControl({ action, symbol, userId, requestId, chatId, messageId, signal, interaction, operator, diagnostics, logStage, sendMessage, editMessage, buildNavigationKeyboard }) {
-    const method = ({
-      PAUSE: "pauseMarket",
-      RESUME: "resumeMarket",
-      PAUSE_BUYS: "pauseBuys",
-      RESUME_BUYS: "resumeBuys",
-      PAUSE_ALL_BUYS: "pauseAllBuys",
-      RESUME_ALL_BUYS: "resumeAllBuys",
-    })[action]
-    interaction.action = action
-    interaction.symbol = symbol
-    interaction.operation = method
-    if (typeof operator[method] !== "function") {
-      const text = action.startsWith("RESUME") ? "Resume is not available in this operator adapter configuration." : "Pause is not available in this operator adapter configuration."
-      diagnostics.report({
-        interaction,
-        stage: "APPLICATION_OPERATION_UNAVAILABLE",
-        operation: method,
-        symbol,
-        classification: "OPERATOR_CONTROL_UNAVAILABLE",
-        message: `Operator control use case is unavailable: ${method}`,
-      })
-      if (messageId !== undefined) { await editMessage({ chatId,
-messageId,
-text,
-replyMarkup: buildNavigationKeyboard(),
-signal,
-interaction }) }
-      else { await sendMessage({ chatId,
-text,
-replyMarkup: buildNavigationKeyboard(),
-signal,
-interaction }) }
-      return
-    }
-    const startedAt = Date.now()
-    interaction.applicationOperationInvoked = true
+async function invokeOperatorControl({
+  action,
+  symbol,
+  userId,
+  requestId,
+  interaction,
+  operator,
+  diagnostics,
+  logStage,
+}) {
+  const method = ({
+    PAUSE: "pauseMarket",
+    RESUME: "resumeMarket",
+    PAUSE_BUYS: "pauseBuys",
+    RESUME_BUYS: "resumeBuys",
+    PAUSE_ALL_BUYS: "pauseAllBuys",
+    RESUME_ALL_BUYS: "resumeAllBuys",
+  })[action]
+  interaction.action = action
+  interaction.symbol = symbol
+  interaction.operation = method
+  if (typeof operator[method] !== "function") {
+    const verb = action.startsWith("RESUME") ? "Resume" : "Pause"
+    diagnostics.report({
+      interaction,
+      stage: "APPLICATION_OPERATION_UNAVAILABLE",
+      operation: method,
+      symbol,
+      classification: "OPERATOR_CONTROL_UNAVAILABLE",
+      message: `Operator control use case is unavailable: ${method}`,
+    })
+    return { method, reply: `${verb} is not available in this operator adapter configuration.` }
+  }
+  const startedAt = Date.now()
+  interaction.applicationOperationInvoked = true
+  logStage({
+    interaction,
+    message: "Telegram application operation STARTED",
+    stage: "APPLICATION_OPERATION_STARTED",
+  })
+  let result
+  try {
+    result = await operator[method]({
+      actor: { id: `telegram-user:${userId}`, roles: ["trading-operator"] },
+      requestId,
+      symbol,
+    })
+  } catch (error) {
+    diagnostics.fail({
+      interaction,
+      error,
+      stage: "APPLICATION_OPERATION",
+      operation: method,
+      symbol,
+    })
+  }
+  const reply = buildControlReply({
+    action,
+    symbol,
+    result,
+    method,
+    interaction,
+    diagnostics,
+  })
+  if (interaction.applicationOperationCompleted) {
     logStage({
       interaction,
-      message: "Telegram application operation STARTED",
-      stage: "APPLICATION_OPERATION_STARTED",
+      message: "Telegram application operation COMPLETED",
+      stage: "APPLICATION_OPERATION_COMPLETED",
+      level: "info",
+      fields: {
+        durationMs: Date.now() - startedAt,
+        result: action.startsWith("PAUSE") ? "PAUSED" : "RESUME_PROCESSED",
+      },
     })
-    let result
-    try {
-      result = await operator[method]({
-        actor: {
-          id: `telegram-user:${userId}`,
-          roles: ["trading-operator"],
-        },
-        requestId,
-        symbol,
-      })
-    } catch (error) {
-      diagnostics.fail({
-        interaction,
-        error,
-        stage: "APPLICATION_OPERATION",
-        operation: method,
-        symbol,
-      })
-    }
-    const reply = buildControlReply({
-      action,
-      symbol,
-      result,
-      method,
-      interaction,
-      diagnostics,
-    })
-    if (interaction.applicationOperationCompleted) {
-      logStage({
-        interaction,
-        message: "Telegram application operation COMPLETED",
-        stage: "APPLICATION_OPERATION_COMPLETED",
-        level: "info",
-        fields: {
-          durationMs: Date.now() - startedAt,
-          result: action.startsWith("PAUSE") ? "PAUSED" : "RESUME_PROCESSED",
-        },
-      })
-    }
-    if (messageId !== undefined) {
-      await editMessage({
-        chatId,
-        messageId,
-        text: reply,
-        replyMarkup: buildNavigationKeyboard(),
-        signal,
-        interaction,
-      })
-    } else {
-      await sendMessage({
-        chatId,
-        text: reply,
-        replyMarkup: buildNavigationKeyboard(),
-        signal,
-        interaction,
-      })
-    }
+  }
+  return { method, reply }
+}
+
+export async function executeTelegramOperatorControl({
+  action,
+  symbol,
+  userId,
+  requestId,
+  chatId,
+  messageId,
+  signal,
+  interaction,
+  operator,
+  diagnostics,
+  logStage,
+  sendMessage,
+  editMessage,
+  buildNavigationKeyboard,
+}) {
+  const result = await invokeOperatorControl({
+    action,
+    symbol,
+    userId,
+    requestId,
+    interaction,
+    operator,
+    diagnostics,
+    logStage,
+  })
+  const response = {
+    chatId,
+    text: result.reply,
+    replyMarkup: buildNavigationKeyboard(),
+    signal,
+    interaction,
+  }
+  if (messageId !== undefined) {
+    await editMessage({ ...response, messageId })
+    return
+  }
+  await sendMessage(response)
 }
