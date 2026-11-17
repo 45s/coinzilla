@@ -10,7 +10,12 @@ export class ProviderRegistryError extends SystemCustomError {
   }
 }
 
-function createRegistryError({ message, code = "HARVESTER_PROVIDER_REGISTRY_INVALID", context = {}, cause }) {
+function createRegistryError({
+  message,
+  code = "HARVESTER_PROVIDER_REGISTRY_INVALID",
+  context = {},
+  cause,
+} = {}) {
   const options = { code, context }
   if (cause !== undefined) {
     options.cause = cause
@@ -38,6 +43,49 @@ function validateIdentifier({ value, field }) {
   return value
 }
 
+function validateCapabilityDeclaration({ broker, providerType, environment }) {
+  const capabilities = broker.capabilities
+  const { selectedMode } = capabilities?.environment ?? {}
+  const valid = capabilities !== null &&
+    typeof capabilities === "object" &&
+    !Array.isArray(capabilities) &&
+    isDeeplyFrozen({ value: capabilities }) &&
+    Number.isInteger(capabilities.contractVersion) &&
+    capabilities.contractVersion > 0 &&
+    capabilities.provider === providerType &&
+    (selectedMode === undefined || selectedMode === environment)
+  if (!valid) {
+    throw createRegistryError({
+      message: "Provider capability declaration must be immutable and match its registered provider identity",
+      context: {
+        field: "capabilities",
+        providerType,
+        environment,
+      },
+    })
+  }
+  return capabilities
+}
+
+function validateProviderBroker({ broker, providerType, environment }) {
+  let brokerPort
+  try {
+    brokerPort = assertBrokerPort({ broker })
+  } catch (cause) {
+    throw createRegistryError({
+      message: "Provider registry entry must implement the Harvester BrokerPort",
+      context: { field: "broker" },
+      cause,
+    })
+  }
+  const capabilities = validateCapabilityDeclaration({
+    broker: brokerPort,
+    providerType,
+    environment,
+  })
+  return { broker: brokerPort, capabilities }
+}
+
 function validateProviderDescriptor({ provider } = {}) {
   if (provider === null || typeof provider !== "object" || Array.isArray(provider)) {
     throw createRegistryError({
@@ -62,35 +110,11 @@ function validateProviderDescriptor({ provider } = {}) {
     value: provider.environment,
     field: "environment",
   })
-
-  let broker
-  try {
-    broker = assertBrokerPort({ broker: provider.broker })
-  } catch (cause) {
-    throw createRegistryError({
-      message: "Provider registry entry must implement the Harvester BrokerPort",
-      context: { field: "broker" },
-      cause,
-    })
-  }
-
-  const capabilities = broker.capabilities
-  const selectedMode = capabilities?.environment?.selectedMode
-  const validCapabilities = capabilities !== null &&
-    typeof capabilities === "object" &&
-    !Array.isArray(capabilities) &&
-    isDeeplyFrozen({ value: capabilities }) &&
-    Number.isInteger(capabilities.contractVersion) &&
-    capabilities.contractVersion > 0 &&
-    capabilities.provider === providerType &&
-    (selectedMode === undefined || selectedMode === environment)
-  if (!validCapabilities) {
-    throw createRegistryError({
-      message: "Provider capability declaration must be immutable and match its registered provider identity",
-      context: { providerInstanceId, providerType, environment },
-    })
-  }
-
+  const { broker, capabilities } = validateProviderBroker({
+    broker: provider.broker,
+    providerType,
+    environment,
+  })
   return {
     providerInstanceId,
     providerType,
@@ -121,34 +145,34 @@ function createBrokerPortProxy({
     return [method, (...args) => broker[method](...args)]
   }))
   Object.defineProperties(proxy, {
-    capabilities: { value: capabilities, enumerable: true },
-    providerInstanceId: { value: providerInstanceId, enumerable: true },
-    providerType: { value: providerType, enumerable: true },
-    accountId: { value: accountId, enumerable: true },
-    environment: { value: environment, enumerable: true },
+    capabilities: {
+      value: capabilities,
+      enumerable: true,
+    },
+    providerInstanceId: {
+      value: providerInstanceId,
+      enumerable: true,
+    },
+    providerType: {
+      value: providerType,
+      enumerable: true,
+    },
+    accountId: {
+      value: accountId,
+      enumerable: true,
+    },
+    environment: {
+      value: environment,
+      enumerable: true,
+    },
   })
   return Object.freeze(proxy)
 }
 
-function createProviderEntry({ descriptor }) {
-  const {
-    providerInstanceId,
-    providerType,
-    accountId,
-    environment,
-    broker,
-    capabilities,
-  } = descriptor
-  const lifecycle = {
-    status: "created",
-    connectPromise: undefined,
-    disconnectPromise: undefined,
-  }
-  let provider
-
-  function connect() {
+function createProviderConnect({ broker, lifecycle }) {
+  return function connect() {
     if (lifecycle.status === "connected") {
-      return Promise.resolve(provider)
+      return Promise.resolve()
     }
     if (lifecycle.status === "connecting") {
       return lifecycle.connectPromise
@@ -171,50 +195,69 @@ function createProviderEntry({ descriptor }) {
     lifecycle.connectPromise = Promise.resolve(connection)
       .then(() => {
         lifecycle.status = "connected"
-        return provider
       }, (cause) => {
         lifecycle.status = "failed"
         throw cause
       })
     return lifecycle.connectPromise
   }
+}
 
-  async function disconnect() {
+function startProviderDisconnect({ broker, lifecycle }) {
+  lifecycle.status = "disconnecting"
+  lifecycle.disconnectPromise = Promise.resolve()
+    .then(() => broker.disconnect())
+    .then(() => {
+      lifecycle.status = "disconnected"
+    }, (cause) => {
+      lifecycle.status = "disconnect-failed"
+      throw cause
+    })
+    .finally(() => {
+      lifecycle.disconnectPromise = undefined
+    })
+  return lifecycle.disconnectPromise
+}
+
+function createProviderDisconnect({ broker, lifecycle }) {
+  return function disconnect() {
     if (lifecycle.status === "disconnected") {
-      return
+      return Promise.resolve()
     }
     if (lifecycle.status === "disconnecting") {
       return lifecycle.disconnectPromise
     }
     if (lifecycle.status === "connecting" && lifecycle.connectPromise) {
-      try {
-        await lifecycle.connectPromise
-      } catch {
-        // A failed connect still requires an explicit disconnect attempt.
-      }
-    }
-    if (lifecycle.status === "disconnected") {
-      return
-    }
-    if (lifecycle.status === "disconnecting") {
-      return lifecycle.disconnectPromise
-    }
-
-    lifecycle.status = "disconnecting"
-    lifecycle.disconnectPromise = Promise.resolve()
-      .then(() => broker.disconnect())
-      .then(() => {
-        lifecycle.status = "disconnected"
-      }, (cause) => {
-        lifecycle.status = "disconnect-failed"
-        throw cause
+      return lifecycle.connectPromise.catch(() => undefined).then(() => {
+        if (lifecycle.status === "disconnected") {
+          return undefined
+        }
+        if (lifecycle.status === "disconnecting") {
+          return lifecycle.disconnectPromise
+        }
+        return startProviderDisconnect({ broker, lifecycle })
       })
-      .finally(() => {
-        lifecycle.disconnectPromise = undefined
-      })
-    return lifecycle.disconnectPromise
+    }
+    return startProviderDisconnect({ broker, lifecycle })
   }
+}
 
+function createProviderEntry({ descriptor }) {
+  const {
+    providerInstanceId,
+    providerType,
+    accountId,
+    environment,
+    broker,
+    capabilities,
+  } = descriptor
+  const lifecycle = {
+    status: "created",
+    connectPromise: undefined,
+    disconnectPromise: undefined,
+  }
+  const connect = createProviderConnect({ broker, lifecycle })
+  const disconnect = createProviderDisconnect({ broker, lifecycle })
   const brokerPort = createBrokerPortProxy({
     broker,
     connect,
@@ -225,7 +268,7 @@ function createProviderEntry({ descriptor }) {
     accountId,
     environment,
   })
-  provider = Object.freeze({
+  return Object.freeze({
     providerInstanceId,
     providerType,
     accountId,
@@ -238,7 +281,91 @@ function createProviderEntry({ descriptor }) {
       return lifecycle.status
     },
   })
+}
+
+function createProviderEntries({ providers }) {
+  const entries = new Map()
+  for (const provider of providers) {
+    const descriptor = validateProviderDescriptor({ provider })
+    if (entries.has(descriptor.providerInstanceId)) {
+      throw createRegistryError({
+        message: "Provider registry contains a duplicate provider-instance identity",
+        context: { field: "providerInstanceId" },
+      })
+    }
+    entries.set(descriptor.providerInstanceId, createProviderEntry({ descriptor }))
+  }
+  return entries
+}
+
+function getProvider({ entries, providerInstanceId }) {
+  const provider = entries.get(providerInstanceId)
+  if (!provider) {
+    throw createRegistryError({
+      message: "Requested provider instance is not registered",
+      code: "HARVESTER_PROVIDER_INSTANCE_NOT_FOUND",
+      context: { field: "providerInstanceId" },
+    })
+  }
   return provider
+}
+
+function listProviderMetadata({ entries }) {
+  const metadata = [...entries.values()].map((provider) => Object.freeze({
+    providerInstanceId: provider.providerInstanceId,
+    providerType: provider.providerType,
+    accountId: provider.accountId,
+    environment: provider.environment,
+    capabilities: provider.capabilities,
+    status: provider.status,
+  }))
+  return Object.freeze(metadata)
+}
+
+async function connectAllProviders({ entries }) {
+  const providersToConnect = [...entries.values()]
+  try {
+    for (const provider of providersToConnect) {
+      await provider.connect()
+    }
+  } catch (connectionError) {
+    const cleanupErrors = []
+    for (const provider of providersToConnect.reverse()) {
+      try {
+        await provider.disconnect()
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError)
+      }
+    }
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(
+        [connectionError, ...cleanupErrors],
+        "Provider registry connection failed and rollback cleanup was incomplete",
+        { cause: connectionError },
+      )
+    }
+    throw connectionError
+  }
+  return Object.freeze(providersToConnect)
+}
+
+async function disconnectAllProviders({ entries }) {
+  const cleanupErrors = []
+  const providersToDisconnect = [...entries.values()].reverse()
+  for (const provider of providersToDisconnect) {
+    try {
+      await provider.disconnect()
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+  }
+  if (cleanupErrors.length > 0) {
+    throw new AggregateError(
+      cleanupErrors,
+      "Provider registry disconnect cleanup failed",
+      { cause: cleanupErrors[0] },
+    )
+  }
 }
 
 /**
@@ -246,7 +373,7 @@ function createProviderEntry({ descriptor }) {
  * The registry owns provider connection lifecycle; route selection remains outside this foundation.
  *
  * @param {{providers: object[]}} input
- * @returns {{get: (providerInstanceId: string) => object, list: () => object[], connect: (providerInstanceId: string) => Promise<object>, disconnect: (providerInstanceId: string) => Promise<void>}}
+ * @returns {{get: (providerInstanceId: string) => object, list: () => object[], connect: (providerInstanceId: string) => Promise<void>, disconnect: (providerInstanceId: string) => Promise<void>, connectAll: () => Promise<object[]>, disconnectAll: () => Promise<void>}}
  */
 export function createProviderRegistry({ providers } = {}) {
   if (!Array.isArray(providers) || providers.length === 0) {
@@ -256,95 +383,13 @@ export function createProviderRegistry({ providers } = {}) {
     })
   }
 
-  const entries = new Map()
-  for (const provider of providers) {
-    const descriptor = validateProviderDescriptor({ provider })
-    if (entries.has(descriptor.providerInstanceId)) {
-      throw createRegistryError({
-        message: "Provider registry contains a duplicate provider-instance identity",
-        context: { providerInstanceId: descriptor.providerInstanceId },
-      })
-    }
-    entries.set(descriptor.providerInstanceId, createProviderEntry({ descriptor }))
-  }
-
-  function get(providerInstanceId) {
-    const provider = entries.get(providerInstanceId)
-    if (!provider) {
-      throw createRegistryError({
-        message: "Requested provider instance is not registered",
-        code: "HARVESTER_PROVIDER_INSTANCE_NOT_FOUND",
-        context: {
-          field: "providerInstanceId",
-        },
-      })
-    }
-    return provider
-  }
-
-  function list() {
-    return Object.freeze([...entries.values()].map((provider) => Object.freeze({
-      providerInstanceId: provider.providerInstanceId,
-      providerType: provider.providerType,
-      accountId: provider.accountId,
-      environment: provider.environment,
-      capabilities: provider.capabilities,
-      status: provider.status,
-    })))
-  }
-
-  async function connectAll() {
-    const providersToConnect = [...entries.values()]
-    try {
-      for (const provider of providersToConnect) {
-        await provider.connect()
-      }
-    } catch (connectionError) {
-      const cleanupErrors = []
-      for (const provider of providersToConnect.reverse()) {
-        try {
-          await provider.disconnect()
-        } catch (cleanupError) {
-          cleanupErrors.push(cleanupError)
-        }
-      }
-      if (cleanupErrors.length > 0) {
-        throw new AggregateError(
-          [connectionError, ...cleanupErrors],
-          "Provider registry connection failed and rollback cleanup was incomplete",
-          { cause: connectionError },
-        )
-      }
-      throw connectionError
-    }
-    return Object.freeze(providersToConnect)
-  }
-
-  async function disconnectAll() {
-    const cleanupErrors = []
-    const providersToDisconnect = [...entries.values()].reverse()
-    for (const provider of providersToDisconnect) {
-      try {
-        await provider.disconnect()
-      } catch (error) {
-        cleanupErrors.push(error)
-      }
-    }
-    if (cleanupErrors.length > 0) {
-      throw new AggregateError(
-        cleanupErrors,
-        "Provider registry disconnect cleanup failed",
-        { cause: cleanupErrors[0] },
-      )
-    }
-  }
-
+  const entries = createProviderEntries({ providers })
   return Object.freeze({
-    get,
-    list,
-    connect: (providerInstanceId) => get(providerInstanceId).connect(),
-    disconnect: (providerInstanceId) => get(providerInstanceId).disconnect(),
-    connectAll,
-    disconnectAll,
+    get: (providerInstanceId) => getProvider({ entries, providerInstanceId }),
+    list: () => listProviderMetadata({ entries }),
+    connect: (providerInstanceId) => getProvider({ entries, providerInstanceId }).connect(),
+    disconnect: (providerInstanceId) => getProvider({ entries, providerInstanceId }).disconnect(),
+    connectAll: () => connectAllProviders({ entries }),
+    disconnectAll: () => disconnectAllProviders({ entries }),
   })
 }
