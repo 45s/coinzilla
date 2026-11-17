@@ -86,13 +86,14 @@ function readDestinationAddress({ record }) {
   }
 }
 
-function adaptWithdrawalRecord({ record }) {
-  if (!record || typeof record !== "object" || Array.isArray(record)) {
-    throw new TypeError("Bitunix Spot withdrawal row must be an object")
-  }
+function readWithdrawalCoreFields({ record }) {
   const id = normalizeIdentifier({
     value: record.id,
     field: "id",
+  })
+  const outBizId = readOptionalString({
+    record,
+    field: "outBizId",
   })
   const type = requireNonEmptyString({
     value: record.type,
@@ -102,7 +103,7 @@ function adaptWithdrawalRecord({ record }) {
     value: record.coin,
     field: "coin",
   })
-  const amount = record.amount
+  const { amount } = record
   assertDecimalString({
     value: amount,
     field: "Bitunix Spot withdrawal amount",
@@ -114,10 +115,18 @@ function adaptWithdrawalRecord({ record }) {
   const ctime = validateWithdrawalTimestamp({
     value: record.ctime,
   })
-  const outBizId = readOptionalString({
-    record,
-    field: "outBizId",
-  })
+  return {
+    id,
+    ...(outBizId === undefined ? {} : { outBizId }),
+    type,
+    coin,
+    amount,
+    status,
+    ctime,
+  }
+}
+
+function readWithdrawalAccountFields({ record }) {
   const network = readOptionalString({
     record,
     field: "network",
@@ -138,6 +147,16 @@ function adaptWithdrawalRecord({ record }) {
     record,
     field: "memo",
   })
+  return {
+    ...(network === undefined ? {} : { network }),
+    ...(transactionHash === undefined ? {} : { transactionHash }),
+    ...(feeCoin === undefined ? {} : { feeCoin }),
+    ...(fee === undefined ? {} : { fee }),
+    ...(memo === undefined ? {} : { memo }),
+  }
+}
+
+function readWithdrawalRecipientFields({ record }) {
   const toType = readOptionalString({
     record,
     field: "toType",
@@ -162,28 +181,25 @@ function adaptWithdrawalRecord({ record }) {
     record,
     field: "remark",
   })
-  const destination = readDestinationAddress({ record })
-
-  return Object.freeze({
-    id,
-    ...(outBizId === undefined ? {} : { outBizId }),
-    type,
-    coin,
-    amount,
-    status,
-    ctime,
-    ...(network === undefined ? {} : { network }),
-    ...destination,
-    ...(transactionHash === undefined ? {} : { transactionHash }),
-    ...(feeCoin === undefined ? {} : { feeCoin }),
-    ...(fee === undefined ? {} : { fee }),
-    ...(memo === undefined ? {} : { memo }),
+  return {
+    ...readDestinationAddress({ record }),
     ...(toType === undefined ? {} : { toType }),
     ...(toUid === undefined ? {} : { toUid }),
     ...(toPhoneCountryCode === undefined ? {} : { toPhoneCountryCode }),
     ...(toPhoneNumber === undefined ? {} : { toPhoneNumber }),
     ...(toEmail === undefined ? {} : { toEmail }),
     ...(remark === undefined ? {} : { remark }),
+  }
+}
+
+function adaptWithdrawalRecord({ record }) {
+  if (!record || typeof record !== "object" || Array.isArray(record)) {
+    throw new TypeError("Bitunix Spot withdrawal row must be an object")
+  }
+  return Object.freeze({
+    ...readWithdrawalCoreFields({ record }),
+    ...readWithdrawalAccountFields({ record }),
+    ...readWithdrawalRecipientFields({ record }),
   })
 }
 
