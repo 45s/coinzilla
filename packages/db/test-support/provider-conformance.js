@@ -6,10 +6,7 @@ import test from "node:test"
 
 import { DatabaseConflictError } from "../src/index.js"
 
-async function withDatabase({ createDatabase, callback, filename = ":memory:" }) {
-  const database = createDatabase({
-    filename,
-  })
+async function withConnectedDatabase({ database, callback }) {
   await database.connect()
 
   try {
@@ -19,10 +16,44 @@ async function withDatabase({ createDatabase, callback, filename = ":memory:" })
   }
 }
 
+async function withDatabase({ createDatabase, callback, filename = ":memory:" }) {
+  const database = createDatabase({
+    filename,
+  })
+  await withConnectedDatabase({
+    database,
+    callback,
+  })
+}
+
 function registerStandardTest({ name, description, createDatabase, verify }) {
   test(`${name}: ${description}`, async () => {
     await withDatabase({
       createDatabase,
+      callback: verify,
+    })
+  })
+}
+
+function registerQueryCapabilityTest({
+  name,
+  description,
+  capability,
+  createDatabase,
+  verify,
+}) {
+  test(`${name}: ${description}`, async (context) => {
+    const database = createDatabase({
+      filename: ":memory:",
+    })
+    if (!database.capabilities.queries[capability]) {
+      await database.close()
+      context.skip(`Provider declares queries.${capability}=false`)
+      return
+    }
+
+    await withConnectedDatabase({
+      database,
       callback: verify,
     })
   })
@@ -133,55 +164,31 @@ async function verifyDuplicate(database) {
   )
 }
 
-async function verifyQueries(database) {
+async function verifyFilters(database) {
   await database.create({
     collection: "people",
     record: {
-      id: "person-3",
-      name: "Charlie",
-      status: "active",
-    },
-  })
-  await database.create({
-    collection: "people",
-    record: {
-      id: "person-2",
-      name: "Bravo",
+      id: "verified-1",
       status: "active",
       verified: true,
+      nickname: null,
     },
   })
   await database.create({
     collection: "people",
     record: {
-      id: "person-1",
-      name: "Alpha",
-      status: "inactive",
+      id: "numeric-true-1",
+      status: "active",
+      verified: 1,
     },
   })
-
-  const records = await database.readMany({
+  await database.create({
     collection: "people",
-    query: {
-      filter: {
-        status: "active",
-      },
-      sort: [
-        {
-          field: "name",
-          direction: "asc",
-        },
-      ],
-      limit: 1,
-      offset: 1,
+    record: {
+      id: "missing-nickname-1",
+      status: "active",
     },
   })
-
-  assert.deepEqual(
-    records.map((record) => record.id),
-    ["person-3"],
-    "READ MANY must filter before sorting and apply offset/limit to the sorted matches",
-  )
 
   const verified = await database.readMany({
     collection: "people",
@@ -193,8 +200,114 @@ async function verifyQueries(database) {
   })
   assert.deepEqual(
     verified.map((record) => record.id),
-    ["person-2"],
-    "Equality filters must distinguish JSON booleans from other JSON value types",
+    ["verified-1"],
+    "Equality filters must distinguish JSON booleans from numeric values",
+  )
+
+  const explicitNull = await database.readMany({
+    collection: "people",
+    query: {
+      filter: {
+        nickname: null,
+      },
+    },
+  })
+  assert.deepEqual(
+    explicitNull.map((record) => record.id),
+    ["verified-1"],
+    "An explicit null filter must not match records where the field is absent",
+  )
+}
+
+async function verifySorting(database) {
+  await database.create({
+    collection: "people",
+    record: {
+      id: "person-b",
+      name: "Same",
+    },
+  })
+  await database.create({
+    collection: "people",
+    record: {
+      id: "person-a",
+      name: "Same",
+    },
+  })
+  await database.create({
+    collection: "people",
+    record: {
+      id: "person-c",
+      name: "Zebra",
+    },
+  })
+
+  const records = await database.readMany({
+    collection: "people",
+    query: {
+      sort: [
+        {
+          field: "name",
+          direction: "asc",
+        },
+      ],
+    },
+  })
+
+  assert.deepEqual(
+    records.map((record) => record.id),
+    ["person-a", "person-b", "person-c"],
+    "Sorting must honor the requested field and use the identifier as a stable tie-breaker",
+  )
+}
+
+async function verifyPagination(database) {
+  for (const record of [
+    { id: "rank-1", rank: 1 },
+    { id: "rank-2", rank: 2 },
+    { id: "rank-3", rank: 3 },
+  ]) {
+    await database.create({
+      collection: "records",
+      record,
+    })
+  }
+
+  const remaining = await database.readMany({
+    collection: "records",
+    query: {
+      sort: [
+        {
+          field: "rank",
+          direction: "asc",
+        },
+      ],
+      offset: 1,
+    },
+  })
+  assert.deepEqual(
+    remaining.map((record) => record.id),
+    ["rank-2", "rank-3"],
+    "An offset without a limit must return every remaining sorted record",
+  )
+
+  const page = await database.readMany({
+    collection: "records",
+    query: {
+      sort: [
+        {
+          field: "rank",
+          direction: "asc",
+        },
+      ],
+      limit: 1,
+      offset: 1,
+    },
+  })
+  assert.deepEqual(
+    page.map((record) => record.id),
+    ["rank-2"],
+    "Pagination must apply limit and offset after sorting the complete matching set",
   )
 }
 
@@ -275,38 +388,6 @@ async function verifyCommit(database) {
       name: "Committed",
     },
     "A successful transaction must make every callback write visible after commit",
-  )
-}
-
-async function verifyNullFiltering(database) {
-  await database.create({
-    collection: "people",
-    record: {
-      id: "explicit-null-1",
-      nickname: null,
-    },
-  })
-  await database.create({
-    collection: "people",
-    record: {
-      id: "missing-nickname-1",
-      name: "No nickname",
-    },
-  })
-
-  const records = await database.readMany({
-    collection: "people",
-    query: {
-      filter: {
-        nickname: null,
-      },
-    },
-  })
-
-  assert.deepEqual(
-    records.map((record) => record.id),
-    ["explicit-null-1"],
-    "An explicit null filter must not match records where the field is absent",
   )
 }
 
@@ -394,6 +475,25 @@ async function verifyPersistence({ createDatabase }) {
   }
 }
 
+function registerPersistenceTest({ name, createDatabase }) {
+  test(`${name}: persistent records survive a new database connection`, async (context) => {
+    const database = createDatabase({
+      filename: ":memory:",
+    })
+    const storageModes = database.capabilities.storage.modes
+    if (!storageModes.includes("file") && !storageModes.includes("server")) {
+      await database.close()
+      context.skip("Provider declares only ephemeral in-memory storage")
+      return
+    }
+
+    await database.close()
+    await verifyPersistence({
+      createDatabase,
+    })
+  })
+}
+
 /**
  * Register the provider-neutral contract tests for a database provider.
  *
@@ -415,11 +515,26 @@ export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
     createDatabase,
     verify: verifyDuplicate,
   })
-  registerStandardTest({
+  registerQueryCapabilityTest({
     name,
-    description: "filters, sorting, and pagination return the requested page",
+    description: "exact equality filters distinguish JSON values",
+    capability: "equalityFilters",
     createDatabase,
-    verify: verifyQueries,
+    verify: verifyFilters,
+  })
+  registerQueryCapabilityTest({
+    name,
+    description: "sorting is stable and honors requested fields",
+    capability: "sorting",
+    createDatabase,
+    verify: verifySorting,
+  })
+  registerQueryCapabilityTest({
+    name,
+    description: "pagination applies limit and offset after sorting",
+    capability: "pagination",
+    createDatabase,
+    verify: verifyPagination,
   })
   registerStandardTest({
     name,
@@ -441,12 +556,6 @@ export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
   })
   registerStandardTest({
     name,
-    description: "missing fields do not match explicit null filters",
-    createDatabase,
-    verify: verifyNullFiltering,
-  })
-  registerStandardTest({
-    name,
     description: "provider capabilities are exposed as an immutable snapshot",
     createDatabase,
     verify: verifyCapabilities,
@@ -456,9 +565,8 @@ export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
       createDatabase,
     })
   })
-  test(`${name}: file-backed records survive a new database connection`, async () => {
-    await verifyPersistence({
-      createDatabase,
-    })
+  registerPersistenceTest({
+    name,
+    createDatabase,
   })
 }
