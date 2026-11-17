@@ -121,13 +121,13 @@ Model only the concepts required by the approved RS contract:
 - Custody: Spot-available, EARN/off-Spot and unresolved quantities are distinct; transfers do not change historical cost basis.
 - Recovery tranche: canonical BUY-fill quantity, cost basis and actual commissions.
 - Active/pending/partial/unknown order reservations.
-- Reuse the existing pair-level `minProfit` setting for minimum net recovery-cycle profit; retain a separate legacy cost-basis gate. Recovery profit cannot subsidize a legacy loss.
+- Use the existing pair-level `minProfit` as the minimum net profit for the entire cycle SELL. For a mixed SELL, net proceeds after all applicable fees must recover the full recovery BUY investment plus the historical cost allocated to the legacy quantity sold, then earn at least `minProfit`. Do not apply separate profitability gates to recovery and legacy allocations; retain their separate accounting and cost-basis tracking.
 - Reuse Conservative's configured investment-limit logic. At the limit, stop submitting new BUYs but leave an already-open recovery SELL live and unchanged until it is filled/terminal; continue reconciliation.
 - Follow Conservative's third-asset commission rule: require a reliable quote-currency valuation; missing, stale, ambiguous or unavailable valuation is not zero and fails closed before either accounting projection commits.
 - Reuse Conservative BUY cadence, tranche sizing/configuration and pending-order safeguards where applicable, rather than introducing parallel RS-only behavior.
-- When authorized legacy inventory is exhausted, continue normal recovery-only BUY/SELL cycles until the operator stops RS. Each recovery-only SELL must meet the existing pair-level `minProfit` after applicable commissions; the legacy historical-basis gate applies only when a legacy slice is included. Exhaustion alone does not pause RS or require reauthorization. Existing orders/fills/reservations remain owned and reconciled.
+- When authorized legacy inventory is exhausted, continue normal recovery-only BUY/SELL cycles until the operator stops RS. Each recovery-only SELL must recover the recovery BUY investment and applicable fees, then earn at least the existing pair-level `minProfit`; when a legacy slice is included, its allocated historical cost is added to the same cycle-level recovery target. Exhaustion alone does not pause RS or require reauthorization. Existing orders/fills/reservations remain owned and reconciled.
 - Exchange-filter-constrained dust may be classified only after a fully reconciled successful cycle; retain it as bonus inventory and permanently exclude it from all later RS cycle quantity, cost, proceeds, profitability, and availability calculations. Ordinary sellable residual must not be classified as dust.
-- If remaining authorized legacy inventory is smaller than `sellQuantity`, use the smaller available/unreserved quantity in the current cycle SELL only when exchange filters and both independent profitability gates pass; otherwise retain it. No extra final-liquidation authorization is needed solely because the remainder is smaller.
+- If remaining authorized legacy inventory is smaller than `sellQuantity`, use the smaller available/unreserved quantity in the current cycle SELL only when exchange filters and the combined cycle-level profitability gate pass; otherwise retain it. No extra final-liquidation authorization is needed solely because the remainder is smaller.
 
 Agreed illustrative config shape (proposal only, not runtime configuration):
 
@@ -153,8 +153,8 @@ Model only the concepts required by the approved RS contract:
 - Custody: Spot-available, EARN/off-Spot and unresolved quantities are distinct; transfers do not change historical cost basis.
 - Recovery tranche: canonical BUY-fill quantity, cost basis and actual commissions.
 - Active/pending/partial/unknown order reservations.
-- Independent recovery-tranche and legacy profitability gates. Recovery profit cannot subsidize a legacy loss.
-- Apply the smaller-remainder rule: legacy SELL quantity is capped downward to the remaining authorized, Spot-available, unreserved quantity; sell that smaller amount only when exchange filters and both independent profitability gates pass, otherwise retain it. After legacy inventory is exhausted, continue recovery-only cycles (e.g. BUY 5 ZRO → SELL 5 ZRO) subject to the recovery `minProfit` gate; no legacy gate applies when no legacy quantity is sold.
+- One combined cycle-level profitability gate: mixed SELL net proceeds after all fees must recover recovery BUY cost plus allocated legacy historical cost and earn at least `minProfit`; recovery-only SELLs omit the legacy cost. Keep recovery and legacy allocations separate for accounting, not separate eligibility gates.
+- Apply the smaller-remainder rule: legacy SELL quantity is capped downward to the remaining authorized, Spot-available, unreserved quantity; sell that smaller amount only when exchange filters and the combined cycle-level profitability gate pass, otherwise retain it. After legacy inventory is exhausted, continue recovery-only cycles (e.g. BUY 5 ZRO → SELL 5 ZRO) subject to the recovery `minProfit` gate; no legacy gate applies when no legacy quantity is sold.
 
 Agreed illustrative config shape (proposal only, not runtime configuration):
 
@@ -175,10 +175,10 @@ Required test families:
 - Successful-cycle legacy quantity decrement by the actual legacy quantity sold; original average cost is never recalculated.
 - Spot/EARN custody separation, transfers and insufficient Spot quantity.
 - Recovery BUY fills, partial fills, actual commissions and cost basis.
-- Profitable recovery tranche paired with a loss-making legacy slice.
+- Mixed-cycle profitability where the recovery and legacy allocation-level results differ, but the combined SELL either does or does not recover both costs and earn `minProfit`.
 - After each successful cycle, deduct the actual legacy quantity sold from the remaining legacy quantity exactly once; never recalculate the original average cost.
 - Reservations, partial SELLs, cancellation races, unknown outcomes and exact-once fill identity.
-- Exchange quantity-step/minimum-quantity/minimum-notional and residual boundaries, including remaining legacy quantity below `sellQuantity`; verify smaller remainder is sold only when both profitability gates and exchange filters pass, otherwise retained. Constrained dust is retained only after successful full reconciliation and never re-enters later cycle accounting, while ordinary sellable residual remains actionable.
+- Exchange quantity-step/minimum-quantity/minimum-notional and residual boundaries, including remaining legacy quantity below `sellQuantity`; verify smaller remainder is sold only when the combined cycle-level profitability gate and exchange filters pass, otherwise retained. Constrained dust is retained only after successful full reconciliation and never re-enters later cycle accounting, while ordinary sellable residual remains actionable.
 - Invalid, contradictory, stale or incomplete evidence fails closed.
 
 Never fabricate BUY fills or seed Portfolio from unverified wallet snapshots.
@@ -194,7 +194,7 @@ Implement:
 - recovery-tranche and eligible legacy quantity decisions from actual net fills, fixed legacy basis, verified Spot availability and shared reservations;
 - BUY planning within the RS strategy/pair investment budget, reusing only the explicitly approved Conservative-neutral cadence and fee rules;
 - mixed SELL planning whose quantity never exceeds actual net recovery inventory plus the authorized, verified, unreserved legacy slice;
-- independent recovery minProfit and legacy non-loss gates, with exact decimal fee reserves and exchange-filter validation;
+- one combined cycle-level gate requiring net mixed-SELL proceeds to cover recovery BUY cost, allocated legacy historical cost, all applicable fees, and pair-level `minProfit`, with exact decimal arithmetic and exchange-filter validation;
 - explicit SUBMIT, WAIT, BLOCK, and RECONCILE outcomes with stable reason codes;
 - state transitions for pending/open/partial/unknown/terminal orders without releasing reservations or starting another cycle on uncertain evidence.
 
@@ -207,14 +207,14 @@ The current specification settles the economic invariants but does not yet defin
 | Policy area | Owner-approved contract / remaining implementation work | Status |
 |---|---|---|
 
-| Mixed SELL price, quantity and order type | Exact pre-submission price/quantity arithmetic, fee reserves, base-fee gross-up, order type, tick/step rounding and min/max filter handling still require source-backed specification and tests. The mixed SELL remains one order: actual net recovery quantity plus eligible legacy slice. | **OPEN implementation detail.** Inspect current Conservative pricing/fee/filter code and specify exact arithmetic before policy coding. Never weaken either strict-profit gate or exceed authorized legacy debit. |
-| One gate passes and the other fails | The recovery and legacy allocations are evaluated independently. The current pure calculator still treats legacy break-even (`>= 0`) as eligible and therefore does not yet implement the approved strict-positive rule. | **DECIDED (Questions 2–3); code change required:** both applicable allocations must each have strictly positive net profit after all fees; recovery must also meet pair-level `minProfit`. Break-even fails. Update the calculator predicate and boundary tests from `>= 0` to `> 0`. If either gate fails, do not submit the mixed SELL. Do not let recovery profit subsidize legacy or omit the legacy slice while legacy remains. Recovery-only SELLs start only after legacy exhaustion. |
+| Mixed SELL price, quantity and order type | Exact pre-submission price/quantity arithmetic, fee reserves, base-fee gross-up, order type, tick/step rounding and min/max filter handling still require source-backed specification and tests. The mixed SELL remains one order: actual net recovery quantity plus eligible legacy slice. | **OPEN implementation detail.** Inspect current Conservative pricing/fee/filter code and specify exact arithmetic before policy coding. Never weaken the combined cost-recovery-plus-`minProfit` gate or exceed authorized legacy debit. |
+| Combined cycle profitability | Recovery and legacy allocations remain separately attributed for accounting, but eligibility is decided once for the whole SELL. | **DECIDED (Questions 2–3); code change required:** replace the separate gates with `net SELL proceeds after all fees >= recovery BUY cost + allocated legacy historical cost + pair-level minProfit`. For recovery-only cycles, allocated legacy cost is zero. Do not omit the configured legacy slice while legacy remains. |
 | Realized profitability fails after execution | Actual execution/fees can differ from estimates. Confirmed fills must still be recorded; the next lifecycle action is not yet owner-approved. | **OPEN — Question 4.** Mandatory: account every confirmed fill and actual fee exactly once; never hide/reverse it. Proposed safe default for owner confirmation: block new BUYs and follow-up SELLs, retain accurate remaining inventory/reservations, reconcile terminal order state, and surface an operator-review BLOCK reason. Do not implement an invented recovery action. |
 | Terminal partial / canceled SELL and cycle-level proceeds | The owner chose one terminal SELL lifecycle per recovery cycle; there is no second/continuation SELL and no cumulative proceeds ledger in this phase. A terminal partial/canceled result leaves the cycle unresolved. | **DECIDED (Question 5):** one SELL order lifecycle per cycle. No second SELL and no new BUY after a terminal underfill/cancel until the separate unresolved-cycle policy is approved. |
 
 The final-residual-without-a-new-BUY liquidation remains explicitly deferred under FITDIB and is not an RS-3 deliverable. Advanced pause/disable/abandon/resume/restart semantics also remain deferred.
 
-**Acceptance:** deterministic tests cover success, exact boundaries, invalid state, both profitability-gate combinations, partial/terminal/unknown order states, commission and filter constraints, and every explicit wait/block/reconcile outcome. The pure policy does not submit orders or perform I/O. Preserve all existing CG regression behavior.
+**Acceptance:** deterministic tests cover success, exact boundaries, invalid state, combined cycle-profit calculations with differing recovery/legacy allocation results, partial/terminal/unknown order states, commission and filter constraints, and every explicit wait/block/reconcile outcome. The pure policy does not submit orders or perform I/O. Preserve all existing CG regression behavior.
 
 ## RS-4 — Concurrent Trading Engine integration
 
