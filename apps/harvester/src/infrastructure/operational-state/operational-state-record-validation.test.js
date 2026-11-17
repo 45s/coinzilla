@@ -54,7 +54,11 @@ test("accepts a canonical process-stop fact bound to its runtime session", () =>
 test("rejects unknown fact types, implicit genesis appends, and non-object fact data", () => {
   assert.throws(
     () => validateFactInput({
-      fact: { factId: "unknown", factType: "NOT_ALLOWLISTED", data: {} },
+      fact: {
+        factId: "unknown",
+        factType: "NOT_ALLOWLISTED",
+        data: {},
+      },
       runtimeSessionId: "test-session",
     }),
     /not allowlisted/,
@@ -62,7 +66,11 @@ test("rejects unknown fact types, implicit genesis appends, and non-object fact 
   )
   assert.throws(
     () => validateFactInput({
-      fact: { factId: "genesis", factType: "LEDGER_INITIALIZED", data: { schemaVersion: 1 } },
+      fact: {
+        factId: "genesis",
+        factType: "LEDGER_INITIALIZED",
+        data: { schemaVersion: 1 },
+      },
       runtimeSessionId: "test-session",
     }),
     /not allowlisted/,
@@ -70,7 +78,11 @@ test("rejects unknown fact types, implicit genesis appends, and non-object fact 
   )
   assert.throws(
     () => validateFactInput({
-      fact: { factId: "bad-data", factType: "PROCESS_STOPPED", data: [] },
+      fact: {
+        factId: "bad-data",
+        factType: "PROCESS_STOPPED",
+        data: [],
+      },
       runtimeSessionId: "test-session",
     }),
     /plain object/,
@@ -92,7 +104,10 @@ test("validates genesis envelope, sequence, schema, and digest integrity", () =>
 
   assert.throws(
     () => validateFactRecord({
-      record: { ...GENESIS_RECORD, sequence: "1" },
+      record: {
+        ...GENESIS_RECORD,
+        sequence: "1",
+      },
       schemaVersion: SCHEMA_VERSION,
       expectedSequence: "0",
       previousDigest: null,
@@ -104,7 +119,10 @@ test("validates genesis envelope, sequence, schema, and digest integrity", () =>
 
   assert.throws(
     () => validateFactRecord({
-      record: { ...GENESIS_RECORD, digest: "0".repeat(64) },
+      record: {
+        ...GENESIS_RECORD,
+        digest: "0".repeat(64),
+      },
       schemaVersion: SCHEMA_VERSION,
       expectedSequence: "0",
       previousDigest: null,
@@ -136,7 +154,10 @@ test("creates and validates a committed-head checkpoint linked to the exact fact
 
   assert.throws(
     () => validateManifestCheckpoint({
-      checkpoint: { ...checkpoint, lastCommittedDigest: "f".repeat(64) },
+      checkpoint: {
+        ...checkpoint,
+        lastCommittedDigest: "f".repeat(64),
+      },
       schemaVersion: SCHEMA_VERSION,
       factRecord: GENESIS_RECORD,
       expectedSequence: "0",
@@ -149,7 +170,10 @@ test("creates and validates a committed-head checkpoint linked to the exact fact
 })
 
 test("parses only complete newline-terminated canonical JSONL records", () => {
-  const canonicalLine = canonicalStringifyOperationalStateValue({ alpha: 1, beta: "two" })
+  const canonicalLine = canonicalStringifyOperationalStateValue({
+    alpha: 1,
+    beta: "two",
+  })
   assert.deepEqual(
     parseJsonLines({ source: `${canonicalLine}\n`, label: "test ledger" }),
     [{ alpha: 1, beta: "two" }],
