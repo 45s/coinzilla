@@ -132,7 +132,7 @@ test("SQLite backup rejects invalid destinations and never backs up over its sou
 
     await assert.rejects(
       database.backup({ destination: filename }),
-      /source database/i,
+      /source.*destination/i,
       "A backup must reject a destination that resolves to the live source database",
     )
     await assert.rejects(
@@ -324,9 +324,13 @@ test("SQLite close drains an active backup and rejects new backup requests", asy
       progress() {
         if (!closePromise) {
           closePromise = database.close()
-          backupAfterClosePromise = database.backup({
-            destination: rejectedBackupFilename,
-          })
+          backupAfterClosePromise = assert.rejects(
+            database.backup({
+              destination: rejectedBackupFilename,
+            }),
+            /closing|closed/i,
+            "The database must reject a new backup after shutdown has started",
+          )
         }
       },
     })
@@ -342,11 +346,7 @@ test("SQLite close drains an active backup and rejects new backup requests", asy
       copiedPages > 0,
       "The in-flight backup must finish successfully before database shutdown completes",
     )
-    await assert.rejects(
-      backupAfterClosePromise,
-      /closing|closed/i,
-      "The database must reject a new backup after shutdown has started",
-    )
+    await backupAfterClosePromise
     assert.equal(
       database.state,
       "closed",

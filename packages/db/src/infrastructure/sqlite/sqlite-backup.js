@@ -203,8 +203,16 @@ async function runBackup({ sourceConnection, destinationFilename, rate, progress
   }
 
   if (operationError) {
-    if (operationError === progressError) {
-      throw operationError
+    if (progressError) {
+      if (operationError instanceof AggregateError) {
+        throw new AggregateError(
+          [progressError, ...operationError.errors],
+          "SQLite backup progress callback failed and cleanup also failed",
+          { cause: progressError },
+        )
+      }
+
+      throw progressError
     }
 
     throw new DatabaseProviderError({
