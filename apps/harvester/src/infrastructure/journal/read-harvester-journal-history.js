@@ -369,6 +369,9 @@ error() {} },
       directoriesVisited,
     })
   } catch (error) {
-    return createHistoryReadErrorResult({ error, directory })
+    return createHistoryReadErrorResult({
+      error,
+      directory,
+    })
   }
 }
