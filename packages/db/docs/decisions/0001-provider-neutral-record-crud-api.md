@@ -23,6 +23,7 @@ The generic API stores JSON records in named collections.
 - A record is a JSON-safe plain object with a non-empty string `id`.
 - Identifiers are unique within a collection; identifiers may repeat across collections.
 - The public operations are `create`, `readOne`, `readMany`, `update`, and `delete`.
+- Each operation accepts one named input object (for example, `{ collection, record }` for CREATE) rather than positional arguments.
 - Updates are shallow merges and cannot change `id`.
 - Missing records use explicit results: `null` for read/update and `false` for delete.
 - Duplicate identifiers use the package-owned `DatabaseConflictError`.
