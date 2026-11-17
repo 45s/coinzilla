@@ -357,7 +357,7 @@ flowchart TD
   C -- Yes --> D[Evaluate RS recovery BUY tranche]
   D --> E[Apply canonical BUY fills to shared Portfolio and RS attribution]
   E --> F[Reconcile orders, fills, fees and reservations]
-  F --> G{Cycle and legacy profit gates both pass?}
+  F --> G{Combined SELL covers both costs, fees and minProfit?}
   G -- No --> H[Wait or follow approved accumulation rule]
   G -- Yes --> I[Validate SELL against authorization and exchange filters]
   I --> J{Submission and ownership gates pass?}
