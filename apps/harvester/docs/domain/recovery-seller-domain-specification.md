@@ -134,7 +134,7 @@ RS-2b implements the application-owned allocation boundary without changing the 
 
 4. **Single shared custody debit:** the account-level Spot allocation records the full actual base debit (executed base plus actual base commission) once. The Portfolio recovery Position receives only its explicitly allocated recovery share; the RS legacy projection receives only its explicitly allocated legacy share. The updated legacy Position is used to recalculate the separately tracked Spot quantity; never add configured legacy quantity to Portfolio. The same verified additional-base provider must feed both account-snapshot baseline capture and the shared allocator, which applies the current-minus-snapshot delta alongside the Portfolio base delta. Net legacy quote proceeds are included in the shared quote-cash-flow baseline and current allocator delta, not legacy historical cost basis or realized profit.
 5. **Exact-once reconciliation:** key allocation identity and duplicate detection by canonical Fill ID plus immutable allocation fingerprint. Stage each partial fill against its originating order/cycle. Do not commit the cycle's legacy decrement until complete terminal order/fill reconciliation proves the aggregate execution quantity and all allocation facts. Replays are no-ops only when both canonical facts and allocation metadata are identical; conflicting or missing attribution fails closed.
-6. **Independent economics:** calculate recovery-tranche net proceeds/profit and legacy net proceeds against the fixed original legacy average cost from their own allocated quantities and actual fees. A profitable recovery share cannot subsidize a legacy loss. Missing/incomplete commission facts or third-asset quote valuation reject the whole accounting transition before any projection commits.
+6. **Cycle-level economics and separate attribution:** retain recovery and legacy proceeds/cost allocations for accurate accounting, but decide SELL eligibility from the combined cycle result. Net SELL proceeds after actual SELL commissions and reliable third-asset valuation must cover the recovery BUY cost (including BUY commissions), the fixed historical cost allocated to the legacy quantity sold, and pair-level `minProfit`. Neither allocation is independently required to show a profit. Missing/incomplete commission facts or third-asset quote valuation reject the whole accounting transition before any projection commits.
 7. **Central reservation gate:** the shared allocator remains responsible for the full mixed SELL reservation against verified account Spot availability. PR #1276 stages the terminal OrderRegistry update and publishes it only after successful accounting, releasing the unfilled reservation once. Because RS submission is not yet wired, creation of RS intents and their initial reservation remain RS-4 runtime-integration work.
 
 A standalone legacy-only SELL is not part of the current RS cycle contract. While legacy remains, a cycle SELL contains the recovery tranche plus its permitted legacy slice; once legacy is exhausted, subsequent cycles are recovery-only. The shared allocator remains generic, but RS policy must reject a legacy-only action.
@@ -151,7 +151,7 @@ flowchart TD
   D --> E{Ownership, quantities, fees and history valid?}
   E -->|No| X[Fail closed; retain prior projections and SELL reservation]
   E -->|Yes| F[Commit recovery Portfolio and legacy projections atomically]
-  F --> G[Calculate independent recovery and legacy profitability]
+  F --> G[Calculate combined cycle cost recovery and minProfit]
   G --> H[Publish terminal OrderRegistry update]
   H --> I[Release unfilled SELL reservation once]
   G --> J{Combined SELL covers both costs, fees and minProfit?}
@@ -238,7 +238,7 @@ No separate RS-only per-tranche cap, maximum-drawdown rule, adverse-price limit,
 
 For example, with `orderQuantity: 5` ZRO and `sellQuantity: 0.01` ZRO, when the BUY tranche has produced 5 ZRO of net recovery inventory, the conceptual combined SELL target is 5.01 ZRO. Actual canonical BUY fills and base-asset commissions determine the recovery quantity available; configured order quantity or an order acknowledgement must never be treated as executed inventory. The mixed SELL must satisfy the combined cycle-level gate: net proceeds after all applicable fees cover the recovery BUY cost, the legacy slice's allocated historical cost, and at least `minProfit`. The 0.01 ZRO slice is deducted from the remaining authorized, Spot-available legacy quantity after the cycle succeeds.
 
-**Agreed dust contract:** RS uses the same constrained-dust principle as Conservative. After a cycle has successfully completed and all canonical fills, terminal order state, commissions, proceeds, reservations, and both profitability gates are fully reconciled, any precisely identified residual that cannot be sold solely because of current exchange quantity/notional filters is classified as retained bonus dust. That dust remains in the account but is permanently excluded from all future RS cycle calculations: it is not recovery inventory, is not part of a later cycle's SELL target, does not contribute to later recovery or legacy profitability, and is never counted again as available RS inventory. It is not carried forward as a new cycle's starting balance.
+**Agreed dust contract:** RS uses the same constrained-dust principle as Conservative. After a cycle has successfully completed and all canonical fills, terminal order state, commissions, proceeds, reservations, and the combined cycle-level profitability gate are fully reconciled, any precisely identified residual that cannot be sold solely because of current exchange quantity/notional filters is classified as retained bonus dust. That dust remains in the account but is permanently excluded from all future RS cycle calculations: it is not recovery inventory, is not part of a later cycle's SELL target, does not contribute to later recovery or legacy profitability, and is never counted again as available RS inventory. It is not carried forward as a new cycle's starting balance.
 
 Only an exchange-filter-constrained quantity qualifies. The exact residual quantity and the specific limiting filter must be recorded. Ordinary sellable residual is not dust and cannot be discarded or hidden by cycle completion. Price-filter failures, unavailable commission valuation, incomplete fill/order reconciliation, active reservations, or other unresolved accounting/risk conditions are not dust and must block successful completion. Dust classification is permitted only after the cycle's SELL is terminal and fully reconciled; it must not be used to bypass either profitability gate.
 
@@ -246,7 +246,7 @@ Only an exchange-filter-constrained quantity qualifies. The exact residual quant
 
 **Final residual without a new BUY remains unresolved:** this concerns a leftover quantity from an already completed recovery cycle. It does not limit the normal repeated recovery-cycle behavior defined below.
 
-**Agreed — continue recovery cycles after legacy inventory is exhausted.** Exhaustion of authorized legacy inventory only removes the legacy component from future SELLs; it does not pause RS or require reauthorization. RS continues its normal recovery cycle until the operator stops it: for example, BUY 5 ZRO, then SELL the actual net recovery quantity (5 ZRO in the fully filled/no-base-fee illustration) when the recovery tranche's net proceeds meet the existing pair-level `minProfit` after applicable commissions. With no legacy quantity in that SELL, the legacy historical-cost gate does not apply. While authorized legacy inventory remains, add the eligible legacy slice and enforce its independent historical-basis/selling-cost gate as well. Existing orders, fills, reservations, and accounting remain owned and subject to canonical reconciliation.
+**Agreed — continue recovery cycles after legacy inventory is exhausted.** Exhaustion of authorized legacy inventory only removes the legacy component from future SELLs; it does not pause RS or require reauthorization. RS continues its normal recovery cycle until the operator stops it: for example, BUY 5 ZRO, then SELL the actual net recovery quantity (5 ZRO in the fully filled/no-base-fee illustration) when net proceeds after applicable commissions recover the recovery BUY cost and earn the existing pair-level `minProfit`. With no legacy quantity in that SELL, the legacy historical-cost term is zero. While authorized legacy inventory remains, add the eligible legacy slice and include its fixed historical cost in the same combined cycle-level profitability calculation. Existing orders, fills, reservations, and accounting remain owned and subject to canonical reconciliation.
 
 Until decided:
 
@@ -275,7 +275,7 @@ Until decided:
 
 Advanced RS lifecycle functionality is deliberately deferred under FITDIB (first implement the safe minimum, then improve it). The first implementation must support the normal repeat-until-operator-stops cycle and the safety blocks defined below; do not add speculative pause/disable/abandon/resume workflows or automatic liquidation. Mandatory safety behavior:
 
-- The operator's stop of RS and any normal readiness, investment-limit, order-safety, or reconciliation block prevent new BUYs. Exhaustion of authorized legacy inventory alone does not pause RS: subsequent cycles continue as recovery-only BUY/SELL cycles, subject to the recovery `minProfit` gate and all normal risk, order, and reconciliation controls. Reaching the configured investment limit blocks new BUYs but does not cancel, replace, or reprice an already-open recovery SELL; keep it alive and reconcile until filled/terminal.
+- The operator's stop of RS and any normal readiness, investment-limit, order-safety, or reconciliation block prevent new BUYs. Exhaustion of authorized legacy inventory alone does not pause RS: subsequent cycles continue as recovery-only BUY/SELL cycles, subject to the whole-cycle cost-recovery-plus-`minProfit` gate and all normal risk, order, and reconciliation controls. Reaching the configured investment limit blocks new BUYs but does not cancel, replace, or reprice an already-open recovery SELL; keep it alive and reconcile until filled/terminal.
 - The first implementation must not cancel, replace, abandon, or market-sell resting orders or inventory as a side effect of the operator stopping RS or a safety block.
 - Existing orders may fill after the operator stops RS or a safety block prevents new BUYs; fills and commissions continue through canonical accounting and reconciliation.
 - In-flight/unknown orders remain owned and reconcilable by their original identities; stopping RS does not erase ownership or reservations.
@@ -331,7 +331,7 @@ RS-2b now has deterministic domain and application regression coverage for legac
 - missing/invalid startup legacy configuration and insufficient verified Spot availability; runtime authorization revocation/expiry is deferred under FITDIB;
 - configured legacy invested quote / original quantity average-cost calculation, including invalid zero/negative/missing inputs;
 - Spot-available versus EARN/off-Spot custody separation, transfer/redeem changes, and insufficient Spot reserve for the next legacy slice;
-- a legacy slice that fails its fixed-original-average-cost profitability gate;
+- mixed-cycle cases where legacy allocation proceeds alone are below its historical cost but the combined SELL still passes or fails the total cost-recovery-plus-`minProfit` gate;
 - the agreed additive `sellQuantity` calculation (actual net recovery quantity + configured legacy slice), smaller-remainder/final-residual behavior, and constrained-dust classification after successful reconciliation; prove retained bonus dust is permanently excluded from every later RS cycle;
 - one/multiple BUY tranches, open/partial/unknown BUYs, and each approved next-BUY boundary;
 - base, quote, and third-asset commission accounting;
@@ -364,7 +364,7 @@ flowchart TD
   J -- No --> X
   J -- Yes --> K[Submit through shared Trading Engine and broker]
   K --> L[Apply partial/terminal fills; reconcile unknown outcomes]
-  L --> M{Close conditions and both profit gates proven?}
+  L --> M{Close conditions and combined cycle-profit gate proven?}
   M -- No --> F
   M -- Yes --> N[Commit Portfolio and RS attribution; update authorization]
 ~~~
