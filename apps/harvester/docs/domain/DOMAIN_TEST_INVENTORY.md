@@ -4,7 +4,7 @@ status: active
 type: testing
 owner: harvester
 created: 2026-11-10
-last_verified: 2026-11-13
+last_verified: 2026-11-17
 ---
 
 # Harvester domain logic test inventory
@@ -13,7 +13,7 @@ last_verified: 2026-11-13
 
 This is the source-driven inventory for deterministic tests under `apps/harvester/src/domain/`. It maps business responsibilities to existing tests, records test-quality risks, and sequences follow-up work. It does not define trading behavior; the [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains authoritative.
 
-Reviewed baseline: `develop` at `9989fea9f77f9ce4b506d4658f2ff1ddef516d83` (2026-11-13, after Harvester source-quality PR #1091 and repository refactoring-standard PR #1095). The current domain tree contains 33 production JavaScript files and 29 domain test files. Historical checkpoints below remain labeled as historical; they are not current file-count claims. PR #917 corrected Conservative BUY gating after RED regressions.
+Reviewed baseline: `develop` at `56097e527f44cfd9bddfd10f8078346695092607` (2026-11-17, after RS-2b application accounting PR #1276 and the latest broker identity hardening). The current domain tree contains 45 production JavaScript files and 38 domain test files. Historical checkpoints below remain labeled as historical; they are not current file-count claims. PR #917 corrected Conservative BUY gating after RED regressions.
 
 All test improvements in this initiative must remain deterministic and offline. Issue [#626](https://github.com/45s/coinzilla/issues/626) and its user-data recovery implementation remain paused and outside this initiative.
 
@@ -28,6 +28,7 @@ All test improvements in this initiative must remain deterministic and offline. 
 | Orders | `orders/allocate-order-commitments.test.js`, `orders/create-pending-canonical-order.test.js`, `orders/order-registry.test.js`, `orders/validate-cancellation-eligibility.test.js`, `orders/validate-order-against-trading-rules.test.js` | Sequential BUY allocation, aggregate SELL limits, pair-versus-account inventory/commitment consistency, post-snapshot net BUY base credit, shared base/quote commitments, PENDING construction, broker/client identity, duplicate and stale reports, partial/terminal/UNKNOWN transitions, cancellation eligibility and exchange filters |
 | Portfolio | `portfolio/portfolio.test.js`, `portfolio/position.test.js` | Immutable fill application, BUY/SELL accounting, base/quote/third-asset commissions, free inventory isolation, duplicate/conflicting fill identity, market isolation and recovery-basis reset |
 | Conservative policy | `strategies/conservative/helpers.test.js`, `initial-buy-price.test.js`, `recovery-completion.test.js`, `recovery-fill-accounting.test.js`, `recovery-ledger.test.js`, `recovery-sell-plan.test.js`, `recovery-sell-plan-accounting.test.js`, `sell-fee-rate.test.js`, `strategy.test.js`, `trailing-buy-repricing.test.js` | BUY/SELL intents, duplicate suppression, recovery economics, fee reserves, exact tick/step rounding, actual fill accounting, reason-specific dust evidence including residual-vs-step and positive evaluated notional, dust/completion, residual sell-through and trailing price thresholds |
+| Recovery Seller accounting (non-executable) | `strategies/recovery-seller/legacy-position.test.js`, `legacy-spot-allocation.test.js`, `mixed-sell-fill-allocation.test.js`, `mixed-sell-fill-accounting.test.js`, `mixed-sell-fill-reconciliation.test.js`, `calculate-profitability.test.js` | Fixed original legacy basis and smaller remainder; verified Spot custody separate from Portfolio; canonical Fill/order ownership allocation; partial-fill staging and terminal reconciliation; exact-once atomic recovery/legacy projections; shared external base/quote-flow baselines; independent recovery and legacy profitability. Pure RS policy and runtime behavior are not yet covered. |
 | Aggressive policy | `strategies/aggressive-strategy.test.js` | Current contract is explicitly non-executable: NO_ACTION blockers, active-position gating and exclusion of retained free inventory |
 | Configuration | `app-config.test.js` | Strategy/pair configuration validation and explicit TESTNET/LIVE mode selection |
 
@@ -61,7 +62,9 @@ The new `src/use-cases/create-candle-history-service.js` is covered by 32 determ
 
 This service collects data and exposes snapshots only. It does not activate volatility protection or authorize/cancel trading orders.
 
-## Application-level orchestration coverage (supplemental; not included in the 30 domain test files)
+## Application-level orchestration coverage (supplemental; not included in the 38 domain test files)
+
+`src/use-cases/create-recovery-seller-accounting-workflow.test.js` covers atomic terminal OrderRegistry/Portfolio/legacy projection commits, reservation retention on failed reconciliation, release after successful commit, verified external Spot and quote-cash-flow providers, duplicate terminal replay, commission allocation, and the rule that confirmed fills are committed even when the independent legacy profitability gate fails. This is accounting orchestration coverage, not executable RS policy or runtime integration.
 
 `src/use-cases/conservative-trading-engine.test.js` contains **163 deterministic test declarations** at the reviewed baseline. The suite covers:
 

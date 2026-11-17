@@ -12,7 +12,7 @@ created: 2026-11-14
 
 **Authority:** This draft becomes the canonical RS contract after formal acceptance. Until then it records the agreed direction, hard safety invariants, accounting boundaries, and remaining implementation requirements. It does not amend the [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
-**Implementation status:** The shared Portfolio/multi-Position foundation is merged in [PR #1118](https://github.com/45s/coinzilla/pull/1118); logical legacy-position accounting is merged in [PR #1131](https://github.com/45s/coinzilla/pull/1131); verified Spot snapshot/reservation plumbing is merged in [PR #1137](https://github.com/45s/coinzilla/pull/1137); immutable order ownership is merged in [PR #1144](https://github.com/45s/coinzilla/pull/1144); and the pure verified legacy Spot allocation calculation is merged in [PR #1152](https://github.com/45s/coinzilla/pull/1152). The verified source remains injectable with an empty default and does not wire RS execution. Canonical-Fill-referenced mixed SELL allocation metadata is merged in [PR #1153](https://github.com/45s/coinzilla/pull/1153). Immutable partial-fill staging, terminal reconciliation, recovery-side Portfolio allocation and legacy realized-P&L projection are merged in [PR #1203](https://github.com/45s/coinzilla/pull/1203). [PR #1212](https://github.com/45s/coinzilla/pull/1212) merged at `4dd365d692908009bfb54358916e536d53b93179`, adding one immutable cross-projection commit after complete terminal reconciliation and extending the shared account-snapshot/allocator path to include verified base inventory and signed quote cash flow tracked outside Portfolio. The updated legacy Position feeds the existing verified Spot-allocation calculation; no configured legacy quantity is inserted into Portfolio. [PR #1213](https://github.com/45s/coinzilla/pull/1213) adds the first pure independent recovery/legacy profitability calculation and rejects negative net proceeds for either allocation. The calculator does not plan SELL quantities, mutate accounting, or wire runtime policy. Reservation release/custody transition integration, end-to-end retry verification and application-level profitability allocation remain. The repository-standard SystemCustomError base was merged in [PR #1262](https://github.com/45s/coinzilla/pull/1262); RS reconciliation and accounting errors extend it and preserve stable domain codes and native causes. RS-3 deterministic policy decisions, SELL planning integration, registration and runtime execution remain unimplemented. The remaining RS-specific domain accounting and later policy/integration phases are tracked in [issue #1127](https://github.com/45s/coinzilla/issues/1127). The owner has approved the sellQuantity plus legacyPosition.invested / legacyPosition.quantity input shape. RS calculates the legacy average once from the original values; that average remains fixed after disposals. This is a product-level input decision, not an executable runtime schema. Owner decisions for the first implementation are recorded; remaining blockers are engineering/accounting implementation and verification, not additional product-policy questions for the opening-inventory boundary. This draft authorizes no trading or exchange operations.
+**Implementation status:** RS-2b accounting is complete. [PR #1276](https://github.com/45s/coinzilla/pull/1276) merged into `develop` as `9276b6c01bec62b743727548786c5af4a04b7908`; exact PR head `19448d63d117f563c31d8ab9422ac73623974782` passed the full Harvester suite (1,847/1,847) and all required checks, including documentation links. No TESTNET/LIVE operation was performed. PR #1276 adds the isolated application workflow that reconciles terminal canonical SELL history, atomically commits the recovery Portfolio and legacy projections, calculates the independent profitability results, and publishes the terminal OrderRegistry only after the accounting commit succeeds. The workflow exposes verified legacy Spot quantity and signed legacy quote cash flow to account-snapshot composition; providers remain empty by default. Confirmed fills are accounted even when a profitability gate fails; incomplete reconciliation or commission valuation still fails closed before commit. The workflow is not registered in bootstrap, RS has no runtime configuration or pure policy, and no RS order can be submitted. RS-3 policy, RS-4 shared Trading Engine integration, and RS-5 lifecycle verification remain. This specification remains DRAFT and authorizes no trading or exchange operations.
 
 The phased implementation plan is maintained in the [Recovery Seller Implementation Roadmap](./recovery-seller-implementation-roadmap.md).
 
@@ -111,23 +111,22 @@ The RS attribution projection must distinguish:
 
 It must reference canonical Fill IDs and retain fill-facts fingerprints. A single execution must never be represented as two Portfolio fills.
 
-### 4.3 Portfolio integration blocker
+### 4.3 Opening-inventory accounting boundary — implemented
 
-The current Portfolio is fill-driven and has no general opening-balance/manual-inventory seeding operation. A SELL containing legacy units not represented in an appropriately owned Position could make that Position's base quantity inconsistent or negative if applied through the existing accounting path unchanged. Multiple Positions do not remove this opening-inventory accounting blocker.
+The operator-declared legacy position remains separate from the shared Portfolio's fill-derived inventory. RS does not seed configured legacy quantity into Portfolio and does not infer custody from EARN, external trades, or an unverified wallet balance.
 
-Therefore, **RS must not submit a SELL consuming legacy inventory until a safe accounting design represents that authorized opening inventory consistently within the shared multi-Position Portfolio and exact-once fill accounting.** An RS attribution ledger alone does not create a sellable Portfolio balance or authorize an oversell.
+The RS-2b implementation now provides the safe boundary:
 
-**Implementation requirement (not an owner question):** represent the manually configured legacy opening inventory and its historical basis within the appropriate RS-owned accounting model and shared Portfolio without synthetic fills, unverified wallet seeding, duplicate custody, or bypassing Portfolio. The operator fills `legacyPosition.invested` and `legacyPosition.quantity` manually before application startup; RS calculates average cost. Actual Spot holdings and off-Spot custody remain separately verified facts. The implementation must define a safe opening-inventory accounting boundary while preserving exact-once canonical fill accounting.
+- **Verified Spot allocation — PR #1152:** derive additional authorized legacy Spot quantity from the authoritative account total minus all Portfolio Positions for the canonical base asset, capped by the remaining operator authorization. Missing balances and Portfolio custody shortfalls fail closed.
+- **Canonical allocation and terminal reconciliation — PRs #1153 and #1203:** bind recovery/legacy splits and commission/proceeds allocation to registered order ownership and canonical Fill identity; stage partial fills and reconcile the complete terminal order history before applying the cycle transition.
+- **Atomic shared accounting — PR #1212:** apply the recovery Position share and legacy quantity/P&L share as one immutable transition, and include externally tracked base quantity and signed legacy quote cash flow in snapshot-relative shared allocation.
+- **Application commit and reservation release — PR #1276:** stage the terminal OrderRegistry update, commit both accounting projections and independent profitability results, then publish the new registry. If reconciliation or either projection fails, the prior Portfolio, legacy state and active SELL reservation remain unchanged.
 
-**Confirmed implementation blocker — opening inventory must not be confused with Spot custody:** the current `Position.baseQuantity` is fill-derived active inventory and `Position.freeBaseQuantity` is retained inventory; `Position.totalBaseQuantity` is their sum. `Portfolio.getTotalBaseQuantity()`, account-snapshot baselines, recovered-account audits, and shared Trading Engine balance/commitment calculations consume that total as tracked actual Spot inventory. Seeding either bucket with the operator-configured original legacy quantity would therefore assert unverified custody, inflate shared sellable/tracked balance, and corrupt snapshot-relative reconciliation. Creating a separate legacy Position does not avoid this because Portfolio aggregates every Position.
+The verified base-quantity and quote-cash-flow providers are exposed for account-snapshot composition but remain empty by default. This completes the RS-2b accounting boundary without synthetic fills, Portfolio seeding, duplicated custody, or inferred EARN inventory. The workflow is isolated and not registered in bootstrap; it cannot submit or manage RS orders.
 
-The opposite shortcut is also unsafe: keeping the operator-declared legacy quantity outside the Position leaves the current `calculatePositionFill()` SELL path subtracting from a fill-derived Position quantity that may not contain the legacy slice; it rejects a negative result. The canonical Fill carries execution facts and Portfolio ownership, but no explicit allocation identifying how much of a mixed SELL consumed recovery versus legacy inventory. An RS-only counter cannot make the shared Portfolio SELL transition valid or prove that the legacy quantity was decremented exactly once.
+### 4.4 Implemented accounting boundary and remaining runtime boundary
 
-The first safe boundary therefore needs two distinct facts: (1) operator-declared legacy authorization and fixed historical basis, which do not establish custody; and (2) an independently verified, account-wide Spot custody allocation, which must respect other strategy Positions and all active reservations. A canonical SELL must debit the actual shared Spot allocation. Its RS accounting transition must also receive explicit, validated legacy/recovery allocation metadata tied to the canonical Fill ID and originating order ownership, so the legacy quantity is decremented exactly once. Keep the canonical Fill as exchange-neutral execution facts; do not add strategy-specific allocation to broker Fill data or fabricate a BUY Fill. The existing Portfolio has no operation or contract for this split today, so implementation must first add and test that explicit boundary rather than populate existing quantity buckets from configuration or an unverified wallet snapshot. This is an implementation blocker within RS-2b, not a new owner-policy question.
-
-### 4.4 Proposed accounting boundary — separate facts, one execution
-
-The next implementation slice must introduce an application-owned allocation boundary without changing the exchange-neutral `Fill` contract or pretending that the configured legacy quantity is already in Spot.
+RS-2b implements the application-owned allocation boundary without changing the exchange-neutral `Fill` contract or pretending that configured legacy quantity is already in Spot.
 
 1. **Order ownership:** retain immutable Harvester-owned metadata beside the canonical order, keyed by its registered `clientOrderId` and attached `brokerOrderId`. It identifies the originating `strategyId`, `positionId`, and RS cycle/purpose. Do not add these fields to `CanonicalOrder` or `Fill`; do not infer ownership from symbol, side, or a reserved client-ID prefix alone.
 2. **Verified Spot allocation:** derive the amount available to RS legacy from the authoritative account snapshot for the canonical base asset, after accounting for every existing Portfolio Position and all account-wide active/in-flight SELL reservations. Cap this by the operator-authorized remaining legacy quantity. A configured legacy quantity, an EARN balance, an unrelated wallet balance, or a stale/unavailable snapshot is never evidence of Spot availability.
@@ -136,36 +135,35 @@ The next implementation slice must introduce an application-owned allocation bou
 4. **Single shared custody debit:** the account-level Spot allocation records the full actual base debit (executed base plus actual base commission) once. The Portfolio recovery Position receives only its explicitly allocated recovery share; the RS legacy projection receives only its explicitly allocated legacy share. The updated legacy Position is used to recalculate the separately tracked Spot quantity; never add configured legacy quantity to Portfolio. The same verified additional-base provider must feed both account-snapshot baseline capture and the shared allocator, which applies the current-minus-snapshot delta alongside the Portfolio base delta. Net legacy quote proceeds are included in the shared quote-cash-flow baseline and current allocator delta, not legacy historical cost basis or realized profit.
 5. **Exact-once reconciliation:** key allocation identity and duplicate detection by canonical Fill ID plus immutable allocation fingerprint. Stage each partial fill against its originating order/cycle. Do not commit the cycle's legacy decrement until complete terminal order/fill reconciliation proves the aggregate execution quantity and all allocation facts. Replays are no-ops only when both canonical facts and allocation metadata are identical; conflicting or missing attribution fails closed.
 6. **Independent economics:** calculate recovery-tranche net proceeds/profit and legacy net proceeds against the fixed original legacy average cost from their own allocated quantities and actual fees. A profitable recovery share cannot subsidize a legacy loss. Missing/incomplete commission facts or third-asset quote valuation reject the whole accounting transition before any projection commits.
-7. **Central reservation gate:** reserve the full mixed SELL quantity against shared exchange Spot availability before broker submission, while separately preventing the same recovery or legacy slice from being reserved by another order. Release only the unfilled reservation after authoritative terminal reconciliation.
+7. **Central reservation gate:** the shared allocator remains responsible for the full mixed SELL reservation against verified account Spot availability. PR #1276 stages the terminal OrderRegistry update and publishes it only after successful accounting, releasing the unfilled reservation once. Because RS submission is not yet wired, creation of RS intents and their initial reservation remain RS-4 runtime-integration work.
 
 A standalone legacy-only SELL is not part of the current RS cycle contract. While legacy remains, a cycle SELL contains the recovery tranche plus its permitted legacy slice; once legacy is exhausted, subsequent cycles are recovery-only. The shared allocator remains generic, but RS policy must reject a legacy-only action.
 
 The shared snapshot/allocator plumbing is merged in PR #1137. The pure verified legacy Spot allocation calculation is merged in PR #1152: it aggregates every Portfolio Position by canonical base-asset ID, subtracts that total from the authoritative Spot account total, and caps the remainder at original/remaining operator authorization. Missing authorized balances and account custody below aggregate Portfolio quantity fail closed. The calculation remains outside Portfolio and injectable only, with an empty default; active/in-flight reservations remain separately reconciled by the shared allocator. It does not infer EARN/off-Spot quantity or adopt unrelated wallet assets, and it does not enable RS runtime execution.
 
-The intended application flow is:
+The implemented accounting flow:
 
 ```mermaid
 flowchart TD
-  A[Canonical SELL Fill + registered order] --> B[Resolve immutable order ownership]
-  B --> C[Verify account-wide Spot allocation and reservations]
-  C --> D[Validate one Fill allocation by canonical Fill ID]
-  D --> E{All quantities, fees and ownership reconcile?}
-  E -->|No| X[Fail closed; pause affected market]
-  E -->|Yes| F[Stage full shared custody debit]
-  F --> G[Stage recovery Position share]
-  F --> H[Stage legacy accounting share]
-  G --> I[Terminal order/fill reconciliation]
-  H --> I
-  I --> J{Cycle complete and both profit gates pass?}
-  J -->|No| X
-  J -->|Yes| K[Commit projections and decrement legacy once]
+  A[Terminal canonical SELL + registered order] --> B[Resolve immutable order ownership]
+  B --> C[Validate canonical fills and allocation metadata]
+  C --> D[Reconcile complete terminal order history]
+  D --> E{Ownership, quantities, fees and history valid?}
+  E -->|No| X[Fail closed; retain prior projections and SELL reservation]
+  E -->|Yes| F[Commit recovery Portfolio and legacy projections atomically]
+  F --> G[Calculate independent recovery and legacy profitability]
+  G --> H[Publish terminal OrderRegistry update]
+  H --> I[Release unfilled SELL reservation once]
+  G --> J{Both applicable profitability gates pass?}
+  J -->|No| K[Report ineligible result; do not undo confirmed fills]
+  J -->|Yes| L[Policy may consider the next action]
 ```
 
-The diagram describes the proposed RS boundary, not current runtime behavior. Immutable order-ownership metadata is implemented in merged PR #1144, and the pure verified legacy Spot allocation calculation is implemented in merged PR #1152; the latter remains injectable only with an empty default. Merged [PR #1153](https://github.com/45s/coinzilla/pull/1153) adds immutable application metadata bound to the original Fill ID/fingerprint and registered order ownership, carrying exact recovery/legacy gross quantities, quote proceeds and actual commission allocations. Immutable partial-fill staging, terminal exact-once reconciliation, and separate recovery Portfolio and legacy inventory/P&L projections are implemented in merged PR #1203. [PR #1212](https://github.com/45s/coinzilla/pull/1212) adds the immutable terminal-order cross-projection commit and shared account-snapshot/allocator support for externally tracked base inventory and quote cash flow. The updated legacy remainder feeds the existing verified Spot allocation provider; its current base allocation is compared with the account-snapshot baseline, and legacy quantity is never seeded into Portfolio. Reservation release and runtime wiring remain separate work. RS remains non-executable.
+Merged PRs #1144, #1152, #1153, #1203 and #1212 provide immutable order ownership, verified legacy Spot allocation, canonical-Fill-bound mixed allocation, partial-fill staging, terminal reconciliation and atomic dual-projection accounting. [PR #1276](https://github.com/45s/coinzilla/pull/1276) completes the application workflow: it stages the terminal OrderRegistry update, commits the recovery Portfolio and legacy projections, calculates independent profitability, and only then publishes the terminal registry state. A failed reconciliation or projection leaves the prior state and reservation intact. A confirmed execution is always accounted even if a profitability gate fails; profitability is a pre-submission policy gate, not permission to discard actual fills. The verified Spot and signed quote-cash-flow providers remain empty by default. The workflow is not registered in bootstrap and RS remains non-executable.
 
 ## 5. Profitability — SELL ONLY IN PROFIT
 
-**SELL ONLY IN PROFIT** is a hard safety requirement, not merely a cycle-level target. Two different economic questions must be evaluated independently.
+**SELL ONLY IN PROFIT** is a hard pre-submission safety requirement, not merely a cycle-level target. Two different economic questions must be evaluated independently. It never suppresses accounting of a confirmed execution: the RS-2b application workflow commits complete canonical fills even when a profitability result is false. A failed gate must prevent the policy from creating or continuing an ineligible SELL; it cannot reverse an exchange fill.
 
 ### 5.1 Recovery-cycle profitability
 
@@ -312,7 +310,7 @@ The first-implementation product decisions below are recorded. Items marked as i
 
 ## 13. Required test contract before implementation
 
-No executable RS tests are added in this RS contract update; RS remains non-executable. Future implementation must add deterministic offline tests for:
+RS-2b now has deterministic domain and application regression coverage for legacy basis, verified Spot allocation, canonical mixed-fill attribution, partial/terminal reconciliation, atomic Portfolio/legacy commits, reservation retention/release, and independent profitability. RS remains non-executable because RS-3 policy and RS-4 runtime integration are not implemented. The remaining policy and lifecycle work must add deterministic offline tests for:
 
 - missing/invalid startup legacy configuration and insufficient verified Spot availability; runtime authorization revocation/expiry is deferred under FITDIB;
 - configured legacy invested quote / original quantity average-cost calculation, including invalid zero/negative/missing inputs;
@@ -359,7 +357,7 @@ The prose is authoritative. The diagram does not authorize a tranche cadence, or
 
 ## 15. Implementation boundary
 
-Until this specification is formally accepted and the RS-2b accounting boundary is implemented:
+Until RS-3 pure policy, RS-4 shared Trading Engine integration, and RS-5 offline lifecycle verification are implemented and reviewed (and this draft specification is formally accepted):
 
 - Do not add RS runtime configuration, strategy registration, operator controls, or executable policy.
 - Do not place, cancel, replace, or manage RS orders.
