@@ -60,6 +60,33 @@ This rule does **not** mean abandoning, cancelling, replacing, or ignoring an al
 
 Examples include: a SELL realizes less profit than planned; an order response has an unknown status; actual fees cannot be valued; available Spot quantity disagrees with the verified allocation; a fill cannot be attributed unambiguously; a reservation or accounting projection conflicts; or a state transition occurs that the approved lifecycle does not define. In every case the response is STOP, not an invented workaround.
 
+### 2.2 Deterministic lifecycle outcomes and transitions
+
+Every RS policy evaluation returns exactly one of these outcomes:
+
+| Outcome | Meaning | Required order facts |
+|---|---|---|
+| `SUBMIT` | One eligible new order intent may be handed to the shared Trading Engine. It is not proof of broker acceptance or execution. | No existing order identity is attached. |
+| `WAIT` | An acknowledged, known active order remains untouched until its next authoritative update. No duplicate submission, replacement, or retry is implied. | Both `clientOrderId` and `brokerOrderId` are required. |
+| `BLOCK` | The current evaluation does not permit a new trading action. Known policy limits may produce a non-STOP BLOCK; unexpected or unsupported conditions must use the global STOP reason and latch STOP. | No order identity is required unless the blocked condition concerns an existing order. |
+| `RECONCILE` | Only non-trading reconciliation of an already-submitted order may proceed because its authoritative outcome is not yet known. The original reservation and ownership remain intact; blind resubmission is forbidden. | The original `clientOrderId` is required; `brokerOrderId` is included when known. |
+
+The valid transitions within one recovery cycle are:
+
+| Previous outcome | Allowed next outcomes |
+|---|---|
+| No previous decision (new cycle context) | `SUBMIT`, `WAIT`, `BLOCK`, `RECONCILE` |
+| `SUBMIT` | `WAIT`, `RECONCILE`, `BLOCK` |
+| `WAIT` | `WAIT`, `RECONCILE`, `BLOCK` |
+| `RECONCILE` | `RECONCILE`, `WAIT`, `BLOCK` |
+| `BLOCK` | `BLOCK`, `WAIT`, `RECONCILE` |
+
+A second `SUBMIT` is never a direct continuation of an existing cycle decision. A new `SUBMIT` requires a fresh cycle context after the previous cycle reaches its separately approved terminal state. A terminal partial/canceled/expired/rejected SELL does not authorize that reset; the cycle remains unresolved.
+
+When global STOP is latched, only valid `WAIT` and `RECONCILE` outcomes may proceed. They do not clear STOP. Every `SUBMIT`, ordinary `BLOCK`, missing/invalid decision, or unsupported transition retains the original sticky STOP decision. The first STOP evidence remains authoritative; no automatic clear operation exists. A future clear path requires a separately approved and evidenced resolution contract.
+
+An unknown submission result or unmodeled exchange status therefore produces both a sticky global STOP state and a `RECONCILE` outcome for the existing order. This keeps permission to trade distinct from permission to perform non-trading reconciliation.
+
 ## 3. Legacy inventory and authorization
 
 Legacy inventory is a specifically identified quantity of a market's base asset that existed before RS was authorized to manage it. It must not be inferred from an exchange free balance, Portfolio total/free quantity, manual/external order, prior process state, or unowned execution.
