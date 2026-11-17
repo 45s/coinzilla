@@ -80,6 +80,11 @@ test("Bitunix Spot broker rejects invalid deposit filters before making a reques
     { coin: " " },
     { type: "withdraw" },
     { transactionHash: "" },
+    { transactionHash: "hash" },
+    {
+      type: "inside_transfer_in",
+      transactionHash: "hash",
+    },
     { startTime: Number.MAX_SAFE_INTEGER + 1 },
     {
       startTime: 20,
