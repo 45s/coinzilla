@@ -24,11 +24,11 @@ function createTransactionFacade(transaction) {
   }
 
   return Object.freeze({
-    create: (...args) => transaction.create(...args),
-    readOne: (...args) => transaction.readOne(...args),
-    readMany: (...args) => transaction.readMany(...args),
-    update: (...args) => transaction.update(...args),
-    delete: (...args) => transaction.delete(...args),
+    create: (input) => transaction.create(input),
+    readOne: (input) => transaction.readOne(input),
+    readMany: (input) => transaction.readMany(input),
+    update: (input) => transaction.update(input),
+    delete: (input) => transaction.delete(input),
   })
 }
 
@@ -99,10 +99,10 @@ function createCapabilitiesSnapshot(capabilities) {
 function createProviderNeutralFacade({ database, provider }) {
   const capabilities = createCapabilitiesSnapshot(provider.capabilities)
 
-  function runOperation({ operation, args }) {
+  function runOperation({ operation, input }) {
     return database.transaction((transaction) => {
       const context = createTransactionFacade(transaction)
-      return context[operation](...args)
+      return context[operation](input)
     })
   }
 
@@ -117,25 +117,25 @@ function createProviderNeutralFacade({ database, provider }) {
         createTransactionFacade(transaction),
       ))
     },
-    create: (...args) => runOperation({
+    create: (input) => runOperation({
       operation: "create",
-      args,
+      input,
     }),
-    readOne: (...args) => runOperation({
+    readOne: (input) => runOperation({
       operation: "readOne",
-      args,
+      input,
     }),
-    readMany: (...args) => runOperation({
+    readMany: (input) => runOperation({
       operation: "readMany",
-      args,
+      input,
     }),
-    update: (...args) => runOperation({
+    update: (input) => runOperation({
       operation: "update",
-      args,
+      input,
     }),
-    delete: (...args) => runOperation({
+    delete: (input) => runOperation({
       operation: "delete",
-      args,
+      input,
     }),
     capabilities,
     get state() {
@@ -150,7 +150,7 @@ function createProviderNeutralFacade({ database, provider }) {
  * Pass `provider` to receive the provider-neutral CRUD API. The legacy
  * `adapter` option remains available for the original lifecycle/SQL API.
  *
- * @param {{adapter?: import("../ports/database-provider.js").DatabaseProvider, provider?: import("../ports/database-provider.js").DatabaseProvider}} options
+ * @param {{adapter?: import("../ports/database-provider.js").DatabaseAdapter, provider?: import("../ports/database-provider.js").DatabaseProvider}} options
  * @returns {ReturnType<typeof createDatabaseEntity>|object}
  */
 export function createDatabase(options = {}) {
