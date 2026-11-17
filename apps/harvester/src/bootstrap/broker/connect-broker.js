@@ -65,36 +65,52 @@ export async function connectBroker({
     throw error
   }
 
+  let providersConnected = false
   try {
     logSystem({ logger,
 message: "Connecting to Binance broker" })
 
-    await providerRegistry.connect(providerInstanceId)
+    await providerRegistry.connectAll()
+    providersConnected = true
     publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTED,
       dataResult: mapBrokerConnectedData({ broker: brokerName }),
     })
   } catch (error) {
-    publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED,
-      dataResult: mapBrokerConnectionFailedData({ broker: brokerName,
-error }),
-    })
-    logger.error?.({
-      message: "Binance broker connection failed",
-      errorName: error?.name,
-      errorMessage: error?.message ?? String(error),
-      errorStack: error?.stack,
-    })
+    const secondaryErrors = []
     try {
-      await providerRegistry.disconnect(providerInstanceId)
-    } catch (disconnectError) {
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED,
+        dataResult: mapBrokerConnectionFailedData({ broker: brokerName,
+error }),
+      })
+    } catch (eventError) {
+      secondaryErrors.push(eventError)
+    }
+    try {
+      logger.error?.({
+        message: "Binance broker connection failed",
+        errorName: error?.name,
+        errorMessage: error?.message ?? String(error),
+        errorStack: error?.stack,
+      })
+    } catch (loggingError) {
+      secondaryErrors.push(loggingError)
+    }
+    if (providersConnected) {
+      try {
+        await providerRegistry.disconnectAll()
+      } catch (disconnectError) {
+        secondaryErrors.push(disconnectError)
+      }
+    }
+    if (secondaryErrors.length > 0) {
       throw new AggregateError(
-        [error, disconnectError],
-        "Harvester broker connection failed and disconnect cleanup also failed",
-        { cause: disconnectError },
+        [error, ...secondaryErrors],
+        "Harvester provider startup failed and secondary cleanup/reporting also failed",
+        { cause: error },
       )
     }
     throw error
