@@ -482,3 +482,21 @@ test("preserves reconciliation of an existing order when the cycle snapshot is m
   assert.equal(result.action, undefined,
     "No new BUY may be emitted while the cycle state is invalid.")
 })
+
+
+test("reports QUANTITY_INCREMENT when the configured BUY tranche rounds down to zero", () => {
+  const result = evaluate({
+    pairConfig: {
+      ...pairConfig,
+      orderQuantity: "0.005",
+    },
+  })
+
+  assert.equal(result.decision.outcome, "BLOCK",
+    "A zero quantity after exchange-step rounding must not become a BUY.")
+  assert.equal(result.buyDisposition.reason, "QUANTITY_INCREMENT",
+    "The exchange quantity step must be distinguished from a minimum-quantity violation.")
+  assert.equal(result.buyDisposition.configuredQuantity, "0.005")
+  assert.equal(result.buyDisposition.quantityStepSize, "0.01")
+  assert.equal(result.action, undefined)
+})
