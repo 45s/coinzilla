@@ -2,7 +2,7 @@ import {
   mkdir,
   rename,
 } from "node:fs/promises"
-import { basename, dirname, resolve } from "node:path"
+import { basename, dirname, join, resolve } from "node:path"
 import { backup as sqliteBackup } from "node:sqlite"
 
 import { DatabaseProviderError } from "../../domain/errors/database-errors.js"
