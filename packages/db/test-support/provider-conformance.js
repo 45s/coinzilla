@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
-import { DatabaseConflictError } from "../src/index.js"
+import { DatabaseConflictError, DatabaseProviderError } from "../src/index.js"
 
 async function withConnectedDatabase({ database, callback }) {
   await database.connect()
@@ -549,8 +549,8 @@ async function verifyNestedTransactionUnsupportedAsynchronous({
         collection: "people",
         record: nestedRecord,
       })),
-      /nested/i,
-      "A provider declaring nestedTransactions=false must reject nested transaction work",
+      (error) => error instanceof DatabaseProviderError,
+      "A provider declaring nestedTransactions=false must reject nested transaction work with the shared provider error",
     )
   })
 }
