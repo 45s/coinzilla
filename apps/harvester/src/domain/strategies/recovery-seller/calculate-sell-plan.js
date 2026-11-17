@@ -44,7 +44,9 @@ function assertPositive({ value, field }) {
 function validateInput(input) {
   const fields = [
     "recoveryQuantity",
-    "legacyQuantity",
+    "configuredLegacyQuantity",
+    "legacyRemainingQuantity",
+    "verifiedUnreservedLegacyQuantity",
     "recoveryCostBasis",
     "legacyAverageCost",
     "minProfit",
@@ -64,9 +66,17 @@ function validateInput(input) {
     value: input.recoveryQuantity,
     field: "recoveryQuantity",
   })
+  assertPositive({
+    value: input.configuredLegacyQuantity,
+    field: "configuredLegacyQuantity",
+  })
   assertNonNegative({
-    value: input.legacyQuantity,
-    field: "legacyQuantity",
+    value: input.legacyRemainingQuantity,
+    field: "legacyRemainingQuantity",
+  })
+  assertNonNegative({
+    value: input.verifiedUnreservedLegacyQuantity,
+    field: "verifiedUnreservedLegacyQuantity",
   })
   assertPositive({
     value: input.recoveryCostBasis,
@@ -102,13 +112,15 @@ function validateInput(input) {
   })
 
   if (compareDecimal({
-    left: input.legacyQuantity,
+    left: input.legacyRemainingQuantity,
     right: "0",
   }) > 0 && compareDecimal({
-    left: input.legacyAverageCost,
+    left: input.verifiedUnreservedLegacyQuantity,
     right: "0",
-  }) <= 0) {
-    throw new RangeError("legacyAverageCost must be positive when legacy quantity is included")
+  }) === 0) {
+    throw new RangeError(
+      "Authorized legacy inventory remains but no verified unreserved Spot quantity is available",
+    )
   }
   if (compareDecimal({
     left: input.quoteFeeRate,
@@ -121,6 +133,45 @@ function validateInput(input) {
     right: "1",
   }) >= 0) {
     throw new RangeError("baseFeeRate must be less than one")
+  }
+}
+
+function calculateEligibleLegacyQuantity({
+  configuredLegacyQuantity,
+  legacyRemainingQuantity,
+  verifiedUnreservedLegacyQuantity,
+}) {
+  if (compareDecimal({
+    left: legacyRemainingQuantity,
+    right: "0",
+  }) === 0) {
+    return "0"
+  }
+  let quantity = configuredLegacyQuantity
+  if (compareDecimal({
+    left: legacyRemainingQuantity,
+    right: quantity,
+  }) < 0) {
+    quantity = legacyRemainingQuantity
+  }
+  if (compareDecimal({
+    left: verifiedUnreservedLegacyQuantity,
+    right: quantity,
+  }) < 0) {
+    quantity = verifiedUnreservedLegacyQuantity
+  }
+  return quantity
+}
+
+function validateLegacyCost({ legacyQuantity, legacyAverageCost }) {
+  if (compareDecimal({
+    left: legacyQuantity,
+    right: "0",
+  }) > 0 && compareDecimal({
+    left: legacyAverageCost,
+    right: "0",
+  }) <= 0) {
+    throw new RangeError("legacyAverageCost must be positive when legacy quantity is included")
   }
 }
 
@@ -255,16 +306,22 @@ function calculateMinimumPrice({ grossQuoteProceeds, quantity, priceTickSize }) 
 
 /**
  * Plan one combined RS SELL from recovery inventory and the eligible legacy slice.
- * The legacy quantity is never independently screened for profitability.
+ *
+ * configuredLegacyQuantity is the per-cycle slice. legacyRemainingQuantity is
+ * the authorized remainder. verifiedUnreservedLegacyQuantity must be supplied
+ * from authoritative Spot custody after active reservations are deducted. If
+ * legacy remains but no such quantity is available, planning fails closed.
  *
  * thirdAssetFeeQuoteValue is a required explicit quote-currency estimate. Pass
- * "0" only when no third-asset fee applies; missing/unvalued fees must not be
- * silently treated as zero. Configured fee rates are planning assumptions;
- * confirmed fill commissions remain authoritative for accounting.
+ * "0" only when no third-asset fee applies; missing/unvalued fees are not zero.
+ * Configured fee rates/valuations are planning assumptions; actual fill
+ * commissions remain authoritative for final accounting.
  */
 export function calculateRecoverySellerSellPlan({
   recoveryQuantity,
-  legacyQuantity,
+  configuredLegacyQuantity,
+  legacyRemainingQuantity,
+  verifiedUnreservedLegacyQuantity,
   recoveryCostBasis,
   legacyAverageCost,
   minProfit,
@@ -276,7 +333,9 @@ export function calculateRecoverySellerSellPlan({
 } = {}) {
   const input = {
     recoveryQuantity,
-    legacyQuantity,
+    configuredLegacyQuantity,
+    legacyRemainingQuantity,
+    verifiedUnreservedLegacyQuantity,
     recoveryCostBasis,
     legacyAverageCost,
     minProfit,
@@ -288,6 +347,15 @@ export function calculateRecoverySellerSellPlan({
   }
   validateInput(input)
 
+  const legacyQuantity = calculateEligibleLegacyQuantity({
+    configuredLegacyQuantity,
+    legacyRemainingQuantity,
+    verifiedUnreservedLegacyQuantity,
+  })
+  validateLegacyCost({
+    legacyQuantity,
+    legacyAverageCost,
+  })
   const availableBaseQuantity = addDecimal({
     left: recoveryQuantity,
     right: legacyQuantity,
