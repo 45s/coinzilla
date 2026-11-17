@@ -158,28 +158,22 @@ fill })
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
 }
 
-test("reopens the real append-only ledger after intent, acknowledgement, and fill crash boundaries", async (t) => {
-  const directory = await createDirectory(t)
-  const store = createStore(directory)
-  await initializeProcess(store)
-
+async function recordCrashBoundaryIntentAndAcknowledgement({ directory, store }) {
   const pending = makeOrder({
     clientOrderId: "crash-matrix-buy-1",
     side: "BUY",
     quantity: "0.02",
     price: "100",
   })
-  const intent = await recordOrderSubmissionIntent({ operationalStateStore: store,
-order: pending })
+  const intent = await recordOrderSubmissionIntent({ operationalStateStore: store, order: pending })
   assert.equal(intent.ok, true, intent.errors?.map(({ message }) => message).join("; "))
-
   const afterIntent = await readCandidate(directory, "crash-reader-after-intent")
   assert.equal(afterIntent.ok, true, afterIntent.errors?.map(({ message }) => message).join("; "))
   const intentOrder = afterIntent.data.orderRegistry.getOrder({ clientOrderId: pending.clientOrderId })
-  assert.equal(intentOrder.status, "UNKNOWN")
-  assert.equal(intentOrder.brokerOrderId, undefined)
-  assert.equal(afterIntent.data.requiresExchangeReconciliation, true)
-  assert.equal(afterIntent.data.restorationEnabled, false)
+  assert.equal(intentOrder.status, "UNKNOWN", "A durable intent without an acknowledgement must restore as UNKNOWN.")
+  assert.equal(intentOrder.brokerOrderId, undefined, "An unacknowledged intent must not invent a broker order ID.")
+  assert.equal(afterIntent.data.requiresExchangeReconciliation, true, "The offline candidate must require exchange reconciliation.")
+  assert.equal(afterIntent.data.restorationEnabled, false, "The offline candidate must never enable runtime restoration.")
 
   const acknowledged = makeOrder({
     clientOrderId: pending.clientOrderId,
@@ -196,14 +190,16 @@ order: pending })
     outcome: "ACKNOWLEDGED",
   })
   assert.equal(outcome.ok, true, outcome.errors?.map(({ message }) => message).join("; "))
-
   const afterAcknowledgement = await readCandidate(directory, "crash-reader-after-ack")
   assert.equal(afterAcknowledgement.ok, true, afterAcknowledgement.errors?.map(({ message }) => message).join("; "))
   const acknowledgedOrder = afterAcknowledgement.data.orderRegistry.getOrder({ clientOrderId: pending.clientOrderId })
-  assert.equal(acknowledgedOrder.status, "UNKNOWN")
-  assert.equal(acknowledgedOrder.brokerOrderId, "broker-crash-matrix-buy-1")
-  assert.equal(acknowledgedOrder.executedQuantity.amount, "0")
+  assert.equal(acknowledgedOrder.status, "UNKNOWN", "An acknowledgement alone must not prove the current exchange order status.")
+  assert.equal(acknowledgedOrder.brokerOrderId, "broker-crash-matrix-buy-1", "The acknowledged broker order ID must survive the crash boundary.")
+  assert.equal(acknowledgedOrder.executedQuantity.amount, "0", "An acknowledgement must not invent executed quantity.")
+  return { pending, acknowledged }
+}
 
+async function verifyCrashBoundaryFill({ directory, store, pending, acknowledged }) {
   const fill = makeFill({
     tradeId: "crash-matrix-buy-trade-1",
     clientOrderId: pending.clientOrderId,
@@ -213,18 +209,24 @@ order: pending })
     quoteQuantity: "2",
     price: "100",
   })
-  await applyFill({ store,
-fill })
-
+  await applyFill({ store, fill })
   const afterFill = await readCandidate(directory, "crash-reader-after-fill")
   assert.equal(afterFill.ok, true, afterFill.errors?.map(({ message }) => message).join("; "))
   const filledOrder = afterFill.data.orderRegistry.getOrder({ clientOrderId: pending.clientOrderId })
   assert.equal(filledOrder.status, "UNKNOWN", "A durable fill does not prove current exchange order status.")
-  assert.equal(filledOrder.executedQuantity.amount, "0.02")
-  assert.equal(afterFill.data.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, "0.02")
-  assert.equal(afterFill.data.portfolio.getPosition({ marketId: market.id }).spent.amount, "2")
-  assert.equal(afterFill.data.recoveryLedgers.get(market.id).buyCost, "2")
-  assert.equal(afterFill.data.requiresExchangeReconciliation, true)
+  assert.equal(filledOrder.executedQuantity.amount, "0.02", "The exact executed quantity must survive the fill crash boundary.")
+  assert.equal(afterFill.data.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, "0.02", "The candidate Portfolio must restore the exact filled base quantity.")
+  assert.equal(afterFill.data.portfolio.getPosition({ marketId: market.id }).spent.amount, "2", "The candidate Portfolio must restore the exact quote cost.")
+  assert.equal(afterFill.data.recoveryLedgers.get(market.id).buyCost, "2", "The RecoveryLedger must restore the exact BUY cost.")
+  assert.equal(afterFill.data.requiresExchangeReconciliation, true, "The filled offline candidate must still require exchange reconciliation.")
+}
+
+test("reopens the real append-only ledger after intent, acknowledgement, and fill crash boundaries", async (t) => {
+  const directory = await createDirectory(t)
+  const store = createStore(directory)
+  await initializeProcess(store)
+  const { pending, acknowledged } = await recordCrashBoundaryIntentAndAcknowledgement({ directory, store })
+  await verifyCrashBoundaryFill({ directory, store, pending, acknowledged })
 })
 
 async function createRecoveryCycleAccountingEvidence({
