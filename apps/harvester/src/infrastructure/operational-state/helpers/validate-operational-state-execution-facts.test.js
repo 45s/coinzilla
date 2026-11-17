@@ -186,7 +186,74 @@ test("enforces commission completeness and the supported commission collection s
   }
 })
 
-test("validates commission entries and quote valuations without floating-point coercion", () => {
+const INVALID_COMMISSION_CASES = [
+  [null, /unsupported fields/],
+  [[], /unsupported fields/],
+  [
+    {
+      amount: "0.1",
+      assetId: "binance:BNB",
+      assetCode: "BNB",
+      unsupported: true,
+    },
+    /unsupported fields/,
+  ],
+  [
+    {
+      amount: "-0.1",
+      assetId: "binance:BNB",
+      assetCode: "BNB",
+      quoteValue: null,
+    },
+    /non-negative exact decimal/,
+  ],
+  [
+    {
+      amount: "0.1",
+      assetId: "",
+      assetCode: "BNB",
+      quoteValue: null,
+    },
+    /non-empty string/,
+  ],
+  [
+    {
+      amount: "0.1",
+      assetId: "binance:BNB",
+      assetCode: "",
+      quoteValue: null,
+    },
+    /non-empty string/,
+  ],
+  [
+    {
+      amount: "0.1",
+      assetId: "binance:BNB",
+      assetCode: "BNB",
+      quoteValue: {
+        amount: "1",
+        assetId: "binance:BTC",
+        assetCode: "BTC",
+      },
+    },
+    /canonical quote asset/,
+  ],
+  [
+    {
+      amount: "0.1",
+      assetId: "binance:BNB",
+      assetCode: "BNB",
+      quoteValue: {
+        amount: "1",
+        assetId: "binance:USDT",
+        assetCode: "",
+      },
+    },
+    /non-empty string/,
+  ],
+]
+
+test("accepts a canonical commission without quote conversion", () => {
   const valid = makeExecutionFill({
     commissionStatus: "COMPLETE",
     commissions: [
@@ -198,73 +265,15 @@ test("validates commission entries and quote valuations without floating-point c
       },
     ],
   })
+
   assert.doesNotThrow(
     () => validateExecutionFillAppliedFact(valid),
     "A canonical commission without quote conversion must remain valid.",
   )
+})
 
-  const invalidCommissions = [
-    [null, /unsupported fields/],
-    [[], /unsupported fields/],
-    [
-      {
-        amount: "0.1",
-        assetId: "binance:BNB",
-        assetCode: "BNB",
-        unsupported: true,
-      },
-      /unsupported fields/,
-    ],
-    [
-      {
-        amount: "-0.1",
-        assetId: "binance:BNB",
-        assetCode: "BNB",
-        quoteValue: null,
-      },
-      /non-negative exact decimal/,
-    ],
-    [
-      {
-        amount: "0.1",
-        assetId: "",
-        assetCode: "BNB",
-        quoteValue: null,
-      },
-      /non-empty string/,
-    ],
-    [
-      {
-        amount: "0.1",
-        assetId: "binance:BNB",
-        assetCode: "",
-        quoteValue: null,
-      },
-      /non-empty string/,
-    ],
-    [{
-      amount: "0.1",
-      assetId: "binance:BNB",
-      assetCode: "BNB",
-      quoteValue: {
-        amount: "1",
-        assetId: "binance:BTC",
-        assetCode: "BTC",
-      },
-    }, /canonical quote asset/],
-    [{
-      amount: "0.1",
-      assetId: "binance:BNB",
-      assetCode: "BNB",
-      quoteValue: {
-        amount: "1",
-        assetId: "binance:USDT",
-        assetCode: "",
-      },
-    }, /non-empty string/],
-  ]
-
-  for (const [commission, expectedError] of invalidCommissions) {
+test("rejects malformed commission entries and non-canonical quote valuations", () => {
+  for (const [commission, expectedError] of INVALID_COMMISSION_CASES) {
     assert.throws(
       () => validateExecutionFillAppliedFact(makeExecutionFill({
         commissionStatus: "COMPLETE",
