@@ -16,6 +16,7 @@ import { defaultLogger } from "@coinzilla/utils"
 import { startHarvester } from "./bootstrap/start-harvester.js"
 import { loadAppConfig } from "./infrastructure/config/load-app-config.js"
 import { resolveRuntimeConfig } from "./domain/app-config.js"
+import { resolveProviderConfiguration } from "./bootstrap/broker/resolve-provider-configuration.js"
 import { configureHarvesterLogging } from "./infrastructure/logging/configure-harvester-logging.js"
 import { createLogCommandInterface } from "./infrastructure/logging/create-log-command-interface.js"
 import { subscribeHarvesterTelegramNotifications } from "./bootstrap/notifications/subscribe-harvester-telegram-notifications.js"
@@ -378,7 +379,7 @@ async function acquireEnvironmentProcessLock({ runtimeConfig, acquireProcessLock
   })
   if (lockResult?.ok !== true || typeof lockResult.release !== "function") {
     const details = lockResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-    throw new Error(`Harvester cannot start without the Binance ${runtimeConfig.tradingMode} environment-scoped single-writer process lock${details ? `: ${details}` : ""}`)
+    throw new Error(`Harvester cannot start without the ${runtimeConfig.brokerName} ${runtimeConfig.tradingMode} environment-scoped single-writer process lock${details ? `: ${details}` : ""}`)
   }
   return lockResult
 }
@@ -398,9 +399,21 @@ async function acquireProcessStartupResources({ options, resources, processStart
   } = options
   resources.eventBus = createEventBus({ logger })
   resources.appConfig = await loadConfig(configSource)
-  resources.runtimeConfig = resolveRuntimeConfig({
+  const exchangeRuntimeConfig = resolveRuntimeConfig({
     tradingMode: env.TRADING_MODE,
     environment: env.NODE_ENV,
+  })
+  const providerConfiguration = resolveProviderConfiguration({
+    brokers: resources.appConfig.brokers,
+    tradingMode: exchangeRuntimeConfig.tradingMode,
+  })
+  const selectedProvider = providerConfiguration.instances.find(
+    (instance) => instance.id === providerConfiguration.selections.execution,
+  )
+  resources.runtimeConfig = Object.freeze({
+    ...exchangeRuntimeConfig,
+    brokerName: selectedProvider.provider,
+    providerInstanceId: selectedProvider.id,
   })
   resources.processLock = await acquireEnvironmentProcessLock({
     runtimeConfig: resources.runtimeConfig,
@@ -539,7 +552,7 @@ function publishRuntimeStarted({ runtime, runtimeConfig, eventPublisher, logger 
     eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.STARTED,
     dataResult: mapHarvesterStartedData({
-      broker: runtime.connected ? (runtime.brokerName ?? runtimeConfig.brokerName ?? "binance") : "none",
+      broker: runtime.connected ? (runtime.brokerName ?? runtimeConfig.brokerName ?? "unknown") : "none",
       strategyMode: runtime.strategyMode ?? "conservative",
       enabledMarkets,
       tradingEnabled: runtime.tradingEnabled === true,
@@ -547,7 +560,7 @@ function publishRuntimeStarted({ runtime, runtimeConfig, eventPublisher, logger 
   })
   if (!runtime.connected) {
     logSystem({ logger,
-      message: "Binance connection was not established." })
+      message: `${runtimeConfig.brokerName} connection was not established.` })
   } else if (runtime.tradingEnabled && runtime.strategyMode === "conservative") {
     logSystem({
       logger,
@@ -556,7 +569,7 @@ function publishRuntimeStarted({ runtime, runtimeConfig, eventPublisher, logger 
   } else {
     logSystem({
       logger,
-      message: `Connected; Binance trading mode is ${runtimeConfig.tradingMode.toUpperCase()}.`,
+      message: `Connected; ${runtimeConfig.brokerName} trading mode is ${runtimeConfig.tradingMode.toUpperCase()}.`,
     })
   }
 }
