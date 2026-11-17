@@ -111,6 +111,7 @@ These rules are mandatory for every AI agent working on the existing broker pack
 The primary pair above is not an exclusive search boundary. When JKorf or the TypeScript MCP does not cover the requested method, or when their source/tests conflict with each other or official docs, search GitHub for the exact endpoint path, method name, and Bitunix Spot capability. Inspect additional language clients and connector packages before concluding that no reference exists.
 
 Known supplementary references from the maintained [Bitunix external implementation audit](./BITUNIX_REFERENCE_AUDIT.md) include:
+
 - [StockSharp/Connectors](https://github.com/StockSharp/Connectors/tree/master/Bitunix) — independent C# Spot connector and DTOs.
 - [0xCherryBlueZu/bitunix](https://github.com/0xCherryBlueZu/bitunix) — Python Spot REST client; inspect signing/logging defects before reuse.
 - [LuiInventions/Bitunix-MCP](https://github.com/LuiInventions/Bitunix-MCP) — Python MCP/application workflows; not a precision-safe broker reference.
