@@ -398,3 +398,98 @@ test("max-depth rejects control flow nested beyond four blocks", async () => {
     "A function with exactly four nested control-flow blocks must remain valid.",
   );
 });
+
+function getRuleSeverity({ rule }) {
+  const [severity] = Array.isArray(rule) ? rule : [rule];
+  return severity ?? 0;
+}
+
+test("preserves existing function-quality thresholds and the Telegram adapter override", async () => {
+  const eslint = new ESLint();
+  const config = await eslint.calculateConfigForFile("apps/harvester/src/index.js");
+  const telegramConfig = await eslint.calculateConfigForFile(
+    "apps/harvester/src/infrastructure/telegram/telegram-operator-adapter.js",
+  );
+
+  assert.deepEqual(config.rules.complexity, [2, { max: 20 }]);
+  assert.deepEqual(config.rules["max-params"], [2, 1]);
+  assert.deepEqual(config.rules["max-lines-per-function"], [
+    1,
+    {
+      max: 80,
+      skipBlankLines: true,
+      skipComments: true,
+    },
+  ]);
+  assert.deepEqual(config.rules["max-statements"], [1, 50]);
+  assert.deepEqual(config.rules["max-nested-callbacks"], [2, 3]);
+  assert.deepEqual(telegramConfig.rules["max-lines-per-function"], [
+    1,
+    {
+      max: 520,
+      skipBlankLines: true,
+      skipComments: true,
+    },
+  ]);
+
+  for (const ruleId of [
+    "no-param-reassign",
+    "no-nested-ternary",
+    "consistent-return",
+    "no-else-return",
+  ]) {
+    assert.equal(
+      getRuleSeverity({ rule: config.rules[ruleId] }),
+      2,
+      `The existing ${ruleId} error-level enforcement must remain active.`,
+    );
+  }
+});
+
+test("function-quality rules reject excess parameters and callbacks and report size warnings", async () => {
+  const eslint = new ESLint();
+  const [parameterFindings] = await eslint.lintText(
+    "function combine(first, second) { return first + second; }",
+    { filePath: "scripts/eslint-parameter-fixture.js" },
+  );
+  const [callbackFindings] = await eslint.lintText(
+    "const task = Promise.resolve().then(() => Promise.resolve().then(() => Promise.resolve().then(() => Promise.resolve().then(() => true)))); process.stdout.write(String(task));",
+    { filePath: "scripts/eslint-callback-fixture.js" },
+  );
+  let longFunctionSource = "function countOperations() {\\n  let total = 0;\\n";
+
+  for (let index = 0; index < 81; index += 1) {
+    longFunctionSource += "  total += 1;\\n";
+  }
+  longFunctionSource += "  return total;\\n}\\n";
+
+  const [sizeFindings] = await eslint.lintText(
+    longFunctionSource,
+    { filePath: "scripts/eslint-size-fixture.js" },
+  );
+
+  assert.ok(
+    parameterFindings.messages.some((message) => (
+      message.ruleId === "max-params" && message.severity === 2
+    )),
+    "More than one function parameter must remain an error.",
+  );
+  assert.ok(
+    callbackFindings.messages.some((message) => (
+      message.ruleId === "max-nested-callbacks" && message.severity === 2
+    )),
+    "More than three nested callbacks must remain an error.",
+  );
+  assert.ok(
+    sizeFindings.messages.some((message) => (
+      message.ruleId === "max-lines-per-function" && message.severity === 1
+    )),
+    "Function length above 80 lines must remain a warning rejected by strict workspace lint.",
+  );
+  assert.ok(
+    sizeFindings.messages.some((message) => (
+      message.ruleId === "max-statements" && message.severity === 1
+    )),
+    "Function statement count above 50 must remain a warning rejected by strict workspace lint.",
+  );
+});
