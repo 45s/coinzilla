@@ -193,22 +193,13 @@ function mapEnabledMarkets({ value }) {
   return markets
 }
 
-export function createTradingSessionRecord({
-  runtimeSessionId,
+function assertValidSessionIdentity({
   environment,
   broker,
   strategyId,
   strategyMode,
   configurationFingerprint,
-  enabledMarkets,
-  buildProvenance,
-  startedAt,
-} = {}) {
-  const id = requireText({
-    value: runtimeSessionId,
-    field: "runtimeSessionId",
-    maxLength: 128,
-  })
+}) {
   if (!ENVIRONMENTS.has(environment)) {
     throw new TypeError("environment must be testnet or live")
   }
@@ -227,6 +218,31 @@ export function createTradingSessionRecord({
   ) {
     throw new TypeError("configurationFingerprint must be a lowercase SHA-256 digest")
   }
+}
+
+export function createTradingSessionRecord({
+  runtimeSessionId,
+  environment,
+  broker,
+  strategyId,
+  strategyMode,
+  configurationFingerprint,
+  enabledMarkets,
+  buildProvenance,
+  startedAt,
+} = {}) {
+  assertValidSessionIdentity({
+    environment,
+    broker,
+    strategyId,
+    strategyMode,
+    configurationFingerprint,
+  })
+  const id = requireText({
+    value: runtimeSessionId,
+    field: "runtimeSessionId",
+    maxLength: 128,
+  })
   return {
     id,
     schemaVersion: 1,
