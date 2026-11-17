@@ -26,7 +26,7 @@ As verified against the active repository ruleset `develop-core` on 2026-11-10, 
 5. `Audit production dependencies`
 6. `actionlint`
 
-The two Harvester workflows and External Documentation Links run as additional checks but are not required contexts in this ruleset. A workflow trigger starting a run does not, by itself, make that check a merge requirement. Re-read the live ruleset before changing workflow names, job names, or required contexts; never infer required contexts from workflow names.
+The two Harvester workflows and External Documentation Links run as additional checks but are not required contexts in this ruleset. A workflow trigger starting a run does not, by itself, make that check a merge requirement. Re-read the live ruleset before changing workflow names, job names, or required contexts; never infer required contexts from workflow names. The required `Check JavaScript syntax` context also runs strict full-workspace ESLint via `pnpm lint`; any error or warning therefore blocks the pull request. No migration baseline or changed-file-only lint exception remains.
 
 The Unit Tests and Test Coverage package matrices explicitly list workspace packages. When adding a package, update both matrices in the same PR; the Indicators package is included in both. Indicators coverage runs the package's 90% line / 85% branch threshold script.
 
