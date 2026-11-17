@@ -408,6 +408,7 @@ async function handleBrokerPlacementException({ context, candidate, error } = {}
       order: pendingOrder,
       errors: durableOutcome.errors,
       outcome: "UNKNOWN",
+    ...getOwnershipMetadata({ ownership }),
     })
     return durableOutcome
   }
@@ -438,6 +439,7 @@ async function handleBrokerFailureResult({ context, candidate, brokerResult } = 
       order: pendingOrder,
       errors: durableOutcome.errors,
       outcome: "UNKNOWN",
+    ...getOwnershipMetadata({ ownership }),
     })
     return durableOutcome
   }
@@ -465,6 +467,7 @@ async function handleMismatchedAcknowledgement({ context, candidate } = {}) {
       order: pendingOrder,
       errors: durableOutcome.errors,
       outcome: "UNKNOWN",
+    ...getOwnershipMetadata({ ownership }),
     })
     return durableOutcome
   }
@@ -491,6 +494,7 @@ async function handleBrokerAcknowledgement({ context, candidate, acknowledgedOrd
       order: pendingOrder,
       errors: durableOutcome.errors,
       outcome: "UNKNOWN",
+    ...getOwnershipMetadata({ ownership }),
     })
     return durableOutcome
   }
