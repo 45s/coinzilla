@@ -228,91 +228,117 @@ function createSqliteTransactionContext({ transaction }) {
   })
 }
 
-function createProviderDatabase({ filename, timeout }) {
-  let database = createSqliteDatabase({
+function getActiveDatabase({ state, filename, timeout }) {
+  if (state.database.state === "closed") {
+    state.database = createSqliteDatabase({
+      filename,
+      timeout,
+    })
+  }
+
+  return state.database
+}
+
+async function connectProviderDatabase({ state, filename, timeout }) {
+  const database = getActiveDatabase({
+    state,
     filename,
     timeout,
   })
 
-  return {
-    async connect() {
-      if (database.state === "closed") {
-        database = createSqliteDatabase({
-          filename,
-          timeout,
-        })
-      }
-
-      try {
-        await database.connect()
-        database.exec(CREATE_RECORDS_TABLE)
-      } catch (error) {
-        let connectionError = error
-        if (database.state === "connected") {
-          try {
-            await database.close()
-          } catch (closeError) {
-            connectionError = new AggregateError(
-              [error, closeError],
-              "SQLite provider connection failed and cleanup also failed",
-              {
-                cause: error,
-              },
-            )
-          }
-        }
-
-        throw new DatabaseProviderError({
-          operation: "connect",
-          cause: connectionError,
-        })
-      }
-    },
-
-    async close() {
+  try {
+    await database.connect()
+    database.exec(CREATE_RECORDS_TABLE)
+  } catch (error) {
+    let connectionError = error
+    if (database.state === "connected") {
       try {
         await database.close()
-      } catch (error) {
-        throw new DatabaseProviderError({
-          operation: "close",
-          cause: error,
-        })
+      } catch (closeError) {
+        connectionError = new AggregateError(
+          [error, closeError],
+          "SQLite provider connection failed and cleanup also failed",
+          {
+            cause: error,
+          },
+        )
       }
-    },
+    }
 
-    withTransaction(work) {
-      let callbackError = null
-      const operation = database.transaction((transaction) => {
-        try {
-          return work(createSqliteTransactionContext({
-            transaction,
-          }))
-        } catch (error) {
-          callbackError = error
-          throw error
-        }
-      })
-
-      return operation.catch((error) => {
-        const isCallbackFailure = error === callbackError
-          || error instanceof DatabaseConflictError
-          || error instanceof DatabaseProviderError
-        const isUnsupportedAsyncCallback = error instanceof TypeError
-          && /SQLite transaction callbacks must be synchronous/.test(error.message)
-
-        if (isCallbackFailure || isUnsupportedAsyncCallback) {
-          throw error
-        }
-
-        throw new DatabaseProviderError({
-          operation: "transaction",
-          cause: error,
-        })
-      })
-    },
+    throw new DatabaseProviderError({
+      operation: "connect",
+      cause: connectionError,
+    })
   }
 }
 
+async function closeProviderDatabase({ state }) {
+  try {
+    await state.database.close()
+  } catch (error) {
+    throw new DatabaseProviderError({
+      operation: "close",
+      cause: error,
+    })
+  }
+}
+
+function runProviderTransaction({ state, work }) {
+  let callbackError = null
+  const operation = state.database.transaction((transaction) => {
+    const context = createSqliteTransactionContext({
+      transaction,
+    })
+
+    try {
+      return work(context)
+    } catch (error) {
+      callbackError = error
+      throw error
+    }
+  })
+
+  return operation.catch((error) => {
+    const isCallbackFailure = error === callbackError
+      || error instanceof DatabaseConflictError
+      || error instanceof DatabaseProviderError
+    const isUnsupportedAsyncCallback = error instanceof TypeError
+      && /SQLite transaction callbacks must be synchronous/.test(error.message)
+
+    if (isCallbackFailure || isUnsupportedAsyncCallback) {
+      throw error
+    }
+
+    throw new DatabaseProviderError({
+      operation: "transaction",
+      cause: error,
+    })
+  })
+}
+
+function createProviderDatabase({ filename, timeout }) {
+  const state = {
+    database: createSqliteDatabase({
+      filename,
+      timeout,
+    }),
+  }
+
+  return {
+    connect: () => connectProviderDatabase({
+      state,
+      filename,
+      timeout,
+    }),
+    close: () => closeProviderDatabase({
+      state,
+    }),
+    withTransaction: (work) => runProviderTransaction({
+      state,
+      work,
+    }),
+  }
+}
 /**
  * Create the built-in SQLite implementation of the provider-neutral record API.
  *
