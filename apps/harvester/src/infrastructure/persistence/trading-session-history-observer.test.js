@@ -59,7 +59,10 @@ async function createObserverFixture({ t, overrides = {} }) {
     await observer.close()
     await eventBus.close()
     await database.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   })
   return {
     database,
@@ -110,7 +113,10 @@ test("creates and updates session history from lifecycle events without changing
     eventBus,
     observer,
     name: HARVESTER_EVENT_NAMES.STOPPED,
-    data: { reason: "SIGINT", outcome: "success" },
+    data: {
+      reason: "SIGINT",
+      outcome: "success",
+    },
   })
   const stopped = await repository.findById(PROCESS_IDENTITY.runtimeSessionId)
   assert.equal(stopped.status, "STOPPED", "A successful shutdown event must transition the history projection to STOPPED.")
@@ -134,7 +140,10 @@ test("records startup failure and does not mark an unsuccessful shutdown as stop
     name: HARVESTER_EVENT_NAMES.STARTUP_FAILED,
     data: {
       stage: "broker-connect",
-      error: { name: "Error", message: "connection failed" },
+      error: {
+        name: "Error",
+        message: "connection failed",
+      },
     },
   })
   const failed = await repository.findById(PROCESS_IDENTITY.runtimeSessionId)
@@ -173,7 +182,10 @@ test("records startup failure and does not mark an unsuccessful shutdown as stop
     eventBus,
     observer: secondObserver,
     name: HARVESTER_EVENT_NAMES.STOPPED,
-    data: { reason: "SIGTERM", outcome: "failed" },
+    data: {
+      reason: "SIGTERM",
+      outcome: "failed",
+    },
   })
   const running = await repository.findById(secondIdentity.runtimeSessionId)
   assert.equal(running.status, "RUNNING", "An unsuccessful shutdown must not falsely close the ordinary historical session.")
