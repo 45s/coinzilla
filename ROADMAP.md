@@ -58,7 +58,6 @@
 
 - **Harvester high-volatility protection (#1016) — IMPLEMENTED; HISTORICAL CALIBRATION OPEN.** Brokers candle history/live Kline support ([PR #1017](https://github.com/45s/coinzilla/pull/1017)), the Indicators ATR/NATR/ratio package ([PR #1018](https://github.com/45s/coinzilla/pull/1018)), Harvester's BrokerPort/adapter ([PR #1019](https://github.com/45s/coinzilla/pull/1019)), candle-history lifecycle ([PR #1037](https://github.com/45s/coinzilla/pull/1037)) and the per-market protection state machine, central order gate, owned-BUY cancellation and recovery-SELL exception ([PR #1041](https://github.com/45s/coinzilla/pull/1041)) are merged. The candle-stream freshness correction was merged in [PR #1049](https://github.com/45s/coinzilla/pull/1049). The seven required workflows passed on PR #1041's exact head. The local-only historical calibration analyzer was merged in [PR #1046](https://github.com/45s/coinzilla/pull/1046) at `6d103fb044939f9bab9cde766a548957f3948f4e`; exact-head CI/merge are complete. Actual representative multi-symbol data analysis and threshold acceptance remain open. No unattended production or exchange operations are authorized by this engineering work. See [Harvester Volatility Protection](apps/harvester/docs/volatility-protection.md) and the owner roadmaps.
 
-
 ## IMPORTANT — active product and shared-package work
 
 3. **Consolidated Harvester trading-session statistics (C).**
