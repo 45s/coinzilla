@@ -48,7 +48,7 @@ This is a plain data object, not a chainable query builder. New operators or nes
 - A provider transaction callback receives only generic CRUD operations.
 - Provider-native connections, SQL, statements, result objects and driver errors stay inside infrastructure.
 - Provider capabilities must state the actual query, transaction and storage guarantees. Unsupported guarantees must not be silently emulated.
-- The standard capability declaration describes transaction callback mode/nesting, equality filtering/sorting/pagination, and supported storage modes (`file`, `memory`, `server`).
+- The standard capability declaration describes transaction callback mode/nesting, equality filtering/sorting/pagination, and supported storage modes (`file`, `memory`, `server`). The reusable conformance suite executes every declared storage mode with isolated keys; file/server modes must prove persistence across a new connection.
 
 The original `createDatabase({ adapter })` lifecycle facade and `createSqliteDatabase(...)` low-level SQL/migration API remain available for compatibility and infrastructure use.
 
@@ -97,6 +97,6 @@ Rejected because repository and schema ownership follows the business bounded co
 ## Verification and implementation evidence
 
 - Provider-neutral CRUD contract test and expected RED are recorded in PR #1353.
-- SQLite provider conformance tests cover CRUD, collection isolation, duplicate handling, filtering, sorting, pagination, missing records, transaction rollback, capability immutability and persistence across a new connection.
+- SQLite provider conformance tests cover CRUD, collection isolation, duplicate handling, filtering, sorting, pagination, missing records, transaction rollback, capability immutability, both declared storage modes (memory and file), and persistence across a new file-backed connection. The reusable suite gives each test an isolated storage key and reuses it only for reconnect-persistence verification.
 - SQLite connection/lock error normalization has separate test-first RED evidence in [closed evidence PR #1347](https://github.com/45s/coinzilla/pull/1347) and its [Actions run](https://github.com/45s/coinzilla/actions/runs/44050359180).
 - Final acceptance depends on required CI passing on the exact final head and the implementation PR being merged into `develop`.
