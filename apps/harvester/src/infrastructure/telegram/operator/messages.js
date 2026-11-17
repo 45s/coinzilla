@@ -1,4 +1,4 @@
-import { getInvalidCommandUsage } from "./telegram-operator-commands.js"
+import { getInvalidCommandUsage } from "./commands.js"
 
 export async function respondToAuthorizedMessage({
   parsed,

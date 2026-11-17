@@ -6,7 +6,7 @@ import {
   messageAuthorizationFailure,
   normalizeTelegramUserId,
   resolveCallbackAction,
-} from "./telegram-operator-interaction.js"
+} from "./interaction.js"
 
 test("normalizes only positive safe Telegram user identifiers", () => {
   assert.equal(

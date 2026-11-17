@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { respondToTelegramCallback } from "./telegram-operator-routing.js"
+import { respondToTelegramCallback } from "./routing.js"
 
 test("rejects an unauthorized callback before reading pages or invoking controls", async () => {
   const answeredCallbacks = []

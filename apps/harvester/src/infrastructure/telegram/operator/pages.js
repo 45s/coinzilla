@@ -4,12 +4,12 @@ import {
   formatTelegramOperatorPositions,
   formatTelegramOperatorOrders,
   formatTelegramOperatorBalances,
-} from "./format-telegram-operator-response.js"
+} from "./format-response.js"
 import {
   helpText,
   PAGE_METHODS,
   PAGE_TITLES,
-} from "./telegram-operator-keyboard.js"
+} from "./keyboard.js"
 
 export function resolveMarketAction(page) {
   if (page === "pause") { return "PAUSE" }

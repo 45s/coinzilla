@@ -4,7 +4,7 @@ import {
   pollTelegramOperatorUpdates,
   processTelegramUpdate,
   waitForRetry,
-} from "./telegram-operator-updates.js"
+} from "./updates.js"
 
 test("processes an update with a stable correlation and reports completion", async () => {
   const stages = []

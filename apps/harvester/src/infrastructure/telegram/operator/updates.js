@@ -1,4 +1,4 @@
-import { createTelegramInteraction } from "./telegram-operator-interaction.js"
+import { createTelegramInteraction } from "./interaction.js"
 
 const MAX_RETRY_DELAY_MS = 30000
 

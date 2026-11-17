@@ -3,7 +3,7 @@ import test from "node:test"
 import {
   buildControlReply,
   executeTelegramOperatorControl,
-} from "./telegram-operator-controls.js"
+} from "./controls.js"
 
 function createDiagnostics() {
   return {

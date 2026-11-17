@@ -3,7 +3,7 @@ import test from "node:test"
 import {
   createTelegramCallApi,
   createTelegramMessageApi,
-} from "./telegram-operator-transport.js"
+} from "./transport.js"
 
 function createResponse({ ok = true,
  body,

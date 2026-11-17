@@ -1,4 +1,4 @@
-import { parseTelegramOperatorCommand } from "./telegram-operator-commands.js"
+import { parseTelegramOperatorCommand } from "./commands.js"
 
 export function normalizeTelegramUserId(value) {
   if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {

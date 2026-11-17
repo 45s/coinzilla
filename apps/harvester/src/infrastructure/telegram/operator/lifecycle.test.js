@@ -3,7 +3,7 @@ import test from "node:test"
 import {
   startTelegramOperatorAdapter,
   stopTelegramOperatorAdapter,
-} from "./telegram-operator-lifecycle.js"
+} from "./lifecycle.js"
 
 function createLifecycleState() {
   return {

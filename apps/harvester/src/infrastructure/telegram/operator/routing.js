@@ -4,16 +4,16 @@ import {
   resolveCallbackAction,
   callbackAuthorizationFailure,
   messageAuthorizationFailure,
-} from "./telegram-operator-interaction.js"
-import { parseTelegramOperatorCommand } from "./telegram-operator-commands.js"
-import { helpText, mainMenuKeyboard, PAGE_METHODS } from "./telegram-operator-keyboard.js"
+} from "./interaction.js"
+import { parseTelegramOperatorCommand } from "./commands.js"
+import { helpText, mainMenuKeyboard, PAGE_METHODS } from "./keyboard.js"
 import {
   handleNavigationCallback,
   handleMarketSelectionCallback,
   handleConfirmationCallback,
   handleCancelCallback,
-} from "./telegram-operator-callbacks.js"
-import { respondToAuthorizedMessage } from "./telegram-operator-messages.js"
+} from "./callbacks.js"
+import { respondToAuthorizedMessage } from "./messages.js"
 
 async function authorizeTelegramCallback({
   callback,

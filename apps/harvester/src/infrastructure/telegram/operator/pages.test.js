@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readTelegramOperatorPage } from "./telegram-operator-pages.js"
+import { readTelegramOperatorPage } from "./pages.js"
 
 function createPageDependencies({ operator = {} } = {}) {
   const diagnostics = {

@@ -1,9 +1,9 @@
-import { createTelegramOperatorDiagnostics } from "./telegram-operator-diagnostics.js"
-import { createNavigationKeyboard } from "./telegram-operator-keyboard.js"
-import { readTelegramOperatorPage } from "./telegram-operator-pages.js"
-import { executeTelegramOperatorControl } from "./telegram-operator-controls.js"
-import { createTelegramMessageApi } from "./telegram-operator-transport.js"
-import { respondToTelegramUpdate } from "./telegram-operator-routing.js"
+import { createTelegramOperatorDiagnostics } from "./diagnostics.js"
+import { createNavigationKeyboard } from "./keyboard.js"
+import { readTelegramOperatorPage } from "./pages.js"
+import { executeTelegramOperatorControl } from "./controls.js"
+import { createTelegramMessageApi } from "./transport.js"
+import { respondToTelegramUpdate } from "./routing.js"
 
 export function createTelegramOperatorHandlers({
   botToken,

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { parseTelegramOperatorCommand } from "./telegram-operator-commands.js"
+import { parseTelegramOperatorCommand } from "./commands.js"
 
 test("parses supported read-only, entry, market and emergency BUY commands", () => {
   const scenarios = [

@@ -3,7 +3,7 @@ import test from "node:test"
 import {
   handleCancelCallback,
   handleConfirmationCallback,
-} from "./telegram-operator-callbacks.js"
+} from "./callbacks.js"
 
 function createConfirmationRequest({ acknowledgement,
  pendingExpiresAt = Date.now() + 60000 } = {}) {
