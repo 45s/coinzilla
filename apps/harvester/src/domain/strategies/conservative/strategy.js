@@ -250,7 +250,10 @@ function resolveAccountingState({
     throw new Error("Conservative RecoveryLedger market does not match strategy market")
   }
   if ((hasActivePosition({ activeQuantity }) ||
-       compareDecimal({ left: positionSpent, right: "0" }) > 0) && !recoveryLedger) {
+       compareDecimal({
+         left: positionSpent,
+         right: "0",
+       }) > 0) && !recoveryLedger) {
     throw new Error("Conservative active Position requires its recovery proceeds ledger")
   }
   validateRecoveryAccounting({
