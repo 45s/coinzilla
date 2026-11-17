@@ -116,3 +116,23 @@ test("Bitunix Spot broker accepts an explicit empty deposit history", async () =
   assert.deepEqual(result.data, [], "an empty deposit response must remain empty rather than being synthesized")
   assert.equal(calls.length, 1, "an empty history result must still represent one successful read request")
 })
+
+test("Bitunix Spot broker preserves on-chain deposit fields and unfamiliar statuses", async () => {
+  const onChainDeposit = createDepositRecord({
+    transactionHash: "d829e32be84907a4dfb5bee5dcdaee6b637be287f8db52817860e7169003b92d",
+    network: "Tron (TRC-20)",
+    type: "deposit",
+    fromAddress: "TB73gtW1hsTxxA9XUYKLSJKTSHw6Jk53eH",
+    toAddress: "TPKhSAEy84qvpomF5wF7h5ih1WmbmupXor",
+    amount: "1000.00000000",
+    status: "future_status",
+  })
+  const { broker } = createBroker({ response: [onChainDeposit] })
+
+  const result = await broker.getDeposits({ type: "deposit" })
+
+  assert.equal(result.ok, true, "a documented on-chain deposit record must be accepted")
+  assert.equal(result.data[0].transactionHash, onChainDeposit.transactionHash, "on-chain transaction hashes must remain unchanged")
+  assert.equal(result.data[0].network, "Tron (TRC-20)", "on-chain network names must remain unchanged")
+  assert.equal(result.data[0].status, "future_status", "unfamiliar deposit statuses must remain visible without guessed normalization")
+})
