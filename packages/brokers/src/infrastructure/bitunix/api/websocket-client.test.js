@@ -355,3 +355,19 @@ test("Bitunix Spot WebSocket client rejects requests before connect and after tr
   assert.equal(client.state, "closed", "a transport error must make the failed client terminal")
   assert.equal(client.pendingCount, 0, "transport failure must clear pending RPC state")
 })
+
+test("Bitunix Spot WebSocket client restricts credential-bearing connections to the official endpoint", () => {
+  assert.throws(
+    () => new BitunixSpotWebSocketClient({
+      apiKey: "key",
+      apiSecret: "secret",
+      url: "wss://attacker.example/ws-api/v1",
+      transportFactory: () => new FakeTransport(),
+    }),
+    /official Bitunix Spot endpoint/i,
+    "credentials must never be signed and sent to an arbitrary WebSocket host",
+  )
+  const { client } = createClient()
+  assert.equal(client.apiSecret, undefined, "the API secret must not be exposed as a public instance property")
+  assert.equal(client.transport, undefined, "the raw transport must not be exposed as a public instance property")
+})
