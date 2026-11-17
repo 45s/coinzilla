@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
-import { createStrictESLint, getChangedFiles } from "./lint-changed.js";
+import { createStrictESLint, getChangedFiles, lintChangedFiles } from "./lint-changed.js";
 
 // These integration tests deliberately use the root canonical ESLint configuration.
 
@@ -62,13 +62,18 @@ async function withRepository({ callback }) {
 }
 
 async function lintStrict({ source, fileName = "scripts/strict-fixture.js" }) {
-  const eslint = createStrictESLint({
-    cwd: repositoryRoot,
-  });
-  const [result] = await eslint.lintText(source, {
-    filePath: fileName,
-  });
-  return result.messages;
+  const absolutePath = join(repositoryRoot, fileName);
+  await mkdir(dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, source);
+  try {
+    const { results } = await lintChangedFiles({
+      cwd: repositoryRoot,
+      files: [fileName],
+    });
+    return results[0].messages;
+  } finally {
+    await rm(absolutePath, { force: true });
+  }
 }
 
 function hasRule({ messages, ruleId }) {
