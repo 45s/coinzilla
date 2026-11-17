@@ -30,9 +30,22 @@ test("the required JavaScript quality gate runs strict workspace lint", () => {
   );
 });
 
-test("the root package exposes no baseline-tolerant lint commands", () => {
-  assert.equal(Object.hasOwn(packageJson.scripts, "lint:changed"), false);
-  assert.equal(Object.hasOwn(packageJson.scripts, "lint:report"), false);
+test("the root package preserves workspace lint and exposes strict changed-file lint", () => {
+  assert.equal(
+    packageJson.scripts.lint,
+    "eslint . --max-warnings 0",
+    "The existing full-workspace lint command must remain unchanged.",
+  );
+  assert.equal(
+    packageJson.scripts["lint:changed"],
+    "node scripts/lint-changed.js",
+    "The separate strict changed-file command must invoke the progressive runner.",
+  );
+  assert.equal(
+    Object.hasOwn(packageJson.scripts, "lint:report"),
+    false,
+    "A baseline-tolerant reporting command must not replace either enforcement gate.",
+  );
 });
 
 test("the workspace complexity policy retains its evidence-based threshold", async () => {
@@ -43,6 +56,21 @@ test("the workspace complexity policy retains its evidence-based threshold", asy
     config.rules.complexity,
     [2, { max: 20 }],
     "Do not lower complexity to 15 while the workspace has a broad existing cleanup burden.",
+  );
+});
+
+test("the required JavaScript quality context aggregates both independent lint jobs", () => {
+  assert.ok(
+    qualityWorkflow.includes("strict-changed:\n    name: Check strict ESLint for changed files"),
+    "The workflow must expose a separate changed-file strict ESLint job.",
+  );
+  assert.ok(
+    qualityWorkflow.includes("required-javascript-quality:\n    name: Check JavaScript syntax"),
+    "The existing required JavaScript status context must remain as an aggregator.",
+  );
+  assert.ok(
+    qualityWorkflow.includes("      - workspace-quality\n      - strict-changed"),
+    "The required context must depend on both independent lint jobs.",
   );
 });
 
@@ -125,6 +153,8 @@ function createFunctionQualityAuditEslint() {
           ],
           "max-statements": ["error", 15],
           "max-depth": ["error", 3],
+          "max-nested-callbacks": ["error", 2],
+          "max-params": ["error", 1],
           "default-param-last": "error",
         },
       },
@@ -132,15 +162,8 @@ function createFunctionQualityAuditEslint() {
   });
 }
 
-function collectFunctionQualityFindings({ results }) {
-  const metrics = {
-    complexity: [],
-    maxLines: [],
-    maxStatements: [],
-    maxDepth: [],
-    defaultParamLast: [],
-  };
-  const measurements = [
+function createFunctionQualityMeasurements() {
+  return [
     {
       ruleId: "complexity",
       key: "complexity",
@@ -162,36 +185,66 @@ function collectFunctionQualityFindings({ results }) {
       pattern: /nested too deeply \((\d+)\)/i,
     },
     {
+      ruleId: "max-params",
+      key: "maxParams",
+      pattern: /too many parameters \((\d+)\)/i,
+    },
+    {
+      ruleId: "max-nested-callbacks",
+      key: "maxNestedCallbacks",
+      pattern: /too many nested callbacks \((\d+)\)/i,
+    },
+    {
       ruleId: "default-param-last",
       key: "defaultParamLast",
       pattern: null,
     },
   ];
+}
+
+function createMeasuredFunctionFinding({ measurement, result, message }) {
+  const value = measurement.pattern
+    ? Number(message.message.match(measurement.pattern)?.[1])
+    : null;
+
+  assert.ok(
+    !measurement.pattern || Number.isFinite(value),
+    `The ${message.ruleId} audit must extract the measured value: ${message.message}`,
+  );
+  return {
+    filePath: result.filePath,
+    line: message.line,
+    value,
+    message: message.message,
+  };
+}
+
+function collectFunctionQualityFindings({ results }) {
+  const metrics = {
+    complexity: [],
+    maxLines: [],
+    maxStatements: [],
+    maxDepth: [],
+    maxParams: [],
+    maxNestedCallbacks: [],
+    defaultParamLast: [],
+  };
+  const measurements = createFunctionQualityMeasurements();
 
   for (const result of results) {
     for (const message of result.messages) {
       const measurement = measurements.find((candidate) => (
         candidate.ruleId === message.ruleId
       ));
-
-      if (!measurement) {
-        continue;
+      if (measurement) {
+        metrics[measurement.key].push(
+          createMeasuredFunctionFinding({
+            measurement,
+            result,
+            message,
+          }),
+        );
       }
-
-      const measuredValue = measurement.pattern
-        ? Number(message.message.match(measurement.pattern)?.[1])
-        : null;
-
-      assert.ok(
-        !measurement.pattern || Number.isFinite(measuredValue),
-        `The ${message.ruleId} audit must extract the measured value from this ESLint diagnostic: ${message.message}`,
-      );
-      metrics[measurement.key].push({
-        filePath: result.filePath,
-        line: message.line,
-        value: measuredValue,
-        message: message.message,
-      });
     }
   }
 
@@ -207,14 +260,47 @@ function countFindingsAboveThreshold({ findings, threshold }) {
   return findings.filter((finding) => finding.value > threshold);
 }
 
+function sortPackageCounts({ packageCounts }) {
+  const packages = [...packageCounts.entries()].map(([name, functions]) => ({
+    name,
+    functions,
+  }));
+
+  for (let index = 1; index < packages.length; index += 1) {
+    const current = packages[index];
+    let insertionIndex = index;
+    while (
+      insertionIndex > 0
+      && packages[insertionIndex - 1].functions < current.functions
+    ) {
+      packages[insertionIndex] = packages[insertionIndex - 1];
+      insertionIndex -= 1;
+    }
+    packages[insertionIndex] = current;
+  }
+
+  return packages;
+}
+
 function summarizeThresholdImpact({ findings, threshold }) {
   const affected = countFindingsAboveThreshold({
     findings,
     threshold,
   });
+  const packageCounts = new Map();
+  for (const finding of affected) {
+    const relativePath = finding.filePath.replace(`${repositoryRoot}/`, "");
+    const [scope, name] = relativePath.split("/");
+    const packageName = scope === "apps" || scope === "packages"
+      ? `${scope}/${name}`
+      : "repository tooling";
+    packageCounts.set(packageName, (packageCounts.get(packageName) ?? 0) + 1);
+  }
+
   return {
     functions: affected.length,
     files: new Set(affected.map((finding) => finding.filePath)).size,
+    packages: sortPackageCounts({ packageCounts }),
     largest: affected
       .toSorted(compareFindingsByValue)
       .slice(0, 5)
@@ -240,52 +326,52 @@ function listThresholdOffenders({ findings, threshold }) {
     }));
 }
 
+function createThresholdReport({ findings, thresholds }) {
+  return Object.fromEntries(
+    thresholds.map((threshold) => [
+      threshold,
+      summarizeThresholdImpact({
+        findings,
+        threshold,
+      }),
+    ]),
+  );
+}
+
 function createFunctionQualityAuditReport({ metrics }) {
   return {
-    complexity: {
-      15: summarizeThresholdImpact({
-        findings: metrics.complexity,
-        threshold: 15,
-      }),
-    },
-    maxLines: {
-      60: summarizeThresholdImpact({
-        findings: metrics.maxLines,
-        threshold: 60,
-      }),
-      50: summarizeThresholdImpact({
-        findings: metrics.maxLines,
-        threshold: 50,
-      }),
-    },
-    maxStatements: {
-      30: summarizeThresholdImpact({
-        findings: metrics.maxStatements,
-        threshold: 30,
-      }),
-      25: summarizeThresholdImpact({
-        findings: metrics.maxStatements,
-        threshold: 25,
-      }),
-      20: summarizeThresholdImpact({
-        findings: metrics.maxStatements,
-        threshold: 20,
-      }),
-      15: summarizeThresholdImpact({
-        findings: metrics.maxStatements,
-        threshold: 15,
-      }),
-    },
-    maxDepth: {
-      3: summarizeThresholdImpact({
-        findings: metrics.maxDepth,
-        threshold: 3,
-      }),
-      4: summarizeThresholdImpact({
-        findings: metrics.maxDepth,
-        threshold: 4,
-      }),
-    },
+    complexity: createThresholdReport({
+      findings: metrics.complexity,
+      thresholds: [15],
+    }),
+    maxLines: createThresholdReport({
+      findings: metrics.maxLines,
+      thresholds: [60, 50],
+    }),
+    maxStatements: createThresholdReport({
+      findings: metrics.maxStatements,
+      thresholds: [30, 25, 20, 15],
+    }),
+    maxParams: createThresholdReport({
+      findings: metrics.maxParams,
+      thresholds: [1],
+    }),
+    maxNestedCallbacks: createThresholdReport({
+      findings: metrics.maxNestedCallbacks,
+      thresholds: [2],
+    }),
+    maxDepth: createThresholdReport({
+      findings: metrics.maxDepth,
+      thresholds: [3, 4],
+    }),
+    maxParamsOffendersAt1: listThresholdOffenders({
+      findings: metrics.maxParams,
+      threshold: 1,
+    }),
+    maxNestedCallbacksOffendersAt2: listThresholdOffenders({
+      findings: metrics.maxNestedCallbacks,
+      threshold: 2,
+    }),
     maxDepthOffendersAt3: listThresholdOffenders({
       findings: metrics.maxDepth,
       threshold: 3,
