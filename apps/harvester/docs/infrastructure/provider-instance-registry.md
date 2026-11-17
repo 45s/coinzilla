@@ -31,7 +31,7 @@ Each entry supplies:
 - a BrokerPort implementation; and
 - its deeply immutable version-1 capability declaration from [Brokers capability contract #1366](https://github.com/45s/coinzilla/pull/1366).
 
-Registration fails closed for an empty registry, duplicate or malformed identities, an invalid BrokerPort, a missing/unsupported capability declaration, a provider-type mismatch, or a declared environment mismatch. Registry lookup requires the exact `providerInstanceId`; there is no implicit default, fallback, or provider selection by brand. The metadata listing is immutable and does not expose broker objects.
+Registration fails closed for an empty registry, duplicate or malformed identities, an invalid BrokerPort, a missing/unsupported capability declaration, a provider-type mismatch, or a missing/mismatched selected environment. Registry lookup requires the exact `providerInstanceId`; there is no implicit default, fallback, or provider selection by brand. The metadata listing is immutable and does not expose broker objects.
 
 The registry owns connection lifecycle:
 
