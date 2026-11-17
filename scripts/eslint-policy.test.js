@@ -165,32 +165,32 @@ function createFunctionQualityMeasurements() {
     {
       ruleId: "complexity",
       key: "complexity",
-      pattern: /complexity of (\\d+)/i,
+      pattern: /complexity of (\d+)/i,
     },
     {
       ruleId: "max-lines-per-function",
       key: "maxLines",
-      pattern: /too many lines \\((\\d+)\\)/i,
+      pattern: /too many lines \((\d+)\)/i,
     },
     {
       ruleId: "max-statements",
       key: "maxStatements",
-      pattern: /too many statements \\((\\d+)\\)/i,
+      pattern: /too many statements \((\d+)\)/i,
     },
     {
       ruleId: "max-depth",
       key: "maxDepth",
-      pattern: /nested too deeply \\((\\d+)\\)/i,
+      pattern: /nested too deeply \((\d+)\)/i,
     },
     {
       ruleId: "max-params",
       key: "maxParams",
-      pattern: /too many parameters \\((\\d+)\\)/i,
+      pattern: /too many parameters \((\d+)\)/i,
     },
     {
       ruleId: "max-nested-callbacks",
       key: "maxNestedCallbacks",
-      pattern: /too many nested callbacks \\((\\d+)\\)/i,
+      pattern: /too many nested callbacks \((\d+)\)/i,
     },
     {
       ruleId: "default-param-last",

@@ -154,7 +154,7 @@ export async function getChangedFiles({ cwd, baseRef, headRef }) {
     output: outputs.changed + outputs.workingTree,
   });
   const untracked = outputs.untracked
-    .split("\\0")
+    .split("\0")
     .filter((path) => path && javascriptExtensions.test(path));
 
   return [...new Set([...changed, ...untracked])].toSorted();
