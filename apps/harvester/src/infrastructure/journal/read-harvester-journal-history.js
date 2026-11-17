@@ -310,6 +310,30 @@ function createHistoryReadErrorResult({ error, directory }) {
   })
 }
 
+function validateHistoryReadRequest({
+  directory,
+  journalFactory,
+  maxDirectories,
+  maxSessions,
+  maxRecords,
+  maxBytes,
+  maxRecordBytes,
+}) {
+  if (typeof directory !== "string" || directory.trim() === "") {
+    throw new TypeError("Harvester Journal history directory must be a non-empty string")
+  }
+  if (typeof journalFactory !== "function") {
+    throw new TypeError("Harvester Journal history journalFactory must be a function")
+  }
+  validateLimits({
+    maxDirectories,
+    maxSessions,
+    maxRecords,
+    maxBytes,
+    maxRecordBytes,
+  })
+}
+
 export async function readHarvesterJournalHistory({
   directory,
   journalFactory = (options) => new Journal(options),
@@ -322,13 +346,9 @@ error() {} },
   maxRecordBytes = DEFAULT_LIMITS.maxRecordBytes,
 } = {}) {
   try {
-    if (typeof directory !== "string" || directory.trim() === "") {
-      throw new TypeError("Harvester Journal history directory must be a non-empty string")
-    }
-    if (typeof journalFactory !== "function") {
-      throw new TypeError("Harvester Journal history journalFactory must be a function")
-    }
-    validateLimits({
+    validateHistoryReadRequest({
+      directory,
+      journalFactory,
       maxDirectories,
       maxSessions,
       maxRecords,
