@@ -358,6 +358,8 @@ async function quiesceMarketIntakeAndDrain(context) {
 }
 
 async function stopMarketIntakeAndDrain(context) {
+  // The callback fence is already active and every accepted price/book task
+  // was drained before CLOSING. Unsubscribe only after that durable barrier.
   const stopResult = await context.failureRecorder.runPhaseSafely({
     phase: "MARKET_INTAKE_STOP",
     operation: () => context.stopMarketIntake({
@@ -372,15 +374,9 @@ async function stopMarketIntakeAndDrain(context) {
     result: stopResult,
     fallbackMessage: "Shutdown market-intake stop failed",
   })
-  const drainErrors = await drainAcceptedMarketWork({
-    context,
-    marketPhase: "MARKET_WORK_DRAIN_FINAL",
-    userDataPhase: "USER_DATA_DRAIN_FINAL_BEFORE_STOP",
-  })
   context.marketIntakeErrors = [
     ...context.marketIntakeErrors,
     ...stopErrors,
-    ...drainErrors,
   ]
   return context.marketIntakeErrors
 }
@@ -676,7 +672,6 @@ async function stopMarketIntakeAfterClosing(context) {
     await publishClosingAuditOrThrow(context)
     throw new AggregateError(errors, "Market intake could not be stopped and drained safely")
   }
-  await reproveAndPublishClosingAuditIfUnsafe(context)
 }
 
 async function stopUserDataAfterMarketIntake(context) {
