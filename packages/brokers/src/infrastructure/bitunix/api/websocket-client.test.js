@@ -133,7 +133,7 @@ test("Bitunix Spot WebSocket client rejects exchange errors without losing respo
   })
 
   await assert.rejects(pending, (error) => {
-    assert.equal(error.code, "1001", "exchange error code must remain available to callers")
+    assert.equal(error.exchangeCode, "1001", "exchange error code must remain available to callers")
     assert.equal(error.requestId, "request-1", "exchange error must retain its request identity")
     assert.match(error.message, /permission denied/i, "exchange error message must be preserved")
     return true
@@ -155,6 +155,7 @@ test("Bitunix Spot WebSocket client rejects malformed and mismatched responses s
   transport.receive({
     id: "request-1",
     code: "0",
+    msg: "success",
     data: { uid: 7 },
   })
   assert.deepEqual(await pending, { uid: 7 }, "the matching user.info response must resolve its own request")
@@ -184,9 +185,31 @@ test("Bitunix Spot WebSocket client validates documented RPC arguments before se
   const { client, transport } = createClient()
   await client.connect()
 
-  await assert.rejects(client.getLastPrice({ symbol: "" }), /symbol/i, "empty symbols must be rejected before network I/O")
-  await assert.rejects(client.getDepth({ symbol: "BTCUSDT" }), /precision/i, "depth precision is required by the official contract")
-  await assert.rejects(client.getKline({ symbol: "BTCUSDT", interval: "invalid" }), /interval/i, "unsupported kline intervals must be rejected")
+  assert.throws(() => client.getLastPrice({ symbol: "" }), /symbol/i, "empty symbols must be rejected before network I/O")
+  assert.throws(() => client.getDepth({ symbol: "BTCUSDT" }), /precision/i, "depth precision is required by the official contract")
+  assert.throws(() => client.getKline({ symbol: "BTCUSDT", interval: "invalid" }), /interval/i, "unsupported kline intervals must be rejected")
   assert.equal(transport.sent.length, 0, "invalid RPC arguments must not be sent")
   await client.disconnect()
+})
+
+test("Bitunix Spot WebSocket client times out reads without retrying or retaining pending state", async () => {
+  const { client, transport } = createClient({
+    requestTimeout: 1,
+  })
+  await client.connect()
+
+  await assert.rejects(client.getAccount(), /timed out/i, "an unanswered read must reject at its configured timeout")
+  assert.equal(transport.sent.length, 1, "a timed-out read must never be replayed automatically")
+  assert.equal(client.pendingCount, 0, "timed-out reads must be removed from pending request state")
+  await client.disconnect()
+})
+
+test("Bitunix Spot WebSocket client exposes only documented read-only operations", () => {
+  const { client } = createClient()
+
+  assert.equal(typeof client.getTradingPairs, "function", "the documented trading-pair RPC must be exposed")
+  assert.equal(typeof client.getExchangeRates, "function", "the documented exchange-rate RPC must be exposed")
+  assert.equal(typeof client.getTokenNetworks, "function", "the documented token-network RPC must be exposed")
+  assert.equal(typeof client.placeOrder, "undefined", "order placement must remain outside this read-only RPC client")
+  assert.equal(typeof client.cancelOrder, "undefined", "order cancellation must remain outside this read-only RPC client")
 })
