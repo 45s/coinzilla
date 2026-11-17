@@ -6,121 +6,118 @@ type: roadmap
 owner: db
 ---
 
-## Current priority — first real consumer: Harvester (#1327)
+## Purpose and ownership
 
-**Goal:** make Harvester persistence provider-agnostic through domain-owned repository ports, using `@coinzilla/db` as shared database infrastructure and Node.js built-in SQLite as the first provider.
+`@coinzilla/db` is a provider-agnostic database infrastructure package.
 
-The SQLite lifecycle/transaction/migration foundation is already implemented. The missing proof is a real application-owned persistence workflow. Do not add generic repositories or expand the database package around hypothetical consumers.
+Its responsibility is to expose a consistent database API to consuming applications while hiding the concrete database engine and driver. The package owns database contracts, provider selection/registration, provider adapters, connection lifecycle, CRUD operations, transaction coordination, and provider-specific infrastructure.
 
-### Architecture contract
+It must not know about any consuming application's business domain.
 
-- `packages/db` owns provider-neutral database lifecycle, transaction/resource coordination, and provider infrastructure mechanics. It currently supplies the built-in SQLite adapter and migration runner.
-- Harvester owns its business persistence contracts: repository ports, data meaning, schema definitions, mapping, idempotency rules, and application transaction boundaries.
-- Harvester domain and application policy depend only on Harvester-owned ports and domain contracts. They must not import `node:sqlite`, SQL, SQLite statement/connection types, or concrete provider adapters.
-- Provider-specific wiring belongs only at the outer composition root/infrastructure bootstrap. No strategy, use case, domain entity, or application service may branch on provider identity.
-- SQLite repositories and SQL migrations belong to Harvester infrastructure; the generic migration runner and SQLite connection/transaction mechanics remain in `@coinzilla/db`.
-- Do not invent a universal SQL-shaped repository API to make MongoDB appear equivalent to relational databases. Future providers must implement the same domain-owned repository contracts where semantics genuinely match; differences in transactions, consistency, uniqueness, and capabilities must be explicit.
-- Do not add generic CRUD, ORM, query builder, schema generator, or speculative abstractions.
+**This roadmap is exclusively about generic database capabilities.** It must not contain application-specific entities, repositories, schemas, migrations, workflows, trading concepts, or business rules. Those belong in the owning application's roadmap and bounded context.
 
-### First consumer scope
+## Architecture contract
 
-Persist the reporting/trading-history records required by Harvester through narrow repository contracts:
+- Consumers depend on the public `@coinzilla/db` API, not on a concrete provider or driver.
+- Concrete provider selection and configuration happen at the outer composition boundary. Application/domain policy must not branch on provider identity.
+- Provider adapters implement the package's provider-neutral contracts.
+- The public API must not leak `node:sqlite`, SQLite statement/connection types, SQL syntax, MongoDB driver types, PostgreSQL client types, or provider-specific result objects.
+- Keep provider-specific implementation details inside their respective infrastructure adapters.
+- Define portable behavior explicitly. Do not claim that providers have identical capabilities where they do not.
+- Do not introduce ORM, query builder, entity modeling, business repositories, or application-specific abstractions.
+- Keep dependencies minimal. The initial SQLite provider must use Node.js built-in `node:sqlite`, with no external database driver.
 
-- Trading sessions and process/runtime identity.
-- Broker orders and their current canonical state.
-- Order lifecycle events, independently from order snapshots.
-- Individual executions/fills, including commissions and fee assets.
-- Account/balance/open-order snapshots.
-- Required bounded metadata and provenance.
+## Provider strategy
 
-A single order can have multiple lifecycle events and multiple fills. Preserve canonical broker order/execution identities, idempotent duplicate delivery, conflict detection, exact decimal values, and UTC timestamps. Do not reconstruct executions from terminal order status.
+### First provider — Node.js built-in SQLite
 
-Production and Testnet must use separate database files and separate database lifecycles, for example:
+SQLite is the initial concrete adapter because it is embedded, file-backed, and available in the supported Node.js runtime without a separate database server or third-party driver.
 
-```text
-apps/harvester/data/
-  production/harvester.db
-  testnet/harvester.db
-```
+The provider implementation must remain replaceable through the public database contract.
 
-Resolve the environment only from the validated explicit `TRADING_MODE` contract (see [ADR-0002](../../docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md)); never use `NODE_ENV` to select an exchange environment or database file. Keep the path configurable through the established Harvester configuration conventions, prevent path traversal/accidental shared-file selection, and keep runtime data out of Git.
+### Future providers — PostgreSQL and MongoDB
 
-### Operational State safety boundary
+PostgreSQL and MongoDB are possible future adapters, not current implementation requirements.
 
-Harvester's ADR-0001 Operational State Store is authoritative recovery evidence. It is not interchangeable with reporting history or the Journal.
+Add a provider only when a real consumer requirement justifies it. Each provider must implement the same supported public contract or explicitly declare unsupported optional capabilities. Do not add speculative drivers or dependencies.
 
-- Preserve the existing append acknowledgement, global sequence, committed-head/hash-chain integrity, stable fact identities, conflict detection, fail-closed verification, explicit genesis, private file permissions, and mandatory Journal barriers.
-- Do not silently replace, weaken, dual-write, or automatically fall back between the existing file store and a database.
-- Assess a SQLite-backed Operational State adapter only as a separate gated phase. It must prove complete ADR-0001 contract parity, including crash/torn-write behavior, durability acknowledgement, integrity verification, initialization, disk-full/error handling, backup/restore, and concurrent-process ownership.
-- Coordinate any cutover with [Harvester restart-recovery issue #654](https://github.com/45s/coinzilla/issues/654). Restart restoration remains disabled until that issue's independent readiness and reconciliation gates are complete.
-- Existing Journal barriers and Journal's observer-only role remain unchanged unless a separate accepted decision explicitly supersedes them.
+## Delivery roadmap
 
-## Delivery plan
+1. **Audit the existing package and public API.**
+   - Review current domain, application, provider port, SQLite adapter, lifecycle, transactions, migrations, tests, package exports and dependency graph.
+   - Identify which existing APIs are provider-neutral and which currently expose SQLite/SQL details.
+   - Preserve working functionality and backward compatibility where required by existing consumers.
+   - Record concrete gaps before changing implementation.
 
-1. **Contract and boundary audit — first implementation step (#1327).**
-   - Re-read current package/app instructions, roadmaps, ADRs, persistence ports, adapters, consumers and tests.
-   - Map the existing `@coinzilla/db` lifecycle/transaction API and identify only concrete gaps needed by the first Harvester repository.
-   - Define the first Harvester-owned repository port and its observable consistency/idempotency contract. Keep this slice small; do not design every future repository before validating one real use case.
-   - Document the dependency direction and provider-selection boundary.
+2. **Define the provider-neutral database contract.**
+   - Define the smallest useful public API for database lifecycle and generic record CRUD: create/insert, read/find, update, and delete.
+   - Define identifiers, records, filters, projections, ordering, pagination, result shapes, not-found behavior, duplicate-key behavior, and error categories without exposing a provider's native types.
+   - Specify the portable query/filter subset supported by every implemented provider. Avoid exposing raw SQL or Mongo query documents as the common contract.
+   - Define transaction semantics and whether transactions are a required capability or an explicitly discoverable optional capability. Never silently emulate atomicity when a provider cannot guarantee it.
+   - Keep the API cohesive; do not build a speculative universal data platform.
 
-2. **First repository vertical slice — SQLite.**
-   - Start with trading-session persistence: create a unique session for every process startup; retain process/runtime ID, environment, broker, strategy/config fingerprint, enabled markets, application/build provenance, timestamps and lifecycle outcome.
-   - Implement the Harvester-owned port, SQLite infrastructure adapter, versioned Harvester-owned migration, and composition-root wiring.
-   - Prove create/read/update, restart persistence, uniqueness, transaction rollback, failure propagation and resource cleanup with temporary file-backed SQLite integration tests.
-   - Keep `packages/db` generic; change it only for a concrete missing provider capability proven by the consumer.
+3. **Implement and prove the SQLite adapter.**
+   - Implement the provider-neutral CRUD contract using Node.js built-in `node:sqlite`.
+   - Keep SQL statements, SQLite schema mechanics, row mapping and driver error translation inside the SQLite adapter.
+   - Use prepared statements and bound parameters.
+   - Preserve exact values supported by the public record contract; do not silently coerce values or use lossy representations.
+   - Keep transactions short and synchronous where required by the built-in SQLite API.
+   - Add contract tests against real in-memory and temporary file-backed SQLite databases.
 
-3. **Trading history repositories.**
-   - Add orders, order events, executions/fills, commissions and account snapshots as focused vertical slices with their own contracts, migrations and tests.
-   - Use unique constraints for broker identities and idempotency. Conflicting reuse of an identity with different economic facts is an integrity failure.
-   - Persist monetary/quantity values as canonical decimal TEXT or safe scaled integers; never SQLite REAL. Preserve original broker payload only where bounded and useful for audit.
-   - Keep event history append-only; do not collapse multiple fills into one order-level execution.
+4. **Provider conformance and lifecycle tests.**
+   - Test create/read/update/delete, filtering, sorting, pagination, identifiers, duplicate handling, missing records, error translation, transaction commit/rollback, close/reopen, and resource cleanup.
+   - Test concurrent access and lock timeout behavior appropriate to SQLite.
+   - Establish a reusable provider contract test suite so future adapters must prove the same portable semantics.
+   - Verify that no provider-specific types or errors escape the public API.
 
-4. **Environment isolation and process concurrency.**
-   - Verify Production and Testnet open different files and cannot read/write each other's records.
-   - Use two real independent Node.js processes in integration tests to create sessions and concurrently write events/fills.
-   - Verify SQLite WAL/read behavior, same-file writer serialization, configured busy timeout, lock errors, rollback and retry classification. Do not claim multiple simultaneous writers inside one SQLite file.
-   - Verify shutdown and abrupt process termination leave committed records valid and uncommitted transactions rolled back.
+5. **Provider configuration and selection.**
+   - Define a single explicit composition API for selecting/configuring a provider.
+   - Validate provider configuration at startup and fail clearly for unknown or unsupported providers.
+   - Keep credentials, connection strings and filenames in provider configuration, not in domain/application policy.
+   - Ensure consumers do not need provider-specific conditionals.
 
-5. **Operational State adapter assessment — gated.**
-   - Compare the SQLite transaction/commit model with every ADR-0001 guarantee and existing filesystem adapter behavior.
-   - Add a separate accepted/superseding ADR before changing the authoritative store contract.
-   - Do not cut over until exact parity tests, crash/failure tests, backup/restore proof, rollback plan and #654 owner approval exist. Keep the existing file store intact until a verified cutover is explicitly authorized.
+6. **Migration and schema capabilities.**
+   - Audit the current migration API and distinguish portable migration orchestration from provider-specific schema changes.
+   - Keep generic migration lifecycle/history behavior in the package only where it can be defined consistently.
+   - Allow provider-specific migration implementations where relational DDL and document-store evolution genuinely differ.
+   - Do not force SQL migrations or relational schema assumptions onto MongoDB.
 
-6. **Historical migration and operating procedures.**
-   - Provide an explicit, repeatable import command; never migrate silently during normal startup.
-   - Verify source integrity before import; preserve original fact IDs, sequences, timestamps, payloads and provenance; detect conflicts; verify counts and digests; retain source files; document rollback.
-   - Document database locations, inspection tools, consistent backup/restore, schema upgrade policy, disk-full behavior, corruption handling and Windows restart/crash behavior before persistent deployment.
+7. **Future provider implementation — only when justified.**
+   - Add PostgreSQL or MongoDB as a separate adapter with its own driver dependency and infrastructure tests.
+   - Run the shared provider conformance suite.
+   - Document capability differences and reject unsupported operations explicitly.
+   - Prove a consumer can switch providers through composition/configuration without changing its domain/application code.
 
-7. **Provider portability and future providers.**
-   - Add architecture/contract tests proving application/domain code imports only domain-owned ports and that the SQLite adapter is replaceable at the composition boundary.
-   - Reassess PostgreSQL or MongoDB only when measured deployment, concurrency, scale, availability or query requirements justify them. Implement another provider as a separate adapter and prove the same domain contract; do not add it preemptively.
+## Existing foundation — implemented
 
-## Existing package foundation — implemented
-
-- [x] Establish `@coinzilla/db` and the provider adapter lifecycle boundary.
+- [x] Establish `@coinzilla/db` package and workspace integration.
 - [x] Implement Node.js built-in `node:sqlite` without an external SQLite driver or ORM.
-- [x] Support in-memory and file-backed SQLite, foreign-key enforcement, WAL for file databases, and configurable lock timeout.
-- [x] Implement explicit synchronous transactions with commit/rollback and nested/async callback rejection.
-- [x] Implement ordered, atomic, versioned schema migrations and migration-history validation.
+- [x] Support in-memory and file-backed SQLite databases.
+- [x] Enable foreign-key enforcement and WAL for file-backed databases.
+- [x] Support configurable SQLite lock timeout.
+- [x] Implement transaction commit/rollback and reject nested or asynchronous transaction callbacks.
+- [x] Implement ordered, atomic, versioned SQLite schema migrations and migration-history validation.
 - [x] Add deterministic tests using real in-memory and temporary file-backed SQLite databases.
 - [x] Separate database lifecycle domain, application provider port/use case, and SQLite infrastructure adapter.
 
-## Current architecture and API
+## Current implementation boundary
 
-The database lifecycle aggregate owns provider-independent connection lifecycle and transaction draining. The JSDoc `DatabaseProvider` port defines `connect`, `close`, and `withTransaction`. `createDatabase({ adapter })` composes that lifecycle boundary. `createSqliteDatabase({ filename, timeout })` supplies the current SQLite implementation and exposes its SQL/transaction/migration operations to infrastructure consumers.
+The current public API includes `createDatabase({ adapter })` for provider lifecycle composition and `createSqliteDatabase({ filename, timeout })` for the concrete SQLite implementation.
 
-The existing API is a provider-neutral lifecycle foundation, **not** a universal data-access API. SQL and `node:sqlite` remain provider-specific. Business repositories belong to the consuming bounded context and must hide these details from its domain/application layers.
+The current SQLite API exposes SQL-oriented operations to infrastructure consumers. It is therefore a useful SQLite foundation, but it is **not yet proof of a complete provider-neutral CRUD API**.
 
-Node's built-in SQLite API is synchronous. SQL statements and transaction callbacks block the event loop while executing; transaction callbacks and migration functions must remain synchronous. Do not put network calls, timers or awaited work inside a transaction. Keep transactions short and test their impact on Harvester's event-driven runtime.
+The next priority is to define and implement the generic contract without leaking SQL or SQLite types. Do not move application-specific repository contracts into this package.
+
+Node's built-in SQLite API is synchronous. Statements, transactions and migrations block the event loop while executing. Transaction callbacks and migration functions must remain synchronous; do not put network calls, timers or awaited work inside transactions.
 
 ## Explicit non-goals
 
-- No business aggregates or Harvester repository contracts inside `packages/db`.
-- No generic CRUD, ORM, query builder, universal SQL abstraction, or application-wide data model.
-- No PostgreSQL/MongoDB provider until a real consumer demonstrates the need.
-- No change to trading strategy behavior, Journal semantics, ADR-0001 safety guarantees, or restart-restoration readiness.
-- No silent persistence fallback or automatic migration of existing runtime data.
+- No application-specific domain entities, repository ports, business schemas, migrations, or workflows.
+- No trading, broker, order, execution, portfolio, session, or recovery concepts.
+- No ORM, query builder, or business-object mapper.
+- No PostgreSQL/MongoDB implementation until justified by a real requirement.
+- No promise of identical semantics across providers where their capabilities differ.
 
 ## Completion policy
 
-A roadmap item is complete only after implementation is merged into `develop` and required validation passes. A proposed provider abstraction is not proven portable until a real consumer contract is implemented and tested through its adapter boundary.
+A roadmap item is complete only after implementation is merged into `develop` and required validation passes. Provider portability is not proven by an interface alone: every provider must pass the shared conformance contract, and at least one real consumer must demonstrate that provider selection does not leak into its domain/application code.
