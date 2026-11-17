@@ -756,6 +756,28 @@ function createOwnedDecision({ ownership } = {}) {
   }
 }
 
+function createOwnershipRecordingExecutor({ observed, setBrokerOrder } = {}) {
+  const record = (callback, result) => async ({ ownership }) => {
+    observed.push({ callback, ownership })
+    return result
+  }
+  const durableResult = { ok: true, data: { durable: true } }
+  return makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async ({ order }) => {
+        setBrokerOrder(order)
+        return { ok: true, data: makeAcknowledgement(order) }
+      },
+    },
+    canSubmit: record("canSubmit", true),
+    onPendingOrder: record("onPendingOrder"),
+    onAcknowledgedOrder: record("onAcknowledgedOrder"),
+    onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
+    onDurableSubmissionIntent: record("onDurableSubmissionIntent", durableResult),
+    onDurableSubmissionOutcome: record("onDurableSubmissionOutcome", durableResult),
+  })
+}
+
 test("propagates RS OrderOwnership metadata through shared execution callbacks without leaking it to the broker", async () => {
   const ownership = {
     strategyId: StrategyId.RECOVERY_SELLER,
@@ -765,67 +787,13 @@ test("propagates RS OrderOwnership metadata through shared execution callbacks w
   }
   const observed = []
   let brokerOrder
-  const execute = makeExecuteStrategyDecision({
-    broker: {
-      placeOrder: async ({ order }) => {
-        brokerOrder = order
-        return {
-          ok: true,
-          data: makeAcknowledgement(order),
-        }
-      },
-    },
-    canSubmit: ({ ownership: observedOwnership }) => {
-      observed.push({
-        callback: "canSubmit",
-        ownership: observedOwnership,
-      })
-      return true
-    },
-    onPendingOrder: async ({ ownership: observedOwnership }) => {
-      observed.push({
-        callback: "onPendingOrder",
-        ownership: observedOwnership,
-      })
-    },
-    onAcknowledgedOrder: async ({ ownership: observedOwnership }) => {
-      observed.push({
-        callback: "onAcknowledgedOrder",
-        ownership: observedOwnership,
-      })
-    },
-    onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
-    onDurableSubmissionIntent: async ({ ownership: observedOwnership }) => {
-      observed.push({
-        callback: "onDurableSubmissionIntent",
-        ownership: observedOwnership,
-      })
-      return {
-        ok: true,
-        data: { durable: true },
-      }
-    },
-    onDurableSubmissionOutcome: async ({ ownership: observedOwnership }) => {
-      observed.push({
-        callback: "onDurableSubmissionOutcome",
-        ownership: observedOwnership,
-      })
-      return {
-        ok: true,
-        data: { durable: true },
-      }
-    },
+  const execute = createOwnershipRecordingExecutor({
+    observed,
+    setBrokerOrder: (order) => { brokerOrder = order },
   })
   const rsDecision = createOwnedDecision({ ownership })
-
-  const validation = await execute.validate({
-    decision: rsDecision,
-    marketMetadata,
-  })
-  const result = await execute({
-    decision: rsDecision,
-    marketMetadata,
-  })
+  const validation = await execute.validate({ decision: rsDecision, marketMetadata })
+  const result = await execute({ decision: rsDecision, marketMetadata })
 
   assert.equal(validation.ok, true)
   assert.equal(result.ok, true)
@@ -837,7 +805,6 @@ test("propagates RS OrderOwnership metadata through shared execution callbacks w
   assert.equal(Object.hasOwn(brokerOrder, "ownership"), false,
     "Application-only ownership metadata must not leak into the broker order request.")
 })
-
 
 test("propagates ownership when the post-registration submission gate throws", async () => {
   const ownership = {
