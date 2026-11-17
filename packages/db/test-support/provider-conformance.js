@@ -496,6 +496,164 @@ async function verifyTransactionCallbackMode(database) {
   )
 }
 
+async function verifyNestedTransactionSupported(database) {
+  await database.transaction(async (transaction) => {
+    await transaction.create({
+      collection: "people",
+      record: {
+        id: "outer-transaction-1",
+        name: "Outer",
+      },
+    })
+    await database.transaction(async (nestedTransaction) => {
+      await nestedTransaction.create({
+        collection: "people",
+        record: {
+          id: "nested-transaction-1",
+          name: "Nested",
+        },
+      })
+    })
+  })
+
+  assert.notEqual(
+    await database.readOne({
+      collection: "people",
+      id: "outer-transaction-1",
+    }),
+    null,
+    "A provider declaring nested transactions must commit the outer transaction",
+  )
+  assert.notEqual(
+    await database.readOne({
+      collection: "people",
+      id: "nested-transaction-1",
+    }),
+    null,
+    "A provider declaring nested transactions must commit nested work",
+  )
+}
+
+async function verifyNestedTransactionUnsupported(database) {
+  const outerRecord = {
+    id: "outer-transaction-1",
+    name: "Outer",
+  }
+  const nestedRecord = {
+    id: "nested-transaction-1",
+    name: "Nested",
+  }
+
+  if (database.capabilities.transactions.callbackMode === "asynchronous") {
+    await database.transaction(async (transaction) => {
+      await transaction.create({
+        collection: "people",
+        record: outerRecord,
+      })
+      await assert.rejects(
+        database.transaction((nestedTransaction) => nestedTransaction.create({
+          collection: "people",
+          record: nestedRecord,
+        })),
+        /nested/i,
+        "A provider declaring nestedTransactions=false must reject nested transaction work",
+      )
+    })
+  } else {
+    let nestedError
+    await database.transaction((transaction) => {
+      transaction.create({
+        collection: "people",
+        record: outerRecord,
+      })
+      database.transaction((nestedTransaction) => nestedTransaction.create({
+        collection: "people",
+        record: nestedRecord,
+      })).catch((error) => {
+        nestedError = error
+      })
+    })
+    await Promise.resolve()
+    assert.match(
+      nestedError?.message ?? "",
+      /nested/i,
+      "A synchronous provider declaring nestedTransactions=false must reject nested transaction work",
+    )
+  }
+
+  assert.notEqual(
+    await database.readOne({
+      collection: "people",
+      id: outerRecord.id,
+    }),
+    null,
+    "Rejecting nested work must not roll back the successful outer transaction",
+  )
+  assert.equal(
+    await database.readOne({
+      collection: "people",
+      id: nestedRecord.id,
+    }),
+    null,
+    "A rejected nested transaction must not persist nested records",
+  )
+}
+
+async function verifyNestedTransactions(database) {
+  if (database.capabilities.transactions.nestedTransactions) {
+    assert.equal(
+      database.capabilities.transactions.callbackMode,
+      "asynchronous",
+      "Nested transactions require asynchronous transaction callbacks in the provider-neutral facade",
+    )
+    await verifyNestedTransactionSupported(database)
+    return
+  }
+
+  await verifyNestedTransactionUnsupported(database)
+}
+
+async function verifyCloseWaitsForActiveTransaction(database) {
+  let releaseTransaction
+  let markTransactionStarted
+  const transactionStarted = new Promise((resolve) => {
+    markTransactionStarted = resolve
+  })
+  const transactionGate = new Promise((resolve) => {
+    releaseTransaction = resolve
+  })
+  const transaction = database.transaction(async () => {
+    markTransactionStarted()
+    await transactionGate
+    return "committed"
+  })
+  await transactionStarted
+
+  const closing = database.close()
+  await Promise.resolve()
+  assert.equal(
+    database.state,
+    "closing",
+    "Closing must enter the closing state while an asynchronous transaction is active",
+  )
+
+  let closed = false
+  closing.then(() => {
+    closed = true
+  })
+  await Promise.resolve()
+  assert.equal(
+    closed,
+    false,
+    "Close must wait for the active transaction before releasing the provider",
+  )
+
+  releaseTransaction()
+  assert.equal(await transaction, "committed")
+  await closing
+  assert.equal(database.state, "closed")
+}
+
 async function verifyLifecycle({ createDatabase, storageMode }) {
   await withStorageKey({
     callback: async ({ storageKey }) => {
@@ -677,6 +835,13 @@ function registerTransactionTests({ name, createDatabase, storageMode }) {
   })
   registerStandardTest({
     name,
+    description: "nested transaction behavior matches the declared capability",
+    createDatabase,
+    verify: verifyNestedTransactions,
+    storageMode,
+  })
+  registerStandardTest({
+    name,
     description: "provider capabilities are exposed as an immutable snapshot",
     createDatabase,
     verify: verifyCapabilities,
@@ -684,10 +849,21 @@ function registerTransactionTests({ name, createDatabase, storageMode }) {
   })
 }
 
-function registerLifecycleTests({ name, createDatabase, storageMode }) {
+function registerLifecycleTests({ name, createDatabase, capabilities, storageMode }) {
   test(`${name} (${storageMode}): closing the database prevents new work`, async () => {
     await verifyLifecycle({
       createDatabase,
+      storageMode,
+    })
+  })
+  test(`${name} (${storageMode}): close waits for active asynchronous transactions`, async (context) => {
+    if (capabilities.transactions.callbackMode === "synchronous") {
+      context.skip("Synchronous providers cannot keep an asynchronous transaction callback active")
+      return
+    }
+    await withDatabase({
+      createDatabase,
+      callback: verifyCloseWaitsForActiveTransaction,
       storageMode,
     })
   })
