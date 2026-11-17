@@ -434,9 +434,15 @@ function createCompletedCycleBoundaryRecords({ cycleCompletedSequence, firstBuyF
   ]
 }
 
+function createSecondSessionOrderIds() {
+  return {
+    clientOrderId: "harvester-cycle-two-buy",
+    brokerOrderId: "broker-cycle-two-buy",
+  }
+}
+
 function createSecondSessionRecords({ secondSessionId, fillId, firstSequence }) {
-  const clientOrderId = "harvester-cycle-two-buy"
-  const brokerOrderId = "broker-cycle-two-buy"
+  const { clientOrderId, brokerOrderId } = createSecondSessionOrderIds()
   return [
     record(firstSequence, "PROCESS_STARTED", {
       configurationFingerprint: fingerprint,
