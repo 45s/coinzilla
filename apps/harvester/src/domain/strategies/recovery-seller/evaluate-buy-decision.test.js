@@ -3,7 +3,6 @@ import assert from "node:assert/strict"
 import { evaluateRecoverySellerBuyDecision } from "./evaluate-buy-decision.js"
 import {
   createRecoverySellerCycleState,
-  markRecoverySellerCycleSellUnknown,
   reconcileRecoverySellerCycleSell,
   recordRecoverySellerCycleSellSubmission,
   startNextRecoverySellerCycle,
