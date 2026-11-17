@@ -19,7 +19,11 @@ function processStartedRecord({
       name: "harvester.process_started",
       source: "harvester",
       timestamp: eventTimestamp,
-      data: { startedAt, runtimeSessionId, processId },
+      data: {
+        startedAt,
+        runtimeSessionId,
+        processId,
+      },
     },
   }
 }
