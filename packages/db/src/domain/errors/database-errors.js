@@ -15,12 +15,16 @@ export class DatabaseConflictError extends SystemCustomError {
 
 export class DatabaseProviderError extends SystemCustomError {
   constructor({ operation, collection, cause } = {}) {
+    const context = {
+      operation,
+    }
+    if (collection !== undefined) {
+      context.collection = collection
+    }
+
     super(`Database provider failed during ${operation}`, {
       code: "DB_PROVIDER_OPERATION_FAILED",
-      context: {
-        operation,
-        collection,
-      },
+      context,
       cause,
     })
   }
