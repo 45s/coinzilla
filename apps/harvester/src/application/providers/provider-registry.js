@@ -48,7 +48,10 @@ function validateIdentifier({ value, field }) {
 
 function validateCapabilityDeclaration({ broker, providerType, environment }) {
   const { capabilities } = broker
-  const { selectedMode } = capabilities?.environment ?? {}
+  const {
+    selectedMode,
+    supportedModes,
+  } = capabilities?.environment ?? {}
   const valid = capabilities !== null &&
     typeof capabilities === "object" &&
     !Array.isArray(capabilities) &&
@@ -56,7 +59,9 @@ function validateCapabilityDeclaration({ broker, providerType, environment }) {
     capabilities.contractVersion === 1 &&
     capabilities.provider === providerType &&
     typeof selectedMode === "string" &&
-    selectedMode === environment
+    selectedMode === environment &&
+    Array.isArray(supportedModes) &&
+    supportedModes.includes(selectedMode)
   if (!valid) {
     throw createRegistryError({
       message: "Provider capability declaration must be immutable and match its registered provider identity",
