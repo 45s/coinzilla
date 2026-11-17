@@ -11,24 +11,24 @@ export function adaptExchangeRates({ value }) {
     throw new TypeError("Bitunix Spot exchange rates response must be an array")
   }
 
-  return Object.freeze(value.map((row, index) => {
+  return Object.freeze(value.map((row) => {
     if (!row || typeof row !== "object" || Array.isArray(row)) {
-      throw new TypeError(`Bitunix Spot exchange rate row ${index} must be an object`)
+      throw new TypeError("Bitunix Spot exchange rate row must be an object")
     }
     for (const field of ["baseSymbol", "quoteSymbol"]) {
       if (typeof row[field] !== "string" || !row[field].trim()) {
-        throw new TypeError(`Bitunix Spot exchange rate row ${index} requires a non-empty ${field}`)
+        throw new TypeError(`Bitunix Spot exchange rate row requires a non-empty ${field}`)
       }
     }
     assertDecimalString({
       value: row.rate,
-      field: `Bitunix Spot exchange rate row ${index} rate`,
+      field: "Bitunix Spot exchange rate rate",
     })
     if (compareDecimal({
       left: row.rate,
       right: "0",
     }) <= 0) {
-      throw new RangeError(`Bitunix Spot exchange rate row ${index} rate must be positive`)
+      throw new RangeError("Bitunix Spot exchange rate rate must be positive")
     }
 
     return Object.freeze({
