@@ -29,7 +29,8 @@ The `@coinzilla/brokers` entry point exports:
 
 - `BinanceWebSocketBroker` — the concrete Binance WebSocket API/Streams broker.
 - `BinanceWebSocketConfig` — validated Binance broker configuration.
-- `BitunixSpotBroker` and `BitunixSpotConfig` — the current read-only Bitunix Spot implementation and its validated configuration.
+- `BitunixSpotBroker` and `BitunixSpotConfig` — the current read-only Bitunix Spot REST broker and its validated configuration.
+- `BitunixSpotWebSocketClient` and `BitunixWebSocketError` — a separately managed, authenticated Spot WebSocket request/response RPC client; it does not add subscriptions or order mutations.
 - `CoreBroker` — the existing compatibility base class; it is not a formal application-owned broker port.
 - `normalizeBinanceId` — exact non-negative Binance identifier normalization, also used by the Harvester infrastructure adapter.
 
@@ -46,7 +47,7 @@ Each capability declaration has a `status` and may include `method`, `guarantee`
 
 The declaration and all nested objects and arrays are frozen. The `capabilities` property itself is non-writable and non-configurable. Its `environment.selectedMode` reports the instance's validated Binance `tradingMode`; `NODE_ENV` never selects exchange endpoints. These declarations describe the broker implementation and its verified boundaries, not live exchange connectivity or account permissions.
 
-Only Binance is declared in this phase. Bitunix remains unchanged and read-only; no Bitunix capability declaration is added.
+Only Binance is declared in this phase. The REST-backed BitunixSpotBroker remains read-only; the separate BitunixSpotWebSocketClient exposes authenticated Spot RPC reads but does not add broker capability declarations or make Bitunix a Harvester execution provider.
 
 For the source-mapped Binance capability matrix, limitations, and remaining multi-provider phases, see [the Brokers roadmap](./ROADMAP.md#multi-provider-construction-and-capability-contracts--1339).
 
@@ -99,6 +100,44 @@ try {
   await broker.disconnect()
 }
 ```
+
+## Bitunix Spot WebSocket RPC
+
+`BitunixSpotWebSocketClient` implements the documented Spot WebSocket request/response API at `wss://openapi.bitunix.com:443/ws-api/v1`. Every RPC is authenticated, including market-data and catalog lookups. It exposes these read-only methods:
+
+- `getLastPrice({ symbol })` — `market.last_price`
+- `getDepth({ symbol, precision })` — `market.depth`; precision is required and supplied by the caller.
+- `getKline({ symbol, interval })` — `market.kline`
+- `getTradingPairs()` — `common.coin_pair.list`
+- `getExchangeRates()` — `common.rate.list`
+- `getTokenNetworks()` — `common.coin.coin_network.list`
+- `getAccount()` — `user.account`
+- `getUserInfo()` — `user.info`
+
+The client correlates concurrent responses by echoed request ID, validates response envelopes, applies the official Spot WebSocket double-SHA256 signature (separate from REST signing), and never automatically retries a request. Account balance numeric tokens are returned as exact decimal strings; unsafe int64 user IDs are preserved as strings. A timeout or disconnect rejects unresolved RPCs. The client does not auto-reconnect; construct a new client after a terminal connection close. Bitunix documents a 24-hour connection lifetime.
+
+```js
+import { BitunixSpotWebSocketClient } from "@coinzilla/brokers"
+
+const client = new BitunixSpotWebSocketClient({
+  apiKey: process.env.BITUNIX_API_KEY,
+  apiSecret: process.env.BITUNIX_API_SECRET,
+})
+
+await client.connect()
+try {
+  const [price, balances, markets] = await Promise.all([
+    client.getLastPrice({ symbol: "BTCUSDT" }),
+    client.getAccount(),
+    client.getTradingPairs(),
+  ])
+  // Each result is the corresponding Bitunix response data.
+} finally {
+  await client.disconnect()
+}
+```
+
+These are one-shot RPC reads, not streaming subscriptions. No continuous public price/depth/K-line feed or private order/execution/balance event stream is implemented. The existing `BitunixSpotBroker` REST methods are unchanged and do not silently switch transports.
 
 ## Canonical order placement response
 
