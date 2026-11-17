@@ -101,8 +101,13 @@ function addMarketPauseBlockers({
     })
   }
 }
+  
 
-function getMarketOrderBlockers({ state, symbol, blockers } = {}) {
+
+    
+function getMarketOrderBlockers({
+  state, s
+  ymbol, blockers } = {}) {
   const ownedOrders = state.registry.orders.filter((order) => order.market.symbol === symbol)
   const activeOrders = state.registry.getActiveOrders().filter((order) => order.market.symbol === symbol)
   addOwnedOrderBlockers({ state, blockers, ownedOrders, activeOrders })

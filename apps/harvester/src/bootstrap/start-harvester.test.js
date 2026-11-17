@@ -3947,10 +3947,13 @@ function configureDurableStartupAuditBroker({ broker, calls, counters }) {
       ok: true,
       data: {
         balances: ["BTC", "ETH", "USDT"].map((code) => {
-          const asset = new Asset({ id: `asset:${code}`, code })
+          const asset = new Asset({ id: `asset:${code}`,
+            code })
           return new Balance({
-            free: new Quantity({ amount: "12.5", asset }),
-            locked: new Quantity({ amount: "0.5", asset }),
+            free: new Quantity({ amount: "12.5",
+              asset }),
+            locked: new Quantity({ amount: "0.5",
+              asset }),
           })
         }),
         sourceTime: 123,
@@ -3961,7 +3964,8 @@ function configureDurableStartupAuditBroker({ broker, calls, counters }) {
     counters.openOrderReads += 1
     calls.push("account:open-orders")
     assert.deepEqual(input, {})
-    return { ok: true, data: [] }
+    return { ok: true,
+      data: [] }
   }
 }
 
@@ -3975,17 +3979,24 @@ function createDurableStartupAuditPublisher({ calls, events, counters }) {
     flush: async () => {
       counters.flushCount += 1
       calls.push(`journal:flush:${counters.flushCount}`)
-      return { ok: true, durable: true }
+      return { ok: true,
+        durable: true }
     },
   }
 }
 
 function createDurableStartupAuditFixture({ calls }) {
   const broker = createBroker(calls)
-  const counters = { accountReads: 0, openOrderReads: 0, flushCount: 0 }
-  configureDurableStartupAuditBroker({ broker, calls, counters })
+  const counters = { accountReads: 0,
+    openOrderReads: 0,
+    flushCount: 0 }
+  configureDurableStartupAuditBroker({ broker,
+    calls,
+    counters })
   const events = []
-  const eventPublisher = createDurableStartupAuditPublisher({ calls, events, counters })
+  const eventPublisher = createDurableStartupAuditPublisher({ calls,
+    events,
+    counters })
   return {
     broker,
     events,
@@ -4319,9 +4330,12 @@ function createShutdownBuyOrder({ order, market }) {
     market,
     side: order.side,
     type: order.type,
-    limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+    limitPrice: new Money({ amount: order.price,
+      asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: order.quantity,
+      asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+      asset: market.baseAsset }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -4365,15 +4379,19 @@ function createShutdownBuyCancellationBroker({ calls, gates }) {
   })
   broker.placeOrder = async ({ order }) => {
     calls.push(`placeOrder:${order.side}`)
-    submittedOrder = createShutdownBuyOrder({ order, market })
-    return { ok: true, data: submittedOrder }
+    submittedOrder = createShutdownBuyOrder({ order,
+      market })
+    return { ok: true,
+      data: submittedOrder }
   }
   broker.cancelOrder = async ({ order }) => {
     calls.push(`cancelOrder:${order.side}`)
     gates.signalCancelStarted()
     await gates.cancelGate
-    canceledOrder = createCanceledShutdownBuyOrder({ order, market })
-    return { ok: true, data: canceledOrder }
+    canceledOrder = createCanceledShutdownBuyOrder({ order,
+      market })
+    return { ok: true,
+      data: canceledOrder }
   }
   makeVolatilityReadyBroker(broker, ["BTCUSDT"])
   return broker

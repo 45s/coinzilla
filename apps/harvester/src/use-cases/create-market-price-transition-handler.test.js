@@ -64,12 +64,14 @@ function createTransitionActionPorts({ state, trace }) {
     maybeReplaceTrailingBuy: async () => {
       assertAcceptedPrice()
       trace.push("trailing-buy")
-      return { ok: true, data: { route: "trailing-buy" } }
+      return { ok: true,
+        data: { route: "trailing-buy" } }
     },
     evaluateLatestTransition: async () => {
       assertAcceptedPrice()
       trace.push("evaluate")
-      return { ok: true, data: { route: "evaluate" } }
+      return { ok: true,
+        data: { route: "evaluate" } }
     },
     nextMarketPriceEventId: () => {
       trace.push("event-id")
@@ -116,6 +118,7 @@ function createHandler({ state, trace, isFresh, canTrade } = {}) {
     }),
     canTrade: () => canTrade,
     ...createTransitionActionPorts({
+      
       state,
       trace,
     }),
