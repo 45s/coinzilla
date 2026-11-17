@@ -949,3 +949,33 @@ function registerLifecycleTests({
  *
  * @param {{name: string, createDatabase: (options: {storageKey: string, storageMode?: string}) => object}} options
  */
+ * @param {{name: string, createDatabase: (options: {storageKey: string, storageMode?: string}) => object, cleanupStorage?: (options: {storageKey: string, storageMode: string}) => Promise<void>|void}} options
+ */
+export function runDatabaseProviderConformanceTests({
+  name,
+  createDatabase,
+  cleanupStorage,
+}) {
+  const capabilityProbe = createDatabase({
+    storageKey: `conformance-probe-${randomUUID()}`,
+  })
+  const { capabilities } = capabilityProbe
+  const probeClose = capabilityProbe.close()
+
+  test(`${name}: capability discovery closes its unconnected provider probe`, async () => {
+    await probeClose
+  })
+
+  for (const storageMode of capabilities.storage.modes) {
+    const options = {
+      name,
+      createDatabase,
+      capabilities,
+      storageMode,
+      cleanupStorage,
+    }
+    registerCrudAndQueryTests(options)
+    registerTransactionTests(options)
+    registerLifecycleTests(options)
+  }
+}
