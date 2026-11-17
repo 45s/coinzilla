@@ -670,6 +670,9 @@ async function stopMarketIntakeAfterClosing(context) {
   // already in flight when the fence was raised.
   const errors = await stopMarketIntakeAndDrain(context)
   if (errors.length > 0) {
+    // Resume callbacks for any subscriptions that remained active after a
+    // partial unsubscribe failure; BUYs remain gated and user-data stays live.
+    context.state.marketIntakeStopped = false
     await publishClosingAuditOrThrow(context)
     throw new AggregateError(errors, "Market intake could not be stopped and drained safely")
   }
