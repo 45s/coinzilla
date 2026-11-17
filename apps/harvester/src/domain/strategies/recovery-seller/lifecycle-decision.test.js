@@ -24,7 +24,10 @@ test("creates distinct immutable SUBMIT, WAIT, BLOCK and RECONCILE decisions", (
   const submit = makeDecision({ outcome: "SUBMIT" })
   const wait = makeDecision({
     outcome: "WAIT",
-    orderIdentity: { clientOrderId: "h-existing-order", brokerOrderId: "exchange-123" },
+    orderIdentity: {
+      clientOrderId: "h-existing-order",
+      brokerOrderId: "exchange-123",
+    },
   })
   const block = makeDecision({ outcome: "BLOCK" })
   const reconcile = makeDecision({
@@ -107,12 +110,18 @@ test("allows only the documented transitions within one recovery cycle", () => {
   for (const [previousOutcome, nextOutcome] of validTransitions) {
     const previousDecision = makeDecision({
       outcome: previousOutcome,
-      ...(previousOutcome === "WAIT" ? { orderIdentity: { clientOrderId: "h-order", brokerOrderId: "exchange-123" } } : {}),
+      ...(previousOutcome === "WAIT" ? { orderIdentity: {
+        clientOrderId: "h-order",
+        brokerOrderId: "exchange-123",
+      } } : {}),
       ...(previousOutcome === "RECONCILE" ? { orderIdentity: { clientOrderId: "h-order" } } : {}),
     })
     const nextDecision = makeDecision({
       outcome: nextOutcome,
-      ...(nextOutcome === "WAIT" ? { orderIdentity: { clientOrderId: "h-order", brokerOrderId: "exchange-123" } } : {}),
+      ...(nextOutcome === "WAIT" ? { orderIdentity: {
+        clientOrderId: "h-order",
+        brokerOrderId: "exchange-123",
+      } } : {}),
       ...(nextOutcome === "RECONCILE" ? { orderIdentity: { clientOrderId: "h-order" } } : {}),
     })
     const result = applyRecoverySellerLifecycleTransition({
@@ -149,7 +158,10 @@ test("allows a new initial SUBMIT but never a direct resubmission within an exis
 test("turns an unsupported transition back to SUBMIT into sticky global STOP", () => {
   const previousDecision = makeDecision({
     outcome: "WAIT",
-    orderIdentity: { clientOrderId: "h-existing-order", brokerOrderId: "exchange-123" },
+    orderIdentity: {
+      clientOrderId: "h-existing-order",
+      brokerOrderId: "exchange-123",
+    },
   })
   const nextDecision = makeDecision({ outcome: "SUBMIT" })
   const result = applyRecoverySellerLifecycleTransition({
@@ -173,7 +185,10 @@ test("keeps a latched STOP active while permitting only WAIT or RECONCILE transi
   })
   const waitDecision = makeDecision({
     outcome: "WAIT",
-    orderIdentity: { clientOrderId: "h-existing-order", brokerOrderId: "exchange-123" },
+    orderIdentity: {
+      clientOrderId: "h-existing-order",
+      brokerOrderId: "exchange-123",
+    },
   })
   const reconcileDecision = makeDecision({
     outcome: "RECONCILE",
