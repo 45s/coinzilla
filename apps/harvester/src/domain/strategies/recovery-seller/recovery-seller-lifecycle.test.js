@@ -28,19 +28,58 @@ const marketMetadata = {
   orderType: "LIMIT_MAKER",
   tradingRules: {
     constraints: [
-      { type: "PRICE_INCREMENT", status: "SUPPORTED", value: { amount: "0.001" } },
-      { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: { amount: "0.01" } },
-      { type: "MIN_QUANTITY", status: "SUPPORTED", value: { amount: "0.01" } },
-      { type: "MIN_NOTIONAL", status: "SUPPORTED", value: { amount: "5" } },
-      { type: "MAX_QUANTITY", status: "SUPPORTED", value: { amount: "100" } },
-      { type: "MAX_NOTIONAL", status: "SUPPORTED", value: { amount: "1000" } },
-      { type: "MIN_PRICE", status: "SUPPORTED", value: { amount: "0.001" } },
-      { type: "MAX_PRICE", status: "SUPPORTED", value: { amount: "100" } },
+      {
+        type: "PRICE_INCREMENT",
+        status: "SUPPORTED",
+        value: { amount: "0.001" },
+      },
+      {
+        type: "QUANTITY_INCREMENT",
+        status: "SUPPORTED",
+        value: { amount: "0.01" },
+      },
+      {
+        type: "MIN_QUANTITY",
+        status: "SUPPORTED",
+        value: { amount: "0.01" },
+      },
+      {
+        type: "MIN_NOTIONAL",
+        status: "SUPPORTED",
+        value: { amount: "5" },
+      },
+      {
+        type: "MAX_QUANTITY",
+        status: "SUPPORTED",
+        value: { amount: "100" },
+      },
+      {
+        type: "MAX_NOTIONAL",
+        status: "SUPPORTED",
+        value: { amount: "1000" },
+      },
+      {
+        type: "MIN_PRICE",
+        status: "SUPPORTED",
+        value: { amount: "0.001" },
+      },
+      {
+        type: "MAX_PRICE",
+        status: "SUPPORTED",
+        value: { amount: "100" },
+      },
     ],
   },
 }
 
-function makeOwnedOrder({ side, status, clientOrderId, brokerOrderId, cycleId, positionId }) {
+function makeOwnedOrder({
+  side,
+  status,
+  clientOrderId,
+  brokerOrderId,
+  cycleId,
+  positionId,
+}) {
   return {
     market: {
       symbol: "ZROUSDT",
@@ -86,26 +125,23 @@ function evaluateBuy({
   })
 }
 
-function createSubmittedCycle() {
-  const initial = createRecoverySellerCycleState({
+function createCycle() {
+  return createRecoverySellerCycleState({
     cycleId: "rs-cycle-1",
     positionId: "rs-position-1",
   })
+}
+
+function createSubmittedCycle() {
   return recordRecoverySellerCycleSellSubmission({
-    state: initial,
+    state: createCycle(),
     orderIdentity: {
       clientOrderId: "rs-sell-1",
     },
   })
 }
 
-test("proves offline BUY, WAIT, one-SELL, STOP, RECONCILE and no-auto-resume lifecycle", () => {
-  const stopState = createRecoverySellerStopState()
-  const cycleState = createRecoverySellerCycleState({
-    cycleId: "rs-cycle-1",
-    positionId: "rs-position-1",
-  })
-
+function assertInitialBuyAndExistingBuyWait({ stopState, cycleState }) {
   const initialBuy = evaluateBuy({
     stopState,
     cycleState,
@@ -129,15 +165,18 @@ test("proves offline BUY, WAIT, one-SELL, STOP, RECONCILE and no-auto-resume lif
   })
   assert.equal(existingBuy.decision.outcome, "WAIT",
     "An acknowledged BUY remains the same order lifecycle; no duplicate BUY is submitted.")
+}
 
+function assertNextBuyAndInvestmentLimit({ stopState, cycleState }) {
+  const recoveryPosition = {
+    positionId: "rs-position-1",
+    quantity: "5",
+    spent: "10",
+  }
   const nextBuy = evaluateBuy({
     stopState,
     cycleState,
-    recoveryPosition: {
-      positionId: "rs-position-1",
-      quantity: "5",
-      spent: "10",
-    },
+    recoveryPosition,
     lastBuyPrice: "2",
   })
   assert.equal(nextBuy.decision.outcome, "SUBMIT")
@@ -148,23 +187,15 @@ test("proves offline BUY, WAIT, one-SELL, STOP, RECONCILE and no-auto-resume lif
   const atLimit = evaluateBuy({
     stopState,
     cycleState,
-    recoveryPosition: {
-      positionId: "rs-position-1",
-      quantity: "5",
-      spent: "10",
-    },
+    recoveryPosition,
     lastBuyPrice: "2",
     investment: "15",
   })
   assert.equal(atLimit.decision.outcome, "BLOCK",
     "The RS per-pair investment limit blocks a new BUY without changing the existing cycle.")
+}
 
-  const sellSubmitted = recordRecoverySellerCycleSellSubmission({
-    state: cycleState,
-    orderIdentity: {
-      clientOrderId: "rs-sell-1",
-    },
-  })
+function assertExistingSellWait({ stopState, sellSubmitted }) {
   const existingSell = evaluateBuy({
     stopState,
     cycleState: sellSubmitted,
@@ -185,7 +216,9 @@ test("proves offline BUY, WAIT, one-SELL, STOP, RECONCILE and no-auto-resume lif
   assert.equal(existingSell.decision.outcome, "WAIT",
     "The single acknowledged SELL remains live and is never duplicated or replaced.")
   assert.equal(existingSell.action, undefined)
+}
 
+function createStoppedReconciledCycle({ stopState, sellSubmitted }) {
   const unknownSell = recordRecoverySellerCycleSellUnknown({
     stopState,
     cycleState: sellSubmitted,
@@ -209,7 +242,13 @@ test("proves offline BUY, WAIT, one-SELL, STOP, RECONCILE and no-auto-resume lif
     "A terminal fill closes the cycle only after authoritative reconciliation and combined profitability pass.")
   assert.equal(reconciled.stopState, unknownSell.stopState,
     "Confirmed fill and accounting reconciliation continue, but never clear global STOP.")
+  return {
+    unknownSell,
+    reconciled,
+  }
+}
 
+function assertNewCycleRemainsStopped({ reconciled, unknownSell }) {
   const nextCycle = startNextRecoverySellerCycleWithStop({
     stopState: reconciled.stopState,
     previousState: reconciled.cycleState,
@@ -224,9 +263,40 @@ test("proves offline BUY, WAIT, one-SELL, STOP, RECONCILE and no-auto-resume lif
   assert.equal(blockedAfterStop.decision.outcome, "BLOCK")
   assert.equal(blockedAfterStop.action, undefined,
     "A successful prior cycle and a new cycle identity do not automatically resume trading.")
+}
+
+test("proves offline BUY, WAIT, one-SELL, STOP, RECONCILE and no-auto-resume lifecycle", () => {
+  const stopState = createRecoverySellerStopState()
+  const cycleState = createCycle()
+  assertInitialBuyAndExistingBuyWait({
+    stopState,
+    cycleState,
+  })
+  assertNextBuyAndInvestmentLimit({
+    stopState,
+    cycleState,
+  })
+  const sellSubmitted = recordRecoverySellerCycleSellSubmission({
+    state: cycleState,
+    orderIdentity: {
+      clientOrderId: "rs-sell-1",
+    },
+  })
+  assertExistingSellWait({
+    stopState,
+    sellSubmitted,
+  })
+  const { unknownSell, reconciled } = createStoppedReconciledCycle({
+    stopState,
+    sellSubmitted,
+  })
+  assertNewCycleRemainsStopped({
+    reconciled,
+    unknownSell,
+  })
 })
 
-test("proves terminal underfill/cancel remains unresolved and cannot start another cycle", () => {
+test("proves terminal cancellation remains unresolved and cannot start another cycle", () => {
   const unknownSell = recordRecoverySellerCycleSellUnknown({
     stopState: createRecoverySellerStopState(),
     cycleState: createSubmittedCycle(),
