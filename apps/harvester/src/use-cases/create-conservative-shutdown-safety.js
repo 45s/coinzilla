@@ -81,11 +81,7 @@ function addMarketTransitionBlockers({
   }
 }
 
-function addMarketPauseBlockers({
-    state,
-    symbol,
-    blockers,
-  }) {
+function addMarketPauseBlockers({ state, symbol, blockers }) {
   const isPaused = state.durablePausedMarkets?.has(symbol) ||
     (state.paused?.has(symbol) && !state.recoveryManagedPausedMarkets.has(symbol))
   if (isPaused) {
@@ -101,19 +97,28 @@ function addMarketPauseBlockers({
     })
   }
 }
-  
 
-
-    
-function getMarketOrderBlockers({
-  state, s
-  ymbol, blockers } = {}) {
+function getMarketOrderBlockers({ state, symbol, blockers } = {}) {
   const ownedOrders = state.registry.orders.filter((order) => order.market.symbol === symbol)
   const activeOrders = state.registry.getActiveOrders().filter((order) => order.market.symbol === symbol)
-  addOwnedOrderBlockers({ state, blockers, ownedOrders, activeOrders })
-  addMarketTransitionBlockers({ state, symbol, blockers })
-  addMarketPauseBlockers({ state, symbol, blockers })
+  addOwnedOrderBlockers({
+    state,
+    blockers,
+    ownedOrders,
+    activeOrders,
+  })
+  addMarketTransitionBlockers({
+    state,
+    symbol,
+    blockers,
+  })
+  addMarketPauseBlockers({
+    state,
+    symbol,
+    blockers,
+  })
 }
+
 function getCoverageBlockers({ coverageResult, symbol, blockers } = {}) {
   if (coverageResult?.ok !== true) {
     addBlocker({ blockers,
