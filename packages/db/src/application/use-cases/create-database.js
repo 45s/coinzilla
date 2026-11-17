@@ -113,6 +113,10 @@ function createCapabilitiesSnapshot(capabilities) {
   return freezeRecursively(snapshot)
 }
 
+function isAsyncFunction(callback) {
+  return callback.constructor?.name === "AsyncFunction"
+}
+
 function createProviderNeutralFacade({ database, provider }) {
   const capabilities = createCapabilitiesSnapshot(provider.capabilities)
 
@@ -134,9 +138,12 @@ function createProviderNeutralFacade({ database, provider }) {
       if (typeof work !== "function") {
         throw new TypeError("A transaction callback is required")
       }
-      return database.transaction((transaction) => work(
-        createTransactionFacade(transaction),
-      ))
+      return database.transaction((transaction) => {
+        if (capabilities.transactions.callbackMode === "synchronous" && isAsyncFunction(work)) {
+          throw new TypeError("Synchronous database provider transaction callbacks must be synchronous")
+        }
+        return work(createTransactionFacade(transaction))
+      })
     },
     create: (input) => runOperation({
       operation: "create",
