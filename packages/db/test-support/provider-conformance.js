@@ -574,10 +574,9 @@ async function verifyNestedTransactionUnsupportedSynchronous({
     })
   })
   await Promise.resolve()
-  assert.match(
-    nestedError?.message ?? "",
-    /nested/i,
-    "A synchronous provider declaring nestedTransactions=false must reject nested transaction work",
+  assert.ok(
+    nestedError instanceof DatabaseProviderError,
+    "A synchronous provider declaring nestedTransactions=false must reject nested transaction work with the shared provider error",
   )
 }
 
