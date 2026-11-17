@@ -94,9 +94,11 @@ test("rejects invalid fee rates and missing third-asset quote valuation input", 
     }),
     /quoteFeeRate/,
   )
-  const { thirdAssetFeeQuoteValue, ...missingValuation } = validInput
   assert.throws(
-    () => calculateRecoverySellerSellPlan(missingValuation),
+    () => calculateRecoverySellerSellPlan({
+      ...validInput,
+      thirdAssetFeeQuoteValue: undefined,
+    }),
     /thirdAssetFeeQuoteValue/,
   )
 })

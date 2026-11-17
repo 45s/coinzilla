@@ -9,19 +9,34 @@ import {
 } from "@coinzilla/utils"
 
 function assertDecimal({ value, field }) {
-  assertDecimalString({ value, field })
+  assertDecimalString({
+    value,
+    field,
+  })
 }
 
 function assertNonNegative({ value, field }) {
-  assertDecimal({ value, field })
-  if (compareDecimal({ left: value, right: "0" }) < 0) {
+  assertDecimal({
+    value,
+    field,
+  })
+  if (compareDecimal({
+    left: value,
+    right: "0",
+  }) < 0) {
     throw new RangeError(`${field} must be non-negative`)
   }
 }
 
 function assertPositive({ value, field }) {
-  assertDecimal({ value, field })
-  if (compareDecimal({ left: value, right: "0" }) <= 0) {
+  assertDecimal({
+    value,
+    field,
+  })
+  if (compareDecimal({
+    left: value,
+    right: "0",
+  }) <= 0) {
     throw new RangeError(`${field} must be greater than zero`)
   }
 }
@@ -40,38 +55,121 @@ function validateInput(input) {
     "quantityStepSize",
   ]
   for (const field of fields) {
-    assertDecimal({ value: input[field], field })
+    assertDecimal({
+      value: input[field],
+      field,
+    })
   }
-  assertPositive({ value: input.recoveryQuantity, field: "recoveryQuantity" })
-  assertNonNegative({ value: input.legacyQuantity, field: "legacyQuantity" })
-  assertPositive({ value: input.recoveryCostBasis, field: "recoveryCostBasis" })
-  assertNonNegative({ value: input.legacyAverageCost, field: "legacyAverageCost" })
-  assertPositive({ value: input.minProfit, field: "minProfit" })
-  assertNonNegative({ value: input.quoteFeeRate, field: "quoteFeeRate" })
-  assertNonNegative({ value: input.baseFeeRate, field: "baseFeeRate" })
+  assertPositive({
+    value: input.recoveryQuantity,
+    field: "recoveryQuantity",
+  })
+  assertNonNegative({
+    value: input.legacyQuantity,
+    field: "legacyQuantity",
+  })
+  assertPositive({
+    value: input.recoveryCostBasis,
+    field: "recoveryCostBasis",
+  })
+  assertNonNegative({
+    value: input.legacyAverageCost,
+    field: "legacyAverageCost",
+  })
+  assertPositive({
+    value: input.minProfit,
+    field: "minProfit",
+  })
+  assertNonNegative({
+    value: input.quoteFeeRate,
+    field: "quoteFeeRate",
+  })
+  assertNonNegative({
+    value: input.baseFeeRate,
+    field: "baseFeeRate",
+  })
   assertNonNegative({
     value: input.thirdAssetFeeQuoteValue,
     field: "thirdAssetFeeQuoteValue",
   })
-  assertPositive({ value: input.priceTickSize, field: "priceTickSize" })
-  assertPositive({ value: input.quantityStepSize, field: "quantityStepSize" })
+  assertPositive({
+    value: input.priceTickSize,
+    field: "priceTickSize",
+  })
+  assertPositive({
+    value: input.quantityStepSize,
+    field: "quantityStepSize",
+  })
 
-  if (compareDecimal({ left: input.legacyQuantity, right: "0" }) > 0 &&
-      compareDecimal({ left: input.legacyAverageCost, right: "0" }) <= 0) {
+  if (compareDecimal({
+    left: input.legacyQuantity,
+    right: "0",
+  }) > 0 && compareDecimal({
+    left: input.legacyAverageCost,
+    right: "0",
+  }) <= 0) {
     throw new RangeError("legacyAverageCost must be positive when legacy quantity is included")
   }
-  if (compareDecimal({ left: input.quoteFeeRate, right: "1" }) >= 0) {
+  if (compareDecimal({
+    left: input.quoteFeeRate,
+    right: "1",
+  }) >= 0) {
     throw new RangeError("quoteFeeRate must be less than one")
   }
-  if (compareDecimal({ left: input.baseFeeRate, right: "1" }) >= 0) {
+  if (compareDecimal({
+    left: input.baseFeeRate,
+    right: "1",
+  }) >= 0) {
     throw new RangeError("baseFeeRate must be less than one")
   }
 }
 
-function calculateOrderQuantity({ availableBaseQuantity, baseFeeRate, quantityStepSize }) {
+function calculateQuoteTarget({
+  recoveryCostBasis,
+  legacyCostBasis,
+  minProfit,
+  thirdAssetFeeQuoteValue,
+  quoteFeeRate,
+}) {
+  const requiredNetQuoteProceeds = addDecimal({
+    left: addDecimal({
+      left: recoveryCostBasis,
+      right: legacyCostBasis,
+    }),
+    right: minProfit,
+  })
+  const grossQuoteTarget = addDecimal({
+    left: requiredNetQuoteProceeds,
+    right: thirdAssetFeeQuoteValue,
+  })
+  const grossQuoteProceeds = divideDecimal({
+    left: grossQuoteTarget,
+    right: subtractDecimal({
+      left: "1",
+      right: quoteFeeRate,
+    }),
+    scale: 36,
+    rounding: "away-from-zero",
+  })
+  return Object.freeze({
+    requiredNetQuoteProceeds,
+    grossQuoteProceeds,
+  })
+}
+
+function calculateOrderQuantities({
+  recoveryQuantity,
+  legacyQuantity,
+  availableBaseQuantity,
+  baseFeeRate,
+  quantityStepSize,
+}) {
   const quantityBeforeStep = divideDecimal({
     left: availableBaseQuantity,
-    right: addDecimal({ left: "1", right: baseFeeRate }),
+    right: addDecimal({
+      left: "1",
+      right: baseFeeRate,
+    }),
     scale: 36,
     rounding: "toward-zero",
   })
@@ -88,12 +186,71 @@ function calculateOrderQuantity({ availableBaseQuantity, baseFeeRate, quantitySt
     left: quantity,
     right: baseFeeQuantity,
   })
-  if (compareDecimal({ left: baseDebitQuantity, right: availableBaseQuantity }) > 0) {
+  if (compareDecimal({
+    left: baseDebitQuantity,
+    right: availableBaseQuantity,
+  }) > 0) {
     throw new RangeError(
       "Exchange quantity step cannot include the full recovery and authorized legacy quantities after base-fee gross-up",
     )
   }
-  return Object.freeze({ quantity, baseFeeQuantity, baseDebitQuantity })
+
+  const recoverySellQuantity = divideDecimal({
+    left: multiplyDecimal({
+      left: quantity,
+      right: recoveryQuantity,
+    }),
+    right: availableBaseQuantity,
+    scale: 36,
+    rounding: "toward-zero",
+  })
+  const legacySellQuantity = subtractDecimal({
+    left: quantity,
+    right: recoverySellQuantity,
+  })
+  const recoveryBaseFeeQuantity = divideDecimal({
+    left: multiplyDecimal({
+      left: baseFeeQuantity,
+      right: recoverySellQuantity,
+    }),
+    right: quantity,
+    scale: 36,
+    rounding: "toward-zero",
+  })
+  const legacyBaseFeeQuantity = subtractDecimal({
+    left: baseFeeQuantity,
+    right: recoveryBaseFeeQuantity,
+  })
+
+  return Object.freeze({
+    quantity,
+    baseFeeQuantity,
+    baseDebitQuantity,
+    recoverySellQuantity,
+    legacySellQuantity,
+    recoveryBaseDebitQuantity: addDecimal({
+      left: recoverySellQuantity,
+      right: recoveryBaseFeeQuantity,
+    }),
+    legacyBaseDebitQuantity: addDecimal({
+      left: legacySellQuantity,
+      right: legacyBaseFeeQuantity,
+    }),
+  })
+}
+
+function calculateMinimumPrice({ grossQuoteProceeds, quantity, priceTickSize }) {
+  const minimumPrice = divideDecimal({
+    left: grossQuoteProceeds,
+    right: quantity,
+    scale: 36,
+    rounding: "away-from-zero",
+  })
+  return roundDecimalToIncrement({
+    value: minimumPrice,
+    increment: priceTickSize,
+    direction: "up",
+  })
 }
 
 /**
@@ -139,80 +296,33 @@ export function calculateRecoverySellerSellPlan({
     left: legacyAverageCost,
     right: legacyQuantity,
   })
-  const requiredNetQuoteProceeds = addDecimal({
-    left: addDecimal({
-      left: recoveryCostBasis,
-      right: legacyCostBasis,
-    }),
-    right: minProfit,
+  const quoteTarget = calculateQuoteTarget({
+    recoveryCostBasis,
+    legacyCostBasis,
+    minProfit,
+    thirdAssetFeeQuoteValue,
+    quoteFeeRate,
   })
-  const grossQuoteTarget = addDecimal({
-    left: requiredNetQuoteProceeds,
-    right: thirdAssetFeeQuoteValue,
-  })
-  const grossQuoteProceeds = divideDecimal({
-    left: grossQuoteTarget,
-    right: subtractDecimal({ left: "1", right: quoteFeeRate }),
-    scale: 36,
-    rounding: "away-from-zero",
-  })
-  const { quantity, baseFeeQuantity, baseDebitQuantity } = calculateOrderQuantity({
+  const quantities = calculateOrderQuantities({
+    recoveryQuantity,
+    legacyQuantity,
     availableBaseQuantity,
     baseFeeRate,
     quantityStepSize,
   })
-  const minimumPrice = divideDecimal({
-    left: grossQuoteProceeds,
-    right: quantity,
-    scale: 36,
-    rounding: "away-from-zero",
-  })
-  const price = roundDecimalToIncrement({
-    value: minimumPrice,
-    increment: priceTickSize,
-    direction: "up",
-  })
-
-  const recoverySellQuantity = divideDecimal({
-    left: multiplyDecimal({ left: quantity, right: recoveryQuantity }),
-    right: availableBaseQuantity,
-    scale: 36,
-    rounding: "toward-zero",
-  })
-  const legacySellQuantity = subtractDecimal({
-    left: quantity,
-    right: recoverySellQuantity,
-  })
-  const recoveryBaseFeeQuantity = divideDecimal({
-    left: multiplyDecimal({ left: baseFeeQuantity, right: recoverySellQuantity }),
-    right: quantity,
-    scale: 36,
-    rounding: "toward-zero",
-  })
-  const legacyBaseFeeQuantity = subtractDecimal({
-    left: baseFeeQuantity,
-    right: recoveryBaseFeeQuantity,
+  const price = calculateMinimumPrice({
+    grossQuoteProceeds: quoteTarget.grossQuoteProceeds,
+    quantity: quantities.quantity,
+    priceTickSize,
   })
 
   return Object.freeze({
-    quantity,
+    ...quantities,
     price,
     recoveryQuantity,
     legacyQuantity,
-    recoverySellQuantity,
-    legacySellQuantity,
-    recoveryBaseDebitQuantity: addDecimal({
-      left: recoverySellQuantity,
-      right: recoveryBaseFeeQuantity,
-    }),
-    legacyBaseDebitQuantity: addDecimal({
-      left: legacySellQuantity,
-      right: legacyBaseFeeQuantity,
-    }),
     legacyCostBasis,
-    requiredNetQuoteProceeds,
-    grossQuoteProceeds,
-    baseFeeQuantity,
-    baseDebitQuantity,
+    requiredNetQuoteProceeds: quoteTarget.requiredNetQuoteProceeds,
+    grossQuoteProceeds: quoteTarget.grossQuoteProceeds,
   })
 }
