@@ -286,6 +286,7 @@ function createStopAndReconcileIfOrderExists({
 }) {
   if (Array.isArray(activeOrders)) {
     const [existingOrder] = activeOrders.filter((order) =>
+      order?.ownership?.strategyId === "RECOVERY_SELLER" &&
       order?.market?.symbol === symbol &&
       typeof order.clientOrderId === "string" &&
       order.clientOrderId.trim(),
@@ -311,7 +312,19 @@ function createStopAndReconcileIfOrderExists({
   })
 }
 
-function findBlockingOrders({ activeOrders, symbol }) {
+function hasValidOrderOwnership({ order, cycleId }) {
+  const expectedPurpose = order.side === "BUY" ? "RECOVERY_BUY" : "RECOVERY_SELL"
+  return Boolean(
+    order.ownership &&
+    order.ownership.strategyId === "RECOVERY_SELLER" &&
+    order.ownership.cycleId === cycleId &&
+    typeof order.ownership.positionId === "string" &&
+    order.ownership.positionId.trim() &&
+    order.ownership.purpose === expectedPurpose
+  )
+}
+
+function findBlockingOrders({ activeOrders, symbol, cycleId }) {
   if (!Array.isArray(activeOrders)) {
     throw new TypeError("Recovery Seller activeOrders must be an array")
   }
@@ -319,8 +332,12 @@ function findBlockingOrders({ activeOrders, symbol }) {
     if (!order || typeof order !== "object" || Array.isArray(order) ||
         typeof order.market?.symbol !== "string" || !order.market.symbol.trim() ||
         !["BUY", "SELL"].includes(order.side) ||
-        !ACTIVE_ORDER_STATUSES.has(order.status)) {
-      throw new Error("Recovery Seller received a malformed or unsupported active-order snapshot")
+        !ACTIVE_ORDER_STATUSES.has(order.status) ||
+        !hasValidOrderOwnership({
+          order,
+          cycleId,
+        })) {
+      throw new Error("Recovery Seller received a malformed, unowned or unsupported active-order snapshot")
     }
   }
   return activeOrders.filter((order) => order.market.symbol === symbol)
@@ -502,6 +519,7 @@ function resolveExistingOrder({ stopState, previousDecision, activeOrders, symbo
   const blockingOrders = findBlockingOrders({
     activeOrders,
     symbol,
+    cycleId: cycleState.cycleId,
   })
   if (["UNRESOLVED", "CLOSED"].includes(cycleState.status)) {
     return resolveClosedOrUnresolvedCycle({
@@ -731,7 +749,8 @@ function createLifecycleResult({ stopState, previousDecision, decision, action, 
  * tick/step checks. This function is pure: it creates an intent decision only.
  *
  * activeOrders must contain only orders already resolved as owned by this RS
- * market/cycle through OrderRegistry ownership. Shared account balance and
+ * market/cycle through OrderRegistry ownership, including matching strategyId,
+ * purpose, positionId and cycleId. Shared account balance and
  * aggregate reservations remain the Trading Engine allocator's responsibility.
  *
  * @param {object} input Pure market, pair, recovery accounting, order and STOP snapshots.
