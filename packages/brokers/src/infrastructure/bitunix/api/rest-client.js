@@ -63,6 +63,15 @@ function parseResponseText({ text, path }) {
   return JSON.parse(losslessText)
 }
 
+function validateAuthentication({ authenticated, method, body, stateChanging }) {
+  if (typeof authenticated !== "boolean") {
+    throw new TypeError("Bitunix REST authenticated flag must be a boolean")
+  }
+  if (!authenticated && (method !== "GET" || body !== undefined || stateChanging)) {
+    throw new TypeError("Unauthenticated Bitunix requests must be read-only GET requests")
+  }
+}
+
 function validateRequest(input = {}) {
   const {
     method,
@@ -85,15 +94,15 @@ function validateRequest(input = {}) {
   if (body !== undefined && (!body || typeof body !== "object" || Array.isArray(body))) {
     throw new TypeError("Bitunix REST body must be an object")
   }
-  if (typeof authenticated !== "boolean") {
-    throw new TypeError("Bitunix REST authenticated flag must be a boolean")
-  }
   if (normalizedMethod === "GET" && body !== undefined) {
     throw new TypeError("Bitunix REST GET requests cannot include a body")
   }
-  if (!authenticated && (normalizedMethod !== "GET" || body !== undefined || stateChanging)) {
-    throw new TypeError("Unauthenticated Bitunix requests must be read-only GET requests")
-  }
+  validateAuthentication({
+    authenticated,
+    method: normalizedMethod,
+    body,
+    stateChanging,
+  })
   return {
     method: normalizedMethod,
     path,

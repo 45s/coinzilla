@@ -54,8 +54,12 @@ test("Bitunix REST client sends explicitly public GET requests without authentic
     nonceFactory: () => {
       throw new Error("public requests must not create a nonce")
     },
-    fetchFn: async (url, options) => {
-      captured = { url, options }
+    fetchFn: async (...args) => {
+      const [url, options] = args
+      captured = {
+        url,
+        options,
+      }
       return {
         ok: true,
         status: 200,
