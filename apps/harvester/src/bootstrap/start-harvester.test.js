@@ -5944,37 +5944,11 @@ function createTelegramNoReplayConfig() {
   }
 }
 
-async function startTelegramNoReplayRuntime({ directory, config, currentStore, setOperator }) {
-  let operatorAdapterStarted = false
-  const runtime = await startHarvesterForTest({
-    loadConfig: async () => config,
-    env: {
-      ...binanceEnv,
-      TELEGRAM_BOT_TOKEN: "test-telegram-token",
-      OPERATIONAL_STATE_DIRECTORY: directory,
-    },
-    runtimeSessionId: "current-process-session",
-    operationalStateStore: currentStore,
-    createTelegramOperatorAdapter: ({ operator }) => {
-      setOperator(operator)
-      return {
-        start: async () => {
-          operatorAdapterStarted = true
-          return { ok: true,
-            started: true }
-        },
-        stop: async () => ({ ok: true,
-          stopped: true }),
-      }
-    },
-  })
-  return { runtime,
-    operatorAdapterStarted }
-}
 
 test("starts Telegram operator control without running process-restart recovery when recovery is disabled", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-operator-control-no-replay-"))
   const config = createTelegramNoReplayConfig()
+  let operatorAdapterStarted = false
   let operator
   let runtime
   try {
@@ -5987,13 +5961,26 @@ test("starts Telegram operator control without running process-restart recovery 
       directory,
       runtimeSessionId: "current-process-session",
     })
-    const { runtime: startedRuntime, operatorAdapterStarted } = await startTelegramNoReplayRuntime({
-      directory,
-      config,
-      currentStore,
-      setOperator: (value) => { operator = value },
+    runtime = await startHarvesterForTest({
+      loadConfig: async () => config,
+      env: {
+        ...binanceEnv,
+        TELEGRAM_BOT_TOKEN: "test-telegram-token",
+        OPERATIONAL_STATE_DIRECTORY: directory,
+      },
+      runtimeSessionId: "current-process-session",
+      operationalStateStore: currentStore,
+      createTelegramOperatorAdapter: ({ operator: suppliedOperator }) => {
+        operator = suppliedOperator
+        return {
+          start: async () => {
+            operatorAdapterStarted = true
+            return { ok: true, started: true }
+          },
+          stop: async () => ({ ok: true, stopped: true }),
+        }
+      },
     })
-    runtime = startedRuntime
     assert.equal(operatorAdapterStarted, true)
     assert.equal(runtime.connected, true)
     assert.equal(runtime.tradingEnabled, false)
@@ -6003,11 +5990,9 @@ test("starts Telegram operator control without running process-restart recovery 
     })
   } finally {
     await runtime?.stop?.()
-    await rm(directory, { recursive: true,
-      force: true })
+    await rm(directory, { recursive: true, force: true })
   }
 })
-
 
 test("keeps shared services connected when a real market callback returns a failed result", async () => {
   const calls = []
