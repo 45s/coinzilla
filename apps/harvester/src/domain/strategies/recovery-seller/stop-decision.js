@@ -89,6 +89,20 @@ function assertStopState({ state } = {}) {
   throw new TypeError("Recovery Seller STOP gate requires a valid STOP state")
 }
 
+/**
+ * Validate a STOP snapshot without changing its state.
+ *
+ * @param {object} input
+ * @param {object} input.state STOP state snapshot.
+ * @returns {object} The validated STOP state.
+ */
+export function assertRecoverySellerStopState({ state } = {}) {
+  assertStopState({
+    state,
+  })
+  return state
+}
+
 function isValidLifecycleDecision(decision) {
   return Boolean(
     decision &&
