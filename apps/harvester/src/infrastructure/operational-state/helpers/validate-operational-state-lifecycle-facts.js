@@ -130,9 +130,13 @@ export function validateSafetyBlockerRaisedFact({ factType, canonicalData, factI
     throw new TypeError("Safety-blocker fact contains unsupported fields")
   }
   validateSafetyBlockerScope({ canonicalData })
-  const reason = requireNonEmptyString({ value: canonicalData.reason, field: "data.reason", maxLength: 128 })
+  const reason = requireNonEmptyString({ value: canonicalData.reason,
+    field: "data.reason",
+    maxLength: 128 })
   validateSafetyBlockerReason({ reason })
-  validateSafetyBlockerIdentity({ canonicalData, factId, reason })
+  validateSafetyBlockerIdentity({ canonicalData,
+    factId,
+    reason })
 }
 
 export function validateSafetyBlockerResolvedFact({ factType, canonicalData, factId }) {
