@@ -240,6 +240,20 @@ function summarizeThresholdImpact({ findings, threshold }) {
   };
 }
 
+function listThresholdOffenders({ findings, threshold }) {
+  return countFindingsAboveThreshold({
+    findings,
+    threshold,
+  })
+    .toSorted(compareFindingsByValue)
+    .map((finding) => ({
+      file: finding.filePath.replace(`${repositoryRoot}/`, ""),
+      line: finding.line,
+      value: finding.value,
+      message: finding.message,
+    }));
+}
+
 function createFunctionQualityAuditReport({ metrics }) {
   return {
     complexity: {
@@ -281,7 +295,19 @@ function createFunctionQualityAuditReport({ metrics }) {
         findings: metrics.maxDepth,
         threshold: 3,
       }),
+      4: summarizeThresholdImpact({
+        findings: metrics.maxDepth,
+        threshold: 4,
+      }),
     },
+    maxDepthOffendersAt3: listThresholdOffenders({
+      findings: metrics.maxDepth,
+      threshold: 3,
+    }),
+    maxStatementsOffendersAt30: listThresholdOffenders({
+      findings: metrics.maxStatements,
+      threshold: 30,
+    }),
     defaultParamLast: {
       violations: metrics.defaultParamLast.length,
       files: new Set(metrics.defaultParamLast.map((finding) => finding.filePath)).size,
