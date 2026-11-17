@@ -280,6 +280,7 @@ test("drains market work after safety is proven and before Binance disconnects",
     calls,
   })
   let marketTaskDrained = false
+  let bookTaskDrained = false
   const marketTask = {
     then(resolve) {
       if (!marketTaskDrained) {
@@ -289,8 +290,18 @@ test("drains market work after safety is proven and before Binance disconnects",
       resolve()
     },
   }
+  const bookTask = {
+    then(resolve) {
+      if (!bookTaskDrained) {
+        bookTaskDrained = true
+        calls.push("book-task-drained")
+      }
+      resolve()
+    },
+  }
   marketPriceIntake.set("BTCUSDT", {
     latestWebSocketPriceTask: marketTask,
+    latestWebSocketBookTask: bookTask,
   })
   const fixture = createShutdown({
     participants: [participant],
@@ -304,6 +315,7 @@ test("drains market work after safety is proven and before Binance disconnects",
   await fixture.stop()
   assert.ok(calls.indexOf("wait:CONSERVATIVE") < calls.indexOf("market-intake-stop"))
   assert.ok(calls.indexOf("market-task-drained") < calls.indexOf("closing-audit:COMPLETE"))
+  assert.ok(calls.indexOf("book-task-drained") < calls.indexOf("closing-audit:COMPLETE"))
   assert.ok(calls.indexOf("closing-audit:COMPLETE") < calls.indexOf("market-intake-stop"))
   assert.ok(calls.indexOf("market-intake-stop") < calls.indexOf("user-data-stop"))
   assert.ok(calls.indexOf("user-data-stop") < calls.indexOf("broker-disconnect"))
