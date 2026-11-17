@@ -203,7 +203,10 @@ test("parses only complete newline-terminated canonical JSONL records", () => {
       source: `${canonicalLine}\n`,
       label: "test ledger",
     }),
-    [{ alpha: 1, beta: "two" }],
+    [{
+      alpha: 1,
+      beta: "two",
+    }],
     "A complete canonical JSONL record must be returned without changing its payload.",
   )
 
