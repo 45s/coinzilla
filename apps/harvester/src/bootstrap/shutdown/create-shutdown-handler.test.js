@@ -440,10 +440,8 @@ test("keeps user-data and broker services alive when market subscriptions cannot
 test("keeps user-data and broker services alive when accepted market work fails to drain", async () => {
   const calls = []
   const failure = new Error("Accepted market task failed")
-  let rejectMarketTask
-  const marketTask = new Promise((resolve, reject) => {
-    rejectMarketTask = reject
-  })
+  const marketTask = Promise.reject(failure)
+  marketTask.catch(() => {})
   const marketPriceIntake = new Map([
     ["DOGEUSDT", { latestWebSocketPriceTask: marketTask }],
   ])
@@ -455,10 +453,7 @@ test("keeps user-data and broker services alive when accepted market work fails 
     participants: [participant],
     calls,
     marketPriceIntake,
-    stopMarketIntake: async () => {
-      rejectMarketTask(failure)
-      return []
-    },
+    stopMarketIntake: async () => [],
   })
 
   await assert.rejects(fixture.stop(), (error) => {
