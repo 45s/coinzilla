@@ -16,7 +16,7 @@ owner: journal
 - Results: initial package lint found 273 findings (255 errors / 18 warnings); final `eslint src` reports zero errors and warnings. Journal tests pass 78/78; coverage is 92.06% lines / 89.72% branches / 98.00% functions. All package coverage and unit-test matrix checks passed on the PR head recorded in the PR description.
 
 - Added a package-owned `lint` command (`eslint src`) and made the existing Journal test/coverage commands invoke it first. This uses the repository ESLint configuration unchanged and makes the full Journal lint result visible in the existing package CI jobs.
-- Tracking: [issue #1243](https://github.com/45s/coinzilla/issues/1243). This status is not a claim that lint or tests have passed.
+- Tracking: [issue #1243](https://github.com/45s/coinzilla/issues/1243) is closed. The verification above records the merged cleanup evidence; future JavaScript changes remain covered by the required workspace lint and progressive changed-file gate.
 
 ## Priority execution plan — current develop direction (2026-11-10)
 
