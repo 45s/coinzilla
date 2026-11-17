@@ -75,6 +75,9 @@ test("grosses up base-asset commission without dropping the authorized legacy sl
   assert.equal(plan.baseFeeQuantity, "0.01")
   assert.equal(plan.baseDebitQuantity, "1.01")
   assert.equal(plan.legacyQuantity, "0.01")
+  assert.equal(plan.legacyBaseDebitQuantity, "0.010000000000000000000000000000000001")
+  assert.equal(plan.legacyCostBasis, "0.20000000000000000000000000000000002")
+  assert.equal(plan.requiredNetQuoteProceeds, "10.21000000000000000000000000000000002")
   assert.equal(plan.recoverySellQuantity, "0.9900990099009900990099009900990099")
   assert.equal(plan.legacySellQuantity, "0.0099009900990099009900990099009901")
   assert.notEqual(plan.legacySellQuantity, "0",
