@@ -1113,4 +1113,3 @@ The purpose is to translate an already implemented and tested Spot behavior into
 - [ ] Next candidate after the existing read-only market-data PR #1324 is reviewed: decide whether to add the Bitunix-only exchange-rate and token/network metadata reads. Do not duplicate PR #1324 or weaken issue #1185 blockers.
 
 The audit is the detailed evidence source; this roadmap records status and next actions. Future agents must search additional GitHub packages when the primary .NET/TypeScript references do not cover a capability or disagree. The source-discovery rule is in [Brokers AGENTS.md](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit).
-
