@@ -129,10 +129,15 @@ test("aggregates connection and disconnect failures without losing either cause"
   })
 
   await assert.rejects(
-    connectBroker({ ...fixture,
-brokerName: "binance",
-tradingMode: "testnet",
-logger: { error: () => {} } }),
+    connectBroker({
+      ...fixture,
+      brokerName: "binance",
+      providerType: "binance",
+      providerInstanceId: "binanceTestnet",
+      accountId: "binance-primary",
+      tradingMode: "testnet",
+      logger: { error: () => {} },
+    }),
     (error) => error instanceof AggregateError && error.errors.length === 2,
     "Connection and cleanup failures must be reported together.",
   )
