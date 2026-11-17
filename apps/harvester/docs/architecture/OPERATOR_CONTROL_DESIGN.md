@@ -60,6 +60,16 @@ The engine remains under `src/use-cases/conservative-trading-engine.js` because 
 
 Do not create `packages/operator`, `packages/operators` or `packages/commands` now. Extract a shared package only after a second real application proves that actor, authorization, request/result and idempotency semantics are genuinely shared without Harvester trading dependencies.
 
+## Telegram adapter test boundaries
+
+The adapter contract is verified offline at two levels:
+
+- Public-adapter integration tests preserve command dispatch, private-chat authorization, callback confirmation/replay, query/control routing, serial polling, retry behavior, startup and shutdown.
+- Focused module tests exercise command parsing, Telegram identity/interaction normalization, callback confirmation consumption, application-control mapping, read-only page queries, Bot API transport semantics, update polling and lifecycle cancellation.
+- Dedicated keyboard, diagnostics and response-formatting suites preserve the persistent/inline keyboard contract, safe correlated error reporting, and operator snapshot presentation.
+
+All Telegram transport and application dependencies are injected or mocked. These tests do not call the live Telegram API, place exchange orders, or require TESTNET/LIVE credentials. Keep focused tests beside the operator feature modules and retain public-adapter integration coverage for cross-module behavior.
+
 ## Architecture flow
 
 The application capability is shared by inbound adapters. Only the adapter changes when another transport is introduced.
