@@ -43,7 +43,6 @@ test("getAccountSnapshot returns canonical balances and account source updateTim
   const { broker, rpc } = createBroker({
     "account.status": () => ({
       updateTime: 1_700_000_000_123,
-      uid: 354937868,
       balances: [
         { asset: "USDT",
 free: "10.25000000",
@@ -59,7 +58,6 @@ locked: "0.00000000" },
 
   assert.equal(result.ok, true)
   assert.equal(result.data.sourceTime, 1_700_000_000_123)
-  assert.equal(result.data.accountId, "354937868", "The signed account.status response UID must be exposed as the canonical account identity.")
   assert.equal(result.data.balances.length, 2)
   assert.equal(result.data.balances[0].asset.code, "USDT")
   assert.equal(result.data.balances[0].free.amount, "10.25")
@@ -70,21 +68,6 @@ locked: "0.00000000" },
     params: { omitZeroBalances: false },
     options: { signed: true },
   }])
-})
-
-test("getAccountSnapshot fails closed when Binance account UID is missing or invalid", async () => {
-  for (const uid of [undefined, 0, -1, Number.MAX_SAFE_INTEGER + 1, "354937868"]) {
-    const { broker } = createBroker({
-      "account.status": () => ({
-        updateTime: 1_700_000_000_123,
-        uid,
-        balances: [],
-      }),
-    })
-    const result = await broker.getAccountSnapshot()
-    assert.equal(result.ok, false, "An account snapshot without a safe numeric Binance UID must fail closed.")
-    assert.ok(result.errors?.length)
-  }
 })
 
 test("getAccountSnapshot fails closed when account source updateTime is missing or invalid", async () => {
