@@ -18,10 +18,16 @@ test("allows Testnet and production writers to coexist", async () => {
   const { root, globalDirectory, journalDirectory } = await createLockDirectories()
   try {
     const testnet = await acquireHarvesterProcessLocks({
-      globalDirectory, journalDirectory, broker: "binance", tradingMode: "testnet",
+      globalDirectory,
+      journalDirectory,
+      broker: "binance",
+      tradingMode: "testnet",
     })
     const production = await acquireHarvesterProcessLocks({
-      globalDirectory, journalDirectory, broker: "binance", tradingMode: "live",
+      globalDirectory,
+      journalDirectory,
+      broker: "binance",
+      tradingMode: "live",
     })
     assert.equal(testnet.ok, true)
     assert.equal(production.ok, true)
@@ -63,7 +69,10 @@ test("fails closed for an unsupported or missing trading environment", async () 
   try {
     for (const tradingMode of ["sandbox", "", undefined]) {
       const result = await acquireHarvesterProcessLocks({
-        globalDirectory, journalDirectory, broker: "binance", tradingMode,
+        globalDirectory,
+        journalDirectory,
+        broker: "binance",
+        tradingMode,
       })
       assert.equal(result.ok, false)
     }
@@ -77,7 +86,10 @@ test("concurrent acquisitions for one broker and environment have exactly one wi
   try {
     const attempts = await Promise.all(Array.from({ length: 8 }, () =>
       acquireHarvesterProcessLocks({
-        globalDirectory, journalDirectory, broker: "binance", tradingMode: "testnet",
+        globalDirectory,
+      journalDirectory,
+      broker: "binance",
+      tradingMode: "testnet",
       })))
     const winners = attempts.filter((result) => result.ok === true)
     assert.equal(winners.length, 1)
