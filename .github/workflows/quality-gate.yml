@@ -71,6 +71,9 @@ jobs:
       - name: Report full-workspace ESLint inventory
         run: pnpm lint:report
 
+      - name: Enforce zero ESLint findings in Harvester entrypoint tests
+        run: pnpm exec eslint apps/harvester/src/index.test.js --max-warnings 0
+
       - name: Lint changed JavaScript files against the base-branch baseline
         if: github.event_name == 'pull_request'
         env:
