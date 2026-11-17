@@ -5,51 +5,22 @@ import {
   mapBrokerConnectedData,
   mapBrokerConnectionFailedData,
 } from "../../application/events/lifecycle-event-dtos.js"
+import { resolveBinanceProviderIdentity } from "../../domain/provider-identity.js"
 
 function logSystem({ logger, ...data }) {
-  if (typeof logger?.system === "function") {
-    logger.system(data)
-    return
-  }
-  logger?.info?.(data)
+  const write = typeof logger?.system === "function" ? logger.system : logger?.info
+  write?.call(logger, data)
 }
 
-/**
- * Construct and register the configured Binance instance, connect it through the registry,
- * and publish the existing broker lifecycle evidence.
- * Connection failure still attempts registry-owned disconnect and aggregates both failures.
- */
-export async function connectBroker({
-  brokerAdapterFactory,
-  env,
-  brokerName,
-  providerType,
-  providerInstanceId,
-  accountId,
-  tradingMode,
-  eventPublisher,
-  logger,
-} = {}) {
-  const broker = brokerAdapterFactory({
-    config: {
-      apiKey: env.BINANCE_API_KEY,
-      apiSecret: env.BINANCE_API_SECRET_KEY,
-      tradingMode,
-    },
-  })
-  let providerRegistry
-  let provider
+async function createRegisteredProvider({ broker, identity, tradingMode }) {
   try {
-    providerRegistry = createProviderRegistry({
+    return createProviderRegistry({
       providers: [{
-        providerInstanceId,
-        providerType,
-        accountId,
+        ...identity,
         environment: tradingMode,
         broker,
       }],
     })
-    provider = providerRegistry.get(providerInstanceId)
   } catch (error) {
     try {
       if (typeof broker?.disconnect === "function") {
@@ -59,47 +30,59 @@ export async function connectBroker({
       throw new AggregateError(
         [error, disconnectError],
         "Binance provider validation failed and constructed-client cleanup also failed",
-        { cause: disconnectError },
+        { cause: error },
       )
     }
     throw error
   }
+}
 
-  let providersConnected = false
+function publishConnectionFailure({ eventPublisher, brokerName, error, logger }) {
+  const secondaryErrors = []
   try {
-    logSystem({ logger,
-message: "Connecting to Binance broker" })
+    publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED,
+      dataResult: mapBrokerConnectionFailedData({ broker: brokerName, error }),
+    })
+  } catch (eventError) {
+    secondaryErrors.push(eventError)
+  }
+  try {
+    logger?.error?.({
+      message: "Binance broker connection failed",
+      errorName: error?.name,
+      errorMessage: error?.message ?? String(error),
+      errorStack: error?.stack,
+    })
+  } catch (loggingError) {
+    secondaryErrors.push(loggingError)
+  }
+  return secondaryErrors
+}
 
+async function connectRegisteredProviders({ providerRegistry, brokerName, eventPublisher, logger }) {
+  let connected = false
+  try {
+    logSystem({
+      logger,
+      message: "Connecting to Binance broker",
+    })
     await providerRegistry.connectAll()
-    providersConnected = true
+    connected = true
     publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTED,
       dataResult: mapBrokerConnectedData({ broker: brokerName }),
     })
   } catch (error) {
-    const secondaryErrors = []
-    try {
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED,
-        dataResult: mapBrokerConnectionFailedData({ broker: brokerName,
-error }),
-      })
-    } catch (eventError) {
-      secondaryErrors.push(eventError)
-    }
-    try {
-      logger.error?.({
-        message: "Binance broker connection failed",
-        errorName: error?.name,
-        errorMessage: error?.message ?? String(error),
-        errorStack: error?.stack,
-      })
-    } catch (loggingError) {
-      secondaryErrors.push(loggingError)
-    }
-    if (providersConnected) {
+    const secondaryErrors = publishConnectionFailure({
+      eventPublisher,
+      brokerName,
+      error,
+      logger,
+    })
+    if (connected) {
       try {
         await providerRegistry.disconnectAll()
       } catch (disconnectError) {
@@ -115,6 +98,42 @@ error }),
     }
     throw error
   }
+}
 
-  return { providerRegistry, provider }
+/**
+ * Construct the configured Binance instance at the composition boundary and connect it through the registry.
+ * @returns {Promise<object>} The registered Harvester BrokerPort facade.
+ */
+export async function connectBroker({
+  brokerAdapterFactory,
+  env,
+  brokerName,
+  tradingMode,
+  eventPublisher,
+  logger,
+} = {}) {
+  const identity = resolveBinanceProviderIdentity({
+    tradingMode,
+    providerInstanceId: env.BINANCE_PROVIDER_INSTANCE_ID,
+    accountId: env.BINANCE_ACCOUNT_ID,
+  })
+  const broker = await brokerAdapterFactory({
+    config: {
+      apiKey: env.BINANCE_API_KEY,
+      apiSecret: env.BINANCE_API_SECRET_KEY,
+      tradingMode,
+    },
+  })
+  const providerRegistry = await createRegisteredProvider({
+    broker,
+    identity,
+    tradingMode,
+  })
+  await connectRegisteredProviders({
+    providerRegistry,
+    brokerName,
+    eventPublisher,
+    logger,
+  })
+  return providerRegistry.get(identity.providerInstanceId).broker
 }
