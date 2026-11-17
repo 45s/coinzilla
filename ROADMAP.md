@@ -4,8 +4,8 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-16
-**Last source-verified develop checkpoint:** `4dd365d692908009bfb54358916e536d53b93179` (2026-11-16; current remote `develop` at documentation update).
+**Last reviewed:** 2026-11-17
+**Last source-verified develop checkpoint:** `43ae5075b75c5fec4b88b02e86f8415d8cc3ed2e` (2026-11-17; strict workspace ESLint enforcement merged).
 
 ## Repository-wide agent workflow continuity
 
@@ -109,8 +109,9 @@
    - **Canonical guidance:** [Structured Error Handling Standard](docs/engineering/structured-error-handling.md).
    - **Owner:** [Utils roadmap](packages/utils/ROADMAP.md) for the shared base; each consuming domain owns its subclasses and gradual migrations.
 
-11. **Workspace JavaScript linting — DONE ([PR #1058](https://github.com/45s/coinzilla/pull/1058)).**
-   - ESLint 10 flat configuration, full-workspace inventory reporting, strict changed-JavaScript CI enforcement, and named-export-only enforcement for ESM modules (with the required ESLint config-loader exception).
+11. **Workspace JavaScript linting — strict zero-baseline enforcement DONE ([PR #1288](https://github.com/45s/coinzilla/pull/1288), merged as `43ae5075b75c5fec4b88b02e86f8415d8cc3ed2e`).**
+   - The original ESLint 10 flat configuration and named-export-only ESM enforcement were delivered in [PR #1058](https://github.com/45s/coinzilla/pull/1058). This follow-up removes the migration-era changed-file comparator and report-only baseline scripts, makes `pnpm lint` fail on every error and warning across the full workspace, and runs it inside the existing required `Check JavaScript syntax` context.
+   - Both active branch rulesets already require `Check JavaScript syntax`; no new required context is needed for the strict lint step to block merges.
    - **Owner:** shared infrastructure.
 
 ### Cross-workspace Binance environment contract — PR #841 merged; LIVE mode is enabled; exchange acceptance remains unverified

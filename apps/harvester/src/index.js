@@ -24,7 +24,7 @@ import { prepareProcessOperationalStateStore } from "./bootstrap/operational-sta
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 const PROCESS_IDENTITY = createHarvesterProcessIdentity()
 
-function logSystem(logger, message) {
+function logSystem({ logger, message } = {}) {
   if (typeof logger?.system === "function") {
     logger.system(message)
     return
@@ -46,7 +46,11 @@ function logTelegramNotificationSummary({ notifications, logger } = {}) {
 
 function classifyJournalFlushFailure({ status } = {}) {
   if (status?.writeFailed === true) {
-    return { category: "DURABILITY", stage: "JOURNAL_WRITE_FAILURE", retryable: false }
+    return {
+      category: "DURABILITY",
+      stage: "JOURNAL_WRITE_FAILURE",
+      retryable: false,
+    }
   }
   if (
     status?.started === true &&
@@ -54,26 +58,44 @@ function classifyJournalFlushFailure({ status } = {}) {
     status?.writeFailed === false &&
     status?.writeErrorCount === 0
   ) {
-    return { category: "DURABILITY", stage: "JOURNAL_FLUSH_FAILURE", retryable: true }
+    return {
+      category: "DURABILITY",
+      stage: "JOURNAL_FLUSH_FAILURE",
+      retryable: true,
+    }
   }
-  return { category: "DURABILITY", stage: "JOURNAL_FLUSH_UNCLASSIFIED", retryable: false }
+  return {
+    category: "DURABILITY",
+    stage: "JOURNAL_FLUSH_UNCLASSIFIED",
+    retryable: false,
+  }
 }
 
 function createDefaultJournalService({ eventBus, logger, processIdentity }) {
-  return prepareOptionalJournal({ eventBus, logger, processIdentity })
+  return prepareOptionalJournal({ eventBus,
+    logger,
+    processIdentity })
 }
 
-async function closeObservability({ journalService, eventBus, processLock, allowProcessLockRelease = true, logger }) {
+function getCleanupErrors({ result, fallbackError } = {}) {
+  return Array.isArray(result?.errors) && result.errors.length > 0
+    ? result.errors
+    : [fallbackError]
+}
+
+async function closeJournalService({ journalService } = {}) {
   const errors = []
   let journalClosed = !journalService
+
   if (typeof journalService?.close === "function") {
     try {
       const result = await journalService.close()
       journalClosed = result?.ok === true
-      if (result?.ok !== true) {
-        errors.push(...(Array.isArray(result?.errors) && result.errors.length > 0
-          ? result.errors
-          : [new Error("Journal close did not complete successfully")]))
+      if (!journalClosed) {
+        errors.push(...getCleanupErrors({
+          result,
+          fallbackError: new Error("Journal close did not complete successfully"),
+        }))
       }
     } catch (error) {
       journalClosed = false
@@ -82,51 +104,95 @@ async function closeObservability({ journalService, eventBus, processLock, allow
   } else if (journalService) {
     errors.push(new Error("Journal close capability is unavailable; trading process lock will be retained"))
   }
-  if (typeof eventBus?.close === "function") {
-    try {
-      const result = await eventBus.close({ timeoutMs: EVENT_BUS_CLOSE_TIMEOUT_MS })
-      if (result?.ok !== true) {
-        errors.push(...(Array.isArray(result?.errors) && result.errors.length > 0
-          ? result.errors
-          : [new Error(result?.timedOut === true
-            ? "EventBus close timed out"
-            : "EventBus close did not complete successfully")]))
-      }
-    } catch (error) {
-      errors.push(error)
-    }
+
+  return {
+    journalClosed,
+    errors,
   }
-  if (processLock) {
-    if (allowProcessLockRelease && journalClosed) {
-      try {
-        const result = await processLock.release()
-        if (result?.ok !== true) {
-          errors.push(...(Array.isArray(result?.errors) && result.errors.length > 0
-            ? result.errors
-            : [new Error("Harvester trading process lock release failed")]))
-        }
-      } catch (error) {
-        errors.push(error)
-      }
-    } else {
-      errors.push(new Error(
-        !allowProcessLockRelease
-          ? "Harvester trading process lock retained because runtime shutdown was not confirmed"
-          : "Harvester trading process lock retained because Journal shutdown was not confirmed",
-      ))
-    }
+}
+
+async function closeEventBus({ eventBus } = {}) {
+  if (typeof eventBus?.close !== "function") {
+    return []
   }
-  if (errors.length > 0) {
-    try {
-      logger?.error?.({
-        message: "observability shutdown incomplete",
-        errorCount: errors.length,
-        errors,
-      })
-    } catch {
-      // Cleanup diagnostics must not interrupt remaining shutdown work.
+
+  try {
+    const result = await eventBus.close({ timeoutMs: EVENT_BUS_CLOSE_TIMEOUT_MS })
+    if (result?.ok === true) {
+      return []
     }
+    return getCleanupErrors({
+      result,
+      fallbackError: new Error(result?.timedOut === true
+        ? "EventBus close timed out"
+        : "EventBus close did not complete successfully"),
+    })
+  } catch (error) {
+    return [error]
   }
+}
+
+async function releaseProcessLock({ processLock, allowProcessLockRelease, journalClosed } = {}) {
+  if (!processLock) {
+    return []
+  }
+
+  if (!allowProcessLockRelease || !journalClosed) {
+    return [new Error(
+      !allowProcessLockRelease
+        ? "Harvester trading process lock retained because runtime shutdown was not confirmed"
+        : "Harvester trading process lock retained because Journal shutdown was not confirmed",
+    )]
+  }
+
+  try {
+    const result = await processLock.release()
+    if (result?.ok === true) {
+      return []
+    }
+    return getCleanupErrors({
+      result,
+      fallbackError: new Error("Harvester trading process lock release failed"),
+    })
+  } catch (error) {
+    return [error]
+  }
+}
+
+function reportObservabilityCleanupErrors({ errors, logger } = {}) {
+  if (errors.length === 0) {
+    return
+  }
+
+  try {
+    logger?.error?.({
+      message: "observability shutdown incomplete",
+      errorCount: errors.length,
+      errors,
+    })
+  } catch {
+    // Cleanup diagnostics must not interrupt remaining shutdown work.
+  }
+}
+
+async function closeObservability({ journalService, eventBus, processLock, allowProcessLockRelease = true, logger } = {}) {
+  const journalResult = await closeJournalService({ journalService })
+  const eventBusErrors = await closeEventBus({ eventBus })
+  const processLockErrors = await releaseProcessLock({
+    processLock,
+    allowProcessLockRelease,
+    journalClosed: journalResult.journalClosed,
+  })
+  const errors = [
+    ...journalResult.errors,
+    ...eventBusErrors,
+    ...processLockErrors,
+  ]
+
+  reportObservabilityCleanupErrors({
+    errors,
+    logger,
+  })
   return errors
 }
 
@@ -174,7 +240,8 @@ function createProcessEventPublisher({ eventBus, logger, journalService, resourc
 
 function publishProcessStartedEvidence({ processStartedDataResult, resources, logger } = {}) {
   if (!processStartedDataResult.ok) {
-    return Promise.resolve({ ok: true, skipped: true })
+    return Promise.resolve({ ok: true,
+      skipped: true })
   }
   const publish = () => publishLifecycleEvent({
     eventPublisher: resources.eventPublisher,
@@ -234,7 +301,7 @@ async function acquireProcessStartupResources({ options, resources, processStart
   })
   if (lockResult?.ok !== true || typeof lockResult.release !== "function") {
     const details = lockResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-    throw new Error("Harvester cannot start without the Binance single-writer process lock" + (details ? ": " + details : ""))
+    throw new Error(`Harvester cannot start without the Binance single-writer process lock${details ? `: ${details}` : ""}`)
   }
   resources.processLock = lockResult
   resources.operationalStateStore = await prepareProcessOperationalStateStore({
@@ -268,10 +335,11 @@ async function configureTelegramNotifications({ options, resources } = {}) {
   const telegramConfig = resources.appConfig.notifications?.telegram ?? {}
   if (telegramConfig.enabled !== false && telegramToken && telegramChatId) {
     try {
-      const notifier = createTelegramNotifier({ token: telegramToken, chatId: telegramChatId })
+      const notifier = createTelegramNotifier({ token: telegramToken,
+        chatId: telegramChatId })
       const telegramLogger = typeof logger?.error === "function"
         ? {
-            error: (entry) => logger.error({
+          error: (entry) => logger.error({
               ...entry,
               notificationDiagnostics: resources.telegramNotifications?.getDiagnostics?.() ?? null,
             }),
@@ -283,12 +351,15 @@ async function configureTelegramNotifications({ options, resources } = {}) {
         logger: telegramLogger,
         telegramConfig,
       })
-      logSystem(logger, "Telegram notifications enabled.")
+      logSystem({ logger,
+        message: "Telegram notifications enabled." })
     } catch (error) {
-      logger.error?.({ message: "Telegram notifications could not be enabled; Harvester will continue without them.", error })
+      logger.error?.({ message: "Telegram notifications could not be enabled; Harvester will continue without them.",
+        error })
     }
   } else if (telegramConfig.enabled === false) {
-    logSystem(logger, "Telegram notifications disabled by app configuration.")
+    logSystem({ logger,
+      message: "Telegram notifications disabled by app configuration." })
   } else if (telegramToken || telegramChatId) {
     logger.error?.({ message: "Telegram notifications require both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID; notifications are disabled." })
   }
@@ -323,11 +394,18 @@ function publishRuntimeStarted({ runtime, runtimeConfig, eventPublisher, logger 
     }),
   })
   if (!runtime.connected) {
-    logSystem(logger, "Binance connection was not established.")
+    logSystem({ logger,
+      message: "Binance connection was not established." })
   } else if (runtime.tradingEnabled && runtime.strategyMode === "conservative") {
-    logSystem(logger, `Connected; subscribed to ${runtime.subscriptions.length} enabled market(s). Conservative ${runtimeConfig.tradingMode.toUpperCase()} trading is enabled; waiting for validated market prices and user-data readiness.`)
+    logSystem({
+      logger,
+      message: `Connected; subscribed to ${runtime.subscriptions.length} enabled market(s). Conservative ${runtimeConfig.tradingMode.toUpperCase()} trading is enabled; waiting for validated market prices and user-data readiness.`,
+    })
   } else {
-    logSystem(logger, `Connected; Binance trading mode is ${runtimeConfig.tradingMode.toUpperCase()}.`)
+    logSystem({
+      logger,
+      message: `Connected; Binance trading mode is ${runtimeConfig.tradingMode.toUpperCase()}.`,
+    })
   }
 }
 
@@ -392,7 +470,8 @@ async function closeStartupTelegramNotifications({ notifications, logger } = {})
       error,
     })
   }
-  logTelegramNotificationSummary({ notifications, logger })
+  logTelegramNotificationSummary({ notifications,
+    logger })
 }
 
 function logStartupFailure({ error, logger } = {}) {
@@ -433,9 +512,11 @@ async function cleanupProcessStartupFailure({ error, options, resources } = {}) 
   publishLifecycleEvent({
     eventPublisher: resources.eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.STARTUP_FAILED,
-    dataResult: mapHarvesterStartupFailedData({ stage: "process-startup", error }),
+    dataResult: mapHarvesterStartupFailedData({ stage: "process-startup",
+      error }),
   })
-  await flushStartupEventBus({ eventBus: resources.eventBus, logger })
+  await flushStartupEventBus({ eventBus: resources.eventBus,
+    logger })
   await closeStartupTelegramNotifications({
     notifications: resources.telegramNotifications,
     logger,
@@ -450,8 +531,10 @@ async function cleanupProcessStartupFailure({ error, options, resources } = {}) 
   if (cleanupErrors.length > 0) {
     process.exitCode = 1
   }
-  logStartupFailure({ error, logger })
-  await closeStartupLogger({ closeLogger, logger })
+  logStartupFailure({ error,
+    logger })
+  await closeStartupLogger({ closeLogger,
+    logger })
   process.exitCode = 1
 }
 
@@ -465,7 +548,7 @@ export async function main(options = {}) {
     loadConfig = loadAppConfig,
     configSource,
     env = process.env,
-    registerSignalHandler = (signal, handler) => process.on(signal, handler),
+    registerSignalHandler = (...args) => process.on(...args),
     closeLogger = async () => {},
     createTelegramNotifier = (notifierOptions) => new TelegramNotifier(notifierOptions),
     createOperationalStateStore,
@@ -487,22 +570,32 @@ export async function main(options = {}) {
     processIdentity,
   }
   const processStartedDataResult = mapHarvesterProcessStartedData(processIdentity)
-  setProcessLoggerContext({ logger, processStartedDataResult })
+  setProcessLoggerContext({ logger,
+    processStartedDataResult })
   const resources = {
-    processStartedPublication: Promise.resolve({ ok: true, skipped: true }),
+    processStartedPublication: Promise.resolve({ ok: true,
+      skipped: true }),
     runtimeStartAttempted: false,
   }
 
   try {
-    await acquireProcessStartupResources({ options: dependencies, resources, processStartedDataResult })
-    await configureTelegramNotifications({ options: dependencies, resources })
+    await acquireProcessStartupResources({ options: dependencies,
+      resources,
+      processStartedDataResult })
+    await configureTelegramNotifications({ options: dependencies,
+      resources })
     await ensureProcessJournalReady({ journalService: resources.journalService })
     await resources.processStartedPublication
     resources.runtimeStartAttempted = true
-    const runtime = await startHarvesterRuntimeAndRegisterShutdown({ options: dependencies, resources })
-    return { runtime, journalService: resources.journalService }
+    const runtime = await startHarvesterRuntimeAndRegisterShutdown({ options: dependencies,
+      resources })
+    return { runtime,
+      journalService: resources.journalService }
   } catch (error) {
-    await cleanupProcessStartupFailure({ error, options: dependencies, resources })
+    await cleanupProcessStartupFailure({ error,
+      options: dependencies,
+      resources })
+    return undefined
   }
 }
 const isDirectExecution = process.argv[1]
