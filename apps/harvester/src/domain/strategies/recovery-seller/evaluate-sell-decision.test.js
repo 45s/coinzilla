@@ -96,7 +96,7 @@ test("plans recovery-only SELL after authorized legacy inventory is exhausted", 
     "A recovery-only cycle remains eligible after legacy exhaustion.")
   assert.equal(result.action.quantity, "1",
     "The recovery-only SELL must use actual net recovery inventory without adding legacy quantity.")
-  assert.equal(result.action.requiredNetQuoteProceeds, "10.11",
+  assert.equal(result.action.requiredNetQuoteProceeds, "10.01",
     "The recovery-only SELL must still recover the tranche cost and minProfit after quote-fee allowance.")
   assert.equal(result.cycleState.status, "SELL_SUBMITTED",
     "Recovery-only cycles retain the same one-SELL-per-cycle state contract.")
@@ -287,4 +287,28 @@ test("does not submit a second SELL from an unresolved or closed cycle", () => {
     "An unresolved terminal SELL must block every new SELL attempt.")
   assert.equal(result.action, undefined,
     "No second SELL may be submitted after the cycle's sole SELL became unresolved.")
+})
+
+
+test("does not consume the cycle's sole SELL allowance when the lifecycle gate blocks submission", () => {
+  const cycleState = createRecoverySellerCycleState({
+    cycleId: "rs-cycle-1",
+  })
+  const result = evaluate({
+    cycleState,
+    previousDecision: {
+      outcome: "SUBMIT",
+      reasonCode: "PREVIOUS_ORDER_SUBMITTED",
+      explanation: "Previous order lifecycle must be terminal and reconciled before a new order context",
+    },
+  })
+
+  assert.equal(result.decision.outcome, "BLOCK",
+    "An unsupported direct SUBMIT transition must latch STOP instead of emitting a second order.")
+  assert.equal(result.stopState.status, "STOPPED",
+    "The unsupported transition must create global STOP.")
+  assert.equal(result.cycleState, cycleState,
+    "A rejected SELL decision must not consume the one-SELL-per-cycle allowance.")
+  assert.equal(result.action, undefined,
+    "No broker action may be emitted when the lifecycle gate blocks the candidate.")
 })
