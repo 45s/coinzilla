@@ -41,7 +41,10 @@ test("adaptOrder rejects unsafe numeric broker order IDs instead of accepting ro
   const unsafeNumericOrderId = Number.MAX_SAFE_INTEGER + 1
 
   assert.throws(
-    () => adaptOrder({ ...validOrder, orderId: unsafeNumericOrderId }),
+    () => adaptOrder({
+      ...validOrder,
+      orderId: unsafeNumericOrderId,
+    }),
     /safe integer/i,
     "An unsafe numeric broker order ID must be rejected before it becomes a rounded string identity.",
   )
@@ -49,7 +52,10 @@ test("adaptOrder rejects unsafe numeric broker order IDs instead of accepting ro
 
 test("adaptOrder preserves safely representable numeric broker order IDs", () => {
   const safeNumericOrderId = Number.MAX_SAFE_INTEGER
-  const order = adaptOrder({ ...validOrder, orderId: safeNumericOrderId })
+  const order = adaptOrder({
+    ...validOrder,
+    orderId: safeNumericOrderId,
+  })
 
   assert.equal(
     order.id,
