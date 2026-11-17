@@ -259,7 +259,7 @@ const INVALID_RECORD_CASES = [
   {
     description: "an empty runtime session identity",
     record: createProcessStoppedRecord({ runtimeSessionId: "" }),
-    expectedError: /record.runtimeSessionId must be a non-empty string/,
+    expectedError: /record.runtimeSessionId must be a canonical non-empty string/,
   },
   {
     description: "a non-canonical recorded-at timestamp",
@@ -462,7 +462,7 @@ test("rejects malformed fact input identities and session bindings", () => {
       },
       runtimeSessionId: "test-session",
     }),
-    /factType must be a non-empty string/,
+    /factType must be a canonical non-empty string/,
     "A fact must declare a non-empty allowlisted type.",
   )
   assert.throws(
