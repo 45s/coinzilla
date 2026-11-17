@@ -10,7 +10,7 @@ owner: brokers
 
 ## Purpose and scope
 
-The Brokers package is an exchange-integration domain. Its responsibility is to expose stable, normalized broker capabilities while hiding Binance protocol details. It is not the owner of trading strategy, portfolio policy, or application workflows.
+The Brokers package is an exchange-integration domain. Its responsibility is to expose stable, normalized broker capabilities while hiding exchange-specific protocol details. It is not the owner of trading strategy, portfolio policy, or application workflows.
 
 The architectural reference is [Harvester Architecture](../../apps/harvester/docs/architecture.md), especially its separation of domain behavior, injected use cases, infrastructure adapters, and bootstrap composition. Reuse the principles, not Harvester's business model or every folder name.
 
