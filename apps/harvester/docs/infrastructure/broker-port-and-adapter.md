@@ -25,6 +25,71 @@ Binance WebSocket API and Streams
 
 The port belongs to Harvester because it describes the capabilities this application needs. The adapter belongs to infrastructure because it knows how to satisfy those needs with a concrete broker. Domain policies, Portfolio, and use cases must not import `@coinzilla/brokers`, `CoreBroker`, Binance classes, exchange SDK types, or raw exchange payloads.
 
+## Multi-provider target architecture — issue #1339
+
+The current implementation below is still a single Binance adapter. The accepted target permits multiple named provider instances in one Harvester process. Harvester bootstrap constructs each configured instance and assembles an application-owned registry/router; the Brokers package supplies exchange clients and verified capabilities but does not own strategy/market routing. The source-verified current-state assessment, provenance gaps and ordered implementation prerequisites are maintained in the [multi-provider migration audit and implementation plan](../../../../docs/architecture/multi-provider-migration-plan.md).
+
+Execution and market-data resolution are separate:
+
+```text
+Strategy policy (strategyId + symbol; no provider knowledge)
+        |
+        v
+Trading Engine / application workflow
+        |
+        +---- execution route: (strategyId, symbol) -> providerInstanceId
+        |                          |
+        |                          v
+        |                  provider registry
+        |                          |
+        |                          v
+        |                 Harvester BrokerPort
+        |
+        +---- market-data route: symbol -> providerInstanceId
+                                   |
+                                   v
+                           provider registry
+                                   |
+                                   v
+                          Harvester BrokerPort
+```
+
+Example target configuration (illustrative; not accepted by today's validator):
+
+```js
+const executionRoutes = [
+  { strategyId: "RS_recoverySeller", symbol: "STRKUSDT", providerInstanceId: "bitunixSpotPrimary" },
+  { strategyId: "CG_coinGrabber", symbol: "LINKUSDT", providerInstanceId: "binanceTestnet" },
+]
+
+const marketDataRoutes = [
+  { symbol: "STRKUSDT", providerInstanceId: "binanceTestnet" },
+  { symbol: "LINKUSDT", providerInstanceId: "binanceTestnet" },
+]
+```
+
+The route table is exact: no implicit default, wildcard, priority list, or failover. Every enabled executable strategy/market pair resolves to exactly one provider. The market-data source is configured independently and is never inferred from the execution route. Duplicate or missing routes and unsupported provider capabilities fail closed.
+
+The router is an application capability injected by bootstrap. Strategy/domain policies receive normalized prices and make strategy decisions; they do not receive provider IDs or concrete broker clients. Provider construction is a composition responsibility, while route resolution is a Harvester application concern.
+
+### Immutable order provenance
+
+Before a state-changing order request, retain the selected `providerInstanceId`, provider type, stable non-secret account identity, strategy ID, and symbol with the order's client identity. Once submitted, the order remains pinned to that provider/account for acknowledgement, cancellation, lookup, fills, user-data events, reconciliation and recovery. A later route-table change affects new intents only.
+
+A provider/account identity must not be inferred from the current route when processing an existing order. Equal exchange-native IDs from different providers are distinct and must be namespaced. Do not persist or log credentials.
+
+### Account and lifecycle isolation
+
+Account snapshots, balances, open orders, reservations, readiness, user-data recovery and process locks must be scoped by provider instance/account/environment. Different exchange accounts are not one spendable wallet. A disconnect or failed recovery for one provider must not silently transfer orders to another provider or mark unrelated providers unavailable.
+
+A state-changing timeout remains an unknown outcome. Never retry it on another provider. Cross-provider fallback could duplicate an order.
+
+### Current capability boundary
+
+Bitunix Spot remains read-only and is not a valid Harvester execution provider today. Its existing metadata helper is not a full broker adapter. Do not enable Bitunix order placement, cancellation or runtime integration until [issue #1185](https://github.com/45s/coinzilla/issues/1185) and the capability gates in [issue #1339](https://github.com/45s/coinzilla/issues/1339) are resolved. RS is also not executable merely because a future route can name its strategy ID.
+
+The durable target contract is [ADR-0003](../../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md); this file remains the Harvester-specific port/adapter guide.
+
 ## Why not depend on CoreBroker directly?
 
 `CoreBroker` is currently a base class whose methods throw when not implemented; it is not a formal, capability-checked application port. Depending on it couples Harvester to the broker package's class hierarchy instead of the small set of operations its use cases require.

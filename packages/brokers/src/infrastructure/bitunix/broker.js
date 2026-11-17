@@ -3,6 +3,7 @@ import { CoreBroker } from "../../broker.core.js"
 import { BitunixRestClient } from "./api/rest-client.js"
 import { adaptAssets } from "./adapters/adapt-assets.js"
 import { adaptBalances } from "./adapters/adapt-balances.js"
+import { adaptBitunixKline, adaptBitunixKlineHistory, adaptBitunixOrderBook, createBitunixKlineHistoryQuery, normalizeBitunixKlineInterval } from "./adapters/adapt-market-data.js"
 import { adaptOrder } from "./adapters/adapt-order.js"
 import { createCanonicalMarket, getBitunixSymbol } from "./adapters/create-canonical-market.js"
 import { BitunixSpotConfig } from "./config/bitunix-spot-config.js"
@@ -14,6 +15,9 @@ const API = Object.freeze({
   orderHistory: "/api/spot/v1/order/history/page",
   orderDetail: "/api/spot/v1/order/detail",
   lastPrice: "/api/spot/v1/market/last_price",
+  depth: "/api/spot/v1/market/depth",
+  kline: "/api/spot/v1/market/kline",
+  klineHistory: "/api/spot/v1/market/kline/history",
 })
 
 const HISTORY_STATUS_CODES = Object.freeze({
@@ -100,6 +104,36 @@ function applyHistoryFilters({ body, status, side, type }) {
   }
 }
 
+function normalizeReturnedHistoryPage({ pageNum, requestedPage }) {
+  const pageNumIsNumber = typeof pageNum === "number" && Number.isSafeInteger(pageNum)
+  const pageNumIsString = typeof pageNum === "string" && /^[0-9]+$/.test(pageNum)
+  if (!pageNumIsNumber && !pageNumIsString) {
+    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
+  }
+
+  const returnedPage = Number(pageNum)
+  if (!Number.isSafeInteger(returnedPage) || returnedPage < 1) {
+    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
+  }
+  if (returnedPage !== requestedPage) {
+    throw new TypeError("Bitunix Spot order history returned pageNum does not match the requested page")
+  }
+}
+
+function normalizeHistoryRows({ data, total }) {
+  if (data === undefined && total !== 0) {
+    throw new TypeError("Bitunix Spot order history data is required when total is positive")
+  }
+  const rows = data === undefined ? [] : requireArray({
+    value: data,
+    operation: "order history",
+  })
+  if (rows.length > total) {
+    throw new TypeError("Bitunix Spot order history data row count exceeds total")
+  }
+  return rows
+}
+
 function normalizeOrderHistoryPage({ value, requestedPage }) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError("Bitunix Spot order history response must be an object")
@@ -107,36 +141,14 @@ function normalizeOrderHistoryPage({ value, requestedPage }) {
   if (!Number.isSafeInteger(value.total) || value.total < 0) {
     throw new TypeError("Bitunix Spot order history total must be a non-negative safe integer")
   }
-  const pageNumIsNumber = typeof value.pageNum === "number" && Number.isSafeInteger(value.pageNum)
-  const pageNumIsString = typeof value.pageNum === "string" && /^[0-9]+$/.test(value.pageNum)
-  if (!pageNumIsNumber && !pageNumIsString) {
-    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
-  }
-
-  const returnedPage = Number(value.pageNum)
-  if (!Number.isSafeInteger(returnedPage) || returnedPage < 1) {
-    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
-  }
-  if (returnedPage !== requestedPage) {
-    throw new TypeError("Bitunix Spot order history returned pageNum does not match the requested page")
-  }
-
-  let rows
-  if (value.data === undefined) {
-    if (value.total !== 0) {
-      throw new TypeError("Bitunix Spot order history data is required when total is positive")
-    }
-    rows = []
-  } else {
-    rows = requireArray({
-      value: value.data,
-      operation: "order history",
-    })
-  }
-  if (rows.length > value.total) {
-    throw new TypeError("Bitunix Spot order history data row count exceeds total")
-  }
-  return rows
+  normalizeReturnedHistoryPage({
+    pageNum: value.pageNum,
+    requestedPage,
+  })
+  return normalizeHistoryRows({
+    data: value.data,
+    total: value.total,
+  })
 }
 
 function createHistoryRequest({ input }) {
@@ -443,6 +455,117 @@ export class BitunixSpotBroker extends CoreBroker {
     }
   }
 
+  /**
+   * Read one Bitunix Spot order-book snapshot. The caller must provide the
+   * exchange's required precision value; its selection semantics are not
+   * inferred by this adapter.
+   *
+   * @param {{symbol: string, precision: number}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getOrderBook(input = {}) {
+    try {
+      const symbol = requireSymbol({
+        symbol: input.symbol,
+        operation: "getOrderBook()",
+      })
+      if (typeof input.precision !== "number" ||
+          !Number.isFinite(input.precision) ||
+          input.precision < 0) {
+        throw new TypeError("Bitunix Spot getOrderBook() requires a non-negative numeric precision")
+      }
+      const response = await this.restClient.request({
+        method: "GET",
+        path: API.depth,
+        queryParams: {
+          symbol,
+          precision: input.precision,
+        },
+      })
+      return toResult({
+        data: adaptBitunixOrderBook({
+          value: response.data,
+          symbol,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getOrderBook()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Read the current Bitunix Spot OHLC row. This is intentionally not exposed
+   * as a canonical candle because the documented response has no volume.
+   *
+   * @param {{symbol: string, interval?: string|number}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getKlines(input = {}) {
+    try {
+      const symbol = requireSymbol({
+        symbol: input.symbol,
+        operation: "getKlines()",
+      })
+      const interval = normalizeBitunixKlineInterval({
+        interval: input.interval,
+      })
+      const response = await this.restClient.request({
+        method: "GET",
+        path: API.kline,
+        queryParams: {
+          symbol,
+          interval,
+        },
+      })
+      return toResult({
+        data: adaptBitunixKline({
+          value: response.data,
+          symbol,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getKlines()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Read one page of Bitunix Spot historical OHLC rows. The endpoint accepts
+   * endTime in seconds and does not document startTime or cursor pagination.
+   *
+   * @param {{symbol: string, interval?: string|number, endTime?: number|string, limit?: number}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getKlineHistory(input = {}) {
+    try {
+      const { queryParams } = createBitunixKlineHistoryQuery({ input })
+      const response = await this.restClient.request({
+        method: "GET",
+        path: API.klineHistory,
+        queryParams,
+      })
+      return toResult({
+        data: adaptBitunixKlineHistory({
+          value: response.data,
+          symbol: queryParams.symbol,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getKlineHistory()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
   async getFills() {
     return toResult({
       errors: [unsupported({
@@ -537,7 +660,7 @@ export class BitunixSpotBroker extends CoreBroker {
   async getCandles() {
     const error = unsupported({
       operation: "getCandles()",
-      reason: "historical Spot candle support has not yet been mapped to the canonical candle contract",
+      reason: "the documented Spot kline responses provide OHLC and a start timestamp but omit volume, which the canonical candle contract requires",
     })
     return toResult({ errors: [error] })
   }

@@ -2,9 +2,95 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## Persistence — provider-agnostic database integration (#1327)
+
+**Goal:** persist Harvester's trading and operational history through application-owned repository contracts. Harvester must not know whether the database provider is SQLite, PostgreSQL, or MongoDB. The generic database API and provider adapters belong to `@coinzilla/db`; all trading-specific persistence requirements belong here.
+
+### DDD ownership and dependency direction
+
+- Harvester owns its domain entities, application use cases, repository ports, business invariants, persistence mapping, and business data model.
+- Harvester infrastructure implements those repository ports using the public provider-neutral API from `@coinzilla/db`.
+- `packages/db` owns generic database CRUD contracts and provider adapters only. It must not contain Harvester concepts or repositories.
+- The concrete provider is selected and configured only in Harvester's outer composition root. Domain, strategy, and application code must never branch on provider identity or import database drivers, SQL, or provider-specific types.
+- Do not create a generic CRUD repository in Harvester's domain. Define narrow repositories around actual Harvester use cases.
+- Do not use a SQL-shaped abstraction in Harvester. Harvester depends on its own repository contracts; the adapter translates those contracts to the selected database API.
+
+### Environment isolation
+
+Production and Testnet must use separate database files and independent database lifecycles when SQLite is selected, for example:
+
+```text
+apps/harvester/data/
+  production/harvester.db
+  testnet/harvester.db
+```
+
+Resolve the environment from validated explicit `TRADING_MODE`, never `NODE_ENV`. Validate configured paths and prevent accidental cross-environment file sharing. Keep runtime data out of Git.
+
+### Persistence scope
+
+Implement the following as Harvester-owned repositories and infrastructure adapters, in focused vertical slices:
+
+1. **Trading sessions:** unique process/session identity, environment, broker, strategy/config fingerprint, enabled markets, build provenance, start/end timestamps, lifecycle status, and bounded non-secret metadata.
+2. **Orders:** canonical broker order identity, client identity, market, side, type, price/quantity, status and lifecycle timestamps.
+3. **Order lifecycle events:** append-only event history, preserving event ordering and source identity.
+4. **Executions/fills:** individual fills, including broker execution identity, exact price/quantity/quote quantity, commission, fee asset, liquidity role and timestamps. One order may have multiple fills; never reconstruct fill history from terminal order status.
+5. **Account snapshots:** balances and open-order snapshots with phase, timestamp and provenance.
+6. **Operational/reporting metadata:** only the bounded facts needed for historical inspection and reporting.
+
+Preserve canonical broker identities and idempotency. Duplicate delivery of the same fact must be harmless; conflicting reuse of an identity with different business facts must fail as an integrity error. Store financial quantities and prices without floating-point loss (canonical decimal strings or explicitly scaled integers; never SQLite REAL).
+
+### Operational State safety boundary
+
+Harvester's ADR-0001 Operational State Store is authoritative recovery evidence and is not interchangeable with reporting/trading history or the Journal.
+
+- Preserve append acknowledgement, global sequence, committed-head/hash-chain integrity, stable fact identities, conflict detection, fail-closed verification, explicit genesis, private file permissions, and mandatory Journal barriers.
+- Do not silently replace, weaken, dual-write, or automatically fall back between the existing file store and a database.
+- Assess any database-backed Operational State adapter as a separate gated change. It must prove complete ADR-0001 contract parity, including crash/torn-write behavior, durability acknowledgement, integrity verification, initialization, disk-full/error handling, backup/restore, and process ownership.
+- Coordinate any cutover with [restart-recovery issue #654](https://github.com/45s/coinzilla/issues/654). Restart restoration remains disabled until its independent readiness and reconciliation gates are complete.
+- Existing Journal barriers and Journal's observer-only role remain unchanged unless a separate accepted decision explicitly supersedes them.
+
+### Delivery plan
+
+1. Audit Harvester's current session identity, Journal, Operational State Store, repositories/ports, consumers, configuration and tests. Decide which history belongs in the new reporting database and which remains authoritative in ADR-0001.
+2. Implement the first trading-session repository through a Harvester-owned port and infrastructure adapter using only the public `@coinzilla/db` contract. Prove restart persistence, uniqueness, lifecycle updates, rollback, failure propagation and resource cleanup.
+3. Add orders, order events, executions/fills and account snapshots as separate TDD vertical slices.
+4. Prove Production/Testnet isolation and two real processes writing concurrently to their respective databases. Test same-file SQLite writer serialization, busy timeout, rollback, process termination and reopen behavior.
+5. Separately assess any Operational State migration; require an explicit accepted/superseding ADR, complete parity evidence, rollback plan and #654 owner approval before cutover.
+6. Provide explicit historical import, integrity/count/digest verification, backup/restore, corruption/disk-full procedures and rollback documentation before persistent deployment.
+7. Add architecture tests proving domain/application imports do not depend on a concrete provider. Provider changes must be confined to infrastructure composition and adapters.
+
+### Acceptance criteria
+
+- Harvester domain/application depend only on Harvester-owned repository ports.
+- Harvester infrastructure uses the public `@coinzilla/db` provider-neutral API; no SQLite/SQL/driver imports leak beyond its provider adapter.
+- Production and Testnet use independent database files when SQLite is selected.
+- Trading sessions, orders, order events, individual fills and account snapshots persist with correct identity and exact values.
+- Real multi-process tests prove environment isolation and concurrency behavior.
+- ADR-0001 and Journal guarantees remain unchanged; no restart restoration is enabled by this work.
+- Backup, restore, import verification and rollback procedures are documented before persistent deployment.
+- Tests and CI pass on exact PR heads; no unverified validation claims.
+
+### Explicit exclusions
+
+- No strategy redesign or trading economics changes.
+- No live or TESTNET exchange operations.
+- No automatic restart restoration enablement.
+- No weakening or replacement of ADR-0001/Journal guarantees.
+- No provider-specific imports in Harvester domain/application.
+- No Harvester business models or repositories in `packages/db`.
+
+## Repository-wide quality baseline
+
+- [x] **Workspace ESLint — COMPLETE.** Strict `pnpm lint` runs as `eslint . --max-warnings 0` in the required `Check JavaScript syntax` workflow. PR #1288 completed the full-workspace zero-error/zero-warning baseline; PR #1311 hardened `no-console` and `no-implicit-coercion` with policy regression tests. The former Harvester cleanup inventory (#1092 and child issues) is superseded and closed. Preserve the strict gate and fix future violations in the change that introduces them.
+
+## Multi-provider execution and market-data routing — #1339
+
+- [ ] **Accepted target architecture; implementation not started.** Add named provider instances, exact `(strategyId, symbol) -> providerInstanceId` execution routes, independent `symbol -> providerInstanceId` market-data routes, immutable provider/account order provenance, account isolation, truthful capability gates, and deterministic multi-provider lifecycle/recovery. Harvester owns route policy and the application registry/router; Brokers owns concrete provider factories and exchange capabilities. No implicit default, wildcard, or cross-provider failover. Preserve the current Binance-only runtime and ADR-0002 until migration is implemented. RS remains non-executable; Bitunix Spot has expanded one-shot read-only market-data support but remains non-executable / not Harvester-ready under [#1185](https://github.com/45s/coinzilla/issues/1185). The source-verified [migration audit and phased plan](../../docs/architecture/multi-provider-migration-plan.md) records the current blockers: missing durable provider/account provenance, account-scoped identity/locks and incomplete process-restart recovery (#654). See [ADR-0003](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and [issue #1339](https://github.com/45s/coinzilla/issues/1339).
+
 ## Binance single-writer lock isolation — #1307
 
-- [~] Scope both host-shared Harvester process locks by Binance provider and explicit trading environment. Preserve atomic exclusive creation, ownership-token release, conservative dead-PID recovery, and process-lock retention on uncertain shutdown. Testnet and LIVE must coexist; duplicate writers in one environment remain blocked across worktrees. Lock identity depends only on broker and trading mode. See [Journal Operations — Trading process ownership locks](./docs/JOURNAL_OPERATIONS.md#trading-process-ownership-locks) and [issue #1307](https://github.com/45s/coinzilla/issues/1307).
+- [x] **Complete — #1307 closed.** Host-shared Harvester process locks are scoped by Binance broker and explicit trading environment. TESTNET and LIVE can coexist; duplicate writers in one environment remain blocked across worktrees. Atomic exclusive creation, ownership-token release, conservative dead-PID recovery and lock retention on uncertain shutdown remain required. Current identity is broker + trading mode, not account ID; account-scoped lock identity is a separate multi-provider migration requirement. See [Journal Operations — Trading process ownership locks](./docs/JOURNAL_OPERATIONS.md#trading-process-ownership-locks), [issue #1307](https://github.com/45s/coinzilla/issues/1307), and the [multi-provider migration audit](../../docs/architecture/multi-provider-migration-plan.md).
 
 ## Internal process entry-point refactor
 
@@ -27,9 +113,9 @@ The 2026-11-12/13 and 2026-11-13 LIVE session evidence is preserved in the [2026
 
 ### P0 — Conservative shutdown priority (#1186)
 
-- [ ] **Block/cancel Conservative BUYs before stopping any service; keep recovery protection alive until every market is safe.** Owner-approved rule is in the [canonical Conservative specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md#conservative-graceful-shutdown--protect-trading-before-stopping-services). After SIGINT, immediately reject new Conservative BUYs and cancel all Harvester-owned active BUYs. Keep market-price, user-data, broker and required operator/runtime services alive; accepted price events continue recovery-only SELL evaluation while all BUY paths remain blocked. Reconcile cancellation-racing fills and commissions, evaluate the safety predicate immediately after cancellation/fill reconciliation (no arbitrary sleep or quiet-period timer), and set `SAFE_TO_SHUTDOWN` only after the final recovery SELL is correctly calculated, acknowledged and authoritatively verified. Do not disconnect or report STOPPED until every enabled Conservative market is safe. Other strategies require separate shutdown contracts. Implementation is in [PR #1190](https://github.com/45s/coinzilla/pull/1190); keep this item open until owner review/merge and required CI pass. Implementation and deterministic TDD acceptance are tracked in [#1186](https://github.com/45s/coinzilla/issues/1186). Hard strategy pauses remain fail-closed: the shutdown-only recovery SELL scope does not bypass `state.paused`, and the shutdown safety audit records durable or non-recovery-managed pauses as `STRATEGY_SAFETY_PAUSED`.
+- [x] **Block/cancel Conservative BUYs before stopping any service; keep recovery protection alive until every market is safe.** Owner-approved rule is implemented in merged [PR #1190](https://github.com/45s/coinzilla/pull/1190). The post-merge audit found that fulfilled price/book callbacks returning `{ ok: false }` could be mistaken for a successful drain. Corrective source and real-bootstrap regressions are in open [PR #1326](https://github.com/45s/coinzilla/pull/1326): failed accepted work now blocks CLOSING/unsubscription, and required services remain connected. The PR also preserves bounded cleanup error messages, stacks and causes. Branch synchronized with current `develop`; all seven required workflows passed on the synchronized PR head. Owner review remains. Keep [#1186](https://github.com/45s/coinzilla/issues/1186) open until the PR is reviewed, merged and all acceptance criteria pass. Hard strategy pauses remain fail-closed; no exchange operation is authorized.
 
-- **Conservative graceful shutdown (#1186 — P0 runtime implementation.** Follow [PR #1190](https://github.com/45s/coinzilla/pull/1190). On SIGINT/SIGTERM, activate the Conservative BUY gate and immediately start cancelling all Harvester-owned active BUYs. Keep market-price intake, user-data intake, Binance and operator control alive while each configured market reconciles cancellation races, fills and actual commissions, then calculates and authoritatively verifies recovery SELL coverage. Track SAFE_TO_SHUTDOWN independently per market; late execution evidence invalidates the affected marker. A strategy-level coordinator waits for every registered strategy participant; it contains no Conservative accounting rules. No arbitrary delay or quiet-period timer. External/manual orders remain unowned and untouched; their presence alone is not a shutdown blocker. Actual unowned executions or unresolved account-wide integrity discrepancies remain fail-closed. Unknown state, incomplete Journal durability or insufficient recovery SELL coverage keeps required services connected and shutdown incomplete.
+- **Conservative graceful shutdown (#1186) — implementation merged; acceptance follow-up pending.** The implementation is in merged [PR #1190](https://github.com/45s/coinzilla/pull/1190); the corrective drain-result work is in open [PR #1326](https://github.com/45s/coinzilla/pull/1326). On SIGINT/SIGTERM, activate the Conservative BUY gate and immediately start cancelling all Harvester-owned active BUYs. Keep market-price intake, user-data intake, Binance and operator control alive while each configured market reconciles cancellation races, fills and actual commissions, then calculates and authoritatively verifies recovery SELL coverage. Track SAFE_TO_SHUTDOWN independently per market; late execution evidence invalidates the affected marker. A strategy-level coordinator waits for every registered strategy participant; it contains no Conservative accounting rules. No arbitrary delay or quiet-period timer. External/manual orders remain unowned and untouched; their presence alone is not a shutdown blocker. Actual unowned executions or unresolved account-wide integrity discrepancies remain fail-closed. Unknown state, incomplete Journal durability or insufficient recovery SELL coverage keeps required services connected and shutdown incomplete.
 
 ### P1 — Command Center emergency BUY pause (#1267)
 
@@ -46,12 +132,12 @@ The 2026-11-12/13 and 2026-11-13 LIVE session evidence is preserved in the [2026
 
 - [x] **Mark strategy-owned diagnostics consistently** — implemented and merged in [PR #1161](https://github.com/45s/coinzilla/pull/1161), merge commit `1a97fced6eaf9323b6a752ff75d972ab01c04eea`. Strategy IDs map immutably to 🪙 CG / 🔴 RS markers, Conservative engine and CG Portfolio diagnostics carry canonical ownership, and strategy identity participates in duplicate suppression. This merge added the ownership markers; the follow-up terminal presentation cleanup below removes the decorative unowned SYS marker. No trading or exchange behavior changed.
 - [x] **Record local order-submission deferral outcomes** — [#1104](https://github.com/45s/coinzilla/issues/1104), delivered in merged [PR #1139](https://github.com/45s/coinzilla/pull/1139), merge commit `6b0bd4477ae585c5e0cc78ecbd5382d0ac509883` (exact PR head `e0cc6ff4bcc6d8ce80d676e1aa1746e535f9cb23`). A durable `order.submission_requested` now has a distinct terminal `order.submission_deferred` event for local pre-broker gate deferrals; the event preserves the original client ID and bounded reason, and Journal replay excludes it from exchange orders/reservations. All seven required workflows passed on the exact PR head; the read-only TESTNET job was skipped.
-- [~] **Surface Telegram delivery failures** — [#1103](https://github.com/45s/coinzilla/issues/1103), implementation in open [PR #1298](https://github.com/45s/coinzilla/pull/1298). Preserve non-blocking delivery and expose the failed event name, safe failure category and accepted/delivered/failed/overflow/pending counters in structured operational logs. No durable outbox or automatic retries; mark complete only after exact-head CI passes and the PR is merged.
+- [x] **Surface Telegram delivery failures** — completed in merged [PR #1298](https://github.com/45s/coinzilla/pull/1298), closing [#1103](https://github.com/45s/coinzilla/issues/1103). Structured operational logs include the failed event name, safe failure category and accepted/delivered/failed/overflow/pending counters. Delivery remains best-effort and non-blocking; no durable outbox or automatic retries.
 - [x] **Make shutdown phase terminal logs phase-aware** — implemented and merged in [PR #1168](https://github.com/45s/coinzilla/pull/1168), merge commit `e2cc0323cead4a96886f68c20b167c2df433de2e`, following the design in [PR #1163](https://github.com/45s/coinzilla/pull/1163). The console renders validated STARTED/COMPLETED/FAILED phase identities and preserves full structured DEBUG/TRACE diagnostics.
 
 - [~] **Explain shutdown phase latency** — [#1105](https://github.com/45s/coinzilla/issues/1105), instrumentation in merged [PR #1120](https://github.com/45s/coinzilla/pull/1120). Structured monotonic phase timings now cover request/stop-state, operator-control cleanup, market-work drain, reconciliation, BUY cancellation, user-data drain, recovery SELL repair, CLOSING audit, Journal barrier, disconnect and process-stop durability. The historical 128.047-second interval remains UNKNOWN: the repository preserves the report, source hashes and derived timeline, but not the original raw log/trace/Journal artifacts. PR #1120's implementation passed its required exact-head checks; #1105 remains open for evidence-preservation and historical disposition, not CI completion.
 
-Remaining safety and observability follow-ups #1103 and #1105 remain open; #1104, #1101, #1102 and P0 #1097 are complete. A merged offline fix or clean audit does not establish runtime safety or authorize another unrestricted LIVE session.
+Remaining safety and observability follow-up #1105 remains open; #1103 is complete in merged PR #1298, and #1104, #1101, #1102 and P0 #1097 are complete. A merged offline fix or clean audit does not establish runtime safety or authorize another unrestricted LIVE session.
 
 - [x] **Simplify Harvester terminal log presentation** — merged in [PR #1169](https://github.com/45s/coinzilla/pull/1169), merge commit `c66d83a8dcf1bdb19d4e5b571401aa854311b8f9`. Restored compact strategy markers without `⚪ SYS`, explicit Binance market-data connection wording, concise Portfolio Stats, pending client IDs and cancellation outcomes on their order lines, and compact lifecycle columns.
 - [~] **Complete the operator-facing portfolio summary** — follow-up in [PR #1184](https://github.com/45s/coinzilla/pull/1184). Render the single-line `amount`, `earned`, `spent`, and three-decimal `net` fields; retain every enabled symbol in the subscriptions-ready summary and remove a duplicate pending client-order-ID detail. Presentation-only; preserve structured DEBUG/TRACE evidence and all trading/order/accounting behavior. No exchange operations.
@@ -63,6 +149,10 @@ Remaining safety and observability follow-ups #1103 and #1105 remain open; #1104
 ## P3 — Operational State Store source naming — COMPLETE
 
 - [x] **Consolidate the Harvester persistence implementation under Operational State Store naming.** Renamed the application port, filesystem adapter, canonicalization/projector modules, related recovery use cases and tests; updated consumers and current architecture documentation. Preserved the ADR-0001 record schema, persisted identities, file protocol, permissions, locking and runtime behavior. No runtime-data migration or exchange operation was performed. Merged in [PR #1108](https://github.com/45s/coinzilla/pull/1108) as `c94a5489c1cc9de721b37879701a96cedc6ae399`; all eight exact-head GitHub Actions workflows passed.
+
+## P3 — Harvester infrastructure module cohesion and dependency direction
+
+- [~] **Review and refactor the four oversized infrastructure modules without changing runtime behavior** — [issue #1309](https://github.com/45s/coinzilla/issues/1309), implementation in [PR #1309](https://github.com/45s/coinzilla/pull/1309). The file-backed Operational State Store now delegates pure fact-family validation and durable-record validation to cohesive modules; its remaining filesystem adapter retains the shared locking, append/checkpoint ordering, fsync, and uncertain-write protocol. Journal history reading now delegates bounded session discovery and chronology to separate infrastructure/pure modules. The Journal recovery reducer and Operational State Store candidate projector intentionally remain single ordered pipelines because their event handlers share mutable projection state and cross-event invariants; splitting them would increase coupling. Direct use-case imports of infrastructure implementations are replaced with injected dependencies composed at bootstrap/CLI boundaries. Persisted schemas, fact identities, Journal contracts, trading behavior, restart-restoration policy, and exchange behavior are unchanged. Offline regression coverage remains in the public store/history/projection suites, with direct helper suites for decimal and durable-record validation, recovery-cycle accounting/dust/outcome invariants, order submission/cancellation contracts, execution-fill/commission contracts, and bounded Journal discovery/chronology. These helper suites are part of the configured Harvester targeted-test set alongside the dependency-injection regressions. Harvester source coverage is enforced at 80% lines, branches, and functions by the package coverage script and CI matrix. This is a user-selected P3 maintainability task, not a prerequisite or readiness gate for the first TESTNET trading cycle. Mark complete only after required exact-head CI passes and the PR merges.
 
 ---
 
@@ -110,7 +200,7 @@ The inbound Telegram Command Center is complete. It is a thin authorized adapter
 - **Correctness fixes:** injected clocks accept `Date` or canonical UTC ISO-8601 strings; genesis and append capture the clock once, and each append reuses its captured timestamp for future-time validation and the record envelope. The canonical JSON boundary rejects negative zero before JSON serialization can normalize it. The durable-facts restart candidate validates operator-pause session placement but does not replay process-lifetime `OPERATOR_MARKET_PAUSED` facts; durable strategy pauses and safety blockers remain projected.
 - **Pure boundary:** `durable-facts-canonical.js` owns bounded canonical JSON cloning/serialization, SHA-256 record digests, timestamp normalization and canonical string validation, with direct unit tests. The store retains filesystem ownership, append ordering, fsync/manifest commit protocol, idempotency and uncertain-write fail-closed behavior.
 - **RED/GREEN evidence:** GitHub Actions reproduced the injected-clock and negative-zero regressions on test-only commit `af111b10147b1f9cceda818c5cb001fd6fcdd7c4`. A third test-only regression demonstrated operator pauses incorrectly entering restart candidates before the projector correction. Harvester tests passed 1,489/1,489 on the pre-lint-fix head; final exact-head verification is recorded by PR #1091.
-- **Lint inventory:** the initial Harvester-wide ESLint run found 359 findings across 73 files: 295 `curly`, 38 `no-nested-ternary`, 7 `no-unused-vars`, 5 `prefer-const`, 4 `no-useless-escape`, 7 `no-control-regex`, 2 `no-empty-pattern`, and 1 `preserve-caught-error`. The 295 brace findings were identified as safe autofix candidates; the other 64 require deliberate review. They are intentionally not bulk-rewritten as part of this correctness audit. Track that separate, behavior-preserving cleanup in [issue #1092](https://github.com/45s/coinzilla/issues/1092). The temporary diagnostic probe was removed after collecting the inventory; it is not a permanent lint gate.
+- **Historical lint inventory (superseded):** the initial Harvester-wide scan found 359 findings across 73 files. This was an interim baseline only; the cleanup was subsequently completed and the strict full-workspace `pnpm lint` gate now passes with zero errors and warnings. Tracking issue #1092 and its child cleanup issues are closed. The temporary diagnostic probe was removed; it is not a permanent lint gate.
 - **Scope and safety:** the Conservative Domain Specification remains authoritative. No strategy economics, exchange configuration, shared packages or other applications changed. Tests remain offline and credential-free; no TESTNET/LIVE connection, order placement, cancellation or account mutation was performed.
 
 ---
@@ -137,7 +227,7 @@ The inbound Telegram Command Center is complete. It is a thin authorized adapter
 
 - Test-only RED runs reproduced the targeted commission-baseline schema defects, missing terminal SELL evidence, contradictory dust evidence, negative-zero MarketPrice/MarketBook timestamps, and the start-harvester terminal-order forwarding regression.
 - The Harvester suite passed **1,512/1,512** on verification commit `af0f32f8494c0aa51b95472bdbc0d1ed832185e9`. The coverage workflow passed at **81.45% line, 81.23% branch, and 80.63% function coverage**. This report aggregates Harvester with imported workspace packages (brokers, entities, event-bus, journal, notifiers, and utils); it is not an isolated Harvester-only metric. The aggregate remains below the 90% branch target noted in project guidance; Harvester has no package-specific threshold. Isolating and enforcing a 90% Harvester-only branch gate is a separate scoped task; no threshold was weakened or changed.
-- Changed-file ESLint/syntax checks passed; no lint rules were weakened. The full workspace's existing style-only ESLint baseline is not bulk-rewritten here; behavior-preserving cleanup remains tracked separately in [issue #1092](https://github.com/45s/coinzilla/issues/1092).
+- At this historical audit checkpoint, changed-file ESLint/syntax checks passed and no lint rules were weakened. The former style-only workspace baseline has since been eliminated; strict full-workspace `pnpm lint` now passes with zero errors and warnings (PR #1288), with rule hardening in PR #1311. No outstanding ESLint cleanup remains.
 - All six required `develop` checks and the advisory external documentation-link check passed on exact verification head `af0f32f8494c0aa51b95472bdbc0d1ed832185e9`: Run package tests, Workspace test coverage, Check JavaScript syntax, packages/utils tests, Audit production dependencies, actionlint, and Check external documentation links. The optional read-only Binance TESTNET integration was skipped.
 - The PR updates the Conservative Domain Specification, architecture/recovery flow, broker port/adapter contract, accounting invariant matrix, domain test inventory, symbol-generator instructions, and a dated audit report. Documentation describes the implemented source behavior rather than planned behavior.
 - Large-file modularity review and staged extraction plans are recorded in Section 7 of the audit report; no broad state-machine or durable-store rewrite was bundled into this correctness PR.

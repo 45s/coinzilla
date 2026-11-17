@@ -6,6 +6,10 @@ type: roadmap
 owner: brokers
 ---
 
+## Multi-provider construction and capability contracts — #1339
+
+- [ ] **Accepted cross-domain target; implementation not started.** Provide stable, provider-specific construction/configuration boundaries and truthful, testable capability declarations so a consumer can construct multiple instances (including multiple accounts/environments) without the Brokers package owning strategy/market routing. Preserve public exports, `CoreBroker` compatibility, exact decimal/error behavior, and existing Binance consumers. Harvester owns the provider registry/router and all strategy/market assignment. Binance keeps ADR-0002's explicit `TRADING_MODE`; do not infer environment semantics for other exchanges. Bitunix Spot has one-shot read-only market, price, depth and OHLC reads, but still lacks canonical fills, account-wide order visibility, timestamped account snapshots, private lifecycle and safe mutations; it remains not Harvester-ready under [#1185](https://github.com/45s/coinzilla/issues/1185). **Recommended first PR:** additive capability contract plus Binance-only declarations and offline contract tests, with no behavior or export changes. Do not change Bitunix declarations until its mandatory external reference audit in `packages/brokers/AGENTS.md` is complete; keep it read-only. See the source-verified [migration audit and phased plan](../../docs/architecture/multi-provider-migration-plan.md), [ADR-0003](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and [issue #1339](https://github.com/45s/coinzilla/issues/1339).
+
 ## Priority execution plan — current develop direction (2026-11-10)
 
 This section is authoritative for next work and orders the broker package by risk. Historical phases below remain implementation evidence.
@@ -946,6 +950,16 @@ This work is in an open task PR targeting `develop`; do not mark it complete unt
 - See the [Bitunix capability contract](../../docs/brokers-websocket-contract.md#bitunix-spot-capability-contract) and [package README](./README.md#bitunix-spot-integration).
 
 **Remaining work before any trading use:** obtain written Bitunix clarification of the single-order versus batch-order quantity units; establish a stable exchange-supported client order identity or authoritative race-safe reconciliation; prove complete per-execution history semantics; establish a documented Spot private order/execution stream or source-timestamp-preserving polling/recovery contract; verify Spot TESTNET or another isolated mutation environment; and add canonical order/account lifecycle support only after the exchange supplies the required facts. Other read-only mappings remain blocked where the API omits canonical facts (OHLCV volume) or leaves required parameters undefined (depth precision selection).
+
+## 2026-11-17 — Bitunix Spot public market-data reads
+
+**Status: Implemented in the open test-first PR [#1324](https://github.com/45s/coinzilla/pull/1324); exact-head CI verification pending.**
+
+- Added one-shot `getOrderBook({ symbol, precision })` using the documented Spot depth endpoint. The required precision is supplied by the caller and forwarded unchanged; the adapter does not infer aggregation semantics. Level prices and volumes remain exact decimal strings, and the optional source timestamp is preserved without assigning undocumented units.
+- Added Bitunix-specific `getKlines({ symbol, interval })` and `getKlineHistory({ symbol, interval, endTime, limit })` reads. The history endpoint accepts `endTime` in seconds and a 1–500 row limit; it does not document `startTime` or cursor pagination. The official page describes a single data object while the .NET wrapper expects an array, so the adapter accepts either outer shape and returns rows without sorting or claiming completeness.
+- Added strict symbol, interval, timestamp, exact-decimal and OHLC consistency validation. The official Spot K-line schema omits volume; these methods expose raw OHLC data and do not synthesize a canonical candle. `getCandles()` remains explicitly unsupported and sends no request.
+- The .NET reference's Spot `GetOrderBookAsync` omits the `precision` argument even though the official endpoint marks it required. Coinzilla's method requires the caller to supply it.
+- Test-first RED was reproduced on the clean test-only commit. The first draft PR was superseded after its test fixture formatting audit found violations; PR #1324 is based on latest `develop` and contains the corrected tests. No order mutation or credential-based live test is part of this change.
 
 ## Bitunix Spot — Binance broker parity audit (2026-11-16)
 
