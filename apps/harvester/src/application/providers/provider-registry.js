@@ -235,7 +235,7 @@ function createProviderDisconnect({ broker, lifecycle }) {
     if (lifecycle.status === "connecting" && lifecycle.connectPromise) {
       return lifecycle.connectPromise.catch(() => undefined).then(() => {
         if (lifecycle.status === "disconnected") {
-          return undefined
+          return Promise.resolve()
         }
         if (lifecycle.status === "disconnecting") {
           return lifecycle.disconnectPromise
