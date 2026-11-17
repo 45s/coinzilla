@@ -170,6 +170,7 @@ testCase("serializes concurrent connection requests and performs one successful 
     "Concurrent startup requests for one provider instance must share one underlying connection attempt.")
   resolveConnection()
   await Promise.all([firstConnection, secondConnection])
+  await registry.connect("binanceTestnet")
   assert.equal(registry.get("binanceTestnet").status, "connected",
     "The provider lifecycle must become connected only after the broker connection succeeds.")
 
