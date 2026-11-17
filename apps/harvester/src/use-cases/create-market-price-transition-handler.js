@@ -123,6 +123,23 @@ function acceptFreshMarketPriceTransition({
   }
 }
 
+function invalidateSafeShutdownMarkerForAcceptedPrice({
+  state,
+  invalidateShutdownSafety,
+  symbol,
+} = {}) {
+  if (state.shutdownBuyGate !== true) {
+    return
+  }
+  if (state.shutdownSafetyBySymbol?.get(symbol)?.status !== "SAFE_TO_SHUTDOWN") {
+    return
+  }
+  invalidateShutdownSafety({
+    symbol,
+    reason: "LATE_MARKET_PRICE_EVIDENCE",
+  })
+}
+
 /** Dispatch an accepted price through the existing trailing or evaluation workflow. */
 function dispatchAcceptedMarketPriceTransition({
   state,
@@ -170,6 +187,7 @@ export function createMarketPriceTransitionHandler({
   canTrade,
   maybeReplaceTrailingBuy,
   evaluateLatestTransition,
+  invalidateShutdownSafety,
   nextMarketPriceEventId,
 } = {}) {
   return async ({ symbol, priceEvent } = {}) => {
@@ -194,6 +212,12 @@ export function createMarketPriceTransitionHandler({
       if (!acceptance.accepted) {
         return acceptance.result
       }
+
+      invalidateSafeShutdownMarkerForAcceptedPrice({
+        state,
+        invalidateShutdownSafety,
+        symbol,
+      })
 
       return dispatchAcceptedMarketPriceTransition({
         state,
