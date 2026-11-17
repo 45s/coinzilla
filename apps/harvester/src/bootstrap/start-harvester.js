@@ -305,7 +305,6 @@ async function createHarvesterStartupContext({ options } = {}) {
   return {
     ...startupOptions,
     env,
-    accountId: env.BINANCE_ACCOUNT_ID,
     brokerAdapterFactory,
     evaluateStrategy,
     logger,
@@ -411,7 +410,6 @@ function createHarvesterAccountSnapshotRuntime({ startup, portfolio, resources }
   })
   startup.accountSnapshotManagerRef.current = createAccountSnapshotManager({
     broker: resources.broker,
-    expectedAccountId: startup.accountId,
     eventPublisher: startup.eventPublisher,
     marketMetadata: portfolio.marketMetadata,
     getPortfolio: portfolio.getPortfolio,
