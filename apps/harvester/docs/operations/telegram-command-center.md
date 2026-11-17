@@ -2,11 +2,9 @@
 
 ## Scope and configuration
 
-The Telegram Command Center is an optional transport adapter over Harvester's existing operator-control application facade. It does not own trading rules, call the broker directly, or use Journal/EventBus as control-state persistence.
+The Telegram Command Center is a thin inbound adapter over Harvester's operator-control application facade. It authenticates the operator, invokes an application query or command, and returns the actual result. It does not own trading rules, decide whether a command is safe, call the broker directly, or implement persistence or recovery.
 
 Inbound control is enabled by default when configured. The bot token remains environment-only in `TELEGRAM_BOT_TOKEN`; `TELEGRAM_USER_ID` seeds the private-chat allowlist. Startup fails closed when the token or a valid allowlisted user is missing. Set `operatorControl.telegram.enabled: false` only when inbound control should be disabled. This configuration is independent from `notifications.telegram`.
-
-Telegram-only control does not require or initialize the Operational State Store when restart recovery is disabled and no store is explicitly supplied. When restart recovery is enabled or a store is supplied, the application uses the same process-owned Operational State Store described in [the operator-control README](../operator-control/README.md). Its default is `apps/harvester/recovery-facts/`, resolved relative to the Harvester package; `OPERATIONAL_STATE_DIRECTORY` is the supported optional absolute-path override. Existing data is not moved or migrated automatically.
 
 ## Authorization and safety
 
@@ -18,9 +16,8 @@ Pause and resume remain market-scoped application use cases:
 - Explicit `/pause SYMBOL` and `/resume SYMBOL` commands remain available to an authorized operator.
 - Pause suppresses new strategy BUY intents and trailing-BUY repricing for that market. It does not cancel or modify existing exchange orders; a resting BUY may still fill.
 - Emergency BUY pause is separate: `/pauseallbuys` blocks new BUYs across configured markets; `/pausebuys SYMBOL` blocks BUYs for one market. Both cancel active BUY orders owned by the current Harvester process through the existing cancellation/reconciliation workflow.
-- Emergency BUY pause never cancels recovery SELLs or startup-snapshot/manual/external orders. It does not itself pause recovery SELL evaluation, fill accounting or reconciliation. If a BUY cancellation is unconfirmed, the BUY remains UNKNOWN and existing order-integrity blockers may still defer conflicting same-market activity until reconciliation. Global and per-market pause scopes are independent; resuming one does not clear the other. Orders from a previous Harvester process are external to the current process and will not be canceled by a repeated pause command after restart; reconcile those explicitly through the exchange/operator recovery procedure.
+- Emergency BUY pause never cancels startup-snapshot/manual/external orders. If a BUY cancellation is unconfirmed, the BUY remains UNKNOWN and the application reports the incomplete outcome. Global and per-market pause scopes are independent; resuming one does not clear the other. Orders from a previous Harvester process are external to the current process and are not canceled by a repeated pause command.
 - If any owned BUY cancellation is unconfirmed, the BUY gate remains active and the command reports `OPERATOR_BUY_CANCELLATION_INCOMPLETE`; inspect `/orders` and Harvester diagnostics before assuming the market is clear.
-- Fill accounting, reconciliation, and risk-reducing recovery SELL decisions continue.
 - Both the legacy market pause and emergency BUY pause are process-lifetime only and are not restored after restart. Reissue `/pause SYMBOL` or the relevant emergency BUY command after restart when required.
 
 ## Supported commands and buttons
@@ -83,7 +80,7 @@ Do not log complete Telegram updates, callback payloads, bot tokens, allowlist I
 | `CALLBACK_ACKNOWLEDGEMENT`; `applicationOperationInvoked=false` | Telegram did not acknowledge the callback. The update offset is not advanced; the same update is retried. | Do not manually repeat the callback while the poller is retrying |
 | Application operation invoked but not completed | The use case was called but did not confirm completion. The state outcome may need inspection. | Check current market state before repeating the command |
 | `applicationOperationCompleted=true`, `stateChanged=true`, then response delivery failed | The application state change completed; only the Telegram response failed. | Verify state with `/markets` before considering any repeat operation |
-| `OPERATOR_BUY_CANCELLATION_INCOMPLETE` | The BUY gate is active, but one or more owned BUY cancellations remain unresolved. | Do not assume all BUYs are gone; inspect `/orders`, broker reconciliation and Harvester diagnostics. Recovery SELLs remain enabled. |
+| `OPERATOR_BUY_CANCELLATION_INCOMPLETE` | The BUY gate is active, but one or more owned BUY cancellations remain unresolved. | Do not assume all BUYs are gone; inspect `/orders` and Harvester diagnostics. |
 | Response delivered after a market selection | Only the selection/confirmation page was displayed. | This is not evidence that the market was paused or resumed |
 
 The `/orders` command requires an account-wide open-order snapshot. Bootstrap intentionally supplies `getOpenOrders: () => resources.broker.getOpenOrders()` without a symbol filter. The Harvester Binance adapter must accept an omitted options object and forward `{}` to the broker; destructuring `symbol` without a default throws before any exchange request. Regression coverage in [PR #1261](https://github.com/45s/coinzilla/pull/1261) protects this contract. The query remains read-only and must never adopt, cancel, or modify returned external orders.\n\nThe historical message `Telegram operator read query returned a failure` came from the generic read-only query result-failure branch. When a query threw, the old `readPage` catch first emitted a separate `Telegram operator read query failed` entry with the original error, converted the result to `{ok:false}`, and then emitted the generic second failure entry. The captured generic line alone does not include the earlier exception details; without that preceding entry (or the structured `operation` field), the exact failing query and exception cannot be identified retrospectively. It is not proof that a pause operation ran.
