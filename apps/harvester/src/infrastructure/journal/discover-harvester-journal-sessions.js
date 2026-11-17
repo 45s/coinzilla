@@ -178,7 +178,10 @@ async function discoverSessionDirectories({ sessionsRoot, maxDirectories, maxSes
   }
 }
 
-function validateRootJournalEntries({ rootDirectory, rootJournalEntries }) {
+function validateRootJournalEntries({
+    rootDirectory,
+    rootJournalEntries,
+  }) {
   const invalidRootJournalEntries = rootJournalEntries.filter((entry) => !entry.isFile())
   if (invalidRootJournalEntries.length > 0) {
     throw createHistoryError({
