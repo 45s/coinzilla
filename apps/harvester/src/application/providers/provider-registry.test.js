@@ -386,3 +386,85 @@ testCase("fails closed on an unsupported provider capability contract version", 
     "The registry must require the capability contract version it explicitly understands.",
   )
 })
+
+
+testCase("rejects incomplete or mutable capability declarations", () => {
+  const incompleteCapabilities = Object.freeze({
+    ...createCapabilities(),
+    environment: Object.freeze({ selectedMode: "testnet" }),
+  })
+  const mutableCapabilities = { ...createCapabilities() }
+  const incompleteBroker = createBroker({ capabilities: incompleteCapabilities }).broker
+  const mutableBroker = createBroker({ capabilities: mutableCapabilities }).broker
+
+  for (const broker of [incompleteBroker, mutableBroker]) {
+    assert.throws(
+      () => createProviderRegistry({ providers: [createProvider({ broker })] }),
+      (error) => error.code === "HARVESTER_PROVIDER_REGISTRY_INVALID",
+      "The registry must reject incomplete or mutable capability snapshots.",
+    )
+  }
+})
+
+testCase("rejects a provider whose broker does not implement the Harvester BrokerPort", () => {
+  const invalidBroker = {
+    connect: async () => undefined,
+    disconnect: async () => undefined,
+  }
+
+  assert.throws(
+    () => createProviderRegistry({
+      providers: [createProvider({ broker: invalidBroker })],
+    }),
+    (error) => error.code === "HARVESTER_PROVIDER_REGISTRY_INVALID",
+    "The registry must validate the application-owned port before accepting an instance.",
+  )
+})
+
+testCase("does not reconnect an instance after it has been disconnected", async () => {
+  const { broker, calls } = createBroker()
+  const registry = createProviderRegistry({
+    providers: [createProvider({ broker })],
+  })
+
+  await registry.connect("binanceTestnet")
+  await registry.disconnect("binanceTestnet")
+  await assert.rejects(
+    registry.connect("binanceTestnet"),
+    (error) => error.code === "HARVESTER_PROVIDER_LIFECYCLE_INVALID",
+    "A closed provider instance must not be silently restarted or recovered by the registry.",
+  )
+  assert.deepEqual(calls, ["connect", "disconnect"],
+    "A disconnected provider must not receive a second connection attempt.")
+})
+
+testCase("disconnects every provider successfully in reverse order", async () => {
+  const calls = []
+  const createTrackedProvider = ({ suffix }) => {
+    const { broker } = createBroker({
+      onConnect: async () => calls.push(`connect:${suffix}`),
+      onDisconnect: async () => calls.push(`disconnect:${suffix}`),
+    })
+    return createProvider({
+      providerInstanceId: `binance${suffix}`,
+      accountId: `account-${suffix}`,
+      broker,
+    })
+  }
+  const registry = createProviderRegistry({
+    providers: [
+      createTrackedProvider({ suffix: "First" }),
+      createTrackedProvider({ suffix: "Second" }),
+    ],
+  })
+
+  await registry.connectAll()
+  await registry.disconnectAll()
+
+  assert.deepEqual(calls, [
+    "connect:First",
+    "connect:Second",
+    "disconnect:Second",
+    "disconnect:First",
+  ], "Successful registry shutdown must attempt every provider in reverse construction order.")
+})
