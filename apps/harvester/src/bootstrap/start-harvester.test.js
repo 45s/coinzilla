@@ -5973,14 +5973,17 @@ test("keeps shared services connected when a real market callback returns a fail
   })
   assert.equal(marketResult.ok, false, "The real market callback must preserve its unsuccessful processing result.")
 
-  await assert.rejects(runtime.stop(), (error) => {
-    assert.ok(error instanceof AggregateError, "The application shutdown must fail closed when accepted market processing failed.")
-    assert.ok(
-      error.errors.some((failure) => failure instanceof TypeError),
-      "The application shutdown must preserve the original market-event validation failure.",
-    )
-    return true
-  })
+  let shutdownError
+  try {
+    await runtime.stop()
+  } catch (error) {
+    shutdownError = error
+  }
+  assert.ok(shutdownError instanceof AggregateError, "The application shutdown must fail closed when accepted market processing failed.")
+  assert.ok(
+    shutdownError.errors.some((failure) => failure instanceof TypeError),
+    "The application shutdown must preserve the original market-event validation failure.",
+  )
   assert.equal(calls.includes("unsubscribe:BTCUSDT"), false, "Market-price intake must remain connected after a failed accepted task.")
   assert.equal(calls.includes("unsubscribe:user-data"), false, "User-data intake must remain connected after a failed accepted task.")
   assert.equal(calls.includes("disconnect"), false, "The broker must remain connected after a failed accepted task.")
