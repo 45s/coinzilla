@@ -465,6 +465,7 @@ test("keeps user-data and broker services alive when market subscriptions cannot
   assert.equal(calls.includes("user-data-stop"), false, "User-data intake must remain available when market intake cannot be stopped.")
   assert.equal(calls.includes("operator-control-stop"), false, "Operator control must remain available when market intake cannot be stopped.")
   assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected when market intake cannot be stopped.")
+  assert.equal(fixture.state.marketIntakeStopped, false, "Callbacks for any subscriptions that remain active must resume after an unsubscribe failure.")
   assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE", "A failed market-intake stop must never be reported as STOPPED.")
 })
 
