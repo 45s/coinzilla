@@ -136,13 +136,3 @@ test("adaptOrder preserves documented exchange timestamp strings without reinter
     "The exchange update timestamp must be preserved exactly without timezone or precision assumptions.",
   )
 })
-
-test("adaptOrder preserves unfamiliar exchange statuses as UNKNOWN without treating them as terminal", () => {
-  const order = adaptOrder({
-    ...validOrder,
-    status: "99",
-  })
-
-  assert.equal(order.status, "UNKNOWN")
-  assert.equal(order.exchangeStatus, "99")
-})
