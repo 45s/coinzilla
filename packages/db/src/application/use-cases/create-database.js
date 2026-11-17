@@ -189,8 +189,9 @@ export function createDatabase(options = {}) {
     (method) => typeof provider[method] !== "function",
   )
   if (missingMethods.length > 0) {
+    const resourceLabel = hasProvider ? "Database provider" : "Database adapter"
     throw new TypeError(
-      `Database adapter must implement: ${missingMethods.join(", ")}`,
+      `${resourceLabel} must implement: ${missingMethods.join(", ")}`,
     )
   }
 
