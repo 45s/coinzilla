@@ -27,6 +27,48 @@ function isAsyncFunction(callback) {
   return callback.constructor?.name === "AsyncFunction"
 }
 
+function createGuardedIterator({ iterator, assertActive }) {
+  return Object.freeze({
+    next(...args) {
+      assertActive()
+      return iterator.next(...args)
+    },
+    return(...args) {
+      assertActive()
+      return iterator.return?.(...args) ?? { done: true }
+    },
+    throw(...args) {
+      assertActive()
+      return iterator.throw?.(...args)
+    },
+    [Symbol.iterator]() {
+      return this
+    },
+  })
+}
+
+function createGuardedStatement({ statement, assertActive }) {
+  return new Proxy(statement, {
+    get(target, property) {
+      const value = Reflect.get(target, property, target)
+      if (typeof value !== "function") {
+        return value
+      }
+
+      return (...args) => {
+        assertActive()
+        const result = value.apply(target, args)
+        return property === "iterate"
+          ? createGuardedIterator({
+            iterator: result,
+            assertActive,
+          })
+          : result
+      }
+    },
+  })
+}
+
 function createSqliteTransactionHandler({ requireConnection, intent }) {
   return function withTransaction(work) {
     const activeConnection = requireConnection()
@@ -40,15 +82,31 @@ function createSqliteTransactionHandler({ requireConnection, intent }) {
     }
 
     activeConnection.exec(intent === "read" ? "BEGIN DEFERRED" : "BEGIN IMMEDIATE")
+    let transactionActive = true
+    const assertActive = () => {
+      if (!transactionActive) {
+        throw new Error("SQLite transaction context is no longer active")
+      }
+    }
 
     try {
       const transaction = Object.freeze({
-        exec: (sql) => activeConnection.exec(sql),
-        prepare: (sql) => activeConnection.prepare(sql),
+        exec(sql) {
+          assertActive()
+          return activeConnection.exec(sql)
+        },
+        prepare(sql) {
+          assertActive()
+          return createGuardedStatement({
+            statement: activeConnection.prepare(sql),
+            assertActive,
+          })
+        },
       })
       const result = work(transaction)
 
       if (isThenable(result)) {
+        transactionActive = false
         Promise.resolve(result).catch(() => {})
         throw new TypeError("SQLite transaction callbacks must be synchronous")
       }
@@ -56,6 +114,7 @@ function createSqliteTransactionHandler({ requireConnection, intent }) {
       activeConnection.exec("COMMIT")
       return result
     } catch (error) {
+      transactionActive = false
       if (activeConnection.isTransaction) {
         let rollbackFailed = false
         let rollbackError
