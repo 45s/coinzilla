@@ -5987,14 +5987,14 @@ test("starts Telegram operator control without running process-restart recovery 
       directory,
       runtimeSessionId: "current-process-session",
     })
-    const started = await startTelegramNoReplayRuntime({
+    const { runtime: startedRuntime, operatorAdapterStarted } = await startTelegramNoReplayRuntime({
       directory,
       config,
       currentStore,
       setOperator: (value) => { operator = value },
     })
-    ({ runtime } = started)
-    assert.equal(started.operatorAdapterStarted, true)
+    runtime = startedRuntime
+    assert.equal(operatorAdapterStarted, true)
     assert.equal(runtime.connected, true)
     assert.equal(runtime.tradingEnabled, false)
     await assertTelegramPauseCommandIsDurable({
