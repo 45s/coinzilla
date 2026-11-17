@@ -337,6 +337,50 @@ async function verifySorting(database) {
   )
 }
 
+async function verifyScalarSortOrdering(database) {
+  const records = [
+    { id: "missing" },
+    { id: "null", rank: null },
+    { id: "false", rank: false },
+    { id: "true", rank: true },
+    { id: "number-2", rank: 2 },
+    { id: "number-10", rank: 10 },
+    { id: "string-10", rank: "10" },
+    { id: "string-2", rank: "2" },
+  ]
+
+  for (const record of records) {
+    await database.create({
+      collection: "sort-types",
+      record,
+    })
+  }
+
+  const ascending = await database.readMany({
+    collection: "sort-types",
+    query: {
+      sort: [{ field: "rank", direction: "asc" }],
+    },
+  })
+  assert.deepEqual(
+    ascending.map((record) => record.id),
+    ["missing", "null", "false", "true", "number-2", "number-10", "string-10", "string-2"],
+    "Ascending scalar sorting must order null/missing, booleans, numbers, and strings consistently",
+  )
+
+  const descending = await database.readMany({
+    collection: "sort-types",
+    query: {
+      sort: [{ field: "rank", direction: "desc" }],
+    },
+  })
+  assert.deepEqual(
+    descending.map((record) => record.id),
+    ["string-2", "string-10", "number-10", "number-2", "true", "false", "missing", "null"],
+    "Descending scalar sorting must reverse value/type order while keeping the identifier tie-breaker ascending",
+  )
+}
+
 async function verifyPagination(database) {
   for (const record of [
     {
@@ -841,6 +885,16 @@ function registerCrudAndQueryTests({
     createDatabase,
     capabilities,
     verify: verifySorting,
+    storageMode,
+    cleanupStorage,
+  })
+  registerQueryCapabilityTest({
+    name,
+    description: "sorting uses portable JSON scalar ordering",
+    capability: "sorting",
+    createDatabase,
+    capabilities,
+    verify: verifyScalarSortOrdering,
     storageMode,
     cleanupStorage,
   })
