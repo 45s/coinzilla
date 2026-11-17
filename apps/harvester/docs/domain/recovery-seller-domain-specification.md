@@ -187,7 +187,7 @@ Illustration: the recovery tranche earns 0.20 USDT net, but the proposed legacy 
 
 ## 6. BUY tranche accumulation and eligibility
 
-The proposal uses orderQuantity as an illustrative recovery BUY tranche size. It does not define whether this means every tranche, the first tranche only, or a maximum.
+**Owner-approved BUY contract (issue #1127):** reuse Conservative's established BUY cadence, tranche sizing/configuration, and pending-order safeguards. orderQuantity is therefore the size of each RS BUY tranche, subject to current exchange quantity filters and actual fills. Use the current Conservative source as the behavioral reference for initial and next-BUY pricing; an order acknowledgement never counts as acquired inventory. At the RS investment limit, stop new BUYs but keep an existing SELL live and reconcile it to terminal filled state before considering another cycle. Do not add RS-specific trailing or replacement behavior beyond the inherited contract.
 
 Hard invariants:
 
@@ -355,7 +355,7 @@ flowchart TD
   M -- Yes --> N[Commit Portfolio and RS attribution; update authorization]
 ~~~
 
-The prose is authoritative. The diagram does not authorize a tranche cadence, order type, cancellation policy, residual policy, or lifecycle transition.
+The prose is authoritative. BUY cadence and tranche sizing follow the owner-approved Conservative reuse decision in issue #1127. The diagram does not authorize an order type, cancellation policy, residual policy, or lifecycle transition.
 
 ## 15. Implementation boundary
 
