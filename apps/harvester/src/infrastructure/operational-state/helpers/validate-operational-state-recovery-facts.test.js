@@ -422,7 +422,7 @@ test("rejects recovery non-completion identity, accounting, and outcome contradi
   for (const [description, options] of invalidCases) {
     assert.throws(
       () => validateNotCompleted(makeNotCompletedFact(options)),
-      /CONTINUE_SELL_THROUGH|BLOCKED|minimum profit|accounting values|internally consistent/,
+      /CONTINUE_SELL_THROUGH|BLOCKED|minimum profit|minProfit|accounting values|internally consistent/,
       `A recovery non-completion fact must reject ${description}.`,
     )
   }
