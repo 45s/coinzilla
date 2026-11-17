@@ -133,16 +133,22 @@ function validateReadinessFlags({ strategyStopped, marketPaused, reconciliationC
 
 function validateRecoveryAccounting({
   recoveryPosition,
+  cycleState,
   cumulativeNetSellProceeds,
   pendingBuyCommitment,
 }) {
-  const recoverySpent = recoveryPosition === undefined || recoveryPosition === null
-    ? "0"
-    : recoveryPosition.spent
-  assertNonNegativeDecimal({
-    value: recoverySpent,
-    field: "recoveryPosition.spent",
-  })
+  const hasRecoveryPosition = recoveryPosition !== undefined && recoveryPosition !== null
+  const recoverySpent = hasRecoveryPosition ? recoveryPosition.spent : "0"
+  if (hasRecoveryPosition) {
+    assertPositiveDecimal({
+      value: recoveryPosition.quantity,
+      field: "recoveryPosition.quantity",
+    })
+    assertPositiveDecimal({
+      value: recoverySpent,
+      field: "recoveryPosition.spent",
+    })
+  }
   assertNonNegativeDecimal({
     value: cumulativeNetSellProceeds,
     field: "cumulativeNetSellProceeds",
@@ -151,14 +157,24 @@ function validateRecoveryAccounting({
     value: pendingBuyCommitment,
     field: "pendingBuyCommitment",
   })
-  if ((recoveryPosition === undefined || recoveryPosition === null) &&
+  if (!hasRecoveryPosition &&
       compareDecimal({
         left: cumulativeNetSellProceeds,
         right: "0",
       }) > 0) {
     throw new Error("Recovery Seller has SELL proceeds without a recovery Position")
   }
-  return recoverySpent
+  if (cycleState.status === "ACCUMULATING" &&
+      compareDecimal({
+        left: cumulativeNetSellProceeds,
+        right: "0",
+      }) > 0) {
+    throw new Error("Recovery Seller accumulating cycle cannot already contain SELL proceeds")
+  }
+  return {
+    recoverySpent,
+    hasRecoveryPosition,
+  }
 }
 
 function getTradingRules({ marketMetadata }) {
@@ -207,6 +223,7 @@ function validateInput({
   pairConfig,
   marketMetadata,
   recoveryPosition,
+  cycleState,
   cumulativeNetSellProceeds,
   pendingBuyCommitment,
   activeOrders,
@@ -232,13 +249,14 @@ function validateInput({
   if (!Array.isArray(activeOrders)) {
     throw new TypeError("Recovery Seller BUY policy activeOrders must be an array")
   }
-  const recoverySpent = validateRecoveryAccounting({
+  const recoveryAccounting = validateRecoveryAccounting({
     recoveryPosition,
+    cycleState,
     cumulativeNetSellProceeds,
     pendingBuyCommitment,
   })
   return {
-    recoverySpent,
+    ...recoveryAccounting,
     ...getTradingRules({
       marketMetadata,
     }),
@@ -536,15 +554,11 @@ function getReadinessBlock({ strategyStopped, marketPaused, reconciliationComple
   return undefined
 }
 
-function createBuyPlan({ marketPrice, pairConfig, rules, recoverySpent, lastBuyPrice }) {
-  const hasRecoveryPosition = compareDecimal({
-    left: recoverySpent,
-    right: "0",
-  }) > 0
+function createBuyPlan({ marketPrice, pairConfig, rules, hasRecoveryPosition, lastBuyPrice }) {
   if (hasRecoveryPosition && lastBuyPrice === undefined) {
     throw new Error("Active Recovery Seller Position requires reconciled completed-BUY VWAP before the next standing BUY")
   }
-  const referencePrice = lastBuyPrice ?? marketPrice.price
+  const referencePrice = hasRecoveryPosition ? lastBuyPrice : marketPrice.price
   assertPositiveDecimal({
     value: referencePrice,
     field: "lastBuyPrice",
@@ -773,6 +787,7 @@ function evaluateBuyReadiness({
   pairConfig,
   marketMetadata,
   recoveryPosition,
+  cycleState,
   cumulativeNetSellProceeds,
   pendingBuyCommitment,
   activeOrders,
@@ -785,6 +800,7 @@ function evaluateBuyReadiness({
     pairConfig,
     marketMetadata,
     recoveryPosition,
+    cycleState,
     cumulativeNetSellProceeds,
     pendingBuyCommitment,
     activeOrders,
