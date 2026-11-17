@@ -53,6 +53,36 @@ async function getCanonicalMarketMetadata({ client, symbol }) {
     return createBinanceMarketMetadata({ symbolFilters: result.data })
 }
 
+function isDeeplyFrozen({ value } = {}) {
+  if (value === null || typeof value !== "object") {
+    return true
+  }
+  if (!Object.isFrozen(value)) {
+    return false
+  }
+  return Object.values(value).every((nestedValue) => isDeeplyFrozen({ value: nestedValue }))
+}
+
+function assertBinanceCapabilityDeclaration({ client, tradingMode } = {}) {
+  const capabilities = client?.capabilities
+  const environment = capabilities?.environment
+  const valid = capabilities !== null &&
+    typeof capabilities === "object" &&
+    capabilities.contractVersion === 1 &&
+    capabilities.provider === "binance" &&
+    capabilities.product === "spot" &&
+    environment?.selector === "tradingMode" &&
+    environment.selectedMode === tradingMode &&
+    Array.isArray(environment.supportedModes) &&
+    environment.supportedModes.includes(tradingMode) &&
+    environment.nodeEnvSelectsEndpoint === false &&
+    isDeeplyFrozen({ value: capabilities })
+  if (!valid) {
+    throw new TypeError("Binance broker capability declaration must be deeply immutable and match the configured tradingMode")
+  }
+  return capabilities
+}
+
 function assertRequiredBrokerMethods({ client }) {
   const requiredMethods = [
     "connect",
@@ -148,15 +178,15 @@ export function createBinanceBrokerAdapter({
     throw new TypeError("brokerFactory must be a function")
   }
 
-  const client = brokerFactory({ config,
-logger })
-
-
-
-
+  const client = brokerFactory({ config, logger })
+  const capabilities = assertBinanceCapabilityDeclaration({
+    client,
+    tradingMode: config.tradingMode,
+  })
   assertRequiredBrokerMethods({ client })
 
   const broker = Object.freeze({
+    capabilities,
     connect: () => client.connect(),
     disconnect: () => client.disconnect(),
     placeOrder: async ({ order }) => {
