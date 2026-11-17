@@ -120,7 +120,7 @@ test("a new file within every strict threshold passes", async () => {
 });
 
 test("strict lint rejects complexity above 15", async () => {
-  const cases = [...Array(16).keys()].map((index) => `case ${index}: return ${index};`).join("\n");
+  const cases = createSwitchCases();
   const messages = await lintStrict({
     source: `export function choose(value) {\n  switch (value) {\n    ${cases}\n    default: return -1;\n  }\n}\n`,
   });
@@ -246,7 +246,7 @@ test("a modified existing file with a strict violation is selected and rejected"
         path: "legacy.js",
         source: "export function old() { return 1; }\n",
       });
-      const cases = [...Array(16).keys()].map((index) => `case ${index}: return ${index};`).join("\n");
+      const cases = createSwitchCases();
       const changedSource = `export function changed(value) { switch (value) { ${cases} default: return -1; } }\n`;
       await writeFile(join(cwd, "legacy.js"), changedSource);
       git({
