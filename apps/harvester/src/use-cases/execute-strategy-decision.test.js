@@ -974,7 +974,8 @@ test("integrates the shared executor, RS OrderRegistry ownership and durable BUY
   })
 
   assert.equal(submitted.ok, true, submitted.errors?.[0]?.message)
-  assert.equal(registeredOrder.status, "OPEN")
+  assert.equal(registeredOrder.status, "UNKNOWN",
+    "A broker acknowledgement retains the order as UNKNOWN until execution quantity is reconciled.")
   assert.deepEqual(
     workflow.getOrderRegistry().getOwnership({
       clientOrderId: registeredOrder.clientOrderId,
