@@ -16,6 +16,16 @@ const KLINE_INTERVALS = new Set([
   "240",
   "360",
   "720",
+  "1min",
+  "3min",
+  "5min",
+  "15min",
+  "30min",
+  "60min",
+  "120min",
+  "240min",
+  "360min",
+  "720min",
   "D",
   "W",
   "M",
@@ -256,7 +266,7 @@ export class BitunixSpotWebSocketClient {
   }
 
   /** Query one Spot K-line snapshot using market.kline. */
-  getKline({ symbol, interval = "1" } = {}) {
+  getKline({ symbol, interval = "1min" } = {}) {
     return this.#request({
       method: "market.kline",
       params: {
