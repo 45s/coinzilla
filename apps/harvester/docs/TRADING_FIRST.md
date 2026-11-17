@@ -280,7 +280,6 @@ SELL 698745 cancellation follows the Conservative BUY-filled path: cancel the ol
 
 Exact accounting baseline: trade 9939 = 5 ZRO at 1.792, 8.96 USDT gross, 0.005 ZRO fee; trade 9940 = 5 ZRO at 1.789, 8.945 USDT gross, 0.005 ZRO fee. Combined net 9.990 ZRO, invested/recovery 17.905 USDT, sell proceeds 0, realized net profit -17.905 USDT. No new TESTNET operation was performed. Offline CI and the next joint controlled TESTNET session remain separate gates.
 
-
 ## Multi-provider construction boundary
 
 Harvester now declares provider instances and execution/account/market-data role selections in application configuration. The current supported runtime intentionally selects one Binance instance for all roles. The bootstrap registry owns construction, verified capability checks, connection, and cleanup. Independent routing, order provenance, account isolation, and Bitunix execution remain deferred under ADR-0003 and issue #1339; Bitunix blockers remain tracked in issue #1185.
