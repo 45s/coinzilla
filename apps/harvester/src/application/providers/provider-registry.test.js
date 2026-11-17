@@ -36,13 +36,31 @@ function createBroker({ capabilities, onConnect, onDisconnect } = {}) {
     value: capabilities ?? createCapabilities(),
     enumerable: true,
   })
-  return { broker, calls }
+  return {
+    broker,
+    calls,
+  }
 }
 
-function createProvider({ providerInstanceId = "binanceTestnet", providerType = "binance", accountId = "binance-primary", environment = "testnet", broker } = {}) {
-  const capabilities = createCapabilities({ provider: providerType, selectedMode: environment })
+function createProvider({
+  providerInstanceId = "binanceTestnet",
+  providerType = "binance",
+  accountId = "binance-primary",
+  environment = "testnet",
+  broker,
+} = {}) {
+  const capabilities = createCapabilities({
+    provider: providerType,
+    selectedMode: environment,
+  })
   const providerBroker = broker ?? createBroker({ capabilities }).broker
-  return { providerInstanceId, providerType, accountId, environment, broker: providerBroker }
+  return {
+    providerInstanceId,
+    providerType,
+    accountId,
+    environment,
+    broker: providerBroker,
+  }
 }
 
 testCase("registers distinct named instances of the same provider type without selecting a default", () => {
@@ -86,16 +104,21 @@ testCase("rejects malformed identities and capability declarations that disagree
   assert.throws(
     () => createProviderRegistry({ providers: [malformedProvider] }),
     (error) => error.code === "HARVESTER_PROVIDER_REGISTRY_INVALID",
-    "Provider-instance IDs must be stable identifier tokens without whitespace.")
+    "Provider-instance IDs must be stable identifier tokens without whitespace.",
+  )
   const mismatchedProvider = createProvider({
     broker: createBroker({
-      capabilities: createCapabilities({ provider: "other", selectedMode: "testnet" }),
+      capabilities: createCapabilities({
+        provider: "other",
+        selectedMode: "testnet",
+      }),
     }).broker,
   })
   assert.throws(
     () => createProviderRegistry({ providers: [mismatchedProvider] }),
     (error) => error.code === "HARVESTER_PROVIDER_REGISTRY_INVALID",
-    "A provider capability declaration must identify the same provider type as its registry entry.")
+    "A provider capability declaration must identify the same provider type as its registry entry.",
+  )
 })
 
 testCase("returns immutable provider metadata without exposing broker internals", () => {
