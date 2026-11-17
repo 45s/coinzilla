@@ -92,6 +92,7 @@ These examples explain the contract; they are not the current accepted runtime s
 const brokers = {
   binanceTestnet: {
     provider: "binance",
+    accountId: "binance-testnet-primary", // stable non-secret account identity
     tradingMode: "testnet",
     credentials: {
       apiKey: process.env.BINANCE_TESTNET_API_KEY,
@@ -100,6 +101,7 @@ const brokers = {
   },
   bitunixSpotPrimary: {
     provider: "bitunix-spot",
+    accountId: "bitunix-primary", // stable non-secret account identity
     tradingMode: "live", // only documented Spot endpoint; this does not enable order mutations
     credentials: {
       apiKey: process.env.BITUNIX_API_KEY,
