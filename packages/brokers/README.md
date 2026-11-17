@@ -114,7 +114,7 @@ try {
 - `getAccount()` — `user.account`
 - `getUserInfo()` — `user.info`
 
-The client correlates concurrent responses by echoed request ID, validates response envelopes, applies the official Spot WebSocket double-SHA256 signature (separate from REST signing), and never automatically retries a request. A timeout or disconnect rejects unresolved RPCs. The client does not auto-reconnect; construct a new client after a terminal connection close. Bitunix documents a 24-hour connection lifetime.
+The client correlates concurrent responses by echoed request ID, validates response envelopes, applies the official Spot WebSocket double-SHA256 signature (separate from REST signing), and never automatically retries a request. Account balance numeric tokens are returned as exact decimal strings; unsafe int64 user IDs are preserved as strings. A timeout or disconnect rejects unresolved RPCs. The client does not auto-reconnect; construct a new client after a terminal connection close. Bitunix documents a 24-hour connection lifetime.
 
 ```js
 import { BitunixSpotWebSocketClient } from "@coinzilla/brokers"
