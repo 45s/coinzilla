@@ -37,5 +37,5 @@ export function associateProviderInstances({ subscriptions, providerInstanceId }
     associateProviderInstance({
       subscription,
       providerInstanceId,
-    })))
+    }))
 }
