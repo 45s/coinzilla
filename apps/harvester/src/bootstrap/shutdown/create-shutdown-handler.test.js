@@ -44,40 +44,15 @@ function createSafeParticipant({ strategyId, calls, waitUntilSafe } = {}) {
   }
 }
 
-function createShutdown({
-  state = createState(),
-  calls = [],
-  tradingEnabled = true,
-  participants = [],
-  eventPublisher = {
-    flush: async () => ({
-      ok: true,
-      durable: true,
-    }),
-  },
-  publishAccountSnapshot = async () => ({ ok: true }),
-  stopUserDataIntake = async () => [],
-  stopMarketIntake = async () => [],
-  disconnectBroker = async () => [],
-  marketPriceIntake = new Map(),
-  subscriptions = [],
-  bookSubscriptions = [],
-  userDataSubscription = {},
-  logger = {},
-  getTradingEngine = () => undefined,
-} = {}) {
-  const stop = createShutdownHandler({
-    state,
-    logger,
-    tradingEnabled,
-    strategyShutdownParticipants: participants,
-    getTradingEngine,
-    subscriptions,
-    bookSubscriptions,
-    marketPriceIntake,
-    getUserDataSubscription: () => userDataSubscription,
-    broker: {},
-    brokerName: "binance",
+function createShutdownPorts({
+  calls,
+  eventPublisher,
+  publishAccountSnapshot,
+  stopUserDataIntake,
+  stopMarketIntake,
+  disconnectBroker,
+}) {
+  return {
     eventPublisher: {
       ...eventPublisher,
       flush: async (...args) => {
@@ -101,12 +76,54 @@ function createShutdown({
       calls.push("broker-disconnect")
       return disconnectBroker(options)
     },
-  })
-  return {
-    stop,
-    state,
-    calls,
   }
+}
+
+function createShutdown({
+  state = createState(),
+  calls = [],
+  tradingEnabled = true,
+  participants = [],
+  eventPublisher = {
+    flush: async () => ({
+      ok: true,
+      durable: true,
+    }),
+  },
+  publishAccountSnapshot = async () => ({ ok: true }),
+  stopUserDataIntake = async () => [],
+  stopMarketIntake = async () => [],
+  disconnectBroker = async () => [],
+  marketPriceIntake = new Map(),
+  subscriptions = [],
+  bookSubscriptions = [],
+  userDataSubscription = {},
+  logger = {},
+  getTradingEngine = () => undefined,
+} = {}) {
+  const ports = createShutdownPorts({
+    calls,
+    eventPublisher,
+    publishAccountSnapshot,
+    stopUserDataIntake,
+    stopMarketIntake,
+    disconnectBroker,
+  })
+  const stop = createShutdownHandler({
+    state,
+    logger,
+    tradingEnabled,
+    strategyShutdownParticipants: participants,
+    getTradingEngine,
+    subscriptions,
+    bookSubscriptions,
+    marketPriceIntake,
+    getUserDataSubscription: () => userDataSubscription,
+    broker: {},
+    brokerName: "binance",
+    ...ports,
+  })
+  return { stop, state, calls }
 }
 
 test("activates strategy gates before shutdown context creation can fail", async () => {
