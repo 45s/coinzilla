@@ -19,27 +19,23 @@ function assertSupportedStrategyConfig(strategyConfig) {
     throw new Error("Aggressive strategy is disabled and deferred; set strategies.CG_coinGrabber.settings.aggressive.enabled=false")
   }
 }
+function resolveBinanceRuntimeConfig({ env }) {
+  return resolveRuntimeConfig({
+    tradingMode: env.TRADING_MODE,
+    environment: env.NODE_ENV,
+    providerInstanceId: env.BINANCE_PROVIDER_INSTANCE_ID,
+    accountId: env.BINANCE_ACCOUNT_ID,
+  })
+}
+
 export async function resolveHarvesterOptions({ configSource, appConfig: suppliedAppConfig, loadConfig, env = process.env, eventPublisher, logger } = {}) {
   const loadedAppConfig = suppliedAppConfig ?? await loadConfig(configSource)
   const configuredAppConfig = resolveTelegramOperatorConfig({ appConfig: loadedAppConfig,
 env })
   const strategyConfig = configuredAppConfig.strategies?.CG_coinGrabber
   assertSupportedStrategyConfig(strategyConfig)
-  const runtime = resolveRuntimeConfig({
-    tradingMode: env.TRADING_MODE,
-    environment: env.NODE_ENV,
-    providerInstanceId: env.BINANCE_PROVIDER_INSTANCE_ID,
-    accountId: env.BINANCE_ACCOUNT_ID,
-  })
-  const {
-    environment,
-    brokerName,
-    providerType,
-    providerInstanceId,
-    accountId,
-    tradingMode,
-    tradingEnabled,
-  } = runtime
+  const runtime = resolveBinanceRuntimeConfig({ env })
+  const { environment, brokerName, tradingMode, tradingEnabled } = runtime
   if (Object.keys(strategyConfig.pairs ?? {}).length === 0) {
     throw new Error("Conservative trading requires at least one enabled pair")
   }
@@ -83,8 +79,8 @@ pairs },
   const log = { message: "App configuration validated",
 environment,
 broker: brokerName,
-providerInstanceId,
-accountId,
+providerInstanceId: runtime.providerInstanceId,
+accountId: runtime.accountId,
 tradingMode,
 enabledSymbols,
 strategyMode: `conservative-${tradingMode}` }
@@ -100,11 +96,6 @@ strategyMode: `conservative-${tradingMode}` }
     enabledSymbols: Object.freeze(enabledSymbols),
     configurationFingerprint: effectiveConfiguration.fingerprint,
     environment,
-    brokerName,
-    providerType,
-    providerInstanceId,
-    accountId,
-    tradingMode,
-    tradingEnabled,
+    ...runtime,
   })
 }
