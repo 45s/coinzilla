@@ -944,3 +944,18 @@ Conservative markets are audited independently. A market becomes SAFE_TO_SHUTDOW
 Express middleware is a request/response pipeline: one request passes through ordered handlers and usually proceeds to the next handler. Shutdown is not one request with a fixed linear path. Multiple strategies own independent safety policies, may reconcile external exchange state concurrently, and can have previously safe state invalidated by late events.
 
 A middleware chain would blur strategy ownership and encourage a single generic shutdown policy. DDD application orchestration with strategy-owned participants is a better fit: the coordinator manages ordering and the shared-service barrier; each strategy's application/domain workflow proves its own safety. A small sequential pipeline can still be used for ordinary cleanup steps after all strategies are safe, but it must not decide trading safety.
+
+## Provider-neutral ordinary trading-session history (#1327)
+
+Ordinary trading-session history is an infrastructure-owned read-side projection. Harvester Domain and Application define the session model, lifecycle invariants, use cases, and narrow repository port; the persistence adapter implements that port through the public `@coinzilla/db` API. The database provider is composed at the infrastructure boundary. Domain, application, and strategy modules do not import SQLite, SQL, database drivers, provider-native results, or provider-native errors.
+
+The first repository contract is deliberately limited to `create(record)`, `findById(runtimeSessionId)`, and `transition({ id, status, endedAt? })`. The collection is `harvester_trading_sessions`; its application schema version is `1`, and its record ID is the existing immutable process/session UUID. Identical duplicate creation returns the existing record. Reuse of the same identity with different immutable facts raises a Harvester integrity error. Lifecycle read/validate/update is atomic and preserves all immutable fields.
+
+The infrastructure observer subscribes to existing `CONFIG_VALIDATED`, `STARTED`, `STARTUP_FAILED`, and successful `STOPPED` events. It serializes its own database queue but returns synchronously to EventBus publication. It therefore does not add a Journal acknowledgement, flush, or durability barrier. A failed history write is logged and isolated; it cannot block the trading loop or change Operational State Store acknowledgement.
+
+This database is not the Operational State Store. ADR-0001 remains authoritative recovery evidence, the file store is unchanged, and restart restoration remains disabled. The history database is never used to restore runtime state. There is no fallback between the database and the file store.
+
+The initial SQLite files are separated by explicit validated `TRADING_MODE`: `live` selects `data/production/harvester.db`, and `testnet` selects `data/testnet/harvester.db`. `NODE_ENV` never selects a trading environment. An optional absolute `HARVESTER_DATABASE_DIRECTORY` supplies only the common parent directory; Harvester validates distinct canonical environment directories and rejects overlapping or aliased database files.
+
+See the [ordinary persistence contract](./persistence/README.md) for the exact schema, lifecycle transition table, provider capabilities, path validation, failure handling, test evidence, and subsequent migration slices. The first implementation remains in progress until PR #1369 is merged and verified.
+
