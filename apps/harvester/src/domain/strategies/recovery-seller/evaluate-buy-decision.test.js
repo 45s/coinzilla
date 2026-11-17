@@ -222,3 +222,27 @@ test("fails closed with global STOP when an active recovery Position lacks its r
   assert.equal(result.action, undefined,
     "No BUY may be submitted without the authoritative completed-BUY VWAP.")
 })
+
+
+test("latches STOP for malformed or unmodeled active-order snapshots", () => {
+  const malformed = evaluate({
+    activeOrders: null,
+  })
+  const unsupported = evaluate({
+    activeOrders: [{
+      market: { symbol: "ZROUSDT" },
+      side: "BUY",
+      status: "PENDING_REPLACE",
+      clientOrderId: "rs-buy-unknown-status",
+    }],
+  })
+
+  assert.equal(malformed.stopState.status, "STOPPED",
+    "A malformed active-order snapshot must not be interpreted as an empty order book.")
+  assert.equal(malformed.action, undefined,
+    "A malformed active-order snapshot must not permit a new BUY.")
+  assert.equal(unsupported.stopState.status, "STOPPED",
+    "An unmodeled order status must latch global STOP rather than being ignored.")
+  assert.equal(unsupported.action, undefined,
+    "An unmodeled order status must never allow a replacement BUY.")
+})
