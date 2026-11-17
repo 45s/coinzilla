@@ -86,7 +86,7 @@ These rules are mandatory for every AI agent working on the existing broker pack
 
 ### Required reference projects
 
-1. **Primary behavioral reference — [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net).** A substantial C# Bitunix client built on CryptoExchange.Net with separate Spot and Futures REST/Socket surfaces. Study its relevant Spot interfaces, implementation, request definitions, models, endpoint fixtures, and unit tests. Especially useful locations:
+1. **Primary behavioral reference.** [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net) is a substantial C# Bitunix client built on CryptoExchange.Net with separate Spot and Futures REST/Socket surfaces. Study its relevant Spot interfaces, implementation, request definitions, models, endpoint fixtures, and unit tests. Especially useful locations:
    - [Spot REST trading implementation](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Clients/SpotApi/Rest/BitunixRestClientSpotApiTrading.cs)
    - [Spot REST trading contract/interface](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Interfaces/Clients/SpotApi/IBitunixRestClientSpotApiTrading.cs)
    - [Spot account implementation](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Clients/SpotApi/Rest/BitunixRestClientSpotApiAccount.cs)
@@ -96,7 +96,7 @@ These rules are mandatory for every AI agent working on the existing broker pack
 
    Treat this project as the first implementation to study and the primary behavioral reference when translating an existing Spot capability into JavaScript. Inspect the actual implementation and tests/fixtures, not only XML comments or generated documentation.
 
-2. **Secondary JavaScript/TypeScript reference — [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp).** An unofficial TypeScript MCP server covering Bitunix Spot and Futures REST. Use it to cross-check JavaScript/TypeScript request construction, authentication/signing, validation, response handling, and available Spot endpoint examples:
+2. **Secondary JavaScript/TypeScript reference.** [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp) is an unofficial TypeScript MCP server covering Bitunix Spot and Futures REST. Use it to cross-check JavaScript/TypeScript request construction, authentication/signing, validation, response handling, and available Spot endpoint examples:
    - [Spot tools](https://github.com/samanzamani/bitunix-mcp/blob/main/src/tools/spot.ts)
    - [REST client and signing implementation](https://github.com/samanzamani/bitunix-mcp/tree/main/src)
    - [Tests](https://github.com/samanzamani/bitunix-mcp/tree/main/src)
