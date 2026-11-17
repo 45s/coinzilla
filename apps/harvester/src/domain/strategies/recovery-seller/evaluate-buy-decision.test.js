@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { StrategyId } from "../strategy-ids.js"
 import { evaluateRecoverySellerBuyDecision } from "./evaluate-buy-decision.js"
 import {
   createRecoverySellerCycleState,
@@ -109,7 +110,7 @@ function ownedOrder({
     clientOrderId,
     ...(brokerOrderId ? { brokerOrderId } : {}),
     ownership: {
-      strategyId: "RECOVERY_SELLER",
+      strategyId: StrategyId.RECOVERY_SELLER,
       purpose: side === "BUY" ? "RECOVERY_BUY" : "RECOVERY_SELL",
       positionId,
       cycleId,
