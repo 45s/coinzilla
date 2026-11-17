@@ -9,9 +9,9 @@ last_verified: 2026-11-17
 
 # Multi-provider migration audit and implementation plan
 
-**Tracking:** [Harvester/Brokers issue #1339](https://github.com/45s/coinzilla/issues/1339)  
-**Architecture authority:** [ADR-0003](./decisions/ADR-0003-multi-provider-routing.md)  
-**Audit baseline:** `develop` at `5d707d17114d524ef3cd7c6d35387dde61338976` (2026-11-17 09:45:59 UTC)  
+**Tracking:** [Harvester/Brokers issue #1339](https://github.com/45s/coinzilla/issues/1339)
+**Architecture authority:** [ADR-0003](./decisions/ADR-0003-multi-provider-routing.md)
+**Audit baseline:** `develop` at `5d707d17114d524ef3cd7c6d35387dde61338976` (2026-11-17 09:45:59 UTC)
 **Scope:** source-verified preparation and migration sequencing only. This document does not authorize runtime routing, database changes, provider mutations, or trading-behavior changes.
 
 ## 1. Executive decision
@@ -349,10 +349,11 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 
 ### Phase 1 — Brokers capability declarations and construction boundary
 
-**Owner:** Brokers.  
+**Owner:** Brokers.
 **Objective:** expose stable provider construction and truthful capabilities for existing implementations without changing exchange behavior.
 
 **Likely scope:**
+
 - `packages/brokers/src/broker.core.js`
 - `packages/brokers/src/index.js`
 - Binance configuration/broker modules
@@ -360,6 +361,7 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 - Do not edit Bitunix Spot implementation or add a Bitunix capability descriptor in this first PR; the mandatory external reference audit in `packages/brokers/AGENTS.md` must be completed first.
 
 **Requirements:**
+
 - Preserve all current exports, constructors, method signatures, results and errors.
 - Declare implemented, unsupported and environment-dependent capabilities explicitly.
 - Do not claim capability from inherited method existence.
@@ -368,6 +370,7 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 - Avoid generic transport/provider plugin frameworks.
 
 **Tests and acceptance:**
+
 - Offline contract tests compare declared capabilities with actual supported/unsupported operations.
 - Binance declarations cover the current source-backed implementation.
 - Existing Bitunix behavior and exports remain unchanged; no Bitunix mutation, canonical fills, private stream or recovery is enabled.
@@ -379,10 +382,11 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 
 ### Phase 2 — Harvester named provider construction and registry
 
-**Owner:** Harvester, with Brokers contract from Phase 1.  
+**Owner:** Harvester, with Brokers contract from Phase 1.
 **Objective:** allow composition of named provider instances while preserving the legacy single-Binance runtime as the default migration path.
 
 **Likely scope:**
+
 - `apps/harvester/src/domain/app-config.js`
 - `apps/harvester/src/bootstrap/config/resolve-harvester-options.js`
 - `apps/harvester/src/bootstrap/broker/connect-broker.js`
@@ -390,6 +394,7 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 - Harvester infrastructure broker adapters and focused bootstrap tests
 
 **Requirements:**
+
 - Add validated non-secret instance IDs, provider type, account ID and provider-specific environment configuration.
 - Keep credentials in deployment environment/secrets; never include them in logs, facts or fingerprints.
 - Construct providers only at the composition boundary.
@@ -398,6 +403,7 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 - Do not route order execution through a new provider yet.
 
 **Tests and acceptance:**
+
 - Legacy config resolves to one Binance instance and preserves current startup order.
 - Invalid/duplicate instance IDs, unsupported environment and missing capability fail closed.
 - Partial construction/connect failure cleans up previously created instances exactly once.
@@ -407,10 +413,11 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 
 ### Phase 3 — Durable provider/account provenance
 
-**Owner:** Harvester, coordinating Entities/Journal only for required shared contracts.  
+**Owner:** Harvester, coordinating Entities/Journal only for required shared contracts.
 **Objective:** pin every new order to its original provider/account before any exchange write.
 
 **Likely scope:**
+
 - `apps/harvester/src/domain/orders/order-ownership.js`
 - `apps/harvester/src/domain/orders/order-registry.js`
 - Submission/cancellation/fill fact producers
@@ -419,6 +426,7 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 - Relevant Entities identity contracts only if required
 
 **Requirements:**
+
 - Include strategy, symbol, provider type, provider instance, stable account ID, client ID and exchange ID where known.
 - Provider/account provenance is immutable after intent persistence.
 - Existing v1 facts remain readable; never rewrite old JSONL/hash-chained history.
@@ -426,6 +434,7 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 - Preserve exact decimal strings and existing durability barriers.
 
 **Tests and acceptance:**
+
 - Assert intent durability includes provenance before fake broker placement is invoked.
 - Reject any attempt to mutate provider/account identity later.
 - Read mixed v1/new-version histories without changing old bytes/hashes.
@@ -437,10 +446,11 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 
 ### Phase 4 — Account isolation, locks and process-restart recovery
 
-**Owner:** Harvester; coordinate with Entities for identity contracts.  
+**Owner:** Harvester; coordinate with Entities for identity contracts.
 **Objective:** ensure each provider/account owns independent balances, reservations, orders, fills, readiness and recovery, and prove restart reconciliation before enabling routed execution.
 
 **Likely scope:**
+
 - Portfolio/Position identity and account context
 - Fill identity and order registry lookup keys
 - Account snapshot manager and reservation/accounting state
@@ -449,6 +459,7 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 - #654 Step 8 parity and Step 9 crash/restart proof
 
 **Requirements:**
+
 - Scope Position and Fill identities to the correct account/provider where needed.
 - Namespace raw exchange order IDs and trade IDs.
 - Scope lock identity by provider/account/environment without allowing old/new protocol overlap.
@@ -457,6 +468,7 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 - One account's failure cannot authorize or block another account incorrectly.
 
 **Tests and acceptance:**
+
 - Same symbol/strategy in two accounts yields distinct positions and reservations.
 - Identical raw order/trade IDs in two accounts remain distinct.
 - Same-account writer exclusion and different-account isolation are deterministic across worktrees.
@@ -468,10 +480,11 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 
 ### Phase 5 — Independent market-data routing
 
-**Owner:** Harvester.  
+**Owner:** Harvester.
 **Objective:** select one explicit market-data provider per symbol independently of execution venue.
 
 **Likely scope:**
+
 - Market-data route config/validation
 - Provider registry/router
 - `subscribe-to-market-data.js`
@@ -479,6 +492,7 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 - Subscription identity and cleanup
 
 **Tests and acceptance:**
+
 - Each symbol resolves to exactly one explicit source.
 - Same symbol from two providers cannot share subscription identity or freshness state.
 - Unsupported stream/history capability blocks the affected consumer.
@@ -490,16 +504,18 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 
 ### Phase 6 — Binance execution routing and parity
 
-**Owner:** Harvester.  
+**Owner:** Harvester.
 **Objective:** route existing Conservative intents through explicit execution resolution while still selecting the same Binance instance.
 
 **Likely scope:**
+
 - Execution route config and resolver
 - Trading Engine/place-order workflow injection
 - Order provenance and account runtime context
 - Startup validation and diagnostics
 
 **Tests and acceptance:**
+
 - Existing strategy decisions and order request payloads are byte/field equivalent where applicable.
 - Every new order's provider/account provenance is durably written before broker I/O.
 - All cancellation/lookup/recovery uses pinned provider identity after route changes.
@@ -511,7 +527,7 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 
 ### Phase 7 — Additional provider enablement
 
-**Owner:** provider package owner plus Harvester consumer owner.  
+**Owner:** provider package owner plus Harvester consumer owner.
 **Objective:** enable one additional provider only after it supports the complete capability set required by a specific strategy/market route.
 
 **Requirements:** official protocol evidence, complete account snapshot, order identity, idempotent placement/reconciliation, cancellation outcome, canonical order/fill history, private execution events or an equally complete proven reconciliation design, environment isolation, precision/filter rules, and lifecycle/recovery tests.
