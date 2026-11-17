@@ -152,7 +152,7 @@ test('refuses tracked and untracked changes without modifying either', () => {
       const changedPath = kind === 'tracked' ? 'tracked.txt' : 'untracked.txt';
       const content = kind === 'tracked' ? 'local edit\n' : 'untracked content\n';
       writeFileSync(join(repository.local, changedPath), content);
-      assertSyncFails(repository.local, /working tree is not clean/);
+      assertSyncFails(repository.local, /Working tree is not clean/);
       assert.equal(readFileSync(join(repository.local, changedPath), 'utf8'), content,
         "A dirty-worktree refusal must preserve the user's file contents.");
       assert.equal(git(repository.local, ['branch', '--show-current']), 'main-work',
