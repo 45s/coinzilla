@@ -81,7 +81,8 @@ export function reconcileRecoverySellerCycleSellWithStop({
  * @param {object} input.stopState Current immutable global STOP state.
  * @param {object} input.previousState Prior closed cycle.
  * @param {string} input.nextCycleId New stable cycle identity.
- * @param {string} [input.nextPositionId] Optional newly preallocated Position identity; otherwise retain the prior Position.
+ * @param {string} [input.nextPositionId] Optional newly preallocated Position identity;
+ *   otherwise retain the prior Position.
  * @returns {object} Immutable unchanged STOP state and new cycle state.
  */
 export function startNextRecoverySellerCycleWithStop({
