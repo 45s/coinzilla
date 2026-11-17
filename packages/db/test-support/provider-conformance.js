@@ -1001,8 +1001,6 @@ function registerLifecycleTests({
  * The factory receives an opaque storageKey and a declared storageMode. Each test
  * receives an isolated key; persistence tests reuse that key across connections.
  *
- * @param {{name: string, createDatabase: (options: {storageKey: string, storageMode?: string}) => object}} options
- */
  * @param {{name: string, createDatabase: (options: {storageKey: string, storageMode?: string}) => object, cleanupStorage?: (options: {storageKey: string, storageMode: string}) => Promise<void>|void}} options
  */
 export function runDatabaseProviderConformanceTests({
