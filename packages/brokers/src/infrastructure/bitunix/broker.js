@@ -653,7 +653,7 @@ export class BitunixSpotBroker extends CoreBroker {
   async getCandles() {
     const error = unsupported({
       operation: "getCandles()",
-      reason: "historical Spot candle support has not yet been mapped to the canonical candle contract",
+      reason: "the documented Spot kline responses provide OHLC and a start timestamp but omit volume, which the canonical candle contract requires",
     })
     return toResult({ errors: [error] })
   }
