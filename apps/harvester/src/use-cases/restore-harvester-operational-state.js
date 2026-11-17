@@ -27,7 +27,8 @@ function createOfflineOperationalStateCandidate({
   restored,
   projection,
   read
-,}) {
+,
+}) {
   return toResult({
     data: Object.freeze({
       ...restored.data,
@@ -70,7 +71,8 @@ export async function restoreHarvesterOperationalState({
     const restored = restoreHarvesterJournalState({
       projection,
       marketMetadata
-    ,})
+    ,
+    })
     if (restored?.ok !== true) {
       return restored
     }
@@ -78,7 +80,8 @@ export async function restoreHarvesterOperationalState({
       restored,
       projection,
       read
-    ,})
+    ,
+    })
   } catch (error) {
     return toResult({ error })
   }
