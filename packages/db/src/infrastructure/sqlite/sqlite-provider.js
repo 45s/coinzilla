@@ -94,6 +94,106 @@ function createReadManyStatement({ transaction, query, collection }) {
   return transaction.prepare(sql).all(...parameters)
 }
 
+function createRecordOperation({ insertRecord }) {
+  return function create({ collection, record }) {
+    validateCollectionName(collection)
+    const serializedRecord = serializeRecord(record)
+
+    return runProviderOperation({
+      operation: "create",
+      collection,
+      work: () => {
+        try {
+          insertRecord.run(collection, record.id, serializedRecord)
+        } catch (error) {
+          if (isUniqueConstraintError(error)) {
+            throw new DatabaseConflictError({
+              collection,
+              cause: error,
+            })
+          }
+          throw error
+        }
+
+        return JSON.parse(serializedRecord)
+      },
+    })
+  }
+}
+
+function createReadOneOperation({ selectRecord }) {
+  return function readOne({ collection, id }) {
+    validateCollectionName(collection)
+    validateRecordIdentifier(id)
+
+    return runProviderOperation({
+      operation: "readOne",
+      collection,
+      work: () => {
+        const result = selectRecord.get(collection, id)
+        return result ? JSON.parse(result.record) : null
+      },
+    })
+  }
+}
+
+function createReadManyOperation({ transaction }) {
+  return function readMany({ collection, query }) {
+    validateCollectionName(collection)
+    const normalizedQuery = normalizeReadQuery(query)
+
+    return runProviderOperation({
+      operation: "readMany",
+      collection,
+      work: () => createReadManyStatement({
+        transaction,
+        query: normalizedQuery,
+        collection,
+      }).map((result) => JSON.parse(result.record)),
+    })
+  }
+}
+
+function createUpdateOperation({ selectRecord, updateRecord }) {
+  return function update({ collection, id, changes }) {
+    validateCollectionName(collection)
+    validateRecordIdentifier(id)
+    const serializedChanges = serializeChanges(changes)
+
+    return runProviderOperation({
+      operation: "update",
+      collection,
+      work: () => {
+        const existing = selectRecord.get(collection, id)
+        if (!existing) {
+          return null
+        }
+
+        const updatedRecord = {
+          ...JSON.parse(existing.record),
+          ...JSON.parse(serializedChanges),
+        }
+        const serializedRecord = JSON.stringify(updatedRecord)
+        updateRecord.run(serializedRecord, collection, id)
+        return updatedRecord
+      },
+    })
+  }
+}
+
+function createDeleteOperation({ deleteRecord }) {
+  return function deleteRecordByIdentifier({ collection, id }) {
+    validateCollectionName(collection)
+    validateRecordIdentifier(id)
+
+    return runProviderOperation({
+      operation: "delete",
+      collection,
+      work: () => deleteRecord.run(collection, id).changes > 0,
+    })
+  }
+}
+
 function createSqliteTransactionContext({ transaction }) {
   const insertRecord = transaction.prepare(
     "INSERT INTO db_records (collection, id, record) VALUES (?, ?, ?)",
@@ -109,113 +209,32 @@ function createSqliteTransactionContext({ transaction }) {
   )
 
   return Object.freeze({
-    create(collection, record) {
-      validateCollectionName(collection)
-      const serializedRecord = serializeRecord(record)
-
-      return runProviderOperation({
-        operation: "create",
-        collection,
-        work: () => {
-          try {
-            insertRecord.run(collection, record.id, serializedRecord)
-          } catch (error) {
-            if (isUniqueConstraintError(error)) {
-              throw new DatabaseConflictError({
-                collection,
-                cause: error,
-              })
-            }
-            throw error
-          }
-
-          return JSON.parse(serializedRecord)
-        },
-      })
-    },
-
-    readOne(collection, identifier) {
-      validateCollectionName(collection)
-      validateRecordIdentifier(identifier)
-
-      return runProviderOperation({
-        operation: "readOne",
-        collection,
-        work: () => {
-          const result = selectRecord.get(collection, identifier)
-          return result ? JSON.parse(result.record) : null
-        },
-      })
-    },
-
-    readMany(collection, query) {
-      validateCollectionName(collection)
-      const normalizedQuery = normalizeReadQuery(query)
-
-      return runProviderOperation({
-        operation: "readMany",
-        collection,
-        work: () => createReadManyStatement({
-          transaction,
-          query: normalizedQuery,
-          collection,
-        }).map((result) => JSON.parse(result.record)),
-      })
-    },
-
-    update(collection, identifier, changes) {
-      validateCollectionName(collection)
-      validateRecordIdentifier(identifier)
-      const serializedChanges = serializeChanges(changes)
-
-      return runProviderOperation({
-        operation: "update",
-        collection,
-        work: () => {
-          const existing = selectRecord.get(collection, identifier)
-          if (!existing) {
-            return null
-          }
-
-          const updatedRecord = {
-            ...JSON.parse(existing.record),
-            ...JSON.parse(serializedChanges),
-          }
-          const serializedRecord = JSON.stringify(updatedRecord)
-          updateRecord.run(serializedRecord, collection, identifier)
-          return updatedRecord
-        },
-      })
-    },
-
-    delete(collection, identifier) {
-      validateCollectionName(collection)
-      validateRecordIdentifier(identifier)
-
-      return runProviderOperation({
-        operation: "delete",
-        collection,
-        work: () => deleteRecord.run(collection, identifier).changes > 0,
-      })
-    },
+    create: createRecordOperation({
+      insertRecord,
+    }),
+    readOne: createReadOneOperation({
+      selectRecord,
+    }),
+    readMany: createReadManyOperation({
+      transaction,
+    }),
+    update: createUpdateOperation({
+      selectRecord,
+      updateRecord,
+    }),
+    delete: createDeleteOperation({
+      deleteRecord,
+    }),
   })
 }
 
-/**
- * Create the built-in SQLite implementation of the provider-neutral record API.
- *
- * @param {{filename: string, timeout?: number}} options
- * @returns {import("../../application/ports/database-provider.js").DatabaseProvider}
- */
-export function createSqliteProvider({ filename, timeout } = {}) {
+function createProviderDatabase({ filename, timeout }) {
   let database = createSqliteDatabase({
     filename,
     timeout,
   })
 
-  return Object.freeze({
-    capabilities: SQLITE_CAPABILITIES,
-
+  return {
     async connect() {
       if (database.state === "closed") {
         database = createSqliteDatabase({
@@ -291,5 +310,23 @@ export function createSqliteProvider({ filename, timeout } = {}) {
         })
       })
     },
+  }
+}
+
+/**
+ * Create the built-in SQLite implementation of the provider-neutral record API.
+ *
+ * @param {{filename: string, timeout?: number}} options
+ * @returns {import("../../application/ports/database-provider.js").DatabaseProvider}
+ */
+export function createSqliteProvider({ filename, timeout } = {}) {
+  const provider = createProviderDatabase({
+    filename,
+    timeout,
+  })
+
+  return Object.freeze({
+    ...provider,
+    capabilities: SQLITE_CAPABILITIES,
   })
 }
