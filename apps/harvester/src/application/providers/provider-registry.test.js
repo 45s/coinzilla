@@ -35,6 +35,7 @@ function createBroker({ capabilities, onConnect, onDisconnect } = {}) {
   Object.defineProperty(broker, "capabilities", {
     value: capabilities ?? createCapabilities(),
     enumerable: true,
+    configurable: true,
   })
   return {
     broker,
