@@ -75,6 +75,12 @@ function hasRule({ messages, ruleId }) {
   return messages.some((message) => message.ruleId === ruleId && message.severity === 2);
 }
 
+function createSwitchCases() {
+  return [...Array(16).keys()]
+    .map((index) => `case ${index}: return ${index};`)
+    .join("\\n");
+}
+
 test("strict policy inherits the canonical workspace rules and overrides only approved thresholds", async () => {
   const { ESLint } = await import("eslint");
   const workspace = new ESLint({
@@ -185,6 +191,33 @@ test("strict lint rejects three nested callbacks", async () => {
     messages,
     ruleId: "max-nested-callbacks",
   }), "Three nested callbacks must fail the strict callback limit of two.");
+});
+
+test("new JavaScript files are selected", async () => {
+  await withRepository({
+    callback: async (cwd) => {
+      await commitFile({
+        cwd,
+        path: "baseline.js",
+        source: "export const baseline = true;\\n",
+      });
+      await writeFile(join(cwd, "new-file.js"), "export const newFile = true;\\n");
+      git({
+        cwd,
+        args: ["add", "--", "new-file.js"],
+      });
+      git({
+        cwd,
+        args: ["commit", "-m", "add JavaScript file"],
+      });
+      const files = await getChangedFiles({
+        cwd,
+        baseRef: "main",
+        headRef: "HEAD",
+      });
+      assert.deepEqual(files, ["new-file.js"], "Every newly added JavaScript file must be selected.");
+    },
+  });
 });
 
 test("a strict violation in an untouched legacy file is not selected", async () => {
