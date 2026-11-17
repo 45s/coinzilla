@@ -103,7 +103,7 @@ function normalizeMessageText({ message }) {
 
 function parseResponseText({ text }) {
   const losslessText = text.replace(
-    /("(balance|balanceLocked|uid)"\\s*:\\s*)(-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)(?=\\s*[,}])/g,
+    /("(balance|balanceLocked|uid)"\s*:\s*)(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)(?=\s*[,}])/g,
     (match, prefix, field, value) => {
       if (field === "uid" && Number.isSafeInteger(Number(value))) {
         return prefix + value
