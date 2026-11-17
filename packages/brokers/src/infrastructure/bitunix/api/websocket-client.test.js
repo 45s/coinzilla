@@ -191,7 +191,14 @@ test("Bitunix Spot WebSocket client validates documented RPC arguments before se
 
   assert.throws(() => client.getLastPrice({ symbol: "" }), /symbol/i, "empty symbols must be rejected before network I/O")
   assert.throws(() => client.getDepth({ symbol: "BTCUSDT" }), /precision/i, "depth precision is required by the official contract")
-  assert.throws(() => client.getKline({ symbol: "BTCUSDT", interval: "invalid" }), /interval/i, "unsupported kline intervals must be rejected")
+  assert.throws(
+    () => client.getKline({
+      symbol: "BTCUSDT",
+      interval: "invalid",
+    }),
+    /interval/i,
+    "unsupported kline intervals must be rejected",
+  )
   assert.equal(transport.sent.length, 0, "invalid RPC arguments must not be sent")
   await client.disconnect()
 })
@@ -227,8 +234,14 @@ test("Bitunix Spot WebSocket client dispatches every documented read-only RPC me
 
   const pending = [
     client.getLastPrice({ symbol: "BTCUSDT" }),
-    client.getDepth({ symbol: "BTCUSDT", precision: 5 }),
-    client.getKline({ symbol: "BTCUSDT", interval: "1" }),
+    client.getDepth({
+      symbol: "BTCUSDT",
+      precision: 5,
+    }),
+    client.getKline({
+      symbol: "BTCUSDT",
+      interval: "1",
+    }),
     client.getTradingPairs(),
     client.getExchangeRates(),
     client.getTokenNetworks(),
@@ -260,7 +273,10 @@ test("Bitunix Spot WebSocket client dispatches every documented read-only RPC me
   }
   assert.deepEqual(
     await Promise.all(pending),
-    Array.from({ length: pending.length }, (_, index) => ({ index })),
+    Array.from({ length: pending.length }, (...args) => {
+      const [, index] = args
+      return { index }
+    }),
     "all documented read RPCs must return their matching response data",
   )
   await client.disconnect()
