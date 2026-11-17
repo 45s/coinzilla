@@ -141,6 +141,27 @@ test("strict lint rejects four nested control-flow blocks", async () => {
     messages,\n    ruleId: "max-depth",\n  }), "Four nested control-flow blocks must fail the strict depth limit of three.");
 });
 
+test("three nested control-flow levels pass the strict depth policy", async () => {
+  const messages = await lintStrict({
+    source: `export function nested({ a, b, c }) {
+  if (a) {
+    if (b) {
+      if (c) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+`,
+  });
+  assert.equal(
+    messages.filter((message) => message.ruleId === "max-depth").length,
+    0,
+    "Exactly three nested control-flow blocks must pass the strict depth limit.",
+  );
+});
+
 test("strict lint rejects three nested callbacks", async () => {
   const messages = await lintStrict({
     source: "setTimeout(() => {\n  setTimeout(() => {\n    setTimeout(() => {}, 0);\n  }, 0);\n}, 0);\n",
@@ -216,6 +237,34 @@ test("renamed files select the destination path", async () => {
   });
 });
 
+test("copied files select the new destination path", async () => {
+  await withRepository({
+    callback: async (cwd) => {
+      const source = "export const copiedValue = 1;\\n";
+      await commitFile({
+        cwd,
+        path: "original.js",
+        source,
+      });
+      await writeFile(join(cwd, "copied.js"), source);
+      git({
+        cwd,
+        args: ["add", "--", "copied.js"],
+      });
+      git({
+        cwd,
+        args: ["commit", "-m", "copy JavaScript file"],
+      });
+      const files = await getChangedFiles({
+        cwd,
+        baseRef: "main",
+        headRef: "HEAD",
+      });
+      assert.deepEqual(files, ["copied.js"], "A copied JavaScript file must be selected even when its source remains unchanged.");
+    },
+  });
+});
+
 test("deleted files are excluded", async () => {
   await withRepository({
     callback: async (cwd) => {
@@ -276,6 +325,27 @@ test("an empty changed-file set succeeds", async () => {
       assert.deepEqual(files, [], "No changed JavaScript files must produce a successful empty selection.");
     },
   });
+});
+
+test("the changed-file CLI succeeds with a clear message for an empty diff", async () => {
+  const output = execFileSync(
+    process.execPath,
+    [join(repositoryRoot, "scripts/lint-changed.js")],
+    {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        LINT_CHANGED_BASE_REF: "HEAD",
+        LINT_CHANGED_HEAD_REF: "HEAD",
+      },
+    },
+  );
+  assert.match(
+    output,
+    /No changed JavaScript files to lint/,
+    "An empty diff must succeed and explicitly explain that no JavaScript files need linting.",
+  );
 });
 
 test("missing or invalid merge-base information fails closed", async () => {
