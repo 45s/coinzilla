@@ -132,7 +132,7 @@ The package exports `BitunixSpotBroker`, `BitunixSpotConfig`, and the separate `
 | `getAccount()` | `user.account` | Private account-balance lookup; no source update timestamp is added. |
 | `getUserInfo()` | `user.info` | Private API-key user identity lookup; nullable UID remains exchange data. |
 
-The WebSocket signature is not the REST header signature. It sorts all method parameters except `apiKey`, `timestamp`, `nonce`, and `sign` by key, concatenates each key with its value, computes SHA-256 of `nonce + timestamp + apiKey + serializedParams`, then SHA-256 of `digest + secretKey`. The client keeps this signing implementation separate from REST signing.
+The WebSocket signature is not the REST header signature. It sorts all method parameters except `apiKey`, `timestamp`, `nonce`, and `sign` by key, concatenates each key with its value, computes SHA-256 of `nonce + timestamp + apiKey + serializedParams`, then SHA-256 of `digest + secretKey`. The client keeps this signing implementation separate from REST signing. For `user.account`, raw numeric `balance` and `balanceLocked` tokens are preserved as exact decimal strings; unsafe int64 `user.info.uid` values are preserved as strings instead of being rounded by JavaScript `Number`.
 
 Concurrent RPCs are correlated only by the echoed request ID. A malformed matching envelope or non-zero exchange code rejects that request; an unrelated response ID is ignored. Timeouts, send failures, and connection closure reject pending requests and clear their timers. Requests are never replayed automatically. A closed client is terminal; callers must construct a new client to reconnect. Bitunix documents a 24-hour maximum connection lifetime.
 
