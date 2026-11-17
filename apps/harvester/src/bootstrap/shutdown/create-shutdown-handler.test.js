@@ -410,6 +410,68 @@ test("keeps user-data and broker services alive when post-market-drain safety ca
   assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE", "An unproven post-drain state must never be reported as STOPPED.")
 })
 
+
+test("keeps user-data and broker services alive when market subscriptions cannot be stopped", async () => {
+  const calls = []
+  const failure = new Error("Market unsubscribe failed")
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+  })
+  const fixture = createShutdown({
+    participants: [participant],
+    calls,
+    stopMarketIntake: async () => [failure],
+  })
+
+  await assert.rejects(fixture.stop(), (error) => {
+    assert.ok(error instanceof AggregateError, "A market-intake failure must be reported as an aggregate shutdown blocker.")
+    assert.ok(error.errors.includes(failure), "The original market unsubscribe failure must remain available to the caller.")
+    return true
+  })
+
+  assert.equal(calls.includes("user-data-stop"), false, "User-data intake must remain available when market intake cannot be stopped.")
+  assert.equal(calls.includes("operator-control-stop"), false, "Operator control must remain available when market intake cannot be stopped.")
+  assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected when market intake cannot be stopped.")
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE", "A failed market-intake stop must never be reported as STOPPED.")
+})
+
+test("keeps user-data and broker services alive when accepted market work fails to drain", async () => {
+  const calls = []
+  const failure = new Error("Accepted market task failed")
+  let rejectMarketTask
+  const marketTask = new Promise((resolve, reject) => {
+    rejectMarketTask = reject
+  })
+  const marketPriceIntake = new Map([
+    ["DOGEUSDT", { latestWebSocketPriceTask: marketTask }],
+  ])
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+  })
+  const fixture = createShutdown({
+    participants: [participant],
+    calls,
+    marketPriceIntake,
+    stopMarketIntake: async () => {
+      rejectMarketTask(failure)
+      return []
+    },
+  })
+
+  await assert.rejects(fixture.stop(), (error) => {
+    assert.ok(error instanceof AggregateError, "A market-work drain failure must be reported as an aggregate shutdown blocker.")
+    assert.ok(error.errors.includes(failure), "The original accepted market task failure must remain available to the caller.")
+    return true
+  })
+
+  assert.equal(calls.includes("user-data-stop"), false, "User-data intake must remain available when accepted market work fails.")
+  assert.equal(calls.includes("operator-control-stop"), false, "Operator control must remain available when accepted market work fails.")
+  assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected when accepted market work fails.")
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE", "A failed market-work drain must never be reported as STOPPED.")
+})
+
 test("shares one in-flight shutdown promise between concurrent callers", async () => {
   let releaseSafety
   const safety = new Promise((resolve) => {
