@@ -19,6 +19,7 @@ function submittedCycle() {
   return recordRecoverySellerCycleSellSubmission({
     state: createRecoverySellerCycleState({
       cycleId: "rs-cycle-1",
+      positionId: "rs-position-1",
     }),
     orderIdentity: {
       clientOrderId: "rs-sell-1",
@@ -119,6 +120,8 @@ test("does not clear STOP when creating a new cycle after a successful prior cyc
     decision: submit,
   })
 
+  assert.equal(next.cycleState.positionId, "rs-position-1",
+    "A new cycle must retain its stable recovery Position identity unless explicitly replaced.")
   assert.equal(next.cycleState.cycleId, "rs-cycle-2")
   assert.equal(next.cycleState.status, "ACCUMULATING")
   assert.equal(next.stopState, stopped.stopState,
