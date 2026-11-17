@@ -102,7 +102,7 @@ function makeRegistry(order) {
   })
 }
 
-function makeContext({ fill = makeFill() } = {}) {
+function makeRecoveryBuyPortfolio() {
   const buyFill = new Fill({
     tradeId: "buy-1",
     brokerOrderId: "broker-buy-1",
@@ -124,11 +124,15 @@ function makeContext({ fill = makeFill() } = {}) {
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  const { portfolio } = new Portfolio().applyFill({
+  return new Portfolio().applyFill({
     fill: buyFill,
     positionId,
     strategyId,
-  })
+  }).portfolio
+}
+
+function makeContext({ fill = makeFill() } = {}) {
+  const portfolio = makeRecoveryBuyPortfolio()
   const openOrder = makeOrder()
   const terminalOrder = makeOrder({
     status: "FILLED",
