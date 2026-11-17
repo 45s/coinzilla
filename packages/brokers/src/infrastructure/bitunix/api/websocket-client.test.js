@@ -399,5 +399,23 @@ test("Bitunix Spot WebSocket client preserves exact account decimals and unsafe 
     { uid: "9007199254740993" },
     "unsafe int64 user IDs must be preserved as exact decimal strings",
   )
+
+  const safeUserInfo = client.getUserInfo()
+  transport.receiveText('{"id":"request-1","code":"0","msg":"success","data":{"uid":681979174}}')
+  assert.deepEqual(
+    await safeUserInfo,
+    { uid: 681979174 },
+    "safe int64 user IDs must retain their numeric response type",
+  )
+
+  const defaultKline = client.getKline({ symbol: "BTCUSDT" })
+  assert.equal(transport.sent.at(-1).params.interval, "1min", "the documented K-line default interval must be used")
+  transport.receive({
+    id: "request-1",
+    code: "0",
+    msg: "success",
+    data: { symbol: "BTCUSDT" },
+  })
+  assert.deepEqual(await defaultKline, { symbol: "BTCUSDT" }, "the default K-line RPC must resolve its response data")
   await client.disconnect()
 })
