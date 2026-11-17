@@ -69,7 +69,7 @@ jobs:
         run: node scripts/check-syntax.js
 
       - name: Test strict ESLint policy
-        run: node --test scripts/eslint-policy.test.js
+        run: node --test scripts/eslint-policy.test.js scripts/lint-changed.test.js
 
       - name: Check agent policy and domain ownership
         run: node --test scripts/check-agent-policy.test.js && node scripts/check-agent-policy.js
