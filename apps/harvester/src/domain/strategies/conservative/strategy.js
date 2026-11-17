@@ -386,10 +386,7 @@ function createRecoverySellPlanForPosition({ context, accounting }) {
   })
 }
 
-function createQuantityIncrementDustDisposition({
-  context,
-  quantity,
-}) {
+function createQuantityIncrementDustDisposition({ context, quantity }) {
   return Object.freeze({
     status: "EXCHANGE_CONSTRAINED_DUST",
     quantity,
@@ -399,10 +396,7 @@ function createQuantityIncrementDustDisposition({
   })
 }
 
-function createMinimumQuantityDustDisposition({
-  context,
-  quantity,
-}) {
+function createMinimumQuantityDustDisposition({ context, quantity }) {
   return Object.freeze({
     status: "EXCHANGE_CONSTRAINED_DUST",
     quantity,
@@ -412,53 +406,7 @@ function createMinimumQuantityDustDisposition({
   })
 }
 
-function createMinimumNotionalDustDisposition({
-  context,
-  quantity,
-  evaluatedNotional,
-}) {
-  return Object.freeze({
-    status: "EXCHANGE_CONSTRAINED_DUST",
-    quantity,
-    reason: "MIN_NOTIONAL",
-    minimumQuantity: context.minQuantity,
-    minimumNotional: context.minNotional,
-    evaluatedQuantity: quantity,
-    evaluatedNotional,
-  })
-}
-
-function createQuantityIncrementDustDisposition({
-  context,
-  quantity,
-}) {
-  return Object.freeze({
-    status: "EXCHANGE_CONSTRAINED_DUST",
-    quantity,
-    reason: "QUANTITY_INCREMENT",
-    quantityStepSize: context.quantityStepSize,
-    evaluatedQuantity: "0",
-  })
-}
-
-function createMinimumQuantityDustDisposition({
-  context,
-  quantity,
-}) {
-  return Object.freeze({
-    status: "EXCHANGE_CONSTRAINED_DUST",
-    quantity,
-    reason: "MIN_QUANTITY",
-    minimumQuantity: context.minQuantity,
-    evaluatedQuantity: quantity,
-  })
-}
-
-function createMinimumNotionalDustDisposition({
-  context,
-  quantity,
-  evaluatedNotional,
-}) {
+function createMinimumNotionalDustDisposition({ context, quantity, evaluatedNotional }) {
   return Object.freeze({
     status: "EXCHANGE_CONSTRAINED_DUST",
     quantity,
