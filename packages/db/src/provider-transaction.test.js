@@ -11,6 +11,16 @@ function createConnectedDatabase() {
   })
 }
 
+function createDeferredRecordWrite(transaction) {
+  return () => transaction.create({
+    collection: "entries",
+    record: {
+      id: "late-write",
+      value: "must-not-escape-rollback",
+    },
+  })
+}
+
 test("provider-neutral SQLite transactions reject async callbacks before invoking them", async () => {
   const database = createConnectedDatabase()
   let callbackInvoked = false
@@ -40,13 +50,9 @@ test("provider-neutral SQLite transactions block deferred CRUD after rejecting a
 
   try {
     await assert.rejects(
-      database.transaction((transaction) => Promise.resolve().then(() => transaction.create({
-        collection: "entries",
-        record: {
-          id: "late-write",
-          value: "must-not-escape-rollback",
-        },
-      }))),
+      database.transaction((transaction) => Promise.resolve().then(
+        createDeferredRecordWrite(transaction),
+      )),
       /must be synchronous/,
     )
 
