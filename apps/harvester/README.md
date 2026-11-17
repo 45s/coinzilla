@@ -73,6 +73,23 @@ The command requires exactly `--confirm-initialize`, rejects unknown arguments a
 
 The Operational State Store currently supports append-only operational record production and offline candidate projection only. Acknowledged orders remain UNKNOWN until exchange reconciliation. When `recovery.enabled` is false, a prior PROCESS_STARTED fact does not block Command Center startup: Harvester starts in observation-only mode and trading remains disabled because prior Portfolio/RecoveryLedger/OrderRegistry state was not restored. A first start with no prior process session may trade according to the configured environment. No automatic restoration or READY publication from recovered state is enabled. The initialization command does not connect to Binance or place/cancel orders.
 
+## Ordinary trading-session history (#1327)
+
+**Implementation status:** First slice in review in [PR #1369](https://github.com/45s/coinzilla/pull/1369). It is not considered complete or deployed until the exact PR head is green, merged into `develop`, and verified after merge.
+
+Harvester is adding a provider-neutral, non-authoritative history store through `@coinzilla/db`. The first slice stores process trading-session history only; it does not migrate orders, fills, account snapshots, or recovery state.
+
+The initial provider is SQLite, with independent files selected only by validated `TRADING_MODE`:
+
+- `TRADING_MODE=live` → `apps/harvester/data/production/harvester.db`
+- `TRADING_MODE=testnet` → `apps/harvester/data/testnet/harvester.db`
+
+`NODE_ENV` never selects the trading environment or database file. An optional `HARVESTER_DATABASE_DIRECTORY` must be an absolute base directory; Harvester creates separate `production/` and `testnet/` children. Runtime database files are Git-ignored.
+
+The database is an ordinary lifecycle-event projection, not the Operational State Store. ADR-0001 remains authoritative recovery evidence; restart restoration remains disabled. The session observer does not change Journal ordering, acknowledgement, flush, durability, or failure behavior. Database/history failures are logged and isolated; they do not add a trading-readiness gate or fallback to another persistence system.
+
+See the [persistence contract and migration plan](./docs/persistence/README.md) for the record schema, repository port, lifecycle transitions, isolation rules, failure semantics, and later migration slices.
+
 ## Configuration
 
 Harvester exposes one application-wide named `appConfig` export from `config/index.js`. Strategy-level switches remain in `config/strategies/cg-coin-grabber.js`. All strategy pair definitions live in one separate JavaScript module: `apps/harvester/cg-coin-grabber.js`, exported as the flat `tradingPairs` map. A symbol is defined once; do not duplicate markets in source modules or maintain separate TESTNET/LIVE maps.
