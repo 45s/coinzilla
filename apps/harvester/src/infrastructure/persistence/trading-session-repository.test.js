@@ -63,7 +63,10 @@ async function createDatabaseFixture(t) {
     if (database.state !== "closed") {
       await database.close()
     }
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   })
   return {
     directory,
@@ -217,8 +220,10 @@ test("propagates transaction rollback and closed-provider failures", async (t) =
   })
   const failingReadRepository = createTradingSessionRepository({
     database: {
-      ...database,
+      capabilities: database.capabilities,
+      create: database.create,
       readOne: async () => { throw providerError },
+      transaction: database.transaction,
     },
   })
   await assert.rejects(
@@ -229,7 +234,9 @@ test("propagates transaction rollback and closed-provider failures", async (t) =
 
   const failingTransactionRepository = createTradingSessionRepository({
     database: {
-      ...database,
+      capabilities: database.capabilities,
+      create: database.create,
+      readOne: database.readOne,
       transaction: async () => { throw providerError },
     },
   })
