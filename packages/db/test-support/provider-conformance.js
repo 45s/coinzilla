@@ -534,53 +534,54 @@ async function verifyNestedTransactionSupported(database) {
   )
 }
 
-async function verifyNestedTransactionUnsupported(database) {
-  const outerRecord = {
-    id: "outer-transaction-1",
-    name: "Outer",
-  }
-  const nestedRecord = {
-    id: "nested-transaction-1",
-    name: "Nested",
-  }
-
-  if (database.capabilities.transactions.callbackMode === "asynchronous") {
-    await database.transaction(async (transaction) => {
-      await transaction.create({
-        collection: "people",
-        record: outerRecord,
-      })
-      await assert.rejects(
-        database.transaction((nestedTransaction) => nestedTransaction.create({
-          collection: "people",
-          record: nestedRecord,
-        })),
-        /nested/i,
-        "A provider declaring nestedTransactions=false must reject nested transaction work",
-      )
+async function verifyNestedTransactionUnsupportedAsynchronous({
+  database,
+  outerRecord,
+  nestedRecord,
+}) {
+  await database.transaction(async (transaction) => {
+    await transaction.create({
+      collection: "people",
+      record: outerRecord,
     })
-  } else {
-    let nestedError
-    await database.transaction((transaction) => {
-      transaction.create({
-        collection: "people",
-        record: outerRecord,
-      })
+    await assert.rejects(
       database.transaction((nestedTransaction) => nestedTransaction.create({
         collection: "people",
         record: nestedRecord,
-      })).catch((error) => {
-        nestedError = error
-      })
-    })
-    await Promise.resolve()
-    assert.match(
-      nestedError?.message ?? "",
+      })),
       /nested/i,
-      "A synchronous provider declaring nestedTransactions=false must reject nested transaction work",
+      "A provider declaring nestedTransactions=false must reject nested transaction work",
     )
-  }
+  })
+}
 
+async function verifyNestedTransactionUnsupportedSynchronous({
+  database,
+  outerRecord,
+  nestedRecord,
+}) {
+  let nestedError
+  await database.transaction((transaction) => {
+    transaction.create({
+      collection: "people",
+      record: outerRecord,
+    })
+    database.transaction((nestedTransaction) => nestedTransaction.create({
+      collection: "people",
+      record: nestedRecord,
+    })).catch((error) => {
+      nestedError = error
+    })
+  })
+  await Promise.resolve()
+  assert.match(
+    nestedError?.message ?? "",
+    /nested/i,
+    "A synchronous provider declaring nestedTransactions=false must reject nested transaction work",
+  )
+}
+
+async function verifyNestedTransactionResults({ database, outerRecord, nestedRecord }) {
   assert.notEqual(
     await database.readOne({
       collection: "people",
@@ -597,6 +598,29 @@ async function verifyNestedTransactionUnsupported(database) {
     null,
     "A rejected nested transaction must not persist nested records",
   )
+}
+
+async function verifyNestedTransactionUnsupported(database) {
+  const outerRecord = {
+    id: "outer-transaction-1",
+    name: "Outer",
+  }
+  const nestedRecord = {
+    id: "nested-transaction-1",
+    name: "Nested",
+  }
+  const options = {
+    database,
+    outerRecord,
+    nestedRecord,
+  }
+
+  if (database.capabilities.transactions.callbackMode === "asynchronous") {
+    await verifyNestedTransactionUnsupportedAsynchronous(options)
+  } else {
+    await verifyNestedTransactionUnsupportedSynchronous(options)
+  }
+  await verifyNestedTransactionResults(options)
 }
 
 async function verifyNestedTransactions(database) {
