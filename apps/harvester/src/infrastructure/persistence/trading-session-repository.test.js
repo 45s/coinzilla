@@ -94,9 +94,20 @@ test("creates a trading session once and treats an identical duplicate as harmle
 
   const created = await repository.create(session)
   const duplicate = await repository.create(session)
+  await repository.transition({
+    id: session.id,
+    status: "RUNNING",
+  })
+  const stopped = await repository.transition({
+    id: session.id,
+    status: "STOPPED",
+    endedAt: SESSION_ENDED_AT,
+  })
+  const duplicateAfterLifecycle = await repository.create(session)
 
   assert.deepEqual(created, session, "The first process-session creation must persist the complete validated historical record.")
   assert.deepEqual(duplicate, created, "Retrying the same process-session identity and business facts must return the original record without creating a second session.")
+  assert.deepEqual(duplicateAfterLifecycle, stopped, "A delayed duplicate creation must return the existing terminal session without resetting its lifecycle or end timestamp.")
 })
 
 test("rejects conflicting reuse of a trading-session identity", async (t) => {
