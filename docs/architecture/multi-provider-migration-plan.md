@@ -206,11 +206,15 @@ Status is based on source implementation and repository tests at the audit basel
 
 Relevant implementation: `packages/brokers/src/infrastructure/binance/broker-websocket/broker.js`. The package and Harvester have offline tests for these paths. This audit did not execute them or perform exchange acceptance.
 
-### 5.2 Additional providers — explicitly out of scope
+### 5.2 Additional providers — deferred, not abandoned
 
-**Current supported runtime: Binance only.** This migration and its current implementation phases do not assess, implement, validate, route, or enable Bitunix or any other additional provider. Provider-specific work for another exchange requires a separately authorized scope and its own source/reference audit.
+**Binance is the first provider in the implementation sequence, not the permanent or exclusive provider.** Bitunix development is temporarily paused while Binance capability contracts and Harvester integration progress.
 
-Do not use the presence of another provider's source files or partial methods as evidence that it is supported by Harvester. No additional provider participates in execution routing, market-data routing, account lifecycle, capability acceptance, or this phase's test matrix.
+Existing Bitunix source, completed read-only work, and capability research remain part of the project. Bitunix implementation continues under [issue #1185](https://github.com/45s/coinzilla/issues/1185). Its current partial/read-only functionality must not be treated as Harvester execution readiness.
+
+When Bitunix implements and verifies the capabilities required by the shared broker contracts—including reliable account snapshots, stable order identity, safe placement and cancellation outcomes, complete order/fill reconciliation, private execution events, environment isolation, and lifecycle/recovery guarantees—it can be added to the provider registry and routed by Harvester under the same provider-neutral architecture.
+
+Until those acceptance requirements are met, Bitunix must not be enabled for Harvester execution. This temporary sequencing does not remove Bitunix from the target architecture or make Binance the only provider Harvester may support.
 
 ### 5.3 Capability reporting rule
 
@@ -477,9 +481,16 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 
 **Risk/rollback:** revert route resolution for new orders to the single Binance instance. Outstanding orders continue through their stored provenance; rollback must not reassign them based on current config.
 
-### Phase 7 — Additional provider enablement (future scope only)
+### Phase 7 — Bitunix capability completion and Harvester enablement (deferred)
 
-No additional provider is part of this delivery plan. If a future initiative authorizes another provider, it must begin with a separate issue/ADR, source-backed capability audit, and complete acceptance plan covering account snapshots, stable order identity, idempotent placement/reconciliation, cancellation outcomes, canonical order/fill history, private execution events, environment isolation, precision/filter rules, and lifecycle/recovery. This phase is not a commitment to implement or enable any named provider.
+**Owner:** Brokers, then Harvester for integration.
+**Tracking:** [Bitunix capability and lifecycle blockers — issue #1185](https://github.com/45s/coinzilla/issues/1185).
+
+Bitunix work is temporarily paused while Binance is the first provider brought through the shared capability-contract and Harvester integration path. Preserve existing Bitunix functionality and completed read-side work; do not enable incomplete execution capabilities.
+
+Resume Bitunix implementation when the Binance-first integration work provides the stable shared contracts needed by both providers. Complete the source-backed Bitunix capability gaps and prove the required account, order, fill, cancellation, private-event, environment, precision, and recovery guarantees. Then add Bitunix to Harvester through the same provider registry and explicit routing model—without provider-specific strategy logic, implicit fallback, or cross-provider retries.
+
+Bitunix enablement requires its own reviewable implementation and acceptance work under #1185 (or explicitly linked follow-up issues). The pause is sequencing only; it is not a decision to abandon Bitunix or exclude it from the target architecture.
 
 ## 9. Test and verification strategy
 
@@ -524,7 +535,7 @@ Severity indicates architectural/operational risk, not a reproduced incident. Th
 - Issue #1339 remains the live task contract and discussion location.
 - Harvester and Brokers roadmaps contain only concise ownership/status pointers to this plan and #1339.
 - Do not copy this full audit into either roadmap.
-- Keep #654 as the process-restart recovery release gate. Additional-provider work is outside this plan's current scope.
+- Keep #654 as the process-restart recovery release gate. Bitunix is deferred during the Binance-first sequence; its capability completion and eventual Harvester integration remain tracked in #1185.
 - Keep current Conservative strategy rules in the canonical Conservative Domain Specification.
 - Do not modify runtime code, schema files, credentials, environment settings, or exchange behavior as part of this audit/plan.
 
