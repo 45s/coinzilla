@@ -86,14 +86,20 @@ test("rejects execution fills with unsupported fields or inconsistent stable ide
     assert.throws(
       () => validateExecutionFillAppliedFact({
         ...valid,
-        canonicalData: { ...valid.canonicalData, ...changes },
+        canonicalData: {
+          ...valid.canonicalData,
+          ...changes,
+        },
       }),
       expectedError,
       `An execution fill must reject ${description}.`,
     )
   }
   assert.throws(
-    () => validateExecutionFillAppliedFact({ ...valid, factId: "wrong-id" }),
+    () => validateExecutionFillAppliedFact({
+      ...valid,
+      factId: "wrong-id",
+    }),
     /identities must match/,
     "The durable execution-fill fact ID must be derived from its canonical fill identity.",
   )
@@ -115,7 +121,10 @@ test("rejects non-positive or non-canonical execution amounts and invalid timest
     assert.throws(
       () => validateExecutionFillAppliedFact({
         ...valid,
-        canonicalData: { ...valid.canonicalData, ...changes },
+        canonicalData: {
+          ...valid.canonicalData,
+          ...changes,
+        },
       }),
       expectedError,
       `An execution fill must reject ${description}.`,
@@ -128,7 +137,14 @@ test("enforces commission completeness and the supported commission collection s
   const invalidCases = [
     ["unknown status with entries", {
       commissionStatus: "UNKNOWN",
-      commissions: [{ amount: "0", assetId: "binance:BNB", assetCode: "BNB", quoteValue: null }],
+      commissions: [
+        {
+          amount: "0",
+          assetId: "binance:BNB",
+          assetCode: "BNB",
+          quoteValue: null,
+        },
+      ],
     }, /contradict commission completeness/],
     ["partial status without entries", {
       commissionStatus: "PARTIAL",
@@ -146,7 +162,10 @@ test("enforces commission completeness and the supported commission collection s
     assert.throws(
       () => validateExecutionFillAppliedFact({
         ...valid,
-        canonicalData: { ...valid.canonicalData, ...changes },
+        canonicalData: {
+          ...valid.canonicalData,
+          ...changes,
+        },
       }),
       expectedError,
       `An execution fill must reject ${description}.`,
@@ -174,10 +193,42 @@ test("validates commission entries and quote valuations without floating-point c
   const invalidCommissions = [
     [null, /unsupported fields/],
     [[], /unsupported fields/],
-    [{ amount: "0.1", assetId: "binance:BNB", assetCode: "BNB", unsupported: true }, /unsupported fields/],
-    [{ amount: "-0.1", assetId: "binance:BNB", assetCode: "BNB", quoteValue: null }, /non-negative exact decimal/],
-    [{ amount: "0.1", assetId: "", assetCode: "BNB", quoteValue: null }, /non-empty string/],
-    [{ amount: "0.1", assetId: "binance:BNB", assetCode: "", quoteValue: null }, /non-empty string/],
+    [
+      {
+        amount: "0.1",
+        assetId: "binance:BNB",
+        assetCode: "BNB",
+        unsupported: true,
+      },
+      /unsupported fields/,
+    ],
+    [
+      {
+        amount: "-0.1",
+        assetId: "binance:BNB",
+        assetCode: "BNB",
+        quoteValue: null,
+      },
+      /non-negative exact decimal/,
+    ],
+    [
+      {
+        amount: "0.1",
+        assetId: "",
+        assetCode: "BNB",
+        quoteValue: null,
+      },
+      /non-empty string/,
+    ],
+    [
+      {
+        amount: "0.1",
+        assetId: "binance:BNB",
+        assetCode: "",
+        quoteValue: null,
+      },
+      /non-empty string/,
+    ],
     [{
       amount: "0.1",
       assetId: "binance:BNB",
