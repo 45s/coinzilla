@@ -200,7 +200,7 @@ test("Bitunix Spot kline history forwards bounded query parameters and normalize
   const result = await broker.getKlineHistory({
     symbol: "BTCUSDT",
     interval: "1",
-    endTime: 1794916800,
+    endTime: "1794916800",
     limit: 100,
   })
 
@@ -250,7 +250,6 @@ test("Bitunix Spot kline history rejects unsupported startTime and malformed row
   assert.equal(calls.length, 1, "unsupported startTime must be rejected before any request")
 })
 
-
 test("Bitunix Spot current kline rejects OHLC values outside the candle range", async () => {
   const { broker, calls } = createBroker({
     responses: {
@@ -286,4 +285,24 @@ test("Bitunix Spot kline history rejects unsupported time units and out-of-range
   assert.equal(millisecondEndTime.ok, false, "history endTime must use the documented seconds unit")
   assert.equal(excessiveLimit.ok, false, "history limit must not exceed the documented maximum of 500")
   assert.equal(calls.length, 0, "invalid history query boundaries must be rejected before transport")
+})
+
+
+test("Bitunix Spot kline timestamps must include an explicit timezone", async () => {
+  const { broker } = createBroker({
+    responses: {
+      [KLINE_PATH]: {
+        ...validKline,
+        ts: "2026-11-17T12:00:00",
+      },
+    },
+  })
+
+  const result = await broker.getKlines({
+    symbol: "BTCUSDT",
+    interval: "60",
+  })
+
+  assert.equal(result.ok, false, "timezone-less timestamps must not be interpreted using the local machine timezone")
+  assert.match(result.errors[0].message, /ISO 8601/i)
 })
