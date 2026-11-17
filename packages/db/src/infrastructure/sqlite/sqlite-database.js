@@ -70,22 +70,20 @@ function createGuardedStatement({ statement, assertActive }) {
   })
 }
 
-function rollbackSqliteTransaction({ activeConnection, error }) {
-  if (!activeConnection.isTransaction) {
-    throw error
-  }
-
-  try {
-    activeConnection.exec("ROLLBACK")
-  } catch (rollbackError) {
-    throw new AggregateError(
-      [error, rollbackError],
-      "SQLite transaction failed and rollback also failed",
-      { cause: error },
-    )
-  }
-
-  throw error
+function createSqliteTransactionHandle({ activeConnection, assertActive }) {
+  return Object.freeze({
+    exec(sql) {
+      assertActive()
+      return activeConnection.exec(sql)
+    },
+    prepare(sql) {
+      assertActive()
+      return createGuardedStatement({
+        statement: activeConnection.prepare(sql),
+        assertActive,
+      })
+    },
+  })
 }
 
 function createSqliteTransactionHandler({ requireConnection, intent }) {
@@ -109,18 +107,9 @@ function createSqliteTransactionHandler({ requireConnection, intent }) {
     }
 
     try {
-      const transaction = Object.freeze({
-        exec(sql) {
-          assertActive()
-          return activeConnection.exec(sql)
-        },
-        prepare(sql) {
-          assertActive()
-          return createGuardedStatement({
-            statement: activeConnection.prepare(sql),
-            assertActive,
-          })
-        },
+      const transaction = createSqliteTransactionHandle({
+        activeConnection,
+        assertActive,
       })
       const result = work(transaction)
 
@@ -134,10 +123,27 @@ function createSqliteTransactionHandler({ requireConnection, intent }) {
       return result
     } catch (error) {
       transactionActive = false
-      rollbackSqliteTransaction({
-        activeConnection,
-        error,
-      })
+      if (activeConnection.isTransaction) {
+        let rollbackFailed = false
+        let rollbackError
+
+        try {
+          activeConnection.exec("ROLLBACK")
+        } catch (caughtRollbackError) {
+          rollbackFailed = true
+          rollbackError = caughtRollbackError
+        }
+
+        if (rollbackFailed) {
+          throw new AggregateError(
+            [error, rollbackError],
+            "SQLite transaction failed and rollback also failed",
+            { cause: error },
+          )
+        }
+      }
+
+      throw error
     }
   }
 }
