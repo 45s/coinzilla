@@ -73,7 +73,7 @@ test("retains the original SELL identity when submission acknowledgement is unkn
     "Unknown submission is not terminal reconciliation evidence.")
 })
 
-test("closes a cycle only after a fully reconciled FILLED SELL passes cycle profitability", () => {
+test("closes a cycle only after a fully reconciled FILLED SELL passes all applicable profitability gates", () => {
   const state = reconcileRecoverySellerCycleSell({
     state: submittedCycle(),
     orderIdentity: {
@@ -89,7 +89,7 @@ test("closes a cycle only after a fully reconciled FILLED SELL passes cycle prof
   assert.equal(state.terminalReconciled, true,
     "The closed cycle must retain complete reconciliation evidence.")
   assert.equal(state.profitabilityEligible, true,
-    "The closed cycle must retain the successful combined cycle profitability result.")
+    "The closed cycle must retain the successful overall recovery, legacy and combined profitability result.")
 })
 
 test("keeps a terminal partial, canceled, rejected or expired SELL unresolved", () => {
@@ -123,7 +123,7 @@ test("keeps a terminal partial, canceled, rejected or expired SELL unresolved", 
     "A canceled SELL with partial execution must remain unresolved even if the realized proceeds appear profitable.")
 })
 
-test("keeps a FILLED SELL unresolved when realized cycle profitability fails", () => {
+test("keeps a FILLED SELL unresolved when any applicable profitability gate fails", () => {
   const state = reconcileRecoverySellerCycleSell({
     state: submittedCycle(),
     orderIdentity: {
