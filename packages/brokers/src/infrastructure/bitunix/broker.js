@@ -108,11 +108,7 @@ function applyHistoryFilters({ body, status, side, type }) {
   }
 }
 
-function createDepositRequest({ input }) {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new TypeError("Bitunix Spot getDeposits() input must be an object")
-  }
-  const body = {}
+function addDepositStringFilters({ input, body }) {
   for (const field of ["id", "coin", "transactionHash"]) {
     if (input[field] === undefined) {
       continue
@@ -122,15 +118,22 @@ function createDepositRequest({ input }) {
     }
     body[field] = input[field]
   }
-  if (input.type !== undefined) {
-    if (input.type !== "deposit" && input.type !== "inside_transfer_in") {
-      throw new TypeError("Bitunix Spot deposit type filter is unsupported")
-    }
-    body.type = input.type
+}
+
+function addDepositTypeFilter({ input, body }) {
+  if (input.type === undefined) {
+    return
+  }
+  if (input.type !== "deposit" && input.type !== "inside_transfer_in") {
+    throw new TypeError("Bitunix Spot deposit type filter is unsupported")
   }
   if (input.transactionHash !== undefined && input.type !== "deposit") {
     throw new TypeError("Bitunix Spot transactionHash filter requires type=deposit")
   }
+  body.type = input.type
+}
+
+function addDepositTimeFilters({ input, body }) {
   validateHistoryTimeRange({
     startTime: input.startTime,
     endTime: input.endTime,
@@ -141,12 +144,27 @@ function createDepositRequest({ input }) {
   if (input.endTime !== undefined) {
     body.endTime = input.endTime
   }
-  if (input.limit !== undefined) {
-    if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 100) {
-      throw new RangeError("Bitunix Spot deposit limit must be an integer between 1 and 100")
-    }
-    body.limit = input.limit
+}
+
+function addDepositLimitFilter({ input, body }) {
+  if (input.limit === undefined) {
+    return
   }
+  if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 100) {
+    throw new RangeError("Bitunix Spot deposit limit must be an integer between 1 and 100")
+  }
+  body.limit = input.limit
+}
+
+function createDepositRequest({ input }) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("Bitunix Spot getDeposits() input must be an object")
+  }
+  const body = {}
+  addDepositStringFilters({ input, body })
+  addDepositTypeFilter({ input, body })
+  addDepositTimeFilters({ input, body })
+  addDepositLimitFilter({ input, body })
   return { body }
 }
 
