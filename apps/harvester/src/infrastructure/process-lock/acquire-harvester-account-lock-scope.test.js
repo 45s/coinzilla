@@ -40,7 +40,7 @@ test("allows Testnet and production writers to coexist", async () => {
   }
 })
 
-test("blocks a second writer in the same environment across worktrees, regardless of account", async () => {
+test("blocks a second writer in the same environment across worktrees", async () => {
   const { root, globalDirectory } = await createLockDirectories()
   try {
     const first = await acquireHarvesterProcessLocks({
@@ -87,9 +87,9 @@ test("concurrent acquisitions for one broker and environment have exactly one wi
     const attempts = await Promise.all(Array.from({ length: 8 }, () =>
       acquireHarvesterProcessLocks({
         globalDirectory,
-      journalDirectory,
-      broker: "binance",
-      tradingMode: "testnet",
+        journalDirectory,
+        broker: "binance",
+        tradingMode: "testnet",
       })))
     const winners = attempts.filter((result) => result.ok === true)
     assert.equal(winners.length, 1)
