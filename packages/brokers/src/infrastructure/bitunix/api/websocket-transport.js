@@ -12,6 +12,31 @@ function createSocketError({ event, phase }) {
   return error
 }
 
+function validateTransportOptions({
+  url,
+  WebSocketCtor,
+  connectTimeout,
+  closeTimeout,
+  setTimeoutFn,
+  clearTimeoutFn,
+}) {
+  if (typeof url !== "string" || !url.startsWith("wss://")) {
+    throw new TypeError("Bitunix WebSocket URL must use wss://")
+  }
+  if (typeof WebSocketCtor !== "function") {
+    throw new Error("This Node.js runtime does not provide the built-in WebSocket")
+  }
+  if (!Number.isInteger(connectTimeout) || connectTimeout < 1) {
+    throw new RangeError("Bitunix WebSocket connectTimeout must be a positive integer")
+  }
+  if (!Number.isInteger(closeTimeout) || closeTimeout < 1) {
+    throw new RangeError("Bitunix WebSocket closeTimeout must be a positive integer")
+  }
+  if (typeof setTimeoutFn !== "function" || typeof clearTimeoutFn !== "function") {
+    throw new TypeError("Bitunix WebSocket timer dependencies must be functions")
+  }
+}
+
 /**
  * Own one native WHATWG WebSocket connection for the Bitunix Spot RPC client.
  * This transport has no exchange-specific signing or request semantics.
@@ -36,29 +61,23 @@ export class BitunixWebSocketTransport {
   /**
    * @param {{url: string, WebSocketCtor?: new (url: string) => object, connectTimeout?: number, closeTimeout?: number, setTimeoutFn?: typeof setTimeout, clearTimeoutFn?: typeof clearTimeout}} options
    */
-  constructor({
-    url,
-    WebSocketCtor = globalThis.WebSocket,
-    connectTimeout = DEFAULT_CONNECT_TIMEOUT,
-    closeTimeout = DEFAULT_CLOSE_TIMEOUT,
-    setTimeoutFn = setTimeout,
-    clearTimeoutFn = clearTimeout,
-  } = {}) {
-    if (typeof url !== "string" || !url.startsWith("wss://")) {
-      throw new TypeError("Bitunix WebSocket URL must use wss://")
-    }
-    if (typeof WebSocketCtor !== "function") {
-      throw new Error("This Node.js runtime does not provide the built-in WebSocket")
-    }
-    if (!Number.isInteger(connectTimeout) || connectTimeout < 1) {
-      throw new RangeError("Bitunix WebSocket connectTimeout must be a positive integer")
-    }
-    if (!Number.isInteger(closeTimeout) || closeTimeout < 1) {
-      throw new RangeError("Bitunix WebSocket closeTimeout must be a positive integer")
-    }
-    if (typeof setTimeoutFn !== "function" || typeof clearTimeoutFn !== "function") {
-      throw new TypeError("Bitunix WebSocket timer dependencies must be functions")
-    }
+  constructor(options = {}) {
+    const {
+      url,
+      WebSocketCtor = globalThis.WebSocket,
+      connectTimeout = DEFAULT_CONNECT_TIMEOUT,
+      closeTimeout = DEFAULT_CLOSE_TIMEOUT,
+      setTimeoutFn = setTimeout,
+      clearTimeoutFn = clearTimeout,
+    } = options
+    validateTransportOptions({
+      url,
+      WebSocketCtor,
+      connectTimeout,
+      closeTimeout,
+      setTimeoutFn,
+      clearTimeoutFn,
+    })
 
     this.url = url
     this.WebSocketCtor = WebSocketCtor
@@ -91,61 +110,20 @@ export class BitunixWebSocketTransport {
       this.#state = "closed"
       return Promise.reject(error)
     }
+    return this.#createConnectionPromise()
+  }
 
-    this.#connectPromise = new Promise((resolve, reject) => {
+  #createConnectionPromise() {
+    this.#connectPromise = new Promise((...callbacks) => {
+      const [resolve, reject] = callbacks
       this.#rejectConnect = reject
-      this.#handlers = {
-        open: () => {
-          if (this.#state !== "connecting") {
-            return
-          }
-          this.#clearConnectTimer()
-          this.#state = "open"
-          this.#rejectConnect = null
-          resolve(this)
-        },
-        message: (event) => this.#emit({
-          type: "message",
-          value: event.data,
-        }),
-        error: (event) => {
-          const error = createSocketError({
-            event,
-            phase: this.#state === "connecting" ? "handshake" : "socket",
-          })
-          this.#emit({
-            type: "error",
-            value: error,
-          })
-          if (this.#state === "connecting") {
-            this.#connectError = error
-            this.#beginClosing()
-          }
-        },
-        close: (event) => this.#finalizeClose({
-          code: event.code,
-          reason: event.reason,
-          wasClean: event.wasClean,
-        }),
-      }
-
+      this.#handlers = this.#createHandlers({ resolve })
       const attached = []
       try {
-        for (const [type, handler] of Object.entries(this.#handlers)) {
-          this.#socket.addEventListener(type, handler)
-          attached.push([type, handler])
-        }
-        this.#connectTimer = this.setTimeout(() => {
-          if (this.#state !== "connecting") {
-            return
-          }
-          this.#connectError = new Error(`Bitunix WebSocket connection timed out after ${this.connectTimeout} ms`)
-          this.#beginClosing()
-        }, this.connectTimeout)
+        this.#attachHandlers({ attached })
+        this.#startConnectTimer()
       } catch (error) {
-        for (const [type, handler] of attached) {
-          this.#socket.removeEventListener(type, handler)
-        }
+        this.#removeAttachedHandlers({ attached })
         this.#handlers = null
         this.#state = "closed"
         this.#rejectConnect = null
@@ -153,6 +131,68 @@ export class BitunixWebSocketTransport {
       }
     })
     return this.#connectPromise
+  }
+
+  #createHandlers({ resolve }) {
+    return {
+      open: () => {
+        if (this.#state !== "connecting") {
+          return
+        }
+        this.#clearConnectTimer()
+        this.#state = "open"
+        this.#rejectConnect = null
+        resolve(this)
+      },
+      message: (event) => this.#emit({
+        type: "message",
+        value: event.data,
+      }),
+      error: (event) => this.#handleSocketError(event),
+      close: (event) => this.#finalizeClose({
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean,
+      }),
+    }
+  }
+
+  #attachHandlers({ attached }) {
+    for (const [type, handler] of Object.entries(this.#handlers)) {
+      this.#socket.addEventListener(type, handler)
+      attached.push([type, handler])
+    }
+  }
+
+  #removeAttachedHandlers({ attached }) {
+    for (const [type, handler] of attached) {
+      this.#socket.removeEventListener(type, handler)
+    }
+  }
+
+  #startConnectTimer() {
+    this.#connectTimer = this.setTimeout(() => {
+      if (this.#state !== "connecting") {
+        return
+      }
+      this.#connectError = new Error(`Bitunix WebSocket connection timed out after ${this.connectTimeout} ms`)
+      this.#beginClosing()
+    }, this.connectTimeout)
+  }
+
+  #handleSocketError(event) {
+    const error = createSocketError({
+      event,
+      phase: this.#state === "connecting" ? "handshake" : "socket",
+    })
+    this.#emit({
+      type: "error",
+      value: error,
+    })
+    if (this.#state === "connecting") {
+      this.#connectError = error
+      this.#beginClosing()
+    }
   }
 
   /** @param {string} message */
