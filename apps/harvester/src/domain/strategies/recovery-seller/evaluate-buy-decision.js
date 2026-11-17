@@ -532,7 +532,14 @@ function resolveAccumulatingCycle({ stopState, previousDecision, blockingOrders 
   })
 }
 
-function resolveExistingOrder({ stopState, previousDecision, activeOrders, symbol, cycleState, positionId }) {
+function resolveExistingOrder({
+  stopState,
+  previousDecision,
+  activeOrders,
+  symbol,
+  cycleState,
+  positionId,
+}) {
   const blockingOrders = findBlockingOrders({
     activeOrders,
     symbol,
@@ -951,7 +958,14 @@ function evaluateBuyCandidate({
   }
 }
 
-function createBuySubmitResult({ stopState, previousDecision, marketMetadata, cycleState, positionId, plan }) {
+function createBuySubmitResult({
+  stopState,
+  previousDecision,
+  marketMetadata,
+  cycleState,
+  positionId,
+  plan,
+}) {
   const decision = createRecoverySellerLifecycleDecision({
     outcome: RECOVERY_SELLER_LIFECYCLE_OUTCOMES.SUBMIT,
     reasonCode: "BUY_TRANCHE_ELIGIBLE",
