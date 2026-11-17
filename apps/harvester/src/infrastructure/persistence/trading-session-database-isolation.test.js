@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
-import { mkdtemp, rm } from "node:fs/promises"
+import { link, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
@@ -8,7 +8,10 @@ import {
   createDatabase,
   createSqliteProvider,
 } from "@coinzilla/db"
-import { resolveTradingSessionDatabaseFilename } from "./resolve-trading-session-database-filename.js"
+import {
+  assertTradingSessionDatabaseIsolation,
+  resolveTradingSessionDatabaseFilename,
+} from "./resolve-trading-session-database-filename.js"
 
 const CHILD_SCRIPT = `
 import { createDatabase, createSqliteProvider } from "@coinzilla/db"
@@ -145,6 +148,58 @@ test("rejects invalid trading modes and unsafe configured database paths", () =>
     }),
     /HARVESTER_DATABASE_DIRECTORY must not be a filesystem root/,
     "A filesystem root must not be accepted as the Harvester database directory.",
+  )
+})
+
+test("rejects aliased Production and Testnet directories", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-db-directory-alias-"))
+  t.after(async () => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+  const testnetDirectory = path.join(directory, "testnet")
+  const productionDirectory = path.join(directory, "production")
+  await mkdir(testnetDirectory, { recursive: true })
+  await symlink(testnetDirectory, productionDirectory, "dir")
+
+  await assert.rejects(
+    assertTradingSessionDatabaseIsolation({
+      tradingMode: "live",
+      env: {
+        HARVESTER_DATABASE_DIRECTORY: directory,
+      },
+    }),
+    /Unable to establish separate, safe Production and Testnet database locations/,
+    "A Production directory symlinked to Testnet must be rejected before either process opens SQLite.",
+  )
+})
+
+test("rejects hard-linked Production and Testnet database files", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-db-file-alias-"))
+  t.after(async () => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+  const productionDirectory = path.join(directory, "production")
+  const testnetDirectory = path.join(directory, "testnet")
+  await Promise.all([
+    mkdir(productionDirectory, { recursive: true }),
+    mkdir(testnetDirectory, { recursive: true }),
+  ])
+  const productionFilename = path.join(productionDirectory, "harvester.db")
+  const testnetFilename = path.join(testnetDirectory, "harvester.db")
+  await writeFile(productionFilename, "test database placeholder")
+  await link(productionFilename, testnetFilename)
+
+  await assert.rejects(
+    assertTradingSessionDatabaseIsolation({
+      tradingMode: "testnet",
+      env: {
+        HARVESTER_DATABASE_DIRECTORY: directory,
+      },
+    }),
+    /Unable to establish separate, safe Production and Testnet database locations/,
+    "Hard-linked Production and Testnet files must be rejected as one shared filesystem object.",
   )
 })
 
