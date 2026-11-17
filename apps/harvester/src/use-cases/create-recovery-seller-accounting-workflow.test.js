@@ -102,7 +102,7 @@ function makeRegistry(order) {
   })
 }
 
-function makeContext({ fill = makeFill() } = {}) {
+function makeRecoveryBuyPortfolio() {
   const buyFill = new Fill({
     tradeId: "buy-1",
     brokerOrderId: "broker-buy-1",
@@ -124,11 +124,15 @@ function makeContext({ fill = makeFill() } = {}) {
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  const { portfolio } = new Portfolio().applyFill({
+  return new Portfolio().applyFill({
     fill: buyFill,
     positionId,
     strategyId,
-  })
+  }).portfolio
+}
+
+function makeContext({ fill = makeFill() } = {}) {
+  const portfolio = makeRecoveryBuyPortfolio()
   const openOrder = makeOrder()
   const terminalOrder = makeOrder({
     status: "FILLED",
@@ -494,4 +498,327 @@ test("rejects inconsistent restored legacy basis before exposing custody provide
     /original invested\/quantity basis/,
     "Restored legacy state must preserve the original operator-declared average cost.",
   )
+})
+
+
+function makeRecoveryBuyOrder() {
+  return new CanonicalOrder({
+    clientOrderId: "rs-buy-1",
+    brokerOrderId: "broker-buy-1",
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    status: "OPEN",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 101,
+  })
+}
+
+function makeRecoveryBuyFill({ tradeId, brokerOrderId = "broker-buy-1", quantity, quoteQuantity } = {}) {
+  return new Fill({
+    tradeId,
+    brokerOrderId,
+    clientOrderId: "rs-buy-1",
+    market,
+    side: "BUY",
+    price: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: quantity,
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: quoteQuantity,
+      asset: quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+}
+
+function makeRecoveryBuyRegistry(order) {
+  const ownership = createOrderOwnership({
+    ownership: {
+      strategyId,
+      positionId,
+      purpose: "RECOVERY_BUY",
+      cycleId: "rs-cycle-1",
+    },
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+  })
+  return new OrderRegistry({
+    orders: [order],
+    ownerships: [ownership],
+  })
+}
+
+test("applies RS BUY fills to the registered Position exactly once and rejects mismatched order identity", async () => {
+  const order = makeRecoveryBuyOrder()
+  const workflow = createRecoverySellerAccountingWorkflow({
+    initialPortfolio: new Portfolio(),
+    initialOrderRegistry: makeRecoveryBuyRegistry(order),
+  })
+  const firstFill = makeRecoveryBuyFill({
+    tradeId: "rs-buy-fill-1",
+    quantity: "2.5",
+    quoteQuantity: "5",
+  })
+  const secondFill = makeRecoveryBuyFill({
+    tradeId: "rs-buy-fill-2",
+    quantity: "2.51",
+    quoteQuantity: "5.02",
+  })
+
+  const first = await workflow.applyBuyFill({ fill: firstFill })
+  const second = await workflow.applyBuyFill({ fill: secondFill })
+  const portfolioAfterFills = workflow.getPortfolio()
+  const duplicate = await workflow.applyBuyFill({ fill: firstFill })
+  const replayedWorkflow = createRecoverySellerAccountingWorkflow({
+    initialPortfolio: portfolioAfterFills,
+    initialOrderRegistry: workflow.getOrderRegistry(),
+  })
+  const replayed = await replayedWorkflow.applyBuyFill({ fill: firstFill })
+  const mismatched = await workflow.applyBuyFill({
+    fill: makeRecoveryBuyFill({
+      tradeId: "rs-buy-fill-wrong-broker",
+      brokerOrderId: "unowned-broker-order",
+      quantity: "1",
+      quoteQuantity: "2",
+    }),
+  })
+  const position = workflow.getPortfolio().getPosition({ positionId })
+
+  assert.equal(first.ok, true, first.errors?.[0]?.message)
+  assert.equal(first.data.applied, true)
+  assert.equal(second.ok, true, second.errors?.[0]?.message)
+  assert.equal(second.data.applied, true)
+  assert.equal(duplicate.ok, true, duplicate.errors?.[0]?.message)
+  assert.equal(duplicate.data.applied, false)
+  assert.equal(duplicate.data.duplicate, true)
+  assert.equal(duplicate.data.portfolio, portfolioAfterFills,
+    "Replaying an identical canonical BUY Fill must preserve the exact Portfolio snapshot.")
+  assert.equal(replayed.ok, true, replayed.errors?.[0]?.message)
+  assert.equal(replayed.data.duplicate, true,
+    "Restoring the Portfolio and OrderRegistry before replay must not account the same Fill twice.")
+  assert.equal(replayed.data.portfolio, portfolioAfterFills)
+  assert.equal(position.strategyId, strategyId)
+  assert.equal(position.baseQuantity.amount, "5.01")
+  assert.equal(position.spent.amount, "10.02",
+    "Accumulated RS BUY basis must use the actual quote quantities of both canonical fills.")
+  assert.equal(workflow.getPortfolio().appliedFillIds.length, 2)
+  assert.equal(first.data.ownership.cycleId, "rs-cycle-1")
+  assert.equal(mismatched.ok, false,
+    "A Fill attributed to a different broker order must fail closed.")
+  assert.equal(workflow.getPortfolio(), portfolioAfterFills,
+    "A rejected Fill must not mutate the RS Portfolio.")
+})
+
+
+function makePendingRecoveryBuyOrder({ clientOrderId = "rs-buy-pending" } = {}) {
+  return new CanonicalOrder({
+    clientOrderId,
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    status: "PENDING",
+    createdAt: 100,
+    updatedAt: 100,
+  })
+}
+
+function makeAcknowledgedRecoveryBuyOrder({ pendingOrder, brokerOrderId = "broker-buy-ack" } = {}) {
+  return new CanonicalOrder({
+    clientOrderId: pendingOrder.clientOrderId,
+    brokerOrderId,
+    market: pendingOrder.market,
+    side: pendingOrder.side,
+    type: pendingOrder.type,
+    limitPrice: pendingOrder.limitPrice,
+    originalQuantity: pendingOrder.originalQuantity,
+    executedQuantity: pendingOrder.executedQuantity,
+    status: "OPEN",
+    createdAt: pendingOrder.createdAt,
+    acknowledgedAt: 101,
+    updatedAt: 101,
+  })
+}
+
+test("exposes RS submission callbacks that preserve ownership across acknowledgement, uncertainty, rejection and deferral", () => {
+  const ownership = {
+    strategyId,
+    positionId,
+    purpose: "RECOVERY_BUY",
+    cycleId: "rs-cycle-callbacks",
+  }
+  const workflow = createRecoverySellerAccountingWorkflow()
+  const callbacks = workflow.getExecutionCallbacks()
+  const pendingOrder = makePendingRecoveryBuyOrder()
+
+  callbacks.onPendingOrder({
+    order: pendingOrder,
+    ownership,
+  })
+  assert.deepEqual(workflow.getOrderRegistry().getOwnership({ clientOrderId: pendingOrder.clientOrderId }), {
+    clientOrderId: pendingOrder.clientOrderId,
+    ...ownership,
+  })
+
+  callbacks.onAcknowledgedOrder({
+    order: makeAcknowledgedRecoveryBuyOrder({ pendingOrder }),
+  })
+  callbacks.onSubmissionFailure({
+    order: pendingOrder,
+    outcome: "UNKNOWN",
+    ownership,
+  })
+  assert.equal(workflow.getOrderRegistry().getOrder({ clientOrderId: pendingOrder.clientOrderId }).status, "UNKNOWN")
+  assert.deepEqual(workflow.getOrderRegistry().getOwnership({ brokerOrderId: "broker-buy-ack" }).positionId, positionId)
+
+  const rejectedWorkflow = createRecoverySellerAccountingWorkflow()
+  const rejectedCallbacks = rejectedWorkflow.getExecutionCallbacks()
+  const rejectedOrder = makePendingRecoveryBuyOrder({ clientOrderId: "rs-buy-rejected" })
+  rejectedCallbacks.onPendingOrder({
+    order: rejectedOrder,
+    ownership,
+  })
+  rejectedCallbacks.onSubmissionFailure({
+    order: rejectedOrder,
+    outcome: "REJECTED",
+    ownership,
+  })
+  assert.equal(rejectedWorkflow.getOrderRegistry().getOrder({ clientOrderId: rejectedOrder.clientOrderId }), undefined)
+  assert.equal(rejectedWorkflow.getOrderRegistry().getOwnership({ clientOrderId: rejectedOrder.clientOrderId }), undefined)
+
+  const deferredWorkflow = createRecoverySellerAccountingWorkflow()
+  const deferredCallbacks = deferredWorkflow.getExecutionCallbacks()
+  const deferredOrder = makePendingRecoveryBuyOrder({ clientOrderId: "rs-buy-deferred" })
+  deferredCallbacks.onPendingOrder({
+    order: deferredOrder,
+    ownership,
+  })
+  deferredCallbacks.onSubmissionDeferred({
+    order: deferredOrder,
+    registered: true,
+    ownership,
+  })
+  assert.equal(deferredWorkflow.getOrderRegistry().getOrder({ clientOrderId: deferredOrder.clientOrderId }), undefined)
+})
+
+
+test("rejects malformed restored legacy Fill identity records", () => {
+  const context = makeContext()
+  const accounting = {
+    ...context.legacyAccounting,
+    appliedFillIds: ["fill-1"],
+    appliedFillFingerprints: [{
+      id: "fill-2",
+      fillFingerprint: "fill-fingerprint",
+      allocationFingerprint: "allocation-fingerprint",
+    }],
+  }
+
+  assert.throws(
+    () => createRecoverySellerAccountingWorkflow({
+      initialPortfolio: context.portfolio,
+      initialOrderRegistry: context.openRegistry,
+      initialLegacyPositions: [{
+        market,
+        position: context.legacyPosition,
+        accounting,
+      }],
+    }),
+    {
+      name: "TypeError",
+      message: "Recovery Seller legacy Fill identity history is invalid",
+    },
+    "Malformed restored Fill identity records must fail closed instead of recursing or being accepted.",
+  )
+})
+
+
+test("persists a BUY execution fact before publishing RS Portfolio accounting", async () => {
+  const order = makeRecoveryBuyOrder()
+  const fill = makeRecoveryBuyFill({
+    tradeId: "rs-buy-durable-1",
+    quantity: "5.01",
+    quoteQuantity: "10.02",
+  })
+  const persistenceCalls = []
+  const workflow = createRecoverySellerAccountingWorkflow({
+    initialPortfolio: new Portfolio(),
+    initialOrderRegistry: makeRecoveryBuyRegistry(order),
+    onOperationalStateExecutionFill: async ({ fill: received }) => {
+      persistenceCalls.push(received)
+      assert.equal(workflow.getPortfolio().positions.length, 0,
+        "RS Portfolio state must remain unchanged while the durable fill append is pending.")
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
+  })
+
+  const applied = await workflow.applyBuyFill({ fill })
+  const duplicate = await workflow.applyBuyFill({ fill })
+
+  assert.equal(applied.ok, true, applied.errors?.[0]?.message)
+  assert.equal(applied.data.applied, true)
+  assert.equal(duplicate.ok, true, duplicate.errors?.[0]?.message)
+  assert.equal(duplicate.data.duplicate, true)
+  assert.deepEqual(persistenceCalls, [fill],
+    "A replayed canonical Fill must not append a second durable execution fact.")
+  assert.equal(workflow.getPortfolio().getPosition({ positionId }).spent.amount, "10.02")
+})
+
+test("does not publish RS BUY accounting when the durable execution-fill append fails", async () => {
+  const order = makeRecoveryBuyOrder()
+  const fill = makeRecoveryBuyFill({
+    tradeId: "rs-buy-durable-failure",
+    quantity: "5.01",
+    quoteQuantity: "10.02",
+  })
+  const workflow = createRecoverySellerAccountingWorkflow({
+    initialPortfolio: new Portfolio(),
+    initialOrderRegistry: makeRecoveryBuyRegistry(order),
+    onOperationalStateExecutionFill: async () => ({
+      ok: false,
+      errors: [new Error("execution fact fsync failed")],
+    }),
+  })
+
+  const result = await workflow.applyBuyFill({ fill })
+
+  assert.equal(result.ok, false,
+    "A BUY Fill must not be committed to the RS Portfolio before its durable fact is confirmed.")
+  assert.match(result.errors[0].message, /execution fact fsync failed/)
+  assert.equal(workflow.getPortfolio().positions.length, 0)
+  assert.deepEqual(workflow.getPortfolio().appliedFillIds, [])
 })
