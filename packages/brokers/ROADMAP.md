@@ -6,6 +6,10 @@ type: roadmap
 owner: brokers
 ---
 
+## Multi-provider construction and capability contracts — #1339
+
+- [ ] **Accepted cross-domain target; implementation not started.** Provide stable, provider-specific construction/configuration boundaries and truthful, testable capability declarations so a consumer can construct multiple instances (including multiple accounts/environments) without the Brokers package owning strategy/market routing. Preserve public exports, `CoreBroker` compatibility, exact decimal/error behavior, and existing Binance consumers. Harvester owns the provider registry/router and all strategy/market assignment. Binance keeps ADR-0002's explicit `TRADING_MODE`; do not infer environment semantics for other exchanges. Bitunix Spot remains read-only and not Harvester-ready while [#1185](https://github.com/45s/coinzilla/issues/1185) is unresolved. See [ADR-0003](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and [issue #1339](https://github.com/45s/coinzilla/issues/1339).
+
 ## Priority execution plan — current develop direction (2026-11-10)
 
 This section is authoritative for next work and orders the broker package by risk. Historical phases below remain implementation evidence.

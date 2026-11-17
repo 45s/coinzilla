@@ -2,6 +2,10 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+## Multi-provider execution and market-data routing — #1339
+
+- [ ] **Accepted target architecture; implementation not started.** Add named provider instances, exact `(strategyId, symbol) -> providerInstanceId` execution routes, independent `symbol -> providerInstanceId` market-data routes, immutable provider/account order provenance, account isolation, truthful capability gates, and deterministic multi-provider lifecycle/recovery. Harvester owns route policy and the application registry/router; Brokers owns concrete provider factories and exchange capabilities. No implicit default, wildcard, or cross-provider failover. Preserve the current Binance-only runtime and ADR-0002 until migration is implemented. RS and Bitunix examples are illustrative only: RS remains non-executable and Bitunix Spot remains read-only / not Harvester-ready under [#1185](https://github.com/45s/coinzilla/issues/1185). See [ADR-0003](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and [issue #1339](https://github.com/45s/coinzilla/issues/1339).
+
 ## Binance single-writer lock isolation — #1307
 
 - [~] Scope both host-shared Harvester process locks by Binance provider and explicit trading environment. Preserve atomic exclusive creation, ownership-token release, conservative dead-PID recovery, and process-lock retention on uncertain shutdown. Testnet and LIVE must coexist; duplicate writers in one environment remain blocked across worktrees. Lock identity depends only on broker and trading mode. See [Journal Operations — Trading process ownership locks](./docs/JOURNAL_OPERATIONS.md#trading-process-ownership-locks) and [issue #1307](https://github.com/45s/coinzilla/issues/1307).

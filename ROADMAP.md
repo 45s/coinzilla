@@ -7,6 +7,10 @@
 **Last reviewed:** 2026-11-17
 **Last source-verified develop checkpoint:** `1ff9e16083f067802ed17533da419874f958d32c` (2026-11-17; progressive strict ESLint enforcement merged and verified on `develop`).
 
+## Multi-provider Harvester execution and market-data routing — #1339
+
+- **Planned — accepted architecture, implementation not started.** Harvester will own explicit strategy/market execution routing, independent market-data routing, provider/account provenance and account isolation; Brokers will supply provider construction and verified capabilities. Preserve the current Binance-only runtime until the phased migration is complete. Bitunix remains read-only / not Harvester-ready and RS remains non-executable. See [ADR-0003](docs/architecture/decisions/ADR-0003-multi-provider-routing.md), [issue #1339](https://github.com/45s/coinzilla/issues/1339), and the [Harvester](apps/harvester/ROADMAP.md) / [Brokers](packages/brokers/ROADMAP.md) owner roadmaps.
+
 ## Repository-wide agent workflow continuity
 
 - **Incremental commits and resumable handoffs — IN PROGRESS** ([issue #1199](https://github.com/45s/coinzilla/issues/1199)). Strengthen the existing agent workflow so task issues remain the live contract, commits form small meaningful checkpoints, and every pause/ownership transfer leaves a complete GitHub handoff. Canonical rules live in [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md); root [AGENTS.md](AGENTS.md), [task checklists](docs/engineering/TASK_WORKFLOWS.md) and the [PR template](.github/PULL_REQUEST_TEMPLATE.md) point contributors to the same contract. Documentation-only scope; no runtime or exchange operations.
