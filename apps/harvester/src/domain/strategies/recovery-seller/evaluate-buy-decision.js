@@ -800,7 +800,6 @@ function getExistingOrderResult({
   activeOrders,
   marketPrice,
   cycleState,
-  positionId,
 }) {
   assertRecoverySellerCycleState({
     state: cycleState,
@@ -811,7 +810,6 @@ function getExistingOrderResult({
     activeOrders,
     symbol: marketPrice?.symbol,
     cycleState,
-    positionId,
   })
   if (existingOrderResult) {
     if (existingOrderResult.stopState.status === "STOPPED") {
@@ -1018,7 +1016,6 @@ export function evaluateRecoverySellerBuyDecision({
   pairConfig,
   marketMetadata,
   recoveryPosition,
-  positionId,
   cycleState,
   cumulativeNetSellProceeds = "0",
   pendingBuyCommitment = "0",
@@ -1049,7 +1046,6 @@ export function evaluateRecoverySellerBuyDecision({
       pairConfig,
       marketMetadata,
       recoveryPosition,
-      positionId,
       cycleState,
       cumulativeNetSellProceeds,
       pendingBuyCommitment,
