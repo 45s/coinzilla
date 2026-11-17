@@ -864,6 +864,15 @@ function getConservativeShutdownBlockers(userDataState) {
   return blockers
 }
 
+function createProviderRegistryDisconnectOperation({ providerRegistry }) {
+  return ({ broker, brokerName, eventPublisher }) => disconnectBrokerOperation({
+    broker,
+    brokerName,
+    eventPublisher,
+    disconnectAll: providerRegistry.disconnectAll,
+  })
+}
+
 function createHarvesterRuntimeStop({ startup, resources, accountSnapshots, userDataEvents } = {}) {
   const strategyShutdownParticipants = [
     ...(startup.strategyShutdownParticipants ?? []),
@@ -877,15 +886,6 @@ function createHarvesterRuntimeStop({ startup, resources, accountSnapshots, user
       })]
       : []),
   ]
-  function createProviderRegistryDisconnectOperation({ providerRegistry }) {
-  return ({ broker, brokerName, eventPublisher }) => disconnectBrokerOperation({
-    broker,
-    brokerName,
-    eventPublisher,
-    disconnectAll: providerRegistry.disconnectAll,
-  })
-}
-
 const stopRuntime = createShutdownHandler({
     state: resources.userDataState,
     strategyShutdownParticipants,
