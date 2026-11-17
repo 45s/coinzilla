@@ -267,8 +267,14 @@ function createProviderEntry({ descriptor }) {
     connectPromise: undefined,
     disconnectPromise: undefined,
   }
-  const connect = createProviderConnect({ broker, lifecycle })
-  const disconnect = createProviderDisconnect({ broker, lifecycle })
+  const connect = createProviderConnect({
+    broker,
+    lifecycle,
+  })
+  const disconnect = createProviderDisconnect({
+    broker,
+    lifecycle,
+  })
   const brokerPort = createBrokerPortProxy({
     broker,
     connect,
