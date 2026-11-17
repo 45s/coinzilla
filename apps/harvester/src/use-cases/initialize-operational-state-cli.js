@@ -34,7 +34,8 @@ function validateInitializationRequest({ args, initialize, resolveDirectory, log
  */
 function resolveInitializationDirectory({ env, resolveDirectory, logger }) {
   try {
-    return { ok: true, directory: resolveDirectory({ env }) }
+    return { ok: true,
+      directory: resolveDirectory({ env }) }
   } catch (error) {
     logger.error?.({ message: error.message })
     return { ok: false }
@@ -77,10 +78,15 @@ export async function runInitializeOperationalState({
   resolveDirectory,
   logger = defaultLogger,
 } = {}) {
-  if (!validateInitializationRequest({ args, initialize, resolveDirectory, logger })) {
+  if (!validateInitializationRequest({ args,
+    initialize,
+    resolveDirectory,
+    logger })) {
     return 1
   }
-  const resolved = resolveInitializationDirectory({ env, resolveDirectory, logger })
+  const resolved = resolveInitializationDirectory({ env,
+    resolveDirectory,
+    logger })
   if (!resolved.ok) {
     return 1
   }
@@ -88,5 +94,6 @@ export async function runInitializeOperationalState({
     initialize,
     directory: resolved.directory,
   })
-  return reportOperationalStateInitialization({ result, logger })
+  return reportOperationalStateInitialization({ result,
+    logger })
 }
