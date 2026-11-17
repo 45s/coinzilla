@@ -63,20 +63,35 @@ async function verifyOperationalStateStoreDurability({ operationalStateStore } =
   }
 }
 
-async function readVerifiedOperationalStateHistory({ operationalStateStore } = {}) {
-  const existingFacts = await operationalStateStore.readAll()
+function assertOperationalStateHistoryRead({ existingFacts }) {
   if (existingFacts?.ok !== true ||
       existingFacts.data?.durableWriteSupported !== true ||
       !Array.isArray(existingFacts.data.records)) {
     const cause = existingFacts?.errors?.[0] ?? new Error("Operational State Store history could not be read and verified")
-    throw new Error(`Harvester cannot connect to the broker without verified Operational State Store history: ${  cause.message ?? String(cause)}`, { cause })
+    throw new Error(`Harvester cannot connect to the broker without verified Operational State Store history: ${cause.message ?? String(cause)}`, { cause })
   }
-  const existingProjection = projectHarvesterOperationalState({ records: existingFacts.data.records })
-  if (existingProjection?.ok !== true) {
-    const cause = existingProjection?.errors?.[0] ?? new Error("Operational State Store history projection failed")
-    throw new Error(`Harvester cannot restart from an unprojectable Operational State Store history: ${  cause.message ?? String(cause)}`, { cause })
+  return existingFacts.data.records
+}
+
+function assertOperationalStateHistoryProjection({ projection }) {
+  if (projection?.ok !== true) {
+    const cause = projection?.errors?.[0] ?? new Error("Operational State Store history projection failed")
+    throw new Error(`Harvester cannot restart from an unprojectable Operational State Store history: ${cause.message ?? String(cause)}`, { cause })
   }
-  return existingProjection
+  return projection
+}
+
+async function readVerifiedOperationalStateHistory({ operationalStateStore } = {}) {
+  const existingFacts = await operationalStateStore.readAll()
+  const records = assertOperationalStateHistoryRead({
+    existingFacts,
+  })
+  const projection = projectHarvesterOperationalState({
+    records,
+  })
+  return assertOperationalStateHistoryProjection({
+    projection,
+  })
 }
 
 function assertOperationalStateCanStart({ projection } = {}) {
@@ -122,6 +137,44 @@ function assertConfigurationBaselineMatchesRuntime({ baseline, configurationFing
   }
 }
 
+async function persistConfigurationBaseline({
+  operationalStateStore,
+  appConfig,
+  configurationFingerprint,
+  enabledMarkets,
+}) {
+  const baseline = await recordConfigurationBaseline({
+    operationalStateStore,
+    appConfig,
+  })
+  if (baseline?.ok !== true || baseline.data?.durable !== true) {
+    throw new Error(`Harvester cannot connect to the broker without a durable configuration baseline: ${baseline?.errors?.[0]?.message ?? "durable acknowledgement missing"}`)
+  }
+  assertConfigurationBaselineMatchesRuntime({
+    baseline,
+    configurationFingerprint,
+    enabledMarkets,
+  })
+  return baseline
+}
+
+async function persistProcessStartedBoundary({
+  operationalStateStore,
+  baseline,
+  tradingEnabled,
+}) {
+  const started = await recordProcessStarted({
+    operationalStateStore,
+    configurationFingerprint: baseline.data.fingerprint,
+    strategyName: baseline.data.strategyName,
+    markets: baseline.data.markets,
+    tradingEnabled,
+  })
+  if (started?.ok !== true || started.data?.durable !== true) {
+    throw new Error(`Harvester cannot connect to the broker without a durable process-start boundary: ${started?.errors?.[0]?.message ?? "durable acknowledgement missing"}`)
+  }
+}
+
 async function persistHarvesterProcessStart({
   operationalStateStore,
   appConfig,
@@ -132,26 +185,17 @@ async function persistHarvesterProcessStart({
   if (!operationalStateStore) {
     return
   }
-  const baseline = await recordConfigurationBaseline({ operationalStateStore,
-appConfig })
-  if (baseline?.ok !== true || baseline.data?.durable !== true) {
-    throw new Error(`Harvester cannot connect to the broker without a durable configuration baseline: ${ 
-      baseline?.errors?.[0]?.message ?? "durable acknowledgement missing"}`)
-  }
-  assertConfigurationBaselineMatchesRuntime({ baseline,
-configurationFingerprint,
-enabledMarkets })
-  const started = await recordProcessStarted({
+  const baseline = await persistConfigurationBaseline({
     operationalStateStore,
-    configurationFingerprint: baseline.data.fingerprint,
-    strategyName: baseline.data.strategyName,
-    markets: baseline.data.markets,
+    appConfig,
+    configurationFingerprint,
+    enabledMarkets,
+  })
+  await persistProcessStartedBoundary({
+    operationalStateStore,
+    baseline,
     tradingEnabled,
   })
-  if (started?.ok !== true || started.data?.durable !== true) {
-    throw new Error(`Harvester cannot connect to the broker without a durable process-start boundary: ${ 
-      started?.errors?.[0]?.message ?? "durable acknowledgement missing"}`)
-  }
 }
 
 function throwIfStartupCleanupFailed({ error, cleanupErrors } = {}) {
@@ -247,52 +291,48 @@ function createCommissionAssetPublisher({ accountSnapshotManagerRef }) {
   }
 }
 
-async function createHarvesterStartupContext({ options } = {}) {
-  const {
-    configSource,
-    appConfig: suppliedAppConfig,
-    loadConfig = loadAppConfig,
-    env = process.env,
-    brokerAdapterFactory = createBinanceBrokerAdapter,
-    providerAdapterFactories,
-    evaluateStrategy = conservativeStrategyPolicy.evaluate,
-    logger = defaultLogger,
-    eventPublisher,
-    onMarketPriceError = createCoinGrabberMarketPriceErrorHandler({ logger }),
-    onUserDataEvent = async () => {},
-    onUserDataStatus = () => {},
-    now = Date.now,
-    operationalStateStore: suppliedOperationalStateStore,
-    runtimeSessionId,
-    createOperationalStateStore,
-    createTelegramOperatorAdapter: createTelegramOperatorAdapterFactory,
-    telegramOperatorFetchImpl,
-    strategyShutdownParticipants = [],
-  } = options
-  const runtimeStartedAt = now()
-  const resolved = await resolveHarvesterOptions({
-    configSource,
-    appConfig: suppliedAppConfig,
-    loadConfig,
-    env,
-    eventPublisher,
+function resolveStartupDependencies({ options }) {
+  const logger = options.logger ?? defaultLogger
+  return {
+    configSource: options.configSource,
+    suppliedAppConfig: options.appConfig,
+    loadConfig: options.loadConfig ?? loadAppConfig,
+    env: options.env ?? process.env,
+    brokerAdapterFactory: options.brokerAdapterFactory ?? createBinanceBrokerAdapter,
+    providerAdapterFactories: options.providerAdapterFactories,
+    evaluateStrategy: options.evaluateStrategy ?? conservativeStrategyPolicy.evaluate,
     logger,
-  })
+    eventPublisher: options.eventPublisher,
+    onMarketPriceError: options.onMarketPriceError ?? createCoinGrabberMarketPriceErrorHandler({ logger }),
+    onUserDataEvent: options.onUserDataEvent ?? (async () => {}),
+    onUserDataStatus: options.onUserDataStatus ?? (() => {}),
+    now: options.now ?? Date.now,
+    suppliedOperationalStateStore: options.operationalStateStore,
+    runtimeSessionId: options.runtimeSessionId,
+    createOperationalStateStore: options.createOperationalStateStore,
+    createTelegramOperatorAdapter: options.createTelegramOperatorAdapter,
+    telegramOperatorFetchImpl: options.telegramOperatorFetchImpl,
+    strategyShutdownParticipants: options.strategyShutdownParticipants ?? [],
+  }
+}
+
+async function prepareHarvesterStartupRuntime({ dependencies, resolved }) {
   const operatorControlLifecycle = await prepareTelegramOperatorControl({
     telegramConfig: resolved.appConfig.operatorControl?.telegram,
-    env,
-    runtimeSessionId,
-    operationalStateStore: suppliedOperationalStateStore,
-    createOperationalStateStore,
-    createAdapter: createTelegramOperatorAdapterFactory,
-    fetchImpl: telegramOperatorFetchImpl,
-    logger,
+    env: dependencies.env,
+    runtimeSessionId: dependencies.runtimeSessionId,
+    operationalStateStore: dependencies.suppliedOperationalStateStore,
+    createOperationalStateStore: dependencies.createOperationalStateStore,
+    createAdapter: dependencies.createTelegramOperatorAdapter,
+    fetchImpl: dependencies.telegramOperatorFetchImpl,
+    logger: dependencies.logger,
   })
-  const operationalStateStore = suppliedOperationalStateStore ?? operatorControlLifecycle.operationalStateStore
+  const operationalStateStore = dependencies.suppliedOperationalStateStore ??
+    operatorControlLifecycle.operationalStateStore
   const startupOptions = await resolveStartupOptionsForProcessRecovery({
     resolved,
     operationalStateStore,
-    logger,
+    logger: dependencies.logger,
   })
   await persistHarvesterProcessStart({
     operationalStateStore,
@@ -301,26 +341,58 @@ async function createHarvesterStartupContext({ options } = {}) {
     configurationFingerprint: startupOptions.configurationFingerprint,
     enabledMarkets: startupOptions.enabledSymbols,
   })
-  const operationalStateCallbacks = createHarvesterOperationalStateCallbacks({ operationalStateStore })
-  const accountSnapshotManagerRef = { current: null }
-  const onCommissionAsset = createCommissionAssetPublisher({ accountSnapshotManagerRef })
   return {
-    ...startupOptions,
-    env,
-    brokerAdapterFactory,
-    providerAdapterFactories: providerAdapterFactories ?? { binance: brokerAdapterFactory },
-    evaluateStrategy,
-    logger,
-    eventPublisher,
-    onMarketPriceError,
-    onUserDataEvent,
-    onUserDataStatus,
-    now,
-    runtimeStartedAt,
-    runtimeSessionId,
-    strategyShutdownParticipants,
     operatorControlLifecycle,
     operationalStateStore,
+    startupOptions,
+  }
+}
+
+async function createHarvesterStartupContext({ options } = {}) {
+  const dependencies = resolveStartupDependencies({
+    options,
+  })
+  const runtimeStartedAt = dependencies.now()
+  const resolved = await resolveHarvesterOptions({
+    configSource: dependencies.configSource,
+    appConfig: dependencies.suppliedAppConfig,
+    loadConfig: dependencies.loadConfig,
+    env: dependencies.env,
+    eventPublisher: dependencies.eventPublisher,
+    logger: dependencies.logger,
+  })
+  const prepared = await prepareHarvesterStartupRuntime({
+    dependencies,
+    resolved,
+  })
+  const operationalStateCallbacks = createHarvesterOperationalStateCallbacks({
+    operationalStateStore: prepared.operationalStateStore,
+  })
+  const accountSnapshotManagerRef = {
+    current: null,
+  }
+  const onCommissionAsset = createCommissionAssetPublisher({
+    accountSnapshotManagerRef,
+  })
+  return {
+    ...prepared.startupOptions,
+    env: dependencies.env,
+    brokerAdapterFactory: dependencies.brokerAdapterFactory,
+    providerAdapterFactories: dependencies.providerAdapterFactories ?? {
+      binance: dependencies.brokerAdapterFactory,
+    },
+    evaluateStrategy: dependencies.evaluateStrategy,
+    logger: dependencies.logger,
+    eventPublisher: dependencies.eventPublisher,
+    onMarketPriceError: dependencies.onMarketPriceError,
+    onUserDataEvent: dependencies.onUserDataEvent,
+    onUserDataStatus: dependencies.onUserDataStatus,
+    now: dependencies.now,
+    runtimeStartedAt,
+    runtimeSessionId: dependencies.runtimeSessionId,
+    strategyShutdownParticipants: dependencies.strategyShutdownParticipants,
+    operatorControlLifecycle: prepared.operatorControlLifecycle,
+    operationalStateStore: prepared.operationalStateStore,
     accountSnapshotManagerRef,
     onCommissionAsset,
     ...operationalStateCallbacks,
@@ -390,6 +462,7 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
       throw new AggregateError(
         [error, cleanupError],
         "Harvester provider startup failed and operator-control cleanup also failed",
+        { cause: error },
       )
     }
     throw error
@@ -586,34 +659,14 @@ function createHarvesterTradingEngineActivator({ startup, portfolio, resources, 
   }
 }
 
-async function startHarvesterPreflightServices({ startup, portfolio, resources, accountSnapshots, userDataEvents, recoveryRuntime, activateTradingEngine } = {}) {
-  await loadMarketMetadata({
-    broker: resources.broker,
-    pairs: startup.pairs,
-    marketMetadata: portfolio.marketMetadata,
-    eventPublisher: startup.eventPublisher,
-    logger: startup.logger,
-  })
-  activateTradingEngine()
-  await startup.operatorControlLifecycle.start({
-    engine: resources.tradingEngine,
-    getRuntimeSnapshot: accountSnapshots.getOperatorRuntimeSnapshot,
-    getPortfolio: portfolio.getPortfolio,
-    getRecoveryLedger: portfolio.getRecoveryLedger,
-    getAccountSnapshot: portfolio.getAccountSnapshot,
-    getOpenOrders: () => resources.broker.getOpenOrders(),
-  })
-  portfolio.portfolioWorkflow = createPortfolioWorkflow({
-    evaluateStrategy: startup.evaluateStrategy,
-    logger: createStrategyLogger({
-      logger: startup.logger,
-      strategyId: StrategyId.COIN_GRABBER,
-    }),
-    onCommissionAsset: startup.onCommissionAsset,
-    onOperationalStateExecutionFill: startup.onOperationalStateExecutionFill,
-    onOperationalStateRecoveryCycleCompleted: startup.onOperationalStateRecoveryCycleCompleted,
-    onOperationalStateRecoveryCycleNotCompleted: startup.onOperationalStateRecoveryCycleNotCompleted,
-  })
+async function subscribeHarvesterUserData({
+  startup,
+  portfolio,
+  resources,
+  accountSnapshots,
+  userDataEvents,
+  recoveryRuntime,
+}) {
   const userDataSubscription = await subscribeToUserData({
     broker: resources.broker,
     brokerName: startup.brokerName,
@@ -646,6 +699,52 @@ async function startHarvesterPreflightServices({ startup, portfolio, resources, 
     eventPublisher: startup.eventPublisher,
     brokerName: startup.brokerName,
     userDataState: resources.userDataState,
+  })
+}
+
+async function startHarvesterPreflightServices({
+  startup,
+  portfolio,
+  resources,
+  accountSnapshots,
+  userDataEvents,
+  recoveryRuntime,
+  activateTradingEngine,
+} = {}) {
+  await loadMarketMetadata({
+    broker: resources.broker,
+    pairs: startup.pairs,
+    marketMetadata: portfolio.marketMetadata,
+    eventPublisher: startup.eventPublisher,
+    logger: startup.logger,
+  })
+  activateTradingEngine()
+  await startup.operatorControlLifecycle.start({
+    engine: resources.tradingEngine,
+    getRuntimeSnapshot: accountSnapshots.getOperatorRuntimeSnapshot,
+    getPortfolio: portfolio.getPortfolio,
+    getRecoveryLedger: portfolio.getRecoveryLedger,
+    getAccountSnapshot: portfolio.getAccountSnapshot,
+    getOpenOrders: () => resources.broker.getOpenOrders(),
+  })
+  portfolio.portfolioWorkflow = createPortfolioWorkflow({
+    evaluateStrategy: startup.evaluateStrategy,
+    logger: createStrategyLogger({
+      logger: startup.logger,
+      strategyId: StrategyId.COIN_GRABBER,
+    }),
+    onCommissionAsset: startup.onCommissionAsset,
+    onOperationalStateExecutionFill: startup.onOperationalStateExecutionFill,
+    onOperationalStateRecoveryCycleCompleted: startup.onOperationalStateRecoveryCycleCompleted,
+    onOperationalStateRecoveryCycleNotCompleted: startup.onOperationalStateRecoveryCycleNotCompleted,
+  })
+  await subscribeHarvesterUserData({
+    startup,
+    portfolio,
+    resources,
+    accountSnapshots,
+    userDataEvents,
+    recoveryRuntime,
   })
 }
 
