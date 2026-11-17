@@ -334,6 +334,48 @@ test("treats a repeated terminal RS accounting event as an exact no-op", async (
     "A replay must not release or recreate the terminal order reservation a second time.")
 })
 
+test("accepts a loss-making legacy allocation when the combined cycle meets minProfit", async () => {
+  const context = makeContext()
+  const legacyPosition = createLegacyPosition({
+    invested: "150",
+    quantity: "50",
+  })
+  const workflow = createRecoverySellerAccountingWorkflow({
+    initialPortfolio: context.portfolio,
+    initialOrderRegistry: context.openRegistry,
+    initialLegacyPositions: [{
+      market,
+      position: legacyPosition,
+      accounting: createLegacyPositionAccounting(),
+    }],
+  })
+
+  const result = await workflow.reconcileTerminalMixedSell({
+    reconciliation: context.reconciliation,
+    terminalOrder: context.terminalOrder,
+    canonicalFills: [context.fill],
+    canonicalFillAllocations: [context.allocation],
+    minProfit: "0.2",
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.applied, true,
+    "Confirmed exchange executions are accounted even though the legacy allocation is individually loss-making.")
+  assert.equal(result.data.profitability.recovery.eligible, true,
+    "The recovery allocation remains profitable.")
+  assert.equal(result.data.profitability.legacy.eligible, false,
+    "Legacy allocation diagnostics must remain available for accounting.")
+  assert.equal(result.data.profitability.cycle.eligible, true,
+    "The combined cycle passes because recovery profit offsets the legacy loss.")
+  assert.equal(result.data.profitability.eligible, true,
+    "Public eligibility follows the combined cycle, not either allocation alone.")
+  assert.equal(workflow.getLegacyPosition({ marketId: market.id }).remainingQuantity, "49.99",
+    "Actual legacy base debit must still be recorded after a loss-making execution.")
+  assert.equal(workflow.getActiveOrders().length, 0,
+    "A fully reconciled terminal order releases its reservation even when realized profitability is below its gate.")
+})
+
+
 test("commits actual fills when the combined cycle misses minProfit", async () => {
   const context = makeContext()
   const legacyPosition = createLegacyPosition({

@@ -59,6 +59,10 @@ test("grosses up base-asset commission without dropping the authorized legacy sl
   assert.equal(plan.baseFeeQuantity, "0.01")
   assert.equal(plan.baseDebitQuantity, "1.01")
   assert.equal(plan.legacyQuantity, "0.01")
+  assert.equal(plan.recoverySellQuantity, "0.990099009900990099009900990099009900")
+  assert.equal(plan.legacySellQuantity, "0.009900990099009900990099009900990100")
+  assert.notEqual(plan.legacySellQuantity, "0",
+    "The eligible legacy slice must remain in the mixed SELL after base-fee gross-up.")
 })
 
 test("rounds the minimum price upward to the exchange price tick", () => {

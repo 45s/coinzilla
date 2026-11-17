@@ -173,11 +173,42 @@ export function calculateRecoverySellerSellPlan({
     direction: "up",
   })
 
+  const recoverySellQuantity = divideDecimal({
+    left: multiplyDecimal({ left: quantity, right: recoveryQuantity }),
+    right: availableBaseQuantity,
+    scale: 36,
+    rounding: "toward-zero",
+  })
+  const legacySellQuantity = subtractDecimal({
+    left: quantity,
+    right: recoverySellQuantity,
+  })
+  const recoveryBaseFeeQuantity = divideDecimal({
+    left: multiplyDecimal({ left: baseFeeQuantity, right: recoverySellQuantity }),
+    right: quantity,
+    scale: 36,
+    rounding: "toward-zero",
+  })
+  const legacyBaseFeeQuantity = subtractDecimal({
+    left: baseFeeQuantity,
+    right: recoveryBaseFeeQuantity,
+  })
+
   return Object.freeze({
     quantity,
     price,
     recoveryQuantity,
     legacyQuantity,
+    recoverySellQuantity,
+    legacySellQuantity,
+    recoveryBaseDebitQuantity: addDecimal({
+      left: recoverySellQuantity,
+      right: recoveryBaseFeeQuantity,
+    }),
+    legacyBaseDebitQuantity: addDecimal({
+      left: legacySellQuantity,
+      right: legacyBaseFeeQuantity,
+    }),
     legacyCostBasis,
     requiredNetQuoteProceeds,
     grossQuoteProceeds,
