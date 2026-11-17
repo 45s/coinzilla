@@ -140,12 +140,18 @@ function getCapability({ declaration, path }) {
   return capability
 }
 
-function isCapabilityEnvironmentValid({ descriptor, declaration }) {
+function isCapabilityEnvironmentValid({
+    descriptor,
+    declaration,
+  }) {
   const selectedMode = declaration.environment?.selectedMode
   return !descriptor.tradingMode || selectedMode === undefined || selectedMode === descriptor.tradingMode
 }
 
-function isCapabilityAvailable({ capability, path }) {
+function isCapabilityAvailable({
+      capability,
+      path,
+    }) {
   const isMutation = path[0] === "orders" &&
     ["placement", "cancellation"].includes(path[1])
   return capability?.status === "supported" ||
