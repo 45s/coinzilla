@@ -212,6 +212,11 @@ function collectFunctionQualityFindings({ results }) {
   return metrics;
 }
 
+function compareFindingsByValue(...findings) {
+  const [left, right] = findings;
+  return right.value - left.value;
+}
+
 function countFindingsAboveThreshold({ findings, threshold }) {
   return findings.filter((finding) => finding.value > threshold);
 }
@@ -222,7 +227,7 @@ function summarizeThresholdImpact({ findings, threshold }) {
     functions: affected.length,
     files: new Set(affected.map((finding) => finding.filePath)).size,
     largest: affected
-      .toSorted((left, right) => right.value - left.value)
+      .toSorted(compareFindingsByValue)
       .slice(0, 5)
       .map(({ filePath, line, value }) => ({
         file: filePath.replace(`${repositoryRoot}/`, ""),
