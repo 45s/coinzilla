@@ -62,6 +62,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Enforce zero-warning full-workspace ESLint
+        run: pnpm lint
+
       - name: Check JavaScript syntax
         run: node scripts/check-syntax.js
 
