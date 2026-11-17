@@ -257,7 +257,7 @@ function validateAdapterConfiguration({ config, brokerFactory }) {
   }
 }
 
-function resolveClientCapabilities({ client, tradingMode }) {
+function resolveClientCapabilities({ client }) {
   if (client?.capabilities === undefined) {
     return undefined
   }
@@ -281,10 +281,7 @@ export function createBinanceBrokerAdapter({
     config,
     logger,
   })
-  const capabilities = resolveClientCapabilities({
-    client,
-    tradingMode: config.tradingMode,
-  })
+  const capabilities = resolveClientCapabilities({ client })
   assertRequiredBrokerMethods({ client })
   const broker = createBrokerPort({
     client,
