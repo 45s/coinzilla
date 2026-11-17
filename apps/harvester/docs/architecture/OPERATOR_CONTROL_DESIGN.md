@@ -68,7 +68,7 @@ The adapter contract is verified offline at two levels:
 - Focused module tests exercise command parsing, Telegram identity/interaction normalization, callback confirmation consumption, application-control mapping, read-only page queries, Bot API transport semantics, update polling and lifecycle cancellation.
 - Dedicated keyboard, diagnostics and response-formatting suites preserve the persistent/inline keyboard contract, safe correlated error reporting, and operator snapshot presentation.
 
-These are offline characterization tests; this checkpoint changes no runtime behavior. All Telegram transport and application dependencies are injected or mocked. The tests do not call the live Telegram API, place exchange orders, or require TESTNET/LIVE credentials. Keep focused tests beside the operator feature modules and retain public-adapter integration coverage for cross-module behavior.
+These are offline characterization tests; this checkpoint changes no runtime behavior. Their source follows the repository's zero-warning ESLint rules without suppressions. All Telegram transport and application dependencies are injected or mocked. The tests do not call the live Telegram API, place exchange orders, or require TESTNET/LIVE credentials. Keep focused tests beside the operator feature modules and retain public-adapter integration coverage for cross-module behavior.
 
 ## Architecture flow
 

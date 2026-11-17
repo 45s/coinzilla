@@ -25,7 +25,7 @@ test("sends Telegram API requests with the token, JSON body and abort signal", a
  result: [{ update_id: 1 }] } })
     },
   })
-  const signal = new AbortController().signal
+  const { signal } = new AbortController()
   const result = await callApi({
     method: "getUpdates",
     payload: { timeout: 30 },
@@ -36,7 +36,7 @@ test("sends Telegram API requests with the token, JSON body and abort signal", a
     [{ update_id: 1 }],
     "Successful Telegram API calls must return only the Bot API result payload.",
   )
-  const [requestUrl, requestOptions] = calls[0]
+  const [[requestUrl, requestOptions]] = calls
   assert.equal(
     requestUrl,
     "https://api.telegram.org/bottest-token/getUpdates",
