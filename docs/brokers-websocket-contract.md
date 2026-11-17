@@ -147,6 +147,12 @@ The single-order REST endpoint says limit `volume` is quote quantity and market 
 
 Official references: [Spot REST API](https://www.bitunix.com/api-docs/spots/en_us/), [Spot order API](https://www.bitunix.com/api-docs/spots/en_us/order/), [Spot WebSocket API](https://www.bitunix.com/api-docs/spots/en_us/ws/), [Spot WebSocket order API](https://www.bitunix.com/api-docs/spots/en_us/order-ws/).
 
+### External reference audit and Bitunix-only extensions
+
+The source-level comparison of JKorf/Bitunix.Net, the TypeScript MCP, StockSharp and other independent clients is maintained in the [Bitunix external implementation reference audit](../packages/brokers/BITUNIX_REFERENCE_AUDIT.md). It records implementation defects and does not override this contract or official Bitunix documentation.
+
+The audit identified public exchange-rate and token/network metadata endpoints as possible **Bitunix-specific read-only extensions**, not Binance parity methods. They are not part of the current supported broker contract. Add them only after an explicit extension decision and tests; do not infer trading filters or authorize wallet mutations from metadata.
+
 ## Candle market-data public contract
 
 PR #1017 adds two optional market-data capabilities to BinanceWebSocketBroker. They are additive methods on the concrete Binance broker; CoreBroker and the Market Simulator are not changed.
