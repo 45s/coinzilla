@@ -12,6 +12,7 @@ const CRUD_METHODS = Object.freeze([
   "update",
   "delete",
 ])
+const READ_ONLY_OPERATIONS = new Set(["readOne", "readMany"])
 
 function createTransactionFacade(transaction) {
   const missingMethods = CRUD_METHODS.filter(
@@ -112,6 +113,8 @@ function createProviderNeutralFacade({ database, provider }) {
     return database.transaction((transaction) => {
       const context = createTransactionFacade(transaction)
       return context[operation](input)
+    }, {
+      intent: READ_ONLY_OPERATIONS.has(operation) ? "read" : "write",
     })
   }
 

@@ -55,7 +55,13 @@ test("SQLite lock failures use the provider-neutral error contract", async () =>
     competingConnection.exec("BEGIN IMMEDIATE")
 
     await assert.rejects(
-      database.transaction(() => "unreachable"),
+      database.create({
+        collection: "people",
+        record: {
+          id: "locked-write-1",
+          name: "Blocked",
+        },
+      }),
       (error) => error instanceof DatabaseProviderError
         && error.code === "DB_PROVIDER_OPERATION_FAILED"
         && error.cause instanceof Error,

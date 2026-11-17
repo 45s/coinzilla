@@ -283,7 +283,7 @@ async function closeProviderDatabase({ state }) {
   }
 }
 
-function runProviderTransaction({ state, work }) {
+function runProviderTransaction({ state, work, options }) {
   let callbackError = null
   const operation = state.database.transaction((transaction) => {
     const context = createSqliteTransactionContext({
@@ -296,7 +296,7 @@ function runProviderTransaction({ state, work }) {
       callbackError = error
       throw error
     }
-  })
+  }, options)
 
   return operation.catch((error) => {
     const isCallbackFailure = error === callbackError
@@ -333,9 +333,10 @@ function createProviderDatabase({ filename, timeout }) {
     close: () => closeProviderDatabase({
       state,
     }),
-    withTransaction: (work) => runProviderTransaction({
+    withTransaction: (work, options) => runProviderTransaction({
       state,
       work,
+      options,
     }),
   }
 }

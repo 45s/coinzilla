@@ -41,7 +41,7 @@ function createConnectionOperation({ provider, lifecycle }) {
 }
 
 function createTransactionOperation({ provider, lifecycle }) {
-  return function transaction(work) {
+  return function transaction(work, options = {}) {
     if (typeof work !== "function") {
       throw new TypeError("A transaction callback is required")
     }
@@ -53,7 +53,7 @@ function createTransactionOperation({ provider, lifecycle }) {
 
     let operation
     try {
-      operation = Promise.resolve(provider.withTransaction(work))
+      operation = Promise.resolve(provider.withTransaction(work, options))
     } catch (error) {
       operation = Promise.reject(error)
     }

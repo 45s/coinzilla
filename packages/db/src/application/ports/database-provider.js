@@ -1,4 +1,8 @@
 /**
+ * Provider-neutral transaction intent used by infrastructure to optimize read/write locking.
+ *
+ * @typedef {{intent?: "read"|"write"}} DatabaseTransactionOptions
+ *
  * Provider-neutral record operations available inside a transaction.
  *
  * @typedef {object} DatabaseTransaction
@@ -20,7 +24,7 @@
  *
  * @typedef {DatabaseAdapter & {
  *   capabilities: DatabaseCapabilities,
- *   withTransaction: (work: (transaction: DatabaseTransaction) => unknown) => Promise<unknown>|unknown
+ *   withTransaction: (work: (transaction: DatabaseTransaction) => unknown, options?: DatabaseTransactionOptions) => Promise<unknown>|unknown
  * }} DatabaseProvider
  */
 export {}

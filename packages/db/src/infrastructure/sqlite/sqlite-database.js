@@ -28,7 +28,12 @@ function isAsyncFunction(callback) {
 }
 
 function createSqliteTransactionHandler({ requireConnection }) {
-  return function withTransaction(work) {
+  return function withTransaction(work, options = {}) {
+    const intent = options?.intent ?? "write"
+    if (intent !== "read" && intent !== "write") {
+      throw new TypeError("SQLite transaction intent must be read or write")
+    }
+
     const activeConnection = requireConnection()
 
     if (activeConnection.isTransaction) {
@@ -39,7 +44,7 @@ function createSqliteTransactionHandler({ requireConnection }) {
       throw new TypeError("SQLite transaction callbacks must be synchronous")
     }
 
-    activeConnection.exec("BEGIN IMMEDIATE")
+    activeConnection.exec(intent === "read" ? "BEGIN DEFERRED" : "BEGIN IMMEDIATE")
 
     try {
       const transaction = Object.freeze({
