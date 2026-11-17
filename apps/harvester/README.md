@@ -83,6 +83,8 @@ Other strategy-owned pair fields remain under `tradingPairs.<SYMBOL>`: `enabled`
 
 **Runtime environment contract:** `TRADING_MODE` accepts exactly `testnet` or `live` and selects both Binance API/stream endpoints and the eligible pair subset. `NODE_ENV` does not select the exchange environment. The intended files are `.env.development` with `TRADING_MODE=testnet` and `.env` with `TRADING_MODE=live`. Host-shared writer locks are scoped by broker and trading mode, so Testnet and production can run concurrently while duplicate writers in the same environment remain blocked across worktrees.
 
+The runtime is currently Binance-only. The accepted target architecture adds named provider instances, explicit strategy/market execution routes, and independent market-data routes; it is not yet implemented and does not change today's environment setup. See [ADR-0003](../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and [issue #1339](https://github.com/45s/coinzilla/issues/1339).
+
 ### Generate or refresh market metadata
 
 Use the interactive generator to retrieve Binance precision metadata instead of guessing it:
