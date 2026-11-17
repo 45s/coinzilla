@@ -48,6 +48,30 @@ function assertRequiredTimestamp({ value, field }) {
   }
 }
 
+function validateOrderIdentity({ orderId, symbol, ctime, utime }) {
+  if ((typeof orderId !== "string" && typeof orderId !== "number") ||
+      (typeof orderId === "string" && orderId.trim() === "") ||
+      (typeof orderId === "number" && !Number.isSafeInteger(orderId))) {
+    throw new TypeError("Bitunix Spot order ID must be a non-empty string or safe integer")
+  }
+  if (typeof symbol !== "string" || !symbol.trim()) {
+    throw new TypeError("Bitunix Spot order is missing symbol")
+  }
+  assertRequiredTimestamp({ value: ctime, field: "ctime" })
+  assertRequiredTimestamp({ value: utime, field: "utime" })
+}
+
+function normalizeOrderStatus({ status }) {
+  if ((typeof status !== "string" && typeof status !== "number") || String(status).trim() === "") {
+    throw new TypeError("Bitunix Spot order status must be a non-empty string or number")
+  }
+  const exchangeStatus = String(status)
+  return {
+    exchangeStatus,
+    normalizedStatus: STATUS_MAP[exchangeStatus] ?? "UNKNOWN",
+  }
+}
+
 function validateOrder({ bitunixOrder }) {
   if (!bitunixOrder || typeof bitunixOrder !== "object" || Array.isArray(bitunixOrder)) {
     throw new TypeError("Bitunix Spot order should be an object")
@@ -64,30 +88,11 @@ function validateOrder({ bitunixOrder }) {
     ctime,
     utime,
   } = bitunixOrder
-  if ((typeof orderId !== "string" && typeof orderId !== "number") ||
-      (typeof orderId === "string" && orderId.trim() === "") ||
-      (typeof orderId === "number" && !Number.isSafeInteger(orderId))) {
-    throw new TypeError("Bitunix Spot order ID must be a non-empty string or safe integer")
-  }
-  if (typeof symbol !== "string" || !symbol.trim()) {
-    throw new TypeError("Bitunix Spot order is missing symbol")
-  }
-  assertRequiredTimestamp({
-    value: ctime,
-    field: "ctime",
-  })
-  assertRequiredTimestamp({
-    value: utime,
-    field: "utime",
-  })
+  validateOrderIdentity({ orderId, symbol, ctime, utime })
 
   const normalizedSide = SIDE_MAP[String(side)]
   const normalizedType = TYPE_MAP[String(type ?? bitunixOrder.orderType)]
-  if ((typeof status !== "string" && typeof status !== "number") || String(status).trim() === "") {
-    throw new TypeError("Bitunix Spot order status must be a non-empty string or number")
-  }
-  const exchangeStatus = String(status)
-  const normalizedStatus = STATUS_MAP[exchangeStatus] ?? "UNKNOWN"
+  const { exchangeStatus, normalizedStatus } = normalizeOrderStatus({ status })
   if (!normalizedSide) {
     throw new TypeError("Bitunix Spot order side is unsupported")
   }
