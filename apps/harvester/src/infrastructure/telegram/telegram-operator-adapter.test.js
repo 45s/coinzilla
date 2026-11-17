@@ -2178,14 +2178,17 @@ test("aborts active polling, shares concurrent shutdown, and supports a clean re
       })
     }
     if (telegramApiMethod === "setMyCommands") {
-      return makeResponse({ ok: true, result: true })
+      return makeResponse({
+        ok: true,
+        result: true,
+      })
     }
     if (telegramApiMethod === "getUpdates") {
       pollCalls += 1
       pollSignals.push(telegramRequestOptions.signal)
       notifyPollWaiters()
       return new Promise((...handlers) => {
-        const reject = handlers[1]
+        const [, reject] = handlers
         const abortPoll = () => reject(new Error("Telegram long poll aborted"))
         if (telegramRequestOptions.signal.aborted) {
           abortPoll()
