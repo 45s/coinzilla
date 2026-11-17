@@ -113,7 +113,6 @@ Node's built-in SQLite API is synchronous. Statements, transactions and migratio
 ## Explicit non-goals
 
 - No application-specific domain entities, repository ports, business schemas, migrations, or workflows.
-- No trading, broker, order, execution, portfolio, session, or recovery concepts.
 - No ORM, query builder, or business-object mapper.
 - No PostgreSQL/MongoDB implementation until justified by a real requirement.
 - No promise of identical semantics across providers where their capabilities differ.
