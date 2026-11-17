@@ -98,9 +98,6 @@ test("Bitunix Spot broker supports the schema's object response and preserves in
     id: "1909921053381820417",
     type: "inside_transfer_out",
     network: null,
-    address: undefined,
-    transactionHash: undefined,
-    toAddress: undefined,
     toType: "email",
     toUid: "681979174",
     toPhoneCountryCode: null,
@@ -109,6 +106,9 @@ test("Bitunix Spot broker supports the schema's object response and preserves in
     remark: "internal treasury transfer",
     status: "future_status",
   })
+  delete transfer.address
+  delete transfer.transactionHash
+  delete transfer.toAddress
   const { broker } = createBroker({ response: transfer })
 
   const result = await broker.getWithdrawalHistory({
