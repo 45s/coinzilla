@@ -292,64 +292,44 @@ function listThresholdOffenders({ findings, threshold }) {
     }));
 }
 
+function createThresholdReport({ findings, thresholds }) {
+  return Object.fromEntries(
+    thresholds.map((threshold) => [
+      threshold,
+      summarizeThresholdImpact({
+        findings,
+        threshold,
+      }),
+    ]),
+  );
+}
+
 function createFunctionQualityAuditReport({ metrics }) {
   return {
-    complexity: {
-      15: summarizeThresholdImpact({
-        findings: metrics.complexity,
-        threshold: 15,
-      }),
-    },
-    maxLines: {
-      60: summarizeThresholdImpact({
-        findings: metrics.maxLines,
-        threshold: 60,
-      }),
-      50: summarizeThresholdImpact({
-        findings: metrics.maxLines,
-        threshold: 50,
-      }),
-    },
-    maxStatements: {
-      30: summarizeThresholdImpact({
-        findings: metrics.maxStatements,
-        threshold: 30,
-      }),
-      25: summarizeThresholdImpact({
-        findings: metrics.maxStatements,
-        threshold: 25,
-      }),
-      20: summarizeThresholdImpact({
-        findings: metrics.maxStatements,
-        threshold: 20,
-      }),
-      15: summarizeThresholdImpact({
-        findings: metrics.maxStatements,
-        threshold: 15,
-      }),
-    },
-    maxParams: {
-      1: summarizeThresholdImpact({
-        findings: metrics.maxParams,
-        threshold: 1,
-      }),
-    },
-    maxNestedCallbacks: {
-      2: summarizeThresholdImpact({
-        findings: metrics.maxNestedCallbacks,
-        threshold: 2,
-      }),
-    },
-    maxDepth: {
-      3: summarizeThresholdImpact({
-        findings: metrics.maxDepth,
-        threshold: 3,
-      }),
-      4: summarizeThresholdImpact({
-        findings: metrics.maxDepth,
-        threshold: 4,
-      }),
-    },
+    complexity: createThresholdReport({
+      findings: metrics.complexity,
+      thresholds: [15],
+    }),
+    maxLines: createThresholdReport({
+      findings: metrics.maxLines,
+      thresholds: [60, 50],
+    }),
+    maxStatements: createThresholdReport({
+      findings: metrics.maxStatements,
+      thresholds: [30, 25, 20, 15],
+    }),
+    maxParams: createThresholdReport({
+      findings: metrics.maxParams,
+      thresholds: [1],
+    }),
+    maxNestedCallbacks: createThresholdReport({
+      findings: metrics.maxNestedCallbacks,
+      thresholds: [2],
+    }),
+    maxDepth: createThresholdReport({
+      findings: metrics.maxDepth,
+      thresholds: [3, 4],
+    }),
     maxParamsOffendersAt1: listThresholdOffenders({
       findings: metrics.maxParams,
       threshold: 1,
