@@ -46,6 +46,8 @@ This is a plain data object, not a chainable query builder. New operators or nes
 - The application composition root selects and configures a provider.
 - `createDatabase({ provider })` exposes provider-neutral CRUD, transaction, lifecycle and immutable capability information.
 - A provider transaction callback receives only generic CRUD operations.
+- Portable sorting uses `missing/null < false < true < number < string`; numeric values compare numerically, strings compare by binary UTF-8 order, and identifier tie-breaking is always ascending.
+- The reusable conformance suite runs every declared storage mode and supports an optional provider-owned cleanup callback after all connections for an isolated key have closed.
 - Provider-neutral providers implement separate `withTransaction(work)` and `withReadTransaction(work)` operations. Explicit transactions and mutations use the write path; `readOne` and `readMany` use the read path. Legacy adapters may omit the read path and retain the original lifecycle/SQL behavior.
 - SQLite uses `BEGIN IMMEDIATE` for writes and `BEGIN DEFERRED` for reads. This preserves write reservation before read-modify-write operations while allowing WAL readers during a competing writer reservation.
 - A synchronous callback provider cannot declare nested transactions because the facade's nested transaction call is asynchronous; capability validation rejects that incompatible declaration.
