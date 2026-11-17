@@ -136,7 +136,7 @@ test("allows only the documented transitions within one recovery cycle", () => {
   }
 })
 
-test("allows a new initial SUBMIT but never a direct resubmission within an existing cycle", () => {
+test("allows a new order lifecycle but never a direct duplicate SUBMIT within one order lifecycle", () => {
   const initialSubmit = makeDecision({ outcome: "SUBMIT" })
   const initialResult = applyRecoverySellerLifecycleTransition({
     stopState: createRecoverySellerStopState(),
@@ -150,8 +150,8 @@ test("allows a new initial SUBMIT but never a direct resubmission within an exis
     nextDecision: repeatedSubmit,
   })
 
-  assert.equal(initialResult.decision, initialSubmit, "A new cycle with no previous lifecycle outcome may submit only after its separate policy gates pass.")
-  assert.equal(repeatedResult.decision.outcome, "BLOCK", "A second SUBMIT inside the same cycle must be blocked instead of duplicating an order.")
+  assert.equal(initialResult.decision, initialSubmit, "A new order lifecycle may submit after the caller has proven prior-order terminal reconciliation and its separate policy gates pass.")
+  assert.equal(repeatedResult.decision.outcome, "BLOCK", "A second SUBMIT inside the same order lifecycle must be blocked instead of duplicating an order.")
   assert.equal(repeatedResult.decision.reasonCode, RECOVERY_SELLER_STOP_REASON_CODE, "An unsupported repeated submission must establish the stable global STOP reason.")
   assert.equal(repeatedResult.stopState.status, "STOPPED", "An unsupported repeated submission must latch STOP for the remainder of the unresolved cycle.")
 })
@@ -253,4 +253,29 @@ test("rejects a STOP-and-reconcile transition without an existing order identity
     /RECONCILE requires clientOrderId/,
     "An unknown outcome must never create an anonymous reconciliation action.",
   )
+})
+
+
+test("allows sequential BUY tranches in one recovery cycle as distinct reconciled order lifecycles", () => {
+  const firstTranche = makeDecision({
+    outcome: "SUBMIT",
+  })
+  const secondTranche = makeDecision({
+    outcome: "SUBMIT",
+  })
+  const firstOrderLifecycle = applyRecoverySellerLifecycleTransition({
+    stopState: createRecoverySellerStopState(),
+    nextDecision: firstTranche,
+  })
+  const nextOrderLifecycle = applyRecoverySellerLifecycleTransition({
+    stopState: firstOrderLifecycle.stopState,
+    nextDecision: secondTranche,
+  })
+
+  assert.equal(firstOrderLifecycle.decision, firstTranche,
+    "The first BUY tranche may be submitted when its policy gates pass.")
+  assert.equal(nextOrderLifecycle.decision, secondTranche,
+    "A later BUY tranche in the same recovery cycle may start a new order lifecycle only after the caller has reconciled the prior order.")
+  assert.equal(nextOrderLifecycle.stopState.status, "CLEAR",
+    "A separately reconciled BUY tranche must not be mistaken for a duplicate submission within the same order lifecycle.")
 })
