@@ -209,7 +209,7 @@ export function createBitunixKlineHistoryQuery({ input }) {
     const endTime = typeof input.endTime === "string" && /^\d+$/.test(input.endTime)
       ? Number(input.endTime)
       : input.endTime
-    if (!Number.isSafeInteger(endTime) || endTime < 1) {
+    if (!Number.isSafeInteger(endTime) || endTime < 1 || endTime >= 1000000000000) {
       throw new RangeError("Bitunix Spot kline history endTime must be a positive Unix timestamp in seconds")
     }
     queryParams.endTime = String(endTime)
