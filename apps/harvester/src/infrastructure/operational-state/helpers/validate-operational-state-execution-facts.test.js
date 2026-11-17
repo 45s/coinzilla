@@ -77,7 +77,6 @@ test("rejects execution fills with unsupported fields or inconsistent stable ide
     ["non-lowercase venue", { venue: "Binance" }, /identities must match/],
     ["market and venue mismatch", { marketId: "kraken:BTCUSDT" }, /identities must match/],
     ["fill and trade mismatch", { fillId: "binance:BTCUSDT:other-trade" }, /identities must match/],
-    ["non-canonical symbol", { symbol: "btc-usdt" }, /symbol must be canonical/],
     ["unsupported side", { side: "HOLD" }, /side must be BUY or SELL/],
     ["unsupported liquidity role", { liquidityRole: "UNKNOWN_ROLE" }, /liquidity role is unsupported/],
   ]
@@ -95,6 +94,20 @@ test("rejects execution fills with unsupported fields or inconsistent stable ide
       `An execution fill must reject ${description}.`,
     )
   }
+  assert.throws(
+    () => validateExecutionFillAppliedFact({
+      ...valid,
+      factId: "execution-fill-applied:binance:btc-usdt:trade-1",
+      canonicalData: {
+        ...valid.canonicalData,
+        symbol: "btc-usdt",
+        marketId: "binance:btc-usdt",
+        fillId: "binance:btc-usdt:trade-1",
+      },
+    }),
+    /symbol must be canonical/,
+    "An execution-fill symbol must be validated after its matching market and trade identity are established.",
+  )
   assert.throws(
     () => validateExecutionFillAppliedFact({
       ...valid,
