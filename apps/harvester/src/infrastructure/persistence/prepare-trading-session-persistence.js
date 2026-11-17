@@ -56,7 +56,10 @@ export async function prepareTradingSessionPersistence({ tradingMode, env, logge
       stage: "prepare",
       error,
     })
-    await closeAfterPreparationFailure({ database, logger })
+    await closeAfterPreparationFailure({
+      database,
+      logger,
+    })
     return null
   }
 }
