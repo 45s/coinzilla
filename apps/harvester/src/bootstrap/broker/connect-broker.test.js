@@ -127,7 +127,10 @@ test("aggregates connection and disconnect failures without losing either cause"
   })
 
   await assert.rejects(
-    connectBroker(createConnectInput({ fixture, logger: { error: () => {} } })),
+    connectBroker(createConnectInput({
+      fixture,
+      logger: { error: () => {} },
+    })),
     (error) => error instanceof AggregateError && error.errors.length === 2,
     "Connection and cleanup failures must be reported together.")
   assert.deepEqual(fixture.calls, ["factory", "connect", "disconnect"],
