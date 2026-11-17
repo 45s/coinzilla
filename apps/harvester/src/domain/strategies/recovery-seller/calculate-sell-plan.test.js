@@ -44,7 +44,8 @@ test("adds a reliably quote-valued third-asset commission to gross proceeds", ()
   const plan = calculateRecoverySellerSellPlan({
     ...validInput,
     recoveryQuantity: "1",
-    legacyQuantity: "0",
+    legacyRemainingQuantity: "0",
+    verifiedUnreservedLegacyQuantity: "0",
     thirdAssetFeeQuoteValue: "0.05",
   })
 
@@ -109,7 +110,7 @@ test("does not silently omit authorized legacy inventory when Spot availability 
       ...validInput,
       verifiedUnreservedLegacyQuantity: "0",
     }),
-    /authorized legacy inventory remains/,
+    /Authorized legacy inventory remains/,
   )
 })
 

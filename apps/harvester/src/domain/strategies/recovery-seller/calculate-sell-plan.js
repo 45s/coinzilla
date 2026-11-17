@@ -41,6 +41,35 @@ function assertPositive({ value, field }) {
   }
 }
 
+function validateLegacyAvailability({ legacyRemainingQuantity, verifiedUnreservedLegacyQuantity }) {
+  if (compareDecimal({
+    left: legacyRemainingQuantity,
+    right: "0",
+  }) > 0 && compareDecimal({
+    left: verifiedUnreservedLegacyQuantity,
+    right: "0",
+  }) === 0) {
+    throw new RangeError(
+      "Authorized legacy inventory remains but no verified unreserved Spot quantity is available",
+    )
+  }
+}
+
+function validateFeeRates({ quoteFeeRate, baseFeeRate }) {
+  if (compareDecimal({
+    left: quoteFeeRate,
+    right: "1",
+  }) >= 0) {
+    throw new RangeError("quoteFeeRate must be less than one")
+  }
+  if (compareDecimal({
+    left: baseFeeRate,
+    right: "1",
+  }) >= 0) {
+    throw new RangeError("baseFeeRate must be less than one")
+  }
+}
+
 function validateInput(input) {
   const fields = [
     "recoveryQuantity",
@@ -111,29 +140,14 @@ function validateInput(input) {
     field: "quantityStepSize",
   })
 
-  if (compareDecimal({
-    left: input.legacyRemainingQuantity,
-    right: "0",
-  }) > 0 && compareDecimal({
-    left: input.verifiedUnreservedLegacyQuantity,
-    right: "0",
-  }) === 0) {
-    throw new RangeError(
-      "Authorized legacy inventory remains but no verified unreserved Spot quantity is available",
-    )
-  }
-  if (compareDecimal({
-    left: input.quoteFeeRate,
-    right: "1",
-  }) >= 0) {
-    throw new RangeError("quoteFeeRate must be less than one")
-  }
-  if (compareDecimal({
-    left: input.baseFeeRate,
-    right: "1",
-  }) >= 0) {
-    throw new RangeError("baseFeeRate must be less than one")
-  }
+  validateLegacyAvailability({
+    legacyRemainingQuantity: input.legacyRemainingQuantity,
+    verifiedUnreservedLegacyQuantity: input.verifiedUnreservedLegacyQuantity,
+  })
+  validateFeeRates({
+    quoteFeeRate: input.quoteFeeRate,
+    baseFeeRate: input.baseFeeRate,
+  })
 }
 
 function calculateEligibleLegacyQuantity({
@@ -210,7 +224,6 @@ function calculateQuoteTarget({
 
 function calculateOrderQuantities({
   recoveryQuantity,
-  legacyQuantity,
   availableBaseQuantity,
   baseFeeRate,
   quantityStepSize,
@@ -373,7 +386,6 @@ export function calculateRecoverySellerSellPlan({
   })
   const quantities = calculateOrderQuantities({
     recoveryQuantity,
-    legacyQuantity,
     availableBaseQuantity,
     baseFeeRate,
     quantityStepSize,
