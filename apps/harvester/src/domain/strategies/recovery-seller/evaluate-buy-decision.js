@@ -265,6 +265,7 @@ function validateInput({
   }
   const recoveryAccounting = validateRecoveryAccounting({
     recoveryPosition,
+    positionId,
     cycleState,
     cumulativeNetSellProceeds,
     pendingBuyCommitment,
@@ -326,7 +327,7 @@ function createStopAndReconcileIfOrderExists({
   })
 }
 
-function hasValidOrderOwnership({ order, cycleId }) {
+function hasValidOrderOwnership({ order, cycleId, positionId }) {
   const expectedPurpose = order.side === "BUY" ? "RECOVERY_BUY" : "RECOVERY_SELL"
   return Boolean(
     order.ownership &&
