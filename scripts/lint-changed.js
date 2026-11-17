@@ -105,21 +105,30 @@ export async function getChangedFiles({ cwd, baseRef, headRef }) {
     );
   }
 
-  let output;
+  let changedOutput;
+  let workingTreeOutput;
+  let untrackedOutput;
   try {
-    output = runGit({
+    const diffArguments = [
+      "diff",
+      "--name-status",
+      "-z",
+      "--find-renames",
+      "--find-copies",
+      "--find-copies-harder",
+      "--diff-filter=ACMRT",
+    ];
+    changedOutput = runGit({
       cwd,
-      args: [
-        "diff",
-        "--name-status",
-        "-z",
-        "--find-renames",
-        "--find-copies",
-        "--find-copies-harder",
-        "--diff-filter=ACMRT",
-        mergeBase,
-        headRef,
-      ],
+      args: [...diffArguments, mergeBase, headRef],
+    });
+    workingTreeOutput = runGit({
+      cwd,
+      args: [...diffArguments, headRef],
+    });
+    untrackedOutput = runGit({
+      cwd,
+      args: ["ls-files", "--others", "--exclude-standard", "-z"],
     });
   } catch (error) {
     const detail = error.stderr?.toString().trim() || error.message;
@@ -129,7 +138,14 @@ export async function getChangedFiles({ cwd, baseRef, headRef }) {
     );
   }
 
-  return parseChangedPaths({ output });
+  const committedAndModified = parseChangedPaths({
+    output: changedOutput + workingTreeOutput,
+  });
+  const untracked = untrackedOutput
+    .split("\0")
+    .filter((path) => path && javascriptExtensions.test(path));
+
+  return [...new Set([...committedAndModified, ...untracked])].toSorted();
 }
 
 /**
