@@ -170,6 +170,57 @@ const marketDataBroker = brokerRouter.resolveMarketData({
 
 The function names are illustrative. Prefer small cohesive composition and routing modules; do not introduce a generic dependency-injection framework or put strategy/market routing inside `@coinzilla/brokers`.
 
+### Provider composition and route validation
+
+The following flow shows startup validation. The router is assembled only after provider instances are constructed; an invalid route or missing required capability prevents the affected strategy/market from becoming executable.
+
+```mermaid
+flowchart TD
+    A[Load application configuration] --> B[Validate provider instance definitions]
+    B --> C[Construct configured providers at composition root]
+    C --> D[Build provider registry]
+    D --> E[Validate execution routes]
+    D --> F[Validate independent market-data routes]
+    E --> G{All routes and required capabilities valid?}
+    F --> G
+    G -->|No| H[Fail startup or keep affected route blocked]
+    G -->|Yes| I[Inject router into application workflows]
+    I --> J[Strategy evaluates without provider knowledge]
+    J --> K[Resolve exact strategy and market route]
+    K --> L[Use selected provider instance]
+```
+
+### Order submission and provider pinning
+
+The provider identity is attached to the order before state-changing I/O. All later lifecycle operations use that stored identity, not the current route table.
+
+```mermaid
+sequenceDiagram
+    participant S as Strategy
+    participant E as Trading Engine
+    participant R as Harvester Router
+    participant P as Provider Instance
+    participant X as Exchange
+    S->>E: Strategy decision / order intent
+    E->>R: Resolve execution(strategyId, symbol)
+    R-->>E: Provider instance
+    E->>E: Persist immutable provider/account provenance
+    E->>P: Place order with pinned identity
+    P->>X: Exchange request
+    alt Confirmed acknowledgement
+        X-->>P: Provider order identity
+        P-->>E: Canonical acknowledgement
+    else Timeout or disconnect
+        X--xP: Response unavailable / outcome unknown
+        P-->>E: Unknown outcome
+        Note over E,P: Reconcile only against the same provider/account
+        Note over E,R: Never retry through another provider
+    end
+    E->>P: Later cancel, lookup, fills and recovery use pinned provider
+```
+
+The diagrams are explanatory; the invariants in the Decision section are authoritative.
+
 ## Ownership
 
 | Concern | Owner |
