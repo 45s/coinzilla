@@ -177,7 +177,14 @@ test("rejects order-submission outcomes with inconsistent identity, amounts, or 
   const valid = makeSubmissionOutcome()
   const invalidCases = [
     ["unsupported field", { unsupported: true }, /unsupported fields/],
-    ["invalid symbol", { symbol: "btc-usdt", marketId: "binance:btc-usdt" }, /symbol must be canonical/],
+    [
+      "invalid symbol",
+      {
+        symbol: "btc-usdt",
+        marketId: "binance:btc-usdt",
+      },
+      /symbol must be canonical/,
+    ],
     ["invalid side", { side: "HOLD" }, /side must be BUY or SELL/],
     ["invalid type", { type: "MARKET" }, /type must be LIMIT/],
     ["invalid amount", { price: "0" }, /amounts must be canonical/],
