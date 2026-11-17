@@ -8,7 +8,7 @@
 
 ## Telegram Command Center — COMPLETE
 
-The inbound Telegram Command Center is complete. It is a thin, authorized command/query interface over Harvester application use cases; it does not own trading policy, persistence, startup policy, or recovery. Delivered capabilities: slash commands and read-only queries (PRs #1079, #1081, #1086), inline navigation/confirmation (PR #1088), persistent keyboard (PR #1194), emergency global/per-market BUY commands (PR #1267), and correlated interaction diagnostics plus callback acknowledgement handling (PR #1215). See the [operator-control contract](./docs/operator-control/README.md) and [Telegram runbook](./docs/operations/telegram-command-center.md). Outbound notifications are a separate capability and are not part of CC.
+The inbound Telegram Command Center is complete. It is a thin, authorized command/query interface over Harvester application use cases; it does not own trading policy, persistence, or startup policy. Delivered capabilities: slash commands and read-only queries (PRs #1079, #1081, #1086), inline navigation/confirmation (PR #1088), persistent keyboard (PR #1194), emergency global/per-market BUY commands (PR #1267), and correlated interaction diagnostics plus callback acknowledgement handling (PR #1215). See the [operator-control contract](./docs/operator-control/README.md) and [Telegram runbook](./docs/operations/telegram-command-center.md). Outbound notifications are a separate capability and are not part of CC.
 
 ## Current safety priorities — LIVE-session audit findings
 
