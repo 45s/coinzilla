@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { randomUUID } from "node:crypto"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -16,21 +17,49 @@ async function withConnectedDatabase({ database, callback }) {
   }
 }
 
-async function withDatabase({ createDatabase, callback, storageKey = ":memory:" }) {
-  const database = createDatabase({
-    storageKey,
-  })
-  await withConnectedDatabase({
-    database,
-    callback,
+async function withStorageKey({ callback }) {
+  const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-contract-"))
+  const storageKey = join(directory, `${randomUUID()}.sqlite`)
+
+  try {
+    await callback({
+      storageKey,
+    })
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+}
+
+async function withDatabase({ createDatabase, callback, storageMode }) {
+  await withStorageKey({
+    callback: async ({ storageKey }) => {
+      const database = createDatabase({
+        storageKey,
+        storageMode,
+      })
+      await withConnectedDatabase({
+        database,
+        callback,
+      })
+    },
   })
 }
 
-function registerStandardTest({ name, description, createDatabase, verify }) {
-  test(`${name}: ${description}`, async () => {
+function registerStandardTest({
+  name,
+  description,
+  createDatabase,
+  verify,
+  storageMode,
+}) {
+  test(`${name} (${storageMode}): ${description}`, async () => {
     await withDatabase({
       createDatabase,
       callback: verify,
+      storageMode,
     })
   })
 }
@@ -40,21 +69,20 @@ function registerQueryCapabilityTest({
   description,
   capability,
   createDatabase,
+  capabilities,
+  storageMode,
   verify,
 }) {
-  test(`${name}: ${description}`, async (context) => {
-    const database = createDatabase({
-      storageKey: ":memory:",
-    })
-    if (!database.capabilities.queries[capability]) {
-      await database.close()
+  test(`${name} (${storageMode}): ${description}`, async (context) => {
+    if (!capabilities.queries[capability]) {
       context.skip(`Provider declares queries.${capability}=false`)
       return
     }
 
-    await withConnectedDatabase({
-      database,
+    await withDatabase({
+      createDatabase,
       callback: verify,
+      storageMode,
     })
   })
 }
@@ -468,30 +496,35 @@ async function verifyTransactionCallbackMode(database) {
   )
 }
 
-async function verifyLifecycle({ createDatabase }) {
-  const database = createDatabase({
-    storageKey: ":memory:",
-  })
-  await database.connect()
-  await database.close()
+async function verifyLifecycle({ createDatabase, storageMode }) {
+  await withStorageKey({
+    callback: async ({ storageKey }) => {
+      const database = createDatabase({
+        storageKey,
+        storageMode,
+      })
+      await database.connect()
+      await database.close()
 
-  assert.equal(
-    database.state,
-    "closed",
-    "Closing the composed database must expose the terminal closed lifecycle state",
-  )
-  assert.throws(
-    () => database.readMany({
-      collection: "people",
-    }),
-    /Database must be connected/,
-    "A closed database must reject new CRUD operations before calling the provider",
-  )
-  await assert.rejects(
-    database.connect(),
-    /Cannot connect database while it is closed/,
-    "A closed database resource must not be reopened through the same lifecycle facade",
-  )
+      assert.equal(
+        database.state,
+        "closed",
+        "Closing the composed database must expose the terminal closed lifecycle state",
+      )
+      assert.throws(
+        () => database.readMany({
+          collection: "people",
+        }),
+        /Database must be connected/,
+        "A closed database must reject new CRUD operations before calling the provider",
+      )
+      await assert.rejects(
+        database.connect(),
+        /Cannot connect database while it is closed/,
+        "A closed database resource must not be reopened through the same lifecycle facade",
+      )
+    },
+  })
 }
 
 async function verifyCapabilities(database) {
@@ -507,156 +540,161 @@ async function verifyCapabilities(database) {
   )
 }
 
-async function verifyPersistence({ createDatabase }) {
-  const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-contract-"))
-  const storageKey = join(directory, "records.sqlite")
+async function verifyPersistence({ createDatabase, storageMode }) {
+  await withStorageKey({
+    callback: async ({ storageKey }) => {
+      await withConnectedDatabase({
+        database: createDatabase({
+          storageKey,
+          storageMode,
+        }),
+        callback: async (database) => {
+          await database.create({
+            collection: "people",
+            record: {
+              id: "persistent-1",
+              name: "Stored",
+            },
+          })
+        },
+      })
 
-  try {
-    await withDatabase({
-      createDatabase,
-      storageKey,
-      callback: async (database) => {
-        await database.create({
-          collection: "people",
-          record: {
+      await withConnectedDatabase({
+        database: createDatabase({
+          storageKey,
+          storageMode,
+        }),
+        callback: async (database) => {
+          const record = await database.readOne({
+            collection: "people",
             id: "persistent-1",
-            name: "Stored",
-          },
-        })
-      },
-    })
-
-    await withDatabase({
-      createDatabase,
-      storageKey,
-      callback: async (database) => {
-        const record = await database.readOne({
-          collection: "people",
-          id: "persistent-1",
-        })
-        assert.deepEqual(
-          record,
-          {
-            id: "persistent-1",
-            name: "Stored",
-          },
-          "A newly created provider connection must read records persisted by the previous connection",
-        )
-      },
-    })
-  } finally {
-    await rm(directory, {
-      recursive: true,
-      force: true,
-    })
-  }
+          })
+          assert.deepEqual(
+            record,
+            {
+              id: "persistent-1",
+              name: "Stored",
+            },
+            "A newly created provider connection must read records persisted by the previous connection",
+          )
+        },
+      })
+    },
+  })
 }
 
-function registerPersistenceTest({ name, createDatabase }) {
-  test(`${name}: persistent records survive a new database connection`, async (context) => {
-    const database = createDatabase({
-      storageKey: ":memory:",
-    })
-    const storageModes = database.capabilities.storage.modes
-    if (!storageModes.includes("file") && !storageModes.includes("server")) {
-      await database.close()
-      context.skip("Provider declares only ephemeral in-memory storage")
+function registerPersistenceTest({ name, createDatabase, storageMode }) {
+  test(`${name} (${storageMode}): persistent records survive a new database connection`, async (context) => {
+    if (storageMode === "memory") {
+      context.skip("Provider declares ephemeral in-memory storage")
       return
     }
 
-    await database.close()
     await verifyPersistence({
       createDatabase,
+      storageMode,
     })
   })
 }
 
-/**
- * Register the provider-neutral contract tests for a database provider.
- *
- * The factory receives an opaque storageKey. Use isolated storage for each test
- * and reuse the supplied key when testing persistence across connections.
- *
- * @param {{name: string, createDatabase: (options: {storageKey: string}) => object}} options
- */
-function registerCrudAndQueryTests({ name, createDatabase }) {
+function registerCrudAndQueryTests({
+  name,
+  createDatabase,
+  capabilities,
+  storageMode,
+}) {
   registerStandardTest({
     name,
     description: "CRUD operations preserve records and collection isolation",
     createDatabase,
     verify: verifyCrud,
+    storageMode,
   })
   registerStandardTest({
     name,
     description: "duplicate identifiers return the shared conflict error",
     createDatabase,
     verify: verifyDuplicate,
+    storageMode,
   })
   registerQueryCapabilityTest({
     name,
     description: "exact equality filters distinguish JSON values",
     capability: "equalityFilters",
     createDatabase,
+    capabilities,
     verify: verifyFilters,
+    storageMode,
   })
   registerQueryCapabilityTest({
     name,
     description: "sorting is stable and honors requested fields",
     capability: "sorting",
     createDatabase,
+    capabilities,
     verify: verifySorting,
+    storageMode,
   })
   registerQueryCapabilityTest({
     name,
     description: "pagination applies limit and offset after sorting",
     capability: "pagination",
     createDatabase,
+    capabilities,
     verify: verifyPagination,
+    storageMode,
   })
 }
 
-function registerTransactionTests({ name, createDatabase }) {
+function registerTransactionTests({ name, createDatabase, storageMode }) {
   registerStandardTest({
     name,
     description: "missing updates and deletes use non-exception results",
     createDatabase,
     verify: verifyMissingRecords,
+    storageMode,
   })
   registerStandardTest({
     name,
     description: "transaction failures roll back every record change",
     createDatabase,
     verify: verifyRollback,
+    storageMode,
   })
   registerStandardTest({
     name,
     description: "successful transactions commit all record changes",
     createDatabase,
     verify: verifyCommit,
+    storageMode,
   })
   registerStandardTest({
     name,
     description: "transaction callbacks follow the declared callback mode",
     createDatabase,
     verify: verifyTransactionCallbackMode,
+    storageMode,
   })
   registerStandardTest({
     name,
     description: "provider capabilities are exposed as an immutable snapshot",
     createDatabase,
     verify: verifyCapabilities,
+    storageMode,
   })
 }
 
-function registerLifecycleTests({ name, createDatabase }) {
-  test(`${name}: closing the database prevents new work and releases the provider`, async () => {
+function registerLifecycleTests({ name, createDatabase, storageMode }) {
+  test(`${name} (${storageMode}): closing the database prevents new work and releases the provider`, async () => {
     await verifyLifecycle({
       createDatabase,
+      storageMode,
     })
   })
   registerPersistenceTest({
     name,
     createDatabase,
+    storageMode,
   })
 }
 
@@ -668,6 +706,29 @@ function registerLifecycleTests({ name, createDatabase }) {
  *
  * @param {{name: string, createDatabase: (options: {storageKey: string}) => object}} options
  */
+export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
+  const capabilityProbe = createDatabase({
+    storageKey: `conformance-probe-${randomUUID()}`,
+  })
+  const capabilities = capabilityProbe.capabilities
+  const probeClose = capabilityProbe.close()
+
+  test(`${name}: capability discovery closes its unconnected provider probe`, async () => {
+    await probeClose
+  })
+
+  for (const storageMode of capabilities.storage.modes) {
+    const options = {
+      name,
+      createDatabase,
+      capabilities,
+      storageMode,
+    }
+    registerCrudAndQueryTests(options)
+    registerTransactionTests(options)
+    registerLifecycleTests(options)
+  }
+}
 export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
   const options = {
     name,
