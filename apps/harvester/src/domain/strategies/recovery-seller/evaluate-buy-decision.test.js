@@ -92,6 +92,24 @@ const marketMetadata = {
   },
 }
 
+function ownedOrder({ side, status, clientOrderId, brokerOrderId, cycleId = "rs-cycle-1" }) {
+  return {
+    market: {
+      symbol: "ZROUSDT",
+    },
+    side,
+    status,
+    clientOrderId,
+    ...(brokerOrderId ? { brokerOrderId } : {}),
+    ownership: {
+      strategyId: "RECOVERY_SELLER",
+      purpose: side === "BUY" ? "RECOVERY_BUY" : "RECOVERY_SELL",
+      positionId: "rs-position-1",
+      cycleId,
+    },
+  }
+}
+
 function evaluate(overrides = {}) {
   return evaluateRecoverySellerBuyDecision({
     stopState: createRecoverySellerStopState(),
@@ -185,13 +203,12 @@ test("latches STOP when a BUY commitment exists without an identifiable active o
 
 test("waits for an existing acknowledged RS order instead of creating a duplicate BUY", () => {
   const result = evaluate({
-    activeOrders: [{
-      market: { symbol: "ZROUSDT" },
+    activeOrders: [ownedOrder({
       side: "BUY",
       status: "PARTIALLY_FILLED",
       clientOrderId: "rs-buy-1",
       brokerOrderId: "exchange-1",
-    }],
+    })],
   })
 
   assert.equal(result.decision.outcome, "WAIT",
@@ -206,12 +223,11 @@ test("waits for an existing acknowledged RS order instead of creating a duplicat
 
 test("latches STOP and reconciles the original identity for an unknown or unacknowledged RS order", () => {
   const result = evaluate({
-    activeOrders: [{
-      market: { symbol: "ZROUSDT" },
+    activeOrders: [ownedOrder({
       side: "BUY",
       status: "UNKNOWN",
       clientOrderId: "rs-buy-unknown",
-    }],
+    })],
   })
 
   assert.equal(result.stopState.status, "STOPPED",
@@ -296,12 +312,11 @@ test("latches STOP for malformed or unmodeled active-order snapshots", () => {
     activeOrders: null,
   })
   const unsupported = evaluate({
-    activeOrders: [{
-      market: { symbol: "ZROUSDT" },
+    activeOrders: [ownedOrder({
       side: "BUY",
       status: "PENDING_REPLACE",
       clientOrderId: "rs-buy-unknown-status",
-    }],
+    })],
   })
 
   assert.equal(malformed.stopState.status, "STOPPED",
@@ -412,13 +427,12 @@ test("waits on the cycle's existing SELL without canceling or replacing it", () 
   })
   const result = evaluate({
     cycleState,
-    activeOrders: [{
-      market: { symbol: "ZROUSDT" },
+    activeOrders: [ownedOrder({
       side: "SELL",
       status: "PARTIALLY_FILLED",
       clientOrderId: "rs-sell-1",
       brokerOrderId: "exchange-sell-1",
-    }],
+    })],
     strategyStopped: true,
     marketPaused: true,
     reconciliationComplete: false,
@@ -469,12 +483,11 @@ test("allows the next BUY only after the previous cycle is closed and a new cycl
 test("preserves reconciliation of an existing order when the cycle snapshot is malformed", () => {
   const result = evaluate({
     cycleState: undefined,
-    activeOrders: [{
-      market: { symbol: "ZROUSDT" },
+    activeOrders: [ownedOrder({
       side: "BUY",
       status: "UNKNOWN",
       clientOrderId: "rs-buy-unknown",
-    }],
+    })],
   })
 
   assert.equal(result.stopState.status, "STOPPED",
