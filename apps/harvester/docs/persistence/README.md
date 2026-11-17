@@ -84,7 +84,6 @@ Example (illustrative values):
       "branch": "develop",
       "commit": "<40-64 hexadecimal Git SHA or null>",
       "shortCommit": "<first 8 SHA characters or null>",
-      "commitMessage": "<bounded sanitized message or null>",
       "commitDate": "2026-11-17T15:00:00.000Z",
       "workingTree": "clean",
       "metadataSource": "git"
