@@ -59,8 +59,8 @@ async function withRepository({ callback }) {
 }
 
 async function lintStrict({ source, fileName = "scripts/strict-fixture.js" }) {
-  const eslint = createStrictESLint({ cwd: repositoryRoot });
-  const [result] = await eslint.lintText(source, { filePath: fileName });
+  const eslint = createStrictESLint({\n    cwd: repositoryRoot,\n  });
+  const [result] = await eslint.lintText(source, {\n    filePath: fileName,\n  });
   return result.messages;
 }
 
@@ -70,8 +70,8 @@ function hasRule({ messages, ruleId }) {
 
 test("strict policy inherits the canonical workspace rules and overrides only approved thresholds", async () => {
   const { ESLint } = await import("eslint");
-  const workspace = new ESLint({ cwd: repositoryRoot });
-  const strict = createStrictESLint({ cwd: repositoryRoot });
+  const workspace = new ESLint({\n    cwd: repositoryRoot,\n  });
+  const strict = createStrictESLint({\n    cwd: repositoryRoot,\n  });
   const [workspaceConfig, strictConfig] = await Promise.all([
     workspace.calculateConfigForFile("scripts/eslint-policy.test.js"),
     strict.calculateConfigForFile("scripts/eslint-policy.test.js"),
@@ -107,7 +107,7 @@ test("strict lint rejects complexity above 15", async () => {
   const messages = await lintStrict({
     source: `export function choose(value) {\n  switch (value) {\n    ${cases}\n    default: return -1;\n  }\n}\n`,
   });
-  assert.ok(hasRule({ messages, ruleId: "complexity" }), "A function with sixteen independent switch paths must fail complexity 15.");
+  assert.ok(hasRule({\n    messages,\n    ruleId: "complexity",\n  }), "A function with sixteen independent switch paths must fail complexity 15.");
 });
 
 test("strict lint rejects functions longer than 60 counted lines", async () => {
@@ -115,7 +115,7 @@ test("strict lint rejects functions longer than 60 counted lines", async () => {
   const messages = await lintStrict({
     source: `export function longFunction() {\n${body}\n  return value0;\n}\n`,
   });
-  assert.ok(hasRule({ messages, ruleId: "max-lines-per-function" }), "A function with more than sixty nonblank, noncomment lines must fail.");
+  assert.ok(hasRule({\n    messages,\n    ruleId: "max-lines-per-function",\n  }), "A function with more than sixty nonblank, noncomment lines must fail.");
 });
 
 test("strict lint rejects more than 30 statements", async () => {
@@ -123,21 +123,21 @@ test("strict lint rejects more than 30 statements", async () => {
   const messages = await lintStrict({
     source: `export function manyStatements() {\n${body}\n  return value0;\n}\n`,
   });
-  assert.ok(hasRule({ messages, ruleId: "max-statements" }), "A function with more than thirty statements must fail.");
+  assert.ok(hasRule({\n    messages,\n    ruleId: "max-statements",\n  }), "A function with more than thirty statements must fail.");
 });
 
 test("strict lint rejects four nested control-flow blocks", async () => {
   const messages = await lintStrict({
     source: `export function nested(a, b, c, d) {\n  if (a) {\n    if (b) {\n      if (c) {\n        if (d) {\n          return true;\n        }\n      }\n    }\n  }\n  return false;\n}\n`,
   });
-  assert.ok(hasRule({ messages, ruleId: "max-depth" }), "Four nested control-flow blocks must fail the strict depth limit of three.");
+  assert.ok(hasRule({\n    messages,\n    ruleId: "max-depth",\n  }), "Four nested control-flow blocks must fail the strict depth limit of three.");
 });
 
 test("strict lint rejects three nested callbacks", async () => {
   const messages = await lintStrict({
     source: "setTimeout(() => {\n  setTimeout(() => {\n    setTimeout(() => {}, 0);\n  }, 0);\n}, 0);\n",
   });
-  assert.ok(hasRule({ messages, ruleId: "max-nested-callbacks" }), "Three nested callbacks must fail the strict callback limit of two.");
+  assert.ok(hasRule({\n    messages,\n    ruleId: "max-nested-callbacks",\n  }), "Three nested callbacks must fail the strict callback limit of two.");
 });
 
 test("a strict violation in an untouched legacy file is not selected", async () => {
@@ -148,7 +148,7 @@ test("a strict violation in an untouched legacy file is not selected", async () 
         path: "legacy.js",
         source: "export function old() { return 1; }\n",
       });
-      const files = await getChangedFiles({ cwd, baseRef: "main", headRef: "HEAD" });
+      const files = await getChangedFiles({\n        cwd,\n        baseRef: "main",\n        headRef: "HEAD",\n      });
       assert.deepEqual(files, [], "An unchanged legacy file must not enter the changed-file lint set.");
     },
   });
@@ -173,10 +173,10 @@ test("a modified existing file with a strict violation is selected and rejected"
         cwd,
         args: ["commit", "-m", "modify legacy file"],
       });
-      const files = await getChangedFiles({ cwd, baseRef: "main", headRef: "HEAD" });
+      const files = await getChangedFiles({\n        cwd,\n        baseRef: "main",\n        headRef: "HEAD",\n      });
       assert.deepEqual(files, ["legacy.js"], "A modified legacy file must be selected in full.");
       const messages = await lintStrict({ source: changedSource });
-      assert.ok(hasRule({ messages, ruleId: "complexity" }), "A strict violation anywhere in the modified file must fail.");
+      assert.ok(hasRule({\n    messages,\n    ruleId: "complexity",\n  }), "A strict violation anywhere in the modified file must fail.");
     },
   });
 });
@@ -197,7 +197,7 @@ test("renamed files select the destination path", async () => {
         cwd,
         args: ["commit", "-m", "rename file"],
       });
-      const files = await getChangedFiles({ cwd, baseRef: "main", headRef: "HEAD" });
+      const files = await getChangedFiles({\n        cwd,\n        baseRef: "main",\n        headRef: "HEAD",\n      });
       assert.deepEqual(files, ["after.mjs"], "A renamed JavaScript file must be linted at its new path.");
     },
   });
@@ -219,7 +219,7 @@ test("deleted files are excluded", async () => {
         cwd,
         args: ["commit", "-m", "delete file"],
       });
-      const files = await getChangedFiles({ cwd, baseRef: "main", headRef: "HEAD" });
+      const files = await getChangedFiles({\n        cwd,\n        baseRef: "main",\n        headRef: "HEAD",\n      });
       assert.deepEqual(files, [], "Deleted JavaScript files must never be passed to ESLint.");
     },
   });
@@ -242,7 +242,7 @@ test("filenames containing spaces are handled without line parsing", async () =>
         cwd,
         args: ["commit", "-m", "modify spaced path"],
       });
-      const files = await getChangedFiles({ cwd, baseRef: "main", headRef: "HEAD" });
+      const files = await getChangedFiles({\n        cwd,\n        baseRef: "main",\n        headRef: "HEAD",\n      });
       assert.deepEqual(files, ["file with spaces.js"], "A valid path containing spaces must remain one selected filename.");
     },
   });
@@ -256,7 +256,7 @@ test("an empty changed-file set succeeds", async () => {
         path: "unchanged.js",
         source: "export const value = 1;\n",
       });
-      const files = await getChangedFiles({ cwd, baseRef: "main", headRef: "HEAD" });
+      const files = await getChangedFiles({\n        cwd,\n        baseRef: "main",\n        headRef: "HEAD",\n      });
       assert.deepEqual(files, [], "No changed JavaScript files must produce a successful empty selection.");
     },
   });
@@ -271,7 +271,7 @@ test("missing or invalid merge-base information fails closed", async () => {
         source: "export const value = 1;\n",
       });
       await assert.rejects(
-        getChangedFiles({ cwd, baseRef: "missing-base", headRef: "HEAD" }),
+        getChangedFiles({\n          cwd,\n          baseRef: "missing-base",\n          headRef: "HEAD",\n        }),
         /merge base|base ref|not found/i,
         "An unavailable base ref must produce an actionable error instead of skipping lint.",
       );
