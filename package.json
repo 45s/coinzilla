@@ -13,7 +13,8 @@
     "test:external-links": "node --test scripts/check-external-links.test.js",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
-    "test:sync-main": "node --test scripts/sync-main.test.js"
+    "test:sync-main": "node --test scripts/sync-main.test.js",
+    "sync:main": "node scripts/sync-main.js"
   },
   "keywords": [],
   "author": "",
