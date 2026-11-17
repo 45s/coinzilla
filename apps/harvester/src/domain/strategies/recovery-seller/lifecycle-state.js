@@ -87,6 +87,7 @@ export function startNextRecoverySellerCycleWithStop({
   stopState,
   previousState,
   nextCycleId,
+  nextPositionId,
 } = {}) {
   assertRecoverySellerStopState({
     state: stopState,
@@ -94,6 +95,7 @@ export function startNextRecoverySellerCycleWithStop({
   const cycleState = startNextRecoverySellerCycle({
     previousState,
     nextCycleId,
+    nextPositionId,
   })
   return Object.freeze({
     stopState,
