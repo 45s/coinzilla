@@ -210,7 +210,6 @@ test("a safe strategy cannot release shared services while another strategy is u
   assert.equal(calls.includes("market-intake-stop"), false)
   assert.equal(calls.includes("broker-disconnect"), false)
   assert.equal(calls.includes("operator-control-stop"), false)
-  assert.equal(fixture.state.marketIntakeStopped, false, "Market callback processing must resume when the CLOSING barrier fails before unsubscription.")
   assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE")
 })
 
@@ -235,6 +234,7 @@ test("keeps every shared connection alive when the CLOSING Journal barrier fails
   assert.equal(calls.includes("market-intake-stop"), false)
   assert.equal(calls.includes("broker-disconnect"), false)
   assert.equal(calls.includes("operator-control-stop"), false)
+  assert.equal(fixture.state.marketIntakeStopped, false, "Market callback processing must resume when the CLOSING barrier fails before unsubscription.")
   assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE")
 })
 
