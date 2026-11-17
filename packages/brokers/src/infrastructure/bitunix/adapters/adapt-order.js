@@ -55,6 +55,8 @@ function validateOrder({ bitunixOrder }) {
     volume,
     dealVolume,
     price,
+    ctime,
+    utime,
   } = bitunixOrder
   if ((typeof orderId !== "string" && typeof orderId !== "number") ||
       (typeof orderId === "string" && orderId.trim() === "") ||
@@ -63,6 +65,12 @@ function validateOrder({ bitunixOrder }) {
   }
   if (typeof symbol !== "string" || !symbol.trim()) {
     throw new TypeError("Bitunix Spot order is missing symbol")
+  }
+  if (typeof ctime !== "string" || !ctime.trim()) {
+    throw new TypeError("Bitunix Spot order ctime must be a non-empty string")
+  }
+  if (typeof utime !== "string" || !utime.trim()) {
+    throw new TypeError("Bitunix Spot order utime must be a non-empty string")
   }
 
   const normalizedSide = SIDE_MAP[String(side)]
