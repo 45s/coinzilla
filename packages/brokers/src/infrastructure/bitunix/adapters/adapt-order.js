@@ -57,8 +57,14 @@ function validateOrderIdentity({ orderId, symbol, ctime, utime }) {
   if (typeof symbol !== "string" || !symbol.trim()) {
     throw new TypeError("Bitunix Spot order is missing symbol")
   }
-  assertRequiredTimestamp({ value: ctime, field: "ctime" })
-  assertRequiredTimestamp({ value: utime, field: "utime" })
+  assertRequiredTimestamp({
+    value: ctime,
+    field: "ctime",
+  })
+  assertRequiredTimestamp({
+    value: utime,
+    field: "utime",
+  })
 }
 
 function normalizeOrderStatus({ status }) {
@@ -88,7 +94,12 @@ function validateOrder({ bitunixOrder }) {
     ctime,
     utime,
   } = bitunixOrder
-  validateOrderIdentity({ orderId, symbol, ctime, utime })
+  validateOrderIdentity({
+    orderId,
+    symbol,
+    ctime,
+    utime,
+  })
 
   const normalizedSide = SIDE_MAP[String(side)]
   const normalizedType = TYPE_MAP[String(type ?? bitunixOrder.orderType)]
