@@ -125,6 +125,7 @@ function createFunctionQualityAuditEslint() {
           ],
           "max-statements": ["error", 15],
           "max-depth": ["error", 3],
+          "max-nested-callbacks": ["error", 2],
           "default-param-last": "error",
         },
       },
@@ -138,6 +139,8 @@ function collectFunctionQualityFindings({ results }) {
     maxLines: [],
     maxStatements: [],
     maxDepth: [],
+    maxParams: [],
+    maxNestedCallbacks: [],
     defaultParamLast: [],
   };
   const measurements = [
@@ -160,6 +163,16 @@ function collectFunctionQualityFindings({ results }) {
       ruleId: "max-depth",
       key: "maxDepth",
       pattern: /nested too deeply \((\d+)\)/i,
+    },
+    {
+      ruleId: "max-params",
+      key: "maxParams",
+      pattern: /too many parameters \\((\\d+)\\)/i,
+    },
+    {
+      ruleId: "max-nested-callbacks",
+      key: "maxNestedCallbacks",
+      pattern: /too many nested callbacks \\((\\d+)\\)/i,
     },
     {
       ruleId: "default-param-last",
@@ -212,9 +225,22 @@ function summarizeThresholdImpact({ findings, threshold }) {
     findings,
     threshold,
   });
+  const packageCounts = new Map();
+  for (const finding of affected) {
+    const relativePath = finding.filePath.replace(`${repositoryRoot}/`, "");
+    const [scope, name] = relativePath.split("/");
+    const packageName = scope === "apps" || scope === "packages"
+      ? `${scope}/${name}`
+      : "repository tooling";
+    packageCounts.set(packageName, (packageCounts.get(packageName) ?? 0) + 1);
+  }
+
   return {
     functions: affected.length,
     files: new Set(affected.map((finding) => finding.filePath)).size,
+    packages: [...packageCounts.entries()]
+      .toSorted((left, right) => right[1] - left[1])
+      .map(([name, functions]) => ({ name, functions })),
     largest: affected
       .toSorted(compareFindingsByValue)
       .slice(0, 5)
@@ -276,6 +302,18 @@ function createFunctionQualityAuditReport({ metrics }) {
         threshold: 15,
       }),
     },
+    maxParams: {
+      1: summarizeThresholdImpact({
+        findings: metrics.maxParams,
+        threshold: 1,
+      }),
+    },
+    maxNestedCallbacks: {
+      2: summarizeThresholdImpact({
+        findings: metrics.maxNestedCallbacks,
+        threshold: 2,
+      }),
+    },
     maxDepth: {
       3: summarizeThresholdImpact({
         findings: metrics.maxDepth,
@@ -286,6 +324,14 @@ function createFunctionQualityAuditReport({ metrics }) {
         threshold: 4,
       }),
     },
+    maxParamsOffendersAt1: listThresholdOffenders({
+      findings: metrics.maxParams,
+      threshold: 1,
+    }),
+    maxNestedCallbacksOffendersAt2: listThresholdOffenders({
+      findings: metrics.maxNestedCallbacks,
+      threshold: 2,
+    }),
     maxDepthOffendersAt3: listThresholdOffenders({
       findings: metrics.maxDepth,
       threshold: 3,
