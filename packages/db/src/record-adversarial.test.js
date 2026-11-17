@@ -101,3 +101,23 @@ test("query normalization reads validated data descriptors without invoking prox
     "Normalizing a query must not execute a proxy get trap after descriptor validation",
   )
 })
+
+
+test("record arrays reject numeric-looking custom properties that JSON serialization would drop", () => {
+  const values = []
+  Object.defineProperty(values, "4294967295", {
+    configurable: true,
+    enumerable: true,
+    value: "not an array element",
+    writable: true,
+  })
+
+  assert.throws(
+    () => serializeRecord({
+      id: "array-custom-property-1",
+      values,
+    }),
+    TypeError,
+    "Record validation must reject numeric-looking custom array properties instead of silently dropping them",
+  )
+})
