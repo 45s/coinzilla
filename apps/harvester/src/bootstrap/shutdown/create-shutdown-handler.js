@@ -843,10 +843,12 @@ function createShutdownRequestContext({
   } = stopOptions
   const shutdownRequestedAt = requestedAt ?? now()
   const shutdownCorrelationId = runtimeSessionId ?? null
-  const phaseRunner = createShutdownPhaseRunner(options, no
-    w, sh
-    utdownRequestedAt, sh
-    utdownCorrelationId)
+  const phaseRunner = createShutdownPhaseRunner(
+    options,
+    now,
+    shutdownRequestedAt,
+    shutdownCorrelationId,
+  )
   if (!requestLogged) {
     phaseRunner.logPhase({
       phase: "SHUTDOWN_REQUESTED",

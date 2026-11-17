@@ -2372,41 +2372,48 @@ class TestnetTradingRecoveryScenario {
     }
   }
 
-  resetStep1State() {
-    this.calls = []
-    this.buyCancellationCount = { value: 0 }
-    this.subscriptions = new Map()
-    this.bookSubscriptions = new Map()
-    this.userDataHandlers = undefined
-    this.snapshotTime = 0
-    this.baseBalance = "0"
-    this.signalRecoveryCompleted = undefined
-    this.recoveryCompleted = new Promise((resolve) => { this.signalRecoveryCompleted = resolve })
-    this.submittedOrders = []
-    this.canonicalOrdersByBrokerId = new Map()
-    this.fillHistoryByOrder = new Map()
-    this.runtimeErrors = []
-    this.runtimeDebug = []
-    this.runtimeInfo = []
-    this.publishedEvents = []
-    this.durableFlushes = []
-    this.recoveryFillTradeId = "testnet-buy-fill"
-    this.recoveryPending = false
-    this.recoveryCanonicalHistoryReads = 0
-    this.recoveryFillHistoryReads = 0
-    this.recoveryAccountWideOpenOrderReads = 0
-    this.recoveryOwnedOpenOrderReads = 0
-    this.recoveryAccountSnapshotReads = 0
-    this.recoveryAcknowledgementCount = 0
-    this.recoveryQueuedFillProcessedCount = 0
-    this.recoveryQueuedFillMode = undefined
-    this.recoveryAcknowledgementObservation = undefined
-    this.resolveRecoveryHistoryStarted = undefined
-    this.releaseRecoveryHistory = undefined
-    this.resolveRecoveryQueuedFillProcessed = undefined
-    this.resolveRecoveryAcknowledged = undefined
+  resetStep1ProcessState() {
+        this.calls = []
+        this.buyCancellationCount = { value: 0 }
+        this.subscriptions = new Map()
+        this.bookSubscriptions = new Map()
+        this.userDataHandlers = undefined
+        this.snapshotTime = 0
+        this.baseBalance = "0"
+        this.signalRecoveryCompleted = undefined
+        this.recoveryCompleted = new Promise((resolve) => { this.signalRecoveryCompleted = resolve })
+        this.submittedOrders = []
+        this.canonicalOrdersByBrokerId = new Map()
+        this.fillHistoryByOrder = new Map()
+        this.runtimeErrors = []
+        this.runtimeDebug = []
+        this.runtimeInfo = []
+        this.publishedEvents = []
+        this.durableFlushes = []
   }
 
+  resetStep1RecoveryState() {
+        this.recoveryFillTradeId = "testnet-buy-fill"
+        this.recoveryPending = false
+        this.recoveryCanonicalHistoryReads = 0
+        this.recoveryFillHistoryReads = 0
+        this.recoveryAccountWideOpenOrderReads = 0
+        this.recoveryOwnedOpenOrderReads = 0
+        this.recoveryAccountSnapshotReads = 0
+        this.recoveryAcknowledgementCount = 0
+        this.recoveryQueuedFillProcessedCount = 0
+        this.recoveryQueuedFillMode = undefined
+        this.recoveryAcknowledgementObservation = undefined
+        this.resolveRecoveryHistoryStarted = undefined
+        this.releaseRecoveryHistory = undefined
+        this.resolveRecoveryQueuedFillProcessed = undefined
+        this.resolveRecoveryAcknowledged = undefined
+  }
+
+  resetStep1State() {
+    this.resetStep1ProcessState()
+    this.resetStep1RecoveryState()
+  }
   initializeStep1RecoveryHistoryGate() {
     this.recoveryHistoryStarted = new Promise((resolve) => {
       this.resolveRecoveryHistoryStarted = resolve
