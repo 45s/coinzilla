@@ -44,10 +44,22 @@ test("discovers flat root files and recursively nested sessions with determinist
       fileNames,
     })),
     [
-      { directory: rootDirectory, fileNames: ["flat.jsonl"] },
-      { directory: sessionsRoot, fileNames: ["root.jsonl"] },
-      { directory: path.join(sessionsRoot, "nested-a"), fileNames: ["events.jsonl"] },
-      { directory: path.join(sessionsRoot, "nested-z"), fileNames: ["events.jsonl"] },
+      {
+        directory: rootDirectory,
+        fileNames: ["flat.jsonl"],
+      },
+      {
+        directory: sessionsRoot,
+        fileNames: ["root.jsonl"],
+      },
+      {
+        directory: path.join(sessionsRoot, "nested-a"),
+        fileNames: ["events.jsonl"],
+      },
+      {
+        directory: path.join(sessionsRoot, "nested-z"),
+        fileNames: ["events.jsonl"],
+      },
     ],
     "Flat and nested Journal sessions must be returned in deterministic directory order.",
   )
