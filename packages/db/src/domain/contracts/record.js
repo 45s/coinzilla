@@ -7,7 +7,7 @@ function readOwnDescriptors({ value, label }) {
       descriptors: Object.getOwnPropertyDescriptors(value),
     }
   } catch (error) {
-    throw new TypeError(\`\${label} must be a readable plain object\`, {
+    throw new TypeError(`${label} must be a readable plain object`, {
       cause: error,
     })
   }
@@ -19,7 +19,7 @@ function cloneJsonArray({ value, ancestors, label }) {
     label,
   })
   if (prototype !== Array.prototype) {
-    throw new TypeError(\`\${label} must contain plain arrays\`)
+    throw new TypeError(`${label} must contain plain arrays`)
   }
 
   const length = descriptors.length.value
@@ -30,12 +30,12 @@ function cloneJsonArray({ value, ancestors, label }) {
       continue
     }
     if (typeof key !== "string" || !/^(0|[1-9][0-9]*)$/.test(key)) {
-      throw new TypeError(\`\${label} arrays must not contain custom properties\`)
+      throw new TypeError(`${label} arrays must not contain custom properties`)
     }
 
     const descriptor = descriptors[key]
     if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
-      throw new TypeError(\`\${label} arrays must contain data elements only\`)
+      throw new TypeError(`${label} arrays must contain data elements only`)
     }
     clone[Number(key)] = cloneJsonValue({
       value: descriptor.value,
@@ -46,7 +46,7 @@ function cloneJsonArray({ value, ancestors, label }) {
 
   for (let index = 0; index < length; index += 1) {
     if (!Object.hasOwn(descriptors, String(index))) {
-      throw new TypeError(\`\${label} must not contain sparse arrays\`)
+      throw new TypeError(`${label} must not contain sparse arrays`)
     }
   }
 
@@ -59,18 +59,18 @@ function cloneJsonObject({ value, ancestors, label }) {
     label,
   })
   if (prototype !== Object.prototype && prototype !== null) {
-    throw new TypeError(\`\${label} must contain only plain objects\`)
+    throw new TypeError(`${label} must contain only plain objects`)
   }
 
   const clone = {}
   for (const key of Reflect.ownKeys(descriptors)) {
     if (typeof key !== "string") {
-      throw new TypeError(\`\${label} must not contain symbol keys\`)
+      throw new TypeError(`${label} must not contain symbol keys`)
     }
 
     const descriptor = descriptors[key]
     if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
-      throw new TypeError(\`\${label} must contain enumerable data properties only\`)
+      throw new TypeError(`${label} must contain enumerable data properties only`)
     }
 
     Object.defineProperty(clone, key, {
@@ -96,10 +96,10 @@ function cloneJsonValue({ value, ancestors, label }) {
     return value
   }
   if (typeof value !== "object") {
-    throw new TypeError(\`\${label} must contain only JSON-safe values\`)
+    throw new TypeError(`${label} must contain only JSON-safe values`)
   }
   if (ancestors.has(value)) {
-    throw new TypeError(\`\${label} must not contain circular references\`)
+    throw new TypeError(`${label} must not contain circular references`)
   }
 
   ancestors.add(value)
@@ -120,7 +120,7 @@ function cloneJsonValue({ value, ancestors, label }) {
 
 function assertPlainRecord({ value, label }) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    throw new TypeError(\`\${label} must be a plain object\`)
+    throw new TypeError(`${label} must be a plain object`)
   }
 
   return cloneJsonObject({
