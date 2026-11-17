@@ -51,6 +51,21 @@ test("accepts a canonical process-stop fact bound to its runtime session", () =>
   )
 })
 
+test("rejects process-stop facts whose stable identity belongs to another runtime session", () => {
+  assert.throws(
+    () => validateFactInput({
+      fact: {
+        factId: "process-stopped:other-session",
+        factType: "PROCESS_STOPPED",
+        data: { reason: "NORMAL_SHUTDOWN", clean: true },
+      },
+      runtimeSessionId: "test-session",
+    }),
+    /factId must match its runtime session identity/,
+    "A process-stop fact must not be recorded under an identity from a different process session.",
+  )
+})
+
 test("rejects unknown fact types, implicit genesis appends, and non-object fact data", () => {
   assert.throws(
     () => validateFactInput({
