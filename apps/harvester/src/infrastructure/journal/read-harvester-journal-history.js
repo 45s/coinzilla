@@ -301,6 +301,31 @@ function createHistoryReadResult({ records, sessionMetadata, bytesRead, director
   })
 }
 
+function validateHistoryReadOptions({
+  directory,
+  journalFactory,
+  maxDirectories,
+  maxSessions,
+  maxRecords,
+  maxBytes,
+  maxRecordBytes,
+}) {
+  if (typeof directory !== "string" || directory.trim() === "") {
+    throw new TypeError("Harvester Journal history directory must be a non-empty string")
+  }
+  if (typeof journalFactory !== "function") {
+    throw new TypeError("Harvester Journal history journalFactory must be a function")
+  }
+  validateLimits({
+    maxDirectories,
+    maxSessions,
+    maxRecords,
+    maxBytes,
+    maxRecordBytes,
+  })
+  return path.resolve(directory)
+}
+
 export async function readHarvesterJournalHistory({
   directory,
   journalFactory = (options) => new Journal(options),
@@ -313,21 +338,15 @@ error() {} },
   maxRecordBytes = DEFAULT_LIMITS.maxRecordBytes,
 } = {}) {
   try {
-    if (typeof directory !== "string" || directory.trim() === "") {
-      throw new TypeError("Harvester Journal history directory must be a non-empty string")
-    }
-    if (typeof journalFactory !== "function") {
-      throw new TypeError("Harvester Journal history journalFactory must be a function")
-    }
-    validateLimits({
+    const rootDirectory = validateHistoryReadOptions({
+      directory,
+      journalFactory,
       maxDirectories,
       maxSessions,
       maxRecords,
       maxBytes,
       maxRecordBytes,
     })
-
-    const rootDirectory = path.resolve(directory)
     const discovery = await discoverHarvesterJournalSessions({
       rootDirectory,
       maxDirectories,
