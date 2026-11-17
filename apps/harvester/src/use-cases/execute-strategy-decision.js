@@ -117,6 +117,22 @@ function createPendingOrderCandidate({ action, marketMetadata, clientOrderId } =
   })
 }
 
+async function notifyOrderValidationFailure({
+  context,
+  candidate,
+  error,
+  notifyValidationFailure,
+} = {}) {
+  if (!notifyValidationFailure) {
+    return
+  }
+  await context.onOrderValidationFailure({
+    order: candidate.pendingOrder,
+    error,
+    ...getOwnershipMetadata({ ownership: candidate.ownership }),
+  })
+}
+
 async function validateDecision({ context, decision, marketMetadata, notifyValidationFailure = true } = {}) {
   try {
     if (!decision || typeof decision !== "object" || !Array.isArray(decision.actions)) {
@@ -138,13 +154,12 @@ async function validateDecision({ context, decision, marketMetadata, notifyValid
           tradingRules: marketMetadata.tradingRules,
         })
       } catch (error) {
-        if (notifyValidationFailure) {
-          await context.onOrderValidationFailure({
-            order: candidate.pendingOrder,
-            error,
-            ...getOwnershipMetadata({ ownership: candidate.ownership }),
-          })
-        }
+        await notifyOrderValidationFailure({
+          context,
+          candidate,
+          error,
+          notifyValidationFailure,
+        })
         throw error
       }
       const deferral = context.getSubmissionDeferral({
@@ -298,6 +313,46 @@ async function deferRegisteredSubmission({ context, candidate, errors, reason } 
   }
 }
 
+async function deferUnregisteredSubmission({ context, candidate, deferral } = {}) {
+  const { pendingOrder: order, purpose, ownership } = candidate
+  await context.onSubmissionDeferred({
+    order,
+    purpose,
+    ...getOwnershipMetadata({ ownership }),
+    registered: false,
+    ...deferral,
+  })
+  return toResult({
+    data: {
+      deferred: true,
+      ...deferral,
+    },
+  })
+}
+
+async function getPostRegistrationSubmissionDeferral({ context, candidate } = {}) {
+  const { pendingOrder: order, purpose, ownership } = candidate
+  try {
+    return {
+      deferral: context.getSubmissionDeferral({
+        order,
+        purpose,
+        ...getOwnershipMetadata({ ownership }),
+      }),
+    }
+  } catch (error) {
+    await context.onSubmissionDeferred({
+      order,
+      purpose,
+      ...getOwnershipMetadata({ ownership }),
+      registered: true,
+      reason: "SUBMISSION_GATE_ERROR",
+      details: { errorName: error.name },
+    })
+    return { error }
+  }
+}
+
 async function preparePendingSubmission({ context, candidate } = {}) {
   const { pendingOrder, purpose, ownership } = candidate
   const initialDeferral = context.getSubmissionDeferral({
@@ -306,18 +361,10 @@ async function preparePendingSubmission({ context, candidate } = {}) {
     ...getOwnershipMetadata({ ownership }),
   })
   if (initialDeferral) {
-    await context.onSubmissionDeferred({
-      order: pendingOrder,
-      purpose,
-      ...getOwnershipMetadata({ ownership }),
-      registered: false,
-      ...initialDeferral,
-    })
-    return toResult({
-      data: {
-        deferred: true,
-        ...initialDeferral,
-      },
+    return deferUnregisteredSubmission({
+      context,
+      candidate,
+      deferral: initialDeferral,
     })
   }
   const pendingResult = context.onPendingOrder({
@@ -328,36 +375,25 @@ async function preparePendingSubmission({ context, candidate } = {}) {
   if (pendingResult && typeof pendingResult.then === "function") {
     await pendingResult
   }
-  let dispatchDeferral
-  try {
-    dispatchDeferral = context.getSubmissionDeferral({
-      order: pendingOrder,
-      purpose,
-      ...getOwnershipMetadata({ ownership }),
-    })
-  } catch (error) {
-    await context.onSubmissionDeferred({
-      order: pendingOrder,
-      purpose,
-      ...getOwnershipMetadata({ ownership }),
-      registered: true,
-      reason: "SUBMISSION_GATE_ERROR",
-      details: { errorName: error.name },
-    })
-    return toResult({ error })
+  const postRegistration = await getPostRegistrationSubmissionDeferral({
+    context,
+    candidate,
+  })
+  if (postRegistration.error) {
+    return toResult({ error: postRegistration.error })
   }
-  if (dispatchDeferral) {
+  if (postRegistration.deferral) {
     await context.onSubmissionDeferred({
       order: pendingOrder,
       purpose,
       ...getOwnershipMetadata({ ownership }),
       registered: true,
-      ...dispatchDeferral,
+      ...postRegistration.deferral,
     })
     return toResult({
       data: {
         deferred: true,
-        ...dispatchDeferral,
+        ...postRegistration.deferral,
       },
     })
   }
