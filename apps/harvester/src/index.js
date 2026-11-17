@@ -20,6 +20,9 @@ import { configureHarvesterLogging } from "./infrastructure/logging/configure-ha
 import { createLogCommandInterface } from "./infrastructure/logging/create-log-command-interface.js"
 import { subscribeHarvesterTelegramNotifications } from "./bootstrap/notifications/subscribe-harvester-telegram-notifications.js"
 import { prepareProcessOperationalStateStore } from "./bootstrap/operational-state/prepare-process-operational-state-store.js"
+import { prepareTradingSessionPersistence as prepareTradingSessionPersistenceDefault } from "./infrastructure/persistence/prepare-trading-session-persistence.js"
+import { createTradingSessionHistoryObserver } from "./infrastructure/persistence/create-trading-session-history-observer.js"
+import { closeTradingSessionPersistence } from "./infrastructure/persistence/close-trading-session-persistence.js"
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 const PROCESS_IDENTITY = createHarvesterProcessIdentity()
@@ -175,9 +178,21 @@ function reportObservabilityCleanupErrors({ errors, logger } = {}) {
   }
 }
 
-async function closeObservability({ journalService, eventBus, processLock, allowProcessLockRelease = true, logger } = {}) {
+async function closeObservability({
+  journalService,
+  eventBus,
+  processLock,
+  tradingSessionObserver,
+  tradingSessionDatabase,
+  allowProcessLockRelease = true,
+  logger,
+} = {}) {
   const journalResult = await closeJournalService({ journalService })
   const eventBusErrors = await closeEventBus({ eventBus })
+  const tradingSessionErrors = await closeTradingSessionPersistence({
+    observer: tradingSessionObserver,
+    database: tradingSessionDatabase,
+  })
   const processLockErrors = await releaseProcessLock({
     processLock,
     allowProcessLockRelease,
@@ -186,6 +201,7 @@ async function closeObservability({ journalService, eventBus, processLock, allow
   const errors = [
     ...journalResult.errors,
     ...eventBusErrors,
+    ...tradingSessionErrors,
     ...processLockErrors,
   ]
 
@@ -274,6 +290,99 @@ function publishProcessStartedEvidence({ processStartedDataResult, resources, lo
     })
 }
 
+function createEmptyTradingSessionHistoryResources() {
+  return {
+    persistence: null,
+    observer: null,
+  }
+}
+
+async function closeUnusedTradingSessionPersistence({ persistence, logger }) {
+  const errors = await closeTradingSessionPersistence({
+    database: persistence.database,
+  })
+  reportObservabilityCleanupErrors({
+    errors,
+    logger,
+  })
+}
+
+function reportSessionObserverSetupFailure({ logger, error }) {
+  try {
+    logger?.error?.({
+      message: "Ordinary trading-session history observer could not be attached; Harvester continues without this non-authoritative history store.",
+      errorName: error?.name ?? "Error",
+      errorCode: typeof error?.code === "string" ? error.code : "UNKNOWN",
+    })
+  } catch {
+    // Optional historical reporting diagnostics must not affect startup.
+  }
+}
+
+async function prepareTradingSessionHistoryResources({
+  eventBus,
+  processStartedDataResult,
+  runtimeConfig,
+  env,
+  logger,
+  prepareTradingSessionPersistence,
+}) {
+  const persistence = await prepareTradingSessionPersistence({
+    tradingMode: runtimeConfig.tradingMode,
+    env,
+    logger,
+  })
+  if (!persistence) {
+    return createEmptyTradingSessionHistoryResources()
+  }
+  if (!processStartedDataResult.ok) {
+    await closeUnusedTradingSessionPersistence({
+      persistence,
+      logger,
+    })
+    return createEmptyTradingSessionHistoryResources()
+  }
+  try {
+    const observer = createTradingSessionHistoryObserver({
+      eventBus,
+      repository: persistence.repository,
+      processIdentity: processStartedDataResult.data,
+      runtimeConfig,
+      logger,
+    })
+    return {
+      persistence,
+      observer,
+    }
+  } catch (error) {
+    reportSessionObserverSetupFailure({
+      logger,
+      error,
+    })
+    await closeUnusedTradingSessionPersistence({
+      persistence,
+      logger,
+    })
+    return createEmptyTradingSessionHistoryResources()
+  }
+}
+
+async function acquireEnvironmentProcessLock({ runtimeConfig, acquireProcessLock, logger }) {
+  const processLockDirectory = resolveHostProcessLockDirectory()
+  const lockResult = await acquireProcessLock({
+    journalDirectory: processLockDirectory,
+    globalDirectory: processLockDirectory,
+    broker: runtimeConfig.brokerName,
+    tradingMode: runtimeConfig.tradingMode,
+    logger,
+  })
+  if (lockResult?.ok !== true || typeof lockResult.release !== "function") {
+    const details = lockResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+    throw new Error(`Harvester cannot start without the Binance ${runtimeConfig.tradingMode} environment-scoped single-writer process lock${details ? `: ${details}` : ""}`)
+  }
+  return lockResult
+}
+
 async function acquireProcessStartupResources({ options, resources, processStartedDataResult } = {}) {
   const {
     createEventBus,
@@ -285,6 +394,7 @@ async function acquireProcessStartupResources({ options, resources, processStart
     processIdentity,
     createOperationalStateStore,
     createJournalService,
+    prepareTradingSessionPersistence,
   } = options
   resources.eventBus = createEventBus({ logger })
   resources.appConfig = await loadConfig(configSource)
@@ -292,19 +402,11 @@ async function acquireProcessStartupResources({ options, resources, processStart
     tradingMode: env.TRADING_MODE,
     environment: env.NODE_ENV,
   })
-  const processLockDirectory = resolveHostProcessLockDirectory()
-  const lockResult = await acquireProcessLock({
-    journalDirectory: processLockDirectory,
-    globalDirectory: processLockDirectory,
-    broker: resources.runtimeConfig.brokerName,
-    tradingMode: resources.runtimeConfig.tradingMode,
+  resources.processLock = await acquireEnvironmentProcessLock({
+    runtimeConfig: resources.runtimeConfig,
+    acquireProcessLock,
     logger,
   })
-  if (lockResult?.ok !== true || typeof lockResult.release !== "function") {
-    const details = lockResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-    throw new Error(`Harvester cannot start without the Binance ${resources.runtimeConfig.tradingMode} environment-scoped single-writer process lock${details ? `: ${details}` : ""}`)
-  }
-  resources.processLock = lockResult
   resources.operationalStateStore = await prepareProcessOperationalStateStore({
     appConfig: resources.appConfig,
     env,
@@ -322,6 +424,16 @@ async function acquireProcessStartupResources({ options, resources, processStart
     journalService: resources.journalService,
     resources,
   })
+  const tradingSessionHistory = await prepareTradingSessionHistoryResources({
+    eventBus: resources.eventBus,
+    processStartedDataResult,
+    runtimeConfig: resources.runtimeConfig,
+    env,
+    logger,
+    prepareTradingSessionPersistence,
+  })
+  resources.tradingSessionPersistence = tradingSessionHistory.persistence
+  resources.tradingSessionObserver = tradingSessionHistory.observer
   resources.processStartedPublication = publishProcessStartedEvidence({
     processStartedDataResult,
     resources,
@@ -329,41 +441,80 @@ async function acquireProcessStartupResources({ options, resources, processStart
   })
 }
 
+function createTelegramNotificationLogger({ logger, resources }) {
+  if (typeof logger?.error !== "function") {
+    return undefined
+  }
+  return {
+    error: (entry) => logger.error({
+      ...entry,
+      notificationDiagnostics: resources.telegramNotifications?.getDiagnostics?.() ?? null,
+    }),
+  }
+}
+
+async function enableTelegramNotifications({
+  options,
+  resources,
+  telegramToken,
+  telegramChatId,
+  telegramConfig,
+}) {
+  const { logger, createTelegramNotifier } = options
+  try {
+    const notifier = createTelegramNotifier({
+      token: telegramToken,
+      chatId: telegramChatId,
+    })
+    resources.telegramNotifications = await subscribeHarvesterTelegramNotifications({
+      eventBus: resources.eventBus,
+      notifier,
+      logger: createTelegramNotificationLogger({
+        logger,
+        resources,
+      }),
+      telegramConfig,
+    })
+    logSystem({
+      logger,
+      message: "Telegram notifications enabled.",
+    })
+  } catch (error) {
+    logger.error?.({
+      message: "Telegram notifications could not be enabled; Harvester will continue without them.",
+      error,
+    })
+  }
+}
+
 async function configureTelegramNotifications({ options, resources } = {}) {
-  const { env, logger, createTelegramNotifier } = options
+  const { env, logger } = options
   const telegramToken = env.TELEGRAM_BOT_TOKEN?.trim()
   const telegramChatId = env.TELEGRAM_CHAT_ID?.trim()
   const telegramConfig = resources.appConfig.notifications?.telegram ?? {}
-  if (telegramConfig.enabled !== false && telegramToken && telegramChatId) {
-    try {
-      const notifier = createTelegramNotifier({ token: telegramToken,
-        chatId: telegramChatId })
-      const telegramLogger = typeof logger?.error === "function"
-        ? {
-          error: (entry) => logger.error({
-              ...entry,
-              notificationDiagnostics: resources.telegramNotifications?.getDiagnostics?.() ?? null,
-            }),
-          }
-        : undefined
-      resources.telegramNotifications = await subscribeHarvesterTelegramNotifications({
-        eventBus: resources.eventBus,
-        notifier,
-        logger: telegramLogger,
-        telegramConfig,
-      })
-      logSystem({ logger,
-        message: "Telegram notifications enabled." })
-    } catch (error) {
-      logger.error?.({ message: "Telegram notifications could not be enabled; Harvester will continue without them.",
-        error })
-    }
-  } else if (telegramConfig.enabled === false) {
-    logSystem({ logger,
-      message: "Telegram notifications disabled by app configuration." })
-  } else if (telegramToken || telegramChatId) {
-    logger.error?.({ message: "Telegram notifications require both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID; notifications are disabled." })
+  if (telegramConfig.enabled === false) {
+    logSystem({
+      logger,
+      message: "Telegram notifications disabled by app configuration.",
+    })
+    return
   }
+  if (!telegramToken && !telegramChatId) {
+    return
+  }
+  if (!telegramToken || !telegramChatId) {
+    logger.error?.({
+      message: "Telegram notifications require both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID; notifications are disabled.",
+    })
+    return
+  }
+  await enableTelegramNotifications({
+    options,
+    resources,
+    telegramToken,
+    telegramChatId,
+    telegramConfig,
+  })
 }
 
 async function ensureProcessJournalReady({ journalService } = {}) {
@@ -434,7 +585,11 @@ async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } =
       processLock: resources.processLock,
       logger: options.logger,
       closeLogger: options.closeLogger,
-      closeObservability,
+      closeObservability: (cleanupOptions) => closeObservability({
+        ...cleanupOptions,
+        tradingSessionObserver: resources.tradingSessionObserver,
+        tradingSessionDatabase: resources.tradingSessionPersistence?.database,
+      }),
       logTelegramNotificationSummary,
     })
     options.registerSignalHandler("SIGINT", () => shutdown("SIGINT"))
@@ -526,6 +681,8 @@ async function cleanupProcessStartupFailure({ error, options, resources } = {}) 
     journalService: resources.journalService,
     eventBus: resources.eventBus,
     processLock: resources.processLock,
+    tradingSessionObserver: resources.tradingSessionObserver,
+    tradingSessionDatabase: resources.tradingSessionPersistence?.database,
     allowProcessLockRelease: !resources.runtimeStartAttempted,
     logger,
   })
@@ -539,7 +696,28 @@ async function cleanupProcessStartupFailure({ error, options, resources } = {}) 
   process.exitCode = 1
 }
 
-export async function main(options = {}) {
+function resolveTradingSessionPersistencePreparer({
+  start,
+  override,
+  logger,
+}) {
+  if (override) {
+    return override
+  }
+  if (start === startHarvester) {
+    return prepareTradingSessionPersistenceDefault
+  }
+  try {
+    logger?.warn?.({
+      message: "Ordinary trading-session history is disabled for a custom start adapter unless an explicit persistence preparer is supplied.",
+    })
+  } catch {
+    // Optional configuration diagnostics must not affect startup.
+  }
+  return async () => null
+}
+
+function createMainDependencies({ options }) {
   const {
     start = startHarvester,
     logger = defaultLogger,
@@ -553,9 +731,10 @@ export async function main(options = {}) {
     closeLogger = async () => {},
     createTelegramNotifier = (notifierOptions) => new TelegramNotifier(notifierOptions),
     createOperationalStateStore,
+    prepareTradingSessionPersistence: prepareOverride,
     processIdentity = PROCESS_IDENTITY,
   } = options
-  const dependencies = {
+  return {
     start,
     logger,
     createEventBus,
@@ -568,36 +747,74 @@ export async function main(options = {}) {
     closeLogger,
     createTelegramNotifier,
     createOperationalStateStore,
+    prepareTradingSessionPersistence: resolveTradingSessionPersistencePreparer({
+      start,
+      override: prepareOverride,
+      logger,
+    }),
     processIdentity,
   }
-  const processStartedDataResult = mapHarvesterProcessStartedData(processIdentity)
-  setProcessLoggerContext({ logger,
-    processStartedDataResult })
-  const resources = {
-    processStartedPublication: Promise.resolve({ ok: true,
-      skipped: true }),
-    runtimeStartAttempted: false,
-  }
+}
 
+function createInitialProcessResources() {
+  return {
+    processStartedPublication: Promise.resolve({
+      ok: true,
+      skipped: true,
+    }),
+    runtimeStartAttempted: false,
+    tradingSessionPersistence: null,
+    tradingSessionObserver: null,
+  }
+}
+
+async function runMainStartup({ dependencies, resources, processStartedDataResult }) {
   try {
-    await acquireProcessStartupResources({ options: dependencies,
+    await acquireProcessStartupResources({
+      options: dependencies,
       resources,
-      processStartedDataResult })
-    await configureTelegramNotifications({ options: dependencies,
-      resources })
-    await ensureProcessJournalReady({ journalService: resources.journalService })
+      processStartedDataResult,
+    })
+    await configureTelegramNotifications({
+      options: dependencies,
+      resources,
+    })
+    await ensureProcessJournalReady({
+      journalService: resources.journalService,
+    })
     await resources.processStartedPublication
     resources.runtimeStartAttempted = true
-    const runtime = await startHarvesterRuntimeAndRegisterShutdown({ options: dependencies,
-      resources })
-    return { runtime,
-      journalService: resources.journalService }
-  } catch (error) {
-    await cleanupProcessStartupFailure({ error,
+    const runtime = await startHarvesterRuntimeAndRegisterShutdown({
       options: dependencies,
-      resources })
+      resources,
+    })
+    return {
+      runtime,
+      journalService: resources.journalService,
+    }
+  } catch (error) {
+    await cleanupProcessStartupFailure({
+      error,
+      options: dependencies,
+      resources,
+    })
     return undefined
   }
+}
+
+export async function main(options = {}) {
+  const dependencies = createMainDependencies({ options })
+  const processStartedDataResult = mapHarvesterProcessStartedData(dependencies.processIdentity)
+  setProcessLoggerContext({
+    logger: dependencies.logger,
+    processStartedDataResult,
+  })
+  const resources = createInitialProcessResources()
+  return runMainStartup({
+    dependencies,
+    resources,
+    processStartedDataResult,
+  })
 }
 const isDirectExecution = process.argv[1]
   && pathToFileURL(process.argv[1]).href === import.meta.url
