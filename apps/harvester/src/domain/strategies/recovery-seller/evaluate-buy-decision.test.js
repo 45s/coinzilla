@@ -407,3 +407,25 @@ test("allows the next BUY only after the previous cycle is closed and a new cycl
   assert.equal(nextCycleResult.decision.outcome, "SUBMIT",
     "A new BUY cycle may begin only after the prior SELL is filled, reconciled and profitable.")
 })
+
+
+test("preserves reconciliation of an existing order when the cycle snapshot is malformed", () => {
+  const result = evaluate({
+    cycleState: undefined,
+    activeOrders: [{
+      market: { symbol: "ZROUSDT" },
+      side: "BUY",
+      status: "UNKNOWN",
+      clientOrderId: "rs-buy-unknown",
+    }],
+  })
+
+  assert.equal(result.stopState.status, "STOPPED",
+    "A malformed cycle snapshot must latch global STOP.")
+  assert.equal(result.decision.outcome, "RECONCILE",
+    "Failing the policy gate must not discard the original order's reconciliation path.")
+  assert.equal(result.decision.orderIdentity.clientOrderId, "rs-buy-unknown",
+    "The original active order identity must survive a malformed cycle snapshot.")
+  assert.equal(result.action, undefined,
+    "No new BUY may be emitted while the cycle state is invalid.")
+})
