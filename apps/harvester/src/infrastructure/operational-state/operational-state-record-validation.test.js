@@ -34,7 +34,10 @@ test("accepts a canonical process-stop fact bound to its runtime session", () =>
     fact: {
       factId: "process-stopped:test-session",
       factType: "PROCESS_STOPPED",
-      data: { reason: "NORMAL_SHUTDOWN", clean: true },
+      data: {
+        reason: "NORMAL_SHUTDOWN",
+        clean: true,
+      },
     },
     runtimeSessionId: "test-session",
   })
@@ -196,7 +199,10 @@ test("parses only complete newline-terminated canonical JSONL records", () => {
   )
 
   assert.throws(
-    () => parseJsonLines({ source: canonicalLine, label: "test ledger" }),
+    () => parseJsonLines({
+      source: canonicalLine,
+      label: "test ledger",
+    }),
     /newline-terminated/,
     "A final partial line must not be mistaken for a committed record.",
   )
