@@ -181,6 +181,12 @@ function createProviderEntry({ descriptor }) {
         // A failed connect still requires an explicit disconnect attempt.
       }
     }
+    if (lifecycle.status === "disconnected") {
+      return
+    }
+    if (lifecycle.status === "disconnecting") {
+      return lifecycle.disconnectPromise
+    }
 
     lifecycle.status = "disconnecting"
     lifecycle.disconnectPromise = Promise.resolve()
@@ -271,10 +277,58 @@ export function createProviderRegistry({ providers } = {}) {
     })))
   }
 
+  async function connectAll() {
+    const providersToConnect = [...entries.values()]
+    try {
+      for (const provider of providersToConnect) {
+        await provider.connect()
+      }
+    } catch (connectionError) {
+      const cleanupErrors = []
+      for (const provider of providersToConnect.reverse()) {
+        try {
+          await provider.disconnect()
+        } catch (cleanupError) {
+          cleanupErrors.push(cleanupError)
+        }
+      }
+      if (cleanupErrors.length > 0) {
+        throw new AggregateError(
+          [connectionError, ...cleanupErrors],
+          "Provider registry connection failed and rollback cleanup was incomplete",
+          { cause: connectionError },
+        )
+      }
+      throw connectionError
+    }
+    return Object.freeze(providersToConnect)
+  }
+
+  async function disconnectAll() {
+    const cleanupErrors = []
+    const providersToDisconnect = [...entries.values()].reverse()
+    for (const provider of providersToDisconnect) {
+      try {
+        await provider.disconnect()
+      } catch (error) {
+        cleanupErrors.push(error)
+      }
+    }
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(
+        cleanupErrors,
+        "Provider registry disconnect cleanup failed",
+        { cause: cleanupErrors[0] },
+      )
+    }
+  }
+
   return Object.freeze({
     get,
     list,
     connect: (providerInstanceId) => get(providerInstanceId).connect(),
     disconnect: (providerInstanceId) => get(providerInstanceId).disconnect(),
+    connectAll,
+    disconnectAll,
   })
 }
