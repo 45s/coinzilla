@@ -6,6 +6,7 @@ const capabilities = Object.freeze({
   contractVersion: 1,
   provider: "binance",
   marketData: Object.freeze({
+    oneShotPrice: Object.freeze({ status: "supported" }),
     priceStream: Object.freeze({ status: "supported" }),
     bookTickerStream: Object.freeze({ status: "supported" }),
     candleHistory: Object.freeze({ status: "supported" }),
@@ -16,6 +17,8 @@ const capabilities = Object.freeze({
   }),
   orders: Object.freeze({
     openOrders: Object.freeze({ status: "supported" }),
+    canonicalLookup: Object.freeze({ status: "supported" }),
+    canonicalHistory: Object.freeze({ status: "supported" }),
     placement: Object.freeze({ status: "environment-dependent" }),
     cancellation: Object.freeze({ status: "environment-dependent" }),
   }),
@@ -118,6 +121,9 @@ test("constructs named instances and exposes safe descriptors", async () => {
   assert.equal(registry.getDescriptor({
     instanceId: "binancePrimary",
   }).accountId, "binance-primary")
+  assert.equal(registry.getCapabilities({
+    instanceId: "binancePrimary",
+  }), capabilities, "The registry must expose the verified declaration for explicit capability gating.")
 })
 
 test("rejects duplicate instance IDs before adapter construction", async () => {

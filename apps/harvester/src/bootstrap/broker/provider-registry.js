@@ -8,12 +8,15 @@ import {
 } from "../../application/events/lifecycle-event-dtos.js"
 
 const REQUIRED_CAPABILITIES = [
+  ["marketData", "oneShotPrice"],
   ["marketData", "priceStream"],
   ["marketData", "bookTickerStream"],
   ["marketData", "candleHistory"],
   ["marketData", "candleStream"],
   ["account", "snapshot"],
   ["orders", "openOrders"],
+  ["orders", "canonicalLookup"],
+  ["orders", "canonicalHistory"],
   ["orders", "placement"],
   ["orders", "cancellation"],
   ["fills", "canonicalHistory"],
@@ -156,7 +159,7 @@ function assertCapabilities({ descriptor, broker }) {
     const supported = capability?.status === "supported"
     const environmentDependent = isMutation && capability?.status === "environment-dependent"
     if (!supported && !environmentDependent) {
-      throw new TypeError(`Provider instance "${descriptor.id}" lacks required capability "${path.join(".")}"`)
+      throw new TypeError(`Provider instance "${descriptor.id}" declares capability "${path.join(".")}" as "${capability?.status ?? "missing"}"`)
     }
   }
 }
@@ -331,6 +334,10 @@ function createPortFacade({ entry, connectAll, disconnectAll }) {
       enumerable: true,
       value: entry.descriptor.accountId,
     },
+    capabilities: {
+      enumerable: true,
+      value: entry.broker.capabilities,
+    },
   })
   return Object.freeze(assertBrokerPort({
     broker,
@@ -431,6 +438,9 @@ function createRegistryLifecycle({ entries, eventPublisher, logger }) {
     getDescriptor: ({ instanceId } = {}) => getEntry({
       instanceId,
     }).descriptor,
+    getCapabilities: ({ instanceId } = {}) => getEntry({
+      instanceId,
+    }).broker.capabilities,
     descriptors: Object.freeze(entries.map((entry) => entry.descriptor)),
   })
 }

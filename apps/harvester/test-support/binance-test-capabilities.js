@@ -2,6 +2,7 @@ export const TEST_BINANCE_CAPABILITIES = Object.freeze({
   contractVersion: 1,
   provider: "binance",
   marketData: Object.freeze({
+    oneShotPrice: Object.freeze({ status: "supported" }),
     priceStream: Object.freeze({ status: "supported" }),
     bookTickerStream: Object.freeze({ status: "supported" }),
     candleHistory: Object.freeze({ status: "supported" }),
@@ -12,6 +13,8 @@ export const TEST_BINANCE_CAPABILITIES = Object.freeze({
   }),
   orders: Object.freeze({
     openOrders: Object.freeze({ status: "supported" }),
+    canonicalLookup: Object.freeze({ status: "supported" }),
+    canonicalHistory: Object.freeze({ status: "supported" }),
     placement: Object.freeze({ status: "environment-dependent" }),
     cancellation: Object.freeze({ status: "environment-dependent" }),
   }),
