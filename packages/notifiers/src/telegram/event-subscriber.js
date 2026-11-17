@@ -67,7 +67,7 @@ function classifyDeliveryFailure(error) {
   if (/fetch failed|network|socket|econn|enotfound|eai_again/i.test(message)) {
     return "NETWORK"
   }
-  if (/http request failed|http status|status \\d{3}/i.test(message)) {
+  if (/http request failed|http status|status [0-9]{3}/i.test(message)) {
     return "HTTP"
   }
   if (/telegram api|telegram rejected/i.test(message)) {
