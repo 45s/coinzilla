@@ -320,30 +320,30 @@ test("constructs a registered non-Binance provider without provider-specific reg
   const broker = createBroker()
   broker.capabilities = Object.freeze({
     ...capabilities,
-    provider: "bitunix",
+    provider: "future-exchange",
   })
   const registry = await createProviderRegistry({
     providerInstances: [
       createDescriptor({
-        id: "bitunixPrimary",
-        provider: "bitunix",
-        accountId: "bitunix-primary",
+        id: "futureExchangePrimary",
+        provider: "future-exchange",
+        accountId: "future-exchange-primary",
       }),
     ],
     selections: {
-      execution: "bitunixPrimary",
-      account: "bitunixPrimary",
-      marketData: "bitunixPrimary",
+      execution: "futureExchangePrimary",
+      account: "futureExchangePrimary",
+      marketData: "futureExchangePrimary",
     },
     adapterFactories: {
-      bitunix: () => broker,
+      future-exchange: () => broker,
     },
     env: {},
   })
   assert.equal(registry.getDescriptor({
-    instanceId: "bitunixPrimary",
-  }).provider, "bitunix")
+    instanceId: "futureExchangePrimary",
+  }).provider, "future-exchange")
   assert.equal(registry.getBrokerPort({
-    instanceId: "bitunixPrimary",
-  }).providerInstanceId, "bitunixPrimary")
+    instanceId: "futureExchangePrimary",
+  }).providerInstanceId, "futureExchangePrimary")
 })
