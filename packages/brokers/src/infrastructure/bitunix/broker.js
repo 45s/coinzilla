@@ -1,6 +1,7 @@
 import { assertDecimalString, compareDecimal, handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { BitunixRestClient } from "./api/rest-client.js"
+import { adaptBitunixKline, adaptBitunixKlineHistory, adaptBitunixOrderBook, createBitunixKlineHistoryQuery, normalizeBitunixKlineInterval } from "./adapters/adapt-market-data.js"
 import { adaptAssets } from "./adapters/adapt-assets.js"
 import { adaptBalances } from "./adapters/adapt-balances.js"
 import { adaptOrder } from "./adapters/adapt-order.js"
@@ -14,6 +15,9 @@ const API = Object.freeze({
   orderHistory: "/api/spot/v1/order/history/page",
   orderDetail: "/api/spot/v1/order/detail",
   lastPrice: "/api/spot/v1/market/last_price",
+  depth: "/api/spot/v1/market/depth",
+  kline: "/api/spot/v1/market/kline",
+  klineHistory: "/api/spot/v1/market/kline/history",
 })
 
 const HISTORY_STATUS_CODES = Object.freeze({
@@ -437,6 +441,118 @@ export class BitunixSpotBroker extends CoreBroker {
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.getPrices()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+
+  /**
+   * Read one Bitunix Spot order-book snapshot. The caller must provide the
+   * exchange's required precision value; its selection semantics are not
+   * inferred by this adapter.
+   *
+   * @param {{symbol: string, precision: number}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getOrderBook(input = {}) {
+    try {
+      const symbol = requireSymbol({
+        symbol: input.symbol,
+        operation: "getOrderBook()",
+      })
+      if (typeof input.precision !== "number" ||
+          !Number.isFinite(input.precision) ||
+          input.precision < 0) {
+        throw new TypeError("Bitunix Spot getOrderBook() requires a non-negative numeric precision")
+      }
+      const response = await this.restClient.request({
+        method: "GET",
+        path: API.depth,
+        queryParams: {
+          symbol,
+          precision: input.precision,
+        },
+      })
+      return toResult({
+        data: adaptBitunixOrderBook({
+          value: response.data,
+          symbol,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getOrderBook()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Read the current Bitunix Spot OHLC row. This is intentionally not exposed
+   * as a canonical candle because the documented response has no volume.
+   *
+   * @param {{symbol: string, interval?: string|number}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getKlines(input = {}) {
+    try {
+      const symbol = requireSymbol({
+        symbol: input.symbol,
+        operation: "getKlines()",
+      })
+      const interval = normalizeBitunixKlineInterval({
+        interval: input.interval,
+      })
+      const response = await this.restClient.request({
+        method: "GET",
+        path: API.kline,
+        queryParams: {
+          symbol,
+          interval,
+        },
+      })
+      return toResult({
+        data: adaptBitunixKline({
+          value: response.data,
+          symbol,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getKlines()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Read one page of Bitunix Spot historical OHLC rows. The endpoint accepts
+   * endTime in seconds and does not document startTime or cursor pagination.
+   *
+   * @param {{symbol: string, interval?: string|number, endTime?: number|string, limit?: number}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getKlineHistory(input = {}) {
+    try {
+      const { queryParams } = createBitunixKlineHistoryQuery({ input })
+      const response = await this.restClient.request({
+        method: "GET",
+        path: API.klineHistory,
+        queryParams,
+      })
+      return toResult({
+        data: adaptBitunixKlineHistory({
+          value: response.data,
+          symbol: queryParams.symbol,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getKlineHistory()",
         error,
       })
       return toResult({ errors: [error] })
