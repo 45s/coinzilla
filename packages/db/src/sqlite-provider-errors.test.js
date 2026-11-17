@@ -72,7 +72,7 @@ test("SQLite lock failures use the provider-neutral error contract", async () =>
   }
 })
 
-test("SQLite statement preparation failures use the provider-neutral error contract", async () => {
+test("SQLite query execution failures use the provider-neutral error contract", async () => {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-statement-error-"))
   const filename = join(directory, "records.sqlite")
   const database = createDatabase({
@@ -95,7 +95,7 @@ test("SQLite statement preparation failures use the provider-neutral error contr
       (error) => error instanceof DatabaseProviderError
         && error.code === "DB_PROVIDER_OPERATION_FAILED"
         && error.cause instanceof Error,
-      "A SQLite statement preparation failure must be normalized before it reaches the generic consumer",
+      "A SQLite query execution failure must be normalized before it reaches the generic consumer",
     )
   } finally {
     externalConnection.close()
