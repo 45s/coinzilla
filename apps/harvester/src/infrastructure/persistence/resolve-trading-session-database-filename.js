@@ -9,7 +9,12 @@ function resolveBaseDirectory({ value } = {}) {
   if (value === undefined) {
     return DEFAULT_DATABASE_DIRECTORY
   }
-  if (typeof value !== "string" || value.trim() !== value || value === "") {
+  if (
+    typeof value !== "string" ||
+    value.trim() !== value ||
+    value === "" ||
+    value.includes("\0")
+  ) {
     throw new TypeError("HARVESTER_DATABASE_DIRECTORY must be a non-empty absolute path")
   }
   if (!path.isAbsolute(value)) {
@@ -64,32 +69,42 @@ async function readDatabaseFileIdentity({ filename } = {}) {
     if (error?.code === "ENOENT") {
       return null
     }
-    throw new Error("Unable to validate an existing Harvester database file")
+    throw new Error(
+      "Unable to validate an existing Harvester database file",
+      { cause: error },
+    )
   }
 }
 
 function assertDistinctDirectories({ productionDirectory, testnetDirectory } = {}) {
-  if (
-    isSameOrNestedPath({ parent: productionDirectory, candidate: testnetDirectory }) ||
-    isSameOrNestedPath({ parent: testnetDirectory, candidate: productionDirectory })
-  ) {
+  const productionContainsTestnet = isSameOrNestedPath({
+    parent: productionDirectory,
+    candidate: testnetDirectory,
+  })
+  const testnetContainsProduction = isSameOrNestedPath({
+    parent: testnetDirectory,
+    candidate: productionDirectory,
+  })
+  if (productionContainsTestnet || testnetContainsProduction) {
     throw new Error("Production and Testnet database directories must be separate and non-overlapping")
   }
 }
 
 function assertDistinctDatabaseFiles({ productionStats, testnetStats } = {}) {
-  if (
-    productionStats !== null &&
+  const sameFile = productionStats !== null &&
     testnetStats !== null &&
     productionStats.dev === testnetStats.dev &&
     productionStats.ino === testnetStats.ino
-  ) {
+  if (sameFile) {
     throw new Error("Production and Testnet database files must not reference the same filesystem object")
   }
 }
 
 export function resolveTradingSessionDatabaseFilename({ tradingMode, env = process.env } = {}) {
-  const paths = createDatabasePaths({ tradingMode, env })
+  const paths = createDatabasePaths({
+    tradingMode,
+    env,
+  })
   assertDistinctDirectories({
     productionDirectory: paths.productionDirectory,
     testnetDirectory: paths.testnetDirectory,
@@ -98,7 +113,10 @@ export function resolveTradingSessionDatabaseFilename({ tradingMode, env = proce
 }
 
 export async function assertTradingSessionDatabaseIsolation({ tradingMode, env = process.env } = {}) {
-  const paths = createDatabasePaths({ tradingMode, env })
+  const paths = createDatabasePaths({
+    tradingMode,
+    env,
+  })
   try {
     await Promise.all([
       mkdir(paths.productionDirectory, { recursive: true }),
@@ -113,15 +131,22 @@ export async function assertTradingSessionDatabaseIsolation({ tradingMode, env =
       testnetDirectory,
     })
     const [productionStats, testnetStats] = await Promise.all([
-      readDatabaseFileIdentity({ filename: paths.productionFilename }),
-      readDatabaseFileIdentity({ filename: paths.testnetFilename }),
+      readDatabaseFileIdentity({
+        filename: paths.productionFilename,
+      }),
+      readDatabaseFileIdentity({
+        filename: paths.testnetFilename,
+      }),
     ])
     assertDistinctDatabaseFiles({
       productionStats,
       testnetStats,
     })
-  } catch {
-    throw new Error("Unable to establish separate, safe Production and Testnet database locations")
+  } catch (error) {
+    throw new Error(
+      "Unable to establish separate, safe Production and Testnet database locations",
+      { cause: error },
+    )
   }
   return paths.filename
 }
