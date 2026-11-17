@@ -321,3 +321,32 @@ A package's README is a discovery aid, not source proof. If the reference has no
 - StockSharp/Connectors: no matching `/api/spot/v1/deposit/page` implementation found in the inspected source search.
 
 The Coinzilla method validates all supplied filters before I/O, sends only supplied filters, validates the entire response before returning it, preserves exact identifier/amount text, and never mutates account state. It does not fetch deposit addresses, withdrawals, transfers, or any order operation.
+
+
+## 9. Bitunix Spot withdrawal-history read (2026-11-17)
+
+**Decision:** Implemented as a Bitunix-only, signed, read-only extension in issue/PR [#1387](https://github.com/45s/coinzilla/pull/1387). It does not close or weaken issue #1185 and is not Binance parity.
+
+| Evidence | Finding |
+|---|---|
+| Official endpoint | `POST /api/spot/v1/withdraw_transfer/page`; signed Spot user endpoint. It includes both on-chain withdrawals and internal-transfer-out records. |
+| Request filters | `id`, `outBizId`, `coin`, `transactionHash`, `type`, `startTime`, `endTime`, `remark`, `limit`. Type filters are `withdraw` and `inside_transfer_out`; transaction-hash filtering applies only to explicit `type: "withdraw"`. Time values are Unix milliseconds. Limit is 1–100 (default 100); rate limit is 10 requests/second per IP. |
+| Pagination | No cursor, page number or total-count contract is documented. The implementation issues one request only and makes no completeness claim. |
+| Response shape | Official schema labels `data` as an object, but its example is an array. JKorf returns `BitunixWithdrawal[]` and its fixture is an array. Coinzilla accepts either shape and normalizes to an immutable array; missing/null data is rejected. |
+| Destination field | Official schema says `toAddress`; example and JKorf model use `address`. Coinzilla preserves raw `address` and exposes an exact-value `toAddress` alias when only `address` is supplied. If both non-null fields are supplied and disagree, the row fails closed. |
+| Fee fields | Official schema marks `feeCoin` and `fee` required, but the official example and JKorf model allow null. Coinzilla preserves null and rejects malformed non-null decimal text. |
+| Identity and amount | `id` is a string in the schema; `toUid` is int64. The REST parser stringifies raw numeric `id`, `toUid`, `amount` and `fee` tokens before `JSON.parse`, avoiding JavaScript precision loss. Returned IDs/UIDs/amounts/fees are strings. `ctime` remains a safe integer or integer string; unsafe numeric timestamps fail closed. |
+| Recipient fields | `toAddress`/`address`, `toUid`, `toPhoneCountryCode`, `toPhoneNumber`, `toEmail`, `toType`, `remark`, and `memo` are returned as opaque caller-visible values. They are not logged, persisted, redacted or transformed. |
+| Type/status | Known types include `withdraw` and `inside_transfer_out`; status examples include `verification`, `pending`, `cancelled`, `success`, and `fail`. The adapter preserves unfamiliar non-empty strings without inventing enum mappings. |
+
+**Reference audit**
+
+- Official docs: [Request withdrawal history (withdrawal and internal transfer included)](https://www.bitunix.com/api-docs/spots/en_us/user/#7-request-withdrawal-historywithdrawal-and-internal-transfer-included).
+- JKorf interface: [IBitunixRestClientSpotApiAccount.GetWithdrawalHistoryAsync](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Interfaces/Clients/SpotApi/IBitunixRestClientSpotApiAccount.cs).
+- JKorf implementation: [BitunixRestClientSpotApiAccount.GetWithdrawalHistoryAsync](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Clients/SpotApi/Rest/BitunixRestClientSpotApiAccount.cs).
+- JKorf model: [BitunixWithdrawal](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Objects/Models/BitunixWithdrawal.cs).
+- JKorf response fixture: [GetWithdrawalHistory.txt](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net.UnitTests/Endpoints/Spot/Account/GetWithdrawalHistory.txt).
+- TypeScript MCP Spot source: no matching withdrawal-history tool or endpoint found.
+- StockSharp/Connectors: no matching `/api/spot/v1/withdraw_transfer/page` implementation found in the inspected source search.
+
+The method validates all filters before I/O, sends only supplied filters, validates the entire response before returning it, preserves exact numeric identifiers/amounts, and performs no withdrawal or transfer mutation. Sensitive recipient fields are returned only to the caller; they are not logged or stored.
