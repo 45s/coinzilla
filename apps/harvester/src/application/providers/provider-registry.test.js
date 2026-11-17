@@ -223,3 +223,22 @@ testCase("retries a failed disconnect cleanup without repeating a successful dis
   assert.equal(registry.get("binanceTestnet").status, "disconnected",
     "A later successful cleanup must clear the prior disconnect-failed state.")
 })
+
+
+testCase("waits for an in-flight connection before performing one concurrent disconnect", async () => {
+  let resolveConnection
+  const connectionGate = new Promise((resolve) => { resolveConnection = resolve })
+  const { broker, calls } = createBroker({ onConnect: () => connectionGate })
+  const registry = createProviderRegistry({ providers: [createProvider({ broker })] })
+  const connection = registry.connect("binanceTestnet")
+  const firstDisconnect = registry.disconnect("binanceTestnet")
+  const secondDisconnect = registry.disconnect("binanceTestnet")
+
+  resolveConnection()
+  await Promise.all([connection, firstDisconnect, secondDisconnect])
+
+  assert.deepEqual(calls, ["connect", "disconnect"],
+    "Concurrent cleanup requested during connection must wait for startup and invoke the underlying disconnect exactly once.")
+  assert.equal(registry.get("binanceTestnet").status, "disconnected",
+    "The provider must reach a stable disconnected state after cleanup races with connection.")
+})
