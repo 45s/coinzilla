@@ -4,7 +4,7 @@ import { BitunixSpotBroker } from "./broker.js"
 
 const MATCHING_ORDER_PATH = "/api/spot/v1/order/deal/list"
 
-function createBroker({ response = null } = {}) {
+function createBroker({ response = null, responseEnvelope } = {}) {
   const calls = []
   const broker = new BitunixSpotBroker({
     apiKey: "key",
@@ -17,7 +17,7 @@ function createBroker({ response = null } = {}) {
           if (response instanceof Error) {
             throw response
           }
-          return { data: response }
+          return responseEnvelope === undefined ? { data: response } : responseEnvelope
         },
       }),
     },
@@ -119,7 +119,6 @@ test("Bitunix Spot broker rejects invalid matching-order request inputs before I
 
 test("Bitunix Spot broker rejects malformed matching-order responses", async () => {
   const malformedResponses = [
-    undefined,
     [],
     [createMatchingOrder()],
     {},
@@ -162,6 +161,19 @@ test("Bitunix Spot broker rejects malformed matching-order responses", async () 
 
   assert.ok(results.every((result) => result.ok === false), "missing, array, incomplete and malformed matching-order data must fail closed")
   assert.ok(results.every((result) => Array.isArray(result.errors) && result.errors.length > 0), "each malformed matching-order response must expose a validation error")
+})
+
+test("Bitunix Spot broker rejects a missing matching-order data envelope", async () => {
+  const { broker } = createBroker({
+    responseEnvelope: {},
+  })
+
+  const result = await broker.getMatchingOrderDetails({
+    orderId: "order-123",
+    symbol: "BTCUSDT",
+  })
+
+  assert.equal(result.ok, false, "a missing data field must not be treated as an empty or null matching order")
 })
 
 test("Bitunix Spot broker preserves unfamiliar matching-order role values", async () => {
