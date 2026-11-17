@@ -365,3 +365,18 @@ testCase("rejects a capability snapshot for a different provider environment", (
     "The registered provider environment must agree with the capability snapshot's selected environment.",
   )
 })
+
+
+testCase("fails closed on an unsupported provider capability contract version", () => {
+  const capabilities = Object.freeze({
+    ...createCapabilities(),
+    contractVersion: 2,
+  })
+  const { broker } = createBroker({ capabilities })
+
+  assert.throws(
+    () => createProviderRegistry({ providers: [createProvider({ broker })] }),
+    (error) => error.code === "HARVESTER_PROVIDER_REGISTRY_INVALID",
+    "The registry must require the capability contract version it explicitly understands.",
+  )
+})
