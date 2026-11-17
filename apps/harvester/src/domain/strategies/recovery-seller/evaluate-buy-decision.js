@@ -1001,6 +1001,7 @@ export function evaluateRecoverySellerBuyDecision({
       pairConfig,
       marketMetadata,
       recoveryPosition,
+      cycleState,
       cumulativeNetSellProceeds,
       pendingBuyCommitment,
       activeOrders,
