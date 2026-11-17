@@ -54,7 +54,37 @@ function emitWarningSafely({ message, error }) {
   }
 }
 
-function reportDeliveryFailure({ logger, eventName, error }) {
+function classifyDeliveryFailure(error) {
+  const name = typeof error?.name === "string" ? error.name : ""
+  const message = typeof error?.message === "string" ? error.message : ""
+
+  if (name === "AbortError" || /timeout|timed out/i.test(message)) {
+    return "TIMEOUT"
+  }
+  if (/fetch failed|network|socket|econn|enotfound|eai_again/i.test(message)) {
+    return "NETWORK"
+  }
+  if (/http request failed|http status|status \\d{3}/i.test(message)) {
+    return "HTTP"
+  }
+  if (/telegram api|telegram rejected/i.test(message)) {
+    return "TELEGRAM_API"
+  }
+  return "UNKNOWN"
+}
+
+function getDeliveryDiagnostics(state) {
+  return Object.freeze({
+    acceptedCount: state.acceptedCount,
+    deliveredCount: state.deliveredCount,
+    failedCount: state.failedCount,
+    overflowCount: state.overflowCount,
+    pendingCount: state.pendingCount,
+    closed: state.isClosed,
+  })
+}
+
+function reportDeliveryFailure({ logger, eventName, error, state }) {
   if (typeof logger?.error !== "function") {
     return false
   }
@@ -63,6 +93,8 @@ function reportDeliveryFailure({ logger, eventName, error }) {
     logger.error({
       message: "Telegram notification delivery failed",
       eventName,
+      failureCategory: classifyDeliveryFailure(error),
+      delivery: getDeliveryDiagnostics(state),
       error,
     })
     return true
@@ -123,7 +155,8 @@ function createDeliveryHandler({
       )
       if (reportDeliveryFailure({ logger,
         eventName,
-        error })) {
+        error,
+        state })) {
         return Promise.resolve()
       }
       return Promise.reject(error)
@@ -141,7 +174,8 @@ function createDeliveryHandler({
       state.failedCount += 1
       if (!reportDeliveryFailure({ logger,
         eventName,
-        error })) {
+        error,
+        state })) {
         throw error
       }
     })
@@ -212,14 +246,7 @@ export function subscribeTelegramNotifications({
   return {
     /** Return a frozen snapshot of queue and delivery counters. */
     getDiagnostics() {
-      return Object.freeze({
-        acceptedCount: state.acceptedCount,
-        deliveredCount: state.deliveredCount,
-        failedCount: state.failedCount,
-        overflowCount: state.overflowCount,
-        pendingCount: state.pendingCount,
-        closed: state.isClosed,
-      })
+      return getDeliveryDiagnostics(state)
     },
     close() {
       if (closePromise) {
