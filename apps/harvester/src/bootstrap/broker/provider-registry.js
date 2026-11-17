@@ -4,7 +4,6 @@ import { publishLifecycleEvent } from "../../application/events/publish-lifecycl
 import {
   mapBrokerConnectedData,
   mapBrokerConnectionFailedData,
-  mapBrokerDisconnectedData,
 } from "../../application/events/lifecycle-event-dtos.js"
 
 const REQUIRED_CAPABILITIES = [
@@ -163,7 +162,11 @@ function assertCapabilities({ descriptor, broker }) {
   if (!declaration || declaration.contractVersion !== 1 || declaration.provider !== descriptor.provider) {
     throw new TypeError(`Provider instance "${descriptor.id}" has no compatible verified capability declaration`)
   }
-  if (!isCapabilityEnvironmentValid({ descriptor, declaration })) {
+  const environmentValid = isCapabilityEnvironmentValid({
+    descriptor,
+    declaration,
+  })
+  if (!environmentValid) {
     throw new TypeError(`Provider instance "${descriptor.id}" capability environment does not match configured mode`)
   }
   for (const path of REQUIRED_CAPABILITIES) {
@@ -171,11 +174,16 @@ function assertCapabilities({ descriptor, broker }) {
       declaration,
       path,
     })
-    if (!isCapabilityAvailable({ capability, path })) {
+    const available = isCapabilityAvailable({
+      capability,
+      path,
+    })
+    if (!available) {
       throw new TypeError(`Provider instance "${descriptor.id}" declares capability "${path.join(".")}" as "${capability?.status ?? "missing"}"`)
     }
   }
 }
+
 
 function resolveProviderConfig({ descriptor, env }) {
   if (descriptor.provider !== "binance") {
@@ -243,7 +251,7 @@ function publishConnectionFailure({ eventPublisher, descriptor, error, logger })
   })
 }
 
-async function disconnectEntries({ entries, eventPublisher, logger }) {
+async function disconnectEntries({ entries, logger }) {
   const reversedEntries = entries.slice().reverse()
   const results = await Promise.allSettled(reversedEntries.map((entry) =>
     Promise.resolve().then(() => entry.broker.disconnect())))
@@ -258,15 +266,6 @@ async function disconnectEntries({ entries, eventPublisher, logger }) {
         : "Provider instance disconnect failed",
       descriptor: entry.descriptor,
       ...(result.status === "rejected" ? { error: result.reason } : {}),
-    })
-    publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.BROKER_DISCONNECTED,
-      dataResult: mapBrokerDisconnectedData({
-        broker: entry.descriptor.provider,
-        outcome: result.status === "fulfilled" ? "success" : "failed",
-        ...(result.status === "rejected" ? { error: result.reason } : {}),
-      }),
     })
     if (result.status === "rejected") {
       errors.push(result.reason)
@@ -307,7 +306,6 @@ async function constructProviderEntries({ descriptors, adapterFactories, env, lo
   } catch (error) {
     const cleanupErrors = await disconnectEntries({
       entries,
-      eventPublisher,
       logger,
     })
     if (cleanupErrors.length > 0) {
@@ -357,12 +355,11 @@ function createPortFacade({ entry, connectAll, disconnectAll }) {
   }))
 }
 
-function createDisconnectAll({ entries, eventPublisher, logger, lifecycleState }) {
+function createDisconnectAll({ entries, logger, lifecycleState }) {
   return async function disconnectAll() {
     if (!lifecycleState.disconnectPromise) {
       lifecycleState.disconnectPromise = disconnectEntries({
         entries,
-        eventPublisher,
         logger,
       })
     }
@@ -420,7 +417,6 @@ function createRegistryLifecycle({ entries, eventPublisher, logger }) {
   const lifecycleState = {}
   const disconnectAll = createDisconnectAll({
     entries,
-    eventPublisher,
     logger,
     lifecycleState,
   })
