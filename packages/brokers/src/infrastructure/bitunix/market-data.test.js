@@ -122,6 +122,10 @@ test("Bitunix Spot order book rejects missing precision and malformed depth leve
   const missingPrecision = await broker.getOrderBook({
     symbol: "BTCUSDT",
   })
+  const negativePrecision = await broker.getOrderBook({
+    symbol: "BTCUSDT",
+    precision: -1,
+  })
   const malformedLevel = await broker.getOrderBook({
     symbol: "BTCUSDT",
     precision: 0,
@@ -129,6 +133,7 @@ test("Bitunix Spot order book rejects missing precision and malformed depth leve
 
   assert.equal(missingPrecision.ok, false, "depth precision is required by the official Spot endpoint")
   assert.match(missingPrecision.errors[0].message, /precision/i, "missing depth precision must explain the rejected input")
+  assert.equal(negativePrecision.ok, false, "negative depth precision must be rejected before transport")
   assert.equal(malformedLevel.ok, false, "malformed price or volume values must not escape as order-book levels")
   assert.equal(calls.length, 1, "invalid precision must be rejected before a request while malformed responses require one request")
 })
@@ -243,4 +248,42 @@ test("Bitunix Spot kline history rejects unsupported startTime and malformed row
   assert.equal(unsupportedStart.ok, false, "the Spot history endpoint has no documented startTime parameter")
   assert.equal(malformedHistory.ok, false, "one malformed row must reject the complete page instead of returning partial history")
   assert.equal(calls.length, 1, "unsupported startTime must be rejected before any request")
+})
+
+
+test("Bitunix Spot current kline rejects OHLC values outside the candle range", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      [KLINE_PATH]: {
+        ...validKline,
+        high: "99.00",
+      },
+    },
+  })
+
+  const result = await broker.getKlines({
+    symbol: "BTCUSDT",
+    interval: "60",
+  })
+
+  assert.equal(result.ok, false, "high below open must reject an inconsistent OHLC row")
+  assert.match(result.errors[0].message, /OHLC values are inconsistent/i)
+  assert.equal(calls.length, 1)
+})
+
+test("Bitunix Spot kline history rejects unsupported time units and out-of-range limits", async () => {
+  const { broker, calls } = createBroker()
+
+  const millisecondEndTime = await broker.getKlineHistory({
+    symbol: "BTCUSDT",
+    endTime: 1794916800000,
+  })
+  const excessiveLimit = await broker.getKlineHistory({
+    symbol: "BTCUSDT",
+    limit: 501,
+  })
+
+  assert.equal(millisecondEndTime.ok, false, "history endTime must use the documented seconds unit")
+  assert.equal(excessiveLimit.ok, false, "history limit must not exceed the documented maximum of 500")
+  assert.equal(calls.length, 0, "invalid history query boundaries must be rejected before transport")
 })
