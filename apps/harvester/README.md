@@ -75,7 +75,7 @@ The Operational State Store currently supports append-only operational record pr
 
 ## Ordinary trading-session history (#1327)
 
-**Implementation status:** First slice in review in [PR #1369](https://github.com/45s/coinzilla/pull/1369). It is not considered complete or deployed until the exact PR head is green, merged into `develop`, and verified after merge.
+**Implementation status:** The trading-session slice is merged into `develop` in [PR #1369](https://github.com/45s/coinzilla/pull/1369) as `c2116fd647d942c11947e556e71a0e8e578cc192`. Its exact PR head passed 32 GitHub Actions checks; the optional read-only Binance TESTNET integration was skipped. This records code integration into `develop`, not a production deployment or authorization for exchange operations.
 
 Harvester is adding a provider-neutral, non-authoritative history store through `@coinzilla/db`. The first slice stores process trading-session history only; it does not migrate orders, fills, account snapshots, or recovery state.
 

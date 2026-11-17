@@ -14,13 +14,13 @@
 
 ### Current implementation status — 2026-11-17
 
-**First slice: trading-session repository — IN PROGRESS in [PR #1369](https://github.com/45s/coinzilla/pull/1369).**
+**First slice: trading-session repository — COMPLETE.** [PR #1369](https://github.com/45s/coinzilla/pull/1369) merged into `develop` as `c2116fd647d942c11947e556e71a0e8e578cc192` from exact PR head `3bf1ad6ba88cfbfb5aa2ad3365353bf09718ea6b`. GitHub Actions reported 32 successful checks on that exact head; the optional read-only Binance TESTNET integration was skipped. The merge commit is an ancestor of current `develop` (zero commits behind).
 
-The source audit is complete. The first independently testable slice is the Harvester-owned trading-session repository over the public `@coinzilla/db` API. It uses the existing process/session UUID, validated `TRADING_MODE`, configured broker/strategy identity, effective configuration fingerprint, enabled markets, sanitized build provenance, and lifecycle timestamps.
+The Harvester-owned trading-session repository uses the public `@coinzilla/db` API and the existing process/session UUID, validated `TRADING_MODE`, configured broker/strategy identity, effective configuration fingerprint, enabled markets, sanitized build provenance, and lifecycle timestamps.
 
 The history record is a best-effort projection of existing lifecycle events. It does not write to or replace ADR-0001 Operational State Store facts, is not consulted for restart recovery, and does not change Journal durability or trading-readiness behavior. Production and Testnet use separately validated SQLite paths selected only by `TRADING_MODE`; `NODE_ENV` is not involved.
 
-The first slice remains **in progress** until the exact PR head passes required CI, is merged into `develop`, and the merged commit is verified. Orders, events, fills, account snapshots, imports, operations, and architecture enforcement remain separate follow-up slices.
+**Remaining slices are separate follow-up work:** orders, order lifecycle events, individual fills, account snapshots, historical imports/reporting, operational procedures, and architecture enforcement.
 
 ### DDD ownership and dependency direction
 
@@ -69,7 +69,7 @@ Harvester's ADR-0001 Operational State Store is authoritative recovery evidence 
 ### Delivery plan
 
 1. Audit Harvester's current session identity, Journal, Operational State Store, repositories/ports, consumers, configuration and tests. Decide which history belongs in the new reporting database and which remains authoritative in ADR-0001.
-2. Implement the first trading-session repository through a Harvester-owned port and infrastructure adapter using only the public `@coinzilla/db` contract. Prove restart persistence, uniqueness, lifecycle updates, rollback, failure propagation and resource cleanup.
+2. **Complete — trading-session repository delivered in [PR #1369](https://github.com/45s/coinzilla/pull/1369).** A Harvester-owned port and infrastructure adapter use only the public `@coinzilla/db` contract; exact-head CI and merge into `develop` are verified.
 3. Add orders, order events, executions/fills and account snapshots as separate TDD vertical slices.
 4. Prove Production/Testnet isolation and two real processes writing concurrently to their respective databases. Test same-file SQLite writer serialization, busy timeout, rollback, process termination and reopen behavior.
 5. Separately assess any Operational State migration; require an explicit accepted/superseding ADR, complete parity evidence, rollback plan and #654 owner approval before cutover.
