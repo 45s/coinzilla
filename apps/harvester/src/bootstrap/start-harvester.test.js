@@ -917,24 +917,28 @@ test("keeps external open orders audit-blocked but does not block startup or can
   })
 
   try {
-    assert.equal(runtime.userDataReady, true, "An external order must not block the user-data readiness gate.")
-    assert.equal(runtime.userDataStatus, "READY")
-    assert.equal(runtime.recoveredState.orderRegistry.orders.length, 0, "The external order must not be adopted into Harvester ownership.")
-    const audit = logs.find((entry) =>
-      entry.message === "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched")
-    assert.ok(audit, "The audit log must explicitly identify external orders as unowned and untouched.")
-    assert.equal(audit.readiness, "BLOCKED", "BLOCKED is the account-audit status, not trading-engine readiness.")
-    assert.ok(logs.some((entry) =>
-      entry.message === "Conservative TESTNET startup checks passed; current account audit is complete"))
-    assert.ok(logs.some((entry) =>
-      entry.message === "Conservative TESTNET trading engine activated"))
-    assert.equal(externalOpenOrder.clientOrderId, "manual-client-order")
+    assertExternalOrderRemainsUnowned({ runtime, logs, externalOpenOrder })
   } finally {
     await runtime.stop()
   }
   assert.deepEqual(cancellationRequests, [], "Startup and shutdown must never cancel a manually placed external order.")
 })
 
+
+function assertExternalOrderRemainsUnowned({ runtime, logs, externalOpenOrder }) {
+  assert.equal(runtime.userDataReady, true, "An external order must not block the user-data readiness gate.")
+  assert.equal(runtime.userDataStatus, "READY")
+  assert.equal(runtime.recoveredState.orderRegistry.orders.length, 0, "The external order must not be adopted into Harvester ownership.")
+  const audit = logs.find((entry) =>
+    entry.message === "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched")
+  assert.ok(audit, "The audit log must explicitly identify external orders as unowned and untouched.")
+  assert.equal(audit.readiness, "BLOCKED", "BLOCKED is the account-audit status, not trading-engine readiness.")
+  assert.ok(logs.some((entry) =>
+    entry.message === "Conservative TESTNET startup checks passed; current account audit is complete"))
+  assert.ok(logs.some((entry) =>
+    entry.message === "Conservative TESTNET trading engine activated"))
+  assert.equal(externalOpenOrder.clientOrderId, "manual-client-order")
+}
 
 function createTwoMarketStartupConfig() {
   const strategy = appConfig.strategies.CG_coinGrabber
@@ -956,6 +960,57 @@ function createTwoMarketStartupConfig() {
   }
 }
 
+function configureDelayedTickerPricePort({ broker, calls, firstTicker, resolveFirstTickerRequested }) {
+  broker.getPrices = async ({ symbol }) => {
+    calls.push(`prices:${symbol}`)
+    if (symbol === "BTCUSDT") {
+      resolveFirstTickerRequested()
+      return firstTicker
+    }
+    return { ok: true, data: { symbol, price: "65000" } }
+  }
+}
+
+function configureDelayedTickerAccountSnapshot(broker) {
+  let accountSnapshotTime = 0
+  broker.getAccountSnapshot = async () => {
+    accountSnapshotTime += 1
+    const balances = ["BTC", "ETH", "USDT"].map((code) => {
+      const asset = new Asset({ id: `asset:${code}`, code })
+      return new Balance({
+        free: new Quantity({ amount: "0", asset }),
+        locked: new Quantity({ amount: "0", asset }),
+      })
+    })
+    return { ok: true, data: { balances, sourceTime: accountSnapshotTime } }
+  }
+}
+
+function configureDelayedTickerOrderPort(broker) {
+  let placeOrderCalls = 0
+  broker.placeOrder = async () => {
+    placeOrderCalls += 1
+    return { ok: true }
+  }
+  return () => placeOrderCalls
+}
+
+function configureDelayedTickerSubscriptionPort(broker) {
+  let resolveSecondSubscription
+  const secondSubscription = new Promise((resolve) => {
+    resolveSecondSubscription = resolve
+  })
+  const { subscribeForPrices } = broker
+  broker.subscribeForPrices = async (input) => {
+    const result = await subscribeForPrices(input)
+    if (input.symbol === "ETHUSDT") {
+      resolveSecondSubscription()
+    }
+    return result
+  }
+  return secondSubscription
+}
+
 function createDelayedFirstTickerBroker({ broker, calls }) {
   let resolveFirstTicker
   let resolveFirstTickerRequested
@@ -965,72 +1020,11 @@ function createDelayedFirstTickerBroker({ broker, calls }) {
   const firstTickerRequested = new Promise((resolve) => {
     resolveFirstTickerRequested = resolve
   })
-  broker.getPrices = async ({ symbol }) => {
-    calls.push(`prices:${  symbol}`)
-    if (symbol === "BTCUSDT") {
-      resolveFirstTickerRequested()
-      return firstTicker
-    }
-    return {
-      ok: true,
-      data: {
-        symbol,
-        price: "65000",
-      },
-    }
-  }
-  let accountSnapshotTime = 0
-  broker.getAccountSnapshot = async () => {
-    accountSnapshotTime += 1
-    const balances = ["BTC", "ETH", "USDT"].map((code) => {
-      const asset = new Asset({
-        id: `asset:${  code}`,
-        code,
-      })
-      return new Balance({
-        free: new Quantity({
-          amount: "0",
-          asset,
-        }),
-        locked: new Quantity({
-          amount: "0",
-          asset,
-        }),
-      })
-    })
-    return {
-      ok: true,
-      data: {
-        balances,
-        sourceTime: accountSnapshotTime,
-      },
-    }
-  }
-  let placeOrderCalls = 0
-  broker.placeOrder = async () => {
-    placeOrderCalls += 1
-    return {
-      ok: true,
-    }
-  }
-  let resolveSecondSubscription
-  const secondSubscription = new Promise((resolve) => {
-    resolveSecondSubscription = resolve
-  })
-  const {subscribeForPrices} = broker
-  broker.subscribeForPrices = async (input) => {
-    const result = await subscribeForPrices(input)
-    if (input.symbol === "ETHUSDT") {
-      resolveSecondSubscription()
-    }
-    return result
-  }
-  return {
-    secondSubscription,
-    firstTickerRequested,
-    resolveFirstTicker,
-    getPlaceOrderCalls: () => placeOrderCalls,
-  }
+  configureDelayedTickerPricePort({ broker, calls, firstTicker, resolveFirstTickerRequested })
+  configureDelayedTickerAccountSnapshot(broker)
+  const getPlaceOrderCalls = configureDelayedTickerOrderPort(broker)
+  const secondSubscription = configureDelayedTickerSubscriptionPort(broker)
+  return { secondSubscription, firstTickerRequested, resolveFirstTicker, getPlaceOrderCalls }
 }
 
 async function assertSecondMarketSubscribedBeforeTicker({
