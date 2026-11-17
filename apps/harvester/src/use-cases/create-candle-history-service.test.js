@@ -51,6 +51,12 @@ limit: 101 },
   )
 })
 
+test("tags candle subscriptions with their owning provider instance", async () => {
+  const fixture = createFixture({ providerInstanceId: "binancePrimary" })
+  await fixture.start()
+  assert.equal(fixture.subscriptions[0].providerInstanceId, "binancePrimary")
+})
+
 test("does not subscribe to or warm candle history for an enabled pair with volatility protection disabled", async () => {
   const fixture = createFixture({ pairs: { BTCUSDT: { enabled: true },
 DOGEUSDT: { enabled: true,

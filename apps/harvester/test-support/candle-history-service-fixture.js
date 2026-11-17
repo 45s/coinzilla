@@ -119,6 +119,7 @@ export function createFixture({
   subscribeForCandles,
   onSnapshot,
   logger = {},
+  providerInstanceId,
 } = {}) {
   const calls = []
   const candleHandlers = new Map()
@@ -134,6 +135,7 @@ export function createFixture({
   })
   const service = createCandleHistoryService({
     broker,
+    providerInstanceId,
     logger,
     now: () => clock.now,
     onSnapshot,
