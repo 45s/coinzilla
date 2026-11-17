@@ -356,20 +356,21 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 - `packages/brokers/src/broker.core.js`
 - `packages/brokers/src/index.js`
 - Binance configuration/broker modules
-- Bitunix configuration/broker modules
-- Broker contract tests and package documentation
+- Binance broker contract tests and package documentation
+- Do not edit Bitunix Spot implementation or add a Bitunix capability descriptor in this first PR; the mandatory external reference audit in `packages/brokers/AGENTS.md` must be completed first.
 
 **Requirements:**
 - Preserve all current exports, constructors, method signatures, results and errors.
 - Declare implemented, unsupported and environment-dependent capabilities explicitly.
 - Do not claim capability from inherited method existence.
-- Represent Bitunix as read-only with its actual one-shot read capabilities and unsupported execution/private lifecycle capabilities.
+- Keep the capability contract able to represent supported, unsupported and unknown operations.
+- Do not change Bitunix Spot capability declarations in this PR. A Bitunix descriptor is a separate follow-up after the mandatory JKorf/Bitunix.Net, bitunix-mcp and official protocol reference audit.
 - Avoid generic transport/provider plugin frameworks.
 
 **Tests and acceptance:**
 - Offline contract tests compare declared capabilities with actual supported/unsupported operations.
-- Binance declarations cover the current tested implementation.
-- Bitunix mutation, canonical fills, private stream and recovery remain unavailable.
+- Binance declarations cover the current source-backed implementation.
+- Existing Bitunix behavior and exports remain unchanged; no Bitunix mutation, canonical fills, private stream or recovery is enabled.
 - Existing Brokers package tests and coverage thresholds pass.
 - No Harvester imports or routing policy enter Brokers.
 - No exchange operations or credentials are required.
@@ -569,11 +570,12 @@ Severity indicates architectural/operational risk, not a reproduced incident. Th
 
 The first implementation PR should be a **Brokers-only additive capability-contract slice**:
 
-1. Declare explicit capabilities for the existing Binance and Bitunix implementations.
-2. Make unsupported operations explicit without changing their current results/errors.
-3. Add offline contract tests proving declarations match actual source behavior.
+1. Introduce the additive capability contract and declare the existing Binance capabilities only.
+2. Represent unsupported/unknown operations explicitly without changing current results or errors.
+3. Add offline contract tests proving Binance declarations match actual source behavior.
 4. Preserve `CoreBroker`, existing constructors and every public export.
-5. Do not change Harvester bootstrap, configuration, routing, order execution or database/persistence in this PR.
+5. Leave Bitunix implementation/declarations unchanged until its mandatory external reference audit is completed.
+6. Do not change Harvester bootstrap, configuration, routing, order execution or database/persistence in this PR.
 
 The first PR is safe only when existing Brokers tests and coverage pass, the capability matrix is source-backed, Bitunix remains read-only, and Harvester/Binance consumers show no behavior or export regression. It is not permission to enable multi-provider execution.
 
