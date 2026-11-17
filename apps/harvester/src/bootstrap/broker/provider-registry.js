@@ -47,10 +47,15 @@ function assertCredentialEnvironment({ credentialEnv, id }) {
   if (credentialEnv === null || typeof credentialEnv !== "object" || Array.isArray(credentialEnv)) {
     throw new TypeError(`Provider instance "${id}" has invalid credential environment references`)
   }
+  const allowedKeys = ["apiKey", "apiSecret"]
   for (const key of Object.keys(credentialEnv)) {
-    if (!["apiKey", "apiSecret"].includes(key) ||
-        typeof credentialEnv[key] !== "string" ||
-        !/^[A-Z_][A-Z0-9_]*$/.test(credentialEnv[key])) {
+    if (!allowedKeys.includes(key)) {
+      throw new TypeError(`Provider instance "${id}" has an unsupported credential environment reference`)
+    }
+  }
+  for (const key of allowedKeys) {
+    const name = credentialEnv[key]
+    if (typeof name !== "string" || !/^[A-Z_][A-Z0-9_]*$/.test(name)) {
       throw new TypeError(`Provider instance "${id}" credential references must be environment variable names`)
     }
   }
@@ -294,11 +299,9 @@ function createPortFacade({ entry, connectAll, disconnectAll }) {
   }))
 }
 
-function createRegistryLifecycle({ entries, eventPublisher }) {
-  const entriesById = new Map(entries.map((entry) => [entry.descriptor.id, entry]))
-  let connectPromise
+function createDisconnectAll({ entries, eventPublisher }) {
   let disconnectPromise
-  const disconnectAll = async () => {
+  return async function disconnectAll() {
     if (!disconnectPromise) {
       disconnectPromise = disconnectEntries({
         entries,
@@ -310,40 +313,55 @@ function createRegistryLifecycle({ entries, eventPublisher }) {
       throw new AggregateError(errors, "One or more provider instances failed to disconnect")
     }
   }
-  const connectAll = async () => {
-    if (disconnectPromise) {
-      throw new Error("Provider registry cannot connect after shutdown has started")
+}
+
+function createConnectAll({ entries, disconnectAll, eventPublisher }) {
+  let connectPromise
+  return async function connectAll() {
+    if (connectPromise) {
+      return connectPromise
     }
-    if (!connectPromise) {
-      connectPromise = (async () => {
-        for (const entry of entries) {
+    connectPromise = (async () => {
+      for (const entry of entries) {
+        try {
+          await entry.broker.connect()
+          publishConnected({
+            eventPublisher,
+            descriptor: entry.descriptor,
+          })
+        } catch (error) {
+          publishConnectionFailure({
+            eventPublisher,
+            descriptor: entry.descriptor,
+            error,
+          })
           try {
-            await entry.broker.connect()
-            publishConnected({
-              eventPublisher,
-              descriptor: entry.descriptor,
-            })
-          } catch (error) {
-            publishConnectionFailure({
-              eventPublisher,
-              descriptor: entry.descriptor,
+            await disconnectAll()
+          } catch (cleanupError) {
+            throw new AggregateError([
               error,
-            })
-            try {
-              await disconnectAll()
-            } catch (cleanupError) {
-              throw new AggregateError([
-                error,
-                cleanupError,
-              ], "Provider connection and cleanup both failed")
-            }
-            throw error
+              cleanupError,
+            ], "Provider connection and cleanup both failed")
           }
+          throw error
         }
-      })()
-    }
+      }
+    })()
     return connectPromise
   }
+}
+
+function createRegistryLifecycle({ entries, eventPublisher }) {
+  const entriesById = new Map(entries.map((entry) => [entry.descriptor.id, entry]))
+  const disconnectAll = createDisconnectAll({
+    entries,
+    eventPublisher,
+  })
+  const connectAll = createConnectAll({
+    entries,
+    disconnectAll,
+    eventPublisher,
+  })
   const getEntry = ({ instanceId } = {}) => {
     const entry = entriesById.get(instanceId)
     if (!entry) {
