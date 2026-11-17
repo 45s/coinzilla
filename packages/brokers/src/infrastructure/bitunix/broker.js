@@ -104,6 +104,36 @@ function applyHistoryFilters({ body, status, side, type }) {
   }
 }
 
+function normalizeReturnedHistoryPage({ pageNum, requestedPage }) {
+  const pageNumIsNumber = typeof pageNum === "number" && Number.isSafeInteger(pageNum)
+  const pageNumIsString = typeof pageNum === "string" && /^[0-9]+$/.test(pageNum)
+  if (!pageNumIsNumber && !pageNumIsString) {
+    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
+  }
+
+  const returnedPage = Number(pageNum)
+  if (!Number.isSafeInteger(returnedPage) || returnedPage < 1) {
+    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
+  }
+  if (returnedPage !== requestedPage) {
+    throw new TypeError("Bitunix Spot order history returned pageNum does not match the requested page")
+  }
+}
+
+function normalizeHistoryRows({ data, total }) {
+  if (data === undefined && total !== 0) {
+    throw new TypeError("Bitunix Spot order history data is required when total is positive")
+  }
+  const rows = data === undefined ? [] : requireArray({
+    value: data,
+    operation: "order history",
+  })
+  if (rows.length > total) {
+    throw new TypeError("Bitunix Spot order history data row count exceeds total")
+  }
+  return rows
+}
+
 function normalizeOrderHistoryPage({ value, requestedPage }) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError("Bitunix Spot order history response must be an object")
@@ -111,36 +141,14 @@ function normalizeOrderHistoryPage({ value, requestedPage }) {
   if (!Number.isSafeInteger(value.total) || value.total < 0) {
     throw new TypeError("Bitunix Spot order history total must be a non-negative safe integer")
   }
-  const pageNumIsNumber = typeof value.pageNum === "number" && Number.isSafeInteger(value.pageNum)
-  const pageNumIsString = typeof value.pageNum === "string" && /^[0-9]+$/.test(value.pageNum)
-  if (!pageNumIsNumber && !pageNumIsString) {
-    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
-  }
-
-  const returnedPage = Number(value.pageNum)
-  if (!Number.isSafeInteger(returnedPage) || returnedPage < 1) {
-    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
-  }
-  if (returnedPage !== requestedPage) {
-    throw new TypeError("Bitunix Spot order history returned pageNum does not match the requested page")
-  }
-
-  let rows
-  if (value.data === undefined) {
-    if (value.total !== 0) {
-      throw new TypeError("Bitunix Spot order history data is required when total is positive")
-    }
-    rows = []
-  } else {
-    rows = requireArray({
-      value: value.data,
-      operation: "order history",
-    })
-  }
-  if (rows.length > value.total) {
-    throw new TypeError("Bitunix Spot order history data row count exceeds total")
-  }
-  return rows
+  normalizeReturnedHistoryPage({
+    pageNum: value.pageNum,
+    requestedPage,
+  })
+  return normalizeHistoryRows({
+    data: value.data,
+    total: value.total,
+  })
 }
 
 function createHistoryRequest({ input }) {
