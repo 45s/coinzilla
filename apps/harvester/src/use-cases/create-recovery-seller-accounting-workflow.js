@@ -286,73 +286,74 @@ function resolveRegisteredRecoverySellerOrderOwnership({ registry, order } = {})
   return ownership
 }
 
-function createRecoverySellerExecutionCallbacks({ state } = {}) {
-  return Object.freeze({
-    onPendingOrder: ({ order, ownership } = {}) => {
-      validateRecoverySellerExecutionOwnership({
-        order,
-        ownership,
-      })
-      const result = state.orderRegistry.registerPending({
-        order,
-        ownership,
-      })
-      state.orderRegistry = result.registry
-      return result
-    },
-    onAcknowledgedOrder: ({ order } = {}) => {
-      const ownership = resolveRegisteredRecoverySellerOrderOwnership({
-        registry: state.orderRegistry,
-        order,
-      })
-      const result = state.orderRegistry.attachAcknowledgedBrokerOrderId({ order })
-      state.orderRegistry = result.registry
-      return Object.freeze({
-        ...result,
-        ownership,
-      })
-    },
-    onSubmissionFailure: ({ order, outcome } = {}) => {
-      const ownership = resolveRegisteredRecoverySellerOrderOwnership({
-        registry: state.orderRegistry,
-        order,
-      })
-      if (outcome === "REJECTED") {
-        const result = state.orderRegistry.removePending({ clientOrderId: order.clientOrderId })
-        if (!result.removed) {
-          throw new Error("Recovery Seller rejected submission was not a removable pending order")
-        }
-        state.orderRegistry = result.registry
-        return Object.freeze({
-          ...result,
-          ownership,
-        })
-      }
-      const result = state.orderRegistry.markUnknown({ clientOrderId: order.clientOrderId })
-      if (!result.ok) {
-        throw result.errors[0] ?? new Error("Unable to retain uncertain Recovery Seller submission as UNKNOWN")
-      }
-      state.orderRegistry = result.data.registry
-      return Object.freeze({
-        ...result.data,
-        ownership,
-      })
-    },
-    onSubmissionDeferred: ({ order, registered } = {}) => {
-      if (!registered) {
-        return Object.freeze({ removed: false })
-      }
-      resolveRegisteredRecoverySellerOrderOwnership({
-        registry: state.orderRegistry,
-        order,
-      })
+function createRecoverySellerPendingOrderCallback({ state } = {}) {
+  return ({ order, ownership } = {}) => {
+    validateRecoverySellerExecutionOwnership({ order, ownership })
+    const result = state.orderRegistry.registerPending({ order, ownership })
+    state.orderRegistry = result.registry
+    return result
+  }
+}
+
+function createRecoverySellerAcknowledgedOrderCallback({ state } = {}) {
+  return ({ order } = {}) => {
+    const ownership = resolveRegisteredRecoverySellerOrderOwnership({
+      registry: state.orderRegistry,
+      order,
+    })
+    const result = state.orderRegistry.attachAcknowledgedBrokerOrderId({ order })
+    state.orderRegistry = result.registry
+    return Object.freeze({ ...result, ownership })
+  }
+}
+
+function createRecoverySellerSubmissionFailureCallback({ state } = {}) {
+  return ({ order, outcome } = {}) => {
+    const ownership = resolveRegisteredRecoverySellerOrderOwnership({
+      registry: state.orderRegistry,
+      order,
+    })
+    if (outcome === "REJECTED") {
       const result = state.orderRegistry.removePending({ clientOrderId: order.clientOrderId })
       if (!result.removed) {
-        throw new Error("Recovery Seller deferral did not resolve a registered pending order")
+        throw new Error("Recovery Seller rejected submission was not a removable pending order")
       }
       state.orderRegistry = result.registry
-      return result
-    },
+      return Object.freeze({ ...result, ownership })
+    }
+    const result = state.orderRegistry.markUnknown({ clientOrderId: order.clientOrderId })
+    if (!result.ok) {
+      throw result.errors[0] ?? new Error("Unable to retain uncertain Recovery Seller submission as UNKNOWN")
+    }
+    state.orderRegistry = result.data.registry
+    return Object.freeze({ ...result.data, ownership })
+  }
+}
+
+function createRecoverySellerSubmissionDeferredCallback({ state } = {}) {
+  return ({ order, registered } = {}) => {
+    if (!registered) {
+      return Object.freeze({ removed: false })
+    }
+    resolveRegisteredRecoverySellerOrderOwnership({
+      registry: state.orderRegistry,
+      order,
+    })
+    const result = state.orderRegistry.removePending({ clientOrderId: order.clientOrderId })
+    if (!result.removed) {
+      throw new Error("Recovery Seller deferral did not resolve a registered pending order")
+    }
+    state.orderRegistry = result.registry
+    return result
+  }
+}
+
+function createRecoverySellerExecutionCallbacks({ state } = {}) {
+  return Object.freeze({
+    onPendingOrder: createRecoverySellerPendingOrderCallback({ state }),
+    onAcknowledgedOrder: createRecoverySellerAcknowledgedOrderCallback({ state }),
+    onSubmissionFailure: createRecoverySellerSubmissionFailureCallback({ state }),
+    onSubmissionDeferred: createRecoverySellerSubmissionDeferredCallback({ state }),
   })
 }
 
