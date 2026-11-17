@@ -16,7 +16,8 @@ function validateExecutionFillIdentity({
   tradeId,
   marketId,
   venue
-,}) {
+,
+}) {
   if (
     canonicalData.baseAssetId === canonicalData.quoteAssetId ||
     venue !== venue.toLowerCase() ||
@@ -68,7 +69,8 @@ function validateExecutionFillCommissionStatus({ canonicalData }) {
 function validateExecutionFillCommissionEntry({
   commission,
   quoteAssetId
-,}) {
+,
+}) {
   if (
     !commission ||
     typeof commission !== "object" ||
@@ -84,12 +86,14 @@ function validateExecutionFillCommissionEntry({
     value: commission.assetId,
 field: "commission.assetId",
 maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   requireNonEmptyString({
     value: commission.assetCode,
 field: "commission.assetCode",
 maxLength: 32
-  ,})
+  ,
+  })
   if (commission.quoteValue !== null) {
     const { quoteValue } = commission
     if (
@@ -106,19 +110,22 @@ maxLength: 32
       value: quoteValue.assetCode,
 field: "commission.quoteValue.assetCode",
 maxLength: 32
-    ,})
+    ,
+    })
   }
 }
 
 function validateExecutionFillCommissions({
   commissions,
   quoteAssetId
-,}) {
+,
+}) {
   for (const commission of commissions) {
     validateExecutionFillCommissionEntry({
       commission,
 quoteAssetId
-    ,})
+    ,
+    })
   }
 }
 
@@ -152,17 +159,20 @@ function validateExecutionFillIdentityFields({ canonicalData }) {
     value: canonicalData.fillId,
     field: "data.fillId",
     maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   const tradeId = requireNonEmptyString({
     value: canonicalData.tradeId,
     field: "data.tradeId",
     maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   requireNonEmptyString({
     value: canonicalData.brokerOrderId,
     field: "data.brokerOrderId",
     maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   if (canonicalData.clientOrderId !== null) {
     requireNonEmptyString({
       value: canonicalData.clientOrderId,
@@ -174,28 +184,33 @@ function validateExecutionFillIdentityFields({ canonicalData }) {
     value: canonicalData.marketId,
     field: "data.marketId",
     maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   const venue = requireNonEmptyString({
     value: canonicalData.venue,
     field: "data.venue",
     maxLength: 32
-  ,})
+  ,
+  })
   requireNonEmptyString({
     value: canonicalData.baseAssetId,
     field: "data.baseAssetId",
     maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   requireNonEmptyString({
     value: canonicalData.quoteAssetId,
     field: "data.quoteAssetId",
     maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   return {
     fillId,
     tradeId,
     marketId,
     venue
-  ,}
+  ,
+  }
 }
 
 function validateExecutionFillTimestamp({ canonicalData }) {
@@ -211,7 +226,8 @@ export function validateExecutionFillAppliedFact({
   factType,
   canonicalData,
   factId
-,}) {
+,
+}) {
   if (factType !== "EXECUTION_FILL_APPLIED") {
     return
   }
@@ -221,7 +237,8 @@ export function validateExecutionFillAppliedFact({
     tradeId,
     marketId,
     venue
-  ,} = validateExecutionFillIdentityFields({ canonicalData })
+  ,
+  } = validateExecutionFillIdentityFields({ canonicalData })
   validateExecutionFillIdentity({
     canonicalData,
     factId,
@@ -229,7 +246,8 @@ export function validateExecutionFillAppliedFact({
     tradeId,
     marketId,
     venue
-  ,})
+  ,
+  })
   validateExecutionFillSideAndLiquidity({ canonicalData })
   validateExecutionFillAmounts({ canonicalData })
   validateExecutionFillTimestamp({ canonicalData })
