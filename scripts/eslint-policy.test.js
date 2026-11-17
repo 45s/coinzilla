@@ -167,12 +167,12 @@ function collectFunctionQualityFindings({ results }) {
     {
       ruleId: "max-params",
       key: "maxParams",
-      pattern: /too many parameters \\((\\d+)\\)/i,
+      pattern: /too many parameters \((\d+)\)/i,
     },
     {
       ruleId: "max-nested-callbacks",
       key: "maxNestedCallbacks",
-      pattern: /too many nested callbacks \\((\\d+)\\)/i,
+      pattern: /too many nested callbacks \((\d+)\)/i,
     },
     {
       ruleId: "default-param-last",
