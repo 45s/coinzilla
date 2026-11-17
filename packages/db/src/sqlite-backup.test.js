@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
@@ -290,12 +290,9 @@ test("SQLite restore rejects corrupt backup files and does not publish a destina
     )
 
     await assert.rejects(
-      readDatabaseValue({
-        filename: destinationFilename,
-        query: "PRAGMA integrity_check",
-      }),
-      /no such file|unable to open|database/i,
-      "A rejected restore must not leave a destination database behind",
+      stat(destinationFilename),
+      (error) => error.code === "ENOENT",
+      "A rejected restore must not publish any destination file",
     )
   } finally {
     await rm(directory, {
@@ -335,6 +332,10 @@ test("SQLite close drains an active backup and rejects new backup requests", asy
     })
 
     const copiedPages = await backupPromise
+    assert.ok(
+      closePromise instanceof Promise,
+      "The backup progress callback must be able to begin closing while backup work is active",
+    )
     await closePromise
 
     assert.ok(
