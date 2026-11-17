@@ -167,9 +167,7 @@ async function readResponsePayload({ response, path, stateChanging }) {
       cause: error,
       path,
       status: response.status,
-      outcomeUnknown: stateChanging && isHttpFailure && response.status >= 500
-        ? true
-        : stateChanging && !isHttpFailure,
+      outcomeUnknown: stateChanging,
     })
   }
 }
@@ -224,20 +222,18 @@ function validateResponse({ response, payload, path, stateChanging }) {
       path,
     })
   }
-  if (code !== "0") {
+  if (typeof payload.msg !== "string") {
     throw new BitunixRestError({
-      message: typeof payload.msg === "string"
-        ? payload.msg
-        : "Bitunix REST exchange request failed",
-      kind: "exchange",
+      message: "Bitunix REST response is missing its message",
+      kind: "response",
       path,
       code,
     })
   }
-  if (typeof payload.msg !== "string") {
+  if (code !== "0") {
     throw new BitunixRestError({
-      message: "Bitunix REST success response is missing its message",
-      kind: "response",
+      message: payload.msg,
+      kind: "exchange",
       path,
       code,
     })
