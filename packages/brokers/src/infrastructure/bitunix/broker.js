@@ -161,10 +161,22 @@ function createDepositRequest({ input }) {
     throw new TypeError("Bitunix Spot getDeposits() input must be an object")
   }
   const body = {}
-  addDepositStringFilters({ input, body })
-  addDepositTypeFilter({ input, body })
-  addDepositTimeFilters({ input, body })
-  addDepositLimitFilter({ input, body })
+  addDepositStringFilters({
+    input,
+    body,
+  })
+  addDepositTypeFilter({
+    input,
+    body,
+  })
+  addDepositTimeFilters({
+    input,
+    body,
+  })
+  addDepositLimitFilter({
+    input,
+    body,
+  })
   return { body }
 }
 
