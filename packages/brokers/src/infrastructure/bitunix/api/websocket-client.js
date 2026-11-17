@@ -101,6 +101,19 @@ function normalizeMessageText({ message }) {
   throw new TypeError("Bitunix Spot WebSocket supports text JSON responses only")
 }
 
+function parseResponseText({ text }) {
+  const losslessText = text.replace(
+    /("(balance|balanceLocked|uid)"\\s*:\\s*)(-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)(?=\\s*[,}])/g,
+    (match, prefix, field, value) => {
+      if (field === "uid" && Number.isSafeInteger(Number(value))) {
+        return prefix + value
+      }
+      return prefix + JSON.stringify(value)
+    },
+  )
+  return JSON.parse(losslessText)
+}
+
 function normalizeResponseCode({ code }) {
   if (typeof code === "number" && Number.isSafeInteger(code)) {
     return String(code)
@@ -472,9 +485,11 @@ export class BitunixSpotWebSocketClient {
   #handleMessage(message) {
     let response
     try {
-      response = JSON.parse(normalizeMessageText({
-        message,
-      }))
+      response = parseResponseText({
+        text: normalizeMessageText({
+          message,
+        }),
+      })
     } catch (error) {
       this.#rejectPending(new BitunixWebSocketError({
         message: `Bitunix Spot WebSocket response JSON is invalid: ${error.message}`,
