@@ -703,3 +703,18 @@ test("Bitunix Spot pending orders reject missing or null response data", async (
     assert.equal(calls.length, 1)
   }
 })
+
+
+test("Bitunix Spot order detail rejects unsafe numeric order IDs before making a request", async () => {
+  const { broker, calls } = createBroker()
+  const unsafeNumericOrderId = Number.MAX_SAFE_INTEGER + 1
+
+  const result = await broker.getOrder({
+    symbol: "BTCUSDT",
+    orderId: unsafeNumericOrderId,
+  })
+
+  assert.equal(result.ok, false, "An unsafe numeric order ID must not be treated as a reliable broker identity.")
+  assert.match(result.errors[0].message, /safe integer/i, "The failure must explain that numeric order IDs require safe integer precision.")
+  assert.equal(calls.length, 0, "Invalid numeric order IDs must be rejected before any REST request is sent.")
+})
