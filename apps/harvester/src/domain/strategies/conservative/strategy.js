@@ -197,23 +197,44 @@ function validateStrategyInput(input) {
   }
 }
 
-function validateRecoveryAccounting({ recoveryLedger, position, activeQuantity, positionSpent, ledger }) {
+function validateRecoveryAccounting({
+  recoveryLedger,
+  position,
+  activeQuantity,
+  positionSpent,
+  ledger,
+}) {
   if (recoveryLedger && position &&
-      compareDecimal({ left: ledger.buyCost, right: positionSpent }) !== 0) {
+      compareDecimal({
+        left: ledger.buyCost,
+        right: positionSpent,
+      }) !== 0) {
     throw new Error("Conservative Position.spent and legacy RecoveryLedger cost mirror diverged")
   }
   if (hasActivePosition({ activeQuantity }) &&
-      compareDecimal({ left: positionSpent, right: "0" }) <= 0) {
+      compareDecimal({
+        left: positionSpent,
+        right: "0",
+      }) <= 0) {
     throw new Error("Conservative active inventory has no Position.spent recovery basis")
   }
   if (!position &&
-      (compareDecimal({ left: ledger.buyCost, right: "0" }) > 0 ||
-       compareDecimal({ left: ledger.netSellProceeds, right: "0" }) > 0)) {
+      (compareDecimal({
+         left: ledger.buyCost,
+         right: "0",
+       }) > 0 ||
+       compareDecimal({
+         left: ledger.netSellProceeds,
+         right: "0",
+       }) > 0)) {
     throw new Error("Conservative RecoveryLedger has cycle accounting without an active Position")
   }
 }
 
-function resolveAccountingState({ context, recoveryLedger }) {
+function resolveAccountingState({
+  context,
+  recoveryLedger,
+}) {
   const { portfolio, marketPrice, marketMetadata, pairConfig } = context
   const position = portfolio.getPosition({
     symbol: marketPrice.symbol,
@@ -246,7 +267,10 @@ function resolveAccountingState({ context, recoveryLedger }) {
     ledger,
     outstandingRecovery: maxDecimal({
       left: "0",
-      right: subtractDecimal({ left: positionSpent, right: ledger.netSellProceeds }),
+      right: subtractDecimal({
+        left: positionSpent,
+        right: ledger.netSellProceeds,
+      }),
     }),
     keepQuantity: String(pairConfig.keepQuantity),
     recoveryLedger,
