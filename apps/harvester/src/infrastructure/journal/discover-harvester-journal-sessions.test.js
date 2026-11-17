@@ -28,7 +28,10 @@ async function assertDiscoveryError({ promise, code, message }) {
 }
 
 test("discovers flat root files and recursively nested sessions with deterministic order", async (t) => {
-  const rootDirectory = await createRoot(t, "flat-and-nested")
+  const rootDirectory = await createRoot({
+    t,
+    suffix: "flat-and-nested",
+  })
   const sessionsRoot = path.join(rootDirectory, "sessions")
   await writeFile(path.join(rootDirectory, "flat.jsonl"), "{}\n")
   await createSession({
@@ -77,7 +80,10 @@ test("discovers flat root files and recursively nested sessions with determinist
 })
 
 test("discovers a sessions root directly and sorts sibling session directories", async (t) => {
-  const rootDirectory = path.join(await createRoot(t, "direct-sessions"), "sessions")
+  const rootDirectory = path.join(await createRoot({
+    t,
+    suffix: "direct-sessions",
+  }), "sessions")
   await createSession({ directory: path.join(rootDirectory, "z-session") })
   await createSession({ directory: path.join(rootDirectory, "a-session") })
   await createSession({ directory: path.join(rootDirectory, "m-session") })
@@ -97,7 +103,10 @@ test("discovers a sessions root directly and sorts sibling session directories",
 })
 
 test("rejects symbolic links instead of silently omitting session evidence", async (t) => {
-  const rootDirectory = await createRoot(t, "symlink")
+  const rootDirectory = await createRoot({
+    t,
+    suffix: "symlink",
+  })
   const targetDirectory = path.join(rootDirectory, "target")
   const sessionsRoot = path.join(rootDirectory, "sessions")
   await mkdir(targetDirectory)
@@ -124,7 +133,10 @@ test("rejects symbolic links instead of silently omitting session evidence", asy
 })
 
 test("rejects directories masquerading as JSONL files", async (t) => {
-  const rootDirectory = await createRoot(t, "invalid-jsonl-entry")
+  const rootDirectory = await createRoot({
+    t,
+    suffix: "invalid-jsonl-entry",
+  })
   await mkdir(path.join(rootDirectory, "not-a-file.jsonl"))
 
   await assertDiscoveryError({
@@ -139,7 +151,10 @@ test("rejects directories masquerading as JSONL files", async (t) => {
 })
 
 test("rejects empty process-session directories and file-bearing session containers", async (t) => {
-  const emptyRoot = path.join(await createRoot(t, "empty-session"), "sessions")
+  const emptyRoot = path.join(await createRoot({
+    t,
+    suffix: "empty-session",
+  }), "sessions")
   await mkdir(emptyRoot, { recursive: true })
   await mkdir(path.join(emptyRoot, "empty-session"))
   await assertDiscoveryError({
@@ -152,7 +167,10 @@ test("rejects empty process-session directories and file-bearing session contain
       message: "A discovered process-session directory without a JSONL record must be reported as missing.",
     })
 
-  const containerRoot = path.join(await createRoot(t, "session-container"), "sessions")
+  const containerRoot = path.join(await createRoot({
+    t,
+    suffix: "session-container",
+  }), "sessions")
   const containerDirectory = path.join(containerRoot, "container")
   await mkdir(path.join(containerDirectory, "nested"), { recursive: true })
   await writeFile(path.join(containerDirectory, "README.txt"), "not a session record")
@@ -169,7 +187,10 @@ test("rejects empty process-session directories and file-bearing session contain
 })
 
 test("rejects unexpected files in the sessions root and non-directory sessions paths", async (t) => {
-  const sessionsRoot = path.join(await createRoot(t, "unexpected-root-file"), "sessions")
+  const sessionsRoot = path.join(await createRoot({
+    t,
+    suffix: "unexpected-root-file",
+  }), "sessions")
   await mkdir(sessionsRoot)
   await writeFile(path.join(sessionsRoot, "README.txt"), "unexpected")
   await assertDiscoveryError({
@@ -182,7 +203,10 @@ test("rejects unexpected files in the sessions root and non-directory sessions p
       message: "Unexpected non-JSONL files in the sessions root must make discovery incomplete.",
     })
 
-  const parentRoot = await createRoot(t, "sessions-not-directory")
+  const parentRoot = await createRoot({
+    t,
+    suffix: "sessions-not-directory",
+  })
   await writeFile(path.join(parentRoot, "sessions"), "not a directory")
   await assertDiscoveryError({
       promise: discoverHarvesterJournalSessions({
@@ -196,7 +220,10 @@ test("rejects unexpected files in the sessions root and non-directory sessions p
 })
 
 test("enforces maxDirectories and maxSessions during recursive discovery", async (t) => {
-  const directoryRoot = path.join(await createRoot(t, "directory-limit"), "sessions")
+  const directoryRoot = path.join(await createRoot({
+    t,
+    suffix: "directory-limit",
+  }), "sessions")
   await createSession({ directory: path.join(directoryRoot, "child") })
   await assertDiscoveryError({
       promise: discoverHarvesterJournalSessions({
@@ -208,7 +235,10 @@ test("enforces maxDirectories and maxSessions during recursive discovery", async
       message: "Recursive discovery must stop before visiting more than maxDirectories.",
     })
 
-  const sessionRoot = path.join(await createRoot(t, "session-limit"), "sessions")
+  const sessionRoot = path.join(await createRoot({
+    t,
+    suffix: "session-limit",
+  }), "sessions")
   await createSession({
     directory: sessionRoot,
     fileName: "first.jsonl",
@@ -229,7 +259,10 @@ test("enforces maxDirectories and maxSessions during recursive discovery", async
 })
 
 test("enforces maxSessions for flat root-level history files", async (t) => {
-  const rootDirectory = await createRoot(t, "flat-session-limit")
+  const rootDirectory = await createRoot({
+    t,
+    suffix: "flat-session-limit",
+  })
   await writeFile(path.join(rootDirectory, "first.jsonl"), "{}\n")
   await writeFile(path.join(rootDirectory, "second.jsonl"), "{}\n")
 
@@ -245,7 +278,10 @@ test("enforces maxSessions for flat root-level history files", async (t) => {
 })
 
 test("rejects root-level directories masquerading as Journal files", async (t) => {
-  const rootDirectory = await createRoot(t, "root-invalid-jsonl")
+  const rootDirectory = await createRoot({
+    t,
+    suffix: "root-invalid-jsonl",
+  })
   await mkdir(path.join(rootDirectory, "session.jsonl"))
 
   await assertDiscoveryError({
