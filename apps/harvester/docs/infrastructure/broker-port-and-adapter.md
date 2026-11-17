@@ -27,7 +27,7 @@ The port belongs to Harvester because it describes the capabilities this applica
 
 ## Multi-provider target architecture — issue #1339
 
-The current implementation below is still a single Binance adapter. The accepted target permits multiple named provider instances in one Harvester process. Harvester bootstrap constructs each configured instance and assembles an application-owned registry/router; the Brokers package supplies exchange clients and verified capabilities but does not own strategy/market routing.
+The current implementation below is still a single Binance adapter. The accepted target permits multiple named provider instances in one Harvester process. Harvester bootstrap constructs each configured instance and assembles an application-owned registry/router; the Brokers package supplies exchange clients and verified capabilities but does not own strategy/market routing. The source-verified current-state assessment, provenance gaps and ordered implementation prerequisites are maintained in the [multi-provider migration audit and implementation plan](../../../../docs/architecture/multi-provider-migration-plan.md).
 
 Execution and market-data resolution are separate:
 
