@@ -227,58 +227,73 @@ fill })
   assert.equal(afterFill.data.requiresExchangeReconciliation, true)
 })
 
-async function recordNotCompletedRecoveryCycle({ store } = {}) {
+async function createRecoveryCycleAccountingEvidence({
+  store,
+  cycleName,
+  buyQuantity,
+  sellQuantity,
+  buyPrice,
+  sellPrice,
+  buyQuoteQuantity,
+  sellQuoteQuantity,
+}) {
   const buyOrder = await persistOrder({
     store,
-    clientOrderId: "crash-matrix-noncomplete-buy",
+    clientOrderId: `crash-matrix-${cycleName}-buy`,
     side: "BUY",
-    quantity: "0.42",
-    price: "95",
+    quantity: buyQuantity,
+    price: buyPrice,
   })
   const sellOrder = await persistOrder({
     store,
-    clientOrderId: "crash-matrix-noncomplete-sell",
+    clientOrderId: `crash-matrix-${cycleName}-sell`,
     side: "SELL",
-    quantity: "0.4",
-    price: "100",
+    quantity: sellQuantity,
+    price: sellPrice,
     purpose: "RECOVERY_SELL",
   })
   const buyFill = makeFill({
-    tradeId: "crash-matrix-noncomplete-buy-fill",
+    tradeId: `crash-matrix-${cycleName}-buy-fill`,
     clientOrderId: buyOrder.clientOrderId,
     brokerOrderId: buyOrder.brokerOrderId,
     side: "BUY",
-    quantity: "0.42",
-    quoteQuantity: "39.9",
-    price: "95",
+    quantity: buyQuantity,
+    quoteQuantity: buyQuoteQuantity,
+    price: buyPrice,
   })
   const sellFill = makeFill({
-    tradeId: "crash-matrix-noncomplete-sell-fill",
+    tradeId: `crash-matrix-${cycleName}-sell-fill`,
     clientOrderId: sellOrder.clientOrderId,
     brokerOrderId: sellOrder.brokerOrderId,
     side: "SELL",
-    quantity: "0.4",
-    quoteQuantity: "40",
-    price: "100",
+    quantity: sellQuantity,
+    quoteQuantity: sellQuoteQuantity,
+    price: sellPrice,
   })
-  await applyFill({ store,
-fill: buyFill })
-  await applyFill({ store,
-fill: sellFill })
-
-  const {portfolio} = new Portfolio()
-    .applyFill({ fill: buyFill,
-strategyId: StrategyId.COIN_GRABBER }).portfolio
-    .applyFill({ fill: sellFill,
-strategyId: StrategyId.COIN_GRABBER })
+  await applyFill({ store, fill: buyFill })
+  await applyFill({ store, fill: sellFill })
+  const { portfolio } = new Portfolio()
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER })
   const recoveryLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill,
-strategyId: StrategyId.COIN_GRABBER }).ledger
-    .applyFill({
-      fill: sellFill,
-      strategyId: StrategyId.COIN_GRABBER,
-    }).ledger
+    .applyFill({ fill: buyFill, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill, strategyId: StrategyId.COIN_GRABBER }).ledger
   const position = portfolio.getPosition({ marketId: market.id })
+  return { buyOrder, sellOrder, recoveryLedger, position }
+}
+
+async function recordNotCompletedRecoveryCycle({ store } = {}) {
+  const evidence = await createRecoveryCycleAccountingEvidence({
+    store,
+    cycleName: "noncomplete",
+    buyQuantity: "0.42",
+    sellQuantity: "0.4",
+    buyPrice: "95",
+    sellPrice: "100",
+    buyQuoteQuantity: "39.9",
+    sellQuoteQuantity: "40",
+  })
+  const { recoveryLedger, position, sellOrder } = evidence
   const evaluated = evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,
     spent: position.spent.amount,
@@ -341,55 +356,17 @@ test("reopens a NOT_COMPLETED recovery SELL with exact cycle evidence and sticky
 })
 
 async function recordCompletedRecoveryCycle({ store }) {
-  const buyOrder = await persistOrder({
+  const evidence = await createRecoveryCycleAccountingEvidence({
     store,
-    clientOrderId: "crash-matrix-completed-buy",
-    side: "BUY",
-    quantity: "2",
-    price: "65000",
-  });
-  const sellOrder = await persistOrder({
-    store,
-    clientOrderId: "crash-matrix-completed-sell",
-    side: "SELL",
-    quantity: "1",
-    price: "130005",
-    purpose: "RECOVERY_SELL",
-  });
-  const buyFill = makeFill({
-    tradeId: "crash-matrix-completed-buy-fill",
-    clientOrderId: buyOrder.clientOrderId,
-    brokerOrderId: buyOrder.brokerOrderId,
-    side: "BUY",
-    quantity: "2",
-    quoteQuantity: "130000",
-    price: "65000",
-  });
-  const sellFill = makeFill({
-    tradeId: "crash-matrix-completed-sell-fill",
-    clientOrderId: sellOrder.clientOrderId,
-    brokerOrderId: sellOrder.brokerOrderId,
-    side: "SELL",
-    quantity: "1",
-    quoteQuantity: "130005",
-    price: "130005",
-  });
-  await applyFill({ store,
-fill: buyFill });
-  await applyFill({ store,
-fill: sellFill });
-
-  const { portfolio } = new Portfolio()
-    .applyFill({ fill: buyFill,
-strategyId: StrategyId.COIN_GRABBER }).portfolio
-    .applyFill({ fill: sellFill,
-strategyId: StrategyId.COIN_GRABBER });
-  const recoveryLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill,
-strategyId: StrategyId.COIN_GRABBER }).ledger
-    .applyFill({ fill: sellFill,
-strategyId: StrategyId.COIN_GRABBER }).ledger;
-  const position = portfolio.getPosition({ marketId: market.id });
+    cycleName: "completed",
+    buyQuantity: "2",
+    sellQuantity: "1",
+    buyPrice: "65000",
+    sellPrice: "130005",
+    buyQuoteQuantity: "130000",
+    sellQuoteQuantity: "130005",
+  })
+  const { buyOrder, sellOrder, recoveryLedger, position } = evidence
   const evaluated = evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,
     spent: position.spent.amount,
@@ -397,14 +374,14 @@ strategyId: StrategyId.COIN_GRABBER }).ledger;
     activeQuantity: position.baseQuantity.amount,
     keepQuantity: "1",
     minProfit: "5",
-  });
+  })
   const completion = Object.freeze({
     ...evaluated,
     activeQuantity: position.baseQuantity.amount,
     keepQuantity: "1",
     minProfit: "5",
-  });
-  assert.equal(completion.eligible, true, "The exact completed recovery cycle must meet the configured profit threshold.");
+  })
+  assert.equal(completion.eligible, true, "The exact completed recovery cycle must meet the configured profit threshold.")
   const recorded = await recordRecoveryCycleCompleted({
     operationalStateStore: store,
     recoveryLedger,
@@ -412,13 +389,9 @@ strategyId: StrategyId.COIN_GRABBER }).ledger;
     sellOrder,
     completion,
     minProfit: "5",
-  });
-  assert.equal(recorded.ok, true, recorded.errors?.map(({ message }) => message).join("; "));
-
-  return { buyOrder,
-sellOrder,
-recoveryLedger,
-recorded };
+  })
+  assert.equal(recorded.ok, true, recorded.errors?.map(({ message }) => message).join("; "))
+  return { buyOrder, sellOrder, recoveryLedger, recorded }
 }
 
 test("reopens a completed cycle with exact retained inventory and reset recovery basis", async (t) => {
