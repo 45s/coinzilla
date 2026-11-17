@@ -1,4 +1,3 @@
-// Temporary CI trigger for repository ESLint autofix; removed after the run.
 import { defaultLogger } from "@coinzilla/utils"
 
 function hasExplicitConfirmation({ args }) {
