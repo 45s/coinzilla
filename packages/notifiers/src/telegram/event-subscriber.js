@@ -58,6 +58,9 @@ function classifyDeliveryFailure(error) {
   const name = typeof error?.name === "string" ? error.name : ""
   const message = typeof error?.message === "string" ? error.message : ""
 
+  if (/queue capacity exceeded/i.test(message)) {
+    return "QUEUE_OVERFLOW"
+  }
   if (name === "AbortError" || /timeout|timed out/i.test(message)) {
     return "TIMEOUT"
   }
