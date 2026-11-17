@@ -409,7 +409,11 @@ function resolveRecoverySellerBuyOrderOwnership({ registry, fill }) {
   }
 }
 
-function applyRecoverySellerBuyFillTransition({ state, fill }) {
+async function applyRecoverySellerBuyFillTransition({
+  state,
+  fill,
+  onOperationalStateExecutionFill,
+}) {
   const { order, ownership } = resolveRecoverySellerBuyOrderOwnership({
     registry: state.orderRegistry,
     fill,
@@ -419,6 +423,13 @@ function applyRecoverySellerBuyFillTransition({ state, fill }) {
     positionId: ownership.positionId,
     strategyId: ownership.strategyId,
   })
+  if (result.applied && onOperationalStateExecutionFill) {
+    const durableResult = await onOperationalStateExecutionFill({ fill })
+    if (durableResult?.ok !== true || durableResult.data?.durable !== true) {
+      throw durableResult?.errors?.[0] ??
+        new Error("Execution-fill fact append did not confirm durable commitment")
+    }
+  }
   state.portfolio = result.portfolio
   return Object.freeze({
     ...result,
@@ -569,14 +580,15 @@ function reconcileTerminalMixedSellTransition({
  * @param {Portfolio} [options.initialPortfolio] Shared Portfolio snapshot.
  * @param {OrderRegistry} [options.initialOrderRegistry] Shared order registry.
  * @param {Array<object>} [options.initialLegacyPositions] Market-scoped logical legacy state.
+ * @param {Function} [options.onOperationalStateExecutionFill] Durable canonical Fill append callback.
  * @returns {object} Serialized RS accounting and account-snapshot provider operations.
  */
 function createSerializedWorkflowOperation({ state, transition } = {}) {
   return (input = {}) => {
-    const task = state.updateQueue.then(() => {
+    const task = state.updateQueue.then(async () => {
       try {
         return toResult({
-          data: transition({
+          data: await transition({
             state,
             ...input,
           }),
@@ -594,6 +606,7 @@ export function createRecoverySellerAccountingWorkflow({
   initialPortfolio = new Portfolio(),
   initialOrderRegistry = OrderRegistry.empty(),
   initialLegacyPositions = [],
+  onOperationalStateExecutionFill,
 } = {}) {
   if (!(initialPortfolio instanceof Portfolio)) {
     throw new TypeError("initialPortfolio must be a Portfolio")
@@ -609,9 +622,18 @@ export function createRecoverySellerAccountingWorkflow({
     updateQueue: Promise.resolve(),
   }
 
+  if (onOperationalStateExecutionFill !== undefined &&
+      typeof onOperationalStateExecutionFill !== "function") {
+    throw new TypeError("onOperationalStateExecutionFill must be a function")
+  }
+
   const applyBuyFill = createSerializedWorkflowOperation({
     state,
-    transition: applyRecoverySellerBuyFillTransition,
+    transition: ({ state: currentState, fill }) => applyRecoverySellerBuyFillTransition({
+      state: currentState,
+      fill,
+      onOperationalStateExecutionFill,
+    }),
   })
   const reconcileTerminalMixedSell = createSerializedWorkflowOperation({
     state,
