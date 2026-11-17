@@ -278,3 +278,24 @@ test("does not resolve a market blocker when the target-market audit is blocked"
   assert.equal(store.records.some(({ factType }) => factType === "SAFETY_BLOCKER_RESOLVED"), false)
   assert.equal(result.data.targetMarketReady, false)
 })
+
+
+test("uses the injected Operational State projector before any reconciliation reads", async () => {
+  const projectionError = new Error("Injected Operational State projection failure")
+  const deps = makeDependencies()
+  const result = await reconcileHarvesterOperationalStateCandidate({
+    operationalStateStore: makeStore(records()),
+    marketMetadata: new Map([[market.symbol, { market }]]),
+    markets: [market],
+    targetMarket: market,
+    projectOperationalState: () => ({
+      ok: false,
+      errors: [projectionError],
+    }),
+    ...deps,
+  })
+
+  assert.equal(result.ok, false, "A failed injected projection must stop candidate reconciliation.")
+  assert.strictEqual(result.errors[0], projectionError, "The use case must preserve the projector's original error.")
+  assert.deepEqual(deps.calls, [], "No exchange/account reconciliation may begin after projection failure.")
+})

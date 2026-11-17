@@ -109,3 +109,31 @@ durable: true } }
   assert.equal(exitCode, 0)
   assert.equal(received.directory, DEFAULT_OPERATIONAL_STATE_DIRECTORY)
 })
+
+
+test("uses the injected directory resolver at the CLI composition boundary", async () => {
+  let received
+  const exitCode = await runInitializeOperationalState({
+    env: {},
+    args: ["--confirm-initialize"],
+    resolveDirectory: () => "/tmp/injected-operational-state",
+    initialize: async (input) => {
+      received = input
+      return {
+        ok: true,
+        data: {
+          directory: input.directory,
+          sequence: "0",
+          durable: true,
+        },
+      }
+    },
+    logger: createLogger(),
+  })
+
+  assert.equal(exitCode, 0, "The CLI must complete when its injected resolver and initializer succeed.")
+  assert.deepEqual(received, {
+    confirmed: true,
+    directory: "/tmp/injected-operational-state",
+  }, "The CLI must pass the composition-root directory to the initializer.")
+})

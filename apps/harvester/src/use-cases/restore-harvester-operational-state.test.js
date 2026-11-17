@@ -558,3 +558,19 @@ test("replays a completed recovery cycle before later-session fills when non-pro
     "The candidate Portfolio must retain both active and free inventory across process sessions.",
   )
 })
+
+
+test("uses the injected Operational State projector and returns its failure unchanged", async () => {
+  const projectionError = new Error("Injected Operational State projection failure")
+  const result = await restoreHarvesterOperationalState({
+    operationalStateStore: makeStore(records()),
+    marketMetadata: new Map([[market.symbol, { market }]]),
+    projectOperationalState: () => ({
+      ok: false,
+      errors: [projectionError],
+    }),
+  })
+
+  assert.equal(result.ok, false, "A failed injected projection must stop candidate restoration.")
+  assert.strictEqual(result.errors[0], projectionError, "The use case must preserve the projector's original error.")
+})

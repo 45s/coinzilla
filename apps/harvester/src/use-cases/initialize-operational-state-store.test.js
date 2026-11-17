@@ -83,3 +83,21 @@ digest: "a".repeat(64) } } }),
   })
   assert.equal(result.ok, false, "A committed genesis must not be reported as fully initialized while the exclusive process lock remains uncertain.")
 })
+
+
+test("requires the composition root to inject storage and process-lock adapters", async () => {
+  const result = await initializeHarvesterOperationalStateStore({
+    confirmed: true,
+    directory: "/tmp/unused-operational-state",
+    processLockDirectory: "/tmp/unused-process-locks",
+    createStore: null,
+    acquireProcessLock: null,
+  })
+
+  assert.equal(result.ok, false, "Initialization must not silently select infrastructure adapters from the use-case layer.")
+  assert.match(
+    result.errors[0].message,
+    /requires.*(createStore|acquireProcessLock)/i,
+    "Missing infrastructure adapters must produce an actionable dependency error.",
+  )
+})
