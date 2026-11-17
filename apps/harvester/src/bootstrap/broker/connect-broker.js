@@ -30,7 +30,7 @@ async function createRegisteredProvider({ broker, identity, tradingMode }) {
       throw new AggregateError(
         [error, disconnectError],
         "Binance provider validation failed and constructed-client cleanup also failed",
-        { cause: error },
+        { cause: disconnectError },
       )
     }
     throw error
@@ -43,7 +43,10 @@ function publishConnectionFailure({ eventPublisher, brokerName, error, logger })
     publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED,
-      dataResult: mapBrokerConnectionFailedData({ broker: brokerName, error }),
+      dataResult: mapBrokerConnectionFailedData({
+        broker: brokerName,
+        error,
+      }),
     })
   } catch (eventError) {
     secondaryErrors.push(eventError)
