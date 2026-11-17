@@ -7,7 +7,12 @@ const createCapabilities = ({ tradingMode = "testnet" } = {}) => Object.freeze({
   contractVersion: 1,
   provider: "binance",
   product: "spot",
-  environment: Object.freeze({ selectedMode: tradingMode }),
+  environment: Object.freeze({
+    selector: "tradingMode",
+    supportedModes: Object.freeze(["testnet", "live"]),
+    selectedMode: tradingMode,
+    nodeEnvSelectsEndpoint: false,
+  }),
 })
 
 const createClient = ({ tradingMode = "testnet" } = {}) => {
