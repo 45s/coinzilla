@@ -1606,7 +1606,6 @@ function createConservativeEngineMarketEventContext({ context } = {}) {
     canTrade: dependencies.canTrade,
     maybeReplaceTrailingBuy: context.maybeReplaceTrailingBuy,
     evaluateLatestTransition: context.evaluateLatestTransition,
-    invalidateShutdownSafety: context.invalidateShutdownSafety,
     nextMarketPriceEventId: context.nextMarketPriceEventId,
   })
 }

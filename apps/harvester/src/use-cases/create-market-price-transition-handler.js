@@ -123,18 +123,15 @@ function acceptFreshMarketPriceTransition({
   }
 }
 
-function invalidateSafeShutdownMarkerForAcceptedPrice({
-  state,
-  invalidateShutdownSafety,
-  symbol,
-} = {}) {
-  if (state.shutdownBuyGate !== true) {
+function invalidateSafeShutdownMarkerForAcceptedPrice({ state, symbol } = {}) {
+  if (
+    state.shutdownBuyGate !== true ||
+    state.shutdownSafetyBySymbol?.get(symbol)?.status !== "SAFE_TO_SHUTDOWN" ||
+    typeof state.invalidateShutdownSafety !== "function"
+  ) {
     return
   }
-  if (state.shutdownSafetyBySymbol?.get(symbol)?.status !== "SAFE_TO_SHUTDOWN") {
-    return
-  }
-  invalidateShutdownSafety({
+  state.invalidateShutdownSafety({
     symbol,
     reason: "LATE_MARKET_PRICE_EVIDENCE",
   })
@@ -187,7 +184,6 @@ export function createMarketPriceTransitionHandler({
   canTrade,
   maybeReplaceTrailingBuy,
   evaluateLatestTransition,
-  invalidateShutdownSafety,
   nextMarketPriceEventId,
 } = {}) {
   return async ({ symbol, priceEvent } = {}) => {
@@ -215,7 +211,6 @@ export function createMarketPriceTransitionHandler({
 
       invalidateSafeShutdownMarkerForAcceptedPrice({
         state,
-        invalidateShutdownSafety,
         symbol,
       })
 

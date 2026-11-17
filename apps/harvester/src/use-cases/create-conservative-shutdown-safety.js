@@ -290,6 +290,7 @@ export function createConservativeShutdownSafety({ state, pairs, runTransition }
     pairs,
     enabledSymbols,
   })
+  state.invalidateShutdownSafety = invalidateShutdownSafety
   const beginShutdown = () => {
     state.shutdownBuyGate = true
     state.deferredEvaluations.clear()

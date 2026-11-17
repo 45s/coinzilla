@@ -311,3 +311,40 @@ test("returns a validation error for a subscription-symbol mismatch before alloc
     "A symbol-mismatched event must not allocate an event identity, emit accepted-event diagnostics, or dispatch a strategy transition.",
   )
 })
+
+test("invalidates a safe shutdown marker when a later accepted price arrives", async () => {
+  const harness = createHarness()
+  const { state } = harness
+  state.shutdownBuyGate = true
+  state.shutdownSafetyBySymbol = new Map([
+    ["DOGEUSDT", {
+      status: "SAFE_TO_SHUTDOWN",
+      blockers: [],
+      revision: 1,
+    }],
+  ])
+  state.invalidateShutdownSafety = ({ symbol, reason }) => {
+    state.shutdownSafetyBySymbol.set(symbol, {
+      status: "UNSAFE",
+      blockers: [reason],
+      revision: 2,
+    })
+  }
+
+  const result = await harness.handler({
+    symbol: "DOGEUSDT",
+    priceEvent: validPriceEvent,
+  })
+
+  assert.equal(result.ok, true, "A late fresh price must continue through recovery-only evaluation.")
+  assert.equal(
+    state.shutdownSafetyBySymbol.get("DOGEUSDT").status,
+    "UNSAFE",
+    "Accepted market evidence must invalidate the previous SAFE_TO_SHUTDOWN marker.",
+  )
+  assert.deepEqual(
+    state.shutdownSafetyBySymbol.get("DOGEUSDT").blockers,
+    ["LATE_MARKET_PRICE_EVIDENCE"],
+    "The invalidated marker must explain why a new recovery proof is required.",
+  )
+})
