@@ -178,8 +178,9 @@ export function reconcileRecoverySellerCycleSell({
     throw new TypeError("terminalOrderStatus must be one of FILLED, CANCELED, REJECTED, EXPIRED")
   }
   if (typeof reconciliationComplete !== "boolean" ||
-      typeof profitabilityEligible !== "boolean") {
-    throw new TypeError("Recovery Seller terminal reconciliation requires explicit reconciliation and profitability results")
+      (reconciliationComplete && typeof profitabilityEligible !== "boolean") ||
+      (!reconciliationComplete && profitabilityEligible !== null)) {
+    throw new TypeError("Recovery Seller terminal reconciliation requires explicit and internally consistent reconciliation/profitability results")
   }
 
   const sellOrderIdentity = Object.freeze({
