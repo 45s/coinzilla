@@ -75,6 +75,12 @@ function getRuleAmount({ marketMetadata, type, required = true }) {
   return rule.value.amount
 }
 
+function validatePositionId({ positionId }) {
+  if (typeof positionId !== "string" || !positionId.trim()) {
+    throw new TypeError("Recovery Seller BUY policy requires a stable positionId")
+  }
+}
+
 function validateMarketPrice({ marketPrice }) {
   if (!marketPrice || typeof marketPrice.symbol !== "string" || !marketPrice.symbol.trim()) {
     throw new TypeError("Recovery Seller BUY policy requires a market symbol")
@@ -133,6 +139,7 @@ function validateReadinessFlags({ strategyStopped, marketPaused, reconciliationC
 
 function validateRecoveryAccounting({
   recoveryPosition,
+  positionId,
   cycleState,
   cumulativeNetSellProceeds,
   pendingBuyCommitment,
@@ -140,6 +147,9 @@ function validateRecoveryAccounting({
   const hasRecoveryPosition = recoveryPosition !== undefined && recoveryPosition !== null
   const recoverySpent = hasRecoveryPosition ? recoveryPosition.spent : "0"
   if (hasRecoveryPosition) {
+    if (recoveryPosition.positionId !== positionId) {
+      throw new Error("Recovery Seller Position identity does not match the current cycle ownership")
+    }
     assertPositiveDecimal({
       value: recoveryPosition.quantity,
       field: "recoveryPosition.quantity",
@@ -223,6 +233,7 @@ function validateInput({
   pairConfig,
   marketMetadata,
   recoveryPosition,
+  positionId,
   cycleState,
   cumulativeNetSellProceeds,
   pendingBuyCommitment,
@@ -231,6 +242,9 @@ function validateInput({
   marketPaused,
   reconciliationComplete,
 }) {
+  validatePositionId({
+    positionId,
+  })
   validateMarketPrice({
     marketPrice,
   })
@@ -318,13 +332,14 @@ function hasValidOrderOwnership({ order, cycleId }) {
     order.ownership &&
     order.ownership.strategyId === "RECOVERY_SELLER" &&
     order.ownership.cycleId === cycleId &&
+    order.ownership.positionId === positionId &&
     typeof order.ownership.positionId === "string" &&
     order.ownership.positionId.trim() &&
     order.ownership.purpose === expectedPurpose
   )
 }
 
-function findBlockingOrders({ activeOrders, symbol, cycleId }) {
+function findBlockingOrders({ activeOrders, symbol, cycleId, positionId }) {
   if (!Array.isArray(activeOrders)) {
     throw new TypeError("Recovery Seller activeOrders must be an array")
   }
@@ -336,6 +351,7 @@ function findBlockingOrders({ activeOrders, symbol, cycleId }) {
         !hasValidOrderOwnership({
           order,
           cycleId,
+          positionId,
         })) {
       throw new Error("Recovery Seller received a malformed, unowned or unsupported active-order snapshot")
     }
@@ -515,11 +531,12 @@ function resolveAccumulatingCycle({ stopState, previousDecision, blockingOrders 
   })
 }
 
-function resolveExistingOrder({ stopState, previousDecision, activeOrders, symbol, cycleState }) {
+function resolveExistingOrder({ stopState, previousDecision, activeOrders, symbol, cycleState, positionId }) {
   const blockingOrders = findBlockingOrders({
     activeOrders,
     symbol,
     cycleId: cycleState.cycleId,
+    positionId,
   })
   if (["UNRESOLVED", "CLOSED"].includes(cycleState.status)) {
     return resolveClosedOrUnresolvedCycle({
@@ -762,6 +779,7 @@ function getExistingOrderResult({
   activeOrders,
   marketPrice,
   cycleState,
+  positionId,
 }) {
   assertRecoverySellerCycleState({
     state: cycleState,
@@ -772,6 +790,7 @@ function getExistingOrderResult({
     activeOrders,
     symbol: marketPrice?.symbol,
     cycleState,
+    positionId,
   })
   if (existingOrderResult) {
     if (existingOrderResult.stopState.status === "STOPPED") {
@@ -806,6 +825,7 @@ function evaluateBuyReadiness({
   pairConfig,
   marketMetadata,
   recoveryPosition,
+  positionId,
   cycleState,
   cumulativeNetSellProceeds,
   pendingBuyCommitment,
@@ -819,6 +839,7 @@ function evaluateBuyReadiness({
     pairConfig,
     marketMetadata,
     recoveryPosition,
+    positionId,
     cycleState,
     cumulativeNetSellProceeds,
     pendingBuyCommitment,
@@ -929,7 +950,7 @@ function evaluateBuyCandidate({
   }
 }
 
-function createBuySubmitResult({ stopState, previousDecision, marketMetadata, cycleState, plan }) {
+function createBuySubmitResult({ stopState, previousDecision, marketMetadata, cycleState, positionId, plan }) {
   const decision = createRecoverySellerLifecycleDecision({
     outcome: RECOVERY_SELLER_LIFECYCLE_OUTCOMES.SUBMIT,
     reasonCode: "BUY_TRANCHE_ELIGIBLE",
@@ -943,6 +964,7 @@ function createBuySubmitResult({ stopState, previousDecision, marketMetadata, cy
       side: "BUY",
       purpose: "RECOVERY_BUY",
       cycleId: cycleState.cycleId,
+      positionId,
       type: marketMetadata.orderType,
       price: plan.buyPrice,
       quantity: plan.buyQuantity,
@@ -971,6 +993,7 @@ export function evaluateRecoverySellerBuyDecision({
   pairConfig,
   marketMetadata,
   recoveryPosition,
+  positionId,
   cycleState,
   cumulativeNetSellProceeds = "0",
   pendingBuyCommitment = "0",
@@ -990,6 +1013,7 @@ export function evaluateRecoverySellerBuyDecision({
       activeOrders,
       marketPrice,
       cycleState,
+      positionId,
     })
     if (existingOrderResult) {
       return existingOrderResult
@@ -1001,6 +1025,7 @@ export function evaluateRecoverySellerBuyDecision({
       pairConfig,
       marketMetadata,
       recoveryPosition,
+      positionId,
       cycleState,
       cumulativeNetSellProceeds,
       pendingBuyCommitment,
@@ -1030,6 +1055,7 @@ export function evaluateRecoverySellerBuyDecision({
       previousDecision,
       marketMetadata,
       cycleState,
+      positionId,
       plan: candidate.plan,
     })
   } catch (error) {
