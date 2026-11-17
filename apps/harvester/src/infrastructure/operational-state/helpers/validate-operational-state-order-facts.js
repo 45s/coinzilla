@@ -28,7 +28,8 @@ export function validateOrderSubmissionIntentFact({
   factType,
   canonicalData,
   factId
-,}) {
+,
+}) {
   if (factType === "ORDER_SUBMISSION_INTENT") {
     const allowedFields = new Set([
       "clientOrderId",
@@ -55,22 +56,26 @@ export function validateOrderSubmissionIntentFact({
       value: canonicalData.marketId,
 field: "data.marketId",
 maxLength: MAX_FACT_ID_LENGTH
-    ,})
+    ,
+    })
     requireNonEmptyString({
       value: canonicalData.venue,
 field: "data.venue",
 maxLength: 32
-    ,})
+    ,
+    })
     requireNonEmptyString({
       value: canonicalData.baseAssetId,
 field: "data.baseAssetId",
 maxLength: MAX_FACT_ID_LENGTH
-    ,})
+    ,
+    })
     requireNonEmptyString({
       value: canonicalData.quoteAssetId,
 field: "data.quoteAssetId",
 maxLength: MAX_FACT_ID_LENGTH
-    ,})
+    ,
+    })
     if (factIdForOrderIntent(clientOrderId) !== factId) {
       throw new TypeError("Order-submission intent factId must match its stable clientOrderId identity")
     }
@@ -100,7 +105,8 @@ function validateOrderSubmissionOutcomeIdentity({
   canonicalData,
   factId,
   clientOrderId
-,}) {
+,
+}) {
   if (factIdForOrderOutcome(clientOrderId, canonicalData.outcome) !== factId) {
     throw new TypeError("Order-submission outcome factId must match its stable clientOrderId and outcome identity")
   }
@@ -136,7 +142,8 @@ function validateOrderSubmissionOutcomeState({ canonicalData }) {
     value: canonicalData.status,
 field: "data.status",
 maxLength: 32
-  ,})
+  ,
+  })
   if (canonicalData.outcome === "ACKNOWLEDGED") {
     requireNonEmptyString({
       value: canonicalData.brokerOrderId,
@@ -159,7 +166,8 @@ export function validateOrderSubmissionOutcomeFact({
   factType,
   canonicalData,
   factId
-,}) {
+,
+}) {
   if (factType !== "ORDER_SUBMISSION_OUTCOME") {
     return
   }
@@ -192,27 +200,32 @@ export function validateOrderSubmissionOutcomeFact({
     value: canonicalData.marketId,
 field: "data.marketId",
 maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   requireNonEmptyString({
     value: canonicalData.venue,
 field: "data.venue",
 maxLength: 32
-  ,})
+  ,
+  })
   requireNonEmptyString({
     value: canonicalData.baseAssetId,
 field: "data.baseAssetId",
 maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   requireNonEmptyString({
     value: canonicalData.quoteAssetId,
 field: "data.quoteAssetId",
 maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   validateOrderSubmissionOutcomeIdentity({
     canonicalData,
 factId,
 clientOrderId
-  ,})
+  ,
+  })
   validateOrderSubmissionOutcomeAmounts({ canonicalData })
   validateOrderSubmissionOutcomeState({ canonicalData })
 }
@@ -223,7 +236,8 @@ function validateCancellationIdentity({
   reason,
   expectedFactId,
   outcome
-,}) {
+,
+}) {
   const isValidReason = /^[A-Z][A-Z0-9_]{1,63}$/.test(reason)
   const isValidOutcome = outcome === undefined ||
     ["CANCELED", "FILLED", "REJECTED", "EXPIRED", "NOT_CANCELED", "NOT_SENT", "OUTCOME_UNKNOWN", "UNCONFIRMED", "UNKNOWN"].includes(outcome)
@@ -243,7 +257,8 @@ function validateCancellationIdentity({
 function validateCancellationOrderFields({
   canonicalData,
   outcome
-,}) {
+,
+}) {
   if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
     throw new TypeError(outcome === undefined
       ? "Order-cancellation symbol must be canonical uppercase alphanumeric"
@@ -291,7 +306,8 @@ export function validateOrderCancellationIntentFact({
   factType,
   canonicalData,
   factId
-,}) {
+,
+}) {
   if (factType !== "ORDER_CANCELLATION_INTENT") {
     return
   }
@@ -303,43 +319,51 @@ export function validateOrderCancellationIntentFact({
     value: canonicalData.clientOrderId,
     field: "data.clientOrderId",
     maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   requireNonEmptyString({
     value: canonicalData.brokerOrderId,
     field: "data.brokerOrderId",
     maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   const marketId = requireNonEmptyString({
     value: canonicalData.marketId,
     field: "data.marketId",
     maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   const venue = requireNonEmptyString({
     value: canonicalData.venue,
     field: "data.venue",
     maxLength: 32
-  ,})
+  ,
+  })
   requireNonEmptyString({
     value: canonicalData.baseAssetId,
     field: "data.baseAssetId",
     maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   requireNonEmptyString({
     value: canonicalData.quoteAssetId,
     field: "data.quoteAssetId",
     maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   const reason = requireNonEmptyString({
     value: canonicalData.reason,
     field: "data.reason",
     maxLength: 64
-  ,})
+  ,
+  })
   validateCancellationIdentity({
     canonicalData: {
       ...canonicalData,
       marketId,
       venue
-    ,},
+    ,
+    },
     factId,
     reason,
     expectedFactId: factIdForCancellationIntent(clientOrderId, reason, canonicalData.status, canonicalData.executedQuantity),
@@ -352,7 +376,8 @@ export function validateOrderCancellationOutcomeFact({
   factType,
   canonicalData,
   factId
-,}) {
+,
+}) {
   if (factType !== "ORDER_CANCELLATION_OUTCOME") {
     return
   }
@@ -364,43 +389,51 @@ export function validateOrderCancellationOutcomeFact({
     value: canonicalData.clientOrderId,
     field: "data.clientOrderId",
     maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   requireNonEmptyString({
     value: canonicalData.brokerOrderId,
     field: "data.brokerOrderId",
     maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   const marketId = requireNonEmptyString({
     value: canonicalData.marketId,
     field: "data.marketId",
     maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   const venue = requireNonEmptyString({
     value: canonicalData.venue,
     field: "data.venue",
     maxLength: 32
-  ,})
+  ,
+  })
   requireNonEmptyString({
     value: canonicalData.baseAssetId,
     field: "data.baseAssetId",
     maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   requireNonEmptyString({
     value: canonicalData.quoteAssetId,
     field: "data.quoteAssetId",
     maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   const reason = requireNonEmptyString({
     value: canonicalData.reason,
     field: "data.reason",
     maxLength: 64
-  ,})
+  ,
+  })
   validateCancellationIdentity({
     canonicalData: {
       ...canonicalData,
       marketId,
       venue
-    ,},
+    ,
+    },
     factId,
     clientOrderId,
     reason,
@@ -410,6 +443,7 @@ export function validateOrderCancellationOutcomeFact({
   validateCancellationOrderFields({
     canonicalData,
     outcome: canonicalData.outcome
-  ,})
+  ,
+  })
   validateCancellationOutcomeState({ canonicalData })
 }
