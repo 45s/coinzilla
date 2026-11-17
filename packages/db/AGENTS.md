@@ -25,6 +25,7 @@ The package domain may model only generic database infrastructure concepts: reco
 - Generic CRUD is an approved package responsibility. Define behavior once in provider-neutral contracts and require every provider to satisfy the same applicable conformance tests.
 - Keep the public record API simple. Do not create an ORM, chainable query builder, schema generator, or application-specific repository abstraction.
 - The initial record model is a JSON object with a non-empty string `id`, stored in a named collection. Query filters are exact equality on top-level scalar fields; sorting and pagination use the documented portable contract.
+- Every public CRUD operation accepts one named input object; keep that shape consistent in the application facade, provider port, transaction context, tests and examples.
 - Provider-specific configuration belongs at the outer composition boundary. Consumers of the composed database must not branch on provider identity.
 - Declare provider capabilities explicitly. Do not silently emulate unsupported query, transaction, concurrency, or durability guarantees.
 - Keep SQL and SQLite-specific APIs out of domain and application policy.
