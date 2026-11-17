@@ -152,6 +152,7 @@ function createFunctionQualityAuditEslint() {
           "max-statements": ["error", 15],
           "max-depth": ["error", 3],
           "max-nested-callbacks": ["error", 2],
+          "max-params": ["error", 1],
           "default-param-last": "error",
         },
       },
