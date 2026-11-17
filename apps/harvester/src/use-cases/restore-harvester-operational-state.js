@@ -1,5 +1,4 @@
 import { toResult } from "@coinzilla/utils"
-import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester-operational-state.js"
 import { restoreHarvesterJournalState } from "./restore-harvester-journal-state.js"
 
 /**
@@ -10,12 +9,20 @@ import { restoreHarvesterJournalState } from "./restore-harvester-journal-state.
  * @param {object} options
  * @param {object} options.operationalStateStore Initialized store with verified readAll().
  * @param {Map|Array} options.marketMetadata Canonical exchange market metadata.
+ * @param {Function} options.projectOperationalState Injected durable-fact projector.
  * @returns {Promise<object>} Candidate Portfolio, RecoveryLedger map, and OrderRegistry.
  */
-export async function restoreHarvesterOperationalState({ operationalStateStore, marketMetadata } = {}) {
+export async function restoreHarvesterOperationalState({
+  operationalStateStore,
+  marketMetadata,
+  projectOperationalState,
+} = {}) {
   try {
     if (typeof operationalStateStore?.readAll !== "function") {
       throw new TypeError("restoreHarvesterOperationalState requires an initialized durable-fact read port")
+    }
+    if (typeof projectOperationalState !== "function") {
+      throw new TypeError("restoreHarvesterOperationalState requires an injected Operational State projector")
     }
     const read = await operationalStateStore.readAll()
     if (read?.ok !== true || read.data?.durableWriteSupported !== true || !Array.isArray(read.data.records)) {
@@ -25,7 +32,7 @@ export async function restoreHarvesterOperationalState({ operationalStateStore, 
           : [new Error("Durable-fact stream is not verified and durably readable")],
       })
     }
-    const projection = projectHarvesterOperationalState({ records: read.data.records })
+    const projection = projectOperationalState({ records: read.data.records })
     if (projection?.ok !== true) { return projection }
     const restored = restoreHarvesterJournalState({ projection,
 marketMetadata })
