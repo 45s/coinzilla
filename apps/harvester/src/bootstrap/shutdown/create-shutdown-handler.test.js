@@ -257,6 +257,36 @@ test("a safe strategy cannot release shared services while another strategy is u
   assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE")
 })
 
+test("preserves the Journal flush message and cause in shutdown diagnostics", async () => {
+  const cause = new Error("Underlying Journal fsync failure")
+  const failure = new Error("Journal shutdown flush failed", { cause })
+  const calls = []
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+  })
+  const fixture = createShutdown({
+    participants: [participant],
+    calls,
+    eventPublisher: {
+      flush: async () => {
+        throw failure
+      },
+    },
+  })
+
+  await assert.rejects(fixture.stop(), (error) => {
+    assert.equal(error, failure, "Shutdown must preserve the original Journal flush error identity.")
+    const [cleanupFailure] = error.shutdownDiagnostics.cleanupFailures
+    assert.equal(cleanupFailure.message, failure.message, "Shutdown diagnostics must preserve the Journal flush failure message.")
+    assert.equal(cleanupFailure.cause.message, cause.message, "Shutdown diagnostics must preserve the underlying Journal fsync cause.")
+    return true
+  }, "A failed final Journal flush must reject shutdown with its original failure.")
+
+  assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected when final Journal durability cannot be proven.")
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE", "A failed final Journal flush must never report STOPPED.")
+})
+
 test("keeps every shared connection alive when the CLOSING Journal barrier fails", async () => {
   const failure = new Error("Journal fsync failed")
   const calls = []
