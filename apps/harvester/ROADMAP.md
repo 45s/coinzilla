@@ -2,6 +2,11 @@
 
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
+
+## Current safety priority — ADA recovery lifecycle (#1359)
+
+- [ ] **Correct Conservative recovery handling of minimum-notional and fee-reserved residuals.** Parent [#1359](https://github.com/45s/coinzilla/issues/1359); confirmed dust-classification fix [#1360](https://github.com/45s/coinzilla/issues/1360), environment-fee configuration follow-up [#1361](https://github.com/45s/coinzilla/issues/1361), and end-to-end lifecycle audit [#1362](https://github.com/45s/coinzilla/issues/1362). The 2026-11-17 ADAUSDT cycle left 0.1 ADA, exactly one 0.1 quantity step and the minimum quantity, but worth far below the 5 USDT minimum notional. The strategy's zero fee-adjusted SELL quantity path classified it unconditionally as QUANTITY_INCREMENT; completion then rejected the evidence and paused ADA. Classify the remainder using actual exchange-filter evidence, prioritizing MIN_NOTIONAL when quantity is valid but notional is insufficient. Preserve fee-reserved quantity-step evidence separately. PR [#1363](https://github.com/45s/coinzilla/pull/1363) contains the test-first regression and focused fix in progress. The 0.075% LIVE / 0.1% TESTNET fee difference is intentional; the session used the LIVE value in TESTNET by operator oversight. Do not alter those rates under this item. Offline tests only; no exchange operations are authorized.
+
 ## Persistence — provider-agnostic database integration (#1327)
 
 **Goal:** persist Harvester's trading and operational history through application-owned repository contracts. Harvester must not know whether the database provider is SQLite, PostgreSQL, or MongoDB. The generic database API and provider adapters belong to `@coinzilla/db`; all trading-specific persistence requirements belong here.

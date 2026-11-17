@@ -323,13 +323,61 @@ function createRecoverySellPlanForPosition({ context, accounting }) {
   })
 }
 
-function createQuantityIncrementDustDisposition({ context, accounting }) {
+function createUnfillableSellDisposition({ context, accounting, marketPrice }) {
+  const quantity = subtractDecimal({
+    left: accounting.activeQuantity,
+    right: accounting.keepQuantity,
+  })
+  let evaluatedPrice = roundDecimalToIncrement({
+    value: marketPrice.price,
+    increment: context.priceTickSize,
+    direction: "up",
+  })
+  if (context.minPrice && compareDecimal({ left: evaluatedPrice, right: context.minPrice }) < 0) {
+    evaluatedPrice = roundDecimalToIncrement({
+      value: context.minPrice,
+      increment: context.priceTickSize,
+      direction: "up",
+    })
+  }
+  const evaluatedNotional = multiplyDecimal({
+    left: evaluatedPrice,
+    right: quantity,
+  })
+
+  if (compareDecimal({ left: quantity, right: context.quantityStepSize }) < 0) {
+    return Object.freeze({
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity,
+      reason: "QUANTITY_INCREMENT",
+      quantityStepSize: context.quantityStepSize,
+      evaluatedQuantity: "0",
+    })
+  }
+  if (compareDecimal({ left: quantity, right: context.minQuantity }) < 0) {
+    return Object.freeze({
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity,
+      reason: "MIN_QUANTITY",
+      minimumQuantity: context.minQuantity,
+      evaluatedQuantity: quantity,
+    })
+  }
+  if (compareDecimal({ left: evaluatedNotional, right: context.minNotional }) < 0) {
+    return Object.freeze({
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity,
+      reason: "MIN_NOTIONAL",
+      minimumQuantity: context.minQuantity,
+      minimumNotional: context.minNotional,
+      evaluatedQuantity: quantity,
+      evaluatedNotional,
+    })
+  }
+
   return Object.freeze({
     status: "EXCHANGE_CONSTRAINED_DUST",
-    quantity: subtractDecimal({
-      left: accounting.activeQuantity,
-      right: accounting.keepQuantity,
-    }),
+    quantity,
     reason: "QUANTITY_INCREMENT",
     quantityStepSize: context.quantityStepSize,
     evaluatedQuantity: "0",
@@ -362,8 +410,11 @@ accounting })
   if (compareDecimal({ left: sellPlan.quantity,
 right: "0" }) <= 0) {
     return {
-      inventoryDisposition: createQuantityIncrementDustDisposition({ context,
-accounting }),
+      inventoryDisposition: createUnfillableSellDisposition({
+        context,
+        accounting,
+        marketPrice: context.marketPrice,
+      }),
     }
   }
 
