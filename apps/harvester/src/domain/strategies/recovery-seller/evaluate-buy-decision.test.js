@@ -107,22 +107,17 @@ test("blocks the next BUY when the RS per-pair investment limit would be exceede
     "A normal configured investment limit is not an unexpected global STOP.")
 })
 
-test("counts unresolved BUY commitment in outstanding RS exposure", () => {
+test("latches STOP when a BUY commitment exists without an identifiable active order", () => {
   const result = evaluate({
-    pairConfig: {
-      ...pairConfig,
-      investment: "15",
-    },
-    recoveryPosition: {
-      spent: "5",
-    },
     pendingBuyCommitment: "5",
   })
 
   assert.equal(result.decision.outcome, "BLOCK",
-    "A new tranche must not ignore an existing committed quote amount.")
-  assert.equal(result.decision.reasonCode, "INVESTMENT_LIMIT_REACHED",
-    "Committed exposure must be included in the same per-strategy budget calculation.")
+    "An orphaned BUY commitment must not be ignored or treated as free investment capacity.")
+  assert.equal(result.stopState.status, "STOPPED",
+    "A committed quote amount without its canonical order identity is an unmodeled lifecycle condition.")
+  assert.equal(result.action, undefined,
+    "No additional BUY may be planned while an unowned commitment remains unresolved.")
 })
 
 test("waits for an existing acknowledged RS order instead of creating a duplicate BUY", () => {
