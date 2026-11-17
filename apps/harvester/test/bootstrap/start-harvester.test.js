@@ -15,6 +15,7 @@ import { toResult } from '@coinzilla/utils';
 import { startHarvester } from '../../src/bootstrap/start-harvester.js';
 import { resolveHarvesterOptions } from '../../src/bootstrap/config/resolve-harvester-options.js';
 import { loadAppConfig } from '../../src/infrastructure/config/load-app-config.js';
+import { TEST_BINANCE_CAPABILITIES } from '../../test-support/binance-test-capabilities.js';
 
 const createOpenOrderSnapshot = ({ order }) => {
   const openOrder = new Order({
@@ -374,6 +375,7 @@ function createOrdinaryTradeUserDataPort({ state } = {}) {
 
 function createOrdinaryTradeBroker({ market, baseAsset, quoteAsset, marketMetadata, balances, state } = {}) {
   return {
+    capabilities: TEST_BINANCE_CAPABILITIES,
     connect: async () => {},
     disconnect: async () => {},
     ...createOrdinaryTradeOrderPorts({ market,
