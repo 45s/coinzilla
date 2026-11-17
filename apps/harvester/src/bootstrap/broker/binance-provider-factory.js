@@ -1,7 +1,7 @@
 import { createBinanceBrokerAdapter } from "../../infrastructure/brokers/binance-broker-adapter.js"
 
 function assertBinanceCredentialReferences({ descriptor }) {
-  const credentialEnv = descriptor.credentialEnv
+  const { credentialEnv } = descriptor
   if (credentialEnv === undefined) {
     return
   }

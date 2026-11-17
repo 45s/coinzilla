@@ -415,6 +415,18 @@ function createDisconnectAll({ entries, entryLifecycles, registryState }) {
   }
 }
 
+function createConnectionCleanupError({ error, cleanupError }) {
+  const originalErrors = error instanceof AggregateError ? error.errors : [error]
+  const cleanupErrors = cleanupError instanceof AggregateError ? cleanupError.errors : [cleanupError]
+  const additionalErrors = cleanupErrors.filter((entry) => !originalErrors.includes(entry))
+  return new AggregateError([
+    ...originalErrors,
+    ...additionalErrors,
+  ], "Provider connection and registry cleanup both failed", {
+    cause: cleanupError,
+  })
+}
+
 function createConnectAll({ entries, entryLifecycles, disconnectAll, registryState }) {
   return async function connectAll() {
     if (registryState.disconnectPromise) {
@@ -430,11 +442,9 @@ function createConnectAll({ entries, entryLifecycles, disconnectAll, registrySta
           try {
             await disconnectAll()
           } catch (cleanupError) {
-            throw new AggregateError([
+            throw createConnectionCleanupError({
               error,
               cleanupError,
-            ], "Provider connection and registry cleanup both failed", {
-              cause: cleanupError,
             })
           }
           throw error
