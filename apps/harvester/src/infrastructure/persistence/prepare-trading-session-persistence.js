@@ -32,15 +32,21 @@ async function closeAfterPreparationFailure({ database, logger }) {
   }
 }
 
-export async function prepareTradingSessionPersistence({ tradingMode, env, logger } = {}) {
+export async function prepareTradingSessionPersistence({
+  tradingMode,
+  env,
+  logger,
+  createDatabase: createDatabaseFactory = createDatabase,
+  createSqliteProvider: createSqliteProviderFactory = createSqliteProvider,
+} = {}) {
   let database
   try {
     const filename = await assertTradingSessionDatabaseIsolation({
       tradingMode,
       env,
     })
-    database = createDatabase({
-      provider: createSqliteProvider({
+    database = createDatabaseFactory({
+      provider: createSqliteProviderFactory({
         filename,
         timeout: SQLITE_TIMEOUT_MS,
       }),
