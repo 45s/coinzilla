@@ -225,6 +225,33 @@ test("new JavaScript files are selected", async () => {
   });
 });
 
+test("new CommonJS files are selected", async () => {
+  await withRepository({
+    callback: async (cwd) => {
+      await commitFile({
+        cwd,
+        path: "baseline.js",
+        source: "export const baseline = true;\n",
+      });
+      await writeFile(join(cwd, "new-file.cjs"), "module.exports = true;\n");
+      git({
+        cwd,
+        args: ["add", "--", "new-file.cjs"],
+      });
+      git({
+        cwd,
+        args: ["commit", "-m", "add CommonJS file"],
+      });
+      const files = await getChangedFiles({
+        cwd,
+        baseRef: "main",
+        headRef: "HEAD",
+      });
+      assert.deepEqual(files, ["new-file.cjs"], "CommonJS files must be included in the strict file selection.");
+    },
+  });
+});
+
 test("a strict violation in an untouched legacy file is not selected", async () => {
   await withRepository({
     callback: async (cwd) => {
