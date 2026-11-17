@@ -12,5 +12,8 @@
   },
   "engines": {
     "node": ">=24"
+  },
+  "dependencies": {
+    "@coinzilla/utils": "workspace:*"
   }
 }
