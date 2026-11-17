@@ -9,7 +9,12 @@ const createCapabilities = ({ provider = "binance", selectedMode = "testnet" } =
   contractVersion: 1,
   provider,
   product: "spot",
-  environment: Object.freeze({ selectedMode }),
+  environment: Object.freeze({
+    selector: "tradingMode",
+    supportedModes: Object.freeze(["testnet", "live"]),
+    selectedMode,
+    nodeEnvSelectsEndpoint: false,
+  }),
 })
 
 function createBroker({ capabilities, onConnect, onDisconnect } = {}) {
