@@ -42,6 +42,12 @@ function assertOrderQuantities({ volume, dealVolume }) {
   }
 }
 
+function assertRequiredTimestamp({ value, field }) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new TypeError(`Bitunix Spot order ${field} must be a non-empty string`)
+  }
+}
+
 function validateOrder({ bitunixOrder }) {
   if (!bitunixOrder || typeof bitunixOrder !== "object" || Array.isArray(bitunixOrder)) {
     throw new TypeError("Bitunix Spot order should be an object")
@@ -66,12 +72,14 @@ function validateOrder({ bitunixOrder }) {
   if (typeof symbol !== "string" || !symbol.trim()) {
     throw new TypeError("Bitunix Spot order is missing symbol")
   }
-  if (typeof ctime !== "string" || !ctime.trim()) {
-    throw new TypeError("Bitunix Spot order ctime must be a non-empty string")
-  }
-  if (typeof utime !== "string" || !utime.trim()) {
-    throw new TypeError("Bitunix Spot order utime must be a non-empty string")
-  }
+  assertRequiredTimestamp({
+    value: ctime,
+    field: "ctime",
+  })
+  assertRequiredTimestamp({
+    value: utime,
+    field: "utime",
+  })
 
   const normalizedSide = SIDE_MAP[String(side)]
   const normalizedType = TYPE_MAP[String(type ?? bitunixOrder.orderType)]
