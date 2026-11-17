@@ -23,14 +23,16 @@ export function getBitunixSymbol({ symbolInfo } = {}) {
   if (!symbolInfo || typeof symbolInfo !== "object" || Array.isArray(symbolInfo)) {
     throw new TypeError("Bitunix market metadata must be an object")
   }
-  if (typeof symbolInfo.symbol === "string" && symbolInfo.symbol.trim()) {
-    return symbolInfo.symbol.trim().toUpperCase()
-  }
   if (typeof symbolInfo.base !== "string" || !symbolInfo.base.trim() ||
       typeof symbolInfo.quote !== "string" || !symbolInfo.quote.trim()) {
     throw new TypeError("Bitunix market metadata is missing base or quote asset code")
   }
-  return `${symbolInfo.base.trim()}${symbolInfo.quote.trim()}`.toUpperCase()
+  const derivedSymbol = `${symbolInfo.base.trim()}${symbolInfo.quote.trim()}`.toUpperCase()
+  if (typeof symbolInfo.symbol === "string" && symbolInfo.symbol.trim() &&
+      symbolInfo.symbol.trim().toUpperCase() !== derivedSymbol) {
+    throw new TypeError("Bitunix market metadata symbol must match base and quote assets")
+  }
+  return derivedSymbol
 }
 
 /**

@@ -63,3 +63,18 @@ test("allows closed Bitunix markets when adapting historical fills", () => {
 
   assert.equal(market.symbol, "BTCUSDT")
 })
+
+test("rejects a supplied Bitunix symbol that conflicts with its base and quote assets", () => {
+  assert.throws(
+    () => createCanonicalMarket({
+      symbolInfo: {
+        symbol: "ETHUSDT",
+        base: "BTC",
+        quote: "USDT",
+        isOpen: "1",
+      },
+    }),
+    /symbol.*match.*base.*quote/i,
+    "A supplied symbol must not override the documented base/quote identity.",
+  )
+})

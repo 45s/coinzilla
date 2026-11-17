@@ -74,6 +74,9 @@ jobs:
       - name: Check agent policy and domain ownership
         run: node --test scripts/check-agent-policy.test.js && node scripts/check-agent-policy.js
 
+      - name: Test safe worktree synchronization
+        run: pnpm run test:sync-main
+
       - name: Test external-link checker
         run: node --test scripts/check-external-links.test.js
 

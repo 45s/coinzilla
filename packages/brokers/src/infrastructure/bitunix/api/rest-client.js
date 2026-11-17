@@ -1,24 +1,48 @@
 import { randomBytes } from "node:crypto"
+import { SystemCustomError } from "@coinzilla/utils"
 import { createRestSignature } from "../auth/create-rest-signature.js"
 
 const DEFAULT_BASE_URL = "https://openapi.bitunix.com"
 const DEFAULT_REQUEST_TIMEOUT = 10_000
 
+const ERROR_CODES = Object.freeze({
+  transport: "BITUNIX_REST_TRANSPORT_FAILED",
+  http: "BITUNIX_REST_HTTP_FAILED",
+  exchange: "BITUNIX_REST_EXCHANGE_REJECTED",
+  response: "BITUNIX_REST_RESPONSE_INVALID",
+})
+
 /** Error returned by the Bitunix Spot REST API or transport boundary. */
-export class BitunixRestError extends Error {
+export class BitunixRestError extends SystemCustomError {
   /**
-   * @param {{message: string, code?: string|null, status?: number|null, path?: string|null, outcomeUnknown?: boolean}} input
+   * @param {{message: string, kind?: "transport"|"http"|"exchange"|"response", cause?: unknown, exchangeCode?: string|null, status?: number|null, path?: string|null, outcomeUnknown?: boolean}} input
    */
   constructor({
     message,
-    code = null,
+    kind = "response",
+    cause,
+    exchangeCode = null,
     status = null,
     path = null,
     outcomeUnknown = false,
   } = {}) {
-    super(message)
-    this.name = "BitunixRestError"
-    this.code = code
+    if (!Object.hasOwn(ERROR_CODES, kind)) {
+      throw new TypeError("Bitunix REST error kind is unsupported")
+    }
+    const errorOptions = {
+      code: ERROR_CODES[kind],
+      context: {
+        path,
+        status,
+        exchangeCode,
+      },
+    }
+    if (cause !== undefined) {
+      errorOptions.cause = cause
+    }
+    super(message, errorOptions)
+    this.kind = kind
+    this.exchangeCode = exchangeCode
     this.status = status
     this.path = path
     this.outcomeUnknown = outcomeUnknown
@@ -121,7 +145,9 @@ async function sendRequest({ client, request, path, stateChanging }) {
     return await client.fetch(request.url, request.options)
   } catch (error) {
     throw new BitunixRestError({
-      message: error.message,
+      message: error instanceof Error ? error.message : String(error),
+      kind: "transport",
+      cause: error,
       path,
       outcomeUnknown: stateChanging,
     })
@@ -133,6 +159,7 @@ async function readResponsePayload({ response, path, stateChanging }) {
       (typeof response.json !== "function" && typeof response.text !== "function")) {
     throw new BitunixRestError({
       message: "Bitunix REST response is malformed",
+      kind: "response",
       path,
       status: response?.status ?? null,
       outcomeUnknown: stateChanging,
@@ -152,35 +179,96 @@ async function readResponsePayload({ response, path, stateChanging }) {
       path,
     })
   } catch (error) {
+    const hasValidHttpMetadata = typeof response.ok === "boolean" &&
+      Number.isInteger(response.status) &&
+      response.status >= 100 &&
+      response.status <= 599
+    const isHttpFailure = hasValidHttpMetadata && response.ok === false
+    let message = `Bitunix REST response JSON is invalid: ${error.message}`
+    let kind = "response"
+    if (!hasValidHttpMetadata) {
+      message = "Bitunix REST HTTP response metadata is malformed"
+    } else if (isHttpFailure) {
+      message = "Bitunix REST HTTP request failed with a non-JSON response"
+      kind = "http"
+    }
     throw new BitunixRestError({
-      message: `Bitunix REST response JSON is invalid: ${error.message}`,
+      message,
+      kind,
+      cause: error,
       path,
-      status: response.status,
+      status: hasValidHttpMetadata ? response.status : null,
       outcomeUnknown: stateChanging,
     })
   }
 }
 
+function normalizeErrorCode({ code }) {
+  if (typeof code === "number" && Number.isSafeInteger(code)) {
+    return String(code)
+  }
+  if (typeof code === "string" && /^-?[0-9]+$/.test(code)) {
+    return code
+  }
+  return null
+}
+
 function validateResponse({ response, payload, path, stateChanging }) {
+  if (typeof response.ok !== "boolean" ||
+      !Number.isInteger(response.status) ||
+      response.status < 100 ||
+      response.status > 599) {
+    throw new BitunixRestError({
+      message: "Bitunix REST HTTP response metadata is malformed",
+      kind: "response",
+      path,
+      status: Number.isInteger(response.status) ? response.status : null,
+      outcomeUnknown: stateChanging,
+    })
+  }
   if (!response.ok) {
     throw new BitunixRestError({
       message: typeof payload?.msg === "string"
         ? payload.msg
         : "Bitunix REST HTTP request failed",
+      kind: "http",
       status: response.status,
       path,
-      code: payload?.code === undefined ? null : String(payload.code),
+      exchangeCode: normalizeErrorCode({ code: payload?.code }),
       outcomeUnknown: stateChanging && response.status >= 500,
     })
   }
-  if (!payload || typeof payload !== "object" || Array.isArray(payload) ||
-      String(payload.code) !== "0") {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new BitunixRestError({
-      message: typeof payload?.msg === "string"
-        ? payload.msg
-        : "Bitunix REST response has an invalid success code",
+      message: "Bitunix REST response envelope is malformed",
+      kind: "response",
       path,
-      code: payload?.code === undefined ? null : String(payload.code),
+    })
+  }
+  const code = normalizeErrorCode({ code: payload.code })
+  if (code === null) {
+    throw new BitunixRestError({
+      message: "Bitunix REST response has an invalid error code",
+      kind: "response",
+      path,
+    })
+  }
+  if (typeof payload.msg !== "string") {
+    throw new BitunixRestError({
+      message: "Bitunix REST response is missing its message",
+      kind: "response",
+      path,
+      exchangeCode: code,
+      status: response.status,
+    })
+  }
+  if (code !== "0") {
+    throw new BitunixRestError({
+      message: payload.msg,
+      kind: "exchange",
+      path,
+      exchangeCode: code,
+      status: response.status,
     })
   }
   return { data: payload.data }
