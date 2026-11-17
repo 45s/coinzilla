@@ -41,7 +41,10 @@ function normalizePlaceOrderResult({ result, order } = {}) {
   if (error?.outcomeUnknown === true) {
     return result
   }
-  const normalizedError = normalizePostOnlyError({ error, order }) ??
+  const normalizedError = normalizePostOnlyError({
+    error,
+    order,
+  }) ??
     normalizeExchangeFilterError({ error })
   if (!normalizedError) {
     return result
@@ -154,7 +157,10 @@ function resolveCancellationTarget({ order, symbol, orderId }) {
   }
   try {
     const targetOrderId = normalizeBinanceId(order?.brokerOrderId ?? orderId, "orderId")
-    return { targetSymbol, targetOrderId }
+    return {
+      targetSymbol,
+      targetOrderId,
+    }
   } catch (error) {
     return { result: toResult({ error }) }
   }
@@ -239,7 +245,10 @@ function createBrokerPort({ client, capabilities }) {
     getExchangeMarkets: () => client.getExchangeMarkets(),
     getSymbolFilters: async ({ symbol }) => {
       try {
-        const data = await getCanonicalMarketMetadata({ client, symbol })
+        const data = await getCanonicalMarketMetadata({
+          client,
+          symbol,
+        })
         return toResult({ data })
       } catch (error) {
         return toResult({ error })
