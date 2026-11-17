@@ -78,7 +78,10 @@ maxLength: 32 })
   ) {
     throw new TypeError("Recovery-cycle completion requires unique applied fill identities")
   }
-  return { cycleId, marketId, sellOrderClientId, sellOrderBrokerOrderId }
+  return { cycleId,
+    marketId,
+    sellOrderClientId,
+    sellOrderBrokerOrderId }
 }
 
 function validateRecoveryCycleCompletedAmounts({ canonicalData }) {
