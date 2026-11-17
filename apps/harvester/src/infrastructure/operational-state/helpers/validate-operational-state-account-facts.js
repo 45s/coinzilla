@@ -105,7 +105,8 @@ function validateAccountSnapshotBalances({ balances }) {
       right: addDecimal({
         left: balance.free,
 right: balance.locked
-      ,}),
+      ,
+      }),
     }) !== 0) {
       throw new TypeError("Account snapshot total balance must equal exact free plus locked quantities")
     }
@@ -115,7 +116,8 @@ right: balance.locked
 export function validateAccountSnapshotCapturedFact({
   factType,
   canonicalData
-,}) {
+,
+}) {
   if (factType !== "ACCOUNT_SNAPSHOT_CAPTURED") {
     return
   }
@@ -157,7 +159,8 @@ function validateAccountOpenOrdersMetadata({ canonicalData }) {
 function validateAccountOpenOrderShape({
   order,
   index
-,}) {
+,
+}) {
   const allowedOrderFields = new Set([
     "clientOrderId",
     "brokerOrderId",
@@ -182,7 +185,8 @@ function validateAccountOpenOrderShape({
 function validateAccountOpenOrderIdentity({
   order,
   index
-,}) {
+,
+}) {
   const brokerOrderId = requireNonEmptyString({
     value: order.brokerOrderId,
     field: `orders[${index}].brokerOrderId`,
@@ -206,7 +210,8 @@ function validateAccountOpenOrderIdentity({
   return {
     brokerOrderId,
     symbol
-  ,}
+  ,
+  }
 }
 
 function validateAccountOpenOrderAmounts({ order }) {
@@ -225,7 +230,8 @@ function validateAccountOpenOrderAmounts({ order }) {
   if (compareDecimal({
     left: order.executedQuantity,
     right: order.quantity
-  ,}) > 0) {
+  ,
+  }) > 0) {
     throw new TypeError("Account open-order executed quantity cannot exceed original quantity")
   }
 }
@@ -233,7 +239,8 @@ function validateAccountOpenOrderAmounts({ order }) {
 function validateAccountOpenOrderState({
   order,
   index
-,}) {
+,
+}) {
   if (order.side !== "BUY" && order.side !== "SELL") {
     throw new TypeError("Account open-order side must be BUY or SELL")
   }
@@ -241,7 +248,8 @@ function validateAccountOpenOrderState({
     value: order.type,
     field: `orders[${index}].type`,
     maxLength: 32
-  ,})
+  ,
+  })
   if (!["NEW", "OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
     throw new TypeError("Account open-order status must be OPEN or PARTIALLY_FILLED")
   }
@@ -250,23 +258,28 @@ function validateAccountOpenOrderState({
 function validateAccountOpenOrder({
   order,
   index
-,}) {
+,
+}) {
   validateAccountOpenOrderShape({
     order,
     index
-  ,})
+  ,
+  })
   const {
     brokerOrderId,
     symbol
-  ,} = validateAccountOpenOrderIdentity({
+  ,
+  } = validateAccountOpenOrderIdentity({
     order,
     index
-  ,})
+  ,
+  })
   validateAccountOpenOrderAmounts({ order })
   validateAccountOpenOrderState({
     order,
     index
-  ,})
+  ,
+  })
   return `${symbol}:${brokerOrderId}`
 }
 
@@ -277,7 +290,8 @@ function validateAccountOpenOrderCollection({ orders }) {
     const identity = validateAccountOpenOrder({
       order,
 index
-    ,})
+    ,
+    })
     if (orderIdentities.has(identity)) {
       throw new TypeError("Account open-order snapshot contains duplicate symbol/brokerOrderId identities")
     }
@@ -306,7 +320,8 @@ function validateAccountOpenOrderReadiness({ canonicalData }) {
 export function validateAccountOpenOrdersCapturedFact({
   factType,
   canonicalData
-,}) {
+,
+}) {
   if (factType !== "ACCOUNT_OPEN_ORDERS_CAPTURED") {
     return
   }
@@ -318,7 +333,8 @@ export function validateAccountOpenOrdersCapturedFact({
 export function validateMarketHistoryCoverageConfirmedFact({
   factType,
   canonicalData
-,}) {
+,
+}) {
   if (factType === "MARKET_HISTORY_COVERAGE_CONFIRMED") {
     const allowedFields = new Set([
       "symbol",
@@ -333,7 +349,8 @@ export function validateMarketHistoryCoverageConfirmedFact({
     requireNonEmptyString({
       value: canonicalData.symbol,
 field: "data.symbol"
-    ,})
+    ,
+    })
     if (!/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
       throw new TypeError("Market-history coverage symbol must be canonical uppercase alphanumeric")
     }
@@ -341,7 +358,8 @@ field: "data.symbol"
       value: canonicalData.verifiedBy,
 field: "data.verifiedBy",
 maxLength: MAX_FACT_ID_LENGTH
-    ,})
+    ,
+    })
     if (!Number.isSafeInteger(canonicalData.coveredFromTime) || canonicalData.coveredFromTime < 0 ||
         !Number.isSafeInteger(canonicalData.verifiedAt) || canonicalData.verifiedAt < canonicalData.coveredFromTime) {
       throw new TypeError("Market-history coverage timestamps must be non-negative safe integers with verifiedAt >= coveredFromTime")
