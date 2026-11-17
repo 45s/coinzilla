@@ -47,6 +47,52 @@ function createState({
   return state
 }
 
+function createTransitionActionPorts({ state, trace }) {
+  const assertAcceptedPrice = () => {
+    assert.equal(
+      state.prices.get("DOGEUSDT")?.price,
+      "100.25",
+      "The accepted market price must be committed before a transition is invoked.",
+    )
+    assert.equal(
+      state.marketPriceEventIds.get("DOGEUSDT"),
+      8,
+      "The accepted event identity must be committed before a transition is invoked.",
+    )
+  }
+  return {
+    maybeReplaceTrailingBuy: async () => {
+      assertAcceptedPrice()
+      trace.push("trailing-buy")
+      return { ok: true,
+        data: { route: "trailing-buy" } }
+    },
+    evaluateLatestTransition: async () => {
+      assertAcceptedPrice()
+      trace.push("evaluate")
+      return { ok: true,
+        data: { route: "evaluate" } }
+    },
+    nextMarketPriceEventId: () => {
+      trace.push("event-id")
+      return 8
+    },
+  }
+}
+
+function createTransitionLogger(trace) {
+  return {
+    debug: ({ message } = {}) => {
+      if (message === "Harvester market price event received") {
+        trace.push("received")
+      }
+      if (message === "Harvester market price event skipped") {
+        trace.push("stale")
+      }
+    },
+  }
+}
+
 function createHandler({ state, trace, isFresh, canTrade } = {}) {
   return createMarketPriceTransitionHandler({
     state,
@@ -59,16 +105,7 @@ function createHandler({ state, trace, isFresh, canTrade } = {}) {
         id: "doge-market",
       },
     }),
-    logger: {
-      debug: ({ message } = {}) => {
-        if (message === "Harvester market price event received") {
-          trace.push("received")
-        }
-        if (message === "Harvester market price event skipped") {
-          trace.push("stale")
-        }
-      },
-    },
+    logger: createTransitionLogger(trace),
     getPortfolio: () => ({
       value: {
         snapshot: "portfolio",
@@ -80,51 +117,13 @@ function createHandler({ state, trace, isFresh, canTrade } = {}) {
       },
     }),
     canTrade: () => canTrade,
-    maybeReplaceTrailingBuy: async () => {
-      assert.equal(
-        state.prices.get("DOGEUSDT")?.price,
-        "100.25",
-        "The accepted market price must be committed before trailing replacement is invoked.",
-      )
-      assert.equal(
-        state.marketPriceEventIds.get("DOGEUSDT"),
-        8,
-        "The accepted event identity must be committed before trailing replacement is invoked.",
-      )
-      trace.push("trailing-buy")
-      return {
-        ok: true,
-        data: {
-          route: "trailing-buy",
-        },
-      }
-    },
-    evaluateLatestTransition: async () => {
-      assert.equal(
-        state.prices.get("DOGEUSDT")?.price,
-        "100.25",
-        "The accepted market price must be committed before normal strategy evaluation is invoked.",
-      )
-      assert.equal(
-        state.marketPriceEventIds.get("DOGEUSDT"),
-        8,
-        "The accepted event identity must be committed before normal strategy evaluation is invoked.",
-      )
-      trace.push("evaluate")
-      return {
-        ok: true,
-        data: {
-          route: "evaluate",
-        },
-      }
-    },
-    nextMarketPriceEventId: () => {
-      trace.push("event-id")
-      return 8
-    },
+    ...createTransitionActionPorts({
+      
+      state,
+      trace,
+    }),
   })
 }
-
 function createHarness(options = {}) {
   const trace = []
   const state = createState(options)
@@ -309,5 +308,42 @@ test("returns a validation error for a subscription-symbol mismatch before alloc
     harness.trace,
     [],
     "A symbol-mismatched event must not allocate an event identity, emit accepted-event diagnostics, or dispatch a strategy transition.",
+  )
+})
+
+test("invalidates a safe shutdown marker when a later accepted price arrives", async () => {
+  const harness = createHarness()
+  const { state } = harness
+  state.shutdownBuyGate = true
+  state.shutdownSafetyBySymbol = new Map([
+    ["DOGEUSDT", {
+      status: "SAFE_TO_SHUTDOWN",
+      blockers: [],
+      revision: 1,
+    }],
+  ])
+  state.invalidateShutdownSafety = ({ symbol, reason }) => {
+    state.shutdownSafetyBySymbol.set(symbol, {
+      status: "UNSAFE",
+      blockers: [reason],
+      revision: 2,
+    })
+  }
+
+  const result = await harness.handler({
+    symbol: "DOGEUSDT",
+    priceEvent: validPriceEvent,
+  })
+
+  assert.equal(result.ok, true, "A late fresh price must continue through recovery-only evaluation.")
+  assert.equal(
+    state.shutdownSafetyBySymbol.get("DOGEUSDT").status,
+    "UNSAFE",
+    "Accepted market evidence must invalidate the previous SAFE_TO_SHUTDOWN marker.",
+  )
+  assert.deepEqual(
+    state.shutdownSafetyBySymbol.get("DOGEUSDT").blockers,
+    ["LATE_MARKET_PRICE_EVIDENCE"],
+    "The invalidated marker must explain why a new recovery proof is required.",
   )
 })

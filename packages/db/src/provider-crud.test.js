@@ -89,3 +89,51 @@ test("provider-neutral database API creates, reads, updates, and deletes records
     await database.close()
   }
 })
+
+test("SQLite CREATE uses the validated record snapshot instead of rereading a caller Proxy", async () => {
+  const database = createDatabase({
+    provider: createSqliteProvider({
+      filename: ":memory:",
+    }),
+  })
+  let proxyGetTrapExecuted = false
+  const expectedRecord = {
+    id: "proxy-person-1",
+    name: "Proxy-safe",
+  }
+  const record = new Proxy(expectedRecord, {
+    get() {
+      proxyGetTrapExecuted = true
+      throw new Error("Caller Proxy get trap must not execute after validation")
+    },
+  })
+  await database.connect()
+
+  try {
+    const createdRecord = await database.create({
+      collection: "people",
+      record,
+    })
+
+    assert.deepEqual(
+      createdRecord,
+      expectedRecord,
+      "CREATE must persist and return the descriptor-validated record snapshot",
+    )
+    assert.equal(
+      proxyGetTrapExecuted,
+      false,
+      "SQLite CREATE must not execute caller-controlled Proxy get traps after record validation",
+    )
+    assert.deepEqual(
+      await database.readOne({
+        collection: "people",
+        id: expectedRecord.id,
+      }),
+      expectedRecord,
+      "CREATE must persist the identifier and record contents from the same validated snapshot",
+    )
+  } finally {
+    await database.close()
+  }
+})

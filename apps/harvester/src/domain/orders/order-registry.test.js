@@ -801,3 +801,147 @@ test("accepts the first authoritative OPEN report for an UNKNOWN submission and 
   assert.equal(duplicate.applied, false, "Repeated identical NEW reports must not mutate the registry.")
   assert.equal(duplicate.duplicate, true, "Repeated identical NEW reports must be classified as duplicates.")
 })
+
+
+function createFilledRSBuyRegistry() {
+  const clientOrderId = "rs-cycle-buy"
+  const ownership = {
+    strategyId: "RS_recoverySeller",
+    positionId: "rs-position-1",
+    purpose: "RECOVERY_BUY",
+    cycleId: "rs-cycle-1",
+  }
+  const registered = OrderRegistry.empty().registerPending({
+    order: makeOrder({ clientOrderId }),
+    ownership,
+  }).registry
+  const acknowledged = registered.attachAcknowledgedBrokerOrderId({
+    order: makeOrder({
+      clientOrderId,
+      brokerOrderId: "rs-broker-buy",
+      status: "OPEN",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt: 101,
+    }),
+  })
+  const partial = acknowledged.registry.applyUpdate({
+    order: makeOrder({
+      clientOrderId,
+      brokerOrderId: "rs-broker-buy",
+      status: "PARTIALLY_FILLED",
+      executedQuantity: "25",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt: 102,
+    }),
+  })
+  const filled = partial.registry.applyUpdate({
+    order: makeOrder({
+      clientOrderId,
+      brokerOrderId: "rs-broker-buy",
+      status: "FILLED",
+      executedQuantity: "100",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt: 103,
+      completedAt: 103,
+    }),
+  })
+  return {
+    clientOrderId,
+    ownership,
+    acknowledgedRegistry: acknowledged.registry,
+    partialRegistry: partial.registry,
+    registry: filled.registry,
+  }
+}
+
+function createCanceledRSSellRegistry() {
+  const clientOrderId = "rs-cycle-sell"
+  const ownership = {
+    strategyId: "RS_recoverySeller",
+    positionId: "rs-position-1",
+    purpose: "RECOVERY_SELL",
+    cycleId: "rs-cycle-1",
+  }
+  const registered = OrderRegistry.empty().registerPending({
+    order: makeOrder({
+      clientOrderId,
+      side: "SELL",
+    }),
+    ownership,
+  }).registry
+  const acknowledged = registered.attachAcknowledgedBrokerOrderId({
+    order: makeOrder({
+      clientOrderId,
+      brokerOrderId: "rs-broker-sell",
+      side: "SELL",
+      status: "OPEN",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt: 101,
+    }),
+  })
+  const partial = acknowledged.registry.applyUpdate({
+    order: makeOrder({
+      clientOrderId,
+      brokerOrderId: "rs-broker-sell",
+      side: "SELL",
+      status: "PARTIALLY_FILLED",
+      executedQuantity: "25",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt: 102,
+    }),
+  })
+  const cancellationUnknown = partial.registry.markCancellationUnknown({ clientOrderId })
+  const canceled = cancellationUnknown.data.registry.applyUpdate({
+    order: makeOrder({
+      clientOrderId,
+      brokerOrderId: "rs-broker-sell",
+      side: "SELL",
+      status: "CANCELED",
+      executedQuantity: "25",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt: 103,
+      completedAt: 103,
+    }),
+  })
+  return {
+    clientOrderId,
+    ownership,
+    cancellationUnknown,
+    registry: canceled.registry,
+  }
+}
+
+test("retains RS ownership through pending registration, acknowledgement, fills, cancellation and replay", () => {
+  const buy = createFilledRSBuyRegistry()
+  assert.deepEqual(buy.acknowledgedRegistry.getOwnership({ brokerOrderId: "rs-broker-buy" }).positionId, "rs-position-1")
+  assert.equal(buy.partialRegistry.getOwnership({ clientOrderId: buy.clientOrderId }).cycleId, "rs-cycle-1")
+  assert.equal(buy.registry.getOrder({ clientOrderId: buy.clientOrderId }).status, "FILLED")
+  assert.deepEqual(buy.registry.getOwnership({ clientOrderId: buy.clientOrderId }), {
+    clientOrderId: buy.clientOrderId,
+    brokerOrderId: "rs-broker-buy",
+    ...buy.ownership,
+  })
+
+  const sell = createCanceledRSSellRegistry()
+  assert.equal(sell.cancellationUnknown.ok, true)
+  assert.equal(sell.cancellationUnknown.data.order.status, "UNKNOWN")
+  assert.equal(sell.registry.getOrder({ clientOrderId: sell.clientOrderId }).status, "CANCELED")
+  assert.deepEqual(sell.registry.getOwnership({ brokerOrderId: "rs-broker-sell" }), {
+    clientOrderId: sell.clientOrderId,
+    brokerOrderId: "rs-broker-sell",
+    ...sell.ownership,
+  })
+
+  const replayed = new OrderRegistry({
+    orders: [...buy.registry.orders, ...sell.registry.orders],
+    ownerships: [...buy.registry.ownerships, ...sell.registry.ownerships],
+  })
+  assert.deepEqual(replayed.getOwnership({ clientOrderId: buy.clientOrderId }), buy.registry.getOwnership({ clientOrderId: buy.clientOrderId }))
+  assert.deepEqual(replayed.getOwnership({ clientOrderId: sell.clientOrderId }), sell.registry.getOwnership({ clientOrderId: sell.clientOrderId }))
+})

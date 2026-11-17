@@ -3,6 +3,7 @@ import { CoreBroker } from "../../../broker.core.js"
 import { adaptCanonicalFill, adaptCanonicalOrder, adaptOrder, adaptSpotAsset, adaptSpotBalance, adaptTrade, createCanonicalMarket } from "../adapters/index.js"
 import { adaptOrderRequestParams } from "./helpers/adapters/order-request-params.js"
 import { BinanceWebSocketConfig } from "./config/binance-websocket-config.js"
+import { createBinanceBrokerCapabilities } from "./capabilities.js"
 import { BinanceWebSocketApiClient } from "./utils/rpc-client.js"
 import { adaptPublicStreamMessage } from "./helpers/public-stream-adapters.js"
 import { createStreamName } from "./utils/streams-protocol.js"
@@ -320,7 +321,11 @@ function createUserDataEventForwarder({ broker, onEvent, onStatus, logger }) {
  * @property {Error[]} [errors] - Operation errors when unsuccessful.
  */
 
-/** Native Binance Spot broker using separate WebSocket API and public Streams clients. */
+/**
+ * Native Binance Spot broker using separate WebSocket API and public Streams clients.
+ *
+ * @property {ReturnType<typeof createBinanceBrokerCapabilities>} capabilities - Immutable, instance-specific capability declaration.
+ */
 export class BinanceWebSocketBroker extends CoreBroker {
   /**
    * @param {{apiKey: string, apiSecret: string, websocketApiUrl?: string, websocketStreamsUrl?: string, reconnectDelay?: number, logger?: object}} [input]
@@ -342,6 +347,10 @@ export class BinanceWebSocketBroker extends CoreBroker {
     super(input)
 
     this.config = new BinanceWebSocketConfig(input)
+    Object.defineProperty(this, "capabilities", {
+      enumerable: true,
+      value: createBinanceBrokerCapabilities({ tradingMode: this.config.tradingMode }),
+    })
     this.apiClientFactory = apiClientFactory
     this.tradingConnection = apiClientFactory(this.config)
     this.marketConnection = marketClientFactory(this.config, this.logger)

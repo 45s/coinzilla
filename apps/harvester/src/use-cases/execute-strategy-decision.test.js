@@ -1,7 +1,9 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { Asset, CanonicalOrder, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
+import { Asset, CanonicalOrder, Fill, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import { createRecoverySellerAccountingWorkflow } from "./create-recovery-seller-accounting-workflow.js"
 
 const baseAsset = new Asset({ id: "doge",
 code: "DOGE" })
@@ -468,8 +470,7 @@ marketMetadata })
 })
 
 
-test("preserves every stable submission-gate reason and its details without broker I/O", async () => {
-  const deferrals = [
+const SUBMISSION_GATE_DEFERRALS = [
     { reason: "MARKET_PAUSED",
 details: { symbol: "DOGEUSDT" } },
     { reason: "OPERATOR_MARKET_PAUSED",
@@ -497,9 +498,10 @@ bookTimestamp: 20 } },
     { reason: "POST_ONLY_WOULD_CROSS",
 details: { symbol: "DOGEUSDT",
 bestAskPrice: "0.101" } },
-  ]
+]
 
-  for (const deferral of deferrals) {
+test("preserves every stable submission-gate reason and its details without broker I/O", async () => {
+  for (const deferral of SUBMISSION_GATE_DEFERRALS) {
     let pendingRegistrations = 0
     let brokerCalls = 0
     let deferredContext
@@ -743,4 +745,335 @@ marketMetadata })
   assert.equal(result.ok, false, "A definite post-only rejection must remain a failed submission.")
   assert.deepEqual(durableOutcomes, ["REJECTED"], "The durable outcome must preserve a broker-confirmed definite rejection.")
   assert.deepEqual(failureOutcomes, ["REJECTED"], "The existing safety handler must receive the same definite rejection classification.")
+})
+
+
+function createOwnedDecision({ ownership } = {}) {
+  return {
+    actions: [{
+      ...decision.actions[0],
+      ...ownership,
+    }],
+  }
+}
+
+function createOwnershipRecordingExecutor({ observed, setBrokerOrder } = {}) {
+  const record = ({ callback, result } = {}) => ({ ownership } = {}) => {
+    observed.push({
+      callback,
+      ownership,
+    })
+    return result
+  }
+  const durableResult = {
+    ok: true,
+    data: { durable: true },
+  }
+  return makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async ({ order }) => {
+        setBrokerOrder(order)
+        return {
+          ok: true,
+          data: makeAcknowledgement(order),
+        }
+      },
+    },
+    canSubmit: record({
+      callback: "canSubmit",
+      result: true,
+    }),
+    onPendingOrder: record({ callback: "onPendingOrder" }),
+    onAcknowledgedOrder: record({ callback: "onAcknowledgedOrder" }),
+    onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
+    onDurableSubmissionIntent: record({
+      callback: "onDurableSubmissionIntent",
+      result: durableResult,
+    }),
+    onDurableSubmissionOutcome: record({
+      callback: "onDurableSubmissionOutcome",
+      result: durableResult,
+    }),
+  })
+}
+
+test("propagates RS OrderOwnership metadata through shared execution callbacks without leaking it to the broker", async () => {
+  const ownership = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-1",
+    purpose: "RECOVERY_BUY",
+    cycleId: "rs-cycle-1",
+  }
+  const observed = []
+  let brokerOrder
+  const execute = createOwnershipRecordingExecutor({
+    observed,
+    setBrokerOrder: (order) => { brokerOrder = order },
+  })
+  const rsDecision = createOwnedDecision({ ownership })
+  const validation = await execute.validate({
+    decision: rsDecision,
+    marketMetadata,
+  })
+  const result = await execute({
+    decision: rsDecision,
+    marketMetadata,
+  })
+
+  assert.equal(validation.ok, true)
+  assert.equal(result.ok, true)
+  assert.ok(observed.length >= 6)
+  for (const callback of observed) {
+    assert.deepEqual(callback.ownership, ownership,
+      `${callback.callback} must receive the exact strategy, Position, purpose and cycle attribution.`)
+  }
+  assert.equal(Object.hasOwn(brokerOrder, "ownership"), false,
+    "Application-only ownership metadata must not leak into the broker order request.")
+})
+
+test("propagates ownership when the post-registration submission gate throws", async () => {
+  const ownership = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-throwing-gate",
+    purpose: "RECOVERY_BUY",
+    cycleId: "rs-cycle-throwing-gate",
+  }
+  let gateChecks = 0
+  let deferredContext
+  let brokerCalls = 0
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async () => {
+        brokerCalls += 1
+        return {
+          ok: true,
+          data: makeAcknowledgement(decision.actions[0]),
+        }
+      },
+    },
+    canSubmit: () => {
+      gateChecks += 1
+      if (gateChecks === 1) {return true}
+      throw new Error("submission gate unavailable")
+    },
+    onPendingOrder: async () => {},
+    onSubmissionDeferred: async (context) => { deferredContext = context },
+    onAcknowledgedOrder: async () => assert.fail("a throwing gate must not acknowledge an order"),
+    onSubmissionFailure: async () => assert.fail("a local gate error is not a broker submission failure"),
+  })
+  const result = await execute({
+    decision: {
+      actions: [{
+        ...decision.actions[0],
+        ...ownership,
+      }],
+    },
+    marketMetadata,
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.errors[0].message, "submission gate unavailable")
+  assert.deepEqual(deferredContext.ownership, ownership,
+    "The registered-order deferral callback must retain complete RS ownership even when the gate throws.")
+  assert.equal(deferredContext.registered, true)
+  assert.equal(brokerCalls, 0, "A gate exception must prevent broker I/O.")
+})
+
+
+test("propagates OrderOwnership to the order-validation failure callback", async () => {
+  const ownership = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-invalid-order",
+    purpose: "RECOVERY_BUY",
+    cycleId: "rs-cycle-invalid-order",
+  }
+  const validationFailures = []
+  let brokerCalls = 0
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async () => {
+        brokerCalls += 1
+        return {
+          ok: true,
+          data: makeAcknowledgement(decision.actions[0]),
+        }
+      },
+    },
+    onPendingOrder: async () => {},
+    onAcknowledgedOrder: async () => assert.fail("an invalid order must not be acknowledged"),
+    onSubmissionFailure: async () => assert.fail("local validation is not a broker submission failure"),
+    onOrderValidationFailure: async ({ order, error, ownership: receivedOwnership }) => {
+      validationFailures.push({
+        order,
+        error,
+        ownership: receivedOwnership,
+      })
+    },
+  })
+  const result = await execute.validate({
+    decision: {
+      actions: [{
+        ...decision.actions[0],
+        price: "0.0991",
+        ...ownership,
+      }],
+    },
+    marketMetadata,
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /PRICE_INCREMENT/)
+  assert.equal(validationFailures.length, 1)
+  assert.deepEqual(validationFailures[0].ownership, ownership)
+  assert.equal(validationFailures[0].order.status, "PENDING")
+  assert.equal(brokerCalls, 0)
+})
+
+
+function createDurableRSIntegrationWorkflow({ durableFills } = {}) {
+  return createRecoverySellerAccountingWorkflow({
+    onOperationalStateExecutionFill: async ({ fill }) => {
+      durableFills.push(fill)
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
+  })
+}
+
+function createRSIntegrationBuyFill({ registeredOrder } = {}) {
+  return new Fill({
+    tradeId: "rs-executor-integration-buy-1",
+    brokerOrderId: registeredOrder.brokerOrderId,
+    clientOrderId: registeredOrder.clientOrderId,
+    market,
+    side: "BUY",
+    price: new Money({
+      amount: "0.099",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "100",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "9.9",
+      asset: quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+}
+
+function assertRSIntegrationOrderOwnership({ workflow, registeredOrder, ownership } = {}) {
+  assert.deepEqual(
+    workflow.getOrderRegistry().getOwnership({
+      clientOrderId: registeredOrder.clientOrderId,
+    }),
+    {
+      clientOrderId: registeredOrder.clientOrderId,
+      brokerOrderId: registeredOrder.brokerOrderId,
+      ...ownership,
+    },
+    "The shared executor acknowledgement must retain the exact RS Position and cycle attribution in OrderRegistry.",
+  )
+}
+
+test("integrates the shared executor, RS OrderRegistry ownership and durable BUY accounting offline", async () => {
+  const ownership = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-executor-integration",
+    purpose: "RECOVERY_BUY",
+    cycleId: "rs-cycle-executor-integration",
+  }
+  const durableFills = []
+  const workflow = createDurableRSIntegrationWorkflow({ durableFills })
+  let brokerOrder
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async ({ order }) => {
+        brokerOrder = order
+        return {
+          ok: true,
+          data: makeAcknowledgement(order),
+        }
+      },
+    },
+    canSubmit: ({ ownership: receivedOwnership }) => {
+      assert.deepEqual(receivedOwnership, ownership)
+      return true
+    },
+    ...workflow.getExecutionCallbacks(),
+  })
+
+  const submitted = await execute({
+    decision: createOwnedDecision({ ownership }),
+    marketMetadata,
+  })
+  const registeredOrder = workflow.getOrderRegistry().getOrder({
+    clientOrderId: brokerOrder.clientOrderId,
+  })
+
+  assert.equal(submitted.ok, true, submitted.errors?.[0]?.message)
+  assert.equal(registeredOrder.status, "UNKNOWN",
+    "A broker acknowledgement retains the order as UNKNOWN until execution quantity is reconciled.")
+  assertRSIntegrationOrderOwnership({
+    workflow,
+    registeredOrder,
+    ownership,
+  })
+
+  const fill = createRSIntegrationBuyFill({ registeredOrder })
+  const applied = await workflow.applyBuyFill({ fill })
+  const replayed = await workflow.applyBuyFill({ fill })
+
+  assert.equal(applied.ok, true, applied.errors?.[0]?.message)
+  assert.equal(applied.data.applied, true)
+  assert.equal(replayed.ok, true, replayed.errors?.[0]?.message)
+  assert.equal(replayed.data.duplicate, true)
+  assert.deepEqual(durableFills, [fill],
+    "The integrated BUY fill must be durably recorded once even when the canonical fill is replayed.")
+  assert.equal(
+    workflow.getPortfolio().getPosition({ positionId: ownership.positionId }).spent.amount,
+    "9.9",
+  )
+})
+
+test("integrates an unknown fake-broker acknowledgement as an owned UNKNOWN RS order", async () => {
+  const ownership = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-unknown-integration",
+    purpose: "RECOVERY_BUY",
+    cycleId: "rs-cycle-unknown-integration",
+  }
+  const workflow = createRecoverySellerAccountingWorkflow()
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async () => {
+        throw new Error("offline fake broker socket closed")
+      },
+    },
+    canSubmit: () => true,
+    ...workflow.getExecutionCallbacks(),
+  })
+
+  const result = await execute({
+    decision: createOwnedDecision({ ownership }),
+    marketMetadata,
+  })
+  const [unknownOrder] = workflow.getOrderRegistry().getActiveOrders()
+
+  assert.equal(result.ok, false)
+  assert.equal(unknownOrder.status, "UNKNOWN")
+  assert.deepEqual(
+    workflow.getOrderRegistry().getOwnership({
+      clientOrderId: unknownOrder.clientOrderId,
+    }),
+    {
+      clientOrderId: unknownOrder.clientOrderId,
+      ...ownership,
+    },
+    "An unknown broker outcome must retain the original RS ownership for reconciliation.",
+  )
 })

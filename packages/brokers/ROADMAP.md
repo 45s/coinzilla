@@ -8,7 +8,62 @@ owner: brokers
 
 ## Multi-provider construction and capability contracts — #1339
 
-- [ ] **Accepted cross-domain target; implementation not started.** Provide stable, provider-specific construction/configuration boundaries and truthful, testable capability declarations so a consumer can construct multiple instances (including multiple accounts/environments) without the Brokers package owning strategy/market routing. Preserve public exports, `CoreBroker` compatibility, exact decimal/error behavior, and existing Binance consumers. Harvester owns the provider registry/router and all strategy/market assignment. Binance keeps ADR-0002's explicit `TRADING_MODE`; do not infer environment semantics for other exchanges. Bitunix Spot has one-shot read-only market, price, depth and OHLC reads, but still lacks canonical fills, account-wide order visibility, timestamped account snapshots, private lifecycle and safe mutations; it remains not Harvester-ready under [#1185](https://github.com/45s/coinzilla/issues/1185). **Recommended first PR:** additive capability contract plus Binance-only declarations and offline contract tests, with no behavior or export changes. Do not change Bitunix declarations until its mandatory external reference audit in `packages/brokers/AGENTS.md` is complete; keep it read-only. See the source-verified [migration audit and phased plan](../../docs/architecture/multi-provider-migration-plan.md), [ADR-0003](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and [issue #1339](https://github.com/45s/coinzilla/issues/1339).
+### Phase 1 — immutable Binance capability declarations
+
+**Status: implemented by [PR #1366](https://github.com/45s/coinzilla/pull/1366) as a declaration-only Phase 1 slice.** This declaration-only slice starts with `BinanceWebSocketBroker`. It does not change constructors, methods, package exports, exchange behavior, Harvester composition, provider routing, or Bitunix.
+
+The instance exposes a non-writable, non-configurable `capabilities` property. The versioned declaration uses the following leaf shape:
+
+```js
+{
+  status: "supported" | "unsupported" | "unknown" | "environment-dependent",
+  method?: string,
+  guarantee?: string,
+  limitation?: string,
+  reason?: string,
+  conditions?: string[],
+}
+```
+
+All nested objects and arrays are recursively frozen. State meanings:
+
+- **supported:** the stated implementation guarantee is backed by source inspection and deterministic offline tests, subject to listed conditions.
+- **unsupported:** the broker explicitly does not provide the capability; an inherited method that throws is not support.
+- **unknown:** available implementation evidence does not establish the guarantee; consumers must not assume it.
+- **environment-dependent:** implementation exists, but actual availability depends on the explicit environment/account conditions listed on the declaration.
+
+#### Verified Binance Spot capability matrix
+
+| Area | Capability | State | Source evidence and precise boundary |
+|---|---|---|---|
+| Environment | Endpoint selection | environment-dependent | `BinanceWebSocketConfig` requires `tradingMode` to be exactly `testnet` or `live` and selects the corresponding Spot WebSocket API and Streams endpoint pair. `NODE_ENV` is not consulted. Offline config tests do not prove endpoint connectivity or account permissions. |
+| Market data | One-shot price | supported | `BinanceWebSocketBroker.getPrices()` uses `ticker.price`; tests: `get-prices-response.test.js`. A single response is not a stream. |
+| Market data | Aggregate-trade price stream | supported | `subscribeForPrices()` uses `aggTrade` plus the rolling-window ticker liveness monitor; tests: `subscribe-for-prices.test.js`, `subscribe-for-prices-liveness.test.js`. Reconnect/resubscribe is implemented; missed events are not replayed and consumers still own freshness/reconciliation. |
+| Market data | Best bid/ask stream | supported | `subscribeForBookTicker()` uses the public `bookTicker` stream; test: `subscribe-for-book-ticker.test.js`. |
+| Market data | Candle history and stream | supported | `getCandles()` uses `time` + `klines`; `subscribeForCandles()` uses Kline Streams. History is one validated bounded response; the broker does not fill gaps or backfill. |
+| Market data | Legacy `getPrice()` | unsupported | `CoreBroker.prototype.getPrice` throws and Binance does not override it. The supported one-shot method is `getPrices()`. |
+| Account | Balances | supported | `getBalances()` returns canonical balances including zero balances; test: `get-balances.test.js`. This method does not itself guarantee a source timestamp. |
+| Account | Timestamped snapshot | supported | `getAccountSnapshot()` validates and returns `account.status.updateTime` as `sourceTime`; test: `broker.snapshot.test.js`. This is not a global event cursor or replay position. |
+| Orders | Open orders and ordinary status lookup | supported | `getOpenOrders()` uses `openOrders.status`; `getOrder()` uses `order.status`; tests: `get-open-orders-symbol.test.js`, `get-order-client-id.test.js`. Ordinary lookup is not canonical reconciliation. |
+| Orders | Canonical lookup and history page | supported | `getCanonicalOrder()` validates one order against market metadata; `getCanonicalOrderHistory()` returns one bounded, symbol-scoped `allOrders` page; tests: `get-canonical-order.test.js`, `get-canonical-order-history.test.js`. The broker does not automatically paginate or reconcile all account state. |
+| Orders | Broker-owned canonical reconciliation | unsupported | No end-to-end broker reconciliation workflow exists. Canonical lookups/history are evidence for consumer-owned reconciliation only. |
+| Orders | Placement and cancellation | environment-dependent | `createCanonicalOrder()`/`createOrder()`, `cancelOrder()`, and `cancelAllOpenOrders()` are implemented and gated on user-data readiness. The selected account/API key must also have Spot trading permission. Offline tests do not establish TESTNET/LIVE exchange acceptance; uncertain outcomes are not blindly retried. |
+| Fills | Canonical fill-history query | supported | `getFills()` adapts signed `myTrades` rows into canonical Fill values; test: `get-fills.test.js`. Each call is one symbol-scoped page (maximum 1,000); cursor/time pagination is caller-managed. |
+| Fills | Complete account-wide fill history | unknown | No automatic all-symbol pagination or proof of exhaustive exchange retention-window coverage exists. A bounded trade-history page is not complete fill history. |
+| Fills | Execution updates | supported | `subscribeForUserData()` normalizes `executionReport` events with `x=TRADE` into canonical order/fill updates; test: `subscribe-for-user-data.test.js`. A stream gap still requires reconciliation. |
+| User data | Private user-data stream | supported | Signed `userDataStream.subscribe.signature`, event forwarding, reconnect/resubscribe, and subscriber recovery acknowledgements are implemented in `UserDataSession`; tests: `subscribe-for-user-data.test.js`, `user-data-session.recovery.test.js`. |
+| User data | Missed-event replay | unsupported | Reconnection resubscribes but does not replay events missed during disconnection or expose a global exchange event cursor. |
+| Recovery | Same-process recovery | supported | In-memory reconnect/resubscribe uses a monotonic recovery generation; all active subscribers must acknowledge after their reconciliation before state-changing RPCs are unblocked. Test: `user-data-session.reconciliation.test.js`. |
+| Recovery | Process-restart recovery | unsupported | No durable broker-owned session/recovery state or restart restoration exists. Harvester issue [#654](https://github.com/45s/coinzilla/issues/654) still has restart parity/crash proof pending and runtime restoration disabled; it is not evidence of this broker capability. |
+
+The declaration's `environment.selectedMode` is the instance's validated `tradingMode`; its `supportedModes` are exactly `testnet` and `live`. Order mutations additionally require account trading permission and an open, reconciled user-data session. This metadata describes implementation capability, not a promise that a given account, market, endpoint, or exchange environment is available.
+
+#### Remaining work outside this declaration-only slice
+
+- Provider-specific construction boundaries, named provider-instance registry, and Harvester-owned routing remain separate migration work under [ADR-0003](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and the [multi-provider migration plan](../../docs/architecture/multi-provider-migration-plan.md).
+- No Bitunix capability descriptor is added. Bitunix remains read-only; any future audit must first follow the mandatory JKorf/Bitunix.Net, bitunix-mcp, and official Spot API reference audit in [AGENTS.md](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit).
+- Complete fill-history guarantees, broker-owned order reconciliation, missed-event replay, and process-restart recovery remain unsupported or unverified as declared above.
+- No Phase 2 provider selection, Harvester composition, strategy/market routing, or trading behavior change is included.
 
 ## Priority execution plan — current develop direction (2026-11-10)
 
@@ -1116,3 +1171,16 @@ The following comparison resolves what the references actually implement; it doe
 The detailed, mandatory procedure and direct source/test links live in [packages/brokers/AGENTS.md — Bitunix Spot development](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit). This roadmap is the work/status view; it does not duplicate that engineering rule.
 
 The purpose is to translate an already implemented and tested Spot behavior into Coinzilla's JavaScript architecture rather than inventing protocol behavior. The .NET implementation is a reference, not infallible authority: inspect source and fixtures, audit endpoint/parameter/response behavior, compare with official docs, and do not copy defects or Futures-only capabilities. Keep all unresolved guarantees in [issue #1185](https://github.com/45s/coinzilla/issues/1185); reference-project coverage does not itself resolve an exchange-contract blocker or authorize order mutations.
+
+## Bitunix Spot — external reference implementation audit (2026-11-17)
+
+- [x] Completed a source-and-fixture-level audit of JKorf/Bitunix.Net Spot market, account, trading and socket code; cross-checked the TypeScript MCP and additional StockSharp, Python and Ruby implementations; reviewed Cachy's Futures-only documentation audit and the official Open API demo scope.
+- [x] Added the maintained [Bitunix external implementation reference audit](./BITUNIX_REFERENCE_AUDIT.md), including the full Binance method parity inventory, reference source/test links, third-party defects, official documentation contradictions, and recommendations for safe ports.
+- [x] Confirmed JKorf's Spot GetUserTradesAsync implementation calls pending/list despite its interface documenting deal/list; StockSharp and an independent Python client use the documented deal/list endpoint. This does not resolve complete execution-history semantics.
+- [x] Confirmed multiple clients expose Spot order placement, but none resolves the official single-order versus batch-order volume contradiction, missing client-order identity, unknown-outcome reconciliation or lack of TESTNET. Placement/cancellation remain blocked by issue #1185.
+- [x] Identified Bitunix-specific public read-only extensions. Exchange rates are implemented in PR #1370; token/network metadata remains a separate candidate requiring its own consumer contract. Neither is Binance parity.
+- [x] The read-only market-data expansion is merged in [PR #1324](https://github.com/45s/coinzilla/pull/1324) at `5d707d17114d524ef3cd7c6d35387dde61338976`; it adds one-shot depth and current/history K-line reads while leaving canonical OHLCV candles unsupported because the Spot schema omits volume.
+- [x] The Bitunix-only exchange-rate extension is merged in [PR #1370](https://github.com/45s/coinzilla/pull/1370) as `55694b837c869878d22346dfd6b0f12c9b0f3269`. It uses the unsigned public `GET /api/spot/v1/common/rate/list`, preserves exact positive decimal strings, freezes returned records, accepts an explicit empty array, and rejects missing or incomplete data. All six required `develop-core` checks passed on exact PR head `0f7fbaa332eea5b45a176a25eae4ba529495893a`.
+- [ ] Token/network metadata remains a separate public extension candidate. Define its consumer contract before implementation; do not combine it with exchange rates or weaken issue #1185 blockers.
+
+The audit is the detailed evidence source; this roadmap records status and next actions. Future agents must search additional GitHub packages when the primary .NET/TypeScript references do not cover a capability or disagree. The source-discovery rule is in [Brokers AGENTS.md](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit).

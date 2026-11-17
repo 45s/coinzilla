@@ -98,13 +98,14 @@ function createRecordOperation({ insertRecord }) {
   return function create({ collection, record }) {
     validateCollectionName(collection)
     const serializedRecord = serializeRecord(record)
+    const recordSnapshot = JSON.parse(serializedRecord)
 
     return runProviderOperation({
       operation: "create",
       collection,
       work: () => {
         try {
-          insertRecord.run(collection, record.id, serializedRecord)
+          insertRecord.run(collection, recordSnapshot.id, serializedRecord)
         } catch (error) {
           if (isUniqueConstraintError(error)) {
             throw new DatabaseConflictError({
@@ -115,7 +116,7 @@ function createRecordOperation({ insertRecord }) {
           throw error
         }
 
-        return JSON.parse(serializedRecord)
+        return recordSnapshot
       },
     })
   }

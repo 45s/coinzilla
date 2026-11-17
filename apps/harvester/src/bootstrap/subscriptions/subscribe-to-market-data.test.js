@@ -4,73 +4,97 @@ import { subscribeToMarketData } from "./subscribe-to-market-data.js"
 
 const test = (...args) => nodeTest(`[subscribe-to-market-data.test.js] ${args[0]}`, ...args.slice(1))
 
+function createBrokerFixture({ calls, subscribeForPrices, subscribeForBookTicker, getPrices }) {
+  return {
+    subscribeForPrices: async (input) => {
+      calls.push(`subscribe-price:${input.symbol}`)
+      return subscribeForPrices
+        ? subscribeForPrices(input, calls)
+        : { ok: true,
+          data: { unsubscribe: async () => {},
+            stream: "price" } }
+    },
+    subscribeForBookTicker: async (input) => {
+      calls.push(`subscribe-book:${input.symbol}`)
+      return subscribeForBookTicker
+        ? subscribeForBookTicker(input, calls)
+        : { ok: true,
+          data: { unsubscribe: async () => {},
+            stream: "book" } }
+    },
+    getPrices: async (input) => {
+      calls.push(`ticker-price-request:${input.symbol}`)
+      return getPrices
+        ? getPrices(input, calls)
+        : { ok: true,
+          data: { symbol: input.symbol,
+            price: "65000" } }
+    },
+  }
+}
+
+function createMarketProcessors({ calls, processMarketPrice, processMarketBook }) {
+  return {
+    processMarketPrice: processMarketPrice ?? (async (input) => {
+      calls.push(`process-price:${input.symbol}`)
+      return { ok: true,
+        data: { decision: { action: "NO_ACTION" } } }
+    }),
+    processMarketBook: processMarketBook ?? (async ({ symbol }) => {
+      calls.push(`process-book:${symbol}`)
+      return { ok: true }
+    }),
+  }
+}
+
 const createFixture = ({
   tradingEnabled = false,
   pairs = { BTCUSDT: { enabled: true,
-orderQuantity: 0.01 } },
+      orderQuantity: 0.01 } },
   subscribeForPrices,
   subscribeForBookTicker,
   getPrices,
   logger = {},
   onMarketPriceError = () => {},
   processMarketPrice,
+  processMarketBook,
+  isStopped = () => false,
 } = {}) => {
   const calls = []
   const events = []
   const subscriptions = []
   const bookSubscriptions = []
   const marketPriceIntake = new Map()
-  const now = () => 10_000
+  const broker = createBrokerFixture({ calls,
+    subscribeForPrices,
+    subscribeForBookTicker,
+    getPrices })
+  const processors = createMarketProcessors({ calls,
+    processMarketPrice,
+    processMarketBook })
   const result = subscribeToMarketData({
-    broker: {
-      subscribeForPrices: async (input) => {
-        calls.push(`subscribe-price:${  input.symbol}`)
-        return subscribeForPrices ? subscribeForPrices(input, calls) : ({ ok: true,
-data: { unsubscribe: async () => {},
-stream: "price" } })
-      },
-      subscribeForBookTicker: async (input) => {
-        calls.push(`subscribe-book:${  input.symbol}`)
-        return subscribeForBookTicker ? subscribeForBookTicker(input, calls) : ({ ok: true,
-data: { unsubscribe: async () => {},
-stream: "book" } })
-      },
-      getPrices: async (input) => {
-        calls.push(`ticker-price-request:${  input.symbol}`)
-        return getPrices ? getPrices(input, calls) : ({ ok: true,
-data: { symbol: input.symbol,
-price: "65000" } })
-      },
-    },
+    broker,
     brokerName: "binance",
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
     logger,
     tradingEnabled,
     pairs,
     settings: {},
-    processMarketPrice: processMarketPrice ?? (async (input) => {
-      calls.push(`process-price:${  input.symbol}`)
-      return { ok: true,
-data: { decision: { action: "NO_ACTION" } } }
-    }),
-    processMarketBook: async ({ symbol }) => {
-      calls.push(`process-book:${  symbol}`)
-      return { ok: true }
-    },
+    ...processors,
     isMarketPriceFresh: (marketPrice) => marketPrice.timestamp === 10_000,
-    now,
-    isStopped: () => false,
+    now: () => 10_000,
+    isStopped,
     onMarketPriceError,
     subscriptions,
     bookSubscriptions,
     marketPriceIntake,
   })
   return { result,
-calls,
-events,
-subscriptions,
-bookSubscriptions,
-marketPriceIntake }
+    calls,
+    events,
+    subscriptions,
+    bookSubscriptions,
+    marketPriceIntake }
 }
 
 test("establishes all enabled book/price streams before WebSocket API ticker.price seeding", async () => {
@@ -85,6 +109,54 @@ test("establishes all enabled book/price streams before WebSocket API ticker.pri
   assert.equal(result.subscriptions.length, 1, "The market-price subscription must be returned for shutdown ownership.")
   assert.equal(result.bookSubscriptions.length, 1, "The book subscription must be returned for shutdown ownership.")
   assert.equal(result.marketPriceIntake.has("BTCUSDT"), true, "Per-market WebSocket intake state must be retained.")
+})
+
+
+test("tracks accepted book-ticker work in the per-market shutdown intake state", async () => {
+  let releaseBookTask
+  const bookTask = new Promise((resolve) => {
+    releaseBookTask = resolve
+  })
+  const fixture = createFixture({
+    tradingEnabled: true,
+    processMarketBook: async () => {
+      await bookTask
+      return { ok: true }
+    },
+    subscribeForBookTicker: async ({ symbol, onBookTicker }) => {
+      onBookTicker({
+        symbol,
+        bidPrice: "64999",
+        bidQuantity: "1",
+        askPrice: "65001",
+        askQuantity: "1",
+      })
+      return {
+        ok: true,
+        data: {
+          unsubscribe: async () => {},
+          stream: "book",
+        },
+      }
+    },
+  })
+
+  await fixture.result
+  const intakeState = fixture.marketPriceIntake.get("BTCUSDT")
+  assert.equal(
+    typeof intakeState.latestWebSocketBookTask?.then,
+    "function",
+    "The accepted book-ticker task must be retained beside the market-price task for shutdown draining.",
+  )
+  assert.equal(
+    intakeState.latestWebSocketPriceTask,
+    null,
+    "Tracking a book task must not fabricate a market-price task.",
+  )
+
+  releaseBookTask()
+  const result = await intakeState.latestWebSocketBookTask
+  assert.equal(result.ok, true, "The tracked book task must preserve the original processing result.")
 })
 
 test("skips WebSocket API ticker.price seeding when a fresh stream price arrives during subscription setup", async () => {
@@ -103,6 +175,61 @@ stream: "price" } }
 
   assert.equal(fixture.calls.includes("ticker-price-request:BTCUSDT"), false, "A fresh first WebSocket Streams price must avoid a redundant ticker.price request.")
   assert.equal(fixture.calls.includes("process-price:BTCUSDT"), true, "The fresh WebSocket price must be processed.")
+})
+
+
+test("rejects new price and book callbacks after the market intake fence", async () => {
+  let intakeStopped = false
+  let onPrice
+  let onBookTicker
+  const fixture = createFixture({
+    tradingEnabled: true,
+    isStopped: () => intakeStopped,
+    subscribeForPrices: async ({ onPrice: handler }) => {
+      onPrice = handler
+      return {
+        ok: true,
+        data: {
+          unsubscribe: async () => {},
+          stream: "price",
+        },
+      }
+    },
+    subscribeForBookTicker: async ({ onBookTicker: handler }) => {
+      onBookTicker = handler
+      return {
+        ok: true,
+        data: {
+          unsubscribe: async () => {},
+          stream: "book",
+        },
+      }
+    },
+  })
+
+  await fixture.result
+  const intakeState = fixture.marketPriceIntake.get("BTCUSDT")
+  assert.equal(intakeState.latestWebSocketPriceTask, null, "Startup ticker seeding must not fabricate a WebSocket callback task.")
+  assert.equal(intakeState.latestWebSocketBookTask, undefined, "No book callback task should exist before the stream delivers one.")
+
+  intakeStopped = true
+  const skippedPrice = onPrice({
+    symbol: "BTCUSDT",
+    price: "65001",
+    timestamp: 10_000,
+  })
+  const skippedBook = onBookTicker({
+    symbol: "BTCUSDT",
+    bidPrice: "65000",
+    bidQuantity: "1",
+    askPrice: "65002",
+    askQuantity: "1",
+  })
+
+  assert.equal(skippedPrice.data.reason, "STOPPING", "The price callback must reject new work after the market intake fence.")
+  assert.equal(skippedBook.data.reason, "STOPPING", "The book callback must reject new work after the market intake fence.")
+  assert.equal(intakeState.latestWebSocketPriceTask, null, "A fenced price callback must not replace the drained task reference.")
+  assert.equal(intakeState.latestWebSocketBookTask, undefined, "A fenced book callback must not register new work after the drain.")
 })
 
 test("read-only mode subscribes to prices without book streams or WebSocket API ticker.price seeding", async () => {

@@ -37,11 +37,9 @@ owner: entities
 
 Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guide](../../docs/engineering/DOMAIN_OWNERSHIP.md).
 
-### Active maintenance
+### Completed maintenance — ESLint compliance
 
-- [~] **Eliminate existing package ESLint violations (#1228).** Produce a complete
-  file/rule inventory, fix all findings without changing runtime behavior or public
-  contracts, and verify package tests and required CI before marking complete.
+- [x] **Package ESLint cleanup — COMPLETE / superseded by the workspace gate.** [Issue #1228](https://github.com/45s/coinzilla/issues/1228) is closed. The required full-workspace `pnpm lint` gate checks every in-scope JavaScript file and fails on errors or warnings; progressive strict changed-file enforcement adds tighter thresholds for new and modified files. No package ESLint cleanup remains outstanding. Fix future findings in the PR that introduces them.
 
 ## Principles
 
