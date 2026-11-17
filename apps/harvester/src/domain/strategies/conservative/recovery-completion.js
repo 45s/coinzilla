@@ -93,9 +93,11 @@ right: "0" }) <= 0 ||
 
 function normalizeQuantityIncrementDust({ inventoryDisposition, quantity, reason }) {
   if (inventoryDisposition.quantityStepSize === undefined ||
-      inventoryDisposition.evaluatedQuantity !== "0" ||
-      compareDecimal({ left: quantity,
-right: inventoryDisposition.quantityStepSize }) >= 0) {
+      inventoryDisposition.evaluatedQuantity === undefined ||
+      compareDecimal({
+        left: inventoryDisposition.evaluatedQuantity,
+        right: inventoryDisposition.quantityStepSize,
+      }) >= 0) {
     return undefined
   }
   return Object.freeze({
