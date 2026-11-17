@@ -227,6 +227,31 @@ This is a touch-driven migration, not a mechanical repository-wide refactor:
 
 The repository-wide audit in `scripts/eslint-policy.test.js` measures the approved thresholds against the current source tree and reports affected functions, files, package concentration, and representative paths. Re-run that audit when evaluating migration effort; do not copy old counts into a new decision.
 
+### 7.7 Current `develop` baseline audit
+
+The reproducible audit was executed against the source baseline at `develop` SHA `abaf922daf9ceb72607b87035f7bdba8683be4a7`. The audit ran on the task branch after adding the runner, tests, and policy documentation; all added/modified JavaScript files passed the strict gate, so these violations are the untouched legacy baseline. Counts are produced by the repository-wide ESLint diagnostics in `scripts/eslint-policy.test.js`, not manually maintained.
+
+| Strict threshold | Affected functions | Affected files | Largest package concentrations |
+| --- | ---: | ---: | --- |
+| `complexity: 15` | 146 | 91 | `apps/harvester`: 112; `packages/brokers`: 16; repository tooling: 8 |
+| `max-params: 1` | 0 | 0 | None |
+| `max-lines-per-function: 60` | 338 | 164 | `apps/harvester`: 269; `packages/brokers`: 25; `packages/entities`: 14 |
+| `max-statements: 30` | 34 | 27 | `apps/harvester`: 15; `packages/brokers`: 8; repository tooling: 8 |
+| `max-depth: 3` | 17 | 11 | `apps/harvester`: 10; `packages/brokers`: 4 |
+| `max-nested-callbacks: 2` | 246 | 50 | `packages/entities`: 113; `packages/utils`: 66; `packages/brokers`: 44 |
+
+The largest migration burden is not the unchanged one-parameter rule: it is callback nesting (246 functions across 50 files), followed by function length (338 functions across 164 files) and complexity (146 functions across 91 files). Callback nesting is concentrated in shared packages such as `packages/entities`, `packages/utils`, and `packages/brokers`; complexity and function length are concentrated in `apps/harvester`.
+
+Representative findings from the audit:
+
+- Complexity: `apps/harvester/scripts/audit-testnet-account.js:138`, `apps/harvester/scripts/calibrate-volatility-thresholds.js:124`, and `apps/harvester/src/bootstrap/shutdown/create-shutdown-handler.js:17` (complexity 20).
+- Function length: `apps/harvester/src/domain/portfolio/portfolio.js:202`, `apps/harvester/src/infrastructure/brokers/bitunix-market-metadata.js:98`, and `apps/harvester/src/infrastructure/telegram/operator/handlers.js:8` (80 counted lines).
+- Statements: `apps/harvester/src/bootstrap/shutdown/create-shutdown-handler.js:584` (43), `packages/utils/src/format-log-content.js:47` (42), and `packages/brokers/src/infrastructure/binance/broker-websocket/tests/user-data-session.recovery.test.js:101` (40).
+- Depth: `apps/harvester/scripts/config-symbol/write-token-specification.js:108`, `apps/harvester/src/application/events/publish-lifecycle-event.js:19`, and `apps/harvester/src/infrastructure/process-lock/acquire-harvester-process-lock.js:119` (depth 4).
+- Nested callbacks: `apps/harvester/scripts/eslint.test.js:53`, `packages/brokers/src/application/user-data-session.test.js:106`, and `packages/entities` tests are representative of the three-level callback pattern.
+
+This is a significant migration burden, particularly for `max-nested-callbacks: 2` and `max-lines-per-function: 60`. It validates the approved progressive strategy: do not refactor hundreds of legacy functions in one campaign. Each file must meet all strict thresholds when it is next modified.
+
 ## 8. Evidence-based repository rule decisions
 
 The following decisions were reviewed against the full workspace on 2026-11-17. The root configuration and `scripts/eslint-policy.test.js` are authoritative for enforcement.
