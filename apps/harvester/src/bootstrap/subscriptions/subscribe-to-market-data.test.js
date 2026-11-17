@@ -14,6 +14,7 @@ orderQuantity: 0.01 } },
   logger = {},
   onMarketPriceError = () => {},
   processMarketPrice,
+  processMarketBook,
 } = {}) => {
   const calls = []
   const events = []
@@ -53,10 +54,10 @@ price: "65000" } })
       return { ok: true,
 data: { decision: { action: "NO_ACTION" } } }
     }),
-    processMarketBook: async ({ symbol }) => {
+    processMarketBook: processMarketBook ?? (async ({ symbol }) => {
       calls.push(`process-book:${  symbol}`)
       return { ok: true }
-    },
+    }),
     isMarketPriceFresh: (marketPrice) => marketPrice.timestamp === 10_000,
     now,
     isStopped: () => false,
@@ -85,6 +86,54 @@ test("establishes all enabled book/price streams before WebSocket API ticker.pri
   assert.equal(result.subscriptions.length, 1, "The market-price subscription must be returned for shutdown ownership.")
   assert.equal(result.bookSubscriptions.length, 1, "The book subscription must be returned for shutdown ownership.")
   assert.equal(result.marketPriceIntake.has("BTCUSDT"), true, "Per-market WebSocket intake state must be retained.")
+})
+
+ 
+test("tracks accepted book-ticker work in the per-market shutdown intake state", async () => {
+  let releaseBookTask
+  const bookTask = new Promise((resolve) => {
+    releaseBookTask = resolve
+  })
+  const fixture = createFixture({
+    tradingEnabled: true,
+    processMarketBook: async () => {
+      await bookTask
+      return { ok: true }
+    },
+    subscribeForBookTicker: async ({ symbol, onBookTicker }) => {
+      onBookTicker({
+        symbol,
+        bidPrice: "64999",
+        bidQuantity: "1",
+        askPrice: "65001",
+        askQuantity: "1",
+      })
+      return {
+        ok: true,
+        data: {
+          unsubscribe: async () => {},
+          stream: "book",
+        },
+      }
+    },
+  })
+
+  await fixture.result
+  const intakeState = fixture.marketPriceIntake.get("BTCUSDT")
+  assert.equal(
+    typeof intakeState.latestWebSocketBookTask?.then,
+    "function",
+    "The accepted book-ticker task must be retained beside the market-price task for shutdown draining.",
+  )
+  assert.equal(
+    intakeState.latestWebSocketPriceTask,
+    null,
+    "Tracking a book task must not fabricate a market-price task.",
+  )
+
+  releaseBookTask()
+  const result = await intakeState.latestWebSocketBookTask
+  assert.equal(result.ok, true, "The tracked book task must preserve the original processing result.")
 })
 
 test("skips WebSocket API ticker.price seeding when a fresh stream price arrives during subscription setup", async () => {
