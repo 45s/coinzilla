@@ -79,42 +79,8 @@ async function getCanonicalMarketMetadata({
   return createBinanceMarketMetadata({ symbolFilters: result.data })
 }
 
-function isDeeplyFrozen({ value } = {}) {
-  if (value === null || typeof value !== "object") {
-    return true
-  }
-  if (!Object.isFrozen(value)) {
-    return false
-  }
-  return Object.values(value).every((nestedValue) => isDeeplyFrozen({ value: nestedValue }))
-}
-
-function hasValidBinanceCapabilityIdentity({ capabilities }) {
-  return capabilities?.contractVersion === 1 &&
-    capabilities.provider === "binance" &&
-    capabilities.product === "spot"
-}
-
-function hasValidBinanceEnvironmentCapability({ environment, tradingMode }) {
-  return environment?.selector === "tradingMode" &&
-    environment.selectedMode === tradingMode &&
-    Array.isArray(environment.supportedModes) &&
-    environment.supportedModes.includes(tradingMode) &&
-    environment.nodeEnvSelectsEndpoint === false
-}
-
-function assertBinanceCapabilityDeclaration({ client, tradingMode } = {}) {
-  const capabilities = client?.capabilities
-  const valid = isDeeplyFrozen({ value: capabilities }) &&
-    hasValidBinanceCapabilityIdentity({ capabilities }) &&
-    hasValidBinanceEnvironmentCapability({
-      environment: capabilities.environment,
-      tradingMode,
-    })
-  if (!valid) {
-    throw new TypeError("Binance broker capability declaration must be deeply immutable and match the configured tradingMode")
-  }
-  return capabilities
+function getClientCapabilities({ client }) {
+  return client?.capabilities
 }
 
 function assertRequiredBrokerMethods({ client }) {
@@ -295,10 +261,7 @@ function resolveClientCapabilities({ client, tradingMode }) {
   if (client?.capabilities === undefined) {
     return undefined
   }
-  return assertBinanceCapabilityDeclaration({
-    client,
-    tradingMode,
-  })
+  return getClientCapabilities({ client })
 }
 
 /**
