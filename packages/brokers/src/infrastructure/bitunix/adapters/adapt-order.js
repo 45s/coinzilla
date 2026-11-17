@@ -94,9 +94,6 @@ function validateOrder({ bitunixOrder }) {
   if (!normalizedType) {
     throw new TypeError("Bitunix Spot order type is unsupported")
   }
-  if (!normalizedStatus) {
-    throw new TypeError("Bitunix Spot order status is unsupported")
-  }
   assertOrderQuantities({
     volume,
     dealVolume,
