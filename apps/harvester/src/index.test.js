@@ -1345,28 +1345,30 @@ test("closes diagnostic log transports after runtime, Journal, and EventBus shut
 })
 
 
+const createProcessProvenanceIdentity = () => ({
+  application: "harvester",
+  version: "1.0.001",
+  runtimeSessionId: "runtime-session-123",
+  processId: 12345,
+  startedAt: "2026-11-09T10:15:30.000Z",
+  source: {
+    branch: "develop",
+    commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    shortCommit: "aaaaaaaa",
+    commitMessage: 'release apiKey="private-value"',
+    commitDate: "2026-11-09T09:00:00.000Z",
+    workingTree: "clean",
+    metadataSource: "git",
+    privateCredential: "must-not-be-copied",
+  },
+  apiSecret: "must-not-be-copied",
+})
+
 const captureProcessProvenanceScenario = async () => {
   const operations = []
   const events = []
   const contexts = []
-  const processIdentity = {
-    application: "harvester",
-    version: "1.0.001",
-    runtimeSessionId: "runtime-session-123",
-    processId: 12345,
-    startedAt: "2026-11-09T10:15:30.000Z",
-    source: {
-      branch: "develop",
-      commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      shortCommit: "aaaaaaaa",
-      commitMessage: 'release apiKey="private-value"',
-      commitDate: "2026-11-09T09:00:00.000Z",
-      workingTree: "clean",
-      metadataSource: "git",
-      privateCredential: "must-not-be-copied",
-    },
-    apiSecret: "must-not-be-copied",
-  }
+  const processIdentity = createProcessProvenanceIdentity()
   let journalFlushCalls = 0
   const eventBus = {
     publish(event) {
@@ -1432,7 +1434,12 @@ const captureProcessProvenanceScenario = async () => {
       NODE_ENV: "development",
     },
   })
-  return { operations, events, contexts, journalFlushCalls }
+  return {
+    operations,
+    events,
+    contexts,
+    journalFlushCalls,
+  }
 }
 
 test("captures process provenance before trading startup and publishes it separately from runtime startup", async () => {
