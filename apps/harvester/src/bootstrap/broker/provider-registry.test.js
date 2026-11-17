@@ -336,7 +336,7 @@ test("constructs a registered non-Binance provider without provider-specific reg
       marketData: "futureExchangePrimary",
     },
     adapterFactories: {
-      future-exchange: () => broker,
+      "future-exchange": () => broker,
     },
     env: {},
   })
