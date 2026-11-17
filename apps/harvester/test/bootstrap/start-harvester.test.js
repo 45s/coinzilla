@@ -721,81 +721,79 @@ function createVolatilityTestState() {
   }
 }
 
+function createVolatilityOrderSubmission({ metadataBySymbol, state }) {
+  return async ({ order } = {}) => {
+    const { market } = metadataBySymbol.get(order.symbol)
+    state.submittedSymbols.push(order.symbol)
+    const submitted = new CanonicalOrder({
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: String(++state.orderSequence),
+      market,
+      side: order.side,
+      type: order.type,
+      limitPrice: new Money({
+        amount: order.price,
+        asset: market.quoteAsset,
+      }),
+      originalQuantity: new Quantity({
+        amount: order.quantity,
+        asset: market.baseAsset,
+      }),
+      executedQuantity: new Quantity({
+        amount: "0",
+        asset: market.baseAsset,
+      }),
+      status: "OPEN",
+      createdAt: 10,
+      acknowledgedAt: 10,
+      updatedAt: 10,
+    })
+    state.canonicalOrders.set(submitted.brokerOrderId, submitted)
+    return toResult({ data: submitted })
+  }
+}
+
+function createVolatilityOrderCancellation({ state }) {
+  return async ({ order } = {}) => {
+    const canceled = new CanonicalOrder({
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: order.brokerOrderId,
+      market: order.market,
+      side: order.side,
+      type: order.type,
+      limitPrice: order.limitPrice,
+      originalQuantity: order.originalQuantity,
+      executedQuantity: order.executedQuantity,
+      status: "CANCELED",
+      createdAt: order.createdAt,
+      acknowledgedAt: order.acknowledgedAt,
+      updatedAt: 11,
+      completedAt: 11,
+    })
+    state.canonicalOrders.set(canceled.brokerOrderId, canceled)
+    return toResult({ data: canceled })
+  }
+}
+
 function createVolatilityOrderLifecycleBroker({ metadataBySymbol, state }) {
   return {
     connect: async () => {},
     disconnect: async () => {},
-    placeOrder: async ({ order } = {}) => {
-      const { market } = metadataBySymbol.get(order.symbol)
-      state.submittedSymbols.push(order.symbol)
-      const submitted = new CanonicalOrder({
-        clientOrderId: order.clientOrderId,
-        brokerOrderId: String(++state.orderSequence),
-        market,
-        side: order.side,
-        type: order.type,
-        limitPrice: new Money({
-          amount: order.price,
-          asset: market.quoteAsset,
-        }),
-        originalQuantity: new Quantity({
-          amount: order.quantity,
-          asset: market.baseAsset,
-        }),
-        executedQuantity: new Quantity({
-          amount: "0",
-          asset: market.baseAsset,
-        }),
-        status: "OPEN",
-        createdAt: 10,
-        acknowledgedAt: 10,
-        updatedAt: 10,
-      })
-      state.canonicalOrders.set(submitted.brokerOrderId, submitted)
-      return toResult({
-        data: submitted,
-      })
-    },
-    cancelOrder: async ({ order } = {}) => {
-      const canceled = new CanonicalOrder({
-        clientOrderId: order.clientOrderId,
-        brokerOrderId: order.brokerOrderId,
-        market: order.market,
-        side: order.side,
-        type: order.type,
-        limitPrice: order.limitPrice,
-        originalQuantity: order.originalQuantity,
-        executedQuantity: order.executedQuantity,
-        status: "CANCELED",
-        createdAt: order.createdAt,
-        acknowledgedAt: order.acknowledgedAt,
-        updatedAt: 11,
-        completedAt: 11,
-      })
-      state.canonicalOrders.set(canceled.brokerOrderId, canceled)
-      return toResult({
-        data: canceled,
-      })
-    },
+    placeOrder: createVolatilityOrderSubmission({ metadataBySymbol, state }),
+    cancelOrder: createVolatilityOrderCancellation({ state }),
     getOpenOrders: async ({ symbol } = {}) => toResult({
       data: [...state.canonicalOrders.values()]
         .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
         .filter((order) => !symbol || order.market.symbol === symbol)
-        .map((order) => createOpenOrderSnapshot({
-          order,
-        })),
+        .map((order) => createOpenOrderSnapshot({ order })),
     }),
-    getFills: async () => toResult({
-      data: [],
-    }),
+    getFills: async () => toResult({ data: [] }),
     getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => toResult({
       data: [...state.canonicalOrders.values()].filter((order) =>
         (!orderId || order.brokerOrderId === String(orderId)) &&
         (!symbol || order.market.symbol === symbol)),
     }),
-    getCanonicalOrder: async () => toResult({
-      data: null,
-    }),
+    getCanonicalOrder: async () => toResult({ data: null }),
   }
 }
 
