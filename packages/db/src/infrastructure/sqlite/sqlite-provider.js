@@ -217,23 +217,70 @@ export function createSqliteProvider({ filename, timeout } = {}) {
     capabilities: SQLITE_CAPABILITIES,
 
     async connect() {
-      await database.connect()
       try {
+        await database.connect()
         database.exec(CREATE_RECORDS_TABLE)
       } catch (error) {
-        await database.close()
-        throw error
+        let connectionError = error
+        try {
+          await database.close()
+        } catch (closeError) {
+          connectionError = new AggregateError(
+            [error, closeError],
+            "SQLite provider connection failed and cleanup also failed",
+            {
+              cause: error,
+            },
+          )
+        }
+
+        throw new DatabaseProviderError({
+          operation: "connect",
+          cause: connectionError,
+        })
       }
     },
 
-    close: database.close,
+    async close() {
+      try {
+        await database.close()
+      } catch (error) {
+        throw new DatabaseProviderError({
+          operation: "close",
+          cause: error,
+        })
+      }
+    },
 
     withTransaction(work) {
-      return database.transaction((transaction) => work(
-        createSqliteTransactionContext({
-          transaction,
-        }),
-      ))
+      let callbackError = null
+      const operation = database.transaction((transaction) => {
+        try {
+          return work(createSqliteTransactionContext({
+            transaction,
+          }))
+        } catch (error) {
+          callbackError = error
+          throw error
+        }
+      })
+
+      return operation.catch((error) => {
+        const isCallbackFailure = error === callbackError
+          || error instanceof DatabaseConflictError
+          || error instanceof DatabaseProviderError
+        const isUnsupportedAsyncCallback = error instanceof TypeError
+          && /SQLite transaction callbacks must be synchronous/.test(error.message)
+
+        if (isCallbackFailure || isUnsupportedAsyncCallback) {
+          throw error
+        }
+
+        throw new DatabaseProviderError({
+          operation: "transaction",
+          cause: error,
+        })
+      })
     },
   })
 }
