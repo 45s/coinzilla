@@ -16,7 +16,10 @@ function createRegistryError({
   context = {},
   cause,
 } = {}) {
-  const options = { code, context }
+  const options = {
+    code,
+    context,
+  }
   if (cause !== undefined) {
     options.cause = cause
   }
