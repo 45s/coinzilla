@@ -77,7 +77,7 @@ export class Journal {
    *
    * @returns {Promise<object>} Result indicating whether startup succeeded or was cancelled.
    */
-  async start({} = {}) {
+  async start() {
     if (this.started || this.starting || this.closing || this.closed) {
       return toResult({ error: new Error("Journal has already started or closed") })
     }
@@ -123,7 +123,10 @@ export class Journal {
         handler: async (event) => {
           const writeResult = await this.record({ event })
           if (!writeResult.ok) {
-            this.reportError({ message: "Failed to write journal event", errors: writeResult.errors, eventId: event.id, eventName: event.name })
+            this.reportError({ message: "Failed to write journal event",
+errors: writeResult.errors,
+eventId: event.id,
+eventName: event.name })
           }
         },
       })
@@ -143,7 +146,8 @@ export class Journal {
     } catch (error) {
       const errors = [error]
       this.startupCleanupErrors = await this.cleanupStoreResources(errors)
-      this.reportError({ message: "Failed to start journal", errors })
+      this.reportError({ message: "Failed to start journal",
+errors })
       return toResult({ errors })
     } finally {
       this.starting = false
@@ -212,7 +216,9 @@ export class Journal {
       }
       try {
         await this.store.append(line)
-        return toResult({ written: true, durable: false, recordId: event.id })
+        return toResult({ written: true,
+durable: false,
+recordId: event.id })
       } catch (error) {
         this.writeFailed = true
         this.appendFailed = true
@@ -270,7 +276,7 @@ export class Journal {
    * @remarks Serialization failures logged by the EventBus subscription are not
    * currently included in this durability result; see Journal issue #889.
    */
-  async flush({} = {}) {
+  async flush() {
     if (!this.started || !this.filePath || this.closeInProgress || this.closing || this.closed) {
       return toResult({ error: new Error("Journal must be started to flush durable records") })
     }
@@ -320,7 +326,9 @@ export class Journal {
       return toResult({ errors })
     }
 
-    return toResult({ flushed: true, durable: true, filePath: this.filePath })
+    return toResult({ flushed: true,
+durable: true,
+filePath: this.filePath })
   }
 
 
@@ -330,7 +338,7 @@ export class Journal {
    *
    * @returns {Promise<object>} Result describing close and durability success or failure.
    */
-  async close({} = {}) {
+  async close() {
     if (this.closed) {
       if (!this.closeDurable) {
         return toResult({
@@ -339,7 +347,8 @@ export class Journal {
           durable: false,
         })
       }
-      return toResult({ closed: true, durable: true })
+      return toResult({ closed: true,
+durable: true })
     }
     if (this.closeInProgress || this.closing) {
       return toResult({
@@ -363,37 +372,69 @@ export class Journal {
    */
   async closeLifecycle() {
     if (this.starting) {
-      this.closing = true
-      const startPromise = this.startPromise
-      if (startPromise) {
-        await startPromise
-      }
+      await this.cancelStartup()
     }
-
     if (!this.started) {
-      this.closed = true
-      this.closing = false
-      const cleanupErrors = this.startupCleanupErrors
-      this.startupCleanupErrors = []
-      if (cleanupErrors.length > 0) {
-        this.closeDurable = false
-        this.reportError({
-          message: "Journal startup cancellation left cleanup errors",
-          errors: cleanupErrors,
-          filePath: this.filePath,
-        })
-        return toResult({ errors: cleanupErrors, closed: true, durable: false })
-      }
-      this.closeDurable = true
-      return toResult({ closed: true, durable: true })
+      return this.closeCancelledStartup()
     }
 
+    await this.waitForAcceptedFlushes()
+    const errors = []
+    await this.drainEventBus(errors)
+    await this.drainAcceptedWrites(errors)
+    await this.closeStoreResources(errors)
+
+    this.closed = true
+    this.started = false
+    this.closing = false
+
+    if (errors.length > 0) {
+      return this.reportCloseFailure(errors)
+    }
+    return this.confirmDurableClose()
+  }
+
+  async cancelStartup() {
+    this.closing = true
+    const { startPromise } = this
+    if (startPromise) {
+      await startPromise
+    }
+  }
+
+  closeCancelledStartup() {
+    this.closed = true
+    this.closing = false
+    const cleanupErrors = this.startupCleanupErrors
+    this.startupCleanupErrors = []
+    if (cleanupErrors.length > 0) {
+      this.closeDurable = false
+      this.reportError({
+        message: "Journal startup cancellation left cleanup errors",
+        errors: cleanupErrors,
+        filePath: this.filePath,
+      })
+      return toResult({
+        errors: cleanupErrors,
+        closed: true,
+        durable: false,
+      })
+    }
+
+    this.closeDurable = true
+    return toResult({
+      closed: true,
+      durable: true,
+    })
+  }
+
+  async waitForAcceptedFlushes() {
     if (this.flushPromises.size > 0) {
       await Promise.all([...this.flushPromises])
     }
+  }
 
-    const errors = []
-
+  async drainEventBus(errors) {
     if (this.subscription) {
       try {
         this.subscription.unsubscribe()
@@ -406,20 +447,22 @@ export class Journal {
 
     try {
       const busResult = await this.eventBus.flush()
-
       if (!busResult.ok) {
         errors.push(...busResult.errors)
       }
     } catch (error) {
       errors.push(error)
     }
+  }
 
+  async drainAcceptedWrites(errors) {
     this.closing = true
     await this.writeQueue
-
     errors.push(...this.writeErrors)
     this.writeErrors = []
+  }
 
+  async closeStoreResources(errors) {
     if (this.filePath) {
       try {
         // Sync the final queued writes before closing the session file.
@@ -433,28 +476,30 @@ export class Journal {
         errors.push(error)
       }
     }
+
     try {
       await this.store.releaseWriter()
     } catch (error) {
       errors.push(error)
     }
-    this.closed = true
-    this.started = false
-    this.closing = false
+  }
 
-    if (errors.length > 0) {
-      this.closeDurable = false
-      this.reportError({
-        message: "Journal closed with errors",
-        errors,
-        filePath: this.filePath,
-      })
+  reportCloseFailure(errors) {
+    this.closeDurable = false
+    this.reportError({
+      message: "Journal closed with errors",
+      errors,
+      filePath: this.filePath,
+    })
 
-      const closeResult = { errors }
-      if (this.writeFailed) closeResult.durable = false
-      return toResult(closeResult)
+    const closeResult = { errors }
+    if (this.writeFailed) {
+      closeResult.durable = false
     }
+    return toResult(closeResult)
+  }
 
+  confirmDurableClose() {
     this.closeDurable = true
     try {
       this.logger.system?.("Journal closed", {

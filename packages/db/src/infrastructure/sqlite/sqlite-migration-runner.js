@@ -7,6 +7,11 @@ function isThenable(value) {
     && typeof value.then === "function"
 }
 
+function compareMigrationVersions(...migrations) {
+  const [left, right] = migrations
+  return left.version - right.version
+}
+
 function validateMigrations(migrations) {
   if (!Array.isArray(migrations)) {
     throw new TypeError("SQLite migrations must be an array")
@@ -33,17 +38,16 @@ function validateMigrations(migrations) {
       names.add(migration.name)
       return migration
     })
-    .sort((left, right) => left.version - right.version)
+    .sort(compareMigrationVersions)
 }
 
 /**
  * Apply ordered, synchronous SQL migrations atomically.
  *
- * @param {{exec: Function, transaction: Function}} database
- * @param {Array<{version: number, name: string, up: (transaction: {exec: Function, prepare: Function}) => void}>} migrations
+ * @param {{database: {exec: Function, transaction: Function}, migrations: Array<{version: number, name: string, up: (transaction: {exec: Function, prepare: Function}) => void}>}} options
  * @returns {Promise<number[]>} Newly applied migration versions.
  */
-export async function migrateSqliteDatabase(database, migrations) {
+export async function migrateSqliteDatabase({ database, migrations }) {
   const orderedMigrations = validateMigrations(migrations)
 
   database.exec(`

@@ -10,6 +10,7 @@ export class FakeTransport {
     this.messageListener = null
     this.errorListener = null
     this.closeListener = null
+    this.pingListener = null
     this.closeCalls = []
   }
 
@@ -28,29 +29,43 @@ export class FakeTransport {
     return () => { this.closeListener = null }
   }
 
+  onPing(listener) {
+    this.pingListener = listener
+    return () => { this.pingListener = null }
+  }
+
   async connect() {
     this.state = "open"
     return this
   }
 
   send(payload) {
-    if (this.state !== "open") throw new Error("fake transport is closed")
+    if (this.state !== "open") {throw new Error("fake transport is closed")}
     this.sent.push(JSON.parse(payload))
   }
 
-  async close(code = 1000, reason = "") {
-    this.closeCalls.push({ code, reason })
-    this.serverClose({ code, reason })
+  async close(...args) {
+    const [code = 1000, reason = ""] = args
+    this.closeCalls.push({ code,
+reason })
+    this.serverClose({ code,
+reason })
   }
 
   receive(message) {
     this.messageListener?.(message)
   }
 
+  ping(payload) {
+    this.pingListener?.(payload)
+  }
+
   serverClose({ code = 1006, reason = "network lost" } = {}) {
-    if (this.state === "closed") return
+    if (this.state === "closed") {return}
     this.state = "closed"
-    this.closeListener?.({ code, reason, wasClean: false })
+    this.closeListener?.({ code,
+reason,
+wasClean: false })
   }
 
   fail(error) {
@@ -78,16 +93,21 @@ export function createClient(options = {}) {
     onError: (error) => errors.push(error.message),
     ...options,
   })
-  return { client, clock, transports, errors }
+  return { client,
+clock,
+transports,
+errors }
 }
 
 export async function flush() {
   await new Promise((resolve) => setImmediate(resolve))
-  for (let index = 0; index < 8; index += 1) await Promise.resolve()
+  for (let index = 0; index < 8; index += 1) {await Promise.resolve()}
 }
 
-export function acknowledge(transport, index = 0, response = { result: null }) {
+export function acknowledge(...args) {
+  const [transport, index = 0, response = { result: null }] = args
   const request = transport.sent[index]
   assert.ok(request, "expected a sent control request")
-  transport.receive({ id: request.id, ...response })
+  transport.receive({ id: request.id,
+...response })
 }

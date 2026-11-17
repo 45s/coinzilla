@@ -1,11 +1,11 @@
-import path from "node:path"
 import { createHarvesterOperator } from "../../application/operator/create-harvester-operator.js"
-import { createFileDurableFactsStore } from "../../infrastructure/durable-facts/create-file-durable-facts-store.js"
 import { createTelegramOperatorAdapter } from "../../infrastructure/telegram/telegram-operator-adapter.js"
 
 export class OperatorControlStartupError extends Error {
-  constructor(message, code, cause) {
-    super(message, { cause })
+  constructor(...args) {
+    const [message, code, cause] = args
+    const detail = cause?.message
+    super(detail ? `${message}: ${detail}` : message, { cause })
     this.name = "OperatorControlStartupError"
     this.code = code
   }
@@ -13,15 +13,23 @@ export class OperatorControlStartupError extends Error {
 
 const disabledLifecycle = Object.freeze({
   enabled: false,
-  durableFactsStore: undefined,
-  async start() { return Object.freeze({ started: false, disabled: true }) },
-  async stop() { return Object.freeze({ stopped: true, alreadyStopped: true }) },
+  operationalStateStore: undefined,
+  async start() { return Object.freeze({ started: false,
+disabled: true }) },
+  async stop() { return Object.freeze({ stopped: true,
+alreadyStopped: true }) },
 })
 
-/** Prepare optional Telegram control after verifying the pre-initialized ADR-0001 store. */
+/**
+ * Prepare Telegram operator control without restart recovery or durable command history.
+ *
+ * TEMPORARY: ADR-0001 Operational State Store construction/verification is deliberately
+ * bypassed so Telegram CC commands can run independently. Pause/resume changes are
+ * process-local only and are lost on restart. Reintroduce durable facts only after the
+ * recovery design is explicitly revisited and its startup requirements are accepted.
+ */
 export async function prepareTelegramOperatorControl({
-  telegramConfig, env = process.env, runtimeSessionId, durableFactsStore: suppliedDurableFactsStore,
-  createDurableFactsStore = createFileDurableFactsStore,
+  telegramConfig, env = process.env, operationalStateStore: suppliedOperationalStateStore,
   createAdapter = createTelegramOperatorAdapter, fetchImpl, logger,
 } = {}) {
   if (telegramConfig?.enabled !== true) {
@@ -31,60 +39,38 @@ export async function prepareTelegramOperatorControl({
   if (!botToken) {
     throw new OperatorControlStartupError("Telegram operator control is enabled but TELEGRAM_BOT_TOKEN is missing", "OPERATOR_CONTROL_TELEGRAM_TOKEN_REQUIRED")
   }
-  const directory = env.DURABLE_FACTS_DIRECTORY?.trim()
-  let durableFacts = suppliedDurableFactsStore
-  if (durableFacts === undefined) {
-    if (!directory || !path.isAbsolute(directory)) {
-      throw new OperatorControlStartupError("Telegram operator control requires an absolute DURABLE_FACTS_DIRECTORY containing an initialized ADR-0001 store", "OPERATOR_CONTROL_DURABLE_FACTS_DIRECTORY_REQUIRED")
-    }
-    if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
-      throw new OperatorControlStartupError("Telegram operator control requires the current Harvester runtime session identity", "OPERATOR_CONTROL_RUNTIME_SESSION_REQUIRED")
-    }
-    try {
-      durableFacts = createDurableFactsStore({ directory, runtimeSessionId })
-    } catch (cause) {
-      throw new OperatorControlStartupError("Unable to construct the configured ADR-0001 durable-facts store", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
-    }
-  } else if (typeof runtimeSessionId !== "string" || runtimeSessionId.trim() === "") {
-    throw new OperatorControlStartupError("Telegram operator control requires the current Harvester runtime session identity", "OPERATOR_CONTROL_RUNTIME_SESSION_REQUIRED")
-  }
-  if (runtimeSessionId !== undefined &&
-      durableFacts?.runtimeSessionId !== undefined &&
-      durableFacts.runtimeSessionId !== runtimeSessionId) {
-    throw new OperatorControlStartupError(
-      "Telegram operator control must share the current Harvester process-session durable-facts store",
-      "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID",
-    )
-  }
-  if (typeof durableFacts?.verify !== "function" || typeof durableFacts?.append !== "function") {
-    throw new OperatorControlStartupError("Configured ADR-0001 durable-facts store does not expose verify() and append()", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID")
-  }
-  let verification
-  try {
-    verification = await durableFacts.verify()
-  } catch (cause) {
-    throw new OperatorControlStartupError("Unable to verify the initialized ADR-0001 durable-facts store; operator control remains disabled", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
-  }
-  if (verification?.ok !== true || verification.data?.valid !== true || verification.data?.durableWriteSupported !== true) {
-    const cause = verification?.errors?.[0] ?? new Error("Durable-facts verification did not confirm a valid durable store")
-    throw new OperatorControlStartupError("Configured ADR-0001 durable-facts store is missing, uninitialized, corrupt or not durably writable", "OPERATOR_CONTROL_DURABLE_FACTS_STORE_INVALID", cause)
-  }
+  // TEMPORARILY DISABLED: Telegram CC does not construct or verify ADR-0001 recovery storage.
+  // An independently supplied store may still record process-lifetime operator commands.
+  // Without one, pause/resume are process-local and are lost on restart.
+  const operationalStateStore = suppliedOperationalStateStore
   let adapter
   return Object.freeze({
     enabled: true,
-    durableFactsStore: durableFacts,
-    async start({ engine } = {}) {
+    operationalStateStore,
+    async start({ engine, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders } = {}) {
       if (adapter) {
-        return Object.freeze({ started: true, alreadyStarted: true })
+        return Object.freeze({ started: true,
+alreadyStarted: true })
       }
-      const operator = createHarvesterOperator({ engine, durableFacts })
+      const operator = createHarvesterOperator({ engine,
+operationalStateStore,
+getRuntimeSnapshot,
+getPortfolio,
+getRecoveryLedger,
+getAccountSnapshot,
+getOpenOrders })
       try {
-        adapter = createAdapter({ botToken, allowedUserIds: telegramConfig.allowedUserIds, operator, fetchImpl, logger })
+        adapter = createAdapter({ botToken,
+allowedUserIds: telegramConfig.allowedUserIds,
+operator,
+fetchImpl,
+logger })
         if (typeof adapter?.start !== "function" || typeof adapter?.stop !== "function") {
           throw new TypeError("Telegram operator adapter must expose start() and stop()")
         }
         await adapter.start()
-        return Object.freeze({ started: true, alreadyStarted: false })
+        return Object.freeze({ started: true,
+alreadyStarted: false })
       } catch (cause) {
         let failure = cause
         let cleanupConfirmed = false
@@ -104,7 +90,8 @@ export async function prepareTelegramOperatorControl({
     },
     async stop() {
       if (!adapter) {
-        return Object.freeze({ stopped: true, alreadyStopped: true })
+        return Object.freeze({ stopped: true,
+alreadyStopped: true })
       }
       const activeAdapter = adapter
       try {

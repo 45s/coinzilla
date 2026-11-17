@@ -20,15 +20,15 @@ const FILTERS_NOT_APPLICABLE_TO_LIMIT_ORDERS = new Set([
 ])
 const KNOWN_SYMBOL_FILTERS = new Set(["PRICE_FILTER", "LOT_SIZE", "MIN_NOTIONAL", "NOTIONAL"])
 
-function validateUniqueFilterTypes(filters, label) {
+function validateUniqueFilterTypes({ filters, label }) {
   const seen = new Set()
   for (const filter of filters) {
     if (!filter || typeof filter !== "object" || Array.isArray(filter) ||
         typeof filter.filterType !== "string" || !filter.filterType.trim()) {
-      throw new TypeError("Binance " + label + " contains a malformed filter without filterType")
+      throw new TypeError(`Binance ${  label  } contains a malformed filter without filterType`)
     }
     if (seen.has(filter.filterType)) {
-      throw new Error("Binance " + label + " contains duplicate " + filter.filterType + " filters")
+      throw new Error(`Binance ${  label  } contains duplicate ${  filter.filterType  } filters`)
     }
     seen.add(filter.filterType)
   }
@@ -43,157 +43,273 @@ const CANONICAL_UNVALIDATED_FILTER_TYPES = Object.freeze({
   MAX_ASSET: "ASSET_ORDER_LIMIT",
 })
 
-function collectUnvalidatedFilters(filters, defaultScope, knownFilters = KNOWN_SYMBOL_FILTERS) {
+function resolveUnvalidatedFilterScope({ filterType, defaultScope }) {
+  if (filterType === "MAX_NUM_ORDERS" || filterType === "MAX_POSITION" || filterType === "MAX_ASSET") {
+    return "ACCOUNT"
+  }
+  if (filterType === "EXCHANGE_MAX_NUM_ORDERS") {
+    return "EXCHANGE"
+  }
+  return defaultScope
+}
+
+function collectUnvalidatedFilters({ filters, defaultScope, knownFilters = KNOWN_SYMBOL_FILTERS }) {
   return filters
     .filter((filter) => !knownFilters.has(filter.filterType) && !FILTERS_NOT_APPLICABLE_TO_LIMIT_ORDERS.has(filter.filterType))
     .map((filter) => Object.freeze({
       type: CANONICAL_UNVALIDATED_FILTER_TYPES[filter.filterType] ?? "UNMODELED_EXCHANGE_CONSTRAINT",
-      scope: filter.filterType === "MAX_NUM_ORDERS" || filter.filterType === "MAX_POSITION" || filter.filterType === "MAX_ASSET"
-        ? "ACCOUNT"
-        : filter.filterType === "EXCHANGE_MAX_NUM_ORDERS"
-          ? "EXCHANGE"
-          : defaultScope,
+      scope: resolveUnvalidatedFilterScope({ filterType: filter.filterType,
+defaultScope }),
       sourceFilterType: filter.filterType,
     }))
 }
 
-function readExactlyOneFilter(filters, filterType) {
+function readExactlyOneFilter({ filters, filterType }) {
   const matches = filters.filter((filter) => filter?.filterType === filterType)
   if (matches.length !== 1) {
-    throw new Error("Binance exchangeInfo must contain exactly one " + filterType + " filter")
+    throw new Error(`Binance exchangeInfo must contain exactly one ${  filterType  } filter`)
   }
   return matches[0]
 }
 
-function normalizeOptionalNonNegativeExchangeDecimal(value, field) {
-  if (value === undefined || value === null) return undefined
+function normalizeOptionalNonNegativeExchangeDecimal({ value, field }) {
+  if (value === undefined || value === null) {
+    return undefined
+  }
   if (typeof value !== "string" || value.trim() !== value) {
-    throw new TypeError("Binance " + field + " must be a decimal string")
+    throw new TypeError(`Binance ${  field  } must be a decimal string`)
   }
   let normalized
   try {
-    normalized = normalizeDecimalString({ value, allowNegative: false, field })
+    normalized = normalizeDecimalString({ value,
+allowNegative: false,
+field })
   } catch (cause) {
-    throw new TypeError("Binance " + field + " must be a valid non-negative decimal string", { cause })
+    throw new TypeError(`Binance ${  field  } must be a valid non-negative decimal string`, { cause })
   }
-  return compareDecimal({ left: normalized, right: "0" }) === 0 ? undefined : value
+  return compareDecimal({ left: normalized,
+right: "0" }) === 0 ? undefined : value
 }
 
-function normalizePositiveExchangeDecimal(value, field) {
+function normalizePositiveExchangeDecimal({ value, field }) {
   if (typeof value !== "string" || value.trim() !== value) {
-    throw new TypeError("Binance " + field + " must be a decimal string")
+    throw new TypeError(`Binance ${  field  } must be a decimal string`)
   }
   let normalized
   try {
-    normalized = normalizeDecimalString({ value, allowNegative: false, field })
+    normalized = normalizeDecimalString({ value,
+allowNegative: false,
+field })
   } catch (cause) {
-    throw new TypeError("Binance " + field + " must be a valid decimal string", { cause })
+    throw new TypeError(`Binance ${  field  } must be a valid decimal string`, { cause })
   }
-  if (compareDecimal({ left: normalized, right: "0" }) <= 0) {
-    throw new RangeError("Binance " + field + " must be a positive decimal increment/value")
+  if (compareDecimal({ left: normalized,
+right: "0" }) <= 0) {
+    throw new RangeError(`Binance ${  field  } must be a positive decimal increment/value`)
   }
   return value
 }
 
-function parseSymbolMetadata({ symbolInfo, requestedSymbol, exchangeInfo }) {
+function validateSymbolTradingMetadata({
+    symbolInfo,
+    requestedSymbol,
+  }) {
   if (!symbolInfo || symbolInfo.symbol !== requestedSymbol) {
-    throw new Error("Binance did not return the requested symbol " + requestedSymbol)
+    throw new Error(`Binance did not return the requested symbol ${requestedSymbol}`)
   }
   if (symbolInfo.status !== "TRADING") {
-    throw new Error("Binance symbol " + requestedSymbol + " is not currently trading")
+    throw new Error(`Binance symbol ${requestedSymbol} is not currently trading`)
   }
   if (symbolInfo.isSpotTradingAllowed !== true) {
-    throw new Error("Binance symbol " + requestedSymbol + " is not enabled for Spot trading")
+    throw new Error(`Binance symbol ${requestedSymbol} is not enabled for Spot trading`)
   }
   if (typeof symbolInfo.baseAsset !== "string" || !symbolInfo.baseAsset || typeof symbolInfo.quoteAsset !== "string" || !symbolInfo.quoteAsset) {
-    throw new Error("Binance symbol " + requestedSymbol + " is missing base/quote asset metadata")
+    throw new Error(`Binance symbol ${requestedSymbol} is missing base/quote asset metadata`)
   }
   if (!Array.isArray(symbolInfo.orderTypes)) {
-    throw new TypeError("Binance symbol " + requestedSymbol + " has malformed supported order types")
+    throw new TypeError(`Binance symbol ${requestedSymbol} has malformed supported order types`)
   }
   const supportedOrderTypes = [...new Set(symbolInfo.orderTypes)]
-  for (const requiredOrderType of ["LIMIT", "LIMIT_MAKER"]) {
-    if (!supportedOrderTypes.includes(requiredOrderType)) {
-      throw new Error("Binance Spot symbol " + requestedSymbol + " does not support " + requiredOrderType + " orders")
-    }
+  if (supportedOrderTypes.some((orderType) => typeof orderType !== "string" || !orderType.trim())) {
+    throw new TypeError(`Binance symbol ${requestedSymbol} has malformed supported order types`)
   }
+  return { supportedOrderTypes }
+}
 
-  const filters = symbolInfo.filters
+function collectSymbolFilterMetadata({ symbolInfo, exchangeInfo, requestedSymbol }) {
+  const {filters} = symbolInfo
   if (!Array.isArray(filters)) {
-    throw new TypeError("Binance symbol " + requestedSymbol + " has malformed exchange filters")
+    throw new TypeError(`Binance symbol ${requestedSymbol} has malformed exchange filters`)
   }
-  validateUniqueFilterTypes(filters, "symbol filters for " + requestedSymbol)
+  validateUniqueFilterTypes({
+    filters,
+    label: `symbol filters for ${requestedSymbol}`,
+  })
   const exchangeFilters = exchangeInfo.exchangeFilters ?? []
   if (!Array.isArray(exchangeFilters)) {
     throw new TypeError("Binance exchangeInfo response has malformed exchangeFilters")
   }
-  validateUniqueFilterTypes(exchangeFilters, "exchange filters")
+  validateUniqueFilterTypes({
+    filters: exchangeFilters,
+    label: "exchange filters",
+  })
   const unvalidatedConstraints = Object.freeze([
-    ...collectUnvalidatedFilters(filters, "SYMBOL"),
-    ...collectUnvalidatedFilters(exchangeFilters, "EXCHANGE", new Set()),
+    ...collectUnvalidatedFilters({
+      filters,
+      defaultScope: "SYMBOL",
+    }),
+    ...collectUnvalidatedFilters({
+      filters: exchangeFilters,
+      defaultScope: "EXCHANGE",
+      knownFilters: new Set(),
+    }),
   ])
-  const priceFilter = readExactlyOneFilter(filters, "PRICE_FILTER")
-  const lotSizeFilter = readExactlyOneFilter(filters, "LOT_SIZE")
-  const tickSize = normalizePositiveExchangeDecimal(priceFilter.tickSize, "PRICE_FILTER.tickSize")
-  const minPrice = normalizeOptionalNonNegativeExchangeDecimal(priceFilter.minPrice, "PRICE_FILTER.minPrice")
-  const maxPrice = normalizeOptionalNonNegativeExchangeDecimal(priceFilter.maxPrice, "PRICE_FILTER.maxPrice")
-  if (minPrice && maxPrice && compareDecimal({ left: minPrice, right: maxPrice }) > 0) {
+  return {
+    filters,
+    unvalidatedConstraints,
+  }
+}
+
+function parsePriceAndQuantityFilters({ filters }) {
+  const priceFilter = readExactlyOneFilter({
+    filters,
+    filterType: "PRICE_FILTER",
+  })
+  const lotSizeFilter = readExactlyOneFilter({
+    filters,
+    filterType: "LOT_SIZE",
+  })
+  const tickSize = normalizePositiveExchangeDecimal({
+    value: priceFilter.tickSize,
+    field: "PRICE_FILTER.tickSize",
+  })
+  const minPrice = normalizeOptionalNonNegativeExchangeDecimal({
+    value: priceFilter.minPrice,
+    field: "PRICE_FILTER.minPrice",
+  })
+  const maxPrice = normalizeOptionalNonNegativeExchangeDecimal({
+    value: priceFilter.maxPrice,
+    field: "PRICE_FILTER.maxPrice",
+  })
+  if (minPrice && maxPrice && compareDecimal({
+    left: minPrice,
+    right: maxPrice,
+  }) > 0) {
     throw new Error("Binance PRICE_FILTER.minPrice exceeds PRICE_FILTER.maxPrice")
   }
-  const stepSize = normalizePositiveExchangeDecimal(lotSizeFilter.stepSize, "LOT_SIZE.stepSize")
-  const minQuantity = normalizePositiveExchangeDecimal(lotSizeFilter.minQty, "LOT_SIZE.minQty")
-  const maxQuantity = normalizePositiveExchangeDecimal(lotSizeFilter.maxQty, "LOT_SIZE.maxQty")
+
+  const stepSize = normalizePositiveExchangeDecimal({
+    value: lotSizeFilter.stepSize,
+    field: "LOT_SIZE.stepSize",
+  })
+  const minQuantity = normalizePositiveExchangeDecimal({
+    value: lotSizeFilter.minQty,
+    field: "LOT_SIZE.minQty",
+  })
+  const maxQuantity = normalizePositiveExchangeDecimal({
+    value: lotSizeFilter.maxQty,
+    field: "LOT_SIZE.maxQty",
+  })
   const alignedMinimumQuantity = roundDecimalToIncrement({
     value: minQuantity,
     increment: stepSize,
     direction: "down",
   })
-  if (compareDecimal({ left: alignedMinimumQuantity, right: minQuantity }) !== 0) {
+  if (compareDecimal({
+    left: alignedMinimumQuantity,
+    right: minQuantity,
+  }) !== 0) {
     throw new Error("Binance LOT_SIZE.minQty is not aligned to LOT_SIZE.stepSize")
   }
-  if (compareDecimal({ left: minQuantity, right: maxQuantity }) > 0) {
+  if (compareDecimal({
+    left: minQuantity,
+    right: maxQuantity,
+  }) > 0) {
     throw new Error("Binance LOT_SIZE.minQty exceeds LOT_SIZE.maxQty")
   }
 
-  for (const filterType of ["MIN_NOTIONAL", "NOTIONAL"]) {
-    if (filters.filter((filter) => filter?.filterType === filterType).length > 1) {
-      throw new Error("Binance exchangeInfo contains duplicate " + filterType + " filters")
-    }
-  }
-  const notionalFilters = filters.filter(
-    (filter) => filter?.filterType === "MIN_NOTIONAL" || filter?.filterType === "NOTIONAL",
-  )
-  if (notionalFilters.length === 0) {
-    throw new Error("Binance exchangeInfo is missing MIN_NOTIONAL/NOTIONAL for " + requestedSymbol)
-  }
-  const minNotionalValues = notionalFilters.map((filter) => {
-    const value = normalizePositiveExchangeDecimal(filter.minNotional, filter.filterType + ".minNotional")
-    return { value, normalized: normalizeDecimalString({ value, allowNegative: false }) }
-  })
-  const strictestMinimum = minNotionalValues.reduce((highest, current) => {
-    return compareDecimal({ left: highest.normalized, right: current.normalized }) >= 0 ? highest : current
-  })
-  const minNotional = strictestMinimum.value
-  const notionalFilter = filters.find((filter) => filter?.filterType === "NOTIONAL")
-  const maxNotional = notionalFilter
-    ? normalizeOptionalNonNegativeExchangeDecimal(
-      notionalFilter.maxNotional,
-      "NOTIONAL.maxNotional",
-    )
-    : undefined
-
   return {
-    symbol: requestedSymbol,
-    baseAsset: symbolInfo.baseAsset,
-    quoteAsset: symbolInfo.quoteAsset,
     tickSize,
     ...(minPrice === undefined ? {} : { minPrice }),
     ...(maxPrice === undefined ? {} : { maxPrice }),
     stepSize,
     minQuantity,
     maxQuantity,
+  }
+}
+
+function parseNotionalFilters({
+    filters,
+    requestedSymbol,
+  }) {
+  for (const filterType of ["MIN_NOTIONAL", "NOTIONAL"]) {
+    if (filters.filter((filter) => filter?.filterType === filterType).length > 1) {
+      throw new Error(`Binance exchangeInfo contains duplicate ${filterType} filters`)
+    }
+  }
+  const notionalFilters = filters.filter(
+    (filter) => filter?.filterType === "MIN_NOTIONAL" || filter?.filterType === "NOTIONAL",
+  )
+  if (notionalFilters.length === 0) {
+    throw new Error(`Binance exchangeInfo is missing MIN_NOTIONAL/NOTIONAL for ${requestedSymbol}`)
+  }
+  const minNotionalValues = notionalFilters.map((filter) => {
+    const value = normalizePositiveExchangeDecimal({
+      value: filter.minNotional,
+      field: `${filter.filterType}.minNotional`,
+    })
+    return {
+      value,
+      normalized: normalizeDecimalString({
+        value,
+        allowNegative: false,
+      }),
+    }
+  })
+  const strictestMinimum = minNotionalValues.reduce((...values) => {
+    const [highest, current] = values
+    return compareDecimal({
+      left: highest.normalized,
+      right: current.normalized,
+    }) >= 0 ? highest : current
+  })
+  const minNotional = strictestMinimum.value
+  const notionalFilter = filters.find((filter) => filter?.filterType === "NOTIONAL")
+  const maxNotional = notionalFilter
+    ? normalizeOptionalNonNegativeExchangeDecimal({
+      value: notionalFilter.maxNotional,
+      field: "NOTIONAL.maxNotional",
+    })
+    : undefined
+
+  return {
     minNotional,
     ...(maxNotional === undefined ? {} : { maxNotional }),
+  }
+}
+
+function parseSymbolMetadata({ symbolInfo, requestedSymbol, exchangeInfo }) {
+  const { supportedOrderTypes } = validateSymbolTradingMetadata({
+    symbolInfo,
+    requestedSymbol,
+  })
+  const { filters, unvalidatedConstraints } = collectSymbolFilterMetadata({
+    symbolInfo,
+    exchangeInfo,
+    requestedSymbol,
+  })
+  const priceAndQuantity = parsePriceAndQuantityFilters({ filters })
+  const notional = parseNotionalFilters({
+    filters,
+    requestedSymbol,
+  })
+
+  return {
+    symbol: requestedSymbol,
+    baseAsset: symbolInfo.baseAsset,
+    quoteAsset: symbolInfo.quoteAsset,
+    ...priceAndQuantity,
+    ...notional,
     supportedOrderTypes,
     unvalidatedConstraints,
   }
@@ -207,15 +323,15 @@ async function requestJson({ fetchImpl, url, label }) {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
   } catch (cause) {
-    throw new Error("Binance " + label + " request failed: " + (cause?.message ?? String(cause)), { cause })
+    throw new Error(`Binance ${  label  } request failed: ${  cause?.message ?? String(cause)}`, { cause })
   }
   if (!response || response.ok !== true) {
-    throw new Error("Binance " + label + " request failed with HTTP status " + (response?.status ?? "unknown"))
+    throw new Error(`Binance ${  label  } request failed with HTTP status ${  response?.status ?? "unknown"}`)
   }
   try {
     return await response.json()
   } catch (cause) {
-    throw new Error("Binance " + label + " response was not valid JSON: " + (cause?.message ?? String(cause)), { cause })
+    throw new Error(`Binance ${  label  } response was not valid JSON: ${  cause?.message ?? String(cause)}`, { cause })
   }
 }
 
@@ -249,17 +365,17 @@ export async function fetchBinanceSpotMetadata({
   const encodedSymbol = encodeURIComponent(requestedSymbol)
   const exchangeInfo = await requestJson({
     fetchImpl,
-    url: endpoint + "/api/v3/exchangeInfo?symbol=" + encodedSymbol,
+    url: `${endpoint  }/api/v3/exchangeInfo?symbol=${  encodedSymbol}`,
     label: "exchangeInfo",
   })
   if (!Array.isArray(exchangeInfo?.symbols)) {
     throw new TypeError("Binance exchangeInfo response is missing its symbols array")
   }
   if (exchangeInfo.symbols.length === 0) {
-    throw new Error("Binance Spot symbol " + requestedSymbol + " was not found")
+    throw new Error(`Binance Spot symbol ${  requestedSymbol  } was not found`)
   }
   if (exchangeInfo.symbols.length !== 1) {
-    throw new Error("Binance exchangeInfo returned an ambiguous result for " + requestedSymbol)
+    throw new Error(`Binance exchangeInfo returned an ambiguous result for ${  requestedSymbol}`)
   }
   const normalized = parseSymbolMetadata({
     symbolInfo: exchangeInfo.symbols[0],
@@ -269,18 +385,23 @@ export async function fetchBinanceSpotMetadata({
 
   const ticker = await requestJson({
     fetchImpl,
-    url: endpoint + "/api/v3/ticker/price?symbol=" + encodedSymbol,
+    url: `${endpoint  }/api/v3/ticker/price?symbol=${  encodedSymbol}`,
     label: "ticker price",
   })
   if (ticker?.symbol !== requestedSymbol) {
-    throw new Error("Binance ticker response symbol does not match " + requestedSymbol)
+    throw new Error(`Binance ticker response symbol does not match ${  requestedSymbol}`)
   }
-  const price = normalizePositiveExchangeDecimal(ticker.price, "ticker.price")
-  if (normalized.minPrice && compareDecimal({ left: price, right: normalized.minPrice }) < 0) {
-    throw new Error("Binance ticker price is below PRICE_FILTER.minPrice for " + requestedSymbol)
+  const price = normalizePositiveExchangeDecimal({ value: ticker.price,
+field: "ticker.price" })
+  if (normalized.minPrice && compareDecimal({ left: price,
+right: normalized.minPrice }) < 0) {
+    throw new Error(`Binance ticker price is below PRICE_FILTER.minPrice for ${  requestedSymbol}`)
   }
-  if (normalized.maxPrice && compareDecimal({ left: price, right: normalized.maxPrice }) > 0) {
-    throw new Error("Binance ticker price is above PRICE_FILTER.maxPrice for " + requestedSymbol)
+  if (normalized.maxPrice && compareDecimal({ left: price,
+right: normalized.maxPrice }) > 0) {
+    throw new Error(`Binance ticker price is above PRICE_FILTER.maxPrice for ${  requestedSymbol}`)
   }
-  return Object.freeze({ ...normalized, price, environment: normalizedEnvironment })
+  return Object.freeze({ ...normalized,
+price,
+environment: normalizedEnvironment })
 }

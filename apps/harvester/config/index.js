@@ -1,6 +1,6 @@
 import { NOTIFICATIONS_TG_PROFILES } from "./notifications-tg-profiles.js";
 import { OPERATOR_CONTROL_CONFIG } from "./operator-control.js";
-import { EXTERNAL_ORDERS_POLICIES } from "../src/domain/external-orders-policy.js";
+import { CG_COIN_GRABBER_CONFIG } from "./strategies/cg-coin-grabber.js";
 
 export const appConfig = {
   notifications: {
@@ -13,118 +13,6 @@ export const appConfig = {
   },
   operatorControl: OPERATOR_CONTROL_CONFIG,
   strategies: {
-    CG_coinGrabber: {
-      enabled: true,
-      settings: {
-        conservative: {
-          enabled: true,
-        },
-        aggressive: {
-          enabled: false,
-        },
-      },
-      pairs: {
-        // BEGIN GENERATED PAIR CONFIGURATION
-        LINKUSDT: {
-          enabled: false,
-          enableVolatilityProtection: true,
-          externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
-          investment: 200,
-          orderQuantity: 2,
-          keepQuantity: 0.01,
-          minProfit: 0.1,
-          priceStepPercent: 0.3,
-          pricePrecision: 3,
-          quantityPrecision: 2,
-          makerPercent: 0.075,
-          takerPercent: 0.075,
-        },
-        LINKFDUSD: {
-          enabled: true,
-          enableVolatilityProtection: false,
-          externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
-          investment: 200,
-          orderQuantity: 2,
-          keepQuantity: 0.01,
-          minProfit: 0.01,
-          priceStepPercent: 0.3,
-          pricePrecision: 3,
-          quantityPrecision: 2,
-          makerPercent: 0,
-          takerPercent: 0.075,
-        },
-        DOGEUSDT: {
-          enabled: false,
-          enableVolatilityProtection: true,
-          externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
-          investment: 100,
-          orderQuantity: 400,
-          keepQuantity: 1,
-          minProfit: 0.01,
-          priceStepPercent: 0.05,
-          pricePrecision: 5,
-          quantityPrecision: 0,
-          makerPercent: 0.1,
-          takerPercent: 0.1,
-        },
-        SOLFDUSD: {
-          enabled: false,
-          enableVolatilityProtection: true,
-          externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
-          investment: 100,
-          orderQuantity: 1,
-          keepQuantity: 0.01,
-          minProfit: 0.01,
-          priceStepPercent: 0.05,
-          pricePrecision: 2,
-          quantityPrecision: 3,
-          makerPercent: 0,
-          takerPercent: 0.1,
-        },
-        ZROUSDT: {
-          enabled: false,
-          enableVolatilityProtection: true,
-          externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
-          investment: 100,
-          orderQuantity: 5,
-          keepQuantity: 0.01,
-          minProfit: 0.01,
-          priceStepPercent: 0.05,
-          pricePrecision: 3,
-          quantityPrecision: 1,
-          makerPercent: 0.1,
-          takerPercent: 0.1,
-        },
-        ZROFDUSD: {
-          enabled: true,
-          enableVolatilityProtection: true,
-          externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
-          investment: 120,
-          orderQuantity: 5,
-          keepQuantity: 0.01,
-          minProfit: 0.01,
-          priceStepPercent: 0.3,
-          pricePrecision: 3,
-          quantityPrecision: 1,
-          makerPercent: 0,
-          takerPercent: 0.1,
-        },
-        ADAFDUSD: {
-          enabled: false,
-          enableVolatilityProtection: false,
-          externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE,
-          investment: 120,
-          orderQuantity: 30,
-          keepQuantity: 0.1,
-          minProfit: 0.01,
-          priceStepPercent: 0.3,
-          pricePrecision: 4,
-          quantityPrecision: 1,
-          makerPercent: 0,
-          takerPercent: 0.075,
-        },
-        // END GENERATED PAIR CONFIGURATION
-      },
-    },
+    CG_coinGrabber: CG_COIN_GRABBER_CONFIG,
   },
 };

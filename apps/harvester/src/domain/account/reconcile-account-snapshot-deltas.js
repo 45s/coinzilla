@@ -5,45 +5,52 @@ import {
   subtractDecimal,
   toResult,
 } from "@coinzilla/utils"
+import { isCanonicalNonNegativeSafeInteger } from "../time/is-canonical-non-negative-safe-integer.js"
 
 const validateSnapshot = ({ snapshot, phase }) => {
   if (!snapshot || snapshot.phase !== phase) {
-    throw new TypeError("Expected an " + phase + " account snapshot event")
+    throw new TypeError(`Expected an ${  phase  } account snapshot event`)
   }
   if (!["COMPLETE", "INCOMPLETE"].includes(snapshot.auditStatus)) {
-    throw new TypeError(phase + " snapshot auditStatus is invalid")
+    throw new TypeError(`${phase  } snapshot auditStatus is invalid`)
   }
-  if (!Number.isSafeInteger(snapshot.sourceTime) || !Array.isArray(snapshot.balances)) {
-    throw new TypeError(phase + " snapshot requires sourceTime and balances")
+  if (!isCanonicalNonNegativeSafeInteger(snapshot.sourceTime)) {
+    throw new TypeError(`${phase  } snapshot sourceTime must be a non-negative safe integer`)
+  }
+  if (!Array.isArray(snapshot.balances)) {
+    throw new TypeError(`${phase  } snapshot balances must be an array`)
   }
   if (!Array.isArray(snapshot.auditReasons) ||
       snapshot.auditReasons.some((reason) => typeof reason !== "string" || !reason.trim())) {
-    throw new TypeError(phase + " snapshot auditReasons must contain non-empty strings")
+    throw new TypeError(`${phase  } snapshot auditReasons must contain non-empty strings`)
   }
   if (snapshot.auditStatus === "COMPLETE" && snapshot.auditReasons.length > 0) {
-    throw new TypeError(phase + " COMPLETE snapshot cannot contain auditReasons")
+    throw new TypeError(`${phase  } COMPLETE snapshot cannot contain auditReasons`)
   }
   if (snapshot.auditStatus === "INCOMPLETE" && snapshot.auditReasons.length === 0) {
-    throw new TypeError(phase + " INCOMPLETE snapshot requires auditReasons")
+    throw new TypeError(`${phase  } INCOMPLETE snapshot requires auditReasons`)
   }
   const balances = new Map()
   for (const [index, balance] of snapshot.balances.entries()) {
     const asset = balance?.asset
     if (typeof asset !== "string" || !asset.trim()) {
-      throw new TypeError(phase + " snapshot asset " + index + " must have a non-empty code")
+      throw new TypeError(`${phase  } snapshot asset ${  index  } must have a non-empty code`)
     }
-    if (balances.has(asset)) throw new TypeError(phase + " snapshot contains duplicate asset " + asset)
+    if (balances.has(asset)) {throw new TypeError(`${phase  } snapshot contains duplicate asset ${  asset}`)}
     for (const field of ["free", "locked", "total"]) {
-      assertDecimalString({ value: balance[field], field: phase + "." + asset + "." + field })
-      if (compareDecimal({ left: balance[field], right: "0" }) < 0) {
-        throw new RangeError(phase + " snapshot balance cannot be negative: " + asset + "." + field)
+      assertDecimalString({ value: balance[field],
+field: `${phase  }.${  asset  }.${  field}` })
+      if (compareDecimal({ left: balance[field],
+right: "0" }) < 0) {
+        throw new RangeError(`${phase  } snapshot balance cannot be negative: ${  asset  }.${  field}`)
       }
     }
     if (compareDecimal({
-      left: addDecimal({ left: balance.free, right: balance.locked }),
+      left: addDecimal({ left: balance.free,
+right: balance.locked }),
       right: balance.total,
     }) !== 0) {
-      throw new TypeError(phase + " snapshot total does not equal free plus locked for " + asset)
+      throw new TypeError(`${phase  } snapshot total does not equal free plus locked for ${  asset}`)
     }
     balances.set(asset, balance)
   }
@@ -57,29 +64,46 @@ const validateSnapshot = ({ snapshot, phase }) => {
  */
 export function reconcileAccountSnapshotDeltas({ openingSnapshot, closingSnapshot } = {}) {
   try {
-    const opening = validateSnapshot({ snapshot: openingSnapshot, phase: "OPENING" })
-    const closing = validateSnapshot({ snapshot: closingSnapshot, phase: "CLOSING" })
+    const openingPhase = openingSnapshot?.phase
+    if (!["PREFLIGHT", "OPENING"].includes(openingPhase)) {
+      throw new TypeError("Expected a PREFLIGHT or legacy OPENING account snapshot event")
+    }
+    const opening = validateSnapshot({ snapshot: openingSnapshot,
+phase: openingPhase })
+    const closing = validateSnapshot({ snapshot: closingSnapshot,
+phase: "CLOSING" })
     if (closingSnapshot.sourceTime < openingSnapshot.sourceTime) {
-      throw new RangeError("CLOSING account snapshot predates OPENING snapshot")
+      throw new RangeError("CLOSING account snapshot predates the PREFLIGHT/OPENING baseline")
     }
     const assets = [...new Set([...opening.keys(), ...closing.keys()])].sort()
     const assetDeltas = assets.map((asset) => {
-      const before = opening.get(asset) ?? { free: "0", locked: "0", total: "0" }
-      const after = closing.get(asset) ?? { free: "0", locked: "0", total: "0" }
+      const before = opening.get(asset) ?? { free: "0",
+locked: "0",
+total: "0" }
+      const after = closing.get(asset) ?? { free: "0",
+locked: "0",
+total: "0" }
       return {
         asset,
-        opening: { free: before.free, locked: before.locked, total: before.total },
-        closing: { free: after.free, locked: after.locked, total: after.total },
+        opening: { free: before.free,
+locked: before.locked,
+total: before.total },
+        closing: { free: after.free,
+locked: after.locked,
+total: after.total },
         delta: {
-          free: subtractDecimal({ left: after.free, right: before.free }),
-          locked: subtractDecimal({ left: after.locked, right: before.locked }),
-          total: subtractDecimal({ left: after.total, right: before.total }),
+          free: subtractDecimal({ left: after.free,
+right: before.free }),
+          locked: subtractDecimal({ left: after.locked,
+right: before.locked }),
+          total: subtractDecimal({ left: after.total,
+right: before.total }),
         },
       }
     })
     const auditReasons = [
-      ...(openingSnapshot.auditReasons ?? []).map((reason) => "OPENING:" + reason),
-      ...(closingSnapshot.auditReasons ?? []).map((reason) => "CLOSING:" + reason),
+      ...(openingSnapshot.auditReasons ?? []).map((reason) => `${openingPhase  }:${  reason}`),
+      ...(closingSnapshot.auditReasons ?? []).map((reason) => `CLOSING:${  reason}`),
     ]
     const auditStatus = openingSnapshot.auditStatus === "COMPLETE" &&
       closingSnapshot.auditStatus === "COMPLETE" ? "COMPLETE" : "INCOMPLETE"

@@ -2,6 +2,17 @@
 
 All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the owning domain's AGENTS.md, and its roadmap. Use the smallest applicable checklist below; high-risk requirements are additive.
 
+## Task contract, incremental commits and handoff
+
+For every non-trivial task, follow the mandatory [incremental commit and handoff protocol](../../AI_AGENT_WORKFLOW.md#11-incremental-commits-and-resumable-task-handoffs--mandatory).
+
+- [ ] A GitHub Issue (or explicitly adopted existing issue) describes the goal, owning scope, exclusions, requirements/invariants, acceptance criteria, dependencies, verification and documentation impact.
+- [ ] The issue, branch, PR and owning roadmap link to one another where applicable; update task state as scope, decisions, blockers and progress change.
+- [ ] Work is split into cohesive, reviewable commits using `<type>(<scope>): <imperative outcome>`; preserve test-first RED/GREEN evidence and avoid unrelated or progress-only commits.
+- [ ] Each meaningful checkpoint is committed and pushed; validation status is recorded against the exact commit SHA.
+- [ ] Before pausing or changing owners, add a handoff checkpoint to the issue (and update the PR when applicable) with exact branch/head, base freshness, completed/in-progress work, next action, decisions, checks/CI SHA, blockers, safety boundaries and documentation/roadmap status.
+- [ ] The task can be resumed from GitHub issue, branch, PR and canonical docs without relying on private chat history.
+
 ## Documentation-only change
 
 - Confirm the owning documentation/domain, canonical source of truth and linked references.
@@ -31,6 +42,19 @@ All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the owning domain's 
 - Apply the canonical [documentation-impact policy](../../ENGINEERING_STANDARDS.md#documentation-impact) to the changed behavior and affected roadmap.
 - Include the required **Documentation impact** note in the PR description, as specified by the canonical policy.
 - Run focused tests/coverage, workspace tests, syntax/policy checks, and applicable CI.
+
+## Refactoring or code audit
+
+- Read the canonical [AI Refactoring and Code Audit Standard](AI_REFACTORING_AUDIT_STANDARD.md) before inspecting or changing code.
+- Confirm the exact user-authorized folder/package scope and owning domain; do not expand scope silently.
+- Read applicable domain instructions, roadmap, specifications, contracts, implementation, consumers, tests, and configuration.
+- Establish existing public behavior and invariants before proposing structural changes.
+- Record findings with severity, exact location, evidence, impact, and a safe recommendation; distinguish confirmed defects from risks and suggestions.
+- For behavior changes, demonstrate RED → GREEN → REFACTOR; add a meaningful regression test for every bug fix.
+- Preserve public contracts unless an intentional, documented, tested behavior change is required.
+- Prefer cohesive modules and meaningful pure-function extraction; avoid speculative abstractions and mechanical churn.
+- Verify every changed file and relevant package/workspace checks; report exact results, skipped checks, and the final PR head.
+- Update affected living documentation and indexes; preserve historical evidence and include a Documentation impact note in the PR.
 
 ## Cross-domain or shared-infrastructure change
 

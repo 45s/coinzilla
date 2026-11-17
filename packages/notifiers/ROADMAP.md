@@ -51,14 +51,16 @@ Read AGENTS.md, README.md, and the repository's mandatory AI_AGENT_WORKFLOW.md.
     packages/notifiers/
       src/
         index.js                 # stable package exports only
-        telegram/                # implemented
-          index.js
-          telegram-notifier.js
-          telegram-validation.js       # pure configuration/message validation
-          safe-error-message.js        # bounded, credential-redacting errors
-          telegram-event-subscriber.js
-          format-telegram-notification.js
-          *.test.js
+        telegram/                # implemented feature module
+          event-subscriber.js     # event-bus subscription and delivery lifecycle
+          notifier.js             # Telegram HTTP transport
+          index.js                 # provider-local public exports
+          notifier.test.js
+          event-subscriber.test.js
+          helpers/                 # pure supporting functions only
+            run-validation.js
+            run-response-validation.js
+            get-safe-error-msg.js
         email/                    # future; create when implemented
         discord/                  # future; create when implemented
 

@@ -7,4 +7,7 @@
 - [Portfolio domain](portfolio.md) — Portfolio concepts, fill application and domain boundaries.
 - [Conservative behavior baseline](CONSERVATIVE_BEHAVIOR_BASELINE.md) — superseded historical pointer only; never use as current rules.
 
+- [Recovery Seller Domain Specification](recovery-seller-domain-specification.md) — draft RS contract, legacy accounting and profitability invariants, and concurrent operation with CG.
+- [Recovery Seller Implementation Roadmap](recovery-seller-implementation-roadmap.md) — six phases from the CG reuse audit through concurrent integration and offline lifecycle verification.
+
 Other documents may explain or verify behavior, but must link to the canonical specification rather than define competing strategy rules.

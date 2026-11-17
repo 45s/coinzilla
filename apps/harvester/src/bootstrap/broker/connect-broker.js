@@ -6,7 +6,7 @@ import {
   mapBrokerConnectionFailedData,
 } from "../../application/events/lifecycle-event-dtos.js"
 
-function logSystem(logger, data) {
+function logSystem({ logger, ...data }) {
   if (typeof logger?.system === "function") {
     logger.system(data)
     return
@@ -37,7 +37,8 @@ export async function connectBroker({
   })
 
   try {
-    logSystem(logger, { message: "Connecting to Binance broker" })
+    logSystem({ logger,
+message: "Connecting to Binance broker" })
 
     await broker.connect()
     publishLifecycleEvent({
@@ -49,7 +50,8 @@ export async function connectBroker({
     publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED,
-      dataResult: mapBrokerConnectionFailedData({ broker: brokerName, error }),
+      dataResult: mapBrokerConnectionFailedData({ broker: brokerName,
+error }),
     })
     logger.error?.({
       message: "Binance broker connection failed",
@@ -63,6 +65,7 @@ export async function connectBroker({
       throw new AggregateError(
         [error, disconnectError],
         "Harvester broker connection failed and disconnect cleanup also failed",
+        { cause: disconnectError },
       )
     }
     throw error

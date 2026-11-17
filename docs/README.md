@@ -1,17 +1,18 @@
 # Repository documentation
 
-This index is the entry point for maintained Coinzilla documentation. The repository-wide migration/adoption work is tracked in [#795](https://github.com/45s/coinzilla/issues/795). The canonical placement, ownership, lifecycle, naming, AI-agent requirements and enforcement rules are defined in [Documentation Governance](DOCUMENTATION_GOVERNANCE.md).
+This index is the entry point for maintained repository documentation. The repository-wide migration/adoption work is tracked in [#795](https://github.com/45s/coinzilla/issues/795). The canonical placement, ownership, lifecycle, naming, AI-agent requirements and enforcement rules are defined in [Documentation Governance](DOCUMENTATION_GOVERNANCE.md).
 
 ## Start here
 
 - [Repository README](../README.md) — workspace overview and setup
 - [Coding-agent instructions](../AGENTS.md) — mandatory agent entry point
-- [AI-agent workflow](../AI_AGENT_WORKFLOW.md) — branches, PRs, collaboration and integration
+- [AI-agent workflow](../AI_AGENT_WORKFLOW.md) — branches, PRs, collaboration and integration; incremental commits and resumable handoffs
 - [Engineering standards](../ENGINEERING_STANDARDS.md) — design, TDD, verification and documentation impact
+- [ESLint Standard](engineering/ESLINT_STANDARD.md) — rule compliance, agent preflight and suppression prevention
 - [Repository roadmap](../ROADMAP.md) — cross-workspace engineering and release work
 - [Documentation Governance](DOCUMENTATION_GOVERNANCE.md) — the documentation vision and maintenance contract
 - [Markdown style standard](MARKDOWN_STYLE.md) — consistent formatting and authoring conventions
-- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (currently 124 tracked Markdown/MDX files)
+- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (currently 147 tracked Markdown/MDX files on `develop`; PR #1267 adds one pending Harvester ADR)
 
 ## Repository-wide engineering
 
@@ -20,6 +21,7 @@ This index is the entry point for maintained Coinzilla documentation. The reposi
 - [ADR-0002: Explicit Binance trading environment](architecture/decisions/ADR-0002-explicit-binance-trading-environment.md)
 - [Domain ownership](engineering/DOMAIN_OWNERSHIP.md)
 - [Task workflows](engineering/TASK_WORKFLOWS.md)
+- [AI refactoring and code audit standard](engineering/AI_REFACTORING_AUDIT_STANDARD.md)
 - [Cross-domain requests](engineering/CROSS_DOMAIN_REQUESTS.md)
 - [Contributing](contributing.md)
 - [Workspace package map](workspace-package-map.md)

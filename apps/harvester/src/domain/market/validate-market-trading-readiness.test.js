@@ -4,8 +4,10 @@ import { Asset, Market, Money, Quantity, TradingRules } from "@coinzilla/entitie
 import { validateMarketTradingReadiness } from "./validate-market-trading-readiness.js"
 import { UnvalidatedMarketExchangeConstraintsError } from "./errors/unvalidated-market-exchange-constraints-error.js"
 
-const baseAsset = new Asset({ id: "doge", code: "DOGE" })
-const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
+const baseAsset = new Asset({ id: "doge",
+code: "DOGE" })
+const quoteAsset = new Asset({ id: "usdt",
+code: "USDT" })
 const market = new Market({
   venue: "binance",
   symbol: "DOGEUSDT",
@@ -21,22 +23,40 @@ const makeMetadata = ({
   tradingRules: new TradingRules({
     market,
     constraints: [
-      { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.001", asset: quoteAsset }) },
-      { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "1", asset: baseAsset }) },
+      { type: "PRICE_INCREMENT",
+status: "SUPPORTED",
+value: new Money({ amount: "0.001",
+asset: quoteAsset }) },
+      { type: "QUANTITY_INCREMENT",
+status: "SUPPORTED",
+value: new Quantity({ amount: "1",
+asset: baseAsset }) },
       ...(omitRule === "MIN_QUANTITY" ? [] : [
-        { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "1", asset: baseAsset }) },
+        { type: "MIN_QUANTITY",
+status: "SUPPORTED",
+value: new Quantity({ amount: "1",
+asset: baseAsset }) },
       ]),
       ...(omitRule === "MIN_NOTIONAL" ? [] : [
-        { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
+        { type: "MIN_NOTIONAL",
+status: "SUPPORTED",
+value: new Money({ amount: "5",
+asset: quoteAsset }) },
       ]),
-      { type: "MAX_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "1000", asset: baseAsset }) },
+      { type: "MAX_QUANTITY",
+status: "SUPPORTED",
+value: new Quantity({ amount: "1000",
+asset: baseAsset }) },
     ],
   }),
   supportedOrderTypes,
   unvalidatedConstraints: [],
 })
 
-const pairConfig = { makerPercent: 0, takerPercent: 0.1, investment: 100, orderQuantity: 100 }
+const pairConfig = { makerPercent: 0,
+takerPercent: 0.1,
+investment: 100,
+orderQuantity: 100 }
 
 test("accepts a market with required increments, quantity/notional minimums and LIMIT_MAKER support", () => {
   const result = validateMarketTradingReadiness({
@@ -54,7 +74,9 @@ test("accepts a market with required increments, quantity/notional minimums and 
 test("selects regular LIMIT when configured maker commission is non-zero", () => {
   const result = validateMarketTradingReadiness({
     symbol: "DOGEUSDT",
-    pairConfig: { ...pairConfig, makerPercent: 0.075, takerPercent: 0.2 },
+    pairConfig: { ...pairConfig,
+makerPercent: 0.075,
+takerPercent: 0.2 },
     marketMetadata: makeMetadata({ supportedOrderTypes: ["LIMIT"] }),
   })
   assert.equal(result.orderType, "LIMIT")
@@ -68,7 +90,7 @@ test("fails closed when a required trading rule is missing or unsupported", () =
         pairConfig,
         marketMetadata: makeMetadata({ omitRule }),
       }),
-      new RegExp("Required exchange trading rule is unavailable: " + omitRule),
+      new RegExp(`Required exchange trading rule is unavailable: ${  omitRule}`),
     )
   }
 })
@@ -88,7 +110,8 @@ test("rejects mismatched market, rules, and invalid configuration", () => {
   const otherMarket = new Market({
     venue: "binance",
     symbol: "ETHUSDT",
-    baseAsset: new Asset({ id: "eth", code: "ETH" }),
+    baseAsset: new Asset({ id: "eth",
+code: "ETH" }),
     quoteAsset,
   })
   assert.throws(
@@ -101,17 +124,20 @@ test("rejects mismatched market, rules, and invalid configuration", () => {
   )
   assert.throws(() => validateMarketTradingReadiness({
     symbol: "DOGEUSDT",
-    pairConfig: { ...pairConfig, makerPercent: -1 },
+    pairConfig: { ...pairConfig,
+makerPercent: -1 },
     marketMetadata: makeMetadata(),
   }), /makerPercent/)
   assert.throws(() => validateMarketTradingReadiness({
     symbol: "DOGEUSDT",
-    pairConfig: { ...pairConfig, makerPercent: 100 },
+    pairConfig: { ...pairConfig,
+makerPercent: 100 },
     marketMetadata: makeMetadata(),
   }), /makerPercent/)
   assert.throws(() => validateMarketTradingReadiness({
     symbol: "DOGEUSDT",
-    pairConfig: { ...pairConfig, takerPercent: 100 },
+    pairConfig: { ...pairConfig,
+takerPercent: 100 },
     marketMetadata: makeMetadata(),
   }), /takerPercent/)
   assert.throws(() => validateMarketTradingReadiness({
@@ -146,7 +172,8 @@ test("enforces exchange quantity limits at exact boundaries and immediately outs
   for (const scenario of scenarios) {
     const evaluate = () => validateMarketTradingReadiness({
       symbol: "DOGEUSDT",
-      pairConfig: { ...pairConfig, orderQuantity: scenario.orderQuantity },
+      pairConfig: { ...pairConfig,
+orderQuantity: scenario.orderQuantity },
       marketMetadata: makeMetadata(),
     })
 
@@ -154,12 +181,12 @@ test("enforces exchange quantity limits at exact boundaries and immediately outs
       assert.throws(
         evaluate,
         new RegExp(scenario.expectedRule),
-        "The " + scenario.name + " configuration must be rejected after exchange-step rounding.",
+        `The ${  scenario.name  } configuration must be rejected after exchange-step rounding.`,
       )
     } else {
       assert.doesNotThrow(
         evaluate,
-        "The " + scenario.name + " configuration is an inclusive supported boundary.",
+        `The ${  scenario.name  } configuration is an inclusive supported boundary.`,
       )
     }
   }
@@ -169,7 +196,9 @@ test("accepts exact MIN_NOTIONAL equality and a configured quantity that rounds 
   const metadata = makeMetadata()
   const result = validateMarketTradingReadiness({
     symbol: "DOGEUSDT",
-    pairConfig: { ...pairConfig, orderQuantity: 1000.9, investment: 5 },
+    pairConfig: { ...pairConfig,
+orderQuantity: 1000.9,
+investment: 5 },
     marketMetadata: metadata,
   })
 
@@ -204,7 +233,8 @@ test("enforces MIN_NOTIONAL at exact equality and immediately below the configur
   assert.doesNotThrow(
     () => validateMarketTradingReadiness({
       symbol: "DOGEUSDT",
-      pairConfig: { ...pairConfig, investment: 5 },
+      pairConfig: { ...pairConfig,
+investment: 5 },
       marketMetadata: makeMetadata(),
     }),
     "An investment exactly equal to the exchange MIN_NOTIONAL is admissible.",
@@ -212,7 +242,8 @@ test("enforces MIN_NOTIONAL at exact equality and immediately below the configur
   assert.throws(
     () => validateMarketTradingReadiness({
       symbol: "DOGEUSDT",
-      pairConfig: { ...pairConfig, investment: 4.999 },
+      pairConfig: { ...pairConfig,
+investment: 4.999 },
       marketMetadata: makeMetadata(),
     }),
     /investment.*MIN_NOTIONAL/,
@@ -223,10 +254,15 @@ test("enforces MIN_NOTIONAL at exact equality and immediately below the configur
 
 test("allows enabled markets with unsupported exchange constraints while retaining their diagnostics", () => {
   const unvalidatedConstraints = [
-    { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
-    { type: "BASE_ASSET_POSITION_LIMIT", scope: "ACCOUNT", sourceFilterType: "MAX_POSITION" },
+    { type: "DYNAMIC_PRICE_BAND",
+scope: "SYMBOL",
+sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
+    { type: "BASE_ASSET_POSITION_LIMIT",
+scope: "ACCOUNT",
+sourceFilterType: "MAX_POSITION" },
   ]
-  const metadata = { ...makeMetadata(), unvalidatedConstraints }
+  const metadata = { ...makeMetadata(),
+unvalidatedConstraints }
 
   const result = validateMarketTradingReadiness({
     symbol: "DOGEUSDT",
@@ -244,7 +280,8 @@ test("rejects malformed unvalidated constraint metadata instead of treating it a
     () => validateMarketTradingReadiness({
       symbol: "DOGEUSDT",
       pairConfig,
-      marketMetadata: { ...makeMetadata(), unvalidatedConstraints: "unknown" },
+      marketMetadata: { ...makeMetadata(),
+unvalidatedConstraints: "unknown" },
     }),
     /unvalidatedConstraints must be an array/,
     "Malformed exchange-constraint metadata must close the readiness gate rather than be interpreted as no restrictions.",
@@ -254,24 +291,28 @@ test("rejects malformed unvalidated constraint metadata instead of treating it a
 
 test("rejects incomplete context when constructing an unvalidated-market error", () => {
   assert.throws(
-    () => new UnvalidatedMarketExchangeConstraintsError({ symbol: " ", constraints: [] }),
+    () => new UnvalidatedMarketExchangeConstraintsError({ symbol: " ",
+constraints: [] }),
     /requires a market symbol/,
     "A market-readiness error must not be constructed without the affected market identity.",
   )
   assert.throws(
-    () => new UnvalidatedMarketExchangeConstraintsError({ symbol: "DOGEUSDT", constraints: [] }),
+    () => new UnvalidatedMarketExchangeConstraintsError({ symbol: "DOGEUSDT",
+constraints: [] }),
     /requires at least one unvalidated exchange constraint/,
     "A market-readiness error must identify at least one concrete exchange constraint.",
   )
   assert.throws(
-    () => new UnvalidatedMarketExchangeConstraintsError({ symbol: "DOGEUSDT", constraints: [null] }),
+    () => new UnvalidatedMarketExchangeConstraintsError({ symbol: "DOGEUSDT",
+constraints: [null] }),
     /descriptors must be objects/,
     "Malformed constraint entries must be rejected rather than hidden inside a diagnostic.",
   )
   assert.throws(
     () => new UnvalidatedMarketExchangeConstraintsError({
       symbol: "DOGEUSDT",
-      constraints: [{ type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL" }],
+      constraints: [{ type: "DYNAMIC_PRICE_BAND",
+scope: "SYMBOL" }],
     }),
     /require type, scope, and sourceFilterType/,
     "A constraint diagnostic must retain its source filter type as well as its canonical category and scope.",

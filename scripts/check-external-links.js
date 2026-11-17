@@ -24,13 +24,14 @@ const CREDENTIAL_QUERY_PARAMETERS = new Set([
 ]);
 const USER_AGENT = 'Coinzilla-Documentation-Link-Checker/1.0';
 
-function countCharacter(value, character) {
+function countCharacter(...args) {
+  const [value, character] = args;
   return [...value].filter((item) => item === character).length;
 }
 
 function trimUrlPunctuation(value) {
   let result = value.trim().replace(/^<|>$/g, '');
-  while (/[.,;:]$/.test(result)) result = result.slice(0, -1);
+  while (/[.,;:]$/.test(result)) {result = result.slice(0, -1);}
   const pairs = [['(', ')'], ['[', ']'], ['{', '}']];
   for (const [opening, closing] of pairs) {
     while (result.endsWith(closing) && countCharacter(result, closing) > countCharacter(result, opening)) {
@@ -50,13 +51,14 @@ function redactCredentials(value) {
   try {
     const parsed = new URL(userInfoRedacted);
     for (const key of parsed.searchParams.keys()) {
-      if (isCredentialQueryParameter(key)) parsed.searchParams.set(key, '[redacted]');
+      if (isCredentialQueryParameter(key)) {parsed.searchParams.set(key, '[redacted]');}
     }
     parsed.hash = '';
     return parsed.href;
   } catch {
     return userInfoRedacted
-      .replace(/([?&])([^=&#]+)=([^&#]*)/g, (match, separator, name) => {
+      .replace(/([?&])([^=&#]+)=([^&#]*)/g, (...args) => {
+        const [match, separator, name] = args;
         let decodedName = name;
         try {
           decodedName = decodeURIComponent(name.replace(/\+/g, ' '));
@@ -64,7 +66,7 @@ function redactCredentials(value) {
           // Keep malformed parameter names unchanged.
         }
         return isCredentialQueryParameter(decodedName)
-          ? separator + name + '=[redacted]'
+          ? `${separator + name  }=[redacted]`
           : match;
       })
       .split('#', 1)[0];
@@ -80,13 +82,15 @@ function redactCredentials(value) {
  */
 export function parseExternalUrl(raw) {
   const value = String(raw).trim().replace(/^<([^>]+)>$/, '$1').replace(/&amp;/g, '&');
-  if (!/^https?:\/\//i.test(value)) return null;
+  if (!/^https?:\/\//i.test(value)) {return null;}
 
   let parsed;
   try {
     parsed = new URL(value);
   } catch {
-    return { status: 'invalid', url: redactCredentials(value), reason: 'Malformed HTTP(S) URL' };
+    return { status: 'invalid',
+url: redactCredentials(value),
+reason: 'Malformed HTTP(S) URL' };
   }
 
   const credentialQueryParameters = [...parsed.searchParams.keys()].filter(isCredentialQueryParameter);
@@ -101,11 +105,16 @@ export function parseExternalUrl(raw) {
   parsed.hash = '';
   const hostname = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase().replace(/\.$/, '');
   if (isIP(hostname) || isLocalHostname(hostname)) {
-    return { status: 'skipped', url: parsed.href, host: hostname, reason: 'Local-only or IP-literal host is not requested' };
+    return { status: 'skipped',
+url: parsed.href,
+host: hostname,
+reason: 'Local-only or IP-literal host is not requested' };
   }
 
   parsed.hostname = hostname;
-  return { status: 'candidate', url: parsed.href, host: hostname };
+  return { status: 'candidate',
+url: parsed.href,
+host: hostname };
 }
 
 /**
@@ -117,18 +126,21 @@ export function parseExternalUrl(raw) {
 export function extractExternalLinks(documents) {
   const links = new Map();
 
-  function add(raw, path) {
+  function add(...args) {
+    const [raw, path] = args;
     const parsed = parseExternalUrl(raw);
-    if (!parsed) return;
-    const key = parsed.status + ':' + parsed.url;
+    if (!parsed) {return;}
+    const key = `${parsed.status  }:${  parsed.url}`;
     let link = links.get(key);
     if (!link) {
-      link = { ...parsed, paths: [], originalUrls: [] };
+      link = { ...parsed,
+paths: [],
+originalUrls: [] };
       links.set(key, link);
     }
-    if (!link.paths.includes(path)) link.paths.push(path);
+    if (!link.paths.includes(path)) {link.paths.push(path);}
     const original = redactCredentials(String(raw).trim());
-    if (!link.originalUrls.includes(original)) link.originalUrls.push(original);
+    if (!link.originalUrls.includes(original)) {link.originalUrls.push(original);}
   }
 
   for (const document of documents) {
@@ -158,7 +170,10 @@ export function extractExternalLinks(documents) {
       paths: link.paths.sort(),
       originalUrls: link.originalUrls.sort(),
     }))
-    .sort((left, right) => left.url.localeCompare(right.url));
+    .sort((...args) => {
+      const [left, right] = args;
+      return left.url.localeCompare(right.url);
+    });
 }
 
 /**
@@ -168,7 +183,8 @@ export function extractExternalLinks(documents) {
  * @param {string[]} changedPaths
  * @returns {{path: string, content: string}[]}
  */
-export function selectChangedMarkdownDocuments(documents, changedPaths) {
+export function selectChangedMarkdownDocuments(...args) {
+  const [documents, changedPaths] = args;
   const changed = new Set(changedPaths.filter((path) => /\.mdx?$/i.test(path)));
   return documents.filter((document) => changed.has(document.path) && !isHistoricalPath(document.path));
 }
@@ -180,12 +196,13 @@ export function selectChangedMarkdownDocuments(documents, changedPaths) {
  * @param {number} maxWaitMs
  * @returns {number|null}
  */
-export function parseRetryAfter(value, nowMs = Date.now(), maxWaitMs = 30_000) {
-  if (!value) return null;
+export function parseRetryAfter(...args) {
+  const [value, nowMs = Date.now(), maxWaitMs = 30_000] = args;
+  if (!value) {return null;}
   const seconds = Number(value);
-  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(maxWaitMs, seconds * 1000);
+  if (Number.isFinite(seconds) && seconds >= 0) {return Math.min(maxWaitMs, seconds * 1000);}
   const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return null;
+  if (!Number.isFinite(timestamp)) {return null;}
   return Math.min(maxWaitMs, Math.max(0, timestamp - nowMs));
 }
 
@@ -200,7 +217,8 @@ export function createHostRateLimiter(options = {}) {
   const tails = new Map();
   const lastStarted = new Map();
 
-  return async function run(host, task) {
+  return async function run(...args) {
+    const [host, task] = args;
     const previous = tails.get(host) ?? Promise.resolve();
     let release;
     const gate = new Promise((resolveGate) => { release = resolveGate; });
@@ -209,14 +227,14 @@ export function createHostRateLimiter(options = {}) {
     await previous;
 
     const elapsed = now() - (lastStarted.get(host) ?? Number.NEGATIVE_INFINITY);
-    if (elapsed < minIntervalMs) await sleep(minIntervalMs - elapsed);
+    if (elapsed < minIntervalMs) {await sleep(minIntervalMs - elapsed);}
     lastStarted.set(host, now());
 
     try {
       return await task();
     } finally {
       release();
-      if (tails.get(host) === tail) tails.delete(host);
+      if (tails.get(host) === tail) {tails.delete(host);}
     }
   };
 }
@@ -225,8 +243,9 @@ function defaultSleep(ms) {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
 
-async function cancelResponseBody(response, method) {
-  if (method !== 'GET' || !response.body || typeof response.body.cancel !== 'function') return;
+async function cancelResponseBody(...args) {
+  const [response, method] = args;
+  if (method !== 'GET' || !response.body || typeof response.body.cancel !== 'function') {return;}
   try {
     await response.body.cancel();
   } catch {
@@ -234,14 +253,18 @@ async function cancelResponseBody(response, method) {
   }
 }
 
-async function fetchWithRetries(url, method, options) {
+async function fetchWithRetries(...args) {
+  const [url, method, options] = args;
   const maxRetries = options.maxRetries ?? 2;
   const baseDelayMs = options.baseDelayMs ?? 500;
   const maxRetryAfterMs = options.maxRetryAfterMs ?? 30_000;
   const sleep = options.sleep ?? defaultSleep;
   const now = options.now ?? Date.now;
-  const fetchImpl = options.fetchImpl ?? ((target, init) => fetchPinned(target, init, options));
-  const hostLimiter = options.hostLimiter;
+  const fetchImpl = options.fetchImpl ?? ((...fetchArguments) => {
+    const [target, init] = fetchArguments;
+    return fetchPinned(target, init, options);
+  });
+  const {hostLimiter} = options;
   let lastError;
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
@@ -268,8 +291,8 @@ async function fetchWithRetries(url, method, options) {
       await sleep(retryAfter ?? backoff);
     } catch (error) {
       lastError = error;
-      if (error?.code === 'ERR_EXTERNAL_LINK_UNSAFE_ADDRESS') return { error: lastError };
-      if (attempt === maxRetries) return { error: lastError };
+      if (error?.code === 'ERR_EXTERNAL_LINK_UNSAFE_ADDRESS') {return { error: lastError };}
+      if (attempt === maxRetries) {return { error: lastError };}
       await sleep(Math.min(maxRetryAfterMs, baseDelayMs * (2 ** attempt)));
     }
   }
@@ -277,23 +300,26 @@ async function fetchWithRetries(url, method, options) {
   return { error: lastError ?? new Error('Request attempts exhausted') };
 }
 
-async function fetchFollowingRedirects(startUrl, method, options) {
+async function fetchFollowingRedirects(...args) {
+  const [startUrl, method, options] = args;
   let currentUrl = startUrl;
   const maxRedirects = options.maxRedirects ?? 5;
 
   for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount += 1) {
     const result = await fetchWithRetries(currentUrl, method, options);
     if (result.error?.code === 'ERR_EXTERNAL_LINK_UNSAFE_ADDRESS') {
-      return { blocked: true, reason: result.error.message };
+      return { blocked: true,
+reason: result.error.message };
     }
-    if (result.error) return { reason: 'Network request failed after retries: ' + result.error.message };
+    if (result.error) {return { reason: `Network request failed after retries: ${  result.error.message}` };}
 
-    const response = result.response;
-    if (!REDIRECT_STATUSES.has(response.status)) return { response, finalUrl: currentUrl };
+    const {response} = result;
+    if (!REDIRECT_STATUSES.has(response.status)) {return { response,
+finalUrl: currentUrl };}
 
     const location = response.headers?.get?.('location');
-    if (!location) return { reason: 'Redirect response did not include a Location header' };
-    if (redirectCount === maxRedirects) return { reason: 'Redirect limit exceeded (' + maxRedirects + ')' };
+    if (!location) {return { reason: 'Redirect response did not include a Location header' };}
+    if (redirectCount === maxRedirects) {return { reason: `Redirect limit exceeded (${  maxRedirects  })` };}
 
     let nextUrl;
     try {
@@ -304,12 +330,13 @@ async function fetchFollowingRedirects(startUrl, method, options) {
 
     const parsed = parseExternalUrl(nextUrl.href);
     if (!parsed || parsed.status !== 'candidate') {
-      return { blocked: true, reason: 'Redirect target is not an eligible public HTTP(S) hostname' };
+      return { blocked: true,
+reason: 'Redirect target is not an eligible public HTTP(S) hostname' };
     }
     currentUrl = parsed.url;
   }
 
-  return { reason: 'Redirect limit exceeded (' + maxRedirects + ')' };
+  return { reason: `Redirect limit exceeded (${  maxRedirects  })` };
 }
 
 function isSuccessfulStatus(status) {
@@ -327,8 +354,9 @@ function isBrokenStatus(status) {
  * @param {object} options Injectable network/rate-limit options for tests.
  * @returns {Promise<object>}
  */
-export async function checkExternalLink(link, options = {}) {
-  if (link.status === 'invalid' || link.status === 'skipped') return link;
+export async function checkExternalLink(...args) {
+  const [link, options = {}] = args;
+  if (link.status === 'invalid' || link.status === 'skipped') {return link;}
 
   const sleep = options.sleep ?? defaultSleep;
   const now = options.now ?? Date.now;
@@ -337,43 +365,64 @@ export async function checkExternalLink(link, options = {}) {
     now,
     sleep,
   });
-  const requestOptions = { ...options, sleep, now, hostLimiter };
+  const requestOptions = { ...options,
+sleep,
+now,
+hostLimiter };
   const head = await fetchFollowingRedirects(link.url, 'HEAD', requestOptions);
 
   if (head.blocked) {
-    return { ...link, status: 'skipped', reason: head.reason };
+    return { ...link,
+status: 'skipped',
+reason: head.reason };
   }
   if (head.reason) {
-    return { ...link, status: 'unverifiable', reason: head.reason };
+    return { ...link,
+status: 'unverifiable',
+reason: head.reason };
   }
   if (isSuccessfulStatus(head.response.status)) {
-    return { ...link, status: 'ok', checkedUrl: head.finalUrl };
+    return { ...link,
+status: 'ok',
+checkedUrl: head.finalUrl };
   }
   if (!GET_FALLBACK_STATUSES.has(head.response.status)) {
-    return { ...link, status: 'unverifiable', reason: 'HEAD returned HTTP ' + head.response.status };
+    return { ...link,
+status: 'unverifiable',
+reason: `HEAD returned HTTP ${  head.response.status}` };
   }
 
   const get = await fetchFollowingRedirects(link.url, 'GET', requestOptions);
   if (get.blocked) {
-    return { ...link, status: 'skipped', reason: get.reason };
+    return { ...link,
+status: 'skipped',
+reason: get.reason };
   }
   if (get.reason) {
-    return { ...link, status: 'unverifiable', reason: get.reason };
+    return { ...link,
+status: 'unverifiable',
+reason: get.reason };
   }
   if (isSuccessfulStatus(get.response.status)) {
-    return { ...link, status: 'ok', checkedUrl: get.finalUrl };
+    return { ...link,
+status: 'ok',
+checkedUrl: get.finalUrl };
   }
   if (isBrokenStatus(get.response.status)) {
     if (head.response.status === 401 || head.response.status === 403) {
       return {
         ...link,
         status: 'unverifiable',
-        reason: 'GET returned HTTP ' + get.response.status + ' after HEAD returned an access-control response (HTTP ' + head.response.status + ')',
+        reason: `GET returned HTTP ${  get.response.status  } after HEAD returned an access-control response (HTTP ${  head.response.status  })`,
       };
     }
-    return { ...link, status: 'broken', reason: 'GET confirmed HTTP ' + get.response.status };
+    return { ...link,
+status: 'broken',
+reason: `GET confirmed HTTP ${  get.response.status}` };
   }
-  return { ...link, status: 'unverifiable', reason: 'GET returned HTTP ' + get.response.status };
+  return { ...link,
+status: 'unverifiable',
+reason: `GET returned HTTP ${  get.response.status}` };
 }
 
 /**
@@ -382,7 +431,8 @@ export async function checkExternalLink(link, options = {}) {
  * @param {object} options
  * @returns {Promise<object[]>}
  */
-export async function checkExternalLinks(links, options = {}) {
+export async function checkExternalLinks(...args) {
+  const [links, options = {}] = args;
   const concurrency = options.concurrency ?? 4;
   const sleep = options.sleep ?? defaultSleep;
   const now = options.now ?? Date.now;
@@ -395,7 +445,7 @@ export async function checkExternalLinks(links, options = {}) {
   const groups = new Map();
 
   for (const link of links) {
-    if (link.status !== 'candidate') continue;
+    if (link.status !== 'candidate') {continue;}
     const group = groups.get(link.host) ?? [];
     group.push(link);
     groups.set(link.host, group);
@@ -409,12 +459,18 @@ export async function checkExternalLinks(links, options = {}) {
       const group = hostGroups[nextGroup];
       nextGroup += 1;
       for (const link of group) {
-        results.push(await checkExternalLink(link, { ...options, sleep, now, hostLimiter }));
+        results.push(await checkExternalLink(link, { ...options,
+sleep,
+now,
+hostLimiter }));
       }
     }
   }));
 
-  return results.sort((left, right) => left.url.localeCompare(right.url));
+  return results.sort((...sortArguments) => {
+    const [left, right] = sortArguments;
+    return left.url.localeCompare(right.url);
+  });
 }
 
 /**
@@ -423,7 +479,8 @@ export async function checkExternalLinks(links, options = {}) {
  * @param {string} root
  * @returns {{path: string, content: string}[]}
  */
-export function getChangedMarkdownDocuments(baseSha, root = repositoryRoot) {
+export function getChangedMarkdownDocuments(...args) {
+  const [baseSha, root = repositoryRoot] = args;
   if (typeof baseSha !== 'string' || !/^[a-f0-9]{40}$/i.test(baseSha)) {
     throw new TypeError('Changed-document mode requires a 40-character base commit SHA');
   }
@@ -445,7 +502,9 @@ export function shouldFailOnBroken(results) {
 }
 
 function parseArguments(argv) {
-  const options = { mode: 'all', baseSha: null, failOnBroken: false };
+  const options = { mode: 'all',
+baseSha: null,
+failOnBroken: false };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === '--all') {
@@ -459,7 +518,7 @@ function parseArguments(argv) {
     } else if (argument === '--report-only') {
       options.failOnBroken = false;
     } else {
-      throw new Error('Unknown argument: ' + argument);
+      throw new Error(`Unknown argument: ${  argument}`);
     }
   }
   if (options.mode === 'changed' && !options.baseSha) {
@@ -468,26 +527,28 @@ function parseArguments(argv) {
   return options;
 }
 
-function printResults(mode, links, results) {
-  const counts = results.reduce((summary, result) => {
+function printResults(...args) {
+  const [mode, links, results] = args;
+  const counts = results.reduce((...reduceArguments) => {
+    const [summary, result] = reduceArguments;
     summary[result.status] = (summary[result.status] ?? 0) + 1;
     return summary;
   }, {});
-  console.log(
-    'External Markdown links (' + mode + '): ' +
-    links.length + ' unique URLs; ' +
-    (counts.ok ?? 0) + ' OK; ' +
-    (counts.broken ?? 0) + ' confirmed broken; ' +
-    (counts.invalid ?? 0) + ' invalid; ' +
-    (counts.unverifiable ?? 0) + ' unverifiable; ' +
-    (counts.skipped ?? 0) + ' skipped.',
+  process.stdout.write(
+    `External Markdown links (${  mode  }): ${ 
+    links.length  } unique URLs; ${ 
+    counts.ok ?? 0  } OK; ${ 
+    counts.broken ?? 0  } confirmed broken; ${ 
+    counts.invalid ?? 0  } invalid; ${ 
+    counts.unverifiable ?? 0  } unverifiable; ${ 
+    counts.skipped ?? 0  } skipped.\n`,
   );
   for (const result of results) {
-    if (result.status === 'ok') continue;
-    console.log(
-      '- ' + result.status + ': ' + result.url +
-      ' [' + result.paths.join(', ') + ']' +
-      (result.reason ? ' — ' + result.reason : ''),
+    if (result.status === 'ok') {continue;}
+    process.stdout.write(
+      `- ${  result.status  }: ${  result.url 
+      } [${  result.paths.join(', ')  }]${ 
+      result.reason ? ` — ${  result.reason}` : ''}\n`,
     );
   }
 }
@@ -503,13 +564,14 @@ export async function main(argv = process.argv.slice(2)) {
   const links = extractExternalLinks(documents);
   const results = await checkExternalLinks(links);
   printResults(options.mode, links, results);
-  if (options.failOnBroken && shouldFailOnBroken(results)) process.exitCode = 1;
+  if (options.failOnBroken && shouldFailOnBroken(results)) {process.exitCode = 1;}
   return results;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   main().catch((error) => {
-    console.error('External Markdown link check failed:', error);
+    const detail = error instanceof Error ? error.stack ?? error.message : String(error);
+    process.stderr.write(`External Markdown link check failed: ${detail}\n`);
     process.exitCode = 1;
   });
 }

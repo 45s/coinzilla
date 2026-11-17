@@ -3,8 +3,10 @@ import assert from "node:assert/strict"
 import { Asset, CanonicalOrder, Market, Money, Quantity } from "@coinzilla/entities"
 import { OrderRegistry } from "./order-registry.js"
 
-const baseAsset = new Asset({ id: "doge", code: "DOGE" })
-const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
+const baseAsset = new Asset({ id: "doge",
+code: "DOGE" })
+const quoteAsset = new Asset({ id: "usdt",
+code: "USDT" })
 const market = new Market({
   venue: "binance",
   symbol: "DOGEUSDT",
@@ -34,9 +36,12 @@ function makeOrder({
     type,
     limitPrice: type === "MARKET"
       ? undefined
-      : new Money({ amount: price, asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: quantity, asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+      : new Money({ amount: price,
+asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: quantity,
+asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: executedQuantity,
+asset: baseAsset }),
     status,
     ...(createdAt === undefined ? {} : { createdAt }),
     ...(acknowledgedAt === undefined ? {} : { acknowledgedAt }),
@@ -47,10 +52,11 @@ function makeOrder({
 
 test("registers multiple pending orders and treats an identical registration as a duplicate", () => {
   const first = makeOrder()
-  const second = makeOrder({ clientOrderId: "harvester-2", side: "SELL" })
-  const registry = OrderRegistry.empty()
+  const second = makeOrder({ clientOrderId: "harvester-2",
+side: "SELL" })
+  const {registry} = OrderRegistry.empty()
     .registerPending({ order: first }).registry
-    .registerPending({ order: second }).registry
+    .registerPending({ order: second })
 
   const duplicate = registry.registerPending({ order: first })
   assert.equal(registry.orders.length, 2)
@@ -61,9 +67,9 @@ test("registers multiple pending orders and treats an identical registration as 
 })
 
 test("rejects conflicting reuse of a client order ID", () => {
-  const registry = OrderRegistry.empty().registerPending({
+  const {registry} = OrderRegistry.empty().registerPending({
     order: makeOrder(),
-  }).registry
+  })
 
   assert.throws(
     () => registry.registerPending({
@@ -75,7 +81,7 @@ test("rejects conflicting reuse of a client order ID", () => {
 
 test("applies broker acknowledgement and partial-fill updates immutably", () => {
   const pending = makeOrder()
-  const registry = OrderRegistry.empty().registerPending({ order: pending }).registry
+  const {registry} = OrderRegistry.empty().registerPending({ order: pending })
   const open = makeOrder({
     brokerOrderId: "9001",
     status: "OPEN",
@@ -128,9 +134,9 @@ test("matches an execution report by broker order ID when Binance client ID diff
     acknowledgedAt: 101,
     updatedAt: 101,
   })
-  const registry = OrderRegistry.empty()
+  const {registry} = OrderRegistry.empty()
     .registerPending({ order: pending }).registry
-    .applyUpdate({ order: acknowledged }).registry
+    .applyUpdate({ order: acknowledged })
 
   const canceledReport = makeOrder({
     clientOrderId: "CU5G5c9IZgepakVzo3Z3kw",
@@ -152,8 +158,9 @@ test("matches an execution report by broker order ID when Binance client ID diff
 
 test("rejects an event whose broker and client IDs point to different registered orders", () => {
   const first = makeOrder({ clientOrderId: "harvester-1" })
-  const second = makeOrder({ clientOrderId: "harvester-2", side: "SELL" })
-  const registry = OrderRegistry.empty()
+  const second = makeOrder({ clientOrderId: "harvester-2",
+side: "SELL" })
+  const {registry} = OrderRegistry.empty()
     .registerPending({ order: first }).registry
     .registerPending({ order: second }).registry
     .applyUpdate({ order: makeOrder({
@@ -172,7 +179,7 @@ test("rejects an event whose broker and client IDs point to different registered
       createdAt: 100,
       acknowledgedAt: 101,
       updatedAt: 101,
-    }) }).registry
+    }) })
 
   assert.throws(() => registry.applyUpdate({ order: makeOrder({
     clientOrderId: "harvester-2",
@@ -205,9 +212,9 @@ test("does not adopt exchange orders not registered by Harvester", () => {
 })
 
 test("treats identical order updates as idempotent", () => {
-  const registry = OrderRegistry.empty().registerPending({
+  const {registry} = OrderRegistry.empty().registerPending({
     order: makeOrder(),
-  }).registry
+  })
   const update = makeOrder({
     brokerOrderId: "9001",
     status: "OPEN",
@@ -229,9 +236,9 @@ test("treats identical order updates as idempotent", () => {
 })
 
 test("rejects decreasing executed quantity and stale update timestamps without changing registry state", () => {
-  const registry = OrderRegistry.empty().registerPending({
+  const {registry} = OrderRegistry.empty().registerPending({
     order: makeOrder(),
-  }).registry
+  })
   const partial = makeOrder({
     brokerOrderId: "9001",
     status: "PARTIALLY_FILLED",
@@ -272,9 +279,9 @@ test("rejects decreasing executed quantity and stale update timestamps without c
   assert.equal(registry.getOrder({ clientOrderId: "harvester-1" }).status, "PENDING", "Applying the accepted partial update must not mutate the original pre-update registry snapshot.")
 })
 test("rejects immutable order intent changes and invalid status transitions", () => {
-  const registry = OrderRegistry.empty().registerPending({
+  const {registry} = OrderRegistry.empty().registerPending({
     order: makeOrder(),
-  }).registry
+  })
   const open = registry.applyUpdate({
     order: makeOrder({
       brokerOrderId: "9001",
@@ -317,9 +324,9 @@ test("rejects immutable order intent changes and invalid status transitions", ()
 
 test("preserves the complete order state when a late FILLED update follows partial CANCELED or EXPIRED", () => {
   for (const terminalStatus of ["CANCELED", "EXPIRED"]) {
-    const registry = OrderRegistry.empty().registerPending({
+    const {registry} = OrderRegistry.empty().registerPending({
       order: makeOrder(),
-    }).registry
+    })
     const terminalOrder = makeOrder({
       brokerOrderId: "9001",
       status: terminalStatus,
@@ -342,15 +349,15 @@ test("preserves the complete order state when a late FILLED update follows parti
     const filled = terminal.applyUpdate({ order: expectedFilledOrder })
     const trackedFilledOrder = filled.registry.getOrder({ clientOrderId: "harvester-1" })
 
-    assert.deepEqual(terminal.getOrder({ clientOrderId: "harvester-1" }).value, terminalOrder.value, "The " + terminalStatus + " report must retain its broker identity, 40 executed units, 60 remaining units and terminal timestamps.")
-    assert.equal(filled.applied, true, "A later authoritative FILLED report with increased execution quantity must advance the " + terminalStatus + " order.")
+    assert.deepEqual(terminal.getOrder({ clientOrderId: "harvester-1" }).value, terminalOrder.value, `The ${  terminalStatus  } report must retain its broker identity, 40 executed units, 60 remaining units and terminal timestamps.`)
+    assert.equal(filled.applied, true, `A later authoritative FILLED report with increased execution quantity must advance the ${  terminalStatus  } order.`)
     assert.equal(filled.duplicate, false, "The late FILLED report must be applied as new execution state, not classified as a duplicate.")
     assert.equal(filled.stale, false, "A late FILLED report with greater cumulative execution must not be discarded as stale.")
     assert.equal(filled.unknown, false, "The late FILLED report must remain matched to the owned canonical order.")
     assert.deepEqual(trackedFilledOrder.value, expectedFilledOrder.value, "The resulting FILLED order must preserve client/broker IDs, market, side, type, price, original quantity, full executed quantity, zero remaining quantity and all timestamps.")
     assert.deepEqual(filled.registry.getActiveOrders(), [], "A fully executed order must no longer appear in the active registry.")
     assert.deepEqual(filled.registry.getTerminalOrders().map((order) => order.value), [expectedFilledOrder.value], "The terminal registry must contain exactly the fully executed canonical order.")
-    assert.equal(terminal.getOrder({ clientOrderId: "harvester-1" }).status, terminalStatus, "Applying the late FILLED report must not mutate the earlier " + terminalStatus + " registry snapshot.")
+    assert.equal(terminal.getOrder({ clientOrderId: "harvester-1" }).status, terminalStatus, `Applying the late FILLED report must not mutate the earlier ${  terminalStatus  } registry snapshot.`)
     assert.equal(registry.getOrder({ clientOrderId: "harvester-1" }).status, "PENDING", "Applying terminal reports must not mutate the original PENDING registry snapshot.")
   }
 })
@@ -363,9 +370,9 @@ test("validates constructor and operation input types", () => {
 })
 
 test("ignores a stale OPEN acknowledgement that arrives after a newer fill event", () => {
-  const registry = OrderRegistry.empty().registerPending({
+  const {registry} = OrderRegistry.empty().registerPending({
     order: makeOrder(),
-  }).registry
+  })
   const partial = registry.applyUpdate({
     order: makeOrder({
       brokerOrderId: "9001",
@@ -401,10 +408,56 @@ test("ignores a stale OPEN acknowledgement that arrives after a newer fill event
 })
 
 
+
+test("ignores FILLED-to-OPEN regressions regardless of event timestamp", () => {
+  for (const updatedAt of [101, 102, 103]) {
+    const clientOrderId = `h-filled-stale-${updatedAt}`
+    const brokerOrderId = `broker-filled-stale-${updatedAt}`
+    const pending = makeOrder({ clientOrderId })
+    const filledOrder = makeOrder({
+      clientOrderId,
+      brokerOrderId,
+      status: "FILLED",
+      executedQuantity: "100",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt: 102,
+      completedAt: 102,
+    })
+    const {registry} = OrderRegistry.empty()
+      .registerPending({ order: pending }).registry
+      .applyUpdate({ order: filledOrder })
+    const before = registry.value
+    const staleOpen = makeOrder({
+      clientOrderId,
+      brokerOrderId,
+      status: "OPEN",
+      executedQuantity: "0",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt,
+    })
+
+    const result = registry.applyUpdate({ order: staleOpen })
+    const tracked = result.registry.getOrder({ clientOrderId })
+
+    assert.equal(result.stale, true, `FILLED -> OPEN must be stale for timestamp ${updatedAt}.`)
+    assert.equal(result.applied, false, "A stale NEW/OPEN report must never be applied.")
+    assert.equal(result.unknown, false, "The matching broker/client IDs identify an owned order.")
+    assert.equal(result.registry, registry, "A stale report must return the exact prior immutable registry.")
+    assert.deepEqual(result.registry.value, before, "The complete canonical order snapshot must remain unchanged.")
+    assert.equal(tracked.status, "FILLED", "A terminal FILLED order must never be reopened.")
+    assert.equal(tracked.executedQuantity.amount, "100", "Cumulative executed quantity must remain monotonic.")
+    assert.equal(tracked.remainingQuantity.amount, "0", "A stale OPEN report must not restore order commitment.")
+    assert.equal(result.registry.getActiveOrders().length, 0, "A stale OPEN report must not make the filled order active.")
+    assert.equal(result.registry.getTerminalOrders().length, 1, "The order must remain terminal.")
+  }
+})
+
 test("allows a late FILLED update after an EXPIRED order report", () => {
-  const registry = OrderRegistry.empty().registerPending({
+  const {registry} = OrderRegistry.empty().registerPending({
     order: makeOrder(),
-  }).registry
+  })
   const expired = registry.applyUpdate({
     order: makeOrder({
       brokerOrderId: "9001",
@@ -447,9 +500,11 @@ test("allows a late FILLED update after an EXPIRED order report", () => {
 test("attaches a client-ID-resolved broker order ID to an UNKNOWN submission", () => {
   const clientOrderId = "h-lost-ack"
   const pending = makeOrder({ clientOrderId })
-  const registry = OrderRegistry.empty().registerPending({ order: pending }).registry.applyUpdate({
-    order: makeOrder({ clientOrderId, status: "UNKNOWN", updatedAt: 102 }),
-  }).registry
+  const {registry} = OrderRegistry.empty().registerPending({ order: pending }).registry.applyUpdate({
+    order: makeOrder({ clientOrderId,
+status: "UNKNOWN",
+updatedAt: 102 }),
+  })
   const acknowledged = makeOrder({
     clientOrderId,
     brokerOrderId: "broker-lost-ack",
@@ -471,7 +526,7 @@ test("attaches a client-ID-resolved broker order ID to an UNKNOWN submission", (
 })
 test("tracks a FILLED acknowledgement as UNKNOWN until execution quantity is reconciled", () => {
   const pending = makeOrder({ clientOrderId: "h-ZROUSDT-ack" })
-  const registry = OrderRegistry.empty().registerPending({ order: pending }).registry
+  const {registry} = OrderRegistry.empty().registerPending({ order: pending })
   const acknowledged = makeOrder({
     clientOrderId: pending.clientOrderId,
     brokerOrderId: "698746",
@@ -507,7 +562,7 @@ test("tracks a FILLED acknowledgement as UNKNOWN until execution quantity is rec
 
 test("deduplicates an identical acknowledgement but rejects changed intent on the same broker identity", () => {
   const pending = makeOrder({ clientOrderId: "h-ack-replay" })
-  const registry = OrderRegistry.empty().registerPending({ order: pending }).registry
+  const {registry} = OrderRegistry.empty().registerPending({ order: pending })
   const acknowledged = makeOrder({
     clientOrderId: pending.clientOrderId,
     brokerOrderId: "698746",
@@ -545,10 +600,11 @@ test("deduplicates an identical acknowledgement but rejects changed intent on th
 
 test("rejects an acknowledgement that reuses another Harvester order's broker ID", () => {
   const first = makeOrder({ clientOrderId: "h-ack-first" })
-  const second = makeOrder({ clientOrderId: "h-ack-second", side: "SELL" })
-  const registry = OrderRegistry.empty()
+  const second = makeOrder({ clientOrderId: "h-ack-second",
+side: "SELL" })
+  const {registry} = OrderRegistry.empty()
     .registerPending({ order: first }).registry
-    .registerPending({ order: second }).registry
+    .registerPending({ order: second })
   const secondAcknowledgement = makeOrder({
     clientOrderId: second.clientOrderId,
     brokerOrderId: "698746",
@@ -579,9 +635,9 @@ test("rejects an acknowledgement that reuses another Harvester order's broker ID
 
 test("marks a PENDING submission UNKNOWN without releasing its order commitment", () => {
   const clientOrderId = "h-unknown-submit"
-  const registry = OrderRegistry.empty().registerPending({
+  const {registry} = OrderRegistry.empty().registerPending({
     order: makeOrder({ clientOrderId }),
-  }).registry
+  })
 
   const result = registry.markUnknown({ clientOrderId })
   const tracked = result.data.registry.getOrder({ clientOrderId })
@@ -600,7 +656,8 @@ test("updates the intended UNKNOWN submission by client ID when multiple orders 
   const secondClientOrderId = "h-unknown-second"
   const initialRegistry = OrderRegistry.empty()
     .registerPending({ order: makeOrder({ clientOrderId: firstClientOrderId }) }).registry
-    .registerPending({ order: makeOrder({ clientOrderId: secondClientOrderId, side: "SELL" }) }).registry
+    .registerPending({ order: makeOrder({ clientOrderId: secondClientOrderId,
+side: "SELL" }) }).registry
   const firstUnknownResult = initialRegistry.markUnknown({ clientOrderId: firstClientOrderId })
   const bothUnknownResult = firstUnknownResult.data.registry.markUnknown({
     clientOrderId: secondClientOrderId,
@@ -650,9 +707,9 @@ test("marks an acknowledged OPEN order UNKNOWN without losing broker identity or
     status: "OPEN",
     updatedAt: 10,
   })
-  const registry = OrderRegistry.empty()
+  const {registry} = OrderRegistry.empty()
     .registerPending({ order: pending }).registry
-    .applyUpdate({ order: open }).registry
+    .applyUpdate({ order: open })
 
   const result = registry.markCancellationUnknown({ clientOrderId })
   const tracked = result.data.registry.getOrder({ clientOrderId })
@@ -677,9 +734,9 @@ test("marks a partially filled order UNKNOWN and preserves cumulative execution"
     executedQuantity: "25.5",
     updatedAt: 20,
   })
-  const registry = OrderRegistry.empty()
+  const {registry} = OrderRegistry.empty()
     .registerPending({ order: pending }).registry
-    .applyUpdate({ order: partiallyFilled }).registry
+    .applyUpdate({ order: partiallyFilled })
 
   const result = registry.markCancellationUnknown({ clientOrderId })
   const tracked = result.data.registry.getOrder({ clientOrderId })
@@ -695,9 +752,13 @@ test("marks a partially filled order UNKNOWN and preserves cumulative execution"
 test("does not downgrade an already acknowledged order when submission failure arrives late", () => {
   const clientOrderId = "h-ack-race"
   const pending = makeOrder({ clientOrderId })
-  const registry = OrderRegistry.empty().registerPending({ order: pending }).registry.applyUpdate({
-    order: makeOrder({ clientOrderId, brokerOrderId: "broker-ack-race", status: "OPEN", updatedAt: 102 }),
-  }).registry
+  const { registry: pendingRegistry } = OrderRegistry.empty().registerPending({ order: pending })
+  const { registry } = pendingRegistry.applyUpdate({
+    order: makeOrder({ clientOrderId,
+brokerOrderId: "broker-ack-race",
+status: "OPEN",
+updatedAt: 102 }),
+  })
 
   const result = registry.markUnknown({ clientOrderId })
 

@@ -5,7 +5,9 @@ import { adaptOrderRequestParams } from "./order-request-params.js"
 
 test("applies Binance order defaults without changing other input fields", () => {
   assert.deepEqual(adaptOrderRequestParams({
-    input: { symbol: "BTCUSDT", quantity: "0.01", price: "50000" },
+    input: { symbol: "BTCUSDT",
+quantity: "0.01",
+price: "50000" },
   }), {
     symbol: "BTCUSDT",
     quantity: "0.01",
@@ -18,7 +20,8 @@ test("applies Binance order defaults without changing other input fields", () =>
 
 test("maps optional clientOrderId to newClientOrderId only when supplied", () => {
   assert.deepEqual(adaptOrderRequestParams({
-    input: { symbol: "BTCUSDT", clientOrderId: "client-123" },
+    input: { symbol: "BTCUSDT",
+clientOrderId: "client-123" },
   }), {
     symbol: "BTCUSDT",
     newClientOrderId: "client-123",
@@ -27,7 +30,8 @@ test("maps optional clientOrderId to newClientOrderId only when supplied", () =>
     timeInForce: "GTC",
   })
   assert.deepEqual(adaptOrderRequestParams({
-    input: { symbol: "BTCUSDT", clientOrderId: "" },
+    input: { symbol: "BTCUSDT",
+clientOrderId: "" },
   }), {
     symbol: "BTCUSDT",
     side: "BUY",

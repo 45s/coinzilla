@@ -1,3 +1,5 @@
+import { isCanonicalNonNegativeSafeInteger } from "./time/is-canonical-non-negative-safe-integer.js"
+
 const isRecord = (value) =>
   value !== null && typeof value === "object" && !Array.isArray(value)
 
@@ -23,9 +25,11 @@ export function createMarketPrice({ priceEvent } = {}) {
   if (!isPositiveDecimal(price)) {
     throw new TypeError("Market price must be a positive decimal string")
   }
-  if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
-    throw new TypeError("Market price timestamp must be a non-negative safe integer")
+  if (!isCanonicalNonNegativeSafeInteger(timestamp)) {
+    throw new TypeError("Market price timestamp must be a non-negative safe integer other than negative zero")
   }
 
-  return Object.freeze({ symbol, price, timestamp })
+  return Object.freeze({ symbol,
+price,
+timestamp })
 }

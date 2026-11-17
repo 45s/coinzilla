@@ -1,3 +1,4 @@
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
@@ -6,8 +7,10 @@ import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledge
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 import { updateTradingAccounting } from "./update-trading-accounting.js"
 
-const baseAsset = new Asset({ id: "doge", code: "DOGE" })
-const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
+const baseAsset = new Asset({ id: "doge",
+code: "DOGE" })
+const quoteAsset = new Asset({ id: "usdt",
+code: "USDT" })
 const market = new Market({
   venue: "binance",
   symbol: "DOGEUSDT",
@@ -26,12 +29,15 @@ function makeFill({
 } = {}) {
   return new Fill({
     tradeId,
-    brokerOrderId: "order-" + tradeId,
+    brokerOrderId: `order-${  tradeId}`,
     market: fillMarket,
     side,
-    price: new Money({ amount: "0.1", asset: quoteAsset }),
-    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
-    quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+    price: new Money({ amount: "0.1",
+asset: quoteAsset }),
+    quantity: new Quantity({ amount: quantity,
+asset: baseAsset }),
+    quoteQuantity: new Money({ amount: quoteQuantity,
+asset: quoteAsset }),
     commissions,
     commissionStatus,
   })
@@ -45,7 +51,8 @@ test("applies a canonical BUY fill to Portfolio and RecoveryLedger together", ()
     recoveryLedger,
     fill: makeFill({
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01",
+asset: quoteAsset }) }),
       ],
     }),
   })
@@ -73,7 +80,8 @@ test("applies SELL proceeds net of actual quote commission to the recovery ledge
       quantity: "50",
       quoteQuantity: "5.5",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01",
+asset: quoteAsset }) }),
       ],
     }),
   })
@@ -105,15 +113,19 @@ test("applies identical duplicate fills idempotently to both projections", () =>
 })
 
 test("fails closed on third-asset fees without quote valuation and accepts a reliable valuation", () => {
-  const thirdAsset = new Asset({ id: "bnb", code: "BNB" })
+  const thirdAsset = new Asset({ id: "bnb",
+code: "BNB" })
   const fill = makeFill({
     commissions: [
-      new Commission({ amount: new Money({ amount: "0.001", asset: thirdAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.001",
+asset: thirdAsset }) }),
     ],
   })
   const portfolio = new Portfolio()
   const recoveryLedger = RecoveryLedger.empty({ market })
-  const result = updateTradingAccounting({ portfolio, recoveryLedger, fill })
+  const result = updateTradingAccounting({ portfolio,
+recoveryLedger,
+fill })
 
   assert.equal(result.ok, false)
   assert.equal(portfolio.positions.length, 0)
@@ -122,14 +134,17 @@ test("fails closed on third-asset fees without quote valuation and accepts a rel
 
 
 test("includes reliable third-asset commission valuation in Position.spent and RecoveryLedger cost mirror", () => {
-  const thirdAsset = new Asset({ id: "bnb", code: "BNB" })
+  const thirdAsset = new Asset({ id: "bnb",
+code: "BNB" })
   const result = updateTradingAccounting({
     portfolio: new Portfolio(),
     recoveryLedger: RecoveryLedger.empty({ market }),
     fill: makeFill({
       commissions: [new Commission({
-        amount: new Money({ amount: "0.001", asset: thirdAsset }),
-        quoteValue: new Money({ amount: "0.02", asset: quoteAsset }),
+        amount: new Money({ amount: "0.001",
+asset: thirdAsset }),
+        quoteValue: new Money({ amount: "0.02",
+asset: quoteAsset }),
       })],
     }),
   })
@@ -140,15 +155,22 @@ test("includes reliable third-asset commission valuation in Position.spent and R
 })
 
 test("preserves third-asset commission accounting across multiple BUY and SELL fills", () => {
-  const thirdAsset = new Asset({ id: "bnb", code: "BNB" })
+  const thirdAsset = new Asset({ id: "bnb",
+code: "BNB" })
   const fills = [
     makeFill({
       tradeId: "third-fee-buy-1",
       quantity: "100",
       quoteQuantity: "10",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.001", asset: thirdAsset }), quoteValue: new Money({ amount: "0.02", asset: quoteAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.002", asset: thirdAsset }), quoteValue: new Money({ amount: "0.01", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.001",
+asset: thirdAsset }),
+quoteValue: new Money({ amount: "0.02",
+asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.002",
+asset: thirdAsset }),
+quoteValue: new Money({ amount: "0.01",
+asset: quoteAsset }) }),
       ],
     }),
     makeFill({
@@ -156,7 +178,10 @@ test("preserves third-asset commission accounting across multiple BUY and SELL f
       quantity: "50",
       quoteQuantity: "5",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.002", asset: thirdAsset }), quoteValue: new Money({ amount: "0.03", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.002",
+asset: thirdAsset }),
+quoteValue: new Money({ amount: "0.03",
+asset: quoteAsset }) }),
       ],
     }),
     makeFill({
@@ -165,7 +190,10 @@ test("preserves third-asset commission accounting across multiple BUY and SELL f
       quantity: "40",
       quoteQuantity: "4.4",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.001", asset: thirdAsset }), quoteValue: new Money({ amount: "0.02", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.001",
+asset: thirdAsset }),
+quoteValue: new Money({ amount: "0.02",
+asset: quoteAsset }) }),
       ],
     }),
     makeFill({
@@ -174,7 +202,10 @@ test("preserves third-asset commission accounting across multiple BUY and SELL f
       quantity: "50",
       quoteQuantity: "5.5",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.001", asset: thirdAsset }), quoteValue: new Money({ amount: "0.01", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.001",
+asset: thirdAsset }),
+quoteValue: new Money({ amount: "0.01",
+asset: quoteAsset }) }),
       ],
     }),
   ]
@@ -182,11 +213,12 @@ test("preserves third-asset commission accounting across multiple BUY and SELL f
   let recoveryLedger = RecoveryLedger.empty({ market })
 
   for (const fill of fills) {
-    const result = updateTradingAccounting({ portfolio, recoveryLedger, fill })
+    const result = updateTradingAccounting({ portfolio,
+recoveryLedger,
+fill })
     assert.equal(result.ok, true, result.errors?.[0]?.message)
     assert.equal(result.data.applied, true)
-    portfolio = result.data.portfolio
-    recoveryLedger = result.data.recoveryLedger
+    ;({ portfolio, recoveryLedger } = result.data)
   }
 
   const position = portfolio.getPosition({ marketId: market.id })
@@ -196,14 +228,16 @@ test("preserves third-asset commission accounting across multiple BUY and SELL f
   assert.equal(recoveryLedger.buyCost, "15.06")
   assert.equal(recoveryLedger.netSellProceeds, "9.87")
   assert.equal(recoveryLedger.outstandingRecoveryAmount, "5.19")
-  assert.equal(position.quoteNetCashFlow.amount, "-" + recoveryLedger.outstandingRecoveryAmount)
+  assert.equal(position.quoteNetCashFlow.amount, `-${  recoveryLedger.outstandingRecoveryAmount}`)
   assert.equal(portfolio.appliedFillIds.length, 4)
   assert.equal(recoveryLedger.appliedFillIds.length, 4)
 })
 
 test("rejects contradictory third-asset identities atomically across both accounting projections", () => {
-  const thirdAsset = new Asset({ id: "bnb", code: "BNB" })
-  const contradictoryAsset = new Asset({ id: "bnb", code: "BNB2" })
+  const thirdAsset = new Asset({ id: "bnb",
+code: "BNB" })
+  const contradictoryAsset = new Asset({ id: "bnb",
+code: "BNB2" })
   const portfolio = new Portfolio()
   const recoveryLedger = RecoveryLedger.empty({ market })
   const originalPortfolio = portfolio.value
@@ -214,12 +248,16 @@ test("rejects contradictory third-asset identities atomically across both accoun
     fill: makeFill({
       commissions: [
         new Commission({
-          amount: new Money({ amount: "0.001", asset: thirdAsset }),
-          quoteValue: new Money({ amount: "0.02", asset: quoteAsset }),
+          amount: new Money({ amount: "0.001",
+asset: thirdAsset }),
+          quoteValue: new Money({ amount: "0.02",
+asset: quoteAsset }),
         }),
         new Commission({
-          amount: new Money({ amount: "0.001", asset: contradictoryAsset }),
-          quoteValue: new Money({ amount: "0.02", asset: quoteAsset }),
+          amount: new Money({ amount: "0.001",
+asset: contradictoryAsset }),
+          quoteValue: new Money({ amount: "0.02",
+asset: quoteAsset }),
         }),
       ],
     }),
@@ -231,8 +269,10 @@ test("rejects contradictory third-asset identities atomically across both accoun
 })
 
 test("rejects a third-asset quote valuation whose asset code contradicts the market quote asset", () => {
-  const thirdAsset = new Asset({ id: "bnb", code: "BNB" })
-  const contradictoryQuoteAsset = new Asset({ id: quoteAsset.id, code: "USDC" })
+  const thirdAsset = new Asset({ id: "bnb",
+code: "BNB" })
+  const contradictoryQuoteAsset = new Asset({ id: quoteAsset.id,
+code: "USDC" })
   const portfolio = new Portfolio()
   const recoveryLedger = RecoveryLedger.empty({ market })
   const originalPortfolio = portfolio.value
@@ -242,8 +282,10 @@ test("rejects a third-asset quote valuation whose asset code contradicts the mar
     recoveryLedger,
     fill: makeFill({
       commissions: [new Commission({
-        amount: new Money({ amount: "0.001", asset: thirdAsset }),
-        quoteValue: new Money({ amount: "0.02", asset: contradictoryQuoteAsset }),
+        amount: new Money({ amount: "0.001",
+asset: thirdAsset }),
+        quoteValue: new Money({ amount: "0.02",
+asset: contradictoryQuoteAsset }),
       })],
     }),
   })
@@ -283,8 +325,11 @@ test("rejects a wrong-market fill atomically when Portfolio accepts but Recovery
   const recoveryLedger = RecoveryLedger.empty({ market })
   const fill = makeFill({ fillMarket: otherMarket })
 
-  assert.equal(portfolio.applyFill({ fill }).applied, true)
-  const result = updateTradingAccounting({ portfolio, recoveryLedger, fill })
+  assert.equal(portfolio.applyFill({ fill,
+strategyId: StrategyId.COIN_GRABBER }).applied, true)
+  const result = updateTradingAccounting({ portfolio,
+recoveryLedger,
+fill })
 
   assert.equal(result.ok, false)
   assert.equal(portfolio.positions.length, 0)
@@ -297,8 +342,10 @@ test("accounts base and quote commissions atomically across Portfolio and Recove
   const buy = makeFill({
     tradeId: "buy-base-and-quote-fees",
     commissions: [
-      new Commission({ amount: new Money({ amount: "1", asset: baseAsset }) }),
-      new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+      new Commission({ amount: new Money({ amount: "1",
+asset: baseAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.01",
+asset: quoteAsset }) }),
     ],
   })
   const bought = updateTradingAccounting({
@@ -319,8 +366,10 @@ test("accounts base and quote commissions atomically across Portfolio and Recove
     quantity: "50",
     quoteQuantity: "6",
     commissions: [
-      new Commission({ amount: new Money({ amount: "0.5", asset: baseAsset }) }),
-      new Commission({ amount: new Money({ amount: "0.02", asset: quoteAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.5",
+asset: baseAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.02",
+asset: quoteAsset }) }),
     ],
   })
   const sold = updateTradingAccounting({
@@ -346,10 +395,14 @@ test("aggregates multiple base and quote commission entries across both accounti
       quantity: "1",
       quoteQuantity: "0.1",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.1", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.2", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.02", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.1",
+asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.2",
+asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01",
+asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.02",
+asset: quoteAsset }) }),
       ],
     }),
   })
@@ -370,10 +423,14 @@ test("aggregates multiple base and quote commission entries across both accounti
       quantity: "0.5",
       quoteQuantity: "0.12",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.05", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.05", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.02", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.05",
+asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.05",
+asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01",
+asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.02",
+asset: quoteAsset }) }),
       ],
     }),
   })
@@ -395,8 +452,10 @@ test("reconciles multiple commission-bearing fills exactly across Portfolio and 
       quantity: "100",
       quoteQuantity: "10",
       commissions: [
-        new Commission({ amount: new Money({ amount: "1", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "1",
+asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01",
+asset: quoteAsset }) }),
       ],
     }),
     makeFill({
@@ -404,8 +463,10 @@ test("reconciles multiple commission-bearing fills exactly across Portfolio and 
       quantity: "50",
       quoteQuantity: "5",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.5", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.005", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.5",
+asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.005",
+asset: quoteAsset }) }),
       ],
     }),
     makeFill({
@@ -414,8 +475,10 @@ test("reconciles multiple commission-bearing fills exactly across Portfolio and 
       quantity: "40",
       quoteQuantity: "4.4",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.4", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.004", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.4",
+asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.004",
+asset: quoteAsset }) }),
       ],
     }),
     makeFill({
@@ -424,8 +487,10 @@ test("reconciles multiple commission-bearing fills exactly across Portfolio and 
       quantity: "50",
       quoteQuantity: "5.5",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.5", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.005", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.5",
+asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.005",
+asset: quoteAsset }) }),
       ],
     }),
   ]
@@ -433,11 +498,12 @@ test("reconciles multiple commission-bearing fills exactly across Portfolio and 
   let recoveryLedger = RecoveryLedger.empty({ market })
 
   for (const fill of fills) {
-    const result = updateTradingAccounting({ portfolio, recoveryLedger, fill })
+    const result = updateTradingAccounting({ portfolio,
+recoveryLedger,
+fill })
     assert.equal(result.ok, true, result.errors?.[0]?.message)
     assert.equal(result.data.applied, true)
-    portfolio = result.data.portfolio
-    recoveryLedger = result.data.recoveryLedger
+    ;({ portfolio, recoveryLedger } = result.data)
   }
 
   const position = portfolio.getPosition({ marketId: market.id })
@@ -448,7 +514,7 @@ test("reconciles multiple commission-bearing fills exactly across Portfolio and 
   assert.equal(recoveryLedger.outstandingRecoveryAmount, "5.124")
   assert.equal(
     position.quoteNetCashFlow.amount,
-    "-" + recoveryLedger.outstandingRecoveryAmount,
+    `-${  recoveryLedger.outstandingRecoveryAmount}`,
   )
   assert.equal(portfolio.appliedFillIds.length, 4)
   assert.equal(recoveryLedger.appliedFillIds.length, 4)
@@ -461,8 +527,10 @@ test("reconciles fee-adjusted Portfolio cash flow with RecoveryLedger cycle prof
       quantity: "100",
       quoteQuantity: "10",
       commissions: [
-        new Commission({ amount: new Money({ amount: "1", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "1",
+asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01",
+asset: quoteAsset }) }),
       ],
     }),
     makeFill({
@@ -471,8 +539,10 @@ test("reconciles fee-adjusted Portfolio cash flow with RecoveryLedger cycle prof
       quantity: "48.5",
       quoteQuantity: "5.5",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.485", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.485",
+asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01",
+asset: quoteAsset }) }),
       ],
     }),
     makeFill({
@@ -481,8 +551,10 @@ test("reconciles fee-adjusted Portfolio cash flow with RecoveryLedger cycle prof
       quantity: "48.5",
       quoteQuantity: "5.5",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.485", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.485",
+asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01",
+asset: quoteAsset }) }),
       ],
     }),
   ]
@@ -490,10 +562,11 @@ test("reconciles fee-adjusted Portfolio cash flow with RecoveryLedger cycle prof
   let recoveryLedger = RecoveryLedger.empty({ market })
 
   for (const fill of fills) {
-    const result = updateTradingAccounting({ portfolio, recoveryLedger, fill })
+    const result = updateTradingAccounting({ portfolio,
+recoveryLedger,
+fill })
     assert.equal(result.ok, true, result.errors?.[0]?.message)
-    portfolio = result.data.portfolio
-    recoveryLedger = result.data.recoveryLedger
+    ;({ portfolio, recoveryLedger } = result.data)
   }
 
   const position = portfolio.getPosition({ marketId: market.id })
@@ -539,14 +612,18 @@ test("rejects conflicting replayed execution facts without changing either proje
   const first = updateTradingAccounting({
     portfolio: new Portfolio(),
     recoveryLedger: RecoveryLedger.empty({ market }),
-    fill: makeFill({ tradeId: "replayed-execution", quantity: "100", quoteQuantity: "10" }),
+    fill: makeFill({ tradeId: "replayed-execution",
+quantity: "100",
+quoteQuantity: "10" }),
   })
   assert.equal(first.ok, true)
 
   const conflicting = updateTradingAccounting({
     portfolio: first.data.portfolio,
     recoveryLedger: first.data.recoveryLedger,
-    fill: makeFill({ tradeId: "replayed-execution", quantity: "99", quoteQuantity: "9.9" }),
+    fill: makeFill({ tradeId: "replayed-execution",
+quantity: "99",
+quoteQuantity: "9.9" }),
   })
 
   assert.equal(conflicting.ok, false)
@@ -559,8 +636,10 @@ test("rejects conflicting replayed execution facts without changing either proje
 
 
 test("reconciles the two observed ZROUSDT TESTNET executions exactly and deduplicates replays", () => {
-  const zroAsset = new Asset({ id: "zro", code: "ZRO" })
-  const usdtAsset = new Asset({ id: "usdt-zro-test", code: "USDT" })
+  const zroAsset = new Asset({ id: "zro",
+code: "ZRO" })
+  const usdtAsset = new Asset({ id: "usdt-zro-test",
+code: "USDT" })
   const zroMarket = new Market({
     venue: "binance",
     symbol: "ZROUSDT",
@@ -573,10 +652,14 @@ test("reconciles the two observed ZROUSDT TESTNET executions exactly and dedupli
       brokerOrderId: "698704",
       market: zroMarket,
       side: "BUY",
-      price: new Money({ amount: "1.792", asset: usdtAsset }),
-      quantity: new Quantity({ amount: "5", asset: zroAsset }),
-      quoteQuantity: new Money({ amount: "8.96", asset: usdtAsset }),
-      commissions: [new Commission({ amount: new Money({ amount: "0.005", asset: zroAsset }) })],
+      price: new Money({ amount: "1.792",
+asset: usdtAsset }),
+      quantity: new Quantity({ amount: "5",
+asset: zroAsset }),
+      quoteQuantity: new Money({ amount: "8.96",
+asset: usdtAsset }),
+      commissions: [new Commission({ amount: new Money({ amount: "0.005",
+asset: zroAsset }) })],
       commissionStatus: "COMPLETE",
     }),
     new Fill({
@@ -584,10 +667,14 @@ test("reconciles the two observed ZROUSDT TESTNET executions exactly and dedupli
       brokerOrderId: "698746",
       market: zroMarket,
       side: "BUY",
-      price: new Money({ amount: "1.789", asset: usdtAsset }),
-      quantity: new Quantity({ amount: "5", asset: zroAsset }),
-      quoteQuantity: new Money({ amount: "8.945", asset: usdtAsset }),
-      commissions: [new Commission({ amount: new Money({ amount: "0.005", asset: zroAsset }) })],
+      price: new Money({ amount: "1.789",
+asset: usdtAsset }),
+      quantity: new Quantity({ amount: "5",
+asset: zroAsset }),
+      quoteQuantity: new Money({ amount: "8.945",
+asset: usdtAsset }),
+      commissions: [new Commission({ amount: new Money({ amount: "0.005",
+asset: zroAsset }) })],
       commissionStatus: "COMPLETE",
     }),
   ]
@@ -595,11 +682,12 @@ test("reconciles the two observed ZROUSDT TESTNET executions exactly and dedupli
   let portfolio = new Portfolio()
   let recoveryLedger = RecoveryLedger.empty({ market: zroMarket })
   for (const fill of fills) {
-    const result = updateTradingAccounting({ portfolio, recoveryLedger, fill })
+    const result = updateTradingAccounting({ portfolio,
+recoveryLedger,
+fill })
     assert.equal(result.ok, true, result.errors?.[0]?.message)
     assert.equal(result.data.applied, true)
-    portfolio = result.data.portfolio
-    recoveryLedger = result.data.recoveryLedger
+    ;({ portfolio, recoveryLedger } = result.data)
   }
 
   const position = portfolio.getPosition({ marketId: zroMarket.id })
@@ -611,7 +699,9 @@ test("reconciles the two observed ZROUSDT TESTNET executions exactly and dedupli
   assert.equal(portfolio.appliedFillIds.length, 2)
   assert.equal(recoveryLedger.appliedFillIds.length, 2)
 
-  const duplicate = updateTradingAccounting({ portfolio, recoveryLedger, fill: fills[1] })
+  const duplicate = updateTradingAccounting({ portfolio,
+recoveryLedger,
+fill: fills[1] })
   assert.equal(duplicate.ok, true)
   assert.equal(duplicate.data.applied, false)
   assert.equal(duplicate.data.duplicate, true)

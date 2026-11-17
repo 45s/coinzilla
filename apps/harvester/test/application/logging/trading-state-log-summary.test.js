@@ -1,3 +1,4 @@
+import { StrategyId } from "../../../src/domain/strategies/strategy-ids.js"
 import test from "node:test"
 import assert from "node:assert/strict"
 import {
@@ -8,7 +9,8 @@ import {
 } from "../../../src/application/logging/trading-state-log-summary.js"
 
 const position = {
-  market: { id: "market-zro-usdt", symbol: "ZROUSDT" },
+  market: { id: "market-zro-usdt",
+symbol: "ZROUSDT" },
   quantity: { amount: "10" },
   spent: { amount: "10.5" },
   baseQuantity: { amount: "10" },
@@ -87,18 +89,23 @@ test("portfolio log summary is scoped to the evaluated market and exposes only a
 
 test("missing portfolio positions and ledgers are represented as null", () => {
   assert.deepEqual(createPortfolioLogSummary({
-    portfolio: { appliedFillIds: [], getPosition: () => undefined },
+    portfolio: { appliedFillIds: [],
+getPosition: () => undefined },
     marketId: "market-zro-usdt",
-  }), { position: null, appliedFillCount: 0 })
+  }), { position: null,
+appliedFillCount: 0 })
   assert.equal("appliedFillFingerprints" in createPortfolioLogSummary({
-    portfolio: { appliedFillIds: [], getPosition: () => undefined },
+    portfolio: { appliedFillIds: [],
+getPosition: () => undefined },
     marketId: "market-zro-usdt",
   }), false)
   assert.equal(createPositionLogSummary({}), null)
   assert.equal(createRecoveryLedgerLogSummary({}), null)
   assert.deepEqual(createPortfolioLogSummary({
-    portfolio: { appliedFillIds: [], getPosition: () => { throw new Error("must not query without market id") } },
-  }), { position: null, appliedFillCount: 0 })
+    portfolio: { appliedFillIds: [],
+getPosition: () => { throw new Error("must not query without market id") } },
+  }), { position: null,
+appliedFillCount: 0 })
 })
 
 
@@ -131,4 +138,34 @@ test("Portfolio Stats contains only Portfolio inventory and accounting values", 
       quoteNetCashFlow: "0 USDT",
     },
   })
+})
+
+
+test("portfolio log summary selects one Position when a strategy owns multiple Positions for the market", () => {
+  const selectedPosition = {
+    ...position,
+    positionId: "position:rs:cycle-2",
+    strategyId: StrategyId.RECOVERY_SELLER,
+  }
+  const portfolio = {
+    appliedFillIds: ["fill-1"],
+    getPosition: (selection) => {
+      assert.deepEqual(selection, {
+        positionId: "position:rs:cycle-2",
+        marketId: position.market.id,
+        strategyId: StrategyId.RECOVERY_SELLER,
+      })
+      return selectedPosition
+    },
+  }
+
+  const summary = createPortfolioLogSummary({
+    portfolio,
+    marketId: position.market.id,
+    positionId: selectedPosition.positionId,
+    strategyId: selectedPosition.strategyId,
+  })
+
+  assert.equal(summary.position.positionId, selectedPosition.positionId)
+  assert.equal(summary.position.strategyId, selectedPosition.strategyId)
 })

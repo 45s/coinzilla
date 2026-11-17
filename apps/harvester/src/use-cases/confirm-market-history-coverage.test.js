@@ -11,7 +11,7 @@ const evidence = {
   verifiedBy: "operator-123",
 }
 
-function createStore(initialRecords = [], { readError, appendError } = {}) {
+function createStore(...[initialRecords = [], { readError, appendError } = {}]) {
   const records = [...initialRecords]
   const calls = []
   return {
@@ -19,21 +19,33 @@ function createStore(initialRecords = [], { readError, appendError } = {}) {
     calls,
     readAll: async () => {
       calls.push("readAll")
-      if (readError) return { ok: false, errors: [readError] }
-      return { ok: true, data: { records: [...records] } }
+      if (readError) {
+        return { ok: false,
+errors: [readError] }
+      }
+      return { ok: true,
+data: { records: [...records] } }
     },
     append: async (fact) => {
       calls.push(["append", fact])
-      if (appendError) return { ok: false, errors: [appendError] }
+      if (appendError) {
+        return { ok: false,
+errors: [appendError] }
+      }
       const existing = records.find((item) => item.factId === fact.factId)
       if (existing) {
         if (JSON.stringify(existing) !== JSON.stringify(fact)) {
-          return { ok: false, errors: [new Error("conflicting duplicate fact")] }
+          return { ok: false,
+errors: [new Error("conflicting duplicate fact")] }
         }
-        return { ok: true, data: { durable: true, duplicate: true } }
+        return { ok: true,
+data: { durable: true,
+duplicate: true } }
       }
       records.push(fact)
-      return { ok: true, data: { durable: true, duplicate: false } }
+      return { ok: true,
+data: { durable: true,
+duplicate: false } }
     },
   }
 }
@@ -45,7 +57,7 @@ function createOptions(overrides = {}) {
     store,
     calls,
     options: {
-      durableFactsStore: store,
+      operationalStateStore: store,
       ...evidence,
       reconcileMarketState: async ({ historyRetentionEvidence }) => {
         calls.push(historyRetentionEvidence)
@@ -55,7 +67,9 @@ function createOptions(overrides = {}) {
             symbol: "LINKUSDT",
             ready: true,
             status: "READY",
-            audit: { targetMarketBlocked: false, tradeHistory: { complete: true, historyRetentionBaselineFactId: evidence.factId } },
+            audit: { targetMarketBlocked: false,
+tradeHistory: { complete: true,
+historyRetentionBaselineFactId: evidence.factId } },
           },
         }
       },
@@ -107,7 +121,10 @@ test("does not append coverage when reconciliation reports a target-market block
         symbol: "LINKUSDT",
         ready: false,
         status: "BLOCKED",
-        audit: { targetMarketBlocked: true, blockedMarkets: ["LINKUSDT"], tradeHistory: { complete: true, historyRetentionBaselineFactId: evidence.factId } },
+        audit: { targetMarketBlocked: true,
+blockedMarkets: ["LINKUSDT"],
+tradeHistory: { complete: true,
+historyRetentionBaselineFactId: evidence.factId } },
       },
     }),
   })
@@ -123,7 +140,10 @@ test("does not append coverage when the recovery audit is skipped for a market w
   const { store, options } = createOptions({
     reconcileMarketState: async () => ({
       ok: true,
-      data: { symbol: "LINKUSDT", ready: false, status: "SKIPPED", reason: "NO_PRIOR_TRADING_STATE" },
+      data: { symbol: "LINKUSDT",
+ready: false,
+status: "SKIPPED",
+reason: "NO_PRIOR_TRADING_STATE" },
     }),
   })
   const result = await confirmMarketHistoryCoverage(options)
@@ -183,21 +203,136 @@ test("rejects a second conflicting coverage baseline for the same market", async
   assert.equal(store.records.length, 1, "A conflicting baseline must not append another coverage fact.")
 })
 
-test("does not reconcile or append when the durable-fact ledger cannot be read", async () => {
+test("does not reconcile or append when the Operational State Store cannot be read", async () => {
   const { store, calls, options } = createOptions()
-  store.readAll = async () => ({ ok: false, errors: [new Error("durable ledger unavailable")] })
+  store.readAll = async () => ({ ok: false,
+errors: [new Error("durable ledger unavailable")] })
   const result = await confirmMarketHistoryCoverage(options)
 
-  assert.equal(result.ok, false, "An unreadable durable-fact ledger must fail the confirmation workflow.")
+  assert.equal(result.ok, false, "An unreadable Operational State Store must fail the confirmation workflow.")
   assert.equal(calls.length, 0, "Reconciliation must not proceed when durable fact integrity cannot be established.")
   assert.equal(store.records.length, 0, "No coverage fact may be appended when the existing ledger cannot be verified.")
 })
 
 test("does not report success when the durable append fails", async () => {
   const { store, options } = createOptions()
-  store.append = async () => ({ ok: false, errors: [new Error("append failed")] })
+  store.append = async () => ({ ok: false,
+errors: [new Error("append failed")] })
   const result = await confirmMarketHistoryCoverage(options)
 
   assert.equal(result.ok, false, "A failed durable append must fail the confirmation workflow.")
   assert.equal(store.records.length, 0, "A failed append must not create an in-memory confirmation record.")
+})
+
+
+test("rejects malformed confirmation evidence before reading the durable ledger", async () => {
+  const invalidCases = [
+    [{ operationalStateStore: {} }, /read\/append port/],
+    [{ symbol: "linkusdt" }, /canonical uppercase/],
+    [{ coveredFromTime: -1 }, /non-negative safe integers/],
+    [{ coveredFromTime: -0 }, /non-negative safe integers/],
+    [{ verifiedAt: -0 }, /non-negative safe integers/],
+    [{ verifiedAt: 99 }, /verifiedAt >= coveredFromTime/],
+    [{ evidenceDigest: "not-a-digest" }, /SHA-256 digest/],
+    [{ verifiedBy: " operator" }, /canonical non-empty string/],
+    [{ reconcileMarketState: undefined }, /one-market reconciliation callback/],
+  ]
+
+  for (const [overrides, message] of invalidCases) {
+    const { store, options } = createOptions()
+    const result = await confirmMarketHistoryCoverage({ ...options,
+...overrides })
+    assert.equal(result.ok, false, "Malformed coverage confirmation evidence must be rejected before a durable operation.")
+    assert.match(result.errors[0].message, message, "The validation error must identify the invalid coverage field or dependency.")
+    assert.equal(store.calls.length, 0, "Invalid confirmation evidence must fail before durable reads or writes.")
+  }
+})
+
+test("does not append when reconciliation fails or identifies another market", async () => {
+  const failedReconciliation = createOptions({
+    reconcileMarketState: async () => ({ ok: false,
+errors: [new Error("reconciliation failed")] }),
+  })
+  const failed = await confirmMarketHistoryCoverage(failedReconciliation.options)
+  assert.equal(failed.ok, false, "A failed one-market reconciliation must not confirm history coverage.")
+  assert.equal(failedReconciliation.store.records.length, 0, "A failed reconciliation must not append a coverage fact.")
+
+  const mismatchedMarket = createOptions({
+    reconcileMarketState: async () => ({
+      ok: true,
+      data: { symbol: "ETHUSDT",
+ready: true,
+audit: {} },
+    }),
+  })
+  const mismatched = await confirmMarketHistoryCoverage(mismatchedMarket.options)
+  assert.equal(mismatched.ok, false, "Reconciliation evidence for another market must be rejected.")
+  assert.match(mismatched.errors[0].message, /different market/, "The failure must identify the market-identity mismatch.")
+  assert.equal(mismatchedMarket.store.records.length, 0, "A market-identity mismatch must not append a coverage fact.")
+})
+
+test("does not append when the history audit is incomplete or references different coverage", async () => {
+  for (const audit of [
+    { targetMarketBlocked: false,
+tradeHistory: { complete: false,
+historyRetentionBaselineFactId: evidence.factId } },
+    { targetMarketBlocked: false,
+tradeHistory: { complete: true,
+historyRetentionBaselineFactId: "other-baseline" } },
+  ]) {
+    const { store, options } = createOptions({
+      reconcileMarketState: async () => ({
+        ok: true,
+        data: { symbol: evidence.symbol,
+ready: true,
+status: "READY",
+audit },
+      }),
+    })
+    const result = await confirmMarketHistoryCoverage(options)
+    assert.equal(result.ok, true, "An incomplete or mismatched history audit must return a handled non-confirmation result.")
+    assert.equal(result.data.confirmed, false, "Incomplete or mismatched history evidence must not be marked confirmed.")
+    assert.equal(store.records.length, 0, "Incomplete or mismatched history evidence must not append a coverage fact.")
+  }
+})
+
+test("fails closed when the committed coverage readback is unavailable or mismatched", async () => {
+  const unavailable = createOptions()
+  let unavailableReads = 0
+  unavailable.store.readAll = async () => {
+    unavailableReads += 1
+    if (unavailableReads === 1) {
+      return { ok: true,
+data: { records: [] } }
+    }
+    return { ok: false,
+errors: [new Error("readback unavailable")] }
+  }
+  const unavailableResult = await confirmMarketHistoryCoverage(unavailable.options)
+  assert.equal(unavailableResult.ok, false, "A failed durable readback must prevent confirmation from being reported as successful.")
+  assert.match(unavailableResult.errors[0].message, /readback unavailable/, "The readback failure must remain visible to the operator.")
+
+  const mismatched = createOptions()
+  let mismatchedReads = 0
+  mismatched.store.readAll = async () => {
+    mismatchedReads += 1
+    if (mismatchedReads === 1) {
+      return { ok: true,
+data: { records: [] } }
+    }
+    return {
+      ok: true,
+      data: {
+        records: [{
+          factId: evidence.factId,
+          factType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
+          data: { ...evidence,
+evidenceDigest: "b".repeat(64) },
+        }],
+      },
+    }
+  }
+  const mismatchedResult = await confirmMarketHistoryCoverage(mismatched.options)
+  assert.equal(mismatchedResult.ok, false, "A committed fact that differs from reviewed evidence must fail confirmation.")
+  assert.match(mismatchedResult.errors[0].message, /does not match the reviewed evidence/, "The readback mismatch must identify the evidence-integrity failure.")
 })

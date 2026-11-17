@@ -7,6 +7,8 @@ import { PassThrough } from "node:stream"
 import { configureHarvesterLogging, createHarvesterConsoleTransport } from "./configure-harvester-logging.js"
 import { createHarvesterLogSessionPaths } from "./create-harvester-log-session-paths.js"
 
+const ANSI_ESCAPE = String.fromCharCode(27)
+
 function createLogger() {
   const transports = new Map()
   const levels = []
@@ -14,19 +16,20 @@ function createLogger() {
     transports,
     levels,
     addTransport(transport) {
-      if (transports.has(transport.name)) throw new Error("duplicate transport")
+      if (transports.has(transport.name)) {throw new Error("duplicate transport")}
       transports.set(transport.name, transport)
     },
     async removeTransport(name) {
       const transport = transports.get(name)
-      if (!transport) return false
+      if (!transport) {return false}
       transports.delete(name)
       await transport.close?.()
       return true
     },
     setLevel(input) {
       levels.push(input)
-      return { transports: [...transports.values()].map(({ name, level }) => ({ name, level })) }
+      return { transports: [...transports.values()].map(({ name, level }) => ({ name,
+level })) }
     },
   }
 }
@@ -35,8 +38,12 @@ test("configures independent DEBUG and TRACE JSONL files and INFO console thresh
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-logs-"))
   const logger = createLogger()
   try {
-    const logging = await configureHarvesterLogging({ logger, directory, processIdentity: { startedAt: "2026-11-05T12:00:00.000Z", runtimeSessionId: "session-one" } })
-    assert.deepEqual(logger.levels, [{ transport: "console", level: "info" }])
+    const logging = await configureHarvesterLogging({ logger,
+directory,
+processIdentity: { startedAt: "2026-11-05T12:00:00.000Z",
+runtimeSessionId: "session-one" } })
+    assert.deepEqual(logger.levels, [{ transport: "console",
+level: "info" }])
     assert.equal(logger.transports.get("console").level, "info")
     assert.equal(logger.transports.get("harvester-debug-file").level, "debug")
     assert.equal(logger.transports.get("harvester-trace-file").level, "trace")
@@ -45,10 +52,12 @@ test("configures independent DEBUG and TRACE JSONL files and INFO console thresh
       timestamp: "2026-11-05T12:00:00.000Z",
       level: "debug",
       method: "debug",
-      data: { message: "diagnostic", symbol: "ZROUSDT" },
+      data: { message: "diagnostic",
+symbol: "ZROUSDT" },
     }
     await logger.transports.get("harvester-debug-file").write(entry)
-    await logger.transports.get("harvester-trace-file").write({ ...entry, level: "trace" })
+    await logger.transports.get("harvester-trace-file").write({ ...entry,
+level: "trace" })
 
     const debugLines = (await readFile(path.join(directory, "cumulative", "harvester.log"), "utf8")).trim().split("\n")
     const traceLines = (await readFile(path.join(directory, "cumulative", "trace.log"), "utf8")).trim().split("\n")
@@ -67,13 +76,15 @@ test("configures independent DEBUG and TRACE JSONL files and INFO console thresh
     )
     assert.deepEqual([...logger.transports.keys()], ["console"])
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
 test("fails clearly when the shared logger transport API is unavailable", async () => {
   await assert.rejects(
-    configureHarvesterLogging({ logger: {}, directory: os.tmpdir() }),
+    configureHarvesterLogging({ logger: {},
+directory: os.tmpdir() }),
     /shared utils dependency first/,
   )
 })
@@ -82,7 +93,9 @@ test("fails clearly when the shared logger transport API is unavailable", async 
 test("formats console entries as one compact line while retaining structured fields", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
   const transport = createHarvesterConsoleTransport({ output })
 
   transport.write({
@@ -104,58 +117,107 @@ test("formats console entries as one compact line while retaining structured fie
 })
 
 
-test("prints complete Portfolio Stats inventory and accounting in console output", () => {
+test("renders Portfolio Stats as a concise readable summary instead of JSON", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   transport.write({
     timestamp: "2026-11-05T12:00:00.000Z",
     level: "info",
     data: {
       message: "Portfolio Stats",
-      symbol: "ZROFDUSD",
+      strategyId: "CG_coinGrabber",
+      symbol: "DOGEUSDT",
       inventory: {
-        activeBaseQuantity: "25 ZRO",
-        freeBaseQuantity: "0.15 ZRO",
-        totalBaseQuantity: "25.15 ZRO",
+        activeBaseQuantity: "0 DOGE",
+        freeBaseQuantity: "3.4 DOGE",
+        totalBaseQuantity: "3.4 DOGE",
       },
       accounting: {
-        spent: "0 FDUSD",
-        quoteNetCashFlow: "0 FDUSD",
+        spent: "0 USDT",
+        quoteNetCashFlow: "0.02045485 USDT",
       },
     },
   })
 
   const line = written.trim()
-  assert.match(line, /Portfolio Stats/)
-  assert.match(line, /"symbol":"ZROFDUSD"/)
-  assert.match(line, /"activeBaseQuantity":"25 ZRO"/)
-  assert.match(line, /"freeBaseQuantity":"0.15 ZRO"/)
-  assert.match(line, /"totalBaseQuantity":"25.15 ZRO"/)
-  assert.match(line, /"spent":"0 FDUSD"/)
-  assert.match(line, /"quoteNetCashFlow":"0 FDUSD"/)
-  assert.ok(line.length <= 360, "Portfolio Stats should remain a bounded single console line")
+  assert.match(
+    line,
+    /^12:00:00 🪙 CG PORTFOLIO/,
+    "Console timestamps must use the same compact 24-hour local-time format as order lifecycle records.",
+  )
+  assert.match(
+    line,
+    /🪙 CG PORTFOLIO DOGEUSDT: amount: 3\.4 \| earned: 3\.4 \| spent: 0 \| net: 0\.020$/,
+    "The operator console must show total coins, retained coins earned from completed cycles, current-cycle spent value, and cumulative net quote cash flow.",
+  )
+  assert.doesNotMatch(
+    line,
+    /\{|\}|activeBaseQuantity|freeBaseQuantity|totalBaseQuantity|quoteNetCashFlow/,
+    "Portfolio Stats must not expose nested JSON or internal field names in the operator-facing terminal.",
+  )
+  assert.ok(
+    line.length <= 200,
+    "The concise Portfolio summary must fit the ordinary terminal line budget.",
+  )
   output.destroy()
 })
 
+test("prints every enabled market symbol in the subscriptions-ready summary", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+
+  transport.write({
+    timestamp: "2026-11-16T01:17:01.000Z",
+    level: "info",
+    data: {
+      message: "Market data subscriptions ready",
+      enabledSymbols: ["LINKUSDT", "ZROUSDT", "DOGEUSDT", "ADAUSDT"],
+    },
+  })
+
+  assert.match(written, /"enabledSymbols":\["LINKUSDT","ZROUSDT","DOGEUSDT","ADAUSDT"\]/)
+  output.destroy()
+})
 
 test("suppresses consecutive duplicate console entries and reports their count", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
   const transport = createHarvesterConsoleTransport({ output })
   const entry = {
     timestamp: "2026-11-05T12:00:00.000Z",
     level: "info",
-    data: { message: "Market data ready", symbol: "ZROUSDT", price: "1.70" },
+    data: { message: "Market data ready",
+symbol: "ZROUSDT",
+price: "1.70" },
   }
 
   transport.write(entry)
-  transport.write({ ...entry, timestamp: "2026-11-05T12:00:01.000Z" })
-  transport.write({ ...entry, timestamp: "2026-11-05T12:00:02.000Z" })
-  transport.write({ ...entry, timestamp: "2026-11-05T12:00:03.000Z", data: { ...entry.data, price: "1.71" } })
+  transport.write({ ...entry,
+timestamp: "2026-11-05T12:00:01.000Z" })
+  transport.write({ ...entry,
+timestamp: "2026-11-05T12:00:02.000Z" })
+  transport.write({ ...entry,
+timestamp: "2026-11-05T12:00:03.000Z",
+data: { ...entry.data,
+price: "1.71" } })
   transport.close()
 
   assert.equal((written.match(/Market data ready/g) ?? []).length, 2)
@@ -169,7 +231,9 @@ test("suppresses consecutive duplicate console entries and reports their count",
 test("keeps INFO output concise and excludes stack traces and audit internals", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
   const transport = createHarvesterConsoleTransport({ output })
 
   transport.write({
@@ -202,7 +266,9 @@ test("keeps INFO output concise and excludes stack traces and audit internals", 
 test("retains the machine-readable Journal error code in compact console output", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
   const transport = createHarvesterConsoleTransport({ output })
 
   transport.write({
@@ -223,8 +289,11 @@ test("retains the machine-readable Journal error code in compact console output"
 test("colors INFO blue and DEBUG magenta when terminal colors are enabled", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: true })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({ output,
+color: true })
 
   transport.write({
     timestamp: "2026-11-05T12:00:00.000Z",
@@ -237,16 +306,21 @@ test("colors INFO blue and DEBUG magenta when terminal colors are enabled", () =
     data: { message: "Detailed diagnostic" },
   })
 
-  assert.match(written, /\u001b\[34m.*Harvester ready\u001b\[0m/)
-  assert.match(written, /\u001b\[35m.*DEBUG Detailed diagnostic\u001b\[0m/)
+  assert.match(written, new RegExp(`${ANSI_ESCAPE}\\[34m.*Harvester ready${ANSI_ESCAPE}\\[0m`))
+  assert.match(written, new RegExp(`${ANSI_ESCAPE}\\[35m.*DEBUG Detailed diagnostic${ANSI_ESCAPE}\\[0m`))
   output.destroy()
 })
 
 test("does not emit ANSI color codes when color is disabled", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   transport.write({
     timestamp: "2026-11-05T12:00:00.000Z",
@@ -254,7 +328,7 @@ test("does not emit ANSI color codes when color is disabled", () => {
     data: { message: "Plain terminal output" },
   })
 
-  assert.doesNotMatch(written, /\u001b\[/)
+  assert.doesNotMatch(written, new RegExp(`${ANSI_ESCAPE}\\[`))
   assert.match(written, /Plain terminal output/)
   output.destroy()
 })
@@ -263,8 +337,11 @@ test("does not emit ANSI color codes when color is disabled", () => {
 test("renders semantic SUCCESS and SYSTEM methods with distinct colors without redundant labels", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: true })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({ output,
+color: true })
   const data = { message: "Lifecycle event" }
 
   transport.write({
@@ -287,9 +364,9 @@ test("renders semantic SUCCESS and SYSTEM methods with distinct colors without r
   })
   transport.close()
 
-  assert.match(written, /\u001b\[32m.*SUCCESS Lifecycle event\u001b\[0m/)
-  assert.match(written, /\u001b\[36m.*Lifecycle event\u001b\[0m/)
-  assert.match(written, /\u001b\[34m.*Lifecycle event\u001b\[0m/)
+  assert.match(written, new RegExp(`${ANSI_ESCAPE}\\[32m.*SUCCESS Lifecycle event${ANSI_ESCAPE}\\[0m`))
+  assert.match(written, new RegExp(`${ANSI_ESCAPE}\\[36m.*Lifecycle event${ANSI_ESCAPE}\\[0m`))
+  assert.match(written, new RegExp(`${ANSI_ESCAPE}\\[34m.*Lifecycle event${ANSI_ESCAPE}\\[0m`))
   assert.equal((written.match(/Lifecycle event/g) ?? []).length, 3)
   assert.doesNotMatch(written, /SYSTEM Lifecycle event/)
   assert.doesNotMatch(written, /repeated/)
@@ -299,8 +376,11 @@ test("renders semantic SUCCESS and SYSTEM methods with distinct colors without r
 test("keeps colored semantic labels within the configured console line limit", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: true })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({ output,
+color: true })
 
   transport.write({
     timestamp: "2026-11-05T12:00:00.000Z",
@@ -309,7 +389,7 @@ test("keeps colored semantic labels within the configured console line limit", (
     data: { message: "x".repeat(240) },
   })
 
-  const plainLine = written.replace(/\u001b\[[0-9;]*m/g, "").trimEnd()
+  const plainLine = written.replace(new RegExp(`${ANSI_ESCAPE}\\[[0-9;]*m`, "g"), "").trimEnd()
   assert.ok(plainLine.length <= 200)
   output.destroy()
 })
@@ -317,8 +397,13 @@ test("keeps colored semantic labels within the configured console line limit", (
 test("omits INFO labels while retaining DEBUG, WARN, and ERROR labels", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   for (const [level, message] of [
     ["INFO", "Informational event"],
@@ -346,14 +431,24 @@ test("appends cumulative logs while keeping separate timestamped session histori
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-log-sessions-"))
   try {
     const firstLogger = createLogger()
-    const firstSession = await configureHarvesterLogging({ logger: firstLogger, directory, processIdentity: { startedAt: "2026-11-05T12:00:00.000Z", runtimeSessionId: "first-session" } })
-    const firstEntry = { timestamp: "2026-11-05T12:00:01.000Z", level: "debug", data: { message: "first run" } }
+    const firstSession = await configureHarvesterLogging({ logger: firstLogger,
+directory,
+processIdentity: { startedAt: "2026-11-05T12:00:00.000Z",
+runtimeSessionId: "first-session" } })
+    const firstEntry = { timestamp: "2026-11-05T12:00:01.000Z",
+level: "debug",
+data: { message: "first run" } }
     await firstLogger.transports.get("harvester-debug-file").write(firstEntry)
     await firstSession.close()
 
     const secondLogger = createLogger()
-    const secondSession = await configureHarvesterLogging({ logger: secondLogger, directory, processIdentity: { startedAt: "2026-11-05T13:00:00.000Z", runtimeSessionId: "second-session" } })
-    const secondEntry = { timestamp: "2026-11-05T13:00:01.000Z", level: "debug", data: { message: "second run" } }
+    const secondSession = await configureHarvesterLogging({ logger: secondLogger,
+directory,
+processIdentity: { startedAt: "2026-11-05T13:00:00.000Z",
+runtimeSessionId: "second-session" } })
+    const secondEntry = { timestamp: "2026-11-05T13:00:01.000Z",
+level: "debug",
+data: { message: "second run" } }
     await secondLogger.transports.get("harvester-debug-file").write(secondEntry)
     await secondSession.close()
 
@@ -364,7 +459,8 @@ test("appends cumulative logs while keeping separate timestamped session histori
     assert.deepEqual(firstEntries, [firstEntry], "the first session file must contain only first-run diagnostics")
     assert.deepEqual(secondEntries, [secondEntry], "the second session file must contain only second-run diagnostics")
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -394,7 +490,9 @@ test("preserves pre-existing transports after partial logging setup failure", as
     await writeFile(sessionPaths.trace, "preserve trace session\\n")
 
     await assert.rejects(
-      configureHarvesterLogging({ logger, directory, processIdentity }),
+      configureHarvesterLogging({ logger,
+directory,
+processIdentity }),
       /EEXIST/,
       "a TRACE session collision must fail setup",
     )
@@ -416,7 +514,8 @@ test("preserves pre-existing transports after partial logging setup failure", as
       "failed setup must preserve the colliding session file",
     )
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -451,27 +550,36 @@ test("rejects an existing session file before registering transports or leaking 
       "failed setup must close its cumulative stream while preserving the pre-existing session file inside the session grouping directory",
     );
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true,
+force: true });
   }
 });
 
 test("appends cumulative files while isolating and flushing consecutive process sessions", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-log-restarts-"));
   const sessionIdentities = [
-    { startedAt: "2026-11-09T12:00:00.000Z", runtimeSessionId: "first-run" },
-    { startedAt: "2026-11-09T12:01:00.000Z", runtimeSessionId: "second-run" },
+    { startedAt: "2026-11-09T12:00:00.000Z",
+runtimeSessionId: "first-run" },
+    { startedAt: "2026-11-09T12:01:00.000Z",
+runtimeSessionId: "second-run" },
   ];
   try {
     for (const [index, processIdentity] of sessionIdentities.entries()) {
       const logger = createLogger();
-      const logging = await configureHarvesterLogging({ logger, directory, processIdentity });
+      const logging = await configureHarvesterLogging({
+        logger,
+        directory,
+        processIdentity,
+      });
       const debugEntry = {
         timestamp: processIdentity.startedAt,
         level: "debug",
         method: "debug",
-        data: { message: "session diagnostic " + (index + 1) },
+        data: { message: `session diagnostic ${  index + 1}` },
       };
-      const traceEntry = { ...debugEntry, level: "trace", method: "trace" };
+      const traceEntry = { ...debugEntry,
+level: "trace",
+method: "trace" };
       await logger.transports.get("harvester-debug-file").write(debugEntry);
       await logger.transports.get("harvester-trace-file").write(traceEntry);
       await logging.close();
@@ -509,7 +617,8 @@ test("appends cumulative files while isolating and flushing consecutive process 
       assert.equal(traceEntries.length, 1, "each TRACE session file must contain only its own process entries");
     }
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true,
+force: true });
   }
 });
 
@@ -521,13 +630,16 @@ test("closes the already-open DEBUG streams when TRACE session creation fails", 
     startedAt: "2026-11-09T12:05:00.000Z",
     runtimeSessionId: "trace-collision",
   };
-  const sessionPaths = createHarvesterLogSessionPaths({ directory, ...processIdentity });
+  const sessionPaths = createHarvesterLogSessionPaths({ directory,
+...processIdentity });
   const traceSessionFile = sessionPaths.trace;
   try {
     await mkdir(sessionPaths.sessionDirectory, { recursive: true });
     await writeFile(traceSessionFile, "preserve trace history\n");
     await assert.rejects(
-      configureHarvesterLogging({ logger, directory, processIdentity }),
+      configureHarvesterLogging({ logger,
+directory,
+processIdentity }),
       /EEXIST/,
       "TRACE session collision must abort setup after cleaning up the already-open DEBUG transport",
     );
@@ -548,7 +660,8 @@ test("closes the already-open DEBUG streams when TRACE session creation fails", 
       "failed partial setup must close every stream without deleting any created or pre-existing log file",
     );
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true,
+force: true });
   }
 });
 
@@ -556,7 +669,9 @@ test("closes the already-open DEBUG streams when TRACE session creation fails", 
 test("retains the market symbol and source filter types in compact fatal console summaries", () => {
   const output = new PassThrough()
   let written = ""
-  output.on("data", (chunk) => { written += chunk.toString() })
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
   const transport = createHarvesterConsoleTransport({ output })
 
   transport.write({
@@ -576,5 +691,223 @@ test("retains the market symbol and source filter types in compact fatal console
   assert.match(written, /LINKFDUSD/, "The compact fatal console line must identify the blocked market.")
   assert.match(written, /PERCENT_PRICE_BY_SIDE/, "The compact fatal console line must retain the leading source filter that caused the block.")
   assert.ok(written.trim().length <= 200, "The compact fatal console line must remain within its documented output bound.")
+  output.destroy()
+})
+
+test("keeps strategy-owned order facts on compact single-space lifecycle lines", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+
+  transport.write({
+    timestamp: "2026-11-15T19:14:52",
+    level: "info",
+    method: "info",
+    data: {
+      message: "Order lifecycle",
+      orderLifecycle: true,
+      strategyId: "CG_coinGrabber",
+      lifecycleStatus: "SUBMITTED",
+      clientOrderId: "h-325e71ba16494aeb875e6e-3",
+      symbol: "ZROUSDT",
+      side: "SELL",
+      quantity: "4.98",
+      price: "1.393",
+      detail: "Client order ID: h-325e71ba16494aeb875e6e-3",
+    },
+  })
+  transport.write({
+    timestamp: "2026-11-15T19:14:53",
+    level: "info",
+    method: "info",
+    data: {
+      message: "Order lifecycle",
+      orderLifecycle: true,
+      strategyId: "RS_recoverySeller",
+      lifecycleStatus: "CANCELLED",
+      brokerOrderId: "1341115",
+      clientOrderId: "h-client-2",
+      symbol: "ADAUSDT",
+      side: "SELL",
+      quantity: "49.90",
+      price: "0.15410",
+      detail: "Executed: 20 | Cancelled: 29.90",
+    },
+  })
+
+  const lines = written.trimEnd().split("\n")
+  assert.equal(
+    lines.length,
+    2,
+    "A cancellation result and its exact executed/cancelled quantities must share one terminal line.",
+  )
+  assert.ok(
+    lines.every((line) => line.length < 130),
+    "Order lifecycle records must stay compact rather than reserving large fixed-width terminal columns.",
+  )
+  assert.equal(
+    lines[0],
+    "19:14:52 🪙 CG SUBMITTED #pending ZROUSDT SELL 4.98 @ 1.393 h-325e71ba16494aeb875e6e-3",
+    "A pending submission must use single-space columns and append its raw client order ID on the same line without a verbose label.",
+  )
+  assert.doesNotMatch(
+    lines[0],
+    /\\| Client:|Client order ID:/,
+    "The pending client ID must be printed without a space-consuming explanatory label.",
+  )
+  assert.equal(
+    lines[1],
+    "19:14:53 🔴 RS CANCELLED #1341115 ADAUSDT SELL 49.90 @ 0.15410 | Executed: 20 | Cancelled: 29.90",
+    "The cancellation line must use compact single-space columns and retain its exact cancellation outcome without a second detail line.",
+  )
+  output.destroy()
+})
+
+test("prints strategy markers with one separator and omits the decorative SYS marker", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+  transport.write({
+    timestamp: "2026-11-15T19:14:52",
+    level: "info",
+    method: "info",
+    data: {
+      message: "Market price evaluated",
+      strategyId: "CG_coinGrabber",
+    },
+  })
+  transport.write({
+    timestamp: "2026-11-15T19:14:53",
+    level: "info",
+    method: "system",
+    data: {
+      message: "Connected; subscribed to 4 enabled market(s). Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness.",
+    },
+  })
+
+  assert.match(
+    written,
+    /🪙 CG Market price evaluated/,
+    "Strategy-owned records must show the icon and strategy label separated by exactly one space.",
+  )
+  assert.match(
+    written,
+    /Binance market-data stream connected; active market subscriptions: 4\. Conservative TESTNET trading is enabled/,
+    "The console must name the Binance market-data stream and the active subscription count explicitly.",
+  )
+  assert.doesNotMatch(
+    written,
+    /⚪ SYS|🪙CG|🔴RS/,
+    "The console must not print the decorative SYS marker or concatenate strategy icons and labels.",
+  )
+  output.destroy()
+})
+
+test("does not suppress identical messages from different strategies", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+  for (const [timestamp, strategyId] of [
+    ["2026-11-15T19:14:52", "CG_coinGrabber"],
+    ["2026-11-15T19:14:53", "RS_recoverySeller"],
+  ]) {
+    transport.write({
+      timestamp,
+      level: "info",
+      method: "info",
+      data: {
+        message: "Strategy transition evaluated",
+        strategyId,
+      },
+    })
+  }
+  assert.equal((written.match(/Strategy transition evaluated/g) ?? []).length, 2)
+  assert.match(written, /🪙 CG Strategy transition evaluated/)
+  assert.match(written, /🔴 RS Strategy transition evaluated/)
+  output.destroy()
+})
+
+test("identifies the Binance market-data stream when trading is not enabled", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+
+  transport.write({
+    timestamp: "2026-11-15T19:14:54.000Z",
+    level: "info",
+    method: "system",
+    data: {
+      message: "Connected; Binance trading mode is TESTNET.",
+    },
+  })
+
+  assert.match(
+    written,
+    /Binance market-data stream connected; Binance trading mode is TESTNET\./,
+    "A connected read-only runtime must identify its market-data stream instead of reporting an unspecified Binance connection.",
+  )
+  assert.doesNotMatch(
+    written,
+    /user-data readiness|user-data stream ready/i,
+    "A market-data connection summary must not imply that user-data readiness has been established.",
+  )
+  transport.close()
+  output.destroy()
+})
+
+test("renders recovery SELL cancellation requests in the requested compact console format", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+
+  transport.write({
+    timestamp: "2026-11-16T04:30:15.000Z",
+    level: "info",
+    method: "info",
+    data: {
+      message: "Harvester recovery SELL cancellation requested",
+      strategyId: "CG_coinGrabber",
+      symbol: "DOGEUSDT",
+      reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      clientOrderId: "h-test",
+      brokerOrderId: "1323350",
+    },
+  })
+
+  assert.equal(
+    written.trim(),
+    "04:30:15 🪙 CG recovery SELL cancellation requested: DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+    "the recovery SELL cancellation console line must match the requested concise operator format",
+  )
   output.destroy()
 })

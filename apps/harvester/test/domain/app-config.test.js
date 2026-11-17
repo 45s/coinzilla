@@ -5,6 +5,31 @@ import { NOTIFICATIONS_TG_PROFILES } from '../../config/notifications-tg-profile
 import { validateAppConfig } from '../../src/domain/app-config.js';
 const validConfig = structuredClone(appConfig);
 const strategy = (config) => config.strategies.CG_coinGrabber;
+const marketPrecision = {
+  LINKUSDT: { pricePrecision: 3,
+quantityPrecision: 2 },
+  LINKFDUSD: { pricePrecision: 3,
+quantityPrecision: 2 },
+  DOGEUSDT: { pricePrecision: 5,
+quantityPrecision: 0 },
+  SOLFDUSD: { pricePrecision: 2,
+quantityPrecision: 3 },
+  ZROUSDT: { pricePrecision: 3,
+quantityPrecision: 1 },
+  ZROFDUSD: { pricePrecision: 3,
+quantityPrecision: 1 },
+  ADAFDUSD: { pricePrecision: 4,
+quantityPrecision: 1 },
+  ADAUSDT: {
+    pricePrecision: 4,
+    quantityPrecision: 1,
+  },
+  WLDFDUSD: { pricePrecision: 4,
+quantityPrecision: 1 },
+};
+for (const [symbol, pair] of Object.entries(strategy(validConfig).pairs)) {
+  Object.assign(pair, marketPrecision[symbol]);
+}
 
 test('accepts nested CG_coinGrabber config and preserves mode toggles', () => {
   assert.equal(validateAppConfig(validConfig), validConfig);
@@ -59,7 +84,8 @@ test('requires enabled CG_coinGrabber and Conservative mode', () => {
 });
 
 test('rejects legacy flat settings/pairs and missing strategy-owned objects', () => {
-  assert.throws(() => validateAppConfig({ settings: { minProfit: 0.01 }, pairs: {} }), /strategies.*expected an object/);
+  assert.throws(() => validateAppConfig({ settings: { minProfit: 0.01 },
+pairs: {} }), /strategies.*expected an object/);
   const noSettings = structuredClone(validConfig); delete strategy(noSettings).settings;
   assert.throws(() => validateAppConfig(noSettings), /CG_coinGrabber.*settings.*expected an object/);
   const noPairs = structuredClone(validConfig); delete strategy(noPairs).pairs;

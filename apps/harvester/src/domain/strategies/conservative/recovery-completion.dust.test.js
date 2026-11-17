@@ -1,5 +1,5 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest("[recovery-completion.dust.test.js] " + name, ...args)
+const test = (...args) => nodeTest(`[recovery-completion.dust.test.js] ${  args[0]}`, ...args.slice(1))
 import assert from "node:assert/strict"
 import { evaluateRecoveryCompletion } from "./recovery-completion.js"
 
@@ -96,9 +96,14 @@ test("does not complete when realized net profit is below the configured minimum
 })
 
 test("validates exact MIN_NOTIONAL evidence before retaining dust", () => {
-  const result = evaluateRecoveryCompletion({ ...baseInput, inventoryDisposition: {
-    ...validDustDisposition, reason: "MIN_NOTIONAL", minimumQuantity: "0.01", minimumNotional: "5",
-    evaluatedQuantity: "0.04", evaluatedNotional: "0.004",
+  const result = evaluateRecoveryCompletion({ ...baseInput,
+inventoryDisposition: {
+    ...validDustDisposition,
+reason: "MIN_NOTIONAL",
+minimumQuantity: "0.01",
+minimumNotional: "5",
+    evaluatedQuantity: "0.04",
+evaluatedNotional: "0.004",
   } })
   assert.equal(result.eligible, true)
   assert.equal(result.dust.reason, "MIN_NOTIONAL")
@@ -106,9 +111,14 @@ test("validates exact MIN_NOTIONAL evidence before retaining dust", () => {
 })
 
 test("rejects dust when its claimed MIN_NOTIONAL filter is not limiting", () => {
-  const result = evaluateRecoveryCompletion({ ...baseInput, inventoryDisposition: {
-    ...validDustDisposition, reason: "MIN_NOTIONAL", minimumQuantity: "0.01", minimumNotional: "5",
-    evaluatedQuantity: "0.04", evaluatedNotional: "5",
+  const result = evaluateRecoveryCompletion({ ...baseInput,
+inventoryDisposition: {
+    ...validDustDisposition,
+reason: "MIN_NOTIONAL",
+minimumQuantity: "0.01",
+minimumNotional: "5",
+    evaluatedQuantity: "0.04",
+evaluatedNotional: "5",
   } })
   assert.equal(result.eligible, false)
   assert.equal(result.reason, "INVALID_EXCHANGE_CONSTRAINED_DUST_EVIDENCE")

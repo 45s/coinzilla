@@ -11,13 +11,146 @@ const defaultSleep = ({ durationMs }) => new Promise((resolve) => {
 function requireSafeTradeId({ fill, symbol }) {
   const tradeId = fill?.tradeId
   if (typeof tradeId !== "string" || !/^\d+$/.test(tradeId)) {
-    throw new TypeError("Account trade history returned an invalid trade ID for " + symbol)
+    throw new TypeError(`Account trade history returned an invalid trade ID for ${symbol}`)
   }
   const normalized = Number(tradeId)
   if (!Number.isSafeInteger(normalized) || normalized < 0) {
-    throw new RangeError("Account trade history trade ID exceeds the safe pagination range for " + symbol)
+    throw new RangeError(`Account trade history trade ID exceeds the safe pagination range for ${symbol}`)
   }
   return normalized
+}
+
+function validateFetchOptions({
+  broker,
+  markets,
+  startTime,
+  limit,
+  requestDelayMs,
+  sleep,
+  marketUniverseComplete,
+}) {
+  if (!broker || typeof broker.getFills !== "function") {
+    throw new TypeError("fetchAccountTradeHistory requires broker.getFills")
+  }
+  if (!Array.isArray(markets) || markets.length === 0 ||
+      markets.some((market) => !(market instanceof Market))) {
+    throw new TypeError("fetchAccountTradeHistory markets must contain at least one canonical Market")
+  }
+  if (new Set(markets.map((market) => market.symbol)).size !== markets.length) {
+    throw new Error("Account trade-history market catalog contains duplicate symbols")
+  }
+  if (!Number.isSafeInteger(startTime) || startTime < 0) {
+    throw new TypeError("Account trade-history startTime must be a non-negative safe integer")
+  }
+  if (marketUniverseComplete === true) {
+    throw new Error("fetchAccountTradeHistory cannot certify the historical market universe from a caller-supplied boolean")
+  }
+  if (!Number.isInteger(limit) || limit < 1 || limit > DEFAULT_PAGE_SIZE) {
+    throw new TypeError("Account trade-history limit must be between 1 and 1000")
+  }
+  if (!Number.isSafeInteger(requestDelayMs) || requestDelayMs < 0) {
+    throw new TypeError("Account trade-history requestDelayMs must be a non-negative safe integer")
+  }
+  if (typeof sleep !== "function") {
+    throw new TypeError("Account trade-history sleep must be a function")
+  }
+}
+
+function validateTradeHistoryPage({ result, market, limit }) {
+  if (result?.ok !== true || !Array.isArray(result.data)) {
+    const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+    throw new Error(
+      `Unable to fetch complete account trade history for ${market.symbol}${details ? `: ${details}` : ""}`,
+    )
+  }
+  if (result.data.length > limit) {
+    throw new Error(`Account trade history exceeded the requested page size for ${market.symbol}`)
+  }
+  return result.data
+}
+
+function validateMarketFill({ fill, market, startTime, lastTradeId, lastExecutedAt, state }) {
+  if (!(fill instanceof Fill) || fill.market.symbol !== market.symbol) {
+    throw new TypeError(`Account trade history returned a non-canonical or wrong-market fill for ${market.symbol}`)
+  }
+  const numericTradeId = requireSafeTradeId({ fill, 
+    symbol: market.symbol })
+  if (state.fillIds.has(fill.id)) {
+    throw new Error(`Account trade history contains duplicate execution identity ${fill.id}`)
+  }
+  const tradeKey = `${market.symbol}:${fill.tradeId}`
+  if (state.tradeIdsBySymbol.has(tradeKey)) {
+    throw new Error(`Account trade history contains duplicate trade identity ${tradeKey}`)
+  }
+  if (numericTradeId <= lastTradeId) {
+    throw new Error(`Account trade history cursor did not advance strictly for ${market.symbol}`)
+  }
+  if (!Number.isSafeInteger(fill.executedAt) || fill.executedAt < lastExecutedAt) {
+    throw new Error(`Account trade history execution timestamps are missing, invalid, or moved backwards for ${market.symbol}`)
+  }
+  if (fill.executedAt < startTime) {
+    throw new Error(`Account trade history returned an execution before the requested baseline for ${market.symbol}`)
+  }
+  return { numericTradeId, 
+    tradeKey }
+}
+
+async function fetchMarketTradeHistory({
+  broker,
+  market,
+  startTime,
+  limit,
+  requestDelayMs,
+  sleep,
+  state,
+}) {
+  const marketFills = []
+  let fromId
+  let firstPage = true
+  let lastTradeId = -1
+  let lastExecutedAt = -1
+
+  while (true) {
+    if (state.requestCount > 0 && requestDelayMs > 0) {
+      await sleep({ durationMs: requestDelayMs })
+    }
+    const query = {
+      symbol: market.symbol,
+      limit,
+      ...(firstPage ? { startTime } : { fromId }),
+    }
+    const result = await broker.getFills(query)
+    state.requestCount += 1
+    const page = validateTradeHistoryPage({ result, 
+      market, 
+      limit })
+
+    for (const fill of page) {
+      const { numericTradeId, tradeKey } = validateMarketFill({
+        fill,
+        market,
+        startTime,
+        lastTradeId,
+        lastExecutedAt,
+        state,
+      })
+      lastTradeId = numericTradeId
+      lastExecutedAt = fill.executedAt
+      state.fillIds.add(fill.id)
+      state.tradeIdsBySymbol.set(tradeKey, fill.id)
+      marketFills.push(fill)
+    }
+
+    if (page.length < limit) {
+      break
+    }
+    if (lastTradeId >= Number.MAX_SAFE_INTEGER) {
+      throw new RangeError(`Account trade history cannot safely advance the Binance trade cursor for ${market.symbol}`)
+    }
+    fromId = lastTradeId + 1
+    firstPage = false
+  }
+  return marketFills
 }
 
 /**
@@ -39,106 +172,39 @@ export async function fetchAccountTradeHistory({
   marketUniverseComplete = false,
 } = {}) {
   try {
-    if (!broker || typeof broker.getFills !== "function") {
-      throw new TypeError("fetchAccountTradeHistory requires broker.getFills")
+    validateFetchOptions({
+      broker,
+      markets,
+      startTime,
+      limit,
+      requestDelayMs,
+      sleep,
+      marketUniverseComplete,
+    })
+    const state = {
+      fills: [],
+      fillIds: new Set(),
+      tradeIdsBySymbol: new Map(),
+      requestCount: 0,
     }
-    if (!Array.isArray(markets) || markets.length === 0 ||
-        markets.some((market) => !(market instanceof Market))) {
-      throw new TypeError("fetchAccountTradeHistory markets must contain at least one canonical Market")
-    }
-    if (new Set(markets.map((market) => market.symbol)).size !== markets.length) {
-      throw new Error("Account trade-history market catalog contains duplicate symbols")
-    }
-    if (!Number.isSafeInteger(startTime) || startTime < 0) {
-      throw new TypeError("Account trade-history startTime must be a non-negative safe integer")
-    }
-    if (marketUniverseComplete === true) {
-      throw new Error("fetchAccountTradeHistory cannot certify the historical market universe from a caller-supplied boolean")
-    }
-    if (!Number.isInteger(limit) || limit < 1 || limit > DEFAULT_PAGE_SIZE) {
-      throw new TypeError("Account trade-history limit must be between 1 and 1000")
-    }
-    if (!Number.isSafeInteger(requestDelayMs) || requestDelayMs < 0) {
-      throw new TypeError("Account trade-history requestDelayMs must be a non-negative safe integer")
-    }
-    if (typeof sleep !== "function") throw new TypeError("Account trade-history sleep must be a function")
-
-    const fills = []
-    const fillIds = new Set()
-    const tradeIdsBySymbol = new Map()
-    let requestCount = 0
-
     for (const market of markets) {
-      let fromId
-      let firstPage = true
-      let lastTradeId = -1
-      let lastExecutedAt = -1
-
-      while (true) {
-        if (requestCount > 0 && requestDelayMs > 0) {
-          await sleep({ durationMs: requestDelayMs })
-        }
-        const query = {
-          symbol: market.symbol,
-          limit,
-          ...(firstPage ? { startTime } : { fromId }),
-        }
-        const result = await broker.getFills(query)
-        requestCount += 1
-        if (result?.ok !== true || !Array.isArray(result.data)) {
-          const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-          throw new Error(
-            "Unable to fetch complete account trade history for " + market.symbol +
-            (details ? ": " + details : ""),
-          )
-        }
-        const page = result.data
-        if (page.length > limit) {
-          throw new Error("Account trade history exceeded the requested page size for " + market.symbol)
-        }
-
-        for (const fill of page) {
-          if (!(fill instanceof Fill) || fill.market.symbol !== market.symbol) {
-            throw new TypeError("Account trade history returned a non-canonical or wrong-market fill for " + market.symbol)
-          }
-          const numericTradeId = requireSafeTradeId({ fill, symbol: market.symbol })
-          if (fillIds.has(fill.id)) {
-            throw new Error("Account trade history contains duplicate execution identity " + fill.id)
-          }
-          const tradeKey = market.symbol + ":" + fill.tradeId
-          if (tradeIdsBySymbol.has(tradeKey)) {
-            throw new Error("Account trade history contains duplicate trade identity " + tradeKey)
-          }
-          if (numericTradeId <= lastTradeId) {
-            throw new Error("Account trade history cursor did not advance strictly for " + market.symbol)
-          }
-          lastTradeId = numericTradeId
-          if (!Number.isSafeInteger(fill.executedAt) || fill.executedAt < lastExecutedAt) {
-            throw new Error("Account trade history execution timestamps are missing, invalid, or moved backwards for " + market.symbol)
-          }
-          if (fill.executedAt < startTime) {
-            throw new Error("Account trade history returned an execution before the requested baseline for " + market.symbol)
-          }
-          lastExecutedAt = fill.executedAt
-          fillIds.add(fill.id)
-          tradeIdsBySymbol.set(tradeKey, fill.id)
-          fills.push(fill)
-        }
-
-        if (page.length < limit) break
-        if (lastTradeId >= Number.MAX_SAFE_INTEGER) {
-          throw new RangeError("Account trade history cannot safely advance the Binance trade cursor for " + market.symbol)
-        }
-        fromId = lastTradeId + 1
-        firstPage = false
-      }
+      const marketFills = await fetchMarketTradeHistory({
+        broker,
+        market,
+        startTime,
+        limit,
+        requestDelayMs,
+        sleep,
+        state,
+      })
+      state.fills.push(...marketFills)
     }
 
     return toResult({
       data: Object.freeze({
-        fills: Object.freeze(fills),
+        fills: Object.freeze(state.fills),
         marketsChecked: markets.length,
-        pagesChecked: requestCount,
+        pagesChecked: state.requestCount,
         historyPagesComplete: true,
         marketHistoryPagesComplete: true,
         historyScope: markets.length === 1 ? "MARKET" : "MARKETS",

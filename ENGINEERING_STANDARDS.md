@@ -1,6 +1,6 @@
 # Engineering Standards
 
-This document is the engineering contract for Coinzilla. Apply it to new code and to code materially changed by a pull request. Automated checks are authoritative where available; principles that cannot be reliably automated require explicit review.
+This document is the repository-wide engineering contract. Apply it to new code and to code materially changed by a pull request. Automated checks are authoritative where available; principles that cannot be reliably automated require explicit review.
 
 ## Definition of Done
 
@@ -30,6 +30,10 @@ This section is the canonical policy for assessing and updating documentation in
 - Do not defer a required documentation update to an unspecified follow-up. Include a **Documentation impact** note in every meaningful PR, listing updates or explaining why none are needed.
 
 Other repository instructions and task checklists should link to this section rather than restating its policy. Document ownership, classification, lifecycle, ADRs, historical evidence, naming, indexes, migration safety and AI-agent maintenance requirements are defined in the canonical [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md); follow it rather than creating local variants.
+
+## ESLint compliance — mandatory
+
+All JavaScript contributors, including AI agents, MUST follow the canonical [ESLint Standard](docs/engineering/ESLINT_STANDARD.md). Read it and inspect the effective eslint.config.js rules before writing or changing JavaScript. ESLint rules are engineering constraints, not suggestions to work around. Do not add inline suppressions, weaken rule settings, reduce lint coverage, or alter lint commands to make a change pass. Refactor the implementation to satisfy the existing rules. The root ESLint configuration disables inline configuration so source comments cannot suppress or override configured rules.
 
 ## Exchange environment configuration
 
@@ -71,7 +75,7 @@ This is a repository-wide convention. Domain-specific agent instructions may add
 - **REFACTOR:** only after GREEN, improve structure or remove duplication while preserving behavior. Re-run the relevant tests after each refactoring step; keep the suite green.
 - Repeat RED → GREEN → REFACTOR in small increments. Do not write a batch of implementation and add tests afterward. Do not treat a test that passes before the implementation as proof of RED; investigate whether the behavior already exists or the test is ineffective.
 - For a bug fix, first add a regression test that reproduces the defect and verify that it fails for the defect. Then implement the fix. A regression test added only after the fix does not satisfy this requirement.
-- If the test cannot be executed, the expected failure cannot be distinguished from an invalid test/setup, or the behavior cannot reasonably be tested automatically, stop before implementation and document the concrete blocker or narrowly scoped exception in the PR. Do not silently skip the RED step or claim it occurred.
+- If local execution is unavailable, perform the RED/GREEN cycle through GitHub Actions: commit the test first, open/update a Draft PR or otherwise trigger the applicable PR workflow, inspect the exact test result and job log, then implement only after confirming the expected behavioral failure. If no workflow covers the test, add or extend a safe, least-privilege workflow in the task PR. A missing terminal, local checkout, package manager, or local runner is not a valid reason to stop. Stop before implementation only when the test cannot be executed locally **and** no safe GitHub Actions path can be made available, the expected failure cannot be distinguished from an invalid test/setup after investigating the remote run, or the behavior cannot reasonably be tested automatically. Record the concrete GitHub-side blocker or narrowly scoped exception in the PR; do not silently skip RED or claim it occurred.
 - For documentation-only, formatting-only, or other changes with no runtime behavior, use the applicable task checklist; do not invent meaningless tests. If a documentation change alters an executable contract or example, test that contract/example where practical.
 - **Every new or changed behavior must be tested.** Tests are a required part of implementation, not optional follow-up work.
 - For every bug fix, add a regression test that demonstrates the original defect and fails before the fix whenever practical.
@@ -108,6 +112,8 @@ A materially edited test case must comply with these practices throughout that c
 
 ### 3. Reliability, error handling, and observability
 
+Follow the canonical [Structured Error Handling Standard](docs/engineering/structured-error-handling.md) for the shared `SystemCustomError` base, component-owned subclasses and codes, cause preservation, safe diagnostic context, and gradual adoption. New functionality and materially changed bug-fix paths must follow it; unrelated legacy code is migrated incrementally.
+
 - Treat diagnostics as part of the feature design. A failure should be understandable from its error and logs without requiring guesswork.
 - Use structured logging with stable fields and relevant context (for example: operation, component, entity/event identifier, state, and original error) when that context exists.
 - Log at meaningful boundaries and actionable failure points. Avoid noisy per-item logs, duplicate reports, and logging the same error at multiple layers without adding context.
@@ -135,20 +141,19 @@ A materially edited test case must comply with these practices throughout that c
 
 The workspace uses the root ESLint flat configuration in `eslint.config.js`. It applies to JavaScript in `apps/`, `packages/`, and repository tooling, including tests. The configuration uses the `@eslint/js` recommended rules and Node built-in globals; browser globals and implicit test-runner globals are not enabled.
 
-The additional enforced rules are `eqeqeq` (with intentional `null` comparisons allowed), `curly` (all control-flow bodies), `prefer-const`, `no-eval`, `no-new-func`, `no-alert`, `no-param-reassign`, and `prefer-promise-reject-errors`. Formatting and stylistic rules are intentionally out of scope.
+The additional enforced rules are `eqeqeq` (with intentional `null` comparisons allowed), `curly` (all control-flow bodies), `no-nested-ternary`, `prefer-const`, `no-eval`, `no-new-func`, `no-alert`, `no-param-reassign`, and `prefer-promise-reject-errors`. Formatting rules remain intentionally limited; `object-property-newline` is enforced so each object-literal property is written on its own line. Keep destructured option properties one per line as well. Do not add inline suppressions or disable this rule to accommodate changed files.
 
-Gradual adoption is enforced by the changed-file gate rather than a permanent suppression file:
+Strict full-workspace enforcement has no migration baseline, grandfathered findings, or changed-file-only exception:
 
-- `pnpm lint` runs ESLint across the complete JavaScript workspace and exits non-zero for findings.
-- `pnpm lint:report` reports the complete-workspace finding count and most frequent rules without blocking on legacy findings.
-- Pull requests lint every changed JavaScript file without suppressions. A changed legacy file must therefore be clean.
-- New JavaScript files must pass from the start.
-- `pnpm lint:fix` applies supported automatic fixes across the workspace. Review its complete diff before committing.
-- Do not disable rules globally or add inline suppressions merely to silence existing findings. Fix the touched file or document a narrowly justified exception.
-
-The full-workspace report makes remaining debt visible; the changed-file CI gate prevents that debt from growing.
+- `pnpm lint` runs ESLint across the complete JavaScript workspace and fails on every error and warning (`--max-warnings 0`).
+- The required `Check JavaScript syntax` CI context runs `pnpm lint`; it is required by both active branch rulesets, so any workspace finding blocks the pull request.
+- Existing and newly changed JavaScript files are held to the same standard. A legacy finding is still a finding and must be fixed.
+- `pnpm lint:fix` applies supported automatic fixes across the workspace. Review its complete diff before committing, then rerun `pnpm lint`.
+- Do not disable rules globally, add inline suppressions, introduce exceptions, or restore a baseline comparator to silence findings.
 
 ### 5. Functions and side effects
+
+Module boundaries and feature-folder organization MUST follow the canonical [Modularity Standard](docs/engineering/MODULARITY_STANDARD.md), including its rule for feature-root components and pure local helpers.
 
 - Prefer small, cohesive functions with one clear responsibility.
 - Prefer pure functions when practical: same inputs produce the same outputs, with no observable side effects.
@@ -253,7 +258,7 @@ Before approving a pull request, ask:
 4. Are test names, variables, comparisons, and failure messages understandable in plain English without decoding tuples or asking for context?
 5. Are names and control flow easy to understand?
 6. Are side effects and state changes explicit?
-7. Are logs and errors actionable, appropriately contextual, and free of sensitive data?
+7. Are logs and errors actionable, appropriately contextual, and free of sensitive data? Do changed error paths use the owning component's specific error type/code and preserve the original cause?
 8. Are module responsibilities cohesive, with thin public entry points and no catch-all modules?
 9. Have meaningful pure functions been extracted into focused modules instead of being embedded in classes/services or large files?
 10. If a file is approaching 300 lines or exceeds 500 lines, has its structure been reviewed and any justified exception documented?
@@ -281,7 +286,7 @@ The repository-wide workflow, domain ownership, cross-domain request process, an
 
 ## JavaScript and JSDoc
 
-Coinzilla's default implementation language is modern JavaScript using the repository's Node.js and ECMAScript-module conventions. TypeScript is not the default and must not be introduced as an incidental refactor.
+The default implementation language is modern JavaScript using the repository's Node.js and ECMAScript-module conventions. TypeScript is not the default and must not be introduced as an incidental refactor.
 
 - Keep implementation files as JavaScript (`.js`). Do not add `tsconfig.json`, TypeScript build steps, `.ts` source, or generated `.d.ts` files unless a separately approved requirement explicitly calls for TypeScript interoperability or migration.
 - Use JSDoc selectively to describe public/exported APIs, non-obvious parameter and return shapes, callbacks, important invariants, and meaningful exceptions.

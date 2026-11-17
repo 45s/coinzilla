@@ -12,6 +12,8 @@ created: 2026-11-12
 
 **Accepted.** This decision narrows the initial operator-control rollout defined by [ADR-0002](./0002-transport-independent-operator-control.md). It supersedes only the requirement that full ADR-0001 restart recovery must be complete before the initial operator-pause capability can be enabled.
 
+> **Terminology note (2026-11-14):** This accepted ADR retains the original durable-fact vocabulary as historical architectural terminology. The current application-facing name for the shared persistence component is **Operational State Store**; see the current [operator-control documentation](../../operator-control/README.md) for supported configuration and commands.
+
 ## Context
 
 The operator-pause capability and process-restart trading recovery solve different problems.
@@ -29,7 +31,7 @@ The initial operator-pause capability is **process-lifetime only**.
 - The initial runtime does not project or replay operator pause facts during startup.
 - After a process restart, the operator pause is **not restored**. Harvester starts without the previous operator-owned pause; the operator must issue `/pause <SYMBOL>` again if the market should remain paused.
 - Existing exchange orders remain untouched by pause. They may still fill; fill accounting and risk-reducing recovery SELL behavior continue. Other markets remain unaffected.
-- Disabled-by-default configuration, actor authorization, durable append wiring and adapter lifecycle must still be validated before inbound runtime control is enabled. These requirements do not depend on completing recovery Steps 7–9.
+- Enabled-by-default configuration, actor authorization, durable append wiring and adapter lifecycle must still be validated before inbound runtime control is enabled. These requirements do not depend on completing recovery Steps 7–9.
 - Full restart restoration and trading-state reconciliation remain a separate workstream under [ADR-0001](./0001-application-owned-recovery-facts.md) and [issue #654](https://github.com/45s/coinzilla/issues/654).
 
 ## Consequences
@@ -53,3 +55,7 @@ The initial operator-pause capability is **process-lifetime only**.
 - [Operator-control implementation contract](../OPERATOR_CONTROL_DESIGN.md)
 - [Operator-control roadmap](../../../ROADMAP.md#operator-control--initial-telegram-pause)
 - [Process-restart recovery issue #654](https://github.com/45s/coinzilla/issues/654)
+
+## Emergency BUY pause scope
+
+The process-lifetime rule also applies to the separate emergency BUY controls introduced by [ADR-0005](./0005-emergency-buy-pause.md). Global and market-specific BUY pauses are not replayed or restored after restart. When an Operational State Store is supplied, their facts use the same durable-before-apply append contract but remain excluded from startup restoration.

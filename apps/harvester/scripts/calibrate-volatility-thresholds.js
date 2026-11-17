@@ -25,7 +25,7 @@ const REFERENCE_OBSERVATIONS = 60
 const INDICATOR_SCALE = 18
 const RATIO_SCALE = 8
 
-function normalizeArchiveTimestamp(value, { field, sourceFile, lineNumber } = {}) {
+function normalizeArchiveTimestamp({ value, field, sourceFile, lineNumber }) {
   if (!/^\d+$/.test(value)) {
     throw new TypeError(`${sourceFile} line ${lineNumber}: ${field} must be an integer timestamp`)
   }
@@ -38,7 +38,8 @@ function normalizeArchiveTimestamp(value, { field, sourceFile, lineNumber } = {}
   if (!Number.isSafeInteger(timestamp)) {
     throw new RangeError(`${sourceFile} line ${lineNumber}: normalized ${field} is outside the safe timestamp range`)
   }
-  return { timestamp, unit }
+  return { timestamp,
+unit }
 }
 
 /** Parse one official Binance Spot 1m Kline CSV file into normalized closed candles. */
@@ -51,7 +52,7 @@ export function parseBinanceSpotKlineCsv({ content, symbol, sourceFile = "input.
   }
 
   const rows = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
-  if (rows[0]?.split(",")[0]?.trim().toLowerCase() === "open_time") rows.shift()
+  if (rows[0]?.split(",")[0]?.trim().toLowerCase() === "open_time") {rows.shift()}
   if (rows.length === 0) {
     throw new RangeError(`${sourceFile}: Binance Kline CSV contains no candle rows`)
   }
@@ -67,12 +68,14 @@ export function parseBinanceSpotKlineCsv({ content, symbol, sourceFile = "input.
       throw new RangeError(`${sourceFile} line ${lineNumber}: expected 12 Binance Spot Kline columns, received ${fields.length}`)
     }
 
-    const openTime = normalizeArchiveTimestamp(fields[0], {
+    const openTime = normalizeArchiveTimestamp({
+      value: fields[0],
       field: "openTime",
       sourceFile,
       lineNumber,
     })
-    const closeTime = normalizeArchiveTimestamp(fields[6], {
+    const closeTime = normalizeArchiveTimestamp({
+      value: fields[6],
       field: "closeTime",
       sourceFile,
       lineNumber,
@@ -150,7 +153,7 @@ export function mergeAndValidateCandles({ symbol, candleGroups } = {}) {
 
   const candles = [...byOpenTime.values()]
     .map(({ candle }) => candle)
-    .sort((left, right) => left.openTime - right.openTime)
+    .sort((...values) => values[0].openTime - values[1].openTime)
   if (candles.length === 0) {
     throw new RangeError("historical candle merge contains no candles")
   }
@@ -173,14 +176,18 @@ export function validateCalibrationThresholds(overrides = {}) {
     ...overrides,
   }
   for (const field of ["recoverRatio", "warningRatio", "protectRatio"]) {
-    assertDecimalString({ value: thresholds[field], field: "calibration " + field })
-    if (compareDecimal({ left: thresholds[field], right: "0" }) <= 0) {
+    assertDecimalString({ value: thresholds[field],
+field: `calibration ${  field}` })
+    if (compareDecimal({ left: thresholds[field],
+right: "0" }) <= 0) {
       throw new RangeError(`calibration ${field} must be positive`)
     }
   }
   if (
-    compareDecimal({ left: thresholds.recoverRatio, right: thresholds.warningRatio }) >= 0 ||
-    compareDecimal({ left: thresholds.warningRatio, right: thresholds.protectRatio }) >= 0
+    compareDecimal({ left: thresholds.recoverRatio,
+right: thresholds.warningRatio }) >= 0 ||
+    compareDecimal({ left: thresholds.warningRatio,
+right: thresholds.protectRatio }) >= 0
   ) {
     throw new RangeError("recovery threshold must be below warning, which must be below protection")
   }
@@ -190,9 +197,192 @@ export function validateCalibrationThresholds(overrides = {}) {
   return Object.freeze(thresholds)
 }
 
-function percentile(sortedValues, percent) {
+function percentile({ sortedValues, percent }) {
   const rank = Math.max(1, Math.ceil((percent / 100) * sortedValues.length))
   return sortedValues[rank - 1]
+}
+
+/**
+ * Replay the production volatility metric and state-transition functions over
+ * validated history. This is a threshold diagnostic, not an execution backtest.
+ */
+function createVolatilityObservation({
+      calculated,
+      thresholds,
+    }) {
+  const metrics = calculated.metrics ?? null
+  if (!metrics) {
+    return {
+      ratio: null,
+      thresholdCounts: null,
+      snapshot: {
+        ok: true,
+        data: {
+          status: {
+            isReady: false,
+            reason: calculated.reason ?? "VOLATILITY_METRICS_UNAVAILABLE",
+          },
+          metrics: null,
+        },
+      },
+    }
+  }
+
+  const ratio = metrics.volatilityRatio
+  return {
+    ratio,
+    thresholdCounts: {
+      warning: compareDecimal({
+        left: ratio,
+        right: thresholds.warningRatio,
+      }) >= 0 ? 1 : 0,
+      protection: compareDecimal({
+        left: ratio,
+        right: thresholds.protectRatio,
+      }) >= 0 ? 1 : 0,
+      recovery: compareDecimal({
+        left: ratio,
+        right: thresholds.recoverRatio,
+      }) <= 0 ? 1 : 0,
+    },
+    snapshot: {
+      ok: true,
+      data: {
+        status: {
+          isReady: true,
+          isFresh: true,
+          reason: null,
+          lastClosedCandleOpenTime: metrics.openTime,
+        },
+        metrics,
+      },
+    },
+  }
+}
+
+function createVolatilityReplay({ symbol }) {
+  return {
+    state: createVolatilityProtectionState({ symbol }),
+    stateCounts: {
+      [VOLATILITY_PROTECTION_MODES.NORMAL]: 0,
+      [VOLATILITY_PROTECTION_MODES.PROTECTED]: 0,
+      [VOLATILITY_PROTECTION_MODES.RECOVERING]: 0,
+    },
+    thresholdCounts: {
+      warning: 0,
+      protection: 0,
+      recovery: 0,
+    },
+    ratios: [],
+    unavailableObservations: 0,
+    protectionEntries: 0,
+    recoveryTransitions: 0,
+    protectionRuns: 0,
+    currentProtectedRun: 0,
+    longestProtectedRunMinutes: 0,
+  }
+}
+
+function recordVolatilityObservation({
+      observation,
+      replay,
+    }) {
+  if (observation.ratio === null) {
+    replay.unavailableObservations += 1
+    return
+  }
+
+  replay.ratios.push(observation.ratio)
+  replay.thresholdCounts.warning += observation.thresholdCounts.warning
+  replay.thresholdCounts.protection += observation.thresholdCounts.protection
+  replay.thresholdCounts.recovery += observation.thresholdCounts.recovery
+}
+
+function recordVolatilityTransition({
+      transition,
+      replay,
+    }) {
+  replay.state = transition.state
+  replay.stateCounts[replay.state.mode] += 1
+  if (transition.enteredProtected) {
+    replay.protectionEntries += 1
+  }
+  if (transition.recovered) {
+    replay.recoveryTransitions += 1
+  }
+
+  if (replay.state.mode !== VOLATILITY_PROTECTION_MODES.NORMAL) {
+    if (replay.currentProtectedRun === 0) {
+      replay.protectionRuns += 1
+    }
+    replay.currentProtectedRun += 1
+    replay.longestProtectedRunMinutes = Math.max(
+      replay.longestProtectedRunMinutes,
+      replay.currentProtectedRun,
+    )
+  } else {
+    replay.currentProtectedRun = 0
+  }
+}
+
+function createVolatilityHistoryReport({ symbol, history, thresholds, replay, latestMetrics }) {
+  const sortedRatios = [...replay.ratios].sort((...values) => compareDecimal({
+    left: values[0],
+    right: values[1],
+  }))
+  const protectedObservations =
+    replay.stateCounts[VOLATILITY_PROTECTION_MODES.PROTECTED] +
+    replay.stateCounts[VOLATILITY_PROTECTION_MODES.RECOVERING]
+  const observationCount = history.length - STARTUP_HISTORY_CANDLES + 1
+
+  return Object.freeze({
+    symbol,
+    interval: CANDLE_INTERVAL,
+    candleCount: history.length,
+    historyStartTime: history[0].openTime,
+    historyEndTime: history.at(-1).openTime,
+    analyzedStartTime: history[STARTUP_HISTORY_CANDLES - 1].openTime,
+    analyzedEndTime: history.at(-1).openTime,
+    observationCount,
+    ratioObservations: replay.ratios.length,
+    unavailableObservations: replay.unavailableObservations,
+    thresholds,
+    thresholdCounts: Object.freeze(replay.thresholdCounts),
+    ratioPercentiles: Object.freeze({
+      p50: percentile({
+        sortedValues: sortedRatios,
+        percent: 50,
+      }),
+      p90: percentile({
+        sortedValues: sortedRatios,
+        percent: 90,
+      }),
+      p95: percentile({
+        sortedValues: sortedRatios,
+        percent: 95,
+      }),
+      p99: percentile({
+        sortedValues: sortedRatios,
+        percent: 99,
+      }),
+    }),
+    maximumRatio: sortedRatios.at(-1),
+    stateCounts: Object.freeze(replay.stateCounts),
+    protectionEntries: replay.protectionEntries,
+    recoveryTransitions: replay.recoveryTransitions,
+    protectionRuns: replay.protectionRuns,
+    longestProtectedRunMinutes: replay.longestProtectedRunMinutes,
+    protectedPercent: Number(((protectedObservations / observationCount) * 100).toFixed(2)),
+    latestMetrics,
+    assumptions: Object.freeze({
+      startupHistoryCandles: STARTUP_HISTORY_CANDLES,
+      protectionRunsIncludeStartupWarmup: true,
+      activeBuyOrderCount: 0,
+      exchangeOrderExecutionSimulated: false,
+      streamFreshnessSimulated: false,
+      strategyProfitabilityEvaluated: false,
+    }),
+  })
 }
 
 /**
@@ -211,24 +401,7 @@ export function analyzeVolatilityHistory({ symbol, candles, thresholds: threshol
     throw new RangeError(`historical calibration requires at least ${STARTUP_HISTORY_CANDLES} contiguous completed candles`)
   }
 
-  let state = createVolatilityProtectionState({ symbol })
-  const stateCounts = {
-    [VOLATILITY_PROTECTION_MODES.NORMAL]: 0,
-    [VOLATILITY_PROTECTION_MODES.PROTECTED]: 0,
-    [VOLATILITY_PROTECTION_MODES.RECOVERING]: 0,
-  }
-  const thresholdCounts = {
-    warning: 0,
-    protection: 0,
-    recovery: 0,
-  }
-  const ratios = []
-  let unavailableObservations = 0
-  let protectionEntries = 0
-  let recoveryTransitions = 0
-  let protectionRuns = 0
-  let currentProtectedRun = 0
-  let longestProtectedRunMinutes = 0
+  const replay = createVolatilityReplay({ symbol })
   let latestMetrics = null
 
   for (let index = STARTUP_HISTORY_CANDLES - 1; index < history.length; index += 1) {
@@ -243,105 +416,41 @@ export function analyzeVolatilityHistory({ symbol, candles, thresholds: threshol
     })
     latestMetrics = calculated.metrics ?? null
 
-    let snapshot
-    if (!calculated.metrics) {
-      unavailableObservations += 1
-      snapshot = {
-        ok: true,
-        data: {
-          status: { isReady: false, reason: calculated.reason ?? "VOLATILITY_METRICS_UNAVAILABLE" },
-          metrics: null,
-        },
-      }
-    } else {
-      const ratio = calculated.metrics.volatilityRatio
-      ratios.push(ratio)
-      if (compareDecimal({ left: ratio, right: thresholds.warningRatio }) >= 0) thresholdCounts.warning += 1
-      if (compareDecimal({ left: ratio, right: thresholds.protectRatio }) >= 0) thresholdCounts.protection += 1
-      if (compareDecimal({ left: ratio, right: thresholds.recoverRatio }) <= 0) thresholdCounts.recovery += 1
-      snapshot = {
-        ok: true,
-        data: {
-          status: {
-            isReady: true,
-            isFresh: true,
-            reason: null,
-            lastClosedCandleOpenTime: calculated.metrics.openTime,
-          },
-          metrics: calculated.metrics,
-        },
-      }
-    }
-
+    const observation = createVolatilityObservation({
+      calculated,
+      thresholds,
+    })
+    recordVolatilityObservation({
+      observation,
+      replay,
+    })
     const transition = transitionVolatilityProtection({
-      state,
-      snapshot,
+      state: replay.state,
+      snapshot: observation.snapshot,
       activeBuyOrderCount: 0,
       thresholds,
     })
-    state = transition.state
-    stateCounts[state.mode] += 1
-    if (transition.enteredProtected) protectionEntries += 1
-    if (transition.recovered) recoveryTransitions += 1
-
-    if (state.mode !== VOLATILITY_PROTECTION_MODES.NORMAL) {
-      if (currentProtectedRun === 0) protectionRuns += 1
-      currentProtectedRun += 1
-      longestProtectedRunMinutes = Math.max(longestProtectedRunMinutes, currentProtectedRun)
-    } else {
-      currentProtectedRun = 0
-    }
+    recordVolatilityTransition({
+      transition,
+      replay,
+    })
   }
 
-  if (ratios.length === 0 || !latestMetrics) {
+  if (replay.ratios.length === 0 || !latestMetrics) {
     throw new RangeError("historical calibration produced no valid volatility-ratio observations")
   }
-  const sortedRatios = [...ratios].sort((left, right) => compareDecimal({ left, right }))
-  const protectedObservations =
-    stateCounts[VOLATILITY_PROTECTION_MODES.PROTECTED] +
-    stateCounts[VOLATILITY_PROTECTION_MODES.RECOVERING]
-  const observationCount = history.length - STARTUP_HISTORY_CANDLES + 1
 
-  return Object.freeze({
+  return createVolatilityHistoryReport({
     symbol,
-    interval: CANDLE_INTERVAL,
-    candleCount: history.length,
-    historyStartTime: history[0].openTime,
-    historyEndTime: history.at(-1).openTime,
-    analyzedStartTime: history[STARTUP_HISTORY_CANDLES - 1].openTime,
-    analyzedEndTime: history.at(-1).openTime,
-    observationCount,
-    ratioObservations: ratios.length,
-    unavailableObservations,
+    history,
     thresholds,
-    thresholdCounts: Object.freeze(thresholdCounts),
-    ratioPercentiles: Object.freeze({
-      p50: percentile(sortedRatios, 50),
-      p90: percentile(sortedRatios, 90),
-      p95: percentile(sortedRatios, 95),
-      p99: percentile(sortedRatios, 99),
-    }),
-    maximumRatio: sortedRatios.at(-1),
-    stateCounts: Object.freeze(stateCounts),
-    protectionEntries,
-    recoveryTransitions,
-    protectionRuns,
-    longestProtectedRunMinutes,
-    protectedPercent: Number(((protectedObservations / observationCount) * 100).toFixed(2)),
+    replay,
     latestMetrics,
-    assumptions: Object.freeze({
-      startupHistoryCandles: STARTUP_HISTORY_CANDLES,
-      protectionRunsIncludeStartupWarmup: true,
-      activeBuyOrderCount: 0,
-      exchangeOrderExecutionSimulated: false,
-      streamFreshnessSimulated: false,
-      strategyProfitabilityEvaluated: false,
-    }),
   })
 }
 
 export function parseCalibrationArguments(args = []) {
-  if (!Array.isArray(args)) throw new TypeError("calibration CLI arguments must be an array")
+  if (!Array.isArray(args)) {throw new TypeError("calibration CLI arguments must be an array")}
   const inputPaths = []
   const thresholdOverrides = {}
   let outputPath = null
@@ -357,13 +466,13 @@ export function parseCalibrationArguments(args = []) {
     if (!value || value.startsWith("--")) {
       throw new TypeError(`missing value for ${argument}`)
     }
-    if (argument === "--input") inputPaths.push(value)
-    else if (argument === "--output") outputPath = value
-    else if (argument === "--warning-ratio") thresholdOverrides.warningRatio = value
-    else if (argument === "--protect-ratio") thresholdOverrides.protectRatio = value
-    else if (argument === "--recover-ratio") thresholdOverrides.recoverRatio = value
-    else if (argument === "--stable-candles") thresholdOverrides.requiredStableCandles = Number(value)
-    else throw new TypeError(`unknown calibration argument: ${argument}`)
+    if (argument === "--input") {inputPaths.push(value)}
+    else if (argument === "--output") {outputPath = value}
+    else if (argument === "--warning-ratio") {thresholdOverrides.warningRatio = value}
+    else if (argument === "--protect-ratio") {thresholdOverrides.protectRatio = value}
+    else if (argument === "--recover-ratio") {thresholdOverrides.recoverRatio = value}
+    else if (argument === "--stable-candles") {thresholdOverrides.requiredStableCandles = Number(value)}
+    else {throw new TypeError(`unknown calibration argument: ${argument}`)}
     index += 1
   }
 
@@ -403,7 +512,7 @@ function symbolFromArchiveFilename(filePath) {
 export function runCalibrationCli(args = process.argv.slice(2)) {
   const options = parseCalibrationArguments(args)
   if (options.help) {
-    process.stdout.write(printUsage() + "\n")
+    process.stdout.write(`${printUsage()  }\n`)
     return
   }
 
@@ -434,8 +543,11 @@ export function runCalibrationCli(args = process.argv.slice(2)) {
   }
 
   const markets = [...groupsBySymbol.entries()].map(([symbol, groups]) => {
-    const candles = mergeAndValidateCandles({ symbol, candleGroups: groups })
-    return analyzeVolatilityHistory({ symbol, candles, thresholds: options.thresholds })
+    const candles = mergeAndValidateCandles({ symbol,
+candleGroups: groups })
+    return analyzeVolatilityHistory({ symbol,
+candles,
+thresholds: options.thresholds })
   })
   const report = Object.freeze({
     dataSource: "Binance Spot Public Data archive (data.binance.vision)",
@@ -450,9 +562,9 @@ export function runCalibrationCli(args = process.argv.slice(2)) {
       "No runtime threshold is changed by this command.",
     ]),
   })
-  const serialized = JSON.stringify(report, null, 2) + "\n"
-  if (options.outputPath) writeFileSync(resolve(options.outputPath), serialized, "utf8")
-  else process.stdout.write(serialized)
+  const serialized = `${JSON.stringify(report, null, 2)  }\n`
+  if (options.outputPath) {writeFileSync(resolve(options.outputPath), serialized, "utf8")}
+  else {process.stdout.write(serialized)}
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

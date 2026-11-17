@@ -73,8 +73,46 @@ The original 110-file checkpoint above remains a historical snapshot. Complete r
 | `e753f9f07a201802814f4019ec2222fc7df7d798` | Current source-verified develop checkpoint after merged PR #1017; complete recursive tree contains 124 tracked Markdown/MDX paths (61 Harvester, 63 elsewhere) | 124 |
 | `452b19bbb13ee4bbe86df23c3d1da6f4566039d6` | Historical source-verified develop checkpoint after merged PR #1018; complete recursive tree still contains 124 tracked Markdown/MDX paths (61 Harvester, 63 elsewhere) | 124 |
 | `b5fc236987833da4374258da876b412be3c48759` | Current source-verified develop checkpoint after merged PR #1012; complete recursive tree still contains 124 tracked Markdown/MDX paths (61 Harvester, 63 elsewhere) | 124 |
+| `7590d332a307c7ef7bea37f0ba8721b399bd96e8` | Historical source-verified develop checkpoint before merged PR #1269; complete recursive tree contains 147 tracked Markdown/MDX paths (81 Harvester, 66 elsewhere) | 147 |
+| `0a51d6034a6ff6473d9a9005b74744fd048c9135` | Current source-verified develop checkpoint after merged PR #1269; no Markdown/MDX path additions or removals since `7590d33`; 147 tracked Markdown/MDX paths (81 Harvester, 66 elsewhere) | 147 |
 
-At the current source-verified develop checkpoint `b5fc236987833da4374258da876b412be3c48759` (after merged PR #1012), the repository contains **124 tracked Markdown/MDX files**: 97 frozen baseline files plus 27 additions, zero net file removals. The complete recursive tree is not truncated: 61 files are under Harvester and 63 are elsewhere. The 113-to-114 increase was `apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md` in PR #917; PR #951 added three audit-category indexes and relocated nine existing evidence files without deleting their contents. The 118-file increase since the 117-file PR #968 checkpoint is the 2026-11-10 restart-recovery audit report; PR #1003 adds the recovery ADR. Subsequent additions include `apps/harvester/docs/exchange-trading-constraints.md`, the four design/proposal documents merged in PR #1013, and the normalized Brokers candle contract documentation. `docs/MARKDOWN_STYLE.md` remains in the outside-Harvester inventory. Earlier 110-, 112-, 113-, 114-, 117-, 118- and 119-file counts remain valid historical snapshots.
+The previous source-verified develop checkpoint `b5fc236987833da4374258da876b412be3c48759` (after merged PR #1012) contained 124 tracked Markdown/MDX files: 61 under Harvester and 63 elsewhere. The complete recursive tree at `7590d332a307c7ef7bea37f0ba8721b399bd96e8` contained **147 tracked Markdown/MDX files**: 81 under Harvester and 66 elsewhere (97 frozen baseline files plus 50 additions, zero net removals). The current source-verified develop checkpoint `0a51d6034a6ff6473d9a9005b74744fd048c9135`, after merged PR #1269, has the same 147 paths; a complete changed-path comparison confirms no Markdown/MDX additions or removals since `7590d33`. Since the 124-file checkpoint, 23 Markdown/MDX paths were added: 20 under Harvester and three under `docs/engineering/`; their paths and purposes are listed below. Earlier 110-, 112-, 113-, 114-, 117-, 118-, 119- and 124-file counts remain valid historical snapshots. The current PR #1267 adds one further Harvester ADR path on its branch; it is not part of the 147-file develop count and will bring the post-merge tree to 148 files (82 Harvester, 66 elsewhere).
+
+## Subsequent recursive additions — current develop checkpoint 0a51d603
+
+A complete recursive tree comparison from the 124-file checkpoint `b5fc236987833da4374258da876b412be3c48759` to current `develop` `7590d332a307c7ef7bea37f0ba8721b399bd96e8` found 23 added Markdown/MDX paths and no removed paths:
+
+| Added path | Purpose |
+| --- | --- |
+| `apps/harvester/docs/SHUTDOWN_LOGGING_REDESIGN.md` | Accepted shutdown phase logging design and implementation contract. |
+| `apps/harvester/docs/architecture/OPERATOR_CONTROL_DESIGN.md` | Current transport-independent operator-control architecture and Command Center contract. |
+| `apps/harvester/docs/architecture/decisions/0002-transport-independent-operator-control.md` | Accepted application/engine/Telegram ownership and market-pause ADR. |
+| `apps/harvester/docs/architecture/decisions/0003-process-lifetime-operator-pause.md` | Accepted process-lifetime operator-pause scope. |
+| `apps/harvester/docs/architecture/decisions/0004-startup-open-orders-are-external.md` | Accepted startup open-order ownership boundary. |
+| `apps/harvester/docs/audits/reports/2026-11-13_source-domain-correctness-audit.md` | Dated source/domain correctness audit evidence. |
+| `apps/harvester/docs/audits/reports/2026-11-15_f055-shutdown-recovery.md` | Dated shutdown recovery finding evidence. |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md` | Preserved session audit evidence. |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-12_19-27-13Z_ORDER_FILL_LEDGER.md` | Matching session order/fill ledger evidence. |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-13_15-50-59Z.md` | Preserved session audit evidence. |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-13_15-50-59Z_ORDER_FILL_LEDGER.md` | Matching session order/fill ledger evidence. |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-14_23-41-12Z.md` | Preserved session audit evidence. |
+| `apps/harvester/docs/domain/recovery-seller-domain-specification.md` | Proposed Recovery Seller domain contract. |
+| `apps/harvester/docs/domain/recovery-seller-implementation-roadmap.md` | Proposed Recovery Seller implementation roadmap. |
+| `apps/harvester/docs/operations/submission-deferrals.md` | Operational explanation of order-submission deferral evidence. |
+| `apps/harvester/docs/operations/telegram-command-center.md` | Telegram Command Center operator runbook. |
+| `apps/harvester/docs/operator-control/README.md` | Operator-control capability index and implementation status. |
+| `apps/harvester/docs/plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md` | Design and implementation record for startup order ownership. |
+| `apps/harvester/docs/plans/WORKFLOW_PIPELINE_MIGRATION.md` | Harvester workflow-pipeline migration plan. |
+| `apps/harvester/docs/recovery/README.md` | Recovery documentation entry point. |
+| `docs/engineering/AI_REFACTORING_AUDIT_STANDARD.md` | Repository AI refactoring audit standard. |
+| `docs/engineering/ESLINT_STANDARD.md` | Repository ESLint policy and verification standard. |
+| `docs/engineering/structured-error-handling.md` | Repository structured error-handling standard. |
+
+### Pending addition — PR #1267
+
+| Added path | Purpose | Expected post-merge total |
+| --- | --- | ---: |
+| `apps/harvester/docs/architecture/decisions/0005-emergency-buy-pause.md` | Accepted global/per-market emergency BUY pause, current-process-owned cancellation and recovery SELL continuity decision. | 148 (82 Harvester) |
 
 ## Merged documentation additions — PR #1013 and follow-up work
 
@@ -88,7 +126,7 @@ At the current source-verified develop checkpoint `b5fc236987833da4374258da876b4
 | `apps/harvester/docs/volatility-protection.md` | Defines per-market protection, candle data, the recovery-SELL exception and Harvester implementation/test plan; PR #1037 delivers candle data and merged PR #1041 delivers the runtime protection gate and owned-BUY cancellation. Historical threshold calibration remains open. |
 | `apps/harvester/docs/exchange-trading-constraints.md` | Records exchange trading constraints and their application-level handling. |
 
-The subsequent Brokers candle contract documentation is an update to an existing file and does not change the Markdown/MDX path count. PR #1018 added runtime JavaScript and package metadata without adding new Markdown paths. PR #1019 updates existing Harvester port, architecture, roadmap and safety documents without adding new Markdown paths. PR #1037 updates existing Harvester/Indicators documentation and test support without adding Markdown/MDX paths; the 124-file count remains unchanged.
+The subsequent Brokers candle contract documentation is an update to an existing file and does not change the Markdown/MDX path count. PR #1018 added runtime JavaScript and package metadata without adding new Markdown paths. PR #1019 updates existing Harvester port, architecture, roadmap and safety documents without adding new Markdown paths. PR #1037 updates existing Harvester/Indicators documentation and test support without adding Markdown/MDX paths; the 124-file count remained unchanged at that historical checkpoint.
 
 ## Source-verified content reviews (post-baseline)
 
@@ -218,3 +256,12 @@ The original 97-file inventory table above is a frozen baseline: its recorded by
 - [x] Verify the required policy/link/heading-anchor baseline remains in CI; heading-anchor validation is report-only, not an enforcement gate.
 - [x] Record evidence-based dispositions and rationale for all six initial REVIEW entries; no initial Harvester or Brokers REVIEW candidates remain.
 - [ ] Record new REVIEW findings discovered during continued content-level review and update indexes after each approved migration.
+
+## Post-baseline additions — startup open-order boundary
+
+PR #1166 added two maintained Harvester documents outside the frozen 97-file baseline. They must be included in the next complete recursive tree verification.
+
+| Added path | Purpose |
+| --- | --- |
+| `apps/harvester/docs/architecture/decisions/0004-startup-open-orders-are-external.md` | Accepted and implemented startup order ownership decision. |
+| `apps/harvester/docs/plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md` | Completed design and implementation record for #1157. |

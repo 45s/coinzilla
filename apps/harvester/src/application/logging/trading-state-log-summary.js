@@ -1,3 +1,4 @@
+import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 /**
  * Build a bounded Position snapshot for DEBUG logs without exposing Portfolio
  * execution identity records.
@@ -7,9 +8,11 @@
  * @returns {object|null}
  */
 export function createPositionLogSummary({ position } = {}) {
-  if (!position) return null
+  if (!position) {return null}
 
   return {
+    ...(typeof position.positionId === "string" ? { positionId: position.positionId } : {}),
+    ...(typeof position.strategyId === "string" ? { strategyId: position.strategyId } : {}),
     marketId: position.market.id,
     symbol: position.market.symbol,
     quantity: position.quantity.amount,
@@ -30,7 +33,7 @@ export function createPositionLogSummary({ position } = {}) {
  * @returns {object|null}
  */
 export function createRecoveryLedgerLogSummary({ recoveryLedger } = {}) {
-  if (!recoveryLedger) return null
+  if (!recoveryLedger) {return null}
 
   return {
     marketId: recoveryLedger.market.id,
@@ -48,13 +51,18 @@ export function createRecoveryLedgerLogSummary({ recoveryLedger } = {}) {
  *
  * @param {object} input
  * @param {object} input.portfolio
- * @param {string} input.marketId
+ * @param {string} [input.marketId]
+ * @param {string} [input.positionId]
+ * @param {string} [input.strategyId]
  * @returns {{ position: object|null, appliedFillCount: number }}
  */
-export function createPortfolioLogSummary({ portfolio, marketId } = {}) {
+export function createPortfolioLogSummary({ portfolio, marketId, positionId, strategyId = StrategyId.COIN_GRABBER } = {}) {
+  const hasPositionSelector = typeof marketId === "string" || typeof positionId === "string"
   return {
     position: createPositionLogSummary({
-      position: typeof marketId === "string" ? portfolio.getPosition({ marketId }) : undefined,
+      position: hasPositionSelector ? portfolio.getPosition({ positionId,
+        marketId,
+        strategyId }) : undefined,
     }),
     appliedFillCount: portfolio.appliedFillIds.length,
   }
@@ -70,7 +78,7 @@ export function createPortfolioLogSummary({ portfolio, marketId } = {}) {
  * @returns {object|null}
  */
 export function createPortfolioStatsLogSummary({ position } = {}) {
-  if (!position) return null
+  if (!position) {return null}
 
   const baseAsset = position.market.baseAsset.code
   const quoteAsset = position.market.quoteAsset.code
@@ -79,13 +87,13 @@ export function createPortfolioStatsLogSummary({ position } = {}) {
     message: "Portfolio Stats",
     symbol: position.market.symbol,
     inventory: {
-      activeBaseQuantity: position.baseQuantity.amount + " " + baseAsset,
-      freeBaseQuantity: position.freeBaseQuantity.amount + " " + baseAsset,
-      totalBaseQuantity: position.totalBaseQuantity.amount + " " + baseAsset,
+      activeBaseQuantity: `${position.baseQuantity.amount} ${baseAsset}`,
+      freeBaseQuantity: `${position.freeBaseQuantity.amount} ${baseAsset}`,
+      totalBaseQuantity: `${position.totalBaseQuantity.amount} ${baseAsset}`,
     },
     accounting: {
-      spent: position.spent.amount + " " + quoteAsset,
-      quoteNetCashFlow: position.quoteNetCashFlow.amount + " " + quoteAsset,
+      spent: `${position.spent.amount} ${quoteAsset}`,
+      quoteNetCashFlow: `${position.quoteNetCashFlow.amount} ${quoteAsset}`,
     },
   }
 }

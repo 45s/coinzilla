@@ -6,25 +6,27 @@ import { toResult } from "@coinzilla/utils"
  * references are committed or strategy progression can continue.
  *
  * @param {object} options
- * @param {object} options.durableFactsStore - Initialized ADR-0001 durable-fact append port.
+ * @param {object} options.operationalStateStore - Initialized ADR-0001 Operational State Store append capability.
  * @param {Fill} options.fill - Validated canonical execution.
  * @returns {Promise<object>} Durable append result; success requires durable === true.
  */
-export async function recordExecutionFill({ durableFactsStore, fill } = {}) {
+export async function recordExecutionFill({ operationalStateStore, fill } = {}) {
   try {
-    if (typeof durableFactsStore?.append !== "function") { throw new TypeError("recordExecutionFill requires a durable-fact append port") }
+    if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordExecutionFill requires a Operational State Store append capability") }
     if (!(fill instanceof Fill)) { throw new TypeError("recordExecutionFill requires a canonical Fill") }
-    const market = fill.market
+    const {market} = fill
     const commissions = fill.commissions.map((commission) => ({
       amount: commission.amount.amount,
       assetId: commission.amount.asset.id,
       assetCode: commission.amount.asset.code,
       quoteValue: commission.quoteValue
-        ? { amount: commission.quoteValue.amount, assetId: commission.quoteValue.asset.id, assetCode: commission.quoteValue.asset.code }
+        ? { amount: commission.quoteValue.amount,
+assetId: commission.quoteValue.asset.id,
+assetCode: commission.quoteValue.asset.code }
         : null,
     }))
-    const result = await durableFactsStore.append({
-      factId: "execution-fill-applied:" + fill.id,
+    const result = await operationalStateStore.append({
+      factId: `execution-fill-applied:${  fill.id}`,
       factType: "EXECUTION_FILL_APPLIED",
       data: {
         fillId: fill.id,

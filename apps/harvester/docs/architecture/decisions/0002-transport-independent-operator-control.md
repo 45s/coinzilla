@@ -12,6 +12,8 @@ created: 2026-11-11
 
 **Accepted — application and trading-engine contract; initial rollout scope narrowed by [ADR-0003](./0003-process-lifetime-operator-pause.md).** The original design/prototype is preserved in [PR #1011](https://github.com/45s/coinzilla/pull/1011); the synchronized implementation continuation is [PR #1045](https://github.com/45s/coinzilla/pull/1045). The engine boundary, transport-independent application use cases and offline-testable Telegram adapter are implemented. The initial operator-pause rollout is process-lifetime only: it does not restore pause state after a process restart. ADR-0003 supersedes only the previous requirement to complete full ADR-0001 restart recovery before enabling this initial operator-control capability. Durable-before-apply, fact idempotency, actor authorization and pause safety semantics remain in force. Full trading-state restart recovery remains a separate ADR-0001 / issue #654 workstream.
 
+> **Terminology note (2026-11-14):** This accepted ADR retains the original durable-fact vocabulary as historical architectural terminology. The current application-facing name for the shared persistence component is **Operational State Store**; see the current [operator-control documentation](../../operator-control/README.md) for supported configuration and commands.
+
 **Owner:** Harvester
 
 **Related decisions and work:**
@@ -156,7 +158,11 @@ No HTTP server, webhook, web session, generic command framework or extra Telegra
 - [x] Reuse the ADR-0001 file durable-facts store through the application append port.
 - [ ] **Deferred to ADR-0001 / issue #654:** project operator facts into candidate startup state and restore them before strategy evaluation. This is not a prerequisite for the initial process-lifetime operator-control rollout.
 - [x] Implement the offline-testable Telegram `/pause <SYMBOL>` parser, private-chat allowlist, serial Long Polling, stable update identity, retry and stop lifecycle.
-- [x] Add disabled-by-default `operatorControl.telegram` configuration validation and fail-closed bootstrap lifecycle — PR #1067. Runtime verifies the initialized ADR-0001 store before broker connection, starts the Telegram poller before trading subscriptions, and stops polling before broker shutdown.
+- [x] Add enabled-by-default `operatorControl.telegram` configuration with environment-backed allowlist validation and fail-closed bootstrap lifecycle — PR #1067. Runtime verifies the initialized ADR-0001 store before broker connection, starts the Telegram poller before trading subscriptions, and stops polling before broker shutdown.
 - [x] **Out of scope for the initial rollout:** restore operator pause state after restart or complete recovery Steps 8–9. Step 7's offline one-market audit/confirmation implementation is complete; the remaining restart-restoration work stays in the separate process-restart recovery workstream under issue #654.
 - [x] Exact-head required CI passed on PR #1067: workspace unit tests/coverage, syntax/lint, documentation links, dependency audit, actionlint, and Linux/Windows process-lock checks. The read-only Binance TESTNET integration was skipped.
 - [ ] User review and merge.
+
+## Later emergency BUY control boundary
+
+The accepted market-pause behavior in this ADR remains unchanged: `pauseMarket` / `/pause SYMBOL` blocks new strategy BUY intents but leaves existing exchange orders untouched. The distinct emergency BUY capability is defined by [ADR-0005](./0005-emergency-buy-pause.md); it uses separate global/market gates and cancels only current-process-owned BUY orders through the existing engine cancellation workflow. Recovery SELLs continue, and startup-snapshot/manual/external orders remain untouched.

@@ -1,0 +1,135 @@
+# Harvester LIVE session — order, fill and recovery ledger
+
+- Session: `85046a77-d7de-4afe-9ff1-a9386535f8e7`
+- Window: 2026-11-13 15:50:59.710Z–19:46:53.089Z
+- Runtime commit: `a2254162d8c6ca40da65ef243484428548fdc304`
+- Source Journal SHA-256: `cf64f296a65008bc9978bdf08a12f0ed49f451558553afc75fb775be40a1b657`
+
+This ledger lists every `execution.fill_applied` event (60 rows) and every `recovery.cycle_completed` event (21 rows) parsed from the supplied Journal. Quantities and prices are exact decimal strings from the source. Commission status was COMPLETE and the commission list was empty on all applied fills.
+
+## Applied fills
+
+| Event time (UTC) | Symbol | Side | Trade ID | Broker order ID | Base quantity | Price | Quote quantity |
+|---|---|---|---:|---:|---:|---:|---:|
+| 2026-11-13T15:52:49.562Z | WLDFDUSD | BUY | 5779910 | 341728932 | 20 | 0.2967 | 5.934 |
+| 2026-11-13T15:55:55.520Z | ADAFDUSD | BUY | 16097018 | 780209811 | 30 | 0.1717 | 5.151 |
+| 2026-11-13T15:59:52.808Z | WLDFDUSD | SELL | 5779914 | 341729474 | 19.9 | 0.2987 | 5.94413 |
+| 2026-11-13T16:01:41.203Z | LINKFDUSD | BUY | 31355120 | 616701596 | 2 | 9.93 | 19.86 |
+| 2026-11-13T16:01:58.492Z | ZROFDUSD | BUY | 1510351 | 219657792 | 5 | 1.602 | 8.01 |
+| 2026-11-13T16:02:31.203Z | WLDFDUSD | BUY | 5779915 | 341730929 | 20 | 0.2972 | 5.944 |
+| 2026-11-13T16:06:55.074Z | ZROFDUSD | SELL | 1510352 | 219659754 | 4.99 | 1.608 | 8.02392 |
+| 2026-11-13T16:08:21.927Z | WLDFDUSD | SELL | 5779916 | 341731599 | 19.9 | 0.2992 | 5.95408 |
+| 2026-11-13T16:08:58.869Z | ADAFDUSD | SELL | 16097026 | 780210532 | 29.9 | 0.1727 | 5.16373 |
+| 2026-11-13T16:09:28.237Z | LINKFDUSD | SELL | 31355148 | 616703059 | 1.99 | 9.985 | 19.87015 |
+| 2026-11-13T16:12:15.360Z | LINKFDUSD | BUY | 31355159 | 616704122 | 2 | 9.955 | 19.91 |
+| 2026-11-13T16:14:04.184Z | ADAFDUSD | BUY | 16097036 | 780212305 | 30 | 0.1721 | 5.163 |
+| 2026-11-13T16:14:17.160Z | LINKFDUSD | BUY | 31355173 | 616704531 | 2 | 9.925 | 19.85 |
+| 2026-11-13T16:14:19.845Z | WLDFDUSD | BUY | 5779917 | 341732905 | 20 | 0.2977 | 5.954 |
+| 2026-11-13T16:14:33.071Z | ZROFDUSD | BUY | 1510353 | 219660454 | 5 | 1.603 | 8.015 |
+| 2026-11-13T16:15:34.915Z | ZROFDUSD | BUY | 1510354 | 219661727 | 5 | 1.598 | 7.99 |
+| 2026-11-13T16:15:41.753Z | ADAFDUSD | BUY | 16097045 | 780213275 | 30 | 0.1715 | 5.145 |
+| 2026-11-13T16:15:44.975Z | LINKFDUSD | BUY | 31355184 | 616704747 | 2 | 9.895 | 19.79 |
+| 2026-11-13T16:16:35.074Z | ZROFDUSD | BUY | 1510355 | 219661940 | 5 | 1.593 | 7.965 |
+| 2026-11-13T16:16:38.215Z | WLDFDUSD | BUY | 5779918 | 341734011 | 20 | 0.2962 | 5.924 |
+| 2026-11-13T16:17:22.538Z | ADAFDUSD | BUY | 16097054 | 780213526 | 30 | 0.1709 | 5.127 |
+| 2026-11-13T16:18:27.401Z | ZROFDUSD | BUY | 1510356 | 219662081 | 5 | 1.588 | 7.94 |
+| 2026-11-13T16:24:19.525Z | WLDFDUSD | SELL | 5779920 | 341734451 | 39.9 | 0.298 | 11.8902 |
+| 2026-11-13T16:24:43.869Z | ZROFDUSD | SELL | 1510357 | 219662329 | 19.99 | 1.597 | 31.92403 |
+| 2026-11-13T16:26:15.872Z | LINKFDUSD | SELL | 31355227 | 616704960 | 5.99 | 9.944 | 59.56456 |
+| 2026-11-13T16:26:18.681Z | ADAFDUSD | SELL | 16097060 | 780213955 | 89.9 | 0.1719 | 15.45381 |
+| 2026-11-13T16:30:00.327Z | ZROFDUSD | BUY | 1510358 | 219663106 | 5 | 1.592 | 7.96 |
+| 2026-11-13T16:30:17.504Z | LINKFDUSD | BUY | 31355253 | 616706465 | 2 | 9.919 | 19.838 |
+| 2026-11-13T16:34:27.566Z | ZROFDUSD | BUY | 1510359 | 219663982 | 5 | 1.587 | 7.935 |
+| 2026-11-13T16:34:30.308Z | ADAFDUSD | BUY | 16097067 | 780215440 | 30 | 0.1715 | 5.145 |
+| 2026-11-13T16:35:38.122Z | ZROFDUSD | SELL | 1510360 | 219664908 | 9.99 | 1.593 | 15.91407 |
+| 2026-11-13T16:43:47.590Z | WLDFDUSD | BUY | 5779922 | 341735691 | 20 | 0.2965 | 5.93 |
+| 2026-11-13T16:46:48.488Z | LINKFDUSD | BUY | 31355288 | 616706983 | 2 | 9.889 | 19.778 |
+| 2026-11-13T17:00:28.983Z | ADAFDUSD | BUY | 16097076 | 780216553 | 30 | 0.1709 | 5.127 |
+| 2026-11-13T17:12:27.276Z | ZROFDUSD | BUY | 1510361 | 219665080 | 5 | 1.588 | 7.94 |
+| 2026-11-13T17:16:13.536Z | ZROFDUSD | BUY | 1510362 | 219670071 | 5 | 1.583 | 7.915 |
+| 2026-11-13T17:22:20.329Z | ZROFDUSD | SELL | 1510364 | 219670491 | 9.99 | 1.589 | 15.87411 |
+| 2026-11-13T17:26:57.684Z | LINKFDUSD | SELL | 31355346 | 616708824 | 3.99 | 9.932 | 39.62868 |
+| 2026-11-13T17:35:10.473Z | ADAFDUSD | SELL | 16097087 | 780219321 | 59.9 | 0.1717 | 10.28483 |
+| 2026-11-13T17:36:25.077Z | WLDFDUSD | SELL | 5779925 | 341738388 | 19.9 | 0.2985 | 5.94015 |
+| 2026-11-13T17:40:27.802Z | ZROFDUSD | BUY | 1510371 | 219673104 | 5 | 1.608 | 8.04 |
+| 2026-11-13T17:42:34.509Z | ZROFDUSD | SELL | 1510372 | 219673807 | 4.99 | 1.614 | 8.05386 |
+| 2026-11-13T17:45:47.196Z | LINKFDUSD | BUY | 31355395 | 616713715 | 2 | 9.994 | 19.988 |
+| 2026-11-13T17:45:50.721Z | ADAFDUSD | BUY | 16097103 | 780223191 | 30 | 0.1723 | 5.169 |
+| 2026-11-13T17:55:00.344Z | ZROFDUSD | BUY | 1510373 | 219674282 | 5 | 1.609 | 8.045 |
+| 2026-11-13T17:55:55.448Z | WLDFDUSD | BUY | 5779932 | 341745574 | 20 | 0.2987 | 5.974 |
+| 2026-11-13T17:56:28.427Z | LINKFDUSD | BUY | 31355413 | 616713982 | 2 | 9.964 | 19.928 |
+| 2026-11-13T17:56:47.657Z | ZROFDUSD | BUY | 1510374 | 219676189 | 5 | 1.604 | 8.02 |
+| 2026-11-13T17:58:27.492Z | ADAFDUSD | BUY | 16097109 | 780223524 | 30 | 0.1717 | 5.151 |
+| 2026-11-13T18:00:03.041Z | ZROFDUSD | BUY | 1510375 | 219676438 | 5 | 1.599 | 7.995 |
+| 2026-11-13T18:02:05.927Z | ZROFDUSD | BUY | 1510377 | 219676816 | 5 | 1.594 | 7.97 |
+| 2026-11-13T18:06:14.369Z | ZROFDUSD | BUY | 1510378 | 219677155 | 5 | 1.589 | 7.945 |
+| 2026-11-13T18:19:36.266Z | LINKFDUSD | SELL | 31355439 | 616714603 | 3.99 | 10.007 | 39.92793 |
+| 2026-11-13T18:19:59.478Z | ZROFDUSD | SELL | 1510381 | 219677931 | 24.99 | 1.601 | 40.00899 |
+| 2026-11-13T18:21:20.114Z | ADAFDUSD | SELL | 16097117 | 780224224 | 59.9 | 0.1725 | 10.33275 |
+| 2026-11-13T18:21:22.606Z | WLDFDUSD | SELL | 5779933 | 341746621 | 19.9 | 0.3008 | 5.98592 |
+| 2026-11-13T18:40:54.690Z | LINKFDUSD | BUY | 31355467 | 616716602 | 2 | 10.008 | 20.016 |
+| 2026-11-13T18:42:13.618Z | ZROFDUSD | BUY | 1510385 | 219682019 | 5 | 1.605 | 8.025 |
+| 2026-11-13T18:48:28.726Z | ZROFDUSD | SELL | 1510386 | 219682854 | 4.99 | 1.611 | 8.03889 |
+| 2026-11-13T19:03:52.940Z | LINKFDUSD | SELL | 31355543 | 616717364 | 1.99 | 10.064 | 20.02736 |
+
+## Completed recovery cycles
+
+| Completion time (UTC) | Symbol | Realized net profit | Retained quantity | Configured keepQuantity |
+|---|---|---:|---:|---:|
+| 2026-11-13T15:59:53.392Z | WLDFDUSD | 0.01013 | 0.1 | 0.1 |
+| 2026-11-13T16:06:55.629Z | ZROFDUSD | 0.01392 | 0.01 | 0.01 |
+| 2026-11-13T16:08:22.490Z | WLDFDUSD | 0.01008 | 0.1 | 0.1 |
+| 2026-11-13T16:08:59.418Z | ADAFDUSD | 0.01273 | 0.1 | 0.1 |
+| 2026-11-13T16:09:28.798Z | LINKFDUSD | 0.01015 | 0.01 | 0.01 |
+| 2026-11-13T16:24:20.078Z | WLDFDUSD | 0.0122 | 0.1 | 0.1 |
+| 2026-11-13T16:24:44.422Z | ZROFDUSD | 0.01403 | 0.01 | 0.01 |
+| 2026-11-13T16:26:16.427Z | LINKFDUSD | 0.01456 | 0.01 | 0.01 |
+| 2026-11-13T16:26:19.242Z | ADAFDUSD | 0.01881 | 0.1 | 0.1 |
+| 2026-11-13T16:35:38.669Z | ZROFDUSD | 0.01907 | 0.01 | 0.01 |
+| 2026-11-13T17:22:20.876Z | ZROFDUSD | 0.01911 | 0.01 | 0.01 |
+| 2026-11-13T17:26:58.241Z | LINKFDUSD | 0.01268 | 0.01 | 0.01 |
+| 2026-11-13T17:35:11.020Z | ADAFDUSD | 0.01283 | 0.1 | 0.1 |
+| 2026-11-13T17:36:25.626Z | WLDFDUSD | 0.01015 | 0.1 | 0.1 |
+| 2026-11-13T17:42:35.056Z | ZROFDUSD | 0.01386 | 0.01 | 0.01 |
+| 2026-11-13T18:19:36.817Z | LINKFDUSD | 0.01193 | 0.01 | 0.01 |
+| 2026-11-13T18:20:00.028Z | ZROFDUSD | 0.03399 | 0.01 | 0.01 |
+| 2026-11-13T18:21:20.666Z | ADAFDUSD | 0.01275 | 0.1 | 0.1 |
+| 2026-11-13T18:21:23.156Z | WLDFDUSD | 0.01192 | 0.1 | 0.1 |
+| 2026-11-13T18:48:29.275Z | ZROFDUSD | 0.01389 | 0.01 | 0.01 |
+| 2026-11-13T19:03:53.490Z | LINKFDUSD | 0.01136 | 0.01 | 0.01 |
+
+**Aggregate:** 21 cycles; net profit 0.30015 FDUSD. Cycle-level totals: ADA 0.05712, LINK 0.06068, WLD 0.05448, ZRO 0.12787.
+
+## Shutdown BUY cancellations
+
+| Time (UTC) | Symbol | Client order ID | Broker order ID | Status |
+|---|---|---|---:|---|
+| 2026-11-13T19:44:36.435Z | ADAFDUSD | `h-fa576fd67e08430298f142-119` | 780225765 | CANCELED |
+| 2026-11-13T19:44:37.870Z | WLDFDUSD | `h-fa576fd67e08430298f142-121` | 341750301 | CANCELED |
+| 2026-11-13T19:44:39.316Z | ZROFDUSD | `h-fa576fd67e08430298f142-126` | 219682856 | CANCELED |
+| 2026-11-13T19:44:40.790Z | LINKFDUSD | `h-fa576fd67e08430298f142-127` | 616718411 | CANCELED |
+
+The complete Journal records 54 `order.cancel_requested` and 54 `order.cancelled` events. This table isolates the four shutdown-pass cancellations.
+
+## Exact account snapshots
+
+| Asset | PREFLIGHT total | CLOSING total |
+|---|---:|---:|
+| ADA | 0 | 0.4 |
+| DOGE | 1 | 1 |
+| FDUSD | 380 | 380.30015 |
+| LINK | 0 | 0.05 |
+| SOL | 0 | 0 |
+| USDT | 0 | 0 |
+| WLD | 0 | 0.5 |
+| ZRO | 0.09 | 0.16 |
+
+All final balances match the per-cycle keepQuantity allocations and 0.30015 FDUSD of cycle profit. The CLOSING balance snapshot is not a final account-wide open-order payload; do not infer complete exchange-wide order absence from this table.
+
+## Duplicate fill notifications
+
+The Journal contains 180 `execution.duplicate_fill` events. Every corresponding accounting trace records `applied: false`, `duplicate: true`, and zero accounting delta. The 60 applied-fill rows above are the unique applied transitions; duplicate notifications are not additional executions.
+
+## Local submission deferral evidence
+
+At 16:12:15.928Z, `order.submission_requested` was recorded for LINKFDUSD SELL client ID `h-fa576fd67e08430298f142-24`, price 10.011, quantity 1.99. Evaluation 116 later returned `deferred: true`, `deferralReason: MARKET_BOOK_STALE`, no submitted orders. A subsequent evaluation used client ID `...-26`, acknowledged as broker order `616704528`. This was a local pre-submission deferral; the Journal lacks an explicit terminal deferral outcome for the first client ID. See [#1104](https://github.com/45s/coinzilla/issues/1104).

@@ -20,14 +20,15 @@ test("package entry point remains a thin facade over the provider API", async ()
 })
 
 test("Telegram adapter depends on injected ports instead of application infrastructure", async () => {
-  const [subscriber, notifier, validation, safeErrors] = await Promise.all([
-    readSource("./telegram/telegram-event-subscriber.js"),
-    readSource("./telegram/telegram-notifier.js"),
-    readSource("./telegram/telegram-validation.js"),
-    readSource("./telegram/safe-error-message.js"),
+  const [subscriber, notifier, validation, safeErrors, responseValidation] = await Promise.all([
+    readSource("./telegram/event-subscriber.js"),
+    readSource("./telegram/notifier.js"),
+    readSource("./telegram/helpers/run-validation.js"),
+    readSource("./telegram/helpers/get-safe-error-msg.js"),
+    readSource("./telegram/helpers/run-response-validation.js"),
   ])
 
-  const providerSources = [subscriber, notifier, validation, safeErrors]
+  const providerSources = [subscriber, notifier, validation, safeErrors, responseValidation]
   for (const source of providerSources) {
     assert.doesNotMatch(
       source,

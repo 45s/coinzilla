@@ -14,11 +14,13 @@ test("RPC client correlates a successful response with its request ID", async ()
     params: { symbol: "BTCUSDT" },
   })
 
-  response(context.sockets[0], request.id, { symbol: "BTCUSDT", price: "65000.00" })
+  response(context.sockets[0], request.id, { symbol: "BTCUSDT",
+price: "65000.00" })
   assert.deepEqual(await pending, {
     id: "request-1",
     status: 200,
-    data: { symbol: "BTCUSDT", price: "65000.00" },
+    data: { symbol: "BTCUSDT",
+price: "65000.00" },
     rateLimits: undefined,
   })
   assert.equal(context.client.pendingCount, 0)
@@ -35,7 +37,8 @@ test("RPC client normalizes Binance API errors and preserves code and status", a
   context.sockets[0].receive(JSON.stringify({
     id: "request-1",
     status: 400,
-    error: { code: -2010, msg: "Insufficient balance" },
+    error: { code: -2010,
+msg: "Insufficient balance" },
   }))
 
   await assert.rejects(pending, (error) => {
@@ -60,7 +63,8 @@ test("RPC client marks 5xx state-changing outcomes as unknown and never replays"
   context.sockets[0].receive(JSON.stringify({
     id: "request-1",
     status: 503,
-    error: { code: -1000, msg: "Service unavailable" },
+    error: { code: -1000,
+msg: "Service unavailable" },
   }))
 
   await assert.rejects(pending, (error) => {
@@ -121,9 +125,11 @@ test("valid messages without request IDs are emitted as push events", async () =
   const events = []
   context.client.onEvent((event) => events.push(event))
 
-  context.sockets[0].receive(JSON.stringify({ e: "executionReport", i: 42 }))
+  context.sockets[0].receive(JSON.stringify({ e: "executionReport",
+i: 42 }))
 
-  assert.deepEqual(events, [{ e: "executionReport", i: 42 }])
+  assert.deepEqual(events, [{ e: "executionReport",
+i: 42 }])
 })
 
 test("malformed response envelopes reject the matching pending request", async () => {
@@ -131,7 +137,8 @@ test("malformed response envelopes reject the matching pending request", async (
   await connectClient(context)
 
   const pending = context.client.request("ticker.price", { symbol: "BTCUSDT" })
-  context.sockets[0].receive(JSON.stringify({ id: "request-1", result: {} }))
+  context.sockets[0].receive(JSON.stringify({ id: "request-1",
+result: {} }))
 
   await assert.rejects(pending, /invalid status field/)
   assert.equal(context.client.pendingCount, 0)
@@ -174,7 +181,9 @@ test("disconnect rejects every pending request and does not replay state changes
 
   const read = context.client.request("ticker.price", {})
   const mutation = context.client.request("order.cancel", {}, { stateChanging: true })
-  context.sockets[0].serverClose({ code: 1006, reason: "network lost", wasClean: false })
+  context.sockets[0].serverClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
 
   await assert.rejects(read, (error) => {
     assert.equal(error.name, "BinanceRpcConnectionError")
@@ -256,7 +265,8 @@ test("RPC client marks HTTP 409 partial mutation responses as uncertain", async 
   context.sockets[0].receive(JSON.stringify({
     id: "request-1",
     status: 409,
-    error: { code: -2022, msg: "Cancel-replace partially failed" },
+    error: { code: -2022,
+msg: "Cancel-replace partially failed" },
   }))
 
   await assert.rejects(pending, (error) => {

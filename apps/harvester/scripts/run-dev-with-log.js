@@ -28,34 +28,37 @@ const logStreams = [
   createWriteStream(sessionPaths.terminal, { flags: "wx" }),
 ]
 const [, sessionLogStream] = logStreams
-let child
+const childProcess = { current: undefined }
 let childClosed = false
 let logStreamFailed = false
 const onLogStreamError = (error) => {
-  if (logStreamFailed) return
+  if (logStreamFailed) {return}
   logStreamFailed = true
   process.stderr.write(`Failed to write Harvester terminal log: ${error.message}\n`)
   process.exitCode = 1
-  if (child && !childClosed && !child.killed) child.kill("SIGTERM")
+  if (childProcess.current && !childClosed && !childProcess.current.killed) {
+    childProcess.current.kill("SIGTERM")
+  }
 }
 logStreams.forEach((stream) => stream.on("error", onLogStreamError))
 
-const streamOpenResults = await Promise.allSettled(logStreams.map((stream) => new Promise((resolve, reject) => {
-  stream.once("open", resolve)
-  stream.once("error", reject)
+const streamOpenResults = await Promise.allSettled(logStreams.map((stream) => new Promise((...callbacks) => {
+  const [resolveOpen, rejectOpen] = callbacks
+  stream.once("open", resolveOpen)
+  stream.once("error", rejectOpen)
 })))
 const streamOpenErrors = streamOpenResults
   .filter((result) => result.status === "rejected")
   .map((result) => result.reason)
 if (streamOpenErrors.length > 0) {
   await Promise.allSettled(logStreams.map(async (stream) => {
-    if (!stream.destroyed) stream.destroy()
-    if (!stream.closed) await once(stream, "close")
+    if (!stream.destroyed) {stream.destroy()}
+    if (!stream.closed) {await once(stream, "close")}
   }))
   throw streamOpenErrors[0]
 }
 
-child = spawn(
+childProcess.current = spawn(
   process.execPath,
   ["src/index.js"],
   {
@@ -75,11 +78,11 @@ child = spawn(
     },
   },
 )
-if (logStreamFailed) child.kill("SIGTERM")
+if (logStreamFailed) {childProcess.current.kill("SIGTERM")}
 
 const closeLogStreams = async () => {
   const results = await Promise.allSettled(logStreams.map(async (stream) => {
-    if (stream.closed) return
+    if (stream.closed) {return}
     if (stream.destroyed) {
       await once(stream, "close")
       return
@@ -96,8 +99,8 @@ const closeLogStreams = async () => {
 const handleSignal = (signal) => {
   // The child has its own process group on POSIX, so it needs an explicit
   // signal. On Windows, Ctrl+C is delivered to both console processes.
-  if (process.platform !== "win32" && !childClosed && !child.killed) {
-    child.kill(signal)
+  if (process.platform !== "win32" && !childClosed && !childProcess.current.killed) {
+    childProcess.current.kill(signal)
   }
 }
 
@@ -107,7 +110,7 @@ const onSigterm = () => handleSignal("SIGTERM")
 process.once("SIGINT", onSigint)
 process.once("SIGTERM", onSigterm)
 
-const forwardOutput = async (stream, output) => {
+const forwardOutput = async ({ stream, output }) => {
   try {
     return await forwardChildOutput({
       source: stream,
@@ -118,29 +121,38 @@ const forwardOutput = async (stream, output) => {
     if (!logStreamFailed) {
       process.stderr.write(`Failed to forward Harvester output: ${error.message}\n`)
       process.exitCode = 1
-      if (!childClosed && !child.killed) child.kill("SIGTERM")
+      if (!childClosed && !childProcess.current.killed) {
+        childProcess.current.kill("SIGTERM")
+      }
     }
     return 0
   }
 }
 
 const outputForwarding = [
-  forwardOutput(child.stdout, process.stdout),
-  forwardOutput(child.stderr, process.stderr),
+  forwardOutput({
+    stream: childProcess.current.stdout,
+    output: process.stdout,
+  }),
+  forwardOutput({
+    stream: childProcess.current.stderr,
+    output: process.stderr,
+  }),
 ]
 
-child.on("error", (error) => {
+childProcess.current.on("error", (error) => {
   process.stderr.write(`Failed to start Harvester: ${error.message}\n`)
   process.exitCode = 1
 })
 
-child.on("close", async (code, signal) => {
+childProcess.current.on("close", async (...closeArguments) => {
+  const [code, signal] = closeArguments
   childClosed = true
   process.removeListener("SIGINT", onSigint)
   process.removeListener("SIGTERM", onSigterm)
 
   const droppedChunks = (await Promise.all(outputForwarding))
-    .reduce((total, count) => total + count, 0)
+    .reduce((...values) => values[0] + values[1], 0)
 
   await closeLogStreams()
 
@@ -159,7 +171,13 @@ child.on("close", async (code, signal) => {
   } else if (code !== null) {
     process.exitCode = code
   } else if (signal) {
-    process.exitCode = signal === "SIGINT" ? 130 : signal === "SIGTERM" ? 143 : 1
+    if (signal === "SIGINT") {
+      process.exitCode = 130
+    } else if (signal === "SIGTERM") {
+      process.exitCode = 143
+    } else {
+      process.exitCode = 1
+    }
   } else {
     process.exitCode ??= 0
   }

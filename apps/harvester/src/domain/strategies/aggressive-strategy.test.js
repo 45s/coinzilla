@@ -1,21 +1,32 @@
+import { StrategyId } from "./strategy-ids.js"
 import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../portfolio/portfolio.js"
 import { evaluateAggressiveStrategy } from "./aggressive-strategy.js"
 
-const marketPrice = { symbol: "BTCUSDT", price: "65000.12", timestamp: 123 }
-const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
-const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "BTCUSDT", baseAsset, quoteAsset })
+const marketPrice = { symbol: "BTCUSDT",
+price: "65000.12",
+timestamp: 123 }
+const baseAsset = new Asset({ id: "asset:BTC",
+code: "BTC" })
+const quoteAsset = new Asset({ id: "asset:USDT",
+code: "USDT" })
+const market = new Market({ venue: "binance",
+symbol: "BTCUSDT",
+baseAsset,
+quoteAsset })
 const buyFill = new Fill({
   tradeId: "trade-1",
   brokerOrderId: "order-1",
   market,
   side: "BUY",
-  price: new Money({ amount: "10", asset: quoteAsset }),
-  quantity: new Quantity({ amount: "0.5", asset: baseAsset }),
-  quoteQuantity: new Money({ amount: "5", asset: quoteAsset }),
+  price: new Money({ amount: "10",
+asset: quoteAsset }),
+  quantity: new Quantity({ amount: "0.5",
+asset: baseAsset }),
+  quoteQuantity: new Money({ amount: "5",
+asset: quoteAsset }),
   commissions: [],
   commissionStatus: "COMPLETE",
 })
@@ -23,7 +34,8 @@ const buyFill = new Fill({
 test("is the active Aggressive policy and blocks unsafe initial grid assumptions", () => {
   const decision = evaluateAggressiveStrategy({
     marketPrice,
-    pairConfig: { makerPercent: 0, orderQuantity: 0.01 },
+    pairConfig: { makerPercent: 0,
+orderQuantity: 0.01 },
     portfolio: new Portfolio(),
   })
   assert.equal(decision.strategy, "AGGRESSIVE")
@@ -32,7 +44,8 @@ test("is the active Aggressive policy and blocks unsafe initial grid assumptions
 })
 
 test("exposes the current Position and blocks unresolved SELL pricing", () => {
-  const portfolio = new Portfolio().applyFill({ fill: buyFill }).portfolio
+  const {portfolio} = new Portfolio().applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER })
   const decision = evaluateAggressiveStrategy({
     marketPrice,
     pairConfig: { makerPercent: 0 },
@@ -45,13 +58,17 @@ test("exposes the current Position and blocks unresolved SELL pricing", () => {
 
 test("treats zero active quantity with retained free inventory as no active Position", () => {
   const portfolioWithFreeInventory = new Portfolio()
-    .applyFill({ fill: buyFill })
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER })
     .portfolio
-    .allocateFreeQuantity({ marketId: market.id, quantity: "0.5" })
+    .allocateFreeQuantity({ marketId: market.id,
+quantity: "0.5",
+strategyId: StrategyId.COIN_GRABBER })
 
   const decision = evaluateAggressiveStrategy({
     marketPrice,
-    pairConfig: { makerPercent: 0, orderQuantity: 0.01 },
+    pairConfig: { makerPercent: 0,
+orderQuantity: 0.01 },
     portfolio: portfolioWithFreeInventory,
   })
 
@@ -63,9 +80,12 @@ test("treats zero active quantity with retained free inventory as no active Posi
 
 test("uses exact decimal active-quantity comparison for Aggressive inventory gating", () => {
   const zeroQuantityPosition = new Portfolio()
-    .applyFill({ fill: buyFill })
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER })
     .portfolio
-    .allocateFreeQuantity({ marketId: market.id, quantity: "0.5" })
+    .allocateFreeQuantity({ marketId: market.id,
+quantity: "0.5",
+strategyId: StrategyId.COIN_GRABBER })
   const decision = evaluateAggressiveStrategy({
     marketPrice,
     pairConfig: { makerPercent: 0 },
@@ -79,7 +99,9 @@ test("uses exact decimal active-quantity comparison for Aggressive inventory gat
 
 test("requires a Portfolio input", () => {
   assert.throws(
-    () => evaluateAggressiveStrategy({ marketPrice, pairConfig: {}, portfolio: {} }),
+    () => evaluateAggressiveStrategy({ marketPrice,
+pairConfig: {},
+portfolio: {} }),
     /requires a Portfolio/,
   )
 })

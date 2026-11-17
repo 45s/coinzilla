@@ -9,7 +9,8 @@ export function adaptOrderRequestParams({
   clientOrderId = input.clientOrderId,
   requireClientOrderId = false,
 }) {
-  const { clientOrderId: ignoredClientOrderId, ...orderInput } = input
+  const orderInput = { ...input }
+  delete orderInput.clientOrderId
   const params = {
     ...orderInput,
     ...(requireClientOrderId || clientOrderId ? { newClientOrderId: clientOrderId } : {}),

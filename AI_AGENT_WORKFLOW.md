@@ -17,6 +17,8 @@ Before **any** task or state-changing action, every agent MUST complete the docu
 
 Before implementing a shared helper or cross-cutting capability, follow the single [shared-utilities policy](docs/engineering/SHARED_UTILITIES_POLICY.md).
 
+For any refactoring or code-audit task, use the canonical [AI Refactoring and Code Audit Standard](docs/engineering/AI_REFACTORING_AUDIT_STANDARD.md) together with the applicable checklist in [Task Workflows](docs/engineering/TASK_WORKFLOWS.md). Treat its scope, evidence, test-first, compatibility, verification, and reporting requirements as mandatory.
+
 1. Read the repository-root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, this document, and the owning domain's `AGENTS.md` and `ROADMAP.md`.
 2. Identify one owning domain and one focused task.
 3. Create a short-lived task branch from the latest `develop`.
@@ -26,6 +28,70 @@ Before implementing a shared helper or cross-cutting capability, follow the sing
 7. The responsible agent synchronizes and merges the task PR after all automated requirements pass. No routine human approval is expected for `develop`.
 8. Never merge task work directly into `main`.
 9. When the agreed milestone is ready, prepare one release PR from `develop` to `main`. The user reviews and approves that release PR.
+
+## 1.1 Incremental commits and resumable task handoffs — mandatory
+
+The task must remain understandable and safely resumable throughout implementation, not only when the PR is finished. The GitHub task issue is the live task contract; the branch and commit history are the implementation record; the roadmap is the concise priority/status index; canonical documentation owns durable rules and contracts. Do not create a parallel private task log or rely on chat history.
+
+### Task contract — before implementation
+
+Every non-trivial task MUST have a GitHub Issue (or an existing issue explicitly adopted for the task) before implementation. The issue description is the durable task brief and MUST state:
+
+- **Goal / outcome:** what observable result is required and why.
+- **Scope and ownership:** owning domain, affected paths/surfaces, explicit exclusions, and coordinating owners for cross-domain work.
+- **Requirements / invariants:** applicable contracts, safety constraints, compatibility expectations and links to canonical docs.
+- **Acceptance criteria:** concrete, verifiable outcomes; distinguish required from optional/deferred work.
+- **Dependencies:** linked issues/PRs, prerequisites and external constraints.
+- **Verification:** relevant tests/checks, expected evidence, and any separately authorized integration activity.
+- **Documentation impact:** living docs, roadmap and indexes expected to change, or why none are needed.
+- **Current state:** planned / in progress / blocked, current branch and PR when available.
+
+An issue title/body is not frozen after kickoff. The responsible agent MUST update it when scope, acceptance criteria, decisions, dependencies, blockers or status materially change. Keep the description concise and current; put dated progress/checkpoint detail in comments rather than accumulating an event log in the issue body. Link the issue from the branch/PR and the owning roadmap where appropriate. If the task is genuinely a tiny standalone change, use an existing tracking issue or create a concise issue; do not invent bureaucracy for a one-line typo.
+
+### Small, meaningful commits
+
+Commit continuously in coherent increments. A commit should represent one reviewable intention (for example: a failing regression test, the minimal fix, a focused refactor, or the corresponding documentation/status update), not an arbitrary number of changed lines.
+
+- Prefer several small, logically ordered commits over one large end-of-task dump. Avoid both extremes: do not split trivial adjacent edits into noisy commits, and do not combine unrelated behavior, cleanup, tests and documentation into one opaque commit.
+- Use the repository's established Conventional Commit form: `<type>(<scope>): <imperative outcome>`. Use the owning package/app as scope; use `repo` for repository-wide workflow/policy work. The subject must explain the result, not say only "updates", "fixes", "work", a phase number or an issue number.
+- Keep each commit limited to the task's authorized scope. Include the tests that prove a completed behavior increment and update affected living documentation in the same task/PR; when practical, include the relevant docs/status update in the same logical commit.
+- Preserve TDD evidence: a deliberate RED test-first commit may fail the targeted test for the expected behavioral reason. Make that explicit in the commit/PR narrative. The next implementation commit should make that same test GREEN. Do not disguise setup failures as RED evidence.
+- After each meaningful increment, inspect the diff and run the narrowest relevant checks when available. Before handing off or pausing, push a coherent checkpoint; do not leave the only copy of work in an uncommitted local workspace. If an unfinished change cannot yet pass checks, record exactly why and what remains.
+- Do not create empty/progress-only commits. Do not rewrite or squash away the only test-first evidence or commits needed to understand the task. Never force-push shared history.
+- A commit is not proof that the task is complete. Report validation status separately and identify the exact commit/PR head on which it was observed.
+
+### Checkpoint and handoff — required whenever work pauses or changes owner
+
+A task is not transferable merely because its branch exists. Before ending a work session, changing agents, or pausing for a blocker, the current owner MUST:
+
+1. Commit and push all safe, coherent work. If changes must remain uncommitted, explain why, list the exact paths and ensure the next owner can access them; never imply they are on GitHub.
+2. Update the GitHub issue's current description/status if the task contract changed, and add a concise checkpoint comment. Update the PR description when one exists and the change affects its scope, status, risks or validation.
+3. Ensure the owning roadmap accurately says planned / in progress / blocked / done and links the issue/PR. Mark Done only after merge to `develop` and required verification.
+4. State the exact repository, branch, latest commit SHA and commit subject, PR link/state, and latest `develop` base/synchronization status.
+5. Record completed outcomes, the current in-progress item, the next concrete action, decisions and rationale, unresolved questions/blockers, affected files/contracts, and any safety restrictions.
+6. Record checks actually run, exact commands/workflows and outcomes, expected RED evidence if applicable, skipped checks with reasons, and the exact SHA validated by the latest green CI. Never transfer a stale "green" claim to a newer commit.
+7. Identify the next owner only when known; otherwise explicitly mark ownership unassigned. The next agent independently repeats the mandatory documentation preflight and verifies branch/PR/CI state before acting.
+
+Use this compact issue-comment/PR checkpoint format (omit fields only when genuinely not applicable):
+
+```markdown
+## Handoff checkpoint — YYYY-MM-DD HH:mm UTC
+
+- **Status / owner:** in progress | blocked | ready for review; owner or unassigned
+- **Task:** #issue — one-sentence outcome
+- **Branch / head:** `branch` — `<sha> <commit subject>`
+- **PR:** #number, draft/ready, target; or not opened
+- **Base freshness:** latest `develop` SHA and whether it is an ancestor of the task head
+- **Completed:** verified outcomes and links
+- **In progress:** exact unfinished slice
+- **Next action:** one concrete next step
+- **Decisions / invariants:** durable decisions and relevant canonical links
+- **Validation:** commands/checks and results; latest green CI SHA; skipped checks and reasons
+- **Blockers / risks:** exact blocker, evidence, and safe boundary
+- **Documentation / roadmap:** updated paths and current status
+```
+
+The next agent must be able to continue from the issue, PR, branch and canonical docs alone. If those sources disagree, reconcile them before implementation; do not guess which one is current. This protocol supplements the existing branch freshness, draft/ready, verification and merge gates below; it does not weaken them.
 
 ## 2. Branch model
 
@@ -120,6 +186,8 @@ The agent is responsible for merge execution and cleanup. Do not ask the user to
 
 ## 6. Branch freshness and conflict handling — required on every PR update
 
+**Continuous branch ownership — the AI agent is responsible, never the user.** Keeping the task branch current is part of the agent's work from branch creation until merge. The user must not be asked to fetch, pull, merge `develop`, resolve conflicts, rebase, or otherwise update a routine task branch. The agent must monitor the target branch while work is in progress and synchronize its task branch whenever the target advances, not merely as a final pre-merge chore. Before every push or PR action, fetch the latest target and PR head, synchronize if necessary, resolve conflicts on the task branch, inspect the complete diff, and verify freshness again. If synchronization invalidates earlier CI, rerun the affected checks and wait for success on the new exact head. If safe synchronization is blocked by permissions or a genuine conflict that cannot be resolved without product-owner input, report that precise blocker; never transfer routine branch maintenance to the user.
+
 The PR's actual target branch is authoritative. Never hard-code `main` as the synchronization target for every PR. **A PR branch must never be knowingly outdated when the PR is created, updated, pushed, marked ready, reviewed, or merged.** The responsible agent owns all freshness checks and synchronization; never ask the user to update a routine task branch.
 
 ### Mandatory freshness check before every PR update
@@ -152,18 +220,21 @@ Each domain roadmap is the source of truth for that domain's planned work and st
 - If work is deferred, superseded, or blocked by another domain, record the reason and link the request.
 - Keep the root roadmap for repository-wide engineering and release work; do not duplicate every domain backlog there.
 
-## 8. Required verification
+## 8. Required verification — GitHub executes the work
 
-Run the narrowest relevant checks first, then the applicable broader checks. **GitHub Actions is the authoritative execution environment for PR verification.**
+**GitHub is both the source-control interface and the required remote execution environment. A missing local terminal is never, by itself, a blocker.** Agents are expected to use GitHub repository operations and GitHub Actions to implement, test, lint, build, inspect failures, and iterate.
 
-- When a working local checkout and toolchain are available, run the relevant package test, coverage, syntax, and quality commands locally for fast feedback.
-- When local execution is unavailable, do not pause implementation, ask the user to run commands, or report local-environment limitations as blockers. Commit the actual source changes, strong tests, and documentation; open/update the PR and let GitHub Actions execute the required checks.
-- Inspect check conclusions for the exact current PR head SHA. A green run on an earlier SHA does not count.
-- Fix failed checks by correcting source, tests, or workflow defects without weakening assertions, skipping tests, reducing coverage, or masking failures. Push the fix and wait for GitHub to rerun.
-- Merge only after every required check passes on the exact head SHA and branch freshness is verified.
+- Local checkout, shell, package manager, and local test execution are optional conveniences. Do not use their absence, a failed `git clone`, or lack of a local workflow runner as an excuse to stop, hand commands to the user, or leave the requested implementation undone.
+- Use GitHub to create/update the task branch and commit the actual source, tests, and documentation. Open or update a Draft PR targeting `develop`; its pull-request workflows are the default remote execution trigger. If an applicable workflow is manual-only, dispatch it through GitHub Actions. Do not wait for the user to trigger routine CI.
+- **Remote TDD is mandatory when local execution is unavailable.** First commit the regression test without the production fix and let the applicable GitHub Actions workflow execute it. Inspect the job log and verify that the test itself fails for the expected behavioral reason. A workflow/setup failure, missing test discovery, syntax error, timeout, or unrelated failure is not valid RED evidence. Then commit the smallest implementation and let GitHub Actions run the same test again for GREEN. Repeat this cycle for meaningful behavior increments. Keep the test-first commit/evidence in branch history; do not squash away the only evidence before review.
+- If no existing workflow executes the relevant test or check, add or extend a narrowly scoped GitHub Actions workflow in the task PR so GitHub can run it. Keep it deterministic, least-privilege, and safe for pull-request code. Do not add credentials, live exchange access, production side effects, or privileged write permissions to make tests run. Never dispatch TESTNET or LIVE operations without the separate authorization required by the broker safety policy.
+- Use the GitHub Actions run, job, and step logs to diagnose failures. Fix the source, tests, or genuine workflow defect; commit the correction and allow GitHub to run it again. Do not skip, weaken, delete, loosen, or mask tests, coverage, lint, security checks, or required status contexts to obtain green.
+- Verify every required check against the **exact current PR head SHA**. Record the SHA and the relevant Actions run/check evidence in the PR. A green run on an earlier commit, a workflow that merely started, or a locally inferred result does not count.
+- If an Actions run fails for infrastructure reasons, retry only the failed job/run when appropriate and safe; distinguish infrastructure failure from a product/test failure. If the workflow itself is broken, repair it in the same task or a focused supporting PR. Do not report the work as verified until the required checks pass.
+- If GitHub permissions or repository services prevent a specific GitHub operation, continue with every other safe implementation and repository step possible. Report the exact denied operation and its effect; do not convert a missing local terminal into a blocker or ask the user to run routine commands.
+- Merge the task PR into `develop` only after every required check passes on the exact head SHA and branch freshness/ownership requirements are satisfied. Never claim a test/check passed unless GitHub reports success for the relevant commit.
 
-For broker changes, keep live/network integration tests separate from default unit tests. Tests that place orders must use TESTNET only. Never claim a check passed unless GitHub (or an actually executed local runner when GitHub is not the applicable runner) reports success.
-
+For broker changes, keep live/network integration tests separate from default unit tests. Tests that place orders must use TESTNET only, and only under explicit authorization. Never use production credentials or trigger LIVE broker actions as part of CI verification.
 ## 9. Final release: one human review
 
 The purpose of `develop` is to accumulate independently implemented, automatically validated work. Do not ask the user to review every task PR.
@@ -289,3 +360,18 @@ Every AI agent and coding assistant MUST execute clear user requests to implemen
 - This execution-first rule does not override security, privacy, domain ownership, financial/production safeguards, required tests, branch protection, or explicit approval gates for destructive actions and releases.
 
 **Expected behavior: act first, deliver the working change, and keep discussion limited to essential decisions and material blockers.**
+
+## 15. Pull-request draft and ready-for-review lifecycle — mandatory
+
+A pull request's GitHub lifecycle state and its draft/ready-for-review state are different. GitHub reports an unmerged draft PR as `state: open` with `draft: true`. In this policy, **READY/OPEN** means explicitly marked ready for review (`draft: false`); **DRAFT/WIP** means work is still in progress (`draft: true`).
+
+- Create every task PR as a **draft**. Keep it draft throughout implementation, investigation, conflict resolution, and verification.
+- Never mark a PR ready for review merely because a PR exists, a branch is mergeable, or some checks have passed.
+- A PR may be marked **ready for review (OPEN)** only when the task is genuinely complete: all agreed acceptance criteria and implementation are finished; tests and required documentation are included; the complete diff has been reviewed; there are no known unresolved blockers or requested changes; and every required CI check has passed on the exact current PR head SHA.
+- **Branch freshness is an absolute precondition to marking a PR ready.** Immediately before the transition, fetch the latest target branch and PR head, compare them, and verify the latest target tip is an ancestor of the exact PR head (`behind_by = 0`). If behind or diverged, keep the PR draft, synchronize safely, inspect the complete diff, and rerun affected checks. Do not mark ready while stale, conflicted, or while required checks are pending or failing.
+- After marking ready, immediately fetch and compare the refs again and verify that the PR is still current. If the target advanced during the transition, or any completion gate is no longer satisfied, convert the PR back to draft, synchronize, and repeat verification.
+- If implementation resumes, a new commit is pushed, a required check fails, a new blocker is found, or requested changes remain unresolved after a PR was marked ready, convert it back to draft immediately. It stays draft until every completion gate is satisfied again.
+- Agents must report the PR's actual draft flag, mergeability, ahead/behind counts, and exact-head CI result. Never describe a draft PR as ready/open for review, and never describe a merely open GitHub state as proof that work is complete.
+- A PR being ready for review is not the same as being merged. Follow the separate merge gates and ownership rules in this workflow; never merge solely because the PR was marked ready.
+
+This rule applies to every AI agent, coding assistant, human contributor and automation. Draft is the default working state; ready-for-review is an explicit completion signal, not a progress indicator.

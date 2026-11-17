@@ -6,7 +6,7 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 
 | Workflow file | Triggers | Purpose and principal checks | Ruleset requirement (`main` + `develop`) |
 | --- | --- | --- | --- |
-| `quality-gate.yml` (**JavaScript Syntax**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs `actionlint`, JavaScript syntax, full-workspace ESLint inventory and strict changed-file ESLint enforcement, agent-policy/domain-ownership checks, the report-only Markdown formatting baseline, changed-file Markdown style enforcement, and mocked external-link checker unit tests. The agent-policy command also prints the report-only heading-anchor baseline. | `actionlint` and `Check JavaScript syntax` are separate required contexts in both active rulesets. |
+| `quality-gate.yml` (**JavaScript Syntax**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs `actionlint`, JavaScript syntax, and strict full-workspace ESLint (`pnpm lint`, zero errors and warnings) in the required `Check JavaScript syntax` job, plus agent-policy/domain-ownership checks, the report-only Markdown formatting baseline, changed-file Markdown style enforcement, and mocked external-link checker unit tests. The agent-policy command also prints the report-only heading-anchor baseline. | `actionlint` and `Check JavaScript syntax` are separate required contexts in both active rulesets. |
 | `unit-tests.yml` (**Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the workspace package-test matrix offline. Manual `develop` dispatch can explicitly opt into read-only Binance TESTNET integration. | `Run package tests` in both active rulesets. |
 | `test-coverage.yml` (**Test Coverage**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the workspace test-coverage matrix and writes the coverage command output to the Actions step summary. | `Workspace test coverage` in both active rulesets. |
 | `utils-unit-tests.yml` (**Utils Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the focused Utils package test command (`node --test packages/utils`). | `packages/utils tests` in both active rulesets. |
@@ -14,6 +14,10 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 | `harvester-targeted-tests.yml` (**Harvester Targeted Tests**) | Pull requests; manual dispatch | Runs `pnpm --filter @coinzilla/harvester test:targeted`. | Additional PR workflow; not required by either active ruleset. |
 | `harvester-process-lock.yml` (**Harvester Process Lock**) | Path-filtered pull requests/pushes; manual dispatch | Runs the process-lock regression test on Ubuntu and Windows when process-lock code, Harvester entrypoint, or this workflow changes. | Additional path-filtered workflow; not required by either active ruleset. |
 | `external-links.yml` (**External Documentation Links**) | Pull requests to `develop` changing Markdown/MDX or checker sources; weekly schedule; manual dispatch | Checks changed maintained Markdown/MDX; weekly/manual full-tree scans include historical docs and are report-only. DNS answers are validated and connections pinned before requests; redirects are independently revalidated. | Additional advisory workflow; not one of the six `develop-core` required contexts. |
+
+## Dependabot version updates
+
+The version-update schedule, ecosystem grouping, open-PR limits and target branch are configured in [`.github/dependabot.yml`](../.github/dependabot.yml). npm and GitHub Actions version-update PRs are configured to target `develop`; patch/minor updates are grouped and major updates remain separate for manual review. This configuration is read from the repository default branch (`main`), so the target-branch change becomes effective after it reaches `main` through the approved release PR. Dependabot security-update PRs continue to target the default branch and must be handled under the security-remediation process in the [dependency audit playbook](./dependency-audit-playbook.md).
 
 ## Required status contexts on `develop`
 
@@ -26,7 +30,7 @@ As verified against the active repository ruleset `develop-core` on 2026-11-10, 
 5. `Audit production dependencies`
 6. `actionlint`
 
-The two Harvester workflows and External Documentation Links run as additional checks but are not required contexts in this ruleset. A workflow trigger starting a run does not, by itself, make that check a merge requirement. Re-read the live ruleset before changing workflow names, job names, or required contexts; never infer required contexts from workflow names.
+The two Harvester workflows and External Documentation Links run as additional checks but are not required contexts in this ruleset. A workflow trigger starting a run does not, by itself, make that check a merge requirement. Re-read the live ruleset before changing workflow names, job names, or required contexts; never infer required contexts from workflow names. The required `Check JavaScript syntax` context also runs strict full-workspace ESLint via `pnpm lint`; any error or warning therefore blocks the pull request. No migration baseline or changed-file-only lint exception remains.
 
 The Unit Tests and Test Coverage package matrices explicitly list workspace packages. When adding a package, update both matrices in the same PR; the Indicators package is included in both. Indicators coverage runs the package's 90% line / 85% branch threshold script.
 
@@ -76,20 +80,14 @@ Run these commands from the repository root with the Node.js and pnpm versions s
 # Workspace package tests
 pnpm test
 
-# Full-workspace strict lint (may exit non-zero while legacy findings remain)
+# Full-workspace strict lint (zero errors and warnings; blocking in CI)
 pnpm lint
-
-# Full-workspace finding counts and most frequent rules (report-only)
-pnpm lint:report
 
 # Auto-fix supported ESLint findings across the workspace
 pnpm lint:fix
 
-# Pull-request changed-file gate (use the exact base commit SHA)
-BASE_SHA="replace-with-exact-pr-base-sha" pnpm lint:changed
-
-# Local aggregate: workspace tests, syntax, agent-policy, and mocked external-link tests
-# (does not run the full-tree formatting report, PR changed-file style gate, or live URL checks)
+# Local aggregate: workspace tests, strict full-workspace ESLint, syntax, agent-policy, and mocked external-link tests
+# (does not run the report-only Markdown baseline, changed-file Markdown style gate, or live URL checks)
 pnpm run quality
 
 # Report-only full-tree Markdown formatting baseline

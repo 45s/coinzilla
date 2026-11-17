@@ -9,8 +9,22 @@ const history = {
   symbol: "DOGEUSDT",
   interval: "1m",
   history: [
-    { timestamp: 1000, open: "1", high: "2", low: "0.5", close: "1.5", volume: "10" },
-    { timestamp: 61000, open: "1.5", high: "2", low: "1", close: "1.75", volume: "12" },
+    {
+      timestamp: 1000,
+      open: "1",
+      high: "2",
+      low: "0.5",
+      close: "1.5",
+      volume: "10",
+    },
+    {
+      timestamp: 61000,
+      open: "1.5",
+      high: "2",
+      low: "1",
+      close: "1.75",
+      volume: "12",
+    },
   ],
 }
 
@@ -19,12 +33,23 @@ test("domain validation is pure and freezes the validated history", () => {
   assert.equal(validated.history.length, 2)
   assert.equal(Object.isFrozen(validated), true)
   assert.equal(Object.isFrozen(validated.history[0]), true)
-  assert.throws(() => validateMarketHistory({ ...history, history: [] }), /at least one candle/)
+  assert.throws(
+    () => validateMarketHistory({
+      ...history,
+      history: [],
+    }),
+    /at least one candle/,
+  )
 })
 
 test("load history use case depends only on the repository port", async () => {
   const calls = []
-  const repository = { async load() { calls.push("load"); return history } }
+  const repository = {
+    async load() {
+      calls.push("load")
+      return history
+    },
+  }
   assert.equal(await loadMarketHistory({ repository }), history)
   assert.deepEqual(calls, ["load"])
   await assert.rejects(loadMarketHistory({ repository: {} }), /repository with load/)
@@ -41,8 +66,21 @@ test("price stream emits immediately, schedules subsequent candles and resolves 
   const timers = []
   const events = []
   const scheduler = {
-    schedule(callback, delay) { const timer = { callback, delay }; timers.push(timer); return timer },
-    cancel(timer) { const index = timers.indexOf(timer); if (index >= 0) timers.splice(index, 1) },
+    schedule(...parameters) {
+      const [callback, delay] = parameters
+      const timer = {
+        callback,
+        delay,
+      }
+      timers.push(timer)
+      return timer
+    },
+    cancel(timer) {
+      const index = timers.indexOf(timer)
+      if (index >= 0) {
+        timers.splice(index, 1)
+      }
+    },
   }
   const playback = createPriceStream({
     history: validateMarketHistory(history),
@@ -67,7 +105,14 @@ test("unsubscribe cancels scheduled work and resolves completion", async () => {
     history: validateMarketHistory(history),
     symbol: "DOGEUSDT",
     speed: 1,
-    scheduler: { schedule() { return 42 }, cancel(handle) { cancelled = handle === 42 } },
+    scheduler: {
+      schedule() {
+        return 42
+      },
+      cancel(handle) {
+        cancelled = handle === 42
+      },
+    },
     onPrice() {},
   })
   playback.unsubscribe()

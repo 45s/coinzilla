@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { createUserDataEventHandler } from "./create-user-data-event-handler.js"
 import { createUserDataStatusHandler } from "./create-user-data-status-handler.js"
 
-const test = (name, ...args) => nodeTest("[create-user-data-event-handler.test.js] " + name, ...args)
+const test = (...args) => nodeTest(`[create-user-data-event-handler.test.js] ${args[0]}`, ...args.slice(1))
 
 const createState = (overrides = {}) => ({
   ready: false,
@@ -20,7 +20,9 @@ const createState = (overrides = {}) => ({
 })
 
 const createHandler = ({ state = createState(), engine, onUserDataEvent = async () => {}, onSafetyBlockerRaised, logger = {} } = {}) => {
-  const actions = { cancellations: 0, resumptions: 0, observations: [] }
+  const actions = { cancellations: 0,
+resumptions: 0,
+observations: [] }
   const handler = createUserDataEventHandler({
     state,
     getTradingEngine: () => engine,
@@ -39,12 +41,17 @@ const createHandler = ({ state = createState(), engine, onUserDataEvent = async 
     resumeDeferredStrategyEvaluations: () => { actions.resumptions += 1 },
     onSafetyBlockerRaised,
   })
-  return { handler, state, actions }
+  return { handler,
+state,
+actions }
 }
 
 test("serializes a valid order event, notifies the observer, and restores readiness", async () => {
   const engine = {
-    processUserDataEvent: async () => ({ ok: true, data: { reevaluate: false } }),
+    processUserDataEvent: async () => ({
+      ok: true,
+      data: { reevaluate: false },
+    }),
     getOrders: () => [],
   }
   const { handler, state, actions } = createHandler({ engine })
@@ -52,7 +59,10 @@ test("serializes a valid order event, notifies the observer, and restores readin
     event: {
       eventType: "executionReport",
       executionType: "NEW",
-      executedOrder: { market: { symbol: "BTCUSDT" }, brokerOrderId: "order-1", clientOrderId: "client-1", side: "BUY" },
+      executedOrder: { market: { symbol: "BTCUSDT" },
+brokerOrderId: "order-1",
+clientOrderId: "client-1",
+side: "BUY" },
     },
   })
   await state.eventQueue
@@ -76,15 +86,20 @@ test("rejects malformed events immediately and requests the accounting-failure s
 
 test("fails closed when the trading engine rejects an order event", async () => {
   const engine = {
-    processUserDataEvent: async () => ({ ok: false, errors: [new Error("unowned order")] }),
+    processUserDataEvent: async () => ({ ok: false,
+errors: [new Error("unowned order")] }),
     getOrders: () => [],
   }
-  const { handler, state, actions } = createHandler({ engine, logger: { error: () => {} } })
+  const { handler, state, actions } = createHandler({ engine,
+logger: { error: () => {} } })
   handler({
     event: {
       eventType: "executionReport",
       executionType: "NEW",
-      executedOrder: { market: { symbol: "BTCUSDT" }, brokerOrderId: "external-order", clientOrderId: "manual-1", side: "BUY" },
+      executedOrder: { market: { symbol: "BTCUSDT" },
+brokerOrderId: "external-order",
+clientOrderId: "manual-1",
+side: "BUY" },
     },
   })
   await state.eventQueue
@@ -245,11 +260,13 @@ test("keeps a queued owned BUY fill in recovery mode across executionPending wit
     processUserDataEvent: async ({ recoveryMode }) => {
       receivedRecoveryMode = recoveryMode
       if (!recoveryMode) { exchangeMutationCount += 1 }
-      return { ok: true, data: { reevaluate: false } }
+      return { ok: true,
+data: { reevaluate: false } }
     },
     getOrders: () => [],
   }
-  const { handler } = createHandler({ state, engine })
+  const { handler } = createHandler({ state,
+engine })
   handler({
     event: {
       eventType: "executionReport",
@@ -278,7 +295,8 @@ test("passes recovery mode to both the trading engine and observer while applica
   const engine = {
     processUserDataEvent: async ({ recoveryMode }) => {
       engineRecoveryMode = recoveryMode
-      return { ok: true, data: { reevaluate: false } }
+      return { ok: true,
+data: { reevaluate: false } }
     },
     getOrders: () => [],
   }
@@ -291,7 +309,10 @@ test("passes recovery mode to both the trading engine and observer while applica
     event: {
       eventType: "executionReport",
       executionType: "NEW",
-      executedOrder: { market: { symbol: "BTCUSDT" }, brokerOrderId: "recovery-order", clientOrderId: "recovery-client", side: "SELL" },
+      executedOrder: { market: { symbol: "BTCUSDT" },
+brokerOrderId: "recovery-order",
+clientOrderId: "recovery-client",
+side: "SELL" },
     },
   })
   await state.eventQueue
@@ -307,7 +328,9 @@ test("persists a sticky market blocker for an actual unowned execution", async (
   const engine = {
     processUserDataEvent: async () => ({
       ok: false,
-      failure: { category: "OWNERSHIP_INTEGRITY", stage: "FILL_ORDER_IDENTITY", retryable: false },
+      failure: { category: "OWNERSHIP_INTEGRITY",
+stage: "FILL_ORDER_IDENTITY",
+retryable: false },
       errors: [new Error("unowned execution")],
     }),
     getOrders: () => [],
@@ -316,7 +339,8 @@ test("persists a sticky market blocker for an actual unowned execution", async (
     engine,
     onSafetyBlockerRaised: async (blocker) => {
       blockers.push(blocker)
-      return { ok: true, data: { durable: true } }
+      return { ok: true,
+data: { durable: true } }
     },
   })
   handler({
@@ -347,24 +371,70 @@ test("does not raise an account-wide sticky blocker for an unowned NEW order rep
   const engine = {
     processUserDataEvent: async () => ({
       ok: false,
-      failure: { category: "OWNERSHIP_INTEGRITY", stage: "ORDER_REGISTRY_MATCH", retryable: false },
+      failure: { category: "OWNERSHIP_INTEGRITY",
+stage: "ORDER_REGISTRY_MATCH",
+retryable: false },
       errors: [new Error("unowned order update")],
     }),
     getOrders: () => [],
   }
   const { handler, state } = createHandler({
     engine,
-    onSafetyBlockerRaised: async () => { blockerCount += 1; return { ok: true, data: { durable: true } } },
+    onSafetyBlockerRaised: async () => { blockerCount += 1; return { ok: true,
+data: { durable: true } } },
   })
   handler({
     event: {
       eventType: "executionReport",
       executionType: "NEW",
-      executedOrder: { market: { symbol: "BTCUSDT" }, brokerOrderId: "external-order", clientOrderId: "manual-order", side: "BUY" },
+      executedOrder: { market: { symbol: "BTCUSDT" },
+brokerOrderId: "external-order",
+clientOrderId: "manual-order",
+side: "BUY" },
     },
   })
   await state.eventQueue
 
   assert.equal(state.accountingFailed, true, "The existing ownership failure must still close readiness.")
   assert.equal(blockerCount, 0, "A passive external NEW order observation is not an actual unowned execution blocker.")
+})
+
+test("does not duplicate raw trade receipt and generic processed logs at the user-data boundary", async () => {
+  const logs = []
+  const engine = {
+    processUserDataEvent: async () => ({ ok: true,
+data: { reevaluate: false } }),
+    getOrders: () => [],
+  }
+  const { handler, state } = createHandler({
+    engine,
+    logger: {
+      info: (entry) => logs.push(entry),
+    },
+  })
+
+  handler({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: {
+        market: { symbol: "DOGEUSDT" },
+        brokerOrderId: "broker-1",
+        clientOrderId: "client-1",
+        side: "BUY",
+      },
+      fill: {
+        id: "fill-1",
+        market: { symbol: "DOGEUSDT" },
+        side: "BUY",
+      },
+    },
+  })
+  await state.eventQueue
+
+  assert.deepEqual(
+    logs,
+    [],
+    "The user-data boundary must not print raw receipt or generic processed messages; canonical lifecycle transitions own those logs.",
+  )
 })

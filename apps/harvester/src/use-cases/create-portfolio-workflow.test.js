@@ -1,13 +1,16 @@
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
-import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, CanonicalOrder, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { createPortfolioWorkflow } from "./create-portfolio-workflow.js"
 
 const createMarket = () => {
-  const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
-  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
+  const baseAsset = new Asset({ id: "asset:BTC",
+code: "BTC" })
+  const quoteAsset = new Asset({ id: "asset:USDT",
+code: "USDT" })
   return new Market({
     venue: "binance",
     symbol: "BTCUSDT",
@@ -17,16 +20,20 @@ const createMarket = () => {
 }
 
 const market = createMarket()
-const feeAsset = new Asset({ id: "asset:BNB", code: "BNB" })
+const feeAsset = new Asset({ id: "asset:BNB",
+code: "BNB" })
 
 const createFill = ({ tradeId, quantity, quoteQuantity, side = "BUY", price = "65000", commissions = [] }) => new Fill({
   tradeId,
-  brokerOrderId: "broker-order-" + tradeId,
+  brokerOrderId: `broker-order-${  tradeId}`,
   market,
   side,
-  price: new Money({ amount: price, asset: market.quoteAsset }),
-  quantity: new Quantity({ amount: quantity, asset: market.baseAsset }),
-  quoteQuantity: new Money({ amount: quoteQuantity, asset: market.quoteAsset }),
+  price: new Money({ amount: price,
+asset: market.quoteAsset }),
+  quantity: new Quantity({ amount: quantity,
+asset: market.baseAsset }),
+  quoteQuantity: new Money({ amount: quoteQuantity,
+asset: market.quoteAsset }),
   commissions,
   commissionStatus: "COMPLETE",
 })
@@ -36,7 +43,32 @@ const createWorkflow = () => createPortfolioWorkflow({
   logger: {},
 })
 
-const test = (name, ...args) => nodeTest("[create-portfolio-workflow.test.js] " + name, ...args)
+const createFilledSellOrder = ({
+  clientOrderId = "completed-recovery-sell",
+  brokerOrderId = "broker-completed-recovery-sell",
+} = {}) => new CanonicalOrder({
+  clientOrderId,
+  brokerOrderId,
+  market,
+  side: "SELL",
+  type: "LIMIT",
+  limitPrice: new Money({ amount: "130005",
+asset: market.quoteAsset }),
+  originalQuantity: new Quantity({ amount: "1",
+asset: market.baseAsset }),
+  executedQuantity: new Quantity({ amount: "1",
+asset: market.baseAsset }),
+  status: "FILLED",
+  createdAt: 1,
+  acknowledgedAt: 1,
+  updatedAt: 2,
+  completedAt: 2,
+})
+
+const test = (...args) => {
+  const [name, ...testArgs] = args
+  return nodeTest(`[create-portfolio-workflow.test.js] ${  name}`, ...testArgs)
+}
 
 test("captures the third-asset baseline before applying the fill to Portfolio and RecoveryLedger", async () => {
   const baselineCalls = []
@@ -47,7 +79,8 @@ test("captures the third-asset baseline before applying the fill to Portfolio an
       assert.equal(workflow.getPortfolio().getPosition({ marketId: market.id }), undefined)
       assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), undefined)
       baselineCalls.push(asset)
-      return { ok: true, data: { sourceTime: 100 } }
+      return { ok: true,
+data: { sourceTime: 100 } }
     },
   })
   const fill = createFill({
@@ -55,15 +88,18 @@ test("captures the third-asset baseline before applying the fill to Portfolio an
     quantity: "0.01",
     quoteQuantity: "650",
     commissions: [new Commission({
-      amount: new Money({ amount: "0.001", asset: feeAsset }),
-      quoteValue: new Money({ amount: "0.1", asset: market.quoteAsset }),
+      amount: new Money({ amount: "0.001",
+asset: feeAsset }),
+      quoteValue: new Money({ amount: "0.1",
+asset: market.quoteAsset }),
     })],
   })
 
   const result = await workflow.updateTradingAccounting({ fill })
 
   assert.equal(result.ok, true)
-  assert.deepEqual(baselineCalls, [{ assetId: feeAsset.id, assetCode: feeAsset.code }])
+  assert.deepEqual(baselineCalls, [{ assetId: feeAsset.id,
+assetCode: feeAsset.code }])
   assert.equal(workflow.getPortfolio().getPosition({ marketId: market.id }).spent.amount, "650.1")
   assert.equal(workflow.getRecoveryLedger({ marketId: market.id }).buyCost, "650.1")
 })
@@ -75,7 +111,8 @@ test("keeps live third-asset BUY and SELL multi-fill accounting in parity", asyn
     logger: {},
     onCommissionAsset: async (asset) => {
       baselineCalls.push(asset)
-      return { ok: true, data: { sourceTime: 100 } }
+      return { ok: true,
+data: { sourceTime: 100 } }
     },
   })
   const fills = [
@@ -84,8 +121,14 @@ test("keeps live third-asset BUY and SELL multi-fill accounting in parity", asyn
       quantity: "100",
       quoteQuantity: "10",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.001", asset: feeAsset }), quoteValue: new Money({ amount: "0.02", asset: market.quoteAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.002", asset: feeAsset }), quoteValue: new Money({ amount: "0.01", asset: market.quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.001",
+asset: feeAsset }),
+quoteValue: new Money({ amount: "0.02",
+asset: market.quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.002",
+asset: feeAsset }),
+quoteValue: new Money({ amount: "0.01",
+asset: market.quoteAsset }) }),
       ],
     }),
     createFill({
@@ -93,7 +136,10 @@ test("keeps live third-asset BUY and SELL multi-fill accounting in parity", asyn
       quantity: "50",
       quoteQuantity: "5",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.002", asset: feeAsset }), quoteValue: new Money({ amount: "0.03", asset: market.quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.002",
+asset: feeAsset }),
+quoteValue: new Money({ amount: "0.03",
+asset: market.quoteAsset }) }),
       ],
     }),
     createFill({
@@ -102,7 +148,10 @@ test("keeps live third-asset BUY and SELL multi-fill accounting in parity", asyn
       quantity: "40",
       quoteQuantity: "4.4",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.001", asset: feeAsset }), quoteValue: new Money({ amount: "0.02", asset: market.quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.001",
+asset: feeAsset }),
+quoteValue: new Money({ amount: "0.02",
+asset: market.quoteAsset }) }),
       ],
     }),
     createFill({
@@ -111,7 +160,10 @@ test("keeps live third-asset BUY and SELL multi-fill accounting in parity", asyn
       quantity: "50",
       quoteQuantity: "5.5",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.001", asset: feeAsset }), quoteValue: new Money({ amount: "0.01", asset: market.quoteAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.001",
+asset: feeAsset }),
+quoteValue: new Money({ amount: "0.01",
+asset: market.quoteAsset }) }),
       ],
     }),
   ]
@@ -130,19 +182,22 @@ test("keeps live third-asset BUY and SELL multi-fill accounting in parity", asyn
   assert.equal(ledger.buyCost, "15.06")
   assert.equal(ledger.netSellProceeds, "9.87")
   assert.equal(ledger.outstandingRecoveryAmount, "5.19")
-  assert.equal(position.quoteNetCashFlow.amount, "-" + ledger.outstandingRecoveryAmount)
-  assert.deepEqual(baselineCalls, Array(4).fill({ assetId: feeAsset.id, assetCode: feeAsset.code }))
+  assert.equal(position.quoteNetCashFlow.amount, `-${  ledger.outstandingRecoveryAmount}`)
+  assert.deepEqual(baselineCalls, Array(4).fill({ assetId: feeAsset.id,
+assetCode: feeAsset.code }))
 })
 
 test("does not persist a commission baseline or mutate live accounting for contradictory fee identity", async () => {
-  const contradictoryFeeAsset = new Asset({ id: feeAsset.id, code: "BNB2" })
+  const contradictoryFeeAsset = new Asset({ id: feeAsset.id,
+code: "BNB2" })
   const baselineCalls = []
   const workflow = createPortfolioWorkflow({
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {},
     onCommissionAsset: async (asset) => {
       baselineCalls.push(asset)
-      return { ok: true, data: { sourceTime: 100 } }
+      return { ok: true,
+data: { sourceTime: 100 } }
     },
   })
   const originalPortfolio = workflow.getPortfolio().value
@@ -153,12 +208,16 @@ test("does not persist a commission baseline or mutate live accounting for contr
       quoteQuantity: "650",
       commissions: [
         new Commission({
-          amount: new Money({ amount: "0.001", asset: feeAsset }),
-          quoteValue: new Money({ amount: "0.1", asset: market.quoteAsset }),
+          amount: new Money({ amount: "0.001",
+asset: feeAsset }),
+          quoteValue: new Money({ amount: "0.1",
+asset: market.quoteAsset }),
         }),
         new Commission({
-          amount: new Money({ amount: "0.001", asset: contradictoryFeeAsset }),
-          quoteValue: new Money({ amount: "0.1", asset: market.quoteAsset }),
+          amount: new Money({ amount: "0.001",
+asset: contradictoryFeeAsset }),
+          quoteValue: new Money({ amount: "0.1",
+asset: market.quoteAsset }),
         }),
       ],
     }),
@@ -184,8 +243,10 @@ test("accounts a valid fill when optional third-asset baseline persistence fails
     quantity: "0.01",
     quoteQuantity: "650",
     commissions: [new Commission({
-      amount: new Money({ amount: "0.001", asset: feeAsset }),
-      quoteValue: new Money({ amount: "0.1", asset: market.quoteAsset }),
+      amount: new Money({ amount: "0.001",
+asset: feeAsset }),
+      quoteValue: new Money({ amount: "0.1",
+asset: market.quoteAsset }),
     })],
   })
 
@@ -200,8 +261,12 @@ test("accounts a valid fill when optional third-asset baseline persistence fails
 
 test("serializes concurrent canonical fills and commits both accounting projections", async () => {
   const workflow = createWorkflow()
-  const firstFill = createFill({ tradeId: "trade-1", quantity: "0.01", quoteQuantity: "650" })
-  const secondFill = createFill({ tradeId: "trade-2", quantity: "0.02", quoteQuantity: "1300" })
+  const firstFill = createFill({ tradeId: "trade-1",
+quantity: "0.01",
+quoteQuantity: "650" })
+  const secondFill = createFill({ tradeId: "trade-2",
+quantity: "0.02",
+quoteQuantity: "1300" })
 
   const [firstResult, secondResult] = await Promise.all([
     workflow.updateTradingAccounting({ fill: firstFill }),
@@ -224,7 +289,9 @@ test("serializes concurrent canonical fills and commits both accounting projecti
 
 test("does not account the same canonical fill twice when deliveries overlap", async () => {
   const workflow = createWorkflow()
-  const canonicalFill = createFill({ tradeId: "duplicate-trade", quantity: "0.01", quoteQuantity: "650" })
+  const canonicalFill = createFill({ tradeId: "duplicate-trade",
+quantity: "0.01",
+quoteQuantity: "650" })
 
   const [firstResult, duplicateResult] = await Promise.all([
     workflow.updateTradingAccounting({ fill: canonicalFill }),
@@ -272,11 +339,15 @@ test("leaves both accounting projections unchanged when recovery ledger reset fa
   })
 
   const initialPortfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
   const baseLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
 
   class FailingResetRecoveryLedger extends RecoveryLedger {
     resetCycle() {
@@ -304,6 +375,7 @@ test("leaves both accounting projections unchanged when recovery ledger reset fa
     marketId: market.id,
     keepQuantity: "1",
     minProfit: "5",
+    sellOrder: createFilledSellOrder({ clientOrderId: "reset-failure-sell" }),
   })
 
   assert.equal(result.ok, false, "A failed RecoveryLedger reset must reject recovery-cycle completion.")
@@ -326,8 +398,12 @@ test("logs Portfolio Stats for each applied BUY or SELL fill that changes invent
     logger: { info: (entry) => { infoLogs.push(entry) } },
   })
 
-  const firstPartialBuyFill = createFill({ tradeId: "stats-buy-1", quantity: "0.004", quoteQuantity: "260" })
-  const secondPartialBuyFill = createFill({ tradeId: "stats-buy-2", quantity: "0.006", quoteQuantity: "390" })
+  const firstPartialBuyFill = createFill({ tradeId: "stats-buy-1",
+quantity: "0.004",
+quoteQuantity: "260" })
+  const secondPartialBuyFill = createFill({ tradeId: "stats-buy-2",
+quantity: "0.006",
+quoteQuantity: "390" })
   const firstBuyResult = await workflow.updateTradingAccounting({ fill: firstPartialBuyFill })
   const secondBuyResult = await workflow.updateTradingAccounting({ fill: secondPartialBuyFill })
 
@@ -379,7 +455,9 @@ test("logs Portfolio Stats for each applied BUY or SELL fill that changes invent
 
 test("logs Portfolio Stats when recovery completion changes Portfolio accounting without changing total inventory", async () => {
   const infoLogs = []
-  const buyFill = createFill({ tradeId: "stats-cycle-buy", quantity: "2", quoteQuantity: "130000" })
+  const buyFill = createFill({ tradeId: "stats-cycle-buy",
+quantity: "2",
+quoteQuantity: "130000" })
   const sellFill = createFill({
     tradeId: "stats-cycle-sell",
     quantity: "1",
@@ -388,11 +466,15 @@ test("logs Portfolio Stats when recovery completion changes Portfolio accounting
     price: "130005",
   })
   const initialPortfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
   const initialLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
   const workflow = createPortfolioWorkflow({
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: { info: (entry) => { infoLogs.push(entry) } },
@@ -404,25 +486,28 @@ test("logs Portfolio Stats when recovery completion changes Portfolio accounting
     marketId: market.id,
     keepQuantity: "1",
     minProfit: "5",
+    sellOrder: createFilledSellOrder({ clientOrderId: "stats-completion-sell" }),
   })
 
-  assert.equal(result.ok, true)
-  assert.equal(result.data.eligible, true)
+  assert.equal(result.ok, true, "A fully filled and profitable recovery SELL must complete its eligible recovery cycle.")
+  assert.equal(result.data.eligible, true, "The completion result must confirm that the cycle is eligible for reset.")
   assert.equal(infoLogs.length, 1, "Resetting Portfolio spent must emit stats even when total inventory stays unchanged.")
   assert.deepEqual(infoLogs[0].inventory, {
     activeBaseQuantity: "0 BTC",
     freeBaseQuantity: "1 BTC",
     totalBaseQuantity: "1 BTC",
-  })
+  }, "Completion stats must show the full retained inventory after active recovery quantity is cleared.")
   assert.deepEqual(infoLogs[0].accounting, {
     spent: "0 USDT",
     quoteNetCashFlow: "5 USDT",
-  })
+  }, "Completion stats must show the reset cost basis and preserved realized quote cash flow.")
 })
 
 
 test("persists a non-completed full-SELL outcome before returning and leaves accounting projections unchanged", async () => {
-  const buyFill = createFill({ tradeId: "not-completed-buy", quantity: "2", quoteQuantity: "130000" })
+  const buyFill = createFill({ tradeId: "not-completed-buy",
+quantity: "2",
+quoteQuantity: "130000" })
   const sellFill = createFill({
     tradeId: "not-completed-sell",
     quantity: "1",
@@ -431,15 +516,18 @@ test("persists a non-completed full-SELL outcome before returning and leaves acc
     price: "130005",
   })
   const initialPortfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
   const initialLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
-  const sellOrder = Object.freeze({
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
+  const sellOrder = createFilledSellOrder({
     clientOrderId: "harvester-sell-not-completed",
     brokerOrderId: "broker-sell-not-completed",
-    market,
   })
   const calls = []
   const workflow = createPortfolioWorkflow({
@@ -447,9 +535,10 @@ test("persists a non-completed full-SELL outcome before returning and leaves acc
     logger: {},
     initialPortfolio,
     initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
-    onDurableRecoveryCycleNotCompleted: async (input) => {
+    onOperationalStateRecoveryCycleNotCompleted: async (input) => {
       calls.push(input)
-      return { ok: true, data: { durable: true } }
+      return { ok: true,
+data: { durable: true } }
     },
   })
 
@@ -460,19 +549,21 @@ test("persists a non-completed full-SELL outcome before returning and leaves acc
     sellOrder,
   })
 
-  assert.equal(result.ok, true, result.errors?.[0]?.message)
-  assert.equal(result.data.eligible, false)
-  assert.equal(result.data.reason, "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH")
+  assert.equal(result.ok, true, "A terminal SELL with residual sellable inventory must return a durable non-completion result.")
+  assert.equal(result.data.eligible, false, "Residual sellable inventory must keep the recovery cycle open.")
+  assert.equal(result.data.reason, "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "The cycle must identify the exact residual sell-through reason.")
   assert.equal(calls.length, 1, "Every fully filled SELL must durably record its explicit non-completion outcome.")
   assert.equal(calls[0].sellOrder, sellOrder, "The outcome must be tied to the exact terminal SELL order.")
-  assert.equal(calls[0].recoveryLedger, initialLedger)
-  assert.equal(calls[0].position, initialPortfolio.getPosition({ marketId: market.id }))
+  assert.equal(calls[0].recoveryLedger, initialLedger, "The durable non-completion fact must reference the unchanged RecoveryLedger.")
+  assert.equal(calls[0].position, initialPortfolio.getPosition({ marketId: market.id }), "The durable non-completion fact must reference the unchanged Position.")
   assert.equal(workflow.getPortfolio(), initialPortfolio, "A non-completed cycle must not allocate free inventory or reset basis.")
-  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger)
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger, "A non-completed recovery cycle must preserve its original RecoveryLedger.")
 })
 
 test("does not return a non-completed cycle when its durable outcome was not committed", async () => {
-  const buyFill = createFill({ tradeId: "not-completed-failure-buy", quantity: "2", quoteQuantity: "130000" })
+  const buyFill = createFill({ tradeId: "not-completed-failure-buy",
+quantity: "2",
+quoteQuantity: "130000" })
   const sellFill = createFill({
     tradeId: "not-completed-failure-sell",
     quantity: "1",
@@ -481,17 +572,21 @@ test("does not return a non-completed cycle when its durable outcome was not com
     price: "130005",
   })
   const initialPortfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
   const initialLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
   const workflow = createPortfolioWorkflow({
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {},
     initialPortfolio,
     initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
-    onDurableRecoveryCycleNotCompleted: async () => ({
+    onOperationalStateRecoveryCycleNotCompleted: async () => ({
       ok: false,
       errors: [new Error("cycle outcome manifest was not committed")],
     }),
@@ -501,17 +596,20 @@ test("does not return a non-completed cycle when its durable outcome was not com
     marketId: market.id,
     keepQuantity: "0.5",
     minProfit: "5",
-    sellOrder: { clientOrderId: "sell-failed", brokerOrderId: "broker-failed", market },
+    sellOrder: createFilledSellOrder({ clientOrderId: "sell-failed",
+brokerOrderId: "broker-failed" }),
   })
 
   assert.equal(result.ok, false, "A missing durable non-completion outcome must block the next strategy action.")
-  assert.match(result.errors[0].message, /manifest was not committed/)
-  assert.equal(workflow.getPortfolio(), initialPortfolio)
-  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger)
+  assert.match(result.errors[0].message, /manifest was not committed/, "The failure must preserve the durable manifest-commit error.")
+  assert.equal(workflow.getPortfolio(), initialPortfolio, "A failed durable non-completion fact must not publish a Portfolio transition.")
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger, "A failed durable non-completion fact must not publish a RecoveryLedger transition.")
 })
 
 test("binds a durable completed-cycle outcome to the exact fully filled SELL order before committing the reset", async () => {
-  const buyFill = createFill({ tradeId: "completed-order-buy", quantity: "2", quoteQuantity: "130000" })
+  const buyFill = createFill({ tradeId: "completed-order-buy",
+quantity: "2",
+quoteQuantity: "130000" })
   const sellFill = createFill({
     tradeId: "completed-order-sell",
     quantity: "1",
@@ -520,15 +618,18 @@ test("binds a durable completed-cycle outcome to the exact fully filled SELL ord
     price: "130005",
   })
   const initialPortfolio = new Portfolio()
-    .applyFill({ fill: buyFill }).portfolio
-    .applyFill({ fill: sellFill }).portfolio
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
   const initialLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill }).ledger
-    .applyFill({ fill: sellFill }).ledger
-  const sellOrder = Object.freeze({
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
+  const sellOrder = createFilledSellOrder({
     clientOrderId: "harvester-sell-completed",
     brokerOrderId: "broker-sell-completed",
-    market,
   })
   let durableInput
   const workflow = createPortfolioWorkflow({
@@ -536,11 +637,12 @@ test("binds a durable completed-cycle outcome to the exact fully filled SELL ord
     logger: {},
     initialPortfolio,
     initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
-    onDurableRecoveryCycleCompleted: async (input) => {
+    onOperationalStateRecoveryCycleCompleted: async (input) => {
       durableInput = input
       assert.equal(workflow.getPortfolio(), initialPortfolio, "The durable fact must commit before either accounting projection is reset.")
-      assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger)
-      return { ok: true, data: { durable: true } }
+      assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger, "The RecoveryLedger reset must remain unpublished until the completed-cycle fact is durable.")
+      return { ok: true,
+data: { durable: true } }
     },
   })
 
@@ -551,6 +653,157 @@ test("binds a durable completed-cycle outcome to the exact fully filled SELL ord
     sellOrder,
   })
 
-  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.ok, true, "A canonical terminal SELL with eligible economics must commit the recovery-cycle outcome successfully.")
   assert.equal(durableInput.sellOrder, sellOrder, "The completion fact must identify the exact terminal SELL.")
+})
+
+
+test("does not complete or reset a recovery cycle without a canonical fully filled terminal SELL", async () => {
+  const buyFill = createFill({
+    tradeId: "missing-terminal-sell-buy",
+    quantity: "2",
+    quoteQuantity: "130000",
+  })
+  const sellFill = createFill({
+    tradeId: "missing-terminal-sell-accounting-fill",
+    quantity: "1",
+    quoteQuantity: "130005",
+    side: "SELL",
+    price: "130005",
+  })
+  const initialPortfolio = new Portfolio()
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER }).portfolio
+  const initialLedger = RecoveryLedger.empty({ market })
+    .applyFill({ fill: buyFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill,
+strategyId: StrategyId.COIN_GRABBER }).ledger
+  const workflow = createPortfolioWorkflow({
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {},
+    initialPortfolio,
+    initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
+  })
+
+  const result = await workflow.completeRecoveryCycle({
+    marketId: market.id,
+    keepQuantity: "1",
+    minProfit: "5",
+  })
+
+  assert.equal(
+    result.ok,
+    false,
+    "Economic profitability alone must not authorize a recovery-cycle reset without terminal SELL evidence.",
+  )
+  assert.match(
+    result.errors[0].message,
+    /canonical fully filled terminal SELL/,
+    "The failure must identify the missing terminal-order contract.",
+  )
+  assert.equal(workflow.getPortfolio(), initialPortfolio, "Missing terminal SELL evidence must not reset Portfolio.")
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }), initialLedger, "Missing terminal SELL evidence must not reset RecoveryLedger.")
+})
+
+
+function createSerializedRecoveryCompletionFixture() {
+  const buyFill = createFill({
+    tradeId: "serialized-cycle-buy",
+    quantity: "2",
+    quoteQuantity: "130000",
+  })
+  const sellFill = createFill({
+    tradeId: "serialized-cycle-sell",
+    quantity: "1",
+    quoteQuantity: "130005",
+    side: "SELL",
+    price: "130005",
+  })
+  const additionalBuyFill = createFill({
+    tradeId: "serialized-cycle-additional-buy",
+    quantity: "0.5",
+    quoteQuantity: "65000",
+    price: "130000",
+  })
+  const initialPortfolio = new Portfolio()
+    .applyFill({ fill: buyFill, 
+      strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({ fill: sellFill, 
+      strategyId: StrategyId.COIN_GRABBER }).portfolio
+  const initialLedger = RecoveryLedger.empty({ market })
+    .applyFill({ fill: buyFill, 
+      strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({ fill: sellFill, 
+      strategyId: StrategyId.COIN_GRABBER }).ledger
+  let releaseDurableFill
+  let markDurableFillStarted
+  const durableFillStarted = new Promise((resolve) => { markDurableFillStarted = resolve })
+  const durableFillGate = new Promise((resolve) => { releaseDurableFill = resolve })
+  const completionCalls = []
+  const workflow = createPortfolioWorkflow({
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {},
+    initialPortfolio,
+    initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
+    onOperationalStateExecutionFill: async ({ fill: received }) => {
+      assert.equal(received, additionalBuyFill, "The serialization test must hold the durable barrier for the exact concurrent BUY fill.")
+      markDurableFillStarted()
+      await durableFillGate
+      return { ok: true, 
+        data: { durable: true } }
+    },
+    onOperationalStateRecoveryCycleCompleted: async (input) => {
+      completionCalls.push(input)
+      return { ok: true, 
+        data: { durable: true } }
+    },
+  })
+  return { workflow, 
+    additionalBuyFill, 
+    durableFillStarted, 
+    releaseDurableFill, 
+    completionCalls }
+}
+
+test("serializes recovery completion behind an in-flight durable fill", async () => {
+  const {
+    workflow,
+    additionalBuyFill,
+    durableFillStarted,
+    releaseDurableFill,
+    completionCalls,
+  } = createSerializedRecoveryCompletionFixture()
+  const fillPromise = workflow.updateTradingAccounting({ fill: additionalBuyFill })
+  await durableFillStarted
+  const completionPromise = workflow.completeRecoveryCycle({
+    marketId: market.id,
+    keepQuantity: "1",
+    minProfit: "5",
+    sellOrder: createFilledSellOrder({ clientOrderId: "serialized-cycle-terminal-sell" }),
+  })
+
+  releaseDurableFill()
+  const [fillResult, completionResult] = await Promise.all([fillPromise, completionPromise])
+
+  assert.equal(fillResult.ok, true, "The concurrent BUY fill must finish its durable accounting transition successfully.")
+  assert.equal(completionResult.ok, true, "Recovery completion must finish after the queued BUY fill transition.")
+  assert.equal(
+    completionResult.data.eligible,
+    false,
+    "Completion must evaluate the state after the in-flight BUY fill has committed.",
+  )
+  assert.equal(
+    completionResult.data.reason,
+    "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+    "The newly committed active inventory must keep the recovery cycle open.",
+  )
+  assert.equal(completionCalls.length, 0, "A concurrent fill must prevent an outdated completed-cycle fact from being persisted.")
+  const finalPosition = workflow.getPortfolio().getPosition({ marketId: market.id })
+  assert.equal(finalPosition.baseQuantity.amount, "1.5", "The concurrent BUY fill must remain in active Position quantity after completion is evaluated.")
+  assert.equal(finalPosition.spent.amount, "195000", "The concurrent BUY fill must remain included in the full recovery cost basis.")
+  assert.equal(finalPosition.freeBaseQuantity.amount, "0", "No retained inventory may be allocated from a cycle invalidated by the queued BUY fill.")
+  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }).buyCost, "195000", "The RecoveryLedger cost must stay aligned with Portfolio after the serialized BUY fill.")
 })

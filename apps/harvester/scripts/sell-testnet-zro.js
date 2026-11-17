@@ -1,3 +1,4 @@
+import { Console } from "node:console"
 import { createInterface } from "node:readline/promises"
 import { stdin, stdout } from "node:process"
 
@@ -8,6 +9,11 @@ import {
   getOpenOrders,
 } from "./binance-testnet-api.js"
 import { getMarketSellQuantity } from "./testnet-sell-utils.js"
+
+const cliConsole = new Console({
+  stdout: process.stdout,
+  stderr: process.stderr,
+})
 
 const SYMBOL = "ZROUSDT"
 const ASSET = "ZRO"
@@ -52,7 +58,7 @@ const assertNoOpenOrders = async () => {
   const symbolOrders = orders.filter(({ symbol }) => symbol === SYMBOL)
 
   if (symbolOrders.length > 0) {
-    console.table(
+    cliConsole.table(
       symbolOrders.map((order) => ({
         orderId: order.orderId,
         side: order.side,
@@ -71,7 +77,8 @@ const assertNoOpenOrders = async () => {
 }
 
 const askForConfirmation = async () => {
-  const readline = createInterface({ input: stdin, output: stdout })
+  const readline = createInterface({ input: stdin,
+output: stdout })
 
   try {
     const answer = await readline.question(
@@ -85,7 +92,7 @@ const askForConfirmation = async () => {
 }
 
 const main = async () => {
-  console.log("\nBinance Spot TESTNET — Sell All Free ZRO at Market\n")
+  cliConsole.log("\nBinance Spot TESTNET — Sell All Free ZRO at Market\n")
 
   await assertNoOpenOrders()
 
@@ -100,22 +107,22 @@ const main = async () => {
     symbolInfo,
   })
 
-  console.log("========== MARKET SELL PREVIEW ==========")
-  console.log(`Environment:  Binance Spot TESTNET`)
-  console.log(`Symbol:       ${SYMBOL}`)
-  console.log("Side:         SELL")
-  console.log("Order type:   MARKET")
-  console.log(`Free balance: ${freeBalance} ${ASSET}`)
-  console.log(`Sell amount:  ${quantity} ${ASSET}`)
-  console.log(`Step size:    ${stepSize}`)
-  console.log("=========================================")
-  console.log("\nOnly free ZRO is included. Locked ZRO is not sold.")
-  console.log("A market order does not guarantee a specific execution price.")
+  cliConsole.log("========== MARKET SELL PREVIEW ==========")
+  cliConsole.log(`Environment:  Binance Spot TESTNET`)
+  cliConsole.log(`Symbol:       ${SYMBOL}`)
+  cliConsole.log("Side:         SELL")
+  cliConsole.log("Order type:   MARKET")
+  cliConsole.log(`Free balance: ${freeBalance} ${ASSET}`)
+  cliConsole.log(`Sell amount:  ${quantity} ${ASSET}`)
+  cliConsole.log(`Step size:    ${stepSize}`)
+  cliConsole.log("=========================================")
+  cliConsole.log("\nOnly free ZRO is included. Locked ZRO is not sold.")
+  cliConsole.log("A market order does not guarantee a specific execution price.")
 
   const confirmed = await askForConfirmation()
 
   if (!confirmed) {
-    console.log("\nConfirmation did not match. No order was placed.")
+    cliConsole.log("\nConfirmation did not match. No order was placed.")
     return
   }
 
@@ -138,7 +145,7 @@ const main = async () => {
     )
   }
 
-  console.log("\nSubmitting MARKET SELL...")
+  cliConsole.log("\nSubmitting MARKET SELL...")
 
   const { data: order } = await binanceTestnetRequest({
     method: "POST",
@@ -152,15 +159,15 @@ const main = async () => {
     },
   })
 
-  console.log("\n========== MARKET SELL RESULT ==========")
-  console.log(`Order ID:          ${order.orderId}`)
-  console.log(`Status:            ${order.status}`)
-  console.log(`Requested:         ${quantity} ${ASSET}`)
-  console.log(`Executed:          ${order.executedQty} ${ASSET}`)
-  console.log(`Quote received:    ${order.cummulativeQuoteQty} USDT`)
-  console.log(`Fills:             ${order.fills?.length ?? 0}`)
+  cliConsole.log("\n========== MARKET SELL RESULT ==========")
+  cliConsole.log(`Order ID:          ${order.orderId}`)
+  cliConsole.log(`Status:            ${order.status}`)
+  cliConsole.log(`Requested:         ${quantity} ${ASSET}`)
+  cliConsole.log(`Executed:          ${order.executedQty} ${ASSET}`)
+  cliConsole.log(`Quote received:    ${order.cummulativeQuoteQty} USDT`)
+  cliConsole.log(`Fills:             ${order.fills?.length ?? 0}`)
   if (Array.isArray(order.fills)) {
-    console.table(
+    cliConsole.table(
       order.fills.map((fill) => ({
         price: fill.price,
         quantity: fill.qty,
@@ -169,11 +176,11 @@ const main = async () => {
       })),
     )
   }
-  console.log("========================================")
+  cliConsole.log("========================================")
 }
 
 main().catch((error) => {
-  console.error("\nFailed to sell free ZRO on Binance TESTNET:")
-  console.error(error.message)
+  cliConsole.error("\nFailed to sell free ZRO on Binance TESTNET:")
+  cliConsole.error(error.message)
   process.exitCode = 1
 })

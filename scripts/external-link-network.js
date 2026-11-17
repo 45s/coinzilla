@@ -24,14 +24,15 @@ function createUnsafeAddressError() {
 }
 
 
-async function awaitWithAbort(promise, signal) {
-  if (!signal) return promise;
+async function awaitWithAbort({ promise, signal }) {
+  if (!signal) {return promise;}
   if (signal.aborted) {
     throw signal.reason ?? new Error('DNS resolution aborted before completion');
   }
 
   let abortListener;
-  const aborted = new Promise((_, reject) => {
+  const aborted = new Promise((...executorArguments) => {
+    const [, reject] = executorArguments;
     abortListener = () => reject(signal.reason ?? new Error('DNS resolution aborted before completion'));
     signal.addEventListener('abort', abortListener, { once: true });
   });
@@ -52,7 +53,8 @@ async function awaitWithAbort(promise, signal) {
  * @param {AbortSignal} [options.signal] Request timeout/cancellation signal.
  * @returns {Promise<Array<{address: string, family: number}>>}
  */
-export async function resolvePublicAddresses(hostname, options = {}) {
+export async function resolvePublicAddresses(...args) {
+  const [hostname, options = {}] = args;
   const normalizedHostname = hostname.toLowerCase().replace(/\.$/, '');
   if (isIP(normalizedHostname) || isLocalHostname(normalizedHostname)) {
     throw createUnsafeAddressError();
@@ -61,8 +63,12 @@ export async function resolvePublicAddresses(hostname, options = {}) {
     throw options.signal.reason ?? new Error('DNS resolution aborted before completion');
   }
   const resolver = options.resolveHost ?? dnsLookup;
-  const resolution = resolver(normalizedHostname, { all: true, verbatim: true });
-  const answers = await awaitWithAbort(resolution, options.signal);
+  const resolution = resolver(normalizedHostname, { all: true,
+verbatim: true });
+  const answers = await awaitWithAbort({
+    promise: resolution,
+    signal: options.signal,
+  });
   if (!Array.isArray(answers) || answers.length === 0) {
     throw new Error('DNS resolution returned no addresses');
   }
@@ -74,7 +80,8 @@ export async function resolvePublicAddresses(hostname, options = {}) {
     if (family === 0 || !isPublicAddress(address)) {
       throw createUnsafeAddressError();
     }
-    addresses.set(address.toLowerCase(), { address, family });
+    addresses.set(address.toLowerCase(), { address,
+family });
   }
 
   return [...addresses.values()];
@@ -86,9 +93,10 @@ export async function resolvePublicAddresses(hostname, options = {}) {
  * @param {Array<{address: string, family: number}>} addresses
  * @returns {(hostname: string, options: object, callback: (error: Error|null, address: string|Array<{address: string, family: number}>, family?: number) => void) => void}
  */
-function createPinnedLookup(hostname, addresses) {
+function createPinnedLookup({ hostname, addresses }) {
   const expectedHostname = hostname.toLowerCase().replace(/\.$/, '');
-  return (requestedHostname, options, callback) => {
+  return (...lookupArguments) => {
+    const [requestedHostname, options, callback] = lookupArguments;
     let lookupOptions = options;
     let done = callback;
     if (typeof lookupOptions === 'function') {
@@ -113,7 +121,8 @@ function createPinnedLookup(hostname, addresses) {
     }
 
     if (lookupOptions?.all === true) {
-      done(null, eligible.map((entry) => ({ address: entry.address, family: entry.family })));
+      done(null, eligible.map((entry) => ({ address: entry.address,
+family: entry.family })));
       return;
     }
 
@@ -131,7 +140,8 @@ function createPinnedLookup(hostname, addresses) {
  * @param {HttpRequestImplementation} [options.requestImpl] Injectable HTTP(S) request implementation for deterministic tests.
  * @returns {Promise<{status: number, headers: {get: (name: string) => string|null}, body: null}>}
  */
-export async function fetchPinned(input, init = {}, options = {}) {
+export async function fetchPinned(...args) {
+  const [input, init = {}, options = {}] = args;
   const url = new URL(input);
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new TypeError('Pinned transport only supports HTTP(S) URLs');
@@ -142,9 +152,13 @@ export async function fetchPinned(input, init = {}, options = {}) {
     signal: init.signal ?? options.signal,
   });
   const transport = options.requestImpl ?? (url.protocol === 'https:' ? httpsRequest : httpRequest);
-  const lookup = createPinnedLookup(hostname, addresses);
+  const lookup = createPinnedLookup({
+    hostname,
+    addresses,
+  });
 
-  return new Promise((resolveResponse, rejectRequest) => {
+  return new Promise((...executorArguments) => {
+    const [resolveResponse, rejectRequest] = executorArguments;
     let request;
     try {
       request = transport(url, {

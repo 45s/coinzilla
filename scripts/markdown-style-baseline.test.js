@@ -65,26 +65,39 @@ test("reports list and table structural findings with source line numbers", () =
     "",
   ].join("\n")
   const report = collectMarkdownStyleBaseline([
-    { path: "docs/list-table-findings.md", content },
+    { path: "docs/list-table-findings.md",
+content },
   ])
 
   assert.deepEqual(report.findings.unorderedListMarkers[0], {
-    path: "docs/list-table-findings.md", count: 2, lines: [3, 5],
+    path: "docs/list-table-findings.md",
+count: 2,
+lines: [3, 5],
   })
   assert.deepEqual(report.findings.nestedListIndentation[0], {
-    path: "docs/list-table-findings.md", count: 1, lines: [4],
+    path: "docs/list-table-findings.md",
+count: 1,
+lines: [4],
   })
   assert.deepEqual(report.findings.listSpacing[0], {
-    path: "docs/list-table-findings.md", count: 2, lines: [3, 6],
+    path: "docs/list-table-findings.md",
+count: 2,
+lines: [3, 6],
   })
   assert.deepEqual(report.findings.malformedTableDelimiters[0], {
-    path: "docs/list-table-findings.md", count: 1, lines: [8],
+    path: "docs/list-table-findings.md",
+count: 1,
+lines: [8],
   })
   assert.deepEqual(report.findings.tableColumnMismatches[0], {
-    path: "docs/list-table-findings.md", count: 1, lines: [9],
+    path: "docs/list-table-findings.md",
+count: 1,
+lines: [9],
   })
   assert.deepEqual(report.findings.tableSpacing[0], {
-    path: "docs/list-table-findings.md", count: 2, lines: [7, 10],
+    path: "docs/list-table-findings.md",
+count: 2,
+lines: [7, 10],
   })
 })
 
@@ -111,7 +124,8 @@ test("accepts canonical list and table formatting", () => {
     "",
   ].join("\n")
   const report = collectMarkdownStyleBaseline([
-    { path: "docs/list-table-clean.md", content },
+    { path: "docs/list-table-clean.md",
+content },
   ])
 
   for (const name of [
@@ -122,7 +136,7 @@ test("accepts canonical list and table formatting", () => {
     "tableColumnMismatches",
     "tableSpacing",
   ]) {
-    assert.deepEqual(report.findings[name], [], name + " should accept canonical formatting")
+    assert.deepEqual(report.findings[name], [], `${name  } should accept canonical formatting`)
   }
 })
 
@@ -131,7 +145,7 @@ test("excludes fenced examples but retains historical documents in the report-on
   const codeContent = [
     "# Code examples",
     "",
-    fence + "md",
+    `${fence  }md`,
     "* unordered marker",
     "   - odd nested indentation",
     "Paragraph without a separator",
@@ -157,11 +171,16 @@ test("excludes fenced examples but retains historical documents in the report-on
   const historicalNoHeading = "Plain text\r\n## Section\r\n~~~\ncode\n~~~"
 
   const report = collectMarkdownStyleBaseline([
-    { path: "docs/clean.md", content: "# Clean\n\n## Details\n\nNo findings.\n" },
-    { path: "docs/code-examples.md", content: codeContent },
-    { path: "apps/harvester/docs/audits/legacy-list-table.md", content: historicalListTable },
-    { path: "apps/harvester/docs/audits/legacy-style.md", content: historicalStyle },
-    { path: "docs/audits/legacy-no-heading.md", content: historicalNoHeading },
+    { path: "docs/clean.md",
+content: "# Clean\n\n## Details\n\nNo findings.\n" },
+    { path: "docs/code-examples.md",
+content: codeContent },
+    { path: "apps/harvester/docs/audits/legacy-list-table.md",
+content: historicalListTable },
+    { path: "apps/harvester/docs/audits/legacy-style.md",
+content: historicalStyle },
+    { path: "docs/audits/legacy-no-heading.md",
+content: historicalNoHeading },
   ])
 
   for (const name of Object.keys(report.findings)) {

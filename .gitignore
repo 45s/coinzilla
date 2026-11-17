@@ -6,6 +6,9 @@
 
 node_modules
 
+# Harvester private operational state (created only by explicit initialization)
+/apps/harvester/recovery-facts/
+
 # Application session logs
 /logs_bot-free-roll/
 /apps/harvester/logs/harvester.log

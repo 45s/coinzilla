@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createClient, connectClient, response } from "../test-helpers/rpc-client-fixtures.js"
+import { createClient, connectClient } from "../test-helpers/rpc-client-fixtures.js"
 import { BinanceWebSocketApiClient } from "./rpc-client.js"
 
 test("notifies close observers when the transport closes unexpectedly", async () => {
@@ -9,7 +9,9 @@ test("notifies close observers when the transport closes unexpectedly", async ()
   const closes = []
   context.client.onClose((event) => closes.push(event))
 
-  context.sockets[0].serverClose({ code: 1006, reason: "network lost", wasClean: false })
+  context.sockets[0].serverClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
 
   assert.deepEqual(closes, [{
     code: 1006,
@@ -152,13 +154,17 @@ test("RPC client decodes ArrayBuffer and typed-array response frames", async () 
 
   const first = context.client.request("ticker.price", {})
   context.sockets[0].receive(new TextEncoder().encode(JSON.stringify({
-    id: "request-1", status: 200, result: { frame: "array-buffer" },
+    id: "request-1",
+status: 200,
+result: { frame: "array-buffer" },
   })).buffer)
   assert.deepEqual((await first).data, { frame: "array-buffer" })
 
   const second = context.client.request("ticker.price", {})
   context.sockets[0].receive(new TextEncoder().encode(JSON.stringify({
-    id: "request-2", status: 200, result: { frame: "typed-array" },
+    id: "request-2",
+status: 200,
+result: { frame: "typed-array" },
   })))
   assert.deepEqual((await second).data, { frame: "typed-array" })
   context.sockets[0].serverClose()
@@ -203,7 +209,9 @@ test("RPC client reports close-observer exceptions without blocking cleanup", as
   context.client.onError((error) => errors.push(error.message))
   context.client.onClose(() => { throw new Error("close observer failed") })
 
-  context.sockets[0].serverClose({ code: 1006, reason: "unexpected close", wasClean: false })
+  context.sockets[0].serverClose({ code: 1006,
+reason: "unexpected close",
+wasClean: false })
 
   assert.equal(context.client.state, "closed")
   assert.deepEqual(errors, ["close observer failed"])
@@ -261,7 +269,8 @@ test("rejects non-text frames, non-object JSON, and malformed RPC response envel
   await assert.rejects(scalarPayload, /message must be a JSON object/)
 
   const malformedSuccess = context.client.request("ticker.price", {})
-  context.sockets[0].receive(JSON.stringify({ id: "request-3", status: 200 }))
+  context.sockets[0].receive(JSON.stringify({ id: "request-3",
+status: 200 }))
   await assert.rejects(malformedSuccess, /Successful Binance response must contain result only/)
 
   const malformedFailure = context.client.request("ticker.price", {})
@@ -292,7 +301,9 @@ test("rejects reconnect attempts after the RPC transport has closed", async () =
 test("rejects an RPC connection closed before the socket opens", async () => {
   const context = createClient()
   const connecting = context.client.connect()
-  context.sockets[0].serverClose({ code: 1006, reason: "closed before open", wasClean: false })
+  context.sockets[0].serverClose({ code: 1006,
+reason: "closed before open",
+wasClean: false })
 
   await assert.rejects(connecting, /closed before opening/)
   assert.equal(context.client.state, "closed")

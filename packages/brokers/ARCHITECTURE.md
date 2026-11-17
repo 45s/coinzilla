@@ -16,6 +16,15 @@ The architectural reference is [Harvester Architecture](../../apps/harvester/doc
 
 The package already contains valuable boundaries (RPC, Streams, transport, user-data session, canonical adapters, and deterministic tests). DDD modernization should clarify ownership and dependency direction around those capabilities—not replace working WebSocket code or reorganize files merely for appearance.
 
+## Exchange infrastructure boundaries
+
+Each exchange owns its protocol and infrastructure adapter:
+
+- `infrastructure/binance/` owns Binance WebSocket API/Streams, signing, configuration, user-data lifecycle, and DTO adaptation.
+- `infrastructure/bitunix/` owns Bitunix Spot REST signing, HTTP transport, configuration, DTO adaptation, and Bitunix-to-entity mapping.
+
+Adapters may share canonical `@coinzilla/entities` and exact decimal utilities, but must not import one another's protocol code. Matching method names do not imply equal capabilities; unsupported capabilities fail explicitly and exchange facts are never synthesized.
+
 ## Target dependency direction
 
 ```text

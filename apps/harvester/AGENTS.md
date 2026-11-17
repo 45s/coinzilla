@@ -59,14 +59,18 @@ A missing local checkout, terminal, Node installation, pnpm installation, or loc
 ## Application configuration
 
 - The app has one application-wide named `appConfig` export in `apps/harvester/config/index.js`. Focused configuration modules are allowed when they isolate a cohesive concern and are imported into that single object (for example, `OPERATOR_CONTROL_CONFIG` from `config/operator-control.js` and notification profile constants from `config/notifications-tg-profiles.js`). Do not create separate runtime configuration boundaries or duplicate validators. **Use named exports only; do not introduce default exports in Harvester configuration or domain modules.**
-- Keep strategy-owned settings and pairs under `strategies.CG_coinGrabber`; keep application-wide concerns such as Telegram notification policy and operator-control settings in sibling root sections. Supporting modules must be composed into `appConfig`.
-- The `config:symbol` generator may update only the pair entries between the generated-pair markers in `config/index.js`; preserve imports, profile constants, comments, and all source outside that region.
+- Keep strategy flags/settings under `strategies.CG_coinGrabber` in `config/strategies/cg-coin-grabber.js`. Keep all strategy pair definitions in the single operator-maintained `apps/harvester/cg-coin-grabber.js` module, exported as `tradingPairs` and imported into the single `appConfig`; do not duplicate pair definitions in application source.
+- The `config:symbol` generator updates only `apps/harvester/token-specification.json`; it must never add or modify strategy pairs. Group specifications by base asset and key each token's `markets` object by exact Binance symbol. Keep `pricePrecision` and `quantityPrecision` under each market because `tickSize` and `stepSize` can differ between quote pairs.
+- External pair entries MUST use `TRADING_ENVIRONMENTS.BOTH`, `.TESTNET`, or `.LIVE` and `EXTERNAL_ORDERS_POLICIES.IGNORE` or `.BLOCK`; keep the serialized values unchanged and use these named constants in validation, selection, and generator tests.
+- `apps/harvester/token-specification.json` is the sole source of exchange-derived pair precision. `loadAppConfig` resolves every operator-configured pair by exact market symbol and adds `pricePrecision`/`quantityPrecision` to the effective runtime pair before `validateAppConfig`; missing, malformed, or multiply assigned market metadata must fail closed. Strategy pair entries must not define these precision fields.
 - Use `loadAppConfig` and `validateAppConfig` for the application configuration boundary. Update their tests and all docs/examples when the contract changes.
 - Telegram bot tokens and chat IDs are environment-only secrets. `notifications.telegram` contains only the enabled switch, profile, market filter, and event overrides.
 - Notification profiles are `minimal`, `trader`, `verbose`, and `custom`. Critical safety alerts are non-disableable and bypass event overrides and market filters.
 - Harvester owns trading-specific Telegram event mapping, message formatting, and notification policy. `@coinzilla/notifiers` owns generic bounded delivery, Telegram transport, and delivery diagnostics; it must not contain Harvester event semantics or message templates.
 
 ## Actionable errors and diagnostics
+
+Follow the repository-wide [Structured Error Handling Standard](../../docs/engineering/structured-error-handling.md) for the shared `SystemCustomError` base, stable codes, cause preservation and safe context. This section adds stricter Harvester-specific diagnostic requirements.
 
 - AI agents MUST NOT introduce a generic `Error` for a known Harvester/domain failure when a specific failure type can be named. Use a domain-specific class extending `Error`, with a precise `name` and stable machine-readable `code`.
 - Every operational error MUST identify the failing component/operation and affected entity (for example, market symbol), preserve the original cause, and expose safe structured details needed to act. The message must state what failed and why; include concrete remediation when known.

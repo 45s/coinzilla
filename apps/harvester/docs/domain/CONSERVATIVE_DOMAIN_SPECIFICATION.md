@@ -191,6 +191,8 @@ Only after these conditions pass may keepQuantity plus any classified exchange-c
 
 The durable `recovery.cycle_completed` record must preserve the pair's configured `keepQuantity` and `minProfit`, actual `realizedNetProfit`, final `freeQuantity`, and exact dust/filter evidence when dust exists. The recorded threshold is the value used for that market and cycle; replay validates the record against its own threshold rather than another market's current configuration. Replay must verify that realized profit meets the recorded threshold and that `freeQuantity = keepQuantity + dust` (or exactly `keepQuantity` when there is no dust). After replaying the fills, the recorded free allocation must consume all remaining active inventory. A journal record that leaves sellable active inventory behind or weakens the configured profit threshold is invalid and must fail closed. Older completion records that lack the configured threshold or retained-inventory proof are not silently upgraded; replay must fail closed and require reconciliation.
 
+The application completion boundary must also receive the exact canonical terminal SELL order as evidence; it must not infer completion from profitability or a dust classification alone. The order must be a `CanonicalOrder` for the same market as the active Position and RecoveryLedger, with `side = SELL`, `status = FILLED`, a non-empty broker order ID, and `executedQuantity = originalQuantity`. The normal user-data SELL-fill path, cancellation/reconciliation race path, and exchange-constrained dust-completion path must all forward that same reconciled order identity. Recovery completion is serialized behind accepted fill-accounting transitions so it cannot evaluate or reset against a stale Portfolio/RecoveryLedger projection.
+
 keepQuantity = 0 is permitted only after the complete workflow—including BUY, partial SELL, cancellation/reconciliation, terminal SELL, dust, profit verification, and exact-once completion—has passed end-to-end regression. Until then, fail closed at the precise unsupported boundary.
 
 ## 7. Workstation downtime and scope
@@ -200,6 +202,34 @@ Harvester runs on the owner's personal PC. 24/7 uptime is not required. Resting 
 Do not retroactively change historical shutdown snapshots. Safe process-restart reconstruction and reconciliation before new trading are a separate workstream in [#654](https://github.com/45s/coinzilla), outside this implementation scope.
 
 No TESTNET order, cancellation, restart, or other exchange action is authorized by this specification.
+
+### Conservative graceful shutdown — protect trading before stopping services
+
+This contract applies **only to the Conservative strategy**. Other strategies must define their own shutdown policy. Do not turn this into a generic process-wide rule that blocks SELL/recovery work.
+
+After SIGINT/SIGTERM, the first trading action is to set a Conservative BUY-shutdown gate. This gate must reject every new BUY submission and BUY replacement, including trailing-BUY work and delayed evaluations. It must not block SELL fills, recovery calculations, or the recovery SELL submissions required to protect the position.
+
+The shutdown sequence is:
+
+1. **Block BUYs immediately.** Set the Conservative BUY-shutdown gate before stopping any service, subscription, or exchange connection.
+2. **Cancel owned BUY orders.** Start cancellation of every Harvester-owned active BUY for every enabled Conservative market. Never cancel or adopt external/manual orders. Resolve PENDING/UNKNOWN identity safely; do not guess an exchange order ID. Reconcile every cancellation's terminal state, all fills that raced with it, and actual commissions.
+3. **Keep the system connected.** Do not stop operator/runtime services, market-price or order-book intake, Binance user-data intake, or the broker connection while any Conservative market is unsafe. Accepted market-price events continue through a recovery-only evaluation path: only recovery SELL decisions may be evaluated/submitted; every BUY, trailing-BUY replacement, retry and delayed BUY path remains blocked.
+4. **Verify readiness immediately; do not wait for a timer.** As soon as cancellation outcomes, accepted user-data work, fills, commissions, and exchange state are fully reconciled, evaluate the market's safety conditions. There is no arbitrary 20-second quiet period. A market that already satisfies every condition becomes `SAFE_TO_SHUTDOWN` immediately.
+5. **Protect each market independently.** A market may enter `SAFE_TO_SHUTDOWN` only when all of these conditions are authoritatively verified:
+   - its Conservative BUY-shutdown gate remains active;
+   - no Harvester-owned BUY is PENDING, OPEN, PARTIALLY_FILLED, or UNKNOWN;
+   - all accepted user-data work and all BUY/SELL fills and actual commissions are reconciled, with no accounting or order-state ambiguity;
+   - if recovery is required, the recovery SELL is calculated from the final Position and RecoveryLedger, including actual commissions and the full recovery target, and the final owned SELL is acknowledged and verified against canonical Binance order state for required quantity and financial coverage; and
+   - any old recovery SELL that no longer matches the final plan has a confirmed terminal state and complete raced-fill reconciliation before a replacement is submitted.
+
+   If no recovery SELL is required, verify that there is no remaining sellable recovery obligation and no stale active recovery SELL.
+6. **Stop only after safety is proven.** A market's safe state is independent of other markets. The process must not stop the remaining services or disconnect the account-wide broker/user-data connection until every enabled Conservative market is `SAFE_TO_SHUTDOWN`. Then perform the existing closing audit and orderly resource cleanup.
+
+If any condition cannot be proven, keep the connections and recovery processing needed to protect the position alive, report the exact market and blocker, and do not report `STOPPED`. Unknown placement/cancellation outcomes must be reconciled by canonical identity; never submit a blind duplicate recovery SELL.
+
+A `SAFE_TO_SHUTDOWN` marker is derived from verified facts, not a timer. If a late execution, newly discovered open BUY, changed SELL state, or reconciliation discrepancy appears after a market was marked safe, immediately invalidate that marker, keep the required services connected, process the new facts, and re-establish recovery SELL coverage before marking it safe again. The marker is a process-local projection, not a durable restart fact. Set it only after its supporting Journal evidence is durable; on restart rebuild safety from Journal evidence and authoritative exchange state. This rule does not weaken order ownership, fill accounting, Journal durability, or exchange reconciliation.
+
+Implementation tracking: [issue #1186](https://github.com/45s/coinzilla/issues/1186). This specification defines the required behavior; it does not claim that the current shutdown implementation already conforms.
 
 ## 8. Conservative trailing-BUY replacement safety
 
@@ -306,3 +336,24 @@ flowchart TD
 \`\`\`
 
 **Change control:** Amend this document only when the owner explicitly changes a rule. Update implementation, tests, reference documents, and GitHub records to conform. Never create a competing Conservative rule definition.
+
+## 9. Conservative graceful shutdown — protect trading before stopping services
+
+This contract applies to the Conservative strategy only. Every other strategy must own a separate shutdown policy and safety participant. The application-level shutdown coordinator must not contain Conservative-specific order or accounting rules.
+
+On SIGINT or SIGTERM:
+
+1. Activate the Conservative BUY shutdown gate before stopping any shared service. Reject every new BUY, replacement BUY, retry, trailing-BUY reprice and delayed BUY evaluation. Only the explicitly authorized shutdown recovery SELL path may submit a SELL.
+2. Immediately begin cancellation of every Harvester-owned active Conservative BUY order. Never cancel, adopt or modify external/manual orders. An external open order alone is not a Harvester-owned shutdown blocker; an actual unowned execution or unresolved account-wide ownership/balance discrepancy remains a separate integrity blocker. Keep market-price intake, Binance user-data intake, broker connectivity and operator/runtime services alive.
+3. Reconcile pending client-order identities and every cancellation outcome. Process cancellation-racing fills exactly once and apply actual broker commissions through the existing Portfolio and RecoveryLedger accounting. An UNKNOWN order or incomplete terminal-fill history is not safe.
+4. Recalculate recovery SELL coverage from the final reconciled position and RecoveryLedger. If an old recovery SELL must be replaced, first confirm its terminal state and reconcile all fills and commissions. Never submit a replacement after an ambiguous cancellation or placement response; resolve the canonical order by its original client order ID first.
+5. Verify the final owned recovery SELL against authoritative Binance state: remaining quantity and net proceeds must cover the final recovery obligation and configured profit target. If no recovery obligation remains, prove that fact and that no stale recovery SELL remains.
+6. Mark each market SAFE_TO_SHUTDOWN as soon as its evidence is complete and Journal-durable. The marker is independent per market. Late execution/order evidence invalidates the affected marker immediately; re-reconcile and re-verify before marking it safe again.
+7. Once every enabled Conservative market and every other registered strategy participant is safe, publish and durably flush the CLOSING account snapshot. Then stop user-data intake and drain accepted events. If late accepted evidence invalidates a market marker, re-reconcile/re-verify and publish an updated CLOSING snapshot before shared cleanup.
+8. Stop operator control and market-price/book intake, drain accepted market work, then disconnect Binance and complete process cleanup only while all safety markers remain valid.
+
+There are no arbitrary sleeps, 20-second delays, quiet periods or time-based guesses. A market already meeting every condition is safe immediately. If safety cannot be proven, fail closed: retain the connections and services needed for reconciliation/recovery, report the exact strategy, market and blockers, and do not report STOPPED.
+
+The SAFE_TO_SHUTDOWN marker is a process-local projection, not a durable fact across restarts. On restart, rebuild safety from Journal evidence and authoritative exchange state; never trust a previous process's marker. The Journal must durably flush its published lifecycle/audit evidence before cleanup. Applied fills and order facts remain governed by [ADR-0001](../architecture/decisions/0001-application-owned-recovery-facts.md) and must be persisted before in-memory Portfolio/RecoveryLedger projections change.
+
+The implementation and deterministic regression tests are tracked by [issue #1186](https://github.com/45s/coinzilla/issues/1186) and [PR #1190](https://github.com/45s/coinzilla/pull/1190).

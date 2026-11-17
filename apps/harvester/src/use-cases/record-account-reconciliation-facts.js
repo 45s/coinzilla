@@ -1,9 +1,10 @@
+import { isCanonicalNonNegativeSafeInteger } from "../domain/time/is-canonical-non-negative-safe-integer.js"
 import { createHash } from "node:crypto"
 import { toResult } from "@coinzilla/utils"
 
-const requireAppendPort = ({ durableFactsStore, operation }) => {
-  if (typeof durableFactsStore?.append !== "function") {
-    throw new TypeError(operation + " requires a durable-fact append port")
+const requireAppendPort = ({ operationalStateStore, operation }) => {
+  if (typeof operationalStateStore?.append !== "function") {
+    throw new TypeError(`${operation  } requires a Operational State Store append capability`)
   }
 }
 
@@ -12,7 +13,7 @@ const requireDurableAppend = ({ result, operation }) => {
     return toResult({
       errors: result?.errors?.length
         ? result.errors
-        : [new Error(operation + " append did not confirm durable commitment")],
+        : [new Error(`${operation  } append did not confirm durable commitment`)],
     })
   }
   return result
@@ -27,15 +28,16 @@ const requireDurableAppend = ({ result, operation }) => {
  * DTO produced by mapAccountSnapshotCapturedData.
  *
  * @param {object} options
- * @param {object} options.durableFactsStore Initialized ADR-0001 append port.
+ * @param {object} options.operationalStateStore Initialized ADR-0001 append port.
  * @param {object} options.data Sanitized account snapshot DTO.
  * @returns {Promise<object>} Durable append result.
  */
-export async function recordAccountSnapshotCaptured({ durableFactsStore, data } = {}) {
+export async function recordAccountSnapshotCaptured({ operationalStateStore, data } = {}) {
   try {
-    requireAppendPort({ durableFactsStore, operation: "recordAccountSnapshotCaptured" })
+    requireAppendPort({ operationalStateStore,
+operation: "recordAccountSnapshotCaptured" })
     if (!data || typeof data !== "object" || Array.isArray(data) ||
-        typeof data.phase !== "string" || !Number.isSafeInteger(data.sourceTime) ||
+        typeof data.phase !== "string" || !isCanonicalNonNegativeSafeInteger(data.sourceTime) ||
         !Array.isArray(data.balances)) {
       throw new TypeError("recordAccountSnapshotCaptured requires a mapped account snapshot DTO")
     }
@@ -45,12 +47,13 @@ export async function recordAccountSnapshotCaptured({ durableFactsStore, data } 
       throw new TypeError("recordAccountSnapshotCaptured requires unique canonical asset codes")
     }
     const assetSetDigest = createHash("sha256").update([...assets].sort().join("\\0")).digest("hex")
-    const result = await durableFactsStore.append({
-      factId: "account-snapshot:" + data.phase + ":" + data.sourceTime + ":" + assetSetDigest,
+    const result = await operationalStateStore.append({
+      factId: `account-snapshot:${  data.phase  }:${  data.sourceTime  }:${  assetSetDigest}`,
       factType: "ACCOUNT_SNAPSHOT_CAPTURED",
       data,
     })
-    return requireDurableAppend({ result, operation: "Account snapshot" })
+    return requireDurableAppend({ result,
+operation: "Account snapshot" })
   } catch (error) {
     return toResult({ error })
   }
@@ -65,23 +68,25 @@ export async function recordAccountSnapshotCaptured({ durableFactsStore, data } 
  * mapAccountOpenOrdersCapturedData.
  *
  * @param {object} options
- * @param {object} options.durableFactsStore Initialized ADR-0001 append port.
+ * @param {object} options.operationalStateStore Initialized ADR-0001 append port.
  * @param {object} options.data Sanitized account-wide open-order DTO.
  * @returns {Promise<object>} Durable append result.
  */
-export async function recordAccountOpenOrdersCaptured({ durableFactsStore, data } = {}) {
+export async function recordAccountOpenOrdersCaptured({ operationalStateStore, data } = {}) {
   try {
-    requireAppendPort({ durableFactsStore, operation: "recordAccountOpenOrdersCaptured" })
+    requireAppendPort({ operationalStateStore,
+operation: "recordAccountOpenOrdersCaptured" })
     if (!data || typeof data !== "object" || Array.isArray(data) ||
-        typeof data.phase !== "string" || !Number.isSafeInteger(data.observedAt)) {
+        typeof data.phase !== "string" || !isCanonicalNonNegativeSafeInteger(data.observedAt)) {
       throw new TypeError("recordAccountOpenOrdersCaptured requires a mapped account open-order DTO")
     }
-    const result = await durableFactsStore.append({
-      factId: "account-open-orders:" + data.phase + ":" + data.observedAt,
+    const result = await operationalStateStore.append({
+      factId: `account-open-orders:${  data.phase  }:${  data.observedAt}`,
       factType: "ACCOUNT_OPEN_ORDERS_CAPTURED",
       data,
     })
-    return requireDurableAppend({ result, operation: "Account open-orders snapshot" })
+    return requireDurableAppend({ result,
+operation: "Account open-orders snapshot" })
   } catch (error) {
     return toResult({ error })
   }

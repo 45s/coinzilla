@@ -1,31 +1,42 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
-import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { recordExecutionFill } from "./record-execution-fill.js"
 
-const baseAsset = new Asset({ id: "binance:DOGE", code: "DOGE" })
-const quoteAsset = new Asset({ id: "binance:USDT", code: "USDT" })
-const feeAsset = new Asset({ id: "binance:BNB", code: "BNB" })
-const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({ id: "binance:DOGE",
+code: "DOGE" })
+const quoteAsset = new Asset({ id: "binance:USDT",
+code: "USDT" })
+const feeAsset = new Asset({ id: "binance:BNB",
+code: "BNB" })
+const market = new Market({ venue: "binance",
+symbol: "DOGEUSDT",
+baseAsset,
+quoteAsset })
 const fill = new Fill({
   tradeId: "trade-123",
   brokerOrderId: "broker-order-9",
   clientOrderId: "client-order-9",
   market,
   side: "BUY",
-  price: new Money({ amount: "0.1", asset: quoteAsset }),
-  quantity: new Quantity({ amount: "100", asset: baseAsset }),
-  quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+  price: new Money({ amount: "0.1",
+asset: quoteAsset }),
+  quantity: new Quantity({ amount: "100",
+asset: baseAsset }),
+  quoteQuantity: new Money({ amount: "10",
+asset: quoteAsset }),
   liquidityRole: "MAKER",
   executedAt: 1762905600000,
   commissions: [
     new Commission({
-      amount: new Money({ amount: "0.001", asset: feeAsset }),
-      quoteValue: new Money({ amount: "0.02", asset: quoteAsset }),
+      amount: new Money({ amount: "0.001",
+asset: feeAsset }),
+      quoteValue: new Money({ amount: "0.02",
+asset: quoteAsset }),
     }),
   ],
   commissionStatus: "COMPLETE",
@@ -33,8 +44,9 @@ const fill = new Fill({
 
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-execution-fill-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
-  const store = createFileDurableFactsStore({
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
+  const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "execution-fill-test",
     now: () => new Date("2026-11-12T00:00:00.000Z"),
@@ -44,12 +56,13 @@ const createStore = async (t) => {
 }
 
 test("records complete canonical fill identity, exact amounts, and commission quote valuation", async (t) => {
-  const durableFactsStore = await createStore(t)
-  const result = await recordExecutionFill({ durableFactsStore, fill })
+  const operationalStateStore = await createStore(t)
+  const result = await recordExecutionFill({ operationalStateStore,
+fill })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
   assert.equal(result.data.durable, true)
-  assert.equal(result.data.record.factId, "execution-fill-applied:" + fill.id)
+  assert.equal(result.data.record.factId, `execution-fill-applied:${  fill.id}`)
   assert.equal(result.data.record.factType, "EXECUTION_FILL_APPLIED")
   assert.deepEqual(result.data.record.data, {
     fillId: fill.id,
@@ -72,14 +85,17 @@ test("records complete canonical fill identity, exact amounts, and commission qu
       amount: "0.001",
       assetId: "binance:BNB",
       assetCode: "BNB",
-      quoteValue: { amount: "0.02", assetId: "binance:USDT", assetCode: "USDT" },
+      quoteValue: { amount: "0.02",
+assetId: "binance:USDT",
+assetCode: "USDT" },
     }],
   })
 })
 
 test("does not report a fill durable when the append is not committed", async () => {
   const result = await recordExecutionFill({
-    durableFactsStore: { append: async () => ({ ok: true, data: { durable: false } }) },
+    operationalStateStore: { append: async () => ({ ok: true,
+data: { durable: false } }) },
     fill,
   })
 
@@ -90,7 +106,8 @@ test("does not report a fill durable when the append is not committed", async ()
 test("rejects non-canonical fills before appending", async () => {
   let appendCalls = 0
   const result = await recordExecutionFill({
-    durableFactsStore: { append: async () => { appendCalls += 1; return { ok: true, data: { durable: true } } } },
+    operationalStateStore: { append: async () => { appendCalls += 1; return { ok: true,
+data: { durable: true } } } },
     fill: { ...fill },
   })
 
@@ -100,9 +117,11 @@ test("rejects non-canonical fills before appending", async () => {
 
 
 test("durable store rejects malformed or secret-bearing execution fill facts", async (t) => {
-  const durableFactsStore = await createStore(t)
+  const operationalStateStore = await createStore(t)
   const malformedFacts = [
-    { factId: "execution-fill-applied:bad", factType: "EXECUTION_FILL_APPLIED", data: {} },
+    { factId: "execution-fill-applied:bad",
+factType: "EXECUTION_FILL_APPLIED",
+data: {} },
     {
       factId: "execution-fill-applied:bad-2",
       factType: "EXECUTION_FILL_APPLIED",
@@ -153,7 +172,7 @@ test("durable store rejects malformed or secret-bearing execution fill facts", a
   ]
 
   for (const fact of malformedFacts) {
-    const result = await durableFactsStore.append(fact)
+    const result = await operationalStateStore.append(fact)
     assert.equal(result.ok, false, "Malformed or secret-bearing fill facts must fail closed.")
   }
 })

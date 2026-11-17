@@ -1,20 +1,22 @@
 import nodeTest from "node:test"
-const test = (name, ...args) => nodeTest("[start-harvester.lifecycle-events.test.js] " + name, ...args)
+const test = (...args) => nodeTest(`[start-harvester.lifecycle-events.test.js] ${args[0]}`, ...args.slice(1))
 import assert from "node:assert/strict"
 import { Asset, Balance, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { startHarvester } from "./start-harvester.js"
 const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
-  flush: async () => ({ ok: true, durable: true }),
+  flush: async () => ({ ok: true,
+durable: true }),
 })
 const startHarvesterForTest = (input = {}) => {
-  const eventPublisher = input.eventPublisher
-    ? typeof input.eventPublisher.flush !== "function"
-      ? { ...input.eventPublisher, flush: testEventPublisher.flush }
-      : input.eventPublisher
-    : testEventPublisher
-  return startHarvester({ ...input, eventPublisher })
+  let eventPublisher = input.eventPublisher ?? testEventPublisher
+  if (input.eventPublisher && typeof input.eventPublisher.flush !== "function") {
+    eventPublisher = { ...input.eventPublisher,
+flush: testEventPublisher.flush }
+  }
+  return startHarvester({ ...input,
+eventPublisher })
 }
 
 
@@ -22,9 +24,23 @@ const config = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
-      settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
+      settings: { conservative: { enabled: true },
+aggressive: { enabled: false } },
       pairs: {
-        BTCUSDT: { enabled: true, enableVolatilityProtection: true, investment: 100, orderQuantity: 0.01, makerPercent: 0, takerPercent: 0 },
+        BTCUSDT: {
+          enabled: true,
+          tradingEnvironment: "both",
+          enableVolatilityProtection: true,
+          investment: 100,
+          orderQuantity: 0.01,
+          keepQuantity: 0,
+          minProfit: 0.01,
+          priceStepPercent: 1,
+          pricePrecision: 2,
+          quantityPrecision: 3,
+          makerPercent: 0,
+          takerPercent: 0,
+        },
       },
     },
   },
@@ -35,72 +51,110 @@ const env = {
   BINANCE_API_KEY: "fake-key",
   BINANCE_API_SECRET_KEY: "fake-secret",
 }
-const silentLogger = { debug() {}, info() {}, error() {} }
+const silentLogger = { debug() {},
+info() {},
+error() {} }
 
 function createMarketMetadata() {
-  const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
-  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-  const market = new Market({ venue: "binance", symbol: "BTCUSDT", baseAsset, quoteAsset })
+  const baseAsset = new Asset({ id: "asset:BTC",
+code: "BTC" })
+  const quoteAsset = new Asset({ id: "asset:USDT",
+code: "USDT" })
+  const market = new Market({ venue: "binance",
+symbol: "BTCUSDT",
+baseAsset,
+quoteAsset })
   const tradingRules = new TradingRules({
     market,
     constraints: [
-      { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.01", asset: quoteAsset }) },
-      { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.001", asset: baseAsset }) },
-      { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "0.001", asset: baseAsset }) },
-      { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
+      { type: "PRICE_INCREMENT",
+status: "SUPPORTED",
+value: new Money({ amount: "0.01",
+asset: quoteAsset }) },
+      { type: "QUANTITY_INCREMENT",
+status: "SUPPORTED",
+value: new Quantity({ amount: "0.001",
+asset: baseAsset }) },
+      { type: "MIN_QUANTITY",
+status: "SUPPORTED",
+value: new Quantity({ amount: "0.001",
+asset: baseAsset }) },
+      { type: "MIN_NOTIONAL",
+status: "SUPPORTED",
+value: new Money({ amount: "5",
+asset: quoteAsset }) },
     ],
   })
-  return { market, tradingRules, supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"], unvalidatedConstraints: [] }
+  return { market,
+tradingRules,
+supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+unvalidatedConstraints: [] }
 }
 
-function createBroker({
-  connectError,
-  userDataResult,
-  priceResult,
-  userDataError,
-  priceError,
-  onRecoveryAcknowledged,
-} = {}) {
-  let handlers
-  let priceHandler
+function createBrokerConnectionPorts({ connectError }) {
   return {
     connect: async () => {
-      if (connectError) {throw connectError}
+      if (connectError) {
+        throw connectError
+      }
     },
     disconnect: async () => {},
     placeOrder: async () => ({ ok: true }),
     cancelOrder: async () => ({ ok: true }),
-    getOpenOrders: async () => ({ ok: true, data: [] }),
-    getFills: async () => ({ ok: true, data: [] }),
-    getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
-    getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
+  }
+}
+
+function createBrokerAccountPorts() {
+  return {
+    getOpenOrders: async () => ({ ok: true,
+data: [] }),
+    getFills: async () => ({ ok: true,
+data: [] }),
+    getCanonicalOrderHistory: async () => ({ ok: true,
+data: [] }),
+    getCanonicalOrder: async () => ({ ok: false,
+errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => ({
       ok: true,
       data: {
         balances: ["BTC", "USDT"].map((code) => {
-          const asset = new Asset({ id: "asset:" + code, code })
+          const asset = new Asset({ id: `asset:${code}`,
+code })
           return new Balance({
-            free: new Quantity({ amount: "1000", asset }),
-            locked: new Quantity({ amount: "0", asset }),
+            free: new Quantity({ amount: "1000",
+asset }),
+            locked: new Quantity({ amount: "0",
+asset }),
           })
         }),
         sourceTime: 1,
       },
     }),
-    getSymbolFilters: async () => ({ ok: true, data: createMarketMetadata() }),
-    getExchangeMarkets: async () => ({ ok: true, data: [createMarketMetadata().market] }),
-    getPrices: async ({ symbol }) => ({ ok: true, data: { symbol, price: "65000" } }),
-    getCandles: async () => ({ ok: true, data: [] }),
-    subscribeForCandles: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
+    getSymbolFilters: async () => ({ ok: true,
+data: createMarketMetadata() }),
+    getExchangeMarkets: async () => ({ ok: true,
+data: [createMarketMetadata().market] }),
+  }
+}
+
+function createBrokerUserDataPorts({
+  state,
+  userDataResult,
+  userDataError,
+  onRecoveryAcknowledged,
+}) {
+  return {
     subscribeForUserData: async (input) => {
-      handlers = input
-      if (userDataError) {throw userDataError}
+      state.handlers = input
+      if (userDataError) {
+        throw userDataError
+      }
       return userDataResult ?? {
         ok: true,
         data: {
           disconnect: async () => {},
           acknowledgeRecoveryResult: (recoveryGeneration) => {
-            handlers.onStatus({
+            state.handlers.onStatus({
               type: "reconciled",
               subscriptionId: 17,
               recoveryGeneration,
@@ -108,22 +162,53 @@ function createBroker({
               reconciliationRequired: false,
             })
             onRecoveryAcknowledged?.()
-            return { accepted: true, completed: true }
+            return { accepted: true,
+completed: true }
           },
         },
       }
     },
-    subscribeForBookTicker: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
+    emitStatus: (status) => state.handlers?.onStatus(status),
+  }
+}
+
+function createBrokerMarketDataPorts({ state, priceResult, priceError }) {
+  return {
+    getPrices: async ({ symbol }) => ({ ok: true,
+data: { symbol,
+price: "65000" } }),
+    getCandles: async () => ({ ok: true,
+data: [] }),
+    subscribeForCandles: async () => ({ ok: true,
+data: { unsubscribe: async () => {} } }),
+    subscribeForBookTicker: async () => ({ ok: true,
+data: { unsubscribe: async () => {} } }),
     subscribeForPrices: async ({ onPrice }) => {
-      priceHandler = onPrice
-      if (priceError) {throw priceError}
+      state.priceHandler = onPrice
+      if (priceError) {
+        throw priceError
+      }
       return priceResult ?? {
         ok: true,
         data: { unsubscribe: async () => {} },
       }
     },
-    emitStatus: (status) => handlers?.onStatus(status),
-    emitPrice: (priceEvent) => priceHandler?.(priceEvent),
+    emitPrice: (priceEvent) => state.priceHandler?.(priceEvent),
+  }
+}
+
+function createBroker(options = {}) {
+  const state = {
+    handlers: null,
+    priceHandler: null,
+  }
+  return {
+    ...createBrokerConnectionPorts(options),
+    ...createBrokerAccountPorts(),
+    ...createBrokerUserDataPorts({ ...options,
+state }),
+    ...createBrokerMarketDataPorts({ ...options,
+state }),
   }
 }
 
@@ -133,9 +218,71 @@ function createPublisher() {
     events,
     publish(event) {
       events.push(event)
-      return { ok: true, event }
+      return { ok: true,
+event }
     },
   }
+}
+
+async function assertReconnectLifecycle({ broker, eventPublisher, runtime, recoveryAcknowledged } = {}) {
+  broker.emitStatus({
+    type: "ready",
+    recoveryRequired: false,
+  })
+  broker.emitStatus({
+    type: "connectionClosed",
+    code: 1006,
+    recoveryRequired: true,
+  })
+  broker.emitStatus({
+    type: "recovered",
+    subscriptionId: 17,
+    recoveryGeneration: 1,
+    recoveryRequired: true,
+    reconciliationRequired: true,
+    attempt: 1,
+  })
+  assert.deepEqual(eventPublisher.events.slice(7)
+    .filter((event) => event.name === HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED)
+    .map((event) => event.data.status)
+    .slice(0, 2), [
+    "connectionClosed",
+    "recovered",
+  ])
+  const connectionClosed = eventPublisher.events.find((event) =>
+    event.name === HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED && event.data.status === "connectionClosed"
+  )
+  assert.equal(connectionClosed.data.recoveryRequired, true)
+  await recoveryAcknowledged
+  assert.equal(runtime.userDataReady, true)
+
+  const readinessTransitions = eventPublisher.events
+    .filter((event) => event.name === HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED)
+    .map(({ data }) => ({
+      ready: data.ready,
+      status: data.status,
+      trigger: data.trigger,
+    }))
+  assert.deepEqual(readinessTransitions, [
+    { ready: true,
+status: "READY",
+trigger: "startup-preflight-completed" },
+    { ready: false,
+status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+trigger: "connectionClosed" },
+    { ready: true,
+status: "READY",
+trigger: "reconciled" },
+  ], "Startup readiness and subsequent reconnect transitions must each publish exactly once.")
+
+  const beforePrice = eventPublisher.events.length
+  await broker.emitPrice({
+    eventType: "aggTrade",
+    symbol: "BTCUSDT",
+    price: "65000",
+    timestamp: 1,
+  })
+  assert.equal(eventPublisher.events.length, beforePrice)
 }
 
 test("publishes validated config, broker/subscription lifecycle and meaningful reconnect transitions", async () => {
@@ -158,14 +305,16 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
     HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
     HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
+    HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED,
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
-    HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
   ])
-  assert.deepEqual(eventPublisher.events[0].data, {
-    enabledMarkets: ["BTCUSDT"],
-    strategyMode: "conservative",
-    tradingEnabled: true,
-  })
+  const configValidatedData = eventPublisher.events[0].data
+  assert.deepEqual(configValidatedData.enabledMarkets, ["BTCUSDT"])
+  assert.equal(configValidatedData.strategyMode, "conservative")
+  assert.equal(configValidatedData.tradingMode, "testnet")
+  assert.equal(configValidatedData.tradingEnabled, true)
+  assert.match(configValidatedData.configurationFingerprint, /^[a-f0-9]{64}$/,
+    "The startup lifecycle must publish a non-secret digest of the effective strategy configuration.")
   assert.deepEqual(eventPublisher.events[3].data, {
     broker: "binance",
     stream: "user-data",
@@ -174,36 +323,22 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
   assert.equal(eventPublisher.events[5].name, HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED)
   assert.deepEqual(eventPublisher.events[6].data, {
     broker: "binance",
+    ready: true,
+    status: "READY",
+    trigger: "startup-preflight-completed",
+  })
+  assert.deepEqual(eventPublisher.events[7].data, {
+    broker: "binance",
     stream: "market-price",
     market: "BTCUSDT",
   })
   assert.equal(runtime.tradingMode, "testnet")
   assert.equal(runtime.tradingEnabled, true)
 
-  broker.emitStatus({ type: "ready", recoveryRequired: false })
-  broker.emitStatus({ type: "connectionClosed", code: 1006, recoveryRequired: true })
-  broker.emitStatus({
-    type: "recovered",
-    subscriptionId: 17,
-    recoveryGeneration: 1,
-    recoveryRequired: true,
-    reconciliationRequired: true,
-    attempt: 1,
-  })
-  assert.deepEqual(eventPublisher.events.slice(7)
-    .filter((event) => event.name === HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED)
-    .map((event) => event.data.status)
-    .slice(0, 2), [
-    "connectionClosed",
-    "recovered",
-  ])
-  assert.equal(eventPublisher.events[8].data.recoveryRequired, true)
-  await recoveryAcknowledged
-  assert.equal(runtime.userDataReady, true)
-
-  const beforePrice = eventPublisher.events.length
-  await broker.emitPrice({ eventType: "aggTrade", symbol: "BTCUSDT", price: "65000", timestamp: 1 })
-  assert.equal(eventPublisher.events.length, beforePrice)
+  await assertReconnectLifecycle({ broker,
+eventPublisher,
+runtime,
+recoveryAcknowledged })
 
   await runtime.stop()
   assert.equal(eventPublisher.events.at(-1).name, HARVESTER_EVENT_NAMES.BROKER_DISCONNECTED)
@@ -236,7 +371,10 @@ test("publishes broker connection failure without claiming a successful connecti
 test("publishes user-data subscription failure before cleanup", async () => {
   const eventPublisher = createPublisher()
   const broker = createBroker({
-    userDataResult: { ok: false, errors: [new Error("user stream unavailable")] },
+    userDataResult: {
+      ok: false,
+      errors: [new Error("user stream unavailable")],
+    },
   })
 
   await assert.rejects(startHarvesterForTest({
@@ -260,7 +398,10 @@ test("publishes user-data subscription failure before cleanup", async () => {
 test("publishes market-price subscription failure and broker disconnect outcome", async () => {
   const eventPublisher = createPublisher()
   const broker = createBroker({
-    priceResult: { ok: false, errors: [new Error("market stream unavailable")] },
+    priceResult: {
+      ok: false,
+      errors: [new Error("market stream unavailable")],
+    },
   })
 
   await assert.rejects(startHarvesterForTest({
@@ -278,11 +419,18 @@ test("publishes market-price subscription failure and broker disconnect outcome"
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
     HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
     HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
+    HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED,
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
     HARVESTER_EVENT_NAMES.BROKER_DISCONNECTED,
   ])
-  assert.equal(eventPublisher.events[6].data.stream, "market-price")
-  assert.equal(eventPublisher.events[6].data.market, "BTCUSDT")
+  assert.deepEqual(eventPublisher.events[6].data, {
+    broker: "binance",
+    ready: true,
+    status: "READY",
+    trigger: "startup-preflight-completed",
+  })
+  assert.equal(eventPublisher.events[7].data.stream, "market-price")
+  assert.equal(eventPublisher.events[7].data.market, "BTCUSDT")
 })
 
 

@@ -3,7 +3,7 @@ import { describe, it } from 'node:test'
 import { Validator, VR } from './validator.js'
 import { EM } from './error-messages.js'
 
-describe('Validator', () => {
+describe('Validator input validation', () => {
   it('throws when items are missing or not an array', () => {
     assert.throws(() => Validator.validate(), { message: EM.invalidParameter('items') })
     assert.throws(() => Validator.validate({ items: {} }), { message: EM.invalidParameter('items') })
@@ -17,6 +17,9 @@ describe('Validator', () => {
     assert.throws(() => Validator.validate({ items: [['value', null]] }), TypeError)
   })
 
+})
+
+describe('Validator results', () => {
   it('returns undefined when all rules pass', () => {
     const items = [
       [42, [VR.required, VR.num, VR.notUndefined], 'price'],
@@ -39,24 +42,41 @@ describe('Validator', () => {
     ]
 
     assert.deepEqual(Validator.validate({ items }), [
-      { value: 0, msgs: [EM.required(), EM.notString()], fieldName: 'quantity' },
-      { value: '   ', msgs: [EM.emptyString(), EM.notNumber()], fieldName: 'symbol' },
-      { value: undefined, msgs: [EM.undefined()], fieldName: 'timestamp' },
-      { value: 'not-an-array', msgs: [EM.arr()], fieldName: 'items' },
-      { value: [], msgs: [EM.emptyArray()], fieldName: 'orders' },
-      { value: 'not-a-function', msgs: [EM.notFunction()], fieldName: 'callback' },
+      { value: 0,
+        msgs: [EM.required(), EM.notString()],
+        fieldName: 'quantity' },
+      { value: '   ',
+        msgs: [EM.emptyString(), EM.notNumber()],
+        fieldName: 'symbol' },
+      { value: undefined,
+        msgs: [EM.undefined()],
+        fieldName: 'timestamp' },
+      { value: 'not-an-array',
+        msgs: [EM.arr()],
+        fieldName: 'items' },
+      { value: [],
+        msgs: [EM.emptyArray()],
+        fieldName: 'orders' },
+      { value: 'not-a-function',
+        msgs: [EM.notFunction()],
+        fieldName: 'callback' },
     ])
   })
 
   it('omits fieldName when none is supplied', () => {
     assert.deepEqual(Validator.validate({ items: [['x', [VR.num]]] }), [
-      { value: 'x', msgs: [EM.notNumber()] },
+      { value: 'x',
+        msgs: [EM.notNumber()] },
     ])
   })
 
+})
+
+describe('Validator soft mode', () => {
   it('throws the collected errors when soft mode is disabled', () => {
     assert.throws(
-      () => Validator.validate({ isSoft: false, items: [['x', [VR.num]]] }),
+      () => Validator.validate({ isSoft: false,
+        items: [['x', [VR.num]]] }),
       (error) => Array.isArray(error) && error[0].msgs[0] === EM.notNumber(),
     )
   })
@@ -66,7 +86,8 @@ describe('Validator', () => {
 
     for (const isSoft of invalidModes) {
       assert.throws(
-        () => Validator.validate({ isSoft, items: [['not-a-number', [VR.num]]] }),
+        () => Validator.validate({ isSoft,
+          items: [['not-a-number', [VR.num]]] }),
         { name: 'TypeError' },
         `Validator must reject the explicitly supplied ${String(isSoft)} isSoft value instead of interpreting it by truthiness`,
       )
@@ -76,11 +97,15 @@ describe('Validator', () => {
   it('defaults to soft mode when isSoft is omitted', () => {
     assert.deepEqual(
       Validator.validate({ items: [['not-a-number', [VR.num]]] }),
-      [{ value: 'not-a-number', msgs: [EM.notNumber()] }],
+      [{ value: 'not-a-number',
+        msgs: [EM.notNumber()] }],
       'Omitting isSoft must preserve the documented default soft mode and return validation errors',
     )
   })
 
+})
+
+describe('Validator rule semantics', () => {
   it('preserves the documented valid edge semantics for every supported rule', () => {
     const items = [
       ['   ', [VR.required], 'truthyWhitespace'],
@@ -112,20 +137,34 @@ describe('Validator', () => {
     assert.deepEqual(
       Validator.validate({ items }),
       [
-        { value: 0, msgs: [EM.required()], fieldName: 'zero' },
-        { value: false, msgs: [EM.required()], fieldName: 'false' },
-        { value: '', msgs: [EM.required()], fieldName: 'emptyString' },
-        { value: null, msgs: [EM.required()], fieldName: 'null' },
-        { value: undefined, msgs: [EM.required()], fieldName: 'undefined' },
+        { value: 0,
+          msgs: [EM.required()],
+          fieldName: 'zero' },
+        { value: false,
+          msgs: [EM.required()],
+          fieldName: 'false' },
+        { value: '',
+          msgs: [EM.required()],
+          fieldName: 'emptyString' },
+        { value: null,
+          msgs: [EM.required()],
+          fieldName: 'null' },
+        { value: undefined,
+          msgs: [EM.required()],
+          fieldName: 'undefined' },
       ],
       'VR.required must reject every falsey value while allowing truthy values such as whitespace-only strings',
     )
   })
 
+})
+
+describe('Validator helper behavior', () => {
   it('rejects non-finite values with the number rule', () => {
     for (const value of [NaN, Infinity, -Infinity]) {
       assert.deepEqual(Validator.validate({ items: [[value, [VR.num]]] }), [
-        { value, msgs: [EM.notNumber()] },
+        { value,
+          msgs: [EM.notNumber()] },
       ])
     }
   })
@@ -133,7 +172,8 @@ describe('Validator', () => {
   it('handles invalid values safely with the non-empty-array rule', () => {
     for (const value of [undefined, null, 'not-an-array', 42]) {
       assert.deepEqual(Validator.validate({ items: [[value, [VR.notEmptyArr]]] }), [
-        { value, msgs: [EM.emptyArray()] },
+        { value,
+          msgs: [EM.emptyArray()] },
       ])
     }
   })
@@ -160,7 +200,9 @@ describe('Validator', () => {
   it('reports non-string values for the non-empty-string rule without throwing', () => {
     for (const value of [undefined, null, 0, 123, false, {}]) {
       assert.deepEqual(Validator.validate({ items: [[value, [VR.notEmptyString], 'field']] }), [
-        { value, msgs: [EM.emptyString()], fieldName: 'field' },
+        { value,
+          msgs: [EM.emptyString()],
+          fieldName: 'field' },
       ])
     }
   })

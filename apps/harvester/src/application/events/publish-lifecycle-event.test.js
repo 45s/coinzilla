@@ -7,7 +7,8 @@ test("publishes the mapped DTO synchronously with the Harvester source", () => {
   const result = publishLifecycleEvent({
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
     eventName: "harvester.started",
-    dataResult: { ok: true, data: { mode: "read-only" } },
+    dataResult: { ok: true,
+      data: { mode: "read-only" } },
   })
 
   assert.deepEqual(result, { ok: true })
@@ -30,7 +31,8 @@ test("reports mapper errors without publishing invalid DTOs or when no publisher
   const result = publishLifecycleEvent({
     eventPublisher,
     eventName: "harvester.started",
-    dataResult: { ok: false, errors: [mapperError] },
+    dataResult: { ok: false,
+      errors: [mapperError] },
   })
   assert.equal(result.ok, false, "A failed DTO mapping must remain a failed publication result.")
   assert.equal(calls, 0, "EventBus must never receive a DTO that failed mapping.")
@@ -40,7 +42,8 @@ test("reports mapper errors without publishing invalid DTOs or when no publisher
 
   assert.equal(publishLifecycleEvent({
     eventName: "harvester.started",
-    dataResult: { ok: true, data: {} },
+    dataResult: { ok: true,
+      data: {} },
   }).skipped, true, "A valid DTO without an injected publisher must remain an explicit skip.")
   assert.equal(calls, 0, "A skipped publication must not invoke EventBus.")
 })
@@ -50,7 +53,8 @@ test("contains a synchronous publisher exception", () => {
   const result = publishLifecycleEvent({
     eventPublisher: { publish: () => { throw error } },
     eventName: "harvester.started",
-    dataResult: { ok: true, data: {} },
+    dataResult: { ok: true,
+      data: {} },
   })
   assert.equal(result.ok, false)
   assert.equal(result.errors[0], error)

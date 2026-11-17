@@ -5,7 +5,8 @@ import { createBinanceBrokerAdapter } from "./binance-broker-adapter.js"
 
 const createClient = () => {
   const calls = []
-  const result = { ok: true, data: {} }
+  const result = { ok: true,
+data: {} }
   const client = {
     connect: async () => calls.push(["connect"]),
     disconnect: async () => calls.push(["disconnect"]),
@@ -25,10 +26,14 @@ const createClient = () => {
     subscribeForBookTicker: async (input) => { calls.push(["subscribeForBookTicker", input]); return result },
     subscribeForUserData: async (input) => { calls.push(["subscribeForUserData", input]); return result },
   }
-  return { calls, client, result }
+  return { calls,
+client,
+result }
 }
 
-const config = { apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet" }
+const config = { apiKey: "test-key",
+apiSecret: "test-secret",
+tradingMode: "testnet" }
 
 test("adapts Harvester placeOrder to Binance createOrder without changing the result", async () => {
   const { calls, client, result } = createClient()
@@ -36,7 +41,10 @@ test("adapts Harvester placeOrder to Binance createOrder without changing the re
     config,
     brokerFactory: () => client,
   })
-  const order = { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01" }
+  const order = { symbol: "BTCUSDT",
+side: "BUY",
+type: "LIMIT",
+quantity: "0.01" }
 
   assert.equal(await broker.placeOrder({ order }), result)
   assert.deepEqual(calls, [["createOrder", order]])
@@ -44,22 +52,28 @@ test("adapts Harvester placeOrder to Binance createOrder without changing the re
 
 test("normalizes only definite immediate-match rejections for LIMIT_MAKER orders", async () => {
   const { client } = createClient()
-  const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
+  const broker = createBinanceBrokerAdapter({ config,
+brokerFactory: () => client })
   const rejection = Object.assign(new Error("Order would immediately match and take."), { code: -2010 })
-  client.createOrder = async () => ({ ok: false, errors: [rejection] })
+  client.createOrder = async () => ({ ok: false,
+errors: [rejection] })
 
-  const maker = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT_MAKER" } })
+  const maker = await broker.placeOrder({ order: { symbol: "BTCUSDT",
+type: "LIMIT_MAKER" } })
   assert.equal(maker.errors[0].code, "POST_ONLY_WOULD_TAKE")
 
-  const limit = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT" } })
+  const limit = await broker.placeOrder({ order: { symbol: "BTCUSDT",
+type: "LIMIT" } })
   assert.equal(limit.errors[0], rejection, "A regular LIMIT failure must not be mislabeled as a post-only rejection.")
 
   const unknown = Object.assign(new Error("Order would immediately match and take."), {
     code: -2010,
     outcomeUnknown: true,
   })
-  client.createOrder = async () => ({ ok: false, errors: [unknown] })
-  const uncertain = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT_MAKER" } })
+  client.createOrder = async () => ({ ok: false,
+errors: [unknown] })
+  const uncertain = await broker.placeOrder({ order: { symbol: "BTCUSDT",
+type: "LIMIT_MAKER" } })
   assert.equal(uncertain.errors[0], unknown, "An unknown submission outcome must never be downgraded to a definite rejection.")
 })
 
@@ -82,11 +96,14 @@ test("maps object-shaped application inputs to the broker package methods", asyn
       },
     }
   }
-  const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
+  const broker = createBinanceBrokerAdapter({ config,
+brokerFactory: () => client })
 
-  assert.equal(await broker.cancelOrder({ symbol: "BTCUSDT", orderId: 7 }), result)
+  assert.equal(await broker.cancelOrder({ symbol: "BTCUSDT",
+orderId: 7 }), result)
   assert.equal(await broker.getOpenOrders({ symbol: "BTCUSDT" }), result)
-  assert.equal(await broker.getFills({ symbol: "BTCUSDT", limit: 10 }), result)
+  assert.equal(await broker.getFills({ symbol: "BTCUSDT",
+limit: 10 }), result)
   assert.equal(await broker.getAccountSnapshot(), result)
   assert.equal(await broker.getExchangeMarkets(), result)
   const marketMetadata = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
@@ -95,38 +112,49 @@ test("maps object-shaped application inputs to the broker package methods", asyn
   assert.ok(marketMetadata.data.tradingRules instanceof TradingRules)
   assert.deepEqual(marketMetadata.data.supportedOrderTypes, ["LIMIT", "LIMIT_MAKER"])
   assert.equal(await broker.getPrices({ symbol: "BTCUSDT" }), result)
-  const candleRequest = { symbol: "BTCUSDT", interval: "1m", limit: 100 }
+  const candleRequest = { symbol: "BTCUSDT",
+interval: "1m",
+limit: 100 }
   assert.equal(await broker.getCandles(candleRequest), result, "Historical candle results must pass through the Harvester adapter unchanged.")
   const onCandle = () => {}
   assert.equal(
-    await broker.subscribeForCandles({ symbol: "BTCUSDT", interval: "1m", onCandle }),
+    await broker.subscribeForCandles({ symbol: "BTCUSDT",
+interval: "1m",
+onCandle }),
     result,
     "The live candle subscription result and its unsubscribe handle must pass through the adapter unchanged.",
   )
 
   assert.deepEqual(calls, [
-    ["cancelOrder", { symbol: "BTCUSDT", orderId: "7" }],
+    ["cancelOrder", { symbol: "BTCUSDT",
+orderId: "7" }],
     ["getOpenOrders", { symbol: "BTCUSDT" }],
-    ["getFills", { symbol: "BTCUSDT", limit: 10 }],
+    ["getFills", { symbol: "BTCUSDT",
+limit: 10 }],
     ["getAccountSnapshot"],
     ["getExchangeMarkets"],
     ["getSymbolFilters", { symbol: "BTCUSDT" }],
     ["getPrices", { symbol: "BTCUSDT" }],
     ["getCandles", candleRequest],
-    ["subscribeForCandles", { symbol: "BTCUSDT", interval: "1m", onCandle }],
+    ["subscribeForCandles", { symbol: "BTCUSDT",
+interval: "1m",
+onCandle }],
   ])
 })
 
 test("forwards connection and subscription lifecycle methods", async () => {
   const { calls, client, result } = createClient()
-  const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
+  const broker = createBinanceBrokerAdapter({ config,
+brokerFactory: () => client })
   const onPrice = () => {}
   const onEvent = () => {}
   const onStatus = () => {}
 
   await broker.connect()
-  await broker.subscribeForPrices({ symbol: "BTCUSDT", onPrice })
-  await broker.subscribeForUserData({ onEvent, onStatus })
+  await broker.subscribeForPrices({ symbol: "BTCUSDT",
+onPrice })
+  await broker.subscribeForUserData({ onEvent,
+onStatus })
   await broker.disconnect()
 
   const userDataCall = calls.find(([method]) => method === "subscribeForUserData")
@@ -134,7 +162,8 @@ test("forwards connection and subscription lifecycle methods", async () => {
   assert.equal(typeof userDataCall[1].onEvent, "function")
   assert.deepEqual(calls.filter(([method]) => method !== "subscribeForUserData"), [
     ["connect"],
-    ["subscribeForPrices", { symbol: "BTCUSDT", onPrice }],
+    ["subscribeForPrices", { symbol: "BTCUSDT",
+onPrice }],
     ["disconnect"],
   ])
   assert.equal(result.ok, true)
@@ -142,7 +171,8 @@ test("forwards connection and subscription lifecycle methods", async () => {
 
 test("rejects missing credentials and incomplete broker implementations", () => {
   assert.throws(
-    () => createBinanceBrokerAdapter({ config: { apiKey: "", apiSecret: "secret" } }),
+    () => createBinanceBrokerAdapter({ config: { apiKey: "",
+apiSecret: "secret" } }),
     /apiKey/,
   )
   assert.throws(
@@ -156,13 +186,15 @@ test("rejects missing credentials and incomplete broker implementations", () => 
 
 test("forwards broker-normalized user-data events without reinterpreting them", async () => {
   const { calls, client } = createClient()
-  const event = Object.freeze({ eventType: "normalized", value: "canonical-from-broker" })
+  const event = Object.freeze({ eventType: "normalized",
+value: "canonical-from-broker" })
   const status = Object.freeze({ type: "ready" })
   client.subscribeForUserData = async ({ onEvent, onStatus }) => {
     calls.push(["subscribeForUserData"])
     onEvent({ event })
     onStatus(status)
-    return { ok: true, data: { disconnect: async () => {} } }
+    return { ok: true,
+data: { disconnect: async () => {} } }
   }
   const received = []
   const statuses = []
@@ -186,16 +218,19 @@ test("forwards broker-normalized user-data events without reinterpreting them", 
 
 test("rejects invalid and unacknowledged cancellation identifiers before calling Binance", async () => {
   const { calls, client } = createClient()
-  const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
+  const broker = createBinanceBrokerAdapter({ config,
+brokerFactory: () => client })
 
-  const malformed = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: "not-an-id" })
+  const malformed = await broker.cancelOrder({ symbol: "BTCUSDT",
+orderId: "not-an-id" })
   const missing = await broker.cancelOrder({ symbol: "BTCUSDT" })
   const unsafe = await broker.cancelOrder({
     symbol: "BTCUSDT",
     orderId: Number.MAX_SAFE_INTEGER + 1,
   })
   const pending = await broker.cancelOrder({
-    order: { status: "PENDING", brokerOrderId: undefined },
+    order: { status: "PENDING",
+brokerOrderId: undefined },
   })
 
   assert.equal(malformed.ok, false)
@@ -208,12 +243,15 @@ test("rejects invalid and unacknowledged cancellation identifiers before calling
 
 test("exposes canonical order history through the Harvester broker port", async () => {
   const { calls, client, result } = createClient()
-  const input = { symbol: "BTCUSDT", orderId: "12345", limit: 1 }
+  const input = { symbol: "BTCUSDT",
+orderId: "12345",
+limit: 1 }
   client.getCanonicalOrderHistory = async (request) => {
     calls.push(["getCanonicalOrderHistory", request])
     return result
   }
-  const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
+  const broker = createBinanceBrokerAdapter({ config,
+brokerFactory: () => client })
 
   assert.equal(await broker.getCanonicalOrderHistory(input), result)
   assert.deepEqual(calls, [["getCanonicalOrderHistory", input]])
@@ -221,8 +259,10 @@ test("exposes canonical order history through the Harvester broker port", async 
 
 test("exposes canonical order lookup by client order ID through the Harvester broker port", async () => {
   const { calls, client, result } = createClient()
-  const input = { symbol: "BTCUSDT", clientOrderId: "h-client-123" }
-  const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
+  const input = { symbol: "BTCUSDT",
+clientOrderId: "h-client-123" }
+  const broker = createBinanceBrokerAdapter({ config,
+brokerFactory: () => client })
 
   assert.equal(await broker.getCanonicalOrder(input), result)
   assert.deepEqual(calls, [["getCanonicalOrder", input]])
@@ -249,7 +289,8 @@ test("fetches current exchange filters for every metadata request instead of reu
       },
     }
   }
-  const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
+  const broker = createBinanceBrokerAdapter({ config,
+brokerFactory: () => client })
 
   const startupMetadata = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
   minNotional = "10"
@@ -275,22 +316,28 @@ test("preserves the broker NOT_SENT cancellation outcome for Harvester", async (
     calls.push(["cancelOrder", input])
     return brokerNotSentResult
   }
-  const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
+  const broker = createBinanceBrokerAdapter({ config,
+brokerFactory: () => client })
 
-  const result = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: 77 })
+  const result = await broker.cancelOrder({ symbol: "BTCUSDT",
+orderId: 77 })
 
   assert.equal(result, brokerNotSentResult, "Harvester's adapter must preserve the broker's explicit proof that cancellation was not sent")
-  assert.deepEqual(calls, [["cancelOrder", { symbol: "BTCUSDT", orderId: "77" }]], "The adapter must forward the exact normalized broker cancellation request")
+  assert.deepEqual(calls, [["cancelOrder", { symbol: "BTCUSDT",
+orderId: "77" }]], "The adapter must forward the exact normalized broker cancellation request")
 })
 
 
 test("normalizes only definite Binance filter rejections and preserves uncertain outcomes", async () => {
   const { client } = createClient()
-  const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
+  const broker = createBinanceBrokerAdapter({ config,
+brokerFactory: () => client })
   const filterRejection = Object.assign(new Error("Filter failure: PERCENT_PRICE_BY_SIDE"), { code: -1013 })
-  client.createOrder = async () => ({ ok: false, errors: [filterRejection] })
+  client.createOrder = async () => ({ ok: false,
+errors: [filterRejection] })
 
-  const rejected = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT" } })
+  const rejected = await broker.placeOrder({ order: { symbol: "BTCUSDT",
+type: "LIMIT" } })
   assert.equal(rejected.errors[0].code, "DEFINITE_EXCHANGE_FILTER_REJECTED", "A definite -1013 filter rejection must be normalized into the venue-neutral definite-rejection signal used by Harvester.")
   assert.equal(rejected.errors[0].cause, filterRejection, "The original Binance error must remain available as the normalized error cause.")
 
@@ -298,12 +345,28 @@ test("normalizes only definite Binance filter rejections and preserves uncertain
     code: -1013,
     outcomeUnknown: true,
   })
-  client.createOrder = async () => ({ ok: false, errors: [uncertainFilterError] })
-  const uncertain = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT" } })
+  client.createOrder = async () => ({ ok: false,
+errors: [uncertainFilterError] })
+  const uncertain = await broker.placeOrder({ order: { symbol: "BTCUSDT",
+type: "LIMIT" } })
   assert.equal(uncertain.errors[0], uncertainFilterError, "An explicitly uncertain result must never be downgraded to a definite rejection.")
 
   const unrelatedError = Object.assign(new Error("Invalid message"), { code: -1013 })
-  client.createOrder = async () => ({ ok: false, errors: [unrelatedError] })
-  const unrelated = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT" } })
+  client.createOrder = async () => ({ ok: false,
+errors: [unrelatedError] })
+  const unrelated = await broker.placeOrder({ order: { symbol: "BTCUSDT",
+type: "LIMIT" } })
   assert.equal(unrelated.errors[0], unrelatedError, "An unrelated -1013 response must not be assumed to be a filter rejection.");
 });
+
+
+test("supports account-wide open-order reads without symbol options", async () => {
+  const { calls, client, result } = createClient()
+  const broker = createBinanceBrokerAdapter({
+    config,
+    brokerFactory: () => client,
+  })
+
+  assert.equal(await broker.getOpenOrders(), result, "An omitted options object must still perform an account-wide open-order read.")
+  assert.deepEqual(calls, [["getOpenOrders", {}]], "The underlying broker must receive an empty options object rather than an undefined argument.")
+})

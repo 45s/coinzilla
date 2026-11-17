@@ -12,6 +12,6 @@ export function assertObjectInput({ input, operation = "Operation" } = {}) {
     throw new TypeError("operation must be a non-empty string")
   }
   if (input === null || typeof input !== "object" || Array.isArray(input)) {
-    throw new TypeError(operation + " input must be an object")
+    throw new TypeError(`${operation  } input must be an object`)
   }
 }

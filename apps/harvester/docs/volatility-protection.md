@@ -9,7 +9,7 @@
 This document is the behavior and safety contract for Harvester's volatility protection. It does not change the authoritative [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md), recovery accounting, or existing order lifecycle rules.
 ## Per-pair configuration
 
-Every configured pair must explicitly declare its volatility-protection policy. Set the required boolean to `true` to retain protection or `false` to opt that pair out in `config/index.js`:
+Every configured pair must explicitly declare its volatility-protection policy. Set the required boolean to `true` to retain protection or `false` to opt that pair out in `config/strategies/cg-coin-grabber.js`:
 
 ```js
 export const appConfig = {

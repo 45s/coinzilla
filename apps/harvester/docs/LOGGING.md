@@ -46,8 +46,10 @@ Non-interactive output remains plain text. The terminal is intentionally a
 summary, not a second diagnostic dump: it prints the event message plus a
 small allowlist of actionable fields (including the stable `diagnosticId`
 for catalogued startup failures), omits stacks/fingerprints/audit internals,
-and caps each line at 200 characters. Consecutive identical
-summaries are suppressed and reported as a repeat count. Full structured
+and caps each line at 200 characters. The recovery SELL cancellation
+summary is rendered as `04:30:15 🪙 CG recovery SELL cancellation requested:
+DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL`, with the redundant
+`Harvester` prefix omitted and symbol/reason shown inline. Full structured
 entries—including stack traces and all other normalized fields—remain in the
 DEBUG/TRACE JSONL files. Each entry retains its timestamp, normalized
 severity, logging method, and redacted, JSON-safe structured data. A console
@@ -91,7 +93,7 @@ Prefer short, specific, past-tense descriptions:
 | --- | --- |
 | `Harvester order event processed` | `Order update processed` |
 | `Harvester subscribed to market prices` | `Market data subscribed` |
-| `Harvester connected and subscribed to 2 enabled markets` | `Connected; subscribed to 2 markets` |
+| `Harvester connected and subscribed to 2 enabled markets` | `Binance market-data stream connected; active market subscriptions: 2.` |
 | `Harvester market price error handler failed` | `Market price error handler failed` |
 
 Keep variable context in structured fields rather than embedding it in the
@@ -157,6 +159,34 @@ These are message-design examples, not a claim that every current call site
 already follows this policy. When changing a log call, update its tests and
 keep the console allowlist in sync with any new fields intended for INFO.
 
+### Portfolio Stats
+
+Portfolio Stats remains a structured event in DEBUG/TRACE. The operator
+console renders one compact line:
+
+`🪙 CG PORTFOLIO DOGEUSDT: amount: 3.4 | earned: 3.4 | spent: 0 | net: 0.020`
+
+- `amount` — total base quantity: active trading inventory plus retained coins.
+- `earned` — retained/free base quantity accumulated from completed recovery cycles.
+- `spent` — BUY cost for the current recovery cycle. It resets to zero when that
+  cycle completes; it is not lifetime spend.
+- `net` — cumulative quote net cash flow from confirmed BUY/SELL fills, including
+  applicable commissions, rounded to three decimal places.
+
+The base-coin unit is implied by the market symbol. The line must not print nested
+inventory/accounting JSON and must remain within the ordinary 200-character
+console budget.
+
+### Startup connection summary
+
+Name the connected resource explicitly. Prefer
+`Binance market-data stream connected; active market subscriptions: 4.` over
+`Connected; subscribed to 4 markets`, which leaves the connection target
+ambiguous. When trading is not enabled, retain the same connection identity:
+`Binance market-data stream connected; Binance trading mode is TESTNET.`
+This summary identifies the market-data stream only; it does not imply that
+user-data readiness has been established.
+
 ### SYSTEM lifecycle events
 
 Use `logger.system()` for meaningful infrastructure and process lifecycle
@@ -173,7 +203,50 @@ Examples include:
 Do not use SYSTEM for every incoming event, market tick, strategy evaluation,
 or repeated connection-status heartbeat. Those belong at DEBUG or INFO
 according to whether they represent an operator-relevant trading event.
-SYSTEM entries are cyan without a redundant `SYSTEM` prefix, making lifecycle events easy to distinguish from blue INFO output.
+SYSTEM entries remain cyan, but infrastructure/application records have no decorative ownership marker. Strategy markers are reserved for records with a canonical strategy owner.
+
+## Shutdown phase terminal records
+
+Shutdown work phases use one compact, 24-hour local-time terminal line:
+
+```text
+21:25:57 shutdown phase MARKET_INTAKE_STOP STARTED
+21:25:57 shutdown phase MARKET_INTAKE_STOP COMPLETED
+21:25:57 shutdown phase BROKER_DISCONNECT FAILED
+```
+
+`STARTED` means the phase operation began, `COMPLETED` means it returned under
+its existing success criteria, and `FAILED` means its existing failure
+criteria were met. These labels describe the current lifecycle outcome; they
+do not change shutdown ordering or failure semantics.
+
+The shared console transport owns terminal rendering and deduplication; lifecycle owners continue emitting structured phase records rather than formatting terminal text themselves.
+
+The phase formatter normalizes and validates the phase/status tokens and timestamp
+before producing a line. Malformed records fall back to the ordinary compact-
+summary path. Formatting does not mutate the structured input.
+
+The instantaneous `SHUTDOWN_REQUESTED` and `STOP_STATE_ESTABLISHED` milestones
+are printed as `shutdown requested` and `shutdown state established`, not as
+work phases. All other valid phase transitions retain their actual phase
+identifier and status. The terminal phase line contains no JSON details,
+correlation IDs, duration, or failure prose.
+
+Consecutive duplicate suppression remains enabled. Its fingerprint includes
+the normalized phase/status pair alongside the existing log level and method,
+so different phases or statuses are always visible. A genuinely identical consecutive phase/status line may be
+suppressed and reported with the existing repeat-count message.
+
+The phase/status pair is part of the pure console-record fingerprint; timestamps
+and omitted diagnostic fields do not prevent genuinely identical terminal
+summaries from being deduplicated. The pure console-record presentation helper supplies the console summary and
+deduplication identity once per record, while retaining the existing order-
+lifecycle summary, standard console detail allowlist, and existing detail truncation rules.
+
+The concise terminal line is only the operator-facing summary. The original
+structured DEBUG/TRACE entry remains unchanged in both cumulative and
+per-session files, including `shutdownPhase`, `phaseStatus`,
+`shutdownCorrelationId`, elapsed/duration timing, and safe failure details.
 
 ## Runtime commands
 
@@ -223,3 +296,101 @@ implemented. Cumulative and per-session files therefore grow until an
 operator archives or removes them. Rotation and retention policy are deferred
 in the [Harvester roadmap](../ROADMAP.md). Do not delete session files as part
 of startup or shutdown.
+
+## Strategy log markers
+
+Every strategy-owned diagnostic carries its canonical `strategyId` in its
+structured data. The Harvester console formatter resolves that ID through the
+single immutable `strategyLogMarkers` mapping:
+
+| Strategy ID | Terminal marker |
+| --- | --- |
+| `CG_coinGrabber` | 🪙 CG |
+| `RS_recoverySeller` | 🔴 RS |
+
+The marker is printed immediately after the timestamp and before the message
+or lifecycle status. Records without a canonical strategy owner have no
+strategy marker; the console does not print a decorative `⚪ SYS` label.
+Strategy identity is never inferred from a symbol, side, order ID, or
+client-order-ID prefix.
+
+The Conservative engine and CG Portfolio/RecoveryLedger workflow receive
+strategy-scoped adapters around the shared `@coinzilla/utils` logger. They add
+the immutable CG strategy ID to every structured diagnostic emitted by those
+strategy-owned workflows, including market-price processing failures, without
+mutating caller data or changing the shared logger. Other strategy workflows
+must use the same adapter with their own canonical `StrategyId`.
+
+Strategy identity is part of the console duplicate-suppression fingerprint.
+Identical messages from different strategies therefore remain separate
+records. Structured DEBUG/TRACE files retain the strategy ID as a field.
+
+## Order lifecycle terminal records
+
+Order lifecycle events use a compact terminal formatter with consistent
+columns across Coin Grabber and Recovery Seller. Keep the strategy marker and
+label separated by one space; avoid oversized column gaps and explanatory
+client-ID labels:
+
+\`\`\`text
+TIME STRATEGY STATUS ORDER SYMBOL SIDE QUANTITY @ PRICE CLIENT ID
+19:14:52 🪙 CG SUBMITTED #pending ADAUSDT BUY 50.00 @ 0.15260 h-325e71ba16494aeb875e6e-3
+19:14:52 🪙 CG ACCEPTED #1341114 ADAUSDT BUY 50.00 @ 0.15260
+19:14:53 🔴 RS PARTIAL FILL #1341115 ADAUSDT SELL 49.90 @ 0.15410 | Executed: 20 | Remaining: 29.90
+\`\`\`
+
+Order events are reconciled against the registered broker order ID when available, with client order ID as the fallback. Strategy identity is derived only from immutable OrderRegistry ownership:
+🪙 CG for CG_coinGrabber and 🔴 RS for RS_recoverySeller. It never changes with
+order status. Unowned diagnostics have no strategy marker. Supporting the RS
+label does not enable RS runtime execution.
+
+Lifecycle status is plain text and never replaces the strategy identity.
+Only strategy-owned records carry 🪙 CG or 🔴 RS; unowned system/application
+records have no icon. Keep the field order compact and separate every field
+with a single space: time, strategy, status, broker order ID (or `#pending`),
+symbol, side, quantity, price, and pending client ID when needed. Do not pad
+columns with large fixed-width gaps. Keep quantities/prices exact and do not
+truncate order or client IDs.
+
+SUBMITTED is emitted after the durable submission-intent barrier and immediately
+before broker I/O; because the exchange order ID does not exist yet, the order
+column shows `#pending` and the detail line preserves the client order ID.
+ACCEPTED follows the canonical broker acknowledgement and registry update, and
+carries the exchange-assigned broker order ID.
+PARTIAL FILL and terminal states are logged only after canonical fill
+reconciliation. CANCEL REQUESTED is logged after the durable cancellation
+intent barrier and before the broker RPC. CANCELLED is logged only when the
+canonical cancellation transition has been applied. Keep cancellation outcome
+quantities (for example, `Executed: 0 | Cancelled: 400`) on the same terminal
+line as the cancellation event. A fill that wins a cancellation race remains
+FILLED; a later stale cancellation report is shown as an unowned informational
+`STALE CANCEL IGNORED` record, never as a cancellation.
+Stale and duplicate order reports are discarded before terminal fill-history
+reconciliation; a duplicate FILLED report is still allowed to complete any
+previously unprocessed canonical fill transition.
+
+The engine owns successful order lifecycle logging after canonical reconciliation. The user-data boundary does not emit a second raw receipt or generic processed-event line.
+
+No-op duplicate reports do not create repeated lifecycle records. Partial
+fills and partially filled cancellations append exact-decimal executed and
+remaining/cancelled quantities to the same line, separated by ` | `. Full
+structured exchange evidence and diagnostic context remain in the DEBUG/TRACE
+files; the terminal is the compact operator view.
+
+When a broker order ID is not available yet (for example, a pending
+submission), display `#pending` in the order-ID column and append the raw client
+order ID at the end of that same line. Do not add `Client:`, `Client order ID:`,
+or a separate indented line. The logger never derives strategy identity from a
+client-order-ID prefix.
+
+## Telegram Command Center interaction diagnostics
+
+Inbound Telegram interactions use the existing Harvester logger through a structured diagnostic boundary. Every update is correlated by `telegram:<update_id>`; redelivered updates retain the same correlation ID. The interaction record identifies message versus callback, command/action, market symbol when relevant, application query/use-case, stage, and duration where applicable.
+
+Telegram lifecycle records are emitted at INFO so they appear in the terminal as well as the structured DEBUG log; detailed exception stacks and nested causes remain available in the structured logs. The lifecycle includes `Telegram update RECEIVED`, `Telegram interaction AUTHORIZED` / `REJECTED`, `Telegram command STARTED`, `Telegram query STARTED` / `COMPLETED`, `Telegram market selection RECEIVED`, `Telegram confirmation REQUESTED` / `RECEIVED` / `CANCELLED`, `Telegram callback ACKNOWLEDGED`, `Telegram application operation STARTED` / `COMPLETED`, `Telegram response SENT`, and `Telegram interaction FAILED` / `HANDLED`. There are no per-poll success logs. Authorization rejections use WARN; failed queries, application operations, callback acknowledgements and response delivery use ERROR.
+
+For state-changing actions, preserve the distinction between `applicationOperationInvoked`, `applicationOperationCompleted`, and `stateChanged`. A selection or confirmation page is not a successful pause/resume. A response-delivery failure after a completed application operation must not be reported as an application-operation failure.
+
+Thrown errors are logged once at the appropriate interaction boundary with their original name, code, message, stack, and nested cause details. Non-exception failures use a stable `failureClassification` and safe `errorMessage`; do not manufacture an exception merely to label a failed result. Read-only query failures are distinct from application-operation failures.
+
+Never log full Telegram updates, callback payloads, bot tokens, allowlist IDs, API credentials, or full account/order payloads. Redact the configured bot token from messages and stacks. Do not log the same exception at every layer; preserve it while adding context at the boundary that owns the interaction. See the [Telegram Command Center runbook](operations/telegram-command-center.md) for stage interpretation and operator response.

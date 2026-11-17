@@ -11,23 +11,35 @@ import {
 import { validateCandles } from "./validate-candles.js"
 
 function calculateTrueRange({ candle, previousClose }) {
-  const candleRange = subtractDecimal({ left: candle.high, right: candle.low })
+  const candleRange = subtractDecimal({
+    left: candle.high,
+    right: candle.low,
+  })
   if (previousClose === null) {
     return candleRange
   }
 
   const highToPreviousClose = absoluteDecimal({
-    value: subtractDecimal({ left: candle.high, right: previousClose }),
+    value: subtractDecimal({
+      left: candle.high,
+      right: previousClose,
+    }),
   })
   const lowToPreviousClose = absoluteDecimal({
-    value: subtractDecimal({ left: candle.low, right: previousClose }),
+    value: subtractDecimal({
+      left: candle.low,
+      right: previousClose,
+    }),
   })
   const gapRange = maxDecimal({
     left: highToPreviousClose,
     right: lowToPreviousClose,
   })
 
-  return maxDecimal({ left: candleRange, right: gapRange })
+  return maxDecimal({
+    left: candleRange,
+    right: gapRange,
+  })
 }
 
 /**
@@ -54,18 +66,29 @@ export function calculateAtrSeries({
   rounding = "half-up",
 } = {}) {
   validateDecimalScale({ scale: outputScale })
-  validateCandles({ candles, intervalMs, period })
+  validateCandles({
+    candles,
+    intervalMs,
+    period,
+  })
 
   const trueRanges = []
   for (let index = 0; index < candles.length; index += 1) {
     const candle = candles[index]
     const previousClose = index === 0 ? null : candles[index - 1].close
-    trueRanges.push(calculateTrueRange({ candle, previousClose }))
+    trueRanges.push(calculateTrueRange({
+      candle,
+      previousClose,
+    }))
   }
 
-  const initialRangeTotal = trueRanges
-    .slice(0, period)
-    .reduce((total, trueRange) => addDecimal({ left: total, right: trueRange }), "0")
+  let initialRangeTotal = "0"
+  for (let index = 0; index < period; index += 1) {
+    initialRangeTotal = addDecimal({
+      left: initialRangeTotal,
+      right: trueRanges[index],
+    })
+  }
   let previousAtr = divideDecimal({
     left: initialRangeTotal,
     right: String(period),

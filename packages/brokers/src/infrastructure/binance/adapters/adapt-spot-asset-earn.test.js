@@ -5,8 +5,13 @@ import { adaptSpotAsset } from "./adapt-spot-asset.js"
 describe("adaptSpotAsset earn assets", () => {
   it("strips the LD prefix and combines free and locked amounts", () => {
     assert.deepEqual(adaptSpotAsset([
-      { asset: "LDBTC", free: "0.1", locked: "0.02" },
-      { asset: "LDUSDT", free: "0", locked: "0" },
-    ]), [{ ticker: "BTC", quantity: 0.12000000000000001 }])
+      { asset: "LDBTC",
+free: "0.1",
+locked: "0.02" },
+      { asset: "LDUSDT",
+free: "0",
+locked: "0" },
+    ]), [{ ticker: "BTC",
+quantity: 0.12000000000000001 }])
   })
 })

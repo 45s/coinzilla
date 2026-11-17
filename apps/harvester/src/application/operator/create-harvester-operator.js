@@ -1,5 +1,13 @@
 import { createPauseMarket } from "../../use-cases/operator-control/pause-market.js"
 import { createResumeMarket } from "../../use-cases/operator-control/resume-market.js"
+import {
+  createPauseAllBuys,
+  createPauseBuys,
+  createResumeAllBuys,
+  createResumeBuys,
+} from "../../use-cases/operator-control/buy-controls.js"
+import { createReadOperatorState } from "../../use-cases/operator-control/read-operator-state.js"
+import { createReadOperatorTradingState } from "../../use-cases/operator-control/read-operator-trading-state.js"
 
 /**
  * Compose Harvester's transport-independent operator capability.
@@ -9,12 +17,40 @@ import { createResumeMarket } from "../../use-cases/operator-control/resume-mark
  *
  * @param {object} options
  * @param {object} options.engine - Conservative trading engine control boundary.
- * @param {object} options.durableFacts - ADR-0001 application-owned durable-facts port.
- * @returns {Readonly<{pauseMarket: Function, resumeMarket: Function}>} Operator capability.
+ * @param {object} options.operationalStateStore - ADR-0001 application-owned Operational State Store port.
+ * @param {Function} [options.getRuntimeSnapshot] - Read-only process runtime snapshot provider.
+ * @returns {Readonly<object>} Explicit operator command and query methods.
  */
-export function createHarvesterOperator({ engine, durableFacts } = {}) {
-  return Object.freeze({
-    pauseMarket: createPauseMarket({ engine, durableFacts }),
-    resumeMarket: createResumeMarket({ engine, durableFacts }),
-  })
+export function createHarvesterOperator({ engine, operationalStateStore, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders } = {}) {
+  const operator = {
+    pauseMarket: createPauseMarket({ engine,
+      operationalStateStore }),
+    resumeMarket: createResumeMarket({ engine,
+      operationalStateStore }),
+    pauseBuys: createPauseBuys({ engine,
+      operationalStateStore }),
+    resumeBuys: createResumeBuys({ engine,
+      operationalStateStore }),
+    pauseAllBuys: createPauseAllBuys({ engine,
+      operationalStateStore }),
+    resumeAllBuys: createResumeAllBuys({ engine,
+      operationalStateStore }),
+  }
+  if (getRuntimeSnapshot !== undefined) {
+    const readState = createReadOperatorState({ engine,
+      getRuntimeSnapshot })
+    operator.getStatus = readState.getStatus
+    operator.getMarkets = readState.getMarkets
+  }
+  if ([getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders].some((provider) => provider !== undefined)) {
+    const readTradingState = createReadOperatorTradingState({ engine,
+      getPortfolio,
+      getRecoveryLedger,
+      getAccountSnapshot,
+      getOpenOrders })
+    operator.getPositions = readTradingState.getPositions
+    operator.getOrders = readTradingState.getOrders
+    operator.getBalances = readTradingState.getBalances
+  }
+  return Object.freeze(operator)
 }

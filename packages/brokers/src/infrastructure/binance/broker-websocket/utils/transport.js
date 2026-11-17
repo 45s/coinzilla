@@ -1,11 +1,15 @@
+import { channel } from "node:diagnostics_channel"
 import { assertNativeWebSocketRuntime } from "./runtime.js"
+
+const undiciPingChannel = channel("undici:websocket:ping")
 
 const DEFAULT_CONNECT_TIMEOUT = 10_000
 const DEFAULT_CLOSE_TIMEOUT = 5_000
 const MAX_DIAGNOSTIC_TEXT_LENGTH = 256
 
-function safeDiagnosticText(value, maxLength = MAX_DIAGNOSTIC_TEXT_LENGTH) {
-  if (typeof value !== "string" || value.length === 0) return null
+function safeDiagnosticText(...args) {
+  const [value, maxLength = MAX_DIAGNOSTIC_TEXT_LENGTH] = args
+  if (typeof value !== "string" || value.length === 0) {return null}
   return value
     .slice(0, maxLength)
     .replace(/(api[_-]?key|api[_-]?secret|signature|authorization|token)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
@@ -16,17 +20,18 @@ function readHttpUpgradeStatus(...sources) {
   for (const source of sources) {
     for (const key of ["status", "statusCode"]) {
       const value = source?.[key]
-      if (Number.isInteger(value) && value >= 100 && value <= 599) return value
+      if (Number.isInteger(value) && value >= 100 && value <= 599) {return value}
     }
   }
   return null
 }
 
-function createWebSocketError(event, phase) {
+function createWebSocketError(...args) {
+  const [event, phase] = args
   const source = event?.error instanceof Error ? event.error : null
   const causeMessage = safeDiagnosticText(source?.message) ?? "Underlying WebSocket error"
   const cause = source ? new Error(causeMessage) : undefined
-  if (cause && typeof source.name === "string") cause.name = source.name
+  if (cause && typeof source.name === "string") {cause.name = source.name}
   if (cause && typeof source.stack === "string") {
     cause.stack = safeDiagnosticText(source.stack, 2_048) ?? cause.stack
   }
@@ -35,7 +40,7 @@ function createWebSocketError(event, phase) {
     safeDiagnosticText(source?.message) ??
     "WebSocket connection error"
   const error = new Error(message, cause ? { cause } : undefined)
-  if (source && typeof source.name === "string") error.name = source.name
+  if (source && typeof source.name === "string") {error.name = source.name}
   error.diagnostics = {
     phase,
     httpUpgradeStatus: readHttpUpgradeStatus(event, source),
@@ -43,7 +48,9 @@ function createWebSocketError(event, phase) {
     closeReason: null,
     wasClean: null,
     underlyingError: source
-      ? { name: cause.name, message: cause.message, stack: cause.stack }
+      ? { name: cause.name,
+        message: cause.message,
+        stack: cause.stack }
       : null,
   }
   return error
@@ -66,8 +73,10 @@ export class NativeWebSocketTransport {
     message: new Set(),
     error: new Set(),
     close: new Set(),
+    ping: new Set(),
   }
   #handlers = null
+  #diagnosticCleanup = null
 
   /**
    * @param {{url: string, WebSocketCtor?: new (url: string) => object, connectTimeout?: number, closeTimeout?: number, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void}} options
@@ -116,8 +125,8 @@ export class NativeWebSocketTransport {
 
   /** @returns {Promise<NativeWebSocketTransport>} Resolves when the socket opens. */
   connect() {
-    if (this.#state === "open") return Promise.resolve(this)
-    if (this.#state === "connecting") return this.#connectPromise
+    if (this.#state === "open") {return Promise.resolve(this)}
+    if (this.#state === "connecting") {return this.#connectPromise}
     if (this.#state !== "idle") {
       return Promise.reject(new Error(`Cannot connect WebSocket in state: ${this.#state}`))
     }
@@ -126,16 +135,20 @@ export class NativeWebSocketTransport {
 
     try {
       this.#socket = new this.WebSocketCtor(this.url)
+      this.#attachPingDiagnostics(this.#socket)
     } catch (error) {
+      this.#diagnosticCleanup?.()
+      this.#diagnosticCleanup = null
       this.#state = "closed"
       return Promise.reject(error)
     }
 
-    this.#connectPromise = new Promise((resolve, reject) => {
+    this.#connectPromise = new Promise((...args) => {
+      const [resolve, reject] = args
       this.#rejectConnect = reject
       this.#handlers = {
         open: () => {
-          if (this.#state !== "connecting") return
+          if (this.#state !== "connecting") {return}
           this.#clearConnectTimer()
           this.#state = "open"
           this.#rejectConnect = null
@@ -169,7 +182,7 @@ export class NativeWebSocketTransport {
         }
 
         this.#connectTimer = this.setTimeout(() => {
-          if (this.#state !== "connecting") return
+          if (this.#state !== "connecting") {return}
           reject(new Error(`WebSocket connection timed out after ${this.connectTimeout} ms`))
           this.#rejectConnect = null
           this.#beginClosing()
@@ -185,6 +198,8 @@ export class NativeWebSocketTransport {
           }
         }
         this.#handlers = null
+        this.#diagnosticCleanup?.()
+        this.#diagnosticCleanup = null
         const socket = this.#socket
         this.#socket = null
         try {
@@ -223,6 +238,11 @@ export class NativeWebSocketTransport {
     return this.#subscribe("close", listener)
   }
 
+  /** @param {(payload: Buffer|undefined) => void} listener @returns {() => boolean} Removes the ping-frame listener. */
+  onPing(listener) {
+    return this.#subscribe("ping", listener)
+  }
+
   /**
    * Close the socket and resolve after its close event or bounded close timeout.
    *
@@ -230,16 +250,19 @@ export class NativeWebSocketTransport {
    * @param {string} [reason=""] - WebSocket close reason.
    * @returns {Promise<void>}
    */
-  close(code = 1000, reason = "") {
-    if (this.#state === "closed") return Promise.resolve()
-    if (this.#closePromise) return this.#closePromise
+  close(...args) {
+    const [code = 1000, reason = ""] = args
+    if (this.#state === "closed") {return Promise.resolve()}
+    if (this.#closePromise) {return this.#closePromise}
 
     this.#closePromise = new Promise((resolve) => {
       this.#resolveClose = resolve
     })
 
     if (this.#state === "idle") {
-      this.#finalizeClose({ code: 1000, reason: "", wasClean: true })
+      this.#finalizeClose({ code: 1000,
+        reason: "",
+        wasClean: true })
       return this.#closePromise
     }
 
@@ -253,32 +276,45 @@ export class NativeWebSocketTransport {
   }
 
   /** @param {number} [code=1000] @param {string} [reason=""] @returns {Promise<void>} */
-  disconnect(code = 1000, reason = "") {
-    return this.close(code, reason)
+  disconnect(...args) {
+    return this.close(...args)
   }
 
-  #subscribe(type, listener) {
+  #attachPingDiagnostics(socket) {
+    const listener = ({ websocket, payload }) => {
+      if (websocket === socket && this.#socket === socket && this.#state === "open") {
+        this.#emit("ping", payload)
+      }
+    }
+    undiciPingChannel.subscribe(listener)
+    this.#diagnosticCleanup = () => undiciPingChannel.unsubscribe(listener)
+  }
+
+  #subscribe(...args) {
+    const [type, listener] = args
     if (typeof listener !== "function") {
       throw new TypeError(`WebSocket ${type} listener must be a function`)
     }
-    if (this.#state === "closed") return () => {}
+    if (this.#state === "closed") {return () => {}}
 
     this.#listeners[type].add(listener)
     return () => this.#listeners[type].delete(listener)
   }
 
-  #emit(type, value) {
+  #emit(...args) {
+    const [type, value] = args
     for (const listener of this.#listeners[type]) {
       try {
         listener(value)
       } catch (error) {
-        if (type !== "error") this.#emit("error", error)
+        if (type !== "error") {this.#emit("error", error)}
       }
     }
   }
 
-  #beginClosing(code = 1000, reason = "") {
-    if (this.#state === "closed" || this.#state === "closing") return
+  #beginClosing(...args) {
+    const [code = 1000, reason = ""] = args
+    if (this.#state === "closed" || this.#state === "closing") {return}
     this.#state = "closing"
     this.#clearConnectTimer()
 
@@ -303,7 +339,7 @@ export class NativeWebSocketTransport {
   }
 
   #finalizeClose(event) {
-    if (this.#state === "closed") return
+    if (this.#state === "closed") {return}
     this.#state = "closed"
     this.#clearConnectTimer()
     if (this.#closeTimer !== null) {
@@ -342,6 +378,8 @@ export class NativeWebSocketTransport {
       this.#rejectConnect = null
     }
     this.#connectError = null
+    this.#diagnosticCleanup?.()
+    this.#diagnosticCleanup = null
 
     if (this.#handlers && this.#socket) {
       for (const [type, handler] of Object.entries(this.#handlers)) {
@@ -357,6 +395,7 @@ export class NativeWebSocketTransport {
     this.#listeners.message.clear()
     this.#listeners.error.clear()
     this.#listeners.close.clear()
+    this.#listeners.ping.clear()
     this.#resolveClose?.()
     this.#resolveClose = null
   }

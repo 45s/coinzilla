@@ -1,30 +1,39 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { Asset, CanonicalOrder, Market, Money, Quantity } from "@coinzilla/entities"
-import { createFileDurableFactsStore } from "../infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { recordOrderSubmissionIntent } from "./record-order-submission-intent.js"
 
-const baseAsset = new Asset({ id: "binance:DOGE", code: "DOGE" })
-const quoteAsset = new Asset({ id: "binance:USDT", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({ id: "binance:DOGE",
+code: "DOGE" })
+const quoteAsset = new Asset({ id: "binance:USDT",
+code: "USDT" })
+const market = new Market({ venue: "binance",
+symbol: "DOGEUSDT",
+baseAsset,
+quoteAsset })
 const order = new CanonicalOrder({
   clientOrderId: "h-0123456789abcdef012345-1",
   market,
   side: "BUY",
   type: "LIMIT_MAKER",
-  limitPrice: new Money({ amount: "0.099000", asset: quoteAsset }),
-  originalQuantity: new Quantity({ amount: "100.000", asset: baseAsset }),
-  executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+  limitPrice: new Money({ amount: "0.099000",
+asset: quoteAsset }),
+  originalQuantity: new Quantity({ amount: "100.000",
+asset: baseAsset }),
+  executedQuantity: new Quantity({ amount: "0",
+asset: baseAsset }),
   status: "PENDING",
 })
 
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-order-intent-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
-  const store = createFileDurableFactsStore({
+  t.after(() => rm(directory, { recursive: true,
+force: true }))
+  const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "order-intent-test",
     now: () => new Date("2026-11-12T00:00:00.000Z"),
@@ -34,16 +43,16 @@ const createStore = async (t) => {
 }
 
 test("records the canonical immutable order intent and requires a durable append acknowledgement", async (t) => {
-  const durableFactsStore = await createStore(t)
+  const operationalStateStore = await createStore(t)
   const result = await recordOrderSubmissionIntent({
-    durableFactsStore,
+    operationalStateStore,
     order,
     purpose: "RECOVERY_SELL",
   })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
   assert.equal(result.data.durable, true, "Order submission must proceed only after the durable store confirms its committed fact.")
-  assert.equal(result.data.record.factId, "order-submission-intent:" + order.clientOrderId)
+  assert.equal(result.data.record.factId, `order-submission-intent:${  order.clientOrderId}`)
   assert.equal(result.data.record.factType, "ORDER_SUBMISSION_INTENT")
   assert.deepEqual(result.data.record.data, {
     clientOrderId: order.clientOrderId,
@@ -62,7 +71,8 @@ test("records the canonical immutable order intent and requires a durable append
 
 test("rejects a successful-shaped append that does not confirm durable commitment", async () => {
   const result = await recordOrderSubmissionIntent({
-    durableFactsStore: { append: async () => ({ ok: true, data: { durable: false } }) },
+    operationalStateStore: { append: async () => ({ ok: true,
+data: { durable: false } }) },
     order,
     purpose: null,
   })
@@ -73,15 +83,16 @@ test("rejects a successful-shaped append that does not confirm durable commitmen
 
 test("rejects non-canonical orders and unsupported strategy purposes before appending", async () => {
   let appendCalls = 0
-  const durableFactsStore = { append: async () => { appendCalls += 1; return { ok: true, data: { durable: true } } } }
+  const operationalStateStore = { append: async () => { appendCalls += 1; return { ok: true,
+data: { durable: true } } } }
 
   const invalidOrder = await recordOrderSubmissionIntent({
-    durableFactsStore,
+    operationalStateStore,
     order: { ...order },
     purpose: null,
   })
   const invalidPurpose = await recordOrderSubmissionIntent({
-    durableFactsStore,
+    operationalStateStore,
     order,
     purpose: "UNRECOGNIZED_PURPOSE",
   })
@@ -94,7 +105,9 @@ test("rejects non-canonical orders and unsupported strategy purposes before appe
 test("durable store rejects malformed order submission fact payloads", async (t) => {
   const store = await createStore(t)
   const malformedFacts = [
-    { factId: "bad-order:1", factType: "ORDER_SUBMISSION_INTENT", data: {} },
+    { factId: "bad-order:1",
+factType: "ORDER_SUBMISSION_INTENT",
+data: {} },
     {
       factId: "bad-order:2",
       factType: "ORDER_SUBMISSION_INTENT",

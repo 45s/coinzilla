@@ -1,70 +1,144 @@
+import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../../domain/portfolio/portfolio.js"
 import { createAccountSnapshotManager } from "./create-account-snapshot-manager.js"
+import { calculateVerifiedLegacySpotAllocation } from "../../domain/strategies/recovery-seller/legacy-spot-allocation.js"
 
-const test = (name, ...args) => nodeTest("[create-account-snapshot-manager.test.js] " + name, ...args)
+const test = (...args) => nodeTest(`[create-account-snapshot-manager.test.js] ${args[0]}`, ...args.slice(1))
 
-const createFixture = ({ accountSnapshots = [], accountSnapshotError, openOrders = [], openOrdersResult, openOrdersError, flushResults = [], portfolio = new Portfolio(), activeOrders = [], durableFactsStore } = {}) => {
-  const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
-  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-  const market = new Market({ venue: "binance", symbol: "BTCUSDT", baseAsset, quoteAsset })
-  let snapshotIndex = 0
-  const publishedEvents = []
-  let flushCount = 0
+function createFixtureBroker({ state }) {
+  return {
+    getAccountSnapshot: async () => {
+      if (state.accountSnapshotError) {
+        throw state.accountSnapshotError
+      }
+      return state.accountSnapshots[Math.min(state.snapshotIndex++, state.accountSnapshots.length - 1)]
+    },
+    getOpenOrders: async () => {
+      if (state.openOrdersError) {
+        throw state.openOrdersError
+      }
+      return state.openOrdersResult ?? {
+        ok: true,
+        data: state.openOrders,
+      }
+    },
+  }
+}
+
+function createFixtureEventPublisher({ state }) {
+  return {
+    publish: (event) => {
+      state.publishedEvents.push(event)
+      return { ok: true }
+    },
+    flush: async () => {
+      state.flushCount += 1
+      return state.flushResults[state.flushCount - 1] ?? {
+        ok: true,
+        durable: true,
+      }
+    },
+  }
+}
+
+const createFixture = ({
+  accountSnapshots = [],
+  accountSnapshotError,
+  openOrders = [],
+  openOrdersResult,
+  openOrdersError,
+  flushResults = [],
+  portfolio = new Portfolio(),
+  activeOrders = [],
+  additionalTrackedBaseQuantity = [],
+  additionalTrackedBaseQuantityProvider,
+  additionalTrackedQuoteCashFlow = [],
+  additionalTrackedQuoteCashFlowProvider,
+  operationalStateStore,
+  logger = {},
+  monotonicNow,
+} = {}) => {
+  const baseAsset = new Asset({
+    id: "asset:BTC",
+    code: "BTC",
+  })
+  const quoteAsset = new Asset({
+    id: "asset:USDT",
+    code: "USDT",
+  })
+  const market = new Market({
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAsset,
+    quoteAsset,
+  })
+  const state = {
+    accountSnapshots,
+    accountSnapshotError,
+    openOrders,
+    openOrdersResult,
+    openOrdersError,
+    flushResults,
+    snapshotIndex: 0,
+    publishedEvents: [],
+    flushCount: 0,
+  }
   const manager = createAccountSnapshotManager({
-    broker: {
-      getAccountSnapshot: async () => {
-        if (accountSnapshotError) { throw accountSnapshotError }
-        return accountSnapshots[Math.min(snapshotIndex++, accountSnapshots.length - 1)]
-      },
-      getOpenOrders: async () => {
-        if (openOrdersError) { throw openOrdersError }
-        return openOrdersResult ?? ({ ok: true, data: openOrders })
-      },
-    },
-    eventPublisher: {
-      publish: (event) => {
-        publishedEvents.push(event)
-        return { ok: true }
-      },
-      flush: async () => {
-        flushCount += 1
-        return flushResults[flushCount - 1] ?? { ok: true, durable: true }
-      },
-    },
+    broker: createFixtureBroker({ state }),
+    eventPublisher: createFixtureEventPublisher({ state }),
     marketMetadata: new Map([[market.symbol, { market }]]),
     getPortfolio: () => portfolio,
+    getAdditionalTrackedBaseQuantity: additionalTrackedBaseQuantityProvider ?? (() => additionalTrackedBaseQuantity),
+    getAdditionalTrackedQuoteCashFlow: additionalTrackedQuoteCashFlowProvider ?? (() => additionalTrackedQuoteCashFlow),
     getTradingEngine: () => ({ getActiveOrders: () => activeOrders }),
     getRecoveredState: () => ({ orderRegistry: { orders: [] } }),
     getHasCanonicalOwnershipReconciliation: () => false,
-    logger: {},
+    logger,
     now: () => 123,
-    durableFactsStore,
+    monotonicNow,
+    operationalStateStore,
   })
   return {
     manager,
     market,
     baseAsset,
     quoteAsset,
-    publishedEvents,
-    getFlushCount: () => flushCount,
+    publishedEvents: state.publishedEvents,
+    getFlushCount: () => state.flushCount,
   }
 }
 
-const createAccountSnapshot = ({ market, sourceTime, extraBalances = [] }) => ({
+const createAccountSnapshot = ({
+  market,
+  sourceTime,
+  extraBalances = []
+}) => ({
   ok: true,
   data: {
     sourceTime,
     balances: [
       new Balance({
-        free: new Quantity({ amount: "1.25", asset: market.baseAsset }),
-        locked: new Quantity({ amount: "0.25", asset: market.baseAsset }),
+        free: new Quantity({
+          amount: "1.25",
+          asset: market.baseAsset
+        }),
+        locked: new Quantity({
+          amount: "0.25",
+          asset: market.baseAsset
+        }),
       }),
       new Balance({
-        free: new Quantity({ amount: "500", asset: market.quoteAsset }),
-        locked: new Quantity({ amount: "0", asset: market.quoteAsset }),
+        free: new Quantity({
+          amount: "500",
+          asset: market.quoteAsset
+        }),
+        locked: new Quantity({
+          amount: "0",
+          asset: market.quoteAsset
+        }),
       }),
       ...extraBalances,
     ],
@@ -72,9 +146,12 @@ const createAccountSnapshot = ({ market, sourceTime, extraBalances = [] }) => ({
 })
 
 test("captures configured-asset balances and durably publishes the account audit", async () => {
-  const market = createFixture().market
+  const {market} = createFixture()
   const fixture = createFixture({
-    accountSnapshots: [createAccountSnapshot({ market, sourceTime: 100 })],
+    accountSnapshots: [createAccountSnapshot({
+      market,
+      sourceTime: 100
+    })],
   })
 
   const snapshot = await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
@@ -87,10 +164,17 @@ test("captures configured-asset balances and durably publishes the account audit
   assert.equal(fixture.getFlushCount(), 1, "The account audit must be durably flushed before the call resolves.")
 })
 
-test("publishes only the actual third-asset commission baseline and excludes unrelated wallet assets", async () => {
-  const market = createFixture().market
-  const bnb = new Asset({ id: "asset:BNB", code: "BNB" })
-  const xrp = new Asset({ id: "asset:XRP", code: "XRP" })
+
+function createThirdAssetCommissionFixture() {
+  const {market} = createFixture()
+  const bnb = new Asset({
+    id: "asset:BNB",
+    code: "BNB",
+  })
+  const xrp = new Asset({
+    id: "asset:XRP",
+    code: "XRP",
+  })
   const fixture = createFixture({
     accountSnapshots: [
       createAccountSnapshot({
@@ -98,12 +182,24 @@ test("publishes only the actual third-asset commission baseline and excludes unr
         sourceTime: 100,
         extraBalances: [
           new Balance({
-            free: new Quantity({ amount: "1", asset: bnb }),
-            locked: new Quantity({ amount: "0", asset: bnb }),
+            free: new Quantity({
+              amount: "1",
+              asset: bnb,
+            }),
+            locked: new Quantity({
+              amount: "0",
+              asset: bnb,
+            }),
           }),
           new Balance({
-            free: new Quantity({ amount: "25", asset: xrp }),
-            locked: new Quantity({ amount: "0", asset: xrp }),
+            free: new Quantity({
+              amount: "25",
+              asset: xrp,
+            }),
+            locked: new Quantity({
+              amount: "0",
+              asset: xrp,
+            }),
           }),
         ],
       }),
@@ -112,29 +208,41 @@ test("publishes only the actual third-asset commission baseline and excludes unr
         sourceTime: 200,
         extraBalances: [
           new Balance({
-            free: new Quantity({ amount: "0.9999", asset: bnb }),
-            locked: new Quantity({ amount: "0", asset: bnb }),
+            free: new Quantity({
+              amount: "0.9999",
+              asset: bnb,
+            }),
+            locked: new Quantity({
+              amount: "0",
+              asset: bnb,
+            }),
           }),
           new Balance({
-            free: new Quantity({ amount: "25", asset: xrp }),
-            locked: new Quantity({ amount: "0", asset: xrp }),
+            free: new Quantity({
+              amount: "25",
+              asset: xrp,
+            }),
+            locked: new Quantity({
+              amount: "0",
+              asset: xrp,
+            }),
           }),
         ],
       }),
     ],
   })
+  return {
+    fixture,
+    bnb,
+    xrp,
+  }
+}
 
-  const snapshot = await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
-
-  assert.equal(snapshot.getFreeBalance({ assetId: bnb.id }), undefined)
-  assert.equal(fixture.publishedEvents[0].data.balances.some(({ asset }) => asset === "BNB"), false)
-  assert.equal(fixture.publishedEvents[0].data.balances.some(({ asset }) => asset === "XRP"), false)
-
+async function assertCommissionBaselinePublished({ fixture, bnb }) {
   const baseline = await fixture.manager.publishCommissionAssetBaseline({
     assetId: bnb.id,
     assetCode: bnb.code,
   })
-
   assert.equal(baseline.ok, true)
   assert.equal(fixture.publishedEvents.length, 2)
   assert.equal(fixture.publishedEvents[1].data.phase, "COMMISSION_BASELINE")
@@ -145,7 +253,8 @@ test("publishes only the actual third-asset commission baseline and excludes unr
     locked: "0",
     total: "1",
   }])
-  assert.equal(fixture.publishedEvents.some(({ data }) => data.balances.some(({ asset }) => asset === "XRP")), false)
+  assert.equal(fixture.publishedEvents.some(({ data }) =>
+    data.balances.some(({ asset }) => asset === "XRP")), false)
 
   const duplicate = await fixture.manager.publishCommissionAssetBaseline({
     assetId: bnb.id,
@@ -154,6 +263,26 @@ test("publishes only the actual third-asset commission baseline and excludes unr
   assert.equal(duplicate.data.reason, "BASELINE_ALREADY_CAPTURED")
   assert.equal(fixture.publishedEvents.length, 2)
   assert.equal(fixture.getFlushCount(), 2)
+}
+
+
+test("publishes only the actual third-asset commission baseline and excludes unrelated wallet assets", async () => {
+  const {
+    fixture,
+    bnb,
+    xrp,
+  } = createThirdAssetCommissionFixture()
+  const snapshot = await fixture.manager.publishAccountSnapshot({
+    phase: "PREFLIGHT",
+  })
+
+  assert.equal(snapshot.getFreeBalance({ assetId: bnb.id }), undefined)
+  assert.equal(fixture.publishedEvents[0].data.balances.some(({ asset }) => asset === "BNB"), false)
+  assert.equal(fixture.publishedEvents[0].data.balances.some(({ asset }) => asset === "XRP"), false)
+  await assertCommissionBaselinePublished({
+    fixture,
+    bnb,
+  })
 
   const refreshed = await fixture.manager.refreshAccountSnapshot()
   assert.equal(refreshed.getFreeBalance({ assetId: bnb.id }).amount, "0.9999")
@@ -161,9 +290,12 @@ test("publishes only the actual third-asset commission baseline and excludes unr
 })
 
 test("fails closed when an actual commission asset has no PREFLIGHT balance", async () => {
-  const market = createFixture().market
+  const {market} = createFixture()
   const fixture = createFixture({
-    accountSnapshots: [createAccountSnapshot({ market, sourceTime: 100 })],
+    accountSnapshots: [createAccountSnapshot({
+      market,
+      sourceTime: 100
+    })],
   })
   await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
 
@@ -184,22 +316,41 @@ test("captures Portfolio and active-order baselines at the account snapshot boun
     brokerOrderId: "snapshot-baseline-buy-order",
     market: fixtureMarket,
     side: "BUY",
-    price: new Money({ amount: "10", asset: fixtureMarket.quoteAsset }),
-    quantity: new Quantity({ amount: "10", asset: fixtureMarket.baseAsset }),
-    quoteQuantity: new Money({ amount: "100", asset: fixtureMarket.quoteAsset }),
+    price: new Money({
+      amount: "10",
+      asset: fixtureMarket.quoteAsset
+    }),
+    quantity: new Quantity({
+      amount: "10",
+      asset: fixtureMarket.baseAsset
+    }),
+    quoteQuantity: new Money({
+      amount: "100",
+      asset: fixtureMarket.quoteAsset
+    }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  const portfolio = new Portfolio().applyFill({ fill: portfolioFill }).portfolio
+  const {portfolio} = new Portfolio().applyFill({ fill: portfolioFill,
+strategyId: StrategyId.COIN_GRABBER })
   const activeBuyOrder = new CanonicalOrder({
     clientOrderId: "snapshot-baseline-active-buy",
     brokerOrderId: "snapshot-baseline-active-buy-broker",
     market: fixtureMarket,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "50", asset: fixtureMarket.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "3", asset: fixtureMarket.baseAsset }),
-    executedQuantity: new Quantity({ amount: "1", asset: fixtureMarket.baseAsset }),
+    limitPrice: new Money({
+      amount: "50",
+      asset: fixtureMarket.quoteAsset
+    }),
+    originalQuantity: new Quantity({
+      amount: "3",
+      asset: fixtureMarket.baseAsset
+    }),
+    executedQuantity: new Quantity({
+      amount: "1",
+      asset: fixtureMarket.baseAsset
+    }),
     status: "PARTIALLY_FILLED",
   })
   const activeSellOrder = new CanonicalOrder({
@@ -208,13 +359,25 @@ test("captures Portfolio and active-order baselines at the account snapshot boun
     market: fixtureMarket,
     side: "SELL",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "11", asset: fixtureMarket.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "5", asset: fixtureMarket.baseAsset }),
-    executedQuantity: new Quantity({ amount: "2", asset: fixtureMarket.baseAsset }),
+    limitPrice: new Money({
+      amount: "11",
+      asset: fixtureMarket.quoteAsset
+    }),
+    originalQuantity: new Quantity({
+      amount: "5",
+      asset: fixtureMarket.baseAsset
+    }),
+    executedQuantity: new Quantity({
+      amount: "2",
+      asset: fixtureMarket.baseAsset
+    }),
     status: "PARTIALLY_FILLED",
   })
   const fixture = createFixture({
-    accountSnapshots: [createAccountSnapshot({ market: fixtureMarket, sourceTime: 100 })],
+    accountSnapshots: [createAccountSnapshot({
+      market: fixtureMarket,
+      sourceTime: 100
+    })],
     portfolio,
     activeOrders: [activeBuyOrder, activeSellOrder],
   })
@@ -235,8 +398,20 @@ test("rejects an account snapshot that omits a configured market asset", async (
         sourceTime: 100,
         balances: [
           new Balance({
-            free: new Quantity({ amount: "1", asset: new Asset({ id: "asset:BTC", code: "BTC" }) }),
-            locked: new Quantity({ amount: "0", asset: new Asset({ id: "asset:BTC", code: "BTC" }) }),
+            free: new Quantity({
+              amount: "1",
+              asset: new Asset({
+              id: "asset:BTC",
+              code: "BTC"
+            })
+            }),
+            locked: new Quantity({
+              amount: "0",
+              asset: new Asset({
+              id: "asset:BTC",
+              code: "BTC"
+            })
+            }),
           }),
         ],
       },
@@ -262,12 +437,20 @@ test("rejects an account snapshot that omits a configured market asset", async (
 test("treats unclassified thrown account snapshot and open-orders adapter errors as terminal", async () => {
   const accountFixture = createFixture({ accountSnapshotError: new Error("unexpected account adapter exception") })
   await assert.rejects(accountFixture.manager.refreshAccountSnapshot(), (error) => {
-    assert.deepEqual(error.recoveryFailure, { category: "ACCOUNTING_INTEGRITY", stage: "ACCOUNT_SNAPSHOT_READ_EXCEPTION", retryable: false })
+    assert.deepEqual(error.recoveryFailure, {
+      category: "ACCOUNTING_INTEGRITY",
+      stage: "ACCOUNT_SNAPSHOT_READ_EXCEPTION",
+      retryable: false
+    })
     return true
   })
   const ordersFixture = createFixture({ openOrdersError: new Error("unexpected open-orders adapter exception") })
   await assert.rejects(ordersFixture.manager.publishOpenOrdersSnapshot(), (error) => {
-    assert.deepEqual(error.recoveryFailure, { category: "ACCOUNTING_INTEGRITY", stage: "ACCOUNT_WIDE_OPEN_ORDERS_READ_EXCEPTION", retryable: false })
+    assert.deepEqual(error.recoveryFailure, {
+      category: "ACCOUNTING_INTEGRITY",
+      stage: "ACCOUNT_WIDE_OPEN_ORDERS_READ_EXCEPTION",
+      retryable: false
+    })
     return true
   })
 })
@@ -287,8 +470,14 @@ test("treats account snapshot responses without an explicit success flag as term
 test("does not replace a newer accepted account snapshot with stale broker data", async () => {
   const fixture = createFixture({
     accountSnapshots: [
-      createAccountSnapshot({ market: createFixture().market, sourceTime: 100 }),
-      createAccountSnapshot({ market: createFixture().market, sourceTime: 99 }),
+      createAccountSnapshot({
+        market: createFixture().market,
+        sourceTime: 100
+      }),
+      createAccountSnapshot({
+        market: createFixture().market,
+        sourceTime: 99
+      }),
     ],
   })
 
@@ -343,6 +532,76 @@ test("records unowned open orders as blocked without adopting them", async () =>
 })
 
 
+test("keeps a newly observed external-order symbol guarded until its authoritative audit is durable", async () => {
+  const externalOrder = {
+    id: "external-order-2",
+    symbol: "BTCUSDT",
+    side: "SELL",
+    type: "LIMIT",
+    originalPrice: "65000",
+    originalQuantity: "0.01",
+    executedQuantity: "0",
+    status: "NEW",
+    clientOrderId: "manual-order-2",
+  }
+  const fixture = createFixture({ openOrders: [externalOrder] })
+
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "BTCUSDT" }), false,
+    "A symbol with no accepted account-wide audit must not start with a stale external-order blocker.")
+  const reconciliation = fixture.manager.observeExternalOrder({ symbol: "BTCUSDT" })
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "BTCUSDT" }), true,
+    "The event observation must install a provisional symbol blocker before asynchronous broker I/O.")
+  const result = await reconciliation
+
+  assert.equal(result.ok, true, "A successful authoritative account-wide audit must complete external-order reconciliation.")
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "BTCUSDT" }), true,
+    "The durable snapshot must retain the blocker when the manual order is still open.")
+  assert.equal(fixture.publishedEvents.length, 1, "One authoritative recovery audit must be published.")
+  assert.equal(fixture.publishedEvents[0].data.phase, "RECOVERY",
+    "The new-order reconciliation must be distinguishable from the startup PREFLIGHT audit.")
+  assert.equal(fixture.publishedEvents[0].data.readiness, "BLOCKED",
+    "The audit must durably classify the external order as unowned.")
+  assert.equal(fixture.getFlushCount(), 1,
+    "The account-wide snapshot must cross its Journal durability barrier before reconciliation resolves.")
+})
+
+test("clears a provisional external-order blocker only after an empty authoritative snapshot is durably flushed", async () => {
+  const fixture = createFixture({ openOrders: [] })
+
+  const reconciliation = fixture.manager.observeExternalOrder({ symbol: "BTCUSDT" })
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "BTCUSDT" }), true,
+    "A newly observed manual order must be blocked while its authoritative status is unknown.")
+  const result = await reconciliation
+
+  assert.equal(result.ok, true, "The empty authoritative snapshot must reconcile successfully.")
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "BTCUSDT" }), false,
+    "A durable snapshot with no open external order must release only the provisional blocker.")
+  assert.equal(fixture.publishedEvents[0].data.phase, "RECOVERY")
+  assert.equal(fixture.publishedEvents[0].data.readiness, "READY")
+  assert.equal(fixture.getFlushCount(), 1,
+    "The provisional blocker must not be released before the account-wide audit is durable.")
+})
+
+test("retains the provisional external-order blocker when authoritative audit durability fails", async () => {
+  const fixture = createFixture({
+    openOrders: [],
+    flushResults: [{
+      ok: false,
+      durable: false,
+      errors: [new Error("audit flush failed")],
+    }],
+  })
+
+  const result = await fixture.manager.observeExternalOrder({ symbol: "BTCUSDT" })
+
+  assert.equal(result.ok, false, "A failed Journal barrier must be reported to the caller.")
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "BTCUSDT" }), true,
+    "A failed or uncommitted snapshot must never release the provisional market blocker.")
+  assert.equal(fixture.publishedEvents.length, 1,
+    "The failed durability attempt must retain the observed account-wide audit evidence in memory.")
+  assert.equal(fixture.getFlushCount(), 1)
+})
+
 test("records unowned open orders as blocked and scopes the strategy gate to their symbol", async () => {
   const externalOrder = {
     id: "external-order-1",
@@ -368,27 +627,21 @@ test("records unowned open orders as blocked and scopes the strategy gate to the
   assert.equal(fixture.getFlushCount(), 1)
 
   openOrders.length = 0
-  await fixture.manager.publishOpenOrdersSnapshot({ phase: "RECOVERY", ownershipReconciled: true })
+  await fixture.manager.publishOpenOrdersSnapshot({
+    phase: "RECOVERY",
+    ownershipReconciled: true
+  })
 
   assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "DOGEUSDT" }), false)
   assert.equal(fixture.getFlushCount(), 2, "The reconnect snapshot must be durable before the symbol guard clears.")
 })
 
-test("retries an account snapshot after a REST timeout without publishing a premature audit", async () => {
-  const market = createFixture().market
-  const timeout = Object.assign(
-    new Error("account.status request timed out"),
-    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
-  )
-  const fixture = createFixture({
-    accountSnapshots: [
-      { ok: false, errors: [timeout] },
-      createAccountSnapshot({ market, sourceTime: 100 }),
-    ],
-  })
 
+async function assertAccountSnapshotTimeout({ fixture, timeout }) {
   await assert.rejects(
-    fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" }),
+    fixture.manager.publishAccountSnapshot({
+      phase: "RECOVERY",
+    }),
     (error) => {
       assert.deepEqual(error.recoveryFailure, {
         category: "REST_RECONCILIATION",
@@ -414,60 +667,73 @@ test("retries an account snapshot after a REST timeout without publishing a prem
     },
     "A failed broker account snapshot result must fail the recovery audit with its actionable timeout message and original cause.",
   )
+}
 
-  assert.equal(
-    fixture.manager.getAccountSnapshot(),
-    undefined,
-    "A timed-out account snapshot must not become the accepted account view.",
-  )
-  assert.equal(
-    fixture.publishedEvents.length,
-    0,
-    "A failed account REST read must not publish a durable recovery audit.",
-  )
-  assert.equal(
-    fixture.getFlushCount(),
-    0,
-    "A failed account REST read must not flush an audit that contains no authoritative snapshot.",
-  )
+function assertFailedAccountSnapshotWasNotPublished({ fixture }) {
+  assert.equal(fixture.manager.getAccountSnapshot(), undefined)
+  assert.equal(fixture.publishedEvents.length, 0)
+  assert.equal(fixture.getFlushCount(), 0)
+}
 
-  const recoveredSnapshot = await fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" })
+async function assertAccountSnapshotRetrySucceeded({ fixture }) {
+  const recoveredSnapshot = await fixture.manager.publishAccountSnapshot({
+    phase: "RECOVERY",
+  })
+  assert.equal(recoveredSnapshot.sourceTime, 100)
+  assert.equal(fixture.manager.getAccountSnapshot().sourceTime, 100)
+  assert.equal(fixture.publishedEvents.length, 1)
+  assert.equal(fixture.publishedEvents[0].data.phase, "RECOVERY")
+  assert.equal(fixture.getFlushCount(), 1)
+}
 
-  assert.equal(
-    recoveredSnapshot.sourceTime,
-    100,
-    "A later successful REST read must be accepted after the transient timeout.",
+
+test("retries an account snapshot after a REST timeout without publishing a premature audit", async () => {
+  const {market} = createFixture()
+  const timeout = Object.assign(
+    new Error("account.status request timed out"),
+    {
+      name: "RpcTimeoutError",
+      code: "RPC_TIMEOUT",
+    },
   )
-  assert.equal(
-    fixture.manager.getAccountSnapshot().sourceTime,
-    100,
-    "The successful retry must become the current account snapshot.",
-  )
-  assert.equal(
-    fixture.publishedEvents.length,
-    1,
-    "Only the successful retry may publish the recovery account audit.",
-  )
-  assert.equal(
-    fixture.publishedEvents[0].data.phase,
-    "RECOVERY",
-    "The successful retry must retain the recovery audit phase.",
-  )
-  assert.equal(
-    fixture.getFlushCount(),
-    1,
-    "The successful retry must durably flush exactly one recovery account audit.",
-  )
+  const fixture = createFixture({
+    accountSnapshots: [
+      {
+        ok: false,
+        errors: [timeout],
+      },
+      createAccountSnapshot({
+        market,
+        sourceTime: 100,
+      }),
+    ],
+  })
+
+  await assertAccountSnapshotTimeout({
+    fixture,
+    timeout,
+  })
+  assertFailedAccountSnapshotWasNotPublished({
+    fixture,
+  })
+  await assertAccountSnapshotRetrySucceeded({
+    fixture,
+  })
 })
-
 
 test("preserves the original broker error as cause when the account-wide open-orders snapshot fails", async () => {
   const timeout = Object.assign(
     new Error("account-wide open-orders RPC timed out"),
-    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
+    {
+      name: "RpcTimeoutError",
+      code: "RPC_TIMEOUT"
+    },
   )
   const fixture = createFixture({
-    openOrdersResult: { ok: false, errors: [timeout] },
+    openOrdersResult: {
+      ok: false,
+      errors: [timeout]
+    },
   })
 
   await assert.rejects(
@@ -512,7 +778,7 @@ test("preserves the original broker error as cause when the account-wide open-or
 
 
 test("classifies a permanent Journal write failure as terminal during the recovery account audit", async () => {
-  const market = createFixture().market
+  const {market} = createFixture()
   const writeError = new Error("Journal session is failed after a previous write error")
   const recoveryFailure = {
     category: "DURABILITY",
@@ -520,7 +786,10 @@ test("classifies a permanent Journal write failure as terminal during the recove
     retryable: false,
   }
   const fixture = createFixture({
-    accountSnapshots: [createAccountSnapshot({ market, sourceTime: 100 })],
+    accountSnapshots: [createAccountSnapshot({
+      market,
+      sourceTime: 100
+    })],
     flushResults: [{
       ok: false,
       durable: false,
@@ -548,11 +817,18 @@ test("classifies a permanent Journal write failure as terminal during the recove
 })
 
 test("treats a failed flush with unclassified Journal health as terminal", async () => {
-  const market = createFixture().market
+  const {market} = createFixture()
   const writeError = new Error("Journal flush failed without writer-health metadata")
   const fixture = createFixture({
-    accountSnapshots: [createAccountSnapshot({ market, sourceTime: 100 })],
-    flushResults: [{ ok: false, durable: false, errors: [writeError] }],
+    accountSnapshots: [createAccountSnapshot({
+      market,
+      sourceTime: 100
+    })],
+    flushResults: [{
+      ok: false,
+      durable: false,
+      errors: [writeError]
+    }],
   })
   await assert.rejects(
     fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" }),
@@ -568,27 +844,12 @@ test("treats a failed flush with unclassified Journal health as terminal", async
   )
 })
 
-test("retains the first recovery account audit publication after a transient flush failure and retry", async () => {
-  const market = createFixture().market
-  const syncFailure = new Error("simulated Journal file sync failure")
-  const fixture = createFixture({
-    accountSnapshots: [
-      createAccountSnapshot({ market, sourceTime: 100 }),
-      createAccountSnapshot({ market, sourceTime: 101 }),
-    ],
-    flushResults: [
-      {
-        ok: false,
-        durable: false,
-        errors: [syncFailure],
-        recoveryFailure: { category: "DURABILITY", stage: "JOURNAL_FLUSH_FAILURE", retryable: true },
-      },
-      { ok: true, durable: true },
-    ],
-  })
 
+async function assertFirstRecoveryAuditFlushFailed({ fixture }) {
   await assert.rejects(
-    fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" }),
+    fixture.manager.publishAccountSnapshot({
+      phase: "RECOVERY",
+    }),
     (error) => {
       assert.match(error.message, /Unable to durably persist RECOVERY account snapshot: simulated Journal file sync failure/)
       assert.deepEqual(error.recoveryFailure, {
@@ -600,84 +861,112 @@ test("retains the first recovery account audit publication after a transient flu
     },
     "A failed first Journal sync must reject the account audit even though its event publication already completed.",
   )
+  assert.equal(fixture.publishedEvents.length, 1)
+  assert.equal(fixture.publishedEvents[0].data.phase, "RECOVERY")
+  assert.equal(fixture.getFlushCount(), 1)
+}
 
-  assert.equal(
-    fixture.publishedEvents.length,
-    1,
-    "The first recovery account audit event must remain published after its durability confirmation fails.",
-  )
-  assert.equal(
-    fixture.publishedEvents[0].data.phase,
-    "RECOVERY",
-    "The first uncertain account audit event must retain its RECOVERY phase.",
-  )
-  assert.equal(
-    fixture.getFlushCount(),
-    1,
-    "The first recovery account audit publication must attempt exactly one durability flush before failing.",
-  )
+async function assertRecoveryAuditRetryPublished({ fixture }) {
+  const retrySnapshot = await fixture.manager.publishAccountSnapshot({
+    phase: "RECOVERY",
+  })
+  assert.equal(retrySnapshot.sourceTime, 101)
+  assert.equal(fixture.publishedEvents.length, 2)
+  assert.notEqual(fixture.publishedEvents[0], fixture.publishedEvents[1])
+  assert.deepEqual(fixture.publishedEvents.map((event) => event.data.phase), ["RECOVERY", "RECOVERY"])
+  assert.equal(fixture.getFlushCount(), 2)
+}
 
-  const retrySnapshot = await fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" })
 
-  assert.equal(
-    retrySnapshot.sourceTime,
-    101,
-    "The later recovery attempt must use the next authoritative account snapshot after the transient flush failure.",
-  )
-  assert.equal(
-    fixture.publishedEvents.length,
-    2,
-    "The retry must publish a second account audit rather than deleting or deduplicating the first uncertain publication.",
-  )
-  assert.notEqual(
-    fixture.publishedEvents[0],
-    fixture.publishedEvents[1],
-    "The retry must create a distinct lifecycle event while preserving the original uncertain event object.",
-  )
-  assert.deepEqual(
-    fixture.publishedEvents.map((event) => event.data.phase),
-    ["RECOVERY", "RECOVERY"],
-    "Both the uncertain first publication and successful retry publication must remain labeled as recovery audits.",
-  )
-  assert.equal(
-    fixture.getFlushCount(),
-    2,
-    "The successful retry must perform a second flush that confirms durability for the retry sequence.",
-  )
+test("retains the first recovery account audit publication after a transient flush failure and retry", async () => {
+  const {market} = createFixture()
+  const syncFailure = new Error("simulated Journal file sync failure")
+  const fixture = createFixture({
+    accountSnapshots: [
+      createAccountSnapshot({
+        market,
+        sourceTime: 100,
+      }),
+      createAccountSnapshot({
+        market,
+        sourceTime: 101,
+      }),
+    ],
+    flushResults: [
+      {
+        ok: false,
+        durable: false,
+        errors: [syncFailure],
+        recoveryFailure: {
+          category: "DURABILITY",
+          stage: "JOURNAL_FLUSH_FAILURE",
+          retryable: true,
+        },
+      },
+      {
+        ok: true,
+        durable: true,
+      },
+    ],
+  })
+
+  await assertFirstRecoveryAuditFlushFailed({
+    fixture,
+  })
+  await assertRecoveryAuditRetryPublished({
+    fixture,
+  })
 })
 
-
 test("commits account balance and open-order facts before publishing their Journal audit events", async () => {
-  const durableFacts = []
-  const durableFactsStore = {
+  const appendedRecords = []
+  const operationalStateStore = {
     append: async (fact) => {
-      durableFacts.push(fact)
-      return { ok: true, data: { durable: true, record: fact } }
+      appendedRecords.push(fact)
+      return {
+        ok: true,
+        data: {
+        durable: true,
+        record: fact
+      }
+      }
     },
   }
-  const market = createFixture().market
+  const {market} = createFixture()
   const fixture = createFixture({
-    accountSnapshots: [createAccountSnapshot({ market, sourceTime: 100 })],
-    durableFactsStore,
+    accountSnapshots: [createAccountSnapshot({
+      market,
+      sourceTime: 100
+    })],
+    operationalStateStore,
   })
 
   await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
-  await fixture.manager.publishOpenOrdersSnapshot({ phase: "PREFLIGHT", orders: [] })
+  await fixture.manager.publishOpenOrdersSnapshot({
+    phase: "PREFLIGHT",
+    orders: []
+  })
 
   assert.deepEqual(
-    durableFacts.map(({ factType }) => factType),
+    appendedRecords.map(({ factType }) => factType),
     ["ACCOUNT_SNAPSHOT_CAPTURED", "ACCOUNT_OPEN_ORDERS_CAPTURED"],
-    "Both recovery-critical account snapshots must be committed to the durable-fact stream.",
+    "Both recovery-critical account snapshots must be committed to the Operational State Store record stream.",
   )
-  assert.equal(fixture.publishedEvents.length, 2, "The existing Journal audit events must remain published after durable-fact acknowledgement.")
-  assert.equal(fixture.getFlushCount(), 2, "The existing Journal flush barriers must remain in force after durable-fact commits.")
+  assert.equal(fixture.publishedEvents.length, 2, "The existing Journal audit events must remain published after Operational State Store record acknowledgement.")
+  assert.equal(fixture.getFlushCount(), 2, "The existing Journal flush barriers must remain in force after Operational State Store record commits.")
 })
 
 test("fails closed before Journal publication when the durable balance snapshot append is not acknowledged", async () => {
   const fixture = createFixture({
-    accountSnapshots: [createAccountSnapshot({ market: createFixture().market, sourceTime: 100 })],
-    durableFactsStore: {
-      append: async () => ({ ok: false, errors: [new Error("simulated durable balance snapshot failure")] }),
+    accountSnapshots: [createAccountSnapshot({
+      market: createFixture().market,
+      sourceTime: 100
+    })],
+    operationalStateStore: {
+      append: async () => ({
+        ok: false,
+        errors: [new Error("simulated durable balance snapshot failure")]
+      }),
     },
   })
 
@@ -692,13 +981,19 @@ test("fails closed before Journal publication when the durable balance snapshot 
 
 test("fails closed before Journal publication when the durable open-order snapshot append is not acknowledged", async () => {
   const fixture = createFixture({
-    durableFactsStore: {
-      append: async () => ({ ok: false, errors: [new Error("simulated durable open-order snapshot failure")] }),
+    operationalStateStore: {
+      append: async () => ({
+        ok: false,
+        errors: [new Error("simulated durable open-order snapshot failure")]
+      }),
     },
   })
 
   await assert.rejects(
-    fixture.manager.publishOpenOrdersSnapshot({ phase: "PREFLIGHT", orders: [] }),
+    fixture.manager.publishOpenOrdersSnapshot({
+      phase: "PREFLIGHT",
+      orders: []
+    }),
     /Unable to durably persist account open-orders snapshot: simulated durable open-order snapshot failure/,
     "A failed durable open-order fact must prevent the Journal publication and readiness barrier.",
   )
@@ -708,7 +1003,7 @@ test("fails closed before Journal publication when the durable open-order snapsh
 
 
 test("durably records a Binance NEW external order without inventing its Harvester identity", async () => {
-  const durableFacts = []
+  const operationalStateStore = []
   const externalOrder = {
     id: "external-new-order-1",
     symbol: "BTCUSDT",
@@ -722,26 +1017,32 @@ test("durably records a Binance NEW external order without inventing its Harvest
   }
   const fixture = createFixture({
     openOrders: [externalOrder],
-    durableFactsStore: {
+    operationalStateStore: {
       append: async (fact) => {
-        durableFacts.push(fact)
-        return { ok: true, data: { durable: true, record: fact } }
+        operationalStateStore.push(fact)
+        return {
+          ok: true,
+          data: {
+          durable: true,
+          record: fact
+        }
+        }
       },
     },
   })
 
   await fixture.manager.publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
 
-  assert.equal(durableFacts.length, 1, "The external account-wide order snapshot must be committed as a durable fact.")
-  assert.equal(durableFacts[0].factType, "ACCOUNT_OPEN_ORDERS_CAPTURED")
-  assert.equal(durableFacts[0].data.readiness, "BLOCKED", "An external order remains an explicit blocked audit classification.")
-  assert.equal(durableFacts[0].data.orders[0].status, "NEW", "The durable fact must preserve the exchange's active NEW status.")
-  assert.equal(durableFacts[0].data.orders[0].clientOrderId, "manual-client-order-1", "The observed external client ID is evidence only and does not confer ownership.")
+  assert.equal(operationalStateStore.length, 1, "The external account-wide order snapshot must be committed as a durable fact.")
+  assert.equal(operationalStateStore[0].factType, "ACCOUNT_OPEN_ORDERS_CAPTURED")
+  assert.equal(operationalStateStore[0].data.readiness, "BLOCKED", "An external order remains an explicit blocked audit classification.")
+  assert.equal(operationalStateStore[0].data.orders[0].status, "NEW", "The durable fact must preserve the exchange's active NEW status.")
+  assert.equal(operationalStateStore[0].data.orders[0].clientOrderId, "manual-client-order-1", "The observed external client ID is evidence only and does not confer ownership.")
 })
 
 
 test("durably records a Binance NEW external order without treating its client ID as ownership", async () => {
-  const durableFacts = []
+  const operationalStateStore = []
   const fixture = createFixture({
     openOrders: [{
       id: "external-new-order-1",
@@ -754,25 +1055,31 @@ test("durably records a Binance NEW external order without treating its client I
       status: "NEW",
       clientOrderId: "manual-client-order-1",
     }],
-    durableFactsStore: {
+    operationalStateStore: {
       append: async (fact) => {
-        durableFacts.push(fact)
-        return { ok: true, data: { durable: true, record: fact } }
+        operationalStateStore.push(fact)
+        return {
+          ok: true,
+          data: {
+          durable: true,
+          record: fact
+        }
+        }
       },
     },
   })
 
   await fixture.manager.publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
 
-  assert.equal(durableFacts.length, 1, "The external account-wide order snapshot must be committed as a durable fact.")
-  assert.equal(durableFacts[0].factType, "ACCOUNT_OPEN_ORDERS_CAPTURED")
-  assert.equal(durableFacts[0].data.readiness, "BLOCKED", "An external order remains an explicit blocked audit classification.")
-  assert.equal(durableFacts[0].data.orders[0].status, "NEW", "The durable fact must preserve the exchange's active NEW status.")
-  assert.equal(durableFacts[0].data.orders[0].clientOrderId, "manual-client-order-1", "An observed external client ID is evidence only and does not confer ownership.")
+  assert.equal(operationalStateStore.length, 1, "The external account-wide order snapshot must be committed as a durable fact.")
+  assert.equal(operationalStateStore[0].factType, "ACCOUNT_OPEN_ORDERS_CAPTURED")
+  assert.equal(operationalStateStore[0].data.readiness, "BLOCKED", "An external order remains an explicit blocked audit classification.")
+  assert.equal(operationalStateStore[0].data.orders[0].status, "NEW", "The durable fact must preserve the exchange's active NEW status.")
+  assert.equal(operationalStateStore[0].data.orders[0].clientOrderId, "manual-client-order-1", "An observed external client ID is evidence only and does not confer ownership.")
 })
 
 
-test("separates manual external orders from unresolved prior-process Harvester orders", async () => {
+test("classifies every unmatched startup order as external regardless of client-order ID prefix", async () => {
   const fixture = createFixture({
     openOrders: [
       {
@@ -802,8 +1109,149 @@ test("separates manual external orders from unresolved prior-process Harvester o
 
   await fixture.manager.publishOpenOrdersSnapshot()
 
-  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "DOGEUSDT" }), true, "Manual orders must be exposed to the configured per-pair policy.")
-  assert.equal(fixture.manager.hasUnresolvedHarvesterOpenOrdersForSymbol({ symbol: "DOGEUSDT" }), false, "Manual orders must not be mistaken for unresolved Harvester orders.")
-  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "BTCUSDT" }), false, "A prior-process Harvester order must not be classified as manual.")
-  assert.equal(fixture.manager.hasUnresolvedHarvesterOpenOrdersForSymbol({ symbol: "BTCUSDT" }), true, "A prior-process Harvester order must remain a symbol-scoped blocker.")
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "DOGEUSDT" }), true, "Manual startup orders must be exposed to the configured per-pair policy.")
+  assert.equal(fixture.manager.hasUnownedOpenOrdersForSymbol({ symbol: "BTCUSDT" }), true, "A prior-process Harvester order must follow the same external-order policy as a manual order.")
+  assert.equal(typeof fixture.manager.hasUnresolvedHarvesterOpenOrdersForSymbol, "undefined", "The prefix-specific unresolved-order API must be removed rather than retained as a second ownership category.")
+})
+
+
+test("times the CLOSING Journal durability barrier and reports failed flushes", async () => {
+  const { market } = createFixture()
+  const logEntries = []
+  let tick = 0
+  const fixture = createFixture({
+    accountSnapshots: [createAccountSnapshot({
+      market,
+      sourceTime: 100
+    })],
+    logger: { system: (entry) => logEntries.push(entry) },
+    monotonicNow: () => {
+      tick += 7
+      return tick
+    },
+  })
+
+  await fixture.manager.publishAccountSnapshot({
+    phase: "CLOSING",
+    auditStatus: "COMPLETE"
+  })
+
+  const started = logEntries.find((entry) =>
+    entry.shutdownPhase === "JOURNAL_DURABILITY_BARRIER" && entry.phaseStatus === "STARTED")
+  const completed = logEntries.find((entry) =>
+    entry.shutdownPhase === "JOURNAL_DURABILITY_BARRIER" && entry.phaseStatus === "COMPLETED")
+  assert.ok(started, "The CLOSING audit must log when its Journal barrier starts.")
+  assert.ok(completed, "The CLOSING audit must log when its Journal barrier completes.")
+  assert.equal(completed.durationMs, 7, "The barrier duration must use the injected monotonic clock.")
+  assert.equal(completed.phase, "CLOSING")
+})
+
+
+
+test("provides the authoritative account balances and current Portfolio to the tracked Spot source", async () => {
+  const { market } = createFixture()
+  const accountSnapshot = createAccountSnapshot({
+    market,
+    sourceTime: 103,
+  })
+  const portfolio = new Portfolio()
+  let sourceInput
+  const fixture = createFixture({
+    accountSnapshots: [accountSnapshot],
+    portfolio,
+    additionalTrackedBaseQuantityProvider: (input) => {
+      sourceInput = input
+      return []
+    },
+  })
+
+  await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
+
+  assert.equal(sourceInput.portfolio, portfolio, "The Spot allocation source must receive the same current Portfolio used for the account snapshot baseline.")
+  assert.equal(Object.isFrozen(sourceInput.balances), true, "The allocation source must receive an immutable snapshot of canonical broker balances.")
+  assert.equal(sourceInput.balances[0], accountSnapshot.data.balances[0], "The Spot allocation source must receive the exact canonical Balance values returned by the broker for this snapshot.")
+})
+
+
+test("publishes only the verified legacy Spot quantity into the separate account baseline", async () => {
+  const { market } = createFixture()
+  const fixture = createFixture({
+    accountSnapshots: [
+      createAccountSnapshot({
+        market,
+        sourceTime: 104,
+      }),
+    ],
+    additionalTrackedBaseQuantityProvider: ({ balances, portfolio }) =>
+      calculateVerifiedLegacySpotAllocation({
+        balances,
+        portfolio,
+        legacyPositions: [{
+          market,
+          originalQuantity: "50",
+          remainingQuantity: "0.01",
+        }],
+      }),
+  })
+
+  const snapshot = await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
+
+  assert.equal(
+    snapshot.getAdditionalTrackedBaseQuantityBaseline({ assetId: market.baseAsset.id }),
+    "0.01",
+    "The account baseline must retain only the operator-authorized legacy quantity verified beyond the shared Portfolio.",
+  )
+  assert.equal(
+    snapshot.getPortfolioBaseQuantityBaseline({ assetId: market.baseAsset.id }),
+    "0",
+    "Verified legacy Spot custody must remain separate from Portfolio rather than creating an opening Position balance.",
+  )
+})
+
+test("captures additional tracked Spot allocation separately from Portfolio in account snapshot baselines", async () => {
+  const { market } = createFixture()
+  const fixture = createFixture({
+    accountSnapshots: [
+      createAccountSnapshot({
+        market,
+        sourceTime: 102,
+      }),
+    ],
+    additionalTrackedBaseQuantity: [
+      {
+        assetId: market.baseAsset.id,
+        amount: "0.01",
+      },
+    ],
+  })
+
+  const snapshot = await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
+
+  assert.equal(snapshot.getAdditionalTrackedBaseQuantityBaseline({ assetId: market.baseAsset.id }), "0.01")
+  assert.equal(snapshot.getPortfolioBaseQuantityBaseline({ assetId: market.baseAsset.id }), "0")
+})
+
+test("captures separately tracked legacy quote proceeds in the shared snapshot cash-flow baseline", async () => {
+  const fixture = createFixture({
+    accountSnapshots: [
+      createAccountSnapshot({
+        market: createFixture().market,
+        sourceTime: 104,
+      }),
+    ],
+    additionalTrackedQuoteCashFlow: [
+      {
+        assetId: "asset:USDT",
+        amount: "12.5",
+      },
+    ],
+  })
+
+  const snapshot = await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
+
+  assert.equal(
+    snapshot.getQuoteCashFlowBaseline({ assetId: fixture.quoteAsset.id }),
+    "12.5",
+    "The shared account snapshot must include net quote proceeds from tracked legacy inventory outside Portfolio.",
+  )
 })

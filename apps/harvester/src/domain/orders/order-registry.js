@@ -1,6 +1,12 @@
 import { CanonicalOrder } from "@coinzilla/entities"
-import { toResult } from "@coinzilla/utils"
-import { compareDecimal } from "@coinzilla/utils"
+import { compareDecimal, toResult } from "@coinzilla/utils"
+import {
+  attachBrokerOrderIdToOwnership,
+  createOrderOwnership,
+  findOrderOwnership,
+  hasSameOrderOwnership,
+  validateOrderOwnerships,
+} from "./order-ownership.js"
 
 const ACTIVE_STATUSES = new Set(["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"])
 const TERMINAL_STATUSES = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED"])
@@ -36,6 +42,16 @@ function isStaleOrderUpdate({ current, next }) {
   ) {
     return false
   }
+  // FILLED is terminal: a later non-terminal snapshot with no additional
+  // execution cannot reopen the order, regardless of event timestamp. Binance
+  // may deliver/replay the original NEW report after the submission response
+  // has already established the fully executed state.
+  if (
+    current.status === "FILLED" &&
+    ["OPEN", "PARTIALLY_FILLED"].includes(next.status)
+  ) {
+    return true
+  }
   if (
     current.updatedAt !== undefined &&
     (next.updatedAt === undefined || next.updatedAt < current.updatedAt)
@@ -54,7 +70,6 @@ function isStaleOrderUpdate({ current, next }) {
     // response. The cancellation snapshot and fill history remain authoritative.
     return true
   }
-  // An OPEN report is a stale regression only after a partial fill.
   // UNKNOWN may mean the placement acknowledgement was lost, so its first
   // identity-matching exchange NEW report must be allowed to establish ownership.
   return current.status === "PARTIALLY_FILLED" &&
@@ -62,7 +77,8 @@ function isStaleOrderUpdate({ current, next }) {
 }
 
 function validateOrderUpdate({ current, next }) {
-  if (!sameOrderIntent({ current, next })) {
+  if (!sameOrderIntent({ current,
+next })) {
     throw new Error("Canonical order update changed immutable order intent")
   }
   if (
@@ -88,7 +104,7 @@ function validateOrderUpdate({ current, next }) {
   }
   if (!ALLOWED_TRANSITIONS[current.status]?.has(next.status)) {
     throw new Error(
-      "Invalid canonical order status transition: " + current.status + " -> " + next.status,
+      `Invalid canonical order status transition: ${current.status} -> ${next.status}`,
     )
   }
   if (
@@ -99,16 +115,49 @@ function validateOrderUpdate({ current, next }) {
   }
 }
 
+function findOrderUpdateIndex({ orders, order } = {}) {
+  const brokerIdIndex = order.brokerOrderId === undefined
+    ? -1
+    : orders.findIndex((item) => item.brokerOrderId === order.brokerOrderId)
+  const clientIdIndex = orders.findIndex((item) => item.clientOrderId === order.clientOrderId)
+  if (brokerIdIndex >= 0 && clientIdIndex >= 0 && brokerIdIndex !== clientIdIndex) {
+    throw new Error("Order update brokerOrderId and clientOrderId identify different registered orders")
+  }
+  return brokerIdIndex >= 0 ? brokerIdIndex : clientIdIndex
+}
+
+function createNextCanonicalOrder({ current, order } = {}) {
+  if (current.clientOrderId === order.clientOrderId) {
+    return order
+  }
+  return new CanonicalOrder({
+    clientOrderId: current.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    market: order.market,
+    side: order.side,
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: order.executedQuantity,
+    status: order.status,
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
+    updatedAt: order.updatedAt,
+    completedAt: order.completedAt,
+  })
+}
+
 /**
- * Immutable registry of Harvester-owned canonical orders.
+ * Immutable registry of Harvester-owned canonical orders and their application-owned attribution.
  *
- * Unknown exchange orders are deliberately not adopted. The caller must
- * reconcile them separately before treating account state as fully known.
+ * Order ownership is keyed by Harvester's original clientOrderId and linked to the brokerOrderId
+ * once the exchange identity is known. Unknown exchange orders are deliberately not adopted.
  */
 export class OrderRegistry {
   #orders
+  #ownerships
 
-  constructor({ orders = [] } = {}) {
+  constructor({ orders = [], ownerships = [] } = {}) {
     if (!Array.isArray(orders) || orders.some((order) => !(order instanceof CanonicalOrder))) {
       throw new TypeError("OrderRegistry.orders must contain CanonicalOrder values")
     }
@@ -122,11 +171,15 @@ export class OrderRegistry {
     if (new Set(brokerOrderIds).size !== brokerOrderIds.length) {
       throw new TypeError("OrderRegistry cannot contain duplicate brokerOrderIds")
     }
+
     this.#orders = Object.freeze([...orders])
+    this.#ownerships = validateOrderOwnerships({ orders,
+ownerships })
     Object.freeze(this)
   }
 
   get orders() { return this.#orders }
+  get ownerships() { return this.#ownerships }
 
   getOrder({ clientOrderId } = {}) {
     if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
@@ -140,6 +193,14 @@ export class OrderRegistry {
       throw new TypeError("OrderRegistry.getOrderByBrokerOrderId requires brokerOrderId")
     }
     return this.#orders.find((order) => order.brokerOrderId === brokerOrderId)
+  }
+
+  getOwnership({ clientOrderId, brokerOrderId } = {}) {
+    return findOrderOwnership({
+      ownerships: this.#ownerships,
+      clientOrderId,
+      brokerOrderId,
+    })
   }
 
   getActiveOrders({ marketId } = {}) {
@@ -156,22 +217,45 @@ export class OrderRegistry {
     )
   }
 
-  registerPending({ order } = {}) {
+  registerPending({ order, ownership } = {}) {
     if (!(order instanceof CanonicalOrder) || order.status !== "PENDING") {
       throw new TypeError("OrderRegistry.registerPending requires a PENDING CanonicalOrder")
     }
     const existing = this.getOrder({ clientOrderId: order.clientOrderId })
+    const nextOwnership = ownership === undefined
+      ? undefined
+      : createOrderOwnership({
+          ownership,
+          clientOrderId: order.clientOrderId,
+          brokerOrderId: order.brokerOrderId,
+        })
     if (existing) {
-      if (!sameOrderState({ current: existing, next: order })) {
-        throw new Error("Conflicting pending order reused clientOrderId " + order.clientOrderId)
+      if (!sameOrderState({ current: existing,
+next: order })) {
+        throw new Error(`Conflicting pending order reused clientOrderId ${order.clientOrderId}`)
       }
-      return Object.freeze({ registry: this, applied: false, duplicate: true })
+      const existingOwnership = this.getOwnership({ clientOrderId: order.clientOrderId })
+      if (nextOwnership !== undefined &&
+          (!existingOwnership || !hasSameOrderOwnership({
+            current: existingOwnership,
+            next: nextOwnership,
+          }))) {
+        throw new Error(`Conflicting order ownership reused clientOrderId ${order.clientOrderId}`)
+      }
+      return Object.freeze({ registry: this,
+applied: false,
+duplicate: true })
     }
     if (order.brokerOrderId !== undefined) {
       throw new Error("Pending order cannot already have a brokerOrderId")
     }
     return Object.freeze({
-      registry: new OrderRegistry({ orders: [...this.#orders, order] }),
+      registry: new OrderRegistry({
+        orders: [...this.#orders, order],
+        ownerships: nextOwnership === undefined
+          ? this.#ownerships
+          : [...this.#ownerships, nextOwnership],
+      }),
       applied: true,
       duplicate: false,
     })
@@ -183,7 +267,8 @@ export class OrderRegistry {
     }
     const current = this.getOrder({ clientOrderId })
     if (!current) {
-      return Object.freeze({ registry: this, removed: false })
+      return Object.freeze({ registry: this,
+removed: false })
     }
     if (current.status !== "PENDING") {
       throw new Error("OrderRegistry can remove only a PENDING order")
@@ -191,6 +276,7 @@ export class OrderRegistry {
     return Object.freeze({
       registry: new OrderRegistry({
         orders: this.#orders.filter((order) => order.clientOrderId !== clientOrderId),
+        ownerships: this.#ownerships.filter((ownership) => ownership.clientOrderId !== clientOrderId),
       }),
       removed: true,
     })
@@ -202,13 +288,19 @@ export class OrderRegistry {
         throw new TypeError("markUnknown requires a non-empty clientOrderId")
       }
       const index = this.#orders.findIndex((order) => order.clientOrderId === clientOrderId)
-      if (index < 0) throw new Error("Cannot mark an unregistered order UNKNOWN")
+      if (index < 0) {throw new Error("Cannot mark an unregistered order UNKNOWN")}
       const current = this.#orders[index]
       if (current.status === "UNKNOWN") {
-        return toResult({ data: { registry: this, order: current, applied: false, duplicate: true } })
+        return toResult({ data: { registry: this,
+order: current,
+applied: false,
+duplicate: true } })
       }
       if (current.status !== "PENDING") {
-        return toResult({ data: { registry: this, order: current, applied: false, alreadyAcknowledged: true } })
+        return toResult({ data: { registry: this,
+order: current,
+applied: false,
+alreadyAcknowledged: true } })
       }
       const unknownOrder = new CanonicalOrder({
         clientOrderId: current.clientOrderId,
@@ -225,13 +317,16 @@ export class OrderRegistry {
         updatedAt: current.updatedAt,
         completedAt: current.completedAt,
       })
-      validateOrderUpdate({ current, next: unknownOrder })
-      const orders = this.#orders.map((order, orderIndex) =>
-        orderIndex === index ? unknownOrder : order,
-      )
+      validateOrderUpdate({ current,
+next: unknownOrder })
+      const orders = [...this.#orders]
+      orders[index] = unknownOrder
       return toResult({
         data: {
-          registry: new OrderRegistry({ orders }),
+          registry: new OrderRegistry({
+            orders,
+            ownerships: this.#ownerships,
+          }),
           order: unknownOrder,
           applied: true,
           duplicate: false,
@@ -241,19 +336,26 @@ export class OrderRegistry {
       return toResult({ error })
     }
   }
+
   markCancellationUnknown({ clientOrderId } = {}) {
     try {
       if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
         throw new TypeError("markCancellationUnknown requires a non-empty clientOrderId")
       }
       const index = this.#orders.findIndex((order) => order.clientOrderId === clientOrderId)
-      if (index < 0) throw new Error("Cannot mark an unregistered order UNKNOWN")
+      if (index < 0) {throw new Error("Cannot mark an unregistered order UNKNOWN")}
       const current = this.#orders[index]
       if (current.status === "UNKNOWN") {
-        return toResult({ data: { registry: this, order: current, applied: false, duplicate: true } })
+        return toResult({ data: { registry: this,
+order: current,
+applied: false,
+duplicate: true } })
       }
       if (!["OPEN", "PARTIALLY_FILLED"].includes(current.status)) {
-        return toResult({ data: { registry: this, order: current, applied: false, alreadyTerminal: true } })
+        return toResult({ data: { registry: this,
+order: current,
+applied: false,
+alreadyTerminal: true } })
       }
       const unknownOrder = new CanonicalOrder({
         clientOrderId: current.clientOrderId,
@@ -270,13 +372,16 @@ export class OrderRegistry {
         updatedAt: current.updatedAt,
         completedAt: current.completedAt,
       })
-      validateOrderUpdate({ current, next: unknownOrder })
-      const orders = this.#orders.map((order, orderIndex) =>
-        orderIndex === index ? unknownOrder : order,
-      )
+      validateOrderUpdate({ current,
+next: unknownOrder })
+      const orders = [...this.#orders]
+      orders[index] = unknownOrder
       return toResult({
         data: {
-          registry: new OrderRegistry({ orders }),
+          registry: new OrderRegistry({
+            orders,
+            ownerships: this.#ownerships,
+          }),
           order: unknownOrder,
           applied: true,
           duplicate: false,
@@ -293,25 +398,30 @@ export class OrderRegistry {
       throw new TypeError("OrderRegistry.attachAcknowledgedBrokerOrderId requires an acknowledged order with brokerOrderId")
     }
     const index = this.#orders.findIndex((item) => item.clientOrderId === order.clientOrderId)
-    if (index < 0) throw new Error("Acknowledged order is not registered by clientOrderId")
+    if (index < 0) {throw new Error("Acknowledged order is not registered by clientOrderId")}
     const current = this.#orders[index]
-    if (!sameOrderIntent({ current, next: order })) {
+    if (!sameOrderIntent({ current,
+next: order })) {
       throw new Error("Broker acknowledgement changed immutable order intent")
     }
     if (current.status === "UNKNOWN" && current.brokerOrderId === order.brokerOrderId) {
-      return Object.freeze({ registry: this, applied: false, duplicate: true })
+      return Object.freeze({ registry: this,
+applied: false,
+duplicate: true })
     }
     if (!["PENDING", "UNKNOWN"].includes(current.status)) {
       throw new Error("Only a PENDING or unresolved UNKNOWN order can receive its acknowledged brokerOrderId")
     }
     if (current.brokerOrderId !== undefined) {
       if (current.brokerOrderId === order.brokerOrderId) {
-        return Object.freeze({ registry: this, applied: false, duplicate: true })
+        return Object.freeze({ registry: this,
+applied: false,
+duplicate: true })
       }
       throw new Error("Acknowledged order changed brokerOrderId")
     }
     const existing = this.getOrderByBrokerOrderId({ brokerOrderId: order.brokerOrderId })
-    if (existing) throw new Error("Broker order ID is already owned by another Harvester order")
+    if (existing) {throw new Error("Broker order ID is already owned by another Harvester order")}
     const attached = new CanonicalOrder({
       clientOrderId: current.clientOrderId,
       brokerOrderId: order.brokerOrderId,
@@ -329,9 +439,18 @@ export class OrderRegistry {
       acknowledgedAt: order.acknowledgedAt,
       updatedAt: order.updatedAt,
     })
-    const orders = this.#orders.map((item, itemIndex) => itemIndex === index ? attached : item)
+    const orders = [...this.#orders]
+    orders[index] = attached
+    const ownerships = attachBrokerOrderIdToOwnership({
+      ownerships: this.#ownerships,
+      clientOrderId: current.clientOrderId,
+      brokerOrderId: order.brokerOrderId,
+    })
     return Object.freeze({
-      registry: new OrderRegistry({ orders }),
+      registry: new OrderRegistry({
+        orders,
+        ownerships,
+      }),
       applied: true,
       duplicate: false,
     })
@@ -341,25 +460,11 @@ export class OrderRegistry {
     if (!(order instanceof CanonicalOrder) || order.status === "PENDING") {
       throw new TypeError("OrderRegistry.applyUpdate requires a broker-acknowledged CanonicalOrder")
     }
-    // Match acknowledged exchange events by Binance's exchange-assigned order ID,
-    // exactly like Free-Roll's trackedOrderIds. Client order IDs are metadata and
-    // may differ in Binance cancel/replace execution reports (c versus C).
-    // UNKNOWN submissions can legitimately have no broker ID after a lost
-    // acknowledgement. Undefined is not an identity shared by all such orders:
-    // resolve those updates only by clientOrderId and compare broker IDs only
-    // when the incoming exchange report actually supplies one.
-    const brokerIdIndex = order.brokerOrderId === undefined
-      ? -1
-      : this.#orders.findIndex(
-          (item) => item.brokerOrderId === order.brokerOrderId,
-        )
-    const clientIdIndex = this.#orders.findIndex(
-      (item) => item.clientOrderId === order.clientOrderId,
-    )
-    if (brokerIdIndex >= 0 && clientIdIndex >= 0 && brokerIdIndex !== clientIdIndex) {
-      throw new Error("Order update brokerOrderId and clientOrderId identify different registered orders")
-    }
-    const index = brokerIdIndex >= 0 ? brokerIdIndex : clientIdIndex
+    // Match exchange events by broker identity, while retaining Harvester's original client ID.
+    const index = findOrderUpdateIndex({
+      orders: this.#orders,
+      order,
+    })
     if (index < 0) {
       return Object.freeze({
         registry: this,
@@ -376,31 +481,14 @@ export class OrderRegistry {
     ) {
       throw new Error("Canonical order update changed brokerOrderId")
     }
-
-    // Keep the locally submitted clientOrderId as the canonical identity.
-    // The raw Binance c/C values remain available on the event for diagnostics.
-    const nextOrder = current.clientOrderId === order.clientOrderId
-      ? order
-      : new CanonicalOrder({
-          clientOrderId: current.clientOrderId,
-          brokerOrderId: order.brokerOrderId,
-          market: order.market,
-          side: order.side,
-          type: order.type,
-          limitPrice: order.limitPrice,
-          originalQuantity: order.originalQuantity,
-          executedQuantity: order.executedQuantity,
-          status: order.status,
-          createdAt: order.createdAt,
-          acknowledgedAt: order.acknowledgedAt,
-          updatedAt: order.updatedAt,
-          completedAt: order.completedAt,
-        })
-
+    const nextOrder = createNextCanonicalOrder({ current,
+order })
     if (
-      sameOrderIntent({ current, next: nextOrder }) &&
+      sameOrderIntent({ current,
+next: nextOrder }) &&
       (current.brokerOrderId === undefined || current.brokerOrderId === nextOrder.brokerOrderId) &&
-      isStaleOrderUpdate({ current, next: nextOrder })
+      isStaleOrderUpdate({ current,
+next: nextOrder })
     ) {
       return Object.freeze({
         registry: this,
@@ -410,8 +498,14 @@ export class OrderRegistry {
         unknown: false,
       })
     }
-    validateOrderUpdate({ current, next: nextOrder })
-    if (sameOrderState({ current, next: nextOrder })) {
+    validateOrderUpdate({
+      current,
+      next: nextOrder,
+    })
+    if (sameOrderState({
+      current,
+      next: nextOrder,
+    })) {
       return Object.freeze({
         registry: this,
         applied: false,
@@ -421,11 +515,20 @@ export class OrderRegistry {
       })
     }
 
-    const orders = this.#orders.map((item, itemIndex) =>
-      itemIndex === index ? nextOrder : item,
-    )
+    const orders = [...this.#orders]
+    orders[index] = nextOrder
+    const ownerships = nextOrder.brokerOrderId === undefined
+      ? this.#ownerships
+      : attachBrokerOrderIdToOwnership({
+          ownerships: this.#ownerships,
+          clientOrderId: current.clientOrderId,
+          brokerOrderId: nextOrder.brokerOrderId,
+        })
     return Object.freeze({
-      registry: new OrderRegistry({ orders }),
+      registry: new OrderRegistry({
+        orders,
+        ownerships,
+      }),
       applied: true,
       duplicate: false,
       stale: false,
@@ -440,6 +543,7 @@ export class OrderRegistry {
   get value() {
     return Object.freeze({
       orders: this.#orders.map((order) => order.value),
+      ownerships: Object.freeze(this.#ownerships.map((ownership) => Object.freeze({ ...ownership }))),
     })
   }
 }

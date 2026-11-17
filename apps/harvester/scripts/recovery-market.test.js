@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { access, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { createFileDurableFactsStore } from "../src/infrastructure/durable-facts/create-file-durable-facts-store.js"
+import { createFileOperationalStateStore } from "../src/infrastructure/operational-state/create-file-operational-state-store.js"
 import {
   parseRecoveryMarketArguments,
   runRecoveryMarketCommand,
@@ -16,8 +16,10 @@ const context = {
   markets: [{
     venue: "BINANCE",
     symbol: "LINKUSDT",
-    baseAsset: { id: "binance:LINK", code: "LINK" },
-    quoteAsset: { id: "binance:USDT", code: "USDT" },
+    baseAsset: { id: "binance:LINK",
+code: "LINK" },
+    quoteAsset: { id: "binance:USDT",
+code: "USDT" },
   }],
   coverage: {
     coveredFromTime: 100,
@@ -26,7 +28,8 @@ const context = {
     verifiedBy: "operator-review",
   },
   exchange: {
-    currentAccountSnapshot: { sourceTime: 300, balances: [] },
+    currentAccountSnapshot: { sourceTime: 300,
+balances: [] },
     openOrders: [],
     ownedOrderHistory: [],
     tradeHistory: {
@@ -55,8 +58,14 @@ const readyContext = {
           auditStatus: "COMPLETE",
           auditReasons: [],
           balances: [
-            { asset: "LINK", free: "0", locked: "0", total: "0" },
-            { asset: "USDT", free: "100", locked: "0", total: "100" },
+            { asset: "LINK",
+free: "0",
+locked: "0",
+total: "0" },
+            { asset: "USDT",
+free: "100",
+locked: "0",
+total: "100" },
           ],
         },
       },
@@ -75,8 +84,14 @@ const readyContext = {
     currentAccountSnapshot: {
       sourceTime: 300,
       balances: [
-        { assetId: "binance:LINK", asset: "LINK", free: "0", locked: "0" },
-        { assetId: "binance:USDT", asset: "USDT", free: "100", locked: "0" },
+        { assetId: "binance:LINK",
+asset: "LINK",
+free: "0",
+locked: "0" },
+        { assetId: "binance:USDT",
+asset: "USDT",
+free: "100",
+locked: "0" },
       ],
     },
   },
@@ -85,7 +100,9 @@ const readyContext = {
 test("CLI argument parser requires a context and accepts explicit confirmation", () => {
   assert.deepEqual(
     parseRecoveryMarketArguments(["--context", "evidence.json", "--confirm"]),
-    { confirm: true, help: false, contextPath: "evidence.json" },
+    { confirm: true,
+help: false,
+contextPath: "evidence.json" },
   )
   assert.throws(() => parseRecoveryMarketArguments([]), /--context is required/)
   assert.throws(() => parseRecoveryMarketArguments(["--context"]), /requires a file path/)
@@ -100,7 +117,8 @@ test("CLI runs an audit-only offline context without requiring exchange credenti
     args: ["--context", "evidence.json"],
     cwd: "/offline",
     env: {},
-    readContext: async (filePath, encoding) => {
+    readContext: async (...readArguments) => {
+      const [filePath, encoding] = readArguments
       assert.equal(filePath, "/offline/evidence.json")
       assert.equal(encoding, "utf8")
       return JSON.stringify(context)
@@ -114,22 +132,22 @@ test("CLI runs an audit-only offline context without requiring exchange credenti
   assert.equal(JSON.parse(output[0]).data.reconciliation.status, "SKIPPED")
 })
 
-test("CLI requires an absolute existing durable-fact directory only for explicit confirmation", async () => {
+test("CLI requires an absolute existing Operational State Store record directory only for explicit confirmation", async () => {
   const errors = []
   const exitCode = await runRecoveryMarketCommand({
     args: ["--context", "evidence.json", "--confirm"],
     cwd: "/offline",
-    env: { DURABLE_FACTS_DIRECTORY: "relative/ledger" },
+    env: { OPERATIONAL_STATE_DIRECTORY: "relative/ledger" },
     readContext: async () => JSON.stringify(context),
     writeOutput: () => assert.fail("Confirmation with a relative ledger path must not run."),
     writeError: (value) => errors.push(value),
   })
 
-  assert.equal(exitCode, 1, "Confirmation with a relative durable-fact directory must fail.")
-  assert.match(errors[0], /absolute DURABLE_FACTS_DIRECTORY/)
+  assert.equal(exitCode, 1, "Confirmation with a relative Operational State Store record directory must fail.")
+  assert.match(errors[0], /OPERATIONAL_STATE_DIRECTORY/)
 })
 
-test("CLI help is available without reading evidence or touching the durable-fact store", async () => {
+test("CLI help is available without reading evidence or touching the Operational State Store", async () => {
   const output = []
   const exitCode = await runRecoveryMarketCommand({
     args: ["--help"],
@@ -146,7 +164,7 @@ test("CLI help is available without reading evidence or touching the durable-fac
 test("CLI explicitly confirms a READY offline audit against an already initialized durable ledger", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "coinzilla-recovery-cli-confirm-"))
   try {
-    const store = createFileDurableFactsStore({
+    const store = createFileOperationalStateStore({
       directory,
       runtimeSessionId: readyContext.runtimeSessionId,
     })
@@ -155,7 +173,7 @@ test("CLI explicitly confirms a READY offline audit against an already initializ
     const output = []
     const exitCode = await runRecoveryMarketCommand({
       args: ["--context", "evidence.json", "--confirm"],
-      env: { DURABLE_FACTS_DIRECTORY: directory },
+      env: { OPERATIONAL_STATE_DIRECTORY: directory },
       readContext: async () => JSON.stringify(readyContext),
       writeOutput: (value) => output.push(value),
       writeError: (value) => assert.fail(value),
@@ -169,15 +187,16 @@ test("CLI explicitly confirms a READY offline audit against an already initializ
     assert.equal(readback.ok, true)
     assert.equal(readback.data.records.filter((record) => record.factType === "MARKET_HISTORY_COVERAGE_CONFIRMED").length, 1)
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
-test("CLI never initializes a missing durable-fact directory during confirmation", async () => {
-  const directory = path.join(tmpdir(), "coinzilla-recovery-cli-missing-" + process.pid)
+test("CLI never initializes a missing Operational State Store record directory during confirmation", async () => {
+  const directory = path.join(tmpdir(), `coinzilla-recovery-cli-missing-${  process.pid}`)
   const exitCode = await runRecoveryMarketCommand({
     args: ["--context", "evidence.json", "--confirm"],
-    env: { DURABLE_FACTS_DIRECTORY: directory },
+    env: { OPERATIONAL_STATE_DIRECTORY: directory },
     readContext: async () => JSON.stringify(readyContext),
     writeOutput: () => assert.fail("A missing ledger must not produce a confirmation result."),
     writeError: () => {},
@@ -187,3 +206,27 @@ test("CLI never initializes a missing durable-fact directory during confirmation
   await assert.rejects(access(directory), { code: "ENOENT" }, "The CLI must not create the missing ledger directory.")
 })
 
+
+test("CLI accepts the canonical Operational State Store directory override", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "coinzilla-operational-state-cli-"))
+  try {
+    const store = createFileOperationalStateStore({
+      directory,
+      runtimeSessionId: readyContext.runtimeSessionId,
+    })
+    await store.initialize()
+    const output = []
+    const exitCode = await runRecoveryMarketCommand({
+      args: ["--context", "evidence.json", "--confirm"],
+      env: { OPERATIONAL_STATE_DIRECTORY: directory },
+      readContext: async () => JSON.stringify(readyContext),
+      writeOutput: (value) => output.push(value),
+      writeError: (value) => assert.fail(value),
+    })
+    assert.equal(exitCode, 0)
+    assert.equal(JSON.parse(output[0]).data.confirmation.confirmed, true)
+  } finally {
+    await rm(directory, { recursive: true,
+force: true })
+  }
+})

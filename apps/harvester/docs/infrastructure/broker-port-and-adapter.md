@@ -53,7 +53,7 @@ Do not mirror every `CoreBroker` method automatically. Add a capability only whe
 | Connect / disconnect | `connect()` / `disconnect()` |
 | Place order | `createOrder(orderInput)` |
 | Cancel order | `cancelOrder({ symbol, orderId })` |
-| Read open orders | `getOpenOrders({ symbol })` |
+| Read open orders | `getOpenOrders({ symbol? } = {})`; omit `symbol` for an account-wide snapshot |
 | Read fills | `getFills(input)` |
 | Read canonical order history | `getCanonicalOrderHistory({ symbol, orderId })` |
 | Account snapshot | `getAccountSnapshot()` |
@@ -65,7 +65,7 @@ Do not mirror every `CoreBroker` method automatically. Add a capability only whe
 
 Query/order methods generally return `{ ok, data }` or `{ ok: false, errors }` using the shared result convention. Connection lifecycle methods throw on failure. Consult the package source/tests for exact input/output contracts.
 
-`getOpenOrders({ symbol })` currently returns the shared legacy `Order[]` shape, not `CanonicalOrder[]`. Its numeric `quantity` and `price` fields are not suitable for exact financial comparisons. Reconciliation uses only its string broker `id`, symbol/side/type, and the exact string `originalQuantity` / `executedQuantity` metadata preserved by the broker adapter; canonical status and financial execution facts come from `getCanonicalOrderHistory()` and `getFills()`.
+`getOpenOrders({ symbol? } = {})` returns the shared legacy `Order[]` shape, not `CanonicalOrder[]`. An omitted options object and an explicit empty object both mean account-wide; a supplied `symbol` scopes the query to that market. The Harvester adapter must default its optional options argument to `{}` because bootstrap and read-only operator queries intentionally call `getOpenOrders()` for account-wide visibility. Its numeric `quantity` and `price` fields are not suitable for exact financial comparisons. Reconciliation uses only its string broker `id`, symbol/side/type, and the exact string `originalQuantity` / `executedQuantity` metadata preserved by the broker adapter; canonical status and financial execution facts come from `getCanonicalOrderHistory()` and `getFills()`.
 
 ## Candle market-data capability — issue #1016
 
@@ -99,7 +99,7 @@ export const createBinanceBrokerAdapter = ({ config, logger }) => {
     disconnect: () => client.disconnect(),
     placeOrder: ({ order }) => client.createOrder(order),
     cancelOrder: ({ symbol, orderId }) => client.cancelOrder({ symbol, orderId }),
-    getOpenOrders: ({ symbol }) => client.getOpenOrders({ symbol }),
+    getOpenOrders: (options = {}) => client.getOpenOrders(options),
     getFills: ({ symbol, ...query }) => client.getFills({ symbol, ...query }),
     getCanonicalOrderHistory: ({ symbol, orderId }) => client.getCanonicalOrderHistory({ symbol, orderId }),
     getAccountSnapshot: () => client.getAccountSnapshot(),
@@ -115,7 +115,7 @@ export const createBinanceBrokerAdapter = ({ config, logger }) => {
 
 The package-specific `createOrder` name stays inside the adapter. A simulator or another exchange adapter can implement the same Harvester-facing port without changing use cases. Do not invent request-field transformations; use the canonical shared contracts.
 
-**Trading-rule freshness and completeness:** each Harvester `getSymbolFilters({ symbol })` call fetches public Binance `exchangeInfo` and authenticated, symbol-scoped `myFilters`; the adapter does not retain a process-lifetime filter cache. It returns static canonical rules plus an explicit `unvalidatedConstraints` inventory. Harvester blocks an enabled market if any applicable dynamic, account-level, exchange-wide, or unknown constraint remains unvalidated. Missing or malformed private filter data is a metadata failure, not an empty constraint set. Before replacing a standing Conservative trailing BUY, the engine fetches these rules again, checks that they still identify the active market, and uses that refreshed metadata for both preflight validation and the subsequent replacement submission. A failed, incomplete, mismatched, or blocked refresh pauses the pair before cancellation, leaving the standing BUY untouched. See [Exchange trading constraints](../exchange-trading-constraints.md) for the full contract and current Binance mapping.
+**Trading-rule freshness and completeness:** each Harvester `getSymbolFilters({ symbol })` call fetches public Binance `exchangeInfo` and authenticated, symbol-scoped `myFilters`; the adapter does not retain a process-lifetime filter cache. It returns supported static canonical rules plus an explicit `unvalidatedConstraints` inventory. Harvester locally validates the required price/quantity/notional rules, the configured order type, market identity, and pair sizing inputs. Additional dynamic, account-level, exchange-wide, and unknown constraints remain immutable diagnostics; their presence alone does not block an enabled market. Binance remains authoritative for those constraints and may definitively reject a submitted order. Such a definite filter rejection is classified as `DEFINITE_EXCHANGE_FILTER_REJECTED`, not an ambiguous/UNKNOWN outcome, and must not create a phantom reservation. Missing or malformed private filter data is still a metadata failure, not an empty constraint set. Before replacing a standing Conservative trailing BUY, the engine fetches fresh rules again, checks that they still identify the active market, and uses the refreshed metadata for both preflight validation and replacement submission. A failed/incomplete/mismatched refresh or a failure of the required supported-rule checks pauses the pair before cancellation, leaving the standing BUY untouched. See [Exchange trading constraints](../exchange-trading-constraints.md) for the full contract and current Binance mapping.
 
 ## Implemented application use case
 
@@ -201,3 +201,7 @@ Implemented: application broker port and Binance adapter, Conservative Trading E
 The Harvester broker port exposes `subscribeForBookTicker({ symbol, onBookTicker })` alongside aggregate-trade price subscriptions. The callback receives normalized decimal strings for best bid/ask prices and quantities plus a local receipt timestamp in milliseconds. Bootstrap subscribes to this stream only when TESTNET trading is enabled, requires a successful unsubscribe handle, and removes the subscription during startup rollback and shutdown.
 
 For Conservative, order-type selection, POST-ONLY crossing constraints, and fail-closed behavior are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). The engine requires fresh same-symbol book data before a LIMIT_MAKER submission; this document records the adapter boundary and implementation only. The Binance adapter only classifies the exact Spot `-2010` POST-ONLY matching-engine response as definite when the response is not marked `outcomeUnknown`; all uncertain outcomes retain the existing fail-closed pause behavior.
+
+## Bitunix Spot metadata boundary
+
+The current application broker port and runtime composition remain Binance-only. The Bitunix Spot market-metadata helper (`src/infrastructure/brokers/bitunix-market-metadata.js`) is a pure read-side transformation; it is not a broker adapter, does not satisfy the full Harvester broker port, and is not wired into bootstrap. It maps only `minVolume` and `minPrice` into canonical minimum constraints; precision increments remain UNKNOWN. Do not use it to enable Bitunix trading while issue #1185 remains open.

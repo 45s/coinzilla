@@ -1,20 +1,23 @@
 import { Balance } from "@coinzilla/entities"
 import { assertDecimalString, compareDecimal } from "@coinzilla/utils"
+import { isCanonicalNonNegativeSafeInteger } from "../time/is-canonical-non-negative-safe-integer.js"
 
 function createBaselineMap({ records = [], field, allowNegative = false } = {}) {
   if (!Array.isArray(records) || records.some((item) =>
     !item || typeof item.assetId !== "string" || !item.assetId.trim()
   )) {
-    throw new TypeError("AccountSnapshot." + field + " must contain assetId/amount records")
+    throw new TypeError(`AccountSnapshot.${  field  } must contain assetId/amount records`)
   }
   const values = new Map()
   for (const item of records) {
-    assertDecimalString({ value: item.amount, field: field + ".amount" })
-    if (!allowNegative && compareDecimal({ left: item.amount, right: "0" }) < 0) {
-      throw new RangeError("AccountSnapshot." + field + ".amount must be non-negative")
+    assertDecimalString({ value: item.amount,
+field: `${field  }.amount` })
+    if (!allowNegative && compareDecimal({ left: item.amount,
+right: "0" }) < 0) {
+      throw new RangeError(`AccountSnapshot.${  field  }.amount must be non-negative`)
     }
     if (values.has(item.assetId)) {
-      throw new TypeError("AccountSnapshot " + field + " contains duplicate asset " + item.assetId)
+      throw new TypeError(`AccountSnapshot ${  field  } contains duplicate asset ${  item.assetId}`)
     }
     values.set(item.assetId, item.amount)
   }
@@ -34,6 +37,7 @@ export class AccountSnapshot {
   #sourceTime
   #quoteCashFlowBaselineByAssetId
   #portfolioBaseQuantityBaselineByAssetId
+  #additionalTrackedBaseQuantityBaselineByAssetId
   #committedQuoteBalanceBaselineByAssetId
   #committedBaseBalanceBaselineByAssetId
 
@@ -42,24 +46,27 @@ export class AccountSnapshot {
     sourceTime,
     quoteCashFlowBaseline = [],
     portfolioBaseQuantityBaseline = [],
+    additionalTrackedBaseQuantityBaseline = [],
     committedQuoteBalanceBaseline = [],
     committedBaseBalanceBaseline = [],
   } = {}) {
     if (!Array.isArray(balances) || balances.some((balance) => !(balance instanceof Balance))) {
       throw new TypeError("AccountSnapshot.balances must contain canonical Balance values")
     }
-    if (!Number.isSafeInteger(sourceTime) || sourceTime < 0) {
-      throw new TypeError("AccountSnapshot.sourceTime must be a non-negative safe integer")
+    if (!isCanonicalNonNegativeSafeInteger(sourceTime)) {
+      throw new TypeError("AccountSnapshot.sourceTime must be a non-negative safe integer other than negative zero")
     }
 
     const balancesByAssetId = new Map()
     for (const balance of balances) {
       if (balancesByAssetId.has(balance.asset.id)) {
-        throw new TypeError("AccountSnapshot contains duplicate asset " + balance.asset.code)
+        throw new TypeError(`AccountSnapshot contains duplicate asset ${  balance.asset.code}`)
       }
       if (
-        compareDecimal({ left: balance.free.amount, right: "0" }) < 0 ||
-        compareDecimal({ left: balance.locked.amount, right: "0" }) < 0
+        compareDecimal({ left: balance.free.amount,
+right: "0" }) < 0 ||
+        compareDecimal({ left: balance.locked.amount,
+right: "0" }) < 0
       ) {
         throw new RangeError("AccountSnapshot balances cannot be negative")
       }
@@ -75,6 +82,18 @@ export class AccountSnapshot {
       records: portfolioBaseQuantityBaseline,
       field: "portfolioBaseQuantityBaseline",
     })
+    const additionalTrackedBaseQuantityBaselineByAssetId = createBaselineMap({
+      records: additionalTrackedBaseQuantityBaseline,
+      field: "additionalTrackedBaseQuantityBaseline",
+    })
+
+    for (const assetId of additionalTrackedBaseQuantityBaselineByAssetId.keys()) {
+      if (!balancesByAssetId.has(assetId)) {
+        throw new TypeError(
+          `AccountSnapshot additionalTrackedBaseQuantityBaseline references asset missing from balances: ${assetId}`,
+        )
+      }
+    }
     const committedQuoteBalanceBaselineByAssetId = createBaselineMap({
       records: committedQuoteBalanceBaseline,
       field: "committedQuoteBalanceBaseline",
@@ -89,6 +108,7 @@ export class AccountSnapshot {
     this.#sourceTime = sourceTime
     this.#quoteCashFlowBaselineByAssetId = quoteCashFlowBaselineByAssetId
     this.#portfolioBaseQuantityBaselineByAssetId = portfolioBaseQuantityBaselineByAssetId
+    this.#additionalTrackedBaseQuantityBaselineByAssetId = additionalTrackedBaseQuantityBaselineByAssetId
     this.#committedQuoteBalanceBaselineByAssetId = committedQuoteBalanceBaselineByAssetId
     this.#committedBaseBalanceBaselineByAssetId = committedBaseBalanceBaselineByAssetId
     Object.freeze(this)
@@ -120,6 +140,14 @@ export class AccountSnapshot {
     return this.#portfolioBaseQuantityBaselineByAssetId.get(assetId) ?? "0"
   }
 
+  /** Return separately tracked Spot base quantity already represented by this snapshot, outside Portfolio. */
+  getAdditionalTrackedBaseQuantityBaseline({ assetId } = {}) {
+    if (typeof assetId !== "string" || !assetId.trim()) {
+      throw new TypeError("AccountSnapshot.getAdditionalTrackedBaseQuantityBaseline requires assetId")
+    }
+    return this.#additionalTrackedBaseQuantityBaselineByAssetId.get(assetId) ?? "0"
+  }
+
   getCommittedQuoteBalanceBaseline({ assetId } = {}) {
     if (typeof assetId !== "string" || !assetId.trim()) {
       throw new TypeError("AccountSnapshot.getCommittedQuoteBalanceBaseline requires assetId")
@@ -134,7 +162,7 @@ export class AccountSnapshot {
     return this.#committedBaseBalanceBaselineByAssetId.get(assetId) ?? "0"
   }
 
-  /** Return Portfolio quote cash flow already reflected by this snapshot. */
+  /** Return combined Portfolio and separately tracked quote cash flow already reflected by this snapshot. */
   getQuoteCashFlowBaseline({ assetId } = {}) {
     if (typeof assetId !== "string" || !assetId.trim()) {
       throw new TypeError("AccountSnapshot.getQuoteCashFlowBaseline requires assetId")

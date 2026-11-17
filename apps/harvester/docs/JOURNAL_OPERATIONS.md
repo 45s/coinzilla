@@ -4,7 +4,7 @@
 
 Harvester uses one in-process EventBus to publish selected operational and trading-lifecycle facts. The Journal subscribes to that bus and appends event records to local JSONL files. Journal persistence is optional in configuration-only/no-broker mode; it is a required startup dependency for every broker-connected mode because the account PREFLIGHT audit must be durably recorded before market subscriptions.
 
-The Journal is an operational observer, not trading-state authority. Portfolio and RecoveryLedger remain in-memory application state. The offline `projectHarvesterJournalRecovery()` and `restoreHarvesterJournalState()` helpers can validate and rehydrate a candidate state for controlled offline use, but runtime startup does not invoke them or resume trading from Journal data. Journal replay is not yet wired as runtime trading-state authority. There is no database, outbox, exactly-once delivery, or per-market-price capture.
+The Journal subscribes to the shared EventBus, so derived Telegram notification events are persisted alongside their source lifecycle events. Notification mappings must omit optional fields when the source fact is unavailable: EventBus accepts `undefined`, but the Journal intentionally rejects it under the lossless JSONL contract. In particular, a BLOCKED account-wide open-orders alert may cover multiple symbols, and a user-data subscription failure has no market symbol. Both remain safety notifications; an absent `symbol` is omitted rather than represented as `undefined` or used to suppress the alert.\n\nThe Journal is an operational observer, not trading-state authority. Portfolio and RecoveryLedger remain in-memory application state. The offline `projectHarvesterJournalRecovery()` and `restoreHarvesterJournalState()` helpers can validate and rehydrate a candidate state for controlled offline use, but runtime startup does not invoke them or resume trading from Journal data. Journal replay is not yet wired as runtime trading-state authority. There is no database, outbox, exactly-once delivery, or per-market-price capture.
 
 ## Configuration
 
@@ -93,7 +93,7 @@ Every mapper must follow the temporary payload constraint in [Journal Evidence C
 | `harvester.started` | `broker`, `strategyMode`, `enabledMarkets`, `tradingEnabled` |
 | `harvester.startup_failed` | `stage`, sanitized `error` name/message |
 | `harvester.stopped` | `reason`, `outcome`, optional sanitized `error` |
-| `config.validated` | `enabledMarkets`, `strategyMode`, `tradingEnabled` |
+| `config.validated` | `enabledMarkets`, `strategyMode`, `tradingMode`, `configurationFingerprint` (SHA-256 of canonicalized effective strategy settings), `tradingEnabled` |
 | `broker.connected` | `broker` |
 | `broker.connection_failed` | `broker`, sanitized `error` |
 | `broker.disconnected` | `broker`, `outcome`, optional sanitized `error` |
@@ -102,6 +102,7 @@ Every mapper must follow the temporary payload constraint in [Journal Evidence C
 | `broker.subscription_failed` | `broker`, `stream`, optional `market`, sanitized `error` |
 | `strategy.decision` | `strategy`, `symbol`, `referencePrice`, actionable `actions` (side/type/price/quantity/optional reason) |
 | `order.submission_requested` | client order ID, symbol, side, type, exact price/quantity, status; durably flushed before the broker placement call |
+| `order.submission_deferred` | original client order ID and order facts plus a bounded local reason; best-effort terminal evidence when a registered request is deferred before broker I/O |
 | `order.submitted` | submission facts plus broker order ID and acknowledged status |
 | `order.submission_failed` | client order ID, symbol, side, outcome, optional sanitized error |
 | `strategy.paused` | `symbol`, `reason`, optional sanitized `error` |
@@ -115,10 +116,12 @@ Every mapper must follow the temporary payload constraint in [Journal Evidence C
 | `execution.duplicate_fill` | Fill facts plus `duplicate: true` |
 | `recovery.cycle_completed` | `symbol`, `marketId`, allocated base `freeQuantity`, quote-asset `realizedNetProfit` |
 | `recovery.cycle_not_completed` | exact SELL client/broker identity, `CONTINUE_SELL_THROUGH` or `BLOCKED` outcome, reason, realized profit, active/keep quantities, configured minimum profit |
-| `account.snapshot_captured` | PREFLIGHT/OPENING/CLOSING or targeted COMMISSION_BASELINE phase, audit status, exchange source timestamp, allowlisted exact free/locked/total balances, audit reasons |
-| `account.open_orders_captured` | PREFLIGHT/OPENING phase, observation time, READY/BLOCKED decision, complete account-wide open-order list (client/broker IDs, symbol, side, type, exact price/original/executed quantities, status), block reasons |
+| `account.snapshot_captured` | PREFLIGHT/RECOVERY/CLOSING lifecycle phase or targeted COMMISSION_BASELINE phase, audit status, exchange source timestamp, allowlisted exact free/locked/total balances, audit reasons |
+| `account.open_orders_captured` | PREFLIGHT/RECOVERY phase, observation time, READY/BLOCKED decision, complete account-wide open-order list (client/broker IDs, symbol, side, type, exact price/original/executed quantities, status), block reasons |
 
 The `harvester.process_started` event records the process attempt, including its original UTC entry timestamp, even when optional Journal initialization delays publication. It is distinct from `harvester.started`, which records successful runtime startup. The process event is allowlisted and best-effort: for broker-connected startup, it is admitted before the existing PREFLIGHT flush can persist it; it does not add a separate durability barrier.
+
+The `config.validated` event records the environment-filtered enabled-market set, explicit trading mode, and a deterministic SHA-256 fingerprint of the effective strategy settings. It never includes the raw strategy configuration or credentials. The fingerprint is correlated with the process-start Git provenance through the same Journal session; this remains best-effort evidence and adds no durability barrier beyond the existing PREFLIGHT flush. When the Operational State Store is enabled, the same fingerprint helper populates its durable baseline, and startup verifies that the persisted digest and enabled-market list match the resolver's effective runtime selection before broker connection. A trading mode with no configured pairs and a mode whose configured pairs are all disabled are distinct fail-closed cases. The startup integration regression verifies the fingerprint is published before broker subscription and that reconnect readiness follows authoritative recovery.
 
 The process event, structured DEBUG/TRACE session filenames, and logger context share one immutable process identity: the UTC `startedAt` timestamp and `runtimeSessionId`. The development runner creates that identity once and passes it to the child process; its cumulative and timestamped terminal files use the same identity. A standalone `start` process generates its own identity and has no development terminal-capture files. See [Logging](./LOGGING.md) for exact filenames and stream lifecycle. Configuration-only/no-broker startup does not await optional Journal readiness, and logger context remains the immediate fallback when Journal is delayed or unavailable. Startup-failure and shutdown paths do not separately await the process-start publication promise; the existing Journal close lifecycle remains unchanged and may wait for Journal readiness. If the process exits before the Journal subscriber becomes ready, the Journal event is not guaranteed, but DEBUG/TRACE logs retain the process identity. When readiness is delayed, the event may appear after `harvester.started` in append order; its payload `startedAt` remains the process-entry time. Missing build metadata is recorded as null/unknown rather than inferred.
 
@@ -126,7 +129,7 @@ A `strategy.decision` event is emitted only when the strategy produces at least 
 
 The broker status `recovered` means the remote user-data subscription has returned; it does not mean Harvester has reconciled account state or reopened order placement.
 
-For `account.open_orders_captured`, `readiness: BLOCKED` with `UNOWNED_OPEN_ORDERS` is an ownership-audit classification, not a global trading-startup rejection. Every pair defaults to `externalOrdersPolicy: "ignore"`: manual/external orders remain unowned and untouched, and their unmatched execution reports are diagnostic-only rather than accounting failures. A pair can opt into the previous restriction with `externalOrdersPolicy: "block"`. Unmatched orders in Harvester's reserved `h-` client-ID namespace are treated as unresolved prior-process Harvester orders and remain blocked regardless of the external-order policy. External/manual fills are never added to Harvester Portfolio or RecoveryLedger. Manual balance changes can still affect exchange free-balance checks and cause normal exchange rejections. A transport reconnect alone does not clear an existing Harvester accounting/reconciliation latch. See [issue #667](https://github.com/45s/coinzilla/issues/667#issuecomment-6717086777).
+For `account.open_orders_captured`, `readiness: BLOCKED` with `UNOWNED_OPEN_ORDERS` is an ownership-audit classification, not a global trading-startup rejection. Every pair defaults to `externalOrdersPolicy: "ignore"`: manual/external orders remain unowned and untouched, and their unmatched execution reports are diagnostic-only rather than accounting failures. A pair can opt into same-symbol blocking with `externalOrdersPolicy: "block"`; this applies uniformly to every unmatched startup order, regardless of its client-order ID prefix. An unmatched execution report for a reserved `h-` client ID remains fail-closed and is never attributed to the current process. No external fill is added to Harvester Portfolio or RecoveryLedger. Manual balance changes can still affect exchange free-balance checks and cause normal exchange rejections. A transport reconnect alone does not clear an existing Harvester accounting/reconciliation latch. See [issue #667](https://github.com/45s/coinzilla/issues/667#issuecomment-6717086777).
 
 A broker `rpcError` explicitly marked `recoveryRequired: false` and carrying no contradictory reconciliation flag is diagnostic-only and does not itself invalidate the application recovery generation. Missing or malformed recovery metadata remains fail-closed. An actual `connectionClosed` status, including code `1006`, starts recovery; that abnormal close code does not identify the underlying network cause.
 
@@ -134,13 +137,19 @@ A broker `rpcError` explicitly marked `recoveryRequired: false` and carrying no 
 
 A standalone read-only audit can be run while Harvester remains stopped with `pnpm run testnet:audit`. It creates its own Journal session and writes both account events with phase `PREFLIGHT`; it does not start trading or alter exchange state. Exit code 2 means the audit was persisted successfully but open orders were found.
 
-For every trading startup, bootstrap fetches the full account balance snapshot and account-wide open orders, publishes `account.snapshot_captured` and `account.open_orders_captured` with `phase: PREFLIGHT`, and durably flushes each event before market subscriptions or trading-engine activation. `main()` starts the optional Journal service and invokes Harvester without awaiting `journalService.ready` before broker connection. The first required PREFLIGHT event flush waits for Journal readiness; if the Journal is unavailable or the flush is not durable, startup fails before market subscriptions proceed. If either account query fails, event mapping/publication fails, or either flush is not durable, startup fails closed. A pre-existing order is recorded as external/unowned and is never adopted or cancelled. The `BLOCKED` value is an audit classification, not a trading-readiness gate: `subscribeToUserData()` sets `state.ready = true` after queued events and other safety flags pass, without gating on open-order audit readiness. The current trading-enabled startup test explicitly allows market subscriptions/runtime startup with an unmatched open order. Its fake broker emits no market-price tick, so it does not prove that later strategy activity cannot overlap that unowned order. A prior-process Harvester order can be treated as external after restart; see #654. Programmatic callers of `main()` can inspect `journalService.ready` and `journalService.status`.
+For every broker-connected startup (including read-only mode), bootstrap reads the broker's full raw account-balance response and complete account-wide open-order set. The account-snapshot manager filters the runtime `AccountSnapshot` and its durable/Journal audit to base and quote assets from all configured market metadata (including disabled-pair metadata retained for audit) plus third-asset commission assets whose baseline is actually required by an applied fee. The raw PREFLIGHT balance list is held only in a temporary in-memory lookup map so a later third-asset commission can be compared with its original free/locked/total balance; unrelated wallet assets are not emitted in account-snapshot DTOs. Bootstrap publishes `account.snapshot_captured` and `account.open_orders_captured` with `phase: PREFLIGHT`; the durable-facts account snapshot record is committed before its Journal event is published and durably flushed. These barriers complete before market-data subscriptions and before user-data readiness opens. The trading engine object is composed earlier, but its `canTrade` gate remains closed until the queued user-data events and PREFLIGHT audits succeed.
+
+`main()` starts the optional Journal service and invokes Harvester without awaiting `journalService.ready` before broker connection. The first required PREFLIGHT event flush waits for Journal readiness; if the Journal is unavailable or the flush is not durable, startup fails before market subscriptions proceed. If either account query fails, event mapping/publication fails, or a required durable-facts/Journal barrier is not confirmed, startup fails closed. A pre-existing order is recorded as external/unowned and is never adopted or cancelled. The `BLOCKED` value is an audit classification, not a trading-readiness gate: `subscribeToUserData()` sets `state.ready = true` after queued events and other safety flags pass, without gating on open-order audit readiness. The current trading-enabled startup test explicitly allows market subscriptions/runtime startup with an unmatched open order. Its fake broker emits no market-price tick, so it does not prove that later strategy activity cannot overlap that unowned order.
+
+Same-process user-data reconnect publishes separate `RECOVERY` account and open-order audits and waits for their required durable-facts/Journal barriers before acknowledging the recovered broker generation. Trading-enabled graceful shutdown publishes a `CLOSING` account-balance audit after owned-order shutdown reconciliation; it does not publish a CLOSING open-orders snapshot. A targeted `COMMISSION_BASELINE` event records exactly one newly used third-asset commission baseline. There is no `OPENING` phase.
+
+The production `main()` entry point verifies/projects the ADR-0001 durable-facts ledger and refuses a second process session while prior `PROCESS_STARTED` facts exist; automatic runtime restoration remains disabled pending #654 Steps 8–9 acceptance. A direct bootstrap/test harness that omits this production gate is not evidence that restart is supported. Programmatic callers of `main()` can inspect `journalService.ready` and `journalService.status`.
 
 ## Write failures and durability
 
 - After the startup PREFLIGHT gate succeeds, ordinary event delivery to the Journal is asynchronous. Market-price evaluation, strategy policy, and fill accounting do not await Journal subscriber or filesystem writes.
-- Before any broker order-placement or cancellation call, Harvester publishes the corresponding order intent (`order.submission_requested` or `order.cancel_requested`) and awaits a successful durable Journal flush. If publication or durability fails, the broker write is not attempted and the affected pair is paused.
-- The explicit startup PREFLIGHT audit and trading-enabled CLOSING balance audit are lifecycle exceptions: each awaits a durable flush. A failure in either gate fails startup or reports incomplete shutdown; this is distinct from ordinary per-event observation.
+- Before any broker order-placement or cancellation call, Harvester commits the corresponding ADR-0001 durable-fact intent and publishes the matching Journal event under the existing durability barriers. The durable-facts store is the restart-evidence authority; the Journal remains an independently durable operational observer. If a required fact/event publication or durability acknowledgement fails, the broker write is not attempted and the affected pair is paused.
+- The explicit startup PREFLIGHT, same-process reconnect RECOVERY, and trading-enabled shutdown CLOSING account audits are lifecycle barriers. Account snapshot facts are committed before their Journal event and flush. A failure in PREFLIGHT blocks startup; a failure in RECOVERY keeps the generation unacknowledged and trading readiness closed; a failure in CLOSING reports incomplete shutdown. This is distinct from ordinary best-effort event observation.
 - Journal writes are serialized. The Journal validates the complete source-event graph against its lossless JSONL contract before append. A serialization or append failure is retained in writer state, marks the session `writeFailed`, rejects later record admission, and is surfaced by `Journal.flush()`/`close()`; the Journal must not report `durable: true` after an event was omitted. Records already accepted into the write queue still drain in order. EventBus `publish()`/`flush()` success is not a Journal persistence acknowledgement; inspect Journal `flush()`/`close()` results and `writeErrorCount`. See [Journal issue #889](https://github.com/45s/coinzilla/issues/889) and [PR #920](https://github.com/45s/coinzilla/pull/920).
 - The status becomes `degraded` and exposes `writeFailed` and `writeErrorCount` to programmatic callers.
 - A successful `record()` means the write completed; it does not mean the data was fsynced.
@@ -148,168 +157,74 @@ For every trading startup, bootstrap fetches the full account balance snapshot a
 - A successful close reports `durable: true`. A failed write/sync/close reports errors and does not claim durability.
 - Disk-full, permission, or filesystem errors can therefore leave a session incomplete. The Journal does not automatically recover writes in that session; resolve the filesystem issue and start a new process session.
 
-## Normal shutdown
+## Strategy-owned normal shutdown
 
-The sequence below is the implemented trading-enabled shutdown path. It is verified against
-`src/bootstrap/shutdown/create-shutdown-handler.js`, the Conservative engine's
-`cancelOwnedBuyOrdersForShutdown()` and `reconcileOwnedOrders()` workflows,
-`create-account-snapshot-manager.js`, and the process/lock cleanup in
-`src/index.js`. The diagram describes orchestration; the source remains authoritative.
+> **Owner-approved shutdown contract — [issue #1186](https://github.com/45s/coinzilla/issues/1186), implementation [PR #1190](https://github.com/45s/coinzilla/pull/1190):** This section records the required Conservative shutdown sequence, not the older `develop` behavior. The prior implementation stopped market-price/book intake and reconciled orders before cancelling BUYs; that ordering is historical context only and is not the contract. The canonical rules are defined in [the Conservative specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md#conservative-graceful-shutdown--protect-trading-before-stopping-services). Safety is state-driven: evaluate immediately after authoritative reconciliation; there is no arbitrary 20-second wait or quiet-period timer.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Signal as SIGINT or SIGTERM
-    participant Main as Process main
-    participant Stop as Shutdown handler
-    participant Market as Price and book streams
-    participant Engine as Trading engine
-    participant User as User-data stream and queue
-    participant Broker as Broker WebSocket API
-    participant Journal
-    participant Bus as EventBus
-    participant Telegram as Optional Telegram subscriber
-    participant Locks as Host and application locks
+Shutdown is an application-level coordination process. The application coordinator knows only the strategy participant contract; each strategy owns its domain safety rules. Conservative owns its BUY gate, owned-order cancellation, fill/commission reconciliation and recovery SELL coverage. Other strategies register independent policies.
 
-    Signal->>Main: shutdown(reason)
-    Main->>Stop: runtime.stop()
-    Stop->>Stop: stopped=true; ready=false; status=STOPPING
-    Stop->>Market: unsubscribe price and book subscriptions
-    Market-->>Stop: settle all unsubscribe attempts
-    Stop->>Stop: await accepted market-price tasks
-    Stop->>User: await current accepted event queue
-    Note over Stop,User: User-data intake remains connected through BUY cancellation and final owned-order reconciliation.
+The required order is:
 
-    alt Trading enabled
-        Stop->>Engine: reconcileOwnedOrders() before cancellation
-        Engine->>Broker: resolve pending client IDs; read owned open orders, order history and fills
-        Broker-->>Engine: canonical owned-order snapshots
-        Engine-->>Stop: initial reconciliation result
-        alt Initial reconciliation fails
-            Stop->>Stop: add OWNED_ORDER_RECONCILIATION_FAILED
-        end
+1. **Activate every strategy shutdown gate synchronously.** No service is stopped before every participant has received the shutdown request.
+2. **Conservative immediately starts cancelling all Harvester-owned active BUYs.** It does not cancel manual/external orders. The final submission gate rejects every BUY path; only an explicitly authorized recovery SELL may be submitted.
+3. **Keep required services alive.** Market-price/book intake, Binance user-data intake, broker connectivity and operator control remain available while each market reconciles pending order identity, cancellation outcomes, racing fills and actual commissions. Accepted market-price events continue through recovery-only evaluation; no BUY, trailing-BUY replacement, retry or delayed BUY path may run.
+4. **Secure recovery SELL coverage per market.** Recalculate from final Position and RecoveryLedger facts. An old SELL must reach a confirmed terminal state and its complete fill history must be reconciled before replacement. Verify the final SELL against authoritative Binance order state and net financial coverage.
+5. **Mark each market SAFE_TO_SHUTDOWN immediately when all conditions are proven and Journal-durable.** A safe market does not release shared services while another market or strategy is unsafe. Late execution evidence invalidates the affected marker and triggers immediate re-evaluation. No quiet-period timer or arbitrary delay is used.
+6. **Publish and durably flush CLOSING.** The snapshot is not published as COMPLETE until every strategy participant is safe. A failed snapshot or Journal barrier keeps the required connections alive.
+7. **Stop user-data intake and drain accepted events.** Recheck strategy safety if late accepted execution evidence invalidated a marker, then flush the Journal again.
+8. **Stop operator control and market-price/book intake, drain accepted market work, then disconnect Binance.** The process publishes STOPPED and closes Journal/EventBus/releases locks only after runtime shutdown is confirmed.
 
-        Stop->>Engine: cancelOwnedBuyOrdersForShutdown()
-        loop Each acknowledged owned OPEN or PARTIALLY_FILLED BUY
-            Engine->>Bus: publish order.cancel_requested
-            Bus->>Journal: deliver cancellation intent
-            Engine->>Journal: durable flush
-            alt Durable cancellation intent succeeds
-                Engine->>Broker: cancel BUY
-                Broker-->>Engine: canonical cancellation response
-                Engine->>Broker: getFills(orderId)
-                Broker-->>Engine: canonical execution history
-                Engine->>Engine: validate fill identity, deduplicate and verify executed-quantity parity
-                Engine->>Engine: apply cancellation-racing fills through normal accounting
-            else Intent, cancellation or fill reconciliation fails
-                Engine->>Engine: mark outcome unsafe and pause affected market
-            end
-        end
-        Note over Engine,User: Execution reports may arrive during WebSocket API cancellation; the stream remains active so accepted reports can be applied before the audit.
-        Stop->>User: await queued cancellation and execution-report work
-        Stop->>Engine: reconcileOwnedOrders() final verification
-        Engine->>Broker: reconcile registered owned orders against canonical WebSocket API request/response state
-        Broker-->>Engine: final canonical order and fill state
-        Engine-->>Stop: final reconciliation result
-        Note over Stop,Engine: This final pass verifies state; the handler does not call BUY cancellation a second time. A still-open BUY is unresolved and fails shutdown.
-    else Read-only or no trading
-        Note over Stop,Engine: No owned-order cancellation and no trading CLOSING audit.
-    end
+### Strategy and market safety markers
 
-    Stop->>User: disconnect user-data subscription
-    User-->>Stop: intake-stop result
-    Stop->>Stop: intakeStopped=true; await final accepted event queue
+Conservative tracks every configured market independently. A market is safe only when the BUY gate is active; no owned BUY is pending, open, partially filled or unknown; cancellation outcomes, fills and actual commissions are reconciled; no order/accounting transition remains ambiguous; recovery SELL coverage is authoritatively verified or no recovery obligation remains; and the Journal durability barrier succeeds.
 
-    alt Trading enabled
-        Stop->>Engine: inspect owned order statuses and accounting flags
-        Note over Stop,Engine: FILLED, CANCELED, REJECTED, EXPIRED and EXPIRED_IN_MATCH are terminal. OPEN or PARTIALLY_FILLED SELLs are intentionally exempt.
-        alt Unresolved owned order or unsafe accounting/reconciliation
-            Stop->>Stop: add CLOSING audit reasons; classify audit INCOMPLETE
-        else Only terminal orders and known open SELLs
-            Stop->>Stop: classify audit COMPLETE
-        end
-        Stop->>Broker: getAccountSnapshot()
-        Broker-->>Stop: account balances
-        Stop->>Bus: publish account.snapshot_captured with phase CLOSING
-        Bus->>Journal: deliver CLOSING snapshot
-        Stop->>Journal: flush queued writes and filesystem sync
-        alt Durable flush confirmed
-            Journal-->>Stop: durable=true
-        else Snapshot query, publish or flush fails
-            Journal-->>Stop: error
-            Stop->>Stop: record shutdown failure; do not claim a durable CLOSING audit
-        end
-    end
+The marker is process-local. It is not trusted after restart; rebuild safety from the Journal and authoritative exchange state. An execution report, REST reconciliation result, newly discovered owned order, changed SELL state or accounting discrepancy invalidates the affected marker. A market is re-audited before the shared shutdown barrier can pass.
 
-    Stop->>Broker: disconnect()
-    Broker-->>Stop: disconnect result
-    alt All shutdown and audit stages confirmed
-        Stop->>Stop: status=STOPPED
-    else Any shutdown or audit blocker remains
-        Stop->>Stop: status=SHUTDOWN_INCOMPLETE
-        Stop->>Stop: log and attach shutdownDiagnostics
-    end
-    Stop-->>Main: resolve or reject runtime.stop()
-    Main->>Bus: publish harvester.stopped; flush accepted events
-    opt Telegram notifications enabled
-        Main->>Telegram: close and drain accepted notifications
-        Telegram-->>Main: cleanup result
-    end
-    Main->>Journal: close and drain writes; sync and close session file
-    Main->>Bus: close with 5000 ms timeout
-    alt Runtime stop and Journal close both confirmed
-        Main->>Locks: release application lock, then broker-wide host lock
-        Locks-->>Main: release result
-    else Runtime stop or Journal close not confirmed
-        Note over Main,Locks: Retain the trading-process locks and exit non-zero.
-    end
-    Main->>Main: close logger transports
-```
+### Ambiguous orders and fail-closed behavior
+
+Keep the original client order ID for an ambiguous placement. Reconcile by canonical identity; never retry placement or submit a duplicate recovery SELL just because an acknowledgement timed out. Never cancel an order unless canonical ownership is proven. An external/manual open order is never adopted, canceled or modified; its presence alone does not block shutdown safety. An actual unowned execution or unresolved account-wide ownership/balance discrepancy remains a separate integrity blocker. If an owned BUY/SELL remains UNKNOWN, terminal fill history is incomplete, recovery coverage is insufficient, accounting is unsafe, or Journal durability cannot be proven, report the exact strategy/market/blocker, keep required services connected and do not publish STOPPED.
+
+A failure in one market does not erase another market's SAFE_TO_SHUTDOWN marker, but it prevents shared services from stopping. The coordinator waits for all strategy participants; it does not decide whether a Conservative order is safe.
 
 ### Ambiguous order acknowledgements during shutdown
 
-A placement request can have an uncertain local outcome even when Binance accepted the order. Harvester must retain the original client order ID and keep the order UNKNOWN; it must not retry placement. An authoritative user-data `executionReport` with the matching owned `clientOrderId` and exchange-assigned `brokerOrderId` resolves the identity. The first matching `NEW` report advances the registry from UNKNOWN to OPEN; duplicate reports are idempotent, and conflicting client/broker identities remain rejected.
+A placement request can have an uncertain local outcome even when Binance accepted the order. Keep the original client order ID and retain the order as UNKNOWN; never retry placement because an acknowledgement timed out. An authoritative user-data `executionReport` with the matching owned `clientOrderId` and exchange-assigned `brokerOrderId` resolves identity. The first matching `NEW` report advances UNKNOWN to OPEN; duplicates are idempotent and conflicting identities remain rejected.
 
-This identity recovery is important to shutdown: the initial `reconcileOwnedOrders()` can now see the exchange identity and the existing cancellation selector can cancel the acknowledged owned BUY. If identity reconciliation remains incomplete, shutdown must not guess an order ID or cancel an external order; it records an incomplete CLOSING audit, rejects shutdown, and the process entrypoint retains its locks. Open owned SELLs remain intentionally preserved. The broker requests Binance `newOrderRespType: "RESULT"` for canonical placement so `LIMIT_MAKER` acknowledgements contain the order facts required by the canonical adapter instead of Binance's minimal default ACK.
+Shutdown starts cancellation of known Harvester-owned BUYs immediately. Pending or UNKNOWN identities are reconciled while market-price, user-data and broker services remain connected; cancel an order only after canonical ownership is proven. Never guess an exchange order ID or cancel an external/manual order. The broker requests Binance `newOrderRespType: "RESULT"` for canonical placement so `LIMIT_MAKER` acknowledgements contain the order facts required by the canonical adapter instead of Binance's minimal default ACK.
 
-### Ordering and safety invariants
+### Shutdown-only recovery and safety pauses
 
-- The handler marks shutdown in progress (`stopped=true`, `ready=false`, `status=STOPPING`) before unsubscribing market streams. It unsubscribes both market-price and book-ticker subscriptions, waits for already accepted market-price tasks, and waits for the current user-data queue before touching owned orders. No new strategy decisions should be started by later market callbacks.
-- For trading-enabled runs, the first owned-order reconciliation resolves pending client-order identities and reads canonical order state before cancellation selection. The cancellation workflow selects only registered, acknowledged BUY orders in OPEN or PARTIALLY_FILLED state. Each broker cancellation is preceded by a durably flushed `order.cancel_requested` event. The canonical response must match the owned order and be terminal; canonical fills are then checked for identity, duplicates and cumulative executed-quantity parity before normal accounting applies them.
-- User-data intake remains active through cancellation and the final owned-order reconciliation. After cancellation, the handler awaits queued user-data work, performs its final WebSocket API/stream owned-order reconciliation, disconnects user-data intake, marks intake stopped, and awaits the final accepted queue. The final reconciliation is verification, not another cancellation pass. If it leaves an owned BUY non-terminal, shutdown fails closed.
-- Shutdown never cancels SELL orders. An owned SELL in OPEN or PARTIALLY_FILLED state is explicitly excluded from the unresolved-order check and remains resting at the broker. Other non-terminal/unknown owned-order states are unresolved.
-- Only trading-enabled runs capture a CLOSING account audit. The snapshot is fetched while broker WebSocket API is connected, filtered to configured market assets plus third-asset commission baselines actually used in the session, checked for required asset coverage, published as `account.snapshot_captured` with `phase: "CLOSING"`, and accepted only after the event publisher confirms a durable flush. Unrelated wallet assets remain excluded. An audit reason produces `auditStatus: "INCOMPLETE"`; a query, publish or flush failure means no durable CLOSING audit can be claimed. The CLOSING event is a balance snapshot, not an open-orders audit or a Portfolio import.
-- Broker disconnect is attempted after the CLOSING audit attempt, even when earlier shutdown stages recorded errors. The process then publishes `harvester.stopped`, flushes EventBus work, closes the optional Telegram subscriber, closes Journal, closes EventBus, and finally evaluates lock release.
+The shutdown-only recovery SELL path is a narrowly authorized exception, not a general pause override. The final submission gate permits it only while stopping, for a SELL with purpose `RECOVERY_SELL`, and while the explicit shutdown-recovery submission scope is active. That does not prove that every market pause is safe to bypass.
+
+The latest-transition evaluator and shutdown recovery workflow both reject a market in `state.paused`. Keep those guards: a hard strategy safety pause must never be bypassed by shutdown recovery. The shutdown safety auditor also treats a durable pause, or any non-recovery-managed pause, as an explicit `STRATEGY_SAFETY_PAUSED` blocker. Recovery-managed cancellation pauses remain separately identified and fail closed until their canonical cancellation/reconciliation facts are resolved.
+
+The PR #1190 regression fixture uses order-specific cancellation quantities: zero for BUY cancellation and the already-recorded cumulative fill quantity for the recovery SELL cancellation. This keeps terminal order quantity consistent with the complete distinct fill history. The important recovery boundary is the remaining sellable quantity above `keepQuantity`: when a late SELL fill leaves sellable quantity, shutdown must cancel/reconcile the stale SELL and submit a correctly sized replacement; when it consumes all sellable quantity, only the retained `keepQuantity` remains and no replacement is required. The workflow now bases `requiresSell` on sellable quantity, not on an outstanding cost balance that cannot be recovered from retained inventory. Hard and unresolved recovery-managed pauses remain fail-closed; no pause guard is bypassed.
+
+### Safety and lifecycle invariants
+
+- The strategy shutdown gate is activated before shutdown context construction or shared-service cleanup. It rejects initial BUYs, trailing-BUY replacements, retries, delayed evaluations and every final broker-boundary BUY submission.
+- Market-price/book intake, Binance user-data intake, operator control and broker connectivity remain available while owned BUY cancellation, pending identity resolution, cancellation outcomes, racing fills and actual commissions are reconciled. Accepted market-price events use recovery-only evaluation; only recovery SELL work is allowed.
+- Cancel only registered, Harvester-owned BUYs. Each broker cancellation is preceded by a durably flushed `order.cancel_requested` event. The canonical response must match the owned order and be terminal; canonical fills are checked for identity, duplicates and cumulative executed-quantity parity before normal accounting applies them.
+- User-data intake remains active through BUY cancellation and final owned-order reconciliation. After the CLOSING snapshot barrier, stop user-data intake and drain accepted events. If late accepted evidence invalidates a market marker, reconcile again, re-verify recovery SELL coverage and publish an updated CLOSING snapshot before shared cleanup.
+- Shutdown does not cancel SELLs as generic cleanup. It may cancel only a Harvester-owned recovery SELL that no longer covers the final recovery plan. Before replacement, durably record cancellation intent, confirm the canonical terminal order, reconcile complete terminal fill history and actual commissions, and apply those fills exactly once. Then submit a recovery SELL only; never submit a standing BUY or a blind duplicate. Other valid owned SELLs remain resting; external/manual orders are never adopted, canceled or modified.
+- After recovery replanning, perform another canonical owned-order reconciliation and final coverage audit. An OPEN or PARTIALLY_FILLED recovery SELL is acceptable only when its remaining quantity and net proceeds cover the final recovery obligation and configured profit target, including actual commission facts. UNKNOWN, stale, undersized, financially insufficient or otherwise unverifiable SELL state keeps the market unsafe.
+- Each market's SAFE_TO_SHUTDOWN marker is independent and process-local. It is set only after all order/fill/accounting facts are reconciled and the Journal evidence is durable. Late execution/order evidence invalidates the affected marker. A safe market cannot release shared services while another market or strategy participant is unsafe.
+- Only trading-enabled runs publish the CLOSING account audit. Fetch it while broker WebSocket API is connected; include configured market assets and third-asset commission baselines actually used in the session; validate required asset coverage; publish `account.snapshot_captured` with `phase: "CLOSING"`; and require a durable flush. Unrelated wallet assets remain excluded. The CLOSING event is a balance snapshot, not an open-orders audit or a Portfolio import.
+- Stop operator control and market-price/book intake, drain accepted market work, then disconnect Binance only after all strategy participants are safe and the CLOSING/Journal barrier is durable. Publish STOPPED only after runtime shutdown and cleanup are confirmed.
 
 ### Failure and process-lock behavior
 
-For trading-enabled runs, any owned-BUY cancellation failure, initial/final owned-order reconciliation failure, unresolved non-terminal/unknown owned order, or unsafe user-data/accounting state makes the CLOSING audit INCOMPLETE and rejects runtime shutdown. Market-intake unsubscribe errors, user-data-intake stop errors, CLOSING snapshot query/publish/flush errors, and broker-disconnect errors also make runtime shutdown fail. The process sets a non-zero exit status, still attempts later cleanup, and retains the trading-process locks because `runtime.stop()` was not confirmed. When shutdown is incomplete, the runtime status is `SHUTDOWN_INCOMPLETE`, never `STOPPED`. The thrown `AggregateError` exposes a `shutdownDiagnostics` object and the structured error log includes the same safe summary: the status before shutdown, all CLOSING audit reasons, stage-specific reconciliation failures with category/stage/retryability and error messages, cleanup failure names/messages, accounting/reconciliation/safety-halt flags, retryable recovery category/stage/generation, current and last-acknowledged recovery generations, and exact unresolved owned-order symbol, side, client/broker IDs, status, executed quantity and original quantity. Deliberately preserved OPEN/PARTIALLY_FILLED SELLs are excluded from the unresolved-order list. Broker-disconnect and other post-snapshot cleanup failures are reported as cleanup failures, not retroactively added to the already-published CLOSING audit reasons. The diagnostics contain normalized identity/accounting facts rather than raw broker payloads. A successful shutdown sets `STOPPED` only after broker disconnect and all cleanup checks succeed.
+If BUY cancellation, identity resolution, order/fill reconciliation, actual-commission accounting, recovery SELL coverage, accepted user-data drain, CLOSING snapshot or its Journal barrier cannot be proven, keep the required trading and recovery services connected. Reject runtime shutdown, report the exact strategy/market/blocker, retain Journal/EventBus/process locks and never publish STOPPED. A late or UNKNOWN order is not a reason to disconnect.
 
-The process owns two Harvester locks: a broker-wide host lock and an
-application process lock. Both live under
-`~/.coinzilla/harvester/process-locks/`, outside the logs tree. Lock release
-is allowed only when runtime shutdown was confirmed and Journal close returned
-a successful result. If runtime shutdown is uncertain, or Journal
-close/drain/sync is not confirmed, both locks are retained. The release
-function removes the application lock first and only then the host lock; if
-application-lock release is uncertain, the host lock is deliberately
-retained. A failed lock release is reported and leaves the remaining lock in
-place.
+Post-safety cleanup failures (for example, an intake unsubscribe or broker-disconnect failure) are recorded separately and make runtime shutdown incomplete. Continue only cleanup that is safe after the strategy barrier; do not claim STOPPED. The thrown `AggregateError` exposes `shutdownDiagnostics` and the structured log includes the pre-shutdown status, CLOSING audit reasons, stage-specific reconciliation failures, cleanup errors, accounting/reconciliation/safety-halt flags, retryable recovery generation data and exact unresolved owned-order identities/status/quantities. An OPEN/PARTIALLY_FILLED recovery SELL is excluded from unresolved orders only after the final coverage audit proves it satisfies the plan. Diagnostics contain normalized identity/accounting facts, never raw broker payloads.
 
-Separately, the Journal package owns a hidden `.coinzilla-journal.lock` in the
-active session directory while its JSONL writer is open. Journal removes only
-the lock it acquired. This package-level writer lock is not one of the two
-Harvester process-ownership locks.
+The process owns two Harvester locks: a broker-wide host lock and an application process lock. Both live under `~/.coinzilla/harvester/process-locks/`, outside the logs tree. Release is allowed only when runtime shutdown was confirmed and Journal close returned a successful result. If runtime shutdown is uncertain, or Journal close/drain/sync is not confirmed, retain both locks. Release the application lock first and only then the host lock; if application-lock release is uncertain, deliberately retain the host lock. A failed lock release is reported and leaves the remaining lock in place.
 
-An EventBus close timeout (bounded at five seconds) still causes a non-zero process exit, but it does not by itself retain the trading lock when runtime shutdown and Journal close were both confirmed. Telegram/log-transport cleanup failures are also reported separately from the runtime-stop and Journal-close lock-release gates. This distinction prevents an ancillary delivery failure from being described as an unresolved trading state.
+Separately, the Journal package owns a hidden `.coinzilla-journal.lock` in the active session directory while its JSONL writer is open. Journal removes only the lock it acquired. This package-level writer lock is not one of the two Harvester process-ownership locks.
 
-The handler's shutdown ordering and basic success/error aggregation are covered by
-`create-shutdown-handler.test.js`. Process tests in `src/index.test.js` verify
-that runtime-stop failure and unconfirmed Journal close retain the process lock.
-The tests do not establish an additional post-reconciliation BUY-cancellation
-pass; the sequence above intentionally documents the implementation that exists.
+An EventBus close timeout (bounded at five seconds) causes a non-zero process exit, but does not by itself retain the trading lock when runtime shutdown and Journal close were both confirmed. Telegram/log-transport cleanup failures are reported separately from runtime-stop and Journal-close lock-release gates; an ancillary delivery failure must not be described as unresolved trading state.
 
-A process kill, machine crash, power loss, or failed filesystem sync can still lose recent records. The Journal is not an unconditional durability guarantee.
+The deterministic regression suite covers gate-before-cleanup ordering, per-market and per-strategy barriers, BUY submission races, recovery-only price evaluation, cancellation-racing fills, late evidence invalidation, recovery SELL coverage, incomplete shutdown and process-lock retention. A process kill, machine crash, power loss or failed filesystem sync can still lose recent records; the Journal is not an unconditional durability guarantee.
 
 ## Diagnosing a missing or incomplete session
 
@@ -452,4 +367,4 @@ process-restart recovery. TESTNET acceptance remains PAUSED / UNVERIFIED.
 
 ## External open orders and strategy eligibility
 
-The account-wide audit records all open orders durably and classifies unmatched identities without adopting or modifying them. Manual/external orders are ignored by default per pair; set `externalOrdersPolicy: "block"` on a pair to retain the same-symbol evaluation/submission restriction. Unmatched external user-data reports are diagnostic-only under the default policy and never affect Harvester accounting. Harvester-generated `h-` client IDs from a prior process remain unresolved Harvester orders and block their symbol until restart recovery is implemented. The audit snapshot still refreshes these classifications only after its durable Journal barrier. Manual orders may change exchange free balances, so normal balance validation/rejections still apply.
+[ADR-0004](./architecture/decisions/0004-startup-open-orders-are-external.md) records the accepted ownership rule, implemented in [PR #1166](https://github.com/45s/coinzilla/pull/1166). The account-wide audit records all open orders durably and classifies unmatched identities without adopting or modifying them. Every unmatched startup order is external to the current process, regardless of client-order ID prefix. `externalOrdersPolicy: "ignore"` allows that market to continue strategy evaluation; `externalOrdersPolicy: "block"` applies the same-symbol evaluation/submission restriction to any unmatched order. Under `"block"`, a newly observed unmatched manual execution report immediately installs a provisional guard for that symbol and schedules a fresh account-wide open-order snapshot. The report is diagnostic-only for accounting: it is never adopted or applied to Portfolio/RecoveryLedger and does not close global user-data readiness. The guard is replaced only after the complete snapshot crosses the existing durable Journal barrier; a still-open order remains a symbol-scoped blocker, an empty/closed result releases the provisional guard, and read/durability failure retains it. An unmatched execution report for a reserved `h-` client ID remains fail-closed because it may represent an execution from a previous process; it is never attributed to the current process. Manual orders may change exchange free balances, so normal balance validation/rejections still apply.

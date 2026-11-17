@@ -9,6 +9,15 @@
 **Status:** IMPLEMENTATION AUDIT CLOSED (2026-11-07) — in-scope Conservative source behavior, regression coverage inventory, and supporting documentation have been reconciled against the canonical specification. Test execution and exact-head CI are a separate pending verification phase; no test-pass claim is made. Historical exchange-filter inputs not captured in the original logs remain UNVERIFIED and non-blocking. TESTNET acceptance is NOT CLAIMED.  
 **Safety:** No TESTNET orders, bot restarts, credential requests, or exchange writes were performed.
 
+## Subsequent independent session evidence — 2026-11-14/15
+
+This report's 2026-11-06 session, evidence boundary and closure decision above remain historical and unchanged. A separate Harvester Binance TESTNET session on 2026-11-14/15 has since been fully audited; it is **not** a continuation of the 2026-11-06 session and does not revise its findings.
+
+- [2026-11-14/15 TESTNET session audit](../sessions/AUDIT_SESSION_2026-11-14_23-41-12Z.md) — complete artifact hashes/parse counts, 42-record Journal index, exchange filter metadata, ZRO fill/account reconciliation, full structured order-transition error and shutdown failure diagnostics.
+- [F-054/F-055 findings](AUDIT_FINDINGS.md#2026-11-14-15-testnet-session-findings-addendum) and [tracking issue #1132](https://github.com/45s/coinzilla/issues/1132).
+- F-054 confirms a FILLED → zero-cumulative NEW/OPEN order-event staleness defect; F-055 records a separate shutdown recovery SELL replacement failure whose root cause remains UNKNOWN.
+- The report is evidence-only. No source fix, test pass, TESTNET acceptance or exchange operation is claimed.
+
 ## Executive result
 
 The accessible Journal and the two verbatim 100-row order-history comments establish 23 Harvester order submissions in the 07:00 session: six DOGEUSDT orders and seventeen ZROUSDT orders. The Journal records 12 applied fills, 13 duplicate-fill events, nine cancellation requests and nine confirmed cancellations, and one ZRO recovery-cycle completion.
@@ -1000,3 +1009,15 @@ Persist safety-halt scope, reason, generation and required operator/reconciliati
 Test graceful restart and abrupt termination after each pause cause, including accounting failure, unknown order outcome, user-data liveness failure and reconciliation conflict. Assert that no market-price event can cause a new order before the prior halt is restored and resolved.
 
 **Related:** F-031 / #654, F-028, F-023, F-024 / #773, #769 and #774.
+
+## 2026-11-13 — LIVE trading-session audit addendum
+
+A separate audit of the supplied 2026-11-12/13 LIVE journal, Harvester log and trace log is recorded in [the session report](../sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md), with the [critical order/fill ledger](../sessions/AUDIT_SESSION_2026-11-12_19-27-13Z_ORDER_FILL_LEDGER.md).
+
+This is a session-behaviour audit, not a source-file inventory and not a replacement for the earlier 2026-11-06 audit. The 10 completed cycles and all traded-asset balance deltas reconcile exactly. However, two BUY fills arrived after shutdown started; the stopping path skipped recovery-SELL recalculation, and CLOSING still reported COMPLETE while the ADA and WLD recovery SELLs were undersized against the final active positions. Track the confirmed shutdown lifecycle gap in [#1097](https://github.com/45s/coinzilla/issues/1097).
+
+The session also shows ADAFDUSD enabled at runtime even though it was disabled in the tracked configuration at the reported commit; the runtime working tree was dirty. Four unowned WLDFDUSD BUY orders were present at PREFLIGHT while the strategy traded that same symbol under IGNORE policy. These findings are recorded as F-046 and F-047 in the findings register. No exchange query or order operation was performed during the audit.
+
+## 2026-11-13 — separate LIVE session audit
+
+A separate 2026-11-13 Binance production LIVE session is documented in [the session audit](../sessions/AUDIT_SESSION_2026-11-13_15-50-59Z.md) and [order/fill ledger](../sessions/AUDIT_SESSION_2026-11-13_15-50-59Z_ORDER_FILL_LEDGER.md). Its 60 applied fills, 21 recovery cycles, 0.30015 FDUSD net profit and per-cycle retained inventory reconcile exactly to the supplied PREFLIGHT/CLOSING balances. It did not reproduce the shutdown race in F-045/#1097. New evidence gaps and follow-ups are registered as F-048–F-053 and tracked in #1101–#1105. This separate session must not be merged with the earlier shutdown/configuration/external-order incident evidence.
