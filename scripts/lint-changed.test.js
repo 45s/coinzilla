@@ -78,7 +78,7 @@ function hasRule({ messages, ruleId }) {
 function createSwitchCases() {
   return [...Array(16).keys()]
     .map((index) => `case ${index}: return ${index};`)
-    .join("\\n");
+    .join("\n");
 }
 
 test("strict policy inherits the canonical workspace rules and overrides only approved thresholds", async () => {
@@ -199,9 +199,9 @@ test("new JavaScript files are selected", async () => {
       await commitFile({
         cwd,
         path: "baseline.js",
-        source: "export const baseline = true;\\n",
+        source: "export const baseline = true;\n",
       });
-      await writeFile(join(cwd, "new-file.js"), "export const newFile = true;\\n");
+      await writeFile(join(cwd, "new-file.js"), "export const newFile = true;\n");
       git({
         cwd,
         args: ["add", "--", "new-file.js"],
@@ -301,7 +301,7 @@ test("renamed files select the destination path", async () => {
 test("copied files select the new destination path", async () => {
   await withRepository({
     callback: async (cwd) => {
-      const source = "export const copiedValue = 1;\\n";
+      const source = "export const copiedValue = 1;\n";
       await commitFile({
         cwd,
         path: "original.js",
