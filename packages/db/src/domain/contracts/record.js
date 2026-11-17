@@ -5,9 +5,28 @@ function assertPlainRecord({ value, label }) {
     throw new TypeError(`${label} must be a plain object`)
   }
 
-  const prototype = Object.getPrototypeOf(value)
+  let prototype
+  let descriptors
+  try {
+    prototype = Object.getPrototypeOf(value)
+    descriptors = Object.getOwnPropertyDescriptors(value)
+  } catch {
+    throw new TypeError(`${label} must be a readable plain object`)
+  }
+
   if (prototype !== Object.prototype && prototype !== null) {
     throw new TypeError(`${label} must be a plain object`)
+  }
+
+  for (const key of Reflect.ownKeys(descriptors)) {
+    const descriptor = descriptors[key]
+    if (
+      typeof key !== "string"
+      || !descriptor.enumerable
+      || !Object.hasOwn(descriptor, "value")
+    ) {
+      throw new TypeError(`${label} must contain enumerable string data properties only`)
+    }
   }
 
   return value
@@ -33,12 +52,31 @@ function assertJsonValue({ value, ancestors, label }) {
   ancestors.add(value)
 
   if (Array.isArray(value)) {
+    if (Object.getPrototypeOf(value) !== Array.prototype) {
+      throw new TypeError(`${label} must contain plain arrays`)
+    }
+
+    for (const key of Reflect.ownKeys(value)) {
+      if (key === "length") {
+        continue
+      }
+      if (typeof key !== "string" || !/^(0|[1-9][0-9]*)$/.test(key)) {
+        throw new TypeError(`${label} arrays must not contain custom properties`)
+      }
+
+      const descriptor = Object.getOwnPropertyDescriptor(value, key)
+      if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
+        throw new TypeError(`${label} arrays must contain data elements only`)
+      }
+    }
+
     for (let index = 0; index < value.length; index += 1) {
-      if (!Object.hasOwn(value, index)) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(index))
+      if (!descriptor) {
         throw new TypeError(`${label} must not contain sparse arrays`)
       }
       assertJsonValue({
-        value: value[index],
+        value: descriptor.value,
         ancestors,
         label,
       })
