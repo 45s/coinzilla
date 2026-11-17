@@ -182,6 +182,7 @@ async function createPendingOrderCandidates({ context, decision, marketMetadata 
       await context.onOrderValidationFailure({
         order: candidate.pendingOrder,
         error,
+        ...getOwnershipMetadata({ ownership: candidate.ownership }),
       })
       throw error
     }
@@ -213,7 +214,8 @@ async function persistDurableSubmissionOutcome({ context, order, outcome, purpos
   }
 }
 
-async function persistDurableSubmissionIntent({ context, pendingOrder, purpose, ownership } = {}) {
+async function persistDurableSubmissionIntent({ context, candidate } = {}) {
+  const { pendingOrder, purpose, ownership } = candidate
   try {
     const result = await context.onDurableSubmissionIntent({
       order: pendingOrder,
@@ -344,6 +346,7 @@ async function preparePendingSubmission({ context, candidate } = {}) {
     await context.onSubmissionDeferred({
       order: pendingOrder,
       purpose,
+      ...getOwnershipMetadata({ ownership }),
       registered: true,
       ...dispatchDeferral,
     })
@@ -398,6 +401,7 @@ async function handleBrokerPlacementException({ context, candidate, error } = {}
     order: pendingOrder,
     outcome: "UNKNOWN",
     purpose,
+    ownership,
   })
   if (!durableOutcome.ok) {
     await context.onSubmissionFailure({
@@ -411,6 +415,7 @@ async function handleBrokerPlacementException({ context, candidate, error } = {}
     order: pendingOrder,
     error,
     outcome: "UNKNOWN",
+    ...getOwnershipMetadata({ ownership }),
   })
   return toResult({ error })
 }
@@ -426,6 +431,7 @@ async function handleBrokerFailureResult({ context, candidate, brokerResult } = 
     order: pendingOrder,
     outcome,
     purpose,
+    ownership,
   })
   if (!durableOutcome.ok) {
     await context.onSubmissionFailure({
@@ -439,6 +445,7 @@ async function handleBrokerFailureResult({ context, candidate, brokerResult } = 
     order: pendingOrder,
     errors,
     outcome,
+    ...getOwnershipMetadata({ ownership }),
   })
   return toResult({ errors })
 }
@@ -451,6 +458,7 @@ async function handleMismatchedAcknowledgement({ context, candidate } = {}) {
     order: pendingOrder,
     outcome: "UNKNOWN",
     purpose,
+    ownership,
   })
   if (!durableOutcome.ok) {
     await context.onSubmissionFailure({
@@ -475,6 +483,7 @@ async function handleBrokerAcknowledgement({ context, candidate, acknowledgedOrd
     order: acknowledgedOrder,
     outcome: "ACKNOWLEDGED",
     purpose,
+    ownership,
   })
   if (!durableOutcome.ok) {
     await context.onSubmissionFailure({
@@ -485,12 +494,16 @@ async function handleBrokerAcknowledgement({ context, candidate, acknowledgedOrd
     return durableOutcome
   }
   try {
-    await context.onAcknowledgedOrder({ order: acknowledgedOrder })
+    await context.onAcknowledgedOrder({
+      order: acknowledgedOrder,
+      ...getOwnershipMetadata({ ownership }),
+    })
   } catch (error) {
     await context.onSubmissionFailure({
       order: pendingOrder,
       error,
       outcome: "UNKNOWN",
+      ...getOwnershipMetadata({ ownership }),
     })
     throw error
   }
@@ -520,8 +533,7 @@ async function submitBrokerOrder({ context, candidate } = {}) {
   if (finalDeferral) {
     return deferAfterDurableSubmissionIntent({
       context,
-      pendingOrder,
-      purpose,
+      candidate,
       deferral: finalDeferral,
     })
   }
@@ -551,8 +563,7 @@ async function submitBrokerOrder({ context, candidate } = {}) {
   }
   return handleBrokerAcknowledgement({
     context,
-    pendingOrder,
-    purpose,
+    candidate,
     acknowledgedOrder,
   })
 }
