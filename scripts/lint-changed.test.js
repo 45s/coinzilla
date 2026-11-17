@@ -252,6 +252,30 @@ test("new CommonJS files are selected", async () => {
   });
 });
 
+test("uncommitted and untracked JavaScript files are selected locally", async () => {
+  await withRepository({
+    callback: async (cwd) => {
+      await commitFile({
+        cwd,
+        path: "tracked.js",
+        source: "export const value = 1;\n",
+      });
+      await writeFile(join(cwd, "tracked.js"), "export const value = 2;\n");
+      await writeFile(join(cwd, "untracked file.js"), "export const fresh = true;\n");
+      const files = await getChangedFiles({
+        cwd,
+        baseRef: "main",
+        headRef: "HEAD",
+      });
+      assert.deepEqual(
+        files,
+        ["tracked.js", "untracked file.js"],
+        "Local runs must include unstaged tracked changes and nonignored untracked JavaScript files.",
+      );
+    },
+  });
+});
+
 test("a strict violation in an untouched legacy file is not selected", async () => {
   await withRepository({
     callback: async (cwd) => {
