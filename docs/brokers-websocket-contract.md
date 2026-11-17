@@ -117,6 +117,27 @@ The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The curren
 | `getCandles()` | Blocked; no request is sent | The canonical candle requires volume, but the documented Spot K-line schema exposes OHLC and a start timestamp only. Raw OHLC reads are available through the Bitunix-specific methods above; no volume is fabricated. |
 | `getFills({ symbol, orderId })` | Blocked; no request is sent | The documented matching-order response does not define quantity denomination, complete partial-execution coverage, or stable/unique execution identity. No canonical `Fill` is emitted until Bitunix clarifies these semantics. |
 
+### Bitunix Spot WebSocket RPC client
+
+`BitunixSpotWebSocketClient` is a separate, authenticated, read-only RPC client. It does not change the REST-backed `BitunixSpotBroker` methods or the broker's lifecycle readiness. Official Spot WebSocket requests use the `id`, `method`, and `params` envelope; every request, including public market/catalog reads, carries `apiKey`, millisecond `timestamp`, random `nonce`, and `sign`.
+
+| Client method | Official Spot WebSocket method | Contract |
+|---|---|---|
+| `getLastPrice({ symbol })` | `market.last_price` | One-shot last-price lookup. |
+| `getDepth({ symbol, precision })` | `market.depth` | One-shot depth snapshot; caller supplies required non-negative numeric precision. |
+| `getKline({ symbol, interval })` | `market.kline` | One-shot OHLC lookup; supported intervals match the verified Spot wire values. No volume is synthesized. |
+| `getTradingPairs()` | `common.coin_pair.list` | Trading-pair catalog lookup. |
+| `getExchangeRates()` | `common.rate.list` | Exchange-rate lookup. |
+| `getTokenNetworks()` | `common.coin.coin_network.list` | Token/network metadata lookup. |
+| `getAccount()` | `user.account` | Private account-balance lookup; no source update timestamp is added. |
+| `getUserInfo()` | `user.info` | Private API-key user identity lookup; nullable UID remains exchange data. |
+
+The WebSocket signature is not the REST header signature. It sorts all method parameters except `apiKey`, `timestamp`, `nonce`, and `sign` by key, concatenates each key with its value, computes SHA-256 of `nonce + timestamp + apiKey + serializedParams`, then SHA-256 of `digest + secretKey`. The client keeps this signing implementation separate from REST signing.
+
+Concurrent RPCs are correlated only by the echoed request ID. A malformed matching envelope or non-zero exchange code rejects that request; an unrelated response ID is ignored. Timeouts, send failures, and connection closure reject pending requests and clear their timers. Requests are never replayed automatically. A closed client is terminal; callers must construct a new client to reconnect. Bitunix documents a 24-hour maximum connection lifetime.
+
+This client intentionally exposes no generic arbitrary-method call, order mutation, subscription, or event-stream API. Public methods are request/response lookups, not push feeds. The official Spot docs still do not define continuous market subscriptions or a private order/execution/balance event stream. Implementing this RPC transport does not resolve issue #1185's order identity, fill completeness, account freshness, TESTNET, or mutation-safety blockers.
+
 All adapted Bitunix Spot order rows from pending orders, order history, and order detail must contain non-empty string `ctime` and `utime` fields. The adapter preserves both source strings verbatim; it does not parse or infer timezone, precision, or timestamp ordering because the official order-history schema does not specify those details.
 
 ### REST error and response validation
