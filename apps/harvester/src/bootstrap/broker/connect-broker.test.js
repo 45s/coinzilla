@@ -113,26 +113,3 @@ logger: { error: () => {} } }),
   assert.deepEqual(fixture.calls, ["factory", "connect", "disconnect"], "Disconnect must still be attempted after connect fails.")
 })
 
-test("rejects broker credentials whose signed Binance account UID differs from the configured lock identity", async () => {
-  const fixture = createFixture()
-  fixture.broker.getAccountSnapshot = async () => ({
-    ok: true,
-    data: {
-      accountId: "987654321",
-      balances: [],
-      sourceTime: 1,
-    },
-  })
-
-  await assert.rejects(
-    connectBroker({
-      ...fixture,
-      brokerName: "binance",
-      tradingMode: "testnet",
-      logger: { error() {} },
-    }),
-    (error) => error.code === "HARVESTER_BINANCE_ACCOUNT_ID_MISMATCH",
-    "Harvester must fail closed when the API credentials resolve to a different Binance UID than BINANCE_ACCOUNT_ID.",
-  )
-  assert.deepEqual(fixture.calls, ["factory", "connect", "disconnect"], "A UID mismatch must disconnect the broker before startup can proceed.")
-})

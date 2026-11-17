@@ -263,7 +263,7 @@ function getAccountAuditMarkets({ marketMetadata }) {
   return [...marketMetadata.values()].map(({ market }) => market)
 }
 
-function getAccountSnapshotResultError({ result }) {
+function getAccountSnapshotResultError({ result, expectedAccountId }) {
   if (result?.ok !== false && result?.ok !== true) {
     return withRecoveryFailure({
   error: new Error("Canonical exchange account snapshot response is missing an explicit success flag"),
@@ -291,6 +291,16 @@ function getAccountSnapshotResultError({ result }) {
   stage: "ACCOUNT_SNAPSHOT_SHAPE",
   retryable: false,
 })
+  }
+  if (expectedAccountId !== undefined && result.data.accountId !== expectedAccountId) {
+    const error = new Error("Signed Binance account UID does not match the configured BINANCE_ACCOUNT_ID")
+    error.code = "HARVESTER_BINANCE_ACCOUNT_ID_MISMATCH"
+    return withRecoveryFailure({
+      error,
+      category: "ACCOUNTING_INTEGRITY",
+      stage: "ACCOUNT_IDENTITY_MISMATCH",
+      retryable: false,
+    })
   }
   return undefined
 }
@@ -421,6 +431,7 @@ async function refreshAccountSnapshot({ context, capturePreflightBaseline = fals
   })
   const responseError = getAccountSnapshotResultError({
     result,
+    expectedAccountId: context.expectedAccountId,
   })
   if (responseError) {
     throw responseError
@@ -1115,6 +1126,7 @@ export function createAccountSnapshotManager({
   broker,
   eventPublisher,
   marketMetadata,
+  expectedAccountId,
   getPortfolio,
   getAdditionalTrackedBaseQuantity = () => [],
   getAdditionalTrackedQuoteCashFlow = () => [],
@@ -1149,6 +1161,7 @@ export function createAccountSnapshotManager({
     monotonicNow,
     runtimeSessionId,
     operationalStateStore,
+    expectedAccountId,
     state,
   }
   const refresh = (options = {}) => refreshAccountSnapshot({
