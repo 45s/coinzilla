@@ -6,6 +6,10 @@ import test from "node:test"
 
 import { createSqliteDatabase } from "../src/index.js"
 
+function createDeferredStatementRun(statement) {
+  return () => statement.run("late")
+}
+
 test("SQLite connects and executes parameterized SQL", async () => {
   const database = createSqliteDatabase({ filename: ":memory:" })
   await database.connect()
@@ -198,7 +202,7 @@ test("SQLite invalidates transaction statements before a rejected promise callba
     await assert.rejects(
       database.transaction((transaction) => {
         statement = transaction.prepare("INSERT INTO entries (value) VALUES (?)")
-        return Promise.resolve().then(() => statement.run("late"))
+        return Promise.resolve().then(createDeferredStatementRun(statement))
       }),
       /must be synchronous/,
     )
