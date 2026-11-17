@@ -72,7 +72,9 @@ function classifyJournalFlushFailure({ status } = {}) {
 }
 
 function createDefaultJournalService({ eventBus, logger, processIdentity }) {
-  return prepareOptionalJournal({ eventBus, logger, processIdentity })
+  return prepareOptionalJournal({ eventBus,
+    logger,
+    processIdentity })
 }
 
 async function closeObservability({ journalService, eventBus, processLock, allowProcessLockRelease = true, logger }) {
@@ -186,7 +188,8 @@ function createProcessEventPublisher({ eventBus, logger, journalService, resourc
 
 function publishProcessStartedEvidence({ processStartedDataResult, resources, logger } = {}) {
   if (!processStartedDataResult.ok) {
-    return Promise.resolve({ ok: true, skipped: true })
+    return Promise.resolve({ ok: true,
+      skipped: true })
   }
   const publish = () => publishLifecycleEvent({
     eventPublisher: resources.eventPublisher,
@@ -246,7 +249,7 @@ async function acquireProcessStartupResources({ options, resources, processStart
   })
   if (lockResult?.ok !== true || typeof lockResult.release !== "function") {
     const details = lockResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-    throw new Error("Harvester cannot start without the Binance single-writer process lock" + (details ? ": " + details : ""))
+    throw new Error(`Harvester cannot start without the Binance single-writer process lock${details ? `: ${details}` : ""}`)
   }
   resources.processLock = lockResult
   resources.operationalStateStore = await prepareProcessOperationalStateStore({
@@ -280,10 +283,11 @@ async function configureTelegramNotifications({ options, resources } = {}) {
   const telegramConfig = resources.appConfig.notifications?.telegram ?? {}
   if (telegramConfig.enabled !== false && telegramToken && telegramChatId) {
     try {
-      const notifier = createTelegramNotifier({ token: telegramToken, chatId: telegramChatId })
+      const notifier = createTelegramNotifier({ token: telegramToken,
+        chatId: telegramChatId })
       const telegramLogger = typeof logger?.error === "function"
         ? {
-            error: (entry) => logger.error({
+          error: (entry) => logger.error({
               ...entry,
               notificationDiagnostics: resources.telegramNotifications?.getDiagnostics?.() ?? null,
             }),
@@ -295,12 +299,15 @@ async function configureTelegramNotifications({ options, resources } = {}) {
         logger: telegramLogger,
         telegramConfig,
       })
-      logSystem({ logger, message: "Telegram notifications enabled." })
+      logSystem({ logger,
+        message: "Telegram notifications enabled." })
     } catch (error) {
-      logger.error?.({ message: "Telegram notifications could not be enabled; Harvester will continue without them.", error })
+      logger.error?.({ message: "Telegram notifications could not be enabled; Harvester will continue without them.",
+        error })
     }
   } else if (telegramConfig.enabled === false) {
-    logSystem({ logger, message: "Telegram notifications disabled by app configuration." })
+    logSystem({ logger,
+      message: "Telegram notifications disabled by app configuration." })
   } else if (telegramToken || telegramChatId) {
     logger.error?.({ message: "Telegram notifications require both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID; notifications are disabled." })
   }
@@ -335,7 +342,8 @@ function publishRuntimeStarted({ runtime, runtimeConfig, eventPublisher, logger 
     }),
   })
   if (!runtime.connected) {
-    logSystem({ logger, message: "Binance connection was not established." })
+    logSystem({ logger,
+      message: "Binance connection was not established." })
   } else if (runtime.tradingEnabled && runtime.strategyMode === "conservative") {
     logSystem({
       logger,
@@ -410,7 +418,8 @@ async function closeStartupTelegramNotifications({ notifications, logger } = {})
       error,
     })
   }
-  logTelegramNotificationSummary({ notifications, logger })
+  logTelegramNotificationSummary({ notifications,
+    logger })
 }
 
 function logStartupFailure({ error, logger } = {}) {
@@ -451,9 +460,11 @@ async function cleanupProcessStartupFailure({ error, options, resources } = {}) 
   publishLifecycleEvent({
     eventPublisher: resources.eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.STARTUP_FAILED,
-    dataResult: mapHarvesterStartupFailedData({ stage: "process-startup", error }),
+    dataResult: mapHarvesterStartupFailedData({ stage: "process-startup",
+      error }),
   })
-  await flushStartupEventBus({ eventBus: resources.eventBus, logger })
+  await flushStartupEventBus({ eventBus: resources.eventBus,
+    logger })
   await closeStartupTelegramNotifications({
     notifications: resources.telegramNotifications,
     logger,
@@ -468,8 +479,10 @@ async function cleanupProcessStartupFailure({ error, options, resources } = {}) 
   if (cleanupErrors.length > 0) {
     process.exitCode = 1
   }
-  logStartupFailure({ error, logger })
-  await closeStartupLogger({ closeLogger, logger })
+  logStartupFailure({ error,
+    logger })
+  await closeStartupLogger({ closeLogger,
+    logger })
   process.exitCode = 1
 }
 
@@ -505,22 +518,31 @@ export async function main(options = {}) {
     processIdentity,
   }
   const processStartedDataResult = mapHarvesterProcessStartedData(processIdentity)
-  setProcessLoggerContext({ logger, processStartedDataResult })
+  setProcessLoggerContext({ logger,
+    processStartedDataResult })
   const resources = {
-    processStartedPublication: Promise.resolve({ ok: true, skipped: true }),
+    processStartedPublication: Promise.resolve({ ok: true,
+      skipped: true }),
     runtimeStartAttempted: false,
   }
 
   try {
-    await acquireProcessStartupResources({ options: dependencies, resources, processStartedDataResult })
-    await configureTelegramNotifications({ options: dependencies, resources })
+    await acquireProcessStartupResources({ options: dependencies,
+      resources,
+      processStartedDataResult })
+    await configureTelegramNotifications({ options: dependencies,
+      resources })
     await ensureProcessJournalReady({ journalService: resources.journalService })
     await resources.processStartedPublication
     resources.runtimeStartAttempted = true
-    const runtime = await startHarvesterRuntimeAndRegisterShutdown({ options: dependencies, resources })
-    return { runtime, journalService: resources.journalService }
+    const runtime = await startHarvesterRuntimeAndRegisterShutdown({ options: dependencies,
+      resources })
+    return { runtime,
+      journalService: resources.journalService }
   } catch (error) {
-    await cleanupProcessStartupFailure({ error, options: dependencies, resources })
+    await cleanupProcessStartupFailure({ error,
+      options: dependencies,
+      resources })
   }
 }
 const isDirectExecution = process.argv[1]
