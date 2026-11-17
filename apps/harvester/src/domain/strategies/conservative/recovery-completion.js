@@ -155,38 +155,37 @@ function normalizeDustDisposition({ inventoryDisposition, activeQuantity, keepQu
  * @param {string} [input.inventoryDisposition.quantity] Exact active quantity above keepQuantity.
  * @param {"MIN_QUANTITY"|"MIN_NOTIONAL"|"QUANTITY_INCREMENT"} [input.inventoryDisposition.reason] Limiting exchange filter.
  */
-export function evaluateRecoveryCompletion({ sellOrderFullyFilled, spent, netSellProceeds, activeQuantity, keepQuantity, minProfit, inventoryDisposition } = {}) {
+function validateRecoveryCompletionInput({
+  sellOrderFullyFilled,
+  spent,
+  netSellProceeds,
+  activeQuantity,
+  keepQuantity,
+  minProfit,
+}) {
   if (typeof sellOrderFullyFilled !== "boolean") {
     throw new TypeError("sellOrderFullyFilled must be a boolean")
   }
-  for (const [field, value] of Object.entries({ spent,
-netSellProceeds,
-activeQuantity,
-keepQuantity,
-minProfit })) {
-    assertDecimalString({ value,
-field })
+  for (const [field, value] of Object.entries({
+    spent,
+    netSellProceeds,
+    activeQuantity,
+    keepQuantity,
+    minProfit,
+  })) {
+    assertDecimalString({ value, field })
   }
-  if (compareDecimal({ left: spent,
-right: "0" }) < 0 ||
-      compareDecimal({ left: netSellProceeds,
-right: "0" }) < 0 ||
-      compareDecimal({ left: activeQuantity,
-right: "0" }) < 0 ||
-      compareDecimal({ left: keepQuantity,
-right: "0" }) < 0 ||
-      compareDecimal({ left: minProfit,
-right: "0.01" }) < 0) {
+  if (compareDecimal({ left: spent, right: "0" }) < 0 ||
+      compareDecimal({ left: netSellProceeds, right: "0" }) < 0 ||
+      compareDecimal({ left: activeQuantity, right: "0" }) < 0 ||
+      compareDecimal({ left: keepQuantity, right: "0" }) < 0 ||
+      compareDecimal({ left: minProfit, right: "0.01" }) < 0) {
     throw new RangeError("Invalid recovery completion inputs")
   }
+}
 
-  const realizedNetProfit = subtractDecimal({ left: netSellProceeds,
-right: spent })
-  const dust = normalizeDustDisposition({ inventoryDisposition,
-activeQuantity,
-keepQuantity })
-  const invalidDust = inventoryDisposition?.status === "EXCHANGE_CONSTRAINED_DUST" && !dust
-  const result = ({ eligible, pause, reason, freeQuantity = "0" }) => Object.freeze({
+function createRecoveryCompletionResult({ realizedNetProfit, dust }) {
+  return ({ eligible, pause, reason, freeQuantity = "0" }) => Object.freeze({
     eligible,
     pause,
     reason,
@@ -194,46 +193,105 @@ keepQuantity })
     realizedNetProfit,
     ...(dust ? { dust } : {}),
   })
+}
 
+function resolveRecoveryCompletionOutcome({
+  sellOrderFullyFilled,
+  activeQuantity,
+  keepQuantity,
+  minProfit,
+  realizedNetProfit,
+  dust,
+  invalidDust,
+  result,
+}) {
   if (!sellOrderFullyFilled) {
-    return result({ eligible: false,
-pause: false,
-reason: "RECOVERY_SELL_NOT_FULLY_FILLED" })
+    return result({
+      eligible: false,
+      pause: false,
+      reason: "RECOVERY_SELL_NOT_FULLY_FILLED",
+    })
   }
   if (invalidDust) {
-    return result({ eligible: false,
-pause: true,
-reason: "INVALID_EXCHANGE_CONSTRAINED_DUST_EVIDENCE" })
+    return result({
+      eligible: false,
+      pause: true,
+      reason: "INVALID_EXCHANGE_CONSTRAINED_DUST_EVIDENCE",
+    })
   }
-  if (compareDecimal({ left: activeQuantity,
-right: keepQuantity }) < 0) {
-    return result({ eligible: false,
-pause: true,
-reason: "INSUFFICIENT_ACTIVE_INVENTORY_FOR_FREE_ALLOCATION" })
+  if (compareDecimal({ left: activeQuantity, right: keepQuantity }) < 0) {
+    return result({
+      eligible: false,
+      pause: true,
+      reason: "INSUFFICIENT_ACTIVE_INVENTORY_FOR_FREE_ALLOCATION",
+    })
   }
-  if (compareDecimal({ left: activeQuantity,
-right: keepQuantity }) > 0 && !dust) {
-    let reason = "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH"
-    if (compareDecimal({ left: realizedNetProfit,
-right: minProfit }) < 0) {
-      reason = "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"
-    }
-    return result({ eligible: false,
-pause: false,
-reason })
+  if (compareDecimal({ left: activeQuantity, right: keepQuantity }) > 0 && !dust) {
+    const reason = compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0
+      ? "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"
+      : "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH"
+    return result({
+      eligible: false,
+      pause: false,
+      reason,
+    })
   }
-  if (compareDecimal({ left: realizedNetProfit,
-right: minProfit }) < 0) {
-    return result({ eligible: false,
-pause: true,
-reason: "RECOVERY_SELL_FAILED_MIN_PROFIT" })
+  if (compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0) {
+    return result({
+      eligible: false,
+      pause: true,
+      reason: "RECOVERY_SELL_FAILED_MIN_PROFIT",
+    })
   }
-
   return result({
     eligible: true,
     pause: false,
     reason: null,
-    freeQuantity: dust ? addDecimal({ left: keepQuantity,
-right: dust.quantity }) : keepQuantity,
+    freeQuantity: dust
+      ? addDecimal({ left: keepQuantity, right: dust.quantity })
+      : keepQuantity,
+  })
+}
+
+/**
+ * Complete only after a reconciled recovery SELL, sufficient net profit, and
+ * exact classification of residual dust.
+ *
+ * @param {object} input
+ * @param {boolean} input.sellOrderFullyFilled A terminal FILLED SELL with reconciled execution history.
+ * @param {string} input.spent Full accumulated BUY cost including actual fees.
+ * @param {string} input.netSellProceeds Cumulative confirmed net SELL proceeds.
+ * @param {string} input.activeQuantity Active base quantity after confirmed fills.
+ * @param {string} input.keepQuantity Configured pair-level retained quantity.
+ * @param {string} input.minProfit Minimum realized net profit.
+ * @param {object} [input.inventoryDisposition] Fresh strategy evidence for exchange-constrained dust.
+ * @param {string} [input.inventoryDisposition.quantity] Exact active quantity above keepQuantity.
+ * @param {"MIN_QUANTITY"|"MIN_NOTIONAL"|"QUANTITY_INCREMENT"} [input.inventoryDisposition.reason] Limiting exchange filter.
+ */
+export function evaluateRecoveryCompletion(input = {}) {
+  validateRecoveryCompletionInput(input)
+  const realizedNetProfit = subtractDecimal({
+    left: input.netSellProceeds,
+    right: input.spent,
+  })
+  const dust = normalizeDustDisposition({
+    inventoryDisposition: input.inventoryDisposition,
+    activeQuantity: input.activeQuantity,
+    keepQuantity: input.keepQuantity,
+  })
+  const invalidDust = input.inventoryDisposition?.status === "EXCHANGE_CONSTRAINED_DUST" && !dust
+  const result = createRecoveryCompletionResult({
+    realizedNetProfit,
+    dust,
+  })
+  return resolveRecoveryCompletionOutcome({
+    sellOrderFullyFilled: input.sellOrderFullyFilled,
+    activeQuantity: input.activeQuantity,
+    keepQuantity: input.keepQuantity,
+    minProfit: input.minProfit,
+    realizedNetProfit,
+    dust,
+    invalidDust,
+    result,
   })
 }
