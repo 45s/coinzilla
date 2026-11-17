@@ -50,8 +50,7 @@ function validateCapabilityDeclaration({ broker, providerType, environment }) {
     typeof capabilities === "object" &&
     !Array.isArray(capabilities) &&
     isDeeplyFrozen({ value: capabilities }) &&
-    Number.isInteger(capabilities.contractVersion) &&
-    capabilities.contractVersion > 0 &&
+    capabilities.contractVersion === 1 &&
     capabilities.provider === providerType &&
     (selectedMode === undefined || selectedMode === environment)
   if (!valid) {
