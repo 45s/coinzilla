@@ -907,7 +907,7 @@ function evaluateBuyCandidate({
     marketPrice,
     pairConfig,
     rules,
-    recoverySpent: rules.recoverySpent,
+    hasRecoveryPosition: rules.hasRecoveryPosition,
     lastBuyPrice,
   })
   const filterReason = evaluateBuyExchangeFilters({
