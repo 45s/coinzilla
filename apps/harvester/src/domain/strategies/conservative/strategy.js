@@ -60,84 +60,181 @@ right: "0" }) > 0
     : undefined
 }
 
-function validateStrategyInput({
-  marketPrice,
-  pairConfig,
-  settings,
-  portfolio,
-  marketMetadata,
-  activeOrders,
-}) {
+function validateMarketPriceInput(marketPrice) {
   if (!marketPrice || typeof marketPrice.symbol !== "string") {
     throw new TypeError("Conservative strategy requires a validated marketPrice")
   }
+}
+
+function validatePairConfigInput(pairConfig) {
   if (!pairConfig || typeof pairConfig !== "object" || Array.isArray(pairConfig)) {
     throw new TypeError("Conservative strategy requires pairConfig")
   }
+}
+
+function validateSettingsInput(settings) {
   if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
     throw new TypeError("Conservative strategy requires settings")
   }
+}
+
+function validatePortfolioInput(portfolio) {
   if (!(portfolio instanceof Portfolio)) {
     throw new TypeError("Conservative strategy requires a Portfolio")
   }
+}
+
+function validateMarketMetadataInput({
+  marketMetadata,
+  marketPrice,
+}) {
   if (!marketMetadata?.market || marketMetadata.market.symbol !== marketPrice.symbol) {
     throw new TypeError("Conservative strategy requires matching canonical market metadata")
   }
   if (!marketMetadata?.tradingRules?.constraints || !Array.isArray(marketMetadata.tradingRules.constraints)) {
     throw new TypeError("Conservative strategy requires normalized exchange trading rules")
   }
+}
+
+function validateActiveOrdersInput(activeOrders) {
   if (!Array.isArray(activeOrders)) {
     throw new TypeError("Conservative strategy activeOrders must be an array")
   }
+}
 
-  const priceTickSize = getRequiredRuleAmount({ marketMetadata,
-type: "PRICE_INCREMENT" })
-  const quantityStepSize = getRequiredRuleAmount({ marketMetadata,
-type: "QUANTITY_INCREMENT" })
-  const minQuantity = getRequiredRuleAmount({ marketMetadata,
-type: "MIN_QUANTITY" })
-  const minNotional = getRequiredRuleAmount({ marketMetadata,
-type: "MIN_NOTIONAL" })
-  const minPrice = getOptionalRuleAmount({ marketMetadata,
-type: "MIN_PRICE" })
-  const maxPrice = getOptionalRuleAmount({ marketMetadata,
-type: "MAX_PRICE" })
-  const maxQuantity = getOptionalRuleAmount({ marketMetadata,
-type: "MAX_QUANTITY" })
-  const maxNotional = getOptionalRuleAmount({ marketMetadata,
-type: "MAX_NOTIONAL" })
-  const hasActiveBuy = hasActiveOrder({ activeOrders,
-symbol: marketPrice.symbol,
-side: "BUY" })
-  const hasActiveSell = hasActiveOrder({ activeOrders,
-symbol: marketPrice.symbol,
-side: "SELL" })
-  const hasUnacknowledgedRecoverySell = activeOrders.some((order) =>
-    order?.market?.symbol === marketPrice.symbol &&
-    order.side === "SELL" &&
-    (order.status === "PENDING" || order.status === "UNKNOWN"))
+function validateStrategyInputShape(input) {
+  validateMarketPriceInput(input.marketPrice)
+  validatePairConfigInput(input.pairConfig)
+  validateSettingsInput(input.settings)
+  validatePortfolioInput(input.portfolio)
+  validateMarketMetadataInput({
+    marketMetadata: input.marketMetadata,
+    marketPrice: input.marketPrice,
+  })
+  validateActiveOrdersInput(input.activeOrders)
+}
+function resolveStrategyExchangeFilters({ marketMetadata }) {
+  return {
+    priceTickSize: getRequiredRuleAmount({
+      marketMetadata,
+      type: "PRICE_INCREMENT",
+    }),
+    quantityStepSize: getRequiredRuleAmount({
+      marketMetadata,
+      type: "QUANTITY_INCREMENT",
+    }),
+    minQuantity: getRequiredRuleAmount({
+      marketMetadata,
+      type: "MIN_QUANTITY",
+    }),
+    minNotional: getRequiredRuleAmount({
+      marketMetadata,
+      type: "MIN_NOTIONAL",
+    }),
+    minPrice: getOptionalRuleAmount({
+      marketMetadata,
+      type: "MIN_PRICE",
+    }),
+    maxPrice: getOptionalRuleAmount({
+      marketMetadata,
+      type: "MAX_PRICE",
+    }),
+    maxQuantity: getOptionalRuleAmount({
+      marketMetadata,
+      type: "MAX_QUANTITY",
+    }),
+    maxNotional: getOptionalRuleAmount({
+      marketMetadata,
+      type: "MAX_NOTIONAL",
+    }),
+  }
+}
 
+function resolveStrategyActiveOrderFlags({
+  activeOrders,
+  symbol,
+}) {
+  return {
+    hasActiveBuy: hasActiveOrder({
+      activeOrders,
+      symbol,
+      side: "BUY",
+    }),
+    hasActiveSell: hasActiveOrder({
+      activeOrders,
+      symbol,
+      side: "SELL",
+    }),
+    hasUnacknowledgedRecoverySell: activeOrders.some((order) =>
+      order?.market?.symbol === symbol &&
+      order.side === "SELL" &&
+      (order.status === "PENDING" || order.status === "UNKNOWN")),
+  }
+}
+
+function validateStrategyInput(input) {
+  validateStrategyInputShape(input)
+  const {
+    marketPrice,
+    pairConfig,
+    portfolio,
+    marketMetadata,
+    activeOrders,
+  } = input
+  const exchangeFilters = resolveStrategyExchangeFilters({ marketMetadata })
+  const activeOrderFlags = resolveStrategyActiveOrderFlags({
+    activeOrders,
+    symbol: marketPrice.symbol,
+  })
   return {
     marketPrice,
     pairConfig,
     portfolio,
     marketMetadata,
     activeOrders,
-    priceTickSize,
-    quantityStepSize,
-    minQuantity,
-    minNotional,
-    minPrice,
-    maxPrice,
-    maxQuantity,
-    maxNotional,
-    hasActiveBuy,
-    hasActiveSell,
-    hasUnacknowledgedRecoverySell,
+    ...exchangeFilters,
+    ...activeOrderFlags,
   }
 }
 
-function resolveAccountingState({ context, recoveryLedger }) {
+function validateRecoveryAccounting({
+  recoveryLedger,
+  position,
+  activeQuantity,
+  positionSpent,
+  ledger,
+}) {
+  if (recoveryLedger && position &&
+      compareDecimal({
+        left: ledger.buyCost,
+        right: positionSpent,
+      }) !== 0) {
+    throw new Error("Conservative Position.spent and legacy RecoveryLedger cost mirror diverged")
+  }
+  if (hasActivePosition({ activeQuantity }) &&
+      compareDecimal({
+        left: positionSpent,
+        right: "0",
+      }) <= 0) {
+    throw new Error("Conservative active inventory has no Position.spent recovery basis")
+  }
+  if (!position &&
+      (compareDecimal({
+         left: ledger.buyCost,
+         right: "0",
+       }) > 0 ||
+       compareDecimal({
+         left: ledger.netSellProceeds,
+         right: "0",
+       }) > 0)) {
+    throw new Error("Conservative RecoveryLedger has cycle accounting without an active Position")
+  }
+}
+
+function resolveAccountingState({
+  context,
+  recoveryLedger,
+}) {
   const { portfolio, marketPrice, marketMetadata, pairConfig } = context
   const position = portfolio.getPosition({
     symbol: marketPrice.symbol,
@@ -153,27 +250,19 @@ function resolveAccountingState({ context, recoveryLedger }) {
     throw new Error("Conservative RecoveryLedger market does not match strategy market")
   }
   if ((hasActivePosition({ activeQuantity }) ||
-       compareDecimal({ left: positionSpent,
-right: "0" }) > 0) && !recoveryLedger) {
+       compareDecimal({
+         left: positionSpent,
+         right: "0",
+       }) > 0) && !recoveryLedger) {
     throw new Error("Conservative active Position requires its recovery proceeds ledger")
   }
-  if (recoveryLedger && position &&
-      compareDecimal({ left: ledger.buyCost,
-right: positionSpent }) !== 0) {
-    throw new Error("Conservative Position.spent and legacy RecoveryLedger cost mirror diverged")
-  }
-  if (hasActivePosition({ activeQuantity }) &&
-      compareDecimal({ left: positionSpent,
-right: "0" }) <= 0) {
-    throw new Error("Conservative active inventory has no Position.spent recovery basis")
-  }
-  if (!position &&
-      (compareDecimal({ left: ledger.buyCost,
-right: "0" }) > 0 ||
-       compareDecimal({ left: ledger.netSellProceeds,
-right: "0" }) > 0)) {
-    throw new Error("Conservative RecoveryLedger has cycle accounting without an active Position")
-  }
+  validateRecoveryAccounting({
+    recoveryLedger,
+    position,
+    activeQuantity,
+    positionSpent,
+    ledger,
+  })
   return {
     position,
     activeQuantity,
@@ -181,14 +270,15 @@ right: "0" }) > 0)) {
     ledger,
     outstandingRecovery: maxDecimal({
       left: "0",
-      right: subtractDecimal({ left: positionSpent,
-right: ledger.netSellProceeds }),
+      right: subtractDecimal({
+        left: positionSpent,
+        right: ledger.netSellProceeds,
+      }),
     }),
     keepQuantity: String(pairConfig.keepQuantity),
     recoveryLedger,
   }
 }
-
 function calculateResidualSellPrice({ sellPlan, marketPrice, priceTickSize, minPrice }) {
   let residualPrice
   if (compareDecimal({ left: sellPlan.requiredNetProceeds,
@@ -323,16 +413,108 @@ function createRecoverySellPlanForPosition({ context, accounting }) {
   })
 }
 
-function createQuantityIncrementDustDisposition({ context, accounting }) {
+function createQuantityIncrementDustDisposition({ context, quantity }) {
   return Object.freeze({
     status: "EXCHANGE_CONSTRAINED_DUST",
-    quantity: subtractDecimal({
-      left: accounting.activeQuantity,
-      right: accounting.keepQuantity,
-    }),
+    quantity,
     reason: "QUANTITY_INCREMENT",
     quantityStepSize: context.quantityStepSize,
     evaluatedQuantity: "0",
+  })
+}
+
+function createMinimumQuantityDustDisposition({ context, quantity }) {
+  return Object.freeze({
+    status: "EXCHANGE_CONSTRAINED_DUST",
+    quantity,
+    reason: "MIN_QUANTITY",
+    minimumQuantity: context.minQuantity,
+    evaluatedQuantity: quantity,
+  })
+}
+
+function createMinimumNotionalDustDisposition({ context, quantity, evaluatedNotional }) {
+  return Object.freeze({
+    status: "EXCHANGE_CONSTRAINED_DUST",
+    quantity,
+    reason: "MIN_NOTIONAL",
+    minimumQuantity: context.minQuantity,
+    minimumNotional: context.minNotional,
+    evaluatedQuantity: quantity,
+    evaluatedNotional,
+  })
+}
+
+function resolveDustEvaluationPrice({
+  context,
+  marketPrice,
+}) {
+  let evaluatedPrice = roundDecimalToIncrement({
+    value: marketPrice.price,
+    increment: context.priceTickSize,
+    direction: "up",
+  })
+  if (context.minPrice && compareDecimal({
+    left: evaluatedPrice,
+    right: context.minPrice,
+  }) < 0) {
+    evaluatedPrice = roundDecimalToIncrement({
+      value: context.minPrice,
+      increment: context.priceTickSize,
+      direction: "up",
+    })
+  }
+  return evaluatedPrice
+}
+
+function createUnfillableSellDisposition({
+  context,
+  accounting,
+  marketPrice,
+}) {
+  const quantity = subtractDecimal({
+    left: accounting.activeQuantity,
+    right: accounting.keepQuantity,
+  })
+  const evaluatedPrice = resolveDustEvaluationPrice({
+    context,
+    marketPrice,
+  })
+  const evaluatedNotional = multiplyDecimal({
+    left: evaluatedPrice,
+    right: quantity,
+  })
+  if (compareDecimal({
+    left: quantity,
+    right: context.quantityStepSize,
+  }) < 0) {
+    return createQuantityIncrementDustDisposition({
+      context,
+      quantity,
+    })
+  }
+  if (compareDecimal({
+    left: quantity,
+    right: context.minQuantity,
+  }) < 0) {
+    return createMinimumQuantityDustDisposition({
+      context,
+      quantity,
+    })
+  }
+  if (compareDecimal({
+    left: evaluatedNotional,
+    right: context.minNotional,
+  }) < 0) {
+    return createMinimumNotionalDustDisposition({
+      context,
+      quantity,
+      evaluatedNotional,
+    })
+  }
+  return createQuantityIncrementDustDisposition({
+    context,
+    quantity,
   })
 }
 
@@ -349,32 +531,21 @@ function createPriceFilterBlockedDisposition({ context, accounting, residualPric
   })
 }
 
-function createRecoverySellDecision({ context, accounting }) {
-  if (context.hasActiveSell || !hasSellableInventory({
-    activeQuantity: accounting.activeQuantity,
-    keepQuantity: accounting.keepQuantity,
-  })) {
-    return {}
-  }
-
-  const sellPlan = createRecoverySellPlanForPosition({ context,
-accounting })
-  if (compareDecimal({ left: sellPlan.quantity,
-right: "0" }) <= 0) {
-    return {
-      inventoryDisposition: createQuantityIncrementDustDisposition({ context,
-accounting }),
-    }
-  }
-
+function createRecoverySellDecisionFromPlan({
+  context,
+  accounting,
+  sellPlan,
+}) {
   const residualPrice = calculateResidualSellPrice({
     sellPlan,
     marketPrice: context.marketPrice,
     priceTickSize: context.priceTickSize,
     minPrice: context.minPrice,
   })
-  if (context.maxPrice && compareDecimal({ left: residualPrice,
-right: context.maxPrice }) > 0) {
+  if (context.maxPrice && compareDecimal({
+    left: residualPrice,
+    right: context.maxPrice,
+  }) > 0) {
     return {
       inventoryDisposition: createPriceFilterBlockedDisposition({
         context,
@@ -383,7 +554,6 @@ right: context.maxPrice }) > 0) {
       }),
     }
   }
-
   const quantityLimits = evaluateSellQuantityLimits({
     sellPlan,
     residualPrice,
@@ -411,6 +581,39 @@ right: context.maxPrice }) > 0) {
       quantityLimits,
     }),
   }
+}
+
+function createRecoverySellDecision({
+  context,
+  accounting,
+}) {
+  if (context.hasActiveSell || !hasSellableInventory({
+    activeQuantity: accounting.activeQuantity,
+    keepQuantity: accounting.keepQuantity,
+  })) {
+    return {}
+  }
+  const sellPlan = createRecoverySellPlanForPosition({
+    context,
+    accounting,
+  })
+  if (compareDecimal({
+    left: sellPlan.quantity,
+    right: "0",
+  }) <= 0) {
+    return {
+      inventoryDisposition: createUnfillableSellDisposition({
+        context,
+        accounting,
+        marketPrice: context.marketPrice,
+      }),
+    }
+  }
+  return createRecoverySellDecisionFromPlan({
+    context,
+    accounting,
+    sellPlan,
+  })
 }
 
 function getBuyFilterReason({
@@ -492,45 +695,60 @@ right: buyNotional }),
   }
 }
 
-function createStandingBuyDecision({ context, accounting, inventoryDisposition, lastBuyPrice }) {
-  if (context.hasActiveBuy ||
-      context.hasUnacknowledgedRecoverySell ||
-      inventoryDisposition?.status === "PRICE_FILTER_BLOCKED") {
-    return {}
-  }
-
-  const buyPrice = calculateStandingBuyPrice({ context,
-accounting,
-lastBuyPrice })
+function createStandingBuyCandidate({
+  context,
+  accounting,
+  lastBuyPrice,
+}) {
+  const buyPrice = calculateStandingBuyPrice({
+    context,
+    accounting,
+    lastBuyPrice,
+  })
   const buyQuantity = roundDecimalToIncrement({
     value: String(context.pairConfig.orderQuantity),
     increment: context.quantityStepSize,
     direction: "down",
   })
-  const investmentLimit = context.pairConfig.investment === undefined
-    ? undefined
-    : String(context.pairConfig.investment)
-  if (compareDecimal({ left: buyQuantity,
-right: "0" }) <= 0) {
-    return {
-      buyDisposition: Object.freeze({
-        status: "EXCHANGE_CONSTRAINED_BUY",
-        reason: "QUANTITY_INCREMENT",
-        configuredQuantity: String(context.pairConfig.orderQuantity),
-        quantityStepSize: context.quantityStepSize,
-      }),
-    }
+  return {
+    buyPrice,
+    buyQuantity,
+    buyNotional: compareDecimal({
+      left: buyQuantity,
+      right: "0",
+    }) > 0
+      ? multiplyDecimal({
+        left: buyPrice,
+        right: buyQuantity,
+      })
+      : "0",
+    investmentLimit: context.pairConfig.investment === undefined
+      ? undefined
+      : String(context.pairConfig.investment),
   }
+}
 
-  const buyNotional = multiplyDecimal({ left: buyPrice,
-right: buyQuantity })
+function canPlaceStandingBuy({
+  context,
+  inventoryDisposition,
+}) {
+  return !context.hasActiveBuy &&
+    !context.hasUnacknowledgedRecoverySell &&
+    inventoryDisposition?.status !== "PRICE_FILTER_BLOCKED"
+}
+
+function createStandingBuyDecisionFromCandidate({
+  context,
+  accounting,
+  candidate,
+}) {
   const limits = evaluateBuyOrderLimits({
     context,
     accounting,
-    buyPrice,
-    buyQuantity,
-    buyNotional,
-    investmentLimit,
+    buyPrice: candidate.buyPrice,
+    buyQuantity: candidate.buyQuantity,
+    buyNotional: candidate.buyNotional,
+    investmentLimit: candidate.investmentLimit,
   })
   if (!limits.quantityMeetsMinimum || !limits.notionalMeetsMinimum ||
       !limits.quantityWithinMaximum || !limits.notionalWithinMaximum ||
@@ -540,30 +758,67 @@ right: buyQuantity })
       notionalMeetsMinimum: limits.notionalMeetsMinimum,
       quantityWithinMaximum: limits.quantityWithinMaximum,
       notionalWithinMaximum: limits.notionalWithinMaximum,
-      buyPrice,
+      buyPrice: candidate.buyPrice,
       minPrice: context.minPrice,
     })
     return {
       buyDisposition: createBuyFilterDisposition({
         context,
-        buyQuantity,
-        buyNotional,
+        buyQuantity: candidate.buyQuantity,
+        buyNotional: candidate.buyNotional,
         reason,
       }),
     }
   }
-  if (limits.withinInvestmentLimit) {
+  if (!limits.withinInvestmentLimit) {
+    return {}
+  }
+  return {
+    action: Object.freeze({
+      side: "BUY",
+      type: context.marketMetadata.orderType,
+      price: candidate.buyPrice,
+      quantity: candidate.buyQuantity,
+      reason: accounting.position ? "NEXT_STANDING_BUY" : "INITIAL_BUY",
+    }),
+  }
+}
+
+function createStandingBuyDecision({
+  context,
+  accounting,
+  inventoryDisposition,
+  lastBuyPrice,
+}) {
+  if (!canPlaceStandingBuy({
+    context,
+    inventoryDisposition,
+  })) {
+    return {}
+  }
+  const candidate = createStandingBuyCandidate({
+    context,
+    accounting,
+    lastBuyPrice,
+  })
+  if (compareDecimal({
+    left: candidate.buyQuantity,
+    right: "0",
+  }) <= 0) {
     return {
-      action: Object.freeze({
-        side: "BUY",
-        type: context.marketMetadata.orderType,
-        price: buyPrice,
-        quantity: buyQuantity,
-        reason: accounting.position ? "NEXT_STANDING_BUY" : "INITIAL_BUY",
+      buyDisposition: Object.freeze({
+        status: "EXCHANGE_CONSTRAINED_BUY",
+        reason: "QUANTITY_INCREMENT",
+        configuredQuantity: String(context.pairConfig.orderQuantity),
+        quantityStepSize: context.quantityStepSize,
       }),
     }
   }
-  return {}
+  return createStandingBuyDecisionFromCandidate({
+    context,
+    accounting,
+    candidate,
+  })
 }
 
 /**

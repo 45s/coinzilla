@@ -14,11 +14,9 @@ owner: utils
 - The Harvester Recovery Seller consumer PR [#1203](https://github.com/45s/coinzilla/pull/1203) is merged; its `MixedSellFillReconciliationError` remains feature-local and requires a separate Harvester-owned migration.
 - Verification passed on exact PR head `1aea7ec46a3163c1b815434e73ca9a07b428b743`: Utils tests/coverage, workspace tests/coverage, changed-file ESLint and Markdown checks, dependency audit, and Harvester targeted tests.
 
-## In progress — package ESLint cleanup ([issue #1238](https://github.com/45s/coinzilla/issues/1238))
+## Completed — package ESLint compliance ([issue #1238](https://github.com/45s/coinzilla/issues/1238))
 
-- Eliminate existing ESLint errors and warnings across `packages/utils/` without changing runtime behavior or public contracts.
-- Keep all changes within this package; do not alter root ESLint configuration, workspace scripts, workflows, or other domains.
-- Record the complete package-wide before/after ESLint inventory and verify tests/coverage on the exact PR head.
+- [x] **Package ESLint cleanup — COMPLETE / superseded by the workspace gate.** Issue #1238 is closed. The required full-workspace `pnpm lint` gate checks every in-scope JavaScript file and fails on errors or warnings; progressive strict changed-file enforcement adds tighter thresholds for new and modified files. No package ESLint cleanup remains outstanding. Fix future findings in the PR that introduces them.
 
 ## Priority execution plan — current develop direction (2026-11-10)
 

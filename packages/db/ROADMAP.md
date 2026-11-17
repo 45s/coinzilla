@@ -12,13 +12,13 @@ The accepted architecture is recorded in [ADR-0001](./docs/decisions/0001-provid
 
 `@coinzilla/db` provides a provider-neutral record CRUD and transaction API. Node.js built-in `node:sqlite` is the first concrete provider. The package owns generic persistence infrastructure contracts only; application domains own their business entities, schemas and repository interfaces.
 
-## Provider-neutral CRUD API — core implementation merged
+## Provider-neutral CRUD API — core implementation and hardening merged
 
 **Core implementation:** [PR #1353](https://github.com/45s/coinzilla/pull/1353) merged into `develop` as `70f1345054bf619dca01896817967eeba6ad1141`; it delivered the provider-neutral CRUD facade, built-in SQLite provider, reusable conformance suite, and public documentation.
 
-**Post-merge hardening:** [PR #1364](https://github.com/45s/coinzilla/pull/1364) covers validated CREATE snapshot consistency; [PR #1365](https://github.com/45s/coinzilla/pull/1365) covers synchronous transaction rollback isolation. The latest #1340 status records both as ready for review. Verify their live merge and CI state before treating them as complete.
+**Post-merge hardening — COMPLETE:** [PR #1364](https://github.com/45s/coinzilla/pull/1364) merged the validated CREATE snapshot consistency fix. [PR #1365](https://github.com/45s/coinzilla/pull/1365) merged synchronous transaction rollback isolation. Both fixes preserve the public API and existing SQLite lifecycle.
 
-**ESLint cleanup:** the package-specific `packages/db` ESLint cleanup is complete (validated commit `85ad08be61342d8f543d970f102fafeae367eb78`). It is not an active roadmap item. Continue to enforce the repository's strict `pnpm lint` gate and fix only new violations introduced by future changes.
+**ESLint cleanup — COMPLETE:** the package-specific `packages/db` ESLint cleanup is complete (validated commit `85ad08be61342d8f543d970f102fafeae367eb78`). It is not an active roadmap item. Continue to enforce the repository's strict `pnpm lint` gate and fix only new violations introduced by future changes.
 
 The approved design is:
 
@@ -76,6 +76,7 @@ The following core delivery steps were completed by merged PR #1353:
 - No speculative PostgreSQL or MongoDB adapter implementation.
 - No consumer integration in this task. A real application's repository contract remains owned by that application's bounded context and its roadmap.
 
+
 ## Provider-neutral API contract
 
 The intended public composition is:
@@ -116,7 +117,7 @@ await database.close()
 - Transactions expose the same CRUD methods, never provider-native transaction objects.
 - Provider capabilities are exposed as a frozen, provider-neutral snapshot.
 
-See the [README](./README.md) for the current detailed contract, examples and SQLite runtime constraints. The core API is merged; the two post-merge hardening follow-ups above remain separately tracked until their own merge and required-check gates are verified.
+See the [README](./README.md) for the current detailed contract, examples and SQLite runtime constraints. Implementation status remains in the issue/PR; do not mark roadmap steps complete until the PR is merged and required checks pass.
 
 ## Existing SQLite functionality — preserved
 
@@ -145,11 +146,12 @@ The low-level public API remains available:
 
 The first consumer integration is separately owned by Harvester and tracked in [issue #1327](https://github.com/45s/coinzilla/issues/1327), specifically Workstream B. Start with a source-backed audit and one narrow vertical slice; do not expand `packages/db` with Harvester concepts. See the [Harvester persistence roadmap](../../apps/harvester/ROADMAP.md#persistence--provider-agnostic-database-integration-1327).
 
+
 ## Deferred — evidence-driven
 
-1. **Further application-owned repository integrations**
-   - Add another consumer only when its owning domain approves a concrete use case.
-   - Each consumer owns its repository contract, business schema and migrations.
+1. **First application-owned repository integration**
+   - The consumer owns its repository contract, business schema and migrations.
+   - Integrate only after this generic infrastructure contract is stable and the owning domain approves the consumer task.
    - Verify restart persistence, transaction behavior, concurrency, migration compatibility and deterministic cleanup in that consumer's tests.
 
 2. **Backup and restore operations**

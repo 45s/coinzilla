@@ -138,3 +138,22 @@ test("validates quantity-step dust using the rounded-down candidate quantity", (
   assert.equal(result.eligible, true)
   assert.equal(result.dust.reason, "QUANTITY_INCREMENT")
 })
+
+test("accepts quantity-step dust when the fee-adjusted candidate is below one step", () => {
+  const result = evaluateRecoveryCompletion({
+    ...baseInput,
+    activeQuantity: "1.1",
+    inventoryDisposition: {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.1",
+      reason: "QUANTITY_INCREMENT",
+      quantityStepSize: "0.1",
+      evaluatedQuantity: "0",
+    },
+  })
+
+  assert.equal(result.eligible, true, "A 0.1 residual may be retained when the fee-adjusted candidate rounds below the 0.1 exchange step.")
+  assert.equal(result.dust.quantity, "0.1", "The full residual inventory must be preserved as a keepQuantity bonus.")
+  assert.equal(result.freeQuantity, "1.1", "Completion must allocate keepQuantity plus the validated residual.")
+})
+
