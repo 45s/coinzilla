@@ -92,12 +92,14 @@ test("connects a validated broker and publishes the connected lifecycle event", 
     logger: {},
   })
 
-  assert.equal(connection.provider.broker.capabilities, fixture.broker.capabilities,
+  assert.equal(connection.capabilities, fixture.broker.capabilities,
     "Bootstrap must receive the registered Binance BrokerPort with its immutable capability declaration.")
-  assert.equal(connection.provider.providerInstanceId, "binanceTestnet",
-    "The provider registry must retain the explicit Binance instance identity.")
-  assert.equal(connection.providerRegistry.get("binanceTestnet"), connection.provider,
-    "The connected provider must be retrievable from the registry by its exact identity.")
+  assert.equal(connection.providerInstanceId, "binanceTestnet",
+    "The registered BrokerPort facade must retain the explicit Binance instance identity.")
+  assert.equal(connection.providerType, "binance",
+    "The registered BrokerPort facade must expose provider type separately from instance identity.")
+  assert.equal(connection.accountId, "binance-primary",
+    "The registered BrokerPort facade must expose the stable non-secret account alias.")
   assert.deepEqual(fixture.calls, ["factory", "connect"], "Broker construction must precede the connection attempt.")
   assert.equal(fixture.events[0].name, HARVESTER_EVENT_NAMES.BROKER_CONNECTED, "Successful connection must publish the stable lifecycle event.")
 })
@@ -177,4 +179,31 @@ test("disconnects a constructed Binance client when capability validation blocks
     "A constructed client must be disconnected when its capability contract prevents registry registration.")
   assert.equal(fixture.events.length, 0,
     "Registry validation failure must not publish a broker-connected or broker-connection-failed event.")
+})
+
+
+test("rejects invalid provider identity before constructing a Binance client", async () => {
+  const fixture = createFixture()
+  let factoryCalled = false
+
+  await assert.rejects(
+    connectBroker({
+      ...fixture,
+      brokerAdapterFactory: (input) => {
+        factoryCalled = true
+        return fixture.brokerAdapterFactory(input)
+      },
+      brokerName: "binance",
+      tradingMode: "testnet",
+      env: {
+        ...fixture.env,
+        BINANCE_PROVIDER_INSTANCE_ID: "invalid instance id",
+      },
+      logger: {},
+    }),
+    (error) => error.code === "HARVESTER_PROVIDER_IDENTITY_INVALID",
+    "Invalid provider identity must fail closed before any broker construction or connection.",
+  )
+  assert.equal(factoryCalled, false,
+    "Provider identity validation must precede the broker adapter factory.")
 })
