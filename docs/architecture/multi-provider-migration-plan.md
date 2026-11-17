@@ -12,6 +12,7 @@ last_verified: 2026-11-17
 **Tracking:** [Harvester/Brokers issue #1339](https://github.com/45s/coinzilla/issues/1339)
 **Architecture authority:** [ADR-0003](./decisions/ADR-0003-multi-provider-routing.md)
 **Audit baseline:** `develop` at `5d707d17114d524ef3cd7c6d35387dde61338976` (2026-11-17 09:45:59 UTC)
+**Integration sync:** the documentation branch is synchronized with `develop` at `70f1345054bf619dca01896817967eeba6ad1141`. This does not change the source-audit baseline above; revalidate source-sensitive findings against current `develop` before implementation.
 **Scope:** source-verified preparation and migration sequencing only. This document does not authorize runtime routing, database changes, provider mutations, or trading-behavior changes.
 
 ## 1. Executive decision
