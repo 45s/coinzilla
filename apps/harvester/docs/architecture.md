@@ -2,6 +2,8 @@
 
 > **Audit companion:** See [DDD and Clean Architecture Audit](./DDD_CLEAN_ARCHITECTURE_AUDIT.md) for the source-based assessment, scorecard, current architectural risks, and sequenced follow-up roadmap. The audit is pinned to the source revision stated in that report; it is not a live status feed. The roadmap remains authoritative for delivery priority and implementation status.
 >
+> **Multi-provider audit:** See the [source-verified multi-provider migration audit and implementation plan](../../../docs/architecture/multi-provider-migration-plan.md) for the current Binance-only composition, provider capability matrix, order provenance gaps, account isolation and phased implementation prerequisites under #1339.
+>
 > **Documentation rule:** this guide contains both stable architecture rules and implementation examples/snapshots. Treat claims about what is currently wired or not wired as time-sensitive; verify them against the current source and [Harvester Roadmap](../ROADMAP.md). Historical snapshots must not be used as current implementation instructions.
 
 ## Purpose
