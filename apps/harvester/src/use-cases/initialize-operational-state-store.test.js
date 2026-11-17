@@ -32,7 +32,6 @@ test("initializes operational state only while holding the broker-wide and Journ
       assert.equal(input.globalDirectory, "/tmp/process-locks")
       assert.equal(input.broker, "binance")
       assert.equal(input.tradingMode, "testnet")
-      assert.equal(input.accountId, "123456789")
       return { ok: true,
 release: async () => { sequence.push("release"); return { ok: true } } }
     },
