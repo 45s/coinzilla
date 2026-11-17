@@ -26,7 +26,6 @@ test("initializes operational state only while holding the broker-wide and Journ
     processLockDirectory: "/tmp/process-locks",
     runtimeSessionId: "initializer-session",
     tradingMode: "testnet",
-    accountId: "123456789",
     acquireProcessLock: async (input) => {
       sequence.push("lock")
       assert.equal(input.journalDirectory, "/tmp/process-locks")
