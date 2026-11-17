@@ -509,7 +509,8 @@ function findDuplicateOperationalStateAppend({ state, input }) {
   if (!existing) {
     return null
   }
-  assertDuplicateOperationalStateFactMatches({ existing, input })
+  assertDuplicateOperationalStateFactMatches({ existing,
+input })
   return createDuplicateOperationalStateAppendResult({ existing })
 }
 
@@ -527,8 +528,13 @@ async function persistOperationalStateAppend({
     input,
     recordedAt,
   })
-  await writeOperationalStateFactRecord({ store, line, writeState })
-  await writeOperationalStateManifestCheckpoint({ store, state, record, writeState })
+  await writeOperationalStateFactRecord({ store,
+line,
+writeState })
+  await writeOperationalStateManifestCheckpoint({ store,
+state,
+record,
+writeState })
   const verified = await verifyState()
   return createCommittedOperationalStateAppendResult({ verified })
 }
@@ -542,18 +548,23 @@ async function appendOperationalStateFact({ store, assertNoUncertainWrite, syncS
   }
   try {
     assertNoUncertainWrite()
-    await synchronizeOperationalStateBeforeAppend({ syncStreams, writeState })
-    const state = await verifyOperationalStateBeforeAppend({ verifyState, writeState })
+    await synchronizeOperationalStateBeforeAppend({ syncStreams,
+writeState })
+    const state = await verifyOperationalStateBeforeAppend({ verifyState,
+writeState })
     const input = validateFactInput({
       fact,
       runtimeSessionId: store.runtimeSessionId,
     })
-    const duplicate = findDuplicateOperationalStateAppend({ state, input })
+    const duplicate = findDuplicateOperationalStateAppend({ state,
+input })
     if (duplicate) {
       return duplicate
     }
     const recordedAt = normalizeOperationalStateRecordedAt(store.now())
-    validateMarketHistoryCoverageProgress({ state, input, recordedAt })
+    validateMarketHistoryCoverageProgress({ state,
+input,
+recordedAt })
     return await persistOperationalStateAppend({
       store,
       state,
@@ -563,7 +574,9 @@ async function appendOperationalStateFact({ store, assertNoUncertainWrite, syncS
       verifyState,
     })
   } catch (error) {
-    return handleOperationalStateAppendFailure({ store, writeState, error })
+    return handleOperationalStateAppendFailure({ store,
+writeState,
+error })
   }
 }
 
