@@ -1,9 +1,9 @@
 # Bitunix Spot — external implementation reference audit
 
-**Status:** living engineering reference  
-**Last audited:** 2026-11-17  
-**Scope:** Bitunix Spot REST, Spot WebSocket RPC, market/account reads, order lifecycle, and Binance-broker parity  
-**Canonical blockers:** [issue #1185](https://github.com/45s/coinzilla/issues/1185)  
+**Status:** living engineering reference
+**Last audited:** 2026-11-17
+**Scope:** Bitunix Spot REST, Spot WebSocket RPC, market/account reads, order lifecycle, and Binance-broker parity
+**Canonical blockers:** [issue #1185](https://github.com/45s/coinzilla/issues/1185)
 **Related in-flight work:** [PR #1324 — read-only market data](https://github.com/45s/coinzilla/pull/1324)
 
 This document records what external implementations actually contain, what their source and fixtures prove, what they get wrong or leave unproven, and which capabilities Coinzilla should port. It is not an exchange specification. The official Bitunix Spot documentation remains authoritative; third-party implementations are evidence and implementation examples only.
@@ -41,6 +41,7 @@ No external code is copied verbatim into Coinzilla. No external dependency is in
 **Scope:** separate Spot and Futures REST/Socket surfaces built on CryptoExchange.Net.
 
 Key Spot source:
+
 - [Spot trading implementation](https://github.com/JKorf/Bitunix.Net/blob/57e1fce668b98804a441dea1c8df803da0437c4f/Bitunix.Net/Clients/SpotApi/Rest/BitunixRestClientSpotApiTrading.cs)
 - [Spot trading interface](https://github.com/JKorf/Bitunix.Net/blob/57e1fce668b98804a441dea1c8df803da0437c4f/Bitunix.Net/Interfaces/Clients/SpotApi/IBitunixRestClientSpotApiTrading.cs)
 - [Spot account implementation](https://github.com/JKorf/Bitunix.Net/blob/57e1fce668b98804a441dea1c8df803da0437c4f/Bitunix.Net/Clients/SpotApi/Rest/BitunixRestClientSpotApiAccount.cs)
@@ -55,6 +56,7 @@ Key Spot source:
 **Useful coverage:** Spot latest price, depth, current/history klines, symbols, exchange rates, token/network metadata, balances, deposits, withdrawal history, deposit addresses, transfers, withdrawal, order placement/cancel, pending orders, order history, order detail, and a matching-order lookup. Spot WebSocket order placement/cancel are request/response queries.
 
 **Important source defects / limits:**
+
 - GetUserTradesAsync interface documents GET /api/spot/v1/order/deal/list, but the inspected implementation sends POST /api/spot/v1/order/pending/list. The official Spot order page documents POST /order/deal/list. Do not port the implementation as written.
 - GetOrderBookAsync(symbol) omits the official required precision parameter. The MCP and StockSharp references pass a precision value, but its correct selection semantics remain unresolved.
 - The PlaceOrder.txt fixture contains only data: { placeStatus: 1 }; it does not exercise the official documented orderId, symbol, side, type, volume and price fields. The model has those fields, but the fixture does not prove their presence.
@@ -68,6 +70,7 @@ Key Spot source:
 ### 2.2 [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp) — independent TypeScript
 
 Key source:
+
 - [Spot tools](https://github.com/samanzamani/bitunix-mcp/blob/6bf5d9f915bdf865394ac02f97c50b689ab9e8e7/src/tools/spot.ts)
 - [HTTP/signing boundary](https://github.com/samanzamani/bitunix-mcp/blob/main/src/http.ts)
 - [Repository README](https://github.com/samanzamani/bitunix-mcp/blob/6bf5d9f915bdf865394ac02f97c50b689ab9e8e7/README.md)
@@ -75,6 +78,7 @@ Key source:
 **Useful coverage:** public last price, depth, history klines and trading pairs; private account, pending orders, order history and order detail; optional trading tools for place/cancel, enabled only when BITUNIX_ENABLE_TRADING=true. Its HTTP boundary demonstrates pinned base URLs, request timeout, response-size limit, credential redaction and no redirects.
 
 **Important limits / disagreements:**
+
 - spot_get_pending_orders makes symbol optional and sends {} when omitted, although the official endpoint marks symbol required. This does not prove account-wide open-order support.
 - spot_get_order_history makes symbol optional and locally caps page size at 100. Neither optional symbol nor that local cap is an official exchange guarantee.
 - Its spot_place_order description says LIMIT volume is base quantity and MARKET BUY volume is quote quantity. This is not a safe resolution: the official single-order REST page says LIMIT quote / MARKET base, while the official batch endpoint says the inverse.
@@ -86,9 +90,9 @@ Key source:
 ### 2.3 [StockSharp/Connectors](https://github.com/StockSharp/Connectors) — independent C# connector
 
 Inspected source:
+
 - [Bitunix REST client](https://github.com/StockSharp/Connectors/blob/caa00fcc0e09554b1a3408781e8392d39eeb8302/Bitunix/Native/BitunixRestClient.cs)
 - [Bitunix DTOs](https://github.com/StockSharp/Connectors/blob/caa00fcc0e09554b1a3408781e8392d39eeb8302/Bitunix/Native/Model/BitunixDtos.cs)
-- [Spot transaction/order adapter](https://github.com/StockSharp/Connectors/blob/caa00fcc0e09554b1a3408781e8392d39eeb8302/Bitunix/BitunixMessageAdapter_Transaction.cs)
 - [Spot transaction/order adapter](https://github.com/StockSharp/Connectors/blob/caa00fcc0e09554b1a3408781e8392d39eeb8302/Bitunix/BitunixMessageAdapter_Transaction.cs)
 
 **Useful coverage:** Spot pairs, last price, depth with explicit precision, current/history candles, balances, place/cancel, pending orders, order history and a matching-order lookup. The matching-order method uses POST /api/spot/v1/order/deal/list and returns one BitunixSpotFill object. The transaction adapter queries it only when the order reports positive FilledVolume; it does not demonstrate exhaustive retrieval of every partial execution.
@@ -104,6 +108,7 @@ Inspected [client.py](https://github.com/0xCherryBlueZu/bitunix/blob/28cefd924b6
 **Useful coverage:** public price/depth/kline/pair/rate/token endpoints; private account; single/batch order placement; cancel; matching-order lookup via POST /api/spot/v1/order/deal/list; order history and pending orders.
 
 **Do not copy as-is:**
+
 - _get_authenticated() converts query parameters to a string, then passes that string to sign_request(), whose implementation expects a mapping and calls .items(). Authenticated GET requests with query parameters therefore appear defective.
 - _post_authenticated() prints request headers (including the API key), request body and response. This is unsafe logging for account/trading code.
 - The response handler checks HTTP status but does not validate the Bitunix business code envelope.
@@ -207,6 +212,7 @@ The following is the current method-by-method status from the Binance broker sur
 ### PR #1324 — pending read-only market-data slice
 
 [PR #1324](https://github.com/45s/coinzilla/pull/1324) currently adds:
+
 - getOrderBook({ symbol, precision }) as a one-shot depth snapshot.
 - getKlines({ symbol, interval }) for current K-line rows.
 - getKlineHistory({ symbol, interval, endTime, limit }) for one history page.
@@ -218,6 +224,7 @@ It validates symbol, interval, decimals, OHLC invariants and timezone-qualified 
 ### Recommended next safe work
 
 **Priority 1 — Bitunix-specific public metadata extension (not Binance parity):**
+
 - getExchangeRates() — GET /api/spot/v1/common/rate/list, returning baseSymbol, quoteSymbol, rate.
 - getTokenMetadata() (or a domain-appropriate name) — GET /api/spot/v1/common/coin/coin_network/list, returning token and network metadata such as deposit/withdraw availability, memo requirement, network name, minimums and address validation pattern.
 
