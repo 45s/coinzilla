@@ -5975,9 +5975,15 @@ test("starts Telegram operator control without running process-restart recovery 
         return {
           start: async () => {
             operatorAdapterStarted = true
-            return { ok: true, started: true }
+            return {
+              ok: true,
+              started: true,
+            }
           },
-          stop: async () => ({ ok: true, stopped: true }),
+          stop: async () => ({
+            ok: true,
+            stopped: true,
+          }),
         }
       },
     })
@@ -5990,7 +5996,10 @@ test("starts Telegram operator control without running process-restart recovery 
     })
   } finally {
     await runtime?.stop?.()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
