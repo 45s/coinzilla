@@ -90,7 +90,7 @@ The methods have consistent provider-neutral results:
 
 ### Filtering, sorting and pagination
 
-`readMany(collection, query)` accepts a plain object:
+`readMany({ collection, query })` accepts a plain object:
 
 ```js
 const page = await database.readMany({
@@ -118,7 +118,8 @@ const page = await database.readMany({
 
 - Filters use exact equality on top-level field names. JSON types are significant; for example, boolean `true` does not equal number `1`. A missing field does not match an explicit `null`.
 - Filter and sort field names use letters, numbers and underscores, and cannot start with a number.
-- Sort is an ordered array of `{ field, direction }` entries. Direction is `asc` or `desc`. Records with equal sort values use the record identifier as a stable final tie-breaker.
+- Sort is an ordered array of `{ field, direction }` entries. Direction is `asc` or `desc`. Records with equal sort values use the record identifier as a stable final tie-breaker, always ascending.
+- Portable scalar ordering is `missing/null < false < true < number < string`. Numbers compare numerically; strings compare by binary UTF-8 order. Missing fields and explicit `null` share the same sort rank and are then ordered by identifier.
 - For portable sorting across providers, sort fields should contain scalar JSON values. Ordering of arrays and objects is not part of the portable contract.
 - `limit` is an optional positive safe integer. `offset` is a non-negative safe integer and defaults to zero.
 - Unsupported query options and non-scalar filter values are rejected with `TypeError`.
@@ -196,9 +197,9 @@ runDatabaseProviderConformanceTests({
 })
 ```
 
-The example is illustrative; no PostgreSQL provider is included. The factory receives a unique `storageKey` and one declared `storageMode`. The suite runs the contract against every mode in `database.capabilities.storage.modes`, using an isolated key for each test. For `file` and `server` modes it reuses the same key across a new connection to verify persistence; the reconnect test is explicitly skipped for `memory` mode. A server adapter can derive a temporary database or namespace name from the key and must release that resource when the composed database is closed. SQLite maps `memory` to `:memory:` and `file` to the isolated temporary file path. Providers must not silently skip a declared storage mode or a supported contract.
+The example is illustrative; no PostgreSQL provider is included. The factory receives a unique `storageKey` and one declared `storageMode`. The suite runs the contract against every mode in `database.capabilities.storage.modes`, using an isolated key for each test. For `file` and `server` modes it reuses the same key across a new connection to verify persistence; the reconnect test is explicitly skipped for `memory` mode. SQLite maps `memory` to `:memory:` and `file` to the isolated temporary file path. For server-backed providers, supply the optional `cleanupStorage({ storageKey, storageMode })` callback to drop the temporary database or namespace after all connections for that test have closed. The callback runs once per isolated key, including after both connections in the persistence test; `close()` should close the connection, not destroy the store before reconnect verification. The suite removes its local temporary directory automatically. Providers must not silently skip a declared storage mode or a supported contract.
 
-The suite verifies CRUD and collection isolation, duplicate handling, every declared storage mode, each declared query capability, missing-record results, transaction commit/rollback, declared nested-transaction behavior, the synchronous/asynchronous callback mode, immutable capability snapshots, lifecycle closure, close-time draining of active asynchronous transactions, and persistence across a new connection where storage is persistent. Query cases are skipped with a reason only when the provider declares the corresponding capability unavailable. The in-memory reconnect-persistence case is skipped because that storage mode is explicitly ephemeral. Add provider-specific lifecycle, lock/concurrency and cleanup tests where the generic contract cannot express the provider's operational guarantees.
+The suite verifies CRUD and collection isolation, duplicate handling, every declared storage mode, each declared query capability, portable scalar sorting, missing-record results, transaction commit/rollback, declared nested-transaction behavior, the synchronous/asynchronous callback mode, immutable capability snapshots, lifecycle closure, close-time draining of active asynchronous transactions, cleanup-hook invocation, and persistence across a new connection where storage is persistent. Query cases are skipped with a reason only when the provider declares the corresponding capability unavailable. The in-memory reconnect-persistence case is skipped because that storage mode is explicitly ephemeral. Add provider-specific lifecycle, lock/concurrency and cleanup tests where the generic contract cannot express the provider's operational guarantees.
 
 ## Provider composition
 
