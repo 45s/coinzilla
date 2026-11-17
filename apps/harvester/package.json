@@ -59,6 +59,8 @@
       "src/infrastructure/operational-state/operational-state-record-validation.test.js",
       "src/infrastructure/operational-state/helpers/operational-state-decimal-validation.test.js",
       "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-facts.test.js",
+      "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.test.js",
+      "src/infrastructure/operational-state/helpers/validate-operational-state-execution-facts.test.js",
       "src/infrastructure/journal/helpers/resolve-session-chronology.test.js",
       "src/infrastructure/telegram/format-telegram-operator-response.test.js"
     ]
