@@ -178,6 +178,20 @@ async function discoverSessionDirectories({ sessionsRoot, maxDirectories, maxSes
   }
 }
 
+function validateRootJournalEntries({ rootDirectory, rootJournalEntries }) {
+  const invalidRootJournalEntries = rootJournalEntries.filter((entry) => !entry.isFile())
+  if (invalidRootJournalEntries.length > 0) {
+    throw createHistoryError({
+      code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
+      message: `A root-level Journal session entry is not a regular file: ${rootDirectory}`,
+      details: {
+        directory: rootDirectory,
+        entries: invalidRootJournalEntries.map((entry) => entry.name),
+      },
+    })
+  }
+}
+
 async function discoverRootSessionDirectories({
   rootDirectory,
   rootEntries,
@@ -199,17 +213,7 @@ async function discoverRootSessionDirectories({
   }
 
   const rootJournalEntries = rootEntries.filter((entry) => entry.name.endsWith(".jsonl"))
-  const invalidRootJournalEntries = rootJournalEntries.filter((entry) => !entry.isFile())
-  if (invalidRootJournalEntries.length > 0) {
-    throw createHistoryError({
-      code: "HARVESTER_JOURNAL_DISCOVERY_INCOMPLETE",
-      message: `A root-level Journal session entry is not a regular file: ${rootDirectory}`,
-      details: {
-        directory: rootDirectory,
-        entries: invalidRootJournalEntries.map((entry) => entry.name),
-      },
-    })
-  }
+  validateRootJournalEntries({ rootDirectory, rootJournalEntries })
   if (rootJournalEntries.length > 0) {
     sessionDirectories.push({
       directory: rootDirectory,
