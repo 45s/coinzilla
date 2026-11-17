@@ -14,21 +14,38 @@ function logSystem({ logger, ...data }) {
   logger?.info?.(data)
 }
 
-function summarizeUnresolvedOrder(order) {
-  const symbol = order?.market?.symbol ?? order?.symbol
-  return {
-    ...(typeof symbol === "string" ? { symbol } : {}),
-    ...(typeof order?.side === "string" ? { side: order.side } : {}),
-    ...(typeof order?.clientOrderId === "string" ? { clientOrderId: order.clientOrderId } : {}),
-    ...(typeof order?.brokerOrderId === "string" ? { brokerOrderId: order.brokerOrderId } : {}),
-    ...(typeof order?.status === "string" ? { status: order.status } : {}),
-    ...(order?.executedQuantity?.amount !== undefined
-      ? { executedQuantity: order.executedQuantity.amount }
-      : {}),
-    ...(order?.originalQuantity?.amount !== undefined
-      ? { originalQuantity: order.originalQuantity.amount }
-      : {}),
+function addStringOrderField({ summary, order, field, value = order?.[field] }) {
+  if (typeof value === "string") {
+    summary[field] = value
   }
+}
+
+function addQuantityOrderField({ summary, order, field }) {
+  const amount = order?.[field]?.amount
+  if (amount !== undefined) {
+    summary[field] = amount
+  }
+}
+
+function summarizeUnresolvedOrder(order) {
+  const summary = {}
+  addStringOrderField({
+    summary,
+    order,
+    field: "symbol",
+    value: order?.market?.symbol ?? order?.symbol,
+  })
+  for (const field of ["side", "clientOrderId", "brokerOrderId", "status"]) {
+    addStringOrderField({ summary,
+      order,
+      field })
+  }
+  for (const field of ["executedQuantity", "originalQuantity"]) {
+    addQuantityOrderField({ summary,
+      order,
+      field })
+  }
+  return summary
 }
 
 function getSafeFailureReason(error) {
@@ -53,14 +70,15 @@ function createPhaseRunner({ logger, now, shutdownRequestedAt, shutdownCorrelati
   const isPhaseFailure = (result) =>
     result?.ok === false || (Array.isArray(result) && result.length > 0)
   const getPhaseFailureReason = (result) => {
-    const firstFinding = result?.data?.findings?.[0]
     const firstError = result?.errors?.[0]
-    const recoveryStage = firstError?.recoveryFailure?.stage
-    return result?.failure?.stage ??
-      firstFinding?.reason ??
-      recoveryStage ??
-      firstError?.code ??
-      firstError?.name ??
+    const candidates = [
+      result?.failure?.stage,
+      result?.data?.findings?.[0]?.reason,
+      firstError?.recoveryFailure?.stage,
+      firstError?.code,
+      firstError?.name,
+    ]
+    return candidates.find((candidate) => typeof candidate === "string" && candidate.length > 0) ??
       "PHASE_RESULT_FAILED"
   }
 
@@ -97,7 +115,7 @@ function createPhaseRunner({ logger, now, shutdownRequestedAt, shutdownCorrelati
   }
 }
 
-async function runShutdownPhaseSafely({ context, phaseRunner, logShutdownFailure, options }) {
+async function runShutdownPhaseSafely({ context, phaseRunner, logShutdownFailure: recordShutdownFailure, options }) {
   const {
     phase,
     operation,
@@ -120,9 +138,20 @@ async function runShutdownPhaseSafely({ context, phaseRunner, logShutdownFailure
         context.auditReasons.push(auditReason)
       }
       const errors = Array.isArray(result)
-        ? result.flatMap((entry) => entry?.status === "rejected" ? [entry.reason] : [entry])
+        ? result.flatMap((entry) => {
+          if (entry?.status === "rejected") {
+            return [entry.reason ?? new Error(message)]
+          }
+          if (entry?.status === "fulfilled") {
+            return getResultErrors({
+              result: entry.value,
+              fallbackMessage: message,
+            })
+          }
+          return [entry]
+        })
         : result?.errors ?? []
-      logShutdownFailure({
+      recordShutdownFailure({
         message,
         stage,
         result: { errors },
@@ -133,7 +162,7 @@ async function runShutdownPhaseSafely({ context, phaseRunner, logShutdownFailure
     if (auditReason && !context.auditReasons.includes(auditReason)) {
       context.auditReasons.push(auditReason)
     }
-    logShutdownFailure({
+    recordShutdownFailure({
       message,
       stage,
       error,
@@ -149,85 +178,100 @@ const SHUTDOWN_ERROR_MESSAGE_LIMIT = 2048
 const SHUTDOWN_ERROR_STACK_LIMIT = 8192
 const SHUTDOWN_ERROR_CAUSE_DEPTH_LIMIT = 3
 
-function summarizeShutdownError({ error, depth = 0 } = {}) {
-  const { message: errorMessage } = error ?? {}
-  let message
-  if (typeof errorMessage === "string") {
-    message = errorMessage
-  } else if (typeof error === "string") {
-    message = error
+function getShutdownErrorMessage(error) {
+  if (typeof error?.message === "string") {
+    return error.message
   }
+  return typeof error === "string" ? error : undefined
+}
+
+function summarizeShutdownErrorCause({ error, depth }) {
+  if (depth >= SHUTDOWN_ERROR_CAUSE_DEPTH_LIMIT || error?.cause === undefined) {
+    return undefined
+  }
+  return summarizeShutdownError({
+    error: error.cause,
+    depth: depth + 1,
+  })
+}
+
+function summarizeShutdownError({ error, depth = 0 } = {}) {
+  const message = getShutdownErrorMessage(error)
   const summary = {
     name: typeof error?.name === "string" ? error.name : "Error",
     code: typeof error?.code === "string" ? error.code : null,
     failureStage: typeof error?.recoveryFailure?.stage === "string"
       ? error.recoveryFailure.stage
       : null,
-    ...(message === undefined
-      ? {}
-      : {
-        message: message.slice(0, SHUTDOWN_ERROR_MESSAGE_LIMIT),
-      }),
+    ...(message === undefined ? {} : { message: message.slice(0, SHUTDOWN_ERROR_MESSAGE_LIMIT) }),
     ...(typeof error?.stack === "string"
-      ? {
-        stack: error.stack.slice(0, SHUTDOWN_ERROR_STACK_LIMIT),
-      }
+      ? { stack: error.stack.slice(0, SHUTDOWN_ERROR_STACK_LIMIT) }
       : {}),
   }
-  if (depth < SHUTDOWN_ERROR_CAUSE_DEPTH_LIMIT && error?.cause !== undefined) {
-    summary.cause = summarizeShutdownError({
-      error: error.cause,
-      depth: depth + 1,
-    })
+  const cause = summarizeShutdownErrorCause({ error,
+    depth })
+  if (cause !== undefined) {
+    summary.cause = cause
   }
   return summary
 }
 
-function createFailureRecorder({ context, phaseRunner }) {
-  const logShutdownFailure = ({ message, stage, result, error } = {}) => {
-    let errors
-    if (error) {
-      errors = [error]
-    } else if (result?.errors?.length) {
-      const { errors: resultErrors } = result
-      errors = resultErrors
-    } else {
-      errors = [new Error(message)]
-    }
-    const failure = result?.failure ?? error?.recoveryFailure ??
-      errors.find((entry) => entry?.recoveryFailure)?.recoveryFailure
-    const failureMetadata = failure
-      ? {
-        category: failure.category ?? null,
-        stage: failure.stage ?? null,
-        retryable: typeof failure.retryable === "boolean" ? failure.retryable : null,
-      }
-      : null
-    const errorDetails = errors.map((entry) => summarizeShutdownError({ error: entry }))
-    context.stageFailures.push({
-      stage: stage ?? "UNKNOWN",
-      failure: failureMetadata,
-      errors: errorDetails,
-    })
-    context.logger.error?.({
-      message,
-      stage,
-      failure: failureMetadata,
-      errors: errorDetails,
-      originalErrors: errors,
-      shutdownCorrelationId: context.shutdownCorrelationId,
-    })
+function getShutdownFailureErrors({ message, result, error }) {
+  if (error) {
+    return [error]
   }
+  return result?.errors?.length ? result.errors : [new Error(message)]
+}
 
+function getShutdownFailureMetadata({ result, error, errors }) {
+  const failure = result?.failure ?? error?.recoveryFailure ??
+    errors.find((entry) => entry?.recoveryFailure)?.recoveryFailure
+  if (!failure) {
+    return null
+  }
+  return {
+    category: failure.category ?? null,
+    stage: failure.stage ?? null,
+    retryable: typeof failure.retryable === "boolean" ? failure.retryable : null,
+  }
+}
+
+function logShutdownFailure({ context, message, stage, result, error }) {
+  const errors = getShutdownFailureErrors({ message,
+    result,
+    error })
+  const failure = getShutdownFailureMetadata({ result,
+    error,
+    errors })
+  const errorDetails = errors.map((entry) => summarizeShutdownError({ error: entry }))
+  context.stageFailures.push({
+    stage: stage ?? "UNKNOWN",
+    failure,
+    errors: errorDetails,
+  })
+  context.logger.error?.({
+    message,
+    stage,
+    failure,
+    errors: errorDetails,
+    originalErrors: errors,
+    shutdownCorrelationId: context.shutdownCorrelationId,
+  })
+}
+
+function createFailureRecorder({ context, phaseRunner }) {
+  const recordFailure = (options = {}) => logShutdownFailure({
+    context,
+    ...options,
+  })
   const runPhaseSafely = (options = {}) => runShutdownPhaseSafely({
     context,
     phaseRunner,
-    logShutdownFailure,
+    logShutdownFailure: recordFailure,
     options,
   })
-
   return {
-    logShutdownFailure,
+    logShutdownFailure: recordFailure,
     runPhaseSafely,
   }
 }
@@ -302,9 +346,90 @@ function getResultErrors({ result, fallbackMessage }) {
   return []
 }
 
-async function stopMarketIntakeAndDrain(context) {
+function getSettledMarketTaskErrors({ results, fallbackMessage }) {
+  return results.flatMap((entry) => {
+    if (entry.status === "rejected") {
+      return [entry.reason ?? new Error(fallbackMessage)]
+    }
+    if (entry.status === "fulfilled") {
+      return getResultErrors({
+        result: entry.value,
+        fallbackMessage,
+      })
+    }
+    return [new Error(fallbackMessage)]
+  })
+}
+
+
+async function drainAcceptedMarketWork({
+  context,
+  marketPhase,
+  userDataPhase,
+} = {}) {
+  // Subscription callbacks register their latest task synchronously. The
+  // engine serializes price and book transitions, so each latest task covers
+  // all earlier accepted tasks from that stream.
+  const pendingMarketTasks = [...context.marketPriceIntake.values()]
+    .flatMap(({ latestWebSocketPriceTask, latestWebSocketBookTask }) => [
+      latestWebSocketPriceTask,
+      latestWebSocketBookTask,
+    ])
+    .filter(Boolean)
+  const marketWorkResult = await context.failureRecorder.runPhaseSafely({
+    phase: marketPhase,
+    operation: () => Promise.allSettled(pendingMarketTasks),
+    stage: marketPhase,
+    message: "Shutdown market-work drain failed",
+    auditReason: "MARKET_WORK_DRAIN_FAILED",
+    isFailure: (results) => getSettledMarketTaskErrors({
+      results,
+      fallbackMessage: "Shutdown market-work drain failed",
+    }).length > 0,
+  })
+  const marketWorkErrors = Array.isArray(marketWorkResult)
+    ? getSettledMarketTaskErrors({
+      results: marketWorkResult,
+      fallbackMessage: "Shutdown market-work drain failed",
+    })
+    : getResultErrors({
+      result: marketWorkResult,
+      fallbackMessage: "Shutdown market-work drain failed",
+    })
+
+  // Market tasks can submit recovery SELLs and enqueue their acknowledgements/fills.
+  // Keep user-data intake connected and drain its queue to a stable generation.
+  const userDataDrainResult = await context.failureRecorder.runPhaseSafely({
+    phase: userDataPhase,
+    operation: () => drainUserDataQueue(context),
+    stage: userDataPhase,
+    message: "Shutdown user-data drain failed",
+    auditReason: "USER_DATA_DRAIN_FAILED",
+  })
+  const userDataDrainErrors = getResultErrors({
+    result: userDataDrainResult,
+    fallbackMessage: "Shutdown user-data drain failed",
+  })
+
+  return [...marketWorkErrors, ...userDataDrainErrors]
+}
+
+async function quiesceMarketIntakeAndDrain(context) {
+  // Stop accepting new callbacks without unsubscribing yet. If safety or the
+  // CLOSING barrier fails, subscriptions can be resumed without reconnecting.
   context.state.marketIntakeStopped = true
-  const result = await context.failureRecorder.runPhaseSafely({
+  context.marketIntakeErrors = await drainAcceptedMarketWork({
+    context,
+    marketPhase: "MARKET_WORK_DRAIN_PRE_UNSUBSCRIBE",
+    userDataPhase: "USER_DATA_DRAIN_PRE_UNSUBSCRIBE",
+  })
+  return context.marketIntakeErrors
+}
+
+async function stopMarketIntakeFeeds(context) {
+  // The callback fence is already active and every accepted price/book task
+  // was drained before CLOSING. Unsubscribe only after that durable barrier.
+  const stopResult = await context.failureRecorder.runPhaseSafely({
     phase: "MARKET_INTAKE_STOP",
     operation: () => context.stopMarketIntake({
       subscriptions: context.subscriptions,
@@ -314,28 +439,15 @@ async function stopMarketIntakeAndDrain(context) {
     message: "Shutdown market-intake stop failed",
     auditReason: "MARKET_INTAKE_SHUTDOWN_FAILED",
   })
-  context.marketIntakeErrors = getResultErrors({
-    result,
+  const stopErrors = getResultErrors({
+    result: stopResult,
     fallbackMessage: "Shutdown market-intake stop failed",
   })
-  const pendingMarketTasks = [...context.marketPriceIntake.values()]
-    .map(({ latestWebSocketPriceTask }) => latestWebSocketPriceTask)
-    .filter(Boolean)
-  await context.failureRecorder.runPhaseSafely({
-    phase: "MARKET_WORK_DRAIN",
-    operation: () => Promise.allSettled(pendingMarketTasks),
-    stage: "MARKET_WORK_DRAIN",
-    message: "Shutdown market-work drain failed",
-    auditReason: "MARKET_WORK_DRAIN_FAILED",
-    isFailure: (results) => results.some((entry) => entry.status === "rejected"),
-  })
-  await context.failureRecorder.runPhaseSafely({
-    phase: "USER_DATA_DRAIN_INITIAL",
-    operation: () => context.state.eventQueue,
-    stage: "USER_DATA_DRAIN_INITIAL",
-    message: "Initial shutdown user-data drain failed",
-    auditReason: "USER_DATA_DRAIN_FAILED",
-  })
+  context.marketIntakeErrors = [
+    ...context.marketIntakeErrors,
+    ...stopErrors,
+  ]
+  return context.marketIntakeErrors
 }
 
 async function drainUserDataQueue(context) {
@@ -581,52 +693,93 @@ async function stopOperatorControlAfterSafety(context) {
   }))
 }
 
-async function runShutdownLifecycle(context) {
-  await proveStrategySafety(context)
+async function publishClosingAuditOrThrow(context) {
   await publishClosingAudit(context)
-  if (context.snapshotError) { throw context.snapshotError }
-  if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
-    await reproveStrategySafety(context)
-    await publishClosingAudit(context)
-    if (context.snapshotError) { throw context.snapshotError }
+  if (context.snapshotError) {
+    throw context.snapshotError
   }
+}
 
-  const userDataErrors = await stopUserDataIntakeAndDrain(context)
-  if (userDataErrors.length > 0) {
-    await publishClosingAudit(context)
-    if (context.snapshotError) { throw context.snapshotError }
-    throw new AggregateError(userDataErrors, "User-data intake could not be stopped and drained safely")
+async function reproveAndPublishClosingAuditIfUnsafe(context) {
+  if (context.strategyShutdownCoordinator.isSafeToShutdown()) {
+    return false
   }
+  await reproveStrategySafety(context)
+  await publishClosingAuditOrThrow(context)
+  return true
+}
 
-  if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
-    await reproveStrategySafety(context)
-    await publishClosingAudit(context)
-    if (context.snapshotError) { throw context.snapshotError }
+async function quiesceMarketIntakeForClosing(context) {
+  // Quiesce market callbacks and drain accepted work while subscriptions,
+  // user-data, operator control and the broker remain available.
+  const errors = await quiesceMarketIntakeAndDrain(context)
+  if (errors.length > 0) {
+    context.state.marketIntakeStopped = false
+    await publishClosingAuditOrThrow(context)
+    throw new AggregateError(errors, "Accepted market work could not be drained safely")
   }
+  try {
+    const closingAuditRefreshed = await reproveAndPublishClosingAuditIfUnsafe(context)
+    if (!closingAuditRefreshed) {
+      await publishClosingAuditOrThrow(context)
+    }
+  } catch (error) {
+    context.state.marketIntakeStopped = false
+    throw error
+  }
+}
+
+async function stopMarketIntakeAfterClosing(context) {
+  // The CLOSING barrier has passed. The synchronous callback fence and
+  // pre-CLOSING task drain are complete, so unsubscribe without reopening
+  // callback processing or accepting more market work.
+  const errors = await stopMarketIntakeFeeds(context)
+  if (errors.length > 0) {
+    // Resume callbacks for any subscriptions that remained active after a
+    // partial unsubscribe failure; BUYs remain gated and user-data stays live.
+    context.state.marketIntakeStopped = false
+    await publishClosingAuditOrThrow(context)
+    throw new AggregateError(errors, "Market intake could not be stopped and drained safely")
+  }
+}
+
+async function stopUserDataAfterMarketIntake(context) {
+  const errors = await stopUserDataIntakeAndDrain(context)
+  if (errors.length > 0) {
+    await publishClosingAuditOrThrow(context)
+    throw new AggregateError(errors, "User-data intake could not be stopped and drained safely")
+  }
+  await reproveAndPublishClosingAuditIfUnsafe(context)
+}
+
+async function flushJournalAndReproveIfNeeded(context) {
   try {
     await flushShutdownJournal(context)
   } catch (error) {
     context.auditReasons.push("JOURNAL_NOT_DURABLE")
-    await publishClosingAudit(context)
-    if (context.snapshotError) { throw context.snapshotError }
+    await publishClosingAuditOrThrow(context)
     throw error
   }
   if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
     await reproveStrategySafety(context)
-    await publishClosingAudit(context)
-    if (context.snapshotError) { throw context.snapshotError }
+    await publishClosingAuditOrThrow(context)
     try {
       await flushShutdownJournal(context)
     } catch (error) {
       context.auditReasons.push("JOURNAL_NOT_DURABLE")
-      await publishClosingAudit(context)
-      if (context.snapshotError) { throw context.snapshotError }
+      await publishClosingAuditOrThrow(context)
       throw error
     }
   }
+}
 
+async function runShutdownLifecycle(context) {
+  await proveStrategySafety(context)
+  await quiesceMarketIntakeForClosing(context)
+  await stopMarketIntakeAfterClosing(context)
+  await stopUserDataAfterMarketIntake(context)
+  await flushJournalAndReproveIfNeeded(context)
   await stopOperatorControlAfterSafety(context)
-  await stopMarketIntakeAndDrain(context)
   await disconnectBroker(context)
   finalizeShutdown({
     context,
@@ -642,6 +795,37 @@ async function runShutdownLifecycle(context) {
  * reconciliation and recovery SELL coverage; other strategies keep separate
  * shutdown policies.
  */
+function establishShutdownState({
+  state,
+  phaseRunner,
+  shutdownRequestedAt,
+  stopStateEstablishedLogged,
+  now,
+}) {
+  const shutdownStartedFromStatus = state.status
+  const stateEstablishedAt = now()
+  state.stopped = true
+  state.ready = false
+  state.status = "STOPPING"
+  if (!stopStateEstablishedLogged) {
+    phaseRunner.logPhase({
+      phase: "STOP_STATE_ESTABLISHED",
+      status: "COMPLETED",
+      durationMs: Math.max(0, stateEstablishedAt - shutdownRequestedAt),
+    })
+  }
+  return shutdownStartedFromStatus
+}
+
+function createShutdownPhaseRunner([logger, now, shutdownRequestedAt, shutdownCorrelationId]) {
+  return createPhaseRunner({
+    logger,
+    now,
+    shutdownRequestedAt,
+    shutdownCorrelationId,
+  })
+}
+
 function createShutdownRequestContext({
   options,
   state,
@@ -657,14 +841,8 @@ function createShutdownRequestContext({
     preShutdownErrors = [],
     beforeSharedServicesStop,
   } = stopOptions
-  const shutdownRequestedAt = requestedAt ?? now()
-  const shutdownCorrelationId = runtimeSessionId ?? null
-  const phaseRunner = createPhaseRunner({
-    logger: options.logger,
-    now,
-    shutdownRequestedAt,
-    shutdownCorrelationId,
-  })
+  const shutdownRequestedAt = requestedAt ?? now(), shutdownCorrelationId = runtimeSessionId ?? null
+  const phaseRunner = createShutdownPhaseRunner([options.logger, now, shutdownRequestedAt, shutdownCorrelationId])
   if (!requestLogged) {
     phaseRunner.logPhase({
       phase: "SHUTDOWN_REQUESTED",
@@ -673,18 +851,13 @@ function createShutdownRequestContext({
     })
   }
 
-  const shutdownStartedFromStatus = state.status
-  const stateEstablishedAt = now()
-  state.stopped = true
-  state.ready = false
-  state.status = "STOPPING"
-  if (!stopStateEstablishedLogged) {
-    phaseRunner.logPhase({
-      phase: "STOP_STATE_ESTABLISHED",
-      status: "COMPLETED",
-      durationMs: Math.max(0, stateEstablishedAt - shutdownRequestedAt),
-    })
-  }
+  const shutdownStartedFromStatus = establishShutdownState({
+    state,
+    phaseRunner,
+    shutdownRequestedAt,
+    stopStateEstablishedLogged,
+    now,
+  })
 
   const context = createShutdownContext({
     options: {
