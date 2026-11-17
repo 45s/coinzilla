@@ -247,6 +247,102 @@ function createAdditionalTrackedBaseQuantity({ state, balances, portfolio }) {
   })
 }
 
+function validateRecoverySellerExecutionOwnership({ order, ownership } = {}) {
+  if (!(order instanceof CanonicalOrder) || order.status !== "PENDING") {
+    throw new TypeError("Recovery Seller pending submission requires a PENDING CanonicalOrder")
+  }
+  const expectedPurpose = order.side === "BUY"
+    ? "RECOVERY_BUY"
+    : order.side === "SELL"
+      ? "RECOVERY_SELL"
+      : undefined
+  if (ownership?.strategyId !== StrategyId.RECOVERY_SELLER ||
+      typeof ownership.positionId !== "string" ||
+      !ownership.positionId.trim() ||
+      typeof ownership.cycleId !== "string" ||
+      !ownership.cycleId.trim() ||
+      ownership.purpose !== expectedPurpose) {
+    throw new Error("Recovery Seller submission requires matching RS strategy, Position, purpose and cycle ownership")
+  }
+  return ownership
+}
+
+function resolveRegisteredRecoverySellerOrderOwnership({ registry, order } = {}) {
+  const registeredOrder = registry.getOrder({ clientOrderId: order.clientOrderId })
+  const ownership = registry.getOwnership({ clientOrderId: order.clientOrderId })
+  const expectedPurpose = registeredOrder?.side === "BUY"
+    ? "RECOVERY_BUY"
+    : registeredOrder?.side === "SELL"
+      ? "RECOVERY_SELL"
+      : undefined
+  if (!registeredOrder ||
+      !ownership ||
+      ownership.strategyId !== StrategyId.RECOVERY_SELLER ||
+      ownership.purpose !== expectedPurpose ||
+      typeof ownership.positionId !== "string" ||
+      !ownership.positionId.trim() ||
+      typeof ownership.cycleId !== "string" ||
+      !ownership.cycleId.trim()) {
+    throw new Error("Recovery Seller execution callback requires a registered RS-owned order")
+  }
+  return ownership
+}
+
+function createRecoverySellerExecutionCallbacks({ state } = {}) {
+  return Object.freeze({
+    onPendingOrder: ({ order, ownership } = {}) => {
+      validateRecoverySellerExecutionOwnership({ order, ownership })
+      const result = state.orderRegistry.registerPending({ order, ownership })
+      state.orderRegistry = result.registry
+      return result
+    },
+    onAcknowledgedOrder: ({ order } = {}) => {
+      const ownership = resolveRegisteredRecoverySellerOrderOwnership({
+        registry: state.orderRegistry,
+        order,
+      })
+      const result = state.orderRegistry.attachAcknowledgedBrokerOrderId({ order })
+      state.orderRegistry = result.registry
+      return Object.freeze({ ...result, ownership })
+    },
+    onSubmissionFailure: ({ order, outcome } = {}) => {
+      const ownership = resolveRegisteredRecoverySellerOrderOwnership({
+        registry: state.orderRegistry,
+        order,
+      })
+      if (outcome === "REJECTED") {
+        const result = state.orderRegistry.removePending({ clientOrderId: order.clientOrderId })
+        if (!result.removed) {
+          throw new Error("Recovery Seller rejected submission was not a removable pending order")
+        }
+        state.orderRegistry = result.registry
+        return Object.freeze({ ...result, ownership })
+      }
+      const result = state.orderRegistry.markUnknown({ clientOrderId: order.clientOrderId })
+      if (!result.ok) {
+        throw result.errors[0] ?? new Error("Unable to retain uncertain Recovery Seller submission as UNKNOWN")
+      }
+      state.orderRegistry = result.data.registry
+      return Object.freeze({ ...result.data, ownership })
+    },
+    onSubmissionDeferred: ({ order, registered } = {}) => {
+      if (!registered) {
+        return Object.freeze({ removed: false })
+      }
+      resolveRegisteredRecoverySellerOrderOwnership({
+        registry: state.orderRegistry,
+        order,
+      })
+      const result = state.orderRegistry.removePending({ clientOrderId: order.clientOrderId })
+      if (!result.removed) {
+        throw new Error("Recovery Seller deferral did not resolve a registered pending order")
+      }
+      state.orderRegistry = result.registry
+      return result
+    },
+  })
+}
+
 function resolveRecoverySellerBuyOrderOwnership({ registry, fill }) {
   if (!(fill instanceof Fill) || fill.side !== "BUY") {
     throw new TypeError("Recovery Seller BUY accounting requires a canonical BUY Fill")
@@ -460,6 +556,7 @@ export function createRecoverySellerAccountingWorkflow({
 
   return Object.freeze({
     applyBuyFill,
+    getExecutionCallbacks: () => createRecoverySellerExecutionCallbacks({ state }),
     reconcileTerminalMixedSell,
     getPortfolio: () => state.portfolio,
     getOrderRegistry: () => state.orderRegistry,
