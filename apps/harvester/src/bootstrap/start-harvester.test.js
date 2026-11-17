@@ -4722,15 +4722,15 @@ async function startOwnedBuySafetyCancellationRuntime({ broker, gates, journalEv
   })
 }
 
-async function assertExternalExecutionIsolation({ broker, result, journalEvents, cancelledBrokerOrderIds }) {
+async function assertExternalExecutionIsolation({ broker, result, journalEvents, cancelledBrokerOrderIds, gates }) {
   await broker.emitPrice("BTCUSDT", {
     symbol: "BTCUSDT",
     price: "65000",
     timestamp: Date.now(),
   })
   await waitForTestSignal(
-    result.userDataReady ? Promise.resolve() : Promise.resolve(),
-    "application readiness before external execution",
+    gates.acknowledged,
+    "acknowledged Harvester BUY before the external execution",
     () => ({ userDataStatus: result.userDataStatus }),
     2_000,
   )
@@ -4769,7 +4769,7 @@ test("keeps shared user-data readiness open when an external execution is isolat
   const broker = createOwnedBuySafetyCancellationBroker({ calls, cancelledBrokerOrderIds, gates })
   const journalEvents = []
   const result = await startOwnedBuySafetyCancellationRuntime({ broker, gates, journalEvents })
-  await assertExternalExecutionIsolation({ broker, result, journalEvents, cancelledBrokerOrderIds })
+  await assertExternalExecutionIsolation({ broker, result, journalEvents, cancelledBrokerOrderIds, gates })
   await result.stop()
   assert.deepEqual(cancelledBrokerOrderIds, ["owned-buy-1"])
 })
