@@ -2089,6 +2089,7 @@ test("fails startup when the exchange snapshot omits a configured market asset",
             asset
           }),
         })],
+        accountId: "123456789",
         sourceTime: 1,
       },
     }
@@ -2285,6 +2286,7 @@ class TestnetTradingRecoveryScenario {
           ok: true,
           data: {
           balances,
+          accountId: "123456789",
           sourceTime: this.snapshotTime
         }
         }
@@ -4044,6 +4046,7 @@ function createDurableStartupAuditFixture({ calls }) {
             }),
           })
         }),
+        accountId: "123456789",
         sourceTime: 123,
       },
     }
@@ -4948,6 +4951,7 @@ function createConfiguredAssetSnapshotFixture({ broker }) {
     ok: true,
     data: {
       balances: sourceBalances,
+      accountId: "123456789",
       sourceTime: 1,
     },
   })
