@@ -5,7 +5,7 @@
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
 **Last reviewed:** 2026-11-17
-**Last source-verified develop checkpoint:** `ff19907ce064b1b154df1460f26946389247a3fd` (2026-11-17; includes merged PR #1330, the latest develop commit verified during this audit).
+**Last source-verified develop checkpoint:** `4c30d7386514f68254322d073903f03b0010d0b9` (2026-11-17; includes merged PR #1364, the latest develop commit verified during this audit).
 
 ## Multi-provider Harvester execution and market-data routing — #1339
 
@@ -103,7 +103,7 @@
 9. **Provider-neutral database CRUD infrastructure — initial API merged; hardening in progress ([#1340](https://github.com/45s/coinzilla/issues/1340), [PR #1353](https://github.com/45s/coinzilla/pull/1353), [PR #1364](https://github.com/45s/coinzilla/pull/1364), [PR #1365](https://github.com/45s/coinzilla/pull/1365)).**
    - **Database infrastructure:** `packages/db` owns generic provider-neutral CRUD/query, lifecycle and transaction contracts plus concrete adapters; Node.js built-in SQLite is the first provider. Keep application-specific schemas, repositories and workflows out of the package.
    - **Consumer integration remains separate:** Harvester persistence integration remains owned by Harvester and tracked independently under [issue #1327](https://github.com/45s/coinzilla/issues/1327) and the [Harvester persistence roadmap](apps/harvester/ROADMAP.md#persistence--provider-agnostic-database-integration-1327). This CRUD task does not implement or modify Harvester.
-   - **Status:** the provider-neutral CRUD API and SQLite adapter are merged in #1353. CREATE snapshot consistency and synchronous transaction rollback isolation are separate open hardening PRs #1364 and #1365. Keep #1340 open until both are reviewed and merged; the package roadmap synchronization is tracked by open PR #1367. No Harvester persistence integration is implied.
+   - **Status:** the provider-neutral CRUD API and SQLite adapter are merged in #1353. CREATE snapshot consistency is corrected in merged [PR #1364](https://github.com/45s/coinzilla/pull/1364); synchronous transaction rollback isolation remains in open [PR #1365](https://github.com/45s/coinzilla/pull/1365). Keep #1340 open until #1365 is reviewed and merged; package-roadmap synchronization is tracked by open PR #1367. No Harvester persistence integration is implied.
    - **Owner:** [Database roadmap](packages/db/ROADMAP.md); tracking [issue #1340](https://github.com/45s/coinzilla/issues/1340).
 
 10. **Structured, package-owned errors with a shared `SystemCustomError` base ([#1028](https://github.com/45s/coinzilla/issues/1028)) — IN PROGRESS; the Utilities-owned base is implemented in merged [PR #1262](https://github.com/45s/coinzilla/pull/1262); gradual adoption remains with consuming domains.**
