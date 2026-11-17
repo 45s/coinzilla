@@ -23,7 +23,11 @@ function getOperationalStateReadFailure({ read }) {
   })
 }
 
-function createOfflineOperationalStateCandidate({ restored, projection, read }) {
+function createOfflineOperationalStateCandidate({
+  restored,
+  projection,
+  read
+,}) {
   return toResult({
     data: Object.freeze({
       ...restored.data,
@@ -63,11 +67,18 @@ export async function restoreHarvesterOperationalState({
     if (projection?.ok !== true) {
       return projection
     }
-    const restored = restoreHarvesterJournalState({ projection, marketMetadata })
+    const restored = restoreHarvesterJournalState({
+      projection,
+      marketMetadata
+    ,})
     if (restored?.ok !== true) {
       return restored
     }
-    return createOfflineOperationalStateCandidate({ restored, projection, read })
+    return createOfflineOperationalStateCandidate({
+      restored,
+      projection,
+      read
+    ,})
   } catch (error) {
     return toResult({ error })
   }
