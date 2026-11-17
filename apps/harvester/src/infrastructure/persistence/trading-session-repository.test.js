@@ -6,6 +6,7 @@ import test from "node:test"
 import {
   createDatabase,
   createSqliteProvider,
+  DatabaseProviderError,
 } from "@coinzilla/db"
 import { createTradingSessionRepository } from "./trading-session-repository.js"
 
@@ -205,7 +206,39 @@ test("propagates transaction rollback and closed-provider failures", async (t) =
   await database.close()
   await assert.rejects(
     repository.findById(originalSession.id),
-    (error) => error?.code === "DB_PROVIDER_OPERATION_FAILED",
-    "A provider failure after database closure must propagate with the provider-neutral database error code.",
+    /Database must be connected to start a transaction/,
+    "A closed database lifecycle must reject repository reads instead of pretending that history is empty.",
+  )
+
+  const providerError = new DatabaseProviderError({
+    operation: "readOne",
+    collection: "harvester_trading_sessions",
+    cause: new Error("simulated SQLite I/O failure"),
+  })
+  const failingReadRepository = createTradingSessionRepository({
+    database: {
+      ...database,
+      readOne: async () => { throw providerError },
+    },
+  })
+  await assert.rejects(
+    failingReadRepository.findById(originalSession.id),
+    (error) => error === providerError,
+    "A provider-neutral DatabaseProviderError must propagate unchanged through the Harvester repository adapter.",
+  )
+
+  const failingTransactionRepository = createTradingSessionRepository({
+    database: {
+      ...database,
+      transaction: async () => { throw providerError },
+    },
+  })
+  await assert.rejects(
+    failingTransactionRepository.transition({
+      id: originalSession.id,
+      status: "RUNNING",
+    }),
+    (error) => error === providerError,
+    "A provider failure during an atomic lifecycle transaction must propagate unchanged to the Harvester application boundary.",
   )
 })
