@@ -15,6 +15,10 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 | `harvester-process-lock.yml` (**Harvester Process Lock**) | Path-filtered pull requests/pushes; manual dispatch | Runs the process-lock regression test on Ubuntu and Windows when process-lock code, Harvester entrypoint, or this workflow changes. | Additional path-filtered workflow; not required by either active ruleset. |
 | `external-links.yml` (**External Documentation Links**) | Pull requests to `develop` changing Markdown/MDX or checker sources; weekly schedule; manual dispatch | Checks changed maintained Markdown/MDX; weekly/manual full-tree scans include historical docs and are report-only. DNS answers are validated and connections pinned before requests; redirects are independently revalidated. | Additional advisory workflow; not one of the six `develop-core` required contexts. |
 
+## Dependabot version updates
+
+The version-update schedule, ecosystem grouping, open-PR limits and target branch are configured in [`.github/dependabot.yml`](../.github/dependabot.yml). npm and GitHub Actions version-update PRs are configured to target `develop`; patch/minor updates are grouped and major updates remain separate for manual review. This configuration is read from the repository default branch (`main`), so the target-branch change becomes effective after it reaches `main` through the approved release PR. Dependabot security-update PRs continue to target the default branch and must be handled under the security-remediation process in the [dependency audit playbook](./dependency-audit-playbook.md).
+
 ## Required status contexts on `develop`
 
 As verified against the active repository ruleset `develop-core` on 2026-11-10, strict required-status freshness is enabled and the ruleset requires exactly these six contexts:
