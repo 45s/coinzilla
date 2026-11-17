@@ -334,7 +334,7 @@ test("treats a repeated terminal RS accounting event as an exact no-op", async (
     "A replay must not release or recreate the terminal order reservation a second time.")
 })
 
-test("commits actual fills even when the independent legacy profitability gate fails", async () => {
+test("commits actual fills when the combined cycle misses minProfit", async () => {
   const context = makeContext()
   const legacyPosition = createLegacyPosition({
     invested: "150",
@@ -355,18 +355,20 @@ test("commits actual fills even when the independent legacy profitability gate f
     terminalOrder: context.terminalOrder,
     canonicalFills: [context.fill],
     canonicalFillAllocations: [context.allocation],
-    minProfit: "0.2",
+    minProfit: "1",
   })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(result.data.applied, true,
-    "Confirmed exchange executions must always be accounted even when their profitability gate fails.")
-  assert.equal(result.data.profitability.recovery.eligible, true,
-    "The recovery allocation must retain its independent profitable result.")
+    "Confirmed exchange executions must always be accounted even when the combined profitability target is missed.")
+  assert.equal(result.data.profitability.recovery.eligible, false,
+    "Recovery allocation diagnostics must not replace the combined cycle gate.")
   assert.equal(result.data.profitability.legacy.eligible, false,
-    "The more expensive historical legacy basis must fail independently.")
+    "Legacy allocation diagnostics must remain available for accounting.")
+  assert.equal(result.data.profitability.cycle.eligible, false,
+    "The combined cycle must fail when total net profit is below minProfit.")
   assert.equal(result.data.profitability.eligible, false,
-    "Overall SELL profitability must fail when either applicable gate fails.")
+    "The public eligibility result must be the combined cycle result.")
   assert.equal(workflow.getLegacyPosition({ marketId: market.id }).remainingQuantity, "49.99",
     "Actual legacy base debit must still be recorded after a loss-making execution.")
   assert.equal(workflow.getActiveOrders().length, 0,

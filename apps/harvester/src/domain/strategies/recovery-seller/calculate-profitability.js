@@ -1,39 +1,21 @@
 import {
+  addDecimal,
   assertDecimalString,
   compareDecimal,
   multiplyDecimal,
   subtractDecimal,
 } from "@coinzilla/utils"
 
-function assertNonNegative({
-  value,
-  field,
-}) {
-  assertDecimalString({
-    value,
-    field,
-  })
-  if (compareDecimal({
-    left: value,
-    right: "0",
-  }) < 0) {
+function assertNonNegative({ value, field }) {
+  assertDecimalString({ value, field })
+  if (compareDecimal({ left: value, right: "0" }) < 0) {
     throw new RangeError(`${field} must be non-negative`)
   }
 }
 
-function assertPositive({
-  value,
-  field,
-  message = `${field} must be positive`,
-}) {
-  assertNonNegative({
-    value,
-    field,
-  })
-  if (compareDecimal({
-    left: value,
-    right: "0",
-  }) <= 0) {
+function assertPositive({ value, field, message = `${field} must be positive` }) {
+  assertNonNegative({ value, field })
+  if (compareDecimal({ left: value, right: "0" }) <= 0) {
     throw new RangeError(message)
   }
 }
@@ -46,56 +28,28 @@ function validateProfitabilityInputs({
   legacyBaseDebit,
   legacyNetQuoteProceeds,
 }) {
-  assertNonNegative({
-    value: recoveryNetQuoteProceeds,
-    field: "recoveryNetQuoteProceeds",
-  })
-  assertNonNegative({
-    value: legacyNetQuoteProceeds,
-    field: "legacyNetQuoteProceeds",
-  })
-  assertPositive({
-    value: recoveryCostBasis,
-    field: "recoveryCostBasis",
-  })
+  assertNonNegative({ value: recoveryNetQuoteProceeds, field: "recoveryNetQuoteProceeds" })
+  assertNonNegative({ value: legacyNetQuoteProceeds, field: "legacyNetQuoteProceeds" })
+  assertPositive({ value: recoveryCostBasis, field: "recoveryCostBasis" })
   assertPositive({
     value: minProfit,
     field: "minProfit",
     message: "minProfit must be greater than zero",
   })
-  assertNonNegative({
-    value: legacyAverageCost,
-    field: "legacyAverageCost",
-  })
-  assertNonNegative({
-    value: legacyBaseDebit,
-    field: "legacyBaseDebit",
-  })
+  assertNonNegative({ value: legacyAverageCost, field: "legacyAverageCost" })
+  assertNonNegative({ value: legacyBaseDebit, field: "legacyBaseDebit" })
 
-  const legacyApplicable = compareDecimal({
-    left: legacyBaseDebit,
-    right: "0",
-  }) > 0
-
-  if (!legacyApplicable &&
-      compareDecimal({
-        left: legacyNetQuoteProceeds,
-        right: "0",
-      }) !== 0) {
+  const legacyApplicable = compareDecimal({ left: legacyBaseDebit, right: "0" }) > 0
+  if (!legacyApplicable && compareDecimal({ left: legacyNetQuoteProceeds, right: "0" }) !== 0) {
     throw new RangeError("Legacy quote proceeds require a positive legacy base debit")
   }
-  if (legacyApplicable &&
-      compareDecimal({
-        left: legacyAverageCost,
-        right: "0",
-      }) <= 0) {
+  if (legacyApplicable && compareDecimal({ left: legacyAverageCost, right: "0" }) <= 0) {
     throw new RangeError("legacyAverageCost must be positive when legacy base is debited")
   }
-
   return legacyApplicable
 }
 
-function calculateRecoveryProfitability({
+function calculateRecoveryAllocation({
   recoveryCostBasis,
   recoveryNetQuoteProceeds,
   minProfit,
@@ -104,36 +58,29 @@ function calculateRecoveryProfitability({
     left: recoveryNetQuoteProceeds,
     right: recoveryCostBasis,
   })
-
   return Object.freeze({
     costBasis: recoveryCostBasis,
     netQuoteProceeds: recoveryNetQuoteProceeds,
     netProfit,
     minProfit,
-    eligible: compareDecimal({
-      left: netProfit,
-      right: minProfit,
-    }) >= 0,
+    // Allocation diagnostics only. This is not an independent SELL gate.
+    eligible: compareDecimal({ left: netProfit, right: minProfit }) >= 0,
   })
 }
 
-function calculateLegacyProfitability({
+function calculateLegacyAllocation({
   legacyApplicable,
   legacyAverageCost,
   legacyBaseDebit,
   legacyNetQuoteProceeds,
 }) {
   const costBasis = legacyApplicable
-    ? multiplyDecimal({
-      left: legacyAverageCost,
-      right: legacyBaseDebit,
-    })
+    ? multiplyDecimal({ left: legacyAverageCost, right: legacyBaseDebit })
     : "0"
   const netProfit = subtractDecimal({
     left: legacyNetQuoteProceeds,
     right: costBasis,
   })
-
   return Object.freeze({
     applicable: legacyApplicable,
     averageCost: legacyAverageCost,
@@ -141,30 +88,28 @@ function calculateLegacyProfitability({
     costBasis,
     netQuoteProceeds: legacyNetQuoteProceeds,
     netProfit,
-    eligible: !legacyApplicable || compareDecimal({
-      left: netProfit,
-      right: "0",
-    }) >= 0,
+    // Allocation diagnostics only. A legacy loss may be offset by recovery profit.
+    eligible: !legacyApplicable || compareDecimal({ left: netProfit, right: "0" }) >= 0,
   })
 }
 
 /**
- * Evaluate the recovery and legacy SELL profitability gates independently.
+ * Evaluate one combined Recovery Seller cycle SELL.
  *
- * Net proceeds must already include quote-denominated SELL commissions and
- * reliably valued third-asset commissions. legacyBaseDebit must include the
- * legacy gross base allocation plus the base-denominated SELL commission
- * quantity allocated to legacy.
- * recoveryCostBasis must include the recovery tranche's BUY costs and fees.
+ * Recovery and legacy remain separately attributed for accounting diagnostics,
+ * but only the combined net result determines eligibility:
+ * recovery BUY cost + legacy historical cost + minProfit must be recovered.
+ * All proceeds must already be net of actual quote fees and reliably valued
+ * third-asset fees. legacyBaseDebit includes allocated base-asset commissions.
  *
  * @param {object} options
- * @param {string} options.recoveryCostBasis Recovery tranche quote cost basis.
+ * @param {string} options.recoveryCostBasis Recovery BUY investment and BUY fees.
  * @param {string} options.recoveryNetQuoteProceeds Net quote proceeds allocated to recovery.
- * @param {string} options.minProfit Existing pair-level minimum recovery profit.
+ * @param {string} options.minProfit Required minimum net profit for the whole cycle.
  * @param {string} options.legacyAverageCost Fixed original legacy average cost per base unit.
- * @param {string} options.legacyBaseDebit Actual or conservatively planned legacy base debit, including base fees.
- * @param {string} options.legacyNetQuoteProceeds Net quote proceeds allocated to legacy, after quote/valued third-asset fees.
- * @returns {object} Independent gate results; overall eligibility requires both applicable gates.
+ * @param {string} options.legacyBaseDebit Actual legacy quantity consumed, including base commissions.
+ * @param {string} options.legacyNetQuoteProceeds Net quote proceeds allocated to legacy.
+ * @returns {object} Separate accounting diagnostics and one combined cycle eligibility result.
  */
 export function calculateRecoverySellerProfitability({
   recoveryCostBasis,
@@ -182,21 +127,41 @@ export function calculateRecoverySellerProfitability({
     legacyBaseDebit,
     legacyNetQuoteProceeds,
   })
-  const recovery = calculateRecoveryProfitability({
+  const recovery = calculateRecoveryAllocation({
     recoveryCostBasis,
     recoveryNetQuoteProceeds,
     minProfit,
   })
-  const legacy = calculateLegacyProfitability({
+  const legacy = calculateLegacyAllocation({
     legacyApplicable,
     legacyAverageCost,
     legacyBaseDebit,
     legacyNetQuoteProceeds,
   })
+  const costBasis = addDecimal({
+    left: recovery.costBasis,
+    right: legacy.costBasis,
+  })
+  const netQuoteProceeds = addDecimal({
+    left: recovery.netQuoteProceeds,
+    right: legacy.netQuoteProceeds,
+  })
+  const netProfit = subtractDecimal({
+    left: netQuoteProceeds,
+    right: costBasis,
+  })
+  const cycle = Object.freeze({
+    costBasis,
+    netQuoteProceeds,
+    netProfit,
+    minProfit,
+    eligible: compareDecimal({ left: netProfit, right: minProfit }) >= 0,
+  })
 
   return Object.freeze({
     recovery,
     legacy,
-    eligible: recovery.eligible && legacy.eligible,
+    cycle,
+    eligible: cycle.eligible,
   })
 }
