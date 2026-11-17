@@ -92,7 +92,14 @@ const marketMetadata = {
   },
 }
 
-function ownedOrder({ side, status, clientOrderId, brokerOrderId, cycleId = "rs-cycle-1", positionId = "rs-position-1" }) {
+function ownedOrder({
+  side,
+  status,
+  clientOrderId,
+  brokerOrderId,
+  cycleId = "rs-cycle-1",
+  positionId = "rs-position-1",
+}) {
   return {
     market: {
       symbol: "ZROUSDT",
