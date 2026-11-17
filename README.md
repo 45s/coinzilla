@@ -12,6 +12,18 @@ See the [documentation index](docs/README.md) for repository-wide guidance, appl
 
 See the [architecture documentation](docs/architecture/README.md) for Coinzilla-wide architecture principles and decisions.
 
+## Synchronizing the dedicated main worktree
+
+The separate `harvy-main` worktree uses the local `main-work` branch to track `origin/main`. From the repository root of that worktree, run:
+
+```sh
+pnpm run sync:main
+```
+
+The command fetches `origin/main` and fast-forwards `main-work` only when the worktree is clean and the local history is an ancestor of the fetched remote history. It requires the current branch to be exactly `main-work`; it never switches branches, stashes changes, resets commits, or cleans files.
+
+If the worktree is dirty, the branch is detached or incorrect, the fetch fails, or local commits are ahead/diverged, the command stops with an explanation. Commit or move your changes, or reconcile the history manually, before retrying. Ignored files are not treated as untracked changes by Git.
+
 ## Requirements
 
 - Node.js 24 or newer
