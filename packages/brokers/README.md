@@ -1,4 +1,4 @@
-# Binance WebSocket broker operations
+# Broker provider operations
 
 For mandatory Bitunix reference-project audits before implementing any Spot capability, read [Brokers agent instructions — Bitunix Spot development](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit). The reference projects are [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net) (primary C# implementation and tests) and [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp) (secondary TypeScript REST/signing example); official Bitunix documentation remains authoritative.
 
