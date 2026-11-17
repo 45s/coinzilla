@@ -768,6 +768,18 @@ function createLifecycleResult({ stopState, previousDecision, decision, action, 
   })
 }
 
+function createBuyFailureResult({ stopState, activeOrders, marketPrice, error }) {
+  const explanation = error instanceof Error && error.message
+    ? `Recovery Seller BUY policy failed closed: ${error.message}`
+    : "Recovery Seller BUY policy encountered an unmodeled condition"
+  return createStopAndReconcileIfOrderExists({
+    stopState,
+    activeOrders,
+    symbol: marketPrice?.symbol,
+    explanation,
+  })
+}
+
 /**
  * Evaluate one RS BUY tranche using the established Conservative cadence,
  * configured orderQuantity, percentage-below-reference pricing and exchange
@@ -1076,13 +1088,11 @@ export function evaluateRecoverySellerBuyDecision({
       plan: candidate.plan,
     })
   } catch (error) {
-    return createStopAndReconcileIfOrderExists({
+    return createBuyFailureResult({
       stopState,
       activeOrders,
-      symbol: marketPrice?.symbol,
-      explanation: error instanceof Error && error.message
-        ? `Recovery Seller BUY policy failed closed: ${error.message}`
-        : "Recovery Seller BUY policy encountered an unmodeled condition",
+      marketPrice,
+      error,
     })
   }
 }
