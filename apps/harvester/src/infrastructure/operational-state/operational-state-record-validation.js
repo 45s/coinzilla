@@ -223,8 +223,13 @@ function validateManifestCheckpointDigest({ checkpoint }) {
 
 export function validateManifestCheckpoint({ checkpoint, schemaVersion, factRecord, expectedSequence, previousManifestDigest, index }) {
   validateManifestCheckpointShape({ checkpoint })
-  validateManifestCheckpointVersionAndPosition({ checkpoint, schemaVersion, expectedSequence, index })
-  validateManifestCheckpointLinkage({ checkpoint, factRecord, previousManifestDigest })
+  validateManifestCheckpointVersionAndPosition({ checkpoint,
+    schemaVersion,
+    expectedSequence,
+    index })
+  validateManifestCheckpointLinkage({ checkpoint,
+    factRecord,
+    previousManifestDigest })
   validateManifestCheckpointDigest({ checkpoint })
 }
 
