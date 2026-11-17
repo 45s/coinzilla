@@ -124,8 +124,10 @@ function evaluate(overrides = {}) {
     pairConfig,
     marketMetadata,
     activeOrders: [],
-    cycleState: createRecoverySellerCycleState({ cycleId: "rs-cycle-1" }),
-    positionId: "rs-position-1",
+    cycleState: createRecoverySellerCycleState({
+      cycleId: "rs-cycle-1",
+      positionId: "rs-position-1",
+    }),
     strategyStopped: false,
     marketPaused: false,
     reconciliationComplete: true,
@@ -602,7 +604,13 @@ test("fails closed and reconciles an RS order owned by a different recovery cycl
 
 test("requires the stable Recovery Position identity for every BUY intent", () => {
   const missingPositionId = evaluate({
-    positionId: undefined,
+    cycleState: Object.freeze({
+      ...createRecoverySellerCycleState({
+        cycleId: "rs-cycle-1",
+        positionId: "rs-position-1",
+      }),
+      positionId: undefined,
+    }),
   })
   const mismatchedPosition = evaluate({
     recoveryPosition: {
