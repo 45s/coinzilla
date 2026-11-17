@@ -117,7 +117,7 @@ pnpm lint:changed
 pnpm lint
 ```
 
-By default, `pnpm lint:changed` compares `HEAD` with the merge base of `origin/develop` and `HEAD`. If you need to select different refs for a deliberate local comparison, set `LINT_CHANGED_BASE_REF` and `LINT_CHANGED_HEAD_REF` explicitly. Both refs must exist locally and have enough history to compute a merge base.
+By default, `pnpm lint:changed` compares committed `HEAD` changes with the merge base of `origin/develop` and `HEAD`, then also includes staged/unstaged tracked changes and nonignored untracked JavaScript files in the working tree. If you need to select different refs for a deliberate local comparison, set `LINT_CHANGED_BASE_REF` and `LINT_CHANGED_HEAD_REF` explicitly. Both refs must exist locally and have enough history to compute a merge base.
 
 For pull requests targeting `develop`, the independent GitHub Actions job **Check strict ESLint for changed files** checks out the PR head with complete history, fetches the target branch, verifies the merge base, and runs `pnpm lint:changed`. The independent workspace-quality job continues to run `pnpm lint`. The existing required **Check JavaScript syntax** status context aggregates both jobs, so either failure blocks merging without requiring a new ruleset context. The strict job is not run for PRs targeting other branches.
 
