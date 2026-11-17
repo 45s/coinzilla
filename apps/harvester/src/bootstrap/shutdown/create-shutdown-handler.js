@@ -817,7 +817,7 @@ function establishShutdownState({
   return shutdownStartedFromStatus
 }
 
-function createShutdownPhaseRunner({ options, now, shutdownRequestedAt, shutdownCorrelationId }) {
+function createShutdownPhaseRunner(options, now, shutdownRequestedAt, shutdownCorrelationId) {
   return createPhaseRunner({
     logger: options.logger,
     now,
@@ -843,7 +843,7 @@ function createShutdownRequestContext({
   } = stopOptions
   const shutdownRequestedAt = requestedAt ?? now()
   const shutdownCorrelationId = runtimeSessionId ?? null
-  const phaseRunner = createShutdownPhaseRunner({ options, now, shutdownRequestedAt, shutdownCorrelationId })
+  const phaseRunner = createShutdownPhaseRunner(options, now, shutdownRequestedAt, shutdownCorrelationId)
   if (!requestLogged) {
     phaseRunner.logPhase({
       phase: "SHUTDOWN_REQUESTED",

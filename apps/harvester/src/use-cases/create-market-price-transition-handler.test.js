@@ -115,7 +115,10 @@ function createHandler({ state, trace, isFresh, canTrade } = {}) {
       },
     }),
     canTrade: () => canTrade,
-    ...createTransitionActionPorts({ state, trace }),
+    ...createTransitionActionPorts({
+      state,
+      trace,
+    }),
   })
 }
 function createHarness(options = {}) {

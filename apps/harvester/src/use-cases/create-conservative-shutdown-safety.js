@@ -21,7 +21,12 @@ function getExternalBlockerReason(blocker) {
   return blocker?.reason ?? blocker?.code ?? blocker?.message
 }
 
-function addOwnedOrderBlockers({ state, blockers, ownedOrders, activeOrders }) {
+function addOwnedOrderBlockers({
+    state,
+    blockers,
+    ownedOrders,
+    activeOrders,
+  }) {
   const hasUnresolvedOwnedBuy = ownedOrders.some((order) =>
     order.side === "BUY" && UNRESOLVED_BUY_STATUSES.has(order.status))
   const hasActiveOwnedBuy = activeOrders.some((order) => order.side === "BUY")
