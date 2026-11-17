@@ -24,7 +24,7 @@ import { prepareProcessOperationalStateStore } from "./bootstrap/operational-sta
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 const PROCESS_IDENTITY = createHarvesterProcessIdentity()
 
-function logSystem(logger, message) {
+function logSystem({ logger, message } = {}) {
   if (typeof logger?.system === "function") {
     logger.system(message)
     return
@@ -46,7 +46,11 @@ function logTelegramNotificationSummary({ notifications, logger } = {}) {
 
 function classifyJournalFlushFailure({ status } = {}) {
   if (status?.writeFailed === true) {
-    return { category: "DURABILITY", stage: "JOURNAL_WRITE_FAILURE", retryable: false }
+    return {
+      category: "DURABILITY",
+      stage: "JOURNAL_WRITE_FAILURE",
+      retryable: false,
+    }
   }
   if (
     status?.started === true &&
@@ -54,9 +58,17 @@ function classifyJournalFlushFailure({ status } = {}) {
     status?.writeFailed === false &&
     status?.writeErrorCount === 0
   ) {
-    return { category: "DURABILITY", stage: "JOURNAL_FLUSH_FAILURE", retryable: true }
+    return {
+      category: "DURABILITY",
+      stage: "JOURNAL_FLUSH_FAILURE",
+      retryable: true,
+    }
   }
-  return { category: "DURABILITY", stage: "JOURNAL_FLUSH_UNCLASSIFIED", retryable: false }
+  return {
+    category: "DURABILITY",
+    stage: "JOURNAL_FLUSH_UNCLASSIFIED",
+    retryable: false,
+  }
 }
 
 function createDefaultJournalService({ eventBus, logger, processIdentity }) {
@@ -283,12 +295,12 @@ async function configureTelegramNotifications({ options, resources } = {}) {
         logger: telegramLogger,
         telegramConfig,
       })
-      logSystem(logger, "Telegram notifications enabled.")
+      logSystem({ logger, message: "Telegram notifications enabled." })
     } catch (error) {
       logger.error?.({ message: "Telegram notifications could not be enabled; Harvester will continue without them.", error })
     }
   } else if (telegramConfig.enabled === false) {
-    logSystem(logger, "Telegram notifications disabled by app configuration.")
+    logSystem({ logger, message: "Telegram notifications disabled by app configuration." })
   } else if (telegramToken || telegramChatId) {
     logger.error?.({ message: "Telegram notifications require both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID; notifications are disabled." })
   }
@@ -323,11 +335,17 @@ function publishRuntimeStarted({ runtime, runtimeConfig, eventPublisher, logger 
     }),
   })
   if (!runtime.connected) {
-    logSystem(logger, "Binance connection was not established.")
+    logSystem({ logger, message: "Binance connection was not established." })
   } else if (runtime.tradingEnabled && runtime.strategyMode === "conservative") {
-    logSystem(logger, `Connected; subscribed to ${runtime.subscriptions.length} enabled market(s). Conservative ${runtimeConfig.tradingMode.toUpperCase()} trading is enabled; waiting for validated market prices and user-data readiness.`)
+    logSystem({
+      logger,
+      message: `Connected; subscribed to ${runtime.subscriptions.length} enabled market(s). Conservative ${runtimeConfig.tradingMode.toUpperCase()} trading is enabled; waiting for validated market prices and user-data readiness.`,
+    })
   } else {
-    logSystem(logger, `Connected; Binance trading mode is ${runtimeConfig.tradingMode.toUpperCase()}.`)
+    logSystem({
+      logger,
+      message: `Connected; Binance trading mode is ${runtimeConfig.tradingMode.toUpperCase()}.`,
+    })
   }
 }
 
