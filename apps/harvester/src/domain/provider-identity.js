@@ -1,6 +1,8 @@
 import { SystemCustomError } from "@coinzilla/utils"
-import { TRADING_ENVIRONMENTS } from "./app-config.js"
-
+const TRADING_ENVIRONMENTS = Object.freeze({
+  TESTNET: "testnet",
+  LIVE: "live",
+})
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
 const DEFAULT_ACCOUNT_ID = "binance-primary"
 
