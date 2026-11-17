@@ -87,6 +87,22 @@ When global STOP is latched, only valid `WAIT` and `RECONCILE` outcomes may proc
 
 An unknown submission result or unmodeled exchange status therefore produces both a sticky global STOP state and a `RECONCILE` outcome for the existing order. This keeps permission to trade distinct from permission to perform non-trading reconciliation.
 
+### 2.3 Recovery-cycle state and the one-SELL invariant
+
+The four lifecycle outcomes above describe one order lifecycle. Recovery-cycle state separately controls how many orders may belong to one cycle:
+
+- A new cycle starts in `ACCUMULATING`. It may contain multiple sequential BUY tranches. A later BUY tranche is a new order lifecycle and is allowed only after the preceding BUY is terminal and its canonical fills, commissions, commitment and accounting effects are reconciled.
+- Before any SELL broker I/O, the cycle records its one allowed SELL identity and moves to `SELL_SUBMITTED`. No second SELL, continuation SELL, replacement SELL, or new BUY may be created while that SELL is active or unresolved.
+- An unknown SELL submission/acknowledgement moves the cycle to `RECONCILIATION_REQUIRED`, latches global STOP, and returns `RECONCILE` for the original client identity. The original commitment and order ownership remain intact.
+- A cycle becomes `CLOSED` only when its sole SELL is `FILLED`, all canonical fills/commissions/reservations and both accounting projections are fully reconciled, and the actual combined cycle profitability result passes.
+- A terminal `CANCELED`, `REJECTED`, or `EXPIRED` SELL (including one with partial execution) leaves the cycle `UNRESOLVED`. It does not authorize another SELL or a new BUY cycle.
+- A `FILLED` SELL whose actual combined profitability result fails also leaves the cycle `UNRESOLVED`. The post-fill adverse-result recovery policy remains unresolved (Question 4); do not invent a follow-up SELL, another BUY, or an automatic recovery action.
+- A new cycle with a distinct stable cycle ID may be created only from a `CLOSED` prior cycle. Creating a new cycle never clears the global sticky STOP latch.
+
+The pure BUY evaluator requires an explicit cycle-state snapshot. It blocks new BUYs for `CLOSED` and `UNRESOLVED` cycles, waits/reconciles the recorded sole SELL while it is active or unknown, and fails closed if an active SELL is absent from the cycle state or the cycle records a SELL without authoritative order evidence. It also requires explicit operator-stop, market-pause and reconciliation-readiness flags. These are policy decisions only; shared account balance and aggregate reservations remain the Trading Engine allocator's responsibility.
+
+Canonical fill processing, terminal reconciliation, reservation conservation and exact-once accounting must continue while global STOP is active. STOP blocks new trading actions; it must never discard or suppress facts about already-submitted orders or confirmed executions.
+
 ## 3. Legacy inventory and authorization
 
 Legacy inventory is a specifically identified quantity of a market's base asset that existed before RS was authorized to manage it. It must not be inferred from an exchange free balance, Portfolio total/free quantity, manual/external order, prior process state, or unowned execution.
