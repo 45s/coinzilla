@@ -48,6 +48,7 @@
       "src/domain/strategies/recovery-seller/mixed-sell-fill-reconciliation.test.js",
       "src/domain/strategies/recovery-seller/mixed-sell-fill-accounting.test.js",
       "src/domain/strategies/recovery-seller/calculate-profitability.test.js",
+      "src/domain/strategies/recovery-seller/calculate-sell-plan.test.js",
       "src/domain/account/calculate-account-snapshot-baselines.test.js",
       "src/bootstrap/account/create-account-snapshot-manager.test.js",
       "src/use-cases/create-recovery-seller-accounting-workflow.test.js",
