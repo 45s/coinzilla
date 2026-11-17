@@ -543,6 +543,7 @@ function reconcileTerminalMixedSellTransition({
     canonicalFillAllocations,
     minProfit,
   })
+  // Until this point, the old registry still reserves the SELL.
   // Publish terminal order and both accounting projections as one transition.
   state.portfolio = result.accounting.portfolio
   state.legacyPositions = result.nextLegacyPositions
