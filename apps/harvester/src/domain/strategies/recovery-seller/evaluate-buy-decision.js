@@ -571,29 +571,32 @@ function createBuyPlan({ marketPrice, pairConfig, rules, recoverySpent, lastBuyP
   }
 }
 
-function getBuyFilterReason({
-  quantityMeetsMinimum,
-  notionalMeetsMinimum,
-  quantityWithinMaximum,
-  notionalWithinMaximum,
-  priceWithinFilters,
-}) {
-  if (!quantityMeetsMinimum) {
+function getBuyFilterReason({ plan, rules, limits }) {
+  if (compareDecimal({
+    left: plan.buyQuantity,
+    right: "0",
+  }) <= 0) {
+    return "QUANTITY_INCREMENT"
+  }
+  if (!limits.quantityMeetsMinimum) {
     return "MIN_QUANTITY"
   }
-  if (!notionalMeetsMinimum) {
+  if (!limits.notionalMeetsMinimum) {
     return "MIN_NOTIONAL"
   }
-  if (!quantityWithinMaximum) {
+  if (!limits.quantityWithinMaximum) {
     return "MAX_QUANTITY"
   }
-  if (!notionalWithinMaximum) {
+  if (!limits.notionalWithinMaximum) {
     return "MAX_NOTIONAL"
   }
-  if (!priceWithinFilters) {
-    return "PRICE_FILTER"
+  if (rules.minPrice && compareDecimal({
+    left: plan.buyPrice,
+    right: rules.minPrice,
+  }) < 0) {
+    return "MIN_PRICE"
   }
-  return "UNKNOWN_FILTER"
+  return "MAX_PRICE"
 }
 
 function evaluateBuyExchangeFilters({ plan, rules }) {
@@ -630,11 +633,15 @@ function evaluateBuyExchangeFilters({ plan, rules }) {
     return undefined
   }
   return getBuyFilterReason({
-    quantityMeetsMinimum,
-    notionalMeetsMinimum,
-    quantityWithinMaximum,
-    notionalWithinMaximum,
-    priceWithinFilters,
+    plan,
+    rules,
+    limits: {
+      quantityMeetsMinimum,
+      notionalMeetsMinimum,
+      quantityWithinMaximum,
+      notionalWithinMaximum,
+      priceWithinFilters,
+    },
   })
 }
 
@@ -663,7 +670,15 @@ function isInvestmentLimitExceeded({ investment, recoverySpent, cumulativeNetSel
   }) > 0
 }
 
-function createBuyDisposition({ reason, plan, rules }) {
+function createBuyDisposition({ reason, plan, rules, pairConfig }) {
+  if (reason === "QUANTITY_INCREMENT") {
+    return Object.freeze({
+      status: "EXCHANGE_CONSTRAINED_BUY",
+      reason,
+      configuredQuantity: String(pairConfig.orderQuantity),
+      quantityStepSize: rules.quantityStepSize,
+    })
+  }
   return Object.freeze({
     status: "EXCHANGE_CONSTRAINED_BUY",
     reason,
@@ -848,6 +863,7 @@ function evaluateBuyCandidate({
           reason: filterReason,
           plan,
           rules,
+          pairConfig,
         }),
       }),
     }
