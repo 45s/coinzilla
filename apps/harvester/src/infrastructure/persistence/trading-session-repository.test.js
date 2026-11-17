@@ -145,6 +145,10 @@ test("rejects invalid lifecycle transitions without changing the stored session"
   await repository.create(originalSession)
   await repository.transition({
     id: originalSession.id,
+    status: "RUNNING",
+  })
+  const stoppedSession = await repository.transition({
+    id: originalSession.id,
     status: "STOPPED",
     endedAt: SESSION_ENDED_AT,
   })
@@ -159,8 +163,8 @@ test("rejects invalid lifecycle transitions without changing the stored session"
   )
   assert.deepEqual(
     await repository.findById(originalSession.id),
-    await repository.findById(originalSession.id),
-    "A rejected lifecycle transition must leave the persisted session readable and unchanged.",
+    stoppedSession,
+    "A rejected lifecycle transition must leave the persisted session exactly unchanged.",
   )
 })
 
