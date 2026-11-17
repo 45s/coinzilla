@@ -150,8 +150,13 @@ function createProviderEntry({ descriptor }) {
     }
 
     lifecycle.status = "connecting"
-    lifecycle.connectPromise = Promise.resolve()
-      .then(() => broker.connect())
+    let connection
+    try {
+      connection = broker.connect()
+    } catch (cause) {
+      connection = Promise.reject(cause)
+    }
+    lifecycle.connectPromise = Promise.resolve(connection)
       .then(() => {
         lifecycle.status = "connected"
         return provider
