@@ -119,7 +119,6 @@ async function removeTemporaryDirectory({ directory, operationError }) {
       throw new AggregateError(
         [operationError, cleanupError],
         "SQLite database operation failed and temporary-file cleanup also failed",
-        { cause: operationError },
       )
     }
 
@@ -353,7 +352,6 @@ async function createRestoreArtifact({ sourceFilename, destinationFilename, time
       ? new AggregateError(
         [operationError, error],
         "SQLite restore failed and its source connection could not close",
-        { cause: operationError },
       )
       : error
   }
