@@ -47,6 +47,10 @@ async function commitFile({ cwd, path, source }) {
     cwd,
     args: ["commit", "-m", "fixture"],
   });
+  git({
+    cwd,
+    args: ["branch", "base"],
+  });
 }
 
 async function withRepository({ callback }) {
@@ -217,7 +221,7 @@ test("new JavaScript files are selected", async () => {
       });
       const files = await getChangedFiles({
         cwd,
-        baseRef: "main",
+        baseRef: "base",
         headRef: "HEAD",
       });
       assert.deepEqual(files, ["new-file.js"], "Every newly added JavaScript file must be selected.");
@@ -244,7 +248,7 @@ test("new CommonJS files are selected", async () => {
       });
       const files = await getChangedFiles({
         cwd,
-        baseRef: "main",
+        baseRef: "base",
         headRef: "HEAD",
       });
       assert.deepEqual(files, ["new-file.cjs"], "CommonJS files must be included in the strict file selection.");
@@ -264,7 +268,7 @@ test("uncommitted and untracked JavaScript files are selected locally", async ()
       await writeFile(join(cwd, "untracked file.js"), "export const fresh = true;\n");
       const files = await getChangedFiles({
         cwd,
-        baseRef: "main",
+        baseRef: "base",
         headRef: "HEAD",
       });
       assert.deepEqual(
@@ -286,7 +290,7 @@ test("a strict violation in an untouched legacy file is not selected", async () 
       });
       const files = await getChangedFiles({
         cwd,
-        baseRef: "main",
+        baseRef: "base",
         headRef: "HEAD",
       });
       assert.deepEqual(files, [], "An unchanged legacy file must not enter the changed-file lint set.");
@@ -315,7 +319,7 @@ test("a modified existing file with a strict violation is selected and rejected"
       });
       const files = await getChangedFiles({
         cwd,
-        baseRef: "main",
+        baseRef: "base",
         headRef: "HEAD",
       });
       assert.deepEqual(files, ["legacy.js"], "A modified legacy file must be selected in full.");
@@ -346,7 +350,7 @@ test("renamed files select the destination path", async () => {
       });
       const files = await getChangedFiles({
         cwd,
-        baseRef: "main",
+        baseRef: "base",
         headRef: "HEAD",
       });
       assert.deepEqual(files, ["after.mjs"], "A renamed JavaScript file must be linted at its new path.");
@@ -374,7 +378,7 @@ test("copied files select the new destination path", async () => {
       });
       const files = await getChangedFiles({
         cwd,
-        baseRef: "main",
+        baseRef: "base",
         headRef: "HEAD",
       });
       assert.deepEqual(files, ["copied.js"], "A copied JavaScript file must be selected even when its source remains unchanged.");
@@ -400,7 +404,7 @@ test("deleted files are excluded", async () => {
       });
       const files = await getChangedFiles({
         cwd,
-        baseRef: "main",
+        baseRef: "base",
         headRef: "HEAD",
       });
       assert.deepEqual(files, [], "Deleted JavaScript files must never be passed to ESLint.");
@@ -427,7 +431,7 @@ test("filenames containing spaces are handled without line parsing", async () =>
       });
       const files = await getChangedFiles({
         cwd,
-        baseRef: "main",
+        baseRef: "base",
         headRef: "HEAD",
       });
       assert.deepEqual(files, ["file with spaces.js"], "A valid path containing spaces must remain one selected filename.");
@@ -445,7 +449,7 @@ test("an empty changed-file set succeeds", async () => {
       });
       const files = await getChangedFiles({
         cwd,
-        baseRef: "main",
+        baseRef: "base",
         headRef: "HEAD",
       });
       assert.deepEqual(files, [], "No changed JavaScript files must produce a successful empty selection.");
