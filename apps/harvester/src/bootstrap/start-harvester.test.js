@@ -1522,27 +1522,22 @@ test("starts application reconciliation on transport recovery and acknowledges o
   await result.stop()
 })
 
-test("repeats recovery snapshots when a user-data event arrives during REST audit reads", async () => {
-  const broker = createBroker()
-  const {getAccountSnapshot} = broker
-  let accountReads = 0
-  let openOrderReads = 0
-  const {getOpenOrders} = broker
+function configureRecoverySnapshotReplay(broker) {
+  const { getAccountSnapshot, getOpenOrders, subscribeForUserData } = broker
+  const counters = { accountReads: 0, openOrderReads: 0, acknowledgements: 0 }
+  let resolveAcknowledgement
+  const acknowledged = new Promise((resolve) => { resolveAcknowledgement = resolve })
   broker.getOpenOrders = async (input) => {
-    openOrderReads += 1
+    counters.openOrderReads += 1
     return getOpenOrders(input)
   }
   broker.getAccountSnapshot = async () => {
-    accountReads += 1
-    if (accountReads === 2) {
+    counters.accountReads += 1
+    if (counters.accountReads === 2) {
       broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
     }
     return getAccountSnapshot()
   }
-  let acknowledgementCount = 0
-  let resolveAcknowledgement
-  const acknowledged = new Promise((resolve) => { resolveAcknowledgement = resolve })
-  const {subscribeForUserData} = broker
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
     return {
@@ -1550,7 +1545,7 @@ test("repeats recovery snapshots when a user-data event arrives during REST audi
       data: {
         ...result.data,
         acknowledgeRecovery: () => {
-          acknowledgementCount += 1
+          counters.acknowledgements += 1
           handlers.onStatus({
             type: "reconciled",
             recoveryRequired: false,
@@ -1562,37 +1557,47 @@ test("repeats recovery snapshots when a user-data event arrives during REST audi
       },
     }
   }
+  return {
+    acknowledged,
+    getAccountReads: () => counters.accountReads,
+    getOpenOrderReads: () => counters.openOrderReads,
+    getAcknowledgements: () => counters.acknowledgements,
+  }
+}
+
+test("repeats recovery snapshots when a user-data event arrives during REST audit reads", async () => {
+  const broker = createBroker()
+  const recovery = configureRecoverySnapshotReplay(broker)
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: {
       ...binanceEnv,
-      NODE_ENV: "development"
+      NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
     logger: {
       info() {},
-      error() {}
+      error() {},
     },
   })
-
   broker.emitUserDataStatus({
     type: "recovered",
     subscriptionId: 17,
     recoveryRequired: true,
     reconciliationRequired: true,
   })
-  await waitForTestSignal(acknowledged, "recovery after user-data audit event", () => ({
-    accountReads,
-    openOrderReads,
-    acknowledgementCount,
+  await waitForTestSignal(recovery.acknowledged, "recovery after user-data audit event", () => ({
+    accountReads: recovery.getAccountReads(),
+    openOrderReads: recovery.getOpenOrderReads(),
+    acknowledgementCount: recovery.getAcknowledgements(),
   }), 2_000)
-
-  assert.equal(accountReads, 3)
-  assert.equal(openOrderReads, 3)
-  assert.equal(acknowledgementCount, 1)
+  assert.equal(recovery.getAccountReads(), 3)
+  assert.equal(recovery.getOpenOrderReads(), 3)
+  assert.equal(recovery.getAcknowledgements(), 1)
   assert.equal(result.userDataReady, true)
   await result.stop()
 })
+
 
 test("logs stack and cause details when a user-data RPC error has an empty message", async () => {
   const broker = createBroker()
@@ -1689,42 +1694,49 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
   await assert.rejects(result.stop(), /Harvester shutdown was incomplete/, "shutdown must reject when startup recovery leaves user-data reconciliation incomplete")
 })
 
-test("does not acknowledge a stale recovery after a newer disconnect", async () => {
-  const broker = createBroker()
-  const {getAccountSnapshot} = broker
-  let accountReads = 0
-  let releaseRecoverySnapshot
-  let resolveRecoverySnapshotStarted
-  const recoverySnapshotStarted = new Promise((resolve) => { resolveRecoverySnapshotStarted = resolve })
-  const recoverySnapshotGate = new Promise((resolve) => { releaseRecoverySnapshot = resolve })
+function configureStaleRecoveryRace(broker) {
+  const { getAccountSnapshot, subscribeForUserData } = broker
+  const signals = {}
+  const counters = { accountReads: 0, acknowledgements: 0 }
+  signals.recoverySnapshotStarted = new Promise((resolve) => { signals.resolveSnapshotStarted = resolve })
+  signals.recoverySnapshotGate = new Promise((resolve) => { signals.releaseSnapshot = resolve })
+  signals.staleFailure = new Promise((resolve) => { signals.resolveStaleFailure = resolve })
   broker.getAccountSnapshot = async () => {
-    accountReads += 1
-    if (accountReads === 2) {
-      resolveRecoverySnapshotStarted()
-      await recoverySnapshotGate
+    counters.accountReads += 1
+    if (counters.accountReads === 2) {
+      signals.resolveSnapshotStarted()
+      await signals.recoverySnapshotGate
     }
     return getAccountSnapshot()
   }
-  let acknowledgementCount = 0
-  let resolveStaleFailure
-  const staleFailure = new Promise((resolve) => { resolveStaleFailure = resolve })
-  const {subscribeForUserData} = broker
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
     return {
       ...result,
       data: {
         ...result.data,
-        acknowledgeRecovery: () => { acknowledgementCount += 1; return true },
+        acknowledgeRecovery: () => {
+          counters.acknowledgements += 1
+          return true
+        },
       },
     }
   }
+  return {
+    ...signals,
+    getAccountReads: () => counters.accountReads,
+    getAcknowledgements: () => counters.acknowledgements,
+  }
+}
 
+test("does not acknowledge a stale recovery after a newer disconnect", async () => {
+  const broker = createBroker()
+  const race = configureStaleRecoveryRace(broker)
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: {
       ...binanceEnv,
-      NODE_ENV: "development"
+      NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
@@ -1732,34 +1744,35 @@ test("does not acknowledge a stale recovery after a newer disconnect", async () 
       info() {},
       error: (entry) => {
         if (entry?.message === "application recovery failed; trading remains blocked") {
-          resolveStaleFailure(entry)
+          race.resolveStaleFailure(entry)
         }
       },
     },
   })
-
   broker.emitUserDataStatus({
     type: "recovered",
     subscriptionId: 17,
     recoveryRequired: true,
     reconciliationRequired: true,
   })
-  await waitForTestSignal(recoverySnapshotStarted, "recovery account snapshot", () => ({ accountReads }), 2_000)
+  await waitForTestSignal(race.recoverySnapshotStarted, "recovery account snapshot", () => ({
+    accountReads: race.getAccountReads(),
+  }), 2_000)
   broker.emitUserDataStatus({
     type: "connectionClosed",
     code: 1006,
-    recoveryRequired: true
+    recoveryRequired: true,
   })
-  releaseRecoverySnapshot()
-  await waitForTestSignal(staleFailure, "stale recovery rejection", () => ({
-    accountReads,
-    acknowledgementCount
+  race.releaseSnapshot()
+  await waitForTestSignal(race.staleFailure, "stale recovery rejection", () => ({
+    accountReads: race.getAccountReads(),
+    acknowledgementCount: race.getAcknowledgements(),
   }), 2_000)
-
-  assert.equal(acknowledgementCount, 0)
+  assert.equal(race.getAcknowledgements(), 0)
   assert.equal(result.userDataReady, false)
-  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/, "shutdown must reject when a newer disconnect prevents authoritative user-data recovery")
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
 })
+
 
 test("fails startup when user-data recovery is required during subscription setup", async () => {
   const broker = createBroker()
@@ -3701,11 +3714,11 @@ test("does not publish CLOSING or disconnect when owned-order REST reconciliatio
   })
 })
 
-test("journals PREFLIGHT balances and open orders before trading and CLOSING balances before broker disconnect", async () => {
+async function createPreflightJournalRuntime() {
   const calls = []
   const broker = createBroker(calls)
   let openOrderReads = 0
-  const {getOpenOrders} = broker
+  const { getOpenOrders } = broker
   broker.getOpenOrders = async (input) => {
     openOrderReads += 1
     assert.deepEqual(input, {})
@@ -3715,62 +3728,66 @@ test("journals PREFLIGHT balances and open orders before trading and CLOSING bal
   const eventPublisher = {
     publish: (event) => {
       events.push(event)
-      calls.push(`publish:${  event.name}`)
+      calls.push(`publish:${event.name}`)
       return { ok: true }
     },
     flush: async () => {
       calls.push("journal:flush")
-      return {
-        ok: true,
-        durable: true
-      }
+      return { ok: true, durable: true }
     },
   }
   const runtime = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: {
       ...binanceEnv,
-      NODE_ENV: "development"
+      NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
     eventPublisher,
     logger: {
       info() {},
       error() {},
-      debug() {}
+      debug() {},
     },
   })
+  return { calls, events, runtime, getOpenOrderReads: () => openOrderReads }
+}
 
+function assertPreflightJournalAudit({ calls, events, openOrderReads }) {
   const openingEvent = events.find((event) => event.name === "account.snapshot_captured")
+  const openOrdersEvent = events.find((event) => event.name === "account.open_orders_captured")
   assert.equal(calls.filter((call) => call === "account:snapshot").length, 1)
   assert.equal(openOrderReads, 1)
   assert.equal(events.filter((event) => event.name === "account.snapshot_captured" && event.data.phase === "PREFLIGHT").length, 1)
   assert.equal(events.filter((event) => event.name === "account.open_orders_captured" && event.data.phase === "PREFLIGHT").length, 1)
   assert.equal(openingEvent.data.phase, "PREFLIGHT")
-  const openOrdersEvent = events.find((event) => event.name === "account.open_orders_captured")
   assert.equal(openOrdersEvent.data.readiness, "READY")
   assert.equal(openOrdersEvent.data.orderCount, 0)
   assert.deepEqual(openOrdersEvent.data.orders, [])
   assert.equal(openingEvent.data.auditStatus, "COMPLETE")
   assert.ok(openingEvent.data.balances.some((balance) => balance.asset === "BTC"))
   assert.ok(openingEvent.data.balances.some((balance) => balance.asset === "USDT"))
-  const openingPublishIndex = calls.indexOf("publish:account.snapshot_captured")
-  const openingFlushIndex = calls.indexOf("journal:flush")
-  const firstMarketSubscriptionIndex = calls.findIndex((call) => call.startsWith("subscribe:book:"))
-  assert.ok(openingPublishIndex >= 0)
-  assert.ok(openingFlushIndex > openingPublishIndex)
-  assert.ok(firstMarketSubscriptionIndex > calls.lastIndexOf("journal:flush"))
+  assert.ok(calls.indexOf("journal:flush") > calls.indexOf("publish:account.snapshot_captured"))
+  assert.ok(calls.findIndex((call) => call.startsWith("subscribe:book:")) > calls.lastIndexOf("journal:flush"))
+}
 
-  await runtime.stop()
+function assertClosingJournalAudit({ calls, events }) {
+  const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
+  assert.equal(snapshots.length, 2)
+  assert.equal(snapshots[1].data.phase, "CLOSING")
+  assert.equal(snapshots[1].data.auditStatus, "COMPLETE")
+  assert.ok(calls.indexOf("disconnect") > calls.lastIndexOf("journal:flush"))
+}
 
-  const snapshotEvents = events.filter((event) => event.name === "account.snapshot_captured")
-  assert.equal(snapshotEvents.length, 2)
-  assert.equal(snapshotEvents[1].data.phase, "CLOSING")
-  assert.equal(snapshotEvents[1].data.auditStatus, "COMPLETE")
-  const closingFlushIndex = calls.lastIndexOf("journal:flush")
-  const disconnectIndex = calls.indexOf("disconnect")
-  assert.ok(closingFlushIndex >= 0)
-  assert.ok(disconnectIndex > closingFlushIndex)
+test("journals PREFLIGHT balances and open orders before trading and CLOSING balances before broker disconnect", async () => {
+  const fixture = await createPreflightJournalRuntime()
+  assertPreflightJournalAudit({
+    calls: fixture.calls,
+    events: fixture.events,
+    openOrderReads: fixture.getOpenOrderReads(),
+  })
+  await fixture.runtime.stop()
+  assertClosingJournalAudit(fixture)
 })
 
 
@@ -3826,63 +3843,71 @@ function createPriorProcessOrderBroker({ calls, canceledClientOrderIds } = {}) {
 startupClientOrderId }
 }
 
-test("treats a prior-process Harvester order as external under IGNORE and evaluates a real market-price event", async () => {
-  const calls = []
-  const canceledClientOrderIds = []
-  const { broker, startupClientOrderId } = createPriorProcessOrderBroker({
-    calls,
-    canceledClientOrderIds,
-  })
-  const events = []
-  const eventPublisher = {
-    publish: (event) => { events.push(event); return { ok: true } },
-    flush: async () => ({
-      ok: true,
-      durable: true
-    }),
-  }
-  const runtime = await startHarvesterForTest({
-    loadConfig: async () => ({
-      ...appConfig,
-      strategies: {
-        ...appConfig.strategies,
-        CG_coinGrabber: {
-          ...appConfig.strategies.CG_coinGrabber,
-          pairs: {
-            ...appConfig.strategies.CG_coinGrabber.pairs,
-            BTCUSDT: {
-              ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
-              enabled: true,
-              enableVolatilityProtection: false,
-              makerPercent: 0.1,
-              takerPercent: 0.1,
-            },
+function createPriorProcessOrderConfig() {
+  return {
+    ...appConfig,
+    strategies: {
+      ...appConfig.strategies,
+      CG_coinGrabber: {
+        ...appConfig.strategies.CG_coinGrabber,
+        pairs: {
+          ...appConfig.strategies.CG_coinGrabber.pairs,
+          BTCUSDT: {
+            ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+            enabled: true,
+            enableVolatilityProtection: false,
+            makerPercent: 0.1,
+            takerPercent: 0.1,
           },
         },
       },
-    }),
+    },
+  }
+}
+
+async function startPriorProcessOrderRuntime({ broker, events }) {
+  const eventPublisher = {
+    publish: (event) => {
+      events.push(event)
+      return { ok: true }
+    },
+    flush: async () => ({ ok: true, durable: true }),
+  }
+  return startHarvesterForTest({
+    loadConfig: async () => createPriorProcessOrderConfig(),
     env: {
       ...binanceEnv,
-      NODE_ENV: "development"
+      NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
     eventPublisher,
     logger: {
       info() {},
       error() {},
-      debug() {}
+      debug() {},
     },
   })
+}
 
+function assertPriorProcessOrderIsIgnored({ runtime, calls, events, startupClientOrderId, canceledClientOrderIds }) {
   const openOrders = events.find((event) => event.name === "account.open_orders_captured")
-  assert.equal(openOrders.data.readiness, "BLOCKED", "the audit must preserve its unowned-order classification independently of trading readiness")
-  assert.deepEqual(openOrders.data.blockReasons, ["UNOWNED_OPEN_ORDERS:1"], "the Journal must preserve why the startup order is not owned by this process")
-  assert.equal(openOrders.data.orderCount, 1, "the account-wide audit must record the pre-existing order")
-  assert.equal(openOrders.data.orders[0].brokerOrderId, "699694", "the audit must preserve the exact external broker order ID")
-  assert.equal(openOrders.data.orders[0].clientOrderId, startupClientOrderId, "the audit must preserve the prior-process client-order identity")
-  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), true, "an unowned startup order must not prevent market-price subscriptions")
-  assert.equal(runtime.recoveredState.orderRegistry.getActiveOrders().length, 0, "the startup order must remain absent from the current-process OrderRegistry")
+  assert.equal(openOrders.data.readiness, "BLOCKED")
+  assert.deepEqual(openOrders.data.blockReasons, ["UNOWNED_OPEN_ORDERS:1"])
+  assert.equal(openOrders.data.orderCount, 1)
+  assert.equal(openOrders.data.orders[0].brokerOrderId, "699694")
+  assert.equal(openOrders.data.orders[0].clientOrderId, startupClientOrderId)
+  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), true)
+  assert.equal(runtime.recoveredState.orderRegistry.getActiveOrders().length, 0)
+  assert.equal(canceledClientOrderIds.includes(startupClientOrderId), false)
+}
 
+test("treats a prior-process Harvester order as external under IGNORE and evaluates a real market-price event", async () => {
+  const calls = []
+  const canceledClientOrderIds = []
+  const { broker, startupClientOrderId } = createPriorProcessOrderBroker({ calls, canceledClientOrderIds })
+  const events = []
+  const runtime = await startPriorProcessOrderRuntime({ broker, events })
+  assertPriorProcessOrderIsIgnored({ runtime, calls, events, startupClientOrderId, canceledClientOrderIds })
   const evaluation = await runtime.processMarketPrice({
     symbol: "BTCUSDT",
     priceEvent: {
@@ -3891,16 +3916,15 @@ test("treats a prior-process Harvester order as external under IGNORE and evalua
       timestamp: Date.now(),
     },
   })
-  assert.equal(evaluation.ok, true, "A valid market-price event must reach the strategy engine.")
-  assert.notEqual(evaluation.data?.reason, "UNOWNED_OPEN_ORDER", "The default IGNORE policy must not defer evaluation because a startup order uses the reserved Harvester prefix.")
-  assert.notEqual(evaluation.data?.skipped, true, "The startup order must not create an unconditional strategy deferral.")
-  assert.equal(runtime.recoveredState.orderRegistry.getActiveOrders().length, 0, "The prior-process order must remain outside the current-process registry.")
-  assert.equal(canceledClientOrderIds.includes(startupClientOrderId), false, "The current process must never cancel the startup-snapshot order.")
-
+  assert.equal(evaluation.ok, true)
+  assert.notEqual(evaluation.data?.reason, "UNOWNED_OPEN_ORDER")
+  assert.notEqual(evaluation.data?.skipped, true)
+  assert.equal(runtime.recoveredState.orderRegistry.getActiveOrders().length, 0)
   await runtime.stop()
-  assert.equal(canceledClientOrderIds.includes(startupClientOrderId), false, "shutdown must not cancel the prior-process order")
-  assert.ok(calls.includes("disconnect"), "the test must close the broker connection after verifying startup")
+  assert.equal(canceledClientOrderIds.includes(startupClientOrderId), false)
+  assert.ok(calls.includes("disconnect"))
 })
+
 
 test("fails closed before market subscriptions when the account-wide open-order query fails", async () => {
   const calls = []
@@ -4231,39 +4255,31 @@ test("blocks trading startup when either PREFLIGHT audit event publication fails
 })
 
 
-test("starts from fresh in-memory state without replaying historical Journal records", async () => {
-  const calls = []
-  const broker = createBroker(calls)
+function configureNoReplayHistoryBroker(broker) {
   const historicalReads = []
   broker.getCanonicalOrder = async () => {
     historicalReads.push("getCanonicalOrder")
-    return {
-      ok: false,
-      errors: [new Error("not found")]
-    }
+    return { ok: false, errors: [new Error("not found")] }
   }
   broker.getCanonicalOrderHistory = async () => {
     historicalReads.push("getCanonicalOrderHistory")
-    return {
-      ok: true,
-      data: []
-    }
+    return { ok: true, data: [] }
   }
   broker.getFills = async () => {
     historicalReads.push("getFills")
-    return {
-      ok: true,
-      data: []
-    }
+    return { ok: true, data: [] }
   }
   broker.getExchangeMarkets = async () => {
     historicalReads.push("getExchangeMarkets")
-    return {
-      ok: true,
-      data: []
-    }
+    return { ok: true, data: [] }
   }
+  return historicalReads
+}
 
+test("starts from fresh in-memory state without replaying historical Journal records", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const historicalReads = configureNoReplayHistoryBroker(broker)
   const runtime = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: {
@@ -4271,7 +4287,6 @@ test("starts from fresh in-memory state without replaying historical Journal rec
       NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
-    // Historical records are deliberately ignored; restart recovery is disabled.
     journalRecoveryRecords: [{
       id: "malformed-historical-record",
       payload: {
@@ -4281,15 +4296,14 @@ test("starts from fresh in-memory state without replaying historical Journal rec
       },
       position: {
         fileName: "session.jsonl",
-        lineNumber: 1
+        lineNumber: 1,
       },
     }],
     logger: {
       info() {},
-      error() {}
+      error() {},
     },
   })
-
   assert.equal(runtime.tradingEnabled, true)
   assert.equal(runtime.userDataReady, true)
   assert.deepEqual(runtime.subscriptions, ["BTCUSDT"])
@@ -4298,9 +4312,9 @@ test("starts from fresh in-memory state without replaying historical Journal rec
   assert.equal(calls.includes("subscribe:user-data"), true)
   assert.equal(calls.includes("subscribe:book:BTCUSDT"), true)
   assert.equal(calls.includes("subscribe:BTCUSDT"), true)
-
   await runtime.stop()
 })
+
 
 
 function createShutdownBuyCancellationGates() {
