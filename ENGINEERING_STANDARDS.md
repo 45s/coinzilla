@@ -143,16 +143,13 @@ The workspace uses the root ESLint flat configuration in `eslint.config.js`. It 
 
 The additional enforced rules are `eqeqeq` (with intentional `null` comparisons allowed), `curly` (all control-flow bodies), `no-nested-ternary`, `prefer-const`, `no-eval`, `no-new-func`, `no-alert`, `no-param-reassign`, and `prefer-promise-reject-errors`. Formatting rules remain intentionally limited; `object-property-newline` is enforced so each object-literal property is written on its own line. Keep destructured option properties one per line as well. Do not add inline suppressions or disable this rule to accommodate changed files.
 
-Gradual adoption is enforced by the changed-file gate rather than a permanent suppression file:
+Strict full-workspace enforcement has no migration baseline, grandfathered findings, or changed-file-only exception:
 
-- `pnpm lint` runs ESLint across the complete JavaScript workspace and exits non-zero for findings.
-- `pnpm lint:report` reports the complete-workspace finding count and most frequent rules without blocking on legacy findings.
-- Pull requests lint every changed JavaScript file without suppressions. A changed legacy file must therefore be clean.
-- New JavaScript files must pass from the start.
-- `pnpm lint:fix` applies supported automatic fixes across the workspace. Review its complete diff before committing.
-- Do not disable rules globally or add inline suppressions merely to silence existing findings. Fix the touched file or document a narrowly justified exception.
-
-The full-workspace report makes remaining debt visible; the changed-file CI gate prevents that debt from growing.
+- `pnpm lint` runs ESLint across the complete JavaScript workspace and fails on every error and warning (`--max-warnings 0`).
+- The required `Check JavaScript syntax` CI context runs `pnpm lint`; it is required by both active branch rulesets, so any workspace finding blocks the pull request.
+- Existing and newly changed JavaScript files are held to the same standard. A legacy finding is still a finding and must be fixed.
+- `pnpm lint:fix` applies supported automatic fixes across the workspace. Review its complete diff before committing, then rerun `pnpm lint`.
+- Do not disable rules globally, add inline suppressions, introduce exceptions, or restore a baseline comparator to silence findings.
 
 ### 5. Functions and side effects
 
