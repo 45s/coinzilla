@@ -145,7 +145,7 @@ test("retains the cycle in reconciliation when terminal fill history is incomple
     },
     terminalOrderStatus: "FILLED",
     reconciliationComplete: false,
-    profitabilityEligible: true,
+    profitabilityEligible: null,
   })
 
   assert.equal(state.status, "RECONCILIATION_REQUIRED",
