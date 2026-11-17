@@ -308,7 +308,6 @@ function createOrdinaryTradeAccountPorts({ market, marketMetadata, balances, sta
       return toResult({
         data: {
           balances,
-          accountId: "123456789",
           sourceTime: state.accountSnapshotCalls,
         },
       })
@@ -402,7 +401,6 @@ function createOrdinaryTradeStartOptions({ appConfig, broker, state } = {}) {
       TRADING_MODE: 'testnet',
       BINANCE_API_KEY: 'test-key',
       BINANCE_API_SECRET_KEY: 'test-secret',
-      BINANCE_ACCOUNT_ID: "123456789",
     },
     now: () => 10,
     logger: {
