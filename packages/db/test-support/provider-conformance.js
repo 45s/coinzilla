@@ -16,9 +16,9 @@ async function withConnectedDatabase({ database, callback }) {
   }
 }
 
-async function withDatabase({ createDatabase, callback, filename = ":memory:" }) {
+async function withDatabase({ createDatabase, callback, storageKey = ":memory:" }) {
   const database = createDatabase({
-    filename,
+    storageKey,
   })
   await withConnectedDatabase({
     database,
@@ -44,7 +44,7 @@ function registerQueryCapabilityTest({
 }) {
   test(`${name}: ${description}`, async (context) => {
     const database = createDatabase({
-      filename: ":memory:",
+      storageKey: ":memory:",
     })
     if (!database.capabilities.queries[capability]) {
       await database.close()
@@ -393,7 +393,7 @@ async function verifyCommit(database) {
 
 async function verifyLifecycle({ createDatabase }) {
   const database = createDatabase({
-    filename: ":memory:",
+    storageKey: ":memory:",
   })
   await database.connect()
   await database.close()
@@ -432,12 +432,12 @@ async function verifyCapabilities(database) {
 
 async function verifyPersistence({ createDatabase }) {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-contract-"))
-  const filename = join(directory, "records.sqlite")
+  const storageKey = join(directory, "records.sqlite")
 
   try {
     await withDatabase({
       createDatabase,
-      filename,
+      storageKey,
       callback: async (database) => {
         await database.create({
           collection: "people",
@@ -451,7 +451,7 @@ async function verifyPersistence({ createDatabase }) {
 
     await withDatabase({
       createDatabase,
-      filename,
+      storageKey,
       callback: async (database) => {
         const record = await database.readOne({
           collection: "people",
@@ -478,7 +478,7 @@ async function verifyPersistence({ createDatabase }) {
 function registerPersistenceTest({ name, createDatabase }) {
   test(`${name}: persistent records survive a new database connection`, async (context) => {
     const database = createDatabase({
-      filename: ":memory:",
+      storageKey: ":memory:",
     })
     const storageModes = database.capabilities.storage.modes
     if (!storageModes.includes("file") && !storageModes.includes("server")) {
@@ -497,10 +497,10 @@ function registerPersistenceTest({ name, createDatabase }) {
 /**
  * Register the provider-neutral contract tests for a database provider.
  *
- * The factory receives a filename. Use ":memory:" for isolated tests and
- * persist the supplied filename when testing reconnect behavior.
+ * The factory receives a storageKey. Use ":memory:" for isolated tests and
+ * persist the supplied storageKey when testing reconnect behavior.
  *
- * @param {{name: string, createDatabase: (options: {filename: string}) => object}} options
+ * @param {{name: string, createDatabase: (options: {storageKey: string}) => object}} options
  */
 export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
   registerStandardTest({
