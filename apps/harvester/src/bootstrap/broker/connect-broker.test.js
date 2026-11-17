@@ -1,13 +1,14 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
+import { BROKER_PORT_METHODS } from "../../application/ports/broker.port.js"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { connectBroker } from "./connect-broker.js"
 
 const test = (...args) => nodeTest(`[connect-broker.test.js] ${args[0]}`, ...args.slice(1))
 
-const createCapabilities = () => Object.freeze({
+const createCapabilities = ({ provider = "binance" } = {}) => Object.freeze({
   contractVersion: 1,
-  provider: "binance",
+  provider,
   product: "spot",
   environment: Object.freeze({
     selector: "tradingMode",
@@ -17,111 +18,103 @@ const createCapabilities = () => Object.freeze({
   }),
 })
 
-const createFixture = ({ connect, disconnect } = {}) => {
+function createBrokerPort({ calls, onConnect, onDisconnect }) {
+  const broker = Object.fromEntries(BROKER_PORT_METHODS.map((method) => {
+    if (method === "connect") {
+      return [method, async () => {
+        calls.push("connect")
+        await onConnect?.()
+      }]
+    }
+    if (method === "disconnect") {
+      return [method, async () => {
+        calls.push("disconnect")
+        await onDisconnect?.()
+      }]
+    }
+    return [method, async () => undefined]
+  }))
+  broker.capabilities = createCapabilities()
+  return broker
+}
+
+function createFixture({ connect, disconnect } = {}) {
   const calls = []
   const events = []
-  const broker = {
-    capabilities: createCapabilities(),
-    placeOrder: async () => ({ ok: true }),
-    cancelOrder: async () => ({ ok: true }),
-    getFills: async () => ({ ok: true,
-data: [] }),
-    getCanonicalOrderHistory: async () => ({ ok: true,
-data: [] }),
-    getCanonicalOrder: async () => ({ ok: true,
-data: undefined }),
-    getExchangeMarkets: async () => ({ ok: true,
-data: [] }),
-    getPrices: async () => ({ ok: true,
-data: { symbol: "BTCUSDT",
-price: "65000" } }),
-    getCandles: async () => ({ ok: true,
-data: [] }),
-    subscribeForCandles: async () => ({ ok: true,
-data: { unsubscribe: async () => {} } }),
-    connect: async () => {
-      calls.push("connect")
-      if (connect) {await connect()}
-    },
-    disconnect: async () => {
-      calls.push("disconnect")
-      if (disconnect) {await disconnect()}
-    },
-    getAccountSnapshot: async () => ({ ok: true,
-data: { balances: [],
-sourceTime: 1 } }),
-    getOpenOrders: async () => ({ ok: true,
-data: [] }),
-    getSymbolFilters: async () => ({ ok: true,
-data: {} }),
-    subscribeForPrices: async () => ({ ok: true,
-data: { unsubscribe: async () => {} } }),
-    subscribeForBookTicker: async () => ({ ok: true,
-data: { unsubscribe: async () => {} } }),
-    subscribeForUserData: async () => ({ ok: true,
-data: { disconnect: async () => {} } }),
-  }
-  const eventPublisher = { publish: (event) => { events.push(event); return { ok: true } } }
+  const broker = createBrokerPort({
+    calls,
+    onConnect: connect,
+    onDisconnect: disconnect,
+  })
   const brokerAdapterFactory = ({ config }) => {
     calls.push("factory")
-    assert.equal(config.tradingMode, "testnet", "The validated exchange mode must reach the broker adapter factory.")
-    assert.equal(config.apiKey, "test-key", "The configured API key must reach the broker adapter factory.")
-    assert.equal(config.apiSecret, "test-secret", "The configured API secret must reach the broker adapter factory.")
+    assert.equal(config.tradingMode, "testnet",
+      "The explicit Binance environment must reach the adapter factory.")
+    assert.equal(config.apiKey, "test-key",
+      "The configured API key must reach the adapter factory.")
+    assert.equal(config.apiSecret, "test-secret",
+      "The configured API secret must reach the adapter factory.")
     return broker
   }
   return {
     calls,
-events,
-broker,
-brokerAdapterFactory,
-eventPublisher,
-    env: { BINANCE_API_KEY: "test-key",
-BINANCE_API_SECRET_KEY: "test-secret" },
+    events,
+    broker,
+    brokerAdapterFactory,
+    eventPublisher: {
+      publish: (event) => {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    env: {
+      BINANCE_API_KEY: "test-key",
+      BINANCE_API_SECRET_KEY: "test-secret",
+    },
   }
 }
 
-test("connects a validated broker and publishes the connected lifecycle event", async () => {
-  const fixture = createFixture()
-  const connection = await connectBroker({
+function createConnectInput({ fixture, logger = {} } = {}) {
+  return {
     ...fixture,
     brokerName: "binance",
-    providerType: "binance",
-    providerInstanceId: "binanceTestnet",
-    accountId: "binance-primary",
     tradingMode: "testnet",
-    logger: {},
-  })
+    logger,
+  }
+}
 
-  assert.equal(connection.capabilities, fixture.broker.capabilities,
+test("connects the registered Binance broker and publishes the connected lifecycle event", async () => {
+  const fixture = createFixture()
+  const broker = await connectBroker(createConnectInput({ fixture }))
+
+  assert.equal(broker.capabilities, fixture.broker.capabilities,
     "Bootstrap must receive the registered Binance BrokerPort with its immutable capability declaration.")
-  assert.equal(connection.providerInstanceId, "binanceTestnet",
+  assert.equal(broker.providerInstanceId, "binanceTestnet",
     "The registered BrokerPort facade must retain the explicit Binance instance identity.")
-  assert.equal(connection.providerType, "binance",
+  assert.equal(broker.providerType, "binance",
     "The registered BrokerPort facade must expose provider type separately from instance identity.")
-  assert.equal(connection.accountId, "binance-primary",
+  assert.equal(broker.accountId, "binance-primary",
     "The registered BrokerPort facade must expose the stable non-secret account alias.")
-  assert.deepEqual(fixture.calls, ["factory", "connect"], "Broker construction must precede the connection attempt.")
-  assert.equal(fixture.events[0].name, HARVESTER_EVENT_NAMES.BROKER_CONNECTED, "Successful connection must publish the stable lifecycle event.")
+  assert.deepEqual(fixture.calls, ["factory", "connect"],
+    "Broker construction must precede the connection attempt.")
+  assert.equal(fixture.events[0].name, HARVESTER_EVENT_NAMES.BROKER_CONNECTED,
+    "Successful connection must publish the stable lifecycle event.")
 })
 
 test("disconnects after connection failure and publishes failure evidence", async () => {
-  const fixture = createFixture({ connect: async () => { throw new Error("connect failed") } })
+  const fixture = createFixture({
+    connect: async () => { throw new Error("connect failed") },
+  })
 
   await assert.rejects(
-    connectBroker({
-      ...fixture,
-      brokerName: "binance",
-      providerType: "binance",
-      providerInstanceId: "binanceTestnet",
-      accountId: "binance-primary",
-      tradingMode: "testnet",
-      logger: { error: () => {} },
-    }),
+    connectBroker(createConnectInput({ fixture, logger: { error: () => {} } })),
     /connect failed/,
     "The original connection error must remain the rejection when cleanup succeeds.",
   )
-  assert.deepEqual(fixture.calls, ["factory", "connect", "disconnect"], "A failed connection must attempt broker disconnect.")
-  assert.equal(fixture.events[0].name, HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED, "Connection failure must publish lifecycle evidence.")
+  assert.deepEqual(fixture.calls, ["factory", "connect", "disconnect"],
+    "A failed connection must attempt broker disconnect.")
+  assert.equal(fixture.events[0].name, HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED,
+    "Connection failure must publish lifecycle evidence.")
 })
 
 test("aggregates connection and disconnect failures without losing either cause", async () => {
@@ -131,76 +124,40 @@ test("aggregates connection and disconnect failures without losing either cause"
   })
 
   await assert.rejects(
-    connectBroker({
-      ...fixture,
-      brokerName: "binance",
-      providerType: "binance",
-      providerInstanceId: "binanceTestnet",
-      accountId: "binance-primary",
-      tradingMode: "testnet",
-      logger: { error: () => {} },
-    }),
+    connectBroker(createConnectInput({ fixture, logger: { error: () => {} } })),
     (error) => error instanceof AggregateError && error.errors.length === 2,
-    "Connection and cleanup failures must be reported together.",
-  )
-  assert.deepEqual(fixture.calls, ["factory", "connect", "disconnect"], "Disconnect must still be attempted after connect fails.")
+    "Connection and cleanup failures must be reported together.")
+  assert.deepEqual(fixture.calls, ["factory", "connect", "disconnect"],
+    "Disconnect must still be attempted after connect fails.")
 })
 
-
-
-test("disconnects a constructed Binance client when capability validation blocks registry registration", async () => {
+test("cleans a constructed Binance client when capability validation blocks registry registration", async () => {
   const fixture = createFixture()
-  fixture.broker.capabilities = Object.freeze({
-    contractVersion: 1,
-    provider: "other",
-    product: "spot",
-    environment: Object.freeze({
-      selector: "tradingMode",
-      supportedModes: Object.freeze(["testnet", "live"]),
-      selectedMode: "testnet",
-      nodeEnvSelectsEndpoint: false,
-    }),
-  })
+  fixture.broker.capabilities = createCapabilities({ provider: "other" })
 
   await assert.rejects(
-    connectBroker({
-      ...fixture,
-      brokerName: "binance",
-      providerType: "binance",
-      providerInstanceId: "binanceTestnet",
-      accountId: "binance-primary",
-      tradingMode: "testnet",
-      logger: {},
-    }),
+    connectBroker(createConnectInput({ fixture })),
     /capability declaration/i,
-    "A malformed provider declaration must stop before connection and retain a safe actionable failure.",
-  )
+    "A malformed provider declaration must stop before connection and retain an actionable failure.")
   assert.deepEqual(fixture.calls, ["factory", "disconnect"],
     "A constructed client must be disconnected when its capability contract prevents registry registration.")
   assert.equal(fixture.events.length, 0,
-    "Registry validation failure must not publish a broker-connected or broker-connection-failed event.")
+    "Registry validation failure must not publish broker connection lifecycle events.")
 })
-
 
 test("rejects invalid provider identity before constructing a Binance client", async () => {
   const fixture = createFixture()
   let factoryCalled = false
+  const brokerAdapterFactory = (input) => {
+    factoryCalled = true
+    return fixture.brokerAdapterFactory(input)
+  }
+  const input = createConnectInput({ fixture })
+  input.brokerAdapterFactory = brokerAdapterFactory
+  input.env.BINANCE_PROVIDER_INSTANCE_ID = "invalid instance id"
 
   await assert.rejects(
-    connectBroker({
-      ...fixture,
-      brokerAdapterFactory: (input) => {
-        factoryCalled = true
-        return fixture.brokerAdapterFactory(input)
-      },
-      brokerName: "binance",
-      tradingMode: "testnet",
-      env: {
-        ...fixture.env,
-        BINANCE_PROVIDER_INSTANCE_ID: "invalid instance id",
-      },
-      logger: {},
-    }),
+    connectBroker(input),
     (error) => error.code === "HARVESTER_PROVIDER_IDENTITY_INVALID",
     "Invalid provider identity must fail closed before any broker construction or connection.",
   )
