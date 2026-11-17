@@ -56,8 +56,10 @@ function validateOrder({ bitunixOrder }) {
     dealVolume,
     price,
   } = bitunixOrder
-  if ((typeof orderId !== "string" && typeof orderId !== "number") || String(orderId).trim() === "") {
-    throw new TypeError("Bitunix Spot order is missing order ID")
+  if ((typeof orderId !== "string" && typeof orderId !== "number") ||
+      (typeof orderId === "string" && orderId.trim() === "") ||
+      (typeof orderId === "number" && !Number.isSafeInteger(orderId))) {
+    throw new TypeError("Bitunix Spot order ID must be a non-empty string or safe integer")
   }
   if (typeof symbol !== "string" || !symbol.trim()) {
     throw new TypeError("Bitunix Spot order is missing symbol")
