@@ -1107,14 +1107,19 @@ test("acquires the process lock before starting Journal and releases it after cl
   process.exitCode = 0
   try {
     await main({
-      env: { NODE_ENV: "development" },
-      acquireProcessLock: async ({ journalDirectory, globalDirectory, broker }) => {
+      env: {
+        NODE_ENV: "development",
+        BINANCE_ACCOUNT_ID: "123456789",
+      },
+      acquireProcessLock: async ({ journalDirectory, globalDirectory, broker, tradingMode, accountId }) => {
         sequence.push("lock")
         assert.equal(typeof journalDirectory, "string")
         assert.ok(pathIsAbsolute(journalDirectory))
         assert.ok(globalDirectory.includes(".coinzilla"))
         assert.ok(globalDirectory.endsWith("process-locks"))
         assert.equal(broker, "binance")
+        assert.equal(tradingMode, "testnet")
+        assert.equal(accountId, "123456789")
         return {
           ok: true,
           release: async () => { sequence.push("release"); return { ok: true,

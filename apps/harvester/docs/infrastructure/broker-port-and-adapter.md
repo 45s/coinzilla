@@ -56,7 +56,7 @@ Do not mirror every `CoreBroker` method automatically. Add a capability only whe
 | Read open orders | `getOpenOrders({ symbol? } = {})`; omit `symbol` for an account-wide snapshot |
 | Read fills | `getFills(input)` |
 | Read canonical order history | `getCanonicalOrderHistory({ symbol, orderId })` |
-| Account snapshot | `getAccountSnapshot()` |
+| Account snapshot and canonical account UID | `getAccountSnapshot()` |
 | Symbol filters | `getSymbolFilters({ symbol })` |
 | Price subscription | `subscribeForPrices({ symbol, onPrice })` |
 | Historical candles | `getCandles({ symbol, interval, limit, startTime?, endTime? })` |
@@ -158,7 +158,7 @@ export const createHarvesterServices = ({ config, logger }) => {
 }
 ```
 
-Bootstrap always selects Binance, requires `TRADING_MODE` to be exactly `testnet` or `live`, and requires `BINANCE_API_KEY` and `BINANCE_API_SECRET_KEY`. `testnet` selects Binance Spot TESTNET; `live` selects Binance Spot LIVE and permits real order execution. Trading is enabled in either mode; missing or invalid mode fails startup. `.env.development` supplies `TRADING_MODE=testnet`, while production `.env` supplies `TRADING_MODE=live`. `NODE_ENV` does not select the exchange. Bootstrap connects once and exposes an idempotent `stop()` used by the CLI's SIGINT/SIGTERM handlers. The `@coinzilla/brokers` workspace dependency is declared in Harvester and the lockfile.
+Bootstrap always selects Binance, requires `TRADING_MODE` to be exactly `testnet` or `live`, requires a canonical positive-decimal `BINANCE_ACCOUNT_ID` (the Binance account UID), and requires `BINANCE_API_KEY` and `BINANCE_API_SECRET_KEY`. Use the same account UID for every API key belonging to one account; it is not an arbitrary label. Harvester derives a non-secret SHA-256 lock fingerprint from the provider, trading mode and account UID, so separate worktrees share same-account exclusion while Testnet and LIVE remain isolated. After connecting, Harvester performs the signed read-only `account.status` query and verifies that the API credentials resolve to the configured UID; mismatch or missing identity disconnects the broker and fails startup before trading readiness. Missing or malformed configuration also fails closed before broker connection. `testnet` selects Binance Spot TESTNET; `live` selects Binance Spot LIVE and permits real order execution. `.env.development` supplies `TRADING_MODE=testnet`, while production `.env` supplies `TRADING_MODE=live`. `NODE_ENV` does not select the exchange. Bootstrap connects once and exposes an idempotent `stop()` used by the CLI's SIGINT/SIGTERM handlers. The `@coinzilla/brokers` workspace dependency is declared in Harvester and the lockfile.
 
 ## Reliability rules
 

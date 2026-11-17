@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { ESLint } from "eslint";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,4 +33,77 @@ test("the required JavaScript quality gate runs strict workspace lint", () => {
 test("the root package exposes no baseline-tolerant lint commands", () => {
   assert.equal(Object.hasOwn(packageJson.scripts, "lint:changed"), false);
   assert.equal(Object.hasOwn(packageJson.scripts, "lint:report"), false);
+});
+
+test("the workspace complexity policy retains its evidence-based threshold", async () => {
+  const eslint = new ESLint();
+  const config = await eslint.calculateConfigForFile("apps/harvester/src/index.js");
+
+  assert.deepEqual(
+    config.rules.complexity,
+    [2, { max: 20 }],
+    "Do not lower complexity to 15 while the workspace has a broad existing cleanup burden.",
+  );
+});
+
+test("direct console usage is an error while explicit CLI output remains allowed", async () => {
+  const eslint = new ESLint();
+  const [directConsole] = await eslint.lintText(
+    'console.log("diagnostic");\n',
+    { filePath: "scripts/eslint-policy-fixture.js" },
+  );
+  const [cliOutput] = await eslint.lintText(
+    'process.stdout.write("diagnostic");\n',
+    { filePath: "scripts/eslint-policy-fixture.js" },
+  );
+
+  assert.equal(
+    directConsole.messages.find((message) => message.ruleId === "no-console")?.severity,
+    2,
+    "Direct console usage must be rejected as an error.",
+  );
+  assert.equal(
+    cliOutput.messages.filter((message) => message.ruleId === "no-console").length,
+    0,
+    "Explicit process stream output remains available for intentional CLI diagnostics.",
+  );
+});
+
+test("implicit coercion is an error while explicit conversions remain available", async () => {
+  const eslint = new ESLint();
+  const [implicitCoercion] = await eslint.lintText(
+    'const value = "1";\nconst numeric = +value;\nconst enabled = !!value;\n',
+    { filePath: "apps/harvester/src/domain/implicit-coercion-fixture.js" },
+  );
+  const [explicitConversion] = await eslint.lintText(
+    'const value = "1";\nconst numeric = Number(value);\nconst enabled = Boolean(value);\n',
+    { filePath: "apps/harvester/src/domain/explicit-conversion-fixture.js" },
+  );
+
+  assert.ok(
+    implicitCoercion.messages.some((message) => (
+      message.ruleId === "no-implicit-coercion" && message.severity === 2
+    )),
+    "Implicit unary numeric and boolean coercions must be rejected as errors.",
+  );
+  assert.equal(
+    explicitConversion.messages.filter((message) => message.ruleId === "no-implicit-coercion").length,
+    0,
+    "Explicit conversion functions remain available at intentional boundaries.",
+  );
+});
+
+test("require-atomic-updates remains deferred until concurrency findings are classified", async () => {
+  const eslint = new ESLint();
+  const config = await eslint.calculateConfigForFile(
+    "apps/harvester/src/use-cases/create-portfolio-workflow.js",
+  );
+  const rule = config.rules["require-atomic-updates"];
+  const severity = Array.isArray(rule) ? rule[0] : rule ?? 0;
+
+  assert.equal(
+    severity,
+    0,
+    "Do not enable require-atomic-updates until its 47 workspace findings receive targeted concurrency review.",
+  );
 });

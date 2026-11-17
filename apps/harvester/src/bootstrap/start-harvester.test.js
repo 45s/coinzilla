@@ -276,6 +276,7 @@ function createBrokerAccountPorts({ calls, state }) {
         ok: true,
         data: {
           balances,
+          accountId: "123456789",
           sourceTime: state.accountSnapshotTime,
         },
       }
@@ -488,6 +489,7 @@ const binanceEnv = {
   TRADING_MODE: "testnet",
   BINANCE_API_KEY: "key",
   BINANCE_API_SECRET_KEY: "secret",
+  BINANCE_ACCOUNT_ID: "123456789",
 }
 const startHarvesterForTest = (input = {}) => {
   const eventPublisher = input.eventPublisher ?? testEventPublisher

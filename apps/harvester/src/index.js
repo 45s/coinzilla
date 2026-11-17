@@ -297,11 +297,13 @@ async function acquireProcessStartupResources({ options, resources, processStart
     journalDirectory: processLockDirectory,
     globalDirectory: processLockDirectory,
     broker: resources.runtimeConfig.brokerName,
+    tradingMode: resources.runtimeConfig.tradingMode,
+    accountId: env.BINANCE_ACCOUNT_ID,
     logger,
   })
   if (lockResult?.ok !== true || typeof lockResult.release !== "function") {
     const details = lockResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-    throw new Error(`Harvester cannot start without the Binance single-writer process lock${details ? `: ${details}` : ""}`)
+    throw new Error(`Harvester cannot start without the Binance ${resources.runtimeConfig.tradingMode} account-scoped single-writer process lock${details ? `: ${details}` : ""}`)
   }
   resources.processLock = lockResult
   resources.operationalStateStore = await prepareProcessOperationalStateStore({

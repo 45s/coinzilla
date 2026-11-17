@@ -37,6 +37,8 @@ test("allows Testnet and production writers for the same Binance account to coex
     assert.equal(testnet.ok, true, "A validated Testnet account must acquire its own writer lock.")
     assert.equal(production.ok, true, "The same Binance account UID in production must use a separate environment-scoped writer lock.")
     assert.notEqual(testnet.hostLockPath, production.hostLockPath, "The host lock paths must differ across Binance environments.")
+    assert.doesNotMatch(testnet.hostLockPath, /123456789/, "The canonical account UID must never appear in a lock filename.")
+    assert.match(testnet.hostLockPath, /[a-f0-9]{64}/, "The lock filename must contain only the non-secret SHA-256 scope fingerprint.")
     assert.notEqual(testnet.lockPath, production.lockPath, "The application lock paths must differ across Binance environments.")
     assert.equal((await testnet.release()).ok, true, "The Testnet writer must release only its own lock set.")
     assert.equal((await production.release()).ok, true, "The production writer must release only its own lock set.")

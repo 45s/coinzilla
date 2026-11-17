@@ -25,11 +25,15 @@ test("initializes operational state only while holding the broker-wide and Journ
     directory: "/tmp/recovery-facts",
     processLockDirectory: "/tmp/process-locks",
     runtimeSessionId: "initializer-session",
+    tradingMode: "testnet",
+    accountId: "123456789",
     acquireProcessLock: async (input) => {
       sequence.push("lock")
       assert.equal(input.journalDirectory, "/tmp/process-locks")
       assert.equal(input.globalDirectory, "/tmp/process-locks")
       assert.equal(input.broker, "binance")
+      assert.equal(input.tradingMode, "testnet")
+      assert.equal(input.accountId, "123456789")
       return { ok: true,
 release: async () => { sequence.push("release"); return { ok: true } } }
     },

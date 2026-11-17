@@ -18,6 +18,8 @@ test("rejects a second trading process using a different Journal directory on th
       globalDirectory,
       journalDirectory: firstJournalDirectory,
       broker: "binance",
+      tradingMode: "testnet",
+      accountId: "123456789",
     })
     assert.equal(first.ok, true)
 
@@ -25,6 +27,8 @@ test("rejects a second trading process using a different Journal directory on th
       globalDirectory,
       journalDirectory: secondJournalDirectory,
       broker: "binance",
+      tradingMode: "testnet",
+      accountId: "123456789",
     })
     assert.equal(second.ok, false)
     assert.equal(second.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
@@ -35,6 +39,8 @@ test("rejects a second trading process using a different Journal directory on th
       globalDirectory,
       journalDirectory: secondJournalDirectory,
       broker: "binance",
+      tradingMode: "testnet",
+      accountId: "123456789",
     })
     assert.equal(afterRelease.ok, true)
     assert.notEqual(afterRelease.lockPath, first.lockPath)
@@ -49,27 +55,40 @@ test("releases the host lock when Journal-lock acquisition fails", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "harvester-global-lock-cleanup-"))
   const globalDirectory = path.join(root, "host-locks")
   const journalDirectory = path.join(root, "journal")
+  let hostLockFileName
+  let acquisitionCount = 0
+  const acquireLock = async (input) => {
+    acquisitionCount += 1
+    if (acquisitionCount === 1) {
+      hostLockFileName = input.lockFileName
+      return acquireHarvesterProcessLock(input)
+    }
+    return toResult({ error: Object.assign(new Error("simulated Journal lock conflict"), {
+      code: "HARVESTER_PROCESS_LOCK_EXISTS",
+    }) })
+  }
 
   try {
-    const existingJournalLock = await acquireHarvesterProcessLock({ directory: journalDirectory })
     const failed = await acquireHarvesterProcessLocks({
       globalDirectory,
       journalDirectory,
       broker: "binance",
+      tradingMode: "testnet",
+      accountId: "123456789",
+      acquireLock,
     })
     assert.equal(failed.ok, false)
     assert.equal(failed.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
 
     const hostLockCanBeAcquired = await acquireHarvesterProcessLock({
       directory: globalDirectory,
-      lockFileName: ".binance-harvester-trading.lock",
+      lockFileName: hostLockFileName,
     })
     assert.equal(hostLockCanBeAcquired.ok, true)
     assert.equal((await hostLockCanBeAcquired.release({})).ok, true)
-    assert.equal((await existingJournalLock.release({})).ok, true)
   } finally {
     await rm(root, { recursive: true,
-force: true })
+      force: true })
   }
 })
 
@@ -99,6 +118,8 @@ test("retains the host lock when Journal-lock release is uncertain and retries i
       globalDirectory,
       journalDirectory,
       broker: "binance",
+      tradingMode: "testnet",
+      accountId: "123456789",
       acquireLock,
     })
     assert.equal(first.ok, true)
@@ -111,6 +132,8 @@ test("retains the host lock when Journal-lock release is uncertain and retries i
       globalDirectory,
       journalDirectory: path.join(root, "journal-two"),
       broker: "binance",
+      tradingMode: "testnet",
+      accountId: "123456789",
     })
     assert.equal(blocked.ok, false)
     assert.equal(blocked.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
@@ -122,6 +145,8 @@ test("retains the host lock when Journal-lock release is uncertain and retries i
       globalDirectory,
       journalDirectory: path.join(root, "journal-two"),
       broker: "binance",
+      tradingMode: "testnet",
+      accountId: "123456789",
     })
     assert.equal(afterRelease.ok, true)
     assert.equal((await afterRelease.release({})).ok, true)

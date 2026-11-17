@@ -50,6 +50,7 @@ const env = {
   NODE_ENV: "test",
   BINANCE_API_KEY: "fake-key",
   BINANCE_API_SECRET_KEY: "fake-secret",
+  BINANCE_ACCOUNT_ID: "123456789",
 }
 const silentLogger = { debug() {},
 info() {},
@@ -127,6 +128,7 @@ asset }),
 asset }),
           })
         }),
+        accountId: "123456789",
         sourceTime: 1,
       },
     }),

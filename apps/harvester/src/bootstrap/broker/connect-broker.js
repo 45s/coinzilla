@@ -6,6 +6,15 @@ import {
   mapBrokerConnectionFailedData,
 } from "../../application/events/lifecycle-event-dtos.js"
 
+function verifyConfiguredBinanceAccount({ result, expectedAccountId }) {
+  if (result?.ok === true && result.data?.accountId === expectedAccountId) {
+    return
+  }
+  const error = new Error("Binance API credentials do not match the configured BINANCE_ACCOUNT_ID or the account UID could not be verified")
+  error.code = "HARVESTER_BINANCE_ACCOUNT_ID_MISMATCH"
+  throw error
+}
+
 function logSystem({ logger, ...data }) {
   if (typeof logger?.system === "function") {
     logger.system(data)
@@ -41,6 +50,11 @@ export async function connectBroker({
 message: "Connecting to Binance broker" })
 
     await broker.connect()
+    const accountSnapshot = await broker.getAccountSnapshot()
+    verifyConfiguredBinanceAccount({
+      result: accountSnapshot,
+      expectedAccountId: env.BINANCE_ACCOUNT_ID,
+    })
     publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTED,

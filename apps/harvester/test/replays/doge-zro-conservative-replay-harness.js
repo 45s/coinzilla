@@ -415,6 +415,7 @@ errors: [new Error("not found")] });
     broker.getAccountSnapshot = async () => ({
       ok: true,
       data: {
+        accountId: "123456789",
         sourceTime: Date.now(),
         balances: [state.marketSymbol.slice(0, -4), "USDT"].map((code) => {
           const asset = new Asset({ id: code.toLowerCase(),
@@ -447,6 +448,7 @@ async function startDogeReplayRuntime({ state, appConfig, brokerFactory }) {
     env: {
       BINANCE_API_KEY: "key",
       BINANCE_API_SECRET_KEY: "secret",
+      BINANCE_ACCOUNT_ID: "123456789",
       NODE_ENV: "development",
       TRADING_MODE: "testnet",
     },

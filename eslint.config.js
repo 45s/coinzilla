@@ -83,7 +83,7 @@ export default defineConfig([
       "consistent-return": "error",
       "default-case": "error",
       "no-else-return": "error",
-      "no-implicit-coercion": "warn",
+      "no-implicit-coercion": "error",
 
       // Modern JavaScript
       "prefer-template": "error",
@@ -126,7 +126,7 @@ export default defineConfig([
       ],
 
       // Debugging and logging
-      "no-console": "warn",
+      "no-console": "error",
       "symbol-description": "error",
     },
   },

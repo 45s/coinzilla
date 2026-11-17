@@ -142,7 +142,7 @@ For user data:
 
 The recommended reconciliation inputs are:
 
-- `getAccountSnapshot()` for current balances and the account snapshot's source timestamp.
+- `getAccountSnapshot()` for the canonical Binance account UID, current balances and the account snapshot's source timestamp. The UID comes from the signed `account.status` response; Harvester compares it with its configured account UID before completing broker startup.
 - `getOpenOrders()` for the current open-order set.
 - `getExchangeMarkets()` for the complete symbol catalog returned by Binance `exchangeInfo`; this read-only method returns canonical `Market` values and primes the broker's canonical market cache. It includes the symbols in the current exchange catalog, not delisted symbols.
 
