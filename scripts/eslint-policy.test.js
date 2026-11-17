@@ -107,3 +107,125 @@ test("require-atomic-updates remains deferred until concurrency findings are cla
     "Do not enable require-atomic-updates until its 47 workspace findings receive targeted concurrency review.",
   );
 });
+
+
+test("audits candidate function-quality thresholds across the complete workspace", async () => {
+  const eslint = new ESLint({
+    overrideConfig: [
+      {
+        rules: {
+          complexity: ["error", { max: 15 }],
+          "max-lines-per-function": [
+            "error",
+            {
+              max: 50,
+              skipBlankLines: true,
+              skipComments: true,
+            },
+          ],
+          "max-statements": ["error", 15],
+          "max-depth": ["error", 3],
+          "default-param-last": "error",
+        },
+      },
+      {
+        files: ["apps/harvester/src/infrastructure/telegram/telegram-operator-adapter.js"],
+        rules: {
+          "max-lines-per-function": [
+            "error",
+            {
+              max: 520,
+              skipBlankLines: true,
+              skipComments: true,
+            },
+          ],
+        },
+      },
+    ],
+  });
+  const results = await eslint.lintFiles(["."]);
+  const metrics = {
+    complexity: [],
+    maxLines: [],
+    maxStatements: [],
+    maxDepth: [],
+    defaultParamLast: [],
+  };
+  const measurements = [
+    { ruleId: "complexity", key: "complexity", pattern: /complexity of (\\d+)/i },
+    { ruleId: "max-lines-per-function", key: "maxLines", pattern: /too many lines \\((\\d+)\\)/i },
+    { ruleId: "max-statements", key: "maxStatements", pattern: /too many statements \\((\\d+)\\)/i },
+    { ruleId: "max-depth", key: "maxDepth", pattern: /nested too deeply \\((\\d+)\\)/i },
+    { ruleId: "default-param-last", key: "defaultParamLast", pattern: null },
+  ];
+
+  for (const result of results) {
+    for (const message of result.messages) {
+      const measurement = measurements.find((candidate) => candidate.ruleId === message.ruleId);
+
+      if (!measurement) {
+        continue;
+      }
+
+      const measuredValue = measurement.pattern
+        ? Number(message.message.match(measurement.pattern)?.[1])
+        : null;
+
+      assert.ok(
+        !measurement.pattern || Number.isFinite(measuredValue),
+        `The ${message.ruleId} audit must extract the measured value from each ESLint diagnostic.`,
+      );
+      metrics[measurement.key].push({
+        filePath: result.filePath,
+        line: message.line,
+        value: measuredValue,
+        message: message.message,
+      });
+    }
+  }
+
+  const countAbove = (findings, threshold) => findings.filter(
+    (finding) => finding.value > threshold,
+  );
+  const summarize = (findings, threshold) => {
+    const affected = countAbove(findings, threshold);
+    return {
+      functions: affected.length,
+      files: new Set(affected.map((finding) => finding.filePath)).size,
+      largest: affected
+        .toSorted((left, right) => right.value - left.value)
+        .slice(0, 5)
+        .map(({ filePath, line, value }) => ({
+          file: filePath.replace(`${repositoryRoot}/`, ""),
+          line,
+          value,
+        })),
+    };
+  };
+  const report = {
+    complexity: { 15: summarize(metrics.complexity, 15) },
+    maxLines: {
+      60: summarize(metrics.maxLines, 60),
+      50: summarize(metrics.maxLines, 50),
+    },
+    maxStatements: {
+      30: summarize(metrics.maxStatements, 30),
+      25: summarize(metrics.maxStatements, 25),
+      20: summarize(metrics.maxStatements, 20),
+      15: summarize(metrics.maxStatements, 15),
+    },
+    maxDepth: { 3: summarize(metrics.maxDepth, 3) },
+    defaultParamLast: {
+      violations: metrics.defaultParamLast.length,
+      files: new Set(metrics.defaultParamLast.map((finding) => finding.filePath)).size,
+      examples: metrics.defaultParamLast.slice(0, 10).map(({ filePath, line, message }) => ({
+        file: filePath.replace(`${repositoryRoot}/`, ""),
+        line,
+        message,
+      })),
+    },
+  };
+
+  process.stdout.write(`\\nESLint function-quality candidate audit:\\n${JSON.stringify(report, null, 2)}\\n`);
+  assert.ok(results.length > 0, "The function-quality audit must inspect the complete ESLint workspace.");
+});
