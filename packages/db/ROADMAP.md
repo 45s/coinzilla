@@ -53,7 +53,8 @@ The package defines what database operations mean. Each provider implements how 
 
 3. **Provider conformance suite**
    - Reusable tests cover CREATE/READ/UPDATE/DELETE, collection isolation, filtering, sorting, pagination, identifiers, duplicates, error semantics, transaction commit/rollback, lifecycle, reconnect persistence and cleanup.
-   - The SQLite provider must pass the complete applicable suite.
+   - Run the contract against every storage mode declared by the provider, using isolated test keys. Verify file/server persistence by reconnecting with the same key; explicitly skip reconnect persistence for ephemeral memory storage.
+   - The SQLite provider must pass the complete applicable suite for both in-memory and file-backed modes.
    - Future providers must run the same suite; provider-specific capability differences must be declared rather than silently emulated.
 
 4. **Documentation and hardening**
