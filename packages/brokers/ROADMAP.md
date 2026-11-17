@@ -1203,3 +1203,14 @@ The purpose is to translate an already implemented and tested Spot behavior into
 - [ ] Token/network metadata remains a separate public extension candidate. Define its consumer contract before implementation; do not combine it with exchange rates or weaken issue #1185 blockers.
 
 The audit is the detailed evidence source; this roadmap records status and next actions. Future agents must search additional GitHub packages when the primary .NET/TypeScript references do not cover a capability or disagree. The source-discovery rule is in [Brokers AGENTS.md](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit).
+
+## 2026-11-17 — Bitunix Spot deposit-history extension (#1384 / PR #1385)
+
+- [x] Audit the official `POST /api/spot/v1/deposit/page` contract against JKorf interface, implementation, model and response fixture.
+- [x] Record the schema/example contradiction (`data` object vs array) and support both documented shapes.
+- [x] Add signed, read-only `BitunixSpotBroker.getDeposits()` with validated filters and one-page-only behavior.
+- [x] Preserve large numeric IDs and decimal amount tokens exactly as strings; retain raw status/type and opaque address/UID fields.
+- [x] Add offline success, empty, malformed-row, invalid-filter, response-shape, unknown-status and numeric-precision regression tests.
+- [x] Keep the method Bitunix-specific; do not alter Binance/CoreBroker contracts or issue #1185 lifecycle/mutation blockers.
+
+**Next candidate:** audit the separate read-only Spot withdrawal-history endpoint before implementation. Treat its recipient/address/UID fields as opaque sensitive account data; do not implement withdrawals or transfers.

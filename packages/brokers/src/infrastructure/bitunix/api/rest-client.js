@@ -50,6 +50,16 @@ export class BitunixRestError extends SystemCustomError {
 }
 
 function parseResponseText({ text, path }) {
+  if (path === "/api/spot/v1/deposit/page") {
+    const losslessText = text.replace(
+      /("(?:id|amount)"\s*:\s*)(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)(?=\s*[,}])/g,
+      (...matches) => {
+        const [, prefix, value] = matches
+        return prefix + JSON.stringify(value)
+      },
+    )
+    return JSON.parse(losslessText)
+  }
   if (!path.endsWith("/user/account")) {
     return JSON.parse(text)
   }
