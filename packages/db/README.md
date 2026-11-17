@@ -73,11 +73,11 @@ The methods have consistent provider-neutral results:
 
 | Operation | Result |
 | --- | --- |
-| `create(collection, record)` | The stored record. Duplicate identifiers throw `DatabaseConflictError`. |
-| `readOne(collection, id)` | The record, or `null` when it does not exist. |
-| `readMany(collection, query?)` | An array of matching records; an empty array when none match. |
-| `update(collection, id, changes)` | The complete updated record, or `null` when it does not exist. |
-| `delete(collection, id)` | `true` when a record was removed; otherwise `false`. |
+| `create({ collection, record })` | The stored record. Duplicate identifiers throw `DatabaseConflictError`. |
+| `readOne({ collection, id })` | The record, or `null` when it does not exist. |
+| `readMany({ collection, query? })` | An array of matching records; an empty array when none match. |
+| `update({ collection, id, changes })` | The complete updated record, or `null` when it does not exist. |
+| `delete({ collection, id })` | `true` when a record was removed; otherwise `false`. |
 
 ### Record and identifier rules
 
