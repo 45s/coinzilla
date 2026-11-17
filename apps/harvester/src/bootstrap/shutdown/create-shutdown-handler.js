@@ -633,10 +633,12 @@ async function publishClosingAuditOrThrow(context) {
 }
 
 async function reproveAndPublishClosingAuditIfUnsafe(context) {
-  if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
-    await reproveStrategySafety(context)
-    await publishClosingAuditOrThrow(context)
+  if (context.strategyShutdownCoordinator.isSafeToShutdown()) {
+    return false
   }
+  await reproveStrategySafety(context)
+  await publishClosingAuditOrThrow(context)
+  return true
 }
 
 async function quiesceMarketIntakeForClosing(context) {
@@ -649,8 +651,10 @@ async function quiesceMarketIntakeForClosing(context) {
     throw new AggregateError(errors, "Accepted market work could not be drained safely")
   }
   try {
-    await reproveAndPublishClosingAuditIfUnsafe(context)
-    await publishClosingAuditOrThrow(context)
+    const closingAuditRefreshed = await reproveAndPublishClosingAuditIfUnsafe(context)
+    if (!closingAuditRefreshed) {
+      await publishClosingAuditOrThrow(context)
+    }
   } catch (error) {
     context.state.marketIntakeStopped = false
     throw error
