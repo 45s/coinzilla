@@ -37,7 +37,7 @@ const CONFIGURATION = Object.freeze({
   tradingEnabled: true,
 })
 
-async function createObserverFixture(t, overrides = {}) {
+async function createObserverFixture({ t, overrides = {} }) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-session-observer-"))
   const database = createDatabase({
     provider: createSqliteProvider({
@@ -61,7 +61,12 @@ async function createObserverFixture(t, overrides = {}) {
     await database.close()
     await rm(directory, { recursive: true, force: true })
   })
-  return { database, eventBus, observer, repository }
+  return {
+    database,
+    eventBus,
+    observer,
+    repository,
+  }
 }
 
 async function publishAndDrain({ eventBus, observer, name, data }) {
@@ -76,7 +81,7 @@ async function publishAndDrain({ eventBus, observer, name, data }) {
 }
 
 test("creates and updates session history from lifecycle events without changing event delivery", async (t) => {
-  const { eventBus, observer, repository } = await createObserverFixture(t)
+  const { eventBus, observer, repository } = await createObserverFixture({ t })
 
   await publishAndDrain({
     eventBus,
@@ -183,9 +188,14 @@ test("isolates persistence failures from EventBus publication and reports them",
     findById: async () => null,
     transition: async () => null,
   }
-  const { eventBus, observer } = await createObserverFixture(t, {
-    repository,
-    logger: { error: (entry) => loggedEntries.push(entry) },
+  const { eventBus, observer } = await createObserverFixture({
+    t,
+    overrides: {
+      repository,
+      logger: {
+        error: (entry) => loggedEntries.push(entry),
+      },
+    },
   })
 
   await publishAndDrain({
