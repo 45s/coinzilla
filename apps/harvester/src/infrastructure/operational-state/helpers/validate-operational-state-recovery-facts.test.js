@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { addDecimal } from "@coinzilla/utils"
 import { sha256OperationalStateValue } from "../operational-state-canonical.js"
 import {
   validateRecoveryCycleCompletedFact,
@@ -76,7 +77,7 @@ function makeNotCompletedFact({
     sellOrderBrokerOrderId: "sell-broker-1",
     buyCost: "10",
     spent: "10",
-    netSellProceeds: "8",
+    netSellProceeds: addDecimal({ left: "10", right: realizedNetProfit }),
     realizedNetProfit,
     minProfit,
     activeQuantity,
