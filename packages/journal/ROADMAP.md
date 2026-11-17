@@ -6,9 +6,9 @@ type: roadmap
 owner: journal
 ---
 
-## Maintenance — package ESLint compliance (issue #1243)
+## Completed — package ESLint compliance (issue #1243)
 
-**Status:** READY FOR REVIEW — draft PR [#1244](https://github.com/45s/coinzilla/pull/1244); exact-head package checks passed.
+**Status:** COMPLETE — merged [PR #1244](https://github.com/45s/coinzilla/pull/1244); [issue #1243](https://github.com/45s/coinzilla/issues/1243) is closed. The full-workspace zero-warning gate and progressive strict changed-file policy now provide ongoing enforcement.
 
 - Objective: bring every JavaScript source and test under `packages/journal/` to zero ESLint errors and warnings without changing runtime behavior or public contracts.
 - Scope: Journal-owned files only. Root ESLint rules, scripts, CI policy, other packages, JSONL compatibility, record semantics, lifecycle, replay, and durability guarantees are explicitly unchanged.
