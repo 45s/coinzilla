@@ -62,7 +62,10 @@ function stringifyNumericJsonFields({ text, fields }) {
   )
   return text.replace(
     numericFieldPattern,
-    (_match, prefix, value) => prefix + JSON.stringify(value),
+    (...matches) => {
+      const [, prefix, value] = matches
+      return prefix + JSON.stringify(value)
+    },
   )
 }
 
