@@ -472,6 +472,7 @@ async function handleMismatchedAcknowledgement({ context, candidate } = {}) {
     order: pendingOrder,
     error,
     outcome: "UNKNOWN",
+    ...getOwnershipMetadata({ ownership }),
   })
   return toResult({ error })
 }
