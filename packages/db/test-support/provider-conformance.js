@@ -339,14 +339,37 @@ async function verifySorting(database) {
 
 async function verifyScalarSortOrdering(database) {
   const records = [
-    { id: "missing" },
-    { id: "null", rank: null },
-    { id: "false", rank: false },
-    { id: "true", rank: true },
-    { id: "number-2", rank: 2 },
-    { id: "number-10", rank: 10 },
-    { id: "string-10", rank: "10" },
-    { id: "string-2", rank: "2" },
+    {
+      id: "missing",
+    },
+    {
+      id: "null",
+      rank: null,
+    },
+    {
+      id: "false",
+      rank: false,
+    },
+    {
+      id: "true",
+      rank: true,
+    },
+    {
+      id: "number-2",
+      rank: 2,
+    },
+    {
+      id: "number-10",
+      rank: 10,
+    },
+    {
+      id: "string-10",
+      rank: "10",
+    },
+    {
+      id: "string-2",
+      rank: "2",
+    },
   ]
 
   for (const record of records) {
@@ -359,7 +382,12 @@ async function verifyScalarSortOrdering(database) {
   const ascending = await database.readMany({
     collection: "sort-types",
     query: {
-      sort: [{ field: "rank", direction: "asc" }],
+      sort: [
+        {
+          field: "rank",
+          direction: "asc",
+        },
+      ],
     },
   })
   assert.deepEqual(
@@ -371,7 +399,12 @@ async function verifyScalarSortOrdering(database) {
   const descending = await database.readMany({
     collection: "sort-types",
     query: {
-      sort: [{ field: "rank", direction: "desc" }],
+      sort: [
+        {
+          field: "rank",
+          direction: "desc",
+        },
+      ],
     },
   })
   assert.deepEqual(
