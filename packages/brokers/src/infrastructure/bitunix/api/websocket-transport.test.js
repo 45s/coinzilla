@@ -97,22 +97,36 @@ test("Bitunix WebSocket transport connects once, sends text, forwards messages a
 
 test("Bitunix WebSocket transport rejects insecure URLs and invalid timeouts", () => {
   assert.throws(
-    () => new BitunixWebSocketTransport({ url: "ws://openapi.bitunix.com", WebSocketCtor: FakeWebSocket }),
+    () => new BitunixWebSocketTransport({
+      url: "ws://openapi.bitunix.com",
+      WebSocketCtor: FakeWebSocket,
+    }),
     /wss/i,
     "Bitunix WebSocket transport must reject insecure endpoints",
   )
   assert.throws(
-    () => new BitunixWebSocketTransport({ url: "wss://openapi.bitunix.com", WebSocketCtor: null }),
+    () => new BitunixWebSocketTransport({
+      url: "wss://openapi.bitunix.com",
+      WebSocketCtor: null,
+    }),
     /built-in WebSocket/i,
     "transport must fail clearly when no WebSocket implementation exists",
   )
   assert.throws(
-    () => new BitunixWebSocketTransport({ url: "wss://openapi.bitunix.com", WebSocketCtor: FakeWebSocket, connectTimeout: 0 }),
+    () => new BitunixWebSocketTransport({
+      url: "wss://openapi.bitunix.com",
+      WebSocketCtor: FakeWebSocket,
+      connectTimeout: 0,
+    }),
     /connectTimeout/i,
     "connection timeout must be a positive integer",
   )
   assert.throws(
-    () => new BitunixWebSocketTransport({ url: "wss://openapi.bitunix.com", WebSocketCtor: FakeWebSocket, closeTimeout: 0 }),
+    () => new BitunixWebSocketTransport({
+      url: "wss://openapi.bitunix.com",
+      WebSocketCtor: FakeWebSocket,
+      closeTimeout: 0,
+    }),
     /closeTimeout/i,
     "close timeout must be a positive integer",
   )
