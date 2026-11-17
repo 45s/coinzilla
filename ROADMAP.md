@@ -95,11 +95,10 @@
    - **Remaining:** close the scoped coverage and negative architecture/contract gaps recorded by the package owner.
    - **Owner:** [Entities roadmap](packages/entities/ROADMAP.md).
 
-9. **First provider-neutral database consumer — Harvester (#1327).**
-   - **Why:** the built-in SQLite lifecycle foundation is implemented, but no application-owned persistence workflow yet proves that a real domain repository can remain independent of its provider.
-   - **Plan:** Harvester owns its repository ports and business schemas; `@coinzilla/db` owns provider lifecycle/transaction mechanics and the first Node.js built-in SQLite adapter. The composition root alone wires the provider. Production and Testnet use separate database files derived from explicit `TRADING_MODE`. Persist sessions, orders, order events, individual executions and account snapshots through focused TDD vertical slices.
-   - **Safety:** preserve ADR-0001 Operational State Store guarantees and Journal barriers. Any authoritative-store migration is separately gated by exact durability/integrity parity and restart-recovery issue #654; restart restoration remains disabled. No strategy changes or exchange operations.
-   - **Owner/status:** [Database roadmap](packages/db/ROADMAP.md); [implementation issue #1327](https://github.com/45s/coinzilla/issues/1327).
+9. **Provider-neutral database API and Harvester persistence (#1327).**
+   - **Database infrastructure:** `packages/db` owns generic CRUD/provider contracts and adapters; Node.js built-in SQLite is the first provider. Its roadmap contains no application-specific business models or workflows.
+   - **Harvester consumer:** Harvester owns all trading repositories, data models, environment isolation, mapping and operational safety requirements. See the [Harvester persistence roadmap](apps/harvester/ROADMAP.md#persistence--provider-agnostic-database-integration-1327).
+   - **Owner/status:** [Database roadmap](packages/db/ROADMAP.md); tracking [issue #1327](https://github.com/45s/coinzilla/issues/1327).
 
 10. **Structured, package-owned errors with a shared `SystemCustomError` base ([#1028](https://github.com/45s/coinzilla/issues/1028)) — IN PROGRESS; the Utilities-owned base is implemented in merged [PR #1262](https://github.com/45s/coinzilla/pull/1262); gradual adoption remains with consuming domains.**
    - **Why:** generic errors and inconsistent wrapping make it difficult to identify the failing component/operation and preserve the underlying cause.
