@@ -1,9 +1,9 @@
 import { assertDecimalString, compareDecimal, handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { BitunixRestClient } from "./api/rest-client.js"
-import { adaptBitunixKline, adaptBitunixKlineHistory, adaptBitunixOrderBook, createBitunixKlineHistoryQuery, normalizeBitunixKlineInterval } from "./adapters/adapt-market-data.js"
 import { adaptAssets } from "./adapters/adapt-assets.js"
 import { adaptBalances } from "./adapters/adapt-balances.js"
+import { adaptBitunixKline, adaptBitunixKlineHistory, adaptBitunixOrderBook, createBitunixKlineHistoryQuery, normalizeBitunixKlineInterval } from "./adapters/adapt-market-data.js"
 import { adaptOrder } from "./adapters/adapt-order.js"
 import { createCanonicalMarket, getBitunixSymbol } from "./adapters/create-canonical-market.js"
 import { BitunixSpotConfig } from "./config/bitunix-spot-config.js"
@@ -446,7 +446,6 @@ export class BitunixSpotBroker extends CoreBroker {
       return toResult({ errors: [error] })
     }
   }
-
 
   /**
    * Read one Bitunix Spot order-book snapshot. The caller must provide the
