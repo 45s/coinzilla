@@ -20,8 +20,7 @@ function createProvider({ capabilities }) {
   }
 }
 
-test("provider composition requires complete standard capability declarations", () => {
-  const invalidCapabilities = [
+const invalidCapabilities = [
     {},
     {
       transactions: {
@@ -94,6 +93,7 @@ test("provider composition requires complete standard capability declarations", 
     },
   ]
 
+test("provider composition requires complete standard capability declarations", () => {
   for (const capabilities of invalidCapabilities) {
     assert.throws(
       () => createDatabase({
