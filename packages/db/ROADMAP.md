@@ -12,8 +12,6 @@ owner: db
 
 ## Current priority — provider-neutral CRUD API
 
-<badge></badge>
-
 **In progress:** [Issue #1340](https://github.com/45s/coinzilla/issues/1340) · [PR #1342](https://github.com/45s/coinzilla/pull/1342)
 
 The approved design is:
