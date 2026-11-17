@@ -384,6 +384,10 @@ The current `packages/brokers/src/index.js` exports exactly:
 |---|---|---|
 | `BinanceWebSocketBroker` | `infrastructure/binance/broker-websocket/broker.js` | Public Binance Spot WebSocket API/Streams broker facade |
 | `BinanceWebSocketConfig` | `infrastructure/binance/broker-websocket/config/binance-websocket-config.js` | Validated credentials, endpoints, and reconnect configuration |
+| `BitunixSpotBroker` | `infrastructure/bitunix/broker.js` | Read-only Bitunix Spot REST broker facade; not Harvester-ready |
+| `BitunixSpotConfig` | `infrastructure/bitunix/config/bitunix-spot-config.js` | Validated Bitunix Spot REST configuration |
+| `BitunixSpotWebSocketClient` | `infrastructure/bitunix/api/websocket-client.js` | Separately managed, authenticated, read-only Spot WebSocket RPC client |
+| `BitunixWebSocketError` | `infrastructure/bitunix/api/websocket-client.js` | Structured Bitunix Spot WebSocket RPC/transport error |
 | `CoreBroker` | `broker.core.js` | Shared base class used by broker implementations, including Market Simulator |
 | `normalizeBinanceId` | `infrastructure/binance/adapters/normalize-binance-id.js` | Exact non-negative Binance identifier normalization |
 
@@ -990,6 +994,20 @@ The Binance `getSymbolFilters` path now retrieves authenticated `myFilters` alon
 
 This work is in an open task PR targeting `develop`; do not mark it complete until exact-head broker tests, workspace CI and the linked Harvester readiness regressions pass. See [Harvester exchange trading constraints](../../apps/harvester/docs/exchange-trading-constraints.md) for the cross-domain contract.
 
+## 2026-11-17 — Bitunix Spot WebSocket RPC
+
+**Status: Implemented in test-first PR [#1374](https://github.com/45s/coinzilla/pull/1374); exact-head CI verification pending.**
+
+- Added a separately managed `BitunixSpotWebSocketClient` and native WHATWG WebSocket transport at the official Spot endpoint. It does not change the REST-backed `BitunixSpotBroker` lifecycle or silently switch existing methods to another transport.
+- Implemented documented read-only RPCs: latest price, depth, current K-line, trading-pair catalog, exchange rates, token/network metadata, account balances, and user identity. All requests are authenticated as required by the official Spot WS documentation.
+- Implemented the Spot-specific double-SHA256 signature separately from REST signing, echoed-ID correlation for concurrent RPCs, strict response-envelope handling, bounded request timeouts, and pending-request cleanup on transport errors/close. Account balance numeric tokens and unsafe int64 user IDs are preserved without JavaScript number rounding. Requests are never automatically replayed.
+- Added no generic arbitrary-method request, order placement/cancellation, public push subscription, private user-data subscription, or automatic reconnect. A terminal connection must be replaced by constructing a new client; Bitunix documents a 24-hour connection lifetime.
+- Test-first RED was reproduced in GitHub Actions on the test-only checkpoint because the package did not export `BitunixSpotWebSocketClient`. Offline coverage now includes the public export, signature vector, all documented read method names, request correlation, exchange/protocol errors, timeout, disconnect and transport lifecycle.
+- The official docs and JKorf Spot socket/authentication implementation agree on the RPC envelope and per-request authentication fields. JKorf's Spot socket methods themselves cover order mutations only; no continuous Spot subscriptions are copied from Futures.
+- Issue [#1185](https://github.com/45s/coinzilla/issues/1185) remains unchanged: this RPC client does not establish source-timestamped account snapshots, fill completeness, order identity, safe mutation semantics, a TESTNET, or continuous push streams. Bitunix remains read-only and not Harvester-ready.
+
+See the [Bitunix WebSocket RPC contract](../../docs/brokers-websocket-contract.md#bitunix-spot-websocket-rpc-client) and [package usage guide](./README.md#bitunix-spot-websocket-rpc).
+
 ## 2026-11-16 — Bitunix Spot broker foundation
 
 **Status: In progress — read-only adapter foundation; not Harvester-ready.**
@@ -1178,7 +1196,7 @@ The purpose is to translate an already implemented and tested Spot behavior into
 - [x] Added the maintained [Bitunix external implementation reference audit](./BITUNIX_REFERENCE_AUDIT.md), including the full Binance method parity inventory, reference source/test links, third-party defects, official documentation contradictions, and recommendations for safe ports.
 - [x] Confirmed JKorf's Spot GetUserTradesAsync implementation calls pending/list despite its interface documenting deal/list; StockSharp and an independent Python client use the documented deal/list endpoint. This does not resolve complete execution-history semantics.
 - [x] Confirmed multiple clients expose Spot order placement, but none resolves the official single-order versus batch-order volume contradiction, missing client-order identity, unknown-outcome reconciliation or lack of TESTNET. Placement/cancellation remain blocked by issue #1185.
-- [x] Identified Bitunix-specific public read-only extensions. Exchange rates are implemented in PR #1370; token/network metadata remains a separate candidate requiring its own consumer contract. Neither is Binance parity.
+- [x] Identified Bitunix-specific public read-only extensions. Exchange rates are implemented in PR #1370 and the WebSocket RPC client; token/network metadata is now exposed as a documented WebSocket RPC read. Neither is Binance parity or a new broker-port method.
 - [x] The read-only market-data expansion is merged in [PR #1324](https://github.com/45s/coinzilla/pull/1324) at `5d707d17114d524ef3cd7c6d35387dde61338976`; it adds one-shot depth and current/history K-line reads while leaving canonical OHLCV candles unsupported because the Spot schema omits volume.
 - [x] The Bitunix-only exchange-rate extension is merged in [PR #1370](https://github.com/45s/coinzilla/pull/1370) as `55694b837c869878d22346dfd6b0f12c9b0f3269`. It uses the unsigned public `GET /api/spot/v1/common/rate/list`, preserves exact positive decimal strings, freezes returned records, accepts an explicit empty array, and rejects missing or incomplete data. All six required `develop-core` checks passed on exact PR head `0f7fbaa332eea5b45a176a25eae4ba529495893a`.
 - [ ] Token/network metadata remains a separate public extension candidate. Define its consumer contract before implementation; do not combine it with exchange rates or weaken issue #1185 blockers.

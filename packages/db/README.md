@@ -152,6 +152,31 @@ await database.transaction((transaction) => {
 
 A thrown error rolls back the complete transaction. SQLite transaction callbacks must be synchronous because Node's built-in SQLite API is synchronous; an async callback or a returned Promise is rejected. Do not use `await`, network calls, timers, or unrelated asynchronous work inside a SQLite transaction.
 
+For the provider-neutral SQLite facade, an async-function callback is rejected before its body runs. If a non-async callback returns a Promise or thenable, SQLite rolls back and invalidates the transaction handle and prepared statements before deferred continuations can use them. Such a continuation cannot perform work outside the failed transaction. The low-level `createSqliteDatabase` transaction handle follows the same rollback rule.
+
+For example, a Promise-returning callback is rejected and its deferred write does not escape the rollback:
+
+```js
+await assert.rejects(
+  database.transaction((transaction) => Promise.resolve().then(() => transaction.create({
+    collection: "accounts",
+    record: {
+      id: "account-2",
+      name: "Deferred write",
+    },
+  }))),
+  /must be synchronous/,
+)
+
+assert.equal(
+  await database.readOne({
+    collection: "accounts",
+    id: "account-2",
+  }),
+  null,
+)
+```
+
 ### Errors
 
 - `DatabaseConflictError` identifies a duplicate record identifier. Its stable code is `DB_RECORD_CONFLICT`.

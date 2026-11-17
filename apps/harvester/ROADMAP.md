@@ -8,6 +8,8 @@
 
 ## Persistence — provider-agnostic database integration (#1327)
 
+**Status:** The generic `@coinzilla/db` provider-neutral CRUD core is merged in [PR #1353](https://github.com/45s/coinzilla/pull/1353). The CREATE snapshot-safety and synchronous-transaction rollback hardening are also merged in [PR #1364](https://github.com/45s/coinzilla/pull/1364) and [PR #1365](https://github.com/45s/coinzilla/pull/1365). The package-specific DB ESLint cleanup is complete. Remaining work under #1327 is the Harvester-owned consumer integration described below.
+
 **Goal:** persist Harvester's trading and operational history through application-owned repository contracts. Harvester must not know whether the database provider is SQLite, PostgreSQL, or MongoDB. The generic database API and provider adapters belong to `@coinzilla/db`; all trading-specific persistence requirements belong here.
 
 ### Current implementation status — 2026-11-17

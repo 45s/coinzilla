@@ -94,11 +94,11 @@ The package entry point currently exports exactly `BinanceWebSocketBroker`, `Bin
 - `apps/harvester`, which wraps `BinanceWebSocketBroker` in its own infrastructure adapter and implements Harvester's application-owned `BrokerPort`.
 - `packages/market-simulator`, whose `HistoricalMarketBroker` extends `CoreBroker` and whose `SimulatedExecutionBroker` extends the historical broker.
 
-`CoreBroker` is a live public extension point, not an unused internal base class or a formal application-owned port. `normalizeBinanceId` is used by the Harvester infrastructure adapter. Preserve all four root exports and their consumer contracts unless a separately reviewed compatibility change proves a migration safe. Do not reintroduce the removed third-party SDK.
+`CoreBroker` is a live public extension point, not an unused internal base class or a formal application-owned port. `normalizeBinanceId` is used by the Harvester infrastructure adapter. Preserve the original Binance/CoreBroker root exports and their consumer contracts; the Bitunix Spot broker/config and the separately managed read-only WebSocket RPC client are explicit additive exports. Do not reintroduce the removed third-party SDK.
 
 ## Bitunix Spot capability contract
 
-The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The current implementation is read-only. Supported reads and explicitly blocked capabilities are:
+The package exports `BitunixSpotBroker`, `BitunixSpotConfig`, and the separate `BitunixSpotWebSocketClient`. The REST-backed broker remains read-only. Its supported reads and explicitly blocked capabilities are:
 
 | Broker method | Bitunix operation | Constraint |
 |---|---|---|
@@ -116,6 +116,27 @@ The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The curren
 | `getKlineHistory({ symbol, interval?, endTime?, limit? })` | `GET /api/spot/v1/market/kline/history` | One page only. `endTime` is a positive Unix timestamp in seconds; `limit` is 1–500 (default 200); `startTime` and cursor pagination are unsupported. The official docs describe a single object while the .NET wrapper deserializes an array, so the adapter accepts either shape and returns a row array. Rows retain exact OHLC strings and source timestamp text; no volume, ordering, gap-fill or completeness guarantee is invented. |
 | `getCandles()` | Blocked; no request is sent | The canonical candle requires volume, but the documented Spot K-line schema exposes OHLC and a start timestamp only. Raw OHLC reads are available through the Bitunix-specific methods above; no volume is fabricated. |
 | `getFills({ symbol, orderId })` | Blocked; no request is sent | The documented matching-order response does not define quantity denomination, complete partial-execution coverage, or stable/unique execution identity. No canonical `Fill` is emitted until Bitunix clarifies these semantics. |
+
+### Bitunix Spot WebSocket RPC client
+
+`BitunixSpotWebSocketClient` is a separate, authenticated, read-only RPC client. It does not change the REST-backed `BitunixSpotBroker` methods or the broker's lifecycle readiness. Official Spot WebSocket requests use the `id`, `method`, and `params` envelope; every request, including public market/catalog reads, carries `apiKey`, millisecond `timestamp`, random `nonce`, and `sign`.
+
+| Client method | Official Spot WebSocket method | Contract |
+|---|---|---|
+| `getLastPrice({ symbol })` | `market.last_price` | One-shot last-price lookup. |
+| `getDepth({ symbol, precision })` | `market.depth` | One-shot depth snapshot; caller supplies required non-negative numeric precision. |
+| `getKline({ symbol, interval })` | `market.kline` | One-shot OHLC lookup; supported intervals match the verified Spot wire values. No volume is synthesized. |
+| `getTradingPairs()` | `common.coin_pair.list` | Trading-pair catalog lookup. |
+| `getExchangeRates()` | `common.rate.list` | Exchange-rate lookup. |
+| `getTokenNetworks()` | `common.coin.coin_network.list` | Token/network metadata lookup. |
+| `getAccount()` | `user.account` | Private account-balance lookup; no source update timestamp is added. |
+| `getUserInfo()` | `user.info` | Private API-key user identity lookup; nullable UID remains exchange data. |
+
+The WebSocket signature is not the REST header signature. It sorts all method parameters except `apiKey`, `timestamp`, `nonce`, and `sign` by key, concatenates each key with its value, computes SHA-256 of `nonce + timestamp + apiKey + serializedParams`, then SHA-256 of `digest + secretKey`. The client keeps this signing implementation separate from REST signing. For `user.account`, raw numeric `balance` and `balanceLocked` tokens are preserved as exact decimal strings; unsafe int64 `user.info.uid` values are preserved as strings instead of being rounded by JavaScript `Number`.
+
+Concurrent RPCs are correlated only by the echoed request ID. A malformed matching envelope or non-zero exchange code rejects that request; an unrelated response ID is ignored. Timeouts, send failures, and connection closure reject pending requests and clear their timers. Requests are never replayed automatically. A closed client is terminal; callers must construct a new client to reconnect. Bitunix documents a 24-hour maximum connection lifetime.
+
+This client intentionally exposes no generic arbitrary-method call, order mutation, subscription, or event-stream API. Public methods are request/response lookups, not push feeds. The official Spot docs still do not define continuous market subscriptions or a private order/execution/balance event stream. Implementing this RPC transport does not resolve issue #1185's order identity, fill completeness, account freshness, TESTNET, or mutation-safety blockers.
 
 All adapted Bitunix Spot order rows from pending orders, order history, and order detail must contain non-empty string `ctime` and `utime` fields. The adapter preserves both source strings verbatim; it does not parse or infer timezone, precision, or timestamp ordering because the official order-history schema does not specify those details.
 
@@ -153,7 +174,7 @@ Official references: [Spot REST API](https://www.bitunix.com/api-docs/spots/en_u
 
 The source-level comparison of JKorf/Bitunix.Net, the TypeScript MCP, StockSharp and other independent clients is maintained in the [Bitunix external implementation reference audit](../packages/brokers/BITUNIX_REFERENCE_AUDIT.md). It records implementation defects and does not override this contract or official Bitunix documentation.
 
-The audit identified public exchange-rate and token/network metadata endpoints as possible **Bitunix-specific read-only extensions**, not Binance parity methods. They are not part of the current supported broker contract. Add them only after an explicit extension decision and tests; do not infer trading filters or authorize wallet mutations from metadata.
+The audit identified public exchange-rate and token/network metadata endpoints as **Bitunix-specific read-only extensions**, not Binance parity methods. Exchange rates are already available through the REST broker and the new WebSocket RPC client; token/network metadata is available through the WebSocket RPC client. These are not new Binance-parity broker methods. Do not infer trading filters or authorize wallet mutations from metadata.
 
 ## Candle market-data public contract
 
