@@ -98,7 +98,10 @@ function createPendingOrderCandidate({ action, marketMetadata, clientOrderId } =
     clientOrderId,
     supportedOrderTypes: marketMetadata.supportedOrderTypes,
   })
-  const ownership = action.strategyId || action.positionId || action.cycleId
+  const ownership = action.strategyId !== undefined ||
+    action.positionId !== undefined ||
+    action.purpose !== undefined ||
+    action.cycleId !== undefined
     ? Object.freeze({
       strategyId: action.strategyId,
       positionId: action.positionId,
@@ -336,6 +339,7 @@ async function preparePendingSubmission({ context, candidate } = {}) {
     await context.onSubmissionDeferred({
       order: pendingOrder,
       purpose,
+      ...getOwnershipMetadata({ ownership }),
       registered: true,
       reason: "SUBMISSION_GATE_ERROR",
       details: { errorName: error.name },
