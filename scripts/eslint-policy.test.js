@@ -109,8 +109,9 @@ test("require-atomic-updates remains deferred until concurrency findings are cla
 });
 
 
-test("audits candidate function-quality thresholds across the complete workspace", async () => {
-  const eslint = new ESLint({
+
+function createFunctionQualityAuditEslint() {
+  return new ESLint({
     overrideConfig: [
       {
         rules: {
@@ -143,7 +144,9 @@ test("audits candidate function-quality thresholds across the complete workspace
       },
     ],
   });
-  const results = await eslint.lintFiles(["."]);
+}
+
+function collectFunctionQualityFindings({ results }) {
   const metrics = {
     complexity: [],
     maxLines: [],
@@ -152,16 +155,38 @@ test("audits candidate function-quality thresholds across the complete workspace
     defaultParamLast: [],
   };
   const measurements = [
-    { ruleId: "complexity", key: "complexity", pattern: /complexity of (\\d+)/i },
-    { ruleId: "max-lines-per-function", key: "maxLines", pattern: /too many lines \\((\\d+)\\)/i },
-    { ruleId: "max-statements", key: "maxStatements", pattern: /too many statements \\((\\d+)\\)/i },
-    { ruleId: "max-depth", key: "maxDepth", pattern: /nested too deeply \\((\\d+)\\)/i },
-    { ruleId: "default-param-last", key: "defaultParamLast", pattern: null },
+    {
+      ruleId: "complexity",
+      key: "complexity",
+      pattern: /complexity of (\\d+)/i,
+    },
+    {
+      ruleId: "max-lines-per-function",
+      key: "maxLines",
+      pattern: /too many lines \\((\\d+)\\)/i,
+    },
+    {
+      ruleId: "max-statements",
+      key: "maxStatements",
+      pattern: /too many statements \\((\\d+)\\)/i,
+    },
+    {
+      ruleId: "max-depth",
+      key: "maxDepth",
+      pattern: /nested too deeply \\((\\d+)\\)/i,
+    },
+    {
+      ruleId: "default-param-last",
+      key: "defaultParamLast",
+      pattern: null,
+    },
   ];
 
   for (const result of results) {
     for (const message of result.messages) {
-      const measurement = measurements.find((candidate) => candidate.ruleId === message.ruleId);
+      const measurement = measurements.find((candidate) => (
+        candidate.ruleId === message.ruleId
+      ));
 
       if (!measurement) {
         continue;
@@ -184,48 +209,102 @@ test("audits candidate function-quality thresholds across the complete workspace
     }
   }
 
-  const countAbove = (findings, threshold) => findings.filter(
-    (finding) => finding.value > threshold,
-  );
-  const summarize = (findings, threshold) => {
-    const affected = countAbove(findings, threshold);
-    return {
-      functions: affected.length,
-      files: new Set(affected.map((finding) => finding.filePath)).size,
-      largest: affected
-        .toSorted((left, right) => right.value - left.value)
-        .slice(0, 5)
-        .map(({ filePath, line, value }) => ({
-          file: filePath.replace(`${repositoryRoot}/`, ""),
-          line,
-          value,
-        })),
-    };
+  return metrics;
+}
+
+function countFindingsAboveThreshold({ findings, threshold }) {
+  return findings.filter((finding) => finding.value > threshold);
+}
+
+function summarizeThresholdImpact({ findings, threshold }) {
+  const affected = countFindingsAboveThreshold({ findings, threshold });
+  return {
+    functions: affected.length,
+    files: new Set(affected.map((finding) => finding.filePath)).size,
+    largest: affected
+      .toSorted((left, right) => right.value - left.value)
+      .slice(0, 5)
+      .map(({ filePath, line, value }) => ({
+        file: filePath.replace(`${repositoryRoot}/`, ""),
+        line,
+        value,
+      })),
   };
-  const report = {
-    complexity: { 15: summarize(metrics.complexity, 15) },
+}
+
+function createFunctionQualityAuditReport({ metrics }) {
+  return {
+    complexity: {
+      15: summarizeThresholdImpact({
+        findings: metrics.complexity,
+        threshold: 15,
+      }),
+    },
     maxLines: {
-      60: summarize(metrics.maxLines, 60),
-      50: summarize(metrics.maxLines, 50),
+      60: summarizeThresholdImpact({
+        findings: metrics.maxLines,
+        threshold: 60,
+      }),
+      50: summarizeThresholdImpact({
+        findings: metrics.maxLines,
+        threshold: 50,
+      }),
     },
     maxStatements: {
-      30: summarize(metrics.maxStatements, 30),
-      25: summarize(metrics.maxStatements, 25),
-      20: summarize(metrics.maxStatements, 20),
-      15: summarize(metrics.maxStatements, 15),
+      30: summarizeThresholdImpact({
+        findings: metrics.maxStatements,
+        threshold: 30,
+      }),
+      25: summarizeThresholdImpact({
+        findings: metrics.maxStatements,
+        threshold: 25,
+      }),
+      20: summarizeThresholdImpact({
+        findings: metrics.maxStatements,
+        threshold: 20,
+      }),
+      15: summarizeThresholdImpact({
+        findings: metrics.maxStatements,
+        threshold: 15,
+      }),
     },
-    maxDepth: { 3: summarize(metrics.maxDepth, 3) },
+    maxDepth: {
+      3: summarizeThresholdImpact({
+        findings: metrics.maxDepth,
+        threshold: 3,
+      }),
+    },
     defaultParamLast: {
       violations: metrics.defaultParamLast.length,
       files: new Set(metrics.defaultParamLast.map((finding) => finding.filePath)).size,
-      examples: metrics.defaultParamLast.slice(0, 10).map(({ filePath, line, message }) => ({
-        file: filePath.replace(`${repositoryRoot}/`, ""),
-        line,
-        message,
+      examples: metrics.defaultParamLast.slice(0, 10).map((finding) => ({
+        file: finding.filePath.replace(`${repositoryRoot}/`, ""),
+        line: finding.line,
+        message: finding.message,
       })),
     },
   };
+}
 
-  process.stdout.write(`\\nESLint function-quality candidate audit:\\n${JSON.stringify(report, null, 2)}\\n`);
-  assert.ok(results.length > 0, "The function-quality audit must inspect the complete ESLint workspace.");
+async function auditFunctionQualityThresholds() {
+  const eslint = createFunctionQualityAuditEslint();
+  const results = await eslint.lintFiles(["."]);
+  const metrics = collectFunctionQualityFindings({ results });
+
+  return {
+    inspectedFiles: results.length,
+    report: createFunctionQualityAuditReport({ metrics }),
+  };
+}
+
+test("audits candidate function-quality thresholds across the complete workspace", async () => {
+  const audit = await auditFunctionQualityThresholds();
+
+  process.stdout.write(
+    `\\nESLint function-quality candidate audit:\\n${JSON.stringify(audit, null, 2)}\\n`,
+  );
+  assert.ok(
+    audit.inspectedFiles > 0,
+    "The function-quality audit must inspect the complete ESLint workspace.",
+  );
 });
