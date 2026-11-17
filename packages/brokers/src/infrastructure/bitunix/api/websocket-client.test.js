@@ -47,8 +47,12 @@ class FakeTransport {
   }
 
   receive(payload) {
+    this.receiveText(JSON.stringify(payload))
+  }
+
+  receiveText(message) {
     for (const listener of this.listeners.message) {
-      listener(JSON.stringify(payload))
+      listener(message)
     }
   }
 }
@@ -370,4 +374,30 @@ test("Bitunix Spot WebSocket client restricts credential-bearing connections to 
   const { client } = createClient()
   assert.equal(client.apiSecret, undefined, "the API secret must not be exposed as a public instance property")
   assert.equal(client.transport, undefined, "the raw transport must not be exposed as a public instance property")
+})
+
+test("Bitunix Spot WebSocket client preserves exact account decimals and unsafe int64 user IDs", async () => {
+  const { client, transport } = createClient()
+  await client.connect()
+
+  const balances = client.getAccount()
+  transport.receiveText('{"id":"request-1","code":"0","msg":"success","data":[{"coin":"BTC","balance":0.123456789012345678,"balanceLocked":0.000000000000000001}]}')
+  assert.deepEqual(
+    await balances,
+    [{
+      coin: "BTC",
+      balance: "0.123456789012345678",
+      balanceLocked: "0.000000000000000001",
+    }],
+    "account decimal number tokens must not be rounded by JSON.parse",
+  )
+
+  const userInfo = client.getUserInfo()
+  transport.receiveText('{"id":"request-1","code":"0","msg":"success","data":{"uid":9007199254740993}}')
+  assert.deepEqual(
+    await userInfo,
+    { uid: "9007199254740993" },
+    "unsafe int64 user IDs must be preserved as exact decimal strings",
+  )
+  await client.disconnect()
 })
