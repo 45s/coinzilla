@@ -165,6 +165,8 @@ Merged PRs #1144, #1152, #1153, #1203 and #1212 provide immutable order ownershi
 
 **SELL ONLY IN PROFIT** is a hard pre-submission safety requirement, not merely a cycle-level target. Two different economic questions must be evaluated independently. It never suppresses accounting of a confirmed execution: the RS-2b application workflow commits complete canonical fills even when a profitability result is false. A failed gate must prevent the policy from creating or continuing an ineligible SELL; it cannot reverse an exchange fill.
 
+**Cycle-level proceeds contract remains open:** PR #1276 evaluates recovery profitability from the allocations in the current terminal SELL order against the recovery Position's full spent basis. If a recovery cycle is allowed to span multiple terminal SELL orders, the policy must either maintain and evaluate cycle-scoped cumulative recovery proceeds or explicitly prohibit a second terminal SELL in that cycle. Do not treat one order's proceeds as the full cycle total. The RS-3 roadmap records this as a pre-implementation gate.
+
 ### 5.1 Recovery-cycle profitability
 
 Recovery-tranche cost must include gross executed BUY quote notional, actual quote-asset BUY commissions, and reliable quote valuation of actual third-asset BUY commissions. Base-asset BUY commissions reduce net acquired recovery quantity.
