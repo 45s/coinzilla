@@ -101,7 +101,16 @@ function validateProviderDescriptor({ provider } = {}) {
   }
 }
 
-function createBrokerPortProxy({ broker, connect, disconnect, capabilities }) {
+function createBrokerPortProxy({
+  broker,
+  connect,
+  disconnect,
+  capabilities,
+  providerInstanceId,
+  providerType,
+  accountId,
+  environment,
+}) {
   const proxy = Object.fromEntries(BROKER_PORT_METHODS.map((method) => {
     if (method === "connect") {
       return [method, connect]
@@ -111,9 +120,12 @@ function createBrokerPortProxy({ broker, connect, disconnect, capabilities }) {
     }
     return [method, (...args) => broker[method](...args)]
   }))
-  Object.defineProperty(proxy, "capabilities", {
-    value: capabilities,
-    enumerable: true,
+  Object.defineProperties(proxy, {
+    capabilities: { value: capabilities, enumerable: true },
+    providerInstanceId: { value: providerInstanceId, enumerable: true },
+    providerType: { value: providerType, enumerable: true },
+    accountId: { value: accountId, enumerable: true },
+    environment: { value: environment, enumerable: true },
   })
   return Object.freeze(proxy)
 }
@@ -208,6 +220,10 @@ function createProviderEntry({ descriptor }) {
     connect,
     disconnect,
     capabilities,
+    providerInstanceId,
+    providerType,
+    accountId,
+    environment,
   })
   provider = Object.freeze({
     providerInstanceId,
