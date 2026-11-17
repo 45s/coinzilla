@@ -48,22 +48,7 @@ function assertRequiredTimestamp({ value, field }) {
   }
 }
 
-function validateOrder({ bitunixOrder }) {
-  if (!bitunixOrder || typeof bitunixOrder !== "object" || Array.isArray(bitunixOrder)) {
-    throw new TypeError("Bitunix Spot order should be an object")
-  }
-  const {
-    orderId,
-    symbol,
-    side,
-    type,
-    status,
-    volume,
-    dealVolume,
-    price,
-    ctime,
-    utime,
-  } = bitunixOrder
+function validateOrderIdentity({ orderId, symbol, ctime, utime }) {
   if ((typeof orderId !== "string" && typeof orderId !== "number") ||
       (typeof orderId === "string" && orderId.trim() === "") ||
       (typeof orderId === "number" && !Number.isSafeInteger(orderId))) {
@@ -80,18 +65,50 @@ function validateOrder({ bitunixOrder }) {
     value: utime,
     field: "utime",
   })
+}
+
+function normalizeOrderStatus({ status }) {
+  if ((typeof status !== "string" && typeof status !== "number") || String(status).trim() === "") {
+    throw new TypeError("Bitunix Spot order status must be a non-empty string or number")
+  }
+  const exchangeStatus = String(status)
+  return {
+    exchangeStatus,
+    normalizedStatus: STATUS_MAP[exchangeStatus] ?? "UNKNOWN",
+  }
+}
+
+function validateOrder({ bitunixOrder }) {
+  if (!bitunixOrder || typeof bitunixOrder !== "object" || Array.isArray(bitunixOrder)) {
+    throw new TypeError("Bitunix Spot order should be an object")
+  }
+  const {
+    orderId,
+    symbol,
+    side,
+    type,
+    status,
+    volume,
+    dealVolume,
+    price,
+    ctime,
+    utime,
+  } = bitunixOrder
+  validateOrderIdentity({
+    orderId,
+    symbol,
+    ctime,
+    utime,
+  })
 
   const normalizedSide = SIDE_MAP[String(side)]
   const normalizedType = TYPE_MAP[String(type ?? bitunixOrder.orderType)]
-  const normalizedStatus = STATUS_MAP[String(status)]
+  const { exchangeStatus, normalizedStatus } = normalizeOrderStatus({ status })
   if (!normalizedSide) {
     throw new TypeError("Bitunix Spot order side is unsupported")
   }
   if (!normalizedType) {
     throw new TypeError("Bitunix Spot order type is unsupported")
-  }
-  if (!normalizedStatus) {
-    throw new TypeError("Bitunix Spot order status is unsupported")
   }
   assertOrderQuantities({
     volume,
@@ -110,6 +127,7 @@ function validateOrder({ bitunixOrder }) {
     normalizedSide,
     normalizedType,
     normalizedStatus,
+    exchangeStatus,
     volume,
     dealVolume,
     price,
@@ -129,6 +147,7 @@ export function adaptOrder(bitunixOrder) {
     normalizedSide,
     normalizedType,
     normalizedStatus,
+    exchangeStatus,
     volume,
     dealVolume,
     price,
@@ -151,6 +170,9 @@ export function adaptOrder(bitunixOrder) {
   order.executedQuantity = String(dealVolume)
   order.remainingQuantity = remainingQuantity
   order.status = normalizedStatus
+  if (normalizedStatus === "UNKNOWN") {
+    order.exchangeStatus = exchangeStatus
+  }
   order.createdAt = bitunixOrder.ctime
   order.updatedAt = bitunixOrder.utime
   return order
