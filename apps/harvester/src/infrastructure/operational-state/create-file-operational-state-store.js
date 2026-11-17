@@ -307,13 +307,17 @@ async function initializeOperationalStateStore({ store, assertNoUncertainWrite, 
     assertNoUncertainWrite()
     await prepareOperationalStateDirectory({ store })
     const genesisRecord = createOperationalStateGenesisRecord({ store })
-    await writeOperationalStateGenesisFact({ store, genesisRecord, writeState })
+    await writeOperationalStateGenesisFact({ store,
+      genesisRecord,
+      writeState })
     const genesisCheckpointBody = createManifestCheckpoint({
       schemaVersion: store.schemaVersion,
       record: genesisRecord,
       previousManifestDigest: null,
     })
-    await writeOperationalStateGenesisManifest({ store, genesisCheckpointBody, writeState })
+    await writeOperationalStateGenesisManifest({ store,
+      genesisCheckpointBody,
+      writeState })
     await syncStreams()
     const verified = await verifyState()
     return toResult({
@@ -509,31 +513,43 @@ async function appendOperationalStateFact({ store, assertNoUncertainWrite, syncS
   }
   try {
     assertNoUncertainWrite()
-    await synchronizeOperationalStateBeforeAppend({ syncStreams, writeState })
-    const state = await verifyOperationalStateBeforeAppend({ verifyState, writeState })
+    await synchronizeOperationalStateBeforeAppend({ syncStreams,
+      writeState })
+    const state = await verifyOperationalStateBeforeAppend({ verifyState,
+      writeState })
     const input = validateFactInput({
       fact,
       runtimeSessionId: store.runtimeSessionId,
     })
     const existing = state.records.find((record) => record.factId === input.factId)
     if (existing) {
-      assertDuplicateOperationalStateFactMatches({ existing, input })
+      assertDuplicateOperationalStateFactMatches({ existing,
+        input })
       return createDuplicateOperationalStateAppendResult({ existing })
     }
     const recordedAt = normalizeOperationalStateRecordedAt(store.now())
-    validateMarketHistoryCoverageProgress({ state, input, recordedAt })
+    validateMarketHistoryCoverageProgress({ state,
+      input,
+      recordedAt })
     const { record, line } = createOperationalStateAppendRecord({
       store,
       state,
       input,
       recordedAt,
     })
-    await writeOperationalStateFactRecord({ store, line, writeState })
-    await writeOperationalStateManifestCheckpoint({ store, state, record, writeState })
+    await writeOperationalStateFactRecord({ store,
+      line,
+      writeState })
+    await writeOperationalStateManifestCheckpoint({ store,
+      state,
+      record,
+      writeState })
     const verified = await verifyState()
     return createCommittedOperationalStateAppendResult({ verified })
   } catch (error) {
-    return handleOperationalStateAppendFailure({ store, writeState, error })
+    return handleOperationalStateAppendFailure({ store,
+      writeState,
+      error })
   }
 }
 
