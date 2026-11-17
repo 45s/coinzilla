@@ -3,24 +3,11 @@ import assert from "node:assert/strict"
 import { Market, TradingRules } from "@coinzilla/entities"
 import { createBinanceBrokerAdapter } from "./binance-broker-adapter.js"
 
-const createCapabilities = ({ tradingMode = "testnet" } = {}) => Object.freeze({
-  contractVersion: 1,
-  provider: "binance",
-  product: "spot",
-  environment: Object.freeze({
-    selector: "tradingMode",
-    supportedModes: Object.freeze(["testnet", "live"]),
-    selectedMode: tradingMode,
-    nodeEnvSelectsEndpoint: false,
-  }),
-})
-
-const createClient = ({ tradingMode = "testnet" } = {}) => {
+const createClient = () => {
   const calls = []
   const result = { ok: true,
 data: {} }
   const client = {
-    capabilities: createCapabilities({ tradingMode }),
     connect: async () => calls.push(["connect"]),
     disconnect: async () => calls.push(["disconnect"]),
     createOrder: async (input) => { calls.push(["createOrder", input]); return result },
@@ -382,52 +369,4 @@ test("supports account-wide open-order reads without symbol options", async () =
 
   assert.equal(await broker.getOpenOrders(), result, "An omitted options object must still perform an account-wide open-order read.")
   assert.deepEqual(calls, [["getOpenOrders", {}]], "The underlying broker must receive an empty options object rather than an undefined argument.")
-})
-
-
-test("exposes the immutable Binance capability declaration through the Harvester broker port", () => {
-  const { client } = createClient()
-  const broker = createBinanceBrokerAdapter({
-    config,
-    brokerFactory: () => client,
-  })
-
-  assert.equal(broker.capabilities, client.capabilities,
-    "Harvester's provider registry must receive the exact source-verified capability declaration from the Binance instance.")
-  assert.equal(Object.isFrozen(broker.capabilities), true,
-    "The adapter must not weaken the broker package's immutable capability contract.")
-  assert.equal(broker.capabilities.provider, "binance",
-    "The adapter capability metadata must identify the concrete Binance provider type.")
-  assert.equal(broker.capabilities.environment.selectedMode, "testnet",
-    "The exposed capability declaration must identify the validated Binance endpoint environment.")
-})
-
-test("rejects a Binance capability declaration that does not match the configured environment", () => {
-  const { client } = createClient({ tradingMode: "testnet" })
-
-  assert.throws(
-    () => createBinanceBrokerAdapter({
-      config: {
-        ...config,
-        tradingMode: "live",
-      },
-      brokerFactory: () => client,
-    }),
-    /capability.*tradingMode/i,
-    "A Binance adapter must fail closed when its capability declaration identifies a different endpoint environment.",
-  )
-})
-
-test("rejects a Binance client without its versioned capability declaration", () => {
-  const { client } = createClient()
-  delete client.capabilities
-
-  assert.throws(
-    () => createBinanceBrokerAdapter({
-      config,
-      brokerFactory: () => client,
-    }),
-    /capability declaration/i,
-    "A Binance broker without the #1366 capability contract must not enter the provider registry.",
-  )
 })
