@@ -153,7 +153,7 @@ Application domains own their business entities, schemas, repository interfaces,
    - Verify restart persistence, transaction behavior, concurrency, migration compatibility and deterministic cleanup in the owning consumer's tests.
 
 2. **Application-owned backup and restore policy**
-   - The package supplies SQLite online-backup and validated restore primitives; see the implementation tracked by [#1381](https://github.com/45s/coinzilla/issues/1381) and [PR #1382](https://github.com/45s/coinzilla/pull/1382).
+   - **Generic primitive implementation is in progress** in [PR #1382](https://github.com/45s/coinzilla/pull/1382), tracked by [#1381](https://github.com/45s/coinzilla/issues/1381). The package item is complete only after that PR is merged and its exact-head checks pass.
    - Applications decide schedules, retention/rotation, encryption, off-site storage, deployment paths, version compatibility, permissions, restore drills, and operational runbooks. Do not move those policies into this package.
 
 3. **Additional providers**

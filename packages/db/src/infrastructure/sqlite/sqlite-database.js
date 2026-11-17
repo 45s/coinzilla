@@ -354,6 +354,7 @@ function createSqliteDatabaseFacade({ database, requireConnection, databaseFilen
  *
  * SQLite operations are synchronous. Transaction callbacks must therefore
  * complete synchronously; asynchronous callbacks are rejected before running.
+ * The asynchronous backup operation is drained before close completes.
  *
  * @param {{ filename: string, timeout?: number }} options
  * @returns {ReturnType<typeof createDatabase> & {
@@ -361,7 +362,12 @@ function createSqliteDatabaseFacade({ database, requireConnection, databaseFilen
  *   prepare: (sql: string) => import('node:sqlite').StatementSync,
  *   transaction: (work: (transaction: unknown) => unknown) => Promise<unknown>,
  *   readTransaction: (work: (transaction: unknown) => unknown) => Promise<unknown>,
- *   migrate: (migrations: Array<{version: number, name: string, up: Function}>) => Promise<number[]>
+ *   migrate: (migrations: Array<{version: number, name: string, up: Function}>) => Promise<number[]>,
+ *   backup: (options: {
+ *     destination: string,
+ *     rate?: number,
+ *     progress?: (state: {remainingPages: number, totalPages: number}) => void
+ *   }) => Promise<number>
  * }}
  */
 export function createSqliteDatabase({
