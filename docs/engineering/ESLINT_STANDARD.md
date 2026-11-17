@@ -158,11 +158,11 @@ The one-parameter limit is already part of the workspace policy and remains unch
 
 **`max-lines-per-function: 60` — counted function lines.**
 
-The strict rule excludes blank lines and comments through the configured `skipBlankLines` and `skipComments` options. A function that exceeds 60 counted lines must be reduced. Extract cohesive calculations, validation, or formatting into named pure helpers; do not split a function into arbitrary fragments solely to hit the number.
+The strict rule excludes blank lines and comments through the configured `skipBlankLines` and `skipComments` options. A function with 61 counted lines violates the rule; 60 is the maximum. Extract cohesive calculations, validation, or formatting into named pure helpers; do not split a function into arbitrary fragments solely to hit the number.
 
 **`max-statements: 30` — statements in a function.**
 
-A function containing more than 30 statements is doing too much work in one scope. Separate distinct phases into small functions with clear inputs and return values. Keep orchestration readable and preserve ordering where lifecycle or transaction semantics require it.
+A function containing 31 statements violates the rule; 30 is the maximum. Separate distinct phases into small functions with clear inputs and return values. Keep orchestration readable and preserve ordering where lifecycle or transaction semantics require it.
 
 **`max-depth: 3` — nested control-flow blocks, not cyclomatic complexity.**
 
