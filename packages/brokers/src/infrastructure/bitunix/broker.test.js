@@ -718,3 +718,50 @@ test("Bitunix Spot order detail rejects unsafe numeric order IDs before making a
   assert.match(result.errors[0].message, /safe integer/i, "The failure must explain that numeric order IDs require safe integer precision.")
   assert.equal(calls.length, 0, "Invalid numeric order IDs must be rejected before any REST request is sent.")
 })
+
+
+test("Bitunix Spot order history rejects unsafe numeric page and page-size inputs before sending a request", async () => {
+  const { broker, calls } = createBroker()
+  const unsafeInteger = Number.MAX_SAFE_INTEGER + 1
+
+  const unsafePage = await broker.getOrderHistory({
+    symbol: "BTCUSDT",
+    page: unsafeInteger,
+  })
+  const unsafePageSize = await broker.getOrderHistory({
+    symbol: "BTCUSDT",
+    limit: unsafeInteger,
+  })
+
+  assert.equal(unsafePage.ok, false, "an unsafe page number must not be sent with a potentially rounded numeric identity")
+  assert.equal(unsafePageSize.ok, false, "an unsafe page size must not be sent with a potentially rounded numeric value")
+  assert.match(unsafePage.errors[0].message, /safe integer/i, "the page validation error must identify the safe-integer boundary")
+  assert.match(unsafePageSize.errors[0].message, /safe integer/i, "the page-size validation error must identify the safe-integer boundary")
+  assert.equal(calls.length, 0, "unsafe history pagination values must be rejected before any exchange request")
+})
+
+test("Bitunix Spot order history accepts the largest safely representable page and page-size values", async () => {
+  const maximumSafeInteger = Number.MAX_SAFE_INTEGER
+  const { broker, calls } = createBroker({
+    responses: {
+      "/api/spot/v1/order/history/page": {
+        total: 0,
+        pageNum: String(maximumSafeInteger),
+        data: [],
+      },
+    },
+  })
+
+  const result = await broker.getOrderHistory({
+    symbol: "BTCUSDT",
+    page: maximumSafeInteger,
+    limit: maximumSafeInteger,
+  })
+
+  assert.equal(result.ok, true, "the maximum safe integer remains exactly representable and valid as a numeric request value")
+  assert.deepEqual(calls[0].options.body, {
+    symbol: "BTCUSDT",
+    page: maximumSafeInteger,
+    pageSize: maximumSafeInteger,
+  }, "safe pagination values must be preserved exactly in the Bitunix request")
+})
