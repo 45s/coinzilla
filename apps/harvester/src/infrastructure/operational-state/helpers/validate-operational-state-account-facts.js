@@ -9,17 +9,23 @@ import {
   isPositiveCanonicalDecimalString,
 } from "./operational-state-decimal-validation.js"
 
-function validateAccountSnapshotMetadata({ canonicalData }) {
+function validateAccountSnapshotFields({ canonicalData }) {
   const allowedFields = new Set(["phase", "auditStatus", "sourceTime", "assetCount", "balances", "auditReasons"])
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Account snapshot contains unsupported fields")
   }
+}
+
+function validateAccountSnapshotPhaseAndStatus({ canonicalData }) {
   if (!["OPENING", "CLOSING", "PREFLIGHT", "RECOVERY", "COMMISSION_BASELINE"].includes(canonicalData.phase)) {
     throw new TypeError("Account snapshot phase is unsupported")
   }
   if (!["COMPLETE", "INCOMPLETE"].includes(canonicalData.auditStatus)) {
     throw new TypeError("Account snapshot auditStatus must be COMPLETE or INCOMPLETE")
   }
+}
+
+function validateAccountSnapshotCompleteness({ canonicalData }) {
   if (!Number.isSafeInteger(canonicalData.sourceTime) || canonicalData.sourceTime < 0) {
     throw new TypeError("Account snapshot sourceTime must be a non-negative safe integer")
   }
@@ -36,6 +42,9 @@ function validateAccountSnapshotMetadata({ canonicalData }) {
   ) {
     throw new TypeError("COMMISSION_BASELINE account snapshot must be complete and contain exactly one fee-asset balance")
   }
+}
+
+function validateAccountSnapshotAuditReasons({ canonicalData }) {
   if (
     !Array.isArray(canonicalData.auditReasons) ||
     canonicalData.auditReasons.some((reason) =>
@@ -51,6 +60,14 @@ function validateAccountSnapshotMetadata({ canonicalData }) {
     throw new TypeError("An INCOMPLETE account snapshot requires auditReasons")
   }
 }
+
+function validateAccountSnapshotMetadata({ canonicalData }) {
+  validateAccountSnapshotFields({ canonicalData })
+  validateAccountSnapshotPhaseAndStatus({ canonicalData })
+  validateAccountSnapshotCompleteness({ canonicalData })
+  validateAccountSnapshotAuditReasons({ canonicalData })
+}
+
 
 function validateAccountSnapshotBalances({ balances }) {
   const assets = new Set()
@@ -132,7 +149,7 @@ function validateAccountOpenOrdersMetadata({ canonicalData }) {
   }
 }
 
-function validateAccountOpenOrder({ order, index }) {
+function validateAccountOpenOrderShape({ order, index }) {
   const allowedOrderFields = new Set([
     "clientOrderId",
     "brokerOrderId",
@@ -152,6 +169,9 @@ function validateAccountOpenOrder({ order, index }) {
   ) {
     throw new TypeError(`Account open order ${index} contains unsupported fields`)
   }
+}
+
+function validateAccountOpenOrderIdentity({ order, index }) {
   const brokerOrderId = requireNonEmptyString({
     value: order.brokerOrderId,
     field: `orders[${index}].brokerOrderId`,
@@ -172,12 +192,10 @@ function validateAccountOpenOrder({ order, index }) {
       maxLength: MAX_FACT_ID_LENGTH,
     })
   }
-  if (order.side !== "BUY" && order.side !== "SELL") {
-    throw new TypeError("Account open-order side must be BUY or SELL")
-  }
-  requireNonEmptyString({ value: order.type,
-field: `orders[${index}].type`,
-maxLength: 32 })
+  return { brokerOrderId, symbol }
+}
+
+function validateAccountOpenOrderAmounts({ order }) {
   if (
     order.price !== undefined &&
     !isPositiveCanonicalDecimalString({ value: order.price })
@@ -190,15 +208,29 @@ maxLength: 32 })
   ) {
     throw new TypeError("Account open-order quantities must be exact canonical decimal strings")
   }
-  if (compareDecimal({ left: order.executedQuantity,
-right: order.quantity }) > 0) {
+  if (compareDecimal({ left: order.executedQuantity, right: order.quantity }) > 0) {
     throw new TypeError("Account open-order executed quantity cannot exceed original quantity")
   }
+}
+
+function validateAccountOpenOrderState({ order }) {
+  if (order.side !== "BUY" && order.side !== "SELL") {
+    throw new TypeError("Account open-order side must be BUY or SELL")
+  }
+  requireNonEmptyString({ value: order.type, field: "orders.type", maxLength: 32 })
   if (!["NEW", "OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
     throw new TypeError("Account open-order status must be OPEN or PARTIALLY_FILLED")
   }
+}
+
+function validateAccountOpenOrder({ order, index }) {
+  validateAccountOpenOrderShape({ order, index })
+  const { brokerOrderId, symbol } = validateAccountOpenOrderIdentity({ order, index })
+  validateAccountOpenOrderAmounts({ order })
+  validateAccountOpenOrderState({ order })
   return `${symbol}:${brokerOrderId}`
 }
+
 
 function validateAccountOpenOrderCollection({ orders }) {
   const orderIdentities = new Set()
