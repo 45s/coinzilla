@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-const scriptPath = new URL('./sync-main.js', import.meta.url);
+const scriptPath = fileURLToPath(new URL('./sync-main.js', import.meta.url));
 
 function git(cwd, args, options = {}) {
   return execFileSync('git', args, {
@@ -48,7 +49,7 @@ function advanceRemote({ root, remote }) {
 }
 
 function runSync(local) {
-  return execFileSync(process.execPath, [scriptPath.pathname], {
+  return execFileSync(process.execPath, [scriptPath], {
     cwd: local,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
