@@ -710,7 +710,7 @@ export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
   const capabilityProbe = createDatabase({
     storageKey: `conformance-probe-${randomUUID()}`,
   })
-  const capabilities = capabilityProbe.capabilities
+  const { capabilities } = capabilityProbe
   const probeClose = capabilityProbe.close()
 
   test(`${name}: capability discovery closes its unconnected provider probe`, async () => {
