@@ -251,6 +251,15 @@ function publishConnectionFailure({ eventPublisher, descriptor, error, logger })
   })
 }
 
+function getDisconnectLogMessage({ entry, result }) {
+  if (result.status === "rejected") {
+    return "Provider instance disconnect failed"
+  }
+  return entry.connected
+    ? "Provider instance disconnected"
+    : "Provider instance resources cleaned up"
+}
+
 async function disconnectEntries({ entries, logger }) {
   const reversedEntries = entries.slice().reverse()
   const results = await Promise.allSettled(reversedEntries.map((entry) =>
@@ -261,9 +270,10 @@ async function disconnectEntries({ entries, logger }) {
     logProviderLifecycle({
       logger,
       level: result.status === "fulfilled" ? "system" : "error",
-      message: result.status === "fulfilled"
-        ? entry.connected ? "Provider instance disconnected" : "Provider instance resources cleaned up"
-        : "Provider instance disconnect failed",
+      message: getDisconnectLogMessage({
+        entry,
+        result,
+      }),
       descriptor: entry.descriptor,
       ...(result.status === "rejected" ? { error: result.reason } : {}),
     })
@@ -277,7 +287,7 @@ async function disconnectEntries({ entries, logger }) {
   return errors
 }
 
-async function constructProviderEntries({ descriptors, adapterFactories, env, logger, eventPublisher }) {
+async function constructProviderEntries({ descriptors, adapterFactories, env, logger }) {
   const entries = []
   try {
     for (const descriptor of descriptors) {
@@ -542,7 +552,6 @@ export async function createProviderRegistry({
     adapterFactories,
     env,
     logger,
-    eventPublisher,
   })
   return createRegistryLifecycle({
     entries,
