@@ -54,7 +54,7 @@ The package defines what database operations mean. Each provider implements how 
 3. **Provider conformance suite**
    - Reusable tests cover CREATE/READ/UPDATE/DELETE, collection isolation, filtering, sorting, pagination, identifiers, duplicates, error semantics, transaction commit/rollback, lifecycle, reconnect persistence and cleanup.
    - Run the contract against every storage mode declared by the provider, using isolated test keys. Verify file/server persistence by reconnecting with the same key; explicitly skip reconnect persistence for ephemeral memory storage.
-   - The suite verifies nested-transaction declarations and requires close to drain active asynchronous transactions; synchronous providers receive an explicit skip for the inapplicable async-drain case.
+   - The suite verifies nested-transaction declarations, portable scalar sort ordering, close-time draining of active asynchronous transactions, and the optional provider-owned cleanup hook for server-backed test stores. Synchronous providers receive an explicit skip for the inapplicable async-drain case.
    - The SQLite provider must pass the complete applicable suite for both in-memory and file-backed modes.
    - Future providers must run the same suite; provider-specific capability differences must be declared rather than silently emulated.
 
