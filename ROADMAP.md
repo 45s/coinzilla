@@ -9,7 +9,7 @@
 
 ## Multi-provider Harvester execution and market-data routing — #1339
 
-- **Planned — accepted architecture, implementation not started.** Harvester will own explicit strategy/market execution routing, independent market-data routing, provider/account provenance and account isolation; Brokers will supply provider construction and verified capabilities. Preserve the current Binance-only runtime until the phased migration is complete. Bitunix remains read-only / not Harvester-ready and RS remains non-executable. See [ADR-0003](docs/architecture/decisions/ADR-0003-multi-provider-routing.md), [issue #1339](https://github.com/45s/coinzilla/issues/1339), and the [Harvester](apps/harvester/ROADMAP.md) / [Brokers](packages/brokers/ROADMAP.md) owner roadmaps.
+- **Planned — accepted architecture, implementation not started.** Harvester will own explicit strategy/market execution routing, independent market-data routing, provider/account provenance and account isolation; Brokers will supply provider construction and verified capabilities. Preserve the current Binance-only runtime until the phased migration is complete. Bitunix remains read-only / not Harvester-ready and RS remains non-executable. The [source-verified migration audit and phased plan](docs/architecture/multi-provider-migration-plan.md) records current implementation gaps and the recommended Brokers-first PR. See [ADR-0003](docs/architecture/decisions/ADR-0003-multi-provider-routing.md), [issue #1339](https://github.com/45s/coinzilla/issues/1339), and the [Harvester](apps/harvester/ROADMAP.md) / [Brokers](packages/brokers/ROADMAP.md) owner roadmaps.
 
 ## Repository-wide agent workflow continuity
 
