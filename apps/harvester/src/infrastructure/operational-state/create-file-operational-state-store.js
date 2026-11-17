@@ -478,6 +478,65 @@ function handleOperationalStateAppendFailure({ store, writeState, error }) {
   return toResult({ error })
 }
 
+function createDuplicateOperationalStateAppendResult({ existing }) {
+  return toResult({
+    data: {
+      durable: true,
+      duplicate: true,
+      record: existing,
+    },
+  })
+}
+
+function createCommittedOperationalStateAppendResult({ verified }) {
+  return toResult({
+    data: {
+      durable: true,
+      duplicate: false,
+      record: verified.lastRecord,
+      lastCommittedSequence: verified.manifest.sequence,
+      lastCommittedDigest: verified.manifest.lastCommittedDigest,
+    },
+  })
+}
+
+async function appendOperationalStateFact({ store, assertNoUncertainWrite, syncStreams, verifyState, fact }) {
+  const writeState = {
+    factWriteStarted: false,
+    manifestWriteStarted: false,
+    syncFailed: false,
+    integrityFailed: false,
+  }
+  try {
+    assertNoUncertainWrite()
+    await synchronizeOperationalStateBeforeAppend({ syncStreams, writeState })
+    const state = await verifyOperationalStateBeforeAppend({ verifyState, writeState })
+    const input = validateFactInput({
+      fact,
+      runtimeSessionId: store.runtimeSessionId,
+    })
+    const existing = state.records.find((record) => record.factId === input.factId)
+    if (existing) {
+      assertDuplicateOperationalStateFactMatches({ existing, input })
+      return createDuplicateOperationalStateAppendResult({ existing })
+    }
+    const recordedAt = normalizeOperationalStateRecordedAt(store.now())
+    validateMarketHistoryCoverageProgress({ state, input, recordedAt })
+    const { record, line } = createOperationalStateAppendRecord({
+      store,
+      state,
+      input,
+      recordedAt,
+    })
+    await writeOperationalStateFactRecord({ store, line, writeState })
+    await writeOperationalStateManifestCheckpoint({ store, state, record, writeState })
+    const verified = await verifyState()
+    return createCommittedOperationalStateAppendResult({ verified })
+  } catch (error) {
+    return handleOperationalStateAppendFailure({ store, writeState, error })
+  }
+}
+
 function createOperationalStateStoreAppender({
   store,
   serialize,
@@ -485,68 +544,13 @@ function createOperationalStateStoreAppender({
   syncStreams,
   verifyState,
 }) {
-  return (fact) => serialize(async () => {
-    const writeState = {
-      factWriteStarted: false,
-      manifestWriteStarted: false,
-      syncFailed: false,
-      integrityFailed: false,
-    }
-    try {
-      assertNoUncertainWrite()
-      await synchronizeOperationalStateBeforeAppend({ syncStreams,
-writeState })
-      const state = await verifyOperationalStateBeforeAppend({ verifyState,
-writeState })
-      const input = validateFactInput({
-        fact,
-        runtimeSessionId: store.runtimeSessionId,
-      })
-      const existing = state.records.find((record) => record.factId === input.factId)
-      if (existing) {
-        assertDuplicateOperationalStateFactMatches({ existing,
-input })
-        return toResult({
-          data: {
-            durable: true,
-            duplicate: true,
-            record: existing,
-          },
-        })
-      }
-      const recordedAt = normalizeOperationalStateRecordedAt(store.now())
-      validateMarketHistoryCoverageProgress({ state,
-input,
-recordedAt })
-      const { record, line } = createOperationalStateAppendRecord({
-        store,
-        state,
-        input,
-        recordedAt,
-      })
-      await writeOperationalStateFactRecord({ store,
-line,
-writeState })
-      await writeOperationalStateManifestCheckpoint({ store,
-state,
-record,
-writeState })
-      const verified = await verifyState()
-      return toResult({
-        data: {
-          durable: true,
-          duplicate: false,
-          record: verified.lastRecord,
-          lastCommittedSequence: verified.manifest.sequence,
-          lastCommittedDigest: verified.manifest.lastCommittedDigest,
-        },
-      })
-    } catch (error) {
-      return handleOperationalStateAppendFailure({ store,
-writeState,
-error })
-    }
-  })
+  return (fact) => serialize(() => appendOperationalStateFact({
+    store,
+    assertNoUncertainWrite,
+    syncStreams,
+    verifyState,
+    fact,
+  }))
 }
 
 function createOperationalStateStoreVerificationOperation({
