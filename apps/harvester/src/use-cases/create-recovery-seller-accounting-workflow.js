@@ -46,6 +46,10 @@ function assertLegacyPositionAmounts(position) {
   }
 }
 
+function assertLegacyAccountingFillIdentityHistory(accounting) {
+  assertLegacyAccountingFillIdentityHistory(accounting)
+}
+
 function assertLegacyAccountingState(accounting) {
   for (const field of ["realizedQuoteProceeds", "realizedCostBasis", "realizedProfit"]) {
     assertDecimalString({
