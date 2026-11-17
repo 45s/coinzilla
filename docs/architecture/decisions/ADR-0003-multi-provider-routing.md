@@ -100,6 +100,7 @@ const brokers = {
   },
   bitunixSpotPrimary: {
     provider: "bitunix-spot",
+    tradingMode: "live", // only documented Spot endpoint; this does not enable order mutations
     credentials: {
       apiKey: process.env.BITUNIX_API_KEY,
       apiSecret: process.env.BITUNIX_API_SECRET,
