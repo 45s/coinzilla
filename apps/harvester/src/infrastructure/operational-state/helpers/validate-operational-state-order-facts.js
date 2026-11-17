@@ -103,7 +103,11 @@ export function validateOrderSubmissionIntentFact({ factType, canonicalData, fac
     return
   }
   const clientOrderId = validateOrderSubmissionIntentFields({ canonicalData })
-  validateOrderSubmissionIntentSemantics({ canonicalData, factId, clientOrderId })
+  validateOrderSubmissionIntentSemantics({
+    canonicalData,
+    factId,
+    clientOrderId,
+  })
 }
 
 function validateOrderSubmissionOutcomeIdentity({
@@ -217,7 +221,11 @@ export function validateOrderSubmissionOutcomeFact({ factType, canonicalData, fa
     return
   }
   const clientOrderId = validateOrderSubmissionOutcomeFields({ canonicalData })
-  validateOrderSubmissionOutcomeIdentity({ canonicalData, factId, clientOrderId })
+  validateOrderSubmissionOutcomeIdentity({
+    canonicalData,
+    factId,
+    clientOrderId,
+  })
   validateOrderSubmissionOutcomeAmounts({ canonicalData })
   validateOrderSubmissionOutcomeState({ canonicalData })
 }
@@ -341,7 +349,11 @@ export function validateOrderCancellationIntentFact({ factType, canonicalData, f
   }
   const { clientOrderId, marketId, venue, reason } = validateOrderCancellationFields({ canonicalData })
   validateCancellationIdentity({
-    canonicalData: { ...canonicalData, marketId, venue },
+    canonicalData: {
+      ...canonicalData,
+      marketId,
+      venue,
+    },
     factId,
     reason,
     expectedFactId: factIdForCancellationIntent(clientOrderId, reason, canonicalData.status, canonicalData.executedQuantity),
