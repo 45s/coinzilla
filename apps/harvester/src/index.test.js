@@ -431,7 +431,8 @@ test("publishes process started and stopped events for Binance trading startup",
     }),
     registerSignalHandler: (...signalHandlerArguments) => {
       const [signal, handler] = signalHandlerArguments
-      handlers[signal] = handler },
+      handlers[signal] = handler
+    },
     logger: { info() {},
       error() {},
       debug() {} },
@@ -484,7 +485,8 @@ test("does not publish STOPPED when runtime.stop rejects", async () => {
       }),
       registerSignalHandler: (...signalHandlerArguments) => {
         const [signal, handler] = signalHandlerArguments
-        handlers[signal] = handler },
+        handlers[signal] = handler
+      },
       logger: { info() {},
         error() {},
         debug() {} },
@@ -575,7 +577,8 @@ test("publishes stopped before closing Journal, then closes EventBus", async () 
     }),
     registerSignalHandler: (...signalHandlerArguments) => {
       const [signal, handler] = signalHandlerArguments
-      handlers[signal] = handler },
+      handlers[signal] = handler
+    },
     logger: { info() {},
       error() {},
       debug() {} },
@@ -626,7 +629,8 @@ test("continues EventBus cleanup when Journal close fails", async () => {
       }),
       registerSignalHandler: (...signalHandlerArguments) => {
         const [signal, handler] = signalHandlerArguments
-        handlers[signal] = handler },
+        handlers[signal] = handler
+      },
       logger: { info() {},
         debug() {},
         error() {} },
@@ -675,7 +679,8 @@ test("reports EventBus timeout and preserves Journal close result", async () => 
       }),
       registerSignalHandler: (...signalHandlerArguments) => {
         const [signal, handler] = signalHandlerArguments
-        handlers[signal] = handler },
+        handlers[signal] = handler
+      },
       logger: { info() {},
         debug() {},
         error() {} },
@@ -714,7 +719,8 @@ test("coalesces repeated shutdown signals into one cleanup operation", async () 
     }),
     registerSignalHandler: (...signalHandlerArguments) => {
       const [signal, handler] = signalHandlerArguments
-      handlers[signal] = handler },
+      handlers[signal] = handler
+    },
     logger: { info() {},
       debug() {},
       error() {} },
@@ -800,7 +806,8 @@ test("writes and durably closes a JSONL session in the injected Journal director
       }),
       registerSignalHandler: (...signalHandlerArguments) => {
         const [signal, handler] = signalHandlerArguments
-        handlers[signal] = handler },
+        handlers[signal] = handler
+      },
       logger: { info() {},
         debug() {},
         error() {} },
@@ -1321,7 +1328,8 @@ test("closes diagnostic log transports after runtime, Journal, and EventBus shut
     }),
     registerSignalHandler: (...signalHandlerArguments) => {
       const [signal, handler] = signalHandlerArguments
-      handlers[signal] = handler },
+      handlers[signal] = handler
+    },
     logger: { info() {},
       error() {} },
     closeLogger: async () => { operations.push("logger.close") },
