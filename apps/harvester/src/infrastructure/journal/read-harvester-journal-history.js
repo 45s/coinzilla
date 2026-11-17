@@ -301,6 +301,15 @@ function createHistoryReadResult({ records, sessionMetadata, bytesRead, director
   })
 }
 
+function createHistoryReadErrorResult({ error, directory }) {
+  return toResult({
+    error: normalizeHistoryReadError({
+      error,
+      directory,
+    }),
+  })
+}
+
 export async function readHarvesterJournalHistory({
   directory,
   journalFactory = (options) => new Journal(options),
@@ -360,11 +369,6 @@ error() {} },
       directoriesVisited,
     })
   } catch (error) {
-    return toResult({
-      error: normalizeHistoryReadError({
-        error,
-        directory,
-      }),
-    })
+    return createHistoryReadErrorResult({ error, directory })
   }
 }
