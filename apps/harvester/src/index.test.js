@@ -36,6 +36,7 @@ const main = (options = {}) => {
         data: { valid: true,
           durableWriteSupported: true } }),
     }),
+    prepareTradingSessionPersistence: async () => null,
     ...rest,
     env: { TRADING_MODE: "testnet",
       ...env },
