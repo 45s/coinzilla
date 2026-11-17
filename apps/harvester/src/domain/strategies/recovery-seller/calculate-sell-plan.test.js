@@ -4,7 +4,9 @@ import { calculateRecoverySellerSellPlan } from "./calculate-sell-plan.js"
 
 const validInput = {
   recoveryQuantity: "1",
-  legacyQuantity: "0.01",
+  configuredLegacyQuantity: "0.01",
+  legacyRemainingQuantity: "0.01",
+  verifiedUnreservedLegacyQuantity: "0.01",
   recoveryCostBasis: "10",
   legacyAverageCost: "20",
   minProfit: "0.01",
@@ -28,7 +30,8 @@ test("grosses up quote commission before rounding SELL price upward", () => {
   const plan = calculateRecoverySellerSellPlan({
     ...validInput,
     recoveryQuantity: "1",
-    legacyQuantity: "0",
+    legacyRemainingQuantity: "0",
+    verifiedUnreservedLegacyQuantity: "0",
     quoteFeeRate: "0.01",
   })
 
@@ -84,6 +87,42 @@ test("fails closed when the quantity step cannot include the full base-fee-adjus
     }),
     /cannot include the full recovery and authorized legacy quantities/,
   )
+})
+
+
+test("uses the smaller remaining authorized legacy quantity", () => {
+  const plan = calculateRecoverySellerSellPlan({
+    ...validInput,
+    configuredLegacyQuantity: "0.05",
+    legacyRemainingQuantity: "0.01",
+    verifiedUnreservedLegacyQuantity: "0.01",
+  })
+
+  assert.equal(plan.legacyQuantity, "0.01")
+  assert.equal(plan.legacyCostBasis, "0.2")
+  assert.equal(plan.requiredNetQuoteProceeds, "10.21")
+})
+
+test("does not silently omit authorized legacy inventory when Spot availability is unverified or reserved", () => {
+  assert.throws(
+    () => calculateRecoverySellerSellPlan({
+      ...validInput,
+      verifiedUnreservedLegacyQuantity: "0",
+    }),
+    /authorized legacy inventory remains/,
+  )
+})
+
+test("allows recovery-only SELL only after the authorized legacy quantity is exhausted", () => {
+  const plan = calculateRecoverySellerSellPlan({
+    ...validInput,
+    legacyRemainingQuantity: "0",
+    verifiedUnreservedLegacyQuantity: "0",
+  })
+
+  assert.equal(plan.legacyQuantity, "0")
+  assert.equal(plan.quantity, "1")
+  assert.equal(plan.requiredNetQuoteProceeds, "10.01")
 })
 
 test("rejects invalid fee rates and missing third-asset quote valuation input", () => {
