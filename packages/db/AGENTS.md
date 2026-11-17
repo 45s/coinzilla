@@ -28,6 +28,7 @@ The package domain may model only generic database infrastructure concepts: reco
 - Every public CRUD operation accepts one named input object; keep that shape consistent in the application facade, provider port, transaction context, tests and examples.
 - Provider-specific configuration belongs at the outer composition boundary. Consumers of the composed database must not branch on provider identity.
 - Declare provider capabilities explicitly. Do not silently emulate unsupported query, transaction, concurrency, or durability guarantees.
+- Implement both provider-neutral transaction entry points: `withTransaction(work)` for writes/explicit transactions and `withReadTransaction(work)` for `readOne`/`readMany`. Preserve the same contract while selecting appropriate provider locking behavior.
 - Keep SQL and SQLite-specific APIs out of domain and application policy.
 - Use prepared statements and bound parameters for all SQL values.
 - Enable foreign-key enforcement; keep file-backed journal mode and lock timeout behavior covered by tests.
