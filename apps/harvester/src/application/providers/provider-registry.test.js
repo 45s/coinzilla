@@ -266,7 +266,10 @@ testCase("rolls back every constructed provider in reverse order after a later c
   const registry = createProviderRegistry({
     providers: [
       createTrackedProvider({ suffix: "First" }),
-      createTrackedProvider({ suffix: "Second", failConnect: true }),
+      createTrackedProvider({
+        suffix: "Second",
+        failConnect: true,
+      }),
       createTrackedProvider({ suffix: "Third" }),
     ],
   })
@@ -310,7 +313,10 @@ testCase("disconnects all providers in reverse order and aggregates cleanup fail
   }
   const registry = createProviderRegistry({
     providers: [
-      createTrackedProvider({ suffix: "First", failDisconnect: true }),
+      createTrackedProvider({
+        suffix: "First",
+        failDisconnect: true,
+      }),
       createTrackedProvider({ suffix: "Second" }),
     ],
   })
