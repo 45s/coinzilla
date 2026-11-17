@@ -1,8 +1,9 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { Asset, CanonicalOrder, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
+import { Asset, CanonicalOrder, Fill, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import { createRecoverySellerAccountingWorkflow } from "./create-recovery-seller-accounting-workflow.js"
 
 const baseAsset = new Asset({ id: "doge",
 code: "DOGE" })
@@ -926,4 +927,127 @@ test("propagates OrderOwnership to the order-validation failure callback", async
   assert.deepEqual(validationFailures[0].ownership, ownership)
   assert.equal(validationFailures[0].order.status, "PENDING")
   assert.equal(brokerCalls, 0)
+})
+
+
+test("integrates the shared executor, RS OrderRegistry ownership and durable BUY accounting offline", async () => {
+  const ownership = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-executor-integration",
+    purpose: "RECOVERY_BUY",
+    cycleId: "rs-cycle-executor-integration",
+  }
+  const durableFills = []
+  const workflow = createRecoverySellerAccountingWorkflow({
+    onOperationalStateExecutionFill: async ({ fill }) => {
+      durableFills.push(fill)
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
+  })
+  let brokerOrder
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async ({ order }) => {
+        brokerOrder = order
+        return {
+          ok: true,
+          data: makeAcknowledgement(order),
+        }
+      },
+    },
+    canSubmit: ({ ownership: receivedOwnership }) => {
+      assert.deepEqual(receivedOwnership, ownership)
+      return true
+    },
+    ...workflow.getExecutionCallbacks(),
+  })
+
+  const submitted = await execute({
+    decision: createOwnedDecision({ ownership }),
+    marketMetadata,
+  })
+  const registeredOrder = workflow.getOrderRegistry().getOrder({
+    clientOrderId: brokerOrder.clientOrderId,
+  })
+
+  assert.equal(submitted.ok, true, submitted.errors?.[0]?.message)
+  assert.equal(registeredOrder.status, "OPEN")
+  assert.deepEqual(
+    workflow.getOrderRegistry().getOwnership({
+      clientOrderId: registeredOrder.clientOrderId,
+    }),
+    {
+      clientOrderId: registeredOrder.clientOrderId,
+      brokerOrderId: registeredOrder.brokerOrderId,
+      ...ownership,
+    },
+    "The shared executor acknowledgement must retain the exact RS Position and cycle attribution in OrderRegistry.",
+  )
+
+  const fill = new Fill({
+    tradeId: "rs-executor-integration-buy-1",
+    brokerOrderId: registeredOrder.brokerOrderId,
+    clientOrderId: registeredOrder.clientOrderId,
+    market,
+    side: "BUY",
+    price: new Money({ amount: "0.099", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "100", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "9.9", asset: quoteAsset }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const applied = await workflow.applyBuyFill({ fill })
+  const replayed = await workflow.applyBuyFill({ fill })
+
+  assert.equal(applied.ok, true, applied.errors?.[0]?.message)
+  assert.equal(applied.data.applied, true)
+  assert.equal(replayed.ok, true, replayed.errors?.[0]?.message)
+  assert.equal(replayed.data.duplicate, true)
+  assert.deepEqual(durableFills, [fill],
+    "The integrated BUY fill must be durably recorded once even when the canonical fill is replayed.")
+  assert.equal(
+    workflow.getPortfolio().getPosition({ positionId: ownership.positionId }).spent.amount,
+    "9.9",
+  )
+})
+
+test("integrates an unknown fake-broker acknowledgement as an owned UNKNOWN RS order", async () => {
+  const ownership = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-unknown-integration",
+    purpose: "RECOVERY_BUY",
+    cycleId: "rs-cycle-unknown-integration",
+  }
+  const workflow = createRecoverySellerAccountingWorkflow()
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async () => {
+        throw new Error("offline fake broker socket closed")
+      },
+    },
+    canSubmit: () => true,
+    ...workflow.getExecutionCallbacks(),
+  })
+
+  const result = await execute({
+    decision: createOwnedDecision({ ownership }),
+    marketMetadata,
+  })
+  const [unknownOrder] = workflow.getOrderRegistry().getActiveOrders()
+
+  assert.equal(result.ok, false)
+  assert.equal(unknownOrder.status, "UNKNOWN")
+  assert.deepEqual(
+    workflow.getOrderRegistry().getOwnership({
+      clientOrderId: unknownOrder.clientOrderId,
+    }),
+    {
+      clientOrderId: unknownOrder.clientOrderId,
+      ...ownership,
+    },
+    "An unknown broker outcome must retain the original RS ownership for reconciliation.",
+  )
 })
