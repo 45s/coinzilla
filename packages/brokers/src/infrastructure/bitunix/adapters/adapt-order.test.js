@@ -72,10 +72,12 @@ test("adaptOrder rejects missing or malformed required exchange timestamps", () 
     ["ctime", null],
     ["ctime", 1_794_744_000_000],
     ["ctime", ""],
+    ["ctime", "   "],
     ["utime", undefined],
     ["utime", null],
     ["utime", 1_794_744_000_000],
     ["utime", ""],
+    ["utime", "   "],
   ]) {
     assert.throws(
       () => adaptOrder({
