@@ -288,8 +288,14 @@ function resolveRegisteredRecoverySellerOrderOwnership({ registry, order } = {})
 
 function createRecoverySellerPendingOrderCallback({ state } = {}) {
   return ({ order, ownership } = {}) => {
-    validateRecoverySellerExecutionOwnership({ order, ownership })
-    const result = state.orderRegistry.registerPending({ order, ownership })
+    validateRecoverySellerExecutionOwnership({
+      order,
+      ownership,
+    })
+    const result = state.orderRegistry.registerPending({
+      order,
+      ownership,
+    })
     state.orderRegistry = result.registry
     return result
   }
@@ -303,7 +309,10 @@ function createRecoverySellerAcknowledgedOrderCallback({ state } = {}) {
     })
     const result = state.orderRegistry.attachAcknowledgedBrokerOrderId({ order })
     state.orderRegistry = result.registry
-    return Object.freeze({ ...result, ownership })
+    return Object.freeze({
+      ...result,
+      ownership,
+    })
   }
 }
 
@@ -319,14 +328,20 @@ function createRecoverySellerSubmissionFailureCallback({ state } = {}) {
         throw new Error("Recovery Seller rejected submission was not a removable pending order")
       }
       state.orderRegistry = result.registry
-      return Object.freeze({ ...result, ownership })
+      return Object.freeze({
+        ...result,
+        ownership,
+      })
     }
     const result = state.orderRegistry.markUnknown({ clientOrderId: order.clientOrderId })
     if (!result.ok) {
       throw result.errors[0] ?? new Error("Unable to retain uncertain Recovery Seller submission as UNKNOWN")
     }
     state.orderRegistry = result.data.registry
-    return Object.freeze({ ...result.data, ownership })
+    return Object.freeze({
+      ...result.data,
+      ownership,
+    })
   }
 }
 
