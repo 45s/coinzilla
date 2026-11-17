@@ -56,6 +56,9 @@ function normalizeDepthLevel({ value, side, index }) {
 }
 
 function normalizeDepthLevels({ value, side }) {
+  if (value === undefined || value === null) {
+    return []
+  }
   if (!Array.isArray(value)) {
     throw new TypeError(`Bitunix Spot order book ${side} must be an array`)
   }
@@ -77,12 +80,8 @@ export function adaptBitunixOrderBook({ value, symbol }) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError("Bitunix Spot order book response must be an object")
   }
-  if (typeof value.ts !== "string" || !value.ts.trim()) {
-    throw new TypeError("Bitunix Spot order book timestamp must be a non-empty string")
-  }
-  return {
+  const result = {
     symbol,
-    timestamp: value.ts,
     asks: normalizeDepthLevels({
       value: value.asks,
       side: "asks",
@@ -92,6 +91,13 @@ export function adaptBitunixOrderBook({ value, symbol }) {
       side: "bids",
     }),
   }
+  if (value.ts !== undefined && value.ts !== null) {
+    if (typeof value.ts !== "string" || !value.ts.trim()) {
+      throw new TypeError("Bitunix Spot order book timestamp must be a non-empty string")
+    }
+    result.timestamp = value.ts
+  }
+  return result
 }
 
 /**
@@ -152,6 +158,9 @@ export function adaptBitunixKline({ value, symbol }) {
  * @returns {object[]}
  */
 export function adaptBitunixKlineHistory({ value, symbol }) {
+  if (value === undefined || value === null) {
+    return []
+  }
   const rows = Array.isArray(value) ? value : [value]
   return rows.map((row) => adaptBitunixKline({
     value: row,
