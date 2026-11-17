@@ -219,7 +219,6 @@ The following is the current method-by-method status from the Binance broker sur
 
 It validates symbol, interval, decimals, OHLC invariants and timezone-qualified timestamps. It preserves caller-supplied depth precision and rejects undocumented `startTime`/cursor pagination. Canonical `getCandles()` remains unsupported because Spot K-lines omit volume. The merge and offline checks do not constitute live API acceptance; no live exchange call was performed.
 
-
 ### PR #1370 — Bitunix-only exchange-rate extension (in progress)
 
 [Issue #1331](https://github.com/45s/coinzilla/issues/1331) tracks the public Spot exchange-rate read. The replacement test-first implementation is in [draft PR #1370](https://github.com/45s/coinzilla/pull/1370), based on current `develop`; the original [PR #1332](https://github.com/45s/coinzilla/pull/1332) is stale and is not the integration branch.
