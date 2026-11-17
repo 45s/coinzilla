@@ -49,16 +49,32 @@ export class BitunixRestError extends SystemCustomError {
   }
 }
 
+const LOSSLESS_NUMERIC_FIELDS = Object.freeze({
+  "/api/spot/v1/deposit/page": Object.freeze(["id", "amount"]),
+  "/api/spot/v1/withdraw_transfer/page": Object.freeze(["id", "toUid", "amount", "fee"]),
+})
+
+function stringifyNumericJsonFields({ text, fields }) {
+  const fieldPattern = fields.join("|")
+  const numericFieldPattern = new RegExp(
+    `("(?:${fieldPattern})"\\s*:\\s*)(-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)(?=\\s*[,}])`,
+    "g",
+  )
+  return text.replace(
+    numericFieldPattern,
+    (...matches) => {
+      const [, prefix, value] = matches
+      return prefix + JSON.stringify(value)
+    },
+  )
+}
+
 function parseResponseText({ text, path }) {
-  if (path === "/api/spot/v1/deposit/page") {
-    const losslessText = text.replace(
-      /("(?:id|amount)"\s*:\s*)(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)(?=\s*[,}])/g,
-      (...matches) => {
-        const [, prefix, value] = matches
-        return prefix + JSON.stringify(value)
-      },
-    )
-    return JSON.parse(losslessText)
+  if (Object.hasOwn(LOSSLESS_NUMERIC_FIELDS, path)) {
+    return JSON.parse(stringifyNumericJsonFields({
+      text,
+      fields: LOSSLESS_NUMERIC_FIELDS[path],
+    }))
   }
   if (!path.endsWith("/user/account")) {
     return JSON.parse(text)

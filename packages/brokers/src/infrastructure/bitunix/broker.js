@@ -6,6 +6,7 @@ import { adaptBalances } from "./adapters/adapt-balances.js"
 import { adaptBitunixKline, adaptBitunixKlineHistory, adaptBitunixOrderBook, createBitunixKlineHistoryQuery, normalizeBitunixKlineInterval } from "./adapters/adapt-market-data.js"
 import { adaptExchangeRates } from "./adapters/adapt-exchange-rates.js"
 import { adaptDeposits } from "./adapters/adapt-deposits.js"
+import { adaptWithdrawalHistory } from "./adapters/adapt-withdrawal-history.js"
 import { adaptOrder } from "./adapters/adapt-order.js"
 import { createCanonicalMarket, getBitunixSymbol } from "./adapters/create-canonical-market.js"
 import { BitunixSpotConfig } from "./config/bitunix-spot-config.js"
@@ -22,6 +23,7 @@ const API = Object.freeze({
   kline: "/api/spot/v1/market/kline",
   klineHistory: "/api/spot/v1/market/kline/history",
   deposits: "/api/spot/v1/deposit/page",
+  withdrawalHistory: "/api/spot/v1/withdraw_transfer/page",
 })
 
 const HISTORY_STATUS_CODES = Object.freeze({
@@ -174,6 +176,78 @@ function createDepositRequest({ input }) {
     body,
   })
   addDepositLimitFilter({
+    input,
+    body,
+  })
+  return { body }
+}
+
+function addWithdrawalStringFilters({ input, body }) {
+  for (const field of ["id", "outBizId", "coin", "transactionHash", "remark"]) {
+    if (input[field] === undefined) {
+      continue
+    }
+    if (typeof input[field] !== "string" || !input[field].trim()) {
+      throw new TypeError(`Bitunix Spot withdrawal ${field} filter must be a non-empty string`)
+    }
+    body[field] = input[field]
+  }
+}
+
+function addWithdrawalTypeFilter({ input, body }) {
+  if (input.transactionHash !== undefined && input.type !== "withdraw") {
+    throw new TypeError("Bitunix Spot withdrawal transactionHash filter requires type=withdraw")
+  }
+  if (input.type === undefined) {
+    return
+  }
+  if (input.type !== "withdraw" && input.type !== "inside_transfer_out") {
+    throw new TypeError("Bitunix Spot withdrawal type filter is unsupported")
+  }
+  body.type = input.type
+}
+
+function addWithdrawalTimeFilters({ input, body }) {
+  validateHistoryTimeRange({
+    startTime: input.startTime,
+    endTime: input.endTime,
+  })
+  if (input.startTime !== undefined) {
+    body.startTime = input.startTime
+  }
+  if (input.endTime !== undefined) {
+    body.endTime = input.endTime
+  }
+}
+
+function addWithdrawalLimitFilter({ input, body }) {
+  if (input.limit === undefined) {
+    return
+  }
+  if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 100) {
+    throw new RangeError("Bitunix Spot withdrawal limit must be an integer between 1 and 100")
+  }
+  body.limit = input.limit
+}
+
+function createWithdrawalHistoryRequest({ input }) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("Bitunix Spot getWithdrawalHistory() input must be an object")
+  }
+  const body = {}
+  addWithdrawalStringFilters({
+    input,
+    body,
+  })
+  addWithdrawalTypeFilter({
+    input,
+    body,
+  })
+  addWithdrawalTimeFilters({
+    input,
+    body,
+  })
+  addWithdrawalLimitFilter({
     input,
     body,
   })
@@ -554,6 +628,39 @@ export class BitunixSpotBroker extends CoreBroker {
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.getDeposits()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Read one page of Bitunix Spot withdrawals and internal-transfer-out records.
+   * The endpoint documents a maximum limit of 100 but no cursor or page parameter.
+   * Recipient identifiers and contact/address fields are returned unchanged and are
+   * never logged or persisted by this adapter.
+   *
+   * @param {{id?: string, outBizId?: string, coin?: string, type?: "withdraw"|"inside_transfer_out", transactionHash?: string, startTime?: number, endTime?: number, remark?: string, limit?: number}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getWithdrawalHistory(input = {}) {
+    try {
+      const { body } = createWithdrawalHistoryRequest({ input })
+      const response = await this.restClient.request({
+        method: "POST",
+        path: API.withdrawalHistory,
+        body,
+        authenticated: true,
+        stateChanging: false,
+      })
+      return toResult({
+        data: adaptWithdrawalHistory({
+          value: response.data,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getWithdrawalHistory()",
         error,
       })
       return toResult({ errors: [error] })
