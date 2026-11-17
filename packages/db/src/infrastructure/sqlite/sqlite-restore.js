@@ -1,9 +1,10 @@
 import {
   link,
+  mkdir,
   realpath,
   unlink,
 } from "node:fs/promises"
-import { basename, dirname, mkdir } from "node:path"
+import { basename, dirname } from "node:path"
 import { backup as sqliteBackup, DatabaseSync } from "node:sqlite"
 
 import { DatabaseProviderError } from "../../domain/errors/database-errors.js"
