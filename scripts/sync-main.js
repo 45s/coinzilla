@@ -11,7 +11,11 @@ function runGit({ cwd, args, allowFailure = false }) {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
-    return { status: 0, stdout: stdout.trim(), stderr: '' };
+    return {
+      status: 0,
+      stdout: stdout.trim(),
+      stderr: '',
+    };
   } catch (error) {
     const result = {
       status: error.status ?? 1,
@@ -29,8 +33,14 @@ function runGit({ cwd, args, allowFailure = false }) {
 
 function requireWorktreeRoot() {
   const cwd = process.cwd();
-  const root = runGit({ cwd, args: ['rev-parse', '--show-toplevel'] }).stdout;
-  const prefix = runGit({ cwd, args: ['rev-parse', '--show-prefix'] }).stdout;
+  const root = runGit({
+    cwd,
+    args: ['rev-parse', '--show-toplevel'],
+  }).stdout;
+  const prefix = runGit({
+    cwd,
+    args: ['rev-parse', '--show-prefix'],
+  }).stdout;
   if (prefix !== '') {
     throw new Error('Run this command from the repository root of the dedicated worktree.');
   }
@@ -120,7 +130,10 @@ function requireFastForward({ cwd }) {
 
 function advanceBranch({ cwd }) {
   try {
-    runGit({ cwd, args: ['merge', '--ff-only', '--no-edit', remoteBranch] });
+    runGit({
+      cwd,
+      args: ['merge', '--ff-only', '--no-edit', remoteBranch],
+    });
   } catch (error) {
     throw new Error(`Fast-forward failed; the local branch was not reset or force-updated. ${error.message}`, {
       cause: error,
@@ -137,7 +150,10 @@ function syncMain() {
   requireFastForward({ cwd });
   advanceBranch({ cwd });
 
-  const shortHead = runGit({ cwd, args: ['rev-parse', '--short', 'HEAD'] }).stdout;
+  const shortHead = runGit({
+    cwd,
+    args: ['rev-parse', '--short', 'HEAD'],
+  }).stdout;
   process.stdout.write(
     shortHead === remoteHead.slice(0, shortHead.length)
       ? `main-work is synchronized with origin/main at ${shortHead}.\n`
