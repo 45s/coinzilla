@@ -238,6 +238,7 @@ export async function backupSqliteDatabase({
   destination,
   rate = DEFAULT_BACKUP_RATE,
   progress,
+  timeout = DEFAULT_TIMEOUT_MS,
 } = {}) {
   const destinationFilename = validateBackupOptions({
     destination,
@@ -253,24 +254,39 @@ export async function backupSqliteDatabase({
     throw new TypeError("SQLite backup cannot start while a transaction is active")
   }
 
-  await mkdir(dirname(destinationFilename), {
-    recursive: true,
-  })
-
-  if (sourceFilename !== ":memory:") {
-    await assertDifferentFiles({
-      sourceFilename: resolve(sourceFilename),
-      destinationFilename,
-    })
+  if (!Number.isSafeInteger(timeout) || timeout < 0) {
+    throw new TypeError("SQLite backup timeout must be a non-negative safe integer")
   }
 
-  return runBackup({
-    sourceConnection,
-    destinationFilename,
-    rate,
-    progress,
-    timeout,
-  })
+  try {
+    await mkdir(dirname(destinationFilename), {
+      recursive: true,
+    })
+
+    if (sourceFilename !== ":memory:") {
+      await assertDifferentFiles({
+        sourceFilename: resolve(sourceFilename),
+        destinationFilename,
+      })
+    }
+
+    return await runBackup({
+      sourceConnection,
+      destinationFilename,
+      rate,
+      progress,
+      timeout,
+    })
+  } catch (error) {
+    if (error instanceof TypeError || error instanceof DatabaseProviderError) {
+      throw error
+    }
+
+    throw new DatabaseProviderError({
+      operation: "backup",
+      cause: error,
+    })
+  }
 }
 
 async function assertRestoreDestinationIsNew({ filename }) {
@@ -303,6 +319,88 @@ async function publishRestoredDatabase({ temporaryFilename, destinationFilename 
   await unlink(temporaryFilename)
 }
 
+async function createRestoreArtifact({ sourceFilename, destinationFilename, timeout, rate }) {
+  const sourceDatabase = new DatabaseSync(sourceFilename, {
+    readOnly: true,
+    timeout,
+  })
+  let temporaryDirectory
+  let temporaryFilename
+  let operationError = null
+
+  try {
+    validateIntegrity(sourceDatabase)
+    temporaryDirectory = await createTemporaryDirectory({
+      destinationFilename,
+      prefix: "coinzilla-db-restore",
+    })
+    temporaryFilename = join(temporaryDirectory, basename(destinationFilename))
+    await sqliteBackup(sourceDatabase, temporaryFilename, {
+      rate,
+    })
+    await verifyDatabaseFile({
+      filename: temporaryFilename,
+      timeout,
+    })
+  } catch (error) {
+    operationError = error
+  }
+
+  try {
+    sourceDatabase.close()
+  } catch (error) {
+    operationError = operationError
+      ? new AggregateError(
+        [operationError, error],
+        "SQLite restore failed and its source connection could not close",
+        { cause: operationError },
+      )
+      : error
+  }
+
+  if (operationError) {
+    if (temporaryDirectory) {
+      await removeTemporaryDirectory({
+        directory: temporaryDirectory,
+        operationError,
+      })
+    }
+
+    throw operationError
+  }
+
+  return {
+    directory: temporaryDirectory,
+    filename: temporaryFilename,
+  }
+}
+
+async function publishRestoreArtifact({ artifact, destinationFilename }) {
+  let operationError = null
+
+  try {
+    await publishRestoredDatabase({
+      temporaryFilename: artifact.filename,
+      destinationFilename,
+    })
+  } catch (error) {
+    operationError = error
+  }
+
+  try {
+    await removeTemporaryDirectory({
+      directory: artifact.directory,
+      operationError,
+    })
+  } catch (error) {
+    operationError = error
+  }
+
+  if (operationError) {
+    throw operationError
+  }
+}
+
 /**
  * Restore a validated SQLite backup into a new database file.
  *
@@ -333,81 +431,36 @@ export async function restoreSqliteDatabase({
     rate,
   })
 
-  await mkdir(dirname(destinationFilename), {
-    recursive: true,
-  })
-  await assertDifferentFiles({
-    sourceFilename,
-    destinationFilename,
-  })
-  await assertRestoreDestinationIsNew({
-    filename: destinationFilename,
-  })
-
-  let sourceDatabase
-  let temporaryDirectory
-  let operationError = null
-
   try {
-    sourceDatabase = new DatabaseSync(sourceFilename, {
-      readOnly: true,
-      timeout,
+    await mkdir(dirname(destinationFilename), {
+      recursive: true,
     })
-    validateIntegrity(sourceDatabase)
-
-    temporaryDirectory = await createTemporaryDirectory({
+    await assertDifferentFiles({
+      sourceFilename,
       destinationFilename,
-      prefix: "coinzilla-db-restore",
     })
-    const temporaryFilename = join(temporaryDirectory, basename(destinationFilename))
-    await sqliteBackup(sourceDatabase, temporaryFilename, {
+    await assertRestoreDestinationIsNew({
+      filename: destinationFilename,
+    })
+
+    const artifact = await createRestoreArtifact({
+      sourceFilename,
+      destinationFilename,
+      timeout,
       rate,
     })
-    await verifyDatabaseFile({
-      filename: temporaryFilename,
-      timeout,
-    })
-    await publishRestoredDatabase({
-      temporaryFilename,
+    await publishRestoreArtifact({
+      artifact,
       destinationFilename,
     })
   } catch (error) {
-    operationError = error
-  } finally {
-    if (sourceDatabase?.isOpen) {
-      try {
-        sourceDatabase.close()
-      } catch (error) {
-        operationError = operationError
-          ? new AggregateError(
-            [operationError, error],
-            "SQLite restore failed and its source connection could not close",
-            { cause: operationError },
-          )
-          : error
-      }
-    }
-  }
-
-  if (temporaryDirectory) {
-    try {
-      await removeTemporaryDirectory({
-        directory: temporaryDirectory,
-        operationError,
-      })
-    } catch (error) {
-      operationError = error
-    }
-  }
-
-  if (operationError) {
-    if (operationError instanceof TypeError) {
-      throw operationError
+    if (error instanceof TypeError || error instanceof DatabaseProviderError) {
+      throw error
     }
 
     throw new DatabaseProviderError({
       operation: "restore",
-      cause: operationError,
+      cause: error,
     })
   }
 
