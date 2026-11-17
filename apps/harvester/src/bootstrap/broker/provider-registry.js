@@ -299,29 +299,30 @@ function createPortFacade({ entry, connectAll, disconnectAll }) {
   }))
 }
 
-function createDisconnectAll({ entries, eventPublisher }) {
-  let disconnectPromise
+function createDisconnectAll({ entries, eventPublisher, lifecycleState }) {
   return async function disconnectAll() {
-    if (!disconnectPromise) {
-      disconnectPromise = disconnectEntries({
+    if (!lifecycleState.disconnectPromise) {
+      lifecycleState.disconnectPromise = disconnectEntries({
         entries,
         eventPublisher,
       })
     }
-    const errors = await disconnectPromise
+    const errors = await lifecycleState.disconnectPromise
     if (errors.length > 0) {
       throw new AggregateError(errors, "One or more provider instances failed to disconnect")
     }
   }
 }
 
-function createConnectAll({ entries, disconnectAll, eventPublisher }) {
-  let connectPromise
+function createConnectAll({ entries, disconnectAll, eventPublisher, lifecycleState }) {
   return async function connectAll() {
-    if (connectPromise) {
-      return connectPromise
+    if (lifecycleState.disconnectPromise) {
+      throw new Error("Provider registry cannot connect after shutdown has started")
     }
-    connectPromise = (async () => {
+    if (lifecycleState.connectPromise) {
+      return lifecycleState.connectPromise
+    }
+    lifecycleState.connectPromise = (async () => {
       for (const entry of entries) {
         try {
           await entry.broker.connect()
@@ -347,20 +348,23 @@ function createConnectAll({ entries, disconnectAll, eventPublisher }) {
         }
       }
     })()
-    return connectPromise
+    return lifecycleState.connectPromise
   }
 }
 
 function createRegistryLifecycle({ entries, eventPublisher }) {
   const entriesById = new Map(entries.map((entry) => [entry.descriptor.id, entry]))
+  const lifecycleState = {}
   const disconnectAll = createDisconnectAll({
     entries,
     eventPublisher,
+    lifecycleState,
   })
   const connectAll = createConnectAll({
     entries,
     disconnectAll,
     eventPublisher,
+    lifecycleState,
   })
   const getEntry = ({ instanceId } = {}) => {
     const entry = entriesById.get(instanceId)
