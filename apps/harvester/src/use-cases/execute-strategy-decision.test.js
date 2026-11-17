@@ -767,23 +767,44 @@ test("propagates RS OrderOwnership metadata through shared execution callbacks w
       },
     },
     canSubmit: ({ ownership: observedOwnership }) => {
-      observed.push({ callback: "canSubmit", ownership: observedOwnership })
+      observed.push({
+        callback: "canSubmit",
+        ownership: observedOwnership,
+      })
       return true
     },
     onPendingOrder: async ({ ownership: observedOwnership }) => {
-      observed.push({ callback: "onPendingOrder", ownership: observedOwnership })
+      observed.push({
+        callback: "onPendingOrder",
+        ownership: observedOwnership,
+      })
     },
     onAcknowledgedOrder: async ({ ownership: observedOwnership }) => {
-      observed.push({ callback: "onAcknowledgedOrder", ownership: observedOwnership })
+      observed.push({
+        callback: "onAcknowledgedOrder",
+        ownership: observedOwnership,
+      })
     },
     onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
     onDurableSubmissionIntent: async ({ ownership: observedOwnership }) => {
-      observed.push({ callback: "onDurableSubmissionIntent", ownership: observedOwnership })
-      return { ok: true, data: { durable: true } }
+      observed.push({
+        callback: "onDurableSubmissionIntent",
+        ownership: observedOwnership,
+      })
+      return {
+        ok: true,
+        data: { durable: true },
+      }
     },
     onDurableSubmissionOutcome: async ({ ownership: observedOwnership }) => {
-      observed.push({ callback: "onDurableSubmissionOutcome", ownership: observedOwnership })
-      return { ok: true, data: { durable: true } }
+      observed.push({
+        callback: "onDurableSubmissionOutcome",
+        ownership: observedOwnership,
+      })
+      return {
+        ok: true,
+        data: { durable: true },
+      }
     },
   })
   const rsDecision = {
