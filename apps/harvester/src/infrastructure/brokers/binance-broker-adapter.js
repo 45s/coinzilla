@@ -4,7 +4,10 @@ import { validateCancellationEligibility } from "../../domain/orders/validate-ca
 import { assertBrokerPort } from "../../application/ports/broker.port.js"
 import { createBinanceMarketMetadata } from "./binance-market-metadata.js"
 
-function normalizePostOnlyError({ error, order }) {
+function normalizePostOnlyError({
+    error,
+    order,
+  }) {
   const isPostOnlyRejection = order?.type === "LIMIT_MAKER" &&
     error?.code === -2010 &&
     error.message === "Order would immediately match and take."
@@ -16,7 +19,9 @@ function normalizePostOnlyError({ error, order }) {
   return normalizedError
 }
 
-function normalizeExchangeFilterError({ error }) {
+function normalizeExchangeFilterError({
+      error,
+    }) {
   const isFilterRejection = error?.code === -1013 &&
     typeof error.message === "string" &&
     error.message.startsWith("Filter failure:")
@@ -54,7 +59,10 @@ const createBroker = ({ config, logger }) => new BinanceWebSocketBroker({
   logger,
 })
 
-async function getCanonicalMarketMetadata({ client, symbol }) {
+async function getCanonicalMarketMetadata({
+          client,
+          symbol,
+        }) {
   const result = await client.getSymbolFilters({ symbol })
   if (!result?.ok || !result.data) {
     const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
@@ -139,7 +147,9 @@ function resolveCancellationTarget({ order, symbol, orderId }) {
   if (order) {
     const eligibility = validateCancellationEligibility({ order })
     if (!eligibility.ok) {
-      return { result: eligibility }
+      return {
+        result: eligibility,
+      }
     }
   }
   try {
@@ -276,7 +286,10 @@ function resolveClientCapabilities({ client, tradingMode }) {
   if (client?.capabilities === undefined) {
     return undefined
   }
-  return assertBinanceCapabilityDeclaration({ client, tradingMode })
+  return assertBinanceCapabilityDeclaration({
+    client,
+    tradingMode,
+  })
 }
 
 /**
