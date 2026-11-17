@@ -2359,67 +2359,50 @@ class TestnetTradingRecoveryScenario {
     }
   }
 
-  async runStep1() {
+  resetStep1State() {
     this.calls = []
-  
     this.buyCancellationCount = { value: 0 }
-  
     this.subscriptions = new Map()
-  
     this.bookSubscriptions = new Map()
-  
     this.userDataHandlers = undefined
     this.snapshotTime = 0
-  
     this.baseBalance = "0"
-  
     this.signalRecoveryCompleted = undefined
     this.recoveryCompleted = new Promise((resolve) => { this.signalRecoveryCompleted = resolve })
-  
     this.submittedOrders = []
-  
     this.canonicalOrdersByBrokerId = new Map()
-  
     this.fillHistoryByOrder = new Map()
-  
     this.runtimeErrors = []
-  
     this.runtimeDebug = []
-  
     this.runtimeInfo = []
-  
     this.publishedEvents = []
-  
     this.durableFlushes = []
-  
     this.recoveryFillTradeId = "testnet-buy-fill"
-  
     this.recoveryPending = false
-  
     this.recoveryCanonicalHistoryReads = 0
-  
     this.recoveryFillHistoryReads = 0
-  
     this.recoveryAccountWideOpenOrderReads = 0
-  
     this.recoveryOwnedOpenOrderReads = 0
-  
     this.recoveryAccountSnapshotReads = 0
-  
     this.recoveryAcknowledgementCount = 0
-  
     this.recoveryQueuedFillProcessedCount = 0
-  
     this.recoveryQueuedFillMode = undefined
     this.recoveryAcknowledgementObservation = undefined
     this.resolveRecoveryHistoryStarted = undefined
     this.releaseRecoveryHistory = undefined
     this.resolveRecoveryQueuedFillProcessed = undefined
     this.resolveRecoveryAcknowledged = undefined
+  }
+
+  initializeStep1RecoveryHistoryGate() {
     this.recoveryHistoryStarted = new Promise((resolve) => {
       this.resolveRecoveryHistoryStarted = resolve
     })
-  
+  }
+
+  async runStep1() {
+    this.resetStep1State()
+    this.initializeStep1RecoveryHistoryGate()
   }
 
   async runStep2() {
@@ -3956,30 +3939,18 @@ test("fails closed before market subscriptions when the account-wide open-order 
 
  
 
-function createDurableStartupAuditFixture({ calls }) {
-  const broker = createBroker(calls)
-  let accountReads = 0
-  let openOrderReads = 0
+function configureDurableStartupAuditBroker({ broker, calls, counters }) {
   broker.getAccountSnapshot = async () => {
-    accountReads += 1
+    counters.accountReads += 1
     calls.push("account:snapshot")
     return {
       ok: true,
       data: {
         balances: ["BTC", "ETH", "USDT"].map((code) => {
-          const asset = new Asset({
-            id: `asset:${  code}`,
-            code,
-          })
+          const asset = new Asset({ id: `asset:${code}`, code })
           return new Balance({
-            free: new Quantity({
-              amount: "12.5",
-              asset,
-            }),
-            locked: new Quantity({
-              amount: "0.5",
-              asset,
-            }),
+            free: new Quantity({ amount: "12.5", asset }),
+            locked: new Quantity({ amount: "0.5", asset }),
           })
         }),
         sourceTime: 123,
@@ -3987,40 +3958,41 @@ function createDurableStartupAuditFixture({ calls }) {
     }
   }
   broker.getOpenOrders = async (input) => {
-    openOrderReads += 1
+    counters.openOrderReads += 1
     calls.push("account:open-orders")
     assert.deepEqual(input, {})
-    return {
-      ok: true,
-      data: [],
-    }
+    return { ok: true, data: [] }
   }
-  const events = []
-  let flushCount = 0
-  const eventPublisher = {
+}
+
+function createDurableStartupAuditPublisher({ calls, events, counters }) {
+  return {
     publish: (event) => {
       events.push(event)
-      calls.push(`publish:${  event.name}`)
-      return {
-        ok: true,
-      }
+      calls.push(`publish:${event.name}`)
+      return { ok: true }
     },
     flush: async () => {
-      flushCount += 1
-      calls.push(`journal:flush:${  flushCount}`)
-      return {
-        ok: true,
-        durable: true,
-      }
+      counters.flushCount += 1
+      calls.push(`journal:flush:${counters.flushCount}`)
+      return { ok: true, durable: true }
     },
   }
+}
+
+function createDurableStartupAuditFixture({ calls }) {
+  const broker = createBroker(calls)
+  const counters = { accountReads: 0, openOrderReads: 0, flushCount: 0 }
+  configureDurableStartupAuditBroker({ broker, calls, counters })
+  const events = []
+  const eventPublisher = createDurableStartupAuditPublisher({ calls, events, counters })
   return {
     broker,
     events,
     eventPublisher,
-    getAccountReads: () => accountReads,
-    getOpenOrderReads: () => openOrderReads,
-    getFlushCount: () => flushCount,
+    getAccountReads: () => counters.accountReads,
+    getOpenOrderReads: () => counters.openOrderReads,
+    getFlushCount: () => counters.flushCount,
   }
 }
 
@@ -4340,17 +4312,50 @@ function createShutdownBuyCancellationGates() {
   }
 }
 
+function createShutdownBuyOrder({ order, market }) {
+  return new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: `broker-${order.clientOrderId}`,
+    market,
+    side: order.side,
+    type: order.type,
+    limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+}
+
+function createCanceledShutdownBuyOrder({ order, market }) {
+  return new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    market,
+    side: order.side,
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: order.executedQuantity,
+    status: "CANCELED",
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
+    updatedAt: 2,
+    completedAt: 2,
+  })
+}
+
 function createShutdownBuyCancellationBroker({ calls, gates }) {
   const broker = createBroker(calls)
-  const {market} = createMarketMetadata("BTCUSDT")
+  const { market } = createMarketMetadata("BTCUSDT")
   let submittedOrder
   let canceledOrder
   broker.getOpenOrders = async () => ({
     ok: true,
     data: submittedOrder && !canceledOrder
-      ? [createOpenOrderSnapshot({
-        order: submittedOrder,
-      })]
+      ? [createOpenOrderSnapshot({ order: submittedOrder })]
       : [],
   })
   broker.getCanonicalOrderHistory = async ({ orderId }) => ({
@@ -4359,58 +4364,16 @@ function createShutdownBuyCancellationBroker({ calls, gates }) {
       order?.brokerOrderId === orderId),
   })
   broker.placeOrder = async ({ order }) => {
-    calls.push(`placeOrder:${  order.side}`)
-    submittedOrder = new CanonicalOrder({
-      clientOrderId: order.clientOrderId,
-      brokerOrderId: `broker-${  order.clientOrderId}`,
-      market,
-      side: order.side,
-      type: order.type,
-      limitPrice: new Money({
-        amount: order.price,
-        asset: market.quoteAsset,
-      }),
-      originalQuantity: new Quantity({
-        amount: order.quantity,
-        asset: market.baseAsset,
-      }),
-      executedQuantity: new Quantity({
-        amount: "0",
-        asset: market.baseAsset,
-      }),
-      status: "OPEN",
-      createdAt: 1,
-      acknowledgedAt: 1,
-      updatedAt: 1,
-    })
-    return {
-      ok: true,
-      data: submittedOrder,
-    }
+    calls.push(`placeOrder:${order.side}`)
+    submittedOrder = createShutdownBuyOrder({ order, market })
+    return { ok: true, data: submittedOrder }
   }
   broker.cancelOrder = async ({ order }) => {
-    calls.push(`cancelOrder:${  order.side}`)
+    calls.push(`cancelOrder:${order.side}`)
     gates.signalCancelStarted()
     await gates.cancelGate
-    canceledOrder = new CanonicalOrder({
-      clientOrderId: order.clientOrderId,
-      brokerOrderId: order.brokerOrderId,
-      market,
-      side: order.side,
-      type: order.type,
-      limitPrice: order.limitPrice,
-      originalQuantity: order.originalQuantity,
-      executedQuantity: order.executedQuantity,
-      status: "CANCELED",
-      createdAt: order.createdAt,
-      acknowledgedAt: order.acknowledgedAt,
-      updatedAt: 2,
-      completedAt: 2,
-    })
-    return {
-      ok: true,
-      data: canceledOrder,
-    }
+    canceledOrder = createCanceledShutdownBuyOrder({ order, market })
+    return { ok: true, data: canceledOrder }
   }
   makeVolatilityReadyBroker(broker, ["BTCUSDT"])
   return broker
@@ -5340,12 +5303,12 @@ test("starts in observation-only mode after an unclean prior process when restar
 })
 
 
-async function createSharedOperatorRuntimeFixture({ broker, operationalStateStore, runtimeSessionId }) {
+function attachSharedOperatorRecoveryAcknowledgement(broker) {
   let resolveRecoveryAcknowledgement
   const recoveryAcknowledged = new Promise((resolve) => {
     resolveRecoveryAcknowledgement = resolve
   })
-  const {subscribeForUserData} = broker
+  const { subscribeForUserData } = broker
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
     return {
@@ -5365,9 +5328,11 @@ async function createSharedOperatorRuntimeFixture({ broker, operationalStateStor
       },
     }
   }
-  let operator
-  let secondaryStoreFactoryCalls = 0
-  const config = {
+  return recoveryAcknowledged
+}
+
+function createSharedOperatorRuntimeConfig() {
+  return {
     ...appConfig,
     operatorControl: {
       telegram: {
@@ -5376,6 +5341,11 @@ async function createSharedOperatorRuntimeFixture({ broker, operationalStateStor
       },
     },
   }
+}
+
+async function startSharedOperatorRuntime({ broker, operationalStateStore, runtimeSessionId, config }) {
+  let operator
+  let secondaryStoreFactoryCalls = 0
   const runtime = await startHarvesterForTest({
     appConfig: config,
     operationalStateStore,
@@ -5392,12 +5362,8 @@ async function createSharedOperatorRuntimeFixture({ broker, operationalStateStor
     createTelegramOperatorAdapter: ({ operator: suppliedOperator }) => {
       operator = suppliedOperator
       return {
-        start: async () => ({
-          started: true,
-        }),
-        stop: async () => ({
-          stopped: true,
-        }),
+        start: async () => ({ started: true }),
+        stop: async () => ({ stopped: true }),
       }
     },
     logger: {
@@ -5408,8 +5374,22 @@ async function createSharedOperatorRuntimeFixture({ broker, operationalStateStor
   return {
     runtime,
     operator,
-    recoveryAcknowledged,
     getSecondaryStoreFactoryCalls: () => secondaryStoreFactoryCalls,
+  }
+}
+
+async function createSharedOperatorRuntimeFixture({ broker, operationalStateStore, runtimeSessionId }) {
+  const recoveryAcknowledged = attachSharedOperatorRecoveryAcknowledgement(broker)
+  const config = createSharedOperatorRuntimeConfig()
+  const runtimeFixture = await startSharedOperatorRuntime({
+    broker,
+    operationalStateStore,
+    runtimeSessionId,
+    config,
+  })
+  return {
+    ...runtimeFixture,
+    recoveryAcknowledged,
   }
 }
 
