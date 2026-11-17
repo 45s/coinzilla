@@ -70,6 +70,9 @@ function validateInput({
   cumulativeNetSellProceeds,
   pendingBuyCommitment,
   activeOrders,
+  strategyStopped,
+  marketPaused,
+  reconciliationComplete,
 }) {
   if (!marketPrice || typeof marketPrice.symbol !== "string" || !marketPrice.symbol.trim()) {
     throw new TypeError("Recovery Seller BUY policy requires a market symbol")
@@ -112,6 +115,10 @@ function validateInput({
   }
   if (!Array.isArray(activeOrders)) {
     throw new TypeError("Recovery Seller BUY policy activeOrders must be an array")
+  }
+  if (typeof strategyStopped !== "boolean" || typeof marketPaused !== "boolean" ||
+      typeof reconciliationComplete !== "boolean") {
+    throw new TypeError("Recovery Seller BUY policy requires explicit strategy, market and reconciliation readiness flags")
   }
 
   const recoverySpent = recoveryPosition === undefined || recoveryPosition === null
@@ -330,6 +337,9 @@ export function evaluateRecoverySellerBuyDecision({
   cumulativeNetSellProceeds = "0",
   pendingBuyCommitment = "0",
   activeOrders = [],
+  strategyStopped,
+  marketPaused,
+  reconciliationComplete,
   lastBuyPrice,
 } = {}) {
   if (!stopState) {
@@ -372,12 +382,44 @@ export function evaluateRecoverySellerBuyDecision({
       cumulativeNetSellProceeds,
       pendingBuyCommitment,
       activeOrders,
+      strategyStopped,
+      marketPaused,
+      reconciliationComplete,
     })
 
     if (compareDecimal({ left: pendingBuyCommitment, right: "0" }) > 0) {
       return createStopResult({
         stopState,
         explanation: "Recovery Seller has an unresolved BUY commitment without an identifiable active order",
+      })
+    }
+
+    const readinessBlock = strategyStopped
+      ? {
+        reasonCode: "STRATEGY_STOPPED",
+        explanation: "Recovery Seller is stopped by its operator and may not create a new BUY",
+      }
+      : marketPaused
+        ? {
+          reasonCode: "MARKET_PAUSED",
+          explanation: "The market is paused and Recovery Seller may not create a new BUY",
+        }
+        : !reconciliationComplete
+          ? {
+            reasonCode: "RECONCILIATION_INCOMPLETE",
+            explanation: "Recovery Seller cannot create a new BUY while order, fill, inventory or reservation reconciliation is incomplete",
+          }
+          : undefined
+    if (readinessBlock) {
+      const decision = createRecoverySellerLifecycleDecision({
+        outcome: RECOVERY_SELLER_LIFECYCLE_OUTCOMES.BLOCK,
+        reasonCode: readinessBlock.reasonCode,
+        explanation: readinessBlock.explanation,
+      })
+      return createLifecycleResult({
+        stopState,
+        previousDecision,
+        decision,
       })
     }
 
