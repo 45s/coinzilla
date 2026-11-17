@@ -30,9 +30,22 @@ test("the required JavaScript quality gate runs strict workspace lint", () => {
   );
 });
 
-test("the root package exposes no baseline-tolerant lint commands", () => {
-  assert.equal(Object.hasOwn(packageJson.scripts, "lint:changed"), false);
-  assert.equal(Object.hasOwn(packageJson.scripts, "lint:report"), false);
+test("the root package preserves workspace lint and exposes strict changed-file lint", () => {
+  assert.equal(
+    packageJson.scripts.lint,
+    "eslint . --max-warnings 0",
+    "The existing full-workspace lint command must remain unchanged.",
+  );
+  assert.equal(
+    packageJson.scripts["lint:changed"],
+    "node scripts/lint-changed.js",
+    "The separate strict changed-file command must invoke the progressive runner.",
+  );
+  assert.equal(
+    Object.hasOwn(packageJson.scripts, "lint:report"),
+    false,
+    "A baseline-tolerant reporting command must not replace either enforcement gate.",
+  );
 });
 
 test("the workspace complexity policy retains its evidence-based threshold", async () => {
@@ -43,6 +56,19 @@ test("the workspace complexity policy retains its evidence-based threshold", asy
     config.rules.complexity,
     [2, { max: 20 }],
     "Do not lower complexity to 15 while the workspace has a broad existing cleanup burden.",
+  );
+});
+
+test("the required JavaScript quality context aggregates both independent lint jobs", () => {
+  assert.match(
+    qualityWorkflow,
+    /strict-changed:\\s+name: Check strict ESLint for changed files/,
+    "The workflow must expose a separate changed-file strict ESLint job.",
+  );
+  assert.match(
+    qualityWorkflow,
+    /required-javascript-quality:\\s+name: Check JavaScript syntax[\\s\\S]*?needs:[\\s\\S]*?- workspace-quality[\\s\\S]*?- strict-changed/,
+    "The existing required JavaScript status context must fail unless both independent jobs pass.",
   );
 });
 
@@ -125,6 +151,8 @@ function createFunctionQualityAuditEslint() {
           ],
           "max-statements": ["error", 15],
           "max-depth": ["error", 3],
+          "max-nested-callbacks": ["error", 2],
+          "max-params": ["error", 1],
           "default-param-last": "error",
         },
       },
@@ -138,6 +166,8 @@ function collectFunctionQualityFindings({ results }) {
     maxLines: [],
     maxStatements: [],
     maxDepth: [],
+    maxParams: [],
+    maxNestedCallbacks: [],
     defaultParamLast: [],
   };
   const measurements = [
@@ -160,6 +190,16 @@ function collectFunctionQualityFindings({ results }) {
       ruleId: "max-depth",
       key: "maxDepth",
       pattern: /nested too deeply \((\d+)\)/i,
+    },
+    {
+      ruleId: "max-params",
+      key: "maxParams",
+      pattern: /too many parameters \((\d+)\)/i,
+    },
+    {
+      ruleId: "max-nested-callbacks",
+      key: "maxNestedCallbacks",
+      pattern: /too many nested callbacks \((\d+)\)/i,
     },
     {
       ruleId: "default-param-last",
@@ -212,9 +252,22 @@ function summarizeThresholdImpact({ findings, threshold }) {
     findings,
     threshold,
   });
+  const packageCounts = new Map();
+  for (const finding of affected) {
+    const relativePath = finding.filePath.replace(`${repositoryRoot}/`, "");
+    const [scope, name] = relativePath.split("/");
+    const packageName = scope === "apps" || scope === "packages"
+      ? `${scope}/${name}`
+      : "repository tooling";
+    packageCounts.set(packageName, (packageCounts.get(packageName) ?? 0) + 1);
+  }
+
   return {
     functions: affected.length,
     files: new Set(affected.map((finding) => finding.filePath)).size,
+    packages: [...packageCounts.entries()]
+      .toSorted((left, right) => right[1] - left[1])
+      .map(([name, functions]) => ({ name, functions })),
     largest: affected
       .toSorted(compareFindingsByValue)
       .slice(0, 5)
@@ -240,52 +293,52 @@ function listThresholdOffenders({ findings, threshold }) {
     }));
 }
 
+function createThresholdReport({ findings, thresholds }) {
+  return Object.fromEntries(
+    thresholds.map((threshold) => [
+      threshold,
+      summarizeThresholdImpact({
+        findings,
+        threshold,
+      }),
+    ]),
+  );
+}
+
 function createFunctionQualityAuditReport({ metrics }) {
   return {
-    complexity: {
-      15: summarizeThresholdImpact({
-        findings: metrics.complexity,
-        threshold: 15,
-      }),
-    },
-    maxLines: {
-      60: summarizeThresholdImpact({
-        findings: metrics.maxLines,
-        threshold: 60,
-      }),
-      50: summarizeThresholdImpact({
-        findings: metrics.maxLines,
-        threshold: 50,
-      }),
-    },
-    maxStatements: {
-      30: summarizeThresholdImpact({
-        findings: metrics.maxStatements,
-        threshold: 30,
-      }),
-      25: summarizeThresholdImpact({
-        findings: metrics.maxStatements,
-        threshold: 25,
-      }),
-      20: summarizeThresholdImpact({
-        findings: metrics.maxStatements,
-        threshold: 20,
-      }),
-      15: summarizeThresholdImpact({
-        findings: metrics.maxStatements,
-        threshold: 15,
-      }),
-    },
-    maxDepth: {
-      3: summarizeThresholdImpact({
-        findings: metrics.maxDepth,
-        threshold: 3,
-      }),
-      4: summarizeThresholdImpact({
-        findings: metrics.maxDepth,
-        threshold: 4,
-      }),
-    },
+    complexity: createThresholdReport({
+      findings: metrics.complexity,
+      thresholds: [15],
+    }),
+    maxLines: createThresholdReport({
+      findings: metrics.maxLines,
+      thresholds: [60, 50],
+    }),
+    maxStatements: createThresholdReport({
+      findings: metrics.maxStatements,
+      thresholds: [30, 25, 20, 15],
+    }),
+    maxParams: createThresholdReport({
+      findings: metrics.maxParams,
+      thresholds: [1],
+    }),
+    maxNestedCallbacks: createThresholdReport({
+      findings: metrics.maxNestedCallbacks,
+      thresholds: [2],
+    }),
+    maxDepth: createThresholdReport({
+      findings: metrics.maxDepth,
+      thresholds: [3, 4],
+    }),
+    maxParamsOffendersAt1: listThresholdOffenders({
+      findings: metrics.maxParams,
+      threshold: 1,
+    }),
+    maxNestedCallbacksOffendersAt2: listThresholdOffenders({
+      findings: metrics.maxNestedCallbacks,
+      threshold: 2,
+    }),
     maxDepthOffendersAt3: listThresholdOffenders({
       findings: metrics.maxDepth,
       threshold: 3,
