@@ -149,7 +149,6 @@ The source-level comparison of JKorf/Bitunix.Net, the TypeScript MCP, StockSharp
 
 The audit identified public exchange-rate and token/network metadata endpoints as possible **Bitunix-specific read-only extensions**, not Binance parity methods. They are not part of the current supported broker contract. Add them only after an explicit extension decision and tests; do not infer trading filters or authorize wallet mutations from metadata.
 
-
 ## Candle market-data public contract
 
 PR #1017 adds two optional market-data capabilities to BinanceWebSocketBroker. They are additive methods on the concrete Binance broker; CoreBroker and the Market Simulator are not changed.
