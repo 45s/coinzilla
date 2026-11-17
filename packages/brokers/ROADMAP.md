@@ -60,10 +60,10 @@ The declaration's `environment.selectedMode` is the instance's validated `tradin
 
 #### Remaining work outside this declaration-only slice
 
-- Provider-specific construction boundaries, named provider-instance registry, and Harvester-owned routing remain separate migration work under [ADR-0003](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and the [multi-provider migration plan](../../docs/architecture/multi-provider-migration-plan.md).
+- **Phase 2 — in progress in [Harvester PR #1386](https://github.com/45s/coinzilla/pull/1386).** Harvester now constructs named provider instances through a bootstrap-owned registry, validates the existing BrokerPort and capability declaration, and owns provider connection/cleanup. The initial composition selects one Binance instance for execution, account state, and market data. Independent routing, provider-pinned order provenance, account isolation, and multi-provider execution remain later phases under [ADR-0003](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and the [multi-provider migration plan](../../docs/architecture/multi-provider-migration-plan.md).
 - No Bitunix capability descriptor is added. Bitunix remains read-only; any future audit must first follow the mandatory JKorf/Bitunix.Net, bitunix-mcp, and official Spot API reference audit in [AGENTS.md](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit).
 - Complete fill-history guarantees, broker-owned order reconciliation, missed-event replay, and process-restart recovery remain unsupported or unverified as declared above.
-- No Phase 2 provider selection, Harvester composition, strategy/market routing, or trading behavior change is included.
+- Phase 2 does not enable multi-provider execution, split market-data/account/execution routes, or provider-specific strategy behavior. Bitunix remains deferred and read-only.
 
 ## Priority execution plan — current develop direction (2026-11-10)
 
