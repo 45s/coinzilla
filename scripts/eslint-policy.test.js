@@ -45,3 +45,26 @@ test("the workspace complexity policy retains its evidence-based threshold", asy
     "Do not lower complexity to 15 while the workspace has a broad existing cleanup burden.",
   );
 });
+
+test("direct console usage is an error while explicit CLI output remains allowed", async () => {
+  const eslint = new ESLint();
+  const [directConsole] = await eslint.lintText(
+    'console.log("diagnostic");\n',
+    { filePath: "scripts/eslint-policy-fixture.js" },
+  );
+  const [cliOutput] = await eslint.lintText(
+    'process.stdout.write("diagnostic");\n',
+    { filePath: "scripts/eslint-policy-fixture.js" },
+  );
+
+  assert.equal(
+    directConsole.messages.find((message) => message.ruleId === "no-console")?.severity,
+    2,
+    "Direct console usage must be rejected as an error.",
+  );
+  assert.equal(
+    cliOutput.messages.filter((message) => message.ruleId === "no-console").length,
+    0,
+    "Explicit process stream output remains available for intentional CLI diagnostics.",
+  );
+});
