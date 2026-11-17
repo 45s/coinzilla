@@ -507,11 +507,14 @@ export class BitunixSpotWebSocketClient {
   }
 
   #handleError(error) {
+    this.#state = "closed"
     this.#rejectPending(new BitunixWebSocketError({
       message: "Bitunix Spot WebSocket transport reported an error",
       kind: "connection",
       cause: error,
     }))
+    this.#removeTransportListeners()
+    void this.transport.close().catch(() => {})
   }
 
   #rejectPending(error) {
