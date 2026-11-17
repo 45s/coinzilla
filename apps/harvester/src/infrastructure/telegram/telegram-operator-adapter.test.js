@@ -2172,7 +2172,10 @@ test("aborts active polling, shares concurrent shutdown, and supports a clean re
     const telegramApiMethod = telegramRequestUrl.split("/").pop()
     if (telegramApiMethod === "getMe") {
       getMeCalls += 1
-      return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })
+      return makeResponse({
+        ok: true,
+        result: { username: "coinzilla_bot" },
+      })
     }
     if (telegramApiMethod === "setMyCommands") {
       return makeResponse({ ok: true, result: true })
@@ -2181,7 +2184,8 @@ test("aborts active polling, shares concurrent shutdown, and supports a clean re
       pollCalls += 1
       pollSignals.push(telegramRequestOptions.signal)
       notifyPollWaiters()
-      return new Promise((resolve, reject) => {
+      return new Promise((...handlers) => {
+        const reject = handlers[1]
         const abortPoll = () => reject(new Error("Telegram long poll aborted"))
         if (telegramRequestOptions.signal.aborted) {
           abortPoll()
@@ -2202,14 +2206,23 @@ test("aborts active polling, shares concurrent shutdown, and supports a clean re
   await adapter.start()
   await waitForPollCount(1)
   const concurrentStops = await Promise.all([adapter.stop(), adapter.stop()])
-  assert.deepEqual(concurrentStops[0], { stopped: true, alreadyStopped: false })
+  assert.deepEqual(concurrentStops[0], {
+    stopped: true,
+    alreadyStopped: false,
+  })
   assert.deepEqual(concurrentStops[1], concurrentStops[0])
-  assert.deepEqual(await adapter.stop(), { stopped: true, alreadyStopped: true })
+  assert.deepEqual(await adapter.stop(), {
+    stopped: true,
+    alreadyStopped: true,
+  })
   assert.equal(pollSignals[0].aborted, true)
 
   await adapter.start()
   await waitForPollCount(2)
-  assert.deepEqual(await adapter.stop(), { stopped: true, alreadyStopped: false })
+  assert.deepEqual(await adapter.stop(), {
+    stopped: true,
+    alreadyStopped: false,
+  })
   assert.equal(getMeCalls, 2)
   assert.equal(pollCalls, 2)
   assert.ok(pollSignals.every((signal) => signal.aborted))
