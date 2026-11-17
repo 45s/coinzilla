@@ -58,13 +58,13 @@ function createMarketPriceErrorReporter({ logger, onMarketPriceError }) {
   }
 }
 
-function createBookTickerHandler({ symbol, isStopped, processMarketBook, logger }) {
+function createBookTickerHandler({ symbol, isStopped, processMarketBook, logger, intakeState }) {
   return (bookTicker) => {
     if (isStopped()) {
       return toResult({ data: { skipped: true,
 reason: "STOPPING" } })
     }
-    return Promise.resolve()
+    intakeState.latestWebSocketBookTask = Promise.resolve()
       .then(() => processMarketBook({ symbol,
 bookTicker }))
       .then((processed) => {
@@ -85,6 +85,7 @@ bookTicker }))
         })
         return toResult({ error })
       })
+    return intakeState.latestWebSocketBookTask
   }
 }
 
@@ -167,7 +168,10 @@ async function subscribeToBookTicker({
   isStopped,
   processMarketBook,
   bookSubscriptions,
+  marketPriceIntake,
 }) {
+  const intakeState = marketPriceIntake.get(symbol) ?? {}
+  marketPriceIntake.set(symbol, intakeState)
   let result
   try {
     result = await broker.subscribeForBookTicker({
@@ -177,6 +181,7 @@ async function subscribeToBookTicker({
         isStopped,
         processMarketBook,
         logger,
+        intakeState,
       }),
     })
   } catch (error) {
@@ -213,10 +218,10 @@ async function subscribeToMarketPrice({
   subscriptions,
   marketPriceIntake,
 }) {
-  const intakeState = {
-    hasFreshWebSocketPrice: false,
-    latestWebSocketPriceTask: null,
-  }
+  const intakeState = marketPriceIntake.get(symbol) ?? {}
+  intakeState.hasFreshWebSocketPrice = false
+  intakeState.latestWebSocketPriceTask = null
+  marketPriceIntake.set(symbol, intakeState)
   let result
   try {
     result = await broker.subscribeForPrices({
@@ -288,6 +293,7 @@ async function subscribeToEnabledMarkets({ context, reportPriceError }) {
         isStopped: context.isStopped,
         processMarketBook: context.processMarketBook,
         bookSubscriptions,
+        marketPriceIntake: context.marketPriceIntake,
       })
     }
     await subscribeToMarketPrice({
