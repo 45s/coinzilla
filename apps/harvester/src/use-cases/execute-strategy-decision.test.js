@@ -757,24 +757,42 @@ function createOwnedDecision({ ownership } = {}) {
 }
 
 function createOwnershipRecordingExecutor({ observed, setBrokerOrder } = {}) {
-  const record = (callback, result) => async ({ ownership } = {}) => {
-    observed.push({ callback, ownership })
+  const record = ({ callback, result } = {}) => async ({ ownership } = {}) => {
+    observed.push({
+      callback,
+      ownership,
+    })
     return result
   }
-  const durableResult = { ok: true, data: { durable: true } }
+  const durableResult = {
+    ok: true,
+    data: { durable: true },
+  }
   return makeExecuteStrategyDecision({
     broker: {
       placeOrder: async ({ order }) => {
         setBrokerOrder(order)
-        return { ok: true, data: makeAcknowledgement(order) }
+        return {
+          ok: true,
+          data: makeAcknowledgement(order),
+        }
       },
     },
-    canSubmit: record("canSubmit", true),
-    onPendingOrder: record("onPendingOrder"),
-    onAcknowledgedOrder: record("onAcknowledgedOrder"),
+    canSubmit: record({
+      callback: "canSubmit",
+      result: true,
+    }),
+    onPendingOrder: record({ callback: "onPendingOrder" }),
+    onAcknowledgedOrder: record({ callback: "onAcknowledgedOrder" }),
     onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
-    onDurableSubmissionIntent: record("onDurableSubmissionIntent", durableResult),
-    onDurableSubmissionOutcome: record("onDurableSubmissionOutcome", durableResult),
+    onDurableSubmissionIntent: record({
+      callback: "onDurableSubmissionIntent",
+      result: durableResult,
+    }),
+    onDurableSubmissionOutcome: record({
+      callback: "onDurableSubmissionOutcome",
+      result: durableResult,
+    }),
   })
 }
 
@@ -792,8 +810,14 @@ test("propagates RS OrderOwnership metadata through shared execution callbacks w
     setBrokerOrder: (order) => { brokerOrder = order },
   })
   const rsDecision = createOwnedDecision({ ownership })
-  const validation = await execute.validate({ decision: rsDecision, marketMetadata })
-  const result = await execute({ decision: rsDecision, marketMetadata })
+  const validation = await execute.validate({
+    decision: rsDecision,
+    marketMetadata,
+  })
+  const result = await execute({
+    decision: rsDecision,
+    marketMetadata,
+  })
 
   assert.equal(validation.ok, true)
   assert.equal(result.ok, true)
