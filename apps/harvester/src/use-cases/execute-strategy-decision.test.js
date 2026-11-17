@@ -966,6 +966,20 @@ function createRSIntegrationBuyFill({ registeredOrder } = {}) {
   })
 }
 
+function assertRSIntegrationOrderOwnership({ workflow, registeredOrder, ownership } = {}) {
+  assert.deepEqual(
+    workflow.getOrderRegistry().getOwnership({
+      clientOrderId: registeredOrder.clientOrderId,
+    }),
+    {
+      clientOrderId: registeredOrder.clientOrderId,
+      brokerOrderId: registeredOrder.brokerOrderId,
+      ...ownership,
+    },
+    "The shared executor acknowledgement must retain the exact RS Position and cycle attribution in OrderRegistry.",
+  )
+}
+
 test("integrates the shared executor, RS OrderRegistry ownership and durable BUY accounting offline", async () => {
   const ownership = {
     strategyId: StrategyId.RECOVERY_SELLER,
@@ -1004,17 +1018,11 @@ test("integrates the shared executor, RS OrderRegistry ownership and durable BUY
   assert.equal(submitted.ok, true, submitted.errors?.[0]?.message)
   assert.equal(registeredOrder.status, "UNKNOWN",
     "A broker acknowledgement retains the order as UNKNOWN until execution quantity is reconciled.")
-  assert.deepEqual(
-    workflow.getOrderRegistry().getOwnership({
-      clientOrderId: registeredOrder.clientOrderId,
-    }),
-    {
-      clientOrderId: registeredOrder.clientOrderId,
-      brokerOrderId: registeredOrder.brokerOrderId,
-      ...ownership,
-    },
-    "The shared executor acknowledgement must retain the exact RS Position and cycle attribution in OrderRegistry.",
-  )
+  assertRSIntegrationOrderOwnership({
+    workflow,
+    registeredOrder,
+    ownership,
+  })
 
   const fill = createRSIntegrationBuyFill({ registeredOrder })
   const applied = await workflow.applyBuyFill({ fill })
