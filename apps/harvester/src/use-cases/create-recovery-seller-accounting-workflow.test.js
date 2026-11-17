@@ -762,3 +762,63 @@ test("rejects malformed restored legacy Fill identity records", () => {
     "Malformed restored Fill identity records must fail closed instead of recursing or being accepted.",
   )
 })
+
+
+test("persists a BUY execution fact before publishing RS Portfolio accounting", async () => {
+  const order = makeRecoveryBuyOrder()
+  const fill = makeRecoveryBuyFill({
+    tradeId: "rs-buy-durable-1",
+    quantity: "5.01",
+    quoteQuantity: "10.02",
+  })
+  const persistenceCalls = []
+  const workflow = createRecoverySellerAccountingWorkflow({
+    initialPortfolio: new Portfolio(),
+    initialOrderRegistry: makeRecoveryBuyRegistry(order),
+    onOperationalStateExecutionFill: async ({ fill: received }) => {
+      persistenceCalls.push(received)
+      assert.equal(workflow.getPortfolio().positions.length, 0,
+        "RS Portfolio state must remain unchanged while the durable fill append is pending.")
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
+  })
+
+  const applied = await workflow.applyBuyFill({ fill })
+  const duplicate = await workflow.applyBuyFill({ fill })
+
+  assert.equal(applied.ok, true, applied.errors?.[0]?.message)
+  assert.equal(applied.data.applied, true)
+  assert.equal(duplicate.ok, true, duplicate.errors?.[0]?.message)
+  assert.equal(duplicate.data.duplicate, true)
+  assert.deepEqual(persistenceCalls, [fill],
+    "A replayed canonical Fill must not append a second durable execution fact.")
+  assert.equal(workflow.getPortfolio().getPosition({ positionId }).spent.amount, "10.02")
+})
+
+test("does not publish RS BUY accounting when the durable execution-fill append fails", async () => {
+  const order = makeRecoveryBuyOrder()
+  const fill = makeRecoveryBuyFill({
+    tradeId: "rs-buy-durable-failure",
+    quantity: "5.01",
+    quoteQuantity: "10.02",
+  })
+  const workflow = createRecoverySellerAccountingWorkflow({
+    initialPortfolio: new Portfolio(),
+    initialOrderRegistry: makeRecoveryBuyRegistry(order),
+    onOperationalStateExecutionFill: async () => ({
+      ok: false,
+      errors: [new Error("execution fact fsync failed")],
+    }),
+  })
+
+  const result = await workflow.applyBuyFill({ fill })
+
+  assert.equal(result.ok, false,
+    "A BUY Fill must not be committed to the RS Portfolio before its durable fact is confirmed.")
+  assert.match(result.errors[0].message, /execution fact fsync failed/)
+  assert.equal(workflow.getPortfolio().positions.length, 0)
+  assert.deepEqual(workflow.getPortfolio().appliedFillIds, [])
+})
