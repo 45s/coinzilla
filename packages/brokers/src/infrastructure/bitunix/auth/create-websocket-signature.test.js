@@ -36,7 +36,7 @@ test("Bitunix Spot WebSocket signature sorts method parameters and excludes auth
     },
   })
 
-  assert.equal(serialized, "atrue mBTCz2".replaceAll(" ", ""), "parameters must be key-sorted and exclude all four authentication fields")
+  assert.equal(serialized, "atruemBTCz2", "parameters must be key-sorted and exclude all four authentication fields")
 })
 
 test("Bitunix Spot WebSocket signature rejects malformed input and non-scalar parameters", () => {
