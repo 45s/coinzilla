@@ -288,6 +288,19 @@ sessionMetadata }
  * }} input
  * @returns {Promise<object>} Validated forensic Journal history or a structured failure.
  */
+function createHistoryReadResult({ records, sessionMetadata, bytesRead, directoriesVisited }) {
+  return toResult({
+    records,
+    count: records.length,
+    sessions: sessionMetadata,
+    sessionCount: sessionMetadata.length,
+    bytesRead,
+    directoriesVisited,
+    discoveryComplete: true,
+    ordering: getSessionOrdering({ sessionCount: sessionMetadata.length }),
+  })
+}
+
 export async function readHarvesterJournalHistory({
   directory,
   journalFactory = (options) => new Journal(options),
@@ -340,16 +353,7 @@ error() {} },
     assertUniqueJournalRecordIds({ sessions })
     const orderedSessions = validateAndOrderSessions(sessions)
     const { records, sessionMetadata } = flattenOrderedJournalSessions({ orderedSessions })
-    return toResult({
-      records,
-      count: records.length,
-      sessions: sessionMetadata,
-      sessionCount: sessionMetadata.length,
-      bytesRead,
-      directoriesVisited,
-      discoveryComplete: true,
-      ordering: getSessionOrdering({ sessionCount: sessionMetadata.length }),
-    })
+    return createHistoryReadResult({ records, sessionMetadata, bytesRead, directoriesVisited })
   } catch (error) {
     return toResult({
       error: normalizeHistoryReadError({
