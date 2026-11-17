@@ -768,14 +768,7 @@ function createInitialProcessResources() {
   }
 }
 
-export async function main(options = {}) {
-  const dependencies = createMainDependencies({ options })
-  const processStartedDataResult = mapHarvesterProcessStartedData(dependencies.processIdentity)
-  setProcessLoggerContext({
-    logger: dependencies.logger,
-    processStartedDataResult,
-  })
-  const resources = createInitialProcessResources()
+async function runMainStartup({ dependencies, resources, processStartedDataResult }) {
   try {
     await acquireProcessStartupResources({
       options: dependencies,
@@ -807,6 +800,21 @@ export async function main(options = {}) {
     })
     return undefined
   }
+}
+
+export async function main(options = {}) {
+  const dependencies = createMainDependencies({ options })
+  const processStartedDataResult = mapHarvesterProcessStartedData(dependencies.processIdentity)
+  setProcessLoggerContext({
+    logger: dependencies.logger,
+    processStartedDataResult,
+  })
+  const resources = createInitialProcessResources()
+  return runMainStartup({
+    dependencies,
+    resources,
+    processStartedDataResult,
+  })
 }
 const isDirectExecution = process.argv[1]
   && pathToFileURL(process.argv[1]).href === import.meta.url
