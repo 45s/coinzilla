@@ -139,3 +139,37 @@ logger: { error: () => {} } }),
   assert.deepEqual(fixture.calls, ["factory", "connect", "disconnect"], "Disconnect must still be attempted after connect fails.")
 })
 
+
+
+test("disconnects a constructed Binance client when capability validation blocks registry registration", async () => {
+  const fixture = createFixture()
+  fixture.broker.capabilities = Object.freeze({
+    contractVersion: 1,
+    provider: "other",
+    product: "spot",
+    environment: Object.freeze({
+      selector: "tradingMode",
+      supportedModes: Object.freeze(["testnet", "live"]),
+      selectedMode: "testnet",
+      nodeEnvSelectsEndpoint: false,
+    }),
+  })
+
+  await assert.rejects(
+    connectBroker({
+      ...fixture,
+      brokerName: "binance",
+      providerType: "binance",
+      providerInstanceId: "binanceTestnet",
+      accountId: "binance-primary",
+      tradingMode: "testnet",
+      logger: {},
+    }),
+    /capability declaration/i,
+    "A malformed provider declaration must stop before connection and retain a safe actionable failure.",
+  )
+  assert.deepEqual(fixture.calls, ["factory", "disconnect"],
+    "A constructed client must be disconnected when its capability contract prevents registry registration.")
+  assert.equal(fixture.events.length, 0,
+    "Registry validation failure must not publish a broker-connected or broker-connection-failed event.")
+})
