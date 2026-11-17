@@ -8,6 +8,7 @@ import {
   subtractDecimal,
 } from "@coinzilla/utils"
 import { calculateInitialBuyPrice } from "../conservative/initial-buy-price.js"
+import { assertRecoverySellerCycleState } from "./cycle-state.js"
 import {
   applyRecoverySellerLifecycleTransition,
   createRecoverySellerLifecycleDecision,
@@ -67,6 +68,7 @@ function validateInput({
   pairConfig,
   marketMetadata,
   recoveryPosition,
+  cycleState,
   cumulativeNetSellProceeds,
   pendingBuyCommitment,
   activeOrders,
@@ -184,32 +186,159 @@ function findBlockingOrders({ activeOrders, symbol }) {
   return activeOrders.filter((order) => order.market.symbol === symbol)
 }
 
-function resolveExistingOrder({ stopState, activeOrders, symbol }) {
+function createCycleReconciliationResult({ stopState, orderIdentity, explanation }) {
+  if (orderIdentity?.clientOrderId) {
+    return createRecoverySellerStopAndReconcileDecision({
+      stopState,
+      orderIdentity,
+      explanation,
+    })
+  }
+  return createStopResult({
+    stopState,
+    explanation,
+  })
+}
+
+function resolveExistingOrder({
+  stopState,
+  previousDecision,
+  activeOrders,
+  symbol,
+  cycleState,
+}) {
   const blockingOrders = findBlockingOrders({
     activeOrders,
     symbol,
   })
+
+  if (["UNRESOLVED", "CLOSED"].includes(cycleState.status)) {
+    if (blockingOrders.length > 0) {
+      const [order] = blockingOrders
+      return createCycleReconciliationResult({
+        stopState,
+        orderIdentity: order.clientOrderId
+          ? {
+            clientOrderId: order.clientOrderId,
+            ...(order.brokerOrderId ? { brokerOrderId: order.brokerOrderId } : {}),
+          }
+          : undefined,
+        explanation: "Recovery Seller has an active order after its cycle became terminal or unresolved",
+      })
+    }
+    const decision = createRecoverySellerLifecycleDecision({
+      outcome: RECOVERY_SELLER_LIFECYCLE_OUTCOMES.BLOCK,
+      reasonCode: cycleState.status === "CLOSED" ? "CYCLE_CLOSED" : "CYCLE_UNRESOLVED",
+      explanation: cycleState.status === "CLOSED"
+        ? "The prior Recovery Seller cycle is closed; a distinct next-cycle state is required before another BUY"
+        : "The Recovery Seller cycle has an unresolved terminal SELL and cannot start another BUY",
+    })
+    return applyRecoverySellerLifecycleTransition({
+      stopState,
+      previousDecision,
+      nextDecision: decision,
+    })
+  }
+
+  if (["SELL_SUBMITTED", "RECONCILIATION_REQUIRED"].includes(cycleState.status)) {
+    const identity = cycleState.sellOrderIdentity
+    const matchingOrders = blockingOrders.filter((order) =>
+      order.clientOrderId === identity.clientOrderId)
+    if (blockingOrders.length !== matchingOrders.length || matchingOrders.length > 1) {
+      return createCycleReconciliationResult({
+        stopState,
+        orderIdentity: identity,
+        explanation: "Recovery Seller cycle has an unexpected active order alongside its single submitted SELL",
+      })
+    }
+    if (matchingOrders.length === 0) {
+      return createCycleReconciliationResult({
+        stopState,
+        orderIdentity: identity,
+        explanation: "Recovery Seller cycle records a submitted SELL but the active-order snapshot has no authoritative terminal result",
+      })
+    }
+    const [order] = matchingOrders
+    if (order.side !== "SELL" ||
+        (identity.brokerOrderId !== undefined &&
+         order.brokerOrderId !== undefined &&
+         identity.brokerOrderId !== order.brokerOrderId)) {
+      return createCycleReconciliationResult({
+        stopState,
+        orderIdentity: identity,
+        explanation: "Recovery Seller active order identity conflicts with the cycle's single SELL identity",
+      })
+    }
+    if (["PENDING", "UNKNOWN"].includes(order.status) ||
+        typeof order.brokerOrderId !== "string" ||
+        !order.brokerOrderId.trim()) {
+      return createCycleReconciliationResult({
+        stopState,
+        orderIdentity: {
+          clientOrderId: identity.clientOrderId,
+          ...(order.brokerOrderId ? { brokerOrderId: order.brokerOrderId } : {}),
+        },
+        explanation: "Recovery Seller cycle SELL acknowledgement or execution outcome remains unresolved",
+      })
+    }
+    if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
+      return createCycleReconciliationResult({
+        stopState,
+        orderIdentity: identity,
+        explanation: "Recovery Seller cycle SELL has an unsupported active-order state",
+      })
+    }
+    const decision = createRecoverySellerLifecycleDecision({
+      outcome: RECOVERY_SELLER_LIFECYCLE_OUTCOMES.WAIT,
+      reasonCode: "WAIT_FOR_EXISTING_RS_SELL",
+      explanation: "The cycle's single acknowledged SELL must remain unchanged until its authoritative terminal outcome is reconciled",
+      orderIdentity: {
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: order.brokerOrderId,
+      },
+    })
+    return applyRecoverySellerLifecycleTransition({
+      stopState,
+      previousDecision,
+      nextDecision: decision,
+    })
+  }
+
+  if (cycleState.status !== "ACCUMULATING") {
+    return createStopResult({
+      stopState,
+      explanation: "Recovery Seller cycle has an unsupported lifecycle status",
+    })
+  }
+
+  const sellOrder = blockingOrders.find((order) => order.side === "SELL")
+  if (sellOrder) {
+    return createCycleReconciliationResult({
+      stopState,
+      orderIdentity: sellOrder.clientOrderId
+        ? {
+          clientOrderId: sellOrder.clientOrderId,
+          ...(sellOrder.brokerOrderId ? { brokerOrderId: sellOrder.brokerOrderId } : {}),
+        }
+        : undefined,
+      explanation: "Recovery Seller has a SELL order that was not recorded in the cycle's one-SELL state",
+    })
+  }
+
   if (blockingOrders.length === 0) {
     return undefined
   }
   if (blockingOrders.length > 1) {
-    const unresolved = blockingOrders.find((order) =>
-      ["PENDING", "UNKNOWN"].includes(order.status) ||
-      typeof order.brokerOrderId !== "string" ||
-      !order.brokerOrderId.trim())
-    if (unresolved && typeof unresolved.clientOrderId === "string" && unresolved.clientOrderId.trim()) {
-      return createRecoverySellerStopAndReconcileDecision({
-        stopState,
-        orderIdentity: {
-          clientOrderId: unresolved.clientOrderId,
-          ...(unresolved.brokerOrderId ? { brokerOrderId: unresolved.brokerOrderId } : {}),
-        },
-        explanation: "Recovery Seller has multiple active orders or an unresolved submission identity for this market",
-      })
-    }
-    return createStopResult({
+    const [order] = blockingOrders
+    return createCycleReconciliationResult({
       stopState,
-      explanation: "Recovery Seller has multiple active orders for one market; order ownership or cycle state is inconsistent",
+      orderIdentity: order.clientOrderId
+        ? {
+          clientOrderId: order.clientOrderId,
+          ...(order.brokerOrderId ? { brokerOrderId: order.brokerOrderId } : {}),
+        }
+        : undefined,
+      explanation: "Recovery Seller has multiple active BUY orders in one cycle",
     })
   }
 
@@ -217,35 +346,28 @@ function resolveExistingOrder({ stopState, activeOrders, symbol }) {
   if (["PENDING", "UNKNOWN"].includes(order.status) ||
       typeof order.brokerOrderId !== "string" ||
       !order.brokerOrderId.trim()) {
-    if (typeof order.clientOrderId !== "string" || !order.clientOrderId.trim()) {
-      return createStopResult({
-        stopState,
-        explanation: "Recovery Seller has an unresolved active order without its original clientOrderId",
-      })
-    }
-    return createRecoverySellerStopAndReconcileDecision({
+    return createCycleReconciliationResult({
       stopState,
-      orderIdentity: {
-        clientOrderId: order.clientOrderId,
-        ...(order.brokerOrderId ? { brokerOrderId: order.brokerOrderId } : {}),
-      },
-      explanation: "Recovery Seller order submission or acknowledgement outcome is unresolved",
+      orderIdentity: order.clientOrderId
+        ? {
+          clientOrderId: order.clientOrderId,
+          ...(order.brokerOrderId ? { brokerOrderId: order.brokerOrderId } : {}),
+        }
+        : undefined,
+      explanation: "Recovery Seller BUY submission or acknowledgement outcome is unresolved",
     })
   }
-
-  if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status) ||
-      typeof order.clientOrderId !== "string" ||
-      !order.clientOrderId.trim()) {
+  if (typeof order.clientOrderId !== "string" || !order.clientOrderId.trim()) {
     return createStopResult({
       stopState,
-      explanation: "Recovery Seller active order has an unsupported status or incomplete canonical identity",
+      explanation: "Recovery Seller active BUY has no original clientOrderId",
     })
   }
 
   const decision = createRecoverySellerLifecycleDecision({
     outcome: RECOVERY_SELLER_LIFECYCLE_OUTCOMES.WAIT,
-    reasonCode: "WAIT_FOR_EXISTING_RS_ORDER",
-    explanation: "An existing acknowledged Recovery Seller order must reach an authoritative terminal state before another BUY is considered",
+    reasonCode: "WAIT_FOR_EXISTING_RS_BUY",
+    explanation: "An existing acknowledged Recovery Seller BUY must reach an authoritative terminal state before another tranche is considered",
     orderIdentity: {
       clientOrderId: order.clientOrderId,
       brokerOrderId: order.brokerOrderId,
@@ -253,6 +375,7 @@ function resolveExistingOrder({ stopState, activeOrders, symbol }) {
   })
   return applyRecoverySellerLifecycleTransition({
     stopState,
+    previousDecision,
     nextDecision: decision,
   })
 }
@@ -334,6 +457,7 @@ export function evaluateRecoverySellerBuyDecision({
   pairConfig,
   marketMetadata,
   recoveryPosition,
+  cycleState,
   cumulativeNetSellProceeds = "0",
   pendingBuyCommitment = "0",
   activeOrders = [],
@@ -347,10 +471,13 @@ export function evaluateRecoverySellerBuyDecision({
   }
 
   try {
+    assertRecoverySellerCycleState({ state: cycleState })
     const existingOrderResult = resolveExistingOrder({
       stopState,
+      previousDecision,
       activeOrders,
       symbol: marketPrice?.symbol,
+      cycleState,
     })
     if (existingOrderResult) {
       if (existingOrderResult.stopState.status === "STOPPED") {
@@ -379,6 +506,7 @@ export function evaluateRecoverySellerBuyDecision({
       pairConfig,
       marketMetadata,
       recoveryPosition,
+      cycleState,
       cumulativeNetSellProceeds,
       pendingBuyCommitment,
       activeOrders,
