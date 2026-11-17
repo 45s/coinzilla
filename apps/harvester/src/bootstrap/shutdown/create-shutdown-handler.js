@@ -303,8 +303,9 @@ function getResultErrors({ result, fallbackMessage }) {
 }
 
 async function stopMarketIntakeAndDrain(context) {
+  // Stop accepting new market callbacks, then wait for every callback already accepted.
   context.state.marketIntakeStopped = true
-  const result = await context.failureRecorder.runPhaseSafely({
+  const stopResult = await context.failureRecorder.runPhaseSafely({
     phase: "MARKET_INTAKE_STOP",
     operation: () => context.stopMarketIntake({
       subscriptions: context.subscriptions,
@@ -314,14 +315,15 @@ async function stopMarketIntakeAndDrain(context) {
     message: "Shutdown market-intake stop failed",
     auditReason: "MARKET_INTAKE_SHUTDOWN_FAILED",
   })
-  context.marketIntakeErrors = getResultErrors({
-    result,
+  const stopErrors = getResultErrors({
+    result: stopResult,
     fallbackMessage: "Shutdown market-intake stop failed",
   })
+
   const pendingMarketTasks = [...context.marketPriceIntake.values()]
     .map(({ latestWebSocketPriceTask }) => latestWebSocketPriceTask)
     .filter(Boolean)
-  await context.failureRecorder.runPhaseSafely({
+  const marketWorkResult = await context.failureRecorder.runPhaseSafely({
     phase: "MARKET_WORK_DRAIN",
     operation: () => Promise.allSettled(pendingMarketTasks),
     stage: "MARKET_WORK_DRAIN",
@@ -329,13 +331,33 @@ async function stopMarketIntakeAndDrain(context) {
     auditReason: "MARKET_WORK_DRAIN_FAILED",
     isFailure: (results) => results.some((entry) => entry.status === "rejected"),
   })
-  await context.failureRecorder.runPhaseSafely({
+  const marketWorkErrors = Array.isArray(marketWorkResult)
+    ? marketWorkResult.flatMap((entry) => entry.status === "rejected" ? [entry.reason] : [])
+    : getResultErrors({
+      result: marketWorkResult,
+      fallbackMessage: "Shutdown market-work drain failed",
+    })
+
+  // Market tasks can submit recovery SELLs and enqueue their acknowledgements/fills.
+  // Keep user-data intake connected and drain its queue to a stable generation.
+  const userDataDrainResult = await context.failureRecorder.runPhaseSafely({
     phase: "USER_DATA_DRAIN_INITIAL",
-    operation: () => context.state.eventQueue,
+    operation: () => drainUserDataQueue(context),
     stage: "USER_DATA_DRAIN_INITIAL",
     message: "Initial shutdown user-data drain failed",
     auditReason: "USER_DATA_DRAIN_FAILED",
   })
+  const userDataDrainErrors = getResultErrors({
+    result: userDataDrainResult,
+    fallbackMessage: "Initial shutdown user-data drain failed",
+  })
+
+  context.marketIntakeErrors = [
+    ...stopErrors,
+    ...marketWorkErrors,
+    ...userDataDrainErrors,
+  ]
+  return context.marketIntakeErrors
 }
 
 async function drainUserDataQueue(context) {
@@ -583,13 +605,21 @@ async function stopOperatorControlAfterSafety(context) {
 
 async function runShutdownLifecycle(context) {
   await proveStrategySafety(context)
-  await publishClosingAudit(context)
-  if (context.snapshotError) { throw context.snapshotError }
-  if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
-    await reproveStrategySafety(context)
+
+  // Market tasks may still perform recovery-only SELL work. Stop and drain them
+  // while user-data, operator control and the broker are still available.
+  const marketIntakeErrors = await stopMarketIntakeAndDrain(context)
+  if (marketIntakeErrors.length > 0) {
     await publishClosingAudit(context)
     if (context.snapshotError) { throw context.snapshotError }
+    throw new AggregateError(marketIntakeErrors, "Market intake could not be stopped and drained safely")
   }
+
+  if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
+    await reproveStrategySafety(context)
+  }
+  await publishClosingAudit(context)
+  if (context.snapshotError) { throw context.snapshotError }
 
   const userDataErrors = await stopUserDataIntakeAndDrain(context)
   if (userDataErrors.length > 0) {
@@ -626,7 +656,6 @@ async function runShutdownLifecycle(context) {
   }
 
   await stopOperatorControlAfterSafety(context)
-  await stopMarketIntakeAndDrain(context)
   await disconnectBroker(context)
   finalizeShutdown({
     context,
