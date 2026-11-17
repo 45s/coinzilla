@@ -32,6 +32,62 @@ function assertPlainRecord({ value, label }) {
   return value
 }
 
+function assertJsonArray({ value, ancestors, label }) {
+  if (Object.getPrototypeOf(value) !== Array.prototype) {
+    throw new TypeError(`${label} must contain plain arrays`)
+  }
+
+  for (const key of Reflect.ownKeys(value)) {
+    if (key === "length") {
+      continue
+    }
+    if (typeof key !== "string" || !/^(0|[1-9][0-9]*)$/.test(key)) {
+      throw new TypeError(`${label} arrays must not contain custom properties`)
+    }
+
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
+      throw new TypeError(`${label} arrays must contain data elements only`)
+    }
+  }
+
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(index))
+    if (!descriptor) {
+      throw new TypeError(`${label} must not contain sparse arrays`)
+    }
+    assertJsonValue({
+      value: descriptor.value,
+      ancestors,
+      label,
+    })
+  }
+}
+
+function assertJsonObject({ value, ancestors, label }) {
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError(`${label} must contain only plain objects`)
+  }
+
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string") {
+      throw new TypeError(`${label} must not contain symbol keys`)
+    }
+
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
+      throw new TypeError(`${label} must contain enumerable data properties only`)
+    }
+
+    assertJsonValue({
+      value: descriptor.value,
+      ancestors,
+      label,
+    })
+  }
+}
+
 function assertJsonValue({ value, ancestors, label }) {
   if (value === null || typeof value === "string" || typeof value === "boolean") {
     return
@@ -50,64 +106,21 @@ function assertJsonValue({ value, ancestors, label }) {
   }
 
   ancestors.add(value)
-
   if (Array.isArray(value)) {
-    if (Object.getPrototypeOf(value) !== Array.prototype) {
-      throw new TypeError(`${label} must contain plain arrays`)
-    }
-
-    for (const key of Reflect.ownKeys(value)) {
-      if (key === "length") {
-        continue
-      }
-      if (typeof key !== "string" || !/^(0|[1-9][0-9]*)$/.test(key)) {
-        throw new TypeError(`${label} arrays must not contain custom properties`)
-      }
-
-      const descriptor = Object.getOwnPropertyDescriptor(value, key)
-      if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
-        throw new TypeError(`${label} arrays must contain data elements only`)
-      }
-    }
-
-    for (let index = 0; index < value.length; index += 1) {
-      const descriptor = Object.getOwnPropertyDescriptor(value, String(index))
-      if (!descriptor) {
-        throw new TypeError(`${label} must not contain sparse arrays`)
-      }
-      assertJsonValue({
-        value: descriptor.value,
-        ancestors,
-        label,
-      })
-    }
+    assertJsonArray({
+      value,
+      ancestors,
+      label,
+    })
   } else {
-    const prototype = Object.getPrototypeOf(value)
-    if (prototype !== Object.prototype && prototype !== null) {
-      throw new TypeError(`${label} must contain only plain objects`)
-    }
-
-    for (const key of Reflect.ownKeys(value)) {
-      if (typeof key !== "string") {
-        throw new TypeError(`${label} must not contain symbol keys`)
-      }
-
-      const descriptor = Object.getOwnPropertyDescriptor(value, key)
-      if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
-        throw new TypeError(`${label} must contain enumerable data properties only`)
-      }
-
-      assertJsonValue({
-        value: descriptor.value,
-        ancestors,
-        label,
-      })
-    }
+    assertJsonObject({
+      value,
+      ancestors,
+      label,
+    })
   }
-
   ancestors.delete(value)
 }
-
 export function validateCollectionName(collection) {
   if (typeof collection !== "string" || collection.trim() === "" || collection !== collection.trim()) {
     throw new TypeError("Collection name must be a non-empty string without surrounding whitespace")
@@ -231,10 +244,14 @@ export function normalizeReadQuery(query = {}) {
     }
   }
 
-  const filter = validateFilter(query.filter ?? {})
-  const sort = validateSort(query.sort ?? [])
-  const limit = query.limit
-  const offset = query.offset ?? 0
+  const {
+    filter: rawFilter = {},
+    sort: rawSort = [],
+    limit,
+    offset = 0,
+  } = query
+  const filter = validateFilter(rawFilter)
+  const sort = validateSort(rawSort)
 
   if (limit !== undefined && (!Number.isSafeInteger(limit) || limit <= 0)) {
     throw new TypeError("Query limit must be a positive safe integer")
