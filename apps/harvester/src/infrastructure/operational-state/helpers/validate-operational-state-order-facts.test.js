@@ -127,14 +127,20 @@ test("rejects malformed order-submission intent identity, fields, classification
     assert.throws(
       () => validateOrderSubmissionIntentFact({
         ...valid,
-        canonicalData: { ...valid.canonicalData, ...changes },
+        canonicalData: {
+          ...valid.canonicalData,
+          ...changes,
+        },
       }),
       expectedError,
       `An order-submission intent must reject ${description}.`,
     )
   }
   assert.throws(
-    () => validateOrderSubmissionIntentFact({ ...valid, factId: "wrong-id" }),
+    () => validateOrderSubmissionIntentFact({
+      ...valid,
+      factId: "wrong-id",
+    }),
     /factId must match/,
     "The stable order-submission fact ID must be derived from clientOrderId.",
   )
@@ -191,14 +197,20 @@ test("rejects order-submission outcomes with inconsistent identity, amounts, or 
       () => validateOrderSubmissionOutcomeFact({
         ...valid,
         factId: `order-submission-outcome:client-order-1:${changes.outcome ?? "REJECTED"}`,
-        canonicalData: { ...valid.canonicalData, ...changes },
+        canonicalData: {
+          ...valid.canonicalData,
+          ...changes,
+        },
       }),
       expectedError,
       `An order-submission outcome must reject ${description}.`,
     )
   }
   assert.throws(
-    () => validateOrderSubmissionOutcomeFact({ ...valid, factId: "wrong-id" }),
+    () => validateOrderSubmissionOutcomeFact({
+      ...valid,
+      factId: "wrong-id",
+    }),
     /factId must match/,
     "The outcome fact ID must bind the exact client order and outcome classification.",
   )
@@ -242,7 +254,10 @@ test("rejects cancellation intents with invalid identity, order state, or exact 
     )
   }
   assert.throws(
-    () => validateOrderCancellationIntentFact({ ...valid, factId: "wrong-id" }),
+    () => validateOrderCancellationIntentFact({
+      ...valid,
+      factId: "wrong-id",
+    }),
     /identity or reason is not canonical/,
     "The cancellation-intent identity must bind the order, reason, state, and executed quantity.",
   )
@@ -314,7 +329,10 @@ test("rejects cancellation outcomes with mismatched identity or fabricated termi
     )
   }
   assert.throws(
-    () => validateOrderCancellationOutcomeFact({ ...valid, factId: "wrong-id" }),
+    () => validateOrderCancellationOutcomeFact({
+      ...valid,
+      factId: "wrong-id",
+    }),
     /identity or classification is not canonical/,
     "The cancellation-outcome fact ID must bind its exact order, reason, and classification.",
   )
