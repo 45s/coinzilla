@@ -126,7 +126,7 @@ test("creates and updates session history from lifecycle events without changing
   assert.equal(stopped.broker, "binance", "The session history must preserve the configured broker identity.")
 })
 
-test("records startup failure and does not mark an unsuccessful shutdown as stopped", async (t) => {
+test("records a failed startup as a terminal historical session", async (t) => {
   const { eventBus, observer, repository } = await createObserverFixture({ t })
   await publishAndDrain({
     eventBus,
@@ -146,30 +146,23 @@ test("records startup failure and does not mark an unsuccessful shutdown as stop
       },
     },
   })
+
   const failed = await repository.findById(PROCESS_IDENTITY.runtimeSessionId)
   assert.equal(failed.status, "STARTUP_FAILED", "A startup-failed lifecycle event must terminate a session that never reached RUNNING.")
   assert.equal(typeof failed.endedAt, "string", "A failed startup must preserve its event timestamp as the session end time.")
-  await observer.close()
+})
 
-  const secondIdentity = {
-    ...PROCESS_IDENTITY,
-    runtimeSessionId: "runtime-session-observer-002",
-  }
-  const secondObserver = createTradingSessionHistoryObserver({
-    eventBus,
-    repository,
-    processIdentity: secondIdentity,
-    runtimeConfig: RUNTIME_CONFIG,
-  })
+test("does not mark an unsuccessful shutdown as stopped", async (t) => {
+  const { eventBus, observer, repository } = await createObserverFixture({ t })
   await publishAndDrain({
     eventBus,
-    observer: secondObserver,
+    observer,
     name: HARVESTER_EVENT_NAMES.CONFIG_VALIDATED,
     data: CONFIGURATION,
   })
   await publishAndDrain({
     eventBus,
-    observer: secondObserver,
+    observer,
     name: HARVESTER_EVENT_NAMES.STARTED,
     data: {
       broker: "binance",
@@ -180,17 +173,17 @@ test("records startup failure and does not mark an unsuccessful shutdown as stop
   })
   await publishAndDrain({
     eventBus,
-    observer: secondObserver,
+    observer,
     name: HARVESTER_EVENT_NAMES.STOPPED,
     data: {
       reason: "SIGTERM",
       outcome: "failed",
     },
   })
-  const running = await repository.findById(secondIdentity.runtimeSessionId)
+
+  const running = await repository.findById(PROCESS_IDENTITY.runtimeSessionId)
   assert.equal(running.status, "RUNNING", "An unsuccessful shutdown must not falsely close the ordinary historical session.")
   assert.equal(running.endedAt, null, "An unsuccessful shutdown must not invent an end timestamp.")
-  await secondObserver.close()
 })
 
 test("isolates persistence failures from EventBus publication and reports them", async (t) => {
