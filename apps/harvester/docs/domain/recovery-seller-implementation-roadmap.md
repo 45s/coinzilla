@@ -8,7 +8,7 @@ created: 2026-11-14
 
 # Recovery Seller (RS) — Implementation Roadmap
 
-**Status:** RS-1, RS-2a and RS-2b are COMPLETE. RS-2b includes the isolated application accounting workflow merged in [PR #1276](https://github.com/45s/coinzilla/pull/1276) as `9276b6c01bec62b743727548786c5af4a04b7908` from exact head `19448d63d117f563c31d8ab9422ac73623974782`. The PR reports 1,847/1,847 Harvester tests and all required checks passed; no TESTNET/LIVE operation was performed. The workflow commits terminal recovery/legacy projections atomically, calculates separate recovery/legacy allocation-level profitability results and publishes the terminal OrderRegistry only after success; RS-3 now calculates one combined cycle-level eligibility result and a fee-aware mixed-SELL price/quantity plan; allocation-level results remain accounting diagnostics only. The policy remains isolated from bootstrap and cannot submit orders. RS-3 pure policy is in progress: combined cycle eligibility and fee-aware mixed-SELL price/quantity planning are implemented; order-type/fee-role selection and broader policy outcomes remain. RS-4 shared Trading Engine integration and RS-5 offline lifecycle proof follow. RS is still non-executable.
+**Status:** RS-1, RS-2a and RS-2b are COMPLETE. RS-2b includes the isolated application accounting workflow merged in [PR #1276](https://github.com/45s/coinzilla/pull/1276) as `9276b6c01bec62b743727548786c5af4a04b7908` from exact head `19448d63d117f563c31d8ab9422ac73623974782`. The PR reports 1,847/1,847 Harvester tests and all required checks passed; no TESTNET/LIVE operation was performed. The workflow commits terminal recovery/legacy projections atomically, calculates separate recovery/legacy allocation-level profitability results and publishes the terminal OrderRegistry only after success; RS-3 now calculates one combined cycle-level eligibility result and a fee-aware mixed-SELL price/quantity plan; allocation-level results remain accounting diagnostics only. The policy remains isolated from bootstrap and cannot submit orders. RS-3 pure policy is in progress: combined cycle eligibility and fee-aware mixed-SELL price/quantity planning are implemented; the owner-approved global STOP invariant is documented; an immutable sticky STOP latch/gate and explicit SUBMIT/WAIT/BLOCK/RECONCILE decision/transition contract are implemented with targeted offline tests; a pure BUY-tranche evaluator now reuses Conservative cadence/pricing, tranche sizing, investment-limit and exchange-filter behavior; immutable cycle state binds a stable Position identity to each cycle, enforces one SELL per cycle and unresolved terminal outcomes, and validates active-order ownership; a STOP-safe lifecycle wrapper preserves the sticky STOP through unknown submission, terminal reconciliation and new-cycle creation. Full SELL policy composition and shared Trading Engine/order/fill/inventory/reservation boundary wiring remain. RS-4 shared Trading Engine integration and RS-5 offline lifecycle proof follow. RS is still non-executable.
 **Tracking:** [issue #1127](https://github.com/45s/coinzilla/issues/1127) tracks the remaining RS work. [PR #1118](https://github.com/45s/coinzilla/pull/1118), [PR #1131](https://github.com/45s/coinzilla/pull/1131), [PR #1137](https://github.com/45s/coinzilla/pull/1137), [PR #1144](https://github.com/45s/coinzilla/pull/1144) and [PR #1152](https://github.com/45s/coinzilla/pull/1152) are merged.
 **Domain contract:** [Recovery Seller Domain Specification](./recovery-seller-domain-specification.md).
 **CG baseline:** [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
@@ -191,6 +191,7 @@ Never fabricate BUY fills or seed Portfolio from unverified wallet snapshots.
 
 Implement:
 
+- a global fail-closed decision primitive: any missing, contradictory, unexpected, or unmodeled condition produces a stable BLOCK/STOP decision, prevents all new trading actions, preserves accounting and reservations, and requires reconciliation plus operator review before any resumption;
 - recovery-tranche and eligible legacy quantity decisions from actual net fills, fixed legacy basis, verified Spot availability and shared reservations;
 - BUY planning within the RS strategy/pair investment budget, reusing only the explicitly approved Conservative-neutral cadence and fee rules;
 - mixed SELL planning whose quantity never exceeds actual net recovery inventory plus the authorized, verified, unreserved legacy slice;
@@ -209,7 +210,7 @@ The combined cycle-level economic target and SELL commission allowance are owner
 
 | Mixed SELL price, quantity and order type | One SELL combines the recovery quantity and eligible legacy slice. Net quote target is `recovery BUY investment + legacy historical cost + minProfit`. Quote fees are grossed up by `1 / (1 - r)`; base fees gross up base quantity; third-asset fees require explicit quote valuation. Price rounds upward to the price tick; quantity rounds upward to the quantity step and fails closed if the full combined inventory cannot fit without overspending. Configured rates/valuations are planning assumptions; actual fill commissions govern accounting. | **PARTLY IMPLEMENTED:** combined target and pure fee-aware plan are covered by RS domain tests. Order-type/fee-role selection and full min/max filter policy remain separate RS-3 work. |
 | Combined cycle profitability | Recovery and legacy allocations remain separately attributed for accounting, but eligibility is decided once for the whole SELL. | **IMPLEMENTED:** `net SELL proceeds after all fees >= recovery BUY cost + allocated legacy historical cost + pair-level minProfit`. Recovery-only cycles use zero legacy cost. Allocation-level profitability fields are diagnostics only. |
-| Realized profitability fails after execution | Actual execution/fees can differ from estimates. Confirmed fills must still be recorded; the next lifecycle action is not yet owner-approved. | **OPEN — Question 4.** Mandatory: account every confirmed fill and actual fee exactly once; never hide/reverse it. Proposed safe default for owner confirmation: block new BUYs and follow-up SELLs, retain accurate remaining inventory/reservations, reconcile terminal order state, and surface an operator-review BLOCK reason. Do not implement an invented recovery action. |
+| Unexpected or unmodeled condition (formerly Question 4) | **OWNER-APPROVED GLOBAL STOP:** if reality does not match an explicitly approved RS scenario, stop all new trading actions. Preserve and exactly-once account confirmed fills/actual fees; retain order ownership, inventory and reservations; reconcile already-submitted orders; emit a stable BLOCK reason and require operator review. No guessing, workaround, blind retry, or automatic resume. | **DECIDED — GLOBAL INVARIANT.** Applies across the complete RS lifecycle, not only SELL profitability. |
 | Terminal partial / canceled SELL and cycle-level proceeds | The owner chose one terminal SELL lifecycle per recovery cycle; there is no second/continuation SELL and no cumulative proceeds ledger in this phase. A terminal partial/canceled result leaves the cycle unresolved. | **DECIDED (Question 5):** one SELL order lifecycle per cycle. No second SELL and no new BUY after a terminal underfill/cancel until the separate unresolved-cycle policy is approved. |
 
 The final-residual-without-a-new-BUY liquidation remains explicitly deferred under FITDIB and is not an RS-3 deliverable. Advanced pause/disable/abandon/resume/restart semantics also remain deferred.
@@ -308,13 +309,11 @@ flowchart TD
   D -->|"EARN / off-Spot"| F["Not Spot-sellable; wait for return and reconciliation"]
   E --> G["Calculate eligible legacy slice"]
   F --> G
-  G --> H["Evaluate recovery-tranche profit"]
-  H --> I{"Recovery gate passes?"}
-  I -->|"No"| X["WAIT / BLOCK"]
-  I -->|"Yes"| J["Validate combined cycle cost recovery and minProfit"]
-  J --> K{"Legacy gate passes?"}
-  K -->|"No"| X
-  K -->|"Yes"| L["Shared Trading Engine safety and order gates"]
+  G --> H["Calculate combined cycle SELL net proceeds after all fees"]
+  H --> I["Compare against recovery BUY cost + allocated legacy historical cost + pair minProfit"]
+  I --> J{"Combined cycle target passes?"}
+  J -->|"No"| X["WAIT / BLOCK"]
+  J -->|"Yes"| K["Shared Trading Engine safety and order gates"]
 ~~~
 
 The diagrams do not override the [RS Domain Specification](./recovery-seller-domain-specification.md). RS-2b application accounting, verified custody and profitability integration are merged in PR #1276; RS remains non-executable. RS-3 policy must first resolve the contract gaps above; RS-4 then wires the policy into the shared engine, and RS-5 proves the offline lifecycle. Advanced lifecycle functionality remains deferred under FITDIB.

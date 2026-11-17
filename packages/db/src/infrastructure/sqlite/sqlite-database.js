@@ -27,7 +27,7 @@ function isAsyncFunction(callback) {
   return callback.constructor?.name === "AsyncFunction"
 }
 
-function createSqliteTransactionHandler({ requireConnection }) {
+function createSqliteTransactionHandler({ requireConnection, intent }) {
   return function withTransaction(work) {
     const activeConnection = requireConnection()
 
@@ -39,7 +39,7 @@ function createSqliteTransactionHandler({ requireConnection }) {
       throw new TypeError("SQLite transaction callbacks must be synchronous")
     }
 
-    activeConnection.exec("BEGIN IMMEDIATE")
+    activeConnection.exec(intent === "read" ? "BEGIN DEFERRED" : "BEGIN IMMEDIATE")
 
     try {
       const transaction = Object.freeze({
@@ -127,7 +127,14 @@ function createSqliteAdapter({
       connection = null
     },
 
-    withTransaction: createSqliteTransactionHandler({ requireConnection }),
+    withTransaction: createSqliteTransactionHandler({
+      requireConnection,
+      intent: "write",
+    }),
+    withReadTransaction: createSqliteTransactionHandler({
+      requireConnection,
+      intent: "read",
+    }),
   }
 
   return {
@@ -146,6 +153,8 @@ function createSqliteAdapter({
  * @returns {ReturnType<typeof createDatabase> & {
  *   exec: (sql: string) => void,
  *   prepare: (sql: string) => import('node:sqlite').StatementSync,
+ *   transaction: (work: (transaction: unknown) => unknown) => Promise<unknown>,
+ *   readTransaction: (work: (transaction: unknown) => unknown) => Promise<unknown>,
  *   migrate: (migrations: Array<{version: number, name: string, up: Function}>) => Promise<number[]>
  * }}
  */
@@ -176,6 +185,7 @@ export function createSqliteDatabase({
   const sqliteDatabase = Object.freeze({
     connect: database.connect,
     transaction: database.transaction,
+    readTransaction: database.readTransaction,
     close: database.close,
     get state() {
       return database.state

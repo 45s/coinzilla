@@ -10,7 +10,7 @@ owner: brokers
 
 ## Purpose and scope
 
-The Brokers package is an exchange-integration domain. Its responsibility is to expose stable, normalized broker capabilities while hiding Binance protocol details. It is not the owner of trading strategy, portfolio policy, or application workflows.
+The Brokers package is an exchange-integration domain. Its responsibility is to expose stable, normalized broker capabilities while hiding exchange-specific protocol details. It is not the owner of trading strategy, portfolio policy, or application workflows.
 
 The architectural reference is [Harvester Architecture](../../apps/harvester/docs/architecture.md), especially its separation of domain behavior, injected use cases, infrastructure adapters, and bootstrap composition. Reuse the principles, not Harvester's business model or every folder name.
 
@@ -145,7 +145,17 @@ RPC, Streams, transport, and session modules are infrastructure components. They
 
 ### Bootstrap and public API
 
-Bootstrap constructs concrete Binance infrastructure, injects it into application use cases/ports, and returns the public broker facade. The public `index.js` exports intentional contracts and factories; it should not own implementation logic.
+Provider-specific bootstrap/factory boundaries construct concrete exchange infrastructure, inject it into the package's internal application ports where needed, and expose the public broker facade. A consuming application such as Harvester constructs one or more configured provider instances at its own composition root. The public `index.js` exports intentional contracts and constructors; it should not own implementation logic.
+
+### Multiple provider instances and consumer-owned routing
+
+The package may expose multiple concrete provider implementations (currently Binance and a read-only Bitunix Spot surface), and a consumer may construct more than one instance of the same provider with different accounts or supported environments.
+
+The Brokers package owns exchange-specific configuration, clients, transport, normalization, capability truth, and provider lifecycle. It does **not** own application-specific strategy/market routing. Harvester owns its `BrokerPort`, provider-instance registry, execution route table, independent market-data route table, account isolation, and order provenance. Do not add Harvester imports or a strategy-aware router to `@coinzilla/brokers`.
+
+A provider factory/constructor must validate its own exchange-specific options. Binance instances retain the explicit `TRADING_MODE=testnet|live` contract from ADR-0002. Do not impose Binance's environment model on other exchanges. A provider's presence in the package or registry is not evidence that it supports order placement, cancellation, fills, private streams, or recovery; capability declarations must reflect verified behavior for that provider and environment.
+
+The consumer composes providers and resolves its own routes. For Harvester's accepted target, see [ADR-0003](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md), the source-verified [multi-provider migration audit and implementation plan](../../docs/architecture/multi-provider-migration-plan.md), and [issue #1339](https://github.com/45s/coinzilla/issues/1339). The issue defines the phased factory/capability work and preserves current consumer contracts.
 
 Keep the current public broker API stable during this internal migration. Any proposed public API change requires a separate compatibility analysis and consumer migration plan.
 

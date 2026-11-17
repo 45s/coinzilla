@@ -1,4 +1,4 @@
-import { CanonicalOrder, Market } from "@coinzilla/entities"
+import { CanonicalOrder, Fill, Market } from "@coinzilla/entities"
 import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
@@ -46,6 +46,32 @@ function assertLegacyPositionAmounts(position) {
   }
 }
 
+function assertLegacyAccountingFillIdentityShape(accounting) {
+  if (!Array.isArray(accounting.appliedFillIds) ||
+      !Array.isArray(accounting.appliedFillFingerprints) ||
+      accounting.appliedFillIds.length !== accounting.appliedFillFingerprints.length) {
+    throw new TypeError("Recovery Seller legacy Fill identity history is invalid")
+  }
+}
+
+function assertLegacyAccountingFillIdentityRecords(accounting) {
+  const seenFillIds = new Set()
+  for (const [index, item] of accounting.appliedFillFingerprints.entries()) {
+    if (!item ||
+        typeof item.id !== "string" ||
+        !item.id.trim() ||
+        typeof item.fillFingerprint !== "string" ||
+        !item.fillFingerprint.trim() ||
+        typeof item.allocationFingerprint !== "string" ||
+        !item.allocationFingerprint.trim() ||
+        item.id !== accounting.appliedFillIds[index] ||
+        seenFillIds.has(item.id)) {
+      throw new TypeError("Recovery Seller legacy Fill identity history is invalid")
+    }
+    seenFillIds.add(item.id)
+  }
+}
+
 function assertLegacyAccountingState(accounting) {
   for (const field of ["realizedQuoteProceeds", "realizedCostBasis", "realizedProfit"]) {
     assertDecimalString({
@@ -53,11 +79,7 @@ function assertLegacyAccountingState(accounting) {
       field: `legacyAccounting.${field}`,
     })
   }
-  if (!Array.isArray(accounting.appliedFillIds) ||
-      !Array.isArray(accounting.appliedFillFingerprints) ||
-      accounting.appliedFillIds.length !== accounting.appliedFillFingerprints.length) {
-    throw new TypeError("Recovery Seller legacy Fill identity history is invalid")
-  }
+  assertLegacyAccountingFillIdentityShape(accounting)
   if (compareDecimal({
     left: accounting.realizedQuoteProceeds,
     right: "0",
@@ -77,21 +99,7 @@ function assertLegacyAccountingState(accounting) {
   }) !== 0) {
     throw new RangeError("Recovery Seller legacy realized profit does not match its proceeds and cost basis")
   }
-  const seenFillIds = new Set()
-  for (const [index, item] of accounting.appliedFillFingerprints.entries()) {
-    if (!item ||
-        typeof item.id !== "string" ||
-        !item.id.trim() ||
-        typeof item.fillFingerprint !== "string" ||
-        !item.fillFingerprint.trim() ||
-        typeof item.allocationFingerprint !== "string" ||
-        !item.allocationFingerprint.trim() ||
-        item.id !== accounting.appliedFillIds[index] ||
-        seenFillIds.has(item.id)) {
-      throw new TypeError("Recovery Seller legacy Fill identity history is invalid")
-    }
-    seenFillIds.add(item.id)
-  }
+  assertLegacyAccountingFillIdentityRecords(accounting)
 }
 
 function assertLegacyPositionRecord(record) {
@@ -247,6 +255,189 @@ function createAdditionalTrackedBaseQuantity({ state, balances, portfolio }) {
   })
 }
 
+function getRecoverySellerPurposeForSide({ side } = {}) {
+  if (side === "BUY") {return "RECOVERY_BUY"}
+  if (side === "SELL") {return "RECOVERY_SELL"}
+  return undefined
+}
+
+function validateRecoverySellerExecutionOwnership({ order, ownership } = {}) {
+  if (!(order instanceof CanonicalOrder) || order.status !== "PENDING") {
+    throw new TypeError("Recovery Seller pending submission requires a PENDING CanonicalOrder")
+  }
+  const expectedPurpose = getRecoverySellerPurposeForSide({ side: order.side })
+  if (ownership?.strategyId !== StrategyId.RECOVERY_SELLER ||
+      typeof ownership.positionId !== "string" ||
+      !ownership.positionId.trim() ||
+      typeof ownership.cycleId !== "string" ||
+      !ownership.cycleId.trim() ||
+      ownership.purpose !== expectedPurpose) {
+    throw new Error("Recovery Seller submission requires matching RS strategy, Position, purpose and cycle ownership")
+  }
+  return ownership
+}
+
+function resolveRegisteredRecoverySellerOrderOwnership({ registry, order } = {}) {
+  const registeredOrder = registry.getOrder({ clientOrderId: order.clientOrderId })
+  const ownership = registry.getOwnership({ clientOrderId: order.clientOrderId })
+  const expectedPurpose = getRecoverySellerPurposeForSide({ side: registeredOrder?.side })
+  if (!registeredOrder ||
+      !ownership ||
+      ownership.strategyId !== StrategyId.RECOVERY_SELLER ||
+      ownership.purpose !== expectedPurpose ||
+      typeof ownership.positionId !== "string" ||
+      !ownership.positionId.trim() ||
+      typeof ownership.cycleId !== "string" ||
+      !ownership.cycleId.trim()) {
+    throw new Error("Recovery Seller execution callback requires a registered RS-owned order")
+  }
+  return ownership
+}
+
+function createRecoverySellerPendingOrderCallback({ state } = {}) {
+  return ({ order, ownership } = {}) => {
+    validateRecoverySellerExecutionOwnership({
+      order,
+      ownership,
+    })
+    const result = state.orderRegistry.registerPending({
+      order,
+      ownership,
+    })
+    state.orderRegistry = result.registry
+    return result
+  }
+}
+
+function createRecoverySellerAcknowledgedOrderCallback({ state } = {}) {
+  return ({ order } = {}) => {
+    const ownership = resolveRegisteredRecoverySellerOrderOwnership({
+      registry: state.orderRegistry,
+      order,
+    })
+    const result = state.orderRegistry.attachAcknowledgedBrokerOrderId({ order })
+    state.orderRegistry = result.registry
+    return Object.freeze({
+      ...result,
+      ownership,
+    })
+  }
+}
+
+function createRecoverySellerSubmissionFailureCallback({ state } = {}) {
+  return ({ order, outcome } = {}) => {
+    const ownership = resolveRegisteredRecoverySellerOrderOwnership({
+      registry: state.orderRegistry,
+      order,
+    })
+    if (outcome === "REJECTED") {
+      const result = state.orderRegistry.removePending({ clientOrderId: order.clientOrderId })
+      if (!result.removed) {
+        throw new Error("Recovery Seller rejected submission was not a removable pending order")
+      }
+      state.orderRegistry = result.registry
+      return Object.freeze({
+        ...result,
+        ownership,
+      })
+    }
+    const result = state.orderRegistry.markUnknown({ clientOrderId: order.clientOrderId })
+    if (!result.ok) {
+      throw result.errors[0] ?? new Error("Unable to retain uncertain Recovery Seller submission as UNKNOWN")
+    }
+    state.orderRegistry = result.data.registry
+    return Object.freeze({
+      ...result.data,
+      ownership,
+    })
+  }
+}
+
+function createRecoverySellerSubmissionDeferredCallback({ state } = {}) {
+  return ({ order, registered } = {}) => {
+    if (!registered) {
+      return Object.freeze({ removed: false })
+    }
+    resolveRegisteredRecoverySellerOrderOwnership({
+      registry: state.orderRegistry,
+      order,
+    })
+    const result = state.orderRegistry.removePending({ clientOrderId: order.clientOrderId })
+    if (!result.removed) {
+      throw new Error("Recovery Seller deferral did not resolve a registered pending order")
+    }
+    state.orderRegistry = result.registry
+    return result
+  }
+}
+
+function createRecoverySellerExecutionCallbacks({ state } = {}) {
+  return Object.freeze({
+    onPendingOrder: createRecoverySellerPendingOrderCallback({ state }),
+    onAcknowledgedOrder: createRecoverySellerAcknowledgedOrderCallback({ state }),
+    onSubmissionFailure: createRecoverySellerSubmissionFailureCallback({ state }),
+    onSubmissionDeferred: createRecoverySellerSubmissionDeferredCallback({ state }),
+  })
+}
+
+function resolveRecoverySellerBuyOrderOwnership({ registry, fill }) {
+  if (!(fill instanceof Fill) || fill.side !== "BUY") {
+    throw new TypeError("Recovery Seller BUY accounting requires a canonical BUY Fill")
+  }
+  const order = registry.getOrder({ clientOrderId: fill.clientOrderId })
+  if (!order ||
+      order.status === "REJECTED" ||
+      order.side !== "BUY" ||
+      order.market.id !== fill.market.id ||
+      order.brokerOrderId !== fill.brokerOrderId) {
+    throw new Error("Recovery Seller BUY Fill does not match a registered broker order identity")
+  }
+  const ownership = registry.getOwnership({
+    clientOrderId: fill.clientOrderId,
+    brokerOrderId: fill.brokerOrderId,
+  })
+  if (!ownership ||
+      ownership.strategyId !== StrategyId.RECOVERY_SELLER ||
+      ownership.purpose !== "RECOVERY_BUY" ||
+      typeof ownership.cycleId !== "string" ||
+      !ownership.cycleId.trim()) {
+    throw new Error("Recovery Seller BUY Fill requires registered RS Position and cycle ownership")
+  }
+  return {
+    order,
+    ownership,
+  }
+}
+
+async function applyRecoverySellerBuyFillTransition({
+  state,
+  fill,
+  onOperationalStateExecutionFill,
+}) {
+  const { order, ownership } = resolveRecoverySellerBuyOrderOwnership({
+    registry: state.orderRegistry,
+    fill,
+  })
+  const result = state.portfolio.applyFill({
+    fill,
+    positionId: ownership.positionId,
+    strategyId: ownership.strategyId,
+  })
+  if (result.applied && onOperationalStateExecutionFill) {
+    const durableResult = await onOperationalStateExecutionFill({ fill })
+    if (durableResult?.ok !== true || durableResult.data?.durable !== true) {
+      throw durableResult?.errors?.[0] ??
+        new Error("Execution-fill fact append did not confirm durable commitment")
+    }
+  }
+  state.portfolio = result.portfolio
+  return Object.freeze({
+    ...result,
+    order,
+    ownership,
+  })
+}
+
 function resolveRecoverySellerOrderOwnership({ registry, order }) {
   const ownership = registry.getOwnership({
     clientOrderId: order.clientOrderId,
@@ -259,14 +450,7 @@ function resolveRecoverySellerOrderOwnership({ registry, order }) {
   return ownership
 }
 
-function reconcileTerminalMixedSellTransition({
-  state,
-  reconciliation,
-  terminalOrder,
-  canonicalFills,
-  canonicalFillAllocations,
-  minProfit,
-}) {
+function resolveTerminalMixedSellOrder({ state, terminalOrder } = {}) {
   if (!(terminalOrder instanceof CanonicalOrder) ||
       !TERMINAL_ORDER_STATUSES.has(terminalOrder.status)) {
     throw new TypeError("Recovery Seller mixed SELL commit requires an authoritative terminal CanonicalOrder")
@@ -285,7 +469,21 @@ function reconcileTerminalMixedSellTransition({
       terminalRegisteredOrder.executedQuantity.amount !== terminalOrder.executedQuantity.amount) {
     throw new Error("Recovery Seller terminal order did not become the canonical registered order state")
   }
+  return {
+    registryUpdate,
+    terminalRegisteredOrder,
+  }
+}
 
+function calculateTerminalMixedSellAccounting({
+  state,
+  registryUpdate,
+  terminalRegisteredOrder,
+  reconciliation,
+  canonicalFills,
+  canonicalFillAllocations,
+  minProfit,
+} = {}) {
   const ownership = resolveRecoverySellerOrderOwnership({
     registry: registryUpdate.registry,
     order: terminalRegisteredOrder,
@@ -301,7 +499,6 @@ function reconcileTerminalMixedSellTransition({
   if (!recoveryPosition) {
     throw new TypeError("Recovery Seller terminal mixed SELL requires its owned Portfolio Position")
   }
-
   const accounting = applyReconciledMixedSellOrder({
     portfolio: state.portfolio,
     legacyPosition: legacyRecord.position,
@@ -312,7 +509,6 @@ function reconcileTerminalMixedSellTransition({
     canonicalFills,
     canonicalFillAllocations,
   })
-
   const profitability = accounting.applied
     ? calculateOrderProfitability({
         portfolio: state.portfolio,
@@ -323,7 +519,6 @@ function reconcileTerminalMixedSellTransition({
         minProfit,
       })
     : undefined
-
   const nextLegacyRecord = Object.freeze({
     ...legacyRecord,
     position: accounting.legacyPosition,
@@ -331,17 +526,43 @@ function reconcileTerminalMixedSellTransition({
   })
   const nextLegacyPositions = new Map(state.legacyPositions)
   nextLegacyPositions.set(terminalRegisteredOrder.market.id, nextLegacyRecord)
-
-  // The terminal OrderRegistry and both accounting projections are published
-  // together. Until this point the old registry continues reserving the SELL.
-  state.portfolio = accounting.portfolio
-  state.legacyPositions = nextLegacyPositions
-  state.orderRegistry = registryUpdate.registry
-
-  return Object.freeze({
-    ...accounting,
-    orderRegistry: state.orderRegistry,
+  return {
+    accounting,
     profitability,
+    nextLegacyPositions,
+  }
+}
+
+function reconcileTerminalMixedSellTransition({
+  state,
+  reconciliation,
+  terminalOrder,
+  canonicalFills,
+  canonicalFillAllocations,
+  minProfit,
+}) {
+  const { registryUpdate, terminalRegisteredOrder } = resolveTerminalMixedSellOrder({
+    state,
+    terminalOrder,
+  })
+  const result = calculateTerminalMixedSellAccounting({
+    state,
+    registryUpdate,
+    terminalRegisteredOrder,
+    reconciliation,
+    canonicalFills,
+    canonicalFillAllocations,
+    minProfit,
+  })
+  // Until this point, the old registry still reserves the SELL.
+  // Publish terminal order and both accounting projections as one transition.
+  state.portfolio = result.accounting.portfolio
+  state.legacyPositions = result.nextLegacyPositions
+  state.orderRegistry = registryUpdate.registry
+  return Object.freeze({
+    ...result.accounting,
+    orderRegistry: state.orderRegistry,
+    profitability: result.profitability,
   })
 }
 
@@ -359,12 +580,33 @@ function reconcileTerminalMixedSellTransition({
  * @param {Portfolio} [options.initialPortfolio] Shared Portfolio snapshot.
  * @param {OrderRegistry} [options.initialOrderRegistry] Shared order registry.
  * @param {Array<object>} [options.initialLegacyPositions] Market-scoped logical legacy state.
+ * @param {Function} [options.onOperationalStateExecutionFill] Durable canonical Fill append callback.
  * @returns {object} Serialized RS accounting and account-snapshot provider operations.
  */
+function createSerializedWorkflowOperation({ state, transition } = {}) {
+  return (input = {}) => {
+    const task = state.updateQueue.then(async () => {
+      try {
+        return toResult({
+          data: await transition({
+            state,
+            ...input,
+          }),
+        })
+      } catch (error) {
+        return toResult({ error })
+      }
+    })
+    state.updateQueue = task.then(() => undefined, () => undefined)
+    return task
+  }
+}
+
 export function createRecoverySellerAccountingWorkflow({
   initialPortfolio = new Portfolio(),
   initialOrderRegistry = OrderRegistry.empty(),
   initialLegacyPositions = [],
+  onOperationalStateExecutionFill,
 } = {}) {
   if (!(initialPortfolio instanceof Portfolio)) {
     throw new TypeError("initialPortfolio must be a Portfolio")
@@ -380,24 +622,27 @@ export function createRecoverySellerAccountingWorkflow({
     updateQueue: Promise.resolve(),
   }
 
-  const reconcileTerminalMixedSell = (input = {}) => {
-    const task = state.updateQueue.then(() => {
-      try {
-        return toResult({
-          data: reconcileTerminalMixedSellTransition({
-            state,
-            ...input,
-          }),
-        })
-      } catch (error) {
-        return toResult({ error })
-      }
-    })
-    state.updateQueue = task.then(() => undefined, () => undefined)
-    return task
+  if (onOperationalStateExecutionFill !== undefined &&
+      typeof onOperationalStateExecutionFill !== "function") {
+    throw new TypeError("onOperationalStateExecutionFill must be a function")
   }
 
+  const applyBuyFill = createSerializedWorkflowOperation({
+    state,
+    transition: ({ state: currentState, fill }) => applyRecoverySellerBuyFillTransition({
+      state: currentState,
+      fill,
+      onOperationalStateExecutionFill,
+    }),
+  })
+  const reconcileTerminalMixedSell = createSerializedWorkflowOperation({
+    state,
+    transition: reconcileTerminalMixedSellTransition,
+  })
+
   return Object.freeze({
+    applyBuyFill,
+    getExecutionCallbacks: () => createRecoverySellerExecutionCallbacks({ state }),
     reconcileTerminalMixedSell,
     getPortfolio: () => state.portfolio,
     getOrderRegistry: () => state.orderRegistry,

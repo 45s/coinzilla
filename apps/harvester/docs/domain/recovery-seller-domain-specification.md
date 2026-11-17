@@ -44,6 +44,65 @@ No independent fixed 1% market-rise wait is required merely to release the confi
 - Actual holdings change only from confirmed canonical fills. A price, order intent, acknowledgement, cancellation request, or operator authorization is not an execution.
 - RS is independent of CG_coinGrabber. It must not change Conservative behavior or its canonical specification.
 
+### 2.1 Global fail-closed rule — owner-approved
+
+**STOP whenever actual conditions do not match an explicitly covered and approved RS scenario.** This is a global RS invariant, not a SELL-only profitability rule.
+
+If any input, state transition, exchange response, order outcome, fill, commission, balance, reservation, accounting result, or other observed condition is missing, contradictory, unexpected, or not covered by the approved domain contract, RS must:
+
+1. **Stop all new trading actions immediately.** Do not submit a new BUY, SELL, replacement, retry, or other trading instruction; do not guess, improvise, or choose an unapproved recovery path.
+2. **Preserve facts and commitments.** Do not erase or reverse confirmed fills, actual commissions, accounting, order ownership, inventory, or reservations. Apply every confirmed canonical fill exactly once using actual exchange facts.
+3. **Reconcile what already exists.** Continue only the non-trading safety work needed to establish authoritative status of already-submitted orders and account for subsequent confirmed fills. Unknown order outcomes retain their original identity and reservations; never blindly resubmit.
+4. **Make the stop visible.** Return a deterministic BLOCK decision with a stable reason code and enough context for operator review. The condition remains blocked until an explicitly approved and evidenced path resolves it.
+5. **Do not self-resume.** A later observation that appears normal does not silently clear the stop. Resume/new trading requires the condition to be understood, reconciled, and covered by an approved domain rule or explicit operator decision.
+
+This rule does **not** mean abandoning, cancelling, replacing, or ignoring an already-submitted order. Existing orders remain owned and must be reconciled; actual fills and fees continue to be accounted. It means RS initiates no further trading action while the unexpected condition is unresolved.
+
+Examples include: a SELL realizes less profit than planned; an order response has an unknown status; actual fees cannot be valued; available Spot quantity disagrees with the verified allocation; a fill cannot be attributed unambiguously; a reservation or accounting projection conflicts; or a state transition occurs that the approved lifecycle does not define. In every case the response is STOP, not an invented workaround.
+
+### 2.2 Deterministic lifecycle outcomes and transitions
+
+Every RS policy evaluation returns exactly one of these outcomes:
+
+| Outcome | Meaning | Required order facts |
+|---|---|---|
+| `SUBMIT` | One eligible new order intent may be handed to the shared Trading Engine. It is not proof of broker acceptance or execution. | No existing order identity is attached. |
+| `WAIT` | An acknowledged, known active order remains untouched until its next authoritative update. No duplicate submission, replacement, or retry is implied. | Both `clientOrderId` and `brokerOrderId` are required. |
+| `BLOCK` | The current evaluation does not permit a new trading action. Known policy limits may produce a non-STOP BLOCK; unexpected or unsupported conditions must use the global STOP reason and latch STOP. | No order identity is required unless the blocked condition concerns an existing order. |
+| `RECONCILE` | Only non-trading reconciliation of an already-submitted order may proceed because its authoritative outcome is not yet known. The original reservation and ownership remain intact; blind resubmission is forbidden. | The original `clientOrderId` is required; `brokerOrderId` is included when known. |
+
+The valid transitions below apply to one **order lifecycle**, not to the whole recovery cycle:
+
+| Previous outcome for this order | Allowed next outcomes |
+|---|---|
+| No previous decision (new order-intent context) | `SUBMIT`, `WAIT`, `BLOCK`, `RECONCILE` |
+| `SUBMIT` | `WAIT`, `RECONCILE`, `BLOCK` |
+| `WAIT` | `WAIT`, `RECONCILE`, `BLOCK` |
+| `RECONCILE` | `RECONCILE`, `WAIT`, `BLOCK` |
+| `BLOCK` | `BLOCK`, `WAIT`, `RECONCILE` |
+
+A direct second `SUBMIT` within the same order lifecycle is forbidden. A later BUY tranche may start a distinct order lifecycle in the same recovery cycle only after the previous BUY order is authoritatively terminal and all its canonical fills/commissions and commitments are reconciled. The caller must supply a fresh order-lifecycle context only after proving that condition. This does not authorize a second SELL: the separate cycle contract allows exactly one SELL order lifecycle per recovery cycle. A terminal partial/canceled/expired/rejected SELL does not close the cycle or authorize another SELL or a new BUY cycle; the unresolved remainder stays blocked pending an approved recovery policy.
+
+When global STOP is latched, only valid `WAIT` and `RECONCILE` outcomes may proceed. They do not clear STOP. Every `SUBMIT`, ordinary `BLOCK`, missing/invalid decision, or unsupported transition retains the original sticky STOP decision. The first STOP evidence remains authoritative; no automatic clear operation exists. A future clear path requires a separately approved and evidenced resolution contract.
+
+An unknown submission result or unmodeled exchange status therefore produces both a sticky global STOP state and a `RECONCILE` outcome for the existing order. This keeps permission to trade distinct from permission to perform non-trading reconciliation.
+
+### 2.3 Recovery-cycle state and the one-SELL invariant
+
+The four lifecycle outcomes above describe one order lifecycle. Recovery-cycle state separately controls how many orders may belong to one cycle:
+
+- A new cycle starts in `ACCUMULATING` with a stable `cycleId` and its recovery `positionId`. It may contain multiple sequential BUY tranches. A later BUY tranche is a new order lifecycle and is allowed only after the preceding BUY is terminal and its canonical fills, commissions, commitment and accounting effects are reconciled. A subsequent cycle may retain the same recovery Position or use a newly preallocated Position identity.
+- Every RS-owned active order must have matching `strategyId`, `positionId`, `cycleId`, and purpose in `OrderOwnership`; the order and recovery Position identities must match the cycle snapshot. Before any SELL broker I/O, the cycle records its one allowed SELL identity and moves to `SELL_SUBMITTED`. No second SELL, continuation SELL, replacement SELL, or new BUY may be created while that SELL is active or unresolved.
+- An unknown SELL submission/acknowledgement moves the cycle to `RECONCILIATION_REQUIRED`, latches global STOP, and returns `RECONCILE` for the original client identity. The original commitment and order ownership remain intact.
+- A cycle becomes `CLOSED` only when its sole SELL is `FILLED`, all canonical fills/commissions/reservations and both accounting projections are fully reconciled, and the actual combined cycle profitability result passes.
+- A terminal `CANCELED`, `REJECTED`, or `EXPIRED` SELL (including one with partial execution) leaves the cycle `UNRESOLVED`. It does not authorize another SELL or a new BUY cycle.
+- A `FILLED` SELL whose actual combined profitability result fails also leaves the cycle `UNRESOLVED`. The post-fill adverse-result recovery policy remains unresolved (Question 4); do not invent a follow-up SELL, another BUY, or an automatic recovery action.
+- A new cycle with a distinct stable cycle ID may be created only from a `CLOSED` prior cycle. Its Position identity is retained unless a new Position has been explicitly preallocated. Creating a new cycle never clears the global sticky STOP latch.
+
+The pure BUY evaluator requires an explicit cycle-state snapshot containing both `cycleId` and `positionId`. It blocks new BUYs for `CLOSED` and `UNRESOLVED` cycles, waits/reconciles the recorded sole SELL while it is active or unknown, and fails closed if an active order has missing/mismatched `OrderOwnership` or the cycle records a SELL without authoritative order evidence. It also requires explicit operator-stop, market-pause and reconciliation-readiness flags. These are policy decisions only; shared account balance and aggregate reservations remain the Trading Engine allocator's responsibility.
+
+Canonical fill processing, terminal reconciliation, reservation conservation and exact-once accounting must continue while global STOP is active. STOP blocks new trading actions; it must never discard or suppress facts about already-submitted orders or confirmed executions.
+
 ## 3. Legacy inventory and authorization
 
 Legacy inventory is a specifically identified quantity of a market's base asset that existed before RS was authorized to manage it. It must not be inferred from an exchange free balance, Portfolio total/free quantity, manual/external order, prior process state, or unowned execution.
@@ -333,6 +392,7 @@ The first-implementation product decisions below are recorded. Items marked as i
 RS-2b now has deterministic domain and application regression coverage for legacy basis, verified Spot allocation, canonical mixed-fill attribution, partial/terminal reconciliation, atomic Portfolio/legacy commits, reservation retention/release, and combined cycle-level profitability. RS remains non-executable because RS-3 policy and RS-4 runtime integration are not implemented. The remaining policy and lifecycle work must add deterministic offline tests for:
 
 - missing/invalid startup legacy configuration and insufficient verified Spot availability; runtime authorization revocation/expiry is deferred under FITDIB;
+- any missing, contradictory, unexpected, or unmodeled condition at every lifecycle boundary produces a sticky STOP/BLOCK, prevents all new trading actions, preserves exact-once accounting and reservations, continues required reconciliation of already-submitted orders, and cannot self-resume without an approved resolution;
 - configured legacy invested quote / original quantity average-cost calculation, including invalid zero/negative/missing inputs;
 - Spot-available versus EARN/off-Spot custody separation, transfer/redeem changes, and insufficient Spot reserve for the next legacy slice;
 - mixed-cycle cases where legacy allocation proceeds alone are below its historical cost but the combined SELL still passes or fails the total cost-recovery-plus-`minProfit` gate;

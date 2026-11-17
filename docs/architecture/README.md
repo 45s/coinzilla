@@ -6,6 +6,8 @@ This directory records cross-cutting architecture principles and decisions for t
 
 - [ADR-0001: Clean and Hexagonal Architecture](./decisions/ADR-0001-clean-hexagonal-architecture.md) — the accepted architectural style and dependency boundaries.
 - [ADR-0002: Explicit Binance trading environment](./decisions/ADR-0002-explicit-binance-trading-environment.md) — `TRADING_MODE` is the sole Binance endpoint selector; `NODE_ENV` is not used.
+- [ADR-0003: Explicit multi-provider execution and market-data routing](./decisions/ADR-0003-multi-provider-routing.md) — provider instances, Harvester-owned strategy/market execution routes, independent market-data routes, provenance and account isolation.
+- [Multi-provider migration audit and implementation plan](./multi-provider-migration-plan.md) — source-verified current-state findings, provider capability matrix, provenance gaps, compatibility baseline and phased delivery plan for #1339.
 
 ## Templates
 
