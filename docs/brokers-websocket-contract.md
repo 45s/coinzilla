@@ -98,7 +98,7 @@ The package entry point currently exports exactly `BinanceWebSocketBroker`, `Bin
 
 ## Bitunix Spot capability contract
 
-The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The current implementation is read-only. Supported reads and explicitly blocked capabilities are:
+The package exports `BitunixSpotBroker`, `BitunixSpotConfig`, and the separate `BitunixSpotWebSocketClient`. The REST-backed broker remains read-only. Its supported reads and explicitly blocked capabilities are:
 
 | Broker method | Bitunix operation | Constraint |
 |---|---|---|
@@ -174,7 +174,7 @@ Official references: [Spot REST API](https://www.bitunix.com/api-docs/spots/en_u
 
 The source-level comparison of JKorf/Bitunix.Net, the TypeScript MCP, StockSharp and other independent clients is maintained in the [Bitunix external implementation reference audit](../packages/brokers/BITUNIX_REFERENCE_AUDIT.md). It records implementation defects and does not override this contract or official Bitunix documentation.
 
-The audit identified public exchange-rate and token/network metadata endpoints as possible **Bitunix-specific read-only extensions**, not Binance parity methods. They are not part of the current supported broker contract. Add them only after an explicit extension decision and tests; do not infer trading filters or authorize wallet mutations from metadata.
+The audit identified public exchange-rate and token/network metadata endpoints as **Bitunix-specific read-only extensions**, not Binance parity methods. Exchange rates are already available through the REST broker and the new WebSocket RPC client; token/network metadata is available through the WebSocket RPC client. These are not new Binance-parity broker methods. Do not infer trading filters or authorize wallet mutations from metadata.
 
 ## Candle market-data public contract
 
