@@ -121,7 +121,7 @@ test("creates and updates session history from lifecycle events without changing
 })
 
 test("records startup failure and does not mark an unsuccessful shutdown as stopped", async (t) => {
-  const { eventBus, observer, repository } = await createObserverFixture(t)
+  const { eventBus, observer, repository } = await createObserverFixture({ t })
   await publishAndDrain({
     eventBus,
     observer,
