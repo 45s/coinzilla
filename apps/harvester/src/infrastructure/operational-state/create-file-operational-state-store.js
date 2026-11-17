@@ -261,6 +261,80 @@ async function writeOperationalStateGenesisManifest({ store, genesisCheckpointBo
   }
 }
 
+async function prepareOperationalStateDirectory({ store }) {
+  await store.fileSystem.mkdir(store.absoluteDirectory, {
+    recursive: true,
+    mode: 0o700,
+  })
+  const directoryStat = await store.fileSystem.lstat(store.absoluteDirectory)
+  if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
+    throw new Error("Operational State Store record initialization requires a real directory")
+  }
+  const entries = await store.fileSystem.readdir(store.absoluteDirectory)
+  if (entries.length > 0) {
+    throw new Error("Operational State Store record initialization refuses to overwrite an existing directory")
+  }
+  if (supportsPosixModeBits) {
+    await store.fileSystem.chmod(store.absoluteDirectory, 0o700)
+  }
+}
+
+function createOperationalStateGenesisRecord({ store }) {
+  const recordedAt = normalizeOperationalStateRecordedAt(store.now())
+  const genesisBody = {
+    formatVersion: FORMAT_VERSION,
+    schemaVersion: store.schemaVersion,
+    sequence: "0",
+    factId: "durable-facts:genesis",
+    factType: "LEDGER_INITIALIZED",
+    runtimeSessionId: store.runtimeSessionId,
+    recordedAt,
+    previousDigest: null,
+    data: { schemaVersion: store.schemaVersion },
+  }
+  return {
+    ...genesisBody,
+    digest: digestOperationalStateRecord(genesisBody),
+  }
+}
+
+async function initializeOperationalStateStore({ store, assertNoUncertainWrite, syncStreams, verifyState }) {
+  const writeState = {
+    factWriteStarted: false,
+    manifestWriteStarted: false,
+  }
+  try {
+    assertNoUncertainWrite()
+    await prepareOperationalStateDirectory({ store })
+    const genesisRecord = createOperationalStateGenesisRecord({ store })
+    await writeOperationalStateGenesisFact({ store, genesisRecord, writeState })
+    const genesisCheckpointBody = createManifestCheckpoint({
+      schemaVersion: store.schemaVersion,
+      record: genesisRecord,
+      previousManifestDigest: null,
+    })
+    await writeOperationalStateGenesisManifest({ store, genesisCheckpointBody, writeState })
+    await syncStreams()
+    const verified = await verifyState()
+    return toResult({
+      data: {
+        durable: true,
+        record: verified.lastRecord,
+        lastCommittedSequence: verified.manifest.sequence,
+        lastCommittedDigest: verified.manifest.lastCommittedDigest,
+      },
+    })
+  } catch (error) {
+    if (writeState.factWriteStarted || writeState.manifestWriteStarted) {
+      store.writeUncertain = true
+      error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
+    } else if (!error.code) {
+      error.code = "DURABLE_FACTS_INITIALIZATION_FAILED"
+    }
+    return toResult({ error })
+  }
+}
+
 function createOperationalStateStoreInitializer({
   store,
   serialize,
@@ -268,73 +342,12 @@ function createOperationalStateStoreInitializer({
   syncStreams,
   verifyState,
 }) {
-  return () => serialize(async () => {
-    const writeState = { factWriteStarted: false,
-manifestWriteStarted: false }
-    try {
-      assertNoUncertainWrite()
-      await store.fileSystem.mkdir(store.absoluteDirectory, {
-        recursive: true,
-        mode: 0o700,
-      })
-      const directoryStat = await store.fileSystem.lstat(store.absoluteDirectory)
-      if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
-        throw new Error("Operational State Store record initialization requires a real directory")
-      }
-      const entries = await store.fileSystem.readdir(store.absoluteDirectory)
-      if (entries.length > 0) {
-        throw new Error("Operational State Store record initialization refuses to overwrite an existing directory")
-      }
-      if (supportsPosixModeBits) {
-        await store.fileSystem.chmod(store.absoluteDirectory, 0o700)
-      }
-      const recordedAt = normalizeOperationalStateRecordedAt(store.now())
-      const genesisBody = {
-        formatVersion: FORMAT_VERSION,
-        schemaVersion: store.schemaVersion,
-        sequence: "0",
-        factId: "durable-facts:genesis",
-        factType: "LEDGER_INITIALIZED",
-        runtimeSessionId: store.runtimeSessionId,
-        recordedAt,
-        previousDigest: null,
-        data: { schemaVersion: store.schemaVersion },
-      }
-      const genesisRecord = {
-        ...genesisBody,
-        digest: digestOperationalStateRecord(genesisBody),
-      }
-      await writeOperationalStateGenesisFact({ store,
-genesisRecord,
-writeState })
-      const genesisCheckpointBody = createManifestCheckpoint({
-        schemaVersion: store.schemaVersion,
-        record: genesisRecord,
-        previousManifestDigest: null,
-      })
-      await writeOperationalStateGenesisManifest({ store,
-genesisCheckpointBody,
-writeState })
-      await syncStreams()
-      const verified = await verifyState()
-      return toResult({
-        data: {
-          durable: true,
-          record: verified.lastRecord,
-          lastCommittedSequence: verified.manifest.sequence,
-          lastCommittedDigest: verified.manifest.lastCommittedDigest,
-        },
-      })
-    } catch (error) {
-      if (writeState.factWriteStarted || writeState.manifestWriteStarted) {
-        store.writeUncertain = true
-        error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
-      } else if (!error.code) {
-        error.code = "DURABLE_FACTS_INITIALIZATION_FAILED"
-      }
-      return toResult({ error })
-    }
-  })
+  return () => serialize(() => initializeOperationalStateStore({
+    store,
+    assertNoUncertainWrite,
+    syncStreams,
+    verifyState,
+  }))
 }
 
 async function synchronizeOperationalStateBeforeAppend({ syncStreams, writeState }) {
