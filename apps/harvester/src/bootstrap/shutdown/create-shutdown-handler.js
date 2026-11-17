@@ -552,11 +552,9 @@ function createShutdownDiagnostics({ context, cleanupErrors }) {
       failure: failure.failure ? Object.freeze({ ...failure.failure }) : null,
       errors: Object.freeze(failure.errors.map((error) => Object.freeze({ ...error }))),
     }))),
-    cleanupFailures: Object.freeze(cleanupErrors.map((error) => Object.freeze({
-      name: error?.name ?? "Error",
-      code: typeof error?.code === "string" ? error.code : null,
-      failureStage: error?.recoveryFailure?.stage ?? null,
-    }))),
+    cleanupFailures: Object.freeze(cleanupErrors.map((error) => Object.freeze(
+      summarizeShutdownError({ error }),
+    ))),
     userData: Object.freeze({
       accountingFailed: context.state.accountingFailed === true,
       requiresReconciliation: context.state.requiresReconciliation === true,
