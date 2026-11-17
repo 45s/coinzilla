@@ -59,6 +59,42 @@ test("reports invalid optional history configuration without blocking startup", 
   assert.equal(loggedEntries[0].message.includes("relative/history/path"), false, "Persistence diagnostics must not expose configured paths.")
 })
 
+test("closes a partially prepared database after provider connection failure", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-session-partial-prepare-"))
+  t.after(async () => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+  const loggedEntries = []
+  let closeCalled = false
+  const connectionError = new Error("simulated provider connection failure")
+  const database = {
+    state: "new",
+    connect: async () => {
+      throw connectionError
+    },
+    close: async () => {
+      closeCalled = true
+    },
+  }
+
+  const result = await prepareTradingSessionPersistence({
+    tradingMode: "live",
+    env: {
+      HARVESTER_DATABASE_DIRECTORY: directory,
+    },
+    logger: {
+      error: (entry) => loggedEntries.push(entry),
+    },
+    createDatabase: () => database,
+    createSqliteProvider: () => ({}),
+  })
+
+  assert.equal(result, null, "A failed provider connection must disable only ordinary history.")
+  assert.equal(closeCalled, true, "A database allocated before connection failure must still be closed.")
+  assert.equal(loggedEntries[0].persistenceStage, "prepare", "The provider failure must be reported at the preparation boundary.")
+})
+
 test("closes the database even when observer cleanup fails", async () => {
   const calls = []
   const observer = {
