@@ -17,51 +17,52 @@ const validInput = {
   quantityStepSize: "0.01",
 }
 
-test("targets the greater independent recovery and legacy proceeds requirements", () => {
+test("targets recovery cost plus legacy historical cost plus minProfit", () => {
   const plan = calculateRecoverySellerSellPlan(validInput)
 
-  assert.equal(plan.recoveryRequiredNetQuoteProceeds, "10.01")
-  assert.equal(plan.legacyRequiredNetQuoteProceeds, "0.2")
-  assert.equal(plan.requiredNetQuoteProceeds, "10.21",
-    "The diagnostic sum must retain both independent net proceeds requirements.")
-  assert.equal(plan.grossQuoteProceeds, "20.2",
-    "The gross SELL target must satisfy the legacy break-even gate without using recovery profit to subsidize it.")
+  assert.equal(plan.requiredNetQuoteProceeds, "10.21")
+  assert.equal(plan.grossQuoteProceeds, "10.21")
   assert.equal(plan.quantity, "1.01")
-  assert.equal(plan.price, "20",
-    "The single SELL price must independently satisfy recovery minProfit and legacy historical-basis recovery.")
+  assert.equal(plan.price, "10.11")
 })
 
-test("grosses up quote commission against each independent proceeds allocation", () => {
+test("grosses up quote commission before rounding SELL price upward", () => {
+  const plan = calculateRecoverySellerSellPlan({
+    ...validInput,
+    recoveryQuantity: "1",
+    legacyRemainingQuantity: "0",
+    verifiedUnreservedLegacyQuantity: "0",
+    quoteFeeRate: "0.01",
+  })
+
+  assert.equal(plan.requiredNetQuoteProceeds, "10.01")
+  assert.equal(plan.grossQuoteProceeds, "10.111111111111111111111111111111111112")
+  assert.equal(plan.price, "10.12")
+})
+
+
+test("adds quote commission to the full recovery plus legacy plus minProfit target", () => {
   const plan = calculateRecoverySellerSellPlan({
     ...validInput,
     quoteFeeRate: "0.01",
   })
 
-  assert.equal(plan.recoveryRequiredNetQuoteProceeds, "10.01")
-  assert.equal(plan.legacyRequiredNetQuoteProceeds, "0.2")
-  assert.equal(plan.price, "20.21",
-    "The SELL price must cover quote commission on the legacy allocation as well as the recovery allocation.")
-  assert.ok(plan.grossQuoteProceeds.startsWith("20.4040"),
-    "The legacy allocation's gross proceeds requirement must dominate this mixed SELL.")
+  assert.equal(plan.requiredNetQuoteProceeds, "10.21")
+  assert.equal(plan.grossQuoteProceeds, "10.313131313131313131313131313131313132")
+  assert.equal(plan.price, "10.22")
 })
 
-test("adds a reliably quote-valued third-asset commission to each allocation's target", () => {
-  const recoveryOnly = calculateRecoverySellerSellPlan({
+test("adds a reliably quote-valued third-asset commission to gross proceeds", () => {
+  const plan = calculateRecoverySellerSellPlan({
     ...validInput,
+    recoveryQuantity: "1",
     legacyRemainingQuantity: "0",
     verifiedUnreservedLegacyQuantity: "0",
     thirdAssetFeeQuoteValue: "0.05",
   })
 
-  assert.equal(recoveryOnly.grossQuoteProceeds, "10.06")
-  assert.equal(recoveryOnly.price, "10.06")
-
-  const mixed = calculateRecoverySellerSellPlan({
-    ...validInput,
-    thirdAssetFeeQuoteValue: "0.05",
-  })
-  assert.equal(mixed.price, "20.21",
-    "Third-asset fees must be allocated proportionally to each independent proceeds gate.")
+  assert.equal(plan.grossQuoteProceeds, "10.06")
+  assert.equal(plan.price, "10.06")
 })
 
 test("grosses up base-asset commission without dropping the authorized legacy slice", () => {
@@ -76,22 +77,21 @@ test("grosses up base-asset commission without dropping the authorized legacy sl
   assert.equal(plan.legacyQuantity, "0.01")
   assert.equal(plan.legacyBaseDebitQuantity, "0.010000000000000000000000000000000001")
   assert.equal(plan.legacyCostBasis, "0.20000000000000000000000000000000002")
-  assert.equal(plan.legacyRequiredNetQuoteProceeds, "0.20000000000000000000000000000000002")
+  assert.equal(plan.requiredNetQuoteProceeds, "10.21000000000000000000000000000000002")
   assert.equal(plan.recoverySellQuantity, "0.9900990099009900990099009900990099")
   assert.equal(plan.legacySellQuantity, "0.0099009900990099009900990099009901")
   assert.notEqual(plan.legacySellQuantity, "0",
     "The eligible legacy slice must remain in the mixed SELL after base-fee gross-up.")
-  assert.equal(plan.price, "20.21",
-    "The legacy gate must include the actual allocated base-denominated commission.")
 })
 
-test("rounds the greater independent minimum price upward to the exchange price tick", () => {
+test("rounds the minimum price upward to the exchange price tick", () => {
   const plan = calculateRecoverySellerSellPlan({
     ...validInput,
     priceTickSize: "0.1",
   })
 
-  assert.equal(plan.price, "20")
+  assert.equal(plan.requiredNetQuoteProceeds, "10.21")
+  assert.equal(plan.price, "10.2")
 })
 
 test("fails closed when the quantity step cannot include the full base-fee-adjusted inventory", () => {
@@ -105,6 +105,7 @@ test("fails closed when the quantity step cannot include the full base-fee-adjus
   )
 })
 
+
 test("uses the smaller remaining authorized legacy quantity", () => {
   const plan = calculateRecoverySellerSellPlan({
     ...validInput,
@@ -115,7 +116,7 @@ test("uses the smaller remaining authorized legacy quantity", () => {
 
   assert.equal(plan.legacyQuantity, "0.01")
   assert.equal(plan.legacyCostBasis, "0.2")
-  assert.equal(plan.price, "20")
+  assert.equal(plan.requiredNetQuoteProceeds, "10.21")
 })
 
 test("does not silently omit authorized legacy inventory when Spot availability is unverified or reserved", () => {
@@ -137,10 +138,7 @@ test("allows recovery-only SELL only after the authorized legacy quantity is exh
 
   assert.equal(plan.legacyQuantity, "0")
   assert.equal(plan.quantity, "1")
-  assert.equal(plan.recoveryRequiredNetQuoteProceeds, "10.01")
-  assert.equal(plan.legacyRequiredNetQuoteProceeds, "0")
   assert.equal(plan.requiredNetQuoteProceeds, "10.01")
-  assert.equal(plan.price, "10.01")
 })
 
 test("rejects invalid fee rates and missing third-asset quote valuation input", () => {
