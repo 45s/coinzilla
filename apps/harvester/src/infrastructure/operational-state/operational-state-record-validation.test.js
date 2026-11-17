@@ -480,7 +480,7 @@ test("rejects malformed record envelopes, sequence chains, digests and payloads"
     assert.throws(
       () => validateRecord(invalidRecord),
       invalidRecord.expectedError,
-      "The record validator must reject " + invalidRecord.description + ".",
+      `The record validator must reject ${invalidRecord.description}.`,
     )
   }
 })
@@ -501,7 +501,7 @@ test("rejects inconsistent committed-head checkpoint envelopes and digest links"
     assert.throws(
       () => validateCheckpoint(invalidCheckpoint),
       invalidCheckpoint.expectedError,
-      "The committed-head validator must reject " + invalidCheckpoint.description + ".",
+      `The committed-head validator must reject ${invalidCheckpoint.description}.`,
     )
   }
 })
