@@ -99,7 +99,7 @@ function calculateRecoveryAllocation({
     netQuoteProceeds: recoveryNetQuoteProceeds,
     netProfit,
     minProfit,
-    // Allocation diagnostics only. This is not an independent SELL gate.
+    // Independent recovery gate: recover this tranche cost plus minProfit.
     eligible: compareDecimal({
       left: netProfit,
       right: minProfit,
@@ -130,7 +130,7 @@ function calculateLegacyAllocation({
     costBasis,
     netQuoteProceeds: legacyNetQuoteProceeds,
     netProfit,
-    // Allocation diagnostics only. A legacy loss may be offset by recovery profit.
+    // Independent legacy gate: recover historical basis when legacy is included.
     eligible: !legacyApplicable || compareDecimal({
       left: netProfit,
       right: "0",
@@ -138,7 +138,7 @@ function calculateLegacyAllocation({
   })
 }
 
-function calculateCombinedCycle({ recovery, legacy, minProfit }) {
+function calculateCycleDiagnostics({ recovery, legacy, minProfit }) {
   const costBasis = addDecimal({
     left: recovery.costBasis,
     right: legacy.costBasis,
@@ -156,19 +156,23 @@ function calculateCombinedCycle({ recovery, legacy, minProfit }) {
     netQuoteProceeds,
     netProfit,
     minProfit,
-    eligible: compareDecimal({
-      left: netProfit,
-      right: minProfit,
-    }) >= 0,
+    recoveryEligible: recovery.eligible,
+    legacyEligible: legacy.eligible,
+    // The aggregate is diagnostic only; neither leg may subsidize the other.
+    eligible: recovery.eligible && legacy.eligible,
   })
 }
 
 /**
- * Evaluate one combined Recovery Seller cycle SELL.
+ * Evaluate the independent Recovery Seller profitability gates.
  *
- * Recovery and legacy remain separately attributed for accounting diagnostics,
- * but only the combined net result determines eligibility:
- * recovery BUY cost + legacy historical cost + minProfit must be recovered.
+ * The recovery allocation must recover its BUY cost plus minProfit. When a
+ * legacy slice is included, that allocation must independently recover its
+ * historical basis (break even after allocated selling costs). Recovery
+ * surplus cannot subsidize a legacy loss, and legacy surplus cannot subsidize
+ * a recovery tranche that misses minProfit. Recovery-only cycles do not apply
+ * a legacy gate.
+ *
  * All proceeds must already be net of actual quote fees and reliably valued
  * third-asset fees. legacyBaseDebit includes allocated base-asset commissions.
  */
@@ -199,7 +203,7 @@ export function calculateRecoverySellerProfitability({
     legacyBaseDebit,
     legacyNetQuoteProceeds,
   })
-  const cycle = calculateCombinedCycle({
+  const cycle = calculateCycleDiagnostics({
     recovery,
     legacy,
     minProfit,
