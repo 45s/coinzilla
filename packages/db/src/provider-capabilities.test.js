@@ -17,6 +17,15 @@ function createProvider({ capabilities }) {
         delete() {},
       })
     },
+    withReadTransaction(work) {
+      return work({
+        create() {},
+        readOne() {},
+        readMany() {},
+        update() {},
+        delete() {},
+      })
+    },
   }
 }
 
@@ -154,5 +163,33 @@ test("provider capability declarations support the documented storage modes", ()
     database.capabilities.queries.sorting,
     true,
     "The public capability snapshot must not change when the provider mutates its original declaration",
+  )
+})
+
+test("provider composition requires a read transaction operation", () => {
+  const provider = createProvider({
+    capabilities: {
+      transactions: {
+        callbackMode: "synchronous",
+        nestedTransactions: false,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: {
+        modes: ["memory"],
+      },
+    },
+  })
+  delete provider.withReadTransaction
+
+  assert.throws(
+    () => createDatabase({
+      provider,
+    }),
+    /withReadTransaction/,
+    "A provider-neutral database must expose an explicit read transaction operation",
   )
 })

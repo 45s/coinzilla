@@ -27,17 +27,8 @@ function isAsyncFunction(callback) {
   return callback.constructor?.name === "AsyncFunction"
 }
 
-function resolveTransactionIntent(options) {
-  const intent = options?.intent ?? "write"
-  if (intent !== "read" && intent !== "write") {
-    throw new TypeError("SQLite transaction intent must be read or write")
-  }
-  return intent
-}
-
-function createSqliteTransactionHandler({ requireConnection }) {
-  return function withTransaction(work, options = {}) {
-    const intent = resolveTransactionIntent(options)
+function createSqliteTransactionHandler({ requireConnection, intent }) {
+  return function withTransaction(work) {
     const activeConnection = requireConnection()
 
     if (activeConnection.isTransaction) {
@@ -136,7 +127,14 @@ function createSqliteAdapter({
       connection = null
     },
 
-    withTransaction: createSqliteTransactionHandler({ requireConnection }),
+    withTransaction: createSqliteTransactionHandler({
+      requireConnection,
+      intent: "write",
+    }),
+    withReadTransaction: createSqliteTransactionHandler({
+      requireConnection,
+      intent: "read",
+    }),
   }
 
   return {
@@ -155,7 +153,8 @@ function createSqliteAdapter({
  * @returns {ReturnType<typeof createDatabase> & {
  *   exec: (sql: string) => void,
  *   prepare: (sql: string) => import('node:sqlite').StatementSync,
- *   transaction: (work: (transaction: unknown) => unknown, options?: {intent?: "read"|"write"}) => Promise<unknown>,
+ *   transaction: (work: (transaction: unknown) => unknown) => Promise<unknown>,
+ *   readTransaction: (work: (transaction: unknown) => unknown) => Promise<unknown>,
  *   migrate: (migrations: Array<{version: number, name: string, up: Function}>) => Promise<number[]>
  * }}
  */
@@ -186,6 +185,7 @@ export function createSqliteDatabase({
   const sqliteDatabase = Object.freeze({
     connect: database.connect,
     transaction: database.transaction,
+    readTransaction: database.readTransaction,
     close: database.close,
     get state() {
       return database.state

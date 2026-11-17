@@ -71,7 +71,9 @@ async function verifyReadsDuringWriteReservation({ database, competingConnection
 }
 
 async function closeConcurrencyFixture({ directory, database, competingConnection }) {
-  competingConnection.exec("ROLLBACK")
+  if (competingConnection.isTransaction) {
+    competingConnection.exec("ROLLBACK")
+  }
   competingConnection.close()
   await database.close()
   await rm(directory, {

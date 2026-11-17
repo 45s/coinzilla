@@ -5,6 +5,10 @@ const REQUIRED_PROVIDER_METHODS = Object.freeze([
   "close",
   "withTransaction",
 ])
+const REQUIRED_DATABASE_PROVIDER_METHODS = Object.freeze([
+  ...REQUIRED_PROVIDER_METHODS,
+  "withReadTransaction",
+])
 const CRUD_METHODS = Object.freeze([
   "create",
   "readOne",
@@ -113,11 +117,13 @@ function createProviderNeutralFacade({ database, provider }) {
   const capabilities = createCapabilitiesSnapshot(provider.capabilities)
 
   function runOperation({ operation, input }) {
-    return database.transaction((transaction) => {
+    const runTransaction = READ_ONLY_OPERATIONS.has(operation)
+      ? database.readTransaction
+      : database.transaction
+
+    return runTransaction((transaction) => {
       const context = createTransactionFacade(transaction)
       return context[operation](input)
-    }, {
-      intent: READ_ONLY_OPERATIONS.has(operation) ? "read" : "write",
     })
   }
 
@@ -176,7 +182,10 @@ export function createDatabase(options = {}) {
     throw new TypeError("A database adapter object is required")
   }
 
-  const missingMethods = REQUIRED_PROVIDER_METHODS.filter(
+  const requiredMethods = hasProvider
+    ? REQUIRED_DATABASE_PROVIDER_METHODS
+    : REQUIRED_PROVIDER_METHODS
+  const missingMethods = requiredMethods.filter(
     (method) => typeof provider[method] !== "function",
   )
   if (missingMethods.length > 0) {
