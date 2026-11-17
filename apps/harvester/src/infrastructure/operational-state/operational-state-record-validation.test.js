@@ -48,7 +48,10 @@ test("accepts a canonical process-stop fact bound to its runtime session", () =>
       factId: "process-stopped:test-session",
       factType: "PROCESS_STOPPED",
       runtimeSessionId: "test-session",
-      data: { reason: "NORMAL_SHUTDOWN", clean: true },
+      data: {
+        reason: "NORMAL_SHUTDOWN",
+        clean: true,
+      },
     },
     "A valid process-stop fact must retain its stable identity, session binding, and canonical payload.",
   )
@@ -60,7 +63,10 @@ test("rejects process-stop facts whose stable identity belongs to another runtim
       fact: {
         factId: "process-stopped:other-session",
         factType: "PROCESS_STOPPED",
-        data: { reason: "NORMAL_SHUTDOWN", clean: true },
+        data: {
+        reason: "NORMAL_SHUTDOWN",
+        clean: true,
+      },
       },
       runtimeSessionId: "test-session",
     }),
@@ -193,7 +199,10 @@ test("parses only complete newline-terminated canonical JSONL records", () => {
     beta: "two",
   })
   assert.deepEqual(
-    parseJsonLines({ source: `${canonicalLine}\n`, label: "test ledger" }),
+    parseJsonLines({
+      source: `${canonicalLine}\n`,
+      label: "test ledger",
+    }),
     [{ alpha: 1, beta: "two" }],
     "A complete canonical JSONL record must be returned without changing its payload.",
   )
@@ -207,12 +216,18 @@ test("parses only complete newline-terminated canonical JSONL records", () => {
     "A final partial line must not be mistaken for a committed record.",
   )
   assert.throws(
-    () => parseJsonLines({ source: `${canonicalLine}\n\n`, label: "test ledger" }),
+    () => parseJsonLines({
+      source: `${canonicalLine}\n\n`,
+      label: "test ledger",
+    }),
     /empty or partial/,
     "An empty line inside the append-only stream must be rejected.",
   )
   assert.throws(
-    () => parseJsonLines({ source: '{"beta":"two","alpha":1}\n', label: "test ledger" }),
+    () => parseJsonLines({
+      source: '{"beta":"two","alpha":1}\n',
+      label: "test ledger",
+    }),
     /not canonical JSON/,
     "Equivalent JSON with non-canonical key order must not bypass byte-stable serialization.",
   )
