@@ -126,7 +126,7 @@ export default defineConfig([
       ],
 
       // Debugging and logging
-      "no-console": "warn",
+      "no-console": "error",
       "symbol-description": "error",
     },
   },
