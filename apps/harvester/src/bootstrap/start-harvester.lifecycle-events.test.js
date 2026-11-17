@@ -4,6 +4,7 @@ import assert from "node:assert/strict"
 import { Asset, Balance, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { startHarvester } from "./start-harvester.js"
+import { TEST_BINANCE_CAPABILITIES } from "../../test-support/binance-test-capabilities.js"
 const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
   flush: async () => ({ ok: true,
@@ -203,6 +204,7 @@ function createBroker(options = {}) {
     priceHandler: null,
   }
   return {
+    capabilities: TEST_BINANCE_CAPABILITIES,
     ...createBrokerConnectionPorts(options),
     ...createBrokerAccountPorts(),
     ...createBrokerUserDataPorts({ ...options,
