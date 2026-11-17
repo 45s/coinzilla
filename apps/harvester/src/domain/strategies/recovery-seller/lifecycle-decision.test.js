@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 import {
   applyRecoverySellerLifecycleTransition,
   createRecoverySellerLifecycleDecision,
+  createRecoverySellerStopAndReconcileDecision,
 } from "./lifecycle-decision.js"
 import {
   createRecoverySellerStopDecision,
@@ -215,4 +216,41 @@ test("keeps a latched STOP active while permitting only WAIT or RECONCILE transi
   assert.equal(reconcileResult.decision, reconcileDecision, "Reconciling an existing unknown order outcome must remain available during global STOP.")
   assert.equal(submitResult.decision, stopDecision, "A latched STOP must reject every new trading submission, even if the candidate decision is otherwise eligible.")
   assert.equal(submitResult.stopState, stoppedState, "A blocked submission must not clear or replace the existing STOP state.")
+})
+
+
+test("latches global STOP while preserving RECONCILE for an unknown existing submission", () => {
+  const result = createRecoverySellerStopAndReconcileDecision({
+    stopState: createRecoverySellerStopState(),
+    orderIdentity: {
+      clientOrderId: "h-unknown-submit",
+    },
+    explanation: "The submission acknowledgement was lost and the broker outcome is unknown",
+  })
+
+  assert.equal(result.stopState.status, "STOPPED",
+    "An unknown submission outcome must latch global STOP before any later trading decision.")
+  assert.equal(result.stopDecision.outcome, "BLOCK",
+    "The global STOP decision must independently block every new trading action.")
+  assert.equal(result.stopState.decision, result.stopDecision,
+    "The STOP latch must retain the original evidence.")
+  assert.equal(result.decision.outcome, "RECONCILE",
+    "The original unresolved order must remain eligible for non-trading reconciliation.")
+  assert.deepEqual(result.decision.orderIdentity, {
+    clientOrderId: "h-unknown-submit",
+  }, "Reconciliation must retain the original Harvester client identity when broker acknowledgement is missing.")
+  assert.equal(result.stopDecision.reconciliationRequired, true,
+    "The STOP decision must explicitly require reconciliation.")
+})
+
+test("rejects a STOP-and-reconcile transition without an existing order identity", () => {
+  assert.throws(
+    () => createRecoverySellerStopAndReconcileDecision({
+      stopState: createRecoverySellerStopState(),
+      orderIdentity: {},
+      explanation: "Unknown submission outcome",
+    }),
+    /RECONCILE requires clientOrderId/,
+    "An unknown outcome must never create an anonymous reconciliation action.",
+  )
 })
