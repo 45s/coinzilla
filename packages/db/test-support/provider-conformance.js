@@ -391,6 +391,44 @@ async function verifyCommit(database) {
   )
 }
 
+async function verifyTransactionCallbackMode(database) {
+  if (database.capabilities.transactions.callbackMode === "synchronous") {
+    await assert.rejects(
+      database.transaction(async () => {}),
+      TypeError,
+      "A provider declaring synchronous callbacks must reject async transaction work",
+    )
+    return
+  }
+
+  await database.transaction(async (transaction) => {
+    await transaction.create({
+      collection: "records",
+      record: {
+        id: "async-transaction-1",
+        step: "before-await",
+      },
+    })
+    await Promise.resolve()
+    await transaction.create({
+      collection: "records",
+      record: {
+        id: "async-transaction-2",
+        step: "after-await",
+      },
+    })
+  })
+
+  const records = await database.readMany({
+    collection: "records",
+  })
+  assert.deepEqual(
+    records.map((record) => record.id),
+    ["async-transaction-1", "async-transaction-2"],
+    "A provider declaring asynchronous callbacks must keep the transaction open across awaited work",
+  )
+}
+
 async function verifyLifecycle({ createDatabase }) {
   const database = createDatabase({
     storageKey: ":memory:",
@@ -553,6 +591,12 @@ export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
     description: "successful transactions commit all record changes",
     createDatabase,
     verify: verifyCommit,
+  })
+  registerStandardTest({
+    name,
+    description: "transaction callbacks follow the declared callback mode",
+    createDatabase,
+    verify: verifyTransactionCallbackMode,
   })
   registerStandardTest({
     name,
