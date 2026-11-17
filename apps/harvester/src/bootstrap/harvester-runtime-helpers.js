@@ -121,12 +121,14 @@ export function isHarvesterMarketBookFresh({ marketBook, isMarketDataFresh, now 
 export function createHarvesterCandleHistoryService({
   createCandleHistoryService,
   broker,
+  providerInstanceId,
   logger,
   now,
   getTradingEngine,
 } = {}) {
   return createCandleHistoryService({
     broker,
+    providerInstanceId,
     logger,
     now,
     onSnapshot: async ({ symbol, snapshot } = {}) => {

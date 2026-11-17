@@ -415,6 +415,7 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
   resources.candleHistoryService = createHarvesterCandleHistoryService({
     createCandleHistoryService,
     broker,
+    providerInstanceId: startup.providerInstanceId,
     logger: startup.logger,
     now: startup.now,
     getTradingEngine: () => resources.tradingEngine,
@@ -617,6 +618,7 @@ async function startHarvesterPreflightServices({ startup, portfolio, resources, 
   resources.userDataSubscription = await subscribeToUserData({
     broker: resources.broker,
     brokerName: startup.brokerName,
+    providerInstanceId: startup.providerInstanceId,
     eventPublisher: startup.eventPublisher,
     logger: startup.logger,
     state: resources.userDataState,
@@ -644,6 +646,7 @@ async function startHarvesterMarketServices({ startup, portfolio, resources, fre
   await subscribeToMarketData({
     broker: resources.broker,
     brokerName: startup.brokerName,
+    providerInstanceId: startup.providerInstanceId,
     eventPublisher: startup.eventPublisher,
     logger: startup.logger,
     tradingEnabled: startup.tradingEnabled,

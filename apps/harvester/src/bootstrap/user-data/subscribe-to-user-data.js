@@ -132,6 +132,7 @@ function activateTradingEngine({
 export async function subscribeToUserData({
   broker,
   brokerName,
+  providerInstanceId,
   eventPublisher,
   logger,
   state,
@@ -157,7 +158,13 @@ message: "Subscribing to Binance user-data events" })
     onEvent,
     onStatus,
   })
-  onSubscriptionEstablished?.(userDataSubscription)
+  const ownedUserDataSubscription = providerInstanceId
+    ? Object.freeze({
+      providerInstanceId,
+      disconnect: () => userDataSubscription.disconnect(),
+    })
+    : userDataSubscription
+  onSubscriptionEstablished?.(ownedUserDataSubscription)
   logSystem({ logger,
 message: "User-data stream connected" })
 
@@ -171,7 +178,7 @@ publishAccountSnapshot })
 
   if (!tradingEnabled) {
     await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
-    return userDataSubscription
+    return ownedUserDataSubscription
   }
   if (state.accountingFailed) {
     throw new Error(
@@ -191,5 +198,5 @@ tradingModeLabel })
     getAccountSnapshot,
     resumeDeferredStrategyEvaluations,
   })
-  return userDataSubscription
+  return ownedUserDataSubscription
 }
