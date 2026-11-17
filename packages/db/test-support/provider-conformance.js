@@ -845,13 +845,7 @@ function registerPersistenceTest({ name, createDatabase, storageMode, cleanupSto
   })
 }
 
-function registerCrudAndQueryTests({
-  name,
-  createDatabase,
-  capabilities,
-  storageMode,
-  cleanupStorage,
-}) {
+function registerCrudTests({ name, createDatabase, storageMode, cleanupStorage }) {
   registerStandardTest({
     name,
     description: "CRUD operations preserve records and collection isolation",
@@ -868,46 +862,47 @@ function registerCrudAndQueryTests({
     storageMode,
     cleanupStorage,
   })
-  registerQueryCapabilityTest({
-    name,
-    description: "exact equality filters distinguish JSON values",
-    capability: "equalityFilters",
-    createDatabase,
-    capabilities,
-    verify: verifyFilters,
-    storageMode,
-    cleanupStorage,
-  })
-  registerQueryCapabilityTest({
-    name,
-    description: "sorting is stable and honors requested fields",
-    capability: "sorting",
-    createDatabase,
-    capabilities,
-    verify: verifySorting,
-    storageMode,
-    cleanupStorage,
-  })
-  registerQueryCapabilityTest({
-    name,
-    description: "sorting uses portable JSON scalar ordering",
-    capability: "sorting",
-    createDatabase,
-    capabilities,
-    verify: verifyScalarSortOrdering,
-    storageMode,
-    cleanupStorage,
-  })
-  registerQueryCapabilityTest({
-    name,
-    description: "pagination applies limit and offset after sorting",
-    capability: "pagination",
-    createDatabase,
-    capabilities,
-    verify: verifyPagination,
-    storageMode,
-    cleanupStorage,
-  })
+}
+
+function registerQueryTests({ name, createDatabase, capabilities, storageMode, cleanupStorage }) {
+  const tests = [
+    {
+      description: "exact equality filters distinguish JSON values",
+      capability: "equalityFilters",
+      verify: verifyFilters,
+    },
+    {
+      description: "sorting is stable and honors requested fields",
+      capability: "sorting",
+      verify: verifySorting,
+    },
+    {
+      description: "sorting uses portable JSON scalar ordering",
+      capability: "sorting",
+      verify: verifyScalarSortOrdering,
+    },
+    {
+      description: "pagination applies limit and offset after sorting",
+      capability: "pagination",
+      verify: verifyPagination,
+    },
+  ]
+
+  for (const queryTest of tests) {
+    registerQueryCapabilityTest({
+      name,
+      createDatabase,
+      capabilities,
+      storageMode,
+      cleanupStorage,
+      ...queryTest,
+    })
+  }
+}
+
+function registerCrudAndQueryTests(options) {
+  registerCrudTests(options)
+  registerQueryTests(options)
 }
 
 function registerTransactionTests({ name, createDatabase, storageMode, cleanupStorage }) {
