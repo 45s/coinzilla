@@ -1,4 +1,4 @@
-import { assertBrokerPort } from "../../application/ports/broker.port.js"
+import { createProviderRegistry } from "../../application/providers/provider-registry.js"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { publishLifecycleEvent } from "../../application/events/publish-lifecycle-event.js"
 import {
@@ -15,32 +15,44 @@ function logSystem({ logger, ...data }) {
 }
 
 /**
- * Construct, validate, connect, and publish lifecycle evidence for the broker.
- * Connection failure still attempts disconnect and aggregates both failures.
+ * Construct and register the configured Binance instance, connect it through the registry,
+ * and publish the existing broker lifecycle evidence.
+ * Connection failure still attempts registry-owned disconnect and aggregates both failures.
  */
 export async function connectBroker({
   brokerAdapterFactory,
   env,
   brokerName,
+  providerType,
+  providerInstanceId,
+  accountId,
   tradingMode,
   eventPublisher,
   logger,
 } = {}) {
-  const broker = assertBrokerPort({
-    broker: brokerAdapterFactory({
-      config: {
-        apiKey: env.BINANCE_API_KEY,
-        apiSecret: env.BINANCE_API_SECRET_KEY,
-        tradingMode,
-      },
-    }),
+  const broker = brokerAdapterFactory({
+    config: {
+      apiKey: env.BINANCE_API_KEY,
+      apiSecret: env.BINANCE_API_SECRET_KEY,
+      tradingMode,
+    },
   })
+  const providerRegistry = createProviderRegistry({
+    providers: [{
+      providerInstanceId,
+      providerType,
+      accountId,
+      environment: tradingMode,
+      broker,
+    }],
+  })
+  const provider = providerRegistry.get(providerInstanceId)
 
   try {
     logSystem({ logger,
 message: "Connecting to Binance broker" })
 
-    await broker.connect()
+    await providerRegistry.connect(providerInstanceId)
     publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTED,
@@ -60,7 +72,7 @@ error }),
       errorStack: error?.stack,
     })
     try {
-      await broker.disconnect()
+      await providerRegistry.disconnect(providerInstanceId)
     } catch (disconnectError) {
       throw new AggregateError(
         [error, disconnectError],
@@ -71,5 +83,5 @@ error }),
     throw error
   }
 
-  return broker
+  return { providerRegistry, provider }
 }
