@@ -15,18 +15,21 @@ class FakeWebSocket {
     FakeWebSocket.instances.push(this)
   }
 
-  addEventListener(type, listener) {
+  addEventListener(...args) {
+    const [type, listener] = args
     if (!this.listeners.has(type)) {
       this.listeners.set(type, new Set())
     }
     this.listeners.get(type).add(listener)
   }
 
-  removeEventListener(type, listener) {
+  removeEventListener(...args) {
+    const [type, listener] = args
     this.listeners.get(type)?.delete(listener)
   }
 
-  emit(type, event = {}) {
+  emit(...args) {
+    const [type, event = {}] = args
     for (const listener of this.listeners.get(type) ?? []) {
       listener(event)
     }
