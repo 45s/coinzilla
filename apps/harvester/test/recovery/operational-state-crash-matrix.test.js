@@ -236,7 +236,7 @@ test("reopens the real append-only ledger after intent, acknowledgement, and fil
     acknowledged })
 })
 
-async function createRecoveryCycleAccountingEvidence({
+async function createRecoveryCycleOrdersAndFills({
   store,
   cycleName,
   buyQuantity,
@@ -279,25 +279,59 @@ async function createRecoveryCycleAccountingEvidence({
     quoteQuantity: sellQuoteQuantity,
     price: sellPrice,
   })
-  await applyFill({ store,
-    fill: buyFill })
-  await applyFill({ store,
-    fill: sellFill })
+  return { buyOrder, sellOrder, buyFill, sellFill }
+}
+
+async function createRecoveryCycleAccountingProjection({ buyFill, sellFill }) {
   const { portfolio } = new Portfolio()
-    .applyFill({ fill: buyFill,
-      strategyId: StrategyId.COIN_GRABBER }).portfolio
-    .applyFill({ fill: sellFill,
-      strategyId: StrategyId.COIN_GRABBER })
+    .applyFill({
+      fill: buyFill,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).portfolio
+    .applyFill({
+      fill: sellFill,
+      strategyId: StrategyId.COIN_GRABBER,
+    })
   const recoveryLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill,
-      strategyId: StrategyId.COIN_GRABBER }).ledger
-    .applyFill({ fill: sellFill,
-      strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({
+      fill: buyFill,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).ledger
+    .applyFill({
+      fill: sellFill,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).ledger
   const position = portfolio.getPosition({ marketId: market.id })
-  return { buyOrder,
-    sellOrder,
-    recoveryLedger,
-    position }
+  return { recoveryLedger, position }
+}
+
+async function createRecoveryCycleAccountingEvidence({
+  store,
+  cycleName,
+  buyQuantity,
+  sellQuantity,
+  buyPrice,
+  sellPrice,
+  buyQuoteQuantity,
+  sellQuoteQuantity,
+}) {
+  const ordersAndFills = await createRecoveryCycleOrdersAndFills({
+    store,
+    cycleName,
+    buyQuantity,
+    sellQuantity,
+    buyPrice,
+    sellPrice,
+    buyQuoteQuantity,
+    sellQuoteQuantity,
+  })
+  await applyFill({ store, fill: ordersAndFills.buyFill })
+  await applyFill({ store, fill: ordersAndFills.sellFill })
+  const projection = await createRecoveryCycleAccountingProjection({
+    buyFill: ordersAndFills.buyFill,
+    sellFill: ordersAndFills.sellFill,
+  })
+  return { ...ordersAndFills, ...projection }
 }
 
 async function recordNotCompletedRecoveryCycle({ store } = {}) {
