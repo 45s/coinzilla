@@ -163,15 +163,18 @@ function createStopResult({ stopState, explanation }) {
 }
 
 function findBlockingOrders({ activeOrders, symbol }) {
-  const marketOrders = activeOrders.filter((order) => order?.market?.symbol === symbol)
-  const unsupportedOrder = marketOrders.find((order) =>
-    !ACTIVE_ORDER_STATUSES.has(order.status) ||
-    !["BUY", "SELL"].includes(order.side),
-  )
-  if (unsupportedOrder) {
-    throw new Error("Recovery Seller received an unsupported active-order status or side")
+  if (!Array.isArray(activeOrders)) {
+    throw new TypeError("Recovery Seller activeOrders must be an array")
   }
-  return marketOrders
+  for (const order of activeOrders) {
+    if (!order || typeof order !== "object" || Array.isArray(order) ||
+        typeof order.market?.symbol !== "string" || !order.market.symbol.trim() ||
+        !["BUY", "SELL"].includes(order.side) ||
+        !ACTIVE_ORDER_STATUSES.has(order.status)) {
+      throw new Error("Recovery Seller received a malformed or unsupported active-order snapshot")
+    }
+  }
+  return activeOrders.filter((order) => order.market.symbol === symbol)
 }
 
 function resolveExistingOrder({ stopState, activeOrders, symbol }) {
