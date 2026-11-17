@@ -108,6 +108,8 @@ test("Bitunix Spot broker rejects malformed deposit rows instead of returning pa
     [createDepositRecord({ id: Number.MAX_SAFE_INTEGER + 1 })],
     [createDepositRecord({ amount: "not-a-decimal" })],
     [createDepositRecord({ ctime: Number.MAX_SAFE_INTEGER + 1 })],
+    [createDepositRecord({ network: 12 })],
+    [createDepositRecord({ transactionHash: 12 })],
   ]
   const results = await Promise.all(malformedResponses.map(async (response) => {
     const { broker } = createBroker({ response })
@@ -138,11 +140,18 @@ test("Bitunix Spot broker preserves on-chain deposit fields and unfamiliar statu
     amount: "1000.00000000",
     status: "future_status",
   })
-  const { broker } = createBroker({ response: [onChainDeposit] })
+  const { broker, calls } = createBroker({ response: [onChainDeposit] })
 
-  const result = await broker.getDeposits({ type: "deposit" })
+  const result = await broker.getDeposits({
+    type: "deposit",
+    transactionHash: onChainDeposit.transactionHash,
+  })
 
   assert.equal(result.ok, true, "a documented on-chain deposit record must be accepted")
+  assert.deepEqual(calls[0].body, {
+    type: "deposit",
+    transactionHash: onChainDeposit.transactionHash,
+  }, "transactionHash must be sent only with the explicit on-chain deposit type")
   assert.equal(result.data[0].transactionHash, onChainDeposit.transactionHash, "on-chain transaction hashes must remain unchanged")
   assert.equal(result.data[0].network, "Tron (TRC-20)", "on-chain network names must remain unchanged")
   assert.equal(result.data[0].status, "future_status", "unfamiliar deposit statuses must remain visible without guessed normalization")
@@ -156,4 +165,28 @@ test("Bitunix Spot broker normalizes the single-object deposit response document
 
   assert.equal(result.ok, true, "the documented single-object deposit data shape must be supported")
   assert.deepEqual(result.data, [depositRecord], "a single deposit record must be returned as a one-record immutable collection")
+})
+
+test("Bitunix Spot broker preserves safe numeric IDs and string timestamps when optional fields are absent", async () => {
+  const depositRecord = createDepositRecord({
+    id: 487067,
+    ctime: "1744191503000",
+  })
+  delete depositRecord.transactionHash
+  delete depositRecord.network
+  const { broker } = createBroker({ response: [depositRecord] })
+
+  const result = await broker.getDeposits()
+
+  assert.equal(result.ok, true, "safe numeric IDs and integer-string timestamps must remain supported")
+  assert.deepEqual(result.data[0], {
+    id: "487067",
+    coin: "USDT",
+    type: "inside_transfer_in",
+    fromAddress: "989541187",
+    toAddress: "681979174",
+    amount: "10.00000000",
+    status: "pending",
+    ctime: "1744191503000",
+  }, "absent optional network and transactionHash fields must remain absent")
 })
