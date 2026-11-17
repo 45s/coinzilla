@@ -132,6 +132,14 @@ export class BitunixSpotWebSocketClient {
   #state = "idle"
   #pending = new Map()
   #removeListeners = []
+  #apiKey
+  #apiSecret
+  #transport
+  #now
+  #nonceFactory
+  #idFactory
+  #setTimeout
+  #clearTimeout
 
   /**
    * @param {{apiKey: string, apiSecret: string, url?: string, requestTimeout?: number, connectTimeout?: number, closeTimeout?: number, transportFactory?: (options: object) => object, now?: () => number, nonceFactory?: () => string, idFactory?: () => string|number, setTimeoutFn?: typeof setTimeout, clearTimeoutFn?: typeof clearTimeout}} options
@@ -155,8 +163,21 @@ export class BitunixSpotWebSocketClient {
         typeof apiSecret !== "string" || !apiSecret.trim()) {
       throw new TypeError("Bitunix Spot WebSocket API credentials are required")
     }
-    if (typeof url !== "string" || !url.startsWith("wss://")) {
-      throw new TypeError("Bitunix Spot WebSocket URL must use wss://")
+    let parsedUrl
+    try {
+      parsedUrl = new URL(url)
+    } catch {
+      throw new TypeError("Bitunix Spot WebSocket URL must be the official Bitunix Spot endpoint")
+    }
+    if (parsedUrl.protocol !== "wss:" ||
+        parsedUrl.hostname !== "openapi.bitunix.com" ||
+        parsedUrl.port !== "" ||
+        parsedUrl.pathname !== "/ws-api/v1" ||
+        parsedUrl.username ||
+        parsedUrl.password ||
+        parsedUrl.search ||
+        parsedUrl.hash) {
+      throw new TypeError("Bitunix Spot WebSocket URL must be the official Bitunix Spot endpoint")
     }
     if (!Number.isInteger(requestTimeout) || requestTimeout < 1) {
       throw new RangeError("Bitunix Spot WebSocket requestTimeout must be a positive integer")
@@ -169,26 +190,26 @@ export class BitunixSpotWebSocketClient {
       throw new TypeError("Bitunix Spot WebSocket timer dependencies must be functions")
     }
 
-    this.apiKey = apiKey
-    this.apiSecret = apiSecret
     this.url = url
     this.requestTimeout = requestTimeout
-    this.now = now
-    this.nonceFactory = nonceFactory
-    this.idFactory = idFactory
-    this.setTimeout = setTimeoutFn
-    this.clearTimeout = clearTimeoutFn
+    this.#apiKey = apiKey
+    this.#apiSecret = apiSecret
+    this.#now = now
+    this.#nonceFactory = nonceFactory
+    this.#idFactory = idFactory
+    this.#setTimeout = setTimeoutFn
+    this.#clearTimeout = clearTimeoutFn
 
-    this.transport = transportFactory({
+    this.#transport = transportFactory({
       url,
       ...(connectTimeout === undefined ? {} : { connectTimeout }),
       ...(closeTimeout === undefined ? {} : { closeTimeout }),
     })
-    validateTransport({ transport: this.transport })
+    validateTransport({ transport: this.#transport })
     this.#removeListeners = [
-      this.transport.onMessage((message) => this.#handleMessage(message)),
-      this.transport.onClose((event) => this.#handleClose(event)),
-      this.transport.onError((error) => this.#handleError(error)),
+      this.#transport.onMessage((message) => this.#handleMessage(message)),
+      this.#transport.onClose((event) => this.#handleClose(event)),
+      this.#transport.onError((error) => this.#handleError(error)),
     ].filter((remove) => typeof remove === "function")
   }
 
@@ -213,7 +234,7 @@ export class BitunixSpotWebSocketClient {
     }
     this.#state = "connecting"
     try {
-      await this.transport.connect()
+      await this.#transport.connect()
       if (this.#state === "closed") {
         throw new BitunixWebSocketError({
           message: "Bitunix Spot WebSocket connection closed during connect",
@@ -330,7 +351,7 @@ export class BitunixSpotWebSocketClient {
       kind: "connection",
     }))
     try {
-      await this.transport.close()
+      await this.#transport.close()
     } finally {
       this.#removeTransportListeners()
     }
@@ -351,8 +372,8 @@ export class BitunixSpotWebSocketClient {
     } catch (error) {
       return Promise.reject(error)
     }
-    const nonce = this.nonceFactory()
-    const timestamp = String(this.now())
+    const nonce = this.#nonceFactory()
+    const timestamp = String(this.#now())
     if (typeof nonce !== "string" || !nonce.trim()) {
       return Promise.reject(new TypeError("Bitunix Spot WebSocket nonce must be a non-empty string"))
     }
@@ -362,7 +383,7 @@ export class BitunixSpotWebSocketClient {
 
     const signedParams = {
       ...params,
-      apiKey: this.apiKey,
+      apiKey: this.#apiKey,
       timestamp,
       nonce,
     }
@@ -371,8 +392,8 @@ export class BitunixSpotWebSocketClient {
       sign = createBitunixWebSocketSignature({
         nonce,
         timestamp,
-        apiKey: this.apiKey,
-        secretKey: this.apiSecret,
+        apiKey: this.#apiKey,
+        secretKey: this.#apiSecret,
         params: signedParams,
       })
     } catch (error) {
@@ -390,7 +411,7 @@ export class BitunixSpotWebSocketClient {
   }
 
   #createRequestId() {
-    const id = this.idFactory()
+    const id = this.#idFactory()
     if ((typeof id !== "string" && typeof id !== "number") ||
         id === "" || (typeof id === "number" && !Number.isFinite(id))) {
       throw new TypeError("Bitunix Spot WebSocket request ID must be a non-empty string or finite number")
@@ -404,7 +425,7 @@ export class BitunixSpotWebSocketClient {
   #sendRequest({ id, method, params }) {
     const key = String(id)
     return new Promise((resolve, reject) => {
-      const timer = this.setTimeout(() => {
+      const timer = this.#setTimeout(() => {
         const pending = this.#pending.get(key)
         if (!pending) {
           return
@@ -426,7 +447,7 @@ export class BitunixSpotWebSocketClient {
         timer,
       })
       try {
-        this.transport.send(JSON.stringify({
+        this.#transport.send(JSON.stringify({
           id,
           method,
           params,
@@ -435,7 +456,7 @@ export class BitunixSpotWebSocketClient {
         const pending = this.#pending.get(key)
         if (pending) {
           this.#pending.delete(key)
-          this.clearTimeout(pending.timer)
+          this.#clearTimeout(pending.timer)
         }
         reject(new BitunixWebSocketError({
           message: `Failed to send Bitunix Spot WebSocket RPC "${method}"`,
@@ -477,7 +498,7 @@ export class BitunixSpotWebSocketClient {
       return
     }
     this.#pending.delete(key)
-    this.clearTimeout(pending.timer)
+    this.#clearTimeout(pending.timer)
 
     const code = normalizeResponseCode({
       code: response.code,
@@ -524,12 +545,12 @@ export class BitunixSpotWebSocketClient {
       cause: error,
     }))
     this.#removeTransportListeners()
-    void this.transport.close().catch(() => {})
+    void this.#transport.close().catch(() => {})
   }
 
   #rejectPending(error) {
     for (const pending of this.#pending.values()) {
-      this.clearTimeout(pending.timer)
+      this.#clearTimeout(pending.timer)
       pending.reject(error)
     }
     this.#pending.clear()
