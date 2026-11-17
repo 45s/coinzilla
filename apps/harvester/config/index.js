@@ -5,7 +5,11 @@ import { CG_COIN_GRABBER_CONFIG } from "./strategies/cg-coin-grabber.js";
 export const appConfig = {
   brokers: {
     instances: {
-      binancePrimary: { provider: "binance", accountId: "binance-primary" },
+      binancePrimary: {
+        provider: "binance",
+        accountId: "binance-primary",
+        credentialEnv: { apiKey: "BINANCE_API_KEY", apiSecret: "BINANCE_API_SECRET_KEY" },
+      },
     },
     selection: {
       execution: "binancePrimary",

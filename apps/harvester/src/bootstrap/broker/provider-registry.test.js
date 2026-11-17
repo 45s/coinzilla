@@ -85,6 +85,23 @@ test("rejects a provider whose declared required capability is unknown", async (
   await assert.rejects(createRegistry({ brokers: [broker] }), /account.snapshot/)
 })
 
+test("resolves separate credentials for same-provider instances without storing secrets in descriptors", async () => {
+  const received = []
+  const registry = await createProviderRegistry({
+    providerInstances: [
+      { ...descriptor(), credentialEnv: { apiKey: "PRIMARY_KEY", apiSecret: "PRIMARY_SECRET" } },
+      { ...descriptor("binanceSecondary"), accountId: "binance-secondary", credentialEnv: { apiKey: "SECONDARY_KEY", apiSecret: "SECONDARY_SECRET" } },
+    ],
+    selections,
+    adapterFactories: { binance: ({ config }) => { received.push(config); return createBroker([]) } },
+    env: { PRIMARY_KEY: "primary-key", PRIMARY_SECRET: "primary-secret", SECONDARY_KEY: "secondary-key", SECONDARY_SECRET: "secondary-secret" },
+  })
+  assert.deepEqual(received.map(({ apiKey, apiSecret }) => [apiKey, apiSecret]), [
+    ["primary-key", "primary-secret"], ["secondary-key", "secondary-secret"],
+  ])
+  assert.equal(JSON.stringify(registry.descriptors).includes("primary-secret"), false, "Registry descriptors must never expose credentials.")
+})
+
 test("connects and disconnects each instance once", async () => {
   const { registry, calls } = await createRegistry()
   const broker = registry.getBrokerPort({ instanceId: "binancePrimary" })

@@ -149,7 +149,7 @@ function validateBrokerConfiguration(config) {
     }
     requireRecord({ value: definition, path: `brokers.instances.${id}` })
     for (const key of Object.keys(definition)) {
-      if (key !== "provider" && key !== "accountId") {
+      if (key !== "provider" && key !== "accountId" && key !== "credentialEnv") {
         fail({ path: `brokers.instances.${id}.${key}`, expectation: "provider and non-secret accountId only" })
       }
     }
@@ -158,6 +158,19 @@ function validateBrokerConfiguration(config) {
     }
     if (typeof definition.accountId !== "string" || !definition.accountId.trim()) {
       fail({ path: `brokers.instances.${id}.accountId`, expectation: "a stable non-secret account ID" })
+    }
+    if (definition.credentialEnv !== undefined) {
+      requireRecord({ value: definition.credentialEnv, path: `brokers.instances.${id}.credentialEnv` })
+      for (const key of Object.keys(definition.credentialEnv)) {
+        if (key !== "apiKey" && key !== "apiSecret") {
+          fail({ path: `brokers.instances.${id}.credentialEnv.${key}`, expectation: "apiKey or apiSecret environment variable name" })
+        }
+      }
+      for (const key of ["apiKey", "apiSecret"]) {
+        if (typeof definition.credentialEnv[key] !== "string" || !/^[A-Z_][A-Z0-9_]*$/.test(definition.credentialEnv[key])) {
+          fail({ path: `brokers.instances.${id}.credentialEnv.${key}`, expectation: "an environment variable name, never a secret value" })
+        }
+      }
     }
     ids.add(id)
   }

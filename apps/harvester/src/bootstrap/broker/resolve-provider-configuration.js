@@ -21,6 +21,7 @@ export function resolveProviderConfiguration({ brokers, tradingMode } = {}) {
       id,
       provider: definition.provider,
       accountId: definition.accountId,
+      ...(definition.credentialEnv ? { credentialEnv: Object.freeze({ ...definition.credentialEnv }) } : {}),
       ...(definition.provider === "binance" ? { tradingMode } : {}),
     })
   })

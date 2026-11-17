@@ -28,7 +28,16 @@ function assertDescriptor({ descriptor, index }) {
   if (provider === "binance" && !["testnet", "live"].includes(tradingMode)) {
     throw new TypeError(`Binance instance "${id}" requires explicit testnet or live mode`)
   }
-  return Object.freeze({ id, provider, accountId, ...(tradingMode ? { tradingMode } : {}) })
+  const credentialEnv = descriptor.credentialEnv
+  if (credentialEnv !== undefined && (!credentialEnv || typeof credentialEnv !== "object" ||
+      typeof credentialEnv.apiKey !== "string" || typeof credentialEnv.apiSecret !== "string")) {
+    throw new TypeError(`Provider instance "${id}" has invalid credential environment references`)
+  }
+  return Object.freeze({
+    id, provider, accountId,
+    ...(tradingMode ? { tradingMode } : {}),
+    ...(credentialEnv ? { credentialEnv: Object.freeze({ ...credentialEnv }) } : {}),
+  })
 }
 
 function validateRegistryInput({ providerInstances, selections, adapterFactories }) {
@@ -84,13 +93,15 @@ function resolveProviderConfig({ descriptor, env }) {
   if (descriptor.provider !== "binance") {
     throw new TypeError(`Provider type "${descriptor.provider}" is not registered in Harvester`)
   }
-  const apiKey = env.BINANCE_API_KEY
-  const apiSecret = env.BINANCE_API_SECRET_KEY
+  const apiKeyName = descriptor.credentialEnv?.apiKey ?? "BINANCE_API_KEY"
+  const apiSecretName = descriptor.credentialEnv?.apiSecret ?? "BINANCE_API_SECRET_KEY"
+  const apiKey = env[apiKeyName]
+  const apiSecret = env[apiSecretName]
   if (typeof apiKey !== "string" || !apiKey.trim()) {
-    throw new TypeError(`Provider instance "${descriptor.id}" requires its configured API key`)
+    throw new TypeError(`Provider instance "${descriptor.id}" requires the configured API key environment variable`)
   }
   if (typeof apiSecret !== "string" || !apiSecret.trim()) {
-    throw new TypeError(`Provider instance "${descriptor.id}" requires its configured API secret`)
+    throw new TypeError(`Provider instance "${descriptor.id}" requires the configured API secret environment variable`)
   }
   return { apiKey, apiSecret, tradingMode: descriptor.tradingMode }
 }
