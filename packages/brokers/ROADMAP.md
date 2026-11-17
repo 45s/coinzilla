@@ -1102,3 +1102,15 @@ The following comparison resolves what the references actually implement; it doe
 The detailed, mandatory procedure and direct source/test links live in [packages/brokers/AGENTS.md — Bitunix Spot development](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit). This roadmap is the work/status view; it does not duplicate that engineering rule.
 
 The purpose is to translate an already implemented and tested Spot behavior into Coinzilla's JavaScript architecture rather than inventing protocol behavior. The .NET implementation is a reference, not infallible authority: inspect source and fixtures, audit endpoint/parameter/response behavior, compare with official docs, and do not copy defects or Futures-only capabilities. Keep all unresolved guarantees in [issue #1185](https://github.com/45s/coinzilla/issues/1185); reference-project coverage does not itself resolve an exchange-contract blocker or authorize order mutations.
+
+## Bitunix Spot — external reference implementation audit (2026-11-17)
+
+- [x] Completed a source-and-fixture-level audit of JKorf/Bitunix.Net Spot market, account, trading and socket code; cross-checked the TypeScript MCP and additional StockSharp, Python and Ruby implementations; reviewed Cachy's Futures-only documentation audit and the official Open API demo scope.
+- [x] Added the maintained [Bitunix external implementation reference audit](./BITUNIX_REFERENCE_AUDIT.md), including the full Binance method parity inventory, reference source/test links, third-party defects, official documentation contradictions, and recommendations for safe ports.
+- [x] Confirmed JKorf's Spot GetUserTradesAsync implementation calls pending/list despite its interface documenting deal/list; StockSharp and an independent Python client use the documented deal/list endpoint. This does not resolve complete execution-history semantics.
+- [x] Confirmed multiple clients expose Spot order placement, but none resolves the official single-order versus batch-order volume contradiction, missing client-order identity, unknown-outcome reconciliation or lack of TESTNET. Placement/cancellation remain blocked by issue #1185.
+- [x] Identified Bitunix-specific public read-only extension candidates: exchange rates and token/network metadata. These are not Binance parity methods and require an explicit extension contract before implementation.
+- [ ] Next candidate after the existing read-only market-data PR #1324 is reviewed: decide whether to add the Bitunix-only exchange-rate and token/network metadata reads. Do not duplicate PR #1324 or weaken issue #1185 blockers.
+
+The audit is the detailed evidence source; this roadmap records status and next actions. Future agents must search additional GitHub packages when the primary .NET/TypeScript references do not cover a capability or disagree. The source-discovery rule is in [Brokers AGENTS.md](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit).
+
