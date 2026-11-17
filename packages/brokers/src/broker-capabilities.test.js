@@ -23,7 +23,39 @@ function assertDeeplyFrozen({
 
   for (const [key, nestedValue] of Object.entries(value)) {
     if (nestedValue !== null && typeof nestedValue === "object") {
-      assertDeeplyFrozen({ value: nestedValue, path: `${path}.${key}` })
+      assertDeeplyFrozen({
+        value: nestedValue,
+        path: `${path}.${key}`,
+      })
+    }
+  }
+}
+
+const CAPABILITY_STATUSES = new Set([
+  "supported",
+  "unsupported",
+  "unknown",
+  "environment-dependent",
+])
+
+function assertCapabilityStatuses({ value, path = "capabilities" }) {
+  if (value === null || typeof value !== "object") {
+    return
+  }
+
+  if (Object.hasOwn(value, "status")) {
+    assert.ok(
+      CAPABILITY_STATUSES.has(value.status),
+      `${path}.status must be a recognized capability state`,
+    )
+  }
+
+  for (const [key, nestedValue] of Object.entries(value)) {
+    if (nestedValue !== null && typeof nestedValue === "object") {
+      assertCapabilityStatuses({
+        value: nestedValue,
+        path: `${path}.${key}`,
+      })
     }
   }
 }
@@ -42,6 +74,7 @@ test("Binance broker exposes a versioned, deeply immutable capability declaratio
   assert.equal(broker.capabilities.provider, "binance", "the declaration must identify Binance")
   assert.equal(broker.capabilities.product, "spot", "the declaration must identify Binance Spot")
   assertDeeplyFrozen({ value: broker.capabilities })
+  assertCapabilityStatuses({ value: broker.capabilities })
 })
 
 test("Binance market-data declarations distinguish one-shot reads from streams", () => {
