@@ -731,3 +731,34 @@ test("exposes RS submission callbacks that preserve ownership across acknowledge
   })
   assert.equal(deferredWorkflow.getOrderRegistry().getOrder({ clientOrderId: deferredOrder.clientOrderId }), undefined)
 })
+
+
+test("rejects malformed restored legacy Fill identity records", () => {
+  const context = makeContext()
+  const accounting = {
+    ...context.legacyAccounting,
+    appliedFillIds: ["fill-1"],
+    appliedFillFingerprints: [{
+      id: "fill-2",
+      fillFingerprint: "fill-fingerprint",
+      allocationFingerprint: "allocation-fingerprint",
+    }],
+  }
+
+  assert.throws(
+    () => createRecoverySellerAccountingWorkflow({
+      initialPortfolio: context.portfolio,
+      initialOrderRegistry: context.openRegistry,
+      initialLegacyPositions: [{
+        market,
+        position: context.legacyPosition,
+        accounting,
+      }],
+    }),
+    {
+      name: "TypeError",
+      message: "Recovery Seller legacy Fill identity history is invalid",
+    },
+    "Malformed restored Fill identity records must fail closed instead of recursing or being accepted.",
+  )
+})
