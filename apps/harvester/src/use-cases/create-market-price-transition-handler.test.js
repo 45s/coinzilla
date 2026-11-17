@@ -98,10 +98,22 @@ function createHandler({ state, trace, isFresh, canTrade } = {}) {
       trace.push("freshness")
       return isFresh
     },
-    getCurrentMarketMetadata: () => ({ market: { id: "doge-market" } }),
+    getCurrentMarketMetadata: () => ({
+      market: {
+        id: "doge-market",
+      },
+    }),
     logger: createTransitionLogger(trace),
-    getPortfolio: () => ({ value: { snapshot: "portfolio" } }),
-    getRecoveryLedger: () => ({ value: { snapshot: "recovery-ledger" } }),
+    getPortfolio: () => ({
+      value: {
+        snapshot: "portfolio",
+      },
+    }),
+    getRecoveryLedger: () => ({
+      value: {
+        snapshot: "recovery-ledger",
+      },
+    }),
     canTrade: () => canTrade,
     ...createTransitionActionPorts({ state, trace }),
   })

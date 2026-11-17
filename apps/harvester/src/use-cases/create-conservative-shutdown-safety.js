@@ -21,28 +21,44 @@ function getExternalBlockerReason(blocker) {
   return blocker?.reason ?? blocker?.code ?? blocker?.message
 }
 
-function addOwnedOrderBlockers({ state, symbol, blockers, ownedOrders, activeOrders }) {
+function addOwnedOrderBlockers({ state, blockers, ownedOrders, activeOrders }) {
   const hasUnresolvedOwnedBuy = ownedOrders.some((order) =>
     order.side === "BUY" && UNRESOLVED_BUY_STATUSES.has(order.status))
   const hasActiveOwnedBuy = activeOrders.some((order) => order.side === "BUY")
   if (hasUnresolvedOwnedBuy || hasActiveOwnedBuy) {
-    addBlocker({ blockers, reason: "OWNED_BUY_ORDER_UNRESOLVED" })
+    addBlocker({
+      blockers,
+      reason: "OWNED_BUY_ORDER_UNRESOLVED",
+    })
   }
   if (ownedOrders.some((order) =>
     order.side === "SELL" && UNRESOLVED_SELL_STATUSES.has(order.status))) {
-    addBlocker({ blockers, reason: "OWNED_SELL_ORDER_UNRESOLVED" })
+    addBlocker({
+      blockers,
+      reason: "OWNED_SELL_ORDER_UNRESOLVED",
+    })
   }
   if (ownedOrders.some((order) =>
     state.recoveryManagedCancellationClientOrderIds.has(order.clientOrderId))) {
-    addBlocker({ blockers, reason: "RECOVERY_SELL_CANCELLATION_UNRESOLVED" })
+    addBlocker({
+      blockers,
+      reason: "RECOVERY_SELL_CANCELLATION_UNRESOLVED",
+    })
   }
   if (ownedOrders.some((order) =>
     state.unrequestedTerminalOrderClientIds.has(order.clientOrderId))) {
-    addBlocker({ blockers, reason: "UNREQUESTED_TERMINAL_ORDER_UNRECONCILED" })
+    addBlocker({
+      blockers,
+      reason: "UNREQUESTED_TERMINAL_ORDER_UNRECONCILED",
+    })
   }
 }
 
-function addMarketTransitionBlockers({ state, symbol, blockers }) {
+function addMarketTransitionBlockers({
+    state,
+    symbol,
+    blockers,
+  }) {
   const pendingTransitions = [
     [state.replacementIntents, "ORDER_REPLACEMENT_UNRESOLVED"],
     [state.trailingBuyRepriceIntents, "TRAILING_BUY_TRANSITION_UNRESOLVED"],
@@ -52,26 +68,39 @@ function addMarketTransitionBlockers({ state, symbol, blockers }) {
   ]
   for (const [symbols, reason] of pendingTransitions) {
     if (symbols.has(symbol)) {
-      addBlocker({ blockers, reason })
+      addBlocker({
+        blockers,
+        reason,
+      })
     }
   }
 }
 
-function addMarketPauseBlockers({ state, symbol, blockers }) {
+function addMarketPauseBlockers({
+    state,
+    symbol,
+    blockers,
+  }) {
   const isPaused = state.durablePausedMarkets?.has(symbol) ||
     (state.paused?.has(symbol) && !state.recoveryManagedPausedMarkets.has(symbol))
   if (isPaused) {
-    addBlocker({ blockers, reason: "STRATEGY_SAFETY_PAUSED" })
+    addBlocker({
+      blockers,
+      reason: "STRATEGY_SAFETY_PAUSED",
+    })
   }
   if (state.recoveryManagedPausedMarkets.has(symbol)) {
-    addBlocker({ blockers, reason: "RECOVERY_MANAGED_MARKET_PAUSED" })
+    addBlocker({
+      blockers,
+      reason: "RECOVERY_MANAGED_MARKET_PAUSED",
+    })
   }
 }
 
 function getMarketOrderBlockers({ state, symbol, blockers } = {}) {
   const ownedOrders = state.registry.orders.filter((order) => order.market.symbol === symbol)
   const activeOrders = state.registry.getActiveOrders().filter((order) => order.market.symbol === symbol)
-  addOwnedOrderBlockers({ state, symbol, blockers, ownedOrders, activeOrders })
+  addOwnedOrderBlockers({ state, blockers, ownedOrders, activeOrders })
   addMarketTransitionBlockers({ state, symbol, blockers })
   addMarketPauseBlockers({ state, symbol, blockers })
 }
