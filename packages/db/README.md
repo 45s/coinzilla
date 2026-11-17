@@ -263,6 +263,8 @@ Migrations are identified by positive integer version. Applied versions must rem
 
 ## Architecture and DDD boundaries
 
+The accepted architecture decision is recorded in [ADR-0001](./docs/decisions/0001-provider-neutral-record-crud-api.md). See the [local documentation index](./docs/README.md) for package architecture records.
+
 `@coinzilla/db` is the **Database Infrastructure** bounded context.
 
 - Domain owns provider-independent record/query contracts, database error classification, lifecycle invariants and migration identity.
