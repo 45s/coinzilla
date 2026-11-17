@@ -37,16 +37,33 @@ export async function connectBroker({
       tradingMode,
     },
   })
-  const providerRegistry = createProviderRegistry({
-    providers: [{
-      providerInstanceId,
-      providerType,
-      accountId,
-      environment: tradingMode,
-      broker,
-    }],
-  })
-  const provider = providerRegistry.get(providerInstanceId)
+  let providerRegistry
+  let provider
+  try {
+    providerRegistry = createProviderRegistry({
+      providers: [{
+        providerInstanceId,
+        providerType,
+        accountId,
+        environment: tradingMode,
+        broker,
+      }],
+    })
+    provider = providerRegistry.get(providerInstanceId)
+  } catch (error) {
+    try {
+      if (typeof broker?.disconnect === "function") {
+        await broker.disconnect()
+      }
+    } catch (disconnectError) {
+      throw new AggregateError(
+        [error, disconnectError],
+        "Binance provider validation failed and constructed-client cleanup also failed",
+        { cause: disconnectError },
+      )
+    }
+    throw error
+  }
 
   try {
     logSystem({ logger,
