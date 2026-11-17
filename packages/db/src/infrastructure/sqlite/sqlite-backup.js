@@ -119,6 +119,7 @@ async function removeTemporaryDirectory({ directory, operationError }) {
       throw new AggregateError(
         [operationError, cleanupError],
         "SQLite database operation failed and temporary-file cleanup also failed",
+        { cause: cleanupError },
       )
     }
 
