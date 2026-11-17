@@ -168,6 +168,10 @@ Read `database.capabilities` to inspect the provider-neutral capability declarat
 - Exact equality filters, sorting and pagination are supported.
 - Storage modes are file-backed and in-memory.
 
+A provider passed to `createDatabase({ provider })` implements both `withTransaction(work)` and `withReadTransaction(work)`. Creates, updates, deletes and explicit `database.transaction(work)` callbacks use the write transaction path; `readOne` and `readMany` use the read transaction path. Providers preserve the same CRUD and transaction semantics across both paths while selecting appropriate locking behavior. SQLite uses `BEGIN IMMEDIATE` for writes and `BEGIN DEFERRED` for reads, allowing WAL readers to continue while another connection holds a write reservation. The legacy `adapter` lifecycle/SQL API remains compatible with adapters that only implement `withTransaction`.
+
+A synchronous provider cannot declare `nestedTransactions: true`; the provider-neutral facade requires asynchronous callbacks to invoke nested transactions safely. The capability validator rejects that incompatible declaration at composition time.
+
 A future provider must declare its own actual guarantees. The package will not silently emulate unsupported transaction, query, or durability guarantees.
 
 ## Provider conformance tests
@@ -194,7 +198,7 @@ runDatabaseProviderConformanceTests({
 
 The example is illustrative; no PostgreSQL provider is included. The factory receives a unique `storageKey` and one declared `storageMode`. The suite runs the contract against every mode in `database.capabilities.storage.modes`, using an isolated key for each test. For `file` and `server` modes it reuses the same key across a new connection to verify persistence; the reconnect test is explicitly skipped for `memory` mode. A server adapter can derive a temporary database or namespace name from the key and must release that resource when the composed database is closed. SQLite maps `memory` to `:memory:` and `file` to the isolated temporary file path. Providers must not silently skip a declared storage mode or a supported contract.
 
-The suite verifies CRUD and collection isolation, duplicate handling, every declared storage mode, each declared query capability, missing-record results, transaction commit/rollback, the declared synchronous/asynchronous callback mode, immutable capability snapshots, lifecycle closure, and persistence across a new connection where storage is persistent. Query cases are skipped with a reason only when the provider declares the corresponding capability unavailable. The in-memory reconnect-persistence case is skipped because that storage mode is explicitly ephemeral. Add provider-specific lifecycle, lock/concurrency and cleanup tests where the generic contract cannot express the provider's operational guarantees.
+The suite verifies CRUD and collection isolation, duplicate handling, every declared storage mode, each declared query capability, missing-record results, transaction commit/rollback, declared nested-transaction behavior, the synchronous/asynchronous callback mode, immutable capability snapshots, lifecycle closure, close-time draining of active asynchronous transactions, and persistence across a new connection where storage is persistent. Query cases are skipped with a reason only when the provider declares the corresponding capability unavailable. The in-memory reconnect-persistence case is skipped because that storage mode is explicitly ephemeral. Add provider-specific lifecycle, lock/concurrency and cleanup tests where the generic contract cannot express the provider's operational guarantees.
 
 ## Provider composition
 
