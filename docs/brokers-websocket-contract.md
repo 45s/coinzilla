@@ -112,6 +112,21 @@ The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The curren
 | `getPrices({ symbol })` | `GET /api/spot/v1/market/last_price` | Request/response lookup only; requires a strictly positive decimal string and preserves it exactly in `{ symbol, price }`. No source timestamp is provided. |
 | `getFills({ symbol, orderId })` | Blocked; no request is sent | The documented matching-order response does not define quantity denomination, complete partial-execution coverage, or stable/unique execution identity. No canonical `Fill` is emitted until Bitunix clarifies these semantics. |
 
+All adapted Bitunix Spot order rows from pending orders, order history, and order detail must contain non-empty string `ctime` and `utime` fields. The adapter preserves both source strings verbatim; it does not parse or infer timezone, precision, or timestamp ordering because the official order-history schema does not specify those details.
+
+### REST error and response validation
+
+The Bitunix REST client throws `BitunixRestError`, which extends the shared `SystemCustomError` base. The stable broker-owned `code` identifies the local failure category; `kind` is one of `transport`, `http`, `exchange`, or `response`. The exchange's API error code is kept separately in `exchangeCode` and remains opaque unless Bitunix publishes an authoritative Spot-specific mapping. No retryability or permanent-failure meaning is inferred from an unknown code.
+
+- Transport failures preserve the original thrown value as native `cause`.
+- HTTP status failures remain `http` failures even when their response body is not JSON; a JSON parsing failure is retained as the cause rather than replacing the HTTP classification.
+- A non-zero API `code` in an HTTP-success response is an `exchange` rejection. Its code and message are preserved without guessing what the code means.
+- Successful HTTP envelopes must be objects with a scalar safe-integer numeric `code` or integer-string `code` equal to zero and a string `msg`. The documented `data` field remains optional.
+- Array/object/null/non-integer error-code values, malformed envelopes, missing success messages, and malformed HTTP response metadata fail as `response` errors.
+- The stable diagnostic codes are `BITUNIX_REST_TRANSPORT_FAILED`, `BITUNIX_REST_HTTP_FAILED`, `BITUNIX_REST_EXCHANGE_REJECTED`, and `BITUNIX_REST_RESPONSE_INVALID`. Safe context is limited to request path, HTTP status, and the opaque exchange code. The existing `outcomeUnknown` state-changing-request signal remains conservative; no retry is performed.
+
+The official Spot documentation does not currently provide a sufficiently verified comprehensive Spot-specific error-code catalogue. The generic Open API demo and general/Futures error maps are not treated as Spot authority.
+
 Bitunix documents broker order IDs as strings. For compatibility, Coinzilla accepts string IDs and safely representable integer numbers; fractional, non-finite, and unsafe numeric IDs are rejected before a lookup request or order adaptation. This cannot recover precision already lost by a caller before passing a numeric value, so string IDs remain the authoritative form.
 
 Mutations and lifecycle-dependent methods are deliberately unavailable:

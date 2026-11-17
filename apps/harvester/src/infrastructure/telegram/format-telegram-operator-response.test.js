@@ -9,7 +9,7 @@ import {
   formatTelegramOperatorPositions,
   formatTelegramOperatorOrders,
   formatTelegramOperatorBalances,
-} from "./format-telegram-operator-response.js"
+} from "./operator/format-response.js"
 
 test("formats active and retained position inventory separately", () => {
   const text = formatTelegramOperatorPositions({

@@ -3,9 +3,14 @@ export const MAX_DECIMAL_SCALE = 100
 
 // Shared default precision for derived decimal ratios; callers may override it.
 export const DEFAULT_DECIMAL_DIVISION_SCALE = 36
+export const DECIMAL_ROUNDING_MODES = Object.freeze({
+  TOWARD_ZERO: "toward-zero",
+  AWAY_FROM_ZERO: "away-from-zero",
+  HALF_UP: "half-up",
+})
 const MAX_DECIMAL_EXPONENT = 100
 
-const ROUNDING_MODES = new Set(["toward-zero", "away-from-zero", "half-up"])
+const ROUNDING_MODES = new Set(Object.values(DECIMAL_ROUNDING_MODES))
 const INCREMENT_DIRECTIONS = new Set(["down", "up", "nearest"])
 
 /** @typedef {{ coefficient: bigint, scale: number }} ParsedDecimal */
@@ -197,14 +202,14 @@ function divideIntegers({ numerator, denominator, rounding } = {}) {
 
   const quotient = numerator / denominator
   const remainder = numerator % denominator
-  if (remainder === 0n || rounding === "toward-zero") {
+  if (remainder === 0n || rounding === DECIMAL_ROUNDING_MODES.TOWARD_ZERO) {
     return quotient
   }
 
   const sameSign = (numerator < 0n) === (denominator < 0n)
   const adjustment = sameSign ? 1n : -1n
 
-  if (rounding === "away-from-zero") {
+  if (rounding === DECIMAL_ROUNDING_MODES.AWAY_FROM_ZERO) {
     return quotient + adjustment
   }
 

@@ -14,7 +14,7 @@ Provide one Harvester-owned application capability that authorized operators can
 - The Conservative engine exposes a serialized operator-pause boundary separate from safety pause state; the implementation and regression tests are in [PR #1045](https://github.com/45s/coinzilla/pull/1045).
 - `src/application/operator/create-harvester-operator.js` composes explicit pause/resume use cases with actor-role authorization and an optional Operational State Store append port (ADR-0001 record contract).
 - When the store is supplied, use cases pass its append callback into the engine transition; the engine changes in-memory state only after a confirmed durable commit. Without a store, the engine applies its process-local operator pause directly.
-- `src/infrastructure/telegram/telegram-operator-adapter.js` implements the private-chat allowlist, command parser, serial Long Polling, stable update request IDs, retry behavior, graceful stop and correlated lifecycle diagnostics. PR #1067 wires its lifecycle into Harvester bootstrap; the current default is enabled.
+- The Telegram Command Center is a feature module under `src/infrastructure/telegram/operator/`. Its `index.js` exposes the public factory/parser, and `adapter.js` composes validation, transport, handlers, polling and lifecycle. The parent `telegram-operator-adapter.js` remains a compatibility re-export so existing bootstrap imports do not change. Effectful responsibilities (transport, polling, routing, callback/control execution and lifecycle) remain at the feature root; pure command/interaction mapping and formatting remain independently testable. These modules remain infrastructure-owned and do not introduce Telegram dependencies into application/domain layers. PR #1067 wires the adapter lifecycle into Harvester bootstrap; the current default is enabled.
 - The Operational State Store adapter and integrity checks are composed for restart recovery when configured. Telegram-only control does not create or require the store; never create a second writer for an explicitly supplied store. **Restart restoration is out of scope:** the initial operator pause lasts only for the current process and is not replayed after restart. A prior process session is handled by the recovery workflow only when restart recovery is enabled.
 
 ## DDD ownership and source layout
@@ -38,7 +38,37 @@ apps/harvester/src/
       operator-buy-cancellation-incomplete-error.js
   infrastructure/
     telegram/
-      telegram-operator-adapter.js       # implemented; optional runtime wiring is active
+      telegram-operator-adapter.js       # backwards-compatible public re-export
+      telegram-operator-keyboard.test.js # established targeted integration suite
+      format-telegram-operator-response.test.js # established targeted formatter suite
+      operator/
+        index.js                          # public feature exports
+        adapter.js                        # validation and dependency composition
+        lifecycle.js                      # startup, command registration, stop and cancellation
+        handlers.js                       # injected handler composition and diagnostics
+        routing.js                        # authorized message/callback dispatch
+        commands.js                       # command vocabulary and pure parsing
+        interaction.js                    # identity normalization and authorization
+        callbacks.js                      # confirmation, cancellation and navigation
+        messages.js                       # authorized text-command dispatch
+        keyboard.js                       # persistent/inline keyboard and help
+        pages.js                          # read-only query execution and rendering
+        controls.js                       # application control invocation and replies
+        transport.js                      # Telegram Bot API and message transport
+        updates.js                        # update processing, serial polling and retry
+        diagnostics.js                    # safe correlated interaction diagnostics
+        format-response.js                # operator snapshot formatting
+        adapter.test.js                   # public adapter integration contracts
+        commands.test.js
+        interaction.test.js
+        callbacks.test.js
+        controls.test.js
+        pages.test.js
+        routing.test.js
+        transport.test.js
+        updates.test.js
+        lifecycle.test.js
+        diagnostics.test.js
   bootstrap/
     operator-control/
       prepare-telegram-operator-control.js # runtime lifecycle composition
@@ -47,6 +77,16 @@ apps/harvester/src/
 The engine remains under `src/use-cases/conservative-trading-engine.js` because it coordinates existing application workflows and serialized broker/market transitions. Domain strategy policies remain transport- and persistence-independent.
 
 Do not create `packages/operator`, `packages/operators` or `packages/commands` now. Extract a shared package only after a second real application proves that actor, authorization, request/result and idempotency semantics are genuinely shared without Harvester trading dependencies.
+
+## Telegram adapter test boundaries
+
+The adapter contract is verified offline at two levels:
+
+- Public-adapter integration tests preserve command dispatch, private-chat authorization, callback confirmation/replay, query/control routing, serial polling, retry behavior, startup and shutdown.
+- Focused module tests exercise command parsing, Telegram identity/interaction normalization, callback confirmation consumption, application-control mapping, read-only page queries, Bot API transport semantics, update polling and lifecycle cancellation.
+- Dedicated keyboard, diagnostics and response-formatting suites preserve the persistent/inline keyboard contract, safe correlated error reporting, and operator snapshot presentation.
+
+These are offline characterization tests; this checkpoint changes no runtime behavior. Their source follows the repository's zero-warning ESLint rules without suppressions. All Telegram transport and application dependencies are injected or mocked. The tests do not call the live Telegram API, place exchange orders, or require TESTNET/LIVE credentials. Keep focused tests beside the operator feature modules and retain public-adapter integration coverage for cross-module behavior. The established keyboard and response-formatting targeted-test entry points remain at the parent Telegram path because Harvester's configured targeted-test list references those exact paths.
 
 ## Architecture flow
 

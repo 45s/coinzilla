@@ -11,6 +11,8 @@ const validOrder = {
   volume: "0.300000000000000001",
   dealVolume: "0.1",
   price: "10.25",
+  ctime: "2026-11-15T12:00:00Z",
+  utime: "2026-11-15T12:00:01Z",
 }
 
 test("adaptOrder preserves exact original, executed and remaining quantities", () => {
@@ -61,5 +63,76 @@ test("adaptOrder preserves safely representable numeric broker order IDs", () =>
     order.id,
     String(safeNumericOrderId),
     "A safely representable numeric broker order ID must retain its exact integer identity.",
+  )
+})
+
+test("adaptOrder rejects missing or malformed required exchange timestamps", () => {
+  const invalidTimestamps = [
+    {
+      field: "ctime",
+      invalidValue: undefined,
+    },
+    {
+      field: "ctime",
+      invalidValue: null,
+    },
+    {
+      field: "ctime",
+      invalidValue: 1_794_744_000_000,
+    },
+    {
+      field: "ctime",
+      invalidValue: "",
+    },
+    {
+      field: "ctime",
+      invalidValue: "   ",
+    },
+    {
+      field: "utime",
+      invalidValue: undefined,
+    },
+    {
+      field: "utime",
+      invalidValue: null,
+    },
+    {
+      field: "utime",
+      invalidValue: 1_794_744_000_000,
+    },
+    {
+      field: "utime",
+      invalidValue: "",
+    },
+    {
+      field: "utime",
+      invalidValue: "   ",
+    },
+  ]
+
+  for (const { field, invalidValue } of invalidTimestamps) {
+    assert.throws(
+      () => adaptOrder({
+        ...validOrder,
+        [field]: invalidValue,
+      }),
+      /ctime.*non-empty string|utime.*non-empty string/i,
+      `Bitunix order ${field} must be rejected when its documented timestamp field is missing or malformed.`,
+    )
+  }
+})
+
+test("adaptOrder preserves documented exchange timestamp strings without reinterpreting them", () => {
+  const order = adaptOrder(validOrder)
+
+  assert.equal(
+    order.createdAt,
+    validOrder.ctime,
+    "The exchange creation timestamp must be preserved exactly without timezone or precision assumptions.",
+  )
+  assert.equal(
+    order.updatedAt,
+    validOrder.utime,
+    "The exchange update timestamp must be preserved exactly without timezone or precision assumptions.",
   )
 })
