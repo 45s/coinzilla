@@ -1,7 +1,12 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { DEFAULT_OPERATIONAL_STATE_DIRECTORY } from "../infrastructure/operational-state/resolve-operational-state-directory.js"
+import { DEFAULT_OPERATIONAL_STATE_DIRECTORY, resolveOperationalStateDirectory } from "../infrastructure/operational-state/resolve-operational-state-directory.js"
 import { runInitializeOperationalState } from "./initialize-operational-state-cli.js"
+
+const runWithDefaultDirectory = (options) => runInitializeOperationalState({
+  resolveDirectory: resolveOperationalStateDirectory,
+  ...options,
+})
 
 const createLogger = () => {
   const calls = []
@@ -15,7 +20,7 @@ const createLogger = () => {
 test("requires explicit confirmation before invoking genesis initialization", async () => {
   const logger = createLogger()
   let initializeCalls = 0
-  const exitCode = await runInitializeOperationalState({
+  const exitCode = await runWithDefaultDirectory({
     env: { OPERATIONAL_STATE_DIRECTORY: "/tmp/recovery-facts" },
     args: [],
     initialize: async () => { initializeCalls += 1; return { ok: true } },
@@ -28,14 +33,14 @@ test("requires explicit confirmation before invoking genesis initialization", as
 test("uses the app-local default directory and rejects relative overrides or unknown arguments", async () => {
   let initializeCalls = 0
   const initialize = async () => { initializeCalls += 1; return { ok: true } }
-  const relative = await runInitializeOperationalState({
+  const relative = await runWithDefaultDirectory({
     env: { OPERATIONAL_STATE_DIRECTORY: "relative/recovery-facts" },
     args: ["--confirm-initialize"],
     initialize,
     logger: createLogger(),
   })
   let defaultDirectory
-  const defaulted = await runInitializeOperationalState({
+  const defaulted = await runWithDefaultDirectory({
     env: {},
     args: ["--confirm-initialize"],
     initialize: async (input) => {
@@ -47,7 +52,7 @@ durable: true } }
     },
     logger: createLogger(),
   })
-  const unknown = await runInitializeOperationalState({
+  const unknown = await runWithDefaultDirectory({
     env: { OPERATIONAL_STATE_DIRECTORY: "/tmp/recovery-facts" },
     args: ["--confirm-initialize", "--force"],
     initialize,
@@ -61,7 +66,7 @@ durable: true } }
 test("initializes only the operator-selected absolute directory and reports durable success", async () => {
   const logger = createLogger()
   let received
-  const exitCode = await runInitializeOperationalState({
+  const exitCode = await runWithDefaultDirectory({
     env: { OPERATIONAL_STATE_DIRECTORY: "/tmp/recovery-facts" },
     args: ["--confirm-initialize"],
     initialize: async (input) => {
@@ -81,7 +86,7 @@ directory: "/tmp/recovery-facts" })
 
 test("does not report success when genesis initialization fails", async () => {
   const logger = createLogger()
-  const exitCode = await runInitializeOperationalState({
+  const exitCode = await runWithDefaultDirectory({
     env: { OPERATIONAL_STATE_DIRECTORY: "/tmp/recovery-facts" },
     args: ["--confirm-initialize"],
     initialize: async () => ({ ok: false,
@@ -94,7 +99,7 @@ errors: [new Error("ledger already exists")] }),
 
 test("does not read the removed legacy directory environment variable", async () => {
   let received
-  const exitCode = await runInitializeOperationalState({
+  const exitCode = await runWithDefaultDirectory({
     env: { DURABLE_FACTS_DIRECTORY: "/tmp/legacy-recovery-facts" },
     args: ["--confirm-initialize"],
     initialize: async (input) => {
@@ -108,4 +113,32 @@ durable: true } }
   })
   assert.equal(exitCode, 0)
   assert.equal(received.directory, DEFAULT_OPERATIONAL_STATE_DIRECTORY)
+})
+
+
+test("uses the injected directory resolver at the CLI composition boundary", async () => {
+  let received
+  const exitCode = await runWithDefaultDirectory({
+    env: {},
+    args: ["--confirm-initialize"],
+    resolveDirectory: () => "/tmp/injected-operational-state",
+    initialize: async (input) => {
+      received = input
+      return {
+        ok: true,
+        data: {
+          directory: input.directory,
+          sequence: "0",
+          durable: true,
+        },
+      }
+    },
+    logger: createLogger(),
+  })
+
+  assert.equal(exitCode, 0, "The CLI must complete when its injected resolver and initializer succeed.")
+  assert.deepEqual(received, {
+    confirmed: true,
+    directory: "/tmp/injected-operational-state",
+  }, "The CLI must pass the composition-root directory to the initializer.")
 })
