@@ -35,3 +35,25 @@ test("adaptOrder maps Bitunix side, type and status", () => {
   assert.equal(order.type, "LIMIT")
   assert.equal(order.status, "PARTIALLY_FILLED")
 })
+
+
+test("adaptOrder rejects unsafe numeric broker order IDs instead of accepting rounded identities", () => {
+  const unsafeNumericOrderId = Number.MAX_SAFE_INTEGER + 1
+
+  assert.throws(
+    () => adaptOrder({ ...validOrder, orderId: unsafeNumericOrderId }),
+    /safe integer/i,
+    "An unsafe numeric broker order ID must be rejected before it becomes a rounded string identity.",
+  )
+})
+
+test("adaptOrder preserves safely representable numeric broker order IDs", () => {
+  const safeNumericOrderId = Number.MAX_SAFE_INTEGER
+  const order = adaptOrder({ ...validOrder, orderId: safeNumericOrderId })
+
+  assert.equal(
+    order.id,
+    String(safeNumericOrderId),
+    "A safely representable numeric broker order ID must retain its exact integer identity.",
+  )
+})
