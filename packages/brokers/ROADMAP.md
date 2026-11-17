@@ -347,7 +347,7 @@ Do not modify either consumer's implementation as part of a Brokers-owned refact
 |---|---|
 | `getAssets()` | `account.status` with zero balances omitted; legacy `Coin` values |
 | `getBalances()` | `account.status` including zero balances; canonical `Balance[]` |
-| `getAccountSnapshot()` | `account.status` including canonical account UID, balances and validated source `updateTime` |
+| `getAccountSnapshot()` | `account.status` including balances and validated source `updateTime` |
 | `getServerTime()` | `time` |
 | `getOpenOrders({ symbol? })` | `openOrders.status` |
 | `getOrder({ symbol, orderId })` / `getOrder({ symbol, clientOrderId })` | `order.status` using `orderId` or `origClientOrderId` |
