@@ -363,7 +363,11 @@ export function validateOrderCancellationOutcomeFact({ factType, canonicalData, 
     outcome: canonicalData.outcome,
   })
   validateCancellationIdentity({
-    canonicalData: { ...canonicalData, marketId, venue },
+    canonicalData: {
+      ...canonicalData,
+      marketId,
+      venue,
+    },
     factId,
     reason,
     expectedFactId: factIdForCancellationOutcome(clientOrderId, reason, canonicalData.outcome),
