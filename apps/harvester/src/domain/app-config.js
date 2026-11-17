@@ -41,47 +41,90 @@ export const TELEGRAM_NOTIFICATION_EVENT_KEYS = Object.freeze([
   "brokerConnected", "brokerDisconnected", "accountSafetyAlert",
 ])
 
-function validateTelegramNotificationConfig(config) {
-  if (config.notifications === undefined) {return}
-  requireRecord({ value: config.notifications,
-path: "notifications" })
-  const {telegram} = config.notifications
-  if (telegram === undefined) {return}
-  requireRecord({ value: telegram,
-path: "notifications.telegram" })
-  const path = "notifications.telegram"
+function validateTelegramMarkets({ markets, path }) {
+  if (!Array.isArray(markets)) {
+    fail({
+      path: `${path}.markets`,
+      expectation: "an array of unique non-empty market symbols",
+    })
+  }
+  const seenMarkets = new Set()
+  for (const [index, symbol] of markets.entries()) {
+    if (typeof symbol !== "string" || !symbol.trim() || symbol !== symbol.trim()) {
+      fail({
+        path: `${path}.markets[${index}]`,
+        expectation: "a non-empty trimmed market symbol",
+      })
+    }
+    if (seenMarkets.has(symbol)) {
+      fail({
+        path: `${path}.markets`,
+        expectation: "unique market symbols",
+      })
+    }
+    seenMarkets.add(symbol)
+  }
+}
 
-  if (telegram.enabled !== undefined) {requireBoolean({ value: telegram.enabled,
-path: `${path}.enabled` })}
+function validateTelegramEvents({ events, path }) {
+  requireRecord({
+    value: events,
+    path: `${path}.events`,
+  })
+  for (const [eventKey, enabled] of Object.entries(events)) {
+    if (!TELEGRAM_NOTIFICATION_EVENT_KEYS.includes(eventKey)) {
+      fail({
+        path: `${path}.events.${eventKey}`,
+        expectation: "a supported Telegram notification event key",
+      })
+    }
+    requireBoolean({
+      value: enabled,
+      path: `${path}.events.${eventKey}`,
+    })
+  }
+}
+
+function validateTelegramNotificationConfig(config) {
+  if (config.notifications === undefined) {
+    return
+  }
+  requireRecord({
+    value: config.notifications,
+    path: "notifications",
+  })
+  const { telegram } = config.notifications
+  if (telegram === undefined) {
+    return
+  }
+  requireRecord({
+    value: telegram,
+    path: "notifications.telegram",
+  })
+  const path = "notifications.telegram"
+  if (telegram.enabled !== undefined) {
+    requireBoolean({
+      value: telegram.enabled,
+      path: `${path}.enabled`,
+    })
+  }
   if (telegram.profile !== undefined && !TELEGRAM_NOTIFICATION_PROFILES.includes(telegram.profile)) {
-    fail({ path: `${path}.profile`,
-expectation: "one of minimal, trader, verbose, or custom" })
+    fail({
+      path: `${path}.profile`,
+      expectation: "one of minimal, trader, verbose, or custom",
+    })
   }
   if (telegram.markets !== undefined) {
-    if (!Array.isArray(telegram.markets)) {fail({ path: `${path}.markets`,
-expectation: "an array of unique non-empty market symbols" })}
-    const seenMarkets = new Set()
-    for (const [index, symbol] of telegram.markets.entries()) {
-      if (typeof symbol !== "string" || !symbol.trim() || symbol !== symbol.trim()) {
-        fail({ path: `${path}.markets[${index}]`,
-expectation: "a non-empty trimmed market symbol" })
-      }
-      if (seenMarkets.has(symbol)) {fail({ path: `${path}.markets`,
-expectation: "unique market symbols" })}
-      seenMarkets.add(symbol)
-    }
+    validateTelegramMarkets({
+      markets: telegram.markets,
+      path,
+    })
   }
   if (telegram.events !== undefined) {
-    requireRecord({ value: telegram.events,
-path: `${path}.events` })
-    for (const [eventKey, enabled] of Object.entries(telegram.events)) {
-      if (!TELEGRAM_NOTIFICATION_EVENT_KEYS.includes(eventKey)) {
-        fail({ path: `${path}.events.${eventKey}`,
-expectation: "a supported Telegram notification event key" })
-      }
-      requireBoolean({ value: enabled,
-path: `${path}.events.${eventKey}` })
-    }
+    validateTelegramEvents({
+      events: telegram.events,
+      path,
+    })
   }
 }
 
@@ -124,70 +167,6 @@ expectation: "canonical positive decimal Telegram user ID strings" })
 expectation: "unique positive decimal Telegram user IDs" })
     }
     seenUserIds.add(userId)
-  }
-}
-
-function validateBrokerConfiguration(config) {
-  if (config.brokers === undefined) {
-    return
-  }
-  requireRecord({ value: config.brokers, path: "brokers" })
-  for (const key of Object.keys(config.brokers)) {
-    if (key !== "instances" && key !== "selection") {
-      fail({ path: `brokers.${key}`, expectation: "instances or selection" })
-    }
-  }
-  requireRecord({ value: config.brokers.instances, path: "brokers.instances" })
-  const entries = Object.entries(config.brokers.instances)
-  if (entries.length === 0) {
-    fail({ path: "brokers.instances", expectation: "at least one provider instance" })
-  }
-  const ids = new Set()
-  for (const [id, definition] of entries) {
-    if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(id)) {
-      fail({ path: "brokers.instances", expectation: "stable provider instance IDs" })
-    }
-    requireRecord({ value: definition, path: `brokers.instances.${id}` })
-    for (const key of Object.keys(definition)) {
-      if (key !== "provider" && key !== "accountId" && key !== "credentialEnv") {
-        fail({ path: `brokers.instances.${id}.${key}`, expectation: "provider and non-secret accountId only" })
-      }
-    }
-    if (typeof definition.provider !== "string" || !definition.provider.trim()) {
-      fail({ path: `brokers.instances.${id}.provider`, expectation: "a non-empty provider type" })
-    }
-    if (typeof definition.accountId !== "string" || !definition.accountId.trim()) {
-      fail({ path: `brokers.instances.${id}.accountId`, expectation: "a stable non-secret account ID" })
-    }
-    if (definition.credentialEnv !== undefined) {
-      requireRecord({ value: definition.credentialEnv, path: `brokers.instances.${id}.credentialEnv` })
-      for (const key of Object.keys(definition.credentialEnv)) {
-        if (key !== "apiKey" && key !== "apiSecret") {
-          fail({ path: `brokers.instances.${id}.credentialEnv.${key}`, expectation: "apiKey or apiSecret environment variable name" })
-        }
-      }
-      for (const key of ["apiKey", "apiSecret"]) {
-        if (typeof definition.credentialEnv[key] !== "string" || !/^[A-Z_][A-Z0-9_]*$/.test(definition.credentialEnv[key])) {
-          fail({ path: `brokers.instances.${id}.credentialEnv.${key}`, expectation: "an environment variable name, never a secret value" })
-        }
-      }
-    }
-    ids.add(id)
-  }
-  requireRecord({ value: config.brokers.selection, path: "brokers.selection" })
-  const selection = config.brokers.selection
-  for (const key of Object.keys(selection)) {
-    if (!["execution", "account", "marketData"].includes(key)) {
-      fail({ path: `brokers.selection.${key}`, expectation: "execution, account, or marketData" })
-    }
-  }
-  for (const role of ["execution", "account", "marketData"]) {
-    if (typeof selection[role] !== "string" || !ids.has(selection[role])) {
-      fail({ path: `brokers.selection.${role}`, expectation: "an existing provider instance ID" })
-    }
-  }
-  if (new Set([selection.execution, selection.account, selection.marketData]).size !== 1) {
-    fail({ path: "brokers.selection", expectation: "one shared instance until account and execution isolation are implemented" })
   }
 }
 
@@ -291,7 +270,6 @@ path: "root" })
 
   validateTelegramNotificationConfig(config)
   validateTelegramOperatorControlConfig(config)
-  validateBrokerConfiguration(config)
   if (config.runtime !== undefined) {fail({ path: "runtime",
 expectation: "must not be present; exchange mode is selected by TRADING_MODE" })}
   requireRecord({ value: config.strategies,
@@ -345,8 +323,12 @@ expectation: "testnet, live, or both" })
 
 /** Resolve the mandatory exchange environment without selecting a provider. */
 export function resolveRuntimeConfig({ tradingMode, environment } = {}) {
-  if (tradingMode !== TRADING_ENVIRONMENTS.TESTNET && tradingMode !== TRADING_ENVIRONMENTS.LIVE) {throw new Error('TRADING_MODE must be set to "testnet" or "live"')}
-  return Object.freeze({ environment: environment ?? "unspecified",
-tradingMode,
-tradingEnabled: true })
+  if (tradingMode !== TRADING_ENVIRONMENTS.TESTNET && tradingMode !== TRADING_ENVIRONMENTS.LIVE) {
+    throw new Error('TRADING_MODE must be set to "testnet" or "live"')
+  }
+  return Object.freeze({
+    environment: environment ?? "unspecified",
+    tradingMode,
+    tradingEnabled: true,
+  })
 }

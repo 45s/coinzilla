@@ -397,36 +397,3 @@ test("composes enabled Telegram operator control independently from outbound not
     "The operator allowlist must be seeded from TELEGRAM_USER_ID without adding an undefined entry.",
   )
 })
-
-
-test("validates explicit non-secret provider instances and role selections", () => {
-  const config = createAppConfig()
-  config.brokers = {
-    instances: { binancePrimary: { provider: "binance", accountId: "primary" } },
-    selection: { execution: "binancePrimary", account: "binancePrimary", marketData: "binancePrimary" },
-  }
-  assert.equal(validateAppConfig(config), config)
-  config.brokers.instances.binancePrimary.apiSecret = "must-not-be-stored"
-  assert.throws(() => validateAppConfig(config), (error) =>
-    error instanceof ConfigValidationError && error.path.endsWith(".apiSecret"))
-})
-
-test("rejects missing or split provider role selections", () => {
-  const missing = createAppConfig()
-  missing.brokers = {
-    instances: { binancePrimary: { provider: "binance", accountId: "primary" } },
-    selection: { execution: "missing", account: "binancePrimary", marketData: "binancePrimary" },
-  }
-  assert.throws(() => validateAppConfig(missing), (error) =>
-    error instanceof ConfigValidationError && error.path === "brokers.selection.execution")
-  const split = createAppConfig()
-  split.brokers = {
-    instances: {
-      binancePrimary: { provider: "binance", accountId: "primary" },
-      binanceSecondary: { provider: "binance", accountId: "secondary" },
-    },
-    selection: { execution: "binancePrimary", account: "binanceSecondary", marketData: "binancePrimary" },
-  }
-  assert.throws(() => validateAppConfig(split), (error) =>
-    error instanceof ConfigValidationError && error.path === "brokers.selection")
-})

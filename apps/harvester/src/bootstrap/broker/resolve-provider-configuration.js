@@ -1,49 +1,158 @@
-const LEGACY_ID = "binancePrimary"
-const LEGACY_CONFIG = Object.freeze({
-  instances: Object.freeze({ [LEGACY_ID]: Object.freeze({ provider: "binance", accountId: "binance-primary" }) }),
-  selection: Object.freeze({ execution: LEGACY_ID, account: LEGACY_ID, marketData: LEGACY_ID }),
+const LEGACY_INSTANCE_ID = "binancePrimary"
+
+const LEGACY_CONFIGURATION = Object.freeze({
+  instances: Object.freeze({
+    [LEGACY_INSTANCE_ID]: Object.freeze({
+      provider: "binance",
+      accountId: "binance-primary",
+    }),
+  }),
+  selection: Object.freeze({
+    execution: LEGACY_INSTANCE_ID,
+    account: LEGACY_INSTANCE_ID,
+    marketData: LEGACY_INSTANCE_ID,
+  }),
 })
 
-export function resolveProviderConfiguration({ brokers, tradingMode } = {}) {
-  const config = brokers ?? LEGACY_CONFIG
-  if (!config || typeof config !== "object" || Array.isArray(config) ||
-      !config.instances || typeof config.instances !== "object" || Array.isArray(config.instances) ||
-      !config.selection || typeof config.selection !== "object" || Array.isArray(config.selection)) {
-    throw new TypeError("Harvester broker configuration must define named instances and explicit role selections")
+function assertRecord({ value, path }) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError(`Harvester provider configuration "${path}" must be an object`)
   }
-  const instances = Object.entries(config.instances).map(([id, definition]) => {
-    if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(id) || !definition ||
-        typeof definition.provider !== "string" || !definition.provider.trim() ||
-        typeof definition.accountId !== "string" || !definition.accountId.trim()) {
-      throw new TypeError(`Harvester provider instance "${id}" has an invalid non-secret descriptor`)
-    }
-    return Object.freeze({
-      id,
-      provider: definition.provider,
-      accountId: definition.accountId,
-      ...(definition.credentialEnv ? { credentialEnv: Object.freeze({ ...definition.credentialEnv }) } : {}),
-      ...(definition.provider === "binance" ? { tradingMode } : {}),
-    })
+}
+
+function assertProviderInstanceId({ id }) {
+  if (typeof id !== "string" || !/^[A-Za-z][A-Za-z0-9_-]*$/.test(id)) {
+    throw new TypeError("Harvester provider instance IDs must be stable identifiers")
+  }
+}
+
+function assertCredentialEnvironment({ credentialEnv, id }) {
+  if (credentialEnv === undefined) {
+    return
+  }
+  assertRecord({
+    value: credentialEnv,
+    path: `brokers.instances.${id}.credentialEnv`,
   })
-  if (instances.length === 0) {
-    throw new TypeError("Harvester broker configuration must define at least one provider instance")
+  const allowedKeys = ["apiKey", "apiSecret"]
+  for (const key of Object.keys(credentialEnv)) {
+    if (!allowedKeys.includes(key)) {
+      throw new TypeError(`Provider instance "${id}" has an unsupported credential environment reference`)
+    }
   }
-  const selections = {
-    execution: config.selection.execution,
-    account: config.selection.account,
-    marketData: config.selection.marketData,
+  for (const key of allowedKeys) {
+    const name = credentialEnv[key]
+    if (typeof name !== "string" || !/^[A-Z_][A-Z0-9_]*$/.test(name)) {
+      throw new TypeError(`Provider instance "${id}" credential references must be environment variable names, never secret values`)
+    }
   }
-  for (const [role, instanceId] of Object.entries(selections)) {
+}
+
+function resolveProviderInstance({ id, definition, tradingMode }) {
+  assertProviderInstanceId({
+    id,
+  })
+  assertRecord({
+    value: definition,
+    path: `brokers.instances.${id}`,
+  })
+  const allowedKeys = ["provider", "accountId", "credentialEnv"]
+  for (const key of Object.keys(definition)) {
+    if (!allowedKeys.includes(key)) {
+      throw new TypeError(`Provider instance "${id}" contains unsupported configuration field "${key}"`)
+    }
+  }
+  if (typeof definition.provider !== "string" || !definition.provider.trim()) {
+    throw new TypeError(`Provider instance "${id}" requires a provider type`)
+  }
+  if (typeof definition.accountId !== "string" || !definition.accountId.trim()) {
+    throw new TypeError(`Provider instance "${id}" requires a stable non-secret account ID`)
+  }
+  assertCredentialEnvironment({
+    credentialEnv: definition.credentialEnv,
+    id,
+  })
+  return Object.freeze({
+    id,
+    provider: definition.provider,
+    accountId: definition.accountId,
+    ...(definition.credentialEnv
+      ? { credentialEnv: Object.freeze({ ...definition.credentialEnv }) }
+      : {}),
+    ...(definition.provider === "binance" ? { tradingMode } : {}),
+  })
+}
+
+function resolveProviderInstances({ instances, tradingMode }) {
+  const resolved = Object.entries(instances).map(([id, definition]) =>
+    resolveProviderInstance({
+      id,
+      definition,
+      tradingMode,
+    }))
+  if (resolved.length === 0) {
+    throw new TypeError("Harvester provider configuration must contain at least one instance")
+  }
+  const accountIds = new Set()
+  for (const instance of resolved) {
+    if (accountIds.has(instance.accountId)) {
+      throw new TypeError(`Harvester provider account ID "${instance.accountId}" must be unique`)
+    }
+    accountIds.add(instance.accountId)
+  }
+  return Object.freeze(resolved)
+}
+
+function resolveProviderSelections({ selection, instances }) {
+  assertRecord({
+    value: selection,
+    path: "brokers.selection",
+  })
+  const allowedRoles = ["execution", "account", "marketData"]
+  for (const key of Object.keys(selection)) {
+    if (!allowedRoles.includes(key)) {
+      throw new TypeError(`Harvester provider selection "${key}" is unsupported`)
+    }
+  }
+  const selections = {}
+  for (const role of allowedRoles) {
+    const instanceId = selection[role]
     if (typeof instanceId !== "string" || !instances.some((instance) => instance.id === instanceId)) {
       throw new TypeError(`Harvester ${role} selection must reference a configured provider instance`)
     }
+    selections[role] = instanceId
   }
   if (new Set(Object.values(selections)).size !== 1) {
     throw new TypeError("This Harvester migration phase requires execution, account, and market data to select the same provider instance")
   }
+  return Object.freeze(selections)
+}
+
+/**
+ * Resolve named provider instances. Old configuration is mapped at this single
+ * compatibility boundary; explicit selections never fall back to Binance.
+ */
+export function resolveProviderConfiguration({ brokers, tradingMode } = {}) {
+  const configuration = brokers ?? LEGACY_CONFIGURATION
+  assertRecord({
+    value: configuration,
+    path: "brokers",
+  })
+  assertRecord({
+    value: configuration.instances,
+    path: "brokers.instances",
+  })
+  const instances = resolveProviderInstances({
+    instances: configuration.instances,
+    tradingMode,
+  })
+  const selections = resolveProviderSelections({
+    selection: configuration.selection,
+    instances,
+  })
   return Object.freeze({
-    instances: Object.freeze(instances),
-    selections: Object.freeze(selections),
+    instances,
+    selections,
     legacyCompatibility: brokers === undefined,
   })
 }

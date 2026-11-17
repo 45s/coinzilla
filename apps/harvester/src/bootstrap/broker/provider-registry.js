@@ -8,33 +8,77 @@ import {
 } from "../../application/events/lifecycle-event-dtos.js"
 
 const REQUIRED_CAPABILITIES = [
-  ["marketData", "priceStream"], ["marketData", "bookTickerStream"],
-  ["marketData", "candleHistory"], ["marketData", "candleStream"],
-  ["account", "snapshot"], ["orders", "openOrders"], ["orders", "placement"],
-  ["orders", "cancellation"], ["fills", "canonicalHistory"],
-  ["fills", "executionUpdates"], ["userData", "stream"], ["recovery", "sameProcess"],
+  ["marketData", "priceStream"],
+  ["marketData", "bookTickerStream"],
+  ["marketData", "candleHistory"],
+  ["marketData", "candleStream"],
+  ["account", "snapshot"],
+  ["orders", "openOrders"],
+  ["orders", "placement"],
+  ["orders", "cancellation"],
+  ["fills", "canonicalHistory"],
+  ["fills", "executionUpdates"],
+  ["userData", "stream"],
+  ["recovery", "sameProcess"],
 ]
 
-function assertDescriptor({ descriptor, index }) {
-  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) {
+function assertDescriptorObject({ descriptor, index }) {
+  if (descriptor === null || typeof descriptor !== "object" || Array.isArray(descriptor)) {
     throw new TypeError(`Provider descriptor at index ${index} must be an object`)
   }
-  const { id, provider, accountId, tradingMode } = descriptor
-  if (typeof id !== "string" || !/^[A-Za-z][A-Za-z0-9_-]*$/.test(id) ||
-      typeof provider !== "string" || !provider.trim() ||
-      typeof accountId !== "string" || !accountId.trim()) {
-    throw new TypeError(`Provider descriptor at index ${index} has invalid non-secret identity fields`)
+}
+
+function assertProviderIdentity({ id, provider, accountId, index }) {
+  if (typeof id !== "string" || !/^[A-Za-z][A-Za-z0-9_-]*$/.test(id)) {
+    throw new TypeError(`Provider descriptor at index ${index} has an invalid instance ID`)
   }
+  if (typeof provider !== "string" || !provider.trim()) {
+    throw new TypeError(`Provider instance "${id}" must declare a provider type`)
+  }
+  if (typeof accountId !== "string" || !accountId.trim()) {
+    throw new TypeError(`Provider instance "${id}" must declare a stable non-secret account ID`)
+  }
+}
+
+function assertCredentialEnvironment({ credentialEnv, id }) {
+  if (credentialEnv === undefined) {
+    return
+  }
+  if (credentialEnv === null || typeof credentialEnv !== "object" || Array.isArray(credentialEnv)) {
+    throw new TypeError(`Provider instance "${id}" has invalid credential environment references`)
+  }
+  for (const key of Object.keys(credentialEnv)) {
+    if (!["apiKey", "apiSecret"].includes(key) ||
+        typeof credentialEnv[key] !== "string" ||
+        !/^[A-Z_][A-Z0-9_]*$/.test(credentialEnv[key])) {
+      throw new TypeError(`Provider instance "${id}" credential references must be environment variable names`)
+    }
+  }
+}
+
+function assertDescriptor({ descriptor, index }) {
+  assertDescriptorObject({
+    descriptor,
+    index,
+  })
+  const { id, provider, accountId, tradingMode, credentialEnv } = descriptor
+  assertProviderIdentity({
+    id,
+    provider,
+    accountId,
+    index,
+  })
   if (provider === "binance" && !["testnet", "live"].includes(tradingMode)) {
     throw new TypeError(`Binance instance "${id}" requires explicit testnet or live mode`)
   }
-  const credentialEnv = descriptor.credentialEnv
-  if (credentialEnv !== undefined && (!credentialEnv || typeof credentialEnv !== "object" ||
-      typeof credentialEnv.apiKey !== "string" || typeof credentialEnv.apiSecret !== "string")) {
-    throw new TypeError(`Provider instance "${id}" has invalid credential environment references`)
-  }
+  assertCredentialEnvironment({
+    credentialEnv,
+    id,
+  })
   return Object.freeze({
-    id, provider, accountId,
+    id,
+    provider,
+    accountId,
     ...(tradingMode ? { tradingMode } : {}),
     ...(credentialEnv ? { credentialEnv: Object.freeze({ ...credentialEnv }) } : {}),
   })
@@ -44,30 +88,46 @@ function validateRegistryInput({ providerInstances, selections, adapterFactories
   if (!Array.isArray(providerInstances) || providerInstances.length === 0) {
     throw new TypeError("Harvester requires at least one named provider instance")
   }
-  const descriptors = providerInstances.map((descriptor, index) => assertDescriptor({ descriptor, index }))
-  const ids = new Set()
+  const descriptors = providerInstances.map((descriptor, index) =>
+    assertDescriptor({
+      descriptor,
+      index,
+    }))
+  const instanceIds = new Set()
   const accountIds = new Set()
   for (const descriptor of descriptors) {
-    if (ids.has(descriptor.id)) {
+    if (instanceIds.has(descriptor.id)) {
       throw new TypeError(`Duplicate provider instance ID "${descriptor.id}"`)
     }
     if (accountIds.has(descriptor.accountId)) {
       throw new TypeError(`Duplicate provider account ID "${descriptor.accountId}"`)
     }
-    ids.add(descriptor.id)
+    instanceIds.add(descriptor.id)
     accountIds.add(descriptor.accountId)
   }
-  const selectedIds = [selections?.execution, selections?.account, selections?.marketData]
-  if (selectedIds.some((id) => typeof id !== "string" || !ids.has(id))) {
+  const selectedIds = [
+    selections?.execution,
+    selections?.account,
+    selections?.marketData,
+  ]
+  if (selectedIds.some((id) => typeof id !== "string" || !instanceIds.has(id))) {
     throw new TypeError("Every provider role must explicitly select a configured instance ID")
   }
   if (new Set(selectedIds).size !== 1) {
     throw new TypeError("Execution, account, and market data must use the same instance until isolation is implemented")
   }
-  if (!adapterFactories || typeof adapterFactories !== "object") {
+  if (adapterFactories === null || typeof adapterFactories !== "object") {
     throw new TypeError("Harvester provider adapter factories must be registered")
   }
   return descriptors
+}
+
+function getCapability({ declaration, path }) {
+  let capability = declaration
+  for (const key of path) {
+    capability = capability?.[key]
+  }
+  return capability
 }
 
 function assertCapabilities({ descriptor, broker }) {
@@ -80,10 +140,15 @@ function assertCapabilities({ descriptor, broker }) {
     throw new TypeError(`Provider instance "${descriptor.id}" capability environment does not match configured mode`)
   }
   for (const path of REQUIRED_CAPABILITIES) {
-    const capability = path.reduce((value, key) => value?.[key], declaration)
-    const mutation = path[0] === "orders" && ["placement", "cancellation"].includes(path[1])
-    if (capability?.status !== "supported" &&
-        !(mutation && capability?.status === "environment-dependent")) {
+    const capability = getCapability({
+      declaration,
+      path,
+    })
+    const isMutation = path[0] === "orders" &&
+      ["placement", "cancellation"].includes(path[1])
+    const supported = capability?.status === "supported"
+    const environmentDependent = isMutation && capability?.status === "environment-dependent"
+    if (!supported && !environmentDependent) {
       throw new TypeError(`Provider instance "${descriptor.id}" lacks required capability "${path.join(".")}"`)
     }
   }
@@ -103,32 +168,44 @@ function resolveProviderConfig({ descriptor, env }) {
   if (typeof apiSecret !== "string" || !apiSecret.trim()) {
     throw new TypeError(`Provider instance "${descriptor.id}" requires the configured API secret environment variable`)
   }
-  return { apiKey, apiSecret, tradingMode: descriptor.tradingMode }
+  return {
+    apiKey,
+    apiSecret,
+    tradingMode: descriptor.tradingMode,
+  }
 }
 
 function publishConnected({ eventPublisher, descriptor }) {
   publishLifecycleEvent({
-    eventPublisher, eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTED,
-    dataResult: mapBrokerConnectedData({ broker: descriptor.provider }),
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTED,
+    dataResult: mapBrokerConnectedData({
+      broker: descriptor.provider,
+    }),
   })
 }
 
 function publishConnectionFailure({ eventPublisher, descriptor, error }) {
   publishLifecycleEvent({
-    eventPublisher, eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED,
-    dataResult: mapBrokerConnectionFailedData({ broker: descriptor.provider, error }),
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED,
+    dataResult: mapBrokerConnectionFailedData({
+      broker: descriptor.provider,
+      error,
+    }),
   })
 }
 
 async function disconnectEntries({ entries, eventPublisher }) {
-  const reversed = entries.slice().reverse()
-  const results = await Promise.allSettled(reversed.map((entry) =>
+  const reversedEntries = entries.slice().reverse()
+  const results = await Promise.allSettled(reversedEntries.map((entry) =>
     Promise.resolve().then(() => entry.broker.disconnect())))
   const errors = []
   for (const [index, result] of results.entries()) {
-    const entry = reversed[index]
+    const entry = reversedEntries[index]
     publishLifecycleEvent({
-      eventPublisher, eventName: HARVESTER_EVENT_NAMES.BROKER_DISCONNECTED,
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.BROKER_DISCONNECTED,
       dataResult: mapBrokerDisconnectedData({
         broker: entry.descriptor.provider,
         outcome: result.status === "fulfilled" ? "success" : "failed",
@@ -150,17 +227,37 @@ async function constructProviderEntries({ descriptors, adapterFactories, env, lo
       if (typeof factory !== "function") {
         throw new TypeError(`Provider type "${descriptor.provider}" is not registered in Harvester`)
       }
-      const config = resolveProviderConfig({ descriptor, env })
-      const adapter = factory({ config, logger })
-      entries.push({ descriptor, broker: adapter })
-      const broker = assertBrokerPort({ broker: adapter })
-      assertCapabilities({ descriptor, broker })
+      const config = resolveProviderConfig({
+        descriptor,
+        env,
+      })
+      const adapter = factory({
+        config,
+        logger,
+      })
+      entries.push({
+        descriptor,
+        broker: adapter,
+      })
+      const broker = assertBrokerPort({
+        broker: adapter,
+      })
+      assertCapabilities({
+        descriptor,
+        broker,
+      })
       entries[entries.length - 1].broker = broker
     }
   } catch (error) {
-    const cleanupErrors = await disconnectEntries({ entries, eventPublisher })
+    const cleanupErrors = await disconnectEntries({
+      entries,
+      eventPublisher,
+    })
     if (cleanupErrors.length > 0) {
-      throw new AggregateError([error, ...cleanupErrors], "Provider construction failed and cleanup also failed", { cause: error })
+      throw new AggregateError([
+        error,
+        ...cleanupErrors,
+      ], "Provider construction failed and cleanup also failed")
     }
     throw error
   }
@@ -179,11 +276,22 @@ function createPortFacade({ entry, connectAll, disconnectAll }) {
     }
   }
   Object.defineProperties(broker, {
-    providerInstanceId: { enumerable: true, value: entry.descriptor.id },
-    providerType: { enumerable: true, value: entry.descriptor.provider },
-    accountId: { enumerable: true, value: entry.descriptor.accountId },
+    providerInstanceId: {
+      enumerable: true,
+      value: entry.descriptor.id,
+    },
+    providerType: {
+      enumerable: true,
+      value: entry.descriptor.provider,
+    },
+    accountId: {
+      enumerable: true,
+      value: entry.descriptor.accountId,
+    },
   })
-  return Object.freeze(assertBrokerPort({ broker }))
+  return Object.freeze(assertBrokerPort({
+    broker,
+  }))
 }
 
 function createRegistryLifecycle({ entries, eventPublisher }) {
@@ -192,7 +300,10 @@ function createRegistryLifecycle({ entries, eventPublisher }) {
   let disconnectPromise
   const disconnectAll = async () => {
     if (!disconnectPromise) {
-      disconnectPromise = disconnectEntries({ entries, eventPublisher })
+      disconnectPromise = disconnectEntries({
+        entries,
+        eventPublisher,
+      })
     }
     const errors = await disconnectPromise
     if (errors.length > 0) {
@@ -208,13 +319,23 @@ function createRegistryLifecycle({ entries, eventPublisher }) {
         for (const entry of entries) {
           try {
             await entry.broker.connect()
-            publishConnected({ eventPublisher, descriptor: entry.descriptor })
+            publishConnected({
+              eventPublisher,
+              descriptor: entry.descriptor,
+            })
           } catch (error) {
-            publishConnectionFailure({ eventPublisher, descriptor: entry.descriptor, error })
+            publishConnectionFailure({
+              eventPublisher,
+              descriptor: entry.descriptor,
+              error,
+            })
             try {
               await disconnectAll()
             } catch (cleanupError) {
-              throw new AggregateError([error, cleanupError], "Provider connection and cleanup both failed", { cause: error })
+              throw new AggregateError([
+                error,
+                cleanupError,
+              ], "Provider connection and cleanup both failed")
             }
             throw error
           }
@@ -231,18 +352,45 @@ function createRegistryLifecycle({ entries, eventPublisher }) {
     return entry
   }
   return Object.freeze({
-    connectAll, disconnectAll,
-    getBrokerPort: ({ instanceId } = {}) => createPortFacade({ entry: getEntry({ instanceId }), connectAll, disconnectAll }),
-    getDescriptor: ({ instanceId } = {}) => getEntry({ instanceId }).descriptor,
+    connectAll,
+    disconnectAll,
+    getBrokerPort: ({ instanceId } = {}) => createPortFacade({
+      entry: getEntry({
+        instanceId,
+      }),
+      connectAll,
+      disconnectAll,
+    }),
+    getDescriptor: ({ instanceId } = {}) => getEntry({
+      instanceId,
+    }).descriptor,
     descriptors: Object.freeze(entries.map((entry) => entry.descriptor)),
   })
 }
 
 /** Construct configured adapters and own their connection and cleanup lifecycle. */
 export async function createProviderRegistry({
-  providerInstances, selections, adapterFactories, env = process.env, logger, eventPublisher,
+  providerInstances,
+  selections,
+  adapterFactories,
+  env = process.env,
+  logger,
+  eventPublisher,
 } = {}) {
-  const descriptors = validateRegistryInput({ providerInstances, selections, adapterFactories })
-  const entries = await constructProviderEntries({ descriptors, adapterFactories, env, logger, eventPublisher })
-  return createRegistryLifecycle({ entries, eventPublisher })
+  const descriptors = validateRegistryInput({
+    providerInstances,
+    selections,
+    adapterFactories,
+  })
+  const entries = await constructProviderEntries({
+    descriptors,
+    adapterFactories,
+    env,
+    logger,
+    eventPublisher,
+  })
+  return createRegistryLifecycle({
+    entries,
+    eventPublisher,
+  })
 }
