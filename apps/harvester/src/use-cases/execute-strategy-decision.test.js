@@ -877,3 +877,53 @@ test("propagates ownership when the post-registration submission gate throws", a
   assert.equal(deferredContext.registered, true)
   assert.equal(brokerCalls, 0, "A gate exception must prevent broker I/O.")
 })
+
+
+test("propagates OrderOwnership to the order-validation failure callback", async () => {
+  const ownership = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-invalid-order",
+    purpose: "RECOVERY_BUY",
+    cycleId: "rs-cycle-invalid-order",
+  }
+  const validationFailures = []
+  let brokerCalls = 0
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async () => {
+        brokerCalls += 1
+        return {
+          ok: true,
+          data: makeAcknowledgement(decision.actions[0]),
+        }
+      },
+    },
+    onPendingOrder: async () => {},
+    onAcknowledgedOrder: async () => assert.fail("an invalid order must not be acknowledged"),
+    onSubmissionFailure: async () => assert.fail("local validation is not a broker submission failure"),
+    onOrderValidationFailure: async ({ order, error, ownership: receivedOwnership }) => {
+      validationFailures.push({
+        order,
+        error,
+        ownership: receivedOwnership,
+      })
+    },
+  })
+  const result = await execute.validate({
+    decision: {
+      actions: [{
+        ...decision.actions[0],
+        price: "0.0991",
+        ...ownership,
+      }],
+    },
+    marketMetadata,
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /PRICE_INCREMENT/)
+  assert.equal(validationFailures.length, 1)
+  assert.deepEqual(validationFailures[0].ownership, ownership)
+  assert.equal(validationFailures[0].order.status, "PENDING")
+  assert.equal(brokerCalls, 0)
+})
