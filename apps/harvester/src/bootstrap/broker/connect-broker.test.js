@@ -35,8 +35,7 @@ data: { unsubscribe: async () => {} } }),
       if (disconnect) {await disconnect()}
     },
     getAccountSnapshot: async () => ({ ok: true,
-data: { accountId: "123456789",
-balances: [],
+data: { balances: [],
 sourceTime: 1 } }),
     getOpenOrders: async () => ({ ok: true,
 data: [] }),
@@ -64,8 +63,7 @@ broker,
 brokerAdapterFactory,
 eventPublisher,
     env: { BINANCE_API_KEY: "test-key",
-BINANCE_API_SECRET_KEY: "test-secret",
-BINANCE_ACCOUNT_ID: "123456789" },
+BINANCE_API_SECRET_KEY: "test-secret" },
   }
 }
 
