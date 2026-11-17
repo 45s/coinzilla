@@ -84,12 +84,30 @@ test("Bitunix Spot broker preserves a null matching-order result", async () => {
 test("Bitunix Spot broker rejects invalid matching-order request inputs before I/O", async () => {
   const invalidInputs = [
     {},
-    { orderId: "", symbol: "BTCUSDT" },
-    { orderId: "order-123", symbol: "" },
-    { orderId: " ", symbol: "BTCUSDT" },
-    { orderId: "order-123", symbol: " " },
-    { orderId: 123, symbol: "BTCUSDT" },
-    { orderId: "order-123", symbol: 123 },
+    {
+      orderId: "",
+      symbol: "BTCUSDT",
+    },
+    {
+      orderId: "order-123",
+      symbol: "",
+    },
+    {
+      orderId: " ",
+      symbol: "BTCUSDT",
+    },
+    {
+      orderId: "order-123",
+      symbol: " ",
+    },
+    {
+      orderId: 123,
+      symbol: "BTCUSDT",
+    },
+    {
+      orderId: "order-123",
+      symbol: 123,
+    },
   ]
   const { broker, calls } = createBroker()
 
@@ -105,13 +123,34 @@ test("Bitunix Spot broker rejects malformed matching-order responses", async () 
     [],
     [createMatchingOrder()],
     {},
-    { ...createMatchingOrder(), volume: "not-a-decimal" },
-    { ...createMatchingOrder(), price: "not-a-decimal" },
-    { ...createMatchingOrder(), fee: "not-a-decimal" },
-    { ...createMatchingOrder(), feeCoin: "" },
-    { ...createMatchingOrder(), role: "" },
-    { ...createMatchingOrder(), ctime: "" },
-    { ...createMatchingOrder(), id: "" },
+    {
+      ...createMatchingOrder(),
+      volume: "not-a-decimal",
+    },
+    {
+      ...createMatchingOrder(),
+      price: "not-a-decimal",
+    },
+    {
+      ...createMatchingOrder(),
+      fee: "not-a-decimal",
+    },
+    {
+      ...createMatchingOrder(),
+      feeCoin: "",
+    },
+    {
+      ...createMatchingOrder(),
+      role: "",
+    },
+    {
+      ...createMatchingOrder(),
+      ctime: "",
+    },
+    {
+      ...createMatchingOrder(),
+      id: "",
+    },
   ]
   const results = await Promise.all(malformedResponses.map(async (response) => {
     const { broker } = createBroker({ response })
