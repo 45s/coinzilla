@@ -194,6 +194,14 @@ runDatabaseProviderConformanceTests({
       storageMode,
     }),
   }),
+  cleanupStorage: async ({ storageKey, storageMode }) => {
+    if (storageMode === "server") {
+      // Use the provider's administrative connection to drop the isolated test database.
+      await postgresAdmin.dropDatabase(
+        `coinzilla_test_${basename(storageKey, ".sqlite")}`,
+      )
+    }
+  },
 })
 ```
 
