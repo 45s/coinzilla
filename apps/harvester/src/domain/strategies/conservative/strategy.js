@@ -333,7 +333,10 @@ function createUnfillableSellDisposition({ context, accounting, marketPrice }) {
     increment: context.priceTickSize,
     direction: "up",
   })
-  if (context.minPrice && compareDecimal({ left: evaluatedPrice, right: context.minPrice }) < 0) {
+  if (context.minPrice && compareDecimal({
+    left: evaluatedPrice,
+    right: context.minPrice,
+  }) < 0) {
     evaluatedPrice = roundDecimalToIncrement({
       value: context.minPrice,
       increment: context.priceTickSize,
@@ -345,7 +348,10 @@ function createUnfillableSellDisposition({ context, accounting, marketPrice }) {
     right: quantity,
   })
 
-  if (compareDecimal({ left: quantity, right: context.quantityStepSize }) < 0) {
+  if (compareDecimal({
+    left: quantity,
+    right: context.quantityStepSize,
+  }) < 0) {
     return Object.freeze({
       status: "EXCHANGE_CONSTRAINED_DUST",
       quantity,
@@ -354,7 +360,10 @@ function createUnfillableSellDisposition({ context, accounting, marketPrice }) {
       evaluatedQuantity: "0",
     })
   }
-  if (compareDecimal({ left: quantity, right: context.minQuantity }) < 0) {
+  if (compareDecimal({
+    left: quantity,
+    right: context.minQuantity,
+  }) < 0) {
     return Object.freeze({
       status: "EXCHANGE_CONSTRAINED_DUST",
       quantity,
@@ -363,7 +372,10 @@ function createUnfillableSellDisposition({ context, accounting, marketPrice }) {
       evaluatedQuantity: quantity,
     })
   }
-  if (compareDecimal({ left: evaluatedNotional, right: context.minNotional }) < 0) {
+  if (compareDecimal({
+    left: evaluatedNotional,
+    right: context.minNotional,
+  }) < 0) {
     return Object.freeze({
       status: "EXCHANGE_CONSTRAINED_DUST",
       quantity,
@@ -383,7 +395,6 @@ function createUnfillableSellDisposition({ context, accounting, marketPrice }) {
     evaluatedQuantity: "0",
   })
 }
-
 function createPriceFilterBlockedDisposition({ context, accounting, residualPrice }) {
   return Object.freeze({
     status: "PRICE_FILTER_BLOCKED",

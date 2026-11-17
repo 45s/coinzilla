@@ -97,6 +97,13 @@ function normalizeQuantityIncrementDust({ inventoryDisposition, quantity, reason
       compareDecimal({
         left: inventoryDisposition.evaluatedQuantity,
         right: inventoryDisposition.quantityStepSize,
+      }) >= 0 ||
+      compareDecimal({
+        left: quantity,
+        right: addDecimal({
+          left: inventoryDisposition.quantityStepSize,
+          right: inventoryDisposition.quantityStepSize,
+        }),
       }) >= 0) {
     return undefined
   }

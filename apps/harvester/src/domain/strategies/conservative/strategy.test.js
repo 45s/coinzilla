@@ -1140,8 +1140,16 @@ status: "OPEN" }],
 })
 
 test("classifies the ADA 0.1 residual as MIN_NOTIONAL when one fee-reserved step cannot be sold", () => {
-  const adaBaseAsset = new Asset({ id: "asset:ADA", code: "ADA" })
-  const adaMarket = new Market({ venue: "binance", symbol: "ADAUSDT", baseAsset: adaBaseAsset, quoteAsset })
+  const adaBaseAsset = new Asset({
+    id: "asset:ADA",
+    code: "ADA",
+  })
+  const adaMarket = new Market({
+    venue: "binance",
+    symbol: "ADAUSDT",
+    baseAsset: adaBaseAsset,
+    quoteAsset,
+  })
   const metadata = createDustMarketMetadata({
     market: adaMarket,
     priceIncrement: "0.0001",
@@ -1154,31 +1162,70 @@ test("classifies the ADA 0.1 residual as MIN_NOTIONAL when one fee-reserved step
     recoveryLedger: RecoveryLedger.empty({ market: adaMarket }),
   }
   state = applyDustFill({
-    state, market: adaMarket, baseAsset: adaBaseAsset, side: "BUY",
-    tradeId: "ada-buy-738419", brokerOrderId: "738419",
-    price: "0.1524", quantity: "50", quoteQuantity: "7.62",
-    commissionAmount: "0.05", commissionAsset: adaBaseAsset,
+    state,
+    market: adaMarket,
+    baseAsset: adaBaseAsset,
+    side: "BUY",
+    tradeId: "ada-buy-738419",
+    brokerOrderId: "738419",
+    price: "0.1524",
+    quantity: "50",
+    quoteQuantity: "7.62",
+    commissionAmount: "0.05",
+    commissionAsset: adaBaseAsset,
   })
   state = applyDustFill({
-    state, market: adaMarket, baseAsset: adaBaseAsset, side: "BUY",
-    tradeId: "ada-buy-738559", brokerOrderId: "738559",
-    price: "0.1519", quantity: "50", quoteQuantity: "7.595",
-    commissionAmount: "0.05", commissionAsset: adaBaseAsset,
+    state,
+    market: adaMarket,
+    baseAsset: adaBaseAsset,
+    side: "BUY",
+    tradeId: "ada-buy-738559",
+    brokerOrderId: "738559",
+    price: "0.1519",
+    quantity: "50",
+    quoteQuantity: "7.595",
+    commissionAmount: "0.05",
+    commissionAsset: adaBaseAsset,
   })
   state = applyDustFill({
-    state, market: adaMarket, baseAsset: adaBaseAsset, side: "SELL",
-    tradeId: "ada-sell-738736", brokerOrderId: "738736",
-    price: "0.1531", quantity: "99.8", quoteQuantity: "15.27938",
-    commissionAmount: "0.01527938", commissionAsset: quoteAsset,
+    state,
+    market: adaMarket,
+    baseAsset: adaBaseAsset,
+    side: "SELL",
+    tradeId: "ada-sell-738736",
+    brokerOrderId: "738736",
+    price: "0.1531",
+    quantity: "99.8",
+    quoteQuantity: "15.27938",
+    commissionAmount: "0.01527938",
+    commissionAsset: quoteAsset,
   })
 
-  const position = state.portfolio.getPosition({ symbol: "ADAUSDT" })
-  assert.equal(position.quantity.amount, "0.1", "The two base-asset BUY commissions and the confirmed SELL must leave exactly 0.1 ADA.")
-  assert.equal(position.spent.amount, "15.215", "The full BUY quote cost must remain the recovery basis.")
-  assert.equal(state.recoveryLedger.netSellProceeds, "15.26410062", "SELL proceeds must exclude the actual quote-asset commission.")
+  const position = state.portfolio.getPosition({
+    symbol: "ADAUSDT",
+  })
+  assert.equal(
+    position.quantity.amount,
+    "0.1",
+    "The two base-asset BUY commissions and the confirmed SELL must leave exactly 0.1 ADA.",
+  )
+  assert.equal(
+    position.spent.amount,
+    "15.215",
+    "The full BUY quote cost must remain the recovery basis.",
+  )
+  assert.equal(
+    state.recoveryLedger.netSellProceeds,
+    "15.26410062",
+    "SELL proceeds must exclude the actual quote-asset commission.",
+  )
 
   const decision = evaluateConservativeStrategy({
-    marketPrice: { symbol: "ADAUSDT", price: "0.1531", timestamp: 100 },
+    marketPrice: {
+      symbol: "ADAUSDT",
+      price: "0.1531",
+      timestamp: 100,
+    },
     pairConfig: {
       priceStepPercent: 0.3,
       orderQuantity: 50,
@@ -1194,7 +1241,11 @@ test("classifies the ADA 0.1 residual as MIN_NOTIONAL when one fee-reserved step
     lastBuyPrice: "0.1519",
   })
 
-  assert.equal(decision.actions.some((action) => action.side === "SELL"), false, "The 0.1 ADA residual must not create an invalid below-minimum-notional SELL.")
+  assert.equal(
+    decision.actions.some((action) => action.side === "SELL"),
+    false,
+    "The 0.1 ADA residual must not create an invalid below-minimum-notional SELL.",
+  )
   assert.deepEqual(decision.inventoryDisposition, {
     status: "EXCHANGE_CONSTRAINED_DUST",
     quantity: "0.1",
@@ -1205,4 +1256,3 @@ test("classifies the ADA 0.1 residual as MIN_NOTIONAL when one fee-reserved step
     evaluatedNotional: "0.01531",
   }, "A quantity-valid 0.1 ADA remainder worth less than 5 USDT must be classified as MIN_NOTIONAL dust.")
 })
-
