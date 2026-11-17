@@ -195,9 +195,18 @@ test("reports delivery failures once and continues processing later events", asy
   await eventBus.handlers.get("bot.stopped")({ name: "bot.stopped",
     data: {} })
 
-  assert.equal(errors.length, 1)
-  assert.equal(calls, 2)
-  assert.equal(errors[0].eventName, "bot.started")
+  assert.equal(errors.length, 1, "A failed Telegram delivery must be reported exactly once")
+  assert.equal(calls, 2, "A failed delivery must not poison the serialized queue")
+  assert.equal(errors[0].eventName, "bot.started", "Failure evidence must identify the notification event")
+  assert.equal(errors[0].failureCategory, "NETWORK", "Network failures must use a safe stable category")
+  assert.deepEqual(errors[0].delivery, {
+    acceptedCount: 1,
+    deliveredCount: 0,
+    failedCount: 1,
+    overflowCount: 0,
+    pendingCount: 1,
+    closed: false,
+  }, "Failure evidence must include the exact delivery counters at the failure boundary")
   await subscriber.close()
 })
 
