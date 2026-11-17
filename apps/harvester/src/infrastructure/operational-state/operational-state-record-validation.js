@@ -16,7 +16,8 @@ import { validateFactData } from "./operational-state-fact-validation.js"
 export function validateFactInput({
   fact,
   runtimeSessionId
-,}) {
+,
+}) {
   if (!fact || typeof fact !== "object" || Array.isArray(fact)) {
     throw new TypeError("Operational State record must be an object")
   }
@@ -24,12 +25,14 @@ export function validateFactInput({
     value: fact.factId,
 field: "factId",
 maxLength: MAX_FACT_ID_LENGTH
-  ,})
+  ,
+  })
   const factType = requireNonEmptyString({
     value: fact.factType,
 field: "factType",
 maxLength: 64
-  ,})
+  ,
+  })
   if (!FACT_TYPES.has(factType) || factType === "LEDGER_INITIALIZED") {
     throw new TypeError(`Operational State record type is not allowlisted: ${  factType}`)
   }
@@ -46,7 +49,8 @@ maxLength: 64
 data: fact.data,
 factId,
 runtimeSessionId
-    ,}),
+    ,
+    }),
   }
 }
 
@@ -116,7 +120,8 @@ function assertOperationalStateRecordSequenceIntegrity({
   index,
   previousDigest,
   schemaVersion
-,}) {
+,
+}) {
   if (index === 0) {
     if (
       record.sequence !== "0" ||
@@ -144,7 +149,8 @@ function assertOperationalStateRecordPayloadIntegrity({
   record,
   index,
   schemaVersion
-,}) {
+,
+}) {
   if (!SHA256_PATTERN.test(record.digest ?? "")) {
     throw new TypeError("Operational State record digest is malformed")
   }
@@ -168,7 +174,8 @@ export function validateFactRecord({
   expectedSequence,
   previousDigest,
   index
-,}) {
+,
+}) {
   assertOperationalStateRecordEnvelope({
     record,
     schemaVersion,
@@ -192,7 +199,8 @@ export function createManifestCheckpoint({
   schemaVersion,
   record,
   previousManifestDigest
-,}) {
+,
+}) {
   const body = {
     formatVersion: FORMAT_VERSION,
     schemaVersion,
@@ -204,7 +212,8 @@ export function createManifestCheckpoint({
   return {
     ...body,
 digest: digestOperationalStateRecord(body)
-  ,}
+  ,
+  }
 }
 
 function validateManifestCheckpointShape({ checkpoint }) {
@@ -225,7 +234,8 @@ function validateManifestCheckpointVersionAndPosition({
   schemaVersion,
   expectedSequence,
   index
-,}) {
+,
+}) {
   if (checkpoint.formatVersion !== FORMAT_VERSION || checkpoint.schemaVersion !== schemaVersion) {
     throw new Error("Committed-head manifest format/schema version is unsupported")
   }
@@ -242,7 +252,8 @@ function validateManifestCheckpointLinkage({
   checkpoint,
   factRecord,
   previousManifestDigest
-,}) {
+,
+}) {
   if (checkpoint.lastCommittedDigest !== factRecord.digest) {
     throw new Error("Committed-head manifest does not reference the matching fact record")
   }
@@ -267,26 +278,30 @@ export function validateManifestCheckpoint({
   expectedSequence,
   previousManifestDigest,
   index
-,}) {
+,
+}) {
   validateManifestCheckpointShape({ checkpoint })
   validateManifestCheckpointVersionAndPosition({
     checkpoint,
     schemaVersion,
     expectedSequence,
     index
-  ,})
+  ,
+  })
   validateManifestCheckpointLinkage({
     checkpoint,
     factRecord,
     previousManifestDigest
-  ,})
+  ,
+  })
   validateManifestCheckpointDigest({ checkpoint })
 }
 
 export function parseJsonLines({
   source,
   label
-,}) {
+,
+}) {
   if (typeof source !== "string" || !source.endsWith("\n")) {
     throw new Error(`${label} must end with a complete newline-terminated record`)
   }
