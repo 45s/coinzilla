@@ -38,8 +38,8 @@ jobs:
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
           "$(go env GOPATH)/bin/actionlint"
 
-  syntax:
-    name: Check JavaScript syntax
+  workspace-quality:
+    name: Workspace JavaScript quality
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -91,3 +91,69 @@ jobs:
           git fetch --no-tags --depth=1 origin "$BASE_SHA"
           node --test scripts/check-markdown-style.test.js
           node scripts/check-markdown-style.js "$BASE_SHA"
+
+
+  strict-changed:
+    name: Check strict ESLint for changed files
+    if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out pull-request head with complete history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 12.11.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch target branch and verify merge base
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          git merge-base "origin/${BASE_REF}" "${HEAD_SHA}"
+
+      - name: Enforce strict changed-file ESLint
+        env:
+          LINT_CHANGED_BASE_REF: origin/${{ github.event.pull_request.base.ref }}
+          LINT_CHANGED_HEAD_REF: ${{ github.event.pull_request.head.sha }}
+        run: pnpm lint:changed
+
+  required-javascript-quality:
+    name: Check JavaScript syntax
+    runs-on: ubuntu-latest
+    needs:
+      - workspace-quality
+      - strict-changed
+    if: always()
+    steps:
+      - name: Require workspace and applicable changed-file checks
+        env:
+          WORKSPACE_RESULT: ${{ needs.workspace-quality.result }}
+          STRICT_RESULT: ${{ needs.strict-changed.result }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          if [ "${WORKSPACE_RESULT}" != "success" ]; then
+            echo "Workspace JavaScript quality failed: ${WORKSPACE_RESULT}"
+            exit 1
+          fi
+          if [ "${EVENT_NAME}" = "pull_request" ] && [ "${BASE_REF}" = "develop" ] && [ "${STRICT_RESULT}" != "success" ]; then
+            echo "Strict changed-file ESLint failed or did not run: ${STRICT_RESULT}"
+            exit 1
+          fi
+          echo "Workspace JavaScript quality and all applicable strict checks passed."
