@@ -353,7 +353,12 @@ error() {} },
     assertUniqueJournalRecordIds({ sessions })
     const orderedSessions = validateAndOrderSessions(sessions)
     const { records, sessionMetadata } = flattenOrderedJournalSessions({ orderedSessions })
-    return createHistoryReadResult({ records, sessionMetadata, bytesRead, directoriesVisited })
+    return createHistoryReadResult({
+      records,
+      sessionMetadata,
+      bytesRead,
+      directoriesVisited,
+    })
   } catch (error) {
     return toResult({
       error: normalizeHistoryReadError({
