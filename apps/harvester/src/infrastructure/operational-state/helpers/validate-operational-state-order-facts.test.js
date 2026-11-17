@@ -177,14 +177,7 @@ test("rejects order-submission outcomes with inconsistent identity, amounts, or 
   const valid = makeSubmissionOutcome()
   const invalidCases = [
     ["unsupported field", { unsupported: true }, /unsupported fields/],
-    [
-      "invalid symbol",
-      {
-        symbol: "btc-usdt",
-        marketId: "binance:btc-usdt",
-      },
-      /symbol must be canonical/,
-    ],
+    ["invalid symbol", { symbol: "btc-usdt" }, /symbol must be canonical/],
     ["invalid side", { side: "HOLD" }, /side must be BUY or SELL/],
     ["invalid type", { type: "MARKET" }, /type must be LIMIT/],
     ["invalid amount", { price: "0" }, /amounts must be canonical/],
@@ -249,7 +242,14 @@ test("rejects cancellation intents with invalid identity, order state, or exact 
     ["non-canonical reason", { reason: "operator requested" }, /identity or reason is not canonical/],
     ["non-lowercase venue", { venue: "Binance" }, /identity or reason is not canonical/],
     ["market/venue mismatch", { marketId: "kraken:BTCUSDT" }, /identity or reason is not canonical/],
-    ["invalid symbol", { symbol: "btc-usdt" }, /symbol must be canonical/],
+    [
+      "invalid symbol",
+      {
+        symbol: "btc-usdt",
+        marketId: "binance:btc-usdt",
+      },
+      /symbol must be canonical/,
+    ],
     ["invalid side", { side: "HOLD" }, /side must be BUY or SELL/],
     ["invalid type", { type: "MARKET" }, /type must be LIMIT/],
     ["inactive order status", { status: "FILLED" }, /active acknowledged order/],
