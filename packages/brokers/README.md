@@ -47,7 +47,7 @@ Each capability declaration has a `status` and may include `method`, `guarantee`
 
 The declaration and all nested objects and arrays are frozen. The `capabilities` property itself is non-writable and non-configurable. Its `environment.selectedMode` reports the instance's validated Binance `tradingMode`; `NODE_ENV` never selects exchange endpoints. These declarations describe the broker implementation and its verified boundaries, not live exchange connectivity or account permissions.
 
-Only Binance is declared in this phase. Bitunix remains unchanged and read-only; no Bitunix capability declaration is added.
+Only Binance is declared in this phase. The REST-backed BitunixSpotBroker remains read-only; the separate BitunixSpotWebSocketClient exposes authenticated Spot RPC reads but does not add broker capability declarations or make Bitunix a Harvester execution provider.
 
 For the source-mapped Binance capability matrix, limitations, and remaining multi-provider phases, see [the Brokers roadmap](./ROADMAP.md#multi-provider-construction-and-capability-contracts--1339).
 
