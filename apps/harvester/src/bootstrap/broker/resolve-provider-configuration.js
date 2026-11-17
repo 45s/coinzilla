@@ -34,16 +34,9 @@ function assertCredentialEnvironment({ credentialEnv, id }) {
     value: credentialEnv,
     path: `brokers.instances.${id}.credentialEnv`,
   })
-  const allowedKeys = ["apiKey", "apiSecret"]
-  for (const key of Object.keys(credentialEnv)) {
-    if (!allowedKeys.includes(key)) {
-      throw new TypeError(`Provider instance "${id}" has an unsupported credential environment reference`)
-    }
-  }
-  for (const key of allowedKeys) {
-    const name = credentialEnv[key]
+  for (const name of Object.values(credentialEnv)) {
     if (typeof name !== "string" || !/^[A-Z_][A-Z0-9_]*$/.test(name)) {
-      throw new TypeError(`Provider instance "${id}" credential references must be environment variable names, never secret values`)
+      throw new TypeError(`Provider instance "${id}" credential references must be environment variable names`)
     }
   }
 }
