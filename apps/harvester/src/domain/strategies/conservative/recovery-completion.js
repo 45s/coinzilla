@@ -173,18 +173,39 @@ function validateRecoveryCompletionInput({
     keepQuantity,
     minProfit,
   })) {
-    assertDecimalString({ value, field })
+    assertDecimalString({
+      value,
+      field,
+    })
   }
-  if (compareDecimal({ left: spent, right: "0" }) < 0 ||
-      compareDecimal({ left: netSellProceeds, right: "0" }) < 0 ||
-      compareDecimal({ left: activeQuantity, right: "0" }) < 0 ||
-      compareDecimal({ left: keepQuantity, right: "0" }) < 0 ||
-      compareDecimal({ left: minProfit, right: "0.01" }) < 0) {
+  if (compareDecimal({
+    left: spent,
+    right: "0",
+  }) < 0 ||
+      compareDecimal({
+        left: netSellProceeds,
+        right: "0",
+      }) < 0 ||
+      compareDecimal({
+        left: activeQuantity,
+        right: "0",
+      }) < 0 ||
+      compareDecimal({
+        left: keepQuantity,
+        right: "0",
+      }) < 0 ||
+      compareDecimal({
+        left: minProfit,
+        right: "0.01",
+      }) < 0) {
     throw new RangeError("Invalid recovery completion inputs")
   }
 }
 
-function createRecoveryCompletionResult({ realizedNetProfit, dust }) {
+function createRecoveryCompletionResult({
+  realizedNetProfit,
+  dust,
+}) {
   return ({ eligible, pause, reason, freeQuantity = "0" }) => Object.freeze({
     eligible,
     pause,
@@ -219,15 +240,24 @@ function resolveRecoveryCompletionOutcome({
       reason: "INVALID_EXCHANGE_CONSTRAINED_DUST_EVIDENCE",
     })
   }
-  if (compareDecimal({ left: activeQuantity, right: keepQuantity }) < 0) {
+  if (compareDecimal({
+    left: activeQuantity,
+    right: keepQuantity,
+  }) < 0) {
     return result({
       eligible: false,
       pause: true,
       reason: "INSUFFICIENT_ACTIVE_INVENTORY_FOR_FREE_ALLOCATION",
     })
   }
-  if (compareDecimal({ left: activeQuantity, right: keepQuantity }) > 0 && !dust) {
-    const reason = compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0
+  if (compareDecimal({
+    left: activeQuantity,
+    right: keepQuantity,
+  }) > 0 && !dust) {
+    const reason = compareDecimal({
+      left: realizedNetProfit,
+      right: minProfit,
+    }) < 0
       ? "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"
       : "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH"
     return result({
@@ -236,7 +266,10 @@ function resolveRecoveryCompletionOutcome({
       reason,
     })
   }
-  if (compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0) {
+  if (compareDecimal({
+    left: realizedNetProfit,
+    right: minProfit,
+  }) < 0) {
     return result({
       eligible: false,
       pause: true,
@@ -248,7 +281,10 @@ function resolveRecoveryCompletionOutcome({
     pause: false,
     reason: null,
     freeQuantity: dust
-      ? addDecimal({ left: keepQuantity, right: dust.quantity })
+      ? addDecimal({
+        left: keepQuantity,
+        right: dust.quantity,
+      })
       : keepQuantity,
   })
 }
