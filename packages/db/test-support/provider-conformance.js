@@ -137,6 +137,14 @@ async function verifyCollectionIsolation(database) {
     "shared-id",
     "The same identifier must be allowed in a different collection",
   )
+  assert.equal(
+    await database.delete({
+      collection: "people",
+      id: "shared-id",
+    }),
+    true,
+    "Deleting one collection's record must succeed without affecting another collection",
+  )
   assert.notEqual(
     await database.readOne({
       collection: "teams",
