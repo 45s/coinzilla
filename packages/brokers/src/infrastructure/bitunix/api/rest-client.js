@@ -288,7 +288,7 @@ function normalizeErrorCode({ code }) {
   return null
 }
 
-function validateHttpResponse({ response, path, stateChanging }) {
+function validateHttpResponse({ response, payload, path, stateChanging }) {
   if (!hasValidHttpMetadata({ response })) {
     throw new BitunixRestError({
       message: "Bitunix REST HTTP response metadata is malformed",
@@ -300,8 +300,8 @@ function validateHttpResponse({ response, path, stateChanging }) {
   }
   if (!response.ok) {
     throw new BitunixRestError({
-      message: typeof response.msg === "string"
-        ? response.msg
+      message: typeof payload?.msg === "string"
+        ? payload.msg
         : "Bitunix REST HTTP request failed",
       kind: "http",
       status: response.status,
@@ -351,6 +351,7 @@ function validateResponseEnvelope({ payload, path, response }) {
 function validateResponse({ response, payload, path, stateChanging }) {
   validateHttpResponse({
     response,
+    payload,
     path,
     stateChanging,
   })
