@@ -177,17 +177,20 @@ export function createManifestCheckpoint({ schemaVersion, record, previousManife
 digest: digestOperationalStateRecord(body) }
 }
 
-export function validateManifestCheckpoint({ checkpoint, schemaVersion, factRecord, expectedSequence, previousManifestDigest, index }) {
+function validateManifestCheckpointShape({ checkpoint }) {
+  if (!checkpoint || typeof checkpoint !== "object" || Array.isArray(checkpoint)) {
+    throw new TypeError("Committed-head manifest checkpoint must be an object")
+  }
   const expectedKeys = [
     "digest", "formatVersion", "lastCommittedDigest", "previousManifestDigest",
     "recordCount", "schemaVersion", "sequence",
   ]
-  if (!checkpoint || typeof checkpoint !== "object" || Array.isArray(checkpoint)) {
-    throw new TypeError("Committed-head manifest checkpoint must be an object")
-  }
   if (canonicalStringifyOperationalStateValue(Object.keys(checkpoint).sort()) !== canonicalStringifyOperationalStateValue(expectedKeys)) {
     throw new Error("Committed-head manifest contains missing or unknown fields")
   }
+}
+
+function validateManifestCheckpointVersionAndPosition({ checkpoint, schemaVersion, expectedSequence, index }) {
   if (checkpoint.formatVersion !== FORMAT_VERSION || checkpoint.schemaVersion !== schemaVersion) {
     throw new Error("Committed-head manifest format/schema version is unsupported")
   }
@@ -198,6 +201,9 @@ export function validateManifestCheckpoint({ checkpoint, schemaVersion, factReco
   if (checkpoint.recordCount !== String(index + 1)) {
     throw new Error("Committed-head manifest record count does not match its sequence")
   }
+}
+
+function validateManifestCheckpointLinkage({ checkpoint, factRecord, previousManifestDigest }) {
   if (checkpoint.lastCommittedDigest !== factRecord.digest) {
     throw new Error("Committed-head manifest does not reference the matching fact record")
   }
@@ -207,9 +213,19 @@ export function validateManifestCheckpoint({ checkpoint, schemaVersion, factReco
   if (checkpoint.previousManifestDigest !== null && !SHA256_PATTERN.test(checkpoint.previousManifestDigest)) {
     throw new TypeError("Committed-head manifest previous digest is malformed")
   }
+}
+
+function validateManifestCheckpointDigest({ checkpoint }) {
   if (!SHA256_PATTERN.test(checkpoint.digest ?? "") || digestOperationalStateRecord(checkpoint) !== checkpoint.digest) {
     throw new Error(`Committed-head manifest digest mismatch at sequence ${  checkpoint.sequence}`)
   }
+}
+
+export function validateManifestCheckpoint({ checkpoint, schemaVersion, factRecord, expectedSequence, previousManifestDigest, index }) {
+  validateManifestCheckpointShape({ checkpoint })
+  validateManifestCheckpointVersionAndPosition({ checkpoint, schemaVersion, expectedSequence, index })
+  validateManifestCheckpointLinkage({ checkpoint, factRecord, previousManifestDigest })
+  validateManifestCheckpointDigest({ checkpoint })
 }
 
 export function parseJsonLines({ source, label }) {
