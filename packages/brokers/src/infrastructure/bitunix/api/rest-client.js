@@ -1,27 +1,48 @@
 import { randomBytes } from "node:crypto"
+import { SystemCustomError } from "@coinzilla/utils"
 import { createRestSignature } from "../auth/create-rest-signature.js"
 
 const DEFAULT_BASE_URL = "https://openapi.bitunix.com"
 const DEFAULT_REQUEST_TIMEOUT = 10_000
 
+const ERROR_CODES = Object.freeze({
+  transport: "BITUNIX_REST_TRANSPORT_FAILED",
+  http: "BITUNIX_REST_HTTP_FAILED",
+  exchange: "BITUNIX_REST_EXCHANGE_REJECTED",
+  response: "BITUNIX_REST_RESPONSE_INVALID",
+})
+
 /** Error returned by the Bitunix Spot REST API or transport boundary. */
-export class BitunixRestError extends Error {
+export class BitunixRestError extends SystemCustomError {
   /**
-   * @param {{message: string, kind?: "transport"|"http"|"exchange"|"response", cause?: unknown, code?: string|null, status?: number|null, path?: string|null, outcomeUnknown?: boolean}} input
+   * @param {{message: string, kind?: "transport"|"http"|"exchange"|"response", cause?: unknown, exchangeCode?: string|null, status?: number|null, path?: string|null, outcomeUnknown?: boolean}} input
    */
   constructor({
     message,
     kind = "response",
     cause,
-    code = null,
+    exchangeCode = null,
     status = null,
     path = null,
     outcomeUnknown = false,
   } = {}) {
-    super(message, { cause })
-    this.name = "BitunixRestError"
+    if (!Object.hasOwn(ERROR_CODES, kind)) {
+      throw new TypeError("Bitunix REST error kind is unsupported")
+    }
+    const errorOptions = {
+      code: ERROR_CODES[kind],
+      context: {
+        path,
+        status,
+        exchangeCode,
+      },
+    }
+    if (cause !== undefined) {
+      errorOptions.cause = cause
+    }
+    super(message, errorOptions)
     this.kind = kind
-    this.code = code
+    this.exchangeCode = exchangeCode
     this.status = status
     this.path = path
     this.outcomeUnknown = outcomeUnknown
@@ -203,7 +224,7 @@ function validateResponse({ response, payload, path, stateChanging }) {
       kind: "http",
       status: response.status,
       path,
-      code: normalizeErrorCode({ code: payload?.code }),
+      exchangeCode: normalizeErrorCode({ code: payload?.code }),
       outcomeUnknown: stateChanging && response.status >= 500,
     })
   }
@@ -227,7 +248,8 @@ function validateResponse({ response, payload, path, stateChanging }) {
       message: "Bitunix REST response is missing its message",
       kind: "response",
       path,
-      code,
+      exchangeCode: code,
+      status: response.status,
     })
   }
   if (code !== "0") {
@@ -235,7 +257,8 @@ function validateResponse({ response, payload, path, stateChanging }) {
       message: payload.msg,
       kind: "exchange",
       path,
-      code,
+      exchangeCode: code,
+      status: response.status,
     })
   }
   return { data: payload.data }
