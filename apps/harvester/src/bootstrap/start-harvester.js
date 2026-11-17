@@ -371,15 +371,29 @@ reason: "TRADING_ENGINE_NOT_READY" } })
 }
 
 async function createHarvesterRuntimeResources({ startup } = {}) {
-  const providerRegistry = await createProviderRegistry({
-    providerInstances: startup.providerInstances,
-    selections: startup.providerSelections,
-    adapterFactories: startup.providerAdapterFactories,
-    env: startup.env,
-    logger: startup.logger,
-    eventPublisher: startup.eventPublisher,
-  })
-  await providerRegistry.connectAll()
+  let providerRegistry
+  try {
+    providerRegistry = await createProviderRegistry({
+      providerInstances: startup.providerInstances,
+      selections: startup.providerSelections,
+      adapterFactories: startup.providerAdapterFactories,
+      env: startup.env,
+      logger: startup.logger,
+      eventPublisher: startup.eventPublisher,
+    })
+    await providerRegistry.connectAll()
+  } catch (error) {
+    try {
+      await startup.operatorControlLifecycle.stop()
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        "Harvester provider startup failed and operator-control cleanup also failed",
+        { cause: error },
+      )
+    }
+    throw error
+  }
   const broker = providerRegistry.getBrokerPort({
     instanceId: startup.providerSelections.execution,
   })

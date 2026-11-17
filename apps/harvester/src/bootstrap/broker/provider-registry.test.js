@@ -79,6 +79,12 @@ test("rejects missing credentials without exposing credential values", async () 
   }), (error) => error.message.includes("API secret") && !error.message.includes("secret-value"))
 })
 
+test("rejects a provider whose declared required capability is unknown", async () => {
+  const broker = createBroker([])
+  broker.capabilities = { ...capabilities, account: { snapshot: { status: "unknown" } } }
+  await assert.rejects(createRegistry({ brokers: [broker] }), /account.snapshot/)
+})
+
 test("connects and disconnects each instance once", async () => {
   const { registry, calls } = await createRegistry()
   const broker = registry.getBrokerPort({ instanceId: "binancePrimary" })
