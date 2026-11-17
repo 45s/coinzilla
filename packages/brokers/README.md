@@ -1,6 +1,6 @@
 # Binance WebSocket broker operations
 
-For mandatory Bitunix reference-project audits before implementing any Spot capability, read [Brokers agent instructions — Bitunix Spot development](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit). The reference projects are [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net) (primary C# implementation and tests) and [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp) (secondary TypeScript REST/signing example); official Bitunix documentation remains authoritative.
+For every Bitunix Spot capability, follow the [mandatory reference-first workflow](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit) and consult the maintained [Bitunix external implementation reference audit](./BITUNIX_REFERENCE_AUDIT.md). Start with [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net) and [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp); search additional C#, TypeScript, Python, Go and Ruby implementations when coverage is missing or references disagree. The audit records source paths, fixtures, known defects, parity status and safe implementation picks. Official Bitunix Spot documentation remains authoritative.
 
 For the package's target DDD structure, dependency rules, responsibility map, and migration phases, see [Architecture](./ARCHITECTURE.md) and the execution status in [Roadmap](./ROADMAP.md#14-mandatory-autonomous-ddd-refactoring-execution).
 
