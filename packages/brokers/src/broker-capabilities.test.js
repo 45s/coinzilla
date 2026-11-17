@@ -11,7 +11,10 @@ function createBroker({ tradingMode = "testnet" } = {}) {
   })
 }
 
-function assertDeeplyFrozen({ value, path = "capabilities" }) {
+function assertDeeplyFrozen({
+  value,
+  path = "capabilities",
+}) {
   assert.equal(
     Object.isFrozen(value),
     true,
