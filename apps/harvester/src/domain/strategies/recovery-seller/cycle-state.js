@@ -236,3 +236,16 @@ export function startNextRecoverySellerCycle({ previousState, nextCycleId } = {}
     cycleId: nextCycleId,
   })
 }
+
+
+/**
+ * Validate an externally supplied immutable cycle snapshot before policy use.
+ *
+ * @param {object} input
+ * @param {object} input.state Cycle state snapshot.
+ * @returns {object} The validated cycle state.
+ */
+export function assertRecoverySellerCycleState({ state } = {}) {
+  assertCycleState(state)
+  return state
+}
