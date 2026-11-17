@@ -171,6 +171,37 @@ function createStopResult({ stopState, explanation }) {
   })
 }
 
+function createStopAndReconcileIfOrderExists({
+  stopState,
+  activeOrders,
+  symbol,
+  explanation,
+}) {
+  if (Array.isArray(activeOrders)) {
+    const existingOrder = activeOrders.find((order) =>
+      order?.market?.symbol === symbol &&
+      typeof order.clientOrderId === "string" &&
+      order.clientOrderId.trim(),
+    )
+    if (existingOrder) {
+      return createRecoverySellerStopAndReconcileDecision({
+        stopState,
+        orderIdentity: {
+          clientOrderId: existingOrder.clientOrderId,
+          ...(existingOrder.brokerOrderId
+            ? { brokerOrderId: existingOrder.brokerOrderId }
+            : {}),
+        },
+        explanation,
+      })
+    }
+  }
+  return createStopResult({
+    stopState,
+    explanation,
+  })
+}
+
 function findBlockingOrders({ activeOrders, symbol }) {
   if (!Array.isArray(activeOrders)) {
     throw new TypeError("Recovery Seller activeOrders must be an array")
@@ -677,8 +708,10 @@ export function evaluateRecoverySellerBuyDecision({
       }),
     })
   } catch (error) {
-    return createStopResult({
+    return createStopAndReconcileIfOrderExists({
       stopState,
+      activeOrders,
+      symbol: marketPrice?.symbol,
       explanation: error instanceof Error && error.message
         ? `Recovery Seller BUY policy failed closed: ${error.message}`
         : "Recovery Seller BUY policy encountered an unmodeled condition",
