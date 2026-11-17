@@ -782,7 +782,10 @@ function createVolatilityOrderLifecycleBroker({ metadataBySymbol, state }) {
   return {
     connect: async () => {},
     disconnect: async () => {},
-    placeOrder: createVolatilityOrderSubmission({ metadataBySymbol, state }),
+    placeOrder: createVolatilityOrderSubmission({
+      metadataBySymbol,
+      state,
+    }),
     cancelOrder: createVolatilityOrderCancellation({ state }),
     getOpenOrders: async ({ symbol } = {}) => toResult({
       data: [...state.canonicalOrders.values()]
