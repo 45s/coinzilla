@@ -26,5 +26,8 @@ export function associateProviderInstances({ subscriptions, providerInstanceId }
     throw new TypeError("Provider-owned subscriptions must be an array")
   }
   return Object.freeze(subscriptions.map((subscription) =>
-    associateProviderInstance({ subscription, providerInstanceId })))
+    associateProviderInstance({
+      subscription,
+      providerInstanceId,
+    })))
 }

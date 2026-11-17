@@ -54,8 +54,8 @@ function resolveStrategyPairs({ strategyConfig, tradingMode }) {
   return pairs
 }
 
-function createEffectiveAppConfig({ configuredAppConfig, strategyConfig, pairs }) {
-  return {
+function resolveEffectiveStrategyConfiguration({ configuredAppConfig, strategyConfig, pairs }) {
+  const appConfig = {
     ...configuredAppConfig,
     strategies: {
       ...configuredAppConfig.strategies,
@@ -64,6 +64,15 @@ function createEffectiveAppConfig({ configuredAppConfig, strategyConfig, pairs }
         pairs,
       },
     },
+  }
+  const effectiveConfiguration = createEffectiveStrategyConfigurationFingerprint({
+    strategyName: "CG_coinGrabber",
+    strategy: appConfig.strategies.CG_coinGrabber,
+  })
+  return {
+    appConfig,
+    effectiveConfiguration,
+    enabledSymbols: [...effectiveConfiguration.enabledMarkets],
   }
 }
 
@@ -139,16 +148,15 @@ export async function resolveHarvesterOptions({
     tradingMode,
   })
   const { settings } = strategyConfig
-  const appConfig = createEffectiveAppConfig({
+  const {
+    appConfig,
+    effectiveConfiguration,
+    enabledSymbols,
+  } = resolveEffectiveStrategyConfiguration({
     configuredAppConfig,
     strategyConfig,
     pairs,
   })
-  const effectiveConfiguration = createEffectiveStrategyConfigurationFingerprint({
-    strategyName: "CG_coinGrabber",
-    strategy: appConfig.strategies.CG_coinGrabber,
-  })
-  const enabledSymbols = [...effectiveConfiguration.enabledMarkets]
   publishValidatedConfiguration({
     eventPublisher,
     logger,

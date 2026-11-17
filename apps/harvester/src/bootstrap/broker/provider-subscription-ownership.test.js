@@ -19,8 +19,14 @@ test("associates a subscription with its owner without mutating the original", (
 
 test("associates every market and book subscription with the same explicit owner", () => {
   const subscriptions = [
-    { symbol: "BTCUSDT", unsubscribe: async () => {} },
-    { symbol: "DOGEUSDT", unsubscribe: async () => {} },
+    {
+      symbol: "BTCUSDT",
+      unsubscribe: async () => {},
+    },
+    {
+      symbol: "DOGEUSDT",
+      unsubscribe: async () => {},
+    },
   ]
   const owned = associateProviderInstances({
     subscriptions,

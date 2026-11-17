@@ -93,11 +93,13 @@ function validateRegistryInput({ providerInstances, selections, adapterFactories
   if (!Array.isArray(providerInstances) || providerInstances.length === 0) {
     throw new TypeError("Harvester requires at least one named provider instance")
   }
-  const descriptors = providerInstances.map((descriptor, index) =>
-    assertDescriptor({
+  const descriptors = []
+  for (const [index, descriptor] of providerInstances.entries()) {
+    descriptors.push(assertDescriptor({
       descriptor,
       index,
     }))
+  }
   const instanceIds = new Set()
   const accountIds = new Set()
   for (const descriptor of descriptors) {
@@ -296,7 +298,9 @@ async function constructProviderEntries({ descriptors, adapterFactories, env, lo
       throw new AggregateError([
         error,
         ...cleanupErrors,
-      ], "Provider construction failed and cleanup also failed")
+      ], "Provider construction failed and cleanup also failed", {
+        cause: error,
+      })
     }
     throw error
   }
@@ -379,7 +383,9 @@ function createConnectAll({ entries, disconnectAll, eventPublisher, logger, life
             throw new AggregateError([
               error,
               cleanupError,
-            ], "Provider connection and cleanup both failed")
+            ], "Provider connection and cleanup both failed", {
+              cause: error,
+            })
           }
           throw error
         }
