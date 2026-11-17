@@ -2,6 +2,7 @@
  * Provider-neutral transaction intent used by infrastructure to optimize read/write locking.
  *
  * @typedef {{intent?: "read"|"write"}} DatabaseTransactionOptions
+ * The intent is an optimization hint; it does not change transaction semantics.
  *
  * Provider-neutral record operations available inside a transaction.
  *
@@ -15,7 +16,7 @@
  * @typedef {object} DatabaseAdapter
  * @property {() => Promise<void>|void} connect
  * @property {() => Promise<void>|void} close
- * @property {(work: (transaction: unknown) => unknown) => Promise<unknown>|unknown} withTransaction
+ * @property {(work: (transaction: unknown) => unknown, options?: DatabaseTransactionOptions) => Promise<unknown>|unknown} withTransaction
  *
  * @typedef {object} DatabaseCapabilities
  * @property {{callbackMode: "synchronous"|"asynchronous", nestedTransactions: boolean}} transactions

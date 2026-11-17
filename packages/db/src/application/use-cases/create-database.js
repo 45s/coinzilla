@@ -39,8 +39,11 @@ function validateTransactionCapabilities({ transactions }) {
   )
   const hasNestedTransactionDeclaration = typeof transactions?.nestedTransactions === "boolean"
 
-  if (!transactions || typeof transactions !== "object" || !hasValidCallbackMode || !hasNestedTransactionDeclaration) {
-    throw new TypeError("Provider transaction capabilities must declare callbackMode and nestedTransactions")
+  const hasCompatibleNesting = transactions?.callbackMode !== "synchronous"
+    || transactions?.nestedTransactions !== true
+
+  if (!transactions || typeof transactions !== "object" || !hasValidCallbackMode || !hasNestedTransactionDeclaration || !hasCompatibleNesting) {
+    throw new TypeError("Provider transaction capabilities must declare a compatible callbackMode and nestedTransactions")
   }
 }
 

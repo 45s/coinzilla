@@ -27,13 +27,17 @@ function isAsyncFunction(callback) {
   return callback.constructor?.name === "AsyncFunction"
 }
 
+function resolveTransactionIntent(options) {
+  const intent = options?.intent ?? "write"
+  if (intent !== "read" && intent !== "write") {
+    throw new TypeError("SQLite transaction intent must be read or write")
+  }
+  return intent
+}
+
 function createSqliteTransactionHandler({ requireConnection }) {
   return function withTransaction(work, options = {}) {
-    const intent = options?.intent ?? "write"
-    if (intent !== "read" && intent !== "write") {
-      throw new TypeError("SQLite transaction intent must be read or write")
-    }
-
+    const intent = resolveTransactionIntent(options)
     const activeConnection = requireConnection()
 
     if (activeConnection.isTransaction) {
@@ -151,6 +155,7 @@ function createSqliteAdapter({
  * @returns {ReturnType<typeof createDatabase> & {
  *   exec: (sql: string) => void,
  *   prepare: (sql: string) => import('node:sqlite').StatementSync,
+ *   transaction: (work: (transaction: unknown) => unknown, options?: {intent?: "read"|"write"}) => Promise<unknown>,
  *   migrate: (migrations: Array<{version: number, name: string, up: Function}>) => Promise<number[]>
  * }}
  */

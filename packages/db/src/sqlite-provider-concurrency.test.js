@@ -7,7 +7,7 @@ import test from "node:test"
 
 import { createDatabase, createSqliteProvider } from "./index.js"
 
-test("SQLite reads remain available while another connection holds a write reservation", async () => {
+async function createConcurrencyFixture() {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-concurrency-"))
   const filename = join(directory, "records.sqlite")
   const database = createDatabase({
@@ -16,8 +16,8 @@ test("SQLite reads remain available while another connection holds a write reser
       timeout: 0,
     }),
   })
-  await database.connect()
 
+  await database.connect()
   await database.create({
     collection: "people",
     record: {
@@ -27,53 +27,65 @@ test("SQLite reads remain available while another connection holds a write reser
     },
   })
 
-  const competingConnection = new DatabaseSync(filename, {
-    timeout: 0,
+  return {
+    directory,
+    database,
+    competingConnection: new DatabaseSync(filename, {
+      timeout: 0,
+    }),
+  }
+}
+
+async function verifyReadsDuringWriteReservation({ database, competingConnection }) {
+  competingConnection.exec("BEGIN IMMEDIATE")
+
+  assert.deepEqual(
+    await database.readOne({
+      collection: "people",
+      id: "readable-1",
+    }),
+    {
+      id: "readable-1",
+      name: "Committed",
+      status: "active",
+    },
+    "A WAL reader must not require a competing write reservation",
+  )
+
+  assert.deepEqual(
+    await database.readMany({
+      collection: "people",
+      query: {
+        filter: {
+          status: "active",
+        },
+      },
+    }),
+    [{
+      id: "readable-1",
+      name: "Committed",
+      status: "active",
+    }],
+    "Collection queries must remain available while another connection holds an uncommitted write transaction",
+  )
+}
+
+async function closeConcurrencyFixture({ directory, database, competingConnection }) {
+  competingConnection.exec("ROLLBACK")
+  competingConnection.close()
+  await database.close()
+  await rm(directory, {
+    recursive: true,
+    force: true,
   })
-  let writeReservationStarted = false
+}
+
+test("SQLite reads remain available while another connection holds a write reservation", async () => {
+  const fixture = await createConcurrencyFixture()
 
   try {
-    competingConnection.exec("BEGIN IMMEDIATE")
-    writeReservationStarted = true
-
-    assert.deepEqual(
-      await database.readOne({
-        collection: "people",
-        id: "readable-1",
-      }),
-      {
-        id: "readable-1",
-        name: "Committed",
-        status: "active",
-      },
-      "A WAL reader must not require a competing write reservation",
-    )
-
-    assert.deepEqual(
-      await database.readMany({
-        collection: "people",
-        query: {
-          filter: {
-            status: "active",
-          },
-        },
-      }),
-      [{
-        id: "readable-1",
-        name: "Committed",
-        status: "active",
-      }],
-      "Collection queries must remain available while another connection holds an uncommitted write transaction",
-    )
+    await verifyReadsDuringWriteReservation(fixture)
   } finally {
-    if (writeReservationStarted) {
-      competingConnection.exec("ROLLBACK")
-    }
-    competingConnection.close()
-    await database.close()
-    await rm(directory, {
-      recursive: true,
-      force: true,
-    })
+    await closeConcurrencyFixture(fixture)
   }
 })
