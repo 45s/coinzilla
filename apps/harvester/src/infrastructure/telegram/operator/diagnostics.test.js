@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createTelegramOperatorDiagnostics } from "./telegram-operator-diagnostics.js"
+import { createTelegramOperatorDiagnostics } from "./diagnostics.js"
 
 test("preserves nested error details while redacting bot tokens and excluding Telegram identities", () => {
   const botToken = "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmn"
