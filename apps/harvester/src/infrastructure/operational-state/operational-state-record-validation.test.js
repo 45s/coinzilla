@@ -157,6 +157,354 @@ test("validates genesis envelope, sequence, schema, and digest integrity", () =>
   )
 })
 
+function createProcessStoppedRecord({
+  factId = "process-stopped:test-session",
+  factType = "PROCESS_STOPPED",
+  data = {
+    reason: "NORMAL_SHUTDOWN",
+    clean: true,
+  },
+  sequence = "1",
+  previousDigest = GENESIS_RECORD.digest,
+  recordedAt = "2026-11-17T00:00:01.000Z",
+  runtimeSessionId = "test-session",
+  formatVersion = 1,
+  schemaVersion = SCHEMA_VERSION,
+} = {}) {
+  const body = {
+    formatVersion,
+    schemaVersion,
+    sequence,
+    factId,
+    factType,
+    runtimeSessionId,
+    recordedAt,
+    previousDigest,
+    data,
+  }
+  return {
+    ...body,
+    digest: digestOperationalStateRecord(body),
+  }
+}
+
+function validateRecord({
+  record,
+  schemaVersion = SCHEMA_VERSION,
+  expectedSequence = "1",
+  previousDigest = GENESIS_RECORD.digest,
+  index = 1,
+}) {
+  return validateFactRecord({
+    record,
+    schemaVersion,
+    expectedSequence,
+    previousDigest,
+    index,
+  })
+}
+
+test("rejects malformed fact inputs and record envelopes before payload validation", () => {
+  assert.throws(
+    () => validateFactInput({
+      fact: null,
+      runtimeSessionId: "test-session",
+    }),
+    /record must be an object/,
+    "Null fact input must not enter the durable ledger.",
+  )
+  assert.throws(
+    () => validateFactInput({
+      fact: [],
+      runtimeSessionId: "test-session",
+    }),
+    /record must be an object/,
+    "Array fact input must not be treated as a durable fact record.",
+  )
+  assert.throws(
+    () => validateFactInput({
+      fact: {
+        factId: "",
+        factType: "PROCESS_STOPPED",
+        data: {
+          reason: "NORMAL_SHUTDOWN",
+          clean: true,
+        },
+      },
+      runtimeSessionId: "test-session",
+    }),
+    /factId must be a non-empty string/,
+    "A fact must have a stable non-empty identity.",
+  )
+  assert.throws(
+    () => validateFactInput({
+      fact: {
+        factId: "process-stopped:test-session",
+        factType: "",
+        data: {
+          reason: "NORMAL_SHUTDOWN",
+          clean: true,
+        },
+      },
+      runtimeSessionId: "test-session",
+    }),
+    /factType must be a non-empty string/,
+    "A fact must declare a non-empty allowlisted type.",
+  )
+  assert.throws(
+    () => validateFactInput({
+      fact: {
+        factId: "process-stopped:test-session",
+        factType: "PROCESS_STOPPED",
+        data: {
+          reason: "NORMAL_SHUTDOWN",
+          clean: true,
+        },
+      },
+      runtimeSessionId: "",
+    }),
+    /runtimeSessionId must be a non-empty string/,
+    "Every durable fact must be bound to a non-empty runtime session identity.",
+  )
+
+  const invalidRecords = [
+    {
+      description: "a non-object record",
+      record: null,
+      expectedError: /record must be an object/,
+    },
+    {
+      description: "an array record",
+      record: [],
+      expectedError: /record must be an object/,
+    },
+    {
+      description: "unknown envelope fields",
+      record: {
+        ...GENESIS_RECORD,
+        unsupported: true,
+      },
+      expectedError: /missing or unknown envelope fields/,
+      index: 0,
+      expectedSequence: "0",
+      previousDigest: null,
+    },
+    {
+      description: "an unsupported format version",
+      record: createProcessStoppedRecord({ formatVersion: 2 }),
+      expectedError: /format\/schema version is unsupported/,
+    },
+    {
+      description: "an unsupported schema version",
+      record: createProcessStoppedRecord({ schemaVersion: 2 }),
+      expectedError: /format\/schema version is unsupported/,
+    },
+    {
+      description: "a non-canonical sequence",
+      record: createProcessStoppedRecord({ sequence: "01" }),
+      expectedError: /sequence must be a canonical base-10 string/,
+    },
+    {
+      description: "a sequence gap",
+      record: createProcessStoppedRecord({ sequence: "2" }),
+      expectedError: /sequence gap or reordering/,
+    },
+    {
+      description: "an empty fact identity",
+      record: createProcessStoppedRecord({ factId: "" }),
+      expectedError: /record.factId must be a non-empty string/,
+    },
+    {
+      description: "an unknown record type",
+      record: createProcessStoppedRecord({ factType: "NOT_ALLOWLISTED" }),
+      expectedError: /record type is not allowlisted/,
+    },
+    {
+      description: "an empty runtime session identity",
+      record: createProcessStoppedRecord({ runtimeSessionId: "" }),
+      expectedError: /record.runtimeSessionId must be a non-empty string/,
+    },
+    {
+      description: "a non-canonical recorded-at timestamp",
+      record: createProcessStoppedRecord({ recordedAt: "not-a-timestamp" }),
+      expectedError: /recorded-at timestamp is not canonical/,
+    },
+    {
+      description: "a non-genesis first record",
+      record: createProcessStoppedRecord({
+        sequence: "0",
+        previousDigest: null,
+      }),
+      expectedError: /must begin with its explicit genesis record/,
+      index: 0,
+      expectedSequence: "0",
+      previousDigest: null,
+    },
+    {
+      description: "a second genesis record",
+      record: {
+        ...GENESIS_BODY,
+        sequence: "1",
+        previousDigest: GENESIS_RECORD.digest,
+        digest: digestOperationalStateRecord({
+          ...GENESIS_BODY,
+          sequence: "1",
+          previousDigest: GENESIS_RECORD.digest,
+        }),
+      },
+      expectedError: /second genesis record/,
+    },
+    {
+      description: "a broken previous-digest chain",
+      record: createProcessStoppedRecord({
+        previousDigest: "f".repeat(64),
+      }),
+      expectedError: /previous-digest chain is broken/,
+    },
+    {
+      description: "a malformed previous digest",
+      record: createProcessStoppedRecord({
+        previousDigest: "not-a-sha256-digest",
+      }),
+      expectedError: /previousDigest must be a SHA-256 digest/,
+      previousDigest: "not-a-sha256-digest",
+    },
+    {
+      description: "a malformed record digest",
+      record: {
+        ...createProcessStoppedRecord(),
+        digest: "not-a-sha256-digest",
+      },
+      expectedError: /record digest is malformed/,
+    },
+    {
+      description: "invalid fact-family payload data",
+      record: createProcessStoppedRecord({
+        data: {
+          reason: "invalid reason",
+          clean: true,
+        },
+      }),
+      expectedError: /Process-stop reason and clean marker are invalid/,
+    },
+  ]
+
+  for (const invalidRecord of invalidRecords) {
+    assert.throws(
+      () => validateRecord(invalidRecord),
+      invalidRecord.expectedError,
+      "The record validator must reject " + invalidRecord.description + ".",
+    )
+  }
+})
+
+test("rejects inconsistent committed-head checkpoint envelopes and digest links", () => {
+  const validCheckpoint = createManifestCheckpoint({
+    schemaVersion: SCHEMA_VERSION,
+    record: GENESIS_RECORD,
+    previousManifestDigest: null,
+  })
+  const invalidCheckpoints = [
+    {
+      description: "a null checkpoint",
+      checkpoint: null,
+      expectedError: /checkpoint must be an object/,
+    },
+    {
+      description: "an array checkpoint",
+      checkpoint: [],
+      expectedError: /checkpoint must be an object/,
+    },
+    {
+      description: "unknown checkpoint fields",
+      checkpoint: {
+        ...validCheckpoint,
+        unsupported: true,
+      },
+      expectedError: /missing or unknown fields/,
+    },
+    {
+      description: "an unsupported checkpoint version",
+      checkpoint: {
+        ...validCheckpoint,
+        formatVersion: 2,
+      },
+      expectedError: /format\/schema version is unsupported/,
+    },
+    {
+      description: "a malformed checkpoint sequence",
+      checkpoint: {
+        ...validCheckpoint,
+        sequence: "01",
+      },
+      expectedError: /sequence gap or reordering/,
+    },
+    {
+      description: "a checkpoint sequence gap",
+      checkpoint: {
+        ...validCheckpoint,
+        sequence: "1",
+      },
+      expectedError: /sequence gap or reordering/,
+    },
+    {
+      description: "a mismatched record count",
+      checkpoint: {
+        ...validCheckpoint,
+        recordCount: "2",
+      },
+      expectedError: /record count does not match/,
+    },
+    {
+      description: "a broken previous-manifest chain",
+      checkpoint: validCheckpoint,
+      previousManifestDigest: "f".repeat(64),
+      expectedError: /previous-digest chain is broken/,
+    },
+    {
+      description: "a malformed previous-manifest digest",
+      checkpoint: createManifestCheckpoint({
+        schemaVersion: SCHEMA_VERSION,
+        record: GENESIS_RECORD,
+        previousManifestDigest: "not-a-sha256-digest",
+      }),
+      previousManifestDigest: "not-a-sha256-digest",
+      expectedError: /previous digest is malformed/,
+    },
+    {
+      description: "a malformed checkpoint digest",
+      checkpoint: {
+        ...validCheckpoint,
+        digest: "not-a-sha256-digest",
+      },
+      expectedError: /manifest digest mismatch/,
+    },
+    {
+      description: "a mismatched checkpoint digest",
+      checkpoint: {
+        ...validCheckpoint,
+        digest: "0".repeat(64),
+      },
+      expectedError: /manifest digest mismatch/,
+    },
+  ]
+
+  for (const invalidCheckpoint of invalidCheckpoints) {
+    assert.throws(
+      () => validateManifestCheckpoint({
+        checkpoint: invalidCheckpoint.checkpoint,
+        schemaVersion: SCHEMA_VERSION,
+        factRecord: GENESIS_RECORD,
+        expectedSequence: "0",
+        previousManifestDigest: invalidCheckpoint.previousManifestDigest ?? null,
+        index: 0,
+      }),
+      invalidCheckpoint.expectedError,
+      "The committed-head validator must reject " + invalidCheckpoint.description + ".",
+    )
+  }
+})
+
 test("creates and validates a committed-head checkpoint linked to the exact fact record", () => {
   const checkpoint = createManifestCheckpoint({
     schemaVersion: SCHEMA_VERSION,
@@ -233,5 +581,16 @@ test("parses only complete newline-terminated canonical JSONL records", () => {
     }),
     /not canonical JSON/,
     "Equivalent JSON with non-canonical key order must not bypass byte-stable serialization.",
+  )
+})
+
+test("rejects malformed JSON text in the JSONL stream", () => {
+  assert.throws(
+    () => parseJsonLines({
+      source: '{"alpha":}\n',
+      label: "test ledger",
+    }),
+    SyntaxError,
+    "Malformed JSON text must be rejected instead of being partially parsed.",
   )
 })
