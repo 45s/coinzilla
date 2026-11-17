@@ -32,42 +32,51 @@ function createTransactionFacade(transaction) {
   })
 }
 
-function validateCapabilities(capabilities) {
-  const transactions = capabilities?.transactions
-  const queries = capabilities?.queries
-  const storage = capabilities?.storage
+function validateTransactionCapabilities({ transactions }) {
+  const hasValidCallbackMode = ["synchronous", "asynchronous"].includes(
+    transactions?.callbackMode,
+  )
+  const hasNestedTransactionDeclaration = typeof transactions?.nestedTransactions === "boolean"
 
-  if (
-    !transactions
-    || typeof transactions !== "object"
-    || !["synchronous", "asynchronous"].includes(transactions.callbackMode)
-    || typeof transactions.nestedTransactions !== "boolean"
-  ) {
+  if (!transactions || typeof transactions !== "object" || !hasValidCallbackMode || !hasNestedTransactionDeclaration) {
     throw new TypeError("Provider transaction capabilities must declare callbackMode and nestedTransactions")
   }
+}
 
+function validateQueryCapabilities({ queries }) {
   const queryFeatures = ["equalityFilters", "sorting", "pagination"]
-  if (
-    !queries
-    || typeof queries !== "object"
-    || queryFeatures.some((feature) => typeof queries[feature] !== "boolean")
-  ) {
+  const hasEveryFeature = queries
+    && typeof queries === "object"
+    && queryFeatures.every((feature) => typeof queries[feature] === "boolean")
+
+  if (!hasEveryFeature) {
     throw new TypeError("Provider query capabilities must declare equalityFilters, sorting and pagination")
   }
+}
 
+function validateStorageCapabilities({ storage }) {
   const storageModes = ["file", "memory", "server"]
-  if (
-    !storage
-    || typeof storage !== "object"
-    || !Array.isArray(storage.modes)
-    || storage.modes.length === 0
-    || storage.modes.some((mode) => !storageModes.includes(mode))
-    || new Set(storage.modes).size !== storage.modes.length
-  ) {
+  const hasValidModes = Array.isArray(storage?.modes)
+    && storage.modes.length > 0
+    && storage.modes.every((mode) => storageModes.includes(mode))
+    && new Set(storage.modes).size === storage.modes.length
+
+  if (!storage || typeof storage !== "object" || !hasValidModes) {
     throw new TypeError("Provider storage capabilities must declare unique file, memory or server modes")
   }
 }
 
+function validateCapabilities(capabilities) {
+  validateTransactionCapabilities({
+    transactions: capabilities?.transactions,
+  })
+  validateQueryCapabilities({
+    queries: capabilities?.queries,
+  })
+  validateStorageCapabilities({
+    storage: capabilities?.storage,
+  })
+}
 function freezeRecursively(value) {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {
     for (const nestedValue of Object.values(value)) {
