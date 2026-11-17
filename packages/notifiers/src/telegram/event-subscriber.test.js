@@ -220,8 +220,11 @@ test("reports delivery failures once and continues processing later events", asy
 })
 
 test("classifies timeout, HTTP, Telegram API, and unknown delivery failures safely", async () => {
+  const abortError = new Error("request aborted")
+  abortError.name = "AbortError"
   const scenarios = [
     [new Error("request timed out"), "TIMEOUT"],
+    [abortError, "TIMEOUT"],
     [new Error("Telegram API HTTP request failed with status 503"), "HTTP"],
     [new Error("Telegram API rejected the request"), "TELEGRAM_API"],
     [new Error("unexpected provider failure"), "UNKNOWN"],
