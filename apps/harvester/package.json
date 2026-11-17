@@ -35,10 +35,15 @@
     "@coinzilla/indicators": "workspace:*",
     "@coinzilla/journal": "workspace:*",
     "@coinzilla/notifiers": "workspace:*",
-    "@coinzilla/utils": "workspace:*"
+    "@coinzilla/utils": "workspace:*",
+    "@coinzilla/db": "workspace:*"
   },
   "config": {
     "targetedTestFiles": [
+      "src/domain/trading-session/trading-session.test.js",
+      "src/infrastructure/persistence/trading-session-repository.test.js",
+      "src/infrastructure/persistence/trading-session-database-isolation.test.js",
+      "src/infrastructure/persistence/trading-session-history-observer.test.js",
       "src/use-cases/create-market-price-transition-handler.test.js",
       "test/replays/doge-zro-conservative-replay.test.js",
       "src/bootstrap/start-harvester.test.js",
@@ -73,7 +78,8 @@
       "src/infrastructure/operational-state/helpers/validate-operational-state-execution-facts.test.js",
       "src/infrastructure/journal/helpers/resolve-session-chronology.test.js",
       "src/infrastructure/journal/discover-harvester-journal-sessions.test.js",
-      "src/infrastructure/telegram/format-telegram-operator-response.test.js"
+      "src/infrastructure/telegram/format-telegram-operator-response.test.js",
+      "src/infrastructure/persistence/trading-session-persistence-lifecycle.test.js"
     ]
   }
 }
