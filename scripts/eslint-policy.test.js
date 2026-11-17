@@ -339,7 +339,7 @@ test("audits candidate function-quality thresholds across the complete workspace
   const audit = await auditFunctionQualityThresholds();
 
   process.stdout.write(
-    `\\nESLint function-quality candidate audit:\\n${JSON.stringify(audit, null, 2)}\\n`,
+    `\nESLint function-quality candidate audit:\n${JSON.stringify(audit, null, 2)}\n`,
   );
   assert.ok(
     audit.inspectedFiles > 0 && audit.measuredFiles === audit.inspectedFiles - 1,
@@ -460,12 +460,12 @@ test("function-quality rules reject excess parameters and callbacks and report s
     "const task = Promise.resolve().then(() => Promise.resolve().then(() => Promise.resolve().then(() => Promise.resolve().then(() => true)))); process.stdout.write(String(task));",
     { filePath: "scripts/eslint-callback-fixture.js" },
   );
-  let longFunctionSource = "function countOperations() {\\n  let total = 0;\\n";
+  let longFunctionSource = "function countOperations() {\n  let total = 0;\n";
 
   for (let index = 0; index < 81; index += 1) {
-    longFunctionSource += "  total += 1;\\n";
+    longFunctionSource += "  total += 1;\n";
   }
-  longFunctionSource += "  return total;\\n}\\n";
+  longFunctionSource += "  return total;\n}\n";
 
   const [sizeFindings] = await eslint.lintText(
     longFunctionSource,
