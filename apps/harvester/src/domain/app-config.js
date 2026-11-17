@@ -12,6 +12,7 @@ export class ConfigValidationError extends TypeError {
     this.name = "ConfigValidationError"
     this.path = path
     this.expected = expected
+    this.code = "HARVESTER_CONFIG_INVALID"
   }
 }
 
@@ -278,11 +279,40 @@ expectation: "testnet, live, or both" })
   return selectedPairs
 }
 
-/** Resolve the fixed Binance broker and mandatory exchange mode from the process environment. */
-export function resolveRuntimeConfig({ tradingMode, environment } = {}) {
+const PROVIDER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
+
+function resolveProviderIdentityLabel({ value, fallback, path }) {
+  const identity = value ?? fallback
+  if (typeof identity !== "string" || !PROVIDER_ID_PATTERN.test(identity)) {
+    fail({
+      path,
+      expectation: "a stable non-empty identifier containing only letters, numbers, dots, underscores, colons, or hyphens",
+    })
+  }
+  return identity
+}
+
+/** Resolve the fixed Binance provider identity and mandatory exchange mode from process configuration. */
+export function resolveRuntimeConfig({ tradingMode, environment, providerInstanceId, accountId } = {}) {
   if (tradingMode !== TRADING_ENVIRONMENTS.TESTNET && tradingMode !== TRADING_ENVIRONMENTS.LIVE) {throw new Error('TRADING_MODE must be set to "testnet" or "live"')}
-  return Object.freeze({ environment: environment ?? "unspecified",
-brokerName: "binance",
-tradingMode,
-tradingEnabled: true })
+  const defaultProviderInstanceId = tradingMode === TRADING_ENVIRONMENTS.TESTNET
+    ? "binanceTestnet"
+    : "binanceLive"
+  return Object.freeze({
+    environment: environment ?? "unspecified",
+    brokerName: "binance",
+    providerType: "binance",
+    providerInstanceId: resolveProviderIdentityLabel({
+      value: providerInstanceId,
+      fallback: defaultProviderInstanceId,
+      path: "BINANCE_PROVIDER_INSTANCE_ID",
+    }),
+    accountId: resolveProviderIdentityLabel({
+      value: accountId,
+      fallback: "binance-primary",
+      path: "BINANCE_ACCOUNT_ID",
+    }),
+    tradingMode,
+    tradingEnabled: true,
+  })
 }
