@@ -144,6 +144,29 @@ Read `database.capabilities` to inspect the provider-neutral capability declarat
 
 A future provider must declare its own actual guarantees. The package will not silently emulate unsupported transaction, query, or durability guarantees.
 
+## Provider conformance tests
+
+Future provider packages can reuse the same public contract suite instead of writing a separate interpretation of CRUD behavior:
+
+```js
+import { createDatabase } from "@coinzilla/db"
+import { runDatabaseProviderConformanceTests } from "@coinzilla/db/testing"
+
+runDatabaseProviderConformanceTests({
+  name: "PostgreSQL provider",
+  createDatabase: ({ filename }) => createDatabase({
+    provider: createPostgresProvider({
+      connectionString: process.env.DATABASE_URL,
+      testDatabase: filename,
+    }),
+  }),
+})
+```
+
+The example is illustrative; no PostgreSQL provider is included. The factory must create an isolated test database for each test and honor the supplied file path for persistence tests where the provider supports file-backed storage. Providers that cannot support a particular test must declare the capability difference explicitly and provide a documented, tested reason; do not skip a contract silently.
+
+The suite verifies CRUD and collection isolation, duplicate handling, query behavior, missing-record results, transaction rollback, immutable capability snapshots, and persistence across a new connection. Add provider-specific lifecycle, lock/concurrency and cleanup tests where the generic contract cannot express the provider's operational guarantees.
+
 ## Provider composition
 
 Provider-specific options belong only where the application is assembled:
