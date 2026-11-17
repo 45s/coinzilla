@@ -9,7 +9,8 @@ function validateInitializationRequest({
   initialize,
   resolveDirectory,
   logger
-,}) {
+,
+}) {
   if (!hasExplicitConfirmation({ args })) {
     logger.error?.({
       message: "Operational State Store initialization requires exactly --confirm-initialize; unknown arguments are not accepted.",
@@ -41,12 +42,14 @@ function resolveInitializationDirectory({
   env,
   resolveDirectory,
   logger
-,}) {
+,
+}) {
   try {
     return {
       ok: true,
       directory: resolveDirectory({ env })
-    ,}
+    ,
+    }
   } catch (error) {
     logger.error?.({ message: error.message })
     return { ok: false }
@@ -56,7 +59,8 @@ function resolveInitializationDirectory({
 async function invokeOperationalStateInitializer({
   initialize,
   directory
-,}) {
+,
+}) {
   try {
     return await initialize({
       confirmed: true,
@@ -73,7 +77,8 @@ async function invokeOperationalStateInitializer({
 function reportOperationalStateInitialization({
   result,
   logger
-,}) {
+,
+}) {
   if (result?.ok === true && result.data?.durable === true) {
     logger.system?.(
       `Harvester Operational State Store initialized at ${  result.data.directory
@@ -100,14 +105,16 @@ export async function runInitializeOperationalState({
     initialize,
     resolveDirectory,
     logger
-  ,})) {
+  ,
+  })) {
     return 1
   }
   const resolved = resolveInitializationDirectory({
     env,
     resolveDirectory,
     logger
-  ,})
+  ,
+  })
   if (!resolved.ok) {
     return 1
   }
@@ -118,5 +125,6 @@ export async function runInitializeOperationalState({
   return reportOperationalStateInitialization({
     result,
     logger
-  ,})
+  ,
+  })
 }
