@@ -2146,3 +2146,71 @@ test("does not consume a pending confirmation when Telegram reports an expired c
   assert.equal(completion?.stateChanged, true)
 })
 
+
+
+test("aborts active polling, shares concurrent shutdown, and supports a clean restart", async () => {
+  let getMeCalls = 0
+  let pollCalls = 0
+  const pollSignals = []
+  const pollWaiters = new Map()
+  const waitForPollCount = (expected) => {
+    if (pollCalls >= expected) {
+      return Promise.resolve()
+    }
+    return new Promise((resolve) => pollWaiters.set(expected, resolve))
+  }
+  const notifyPollWaiters = () => {
+    for (const [expected, resolve] of pollWaiters) {
+      if (pollCalls >= expected) {
+        pollWaiters.delete(expected)
+        resolve()
+      }
+    }
+  }
+  const fetchImpl = async (...telegramFetchArguments) => {
+    const [telegramRequestUrl, telegramRequestOptions = {}] = telegramFetchArguments
+    const telegramApiMethod = telegramRequestUrl.split("/").pop()
+    if (telegramApiMethod === "getMe") {
+      getMeCalls += 1
+      return makeResponse({ ok: true, result: { username: "coinzilla_bot" } })
+    }
+    if (telegramApiMethod === "setMyCommands") {
+      return makeResponse({ ok: true, result: true })
+    }
+    if (telegramApiMethod === "getUpdates") {
+      pollCalls += 1
+      pollSignals.push(telegramRequestOptions.signal)
+      notifyPollWaiters()
+      return new Promise((resolve, reject) => {
+        const abortPoll = () => reject(new Error("Telegram long poll aborted"))
+        if (telegramRequestOptions.signal.aborted) {
+          abortPoll()
+          return
+        }
+        telegramRequestOptions.signal.addEventListener("abort", abortPoll, { once: true })
+      })
+    }
+    throw new Error(`Unexpected Telegram API method: ${telegramApiMethod}`)
+  }
+  const adapter = createTelegramOperatorAdapter({
+    botToken: "test-token",
+    allowedUserIds: ["12345"],
+    operator: { pauseMarket: async () => ({ ok: true }) },
+    fetchImpl,
+  })
+
+  await adapter.start()
+  await waitForPollCount(1)
+  const concurrentStops = await Promise.all([adapter.stop(), adapter.stop()])
+  assert.deepEqual(concurrentStops[0], { stopped: true, alreadyStopped: false })
+  assert.deepEqual(concurrentStops[1], concurrentStops[0])
+  assert.deepEqual(await adapter.stop(), { stopped: true, alreadyStopped: true })
+  assert.equal(pollSignals[0].aborted, true)
+
+  await adapter.start()
+  await waitForPollCount(2)
+  assert.deepEqual(await adapter.stop(), { stopped: true, alreadyStopped: false })
+  assert.equal(getMeCalls, 2)
+  assert.equal(pollCalls, 2)
+  assert.ok(pollSignals.every((signal) => signal.aborted))
+})
