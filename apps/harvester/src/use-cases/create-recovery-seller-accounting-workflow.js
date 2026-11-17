@@ -501,6 +501,20 @@ function reconcileTerminalMixedSellTransition({
  * @param {Array<object>} [options.initialLegacyPositions] Market-scoped logical legacy state.
  * @returns {object} Serialized RS accounting and account-snapshot provider operations.
  */
+function createSerializedWorkflowOperation({ state, transition } = {}) {
+  return (input = {}) => {
+    const task = state.updateQueue.then(() => {
+      try {
+        return toResult({ data: transition({ state, ...input }) })
+      } catch (error) {
+        return toResult({ error })
+      }
+    })
+    state.updateQueue = task.then(() => undefined, () => undefined)
+    return task
+  }
+}
+
 export function createRecoverySellerAccountingWorkflow({
   initialPortfolio = new Portfolio(),
   initialOrderRegistry = OrderRegistry.empty(),
@@ -520,39 +534,14 @@ export function createRecoverySellerAccountingWorkflow({
     updateQueue: Promise.resolve(),
   }
 
-  const applyBuyFill = (input = {}) => {
-    const task = state.updateQueue.then(() => {
-      try {
-        return toResult({
-          data: applyRecoverySellerBuyFillTransition({
-            state,
-            ...input,
-          }),
-        })
-      } catch (error) {
-        return toResult({ error })
-      }
-    })
-    state.updateQueue = task.then(() => undefined, () => undefined)
-    return task
-  }
-
-  const reconcileTerminalMixedSell = (input = {}) => {
-    const task = state.updateQueue.then(() => {
-      try {
-        return toResult({
-          data: reconcileTerminalMixedSellTransition({
-            state,
-            ...input,
-          }),
-        })
-      } catch (error) {
-        return toResult({ error })
-      }
-    })
-    state.updateQueue = task.then(() => undefined, () => undefined)
-    return task
-  }
+  const applyBuyFill = createSerializedWorkflowOperation({
+    state,
+    transition: applyRecoverySellerBuyFillTransition,
+  })
+  const reconcileTerminalMixedSell = createSerializedWorkflowOperation({
+    state,
+    transition: reconcileTerminalMixedSellTransition,
+  })
 
   return Object.freeze({
     applyBuyFill,
