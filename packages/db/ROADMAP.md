@@ -147,9 +147,9 @@ The first consumer integration is separately owned by Harvester and tracked in [
 
 ## Deferred — evidence-driven
 
-1. **First application-owned repository integration**
-   - The consumer owns its repository contract, business schema and migrations.
-   - Integrate only after this generic infrastructure contract is stable and the owning domain approves the consumer task.
+1. **Further application-owned repository integrations**
+   - Add another consumer only when its owning domain approves a concrete use case.
+   - Each consumer owns its repository contract, business schema and migrations.
    - Verify restart persistence, transaction behavior, concurrency, migration compatibility and deterministic cleanup in that consumer's tests.
 
 2. **Backup and restore operations**
