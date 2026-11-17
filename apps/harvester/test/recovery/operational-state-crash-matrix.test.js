@@ -8,6 +8,7 @@ import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla
 import { Portfolio } from "../../src/domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../../src/domain/strategies/conservative/recovery-ledger.js"
 import { createFileOperationalStateStore } from "../../src/infrastructure/operational-state/create-file-operational-state-store.js"
+import { projectHarvesterOperationalState } from "../../src/infrastructure/operational-state/project-harvester-operational-state.js"
 import { evaluateRecoveryCompletion } from "../../src/domain/strategies/conservative/recovery-completion.js"
 import { recordConfigurationBaseline } from "../../src/use-cases/record-configuration-baseline.js"
 import { recordProcessStarted } from "../../src/use-cases/record-process-started.js"
@@ -69,6 +70,7 @@ appConfig })
 const readCandidate = (...candidateArguments) => {
   const [directory, runtimeSessionId] = candidateArguments;
   return restoreHarvesterOperationalState({
+    projectOperationalState: projectHarvesterOperationalState,
     operationalStateStore: createStore(directory, runtimeSessionId),
     marketMetadata: new Map([[market.symbol, { market }]]),
   });
@@ -156,11 +158,7 @@ fill })
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
 }
 
-test("reopens the real append-only ledger after intent, acknowledgement, and fill crash boundaries", async (t) => {
-  const directory = await createDirectory(t)
-  const store = createStore(directory)
-  await initializeProcess(store)
-
+async function recordCrashBoundaryIntentAndAcknowledgement({ directory, store }) {
   const pending = makeOrder({
     clientOrderId: "crash-matrix-buy-1",
     side: "BUY",
@@ -168,16 +166,15 @@ test("reopens the real append-only ledger after intent, acknowledgement, and fil
     price: "100",
   })
   const intent = await recordOrderSubmissionIntent({ operationalStateStore: store,
-order: pending })
+    order: pending })
   assert.equal(intent.ok, true, intent.errors?.map(({ message }) => message).join("; "))
-
   const afterIntent = await readCandidate(directory, "crash-reader-after-intent")
   assert.equal(afterIntent.ok, true, afterIntent.errors?.map(({ message }) => message).join("; "))
   const intentOrder = afterIntent.data.orderRegistry.getOrder({ clientOrderId: pending.clientOrderId })
-  assert.equal(intentOrder.status, "UNKNOWN")
-  assert.equal(intentOrder.brokerOrderId, undefined)
-  assert.equal(afterIntent.data.requiresExchangeReconciliation, true)
-  assert.equal(afterIntent.data.restorationEnabled, false)
+  assert.equal(intentOrder.status, "UNKNOWN", "A durable intent without an acknowledgement must restore as UNKNOWN.")
+  assert.equal(intentOrder.brokerOrderId, undefined, "An unacknowledged intent must not invent a broker order ID.")
+  assert.equal(afterIntent.data.requiresExchangeReconciliation, true, "The offline candidate must require exchange reconciliation.")
+  assert.equal(afterIntent.data.restorationEnabled, false, "The offline candidate must never enable runtime restoration.")
 
   const acknowledged = makeOrder({
     clientOrderId: pending.clientOrderId,
@@ -194,14 +191,17 @@ order: pending })
     outcome: "ACKNOWLEDGED",
   })
   assert.equal(outcome.ok, true, outcome.errors?.map(({ message }) => message).join("; "))
-
   const afterAcknowledgement = await readCandidate(directory, "crash-reader-after-ack")
   assert.equal(afterAcknowledgement.ok, true, afterAcknowledgement.errors?.map(({ message }) => message).join("; "))
   const acknowledgedOrder = afterAcknowledgement.data.orderRegistry.getOrder({ clientOrderId: pending.clientOrderId })
-  assert.equal(acknowledgedOrder.status, "UNKNOWN")
-  assert.equal(acknowledgedOrder.brokerOrderId, "broker-crash-matrix-buy-1")
-  assert.equal(acknowledgedOrder.executedQuantity.amount, "0")
+  assert.equal(acknowledgedOrder.status, "UNKNOWN", "An acknowledgement alone must not prove the current exchange order status.")
+  assert.equal(acknowledgedOrder.brokerOrderId, "broker-crash-matrix-buy-1", "The acknowledged broker order ID must survive the crash boundary.")
+  assert.equal(acknowledgedOrder.executedQuantity.amount, "0", "An acknowledgement must not invent executed quantity.")
+  return { pending,
+    acknowledged }
+}
 
+async function verifyCrashBoundaryFill({ directory, store, pending, acknowledged }) {
   const fill = makeFill({
     tradeId: "crash-matrix-buy-trade-1",
     clientOrderId: pending.clientOrderId,
@@ -212,71 +212,151 @@ order: pending })
     price: "100",
   })
   await applyFill({ store,
-fill })
-
+    fill })
   const afterFill = await readCandidate(directory, "crash-reader-after-fill")
   assert.equal(afterFill.ok, true, afterFill.errors?.map(({ message }) => message).join("; "))
   const filledOrder = afterFill.data.orderRegistry.getOrder({ clientOrderId: pending.clientOrderId })
   assert.equal(filledOrder.status, "UNKNOWN", "A durable fill does not prove current exchange order status.")
-  assert.equal(filledOrder.executedQuantity.amount, "0.02")
-  assert.equal(afterFill.data.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, "0.02")
-  assert.equal(afterFill.data.portfolio.getPosition({ marketId: market.id }).spent.amount, "2")
-  assert.equal(afterFill.data.recoveryLedgers.get(market.id).buyCost, "2")
-  assert.equal(afterFill.data.requiresExchangeReconciliation, true)
+  assert.equal(filledOrder.executedQuantity.amount, "0.02", "The exact executed quantity must survive the fill crash boundary.")
+  assert.equal(afterFill.data.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, "0.02", "The candidate Portfolio must restore the exact filled base quantity.")
+  assert.equal(afterFill.data.portfolio.getPosition({ marketId: market.id }).spent.amount, "2", "The candidate Portfolio must restore the exact quote cost.")
+  assert.equal(afterFill.data.recoveryLedgers.get(market.id).buyCost, "2", "The RecoveryLedger must restore the exact BUY cost.")
+  assert.equal(afterFill.data.requiresExchangeReconciliation, true, "The filled offline candidate must still require exchange reconciliation.")
+}
+
+test("reopens the real append-only ledger after intent, acknowledgement, and fill crash boundaries", async (t) => {
+  const directory = await createDirectory(t)
+  const store = createStore(directory)
+  await initializeProcess(store)
+  const { pending, acknowledged } = await recordCrashBoundaryIntentAndAcknowledgement({ directory,
+    store })
+  await verifyCrashBoundaryFill({ directory,
+    store,
+    pending,
+    acknowledged })
 })
 
-async function recordNotCompletedRecoveryCycle({ store } = {}) {
+async function createRecoveryCycleOrdersAndFills({
+  store,
+  cycleName,
+  buyQuantity,
+  sellQuantity,
+  buyPrice,
+  sellPrice,
+  buyQuoteQuantity,
+  sellQuoteQuantity,
+}) {
   const buyOrder = await persistOrder({
     store,
-    clientOrderId: "crash-matrix-noncomplete-buy",
+    clientOrderId: `crash-matrix-${cycleName}-buy`,
     side: "BUY",
-    quantity: "0.42",
-    price: "95",
+    quantity: buyQuantity,
+    price: buyPrice,
   })
   const sellOrder = await persistOrder({
     store,
-    clientOrderId: "crash-matrix-noncomplete-sell",
+    clientOrderId: `crash-matrix-${cycleName}-sell`,
     side: "SELL",
-    quantity: "0.4",
-    price: "100",
+    quantity: sellQuantity,
+    price: sellPrice,
     purpose: "RECOVERY_SELL",
   })
   const buyFill = makeFill({
-    tradeId: "crash-matrix-noncomplete-buy-fill",
+    tradeId: `crash-matrix-${cycleName}-buy-fill`,
     clientOrderId: buyOrder.clientOrderId,
     brokerOrderId: buyOrder.brokerOrderId,
     side: "BUY",
-    quantity: "0.42",
-    quoteQuantity: "39.9",
-    price: "95",
+    quantity: buyQuantity,
+    quoteQuantity: buyQuoteQuantity,
+    price: buyPrice,
   })
   const sellFill = makeFill({
-    tradeId: "crash-matrix-noncomplete-sell-fill",
+    tradeId: `crash-matrix-${cycleName}-sell-fill`,
     clientOrderId: sellOrder.clientOrderId,
     brokerOrderId: sellOrder.brokerOrderId,
     side: "SELL",
-    quantity: "0.4",
-    quoteQuantity: "40",
-    price: "100",
+    quantity: sellQuantity,
+    quoteQuantity: sellQuoteQuantity,
+    price: sellPrice,
   })
-  await applyFill({ store,
-fill: buyFill })
-  await applyFill({ store,
-fill: sellFill })
+  return {
+    buyOrder,
+    sellOrder,
+    buyFill,
+    sellFill,
+  }
+}
 
-  const {portfolio} = new Portfolio()
-    .applyFill({ fill: buyFill,
-strategyId: StrategyId.COIN_GRABBER }).portfolio
-    .applyFill({ fill: sellFill,
-strategyId: StrategyId.COIN_GRABBER })
+async function createRecoveryCycleAccountingProjection({ buyFill, sellFill }) {
+  const { portfolio } = new Portfolio()
+    .applyFill({
+      fill: buyFill,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).portfolio
+    .applyFill({
+      fill: sellFill,
+      strategyId: StrategyId.COIN_GRABBER,
+    })
   const recoveryLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill,
-strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({
+      fill: buyFill,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).ledger
     .applyFill({
       fill: sellFill,
       strategyId: StrategyId.COIN_GRABBER,
     }).ledger
   const position = portfolio.getPosition({ marketId: market.id })
+  return {
+    recoveryLedger,
+    position,
+  }
+}
+
+async function createRecoveryCycleAccountingEvidence({
+  store,
+  cycleName,
+  buyQuantity,
+  sellQuantity,
+  buyPrice,
+  sellPrice,
+  buyQuoteQuantity,
+  sellQuoteQuantity,
+}) {
+  const ordersAndFills = await createRecoveryCycleOrdersAndFills({
+    store,
+    cycleName,
+    buyQuantity,
+    sellQuantity,
+    buyPrice,
+    sellPrice,
+    buyQuoteQuantity,
+    sellQuoteQuantity,
+  })
+  await applyFill({ store, fill: ordersAndFills.buyFill })
+  await applyFill({ store, fill: ordersAndFills.sellFill })
+  const projection = await createRecoveryCycleAccountingProjection({
+    buyFill: ordersAndFills.buyFill,
+    sellFill: ordersAndFills.sellFill,
+  })
+  return {
+    ...ordersAndFills,
+    ...projection,
+  }
+}
+
+async function recordNotCompletedRecoveryCycle({ store } = {}) {
+  const evidence = await createRecoveryCycleAccountingEvidence({
+    store,
+    cycleName: "noncomplete",
+    buyQuantity: "0.42",
+    sellQuantity: "0.4",
+    buyPrice: "95",
+    sellPrice: "100",
+    buyQuoteQuantity: "39.9",
+    sellQuoteQuantity: "40",
+  })
+  const { recoveryLedger, position, sellOrder } = evidence
   const evaluated = evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,
     spent: position.spent.amount,
@@ -339,55 +419,17 @@ test("reopens a NOT_COMPLETED recovery SELL with exact cycle evidence and sticky
 })
 
 async function recordCompletedRecoveryCycle({ store }) {
-  const buyOrder = await persistOrder({
+  const evidence = await createRecoveryCycleAccountingEvidence({
     store,
-    clientOrderId: "crash-matrix-completed-buy",
-    side: "BUY",
-    quantity: "2",
-    price: "65000",
-  });
-  const sellOrder = await persistOrder({
-    store,
-    clientOrderId: "crash-matrix-completed-sell",
-    side: "SELL",
-    quantity: "1",
-    price: "130005",
-    purpose: "RECOVERY_SELL",
-  });
-  const buyFill = makeFill({
-    tradeId: "crash-matrix-completed-buy-fill",
-    clientOrderId: buyOrder.clientOrderId,
-    brokerOrderId: buyOrder.brokerOrderId,
-    side: "BUY",
-    quantity: "2",
-    quoteQuantity: "130000",
-    price: "65000",
-  });
-  const sellFill = makeFill({
-    tradeId: "crash-matrix-completed-sell-fill",
-    clientOrderId: sellOrder.clientOrderId,
-    brokerOrderId: sellOrder.brokerOrderId,
-    side: "SELL",
-    quantity: "1",
-    quoteQuantity: "130005",
-    price: "130005",
-  });
-  await applyFill({ store,
-fill: buyFill });
-  await applyFill({ store,
-fill: sellFill });
-
-  const { portfolio } = new Portfolio()
-    .applyFill({ fill: buyFill,
-strategyId: StrategyId.COIN_GRABBER }).portfolio
-    .applyFill({ fill: sellFill,
-strategyId: StrategyId.COIN_GRABBER });
-  const recoveryLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: buyFill,
-strategyId: StrategyId.COIN_GRABBER }).ledger
-    .applyFill({ fill: sellFill,
-strategyId: StrategyId.COIN_GRABBER }).ledger;
-  const position = portfolio.getPosition({ marketId: market.id });
+    cycleName: "completed",
+    buyQuantity: "2",
+    sellQuantity: "1",
+    buyPrice: "65000",
+    sellPrice: "130005",
+    buyQuoteQuantity: "130000",
+    sellQuoteQuantity: "130005",
+  })
+  const { buyOrder, sellOrder, recoveryLedger, position } = evidence
   const evaluated = evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,
     spent: position.spent.amount,
@@ -395,14 +437,14 @@ strategyId: StrategyId.COIN_GRABBER }).ledger;
     activeQuantity: position.baseQuantity.amount,
     keepQuantity: "1",
     minProfit: "5",
-  });
+  })
   const completion = Object.freeze({
     ...evaluated,
     activeQuantity: position.baseQuantity.amount,
     keepQuantity: "1",
     minProfit: "5",
-  });
-  assert.equal(completion.eligible, true, "The exact completed recovery cycle must meet the configured profit threshold.");
+  })
+  assert.equal(completion.eligible, true, "The exact completed recovery cycle must meet the configured profit threshold.")
   const recorded = await recordRecoveryCycleCompleted({
     operationalStateStore: store,
     recoveryLedger,
@@ -410,13 +452,12 @@ strategyId: StrategyId.COIN_GRABBER }).ledger;
     sellOrder,
     completion,
     minProfit: "5",
-  });
-  assert.equal(recorded.ok, true, recorded.errors?.map(({ message }) => message).join("; "));
-
+  })
+  assert.equal(recorded.ok, true, recorded.errors?.map(({ message }) => message).join("; "))
   return { buyOrder,
-sellOrder,
-recoveryLedger,
-recorded };
+    sellOrder,
+    recoveryLedger,
+    recorded }
 }
 
 test("reopens a completed cycle with exact retained inventory and reset recovery basis", async (t) => {
