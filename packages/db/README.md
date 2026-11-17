@@ -21,33 +21,49 @@ const database = createDatabase({
 await database.connect()
 
 try {
-  const created = await database.create("users", {
-    id: "user-1",
-    name: "John",
-    status: "active",
-  })
-
-  const user = await database.readOne("users", "user-1")
-
-  const activeUsers = await database.readMany("users", {
-    filter: {
+  const created = await database.create({
+    collection: "users",
+    record: {
+      id: "user-1",
+      name: "John",
       status: "active",
     },
-    sort: [
-      {
-        field: "name",
-        direction: "asc",
+  })
+
+  const user = await database.readOne({
+    collection: "users",
+    id: "user-1",
+  })
+
+  const activeUsers = await database.readMany({
+    collection: "users",
+    query: {
+      filter: {
+        status: "active",
       },
-    ],
-    limit: 20,
-    offset: 0,
+      sort: [
+        {
+          field: "name",
+          direction: "asc",
+        },
+      ],
+      limit: 20,
+      offset: 0,
+    },
   })
 
-  const updated = await database.update("users", "user-1", {
-    name: "Peter",
+  const updated = await database.update({
+    collection: "users",
+    id: "user-1",
+    changes: {
+      name: "Peter",
+    },
   })
 
-  const deleted = await database.delete("users", "user-1")
+  const deleted = await database.delete({
+    collection: "users",
+    id: "user-1",
+  })
 } finally {
   await database.close()
 }
@@ -112,13 +128,20 @@ A transaction callback receives the same provider-neutral CRUD operations:
 
 ```js
 await database.transaction((transaction) => {
-  transaction.create("accounts", {
-    id: "account-1",
-    name: "Primary",
+  transaction.create({
+    collection: "accounts",
+    record: {
+      id: "account-1",
+      name: "Primary",
+    },
   })
 
-  transaction.update("accounts", "account-1", {
-    status: "active",
+  transaction.update({
+    collection: "accounts",
+    id: "account-1",
+    changes: {
+      status: "active",
+    },
   })
 })
 ```
