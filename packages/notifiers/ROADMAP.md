@@ -162,6 +162,7 @@ CI run links: [Unit Tests](https://github.com/45s/coinzilla/actions/runs/4124070
 
 - [x] Exercise the subscriber against the real EventBus implementation, including allowlisting, ordering, flush/close lifecycle, and failure reporting (PR #356).
 - [x] Expose immutable, process-local delivery counters for admitted, successful, failed, overflowed, and pending notifications (PR #356).
+- [x] Include the failed event name, safe failure category, and immutable delivery-counter snapshot in each structured delivery-failure/queue-overflow log record (PR #1298; exact-head CI pending).
 - [x] Test the package through its public self-reference export, not only relative source imports (PR #356).
 - [x] Validate all integration and diagnostic behavior with package and workspace CI on the synchronized PR head (PR #356; Node 22 and Node 24, workspace coverage, actionlint, syntax, and dependency audit passed).
 
