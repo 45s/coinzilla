@@ -9,7 +9,8 @@ import {
 test("processes an update with a stable correlation and reports completion", async () => {
   const stages = []
   const result = await processTelegramUpdate({
-    update: { update_id: 901, message: { text: "/status" } },
+    update: { update_id: 901,
+ message: { text: "/status" } },
     respondToUpdate: async () => {},
     diagnostics: { fail: () => assert.fail("A successful update must not report a failure.") },
     logStage: entry => stages.push(entry),
@@ -30,7 +31,8 @@ test("retains a failed update and its interaction context for polling retry", as
   const originalError = new Error("Telegram response delivery failed")
   const failures = []
   const result = await processTelegramUpdate({
-    update: { update_id: 902, message: { text: "/status" } },
+    update: { update_id: 902,
+ message: { text: "/status" } },
     respondToUpdate: async () => { throw originalError },
     diagnostics: { fail: request => failures.push(request) },
     logStage: () => {},
@@ -71,8 +73,10 @@ test("processes updates serially and advances the offset only after each complet
     offsetState,
     botUsername: "coinzilla_bot",
     callApi: async () => [
-      { update_id: 10, message: { text: "/status" } },
-      { update_id: 11, message: { text: "/markets" } },
+      { update_id: 10,
+ message: { text: "/status" } },
+      { update_id: 11,
+ message: { text: "/markets" } },
     ],
     respondToUpdate: async ({ update }) => {
       processedUpdateIds.push(update.update_id)

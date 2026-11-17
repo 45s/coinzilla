@@ -30,8 +30,10 @@ test("normalizes only positive safe Telegram user identifiers", () => {
 
 test("maps callback payloads to stable actions without accepting malformed payloads", () => {
   const scenarios = [
-    ["cc:ask:PAUSE:LINKUSDT", { action: "PAUSE", symbol: "LINKUSDT" }],
-    ["cc:confirm:RESUME:LINKUSDT:42", { action: "RESUME", symbol: "LINKUSDT" }],
+    ["cc:ask:PAUSE:LINKUSDT", { action: "PAUSE",
+ symbol: "LINKUSDT" }],
+    ["cc:confirm:RESUME:LINKUSDT:42", { action: "RESUME",
+ symbol: "LINKUSDT" }],
     ["cc:nav:home", { action: "MENU" }],
     ["cc:refresh:balances", { action: "BALANCES" }],
     ["cc:cancel:42", { action: "CANCEL" }],
@@ -48,10 +50,12 @@ test("maps callback payloads to stable actions without accepting malformed paylo
 
 test("correlates inbound message and callback interactions with their Telegram update", () => {
   const messageInteraction = createTelegramInteraction({
-    update: { update_id: 501, message: { text: "/pause LINKUSDT" } },
+    update: { update_id: 501,
+ message: { text: "/pause LINKUSDT" } },
   })
   const callbackInteraction = createTelegramInteraction({
-    update: { update_id: 502, callback_query: { data: "cc:ask:PAUSE:LINKUSDT" } },
+    update: { update_id: 502,
+ callback_query: { data: "cc:ask:PAUSE:LINKUSDT" } },
   })
   assert.equal(
     messageInteraction.correlationId,
@@ -72,7 +76,8 @@ test("correlates inbound message and callback interactions with their Telegram u
 
 test("rejects non-private, mismatched and non-allowlisted callback identities", () => {
   const allowedUsers = new Set(["123"])
-  const callback = { id: "callback-1", from: { id: 123 } }
+  const callback = { id: "callback-1",
+ from: { id: 123 } }
   assert.equal(
     callbackAuthorizationFailure({
       callback,
@@ -109,10 +114,12 @@ test("rejects non-private, mismatched and non-allowlisted callback identities", 
 })
 
 test("rejects bot senders and non-private or mismatched message identities", () => {
-  const message = { from: { is_bot: false }, chat: { type: "private" } }
+  const message = { from: { is_bot: false },
+ chat: { type: "private" } }
   assert.equal(
     messageAuthorizationFailure({
-      message: { ...message, from: { is_bot: true } },
+      message: { ...message,
+ from: { is_bot: true } },
       userId: "123",
       chatId: "123",
     }),
@@ -121,7 +128,8 @@ test("rejects bot senders and non-private or mismatched message identities", () 
   )
   assert.equal(
     messageAuthorizationFailure({
-      message: { ...message, chat: { type: "group" } },
+      message: { ...message,
+ chat: { type: "group" } },
       userId: "123",
       chatId: "123",
     }),
@@ -129,7 +137,9 @@ test("rejects bot senders and non-private or mismatched message identities", () 
     "Group messages must be rejected even when their sender is allowlisted.",
   )
   assert.equal(
-    messageAuthorizationFailure({ message, userId: "123", chatId: "456" }),
+    messageAuthorizationFailure({ message,
+ userId: "123",
+ chatId: "456" }),
     "PRIVATE_CHAT_IDENTITY_MISMATCH",
     "A message must originate from the sender's own private chat.",
   )

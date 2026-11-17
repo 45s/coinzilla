@@ -21,10 +21,12 @@ test("rejects an unauthorized callback before reading pages or invoking controls
       callback_query: {
         id: "callback-1001",
         data: "cc:nav:status",
-        from: { id: 999, is_bot: false },
+        from: { id: 999,
+ is_bot: false },
         message: {
           message_id: 8,
-          chat: { id: 999, type: "private" },
+          chat: { id: 999,
+ type: "private" },
         },
       },
     },

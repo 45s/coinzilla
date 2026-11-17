@@ -35,7 +35,10 @@ test("maps global emergency BUY pause to the application facade and reports its 
         calls.push(request)
         return {
           ok: true,
-          data: { paused: true, canceled: 2, reconciled: 1, alreadyPaused: false },
+          data: { paused: true,
+ canceled: 2,
+ reconciled: 1,
+ alreadyPaused: false },
         }
       },
     },
@@ -53,7 +56,8 @@ test("maps global emergency BUY pause to the application facade and reports its 
   assert.deepEqual(
     calls[0],
     {
-      actor: { id: "telegram-user:123", roles: ["trading-operator"] },
+      actor: { id: "telegram-user:123",
+ roles: ["trading-operator"] },
       requestId: "telegram:501",
       symbol: undefined,
     },
@@ -101,7 +105,9 @@ test("preserves the existing non-canceling market pause contract", () => {
   const reply = buildControlReply({
     action: "PAUSE",
     symbol: "LINKUSDT",
-    result: { ok: true, data: { paused: true, alreadyPaused: false } },
+    result: { ok: true,
+ data: { paused: true,
+ alreadyPaused: false } },
     method: "pauseMarket",
     interaction: { failed: false },
     diagnostics: createDiagnostics(),

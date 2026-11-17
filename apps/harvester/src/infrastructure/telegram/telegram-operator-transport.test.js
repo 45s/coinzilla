@@ -5,7 +5,9 @@ import {
   createTelegramMessageApi,
 } from "./telegram-operator-transport.js"
 
-function createResponse({ ok = true, body, status = 200 }) {
+function createResponse({ ok = true,
+ body,
+ status = 200 }) {
   return {
     ok,
     status,
@@ -19,7 +21,8 @@ test("sends Telegram API requests with the token, JSON body and abort signal", a
     botToken: "test-token",
     fetchImpl: async (...request) => {
       calls.push(request)
-      return createResponse({ body: { ok: true, result: [{ update_id: 1 }] } })
+      return createResponse({ body: { ok: true,
+ result: [{ update_id: 1 }] } })
     },
   })
   const signal = new AbortController().signal
@@ -33,13 +36,14 @@ test("sends Telegram API requests with the token, JSON body and abort signal", a
     [{ update_id: 1 }],
     "Successful Telegram API calls must return only the Bot API result payload.",
   )
+  const [requestUrl, requestOptions] = calls[0]
   assert.equal(
-    calls[0][0],
+    requestUrl,
     "https://api.telegram.org/bottest-token/getUpdates",
     "The API request must target the selected Bot API method using the injected bot token.",
   )
   assert.equal(
-    calls[0][1].signal,
+    requestOptions.signal,
     signal,
     "The caller's abort signal must reach the Telegram transport request.",
   )
@@ -59,7 +63,8 @@ test("preserves Telegram retry_after metadata on API errors", async () => {
     }),
   })
   await assert.rejects(
-    callApi({ method: "getUpdates", payload: {} }),
+    callApi({ method: "getUpdates",
+ payload: {} }),
     error => error.retryAfter === 3,
     "Telegram rate-limit responses must preserve their retry_after duration for bounded polling backoff.",
   )

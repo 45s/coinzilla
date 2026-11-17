@@ -75,8 +75,10 @@ test("shares concurrent shutdown and clears poller-owned state after cancellatio
     },
   })
   await start
-  const firstStop = stopTelegramOperatorAdapter({ state, pendingConfirmations })
-  const secondStop = stopTelegramOperatorAdapter({ state, pendingConfirmations })
+  const firstStop = stopTelegramOperatorAdapter({ state,
+ pendingConfirmations })
+  const secondStop = stopTelegramOperatorAdapter({ state,
+ pendingConfirmations })
   const results = await Promise.all([firstStop, secondStop])
   assert.equal(
     pollSignal.aborted,
@@ -85,7 +87,8 @@ test("shares concurrent shutdown and clears poller-owned state after cancellatio
   )
   assert.deepEqual(
     results[0],
-    { stopped: true, alreadyStopped: false },
+    { stopped: true,
+ alreadyStopped: false },
     "The first shutdown must report that it stopped the running adapter.",
   )
   assert.deepEqual(

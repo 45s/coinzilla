@@ -5,7 +5,8 @@ import {
   handleConfirmationCallback,
 } from "./telegram-operator-callbacks.js"
 
-function createConfirmationRequest({ acknowledgement, pendingExpiresAt = Date.now() + 60000 } = {}) {
+function createConfirmationRequest({ acknowledgement,
+ pendingExpiresAt = Date.now() + 60000 } = {}) {
   const pendingConfirmations = new Map([[
     "42",
     {
@@ -20,7 +21,8 @@ function createConfirmationRequest({ acknowledgement, pendingExpiresAt = Date.no
   const executedControls = []
   const callbackAnswers = []
   const editedMessages = []
-  const interaction = { action: "UNKNOWN", symbol: undefined }
+  const interaction = { action: "UNKNOWN",
+ symbol: undefined }
   return {
     pendingConfirmations,
     executedControls,

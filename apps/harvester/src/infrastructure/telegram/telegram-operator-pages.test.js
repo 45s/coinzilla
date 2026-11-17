@@ -56,7 +56,8 @@ test("reads a status page through the authorized read-only application query", a
   )
   assert.deepEqual(
     calls[0].actor,
-    { id: "telegram-user:123", roles: ["trading-operator"] },
+    { id: "telegram-user:123",
+ roles: ["trading-operator"] },
     "The read query must receive the authenticated trading-operator actor.",
   )
   assert.match(
@@ -94,7 +95,8 @@ test("returns an unavailable page when the requested query is not provided", asy
 test("does not hide a failed application query behind a successful page", async () => {
   const fixture = createPageDependencies({
     operator: {
-      getOrders: async () => ({ ok: false, errors: [{ code: "ORDERS_READ_FAILED" }] }),
+      getOrders: async () => ({ ok: false,
+ errors: [{ code: "ORDERS_READ_FAILED" }] }),
     },
   })
   const page = await readTelegramOperatorPage({

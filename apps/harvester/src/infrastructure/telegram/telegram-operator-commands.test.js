@@ -12,12 +12,16 @@ test("parses supported read-only, entry, market and emergency BUY commands", () 
     ["/positions", { type: "POSITIONS" }],
     ["/orders", { type: "ORDERS" }],
     ["/balances", { type: "BALANCES" }],
-    ["/pause LINKUSDT", { type: "PAUSE", symbol: "LINKUSDT" }],
-    ["/resume linkusdt", { type: "RESUME", symbol: "LINKUSDT" }],
+    ["/pause LINKUSDT", { type: "PAUSE",
+ symbol: "LINKUSDT" }],
+    ["/resume linkusdt", { type: "RESUME",
+ symbol: "LINKUSDT" }],
     ["/pauseallbuys", { type: "PAUSE_ALL_BUYS" }],
     ["/resumeallbuys", { type: "RESUME_ALL_BUYS" }],
-    ["/pausebuys LINKUSDT", { type: "PAUSE_BUYS", symbol: "LINKUSDT" }],
-    ["/resumebuys LINKUSDT", { type: "RESUME_BUYS", symbol: "LINKUSDT" }],
+    ["/pausebuys LINKUSDT", { type: "PAUSE_BUYS",
+ symbol: "LINKUSDT" }],
+    ["/resumebuys LINKUSDT", { type: "RESUME_BUYS",
+ symbol: "LINKUSDT" }],
   ]
   for (const [commandText, expected] of scenarios) {
     assert.deepEqual(
