@@ -263,9 +263,18 @@ async function verifySorting(database) {
 
 async function verifyPagination(database) {
   for (const record of [
-    { id: "rank-1", rank: 1 },
-    { id: "rank-2", rank: 2 },
-    { id: "rank-3", rank: 3 },
+    {
+      id: "rank-1",
+      rank: 1,
+    },
+    {
+      id: "rank-2",
+      rank: 2,
+    },
+    {
+      id: "rank-3",
+      rank: 3,
+    },
   ]) {
     await database.create({
       collection: "records",
