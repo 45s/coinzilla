@@ -247,15 +247,17 @@ function createAdditionalTrackedBaseQuantity({ state, balances, portfolio }) {
   })
 }
 
+function getRecoverySellerPurposeForSide({ side } = {}) {
+  if (side === "BUY") {return "RECOVERY_BUY"}
+  if (side === "SELL") {return "RECOVERY_SELL"}
+  return undefined
+}
+
 function validateRecoverySellerExecutionOwnership({ order, ownership } = {}) {
   if (!(order instanceof CanonicalOrder) || order.status !== "PENDING") {
     throw new TypeError("Recovery Seller pending submission requires a PENDING CanonicalOrder")
   }
-  const expectedPurpose = order.side === "BUY"
-    ? "RECOVERY_BUY"
-    : order.side === "SELL"
-      ? "RECOVERY_SELL"
-      : undefined
+  const expectedPurpose = getRecoverySellerPurposeForSide({ side: order.side })
   if (ownership?.strategyId !== StrategyId.RECOVERY_SELLER ||
       typeof ownership.positionId !== "string" ||
       !ownership.positionId.trim() ||
@@ -270,11 +272,7 @@ function validateRecoverySellerExecutionOwnership({ order, ownership } = {}) {
 function resolveRegisteredRecoverySellerOrderOwnership({ registry, order } = {}) {
   const registeredOrder = registry.getOrder({ clientOrderId: order.clientOrderId })
   const ownership = registry.getOwnership({ clientOrderId: order.clientOrderId })
-  const expectedPurpose = registeredOrder?.side === "BUY"
-    ? "RECOVERY_BUY"
-    : registeredOrder?.side === "SELL"
-      ? "RECOVERY_SELL"
-      : undefined
+  const expectedPurpose = getRecoverySellerPurposeForSide({ side: registeredOrder?.side })
   if (!registeredOrder ||
       !ownership ||
       ownership.strategyId !== StrategyId.RECOVERY_SELLER ||
@@ -291,8 +289,14 @@ function resolveRegisteredRecoverySellerOrderOwnership({ registry, order } = {})
 function createRecoverySellerExecutionCallbacks({ state } = {}) {
   return Object.freeze({
     onPendingOrder: ({ order, ownership } = {}) => {
-      validateRecoverySellerExecutionOwnership({ order, ownership })
-      const result = state.orderRegistry.registerPending({ order, ownership })
+      validateRecoverySellerExecutionOwnership({
+        order,
+        ownership,
+      })
+      const result = state.orderRegistry.registerPending({
+        order,
+        ownership,
+      })
       state.orderRegistry = result.registry
       return result
     },
@@ -303,7 +307,10 @@ function createRecoverySellerExecutionCallbacks({ state } = {}) {
       })
       const result = state.orderRegistry.attachAcknowledgedBrokerOrderId({ order })
       state.orderRegistry = result.registry
-      return Object.freeze({ ...result, ownership })
+      return Object.freeze({
+        ...result,
+        ownership,
+      })
     },
     onSubmissionFailure: ({ order, outcome } = {}) => {
       const ownership = resolveRegisteredRecoverySellerOrderOwnership({
@@ -316,14 +323,20 @@ function createRecoverySellerExecutionCallbacks({ state } = {}) {
           throw new Error("Recovery Seller rejected submission was not a removable pending order")
         }
         state.orderRegistry = result.registry
-        return Object.freeze({ ...result, ownership })
+        return Object.freeze({
+          ...result,
+          ownership,
+        })
       }
       const result = state.orderRegistry.markUnknown({ clientOrderId: order.clientOrderId })
       if (!result.ok) {
         throw result.errors[0] ?? new Error("Unable to retain uncertain Recovery Seller submission as UNKNOWN")
       }
       state.orderRegistry = result.data.registry
-      return Object.freeze({ ...result.data, ownership })
+      return Object.freeze({
+        ...result.data,
+        ownership,
+      })
     },
     onSubmissionDeferred: ({ order, registered } = {}) => {
       if (!registered) {
@@ -366,7 +379,10 @@ function resolveRecoverySellerBuyOrderOwnership({ registry, fill }) {
       !ownership.cycleId.trim()) {
     throw new Error("Recovery Seller BUY Fill requires registered RS Position and cycle ownership")
   }
-  return { order, ownership }
+  return {
+    order,
+    ownership,
+  }
 }
 
 function applyRecoverySellerBuyFillTransition({ state, fill }) {
@@ -505,7 +521,12 @@ function createSerializedWorkflowOperation({ state, transition } = {}) {
   return (input = {}) => {
     const task = state.updateQueue.then(() => {
       try {
-        return toResult({ data: transition({ state, ...input }) })
+        return toResult({
+          data: transition({
+            state,
+            ...input,
+          }),
+        })
       } catch (error) {
         return toResult({ error })
       }
