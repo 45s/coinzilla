@@ -67,18 +67,20 @@ test("adaptOrder preserves safely representable numeric broker order IDs", () =>
 })
 
 test("adaptOrder rejects missing or malformed required exchange timestamps", () => {
-  for (const [field, invalidValue] of [
-    ["ctime", undefined],
-    ["ctime", null],
-    ["ctime", 1_794_744_000_000],
-    ["ctime", ""],
-    ["ctime", "   "],
-    ["utime", undefined],
-    ["utime", null],
-    ["utime", 1_794_744_000_000],
-    ["utime", ""],
-    ["utime", "   "],
-  ]) {
+  const invalidTimestamps = [
+    { field: "ctime", invalidValue: undefined },
+    { field: "ctime", invalidValue: null },
+    { field: "ctime", invalidValue: 1_794_744_000_000 },
+    { field: "ctime", invalidValue: "" },
+    { field: "ctime", invalidValue: "   " },
+    { field: "utime", invalidValue: undefined },
+    { field: "utime", invalidValue: null },
+    { field: "utime", invalidValue: 1_794_744_000_000 },
+    { field: "utime", invalidValue: "" },
+    { field: "utime", invalidValue: "   " },
+  ]
+
+  for (const { field, invalidValue } of invalidTimestamps) {
     assert.throws(
       () => adaptOrder({
         ...validOrder,
