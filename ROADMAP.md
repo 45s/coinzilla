@@ -95,9 +95,10 @@
    - **Remaining:** close the scoped coverage and negative architecture/contract gaps recorded by the package owner.
    - **Owner:** [Entities roadmap](packages/entities/ROADMAP.md).
 
-9. **First real database consumer and operational procedure.**
-   - **Why:** SQLite lifecycle support is implemented, but no application-owned persistence workflow currently proves the end-to-end contract.
-   - **Remaining:** select a real domain-owned repository use case before adding schema or generic repository abstractions; specify transactions, concurrency, migration, backup and restore as part of that consumer.
+9. **Provider-neutral database CRUD infrastructure — IN PROGRESS ([#1340](https://github.com/45s/coinzilla/issues/1340), [PR #1342](https://github.com/45s/coinzilla/pull/1342)).**
+   - **Why:** the built-in SQLite lifecycle, transactions and migrations exist; a consistent provider-neutral record CRUD/query contract is now the next infrastructure milestone.
+   - **Do:** define generic JSON-record CRUD, query/result/error/transaction/capability contracts; implement the first provider with built-in `node:sqlite`; preserve the existing low-level SQLite API. Keep application schemas and repository interfaces in their owning bounded contexts.
+   - **Separate follow-up:** first real application-owned repository integration, plus backup/restore and operational procedures, remain consumer-owned work after the generic contract is stable.
    - **Owner:** [Database roadmap](packages/db/ROADMAP.md).
 
 10. **Structured, package-owned errors with a shared `SystemCustomError` base ([#1028](https://github.com/45s/coinzilla/issues/1028)) — IN PROGRESS; the Utilities-owned base is implemented in merged [PR #1262](https://github.com/45s/coinzilla/pull/1262); gradual adoption remains with consuming domains.**
