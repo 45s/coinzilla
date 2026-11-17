@@ -39,9 +39,9 @@ function requireKlineTimestamp({ value }) {
   return value
 }
 
-function normalizeDepthLevel({ value, side, index }) {
+function normalizeDepthLevel({ value, side }) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new TypeError(`Bitunix Spot order book ${side} level ${index} must be an object`)
+    throw new TypeError(`Bitunix Spot order book ${side} level must be an object`)
   }
   return {
     price: requirePositiveDecimal({
@@ -62,10 +62,9 @@ function normalizeDepthLevels({ value, side }) {
   if (!Array.isArray(value)) {
     throw new TypeError(`Bitunix Spot order book ${side} must be an array`)
   }
-  return value.map((level, index) => normalizeDepthLevel({
+  return value.map((level) => normalizeDepthLevel({
     value: level,
     side,
-    index,
   }))
 }
 
@@ -131,11 +130,26 @@ export function adaptBitunixKline({ value, symbol }) {
     value: value.close,
     field: "kline close",
   })
-  if (compareDecimal({ left: high, right: low }) < 0 ||
-      compareDecimal({ left: high, right: open }) < 0 ||
-      compareDecimal({ left: high, right: close }) < 0 ||
-      compareDecimal({ left: low, right: open }) > 0 ||
-      compareDecimal({ left: low, right: close }) > 0) {
+  if (compareDecimal({
+    left: high,
+    right: low,
+  }) < 0 ||
+      compareDecimal({
+        left: high,
+        right: open,
+      }) < 0 ||
+      compareDecimal({
+        left: high,
+        right: close,
+      }) < 0 ||
+      compareDecimal({
+        left: low,
+        right: open,
+      }) > 0 ||
+      compareDecimal({
+        left: low,
+        right: close,
+      }) > 0) {
     throw new RangeError("Bitunix Spot kline OHLC values are inconsistent")
   }
   return {
