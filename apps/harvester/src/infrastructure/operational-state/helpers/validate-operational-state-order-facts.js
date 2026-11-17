@@ -103,7 +103,11 @@ export function validateOrderSubmissionIntentFact({ factType, canonicalData, fac
     return
   }
   const clientOrderId = validateOrderSubmissionIntentFields({ canonicalData })
-  validateOrderSubmissionIntentSemantics({ canonicalData, factId, clientOrderId })
+  validateOrderSubmissionIntentSemantics({
+    canonicalData,
+    factId,
+    clientOrderId,
+  })
 }
 
 function validateOrderSubmissionOutcomeIdentity({
@@ -217,7 +221,11 @@ export function validateOrderSubmissionOutcomeFact({ factType, canonicalData, fa
     return
   }
   const clientOrderId = validateOrderSubmissionOutcomeFields({ canonicalData })
-  validateOrderSubmissionOutcomeIdentity({ canonicalData, factId, clientOrderId })
+  validateOrderSubmissionOutcomeIdentity({
+    canonicalData,
+    factId,
+    clientOrderId,
+  })
   validateOrderSubmissionOutcomeAmounts({ canonicalData })
   validateOrderSubmissionOutcomeState({ canonicalData })
 }
