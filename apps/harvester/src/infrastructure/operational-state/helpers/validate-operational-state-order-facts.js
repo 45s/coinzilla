@@ -254,15 +254,31 @@ export function validateOrderCancellationIntentFact({ factType, canonicalData, f
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Order-cancellation intent fact contains unsupported fields")
   }
-  const clientOrderId = requireNonEmptyString({ value: canonicalData.clientOrderId, field: "data.clientOrderId", maxLength: MAX_FACT_ID_LENGTH })
-  requireNonEmptyString({ value: canonicalData.brokerOrderId, field: "data.brokerOrderId", maxLength: MAX_FACT_ID_LENGTH })
-  const marketId = requireNonEmptyString({ value: canonicalData.marketId, field: "data.marketId", maxLength: MAX_FACT_ID_LENGTH })
-  const venue = requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
-  requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
-  requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
-  const reason = requireNonEmptyString({ value: canonicalData.reason, field: "data.reason", maxLength: 64 })
+  const clientOrderId = requireNonEmptyString({ value: canonicalData.clientOrderId,
+    field: "data.clientOrderId",
+    maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: canonicalData.brokerOrderId,
+    field: "data.brokerOrderId",
+    maxLength: MAX_FACT_ID_LENGTH })
+  const marketId = requireNonEmptyString({ value: canonicalData.marketId,
+    field: "data.marketId",
+    maxLength: MAX_FACT_ID_LENGTH })
+  const venue = requireNonEmptyString({ value: canonicalData.venue,
+    field: "data.venue",
+    maxLength: 32 })
+  requireNonEmptyString({ value: canonicalData.baseAssetId,
+    field: "data.baseAssetId",
+    maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: canonicalData.quoteAssetId,
+    field: "data.quoteAssetId",
+    maxLength: MAX_FACT_ID_LENGTH })
+  const reason = requireNonEmptyString({ value: canonicalData.reason,
+    field: "data.reason",
+    maxLength: 64 })
   validateCancellationIdentity({
-    canonicalData: { ...canonicalData, marketId, venue },
+    canonicalData: { ...canonicalData,
+      marketId,
+      venue },
     factId,
     reason,
     expectedFactId: factIdForCancellationIntent(clientOrderId, reason, canonicalData.status, canonicalData.executedQuantity),
@@ -279,21 +295,38 @@ export function validateOrderCancellationOutcomeFact({ factType, canonicalData, 
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Order-cancellation outcome fact contains unsupported fields")
   }
-  const clientOrderId = requireNonEmptyString({ value: canonicalData.clientOrderId, field: "data.clientOrderId", maxLength: MAX_FACT_ID_LENGTH })
-  requireNonEmptyString({ value: canonicalData.brokerOrderId, field: "data.brokerOrderId", maxLength: MAX_FACT_ID_LENGTH })
-  const marketId = requireNonEmptyString({ value: canonicalData.marketId, field: "data.marketId", maxLength: MAX_FACT_ID_LENGTH })
-  const venue = requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
-  requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
-  requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
-  const reason = requireNonEmptyString({ value: canonicalData.reason, field: "data.reason", maxLength: 64 })
+  const clientOrderId = requireNonEmptyString({ value: canonicalData.clientOrderId,
+    field: "data.clientOrderId",
+    maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: canonicalData.brokerOrderId,
+    field: "data.brokerOrderId",
+    maxLength: MAX_FACT_ID_LENGTH })
+  const marketId = requireNonEmptyString({ value: canonicalData.marketId,
+    field: "data.marketId",
+    maxLength: MAX_FACT_ID_LENGTH })
+  const venue = requireNonEmptyString({ value: canonicalData.venue,
+    field: "data.venue",
+    maxLength: 32 })
+  requireNonEmptyString({ value: canonicalData.baseAssetId,
+    field: "data.baseAssetId",
+    maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: canonicalData.quoteAssetId,
+    field: "data.quoteAssetId",
+    maxLength: MAX_FACT_ID_LENGTH })
+  const reason = requireNonEmptyString({ value: canonicalData.reason,
+    field: "data.reason",
+    maxLength: 64 })
   validateCancellationIdentity({
-    canonicalData: { ...canonicalData, marketId, venue },
+    canonicalData: { ...canonicalData,
+      marketId,
+      venue },
     factId,
     clientOrderId,
     reason,
     expectedFactId: factIdForCancellationOutcome(clientOrderId, reason, canonicalData.outcome),
     outcome: canonicalData.outcome,
   })
-  validateCancellationOrderFields({ canonicalData, outcome: canonicalData.outcome })
+  validateCancellationOrderFields({ canonicalData,
+    outcome: canonicalData.outcome })
   validateCancellationOutcomeState({ canonicalData })
 }
