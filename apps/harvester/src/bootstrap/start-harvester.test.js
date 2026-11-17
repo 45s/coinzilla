@@ -1524,7 +1524,9 @@ test("starts application reconciliation on transport recovery and acknowledges o
 
 function configureRecoverySnapshotReplay(broker) {
   const { getAccountSnapshot, getOpenOrders, subscribeForUserData } = broker
-  const counters = { accountReads: 0, openOrderReads: 0, acknowledgements: 0 }
+  const counters = { accountReads: 0,
+    openOrderReads: 0,
+    acknowledgements: 0 }
   let resolveAcknowledgement
   const acknowledged = new Promise((resolve) => { resolveAcknowledgement = resolve })
   broker.getOpenOrders = async (input) => {
@@ -1697,7 +1699,8 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
 function configureStaleRecoveryRace(broker) {
   const { getAccountSnapshot, subscribeForUserData } = broker
   const signals = {}
-  const counters = { accountReads: 0, acknowledgements: 0 }
+  const counters = { accountReads: 0,
+    acknowledgements: 0 }
   signals.recoverySnapshotStarted = new Promise((resolve) => { signals.resolveSnapshotStarted = resolve })
   signals.recoverySnapshotGate = new Promise((resolve) => { signals.releaseSnapshot = resolve })
   signals.staleFailure = new Promise((resolve) => { signals.resolveStaleFailure = resolve })
@@ -3740,7 +3743,8 @@ async function createPreflightJournalRuntime() {
     },
     flush: async () => {
       calls.push("journal:flush")
-      return { ok: true, durable: true }
+      return { ok: true,
+        durable: true }
     },
   }
   const runtime = await startHarvesterForTest({
@@ -3757,7 +3761,10 @@ async function createPreflightJournalRuntime() {
       debug() {},
     },
   })
-  return { calls, events, runtime, getOpenOrderReads: () => openOrderReads }
+  return { calls,
+    events,
+    runtime,
+    getOpenOrderReads: () => openOrderReads }
 }
 
 function assertPreflightJournalAudit({ calls, events, openOrderReads }) {
@@ -3878,7 +3885,8 @@ async function startPriorProcessOrderRuntime({ broker, events }) {
       events.push(event)
       return { ok: true }
     },
-    flush: async () => ({ ok: true, durable: true }),
+    flush: async () => ({ ok: true,
+      durable: true }),
   }
   return startHarvesterForTest({
     loadConfig: async () => createPriorProcessOrderConfig(),
@@ -3911,10 +3919,16 @@ function assertPriorProcessOrderIsIgnored({ runtime, calls, events, startupClien
 test("treats a prior-process Harvester order as external under IGNORE and evaluates a real market-price event", async () => {
   const calls = []
   const canceledClientOrderIds = []
-  const { broker, startupClientOrderId } = createPriorProcessOrderBroker({ calls, canceledClientOrderIds })
+  const { broker, startupClientOrderId } = createPriorProcessOrderBroker({ calls,
+    canceledClientOrderIds })
   const events = []
-  const runtime = await startPriorProcessOrderRuntime({ broker, events })
-  assertPriorProcessOrderIsIgnored({ runtime, calls, events, startupClientOrderId, canceledClientOrderIds })
+  const runtime = await startPriorProcessOrderRuntime({ broker,
+    events })
+  assertPriorProcessOrderIsIgnored({ runtime,
+    calls,
+    events,
+    startupClientOrderId,
+    canceledClientOrderIds })
   const evaluation = await runtime.processMarketPrice({
     symbol: "BTCUSDT",
     priceEvent: {
@@ -4266,19 +4280,23 @@ function configureNoReplayHistoryBroker(broker) {
   const historicalReads = []
   broker.getCanonicalOrder = async () => {
     historicalReads.push("getCanonicalOrder")
-    return { ok: false, errors: [new Error("not found")] }
+    return { ok: false,
+      errors: [new Error("not found")] }
   }
   broker.getCanonicalOrderHistory = async () => {
     historicalReads.push("getCanonicalOrderHistory")
-    return { ok: true, data: [] }
+    return { ok: true,
+      data: [] }
   }
   broker.getFills = async () => {
     historicalReads.push("getFills")
-    return { ok: true, data: [] }
+    return { ok: true,
+      data: [] }
   }
   broker.getExchangeMarkets = async () => {
     historicalReads.push("getExchangeMarkets")
-    return { ok: true, data: [] }
+    return { ok: true,
+      data: [] }
   }
   return historicalReads
 }
@@ -4504,10 +4522,14 @@ function assertShutdownBuyCancellationOrdering(calls) {
 test("keeps user-data intake active until shutdown BUY cancellation and fill reconciliation finish", async () => {
   const calls = []
   const gates = createShutdownBuyCancellationGates()
-  const broker = createShutdownBuyCancellationBroker({ calls, gates })
+  const broker = createShutdownBuyCancellationBroker({ calls,
+    gates })
   const observedEvents = []
-  const runtime = await startShutdownBuyCancellationRuntime({ broker, observedEvents, gates })
-  await prepareShutdownBuyMarketActivity({ broker, calls })
+  const runtime = await startShutdownBuyCancellationRuntime({ broker,
+    observedEvents,
+    gates })
+  await prepareShutdownBuyMarketActivity({ broker,
+    calls })
 
   const stopPromise = runtime.stop()
   let testError
@@ -4518,7 +4540,8 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
       observedEvents: observedEvents.length,
       calls,
     }))
-    assertUserDataRemainsActiveDuringShutdown({ calls, observedEvents })
+    assertUserDataRemainsActiveDuringShutdown({ calls,
+      observedEvents })
   } catch (error) {
     testError = error
   } finally {
@@ -4531,8 +4554,12 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
   } catch (error) {
     stopError = error
   }
-  if (testError) throw testError
-  if (stopError) throw stopError
+  if (testError) {
+    throw testError
+  }
+  if (stopError) {
+    throw stopError
+  }
   assertShutdownBuyCancellationOrdering(calls)
 })
 
@@ -4766,10 +4793,18 @@ test("keeps shared user-data readiness open when an external execution is isolat
   const calls = []
   const cancelledBrokerOrderIds = []
   const gates = createOwnedBuySafetyCancellationGates()
-  const broker = createOwnedBuySafetyCancellationBroker({ calls, cancelledBrokerOrderIds, gates })
+  const broker = createOwnedBuySafetyCancellationBroker({ calls,
+    cancelledBrokerOrderIds,
+    gates })
   const journalEvents = []
-  const result = await startOwnedBuySafetyCancellationRuntime({ broker, gates, journalEvents })
-  await assertExternalExecutionIsolation({ broker, result, journalEvents, cancelledBrokerOrderIds, gates })
+  const result = await startOwnedBuySafetyCancellationRuntime({ broker,
+    gates,
+    journalEvents })
+  await assertExternalExecutionIsolation({ broker,
+    result,
+    journalEvents,
+    cancelledBrokerOrderIds,
+    gates })
   await result.stop()
   assert.deepEqual(cancelledBrokerOrderIds, ["owned-buy-1"])
 })
@@ -5612,7 +5647,10 @@ async function createStrategyScopedMarketRuntimeFixture() {
       error: (entry) => logs.push(entry),
     },
   })
-  return { runtime, calls, candleSubscriptions, logs }
+  return { runtime,
+    calls,
+    candleSubscriptions,
+    logs }
 }
 
 test("does not subscribe to a market blocked by this strategy's external-order policy", async () => {
@@ -5752,9 +5790,12 @@ function createExternalCorrelationOrder(market) {
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "65000", asset: market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "0.01", asset: market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+    limitPrice: new Money({ amount: "65000",
+      asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.01",
+      asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+      asset: market.baseAsset }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -5785,7 +5826,8 @@ test("logs safe correlation details for an external execution without closing gl
         journalEvents.push(event)
         return { ok: true }
       },
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({ ok: true,
+        durable: true }),
     },
     logger: {
       info() {},
@@ -5918,13 +5960,16 @@ async function startTelegramNoReplayRuntime({ directory, config, currentStore, s
       return {
         start: async () => {
           operatorAdapterStarted = true
-          return { ok: true, started: true }
+          return { ok: true,
+            started: true }
         },
-        stop: async () => ({ ok: true, stopped: true }),
+        stop: async () => ({ ok: true,
+          stopped: true }),
       }
     },
   })
-  return { runtime, operatorAdapterStarted }
+  return { runtime,
+    operatorAdapterStarted }
 }
 
 test("starts Telegram operator control without running process-restart recovery when recovery is disabled", async () => {
@@ -5958,7 +6003,8 @@ test("starts Telegram operator control without running process-restart recovery 
     })
   } finally {
     await runtime?.stop?.()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+      force: true })
   }
 })
 
