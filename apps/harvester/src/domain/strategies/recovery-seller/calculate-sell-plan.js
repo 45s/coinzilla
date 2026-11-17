@@ -1,4 +1,5 @@
 import {
+  DEFAULT_DECIMAL_DIVISION_SCALE,
   addDecimal,
   assertDecimalString,
   compareDecimal,
@@ -234,7 +235,7 @@ function calculateOrderQuantities({
       left: "1",
       right: baseFeeRate,
     }),
-    scale: 36,
+    scale: DEFAULT_DECIMAL_DIVISION_SCALE,
     rounding: "toward-zero",
   })
   const quantity = roundDecimalToIncrement({
@@ -265,7 +266,7 @@ function calculateOrderQuantities({
       right: recoveryQuantity,
     }),
     right: availableBaseQuantity,
-    scale: 36,
+    scale: DEFAULT_DECIMAL_DIVISION_SCALE,
     rounding: "toward-zero",
   })
   const legacySellQuantity = subtractDecimal({
@@ -278,7 +279,7 @@ function calculateOrderQuantities({
       right: recoverySellQuantity,
     }),
     right: quantity,
-    scale: 36,
+    scale: DEFAULT_DECIMAL_DIVISION_SCALE,
     rounding: "toward-zero",
   })
   const legacyBaseFeeQuantity = subtractDecimal({
@@ -373,9 +374,15 @@ export function calculateRecoverySellerSellPlan({
     left: recoveryQuantity,
     right: legacyQuantity,
   })
+  const quantities = calculateOrderQuantities({
+    recoveryQuantity,
+    availableBaseQuantity,
+    baseFeeRate,
+    quantityStepSize,
+  })
   const legacyCostBasis = multiplyDecimal({
     left: legacyAverageCost,
-    right: legacyQuantity,
+    right: quantities.legacyBaseDebitQuantity,
   })
   const quoteTarget = calculateQuoteTarget({
     recoveryCostBasis,
@@ -383,12 +390,6 @@ export function calculateRecoverySellerSellPlan({
     minProfit,
     thirdAssetFeeQuoteValue,
     quoteFeeRate,
-  })
-  const quantities = calculateOrderQuantities({
-    recoveryQuantity,
-    availableBaseQuantity,
-    baseFeeRate,
-    quantityStepSize,
   })
   const price = calculateMinimumPrice({
     grossQuoteProceeds: quoteTarget.grossQuoteProceeds,
