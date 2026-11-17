@@ -369,22 +369,15 @@ reason: "TRADING_ENGINE_NOT_READY" } })
 }
 
 async function createHarvesterRuntimeResources({ startup } = {}) {
-  const connection = await connectBroker({
+  const broker = await connectBroker({
     brokerAdapterFactory: startup.brokerAdapterFactory,
     env: startup.env,
     brokerName: startup.brokerName,
-    providerType: startup.providerType,
-    providerInstanceId: startup.providerInstanceId,
-    accountId: startup.accountId,
     tradingMode: startup.tradingMode,
     eventPublisher: startup.eventPublisher,
     logger: startup.logger,
   })
-  const { providerRegistry, provider } = connection
-  const broker = provider.broker
   const resources = {
-    providerRegistry,
-    provider,
     broker,
     subscriptions: [],
     marketPriceIntake: new Map(),
@@ -777,9 +770,6 @@ function createHarvesterRuntimeResult({ startup, portfolio, resources, stop } = 
     eventPublisher: startup.eventPublisher,
     environment: startup.environment,
     brokerName: startup.brokerName,
-    providerType: startup.providerType,
-    providerInstanceId: startup.providerInstanceId,
-    accountId: startup.accountId,
     tradingMode: startup.tradingMode,
     tradingEnabled: startup.tradingEnabled,
     strategyMode: "conservative",
