@@ -83,7 +83,11 @@ function validateOrder({ bitunixOrder }) {
 
   const normalizedSide = SIDE_MAP[String(side)]
   const normalizedType = TYPE_MAP[String(type ?? bitunixOrder.orderType)]
-  const normalizedStatus = STATUS_MAP[String(status)]
+  if ((typeof status !== "string" && typeof status !== "number") || String(status).trim() === "") {
+    throw new TypeError("Bitunix Spot order status must be a non-empty string or number")
+  }
+  const exchangeStatus = String(status)
+  const normalizedStatus = STATUS_MAP[exchangeStatus] ?? "UNKNOWN"
   if (!normalizedSide) {
     throw new TypeError("Bitunix Spot order side is unsupported")
   }
@@ -110,6 +114,7 @@ function validateOrder({ bitunixOrder }) {
     normalizedSide,
     normalizedType,
     normalizedStatus,
+    exchangeStatus,
     volume,
     dealVolume,
     price,
@@ -129,6 +134,7 @@ export function adaptOrder(bitunixOrder) {
     normalizedSide,
     normalizedType,
     normalizedStatus,
+    exchangeStatus,
     volume,
     dealVolume,
     price,
@@ -151,6 +157,9 @@ export function adaptOrder(bitunixOrder) {
   order.executedQuantity = String(dealVolume)
   order.remainingQuantity = remainingQuantity
   order.status = normalizedStatus
+  if (normalizedStatus === "UNKNOWN") {
+    order.exchangeStatus = exchangeStatus
+  }
   order.createdAt = bitunixOrder.ctime
   order.updatedAt = bitunixOrder.utime
   return order
