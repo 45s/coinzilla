@@ -206,45 +206,15 @@ Status is based on source implementation and repository tests at the audit basel
 
 Relevant implementation: `packages/brokers/src/infrastructure/binance/broker-websocket/broker.js`. The package and Harvester have offline tests for these paths. This audit did not execute them or perform exchange acceptance.
 
-### 5.2 Bitunix Spot
+### 5.2 Additional providers — deferred, not abandoned
 
-**Disposition: read-only; not a Harvester execution provider.** The implementation has expanded beyond basic market/price reads, but those additions do not close the account/order lifecycle gaps.
+**Binance is the first provider in the implementation sequence, not the permanent or exclusive provider.** Bitunix development is temporarily paused while Binance capability contracts and Harvester integration progress.
 
-| Capability | Source status | Evidence / boundary |
-| --- | --- | --- |
-| Connect/disconnect | Implemented | Stateless REST adapter lifecycle |
-| Market catalog | Implemented | Open Spot markets |
-| Market metadata | Partial | `getSymbolFilters()` returns catalog data; validated canonical trading increments are not established |
-| Latest price | Implemented, one-shot | `getPrices()`; not a continuous feed and no trusted source timestamp |
-| Order-book depth | Implemented, one-shot | `getOrderBook({ symbol, precision })`; caller supplies precision |
-| Current OHLC row | Implemented, one-shot | `getKlines()`; not canonical candles |
-| Historical OHLC | Implemented, one-page | `getKlineHistory()`; no documented cursor/start-time completeness contract |
-| Canonical candles | Unsupported | Source Kline schema omits volume required by canonical candle contract |
-| Continuous price/book stream | Unsupported | No documented continuous Spot market subscription in adapter |
-| Balances | Implemented | `getBalances()`; exact decimal mapping |
-| Timestamped account snapshot | Unsupported | `getAccountSnapshot()` explicitly rejects missing source timestamp |
-| Native positions | Not provided | Spot balances are not Harvester strategy Positions |
-| Open orders | Partial | Symbol required; no account-wide query |
-| Order history | Partial | Symbol-scoped, one page; no automatic pagination/completeness guarantee |
-| Order detail | Implemented | Exchange order ID lookup |
-| Client-order-ID lookup | Unsupported | No exchange-side client order identity |
-| Canonical order history | Unsupported | Canonical identity requires client order ID |
-| Fills/trade history | Unsupported | Quantity denomination, partial-fill completeness and stable unique execution identity unproven; account-wide trade history absent |
-| Order placement | Unsupported | Explicitly disabled; lost-ack identity cannot be reconciled |
-| Cancellation | Unsupported | Explicitly returns NOT_SENT; no verified private lifecycle/reconciliation |
-| Private user-data stream | Unsupported | No documented continuous private order/execution stream |
-| Recovery/reconciliation | Unsupported | Required canonical order/fill/account lifecycle incomplete |
-| Trading modes | LIVE only | No documented Spot TESTNET endpoint |
+Existing Bitunix source, completed read-only work, and capability research remain part of the project. Bitunix implementation continues under [issue #1185](https://github.com/45s/coinzilla/issues/1185). Its current partial/read-only functionality must not be treated as Harvester execution readiness.
 
-Relevant source:
+When Bitunix implements and verifies the capabilities required by the shared broker contracts—including reliable account snapshots, stable order identity, safe placement and cancellation outcomes, complete order/fill reconciliation, private execution events, environment isolation, and lifecycle/recovery guarantees—it can be added to the provider registry and routed by Harvester under the same provider-neutral architecture.
 
-- `packages/brokers/src/infrastructure/bitunix/broker.js`
-- `packages/brokers/src/infrastructure/bitunix/broker.test.js`
-- `packages/brokers/src/infrastructure/bitunix/adapters/adapt-market-data.js`
-- `packages/brokers/README.md`
-- [Bitunix capability blockers #1185](https://github.com/45s/coinzilla/issues/1185)
-
-The offline broker tests verify implemented read mappings and explicit unsupported behavior. No Bitunix order mutations may be enabled or claimed production-ready. Any future Bitunix Spot capability change must first follow the mandatory reference audit in [packages/brokers/AGENTS.md](../../packages/brokers/AGENTS.md#bitunix-spot-development--mandatory-reference-audit), including the required third-party reference projects and official protocol verification.
+Until those acceptance requirements are met, Bitunix must not be enabled for Harvester execution. This temporary sequencing does not remove Bitunix from the target architecture or make Binance the only provider Harvester may support.
 
 ### 5.3 Capability reporting rule
 
@@ -348,38 +318,23 @@ The first multi-provider deployments should continue to resolve the existing con
 
 Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain contracts must follow the repository's cross-domain request process. Do not start a later phase by silently implementing another domain's internals.
 
-### Phase 1 — Brokers capability declarations and construction boundary
+### Phase 1 — Binance capability declarations and construction boundary
+
+<badge>Complete — PR #1366</badge>
 
 **Owner:** Brokers.
-**Objective:** expose stable provider construction and truthful capabilities for existing implementations without changing exchange behavior.
+**Objective:** expose truthful, immutable capability declarations for the currently working Binance Spot implementation without changing exchange behavior.
 
-**Likely scope:**
+**Delivered scope:** the versioned capability declaration is additive, deeply immutable, and distinguishes supported, unsupported, unknown, and environment-dependent operations. Binance declarations are source-backed; existing broker construction and consumer behavior remain the compatibility baseline.
 
-- `packages/brokers/src/broker.core.js`
-- `packages/brokers/src/index.js`
-- Binance configuration/broker modules
-- Binance broker contract tests and package documentation
-- Do not edit Bitunix Spot implementation or add a Bitunix capability descriptor in this first PR; the mandatory external reference audit in `packages/brokers/AGENTS.md` must be completed first.
+**Acceptance for this phase:**
 
-**Requirements:**
+- Offline contract tests compare declared capabilities with actual Binance behavior.
+- Unsupported and unknown operations are explicit; inherited method presence is not treated as proof of support.
+- Existing Brokers tests and coverage thresholds pass on the merged implementation.
+- No Harvester routing policy, additional provider, or exchange operation is introduced.
 
-- Preserve all current exports, constructors, method signatures, results and errors.
-- Declare implemented, unsupported and environment-dependent capabilities explicitly.
-- Do not claim capability from inherited method existence.
-- Keep the capability contract able to represent supported, unsupported and unknown operations.
-- Do not change Bitunix Spot capability declarations in this PR. A Bitunix descriptor is a separate follow-up after the mandatory JKorf/Bitunix.Net, bitunix-mcp and official protocol reference audit.
-- Avoid generic transport/provider plugin frameworks.
-
-**Tests and acceptance:**
-
-- Offline contract tests compare declared capabilities with actual supported/unsupported operations.
-- Binance declarations cover the current source-backed implementation.
-- Existing Bitunix behavior and exports remain unchanged; no Bitunix mutation, canonical fills, private stream or recovery is enabled.
-- Existing Brokers package tests and coverage thresholds pass.
-- No Harvester imports or routing policy enter Brokers.
-- No exchange operations or credentials are required.
-
-**Risk/rollback:** additive declarations only; remove/ignore the new metadata to return to existing consumers. No runtime behavior changes.
+**Risk/rollback:** additive metadata only; existing consumers can ignore it. No runtime behavior changes.
 
 ### Phase 2 — Harvester named provider construction and registry
 
@@ -526,14 +481,16 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 
 **Risk/rollback:** revert route resolution for new orders to the single Binance instance. Outstanding orders continue through their stored provenance; rollback must not reassign them based on current config.
 
-### Phase 7 — Additional provider enablement
+### Phase 7 — Bitunix capability completion and Harvester enablement (deferred)
 
-**Owner:** provider package owner plus Harvester consumer owner.
-**Objective:** enable one additional provider only after it supports the complete capability set required by a specific strategy/market route.
+**Owner:** Brokers, then Harvester for integration.
+**Tracking:** [Bitunix capability and lifecycle blockers — issue #1185](https://github.com/45s/coinzilla/issues/1185).
 
-**Requirements:** official protocol evidence, complete account snapshot, order identity, idempotent placement/reconciliation, cancellation outcome, canonical order/fill history, private execution events or an equally complete proven reconciliation design, environment isolation, precision/filter rules, and lifecycle/recovery tests.
+Bitunix work is temporarily paused while Binance is the first provider brought through the shared capability-contract and Harvester integration path. Preserve existing Bitunix functionality and completed read-side work; do not enable incomplete execution capabilities.
 
-Bitunix remains excluded until #1185 and #1339 capability requirements are actually closed. A read-only provider can be used only for explicitly supported read routes; it cannot be represented as an execution provider.
+Resume Bitunix implementation when the Binance-first integration work provides the stable shared contracts needed by both providers. Complete the source-backed Bitunix capability gaps and prove the required account, order, fill, cancellation, private-event, environment, precision, and recovery guarantees. Then add Bitunix to Harvester through the same provider registry and explicit routing model—without provider-specific strategy logic, implicit fallback, or cross-provider retries.
+
+Bitunix enablement requires its own reviewable implementation and acceptance work under #1185 (or explicitly linked follow-up issues). The pause is sequencing only; it is not a decision to abandon Bitunix or exclude it from the target architecture.
 
 ## 9. Test and verification strategy
 
@@ -566,7 +523,6 @@ Tests for Harvester must follow the repository human-readable test standard and 
 | Duplicate order after uncertain timeout | P1 | Preserve UNKNOWN outcome; never retry on another provider |
 | Same-account concurrent writers during lock migration | P1 | Account-aware lock plus mixed-version transition barrier |
 | False capability from CoreBroker method presence | P1 | Explicit declarations verified against implementation and tests |
-| Bitunix mistaken for execution-ready | P1 | Keep order mutations, canonical fills, private streams and recovery disabled |
 | Partial startup/shutdown leaks provider resources | P2 | Registry-owned lifecycle with failure-injection tests |
 | Market data silently changes venue/source | P2 | Exact explicit route and source-aware freshness |
 | Binance behavior changes during refactor | P1 | Single-provider parity suite and legacy config adapter |
@@ -579,7 +535,7 @@ Severity indicates architectural/operational risk, not a reproduced incident. Th
 - Issue #1339 remains the live task contract and discussion location.
 - Harvester and Brokers roadmaps contain only concise ownership/status pointers to this plan and #1339.
 - Do not copy this full audit into either roadmap.
-- Keep #654 as the process-restart recovery release gate and #1185 as the Bitunix capability blocker.
+- Keep #654 as the process-restart recovery release gate. Bitunix is deferred during the Binance-first sequence; its capability completion and eventual Harvester integration remain tracked in #1185.
 - Keep current Conservative strategy rules in the canonical Conservative Domain Specification.
 - Do not modify runtime code, schema files, credentials, environment settings, or exchange behavior as part of this audit/plan.
 
@@ -591,10 +547,10 @@ The first implementation PR should be a **Brokers-only additive capability-contr
 2. Represent unsupported/unknown operations explicitly without changing current results or errors.
 3. Add offline contract tests proving Binance declarations match actual source behavior.
 4. Preserve `CoreBroker`, existing constructors and every public export.
-5. Leave Bitunix implementation/declarations unchanged until its mandatory external reference audit is completed.
+5. Keep the implementation and acceptance scope Binance-only; do not add or modify another provider.
 6. Do not change Harvester bootstrap, configuration, routing, order execution or database/persistence in this PR.
 
-The first PR is safe only when existing Brokers tests and coverage pass, the capability matrix is source-backed, Bitunix remains read-only, and Harvester/Binance consumers show no behavior or export regression. It is not permission to enable multi-provider execution.
+The Phase 1 capability-contract PR is complete. This does not enable multi-provider execution or change the Binance-only runtime.
 
 ## 13. Audit limitations and follow-up
 
@@ -602,5 +558,4 @@ The first PR is safe only when existing Brokers tests and coverage pass, the cap
 - Tests were inspected but not executed in this audit.
 - No live or TESTNET exchange calls were made.
 - No multi-provider runtime exists to reproduce route-change misrouting or cross-account collisions; these are source-derived risks.
-- The latest source includes the Bitunix read-only additions from PR #1324; earlier capability descriptions that omit depth and OHLC-history reads are stale.
 - The Harvester roadmap's #1307 lock status was stale at the audit baseline: the issue is closed completed and the lock source implements broker/environment scoping. Correct the roadmap status without changing lock code.
