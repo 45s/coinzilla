@@ -7,6 +7,7 @@ import { adaptBitunixKline, adaptBitunixKlineHistory, adaptBitunixOrderBook, cre
 import { adaptExchangeRates } from "./adapters/adapt-exchange-rates.js"
 import { adaptDeposits } from "./adapters/adapt-deposits.js"
 import { adaptWithdrawalHistory } from "./adapters/adapt-withdrawal-history.js"
+import { adaptMatchingOrderDetails } from "./adapters/adapt-matching-order-details.js"
 import { adaptOrder } from "./adapters/adapt-order.js"
 import { createCanonicalMarket, getBitunixSymbol } from "./adapters/create-canonical-market.js"
 import { BitunixSpotConfig } from "./config/bitunix-spot-config.js"
@@ -24,6 +25,7 @@ const API = Object.freeze({
   klineHistory: "/api/spot/v1/market/kline/history",
   deposits: "/api/spot/v1/deposit/page",
   withdrawalHistory: "/api/spot/v1/withdraw_transfer/page",
+  matchingOrderDetails: "/api/spot/v1/order/deal/list",
 })
 
 const HISTORY_STATUS_CODES = Object.freeze({
@@ -252,6 +254,24 @@ function createWithdrawalHistoryRequest({ input }) {
     body,
   })
   return { body }
+}
+
+function createMatchingOrderDetailsRequest({ input }) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("Bitunix Spot getMatchingOrderDetails() input must be an object")
+  }
+  if (typeof input.orderId !== "string" || !input.orderId.trim()) {
+    throw new TypeError("Bitunix Spot matching-order orderId must be a non-empty string")
+  }
+  if (typeof input.symbol !== "string" || !input.symbol.trim()) {
+    throw new TypeError("Bitunix Spot matching-order symbol must be a non-empty string")
+  }
+  return {
+    body: {
+      orderId: input.orderId,
+      symbol: input.symbol,
+    },
+  }
 }
 
 function normalizeReturnedHistoryPage({ pageNum, requestedPage }) {
@@ -628,6 +648,38 @@ export class BitunixSpotBroker extends CoreBroker {
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.getDeposits()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Read one exchange-native matching-order detail for a known Spot order.
+   * This is not a canonical Fill: volume denomination, execution-ID uniqueness,
+   * and multi-execution completeness are not established by the API contract.
+   *
+   * @param {{orderId: string, symbol: string}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getMatchingOrderDetails(input = {}) {
+    try {
+      const { body } = createMatchingOrderDetailsRequest({ input })
+      const response = await this.restClient.request({
+        method: "POST",
+        path: API.matchingOrderDetails,
+        body,
+        authenticated: true,
+        stateChanging: false,
+      })
+      return toResult({
+        data: adaptMatchingOrderDetails({
+          value: response.data,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getMatchingOrderDetails()",
         error,
       })
       return toResult({ errors: [error] })
