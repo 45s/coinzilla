@@ -217,11 +217,19 @@ test("rejects completed recovery accounting that is inexact or internally incons
     ["realized profit does not reconcile to proceeds less spent", { realizedNetProfit: "4" }],
     [
       "profit is below the configured minimum",
-      { realizedNetProfit: "4", netSellProceeds: "14", minProfit: "5" },
+      {
+        realizedNetProfit: "4",
+        netSellProceeds: "14",
+        minProfit: "5",
+      },
     ],
     [
       "active inventory is below retained inventory",
-      { activeQuantity: "0.5", keepQuantity: "1", freeQuantity: "0.5" },
+      {
+        activeQuantity: "0.5",
+        keepQuantity: "1",
+        freeQuantity: "0.5",
+      },
     ],
     ["free inventory differs from active inventory", { freeQuantity: "0.9" }],
     ["minimum profit is below the supported floor", { minProfit: "0.001" }],
