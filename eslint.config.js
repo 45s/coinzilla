@@ -53,6 +53,7 @@ export default defineConfig([
 
       // Complexity and function boundaries
       complexity: ["error", { max: 20 }],
+      "max-depth": ["error", 4],
       "max-params": ["error", 1],
       "max-lines-per-function": [
         "warn",
