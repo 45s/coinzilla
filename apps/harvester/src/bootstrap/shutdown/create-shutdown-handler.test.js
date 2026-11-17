@@ -381,7 +381,10 @@ test("keeps user-data and broker services alive when post-market-drain safety ca
         return { ok: true }
       }
       safe = false
-      return { ok: false, errors: [failure] }
+      return {
+        ok: false,
+        errors: [failure],
+      }
     },
     isSafeToShutdown: () => safe,
     getSafetySnapshot: () => ({
