@@ -12,7 +12,8 @@
     "check:external-links": "node scripts/check-external-links.js",
     "test:external-links": "node --test scripts/check-external-links.test.js",
     "lint": "eslint . --max-warnings 0",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "test:sync-main": "node --test scripts/sync-main.test.js"
   },
   "keywords": [],
   "author": "",
