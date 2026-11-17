@@ -160,6 +160,63 @@ function createFunctionQualityAuditEslint() {
   });
 }
 
+function createFunctionQualityMeasurements() {
+  return [
+    {
+      ruleId: "complexity",
+      key: "complexity",
+      pattern: /complexity of (\\d+)/i,
+    },
+    {
+      ruleId: "max-lines-per-function",
+      key: "maxLines",
+      pattern: /too many lines \\((\\d+)\\)/i,
+    },
+    {
+      ruleId: "max-statements",
+      key: "maxStatements",
+      pattern: /too many statements \\((\\d+)\\)/i,
+    },
+    {
+      ruleId: "max-depth",
+      key: "maxDepth",
+      pattern: /nested too deeply \\((\\d+)\\)/i,
+    },
+    {
+      ruleId: "max-params",
+      key: "maxParams",
+      pattern: /too many parameters \\((\\d+)\\)/i,
+    },
+    {
+      ruleId: "max-nested-callbacks",
+      key: "maxNestedCallbacks",
+      pattern: /too many nested callbacks \\((\\d+)\\)/i,
+    },
+    {
+      ruleId: "default-param-last",
+      key: "defaultParamLast",
+      pattern: null,
+    },
+  ];
+}
+
+function createMeasuredFunctionFinding({ measurement, result, message }) {
+  const value = measurement.pattern
+    ? Number(message.message.match(measurement.pattern)?.[1])
+    : null;
+
+  assert.ok(
+    !measurement.pattern || Number.isFinite(value),
+    `The ${message.ruleId} audit must extract the measured value: ${message.message}`,
+  );
+  return {
+    filePath: result.filePath,
+    line: message.line,
+    value,
+    message: message.message,
+  };
+}
+
 function collectFunctionQualityFindings({ results }) {
   const metrics = {
     complexity: [],
@@ -170,68 +227,22 @@ function collectFunctionQualityFindings({ results }) {
     maxNestedCallbacks: [],
     defaultParamLast: [],
   };
-  const measurements = [
-    {
-      ruleId: "complexity",
-      key: "complexity",
-      pattern: /complexity of (\d+)/i,
-    },
-    {
-      ruleId: "max-lines-per-function",
-      key: "maxLines",
-      pattern: /too many lines \((\d+)\)/i,
-    },
-    {
-      ruleId: "max-statements",
-      key: "maxStatements",
-      pattern: /too many statements \((\d+)\)/i,
-    },
-    {
-      ruleId: "max-depth",
-      key: "maxDepth",
-      pattern: /nested too deeply \((\d+)\)/i,
-    },
-    {
-      ruleId: "max-params",
-      key: "maxParams",
-      pattern: /too many parameters \((\d+)\)/i,
-    },
-    {
-      ruleId: "max-nested-callbacks",
-      key: "maxNestedCallbacks",
-      pattern: /too many nested callbacks \((\d+)\)/i,
-    },
-    {
-      ruleId: "default-param-last",
-      key: "defaultParamLast",
-      pattern: null,
-    },
-  ];
+  const measurements = createFunctionQualityMeasurements();
 
   for (const result of results) {
     for (const message of result.messages) {
       const measurement = measurements.find((candidate) => (
         candidate.ruleId === message.ruleId
       ));
-
-      if (!measurement) {
-        continue;
+      if (measurement) {
+        metrics[measurement.key].push(
+          createMeasuredFunctionFinding({
+            measurement,
+            result,
+            message,
+          }),
+        );
       }
-
-      const measuredValue = measurement.pattern
-        ? Number(message.message.match(measurement.pattern)?.[1])
-        : null;
-
-      assert.ok(
-        !measurement.pattern || Number.isFinite(measuredValue),
-        `The ${message.ruleId} audit must extract the measured value from this ESLint diagnostic: ${message.message}`,
-      );
-      metrics[measurement.key].push({
-        filePath: result.filePath,
-        line: message.line,
-        value: measuredValue,
-        message: message.message,
-      });
     }
   }
 
@@ -245,6 +256,28 @@ function compareFindingsByValue(...findings) {
 
 function countFindingsAboveThreshold({ findings, threshold }) {
   return findings.filter((finding) => finding.value > threshold);
+}
+
+function sortPackageCounts({ packageCounts }) {
+  const packages = [...packageCounts.entries()].map(([name, functions]) => ({
+    name,
+    functions,
+  }));
+
+  for (let index = 1; index < packages.length; index += 1) {
+    const current = packages[index];
+    let insertionIndex = index;
+    while (
+      insertionIndex > 0
+      && packages[insertionIndex - 1].functions < current.functions
+    ) {
+      packages[insertionIndex] = packages[insertionIndex - 1];
+      insertionIndex -= 1;
+    }
+    packages[insertionIndex] = current;
+  }
+
+  return packages;
 }
 
 function summarizeThresholdImpact({ findings, threshold }) {
@@ -265,9 +298,7 @@ function summarizeThresholdImpact({ findings, threshold }) {
   return {
     functions: affected.length,
     files: new Set(affected.map((finding) => finding.filePath)).size,
-    packages: [...packageCounts.entries()]
-      .toSorted((left, right) => right[1] - left[1])
-      .map(([name, functions]) => ({ name, functions })),
+    packages: sortPackageCounts({ packageCounts }),
     largest: affected
       .toSorted(compareFindingsByValue)
       .slice(0, 5)

@@ -80,14 +80,9 @@ export function parseChangedPaths({ output }) {
  * @param {{ cwd: string, baseRef: string, headRef: string }} input
  * @returns {Promise<string[]>}
  */
-export async function getChangedFiles({ cwd, baseRef, headRef }) {
-  if (!baseRef || !headRef) {
-    throw new Error("Both base and head Git refs are required for strict changed-file lint.");
-  }
-
-  let mergeBase;
+function resolveMergeBase({ cwd, baseRef, headRef }) {
   try {
-    mergeBase = runGit({
+    return runGit({
       cwd,
       args: ["merge-base", baseRef, headRef],
     }).trim();
@@ -98,16 +93,9 @@ export async function getChangedFiles({ cwd, baseRef, headRef }) {
       { cause: error },
     );
   }
+}
 
-  if (!mergeBase) {
-    throw new Error(
-      `Git returned an empty merge base for "${baseRef}" and "${headRef}". Strict lint cannot continue.`,
-    );
-  }
-
-  let changedOutput;
-  let workingTreeOutput;
-  let untrackedOutput;
+function getGitChangedOutputs({ cwd, mergeBase, headRef }) {
   try {
     const diffArguments = [
       "diff",
@@ -118,18 +106,20 @@ export async function getChangedFiles({ cwd, baseRef, headRef }) {
       "--find-copies-harder",
       "--diff-filter=ACMRT",
     ];
-    changedOutput = runGit({
-      cwd,
-      args: [...diffArguments, mergeBase, headRef],
-    });
-    workingTreeOutput = runGit({
-      cwd,
-      args: [...diffArguments, headRef],
-    });
-    untrackedOutput = runGit({
-      cwd,
-      args: ["ls-files", "--others", "--exclude-standard", "-z"],
-    });
+    return {
+      changed: runGit({
+        cwd,
+        args: [...diffArguments, mergeBase, headRef],
+      }),
+      workingTree: runGit({
+        cwd,
+        args: [...diffArguments, headRef],
+      }),
+      untracked: runGit({
+        cwd,
+        args: ["ls-files", "--others", "--exclude-standard", "-z"],
+      }),
+    };
   } catch (error) {
     const detail = error.stderr?.toString().trim() || error.message;
     throw new Error(
@@ -137,15 +127,37 @@ export async function getChangedFiles({ cwd, baseRef, headRef }) {
       { cause: error },
     );
   }
+}
 
-  const committedAndModified = parseChangedPaths({
-    output: changedOutput + workingTreeOutput,
+export async function getChangedFiles({ cwd, baseRef, headRef }) {
+  if (!baseRef || !headRef) {
+    throw new Error("Both base and head Git refs are required for strict changed-file lint.");
+  }
+
+  const mergeBase = resolveMergeBase({
+    cwd,
+    baseRef,
+    headRef,
   });
-  const untracked = untrackedOutput
-    .split("\0")
+  if (!mergeBase) {
+    throw new Error(
+      `Git returned an empty merge base for "${baseRef}" and "${headRef}". Strict lint cannot continue.`,
+    );
+  }
+
+  const outputs = getGitChangedOutputs({
+    cwd,
+    mergeBase,
+    headRef,
+  });
+  const changed = parseChangedPaths({
+    output: outputs.changed + outputs.workingTree,
+  });
+  const untracked = outputs.untracked
+    .split("\\0")
     .filter((path) => path && javascriptExtensions.test(path));
 
-  return [...new Set([...committedAndModified, ...untracked])].toSorted();
+  return [...new Set([...changed, ...untracked])].toSorted();
 }
 
 /**
@@ -182,8 +194,12 @@ export async function lintChangedFiles({ files, cwd = repositoryRoot }) {
 
   const eslint = createStrictESLint({ cwd });
   const results = await eslint.lintFiles(files.map((file) => resolve(cwd, file)));
-  const errorCount = results.reduce((total, result) => total + result.errorCount, 0);
-  const warningCount = results.reduce((total, result) => total + result.warningCount, 0);
+  let errorCount = 0;
+  let warningCount = 0;
+  for (const result of results) {
+    errorCount += result.errorCount;
+    warningCount += result.warningCount;
+  }
 
   return {
     errorCount,
