@@ -9,15 +9,7 @@ function factIdForExecutionFill(fillId) {
   return `execution-fill-applied:${  fillId}`
 }
 
-function validateExecutionFillIdentity({
-  canonicalData,
-  factId,
-  fillId,
-  tradeId,
-  marketId,
-  venue
-,
-}) {
+function validateExecutionFillIdentity({ canonicalData, factId, fillId, tradeId, marketId, venue }) {
   if (
     canonicalData.baseAssetId === canonicalData.quoteAssetId ||
     venue !== venue.toLowerCase() ||
@@ -66,11 +58,7 @@ function validateExecutionFillCommissionStatus({ canonicalData }) {
   }
 }
 
-function validateExecutionFillCommissionEntry({
-  commission,
-  quoteAssetId
-,
-}) {
+function validateExecutionFillCommissionEntry({ commission, quoteAssetId }) {
   if (
     !commission ||
     typeof commission !== "object" ||
@@ -82,18 +70,12 @@ function validateExecutionFillCommissionEntry({
   if (!isCanonicalDecimalString({ value: commission.amount })) {
     throw new TypeError("Execution-fill commission amount must be a non-negative exact decimal string")
   }
-  requireNonEmptyString({
-    value: commission.assetId,
+  requireNonEmptyString({ value: commission.assetId,
 field: "commission.assetId",
-maxLength: MAX_FACT_ID_LENGTH
-  ,
-  })
-  requireNonEmptyString({
-    value: commission.assetCode,
+maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: commission.assetCode,
 field: "commission.assetCode",
-maxLength: 32
-  ,
-  })
+maxLength: 32 })
   if (commission.quoteValue !== null) {
     const { quoteValue } = commission
     if (
@@ -106,26 +88,16 @@ maxLength: 32
     ) {
       throw new TypeError("Execution-fill commission quote valuation must use the canonical quote asset")
     }
-    requireNonEmptyString({
-      value: quoteValue.assetCode,
+    requireNonEmptyString({ value: quoteValue.assetCode,
 field: "commission.quoteValue.assetCode",
-maxLength: 32
-    ,
-    })
+maxLength: 32 })
   }
 }
 
-function validateExecutionFillCommissions({
-  commissions,
-  quoteAssetId
-,
-}) {
+function validateExecutionFillCommissions({ commissions, quoteAssetId }) {
   for (const commission of commissions) {
-    validateExecutionFillCommissionEntry({
-      commission,
-quoteAssetId
-    ,
-    })
+    validateExecutionFillCommissionEntry({ commission,
+quoteAssetId })
   }
 }
 
@@ -155,24 +127,9 @@ function validateExecutionFillFactFields({ canonicalData }) {
 }
 
 function validateExecutionFillIdentityFields({ canonicalData }) {
-  const fillId = requireNonEmptyString({
-    value: canonicalData.fillId,
-    field: "data.fillId",
-    maxLength: MAX_FACT_ID_LENGTH
-  ,
-  })
-  const tradeId = requireNonEmptyString({
-    value: canonicalData.tradeId,
-    field: "data.tradeId",
-    maxLength: MAX_FACT_ID_LENGTH
-  ,
-  })
-  requireNonEmptyString({
-    value: canonicalData.brokerOrderId,
-    field: "data.brokerOrderId",
-    maxLength: MAX_FACT_ID_LENGTH
-  ,
-  })
+  const fillId = requireNonEmptyString({ value: canonicalData.fillId, field: "data.fillId", maxLength: MAX_FACT_ID_LENGTH })
+  const tradeId = requireNonEmptyString({ value: canonicalData.tradeId, field: "data.tradeId", maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: canonicalData.brokerOrderId, field: "data.brokerOrderId", maxLength: MAX_FACT_ID_LENGTH })
   if (canonicalData.clientOrderId !== null) {
     requireNonEmptyString({
       value: canonicalData.clientOrderId,
@@ -180,37 +137,11 @@ function validateExecutionFillIdentityFields({ canonicalData }) {
       maxLength: MAX_FACT_ID_LENGTH,
     })
   }
-  const marketId = requireNonEmptyString({
-    value: canonicalData.marketId,
-    field: "data.marketId",
-    maxLength: MAX_FACT_ID_LENGTH
-  ,
-  })
-  const venue = requireNonEmptyString({
-    value: canonicalData.venue,
-    field: "data.venue",
-    maxLength: 32
-  ,
-  })
-  requireNonEmptyString({
-    value: canonicalData.baseAssetId,
-    field: "data.baseAssetId",
-    maxLength: MAX_FACT_ID_LENGTH
-  ,
-  })
-  requireNonEmptyString({
-    value: canonicalData.quoteAssetId,
-    field: "data.quoteAssetId",
-    maxLength: MAX_FACT_ID_LENGTH
-  ,
-  })
-  return {
-    fillId,
-    tradeId,
-    marketId,
-    venue
-  ,
-  }
+  const marketId = requireNonEmptyString({ value: canonicalData.marketId, field: "data.marketId", maxLength: MAX_FACT_ID_LENGTH })
+  const venue = requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
+  requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
+  return { fillId, tradeId, marketId, venue }
 }
 
 function validateExecutionFillTimestamp({ canonicalData }) {
@@ -222,32 +153,13 @@ function validateExecutionFillTimestamp({ canonicalData }) {
   }
 }
 
-export function validateExecutionFillAppliedFact({
-  factType,
-  canonicalData,
-  factId
-,
-}) {
+export function validateExecutionFillAppliedFact({ factType, canonicalData, factId }) {
   if (factType !== "EXECUTION_FILL_APPLIED") {
     return
   }
   validateExecutionFillFactFields({ canonicalData })
-  const {
-    fillId,
-    tradeId,
-    marketId,
-    venue
-  ,
-  } = validateExecutionFillIdentityFields({ canonicalData })
-  validateExecutionFillIdentity({
-    canonicalData,
-    factId,
-    fillId,
-    tradeId,
-    marketId,
-    venue
-  ,
-  })
+  const { fillId, tradeId, marketId, venue } = validateExecutionFillIdentityFields({ canonicalData })
+  validateExecutionFillIdentity({ canonicalData, factId, fillId, tradeId, marketId, venue })
   validateExecutionFillSideAndLiquidity({ canonicalData })
   validateExecutionFillAmounts({ canonicalData })
   validateExecutionFillTimestamp({ canonicalData })
