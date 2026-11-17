@@ -49,15 +49,16 @@ function createGuardedIterator({ iterator, assertActive }) {
 
 function createGuardedStatement({ statement, assertActive }) {
   return new Proxy(statement, {
-    get(target, property) {
+    get(...args) {
+      const [target, property] = args
       const value = Reflect.get(target, property, target)
       if (typeof value !== "function") {
         return value
       }
 
-      return (...args) => {
+      return (...methodArgs) => {
         assertActive()
-        const result = value.apply(target, args)
+        const result = value.apply(target, methodArgs)
         return property === "iterate"
           ? createGuardedIterator({
             iterator: result,
@@ -67,6 +68,24 @@ function createGuardedStatement({ statement, assertActive }) {
       }
     },
   })
+}
+
+function rollbackSqliteTransaction({ activeConnection, error }) {
+  if (!activeConnection.isTransaction) {
+    throw error
+  }
+
+  try {
+    activeConnection.exec("ROLLBACK")
+  } catch (rollbackError) {
+    throw new AggregateError(
+      [error, rollbackError],
+      "SQLite transaction failed and rollback also failed",
+      { cause: error },
+    )
+  }
+
+  throw error
 }
 
 function createSqliteTransactionHandler({ requireConnection, intent }) {
@@ -115,27 +134,10 @@ function createSqliteTransactionHandler({ requireConnection, intent }) {
       return result
     } catch (error) {
       transactionActive = false
-      if (activeConnection.isTransaction) {
-        let rollbackFailed = false
-        let rollbackError
-
-        try {
-          activeConnection.exec("ROLLBACK")
-        } catch (caughtRollbackError) {
-          rollbackFailed = true
-          rollbackError = caughtRollbackError
-        }
-
-        if (rollbackFailed) {
-          throw new AggregateError(
-            [error, rollbackError],
-            "SQLite transaction failed and rollback also failed",
-            { cause: error },
-          )
-        }
-      }
-
-      throw error
+      rollbackSqliteTransaction({
+        activeConnection,
+        error,
+      })
     }
   }
 }
