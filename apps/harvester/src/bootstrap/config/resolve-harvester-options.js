@@ -40,6 +40,33 @@ function resolveProviderRuntime({ configuredAppConfig, env }) {
   }
 }
 
+function resolveStrategyPairs({ strategyConfig, tradingMode }) {
+  if (Object.keys(strategyConfig.pairs ?? {}).length === 0) {
+    throw new Error("Conservative trading requires at least one enabled pair")
+  }
+  const pairs = selectPairsForTradingMode({
+    pairs: strategyConfig.pairs,
+    tradingMode,
+  })
+  if (Object.keys(pairs).length === 0) {
+    throw new Error(`No CG_coinGrabber pairs configured for TRADING_MODE=${tradingMode}; configure a pair with tradingEnvironment="${tradingMode}" or "both"`)
+  }
+  return pairs
+}
+
+function createEffectiveAppConfig({ configuredAppConfig, strategyConfig, pairs }) {
+  return {
+    ...configuredAppConfig,
+    strategies: {
+      ...configuredAppConfig.strategies,
+      CG_coinGrabber: {
+        ...strategyConfig,
+        pairs,
+      },
+    },
+  }
+}
+
 function publishValidatedConfiguration({
   eventPublisher,
   logger,
@@ -100,37 +127,23 @@ export async function resolveHarvesterOptions({
   })
   const strategyConfig = configuredAppConfig.strategies?.CG_coinGrabber
   assertSupportedStrategyConfig(strategyConfig)
-  const {
-    runtime,
-    providerConfiguration,
-    selectedProvider,
-  } = resolveProviderRuntime({
+  const providerRuntime = resolveProviderRuntime({
     configuredAppConfig,
     env,
   })
+  const { runtime, providerConfiguration, selectedProvider } = providerRuntime
   const { environment, tradingMode, tradingEnabled } = runtime
   const brokerName = selectedProvider.provider
-  if (Object.keys(strategyConfig.pairs ?? {}).length === 0) {
-    throw new Error("Conservative trading requires at least one enabled pair")
-  }
-  const pairs = selectPairsForTradingMode({
-    pairs: strategyConfig.pairs,
+  const pairs = resolveStrategyPairs({
+    strategyConfig,
     tradingMode,
   })
-  if (Object.keys(pairs).length === 0) {
-    throw new Error(`No CG_coinGrabber pairs configured for TRADING_MODE=${tradingMode}; configure a pair with tradingEnvironment="${tradingMode}" or "both"`)
-  }
   const { settings } = strategyConfig
-  const appConfig = {
-    ...configuredAppConfig,
-    strategies: {
-      ...configuredAppConfig.strategies,
-      CG_coinGrabber: {
-        ...strategyConfig,
-        pairs,
-      },
-    },
-  }
+  const appConfig = createEffectiveAppConfig({
+    configuredAppConfig,
+    strategyConfig,
+    pairs,
+  })
   const effectiveConfiguration = createEffectiveStrategyConfigurationFingerprint({
     strategyName: "CG_coinGrabber",
     strategy: appConfig.strategies.CG_coinGrabber,

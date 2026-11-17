@@ -187,7 +187,7 @@ function logProviderLifecycle({ logger, level, message, descriptor, error }) {
     provider: descriptor.provider,
     providerInstanceId: descriptor.id,
     accountId: descriptor.accountId,
-    ...(error ? { error } : {}),
+    ...(error ? { errorName: error.name ?? "Error" } : {}),
   })
 }
 
