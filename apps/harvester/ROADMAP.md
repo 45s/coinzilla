@@ -12,7 +12,7 @@
 
 ## Binance single-writer lock isolation — #1307
 
-- [x] **Complete — #1307 closed.** Host-shared Harvester process locks are scoped by Binance broker and explicit trading environment. TESTNET and LIVE can coexist; duplicate writers in one environment remain blocked across worktrees. Atomic exclusive creation, ownership-token release, conservative dead-PID recovery and lock retention on uncertain shutdown remain required. Current identity is broker + trading mode, not account ID; account-scoped lock identity is a separate multi-provider migration requirement. See [Journal Operations — Trading process ownership locks](./JOURNAL_OPERATIONS.md#trading-process-ownership-locks), [issue #1307](https://github.com/45s/coinzilla/issues/1307), and the [multi-provider migration audit](../../docs/architecture/multi-provider-migration-plan.md).
+- [x] **Complete — #1307 closed.** Host-shared Harvester process locks are scoped by Binance broker and explicit trading environment. TESTNET and LIVE can coexist; duplicate writers in one environment remain blocked across worktrees. Atomic exclusive creation, ownership-token release, conservative dead-PID recovery and lock retention on uncertain shutdown remain required. Current identity is broker + trading mode, not account ID; account-scoped lock identity is a separate multi-provider migration requirement. See [Journal Operations — Trading process ownership locks](./docs/JOURNAL_OPERATIONS.md#trading-process-ownership-locks), [issue #1307](https://github.com/45s/coinzilla/issues/1307), and the [multi-provider migration audit](../../docs/architecture/multi-provider-migration-plan.md).
 
 ## Internal process entry-point refactor
 
