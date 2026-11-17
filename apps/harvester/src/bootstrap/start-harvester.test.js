@@ -276,7 +276,6 @@ function createBrokerAccountPorts({ calls, state }) {
         ok: true,
         data: {
           balances,
-          accountId: "123456789",
           sourceTime: state.accountSnapshotTime,
         },
       }
@@ -489,7 +488,6 @@ const binanceEnv = {
   TRADING_MODE: "testnet",
   BINANCE_API_KEY: "key",
   BINANCE_API_SECRET_KEY: "secret",
-  BINANCE_ACCOUNT_ID: "123456789",
 }
 const startHarvesterForTest = (input = {}) => {
   const eventPublisher = input.eventPublisher ?? testEventPublisher
@@ -1095,7 +1093,6 @@ function createDelayedFirstTickerBroker({ broker, calls }) {
     return {
       ok: true,
       data: {
-        accountId: "123456789",
         balances,
         sourceTime: accountSnapshotTime,
       },
@@ -2089,7 +2086,6 @@ test("fails startup when the exchange snapshot omits a configured market asset",
             asset
           }),
         })],
-        accountId: "123456789",
         sourceTime: 1,
       },
     }
@@ -2286,7 +2282,6 @@ class TestnetTradingRecoveryScenario {
           ok: true,
           data: {
           balances,
-          accountId: "123456789",
           sourceTime: this.snapshotTime
         }
         }
@@ -4046,7 +4041,6 @@ function createDurableStartupAuditFixture({ calls }) {
             }),
           })
         }),
-        accountId: "123456789",
         sourceTime: 123,
       },
     }
@@ -4951,7 +4945,6 @@ function createConfiguredAssetSnapshotFixture({ broker }) {
     ok: true,
     data: {
       balances: sourceBalances,
-      accountId: "123456789",
       sourceTime: 1,
     },
   })
