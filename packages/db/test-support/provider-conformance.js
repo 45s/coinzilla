@@ -497,8 +497,8 @@ function registerPersistenceTest({ name, createDatabase }) {
 /**
  * Register the provider-neutral contract tests for a database provider.
  *
- * The factory receives a storageKey. Use ":memory:" for isolated tests and
- * persist the supplied storageKey when testing reconnect behavior.
+ * The factory receives an opaque storageKey. Use isolated storage for each test
+ * and reuse the supplied key when testing persistence across connections.
  *
  * @param {{name: string, createDatabase: (options: {storageKey: string}) => object}} options
  */
