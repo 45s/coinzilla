@@ -46,8 +46,30 @@ function assertLegacyPositionAmounts(position) {
   }
 }
 
-function assertLegacyAccountingFillIdentityHistory(accounting) {
-  assertLegacyAccountingFillIdentityHistory(accounting)
+function assertLegacyAccountingFillIdentityShape(accounting) {
+  if (!Array.isArray(accounting.appliedFillIds) ||
+      !Array.isArray(accounting.appliedFillFingerprints) ||
+      accounting.appliedFillIds.length !== accounting.appliedFillFingerprints.length) {
+    throw new TypeError("Recovery Seller legacy Fill identity history is invalid")
+  }
+}
+
+function assertLegacyAccountingFillIdentityRecords(accounting) {
+  const seenFillIds = new Set()
+  for (const [index, item] of accounting.appliedFillFingerprints.entries()) {
+    if (!item ||
+        typeof item.id !== "string" ||
+        !item.id.trim() ||
+        typeof item.fillFingerprint !== "string" ||
+        !item.fillFingerprint.trim() ||
+        typeof item.allocationFingerprint !== "string" ||
+        !item.allocationFingerprint.trim() ||
+        item.id !== accounting.appliedFillIds[index] ||
+        seenFillIds.has(item.id)) {
+      throw new TypeError("Recovery Seller legacy Fill identity history is invalid")
+    }
+    seenFillIds.add(item.id)
+  }
 }
 
 function assertLegacyAccountingState(accounting) {
@@ -57,11 +79,7 @@ function assertLegacyAccountingState(accounting) {
       field: `legacyAccounting.${field}`,
     })
   }
-  if (!Array.isArray(accounting.appliedFillIds) ||
-      !Array.isArray(accounting.appliedFillFingerprints) ||
-      accounting.appliedFillIds.length !== accounting.appliedFillFingerprints.length) {
-    throw new TypeError("Recovery Seller legacy Fill identity history is invalid")
-  }
+  assertLegacyAccountingFillIdentityShape(accounting)
   if (compareDecimal({
     left: accounting.realizedQuoteProceeds,
     right: "0",
@@ -81,21 +99,7 @@ function assertLegacyAccountingState(accounting) {
   }) !== 0) {
     throw new RangeError("Recovery Seller legacy realized profit does not match its proceeds and cost basis")
   }
-  const seenFillIds = new Set()
-  for (const [index, item] of accounting.appliedFillFingerprints.entries()) {
-    if (!item ||
-        typeof item.id !== "string" ||
-        !item.id.trim() ||
-        typeof item.fillFingerprint !== "string" ||
-        !item.fillFingerprint.trim() ||
-        typeof item.allocationFingerprint !== "string" ||
-        !item.allocationFingerprint.trim() ||
-        item.id !== accounting.appliedFillIds[index] ||
-        seenFillIds.has(item.id)) {
-      throw new TypeError("Recovery Seller legacy Fill identity history is invalid")
-    }
-    seenFillIds.add(item.id)
-  }
+  assertLegacyAccountingFillIdentityRecords(accounting)
 }
 
 function assertLegacyPositionRecord(record) {
