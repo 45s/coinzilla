@@ -139,11 +139,6 @@ function mapBuildSource({ value }) {
       maxLength: 160,
     }),
     ...commitIdentity,
-    commitMessage: requireNullableText({
-      value: value.commitMessage,
-      field: "buildProvenance.source.commitMessage",
-      maxLength: 240,
-    }),
     commitDate,
     workingTree: value.workingTree,
     metadataSource: value.metadataSource,
