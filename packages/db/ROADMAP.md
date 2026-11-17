@@ -80,10 +80,23 @@ const database = createDatabase({
 })
 
 await database.connect()
-await database.create("users", { id: "user-1", name: "John" })
-const user = await database.readOne("users", "user-1")
-await database.update("users", "user-1", { name: "Peter" })
-await database.delete("users", "user-1")
+await database.create({
+  collection: "users",
+  record: { id: "user-1", name: "John" },
+})
+const user = await database.readOne({
+  collection: "users",
+  id: "user-1",
+})
+await database.update({
+  collection: "users",
+  id: "user-1",
+  changes: { name: "Peter" },
+})
+await database.delete({
+  collection: "users",
+  id: "user-1",
+})
 await database.close()
 ```
 
