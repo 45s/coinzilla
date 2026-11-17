@@ -184,7 +184,7 @@ test("recovers the exact historical session after closing and reopening the SQLi
   assert.deepEqual(recoveredSession, originalSession, "Reopening the provider-neutral database must recover the exact historical trading-session record.")
 })
 
-test("propagates transaction rollback and closed-provider failures", async (t) => {
+test("propagates transaction rollback, closed lifecycle and provider failures", async (t) => {
   const { database, repository } = await createDatabaseFixture(t)
   const originalSession = createSessionRecord()
   const rollbackError = new Error("intentional session transaction rollback")
@@ -218,6 +218,20 @@ test("propagates transaction rollback and closed-provider failures", async (t) =
     collection: "harvester_trading_sessions",
     cause: new Error("simulated SQLite I/O failure"),
   })
+  const failingCreateRepository = createTradingSessionRepository({
+    database: {
+      capabilities: database.capabilities,
+      create: async () => { throw providerError },
+      readOne: database.readOne,
+      transaction: database.transaction,
+    },
+  })
+  await assert.rejects(
+    failingCreateRepository.create(originalSession),
+    (error) => error === providerError,
+    "A provider failure during session creation must propagate unchanged instead of being mistaken for a duplicate.",
+  )
+
   const failingReadRepository = createTradingSessionRepository({
     database: {
       capabilities: database.capabilities,
