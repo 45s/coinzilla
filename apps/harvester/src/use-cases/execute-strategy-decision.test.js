@@ -930,15 +930,8 @@ test("propagates OrderOwnership to the order-validation failure callback", async
 })
 
 
-test("integrates the shared executor, RS OrderRegistry ownership and durable BUY accounting offline", async () => {
-  const ownership = {
-    strategyId: StrategyId.RECOVERY_SELLER,
-    positionId: "rs-position-executor-integration",
-    purpose: "RECOVERY_BUY",
-    cycleId: "rs-cycle-executor-integration",
-  }
-  const durableFills = []
-  const workflow = createRecoverySellerAccountingWorkflow({
+function createDurableRSIntegrationWorkflow({ durableFills } = {}) {
+  return createRecoverySellerAccountingWorkflow({
     onOperationalStateExecutionFill: async ({ fill }) => {
       durableFills.push(fill)
       return {
@@ -947,6 +940,41 @@ test("integrates the shared executor, RS OrderRegistry ownership and durable BUY
       }
     },
   })
+}
+
+function createRSIntegrationBuyFill({ registeredOrder } = {}) {
+  return new Fill({
+    tradeId: "rs-executor-integration-buy-1",
+    brokerOrderId: registeredOrder.brokerOrderId,
+    clientOrderId: registeredOrder.clientOrderId,
+    market,
+    side: "BUY",
+    price: new Money({
+      amount: "0.099",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "100",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "9.9",
+      asset: quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+}
+
+test("integrates the shared executor, RS OrderRegistry ownership and durable BUY accounting offline", async () => {
+  const ownership = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-executor-integration",
+    purpose: "RECOVERY_BUY",
+    cycleId: "rs-cycle-executor-integration",
+  }
+  const durableFills = []
+  const workflow = createDurableRSIntegrationWorkflow({ durableFills })
   let brokerOrder
   const execute = makeExecuteStrategyDecision({
     broker: {
@@ -988,18 +1016,7 @@ test("integrates the shared executor, RS OrderRegistry ownership and durable BUY
     "The shared executor acknowledgement must retain the exact RS Position and cycle attribution in OrderRegistry.",
   )
 
-  const fill = new Fill({
-    tradeId: "rs-executor-integration-buy-1",
-    brokerOrderId: registeredOrder.brokerOrderId,
-    clientOrderId: registeredOrder.clientOrderId,
-    market,
-    side: "BUY",
-    price: new Money({ amount: "0.099", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "100", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "9.9", asset: quoteAsset }),
-    commissions: [],
-    commissionStatus: "COMPLETE",
-  })
+  const fill = createRSIntegrationBuyFill({ registeredOrder })
   const applied = await workflow.applyBuyFill({ fill })
   const replayed = await workflow.applyBuyFill({ fill })
 
