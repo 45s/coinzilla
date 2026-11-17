@@ -76,7 +76,6 @@ The following core delivery steps were completed by merged PR #1353:
 - No speculative PostgreSQL or MongoDB adapter implementation.
 - No consumer integration in this task. A real application's repository contract remains owned by that application's bounded context and its roadmap.
 
-
 ## Provider-neutral API contract
 
 The intended public composition is:
@@ -145,7 +144,6 @@ The low-level public API remains available:
 ## Next work — Harvester-owned consumer integration
 
 The first consumer integration is separately owned by Harvester and tracked in [issue #1327](https://github.com/45s/coinzilla/issues/1327), specifically Workstream B. Start with a source-backed audit and one narrow vertical slice; do not expand `packages/db` with Harvester concepts. See the [Harvester persistence roadmap](../../apps/harvester/ROADMAP.md#persistence--provider-agnostic-database-integration-1327).
-
 
 ## Deferred — evidence-driven
 
