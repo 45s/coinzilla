@@ -20,6 +20,7 @@ const CREATE_RECORDS_TABLE = `
 const SQLITE_CAPABILITIES = Object.freeze({
   transactions: Object.freeze({
     callbackMode: "synchronous",
+    nestedTransactions: false,
   }),
   queries: Object.freeze({
     equalityFilters: true,
@@ -27,8 +28,7 @@ const SQLITE_CAPABILITIES = Object.freeze({
     pagination: true,
   }),
   storage: Object.freeze({
-    fileBacked: true,
-    inMemory: true,
+    modes: Object.freeze(["file", "memory"]),
   }),
 })
 
