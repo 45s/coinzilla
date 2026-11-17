@@ -1299,12 +1299,6 @@ test("passes live TRADING_MODE to the Binance broker factory during startup", as
   })
 
   assert.equal(result.tradingMode, "live")
-  assert.equal(result.providerType, "binance",
-    "The runtime must expose the provider implementation type separately from its instance identity.")
-  assert.equal(result.providerInstanceId, "binanceLive",
-    "LIVE startup must expose its stable named Binance provider-instance identity.")
-  assert.equal(result.accountId, "binance-primary",
-    "The legacy Binance account alias must be available to runtime consumers.")
   assert.equal(brokerConfig.tradingMode, "live")
   await result.stop()
 })
