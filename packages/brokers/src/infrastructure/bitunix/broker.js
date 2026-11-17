@@ -456,6 +456,7 @@ export class BitunixSpotBroker extends CoreBroker {
       const response = await this.restClient.request({
         method: "GET",
         path: API.exchangeRates,
+        authenticated: false,
       })
       return toResult({
         data: adaptExchangeRates({
