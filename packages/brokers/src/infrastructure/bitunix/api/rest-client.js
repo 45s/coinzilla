@@ -179,15 +179,25 @@ async function readResponsePayload({ response, path, stateChanging }) {
       path,
     })
   } catch (error) {
-    const isHttpFailure = response.ok === false
+    const hasValidHttpMetadata = typeof response.ok === "boolean" &&
+      Number.isInteger(response.status) &&
+      response.status >= 100 &&
+      response.status <= 599
+    const isHttpFailure = hasValidHttpMetadata && response.ok === false
+    let message = `Bitunix REST response JSON is invalid: ${error.message}`
+    let kind = "response"
+    if (!hasValidHttpMetadata) {
+      message = "Bitunix REST HTTP response metadata is malformed"
+    } else if (isHttpFailure) {
+      message = "Bitunix REST HTTP request failed with a non-JSON response"
+      kind = "http"
+    }
     throw new BitunixRestError({
-      message: isHttpFailure
-        ? "Bitunix REST HTTP request failed with a non-JSON response"
-        : `Bitunix REST response JSON is invalid: ${error.message}`,
-      kind: isHttpFailure ? "http" : "response",
+      message,
+      kind,
       cause: error,
       path,
-      status: response.status,
+      status: hasValidHttpMetadata ? response.status : null,
       outcomeUnknown: stateChanging,
     })
   }
