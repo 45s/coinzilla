@@ -213,3 +213,145 @@ test("Bitunix Spot WebSocket client exposes only documented read-only operations
   assert.equal(typeof client.placeOrder, "undefined", "order placement must remain outside this read-only RPC client")
   assert.equal(typeof client.cancelOrder, "undefined", "order cancellation must remain outside this read-only RPC client")
 })
+
+test("Bitunix Spot WebSocket client dispatches every documented read-only RPC method", async () => {
+  let nextId = 0
+  const { client, transport } = createClient({
+    idFactory: () => `rpc-${++nextId}`,
+  })
+  await client.connect()
+
+  const pending = [
+    client.getLastPrice({ symbol: "BTCUSDT" }),
+    client.getDepth({ symbol: "BTCUSDT", precision: 5 }),
+    client.getKline({ symbol: "BTCUSDT", interval: "1" }),
+    client.getTradingPairs(),
+    client.getExchangeRates(),
+    client.getTokenNetworks(),
+    client.getAccount(),
+    client.getUserInfo(),
+  ]
+  assert.deepEqual(
+    transport.sent.map((request) => request.method),
+    [
+      "market.last_price",
+      "market.depth",
+      "market.kline",
+      "common.coin_pair.list",
+      "common.rate.list",
+      "common.coin.coin_network.list",
+      "user.account",
+      "user.info",
+    ],
+    "every documented Spot read must use its official RPC method name",
+  )
+
+  for (let index = 0; index < pending.length; index += 1) {
+    transport.receive({
+      id: `rpc-${index + 1}`,
+      code: "0",
+      msg: "success",
+      data: { index },
+    })
+  }
+  assert.deepEqual(
+    await Promise.all(pending),
+    Array.from({ length: pending.length }, (_, index) => ({ index })),
+    "all documented read RPCs must return their matching response data",
+  )
+  await client.disconnect()
+})
+
+test("Bitunix Spot WebSocket client rejects invalid request identity and authentication metadata", async () => {
+  const invalidId = createClient({
+    idFactory: () => "",
+  })
+  await invalidId.client.connect()
+  await assert.rejects(
+    invalidId.client.getAccount(),
+    /request ID/i,
+    "an empty request ID must be rejected before sending",
+  )
+  assert.equal(invalidId.transport.sent.length, 0, "invalid request identity must not reach the socket")
+  await invalidId.client.disconnect()
+
+  const invalidNonce = createClient({
+    nonceFactory: () => "",
+  })
+  await invalidNonce.client.connect()
+  await assert.rejects(
+    invalidNonce.client.getAccount(),
+    /nonce/i,
+    "an empty authentication nonce must be rejected before sending",
+  )
+  await invalidNonce.client.disconnect()
+
+  const invalidTime = createClient({
+    now: () => Number.MAX_SAFE_INTEGER + 1,
+  })
+  await invalidTime.client.connect()
+  await assert.rejects(
+    invalidTime.client.getAccount(),
+    /timestamp/i,
+    "an unsafe authentication timestamp must be rejected before sending",
+  )
+  await invalidTime.client.disconnect()
+})
+
+test("Bitunix Spot WebSocket client rejects duplicate in-flight IDs and recovers after the first response", async () => {
+  const { client, transport } = createClient()
+  await client.connect()
+
+  const first = client.getAccount()
+  await assert.rejects(
+    client.getUserInfo(),
+    /unique/i,
+    "duplicate request IDs must not overwrite an unresolved RPC",
+  )
+  assert.equal(client.pendingCount, 1, "the original request must remain pending after a duplicate ID is refused")
+  transport.receive({
+    id: "request-1",
+    code: "0",
+    msg: "success",
+    data: [],
+  })
+  assert.deepEqual(await first, [], "the original request must still resolve from its matching response")
+  await client.disconnect()
+})
+
+test("Bitunix Spot WebSocket client fails all pending RPCs on an unparseable message", async () => {
+  const { client, transport } = createClient()
+  await client.connect()
+
+  const pending = client.getAccount()
+  transport.receive("{not-json")
+  await assert.rejects(
+    pending,
+    /response JSON is invalid/i,
+    "an unparseable WebSocket frame must fail pending RPCs instead of leaving them hung",
+  )
+  assert.equal(client.pendingCount, 0, "protocol failure must clear pending RPC state")
+  await client.disconnect()
+})
+
+test("Bitunix Spot WebSocket client rejects requests before connect and after transport errors", async () => {
+  const { client, transport } = createClient()
+  await assert.rejects(
+    client.getAccount(),
+    /client is idle/i,
+    "RPC calls must not be sent before the WebSocket is connected",
+  )
+  await client.connect()
+
+  const pending = client.getAccount()
+  for (const listener of transport.listeners.error) {
+    listener(new Error("transport failure"))
+  }
+  await assert.rejects(
+    pending,
+    /transport reported an error/i,
+    "a transport error must reject unresolved RPCs",
+  )
+  assert.equal(client.state, "closed", "a transport error must make the failed client terminal")
+  assert.equal(client.pendingCount, 0, "transport failure must clear pending RPC state")
+})
