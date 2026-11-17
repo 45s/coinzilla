@@ -815,3 +815,49 @@ test("propagates RS OrderOwnership metadata through shared execution callbacks w
   assert.equal(Object.hasOwn(brokerOrder, "ownership"), false,
     "Application-only ownership metadata must not leak into the broker order request.")
 })
+
+
+test("propagates ownership when the post-registration submission gate throws", async () => {
+  const ownership = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-throwing-gate",
+    purpose: "RECOVERY_BUY",
+    cycleId: "rs-cycle-throwing-gate",
+  }
+  let gateChecks = 0
+  let deferredContext
+  let brokerCalls = 0
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async () => {
+        brokerCalls += 1
+        return { ok: true, data: makeAcknowledgement(decision.actions[0]) }
+      },
+    },
+    canSubmit: () => {
+      gateChecks += 1
+      if (gateChecks === 1) {return true}
+      throw new Error("submission gate unavailable")
+    },
+    onPendingOrder: async () => {},
+    onSubmissionDeferred: async (context) => { deferredContext = context },
+    onAcknowledgedOrder: async () => assert.fail("a throwing gate must not acknowledge an order"),
+    onSubmissionFailure: async () => assert.fail("a local gate error is not a broker submission failure"),
+  })
+  const result = await execute({
+    decision: {
+      actions: [{
+        ...decision.actions[0],
+        ...ownership,
+      }],
+    },
+    marketMetadata,
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.errors[0].message, "submission gate unavailable")
+  assert.deepEqual(deferredContext.ownership, ownership,
+    "The registered-order deferral callback must retain complete RS ownership even when the gate throws.")
+  assert.equal(deferredContext.registered, true)
+  assert.equal(brokerCalls, 0, "A gate exception must prevent broker I/O.")
+})
