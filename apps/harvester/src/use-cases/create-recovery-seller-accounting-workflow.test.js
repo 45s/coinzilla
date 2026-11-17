@@ -624,3 +624,89 @@ test("applies RS BUY fills to the registered Position exactly once and rejects m
   assert.equal(workflow.getPortfolio(), portfolioAfterFills,
     "A rejected Fill must not mutate the RS Portfolio.")
 })
+
+
+function makePendingRecoveryBuyOrder({ clientOrderId = "rs-buy-pending" } = {}) {
+  return new CanonicalOrder({
+    clientOrderId,
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    status: "PENDING",
+    createdAt: 100,
+    updatedAt: 100,
+  })
+}
+
+function makeAcknowledgedRecoveryBuyOrder({ pendingOrder, brokerOrderId = "broker-buy-ack" } = {}) {
+  return new CanonicalOrder({
+    clientOrderId: pendingOrder.clientOrderId,
+    brokerOrderId,
+    market: pendingOrder.market,
+    side: pendingOrder.side,
+    type: pendingOrder.type,
+    limitPrice: pendingOrder.limitPrice,
+    originalQuantity: pendingOrder.originalQuantity,
+    executedQuantity: pendingOrder.executedQuantity,
+    status: "OPEN",
+    createdAt: pendingOrder.createdAt,
+    acknowledgedAt: 101,
+    updatedAt: 101,
+  })
+}
+
+test("exposes RS submission callbacks that preserve ownership across acknowledgement, uncertainty, rejection and deferral", () => {
+  const ownership = {
+    strategyId,
+    positionId,
+    purpose: "RECOVERY_BUY",
+    cycleId: "rs-cycle-callbacks",
+  }
+  const workflow = createRecoverySellerAccountingWorkflow()
+  const callbacks = workflow.getExecutionCallbacks()
+  const pendingOrder = makePendingRecoveryBuyOrder()
+
+  callbacks.onPendingOrder({ order: pendingOrder, ownership })
+  assert.deepEqual(workflow.getOrderRegistry().getOwnership({ clientOrderId: pendingOrder.clientOrderId }), {
+    clientOrderId: pendingOrder.clientOrderId,
+    ...ownership,
+  })
+
+  callbacks.onAcknowledgedOrder({
+    order: makeAcknowledgedRecoveryBuyOrder({ pendingOrder }),
+  })
+  callbacks.onSubmissionFailure({
+    order: pendingOrder,
+    outcome: "UNKNOWN",
+    ownership,
+  })
+  assert.equal(workflow.getOrderRegistry().getOrder({ clientOrderId: pendingOrder.clientOrderId }).status, "UNKNOWN")
+  assert.deepEqual(workflow.getOrderRegistry().getOwnership({ brokerOrderId: "broker-buy-ack" }).positionId, positionId)
+
+  const rejectedWorkflow = createRecoverySellerAccountingWorkflow()
+  const rejectedCallbacks = rejectedWorkflow.getExecutionCallbacks()
+  const rejectedOrder = makePendingRecoveryBuyOrder({ clientOrderId: "rs-buy-rejected" })
+  rejectedCallbacks.onPendingOrder({ order: rejectedOrder, ownership })
+  rejectedCallbacks.onSubmissionFailure({ order: rejectedOrder, outcome: "REJECTED", ownership })
+  assert.equal(rejectedWorkflow.getOrderRegistry().getOrder({ clientOrderId: rejectedOrder.clientOrderId }), undefined)
+  assert.equal(rejectedWorkflow.getOrderRegistry().getOwnership({ clientOrderId: rejectedOrder.clientOrderId }), undefined)
+
+  const deferredWorkflow = createRecoverySellerAccountingWorkflow()
+  const deferredCallbacks = deferredWorkflow.getExecutionCallbacks()
+  const deferredOrder = makePendingRecoveryBuyOrder({ clientOrderId: "rs-buy-deferred" })
+  deferredCallbacks.onPendingOrder({ order: deferredOrder, ownership })
+  deferredCallbacks.onSubmissionDeferred({ order: deferredOrder, registered: true, ownership })
+  assert.equal(deferredWorkflow.getOrderRegistry().getOrder({ clientOrderId: deferredOrder.clientOrderId }), undefined)
+})
