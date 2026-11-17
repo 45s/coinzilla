@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path"
 import { DatabaseSync } from "node:sqlite"
 
 import { createDatabase } from "../../database.js"
+import { backupSqliteDatabase } from "./sqlite-backup.js"
 import { migrateSqliteDatabase } from "./sqlite-migration-runner.js"
 
 const DEFAULT_TIMEOUT_MS = 5_000
@@ -210,6 +211,130 @@ function createSqliteAdapter({
   }
 }
 
+function createBackupOperation({ state, requireOpenConnection, databaseFilename, timeout }) {
+  return function backup(options = {}) {
+    if (state.closingRequested) {
+      return Promise.reject(new Error("SQLite database is closing"))
+    }
+
+    let sourceConnection
+    try {
+      sourceConnection = requireOpenConnection()
+    } catch (error) {
+      return Promise.reject(error)
+    }
+
+    const operation = Promise.resolve().then(() => backupSqliteDatabase({
+      sourceConnection,
+      sourceFilename: databaseFilename,
+      destination: options.destination,
+      rate: options.rate,
+      progress: options.progress,
+      timeout,
+    }))
+    state.activeBackups.add(operation)
+    operation.then(
+      () => state.activeBackups.delete(operation),
+      () => state.activeBackups.delete(operation),
+    )
+
+    return operation
+  }
+}
+
+function createCloseOperation({ database, state }) {
+  return function close() {
+    if (database.state === "closed") {
+      return database.close()
+    }
+    if (state.closePromise) {
+      return state.closePromise
+    }
+
+    state.closingRequested = true
+    state.closePromise = (async () => {
+      while (state.activeBackups.size > 0) {
+        await Promise.allSettled([...state.activeBackups])
+      }
+      await database.close()
+    })().finally(() => {
+      state.closePromise = null
+    })
+
+    return state.closePromise
+  }
+}
+
+function createSqliteDatabaseFacade({ database, requireConnection, databaseFilename, timeout }) {
+  const state = {
+    closingRequested: false,
+    closePromise: null,
+    activeBackups: new Set(),
+  }
+
+  function requireOpenConnection() {
+    if (state.closingRequested) {
+      throw new Error("SQLite database is closing")
+    }
+
+    return requireConnection()
+  }
+
+  function runTransaction({ work, operation }) {
+    if (state.closingRequested) {
+      throw new Error("SQLite database is closing")
+    }
+
+    return operation(work)
+  }
+
+  const backup = createBackupOperation({
+    state,
+    requireOpenConnection,
+    databaseFilename,
+    timeout,
+  })
+  const close = createCloseOperation({
+    database,
+    state,
+  })
+
+  const sqliteDatabase = Object.freeze({
+    connect: database.connect,
+    transaction: (work) => runTransaction({
+      work,
+      operation: database.transaction,
+    }),
+    readTransaction: (work) => runTransaction({
+      work,
+      operation: database.readTransaction,
+    }),
+    close,
+    backup,
+    get state() {
+      if (state.closingRequested && database.state !== "closed") {
+        return "closing"
+      }
+
+      return database.state
+    },
+    exec(sql) {
+      return requireOpenConnection().exec(sql)
+    },
+    prepare(sql) {
+      return requireOpenConnection().prepare(sql)
+    },
+    migrate(migrations) {
+      return migrateSqliteDatabase({
+        database: sqliteDatabase,
+        migrations,
+      })
+    },
+  })
+
+  return sqliteDatabase
+}
+
 /**
  * Create a SQLite database backed by Node.js' built-in node:sqlite module.
  *
@@ -249,27 +374,10 @@ export function createSqliteDatabase({
   const database = createDatabase({ adapter })
   databaseReference.current = database
 
-  const sqliteDatabase = Object.freeze({
-    connect: database.connect,
-    transaction: database.transaction,
-    readTransaction: database.readTransaction,
-    close: database.close,
-    get state() {
-      return database.state
-    },
-    exec(sql) {
-      return requireConnection().exec(sql)
-    },
-    prepare(sql) {
-      return requireConnection().prepare(sql)
-    },
-    migrate(migrations) {
-      return migrateSqliteDatabase({
-        database: sqliteDatabase,
-        migrations,
-      })
-    },
+  return createSqliteDatabaseFacade({
+    database,
+    requireConnection,
+    databaseFilename,
+    timeout,
   })
-
-  return sqliteDatabase
 }
