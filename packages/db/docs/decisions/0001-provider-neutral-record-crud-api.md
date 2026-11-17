@@ -4,7 +4,7 @@
 - Date: 2026-11-17
 - Owner: Database Infrastructure (`packages/db`)
 - Issue: [#1340](https://github.com/45s/coinzilla/issues/1340)
-- Implementation PR: [#1342](https://github.com/45s/coinzilla/pull/1342)
+- Implementation PR: [#1353](https://github.com/45s/coinzilla/pull/1353)
 
 ## Context
 
