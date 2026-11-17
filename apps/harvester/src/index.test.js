@@ -1,9 +1,9 @@
 import test from "node:test"
-import { isAbsolute as pathIsAbsolute } from "node:path"
 import assert from "node:assert/strict"
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
 import os from "node:os"
-import path from "node:path"
+// cspell:ignore unvalidated
+import path, { isAbsolute as pathIsAbsolute } from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { main as startMain } from "./index.js"
@@ -11,15 +11,20 @@ import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optiona
 import { UnvalidatedMarketExchangeConstraintsError } from "./domain/market/errors/unvalidated-market-exchange-constraints-error.js"
 
 const disabledJournalService = () => ({
-  ready: Promise.resolve({ ok: true, disabled: true }),
+  ready: Promise.resolve({ ok: true,
+    disabled: true }),
   status: { state: "disabled" },
-  flush: async () => ({ ok: true, durable: true }),
-  close: async () => ({ ok: true, closed: true, disabled: true }),
+  flush: async () => ({ ok: true,
+    durable: true }),
+  close: async () => ({ ok: true,
+    closed: true,
+    disabled: true }),
 })
 
 const acquireProcessLock = async () => ({
   ok: true,
-  release: async () => ({ ok: true, released: true }),
+  release: async () => ({ ok: true,
+    released: true }),
 })
 
 const main = (options = {}) => {
@@ -27,20 +32,25 @@ const main = (options = {}) => {
   return startMain({
     acquireProcessLock,
     createOperationalStateStore: () => ({
-      verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
+      verify: async () => ({ ok: true,
+        data: { valid: true,
+          durableWriteSupported: true } }),
     }),
     ...rest,
-    env: { TRADING_MODE: "testnet", ...env },
+    env: { TRADING_MODE: "testnet",
+      ...env },
     createJournalService: (...args) => {
       const service = createJournalService(...args) ?? {}
       if (!Object.hasOwn(service, "ready")) {
         service.ready = Promise.resolve({ ok: true })
       }
       if (!Object.hasOwn(service, "flush")) {
-        service.flush = async () => ({ ok: true, durable: true })
+        service.flush = async () => ({ ok: true,
+          durable: true })
       }
       if (!Object.hasOwn(service, "close")) {
-        service.close = async () => ({ ok: true, closed: true })
+        service.close = async () => ({ ok: true,
+          closed: true })
       }
       return service
     },
@@ -75,9 +85,14 @@ test("does not create or inject durable recovery facts while recovery is disable
     },
     start: async (input) => {
       startupInput = input
-      return { connected: false, tradingEnabled: false, strategyMode: "conservative", subscriptions: [] }
+      return { connected: false,
+        tradingEnabled: false,
+        strategyMode: "conservative",
+        subscriptions: [] }
     },
-    logger: { info() {}, system() {}, error() {} },
+    logger: { info() {},
+      system() {},
+      error() {} },
   })
   assert.equal(storeCreated, false, "Disabled restart recovery must not create or verify a ADR-0001 ledger.")
   assert.equal(startupInput.operationalStateStore, undefined, "Disabled restart recovery must not inject a Operational State Store into runtime startup.")
@@ -112,9 +127,14 @@ test("does not create or inject recovery storage when Telegram operator control 
     },
     start: async (input) => {
       startupInput = input
-      return { connected: false, tradingEnabled: false, strategyMode: "conservative", subscriptions: [] }
+      return { connected: false,
+        tradingEnabled: false,
+        strategyMode: "conservative",
+        subscriptions: [] }
     },
-    logger: { info() {}, system() {}, error() {} },
+    logger: { info() {},
+      system() {},
+      error() {} },
   })
 
   assert.equal(storeFactoryCalls, 0, "Telegram CC alone must not construct the process-owned recovery store.")
@@ -124,16 +144,23 @@ test("does not create or inject recovery storage when Telegram operator control 
 test("uses the injected logger after Binance TESTNET startup", async () => {
   const calls = []
   const logger = {
-    info: (message) => calls.push({ level: "info", message }),
-    system: (message) => calls.push({ level: "system", message }),
-    error: (data) => calls.push({ level: "error", data }),
+    info: (message) => calls.push({ level: "info",
+      message }),
+    system: (message) => calls.push({ level: "system",
+      message }),
+    error: (data) => calls.push({ level: "error",
+      data }),
   }
 
   const previousExitCode = process.exitCode
   process.exitCode = 0
   try {
     await runMain({
-      start: async () => ({ connected: true, brokerName: "binance", tradingEnabled: true, strategyMode: "conservative", subscriptions: ["BTCUSDT"] }),
+      start: async () => ({ connected: true,
+        brokerName: "binance",
+        tradingEnabled: true,
+        strategyMode: "conservative",
+        subscriptions: ["BTCUSDT"] }),
       logger,
     })
 
@@ -176,7 +203,9 @@ test("passes the immutable process identity into Journal composition", async () 
       observedRuntimeSessionId = runtimeSessionId
       return { connected: false }
     },
-    logger: { info() {}, system() {}, error() {} },
+    logger: { info() {},
+      system() {},
+      error() {} },
   })
   assert.equal(observedIdentity, processIdentity)
   assert.equal(observedRuntimeSessionId, processIdentity.runtimeSessionId, "The exact process session ID must reach bootstrap for durable operator-fact attribution.")
@@ -186,9 +215,11 @@ test("logs startup failures as one structured logger argument", async () => {
   const calls = []
   const error = new Error("configuration failed")
   const logger = {
-    info: (data) => calls.push({ level: "info", data }),
+    info: (data) => calls.push({ level: "info",
+      data }),
     system() {},
-    error: (data) => calls.push({ level: "error", data }),
+    error: (data) => calls.push({ level: "error",
+      data }),
   }
 
   const previousExitCode = process.exitCode
@@ -223,7 +254,9 @@ test("reports the actual Conservative TESTNET trading mode at startup", async ()
       strategyMode: "conservative",
       subscriptions: ["ZROUSDT"],
     }),
-    logger: { info() {}, system: (message) => messages.push(message), error() {} },
+    logger: { info() {},
+      system: (message) => messages.push(message),
+      error() {} },
   })
   assert.deepEqual(messages, [
     "Connected; subscribed to 1 enabled market(s). Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness.",
@@ -233,7 +266,8 @@ test("reports the actual Conservative TESTNET trading mode at startup", async ()
 test("reports LIVE trading mode independently of NODE_ENV", async () => {
   const messages = []
   await runMain({
-    env: { NODE_ENV: "development", TRADING_MODE: "live" },
+    env: { NODE_ENV: "development",
+      TRADING_MODE: "live" },
     start: async () => ({
       connected: true,
       brokerName: "binance",
@@ -241,7 +275,8 @@ test("reports LIVE trading mode independently of NODE_ENV", async () => {
       strategyMode: "conservative",
       subscriptions: ["ZROUSDT"],
     }),
-    logger: { info: (message) => messages.push(message), error() {} },
+    logger: { info: (message) => messages.push(message),
+      error() {} },
   })
   assert.deepEqual(messages, [
     "Connected; subscribed to 1 enabled market(s). Conservative LIVE trading is enabled; waiting for validated market prices and user-data readiness.",
@@ -284,7 +319,8 @@ test("composes exactly one EventBus and injects the best-effort publisher into b
   const eventBus = {
     publish: (event) => {
       publishedEvents.push(event)
-      return { ok: true, event }
+      return { ok: true,
+        event }
     },
   }
 
@@ -298,12 +334,16 @@ test("composes exactly one EventBus and injects the best-effort publisher into b
       startupInput = input
       return { connected: false }
     },
-    logger: { info() {}, error() {}, debug() {} },
+    logger: { info() {},
+      error() {},
+      debug() {} },
   })
 
   assert.equal(eventBusCreations, 1)
   assert.equal(typeof startupInput.eventPublisher.publish, "function")
-  const event = { name: "harvester.test", source: "test", data: {} }
+  const event = { name: "harvester.test",
+    source: "test",
+    data: {} }
   assert.equal(startupInput.eventPublisher.publish(event).ok, true)
   assert.equal(publishedEvents[0].name, HARVESTER_EVENT_NAMES.PROCESS_STARTED, "the process-attempt event must be published before runtime startup")
   assert.equal(publishedEvents[0].data.application, "harvester", "the process event must identify its application")
@@ -315,7 +355,10 @@ test("composes exactly one EventBus and injects the best-effort publisher into b
     {
       name: "harvester.started",
       source: "harvester",
-      data: { broker: "none", strategyMode: "conservative", enabledMarkets: [], tradingEnabled: false },
+      data: { broker: "none",
+        strategyMode: "conservative",
+        enabledMarkets: [],
+        tradingEnabled: false },
     },
     event,
   ], "the existing runtime-start event and caller-published events must retain their order after process provenance is added")
@@ -329,10 +372,12 @@ test("waits for required Journal readiness before starting Harvester", async () 
   const journalService = {
     ready: new Promise((resolve) => { resolveReady = resolve }),
     status: { state: "starting" },
-    close: async () => ({ ok: true, closed: true }),
+    close: async () => ({ ok: true,
+      closed: true }),
   }
 
-  journalService.flush = async () => ({ ok: true, durable: true })
+  journalService.flush = async () => ({ ok: true,
+    durable: true })
   const pending = runMain({
     createJournalService: () => {
       markJournalCreated()
@@ -340,9 +385,15 @@ test("waits for required Journal readiness before starting Harvester", async () 
     },
     start: async () => {
       runtimeStarted = true
-      return { connected: true, brokerName: "binance", tradingEnabled: true, strategyMode: "conservative", subscriptions: [] }
+      return { connected: true,
+        brokerName: "binance",
+        tradingEnabled: true,
+        strategyMode: "conservative",
+        subscriptions: [] }
     },
-    logger: { info() {}, error() {}, debug() {} },
+    logger: { info() {},
+      error() {},
+      debug() {} },
   })
   await journalCreated
   assert.equal(runtimeStarted, false, "Trading startup must wait for the required Journal readiness barrier.")
@@ -364,7 +415,9 @@ test("publishes process started and stopped events for Binance trading startup",
 
   const result = await main({
     createEventBus: () => eventBus,
-    createJournalService: () => ({ status: { state: "disabled" }, close: async () => ({ ok: true, closed: true }) }),
+    createJournalService: () => ({ status: { state: "disabled" },
+      close: async () => ({ ok: true,
+        closed: true }) }),
     env: {},
     start: async () => ({
       connected: true,
@@ -372,11 +425,16 @@ test("publishes process started and stopped events for Binance trading startup",
       tradingEnabled: true,
       strategyMode: "conservative",
       subscriptions: [],
-      appConfig: { strategies: { CG_coinGrabber: { pairs: { BTCUSDT: { enabled: true, tradingEnvironment: "both" } } } } },
+      appConfig: { strategies: { CG_coinGrabber: { pairs: { BTCUSDT: { enabled: true,
+                tradingEnvironment: "both" } } } } },
       stop: async () => {},
     }),
-    registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
-    logger: { info() {}, error() {}, debug() {} },
+    registerSignalHandler: (...signalHandlerArguments) => {
+      const [signal, handler] = signalHandlerArguments
+      handlers[signal] = handler },
+    logger: { info() {},
+      error() {},
+      debug() {} },
   })
 
   assert.ok(result)
@@ -395,7 +453,8 @@ test("publishes process started and stopped events for Binance trading startup",
   await eventBus.flush()
   assert.equal(events.length, 3, "shutdown must retain both startup events and append one stopped event")
   assert.equal(events[2].name, HARVESTER_EVENT_NAMES.STOPPED, "the stopped event must follow the process and runtime start events")
-  assert.deepEqual(events[2].data, { reason: "SIGTERM", outcome: "success" })
+  assert.deepEqual(events[2].data, { reason: "SIGTERM",
+    outcome: "success" })
 
   subscription.subscription.unsubscribe()
   await eventBus.close()
@@ -423,8 +482,12 @@ test("does not publish STOPPED when runtime.stop rejects", async () => {
         subscriptions: [],
         stop: async () => { throw new Error("runtime stop failed") },
       }),
-      registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
-      logger: { info() {}, error() {}, debug() {} },
+      registerSignalHandler: (...signalHandlerArguments) => {
+        const [signal, handler] = signalHandlerArguments
+        handlers[signal] = handler },
+      logger: { info() {},
+        error() {},
+        debug() {} },
     })
 
     await handlers.SIGINT()
@@ -454,7 +517,9 @@ test("publishes a sanitized process startup-failed event", async () => {
       createJournalService: () => ({ status: { state: "disabled" } }),
       env: {},
       start: async () => { throw new Error("startup failed apiKey=private-value") },
-      logger: { info() {}, debug() {}, error() {} },
+      logger: { info() {},
+        debug() {},
+        error() {} },
     })
     await eventBus.flush()
 
@@ -476,8 +541,9 @@ test("publishes stopped before closing Journal, then closes EventBus", async () 
   const operations = []
   const eventBus = {
     publish: (event) => {
-      operations.push("publish:" + event.name)
-      return { ok: true, event }
+      operations.push(`publish:${event.name}`)
+      return { ok: true,
+        event }
     },
     close: async () => {
       operations.push("eventBus.close")
@@ -490,7 +556,9 @@ test("publishes stopped before closing Journal, then closes EventBus", async () 
   const journalService = {
     close: async () => {
       operations.push("journal.close")
-      return { ok: true, closed: true, durable: true }
+      return { ok: true,
+        closed: true,
+        durable: true }
     },
   }
   const handlers = {}
@@ -505,8 +573,12 @@ test("publishes stopped before closing Journal, then closes EventBus", async () 
       subscriptions: [],
       stop: async () => { operations.push("runtime.stop") },
     }),
-    registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
-    logger: { info() {}, error() {}, debug() {} },
+    registerSignalHandler: (...signalHandlerArguments) => {
+      const [signal, handler] = signalHandlerArguments
+      handlers[signal] = handler },
+    logger: { info() {},
+      error() {},
+      debug() {} },
   })
 
   await handlers.SIGTERM()
@@ -525,10 +597,12 @@ test("continues EventBus cleanup when Journal close fails", async () => {
   const operations = []
   const previousExitCode = process.exitCode
   const eventBus = {
-    publish: (event) => { operations.push("publish:" + event.name); return { ok: true, event } },
+    publish: (event) => { operations.push(`publish:${event.name}`); return { ok: true,
+        event } },
     close: async (options) => {
-      operations.push("eventBus.close:" + options.timeoutMs)
-      return { ok: true, closed: true }
+      operations.push(`eventBus.close:${options.timeoutMs}`)
+      return { ok: true,
+        closed: true }
     },
   }
   const journalService = {
@@ -550,8 +624,12 @@ test("continues EventBus cleanup when Journal close fails", async () => {
         subscriptions: [],
         stop: async () => { operations.push("runtime.stop") },
       }),
-      registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
-      logger: { info() {}, debug() {}, error() {} },
+      registerSignalHandler: (...signalHandlerArguments) => {
+        const [signal, handler] = signalHandlerArguments
+        handlers[signal] = handler },
+      logger: { info() {},
+        debug() {},
+        error() {} },
     })
     await handlers.SIGTERM()
     assert.deepEqual(operations.slice(-2), ["journal.close", "eventBus.close:5000"])
@@ -565,16 +643,21 @@ test("reports EventBus timeout and preserves Journal close result", async () => 
   const operations = []
   const previousExitCode = process.exitCode
   const eventBus = {
-    publish: (event) => { operations.push("publish:" + event.name); return { ok: true, event } },
+    publish: (event) => { operations.push(`publish:${event.name}`); return { ok: true,
+        event } },
     close: async (options) => {
-      operations.push("eventBus.close:" + options.timeoutMs)
-      return { ok: false, timedOut: true, errors: [new Error("EventBus close timed out")] }
+      operations.push(`eventBus.close:${options.timeoutMs}`)
+      return { ok: false,
+        timedOut: true,
+        errors: [new Error("EventBus close timed out")] }
     },
   }
   const journalService = {
     close: async () => {
       operations.push("journal.close")
-      return { ok: true, closed: true, durable: true }
+      return { ok: true,
+        closed: true,
+        durable: true }
     },
   }
   const handlers = {}
@@ -590,8 +673,12 @@ test("reports EventBus timeout and preserves Journal close result", async () => 
         subscriptions: [],
         stop: async () => { operations.push("runtime.stop") },
       }),
-      registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
-      logger: { info() {}, debug() {}, error() {} },
+      registerSignalHandler: (...signalHandlerArguments) => {
+        const [signal, handler] = signalHandlerArguments
+        handlers[signal] = handler },
+      logger: { info() {},
+        debug() {},
+        error() {} },
     })
     await handlers.SIGTERM()
     assert.ok(operations.includes("journal.close"))
@@ -608,7 +695,8 @@ test("coalesces repeated shutdown signals into one cleanup operation", async () 
   let resolveStop
   const stopGate = new Promise((resolve) => { resolveStop = resolve })
   const eventBus = {
-    publish: (event) => { operations.push("publish:" + event.name); return { ok: true, event } },
+    publish: (event) => { operations.push(`publish:${event.name}`); return { ok: true,
+        event } },
     close: async () => { operations.push("eventBus.close"); return { ok: true } },
   }
   const journalService = {
@@ -624,8 +712,12 @@ test("coalesces repeated shutdown signals into one cleanup operation", async () 
       subscriptions: [],
       stop: async () => { operations.push("runtime.stop"); await stopGate },
     }),
-    registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
-    logger: { info() {}, debug() {}, error() {} },
+    registerSignalHandler: (...signalHandlerArguments) => {
+      const [signal, handler] = signalHandlerArguments
+      handlers[signal] = handler },
+    logger: { info() {},
+      debug() {},
+      error() {} },
   })
   const first = handlers.SIGINT()
   const second = handlers.SIGTERM()
@@ -641,7 +733,8 @@ test("closes observability after publishing startup failure", async () => {
   const operations = []
   const previousExitCode = process.exitCode
   const eventBus = {
-    publish: (event) => { operations.push("publish:" + event.name); return { ok: true, event } },
+    publish: (event) => { operations.push(`publish:${event.name}`); return { ok: true,
+        event } },
     close: async () => { operations.push("eventBus.close"); return { ok: true } },
   }
   const journalService = {
@@ -653,7 +746,9 @@ test("closes observability after publishing startup failure", async () => {
       createEventBus: () => eventBus,
       createJournalService: () => journalService,
       start: async () => { throw new Error("bootstrap failed") },
-      logger: { info() {}, debug() {}, error() {} },
+      logger: { info() {},
+        debug() {},
+        error() {} },
     })
     assert.deepEqual(operations, [
       "publish:harvester.process_started",
@@ -694,7 +789,8 @@ test("writes and durably closes a JSONL session in the injected Journal director
     const result = await main({
       processIdentity,
       createEventBus: () => eventBus,
-      createJournalService: (input) => prepareOptionalJournal({ ...input, directory }),
+      createJournalService: (input) => prepareOptionalJournal({ ...input,
+        directory }),
       start: async () => ({
         connected: false,
         tradingEnabled: false,
@@ -702,8 +798,12 @@ test("writes and durably closes a JSONL session in the injected Journal director
         subscriptions: [],
         stop: async () => {},
       }),
-      registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
-      logger: { info() {}, debug() {}, error() {} },
+      registerSignalHandler: (...signalHandlerArguments) => {
+        const [signal, handler] = signalHandlerArguments
+        handlers[signal] = handler },
+      logger: { info() {},
+        debug() {},
+        error() {} },
     })
     const ready = await result.journalService.ready
     assert.equal(ready.ok, true)
@@ -728,7 +828,8 @@ test("writes and durably closes a JSONL session in the injected Journal director
     assert.doesNotMatch(content, /apiKey|apiSecret|accessToken|password/)
   } finally {
     process.exitCode = previousExitCode
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+      force: true })
   }
 })
 
@@ -741,15 +842,19 @@ test("refuses TESTNET trading when Journal startup fails", async () => {
       env: { NODE_ENV: "development" },
       acquireProcessLock,
       createJournalService: () => ({
-        ready: Promise.resolve({ ok: false, errors: [new Error("disk unavailable")] }),
+        ready: Promise.resolve({ ok: false,
+          errors: [new Error("disk unavailable")] }),
         flush: async () => ({
       ok: true,
       durable: true,
     }),
-        close: async () => ({ ok: true, closed: true }),
+        close: async () => ({ ok: true,
+          closed: true }),
       }),
       start: async () => { started = true; return { connected: false } },
-      logger: { info() {}, error() {}, debug() {} },
+      logger: { info() {},
+        error() {},
+        debug() {} },
     })
     assert.equal(started, false)
     assert.equal(process.exitCode, 1)
@@ -768,12 +873,20 @@ test("allows a trading-enabled first start only with a validated empty Journal h
       acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
-        recovery: Promise.resolve({ ok: true, available: true, records: [], count: 0 }),
-        flush: async () => ({ ok: true, durable: true }),
-        close: async () => ({ ok: true, closed: true }),
+        recovery: Promise.resolve({ ok: true,
+          available: true,
+          records: [],
+          count: 0 }),
+        flush: async () => ({ ok: true,
+          durable: true }),
+        close: async () => ({ ok: true,
+          closed: true }),
       }),
-      start: async () => { started = true; return { connected: false, tradingEnabled: true } },
-      logger: { info() {}, error() {}, debug() {} },
+      start: async () => { started = true; return { connected: false,
+          tradingEnabled: true } },
+      logger: { info() {},
+        error() {},
+        debug() {} },
     })
     assert.equal(started, true)
     assert.equal(process.exitCode, 0)
@@ -792,12 +905,17 @@ test("does not require historical Journal reads for trading startup", async () =
       acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
-        flush: async () => ({ ok: true, durable: true }),
-        close: async () => ({ ok: true, closed: true }),
+        flush: async () => ({ ok: true,
+          durable: true }),
+        close: async () => ({ ok: true,
+          closed: true }),
       }),
-      start: async () => { started = true; return { connected: false, tradingEnabled: true } },
+      start: async () => { started = true; return { connected: false,
+          tradingEnabled: true } },
       registerSignalHandler() {},
-      logger: { info() {}, error() {}, debug() {} },
+      logger: { info() {},
+        error() {},
+        debug() {} },
     })
     assert.equal(started, true)
     assert.equal(process.exitCode, 0)
@@ -819,16 +937,22 @@ test("does not pass historical Journal records into bootstrap", async () => {
         recovery: Promise.resolve({
           ok: true,
           available: true,
-          records: [{ id: "old-fill", payload: { name: "execution.fill_applied" } }],
+          records: [{ id: "old-fill",
+            payload: { name: "execution.fill_applied" } }],
         }),
-        flush: async () => ({ ok: true, durable: true }),
-        close: async () => ({ ok: true, closed: true }),
+        flush: async () => ({ ok: true,
+          durable: true }),
+        close: async () => ({ ok: true,
+          closed: true }),
       }),
       start: async (input) => {
         startupInput = input
-        return { connected: false, tradingEnabled: false }
+        return { connected: false,
+          tradingEnabled: false }
       },
-      logger: { info() {}, error() {}, debug() {} },
+      logger: { info() {},
+        error() {},
+        debug() {} },
     })
     assert.equal(Object.hasOwn(startupInput, "journalRecoveryRecords"), false)
     assert.equal(process.exitCode, 0)
@@ -846,13 +970,20 @@ test("starts the selected trading mode without replaying prior trading history",
       recovery: Promise.resolve({
         ok: true,
         available: true,
-        records: [{ id: "old-fill", payload: { name: "execution.fill_applied", source: "harvester" } }],
+        records: [{ id: "old-fill",
+          payload: { name: "execution.fill_applied",
+            source: "harvester" } }],
       }),
-      flush: async () => ({ ok: true, durable: true }),
-      close: async () => ({ ok: true, closed: true }),
+      flush: async () => ({ ok: true,
+        durable: true }),
+      close: async () => ({ ok: true,
+        closed: true }),
     }),
-    start: async () => { started = true; return { connected: false, tradingEnabled: false } },
-    logger: { info() {}, error() {}, debug() {} },
+    start: async () => { started = true; return { connected: false,
+        tradingEnabled: false } },
+    logger: { info() {},
+      error() {},
+      debug() {} },
   })
   assert.equal(started, true)
 })
@@ -867,12 +998,18 @@ test("ignores historical Journal read failures when starting the current trading
       acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
-        recovery: Promise.resolve({ ok: false, errors: [new Error("legacy history is malformed")] }),
-        flush: async () => ({ ok: true, durable: true }),
-        close: async () => ({ ok: true, closed: true }),
+        recovery: Promise.resolve({ ok: false,
+          errors: [new Error("legacy history is malformed")] }),
+        flush: async () => ({ ok: true,
+          durable: true }),
+        close: async () => ({ ok: true,
+          closed: true }),
       }),
-      start: async () => { started = true; return { connected: false, tradingEnabled: true } },
-      logger: { info() {}, error() {}, debug() {} },
+      start: async () => { started = true; return { connected: false,
+          tradingEnabled: true } },
+      logger: { info() {},
+        error() {},
+        debug() {} },
     })
     assert.equal(started, true)
     assert.equal(process.exitCode, 0)
@@ -896,7 +1033,9 @@ test("blocks a second trading process before Journal startup when the process lo
       createJournalService: () => { journalFactoryCalls += 1; return disabledJournalService() },
       start: async () => { started = true; return { connected: false } },
       registerSignalHandler() {},
-      logger: { info() {}, error() {}, debug() {} },
+      logger: { info() {},
+        error() {},
+        debug() {} },
     })
     assert.equal(journalFactoryCalls, 0)
     assert.equal(started, false)
@@ -916,13 +1055,18 @@ test("releases the trading process lock only after runtime and Journal shutdown"
       env: { NODE_ENV: "development" },
       acquireProcessLock: async () => ({
         ok: true,
-        release: async () => { sequence.push("lock-release"); return { ok: true, released: true } },
+        release: async () => { sequence.push("lock-release"); return { ok: true,
+            released: true } },
       }),
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
-        recovery: Promise.resolve({ ok: true, available: true, records: [] }),
-        flush: async () => ({ ok: true, durable: true }),
-        close: async () => { sequence.push("journal-close"); return { ok: true, closed: true } },
+        recovery: Promise.resolve({ ok: true,
+          available: true,
+          records: [] }),
+        flush: async () => ({ ok: true,
+          durable: true }),
+        close: async () => { sequence.push("journal-close"); return { ok: true,
+            closed: true } },
       }),
       start: async () => ({
         connected: true,
@@ -930,12 +1074,15 @@ test("releases the trading process lock only after runtime and Journal shutdown"
         subscriptions: [],
         stop: async () => { sequence.push("runtime-stop"); return { ok: true } },
       }),
-      registerSignalHandler: (signal, handler) => {
+      registerSignalHandler: (...signalHandlerArguments) => {
+        const [signal, handler] = signalHandlerArguments
         if (signal === "SIGTERM") {
           signalHandler = handler
         }
       },
-      logger: { info() {}, error() {}, debug() {} },
+      logger: { info() {},
+        error() {},
+        debug() {} },
     })
     assert.equal(typeof signalHandler, "function")
     await signalHandler()
@@ -963,15 +1110,18 @@ test("acquires the process lock before starting Journal and releases it after cl
         assert.equal(broker, "binance")
         return {
           ok: true,
-          release: async () => { sequence.push("release"); return { ok: true, released: true } },
+          release: async () => { sequence.push("release"); return { ok: true,
+              released: true } },
         }
       },
       createJournalService: () => {
         sequence.push("journal")
         return {
           ready: Promise.resolve({ ok: true }),
-          flush: async () => ({ ok: true, durable: true }),
-          close: async () => { sequence.push("journal-close"); return { ok: true, closed: true } },
+          flush: async () => ({ ok: true,
+            durable: true }),
+          close: async () => { sequence.push("journal-close"); return { ok: true,
+              closed: true } },
         }
       },
       start: async (input) => {
@@ -984,12 +1134,15 @@ test("acquires the process lock before starting Journal and releases it after cl
           stop: async () => { sequence.push("runtime-stop"); return { ok: true } },
         }
       },
-      registerSignalHandler: (signal, handler) => {
+      registerSignalHandler: (...signalHandlerArguments) => {
+        const [signal, handler] = signalHandlerArguments
         if (signal === "SIGTERM") {
           signalHandler = handler
         }
       },
-      logger: { info() {}, error() {}, debug() {} },
+      logger: { info() {},
+        error() {},
+        debug() {} },
     })
     assert.deepEqual(sequence, ["lock", "journal", "start"])
     assert.equal(typeof signalHandler, "function")
@@ -1011,13 +1164,18 @@ test("retains the process lock when runtime shutdown throws", async () => {
       env: { NODE_ENV: "development" },
       acquireProcessLock: async () => ({
         ok: true,
-        release: async () => { releaseCalls += 1; return { ok: true, released: true } },
+        release: async () => { releaseCalls += 1; return { ok: true,
+            released: true } },
       }),
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
-        recovery: Promise.resolve({ ok: true, available: true, records: [] }),
-        flush: async () => ({ ok: true, durable: true }),
-        close: async () => ({ ok: true, closed: true }),
+        recovery: Promise.resolve({ ok: true,
+          available: true,
+          records: [] }),
+        flush: async () => ({ ok: true,
+          durable: true }),
+        close: async () => ({ ok: true,
+          closed: true }),
       }),
       start: async () => ({
         connected: true,
@@ -1025,12 +1183,15 @@ test("retains the process lock when runtime shutdown throws", async () => {
         subscriptions: [],
         stop: async () => { throw new Error("broker intake did not stop") },
       }),
-      registerSignalHandler: (signal, handler) => {
+      registerSignalHandler: (...signalHandlerArguments) => {
+        const [signal, handler] = signalHandlerArguments
         if (signal === "SIGTERM") {
           signalHandler = handler
         }
       },
-      logger: { info() {}, error() {}, debug() {} },
+      logger: { info() {},
+        error() {},
+        debug() {} },
     })
     await signalHandler()
     assert.equal(releaseCalls, 0)
@@ -1049,18 +1210,26 @@ test("retains the process lock when Journal writer shutdown is not confirmed", a
       env: { NODE_ENV: "development" },
       acquireProcessLock: async () => ({
         ok: true,
-        release: async () => { releaseCalls += 1; return { ok: true, released: true } },
+        release: async () => { releaseCalls += 1; return { ok: true,
+            released: true } },
       }),
       createJournalService: () => ({
         status: { started: false },
         ready: Promise.resolve({ ok: true }),
-        recovery: Promise.resolve({ ok: true, available: true, records: [] }),
-        flush: async () => ({ ok: true, durable: true }),
-        close: async () => ({ ok: false, errors: [new Error("writer close failed")] }),
+        recovery: Promise.resolve({ ok: true,
+          available: true,
+          records: [] }),
+        flush: async () => ({ ok: true,
+          durable: true }),
+        close: async () => ({ ok: false,
+          errors: [new Error("writer close failed")] }),
       }),
       start: async () => { throw new Error("runtime startup failed") },
       registerSignalHandler() {},
-      logger: { info() {}, system() {}, error() {}, debug() {} },
+      logger: { info() {},
+        system() {},
+        error() {},
+        debug() {} },
     })
     assert.equal(releaseCalls, 0)
     assert.equal(process.exitCode, 1)
@@ -1076,9 +1245,15 @@ test("rejects TESTNET trading when Journal cannot provide durable flush", async 
   try {
     await main({
       env: { NODE_ENV: "development" },
-      createJournalService: () => ({ ready: Promise.resolve({ ok: true }), flush: undefined, close: async () => ({ ok: true, closed: true }) }),
-      start: async () => { started = true; return { connected: true, tradingEnabled: true } },
-      logger: { info() {}, error() {}, debug() {} },
+      createJournalService: () => ({ ready: Promise.resolve({ ok: true }),
+        flush: undefined,
+        close: async () => ({ ok: true,
+          closed: true }) }),
+      start: async () => { started = true; return { connected: true,
+          tradingEnabled: true } },
+      logger: { info() {},
+        error() {},
+        debug() {} },
     })
     assert.equal(started, false)
     assert.equal(process.exitCode, 1)
@@ -1098,19 +1273,26 @@ test("retains the process lock when runtime startup fails after it may have acti
       env: { NODE_ENV: "development" },
       acquireProcessLock: async () => ({
         ok: true,
-        release: async () => { releaseCalls += 1; return { ok: true, released: true } },
+        release: async () => { releaseCalls += 1; return { ok: true,
+            released: true } },
       }),
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
-        recovery: Promise.resolve({ ok: true, available: true, records: [] }),
-        flush: async () => ({ ok: true, durable: true }),
-        close: async () => { journalCloseCalls += 1; return { ok: true, closed: true } },
+        recovery: Promise.resolve({ ok: true,
+          available: true,
+          records: [] }),
+        flush: async () => ({ ok: true,
+          durable: true }),
+        close: async () => { journalCloseCalls += 1; return { ok: true,
+            closed: true } },
       }),
       start: async () => {
         throw new Error("broker startup failed after connection attempt")
       },
       registerSignalHandler() {},
-      logger: { info() {}, error() {}, debug() {} },
+      logger: { info() {},
+        error() {},
+        debug() {} },
     })
     assert.equal(journalCloseCalls, 1)
     assert.equal(releaseCalls, 0)
@@ -1126,8 +1308,9 @@ test("closes diagnostic log transports after runtime, Journal, and EventBus shut
   const handlers = {}
   await main({
     createEventBus: () => ({
-      publish: (event) => ({ ok: true, event }),
-      close: async () => { operations.push("eventbus.close"); return { ok: true } },
+      publish: (event) => ({ ok: true,
+        event }),
+      close: async () => { operations.push("eventBus.close"); return { ok: true } },
     }),
     createJournalService: () => ({
       close: async () => { operations.push("journal.close"); return { ok: true } },
@@ -1136,8 +1319,11 @@ test("closes diagnostic log transports after runtime, Journal, and EventBus shut
       connected: false,
       stop: async () => { operations.push("runtime.stop") },
     }),
-    registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
-    logger: { info() {}, error() {} },
+    registerSignalHandler: (...signalHandlerArguments) => {
+      const [signal, handler] = signalHandlerArguments
+      handlers[signal] = handler },
+    logger: { info() {},
+      error() {} },
     closeLogger: async () => { operations.push("logger.close") },
   })
 
@@ -1145,13 +1331,13 @@ test("closes diagnostic log transports after runtime, Journal, and EventBus shut
   assert.deepEqual(operations, [
     "runtime.stop",
     "journal.close",
-    "eventbus.close",
+    "eventBus.close",
     "logger.close",
   ])
 })
 
 
-test("captures process provenance before trading startup and publishes it separately from runtime startup", async () => {
+const captureProcessProvenanceScenario = async () => {
   const operations = []
   const events = []
   const contexts = []
@@ -1177,11 +1363,13 @@ test("captures process provenance before trading startup and publishes it separa
   const eventBus = {
     publish(event) {
       events.push(event)
-      operations.push("publish:" + event.name)
-      return { ok: true, event }
+      operations.push(`publish:${event.name}`)
+      return { ok: true,
+        event }
     },
     flush: async () => ({ ok: true }),
-    close: async () => ({ ok: true, closed: true }),
+    close: async () => ({ ok: true,
+      closed: true }),
   }
   const logger = {
     setContext(context) {
@@ -1202,7 +1390,9 @@ test("captures process provenance before trading startup and publishes it separa
     },
     acquireProcessLock: async () => {
       operations.push("processLock.acquire")
-      return { ok: true, release: async () => ({ ok: true, released: true }) }
+      return { ok: true,
+        release: async () => ({ ok: true,
+          released: true }) }
     },
     createJournalService: () => {
       operations.push("journal.create")
@@ -1210,9 +1400,12 @@ test("captures process provenance before trading startup and publishes it separa
         ready: Promise.resolve({ ok: true }),
         flush: async () => {
           journalFlushCalls += 1
-          return { ok: true, durable: true }
+          return { ok: true,
+            durable: true }
         },
-        close: async () => ({ ok: true, closed: true, durable: true }),
+        close: async () => ({ ok: true,
+          closed: true,
+          durable: true }),
       }
     },
     start: async ({ eventPublisher }) => {
@@ -1231,7 +1424,11 @@ test("captures process provenance before trading startup and publishes it separa
       NODE_ENV: "development",
     },
   })
+  return { operations, events, contexts, journalFlushCalls }
+}
 
+test("captures process provenance before trading startup and publishes it separately from runtime startup", async () => {
+  const { operations, events, contexts, journalFlushCalls } = await captureProcessProvenanceScenario()
   assert.deepEqual(
     operations.slice(0, 3),
     ["logger.context", "eventBus.create", "processLock.acquire"],
@@ -1270,9 +1467,16 @@ test("preserves terminal Journal write-failure classification at the Harvester c
   await runMain({
     createJournalService: () => ({
       ready: Promise.resolve({ ok: true }),
-      status: { state: "degraded", started: true, closed: false, writeFailed: true, writeErrorCount: 1 },
-      flush: async () => ({ ok: false, errors: [writeError] }),
-      close: async () => ({ ok: true, closed: true, durable: false }),
+      status: { state: "degraded",
+        started: true,
+        closed: false,
+        writeFailed: true,
+        writeErrorCount: 1 },
+      flush: async () => ({ ok: false,
+        errors: [writeError] }),
+      close: async () => ({ ok: true,
+        closed: true,
+        durable: false }),
     }),
     start: async ({ eventPublisher }) => {
       flushResult = await eventPublisher.flush()
@@ -1284,7 +1488,9 @@ test("preserves terminal Journal write-failure classification at the Harvester c
         stop: async () => {},
       }
     },
-    logger: { info() {}, system() {}, error() {} },
+    logger: { info() {},
+      system() {},
+      error() {} },
     registerSignalHandler: () => {},
   })
 
@@ -1292,7 +1498,9 @@ test("preserves terminal Journal write-failure classification at the Harvester c
   assert.equal(flushResult.errors[0], writeError, "The original Journal write error must remain available.")
   assert.deepEqual(
     flushResult.recoveryFailure,
-    { category: "DURABILITY", stage: "JOURNAL_WRITE_FAILURE", retryable: false },
+    { category: "DURABILITY",
+      stage: "JOURNAL_WRITE_FAILURE",
+      retryable: false },
     "A poisoned Journal writer must expose an explicit terminal recovery classification.",
   )
 })
@@ -1303,19 +1511,34 @@ test("classifies a failed flush as retryable only while the Journal writer is he
   await runMain({
     createJournalService: () => ({
       ready: Promise.resolve({ ok: true }),
-      status: { state: "degraded", started: true, closed: false, writeFailed: false, writeErrorCount: 0 },
-      flush: async () => ({ ok: false, errors: [syncError] }),
-      close: async () => ({ ok: true, closed: true, durable: false }),
+      status: { state: "degraded",
+        started: true,
+        closed: false,
+        writeFailed: false,
+        writeErrorCount: 0 },
+      flush: async () => ({ ok: false,
+        errors: [syncError] }),
+      close: async () => ({ ok: true,
+        closed: true,
+        durable: false }),
     }),
     start: async ({ eventPublisher }) => {
       flushResult = await eventPublisher.flush()
-      return { connected: false, tradingEnabled: false, strategyMode: "read-only", subscriptions: [], stop: async () => {} }
+      return { connected: false,
+        tradingEnabled: false,
+        strategyMode: "read-only",
+        subscriptions: [],
+        stop: async () => {} }
     },
-    logger: { info() {}, system() {}, error() {} },
+    logger: { info() {},
+      system() {},
+      error() {} },
     registerSignalHandler: () => {},
   })
   assert.deepEqual(flushResult.recoveryFailure, {
-    category: "DURABILITY", stage: "JOURNAL_FLUSH_FAILURE", retryable: true,
+    category: "DURABILITY",
+    stage: "JOURNAL_FLUSH_FAILURE",
+    retryable: true,
   })
 })
 
@@ -1325,18 +1548,29 @@ test("fails closed when Journal health metadata cannot classify a failed flush",
     createJournalService: () => ({
       ready: Promise.resolve({ ok: true }),
       status: { state: "degraded" },
-      flush: async () => ({ ok: false, errors: [new Error("unclassified flush failure")] }),
-      close: async () => ({ ok: true, closed: true, durable: false }),
+      flush: async () => ({ ok: false,
+        errors: [new Error("unclassified flush failure")] }),
+      close: async () => ({ ok: true,
+        closed: true,
+        durable: false }),
     }),
     start: async ({ eventPublisher }) => {
       flushResult = await eventPublisher.flush()
-      return { connected: false, tradingEnabled: false, strategyMode: "read-only", subscriptions: [], stop: async () => {} }
+      return { connected: false,
+        tradingEnabled: false,
+        strategyMode: "read-only",
+        subscriptions: [],
+        stop: async () => {} }
     },
-    logger: { info() {}, system() {}, error() {} },
+    logger: { info() {},
+      system() {},
+      error() {} },
     registerSignalHandler: () => {},
   })
   assert.deepEqual(flushResult.recoveryFailure, {
-    category: "DURABILITY", stage: "JOURNAL_FLUSH_UNCLASSIFIED", retryable: false,
+    category: "DURABILITY",
+    stage: "JOURNAL_FLUSH_UNCLASSIFIED",
+    retryable: false,
   })
 })
 
@@ -1349,9 +1583,12 @@ test("requires Journal readiness and publishes process provenance before trading
   const processStarted = new Promise((resolve) => { resolveProcessStarted = resolve })
   const journalService = {
     ready: new Promise((resolve) => { resolveJournalReady = resolve }),
-    status: { state: "starting", enabled: true },
-    flush: async () => ({ ok: true, durable: true }),
-    close: async () => ({ ok: true, closed: true }),
+    status: { state: "starting",
+      enabled: true },
+    flush: async () => ({ ok: true,
+      durable: true }),
+    close: async () => ({ ok: true,
+      closed: true }),
   }
   const eventBus = {
     publish(event) {
@@ -1359,10 +1596,12 @@ test("requires Journal readiness and publishes process provenance before trading
       if (event.name === "harvester.process_started") {
         resolveProcessStarted(event)
       }
-      return { ok: true, event }
+      return { ok: true,
+        event }
     },
     flush: async () => ({ ok: true }),
-    close: async () => ({ ok: true, closed: true }),
+    close: async () => ({ ok: true,
+      closed: true }),
   }
 
   const pending = main({
@@ -1422,7 +1661,8 @@ test("retains immediate logger provenance when the optional Journal is disabled"
   const eventBus = {
     publish(event) {
       events.push(event)
-      return { ok: true, event }
+      return { ok: true,
+        event }
     },
   }
 
@@ -1443,7 +1683,11 @@ test("retains immediate logger provenance when the optional Journal is disabled"
         metadataSource: "unavailable",
       },
     },
-    logger: { setContext: (context) => contexts.push(context), info() {}, system() {}, error() {}, warn() {} },
+    logger: { setContext: (context) => contexts.push(context),
+      info() {},
+      system() {},
+      error() {},
+      warn() {} },
     createEventBus: () => eventBus,
     createJournalService: disabledJournalService,
     start: async () => ({ connected: false }),
@@ -1459,10 +1703,12 @@ test("records the process-start attempt before a failed runtime-start event", as
   const eventBus = {
     publish(event) {
       events.push(event)
-      return { ok: true, event }
+      return { ok: true,
+        event }
     },
     flush: async () => ({ ok: true }),
-    close: async () => ({ ok: true, closed: true }),
+    close: async () => ({ ok: true,
+      closed: true }),
   }
   const previousExitCode = process.exitCode
   process.exitCode = 0
@@ -1487,7 +1733,10 @@ test("records the process-start attempt before a failed runtime-start event", as
       createEventBus: () => eventBus,
       createJournalService: disabledJournalService,
       start: async () => { throw new Error("runtime startup failed") },
-      logger: { setContext() {}, info() {}, error() {}, warn() {} },
+      logger: { setContext() {},
+        info() {},
+        error() {},
+        warn() {} },
       registerSignalHandler() {},
       env: {},
     })
@@ -1512,7 +1761,8 @@ test("fails closed when required Journal readiness fails", async () => {
   const eventBus = {
     publish(event) {
       events.push(event)
-      return { ok: true, event }
+      return { ok: true,
+        event }
     },
   }
 
@@ -1542,13 +1792,20 @@ test("fails closed when required Journal readiness fails", async () => {
     },
     createEventBus: () => eventBus,
     createJournalService: () => ({
-      ready: Promise.resolve({ ok: false, errors: [new Error("Journal unavailable")] }),
-      flush: async () => ({ ok: true, durable: true }),
-      close: async () => ({ ok: true, closed: true }),
+      ready: Promise.resolve({ ok: false,
+        errors: [new Error("Journal unavailable")] }),
+      flush: async () => ({ ok: true,
+        durable: true }),
+      close: async () => ({ ok: true,
+        closed: true }),
     }),
     start: async () => {
       runtimeStarted = true
-      return { connected: true, brokerName: "binance", tradingEnabled: true, strategyMode: "conservative", subscriptions: [] }
+      return { connected: true,
+        brokerName: "binance",
+        tradingEnabled: true,
+        strategyMode: "conservative",
+        subscriptions: [] }
     },
     env: {},
   })
@@ -1571,16 +1828,26 @@ test("does not register runtime shutdown handlers before the required Journal is
       markJournalCreated()
       return {
         ready: new Promise((resolve) => { resolveReady = resolve }),
-        flush: async () => ({ ok: true, durable: true }),
-        close: async () => ({ ok: true, closed: true }),
+        flush: async () => ({ ok: true,
+          durable: true }),
+        close: async () => ({ ok: true,
+          closed: true }),
       }
     },
     start: async () => {
       started = true
-      return { connected: true, brokerName: "binance", tradingEnabled: true, strategyMode: "conservative", subscriptions: [], stop: async () => ({ ok: true }) }
+      return { connected: true,
+        brokerName: "binance",
+        tradingEnabled: true,
+        strategyMode: "conservative",
+        subscriptions: [],
+        stop: async () => ({ ok: true }) }
     },
     registerSignalHandler: (signal) => registered.push(signal),
-    logger: { info() {}, system() {}, error() {}, warn() {} },
+    logger: { info() {},
+      system() {},
+      error() {},
+      warn() {} },
     env: {},
   })
   await journalCreated
@@ -1604,7 +1871,10 @@ test("fails before acquiring a lock when TRADING_MODE is missing", async () => {
         lockCalls += 1
         return acquireProcessLock()
       },
-      logger: { info() {}, system() {}, error() {}, warn() {} },
+      logger: { info() {},
+        system() {},
+        error() {},
+        warn() {} },
     })
     assert.equal(lockCalls, 0, "Missing mode must fail before acquiring process or broker resources")
     assert.equal(process.exitCode, 1, "Missing TRADING_MODE must fail startup")
@@ -1619,12 +1889,16 @@ test("uses TRADING_MODE=live for Binance LIVE and acquires the single-writer loc
   let lockCalls = 0
   let startInput
   await main({
-    env: { NODE_ENV: "development", TRADING_MODE: "live" },
+    env: { NODE_ENV: "development",
+      TRADING_MODE: "live" },
     loadConfig: async () => appConfig,
     createJournalService: () => ({
       ready: Promise.resolve({ ok: true }),
-      flush: async () => ({ ok: true, durable: true }),
-      close: async () => ({ ok: true, closed: true, durable: true }),
+      flush: async () => ({ ok: true,
+        durable: true }),
+      close: async () => ({ ok: true,
+        closed: true,
+        durable: true }),
       status: { state: "ready" },
     }),
     acquireProcessLock: async () => {
@@ -1640,7 +1914,9 @@ test("uses TRADING_MODE=live for Binance LIVE and acquires the single-writer loc
         subscriptions: [],
       }
     },
-    logger: { info() {}, debug() {}, error() {} },
+    logger: { info() {},
+      debug() {},
+      error() {} },
   })
 
   assert.equal(lockCalls, 1, "LIVE trading must acquire the same single-writer process lock as TESTNET.")
@@ -1668,7 +1944,10 @@ test("keeps Harvester process ownership locks outside the application logs direc
       strategyMode: "read-only",
       subscriptions: [],
     }),
-    logger: { info() {}, system() {}, error() {}, warn() {} },
+    logger: { info() {},
+      system() {},
+      error() {},
+      warn() {} },
     env: { TRADING_MODE: "testnet" },
   })
 
@@ -1695,8 +1974,12 @@ test("preserves typed market-readiness diagnostics in fatal startup logs", async
   const error = new UnvalidatedMarketExchangeConstraintsError({
     symbol: "LINKFDUSD",
     constraints: [
-      { type: "DYNAMIC_PRICE_BAND", scope: "SYMBOL", sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
-      { type: "ASSET_ORDER_LIMIT", scope: "ACCOUNT", sourceFilterType: "MAX_ASSET" },
+      { type: "DYNAMIC_PRICE_BAND",
+        scope: "SYMBOL",
+        sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
+      { type: "ASSET_ORDER_LIMIT",
+        scope: "ACCOUNT",
+        sourceFilterType: "MAX_ASSET" },
     ],
   })
   const previousExitCode = process.exitCode
@@ -1761,7 +2044,9 @@ test("does not construct, verify, or inject Operational State Store records even
       assert.equal(input.operationalStateStore, undefined)
       return { connected: false }
     },
-    logger: { info() {}, system() {}, error() {} },
+    logger: { info() {},
+      system() {},
+      error() {} },
   })
   assert.equal(storeCreated, false, "Disabled restart recovery must not construct or verify the Operational State Store.")
   assert.equal(journalCreated, true, "An unused recovery directory must not prevent normal Journal startup.")
@@ -1781,10 +2066,12 @@ async function startProcessWithUnresolvedStrategyShutdown({ calls } = {}) {
   }
   const journalService = {
     ready: Promise.resolve({ ok: true }),
-    flush: async () => ({ ok: true, durable: true }),
+    flush: async () => ({ ok: true,
+      durable: true }),
     close: async () => {
       calls.push("journal-close")
-      return { ok: true, closed: true }
+      return { ok: true,
+        closed: true }
     },
   }
   const logger = {
