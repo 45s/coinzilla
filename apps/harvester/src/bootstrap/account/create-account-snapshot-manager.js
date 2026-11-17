@@ -1149,7 +1149,6 @@ export function createAccountSnapshotManager({
     monotonicNow,
     runtimeSessionId,
     operationalStateStore,
-    expectedAccountId,
     state,
   }
   const refresh = (options = {}) => refreshAccountSnapshot({
