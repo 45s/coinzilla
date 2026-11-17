@@ -8,8 +8,9 @@ import test from 'node:test';
 
 const scriptPath = fileURLToPath(new URL('./sync-main.js', import.meta.url));
 
-function git(cwd, args, options = {}) {
-  return execFileSync('git', args, {
+function git(...args) {
+  const [cwd, gitArgs, options = {}] = args;
+  return execFileSync('git', gitArgs, {
     cwd,
     encoding: 'utf8',
     stdio: options.stdio ?? ['ignore', 'pipe', 'pipe'],
@@ -56,7 +57,8 @@ function runSync(local) {
   });
 }
 
-function assertSyncFails(local, expectedMessage) {
+function assertSyncFails(...args) {
+  const [local, expectedMessage] = args;
   let failure;
   try {
     runSync(local);
@@ -145,7 +147,7 @@ test('refuses tracked and untracked changes without modifying either', () => {
       writeFileSync(join(repository.local, changedPath), content);
       assertSyncFails(repository.local, /working tree is not clean/);
       assert.equal(readFileSync(join(repository.local, changedPath), 'utf8'), content,
-        'A dirty-worktree refusal must preserve the user's file contents.');
+        "A dirty-worktree refusal must preserve the user's file contents.");
       assert.equal(git(repository.local, ['branch', '--show-current']), 'main-work',
         'A dirty-worktree refusal must not switch branches.');
     } finally {
