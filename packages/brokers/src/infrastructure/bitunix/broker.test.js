@@ -304,6 +304,8 @@ test("Bitunix Spot broker normalizes a single pending-order response row", async
         volume: "1",
         dealVolume: "0",
         price: "10",
+        ctime: "2026-11-15T12:00:00Z",
+        utime: "2026-11-15T12:00:01Z",
       },
     },
   })
