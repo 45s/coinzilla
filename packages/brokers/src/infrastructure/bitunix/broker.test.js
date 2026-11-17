@@ -83,12 +83,48 @@ test("Bitunix Spot exchange rates reject missing, malformed, and invalid rate re
     undefined,
     {},
     [null],
-    [{ baseSymbol: "USDT", quoteSymbol: "AUD", rate: 1.5 }],
-    [{ baseSymbol: "", quoteSymbol: "AUD", rate: "1.5" }],
-    [{ baseSymbol: "USDT", quoteSymbol: "", rate: "1.5" }],
-    [{ baseSymbol: "USDT", quoteSymbol: "AUD", rate: "0" }],
-    [{ baseSymbol: "USDT", quoteSymbol: "AUD", rate: "-1" }],
-    [{ baseSymbol: "USDT", quoteSymbol: "AUD", rate: "not-a-rate" }],
+    [
+      {
+        baseSymbol: "USDT",
+        quoteSymbol: "AUD",
+        rate: 1.5,
+      },
+    ],
+    [
+      {
+        baseSymbol: "",
+        quoteSymbol: "AUD",
+        rate: "1.5",
+      },
+    ],
+    [
+      {
+        baseSymbol: "USDT",
+        quoteSymbol: "",
+        rate: "1.5",
+      },
+    ],
+    [
+      {
+        baseSymbol: "USDT",
+        quoteSymbol: "AUD",
+        rate: "0",
+      },
+    ],
+    [
+      {
+        baseSymbol: "USDT",
+        quoteSymbol: "AUD",
+        rate: "-1",
+      },
+    ],
+    [
+      {
+        baseSymbol: "USDT",
+        quoteSymbol: "AUD",
+        rate: "not-a-rate",
+      },
+    ],
   ]
 
   for (const response of invalidResponses) {

@@ -3,6 +3,7 @@ import { CoreBroker } from "../../broker.core.js"
 import { BitunixRestClient } from "./api/rest-client.js"
 import { adaptAssets } from "./adapters/adapt-assets.js"
 import { adaptBalances } from "./adapters/adapt-balances.js"
+import { adaptExchangeRates } from "./adapters/adapt-exchange-rates.js"
 import { adaptOrder } from "./adapters/adapt-order.js"
 import { createCanonicalMarket, getBitunixSymbol } from "./adapters/create-canonical-market.js"
 import { BitunixSpotConfig } from "./config/bitunix-spot-config.js"
@@ -14,6 +15,7 @@ const API = Object.freeze({
   orderHistory: "/api/spot/v1/order/history/page",
   orderDetail: "/api/spot/v1/order/detail",
   lastPrice: "/api/spot/v1/market/last_price",
+  exchangeRates: "/api/spot/v1/common/rate/list",
 })
 
 const HISTORY_STATUS_CODES = Object.freeze({
@@ -437,6 +439,32 @@ export class BitunixSpotBroker extends CoreBroker {
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.getPrices()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Read the documented public Bitunix Spot exchange-rate catalog.
+   * This is a Bitunix-specific extension, not a Binance broker capability.
+   *
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getExchangeRates() {
+    try {
+      const response = await this.restClient.request({
+        method: "GET",
+        path: API.exchangeRates,
+      })
+      return toResult({
+        data: adaptExchangeRates({
+          value: response.data,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getExchangeRates()",
         error,
       })
       return toResult({ errors: [error] })
