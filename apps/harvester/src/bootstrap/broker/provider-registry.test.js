@@ -34,10 +34,10 @@ const capabilities = Object.freeze({
   }),
 })
 
-function createDescriptor({ id = "binancePrimary", accountId = "binance-primary", credentialEnv } = {}) {
+function createDescriptor({ id = "binancePrimary", provider = "binance", accountId = "binance-primary", credentialEnv } = {}) {
   return {
     id,
-    provider: "binance",
+    provider,
     accountId,
     tradingMode: "testnet",
     ...(credentialEnv ? { credentialEnv } : {}),
