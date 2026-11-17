@@ -36,7 +36,10 @@ test("allows Testnet and production writers to coexist", async () => {
     assert.equal((await testnet.release()).ok, true)
     assert.equal((await production.release()).ok, true)
   } finally {
-    await rm(root, { recursive: true, force: true })
+    await rm(root, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -60,7 +63,10 @@ test("blocks a second writer in the same environment across worktrees", async ()
     assert.equal(second.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
     assert.equal((await first.release()).ok, true)
   } finally {
-    await rm(root, { recursive: true, force: true })
+    await rm(root, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -77,7 +83,10 @@ test("fails closed for an unsupported or missing trading environment", async () 
       assert.equal(result.ok, false)
     }
   } finally {
-    await rm(root, { recursive: true, force: true })
+    await rm(root, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -96,6 +105,9 @@ test("concurrent acquisitions for one broker and environment have exactly one wi
     assert.equal(attempts.filter((result) => result.ok !== true).length, 7)
     assert.equal((await winners[0].release()).ok, true)
   } finally {
-    await rm(root, { recursive: true, force: true })
+    await rm(root, {
+      recursive: true,
+      force: true,
+    })
   }
 })
