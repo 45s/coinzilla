@@ -106,12 +106,25 @@ const withExternalOrdersPolicy = (...args) => {
 }
 function createMarketTradingRules({ market, baseAsset, quoteAsset }) {
   const constraints = [
-    { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.01", asset: quoteAsset }) },
-    { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.001", asset: baseAsset }) },
-    { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "0.001", asset: baseAsset }) },
-    { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
+    { type: "PRICE_INCREMENT",
+      status: "SUPPORTED",
+      value: new Money({ amount: "0.01",
+        asset: quoteAsset }) },
+    { type: "QUANTITY_INCREMENT",
+      status: "SUPPORTED",
+      value: new Quantity({ amount: "0.001",
+        asset: baseAsset }) },
+    { type: "MIN_QUANTITY",
+      status: "SUPPORTED",
+      value: new Quantity({ amount: "0.001",
+        asset: baseAsset }) },
+    { type: "MIN_NOTIONAL",
+      status: "SUPPORTED",
+      value: new Money({ amount: "5",
+        asset: quoteAsset }) },
   ]
-  return new TradingRules({ market, constraints })
+  return new TradingRules({ market,
+    constraints })
 }
 
 function createTelegramOperatorConfig() {
@@ -132,12 +145,19 @@ const createMarketMetadata = (symbol) => {
     throw new Error(`Unsupported test market quote asset for ${symbol}`)
   }
   const baseCode = symbol.slice(0, -quoteCode.length)
-  const baseAsset = new Asset({ id: `asset:${baseCode}`, code: baseCode })
-  const quoteAsset = new Asset({ id: `asset:${quoteCode}`, code: quoteCode })
-  const market = new Market({ venue: "binance", symbol, baseAsset, quoteAsset })
+  const baseAsset = new Asset({ id: `asset:${baseCode}`,
+    code: baseCode })
+  const quoteAsset = new Asset({ id: `asset:${quoteCode}`,
+    code: quoteCode })
+  const market = new Market({ venue: "binance",
+    symbol,
+    baseAsset,
+    quoteAsset })
   return {
     market,
-    tradingRules: createMarketTradingRules({ market, baseAsset, quoteAsset }),
+    tradingRules: createMarketTradingRules({ market,
+      baseAsset,
+      quoteAsset }),
     supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
     unvalidatedConstraints: [],
   }
@@ -736,7 +756,8 @@ function createOperatorControlOperationalStateStore({ calls, appendedFacts }) {
 }
 
 function createTelegramProcessLocalRuntimeFixture({ calls, appendedFacts, broker, onOperator }) {
-  const operationalStateStore = createOperatorControlOperationalStateStore({ calls, appendedFacts })
+  const operationalStateStore = createOperatorControlOperationalStateStore({ calls,
+    appendedFacts })
   let operator
   const runtime = startHarvesterForTest({
     loadConfig: async () => createTelegramOperatorConfig(),
@@ -764,9 +785,11 @@ function createTelegramProcessLocalRuntimeFixture({ calls, appendedFacts, broker
       }
     },
     brokerAdapterFactory: () => broker,
-    logger: { info() {}, error() {} },
+    logger: { info() {},
+      error() {} },
   })
-  return { runtime, getOperator: () => operator }
+  return { runtime,
+    getOperator: () => operator }
 }
 
 test("starts/stops Telegram CC and applies process-local pause without recovery storage", async () => {
@@ -789,7 +812,8 @@ test("starts/stops Telegram CC and applies process-local pause without recovery 
     assert.equal(calls.includes("verify-Operational State Store records"), false)
     assert.ok(calls.indexOf("start-telegram-poller") < calls.indexOf("subscribe:user-data"))
     const pauseResult = await operator.pauseMarket({
-      actor: { id: "telegram-user:12345", roles: ["trading-operator"] },
+      actor: { id: "telegram-user:12345",
+        roles: ["trading-operator"] },
       requestId: "telegram:9001",
       symbol: "BTCUSDT",
     })
@@ -917,7 +941,9 @@ test("keeps external open orders audit-blocked but does not block startup or can
   })
 
   try {
-    assertExternalOrderRemainsUnowned({ runtime, logs, externalOpenOrder })
+    assertExternalOrderRemainsUnowned({ runtime,
+      logs,
+      externalOpenOrder })
   } finally {
     await runtime.stop()
   }
@@ -967,7 +993,9 @@ function configureDelayedTickerPricePort({ broker, calls, firstTicker, resolveFi
       resolveFirstTickerRequested()
       return firstTicker
     }
-    return { ok: true, data: { symbol, price: "65000" } }
+    return { ok: true,
+      data: { symbol,
+        price: "65000" } }
   }
 }
 
@@ -976,13 +1004,18 @@ function configureDelayedTickerAccountSnapshot(broker) {
   broker.getAccountSnapshot = async () => {
     accountSnapshotTime += 1
     const balances = ["BTC", "ETH", "USDT"].map((code) => {
-      const asset = new Asset({ id: `asset:${code}`, code })
+      const asset = new Asset({ id: `asset:${code}`,
+        code })
       return new Balance({
-        free: new Quantity({ amount: "0", asset }),
-        locked: new Quantity({ amount: "0", asset }),
+        free: new Quantity({ amount: "0",
+          asset }),
+        locked: new Quantity({ amount: "0",
+          asset }),
       })
     })
-    return { ok: true, data: { balances, sourceTime: accountSnapshotTime } }
+    return { ok: true,
+      data: { balances,
+        sourceTime: accountSnapshotTime } }
   }
 }
 
@@ -1020,11 +1053,17 @@ function createDelayedFirstTickerBroker({ broker, calls }) {
   const firstTickerRequested = new Promise((resolve) => {
     resolveFirstTickerRequested = resolve
   })
-  configureDelayedTickerPricePort({ broker, calls, firstTicker, resolveFirstTickerRequested })
+  configureDelayedTickerPricePort({ broker,
+    calls,
+    firstTicker,
+    resolveFirstTickerRequested })
   configureDelayedTickerAccountSnapshot(broker)
   const getPlaceOrderCalls = configureDelayedTickerOrderPort(broker)
   const secondSubscription = configureDelayedTickerSubscriptionPort(broker)
-  return { secondSubscription, firstTickerRequested, resolveFirstTicker, getPlaceOrderCalls }
+  return { secondSubscription,
+    firstTickerRequested,
+    resolveFirstTicker,
+    getPlaceOrderCalls }
 }
 
 async function assertSecondMarketSubscribedBeforeTicker({

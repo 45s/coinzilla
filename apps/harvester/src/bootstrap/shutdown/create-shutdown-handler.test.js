@@ -123,7 +123,9 @@ function createShutdown({
     brokerName: "binance",
     ...ports,
   })
-  return { stop, state, calls }
+  return { stop,
+    state,
+    calls }
 }
 
 test("activates strategy gates before shutdown context creation can fail", async () => {

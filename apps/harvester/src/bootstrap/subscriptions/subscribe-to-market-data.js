@@ -210,7 +210,10 @@ async function requestMarketPriceSubscription({ broker, symbol, handler, eventPu
       onPrice: handler,
     })
   } catch (error) {
-    publishSubscriptionFailure({ eventPublisher, brokerName, symbol, error })
+    publishSubscriptionFailure({ eventPublisher,
+      brokerName,
+      symbol,
+      error })
     throw error
   }
 }
@@ -224,7 +227,10 @@ function validateMarketPriceSubscription({ result, eventPublisher, brokerName, s
     symbol,
     streamLabel: "market prices",
   })
-  publishSubscriptionFailure({ eventPublisher, brokerName, symbol, error })
+  publishSubscriptionFailure({ eventPublisher,
+    brokerName,
+    symbol,
+    error })
   throw error
 }
 
@@ -373,7 +379,8 @@ async function processInitialMarketPrice({ context, reportPriceError, symbol, pa
     settings: context.settings,
   })
   if (!processed.ok) {
-    reportPriceError({ symbol, errors: processed.errors })
+    reportPriceError({ symbol,
+      errors: processed.errors })
     return
   }
   logMarketPriceEvaluation({
@@ -400,8 +407,14 @@ async function seedMissingInitialPrices({ context, reportPriceError }) {
     if (intakeState.hasFreshWebSocketPrice) {
       continue
     }
-    const priceEvent = await getInitialMarketPriceEvent({ broker, symbol, now })
-    await processInitialMarketPrice({ context, reportPriceError, symbol, pairConfig, priceEvent })
+    const priceEvent = await getInitialMarketPriceEvent({ broker,
+      symbol,
+      now })
+    await processInitialMarketPrice({ context,
+      reportPriceError,
+      symbol,
+      pairConfig,
+      priceEvent })
   }
 }
 

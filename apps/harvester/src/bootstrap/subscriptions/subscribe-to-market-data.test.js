@@ -10,19 +10,25 @@ function createBrokerFixture({ calls, subscribeForPrices, subscribeForBookTicker
       calls.push(`subscribe-price:${input.symbol}`)
       return subscribeForPrices
         ? subscribeForPrices(input, calls)
-        : { ok: true, data: { unsubscribe: async () => {}, stream: "price" } }
+        : { ok: true,
+          data: { unsubscribe: async () => {},
+            stream: "price" } }
     },
     subscribeForBookTicker: async (input) => {
       calls.push(`subscribe-book:${input.symbol}`)
       return subscribeForBookTicker
         ? subscribeForBookTicker(input, calls)
-        : { ok: true, data: { unsubscribe: async () => {}, stream: "book" } }
+        : { ok: true,
+          data: { unsubscribe: async () => {},
+            stream: "book" } }
     },
     getPrices: async (input) => {
       calls.push(`ticker-price-request:${input.symbol}`)
       return getPrices
         ? getPrices(input, calls)
-        : { ok: true, data: { symbol: input.symbol, price: "65000" } }
+        : { ok: true,
+          data: { symbol: input.symbol,
+            price: "65000" } }
     },
   }
 }
@@ -31,7 +37,8 @@ function createMarketProcessors({ calls, processMarketPrice, processMarketBook }
   return {
     processMarketPrice: processMarketPrice ?? (async (input) => {
       calls.push(`process-price:${input.symbol}`)
-      return { ok: true, data: { decision: { action: "NO_ACTION" } } }
+      return { ok: true,
+        data: { decision: { action: "NO_ACTION" } } }
     }),
     processMarketBook: processMarketBook ?? (async ({ symbol }) => {
       calls.push(`process-book:${symbol}`)
@@ -42,7 +49,8 @@ function createMarketProcessors({ calls, processMarketPrice, processMarketBook }
 
 const createFixture = ({
   tradingEnabled = false,
-  pairs = { BTCUSDT: { enabled: true, orderQuantity: 0.01 } },
+  pairs = { BTCUSDT: { enabled: true,
+      orderQuantity: 0.01 } },
   subscribeForPrices,
   subscribeForBookTicker,
   getPrices,
@@ -57,8 +65,13 @@ const createFixture = ({
   const subscriptions = []
   const bookSubscriptions = []
   const marketPriceIntake = new Map()
-  const broker = createBrokerFixture({ calls, subscribeForPrices, subscribeForBookTicker, getPrices })
-  const processors = createMarketProcessors({ calls, processMarketPrice, processMarketBook })
+  const broker = createBrokerFixture({ calls,
+    subscribeForPrices,
+    subscribeForBookTicker,
+    getPrices })
+  const processors = createMarketProcessors({ calls,
+    processMarketPrice,
+    processMarketBook })
   const result = subscribeToMarketData({
     broker,
     brokerName: "binance",
@@ -76,7 +89,12 @@ const createFixture = ({
     bookSubscriptions,
     marketPriceIntake,
   })
-  return { result, calls, events, subscriptions, bookSubscriptions, marketPriceIntake }
+  return { result,
+    calls,
+    events,
+    subscriptions,
+    bookSubscriptions,
+    marketPriceIntake }
 }
 
 test("establishes all enabled book/price streams before WebSocket API ticker.price seeding", async () => {
