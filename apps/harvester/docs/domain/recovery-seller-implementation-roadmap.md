@@ -243,7 +243,7 @@ Preserve manual/external order ownership. EARN/off-Spot quantity is never availa
 
 **Deliverable:** deterministic end-to-end RS lifecycle proof and current documentation.
 
-Cover: 50 ZRO / 100 USDT average-cost calculation; 0.5 Spot / 49.5 EARN custody; 0.01 legacy slice; independent profitability gates; partial/terminal fills and commissions; exact-once reservations/accounting; cycle completion after terminal reconciliation; fixed original average cost and decreasing remaining legacy quantity/custody across cycles; EARN redemption and authoritative Spot reconciliation; unknown outcomes, external orders, concurrent CG/RS operation on the same and different markets, shared reservations, strategy-specific attribution and exchange constraints.
+Cover: 50 ZRO / 100 USDT average-cost calculation; 0.5 Spot / 49.5 EARN custody; 0.01 legacy slice; combined cycle-level cost-recovery-plus-`minProfit` gate; partial/terminal fills and commissions; exact-once reservations/accounting; cycle completion after terminal reconciliation; fixed original average cost and decreasing remaining legacy quantity/custody across cycles; EARN redemption and authoritative Spot reconciliation; unknown outcomes, external orders, concurrent CG/RS operation on the same and different markets, shared reservations, strategy-specific attribution and exchange constraints.
 
 Update the canonical RS specification, architecture, runtime config docs only when config is approved, tests index, docs index, Harvester roadmap and PR descriptions.
 
@@ -256,7 +256,7 @@ Update the canonical RS specification, architecture, runtime config docs only wh
 | RS-1 | CG source audit and reuse map | Evidence-backed inventory and reuse decisions |
 | RS-2a | Shared Portfolio/multi-Position accounting foundation | **COMPLETE** — merged in [PR #1118](https://github.com/45s/coinzilla/pull/1118); exact-head required CI passed |
 | RS-2b | RS-specific domain accounting, custody and profitability | **COMPLETE** — PR #1276 merged as `9276b6c01bec62b743727548786c5af4a04b7908` from exact head `19448d63d117f563c31d8ab9422ac73623974782`; full Harvester suite 1,847/1,847 and all required checks passed. No exchange operations. |
-| RS-3 | RS pure policy | PR #1213 adds the pure independent profitability calculator; deterministic quantity/SELL planning decisions and explicit policy outcomes remain pending |
+| RS-3 | RS pure policy | PR #1213 adds the pure profitability calculator foundation; RS-3 must align its policy with the approved combined cycle-level cost-recovery-plus-`minProfit` rule; deterministic quantity/SELL planning decisions and explicit policy outcomes remain pending |
 | RS-4 | Concurrent Trading Engine integration | Existing execution and safety infrastructure reused |
 | RS-5 | Offline lifecycle and docs | Full lifecycle and exact-head CI green |
 
@@ -311,7 +311,7 @@ flowchart TD
   G --> H["Evaluate recovery-tranche profit"]
   H --> I{"Recovery gate passes?"}
   I -->|"No"| X["WAIT / BLOCK"]
-  I -->|"Yes"| J["Evaluate legacy profit independently"]
+  I -->|"Yes"| J["Validate combined cycle cost recovery and minProfit"]
   J --> K{"Legacy gate passes?"}
   K -->|"No"| X
   K -->|"Yes"| L["Shared Trading Engine safety and order gates"]
