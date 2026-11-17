@@ -94,7 +94,7 @@ The package entry point currently exports exactly `BinanceWebSocketBroker`, `Bin
 - `apps/harvester`, which wraps `BinanceWebSocketBroker` in its own infrastructure adapter and implements Harvester's application-owned `BrokerPort`.
 - `packages/market-simulator`, whose `HistoricalMarketBroker` extends `CoreBroker` and whose `SimulatedExecutionBroker` extends the historical broker.
 
-`CoreBroker` is a live public extension point, not an unused internal base class or a formal application-owned port. `normalizeBinanceId` is used by the Harvester infrastructure adapter. Preserve all four root exports and their consumer contracts unless a separately reviewed compatibility change proves a migration safe. Do not reintroduce the removed third-party SDK.
+`CoreBroker` is a live public extension point, not an unused internal base class or a formal application-owned port. `normalizeBinanceId` is used by the Harvester infrastructure adapter. Preserve the original Binance/CoreBroker root exports and their consumer contracts; the Bitunix Spot broker/config and the separately managed read-only WebSocket RPC client are explicit additive exports. Do not reintroduce the removed third-party SDK.
 
 ## Bitunix Spot capability contract
 
