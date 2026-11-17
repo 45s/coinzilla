@@ -470,7 +470,7 @@ test("rejects malformed fact input identities and session bindings", () => {
       fact: validFact,
       runtimeSessionId: "",
     }),
-    /runtimeSessionId must be a non-empty string/,
+    /runtimeSessionId must be a canonical non-empty string/,
     "Every durable fact must be bound to a non-empty runtime session identity.",
   )
 })
