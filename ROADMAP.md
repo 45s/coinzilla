@@ -100,10 +100,9 @@
    - **Owner:** [Entities roadmap](packages/entities/ROADMAP.md).
 
 9. **Provider-neutral database CRUD infrastructure — IN PROGRESS ([#1340](https://github.com/45s/coinzilla/issues/1340), [PR #1353](https://github.com/45s/coinzilla/pull/1353)).**
-   - **Why:** the built-in SQLite lifecycle, transactions and migrations exist; a consistent provider-neutral record CRUD/query contract is now the next infrastructure milestone.
-   - **Do:** define generic JSON-record CRUD, query/result/error/transaction/capability contracts; implement the first provider with built-in `node:sqlite`; preserve the existing low-level SQLite API. Keep application schemas and repository interfaces in their owning bounded contexts.
-   - **Separate follow-up:** first real application-owned repository integration, plus backup/restore and operational procedures, remain consumer-owned work after the generic contract is stable.
-   - **Owner:** [Database roadmap](packages/db/ROADMAP.md).
+   - **Database infrastructure:** `packages/db` owns generic provider-neutral CRUD/query, lifecycle and transaction contracts plus concrete adapters; Node.js built-in SQLite is the first provider. Keep application-specific schemas, repositories and workflows out of the package.
+   - **Consumer integration remains separate:** Harvester persistence integration remains owned by Harvester and tracked independently under [issue #1327](https://github.com/45s/coinzilla/issues/1327) and the [Harvester persistence roadmap](apps/harvester/ROADMAP.md#persistence--provider-agnostic-database-integration-1327). This CRUD task does not implement or modify Harvester.
+   - **Owner/status:** [Database roadmap](packages/db/ROADMAP.md); tracking [issue #1340](https://github.com/45s/coinzilla/issues/1340).
 
 10. **Structured, package-owned errors with a shared `SystemCustomError` base ([#1028](https://github.com/45s/coinzilla/issues/1028)) — IN PROGRESS; the Utilities-owned base is implemented in merged [PR #1262](https://github.com/45s/coinzilla/pull/1262); gradual adoption remains with consuming domains.**
    - **Why:** generic errors and inconsistent wrapping make it difficult to identify the failing component/operation and preserve the underlying cause.
