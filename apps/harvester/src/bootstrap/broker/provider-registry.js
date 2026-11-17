@@ -180,7 +180,24 @@ function resolveProviderConfig({ descriptor, env }) {
   }
 }
 
-function publishConnected({ eventPublisher, descriptor }) {
+function logProviderLifecycle({ logger, level, message, descriptor, error }) {
+  const logMethod = typeof logger?.[level] === "function" ? logger[level] : logger?.info
+  logMethod?.call(logger, {
+    message,
+    provider: descriptor.provider,
+    providerInstanceId: descriptor.id,
+    accountId: descriptor.accountId,
+    ...(error ? { error } : {}),
+  })
+}
+
+function publishConnected({ eventPublisher, descriptor, logger }) {
+  logProviderLifecycle({
+    logger,
+    level: "system",
+    message: "Provider instance connected",
+    descriptor,
+  })
   publishLifecycleEvent({
     eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTED,
@@ -190,7 +207,14 @@ function publishConnected({ eventPublisher, descriptor }) {
   })
 }
 
-function publishConnectionFailure({ eventPublisher, descriptor, error }) {
+function publishConnectionFailure({ eventPublisher, descriptor, error, logger }) {
+  logProviderLifecycle({
+    logger,
+    level: "error",
+    message: "Provider instance connection failed",
+    descriptor,
+    error,
+  })
   publishLifecycleEvent({
     eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED,
@@ -201,13 +225,22 @@ function publishConnectionFailure({ eventPublisher, descriptor, error }) {
   })
 }
 
-async function disconnectEntries({ entries, eventPublisher }) {
+async function disconnectEntries({ entries, eventPublisher, logger }) {
   const reversedEntries = entries.slice().reverse()
   const results = await Promise.allSettled(reversedEntries.map((entry) =>
     Promise.resolve().then(() => entry.broker.disconnect())))
   const errors = []
   for (const [index, result] of results.entries()) {
     const entry = reversedEntries[index]
+    logProviderLifecycle({
+      logger,
+      level: result.status === "fulfilled" ? "system" : "error",
+      message: result.status === "fulfilled"
+        ? "Provider instance disconnected"
+        : "Provider instance disconnect failed",
+      descriptor: entry.descriptor,
+      ...(result.status === "rejected" ? { error: result.reason } : {}),
+    })
     publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.BROKER_DISCONNECTED,
@@ -257,6 +290,7 @@ async function constructProviderEntries({ descriptors, adapterFactories, env, lo
     const cleanupErrors = await disconnectEntries({
       entries,
       eventPublisher,
+      logger,
     })
     if (cleanupErrors.length > 0) {
       throw new AggregateError([
@@ -299,12 +333,13 @@ function createPortFacade({ entry, connectAll, disconnectAll }) {
   }))
 }
 
-function createDisconnectAll({ entries, eventPublisher, lifecycleState }) {
+function createDisconnectAll({ entries, eventPublisher, logger, lifecycleState }) {
   return async function disconnectAll() {
     if (!lifecycleState.disconnectPromise) {
       lifecycleState.disconnectPromise = disconnectEntries({
         entries,
         eventPublisher,
+        logger,
       })
     }
     const errors = await lifecycleState.disconnectPromise
@@ -314,7 +349,7 @@ function createDisconnectAll({ entries, eventPublisher, lifecycleState }) {
   }
 }
 
-function createConnectAll({ entries, disconnectAll, eventPublisher, lifecycleState }) {
+function createConnectAll({ entries, disconnectAll, eventPublisher, logger, lifecycleState }) {
   return async function connectAll() {
     if (lifecycleState.disconnectPromise) {
       throw new Error("Provider registry cannot connect after shutdown has started")
@@ -329,12 +364,14 @@ function createConnectAll({ entries, disconnectAll, eventPublisher, lifecycleSta
           publishConnected({
             eventPublisher,
             descriptor: entry.descriptor,
+            logger,
           })
         } catch (error) {
           publishConnectionFailure({
             eventPublisher,
             descriptor: entry.descriptor,
             error,
+            logger,
           })
           try {
             await disconnectAll()
@@ -352,18 +389,20 @@ function createConnectAll({ entries, disconnectAll, eventPublisher, lifecycleSta
   }
 }
 
-function createRegistryLifecycle({ entries, eventPublisher }) {
+function createRegistryLifecycle({ entries, eventPublisher, logger }) {
   const entriesById = new Map(entries.map((entry) => [entry.descriptor.id, entry]))
   const lifecycleState = {}
   const disconnectAll = createDisconnectAll({
     entries,
     eventPublisher,
+    logger,
     lifecycleState,
   })
   const connectAll = createConnectAll({
     entries,
     disconnectAll,
     eventPublisher,
+    logger,
     lifecycleState,
   })
   const getEntry = ({ instanceId } = {}) => {
@@ -414,5 +453,6 @@ export async function createProviderRegistry({
   return createRegistryLifecycle({
     entries,
     eventPublisher,
+    logger,
   })
 }

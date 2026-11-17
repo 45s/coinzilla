@@ -47,6 +47,7 @@ function publishValidatedConfiguration({
   effectiveConfiguration,
   environment,
   brokerName,
+  providerInstanceId,
   tradingMode,
   tradingEnabled,
 }) {
@@ -72,6 +73,7 @@ function publishValidatedConfiguration({
     message: "App configuration validated",
     environment,
     broker: brokerName,
+    providerInstanceId,
     tradingMode,
     enabledSymbols,
     strategyMode: `conservative-${tradingMode}`,
@@ -141,6 +143,7 @@ export async function resolveHarvesterOptions({
     effectiveConfiguration,
     environment,
     brokerName,
+    providerInstanceId: selectedProvider.id,
     tradingMode,
     tradingEnabled,
   })
