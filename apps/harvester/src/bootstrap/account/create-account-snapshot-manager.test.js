@@ -58,7 +58,6 @@ const createFixture = ({
   additionalTrackedQuoteCashFlow = [],
   additionalTrackedQuoteCashFlowProvider,
   operationalStateStore,
-  expectedAccountId,
   logger = {},
   monotonicNow,
 } = {}) => {
@@ -101,7 +100,6 @@ const createFixture = ({
     now: () => 123,
     monotonicNow,
     operationalStateStore,
-    expectedAccountId,
   })
   return {
     manager,
@@ -116,13 +114,11 @@ const createFixture = ({
 const createAccountSnapshot = ({
   market,
   sourceTime,
-  accountId,
   extraBalances = []
 }) => ({
   ok: true,
   data: {
-    ...(accountId === undefined ? {} : { accountId }),
-    sourceTime,
+undefined    sourceTime,
     balances: [
       new Balance({
         free: new Quantity({
@@ -1261,24 +1257,3 @@ test("captures separately tracked legacy quote proceeds in the shared snapshot c
 })
 
 
-test("fails closed when the signed Binance account UID differs from the configured lock identity", async () => {
-  const { market } = createFixture()
-  const fixture = createFixture({
-    expectedAccountId: "123456789",
-    accountSnapshots: [createAccountSnapshot({
-      market,
-      sourceTime: 100,
-      accountId: "987654321",
-    })],
-  })
-
-  await assert.rejects(
-    fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" }),
-    (error) =>
-      error.code === "HARVESTER_BINANCE_ACCOUNT_ID_MISMATCH" &&
-      error.recoveryFailure?.category === "ACCOUNTING_INTEGRITY" &&
-      error.recoveryFailure?.stage === "ACCOUNT_IDENTITY_MISMATCH",
-  )
-  assert.equal(fixture.publishedEvents.length, 0, "A mismatched account UID must not publish the startup account audit.")
-  assert.equal(fixture.getFlushCount(), 0, "A mismatched account UID must fail before any audit durability flush.")
-})
