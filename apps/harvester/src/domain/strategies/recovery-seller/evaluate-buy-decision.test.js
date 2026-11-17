@@ -95,6 +95,7 @@ test("blocks the next BUY when the RS per-pair investment limit would be exceede
     recoveryPosition: {
       spent: "10",
     },
+    lastBuyPrice: "2",
   })
 
   assert.equal(result.decision.outcome, "BLOCK",
@@ -123,6 +124,7 @@ test("latches STOP when a BUY commitment exists without an identifiable active o
 test("waits for an existing acknowledged RS order instead of creating a duplicate BUY", () => {
   const result = evaluate({
     activeOrders: [{
+      market: { symbol: "ZROUSDT" },
       side: "BUY",
       status: "PARTIALLY_FILLED",
       clientOrderId: "rs-buy-1",
@@ -143,6 +145,7 @@ test("waits for an existing acknowledged RS order instead of creating a duplicat
 test("latches STOP and reconciles the original identity for an unknown or unacknowledged RS order", () => {
   const result = evaluate({
     activeOrders: [{
+      market: { symbol: "ZROUSDT" },
       side: "BUY",
       status: "UNKNOWN",
       clientOrderId: "rs-buy-unknown",
