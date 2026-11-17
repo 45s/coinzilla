@@ -213,11 +213,11 @@ function validateAccountOpenOrderAmounts({ order }) {
   }
 }
 
-function validateAccountOpenOrderState({ order }) {
+function validateAccountOpenOrderState({ order, index }) {
   if (order.side !== "BUY" && order.side !== "SELL") {
     throw new TypeError("Account open-order side must be BUY or SELL")
   }
-  requireNonEmptyString({ value: order.type, field: "orders.type", maxLength: 32 })
+  requireNonEmptyString({ value: order.type, field: `orders[${index}].type`, maxLength: 32 })
   if (!["NEW", "OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
     throw new TypeError("Account open-order status must be OPEN or PARTIALLY_FILLED")
   }
@@ -227,7 +227,7 @@ function validateAccountOpenOrder({ order, index }) {
   validateAccountOpenOrderShape({ order, index })
   const { brokerOrderId, symbol } = validateAccountOpenOrderIdentity({ order, index })
   validateAccountOpenOrderAmounts({ order })
-  validateAccountOpenOrderState({ order })
+  validateAccountOpenOrderState({ order, index })
   return `${symbol}:${brokerOrderId}`
 }
 
