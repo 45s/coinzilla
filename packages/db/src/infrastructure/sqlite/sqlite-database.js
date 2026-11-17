@@ -265,6 +265,26 @@ function createCloseOperation({ database, state }) {
   }
 }
 
+function createRequireOpenConnection({ state, requireConnection }) {
+  return function requireOpenConnection() {
+    if (state.closingRequested) {
+      throw new Error("SQLite database is closing")
+    }
+
+    return requireConnection()
+  }
+}
+
+function createTransactionOperation({ state }) {
+  return function runTransaction({ work, operation }) {
+    if (state.closingRequested) {
+      throw new Error("SQLite database is closing")
+    }
+
+    return operation(work)
+  }
+}
+
 function createSqliteDatabaseFacade({ database, requireConnection, databaseFilename, timeout }) {
   const state = {
     closingRequested: false,
@@ -272,21 +292,11 @@ function createSqliteDatabaseFacade({ database, requireConnection, databaseFilen
     activeBackups: new Set(),
   }
 
-  function requireOpenConnection() {
-    if (state.closingRequested) {
-      throw new Error("SQLite database is closing")
-    }
-
-    return requireConnection()
-  }
-
-  function runTransaction({ work, operation }) {
-    if (state.closingRequested) {
-      throw new Error("SQLite database is closing")
-    }
-
-    return operation(work)
-  }
+  const requireOpenConnection = createRequireOpenConnection({
+    state,
+    requireConnection,
+  })
+  const runTransaction = createTransactionOperation({ state })
 
   const backup = createBackupOperation({
     state,
