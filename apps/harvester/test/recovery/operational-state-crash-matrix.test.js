@@ -333,8 +333,14 @@ async function createRecoveryCycleAccountingEvidence({
     buyQuoteQuantity,
     sellQuoteQuantity,
   })
-  await applyFill({ store, fill: ordersAndFills.buyFill })
-  await applyFill({ store, fill: ordersAndFills.sellFill })
+  await applyFill({
+    store,
+    fill: ordersAndFills.buyFill,
+  })
+  await applyFill({
+    store,
+    fill: ordersAndFills.sellFill,
+  })
   const projection = await createRecoveryCycleAccountingProjection({
     buyFill: ordersAndFills.buyFill,
     sellFill: ordersAndFills.sellFill,
