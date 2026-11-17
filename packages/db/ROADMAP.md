@@ -14,7 +14,7 @@ The accepted architecture is recorded in [ADR-0001](./docs/decisions/0001-provid
 
 ## Current priority — provider-neutral CRUD API
 
-**In progress:** [Issue #1340](https://github.com/45s/coinzilla/issues/1340) · [PR #1342](https://github.com/45s/coinzilla/pull/1342)
+**In progress:** [Issue #1340](https://github.com/45s/coinzilla/issues/1340) · [PR #1353](https://github.com/45s/coinzilla/pull/1342)
 
 The approved design is:
 
