@@ -767,3 +767,134 @@ test("Bitunix Spot order history accepts the largest safely representable page a
     pageSize: maximumSafeInteger,
   }, "safe pagination values must be preserved exactly in the Bitunix request")
 })
+
+const EXCHANGE_RATE_PATH = "/api/spot/v1/common/rate/list"
+
+const INVALID_EXCHANGE_RATE_RESPONSES = [
+  undefined,
+  null,
+  {},
+  [null],
+  [
+    {
+      baseSymbol: "USDT",
+      quoteSymbol: "AUD",
+      rate: 1.5,
+    },
+  ],
+  [
+    {
+      baseSymbol: "",
+      quoteSymbol: "AUD",
+      rate: "1.5",
+    },
+  ],
+  [
+    {
+      baseSymbol: "USDT",
+      quoteSymbol: " ",
+      rate: "1.5",
+    },
+  ],
+  [
+    {
+      baseSymbol: "USDT",
+      quoteSymbol: "AUD",
+      rate: "0",
+    },
+  ],
+  [
+    {
+      baseSymbol: "USDT",
+      quoteSymbol: "AUD",
+      rate: "-1",
+    },
+  ],
+  [
+    {
+      baseSymbol: "USDT",
+      quoteSymbol: "AUD",
+      rate: "not-a-rate",
+    },
+  ],
+]
+
+test("Bitunix Spot exchange rates preserve exact decimal strings and immutable records", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      [EXCHANGE_RATE_PATH]: [
+        {
+          baseSymbol: "USDT",
+          quoteSymbol: "AUD",
+          rate: "1.4452976228500000",
+        },
+      ],
+    },
+  })
+
+  const result = await broker.getExchangeRates()
+
+  assert.equal(result.ok, true, "a valid exchange-rate catalog must return a successful result")
+  assert.deepEqual(result.data, [
+    {
+      baseSymbol: "USDT",
+      quoteSymbol: "AUD",
+      rate: "1.4452976228500000",
+    },
+  ], "the adapter must preserve the exact rate string without Number conversion")
+  assert.equal(Object.isFrozen(result.data), true, "the returned exchange-rate array must be immutable")
+  assert.equal(Object.isFrozen(result.data[0]), true, "each returned exchange-rate record must be immutable")
+  assert.deepEqual(calls[0], {
+    method: "GET",
+    path: EXCHANGE_RATE_PATH,
+    options: {
+      authenticated: false,
+    },
+  }, "the broker must issue the documented public GET without parameters or authentication")
+})
+
+test("Bitunix Spot exchange rates accept an explicitly empty catalog", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      [EXCHANGE_RATE_PATH]: [],
+    },
+  })
+
+  const result = await broker.getExchangeRates()
+
+  assert.equal(result.ok, true, "an explicit empty rate catalog is a valid exchange response")
+  assert.deepEqual(result.data, [], "an empty rate catalog must remain an empty array")
+  assert.equal(calls.length, 1, "reading the exchange-rate catalog must make exactly one request")
+})
+
+test("Bitunix Spot exchange rates reject missing data and malformed or non-positive records", async () => {
+  for (const response of INVALID_EXCHANGE_RATE_RESPONSES) {
+    const { broker } = createBroker({
+      responses: {
+        [EXCHANGE_RATE_PATH]: response,
+      },
+    })
+    const result = await broker.getExchangeRates()
+
+    assert.equal(
+      result.ok,
+      false,
+      `invalid exchange-rate response must fail closed: ${JSON.stringify(response)}`,
+    )
+    assert.ok(result.errors.length > 0, "a malformed exchange-rate response must include a useful error")
+  }
+})
+
+test("Bitunix Spot exchange rates preserve REST failures instead of returning an empty catalog", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      [EXCHANGE_RATE_PATH]: new Error("exchange unavailable"),
+    },
+  })
+
+  const result = await broker.getExchangeRates()
+
+  assert.equal(result.ok, false, "a failed exchange-rate request must not appear successful")
+  assert.match(result.errors[0].message, /exchange unavailable/, "the REST failure must remain visible to the caller")
+  assert.equal(calls.length, 1, "a failed exchange-rate request must not trigger retries")
+})

@@ -292,3 +292,87 @@ test("Bitunix REST client rejects malformed HTTP status metadata without misclas
     return true
   })
 })
+
+test("Bitunix REST client sends public GET requests without authentication headers or signing", async () => {
+  let captured
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    now: () => {
+      throw new Error("public requests must not read the signing clock")
+    },
+    nonceFactory: () => {
+      throw new Error("public requests must not create a nonce")
+    },
+    fetchFn: async (...args) => {
+      const [url, options] = args
+      captured = {
+        url,
+        options,
+      }
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            code: "0",
+            msg: "success",
+            data: [],
+          }
+        },
+      }
+    },
+  })
+
+  const result = await client.request({
+    method: "GET",
+    path: "/api/spot/v1/common/rate/list",
+    authenticated: false,
+  })
+
+  assert.equal(
+    captured.url,
+    "https://openapi.bitunix.com/api/spot/v1/common/rate/list",
+    "the public rate request must use the exact documented endpoint without query parameters",
+  )
+  assert.equal(captured.options.method, "GET", "the public rate endpoint must be requested with GET")
+  assert.equal(captured.options.headers, undefined, "public requests must not include private API authentication headers")
+  assert.ok(captured.options.signal instanceof AbortSignal, "public requests must retain the configured request timeout")
+  assert.deepEqual(result.data, [], "an explicit empty public response must be returned without signing")
+})
+
+test("Bitunix REST client rejects unauthenticated mutations before network I/O", async () => {
+  let callCount = 0
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => {
+      callCount += 1
+      throw new Error("unauthenticated requests must not reach the exchange")
+    },
+  })
+
+  await assert.rejects(
+    client.request({
+      method: "POST",
+      path: "/api/spot/v1/order/place_order",
+      authenticated: false,
+      body: { symbol: "BTCUSDT" },
+    }),
+    /unauthenticated Bitunix requests must be read-only GET requests/i,
+    "an unauthenticated order POST must be rejected before the network boundary",
+  )
+
+  await assert.rejects(
+    client.request({
+      method: "GET",
+      path: "/api/spot/v1/market/last_price",
+      authenticated: false,
+      stateChanging: true,
+    }),
+    /unauthenticated Bitunix requests must be read-only GET requests/i,
+    "an unauthenticated GET explicitly marked state-changing must be rejected before the network boundary",
+  )
+
+  assert.equal(callCount, 0, "no unauthenticated mutation may reach the exchange transport")
+})
