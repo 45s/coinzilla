@@ -13,7 +13,7 @@ import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.
 import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
 import { resolveHarvesterOptions } from "./config/resolve-harvester-options.js"
 import { EffectiveConfigurationError } from "../domain/configuration/create-effective-strategy-configuration-fingerprint.js"
-import { cleanupBroker } from "./broker/cleanup-broker.js"
+import { cleanupBroker, disconnectBroker as disconnectBrokerOperation } from "./broker/cleanup-broker.js"
 import { createAccountSnapshotManager } from "./account/create-account-snapshot-manager.js"
 import { loadMarketMetadata } from "./market/load-market-metadata.js"
 import { createUserDataEventHandler } from "./user-data/create-user-data-event-handler.js"
@@ -811,6 +811,7 @@ async function cleanupFailedHarvesterStartup({ error, startup, resources } = {})
     subscriptions: resources.subscriptions,
     bookSubscriptions: resources.bookSubscriptions,
     userDataSubscription: resources.userDataSubscription,
+    disconnectAll: resources.providerRegistry.disconnectAll,
   })
   const cleanupErrors = [...operatorCleanupErrors, ...brokerCleanupErrors]
   throwIfStartupCleanupFailed({ error,
@@ -876,7 +877,16 @@ function createHarvesterRuntimeStop({ startup, resources, accountSnapshots, user
       })]
       : []),
   ]
-  const stopRuntime = createShutdownHandler({
+  function createProviderRegistryDisconnectOperation({ providerRegistry }) {
+  return ({ broker, brokerName, eventPublisher }) => disconnectBrokerOperation({
+    broker,
+    brokerName,
+    eventPublisher,
+    disconnectAll: providerRegistry.disconnectAll,
+  })
+}
+
+const stopRuntime = createShutdownHandler({
     state: resources.userDataState,
     strategyShutdownParticipants,
     logger: startup.logger,
@@ -889,6 +899,9 @@ function createHarvesterRuntimeStop({ startup, resources, accountSnapshots, user
     broker: resources.broker,
     brokerName: startup.brokerName,
     eventPublisher: startup.eventPublisher,
+    disconnectBroker: createProviderRegistryDisconnectOperation({
+      providerRegistry: resources.providerRegistry,
+    }),
     publishAccountSnapshot: accountSnapshots.publishAccountSnapshot,
     now: () => globalThis.performance.now(),
     runtimeSessionId: startup.runtimeSessionId,

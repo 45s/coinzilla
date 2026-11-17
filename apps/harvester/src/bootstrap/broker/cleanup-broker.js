@@ -1,23 +1,19 @@
-import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
-import { publishLifecycleEvent } from "../../application/events/publish-lifecycle-event.js"
-import { mapBrokerDisconnectedData } from "../../application/events/lifecycle-event-dtos.js"
-
-export async function stopMarketIntake({ subscriptions, bookSubscriptions = [] }) {
-  const results = await Promise.allSettled([
-    ...bookSubscriptions.map(({ unsubscribe }) => {
-      return Promise.resolve().then(() => unsubscribe())
-    }),
-    ...subscriptions.map(({ unsubscribe }) => {
-      return Promise.resolve().then(() => unsubscribe())
-    }),
-  ])
+export async function stopMarketIntake({ subscriptions = [], bookSubscriptions = [] } = {}) {
+  const operations = [
+    ...bookSubscriptions.map(({ unsubscribe }) => () => unsubscribe()),
+    ...subscriptions.map(({ unsubscribe }) => () => unsubscribe()),
+  ]
+  const results = await Promise.allSettled(operations.map((operation) =>
+    Promise.resolve().then(operation)))
   return results
     .filter((result) => result.status === "rejected")
     .map((result) => result.reason)
 }
 
-export async function stopUserDataIntake({ userDataSubscription }) {
-  if (typeof userDataSubscription?.disconnect !== "function") {return []}
+export async function stopUserDataIntake({ userDataSubscription } = {}) {
+  if (typeof userDataSubscription?.disconnect !== "function") {
+    return []
+  }
   const result = await Promise.allSettled([
     Promise.resolve().then(() => userDataSubscription.disconnect()),
   ])
@@ -28,18 +24,23 @@ export async function stopUserDataIntake({ userDataSubscription }) {
 
 async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDataSubscription }) {
   const [marketErrors, userDataErrors] = await Promise.all([
-    stopMarketIntake({ subscriptions,
-bookSubscriptions }),
-    stopUserDataIntake({ userDataSubscription }),
+    stopMarketIntake({
+      subscriptions,
+      bookSubscriptions,
+    }),
+    stopUserDataIntake({
+      userDataSubscription,
+    }),
   ])
   return [...marketErrors, ...userDataErrors]
 }
 
-export async function disconnectBroker({ broker, brokerName, eventPublisher }) {
+export async function disconnectBroker({ broker, brokerName, eventPublisher, disconnectAll }) {
+  const disconnectOperation = typeof disconnectAll === "function"
+    ? disconnectAll
+    : () => broker.disconnect()
   const results = await Promise.allSettled([
-    Promise.resolve().then(() => {
-      return broker.disconnect()
-    }),
+    Promise.resolve().then(disconnectOperation),
   ])
   const [brokerDisconnect] = results
   publishLifecycleEvent({
@@ -56,14 +57,25 @@ export async function disconnectBroker({ broker, brokerName, eventPublisher }) {
     .map((result) => result.reason)
 }
 
-export async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions = [], userDataSubscription }) {
-  const intakeErrors = await stopBrokerIntake({ subscriptions,
-bookSubscriptions,
-userDataSubscription })
-  const disconnectErrors = await disconnectBroker({ broker,
-brokerName,
-eventPublisher })
-  const errors = [...intakeErrors, ...disconnectErrors]
-
-  return errors
+export async function cleanupBroker({
+  broker,
+  brokerName,
+  eventPublisher,
+  subscriptions,
+  bookSubscriptions = [],
+  userDataSubscription,
+  disconnectAll,
+} = {}) {
+  const intakeErrors = await stopBrokerIntake({
+    subscriptions,
+    bookSubscriptions,
+    userDataSubscription,
+  })
+  const disconnectErrors = await disconnectBroker({
+    broker,
+    brokerName,
+    eventPublisher,
+    disconnectAll,
+  })
+  return [...intakeErrors, ...disconnectErrors]
 }

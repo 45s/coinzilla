@@ -262,11 +262,14 @@ async function disconnectEntries({ entries, logger }) {
       logger,
       level: result.status === "fulfilled" ? "system" : "error",
       message: result.status === "fulfilled"
-        ? "Provider instance disconnected"
+        ? entry.connected ? "Provider instance disconnected" : "Provider instance resources cleaned up"
         : "Provider instance disconnect failed",
       descriptor: entry.descriptor,
       ...(result.status === "rejected" ? { error: result.reason } : {}),
     })
+    if (result.status === "fulfilled") {
+      entry.connected = false
+    }
     if (result.status === "rejected") {
       errors.push(result.reason)
     }
@@ -293,6 +296,7 @@ async function constructProviderEntries({ descriptors, adapterFactories, env, lo
       entries.push({
         descriptor,
         broker: adapter,
+        connected: false,
       })
       const broker = assertBrokerPort({
         broker: adapter,
@@ -321,13 +325,13 @@ async function constructProviderEntries({ descriptors, adapterFactories, env, lo
   return entries
 }
 
-function createPortFacade({ entry, connectAll, disconnectAll }) {
+function createPortFacade({ entry, entryLifecycle }) {
   const broker = {}
   for (const method of BROKER_PORT_METHODS) {
     if (method === "connect") {
-      broker.connect = connectAll
+      broker.connect = entryLifecycle.connect
     } else if (method === "disconnect") {
-      broker.disconnect = disconnectAll
+      broker.disconnect = entryLifecycle.disconnect
     } else {
       broker[method] = (...args) => entry.broker[method](...args)
     }
@@ -355,33 +359,30 @@ function createPortFacade({ entry, connectAll, disconnectAll }) {
   }))
 }
 
-function createDisconnectAll({ entries, logger, lifecycleState }) {
-  return async function disconnectAll() {
-    if (!lifecycleState.disconnectPromise) {
-      lifecycleState.disconnectPromise = disconnectEntries({
-        entries,
+function createEntryLifecycle({ entry, eventPublisher, logger, registryState }) {
+  let connectPromise
+  let disconnectPromise
+  const disconnect = async function disconnectEntry() {
+    if (!disconnectPromise) {
+      disconnectPromise = disconnectEntries({
+        entries: [entry],
         logger,
       })
     }
-    const errors = await lifecycleState.disconnectPromise
+    const errors = await disconnectPromise
     if (errors.length > 0) {
-      throw new AggregateError(errors, "One or more provider instances failed to disconnect")
+      throw new AggregateError(errors, `Provider instance "${entry.descriptor.id}" failed to disconnect`)
     }
   }
-}
-
-function createConnectAll({ entries, disconnectAll, eventPublisher, logger, lifecycleState }) {
-  return async function connectAll() {
-    if (lifecycleState.disconnectPromise) {
-      throw new Error("Provider registry cannot connect after shutdown has started")
+  const connect = async function connectEntry() {
+    if (registryState.disconnectPromise || disconnectPromise) {
+      throw new Error(`Provider instance "${entry.descriptor.id}" cannot connect after shutdown has started`)
     }
-    if (lifecycleState.connectPromise) {
-      return lifecycleState.connectPromise
-    }
-    lifecycleState.connectPromise = (async () => {
-      for (const entry of entries) {
+    if (!connectPromise) {
+      connectPromise = (async () => {
         try {
           await entry.broker.connect()
+          entry.connected = true
           publishConnected({
             eventPublisher,
             descriptor: entry.descriptor,
@@ -395,7 +396,7 @@ function createConnectAll({ entries, disconnectAll, eventPublisher, logger, life
             logger,
           })
           try {
-            await disconnectAll()
+            await disconnect()
           } catch (cleanupError) {
             throw new AggregateError([
               error,
@@ -406,26 +407,86 @@ function createConnectAll({ entries, disconnectAll, eventPublisher, logger, life
           }
           throw error
         }
-      }
-    })()
-    return lifecycleState.connectPromise
+      })()
+    }
+    return connectPromise
+  }
+  return Object.freeze({
+    connect,
+    disconnect,
+  })
+}
+
+function createDisconnectAll({ entries, entryLifecycles, registryState }) {
+  return async function disconnectAll() {
+    if (!registryState.disconnectPromise) {
+      registryState.disconnectPromise = (async () => {
+        const results = await Promise.allSettled(entries.slice().reverse().map((entry) =>
+          entryLifecycles.get(entry.descriptor.id).disconnect()))
+        const errors = results
+          .filter((result) => result.status === "rejected")
+          .map((result) => result.reason)
+        if (errors.length > 0) {
+          throw new AggregateError(errors, "One or more provider instances failed to disconnect")
+        }
+      })()
+    }
+    return registryState.disconnectPromise
+  }
+}
+
+function createConnectAll({ entries, entryLifecycles, disconnectAll, registryState }) {
+  return async function connectAll() {
+    if (registryState.disconnectPromise) {
+      throw new Error("Provider registry cannot connect after shutdown has started")
+    }
+    if (!registryState.connectPromise) {
+      registryState.connectPromise = (async () => {
+        try {
+          for (const entry of entries) {
+            await entryLifecycles.get(entry.descriptor.id).connect()
+          }
+        } catch (error) {
+          try {
+            await disconnectAll()
+          } catch (cleanupError) {
+            throw new AggregateError([
+              error,
+              cleanupError,
+            ], "Provider connection and registry cleanup both failed", {
+              cause: cleanupError,
+            })
+          }
+          throw error
+        }
+      })()
+    }
+    return registryState.connectPromise
   }
 }
 
 function createRegistryLifecycle({ entries, eventPublisher, logger }) {
   const entriesById = new Map(entries.map((entry) => [entry.descriptor.id, entry]))
-  const lifecycleState = {}
+  const registryState = {}
+  const entryLifecycles = new Map()
+  for (const entry of entries) {
+    entryLifecycles.set(entry.descriptor.id, createEntryLifecycle({
+      entry,
+      eventPublisher,
+      logger,
+      registryState,
+    }))
+  }
   const disconnectAll = createDisconnectAll({
     entries,
-    logger,
-    lifecycleState,
+    entryLifecycles,
+    registryState,
   })
   const connectAll = createConnectAll({
     entries,
+    entryLifecycles,
     disconnectAll,
-    eventPublisher,
-    logger,
-    lifecycleState,
+    registryState,
   })
   const getEntry = ({ instanceId } = {}) => {
     const entry = entriesById.get(instanceId)
@@ -434,6 +495,13 @@ function createRegistryLifecycle({ entries, eventPublisher, logger }) {
     }
     return entry
   }
+  const getEntryLifecycle = ({ instanceId }) => {
+    const lifecycle = entryLifecycles.get(instanceId)
+    if (!lifecycle) {
+      throw new TypeError(`Unknown provider instance ID "${instanceId}"`)
+    }
+    return lifecycle
+  }
   return Object.freeze({
     connectAll,
     disconnectAll,
@@ -441,8 +509,9 @@ function createRegistryLifecycle({ entries, eventPublisher, logger }) {
       entry: getEntry({
         instanceId,
       }),
-      connectAll,
-      disconnectAll,
+      entryLifecycle: getEntryLifecycle({
+        instanceId,
+      }),
     }),
     getDescriptor: ({ instanceId } = {}) => getEntry({
       instanceId,

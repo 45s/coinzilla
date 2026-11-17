@@ -285,3 +285,86 @@ test("preserves connection and cleanup failures", async () => {
       disconnectError,
     }))
 })
+
+test("disconnects only the explicitly requested provider instance", async () => {
+  const primaryCalls = []
+  const secondaryCalls = []
+  const brokers = [
+    createBroker({
+      calls: primaryCalls,
+    }),
+    createBroker({
+      calls: secondaryCalls,
+    }),
+  ]
+  const registry = await createProviderRegistry({
+    providerInstances: [
+      createDescriptor(),
+      createDescriptor({
+        id: "binanceSecondary",
+        accountId: "secondary",
+      }),
+    ],
+    selections,
+    adapterFactories: {
+      binance: () => brokers.shift(),
+    },
+    env: {
+      BINANCE_API_KEY: "key",
+      BINANCE_API_SECRET_KEY: "secret",
+    },
+  })
+  const primary = registry.getBrokerPort({
+    instanceId: "binancePrimary",
+  })
+  const secondary = registry.getBrokerPort({
+    instanceId: "binanceSecondary",
+  })
+  await primary.connect()
+  await secondary.connect()
+  await primary.disconnect()
+  assert.deepEqual(primaryCalls, ["connect", "disconnect"])
+  assert.deepEqual(secondaryCalls, ["connect"])
+  await registry.disconnectAll()
+  assert.deepEqual(secondaryCalls, ["connect", "disconnect"])
+})
+
+test("an instance connection failure does not disconnect a sibling instance", async () => {
+  const primaryCalls = []
+  const secondaryCalls = []
+  const connectError = new Error("primary connect failed")
+  const brokers = [
+    createBroker({
+      calls: primaryCalls,
+      connect: async () => {
+        throw connectError
+      },
+    }),
+    createBroker({
+      calls: secondaryCalls,
+    }),
+  ]
+  const registry = await createProviderRegistry({
+    providerInstances: [
+      createDescriptor(),
+      createDescriptor({
+        id: "binanceSecondary",
+        accountId: "secondary",
+      }),
+    ],
+    selections,
+    adapterFactories: {
+      binance: () => brokers.shift(),
+    },
+    env: {
+      BINANCE_API_KEY: "key",
+      BINANCE_API_SECRET_KEY: "secret",
+    },
+  })
+  const primary = registry.getBrokerPort({
+    instanceId: "binancePrimary",
+  })
+  await assert.rejects(primary.connect(), /primary connect failed/)
+  assert.deepEqual(primaryCalls, ["connect", "disconnect"])
+  assert.deepEqual(secondaryCalls, [])
+})
