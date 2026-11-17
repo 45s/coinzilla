@@ -770,6 +770,55 @@ test("Bitunix Spot order history accepts the largest safely representable page a
 
 const EXCHANGE_RATE_PATH = "/api/spot/v1/common/rate/list"
 
+const INVALID_EXCHANGE_RATE_RESPONSES = [
+  undefined,
+  null,
+  {},
+  [null],
+  [
+    {
+      baseSymbol: "USDT",
+      quoteSymbol: "AUD",
+      rate: 1.5,
+    },
+  ],
+  [
+    {
+      baseSymbol: "",
+      quoteSymbol: "AUD",
+      rate: "1.5",
+    },
+  ],
+  [
+    {
+      baseSymbol: "USDT",
+      quoteSymbol: " ",
+      rate: "1.5",
+    },
+  ],
+  [
+    {
+      baseSymbol: "USDT",
+      quoteSymbol: "AUD",
+      rate: "0",
+    },
+  ],
+  [
+    {
+      baseSymbol: "USDT",
+      quoteSymbol: "AUD",
+      rate: "-1",
+    },
+  ],
+  [
+    {
+      baseSymbol: "USDT",
+      quoteSymbol: "AUD",
+      rate: "not-a-rate",
+    },
+  ],
+]
+
 test("Bitunix Spot exchange rates preserve exact decimal strings and immutable records", async () => {
   const { broker, calls } = createBroker({
     responses: {
@@ -819,56 +868,7 @@ test("Bitunix Spot exchange rates accept an explicitly empty catalog", async () 
 })
 
 test("Bitunix Spot exchange rates reject missing data and malformed or non-positive records", async () => {
-  const invalidResponses = [
-    undefined,
-    null,
-    {},
-    [null],
-    [
-      {
-        baseSymbol: "USDT",
-        quoteSymbol: "AUD",
-        rate: 1.5,
-      },
-    ],
-    [
-      {
-        baseSymbol: "",
-        quoteSymbol: "AUD",
-        rate: "1.5",
-      },
-    ],
-    [
-      {
-        baseSymbol: "USDT",
-        quoteSymbol: " ",
-        rate: "1.5",
-      },
-    ],
-    [
-      {
-        baseSymbol: "USDT",
-        quoteSymbol: "AUD",
-        rate: "0",
-      },
-    ],
-    [
-      {
-        baseSymbol: "USDT",
-        quoteSymbol: "AUD",
-        rate: "-1",
-      },
-    ],
-    [
-      {
-        baseSymbol: "USDT",
-        quoteSymbol: "AUD",
-        rate: "not-a-rate",
-      },
-    ],
-  ]
-
-  for (const response of invalidResponses) {
+  for (const response of INVALID_EXCHANGE_RATE_RESPONSES) {
     const { broker } = createBroker({
       responses: {
         [EXCHANGE_RATE_PATH]: response,
