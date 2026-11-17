@@ -63,6 +63,15 @@ function parseResponseText({ text, path }) {
   return JSON.parse(losslessText)
 }
 
+function validateAuthentication({ authenticated, method, body, stateChanging }) {
+  if (typeof authenticated !== "boolean") {
+    throw new TypeError("Bitunix REST authenticated flag must be a boolean")
+  }
+  if (!authenticated && (method !== "GET" || body !== undefined || stateChanging)) {
+    throw new TypeError("Unauthenticated Bitunix requests must be read-only GET requests")
+  }
+}
+
 function validateRequest(input = {}) {
   const {
     method,
@@ -70,6 +79,7 @@ function validateRequest(input = {}) {
     queryParams = {},
     body,
     stateChanging = false,
+    authenticated = true,
   } = input
   const normalizedMethod = typeof method === "string" ? method.toUpperCase() : ""
   if (normalizedMethod !== "GET" && normalizedMethod !== "POST") {
@@ -87,12 +97,19 @@ function validateRequest(input = {}) {
   if (normalizedMethod === "GET" && body !== undefined) {
     throw new TypeError("Bitunix REST GET requests cannot include a body")
   }
+  validateAuthentication({
+    authenticated,
+    method: normalizedMethod,
+    body,
+    stateChanging,
+  })
   return {
     method: normalizedMethod,
     path,
     queryParams,
     body,
     stateChanging,
+    authenticated,
   }
 }
 
@@ -136,6 +153,24 @@ function createSignedRequest({ client, method, path, queryParams, body }) {
       },
       signal: AbortSignal.timeout(client.requestTimeout),
       ...(bodyText === undefined ? {} : { body: bodyText }),
+    },
+  }
+}
+
+function createPublicRequest({ client, method, path, queryParams }) {
+  const sortedQuery = Object.fromEntries(
+    Object.keys(queryParams).sort().map((key) => [key, queryParams[key]]),
+  )
+  const url = new URL(path, client.baseUrl)
+  for (const [key, value] of Object.entries(sortedQuery)) {
+    url.searchParams.set(key, String(value))
+  }
+
+  return {
+    url: url.toString(),
+    options: {
+      method,
+      signal: AbortSignal.timeout(client.requestTimeout),
     },
   }
 }
@@ -275,8 +310,8 @@ function validateResponse({ response, payload, path, stateChanging }) {
 }
 
 /**
- * Signed Bitunix Spot REST client. It never retries a request, especially a
- * state-changing order operation whose response may have been lost.
+ * Bitunix Spot REST client. Requests are signed by default; public requests
+ * must explicitly opt into read-only GET mode. It never retries a request.
  */
 export class BitunixRestClient {
   /**
@@ -317,9 +352,9 @@ export class BitunixRestClient {
   }
 
   /**
-   * Send one signed Bitunix Spot REST request.
+   * Send one Bitunix Spot REST request.
    *
-   * @param {{method: "GET"|"POST", path: string, queryParams?: Record<string, string|number|boolean>, body?: object, stateChanging?: boolean}} input
+   * @param {{method: "GET"|"POST", path: string, queryParams?: Record<string, string|number|boolean>, body?: object, stateChanging?: boolean, authenticated?: boolean}} input
    * @returns {Promise<{data: unknown}>}
    */
   async request(input = {}) {
@@ -329,14 +364,22 @@ export class BitunixRestClient {
       queryParams = {},
       body,
       stateChanging = false,
+      authenticated = true,
     } = validateRequest(input)
-    const request = createSignedRequest({
-      client: this,
-      method,
-      path,
-      queryParams,
-      body,
-    })
+    const request = authenticated
+      ? createSignedRequest({
+        client: this,
+        method,
+        path,
+        queryParams,
+        body,
+      })
+      : createPublicRequest({
+        client: this,
+        method,
+        path,
+        queryParams,
+      })
     const response = await sendRequest({
       client: this,
       request,
