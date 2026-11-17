@@ -1,11 +1,14 @@
-import os from "node:os"
 import path from "node:path"
 import { generateUUID, toResult } from "@coinzilla/utils"
-import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
-import { DEFAULT_OPERATIONAL_STATE_DIRECTORY } from "../infrastructure/operational-state/resolve-operational-state-directory.js"
-import { acquireHarvesterProcessLocks } from "../infrastructure/process-lock/acquire-harvester-process-locks.js"
 
-function validateInitializationOptions({ confirmed, directory, processLockDirectory, runtimeSessionId }) {
+function validateInitializationOptions({
+  confirmed,
+  directory,
+  processLockDirectory,
+  runtimeSessionId,
+  acquireProcessLock,
+  createStore,
+}) {
   if (confirmed !== true) {
     return toResult({
       error: new Error("Explicit confirmation is required; pass --confirm-initialize to initialize the Operational State Store"),
@@ -16,6 +19,11 @@ function validateInitializationOptions({ confirmed, directory, processLockDirect
       typeof runtimeSessionId !== "string" || !runtimeSessionId.trim()) {
     return toResult({
       error: new TypeError("Operational State Store initialization requires a directory, process-lock directory, and runtime session ID"),
+    })
+  }
+  if (typeof acquireProcessLock !== "function" || typeof createStore !== "function") {
+    return toResult({
+      error: new TypeError("Operational State Store initialization requires injected createStore and acquireProcessLock adapters"),
     })
   }
   return undefined
@@ -98,17 +106,19 @@ function includeReleaseError({ initializationResult, releaseError }) {
  */
 export async function initializeHarvesterOperationalStateStore({
   confirmed = false,
-  directory = DEFAULT_OPERATIONAL_STATE_DIRECTORY,
-  processLockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
+  directory,
+  processLockDirectory,
   runtimeSessionId = generateUUID(),
-  acquireProcessLock = acquireHarvesterProcessLocks,
-  createStore = createFileOperationalStateStore,
+  acquireProcessLock,
+  createStore,
 } = {}) {
   const validationResult = validateInitializationOptions({
     confirmed,
     directory,
     processLockDirectory,
     runtimeSessionId,
+    acquireProcessLock,
+    createStore,
   })
   if (validationResult) {
     return validationResult

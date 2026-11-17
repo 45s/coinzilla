@@ -56,6 +56,8 @@ test("does not claim successful initialization when the store refuses to overwri
   let released = false
   const result = await initializeHarvesterOperationalStateStore({
     confirmed: true,
+    directory: "/tmp/recovery-facts",
+    processLockDirectory: "/tmp/process-locks",
     acquireProcessLock: async () => ({ ok: true,
 release: async () => { released = true; return { ok: true } } }),
     createStore: () => ({ initialize: async () => ({ ok: false,
@@ -69,6 +71,8 @@ errors: [new Error("refuses to overwrite existing ledger")] }) }),
 test("does not claim genesis success if the process lock cannot be released", async () => {
   const result = await initializeHarvesterOperationalStateStore({
     confirmed: true,
+    directory: "/tmp/recovery-facts",
+    processLockDirectory: "/tmp/process-locks",
     acquireProcessLock: async () => ({
       ok: true,
       release: async () => ({ ok: false,

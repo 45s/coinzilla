@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
 import test from "node:test"
 import { Asset, Market } from "@coinzilla/entities"
+import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester-operational-state.js"
 import { reconcileHarvesterOperationalStateCandidate } from "./reconcile-harvester-operational-state-candidate.js"
 
 const market = new Market({
@@ -119,6 +120,7 @@ const makeDependencies = ({ auditTargetMarketBlocked = false } = {}) => {
   let candidateState
   return {
     calls,
+    projectOperationalState: projectHarvesterOperationalState,
     reconcileOwnedOrders: async ({ candidateState: received, recoveryMode }) => {
       calls.push("owned-orders")
       candidateState = received
@@ -288,11 +290,11 @@ test("uses the injected Operational State projector before any reconciliation re
     marketMetadata: new Map([[market.symbol, { market }]]),
     markets: [market],
     targetMarket: market,
+    ...deps,
     projectOperationalState: () => ({
       ok: false,
       errors: [projectionError],
     }),
-    ...deps,
   })
 
   assert.equal(result.ok, false, "A failed injected projection must stop candidate reconciliation.")

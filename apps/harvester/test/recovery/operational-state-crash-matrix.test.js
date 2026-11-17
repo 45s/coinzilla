@@ -8,6 +8,7 @@ import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla
 import { Portfolio } from "../../src/domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../../src/domain/strategies/conservative/recovery-ledger.js"
 import { createFileOperationalStateStore } from "../../src/infrastructure/operational-state/create-file-operational-state-store.js"
+import { projectHarvesterOperationalState } from "../../src/infrastructure/operational-state/project-harvester-operational-state.js"
 import { evaluateRecoveryCompletion } from "../../src/domain/strategies/conservative/recovery-completion.js"
 import { recordConfigurationBaseline } from "../../src/use-cases/record-configuration-baseline.js"
 import { recordProcessStarted } from "../../src/use-cases/record-process-started.js"
@@ -69,6 +70,7 @@ appConfig })
 const readCandidate = (...candidateArguments) => {
   const [directory, runtimeSessionId] = candidateArguments;
   return restoreHarvesterOperationalState({
+    projectOperationalState: projectHarvesterOperationalState,
     operationalStateStore: createStore(directory, runtimeSessionId),
     marketMetadata: new Map([[market.symbol, { market }]]),
   });
