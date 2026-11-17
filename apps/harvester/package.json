@@ -35,10 +35,12 @@
     "@coinzilla/indicators": "workspace:*",
     "@coinzilla/journal": "workspace:*",
     "@coinzilla/notifiers": "workspace:*",
-    "@coinzilla/utils": "workspace:*"
+    "@coinzilla/utils": "workspace:*",
+    "@coinzilla/db": "workspace:*"
   },
   "config": {
     "targetedTestFiles": [
+      "src/infrastructure/persistence/trading-session-repository.test.js",
       "src/use-cases/create-market-price-transition-handler.test.js",
       "test/replays/doge-zro-conservative-replay.test.js",
       "src/bootstrap/start-harvester.test.js",
