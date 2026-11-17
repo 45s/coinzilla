@@ -302,7 +302,8 @@ function getResultErrors({ result, fallbackMessage }) {
   return []
 }
 
-async function drainAcceptedMarketWork(context, {
+async function drainAcceptedMarketWork({
+  context,
   marketPhase,
   userDataPhase,
 } = {}) {
@@ -345,7 +346,8 @@ async function quiesceMarketIntakeAndDrain(context) {
   // Stop accepting new callbacks without unsubscribing yet. If safety or the
   // CLOSING barrier fails, subscriptions can be resumed without reconnecting.
   context.state.marketIntakeStopped = true
-  context.marketIntakeErrors = await drainAcceptedMarketWork(context, {
+  context.marketIntakeErrors = await drainAcceptedMarketWork({
+    context,
     marketPhase: "MARKET_WORK_DRAIN_PRE_UNSUBSCRIBE",
     userDataPhase: "USER_DATA_DRAIN_PRE_UNSUBSCRIBE",
   })
@@ -367,7 +369,8 @@ async function stopMarketIntakeAndDrain(context) {
     result: stopResult,
     fallbackMessage: "Shutdown market-intake stop failed",
   })
-  const drainErrors = await drainAcceptedMarketWork(context, {
+  const drainErrors = await drainAcceptedMarketWork({
+    context,
     marketPhase: "MARKET_WORK_DRAIN_FINAL",
     userDataPhase: "USER_DATA_DRAIN_FINAL_BEFORE_STOP",
   })
@@ -622,82 +625,86 @@ async function stopOperatorControlAfterSafety(context) {
   }))
 }
 
-async function runShutdownLifecycle(context) {
-  await proveStrategySafety(context)
+async function publishClosingAuditOrThrow(context) {
+  await publishClosingAudit(context)
+  if (context.snapshotError) {
+    throw context.snapshotError
+  }
+}
 
+async function reproveAndPublishClosingAuditIfUnsafe(context) {
+  if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
+    await reproveStrategySafety(context)
+    await publishClosingAuditOrThrow(context)
+  }
+}
+
+async function quiesceMarketIntakeForClosing(context) {
   // Quiesce market callbacks and drain accepted work while subscriptions,
   // user-data, operator control and the broker remain available.
-  const quiesceErrors = await quiesceMarketIntakeAndDrain(context)
-  if (quiesceErrors.length > 0) {
+  const errors = await quiesceMarketIntakeAndDrain(context)
+  if (errors.length > 0) {
     context.state.marketIntakeStopped = false
-    await publishClosingAudit(context)
-    if (context.snapshotError) { throw context.snapshotError }
-    throw new AggregateError(quiesceErrors, "Accepted market work could not be drained safely")
+    await publishClosingAuditOrThrow(context)
+    throw new AggregateError(errors, "Accepted market work could not be drained safely")
   }
-
   try {
-    if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
-      await reproveStrategySafety(context)
-    }
+    await reproveAndPublishClosingAuditIfUnsafe(context)
+    await publishClosingAuditOrThrow(context)
   } catch (error) {
     context.state.marketIntakeStopped = false
     throw error
   }
-  await publishClosingAudit(context)
-  if (context.snapshotError) {
-    context.state.marketIntakeStopped = false
-    throw context.snapshotError
-  }
+}
 
+async function stopMarketIntakeAfterClosing(context) {
   // The CLOSING barrier has passed. Market callbacks are already fenced, so
   // unsubscribe now, then drain once more to include callbacks that were
   // already in flight when the fence was raised.
-  const marketIntakeErrors = await stopMarketIntakeAndDrain(context)
-  if (marketIntakeErrors.length > 0) {
-    await publishClosingAudit(context)
-    if (context.snapshotError) { throw context.snapshotError }
-    throw new AggregateError(marketIntakeErrors, "Market intake could not be stopped and drained safely")
+  const errors = await stopMarketIntakeAndDrain(context)
+  if (errors.length > 0) {
+    await publishClosingAuditOrThrow(context)
+    throw new AggregateError(errors, "Market intake could not be stopped and drained safely")
   }
-  if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
-    await reproveStrategySafety(context)
-    await publishClosingAudit(context)
-    if (context.snapshotError) { throw context.snapshotError }
-  }
+  await reproveAndPublishClosingAuditIfUnsafe(context)
+}
 
-  const userDataErrors = await stopUserDataIntakeAndDrain(context)
-  if (userDataErrors.length > 0) {
-    await publishClosingAudit(context)
-    if (context.snapshotError) { throw context.snapshotError }
-    throw new AggregateError(userDataErrors, "User-data intake could not be stopped and drained safely")
+async function stopUserDataAfterMarketIntake(context) {
+  const errors = await stopUserDataIntakeAndDrain(context)
+  if (errors.length > 0) {
+    await publishClosingAuditOrThrow(context)
+    throw new AggregateError(errors, "User-data intake could not be stopped and drained safely")
   }
+  await reproveAndPublishClosingAuditIfUnsafe(context)
+}
 
-  if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
-    await reproveStrategySafety(context)
-    await publishClosingAudit(context)
-    if (context.snapshotError) { throw context.snapshotError }
-  }
+async function flushJournalAndReproveIfNeeded(context) {
   try {
     await flushShutdownJournal(context)
   } catch (error) {
     context.auditReasons.push("JOURNAL_NOT_DURABLE")
-    await publishClosingAudit(context)
-    if (context.snapshotError) { throw context.snapshotError }
+    await publishClosingAuditOrThrow(context)
     throw error
   }
   if (!context.strategyShutdownCoordinator.isSafeToShutdown()) {
     await reproveStrategySafety(context)
-    await publishClosingAudit(context)
-    if (context.snapshotError) { throw context.snapshotError }
+    await publishClosingAuditOrThrow(context)
     try {
       await flushShutdownJournal(context)
     } catch (error) {
       context.auditReasons.push("JOURNAL_NOT_DURABLE")
-      await publishClosingAudit(context)
-      if (context.snapshotError) { throw context.snapshotError }
+      await publishClosingAuditOrThrow(context)
       throw error
     }
   }
+}
 
+async function runShutdownLifecycle(context) {
+  await proveStrategySafety(context)
+  await quiesceMarketIntakeForClosing(context)
+  await stopMarketIntakeAfterClosing(context)
+  await stopUserDataAfterMarketIntake(context)
+  await flushJournalAndReproveIfNeeded(context)
   await stopOperatorControlAfterSafety(context)
   await disconnectBroker(context)
   finalizeShutdown({
