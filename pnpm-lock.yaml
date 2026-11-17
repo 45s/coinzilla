@@ -248,7 +248,11 @@ importers:
         specifier: workspace:*
         version: link:../utils
 
-  packages/db: {}
+  packages/db:
+    dependencies:
+      '@coinzilla/utils':
+        specifier: workspace:*
+        version: link:../utils
 
   packages/notifiers: {}
 
