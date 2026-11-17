@@ -9,6 +9,7 @@ import { createCandleHistoryService } from "../use-cases/create-candle-history-s
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { loadAppConfig } from "../infrastructure/config/load-app-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
+import { createBinanceProviderFactory } from "./broker/binance-provider-factory.js"
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
 import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
 import { resolveHarvesterOptions } from "./config/resolve-harvester-options.js"
@@ -293,13 +294,18 @@ function createCommissionAssetPublisher({ accountSnapshotManagerRef }) {
 
 function resolveStartupDependencies({ options }) {
   const logger = options.logger ?? defaultLogger
+  const brokerAdapterFactory = options.brokerAdapterFactory ?? createBinanceBrokerAdapter
   return {
     configSource: options.configSource,
     suppliedAppConfig: options.appConfig,
     loadConfig: options.loadConfig ?? loadAppConfig,
     env: options.env ?? process.env,
-    brokerAdapterFactory: options.brokerAdapterFactory ?? createBinanceBrokerAdapter,
-    providerAdapterFactories: options.providerAdapterFactories,
+    brokerAdapterFactory,
+    providerAdapterFactories: options.providerAdapterFactories ?? {
+      binance: createBinanceProviderFactory({
+        brokerAdapterFactory,
+      }),
+    },
     evaluateStrategy: options.evaluateStrategy ?? conservativeStrategyPolicy.evaluate,
     logger,
     eventPublisher: options.eventPublisher,
@@ -315,6 +321,7 @@ function resolveStartupDependencies({ options }) {
     strategyShutdownParticipants: options.strategyShutdownParticipants ?? [],
   }
 }
+
 
 async function prepareHarvesterStartupRuntime({ dependencies, resolved }) {
   const operatorControlLifecycle = await prepareTelegramOperatorControl({
@@ -378,9 +385,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     ...prepared.startupOptions,
     env: dependencies.env,
     brokerAdapterFactory: dependencies.brokerAdapterFactory,
-    providerAdapterFactories: dependencies.providerAdapterFactories ?? {
-      binance: dependencies.brokerAdapterFactory,
-    },
+    providerAdapterFactories: dependencies.providerAdapterFactories,
     evaluateStrategy: dependencies.evaluateStrategy,
     logger: dependencies.logger,
     eventPublisher: dependencies.eventPublisher,

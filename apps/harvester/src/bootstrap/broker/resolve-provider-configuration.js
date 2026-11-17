@@ -79,7 +79,7 @@ function resolveProviderInstance({ id, definition, tradingMode }) {
     ...(definition.credentialEnv
       ? { credentialEnv: Object.freeze({ ...definition.credentialEnv }) }
       : {}),
-    ...(definition.provider === "binance" ? { tradingMode } : {}),
+    ...(tradingMode ? { tradingMode } : {}),
   })
 }
 

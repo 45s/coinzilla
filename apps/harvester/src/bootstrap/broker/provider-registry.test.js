@@ -167,19 +167,6 @@ test("rejects unknown providers without Binance fallback", async () => {
   }), /not registered/)
 })
 
-test("rejects missing credentials without exposing credential values", async () => {
-  await assert.rejects(createProviderRegistry({
-    providerInstances: [createDescriptor()],
-    selections,
-    adapterFactories: {
-      binance: () => createBroker(),
-    },
-    env: {
-      BINANCE_API_KEY: "secret-value",
-    },
-  }), (error) => error.message.includes("API secret") && !error.message.includes("secret-value"))
-})
-
 test("rejects a missing capability declaration", async () => {
   const broker = createBroker()
   broker.capabilities = undefined
@@ -201,46 +188,6 @@ test("rejects an unknown required capability", async () => {
   await assert.rejects(createRegistry({
     brokers: [broker],
   }), /account.snapshot/)
-})
-
-test("resolves separate credentials for same-provider instances without exposing secrets", async () => {
-  const receivedConfigs = []
-  const registry = await createProviderRegistry({
-    providerInstances: [
-      createDescriptor({
-        credentialEnv: {
-          apiKey: "PRIMARY_KEY",
-          apiSecret: "PRIMARY_SECRET",
-        },
-      }),
-      createDescriptor({
-        id: "binanceSecondary",
-        accountId: "binance-secondary",
-        credentialEnv: {
-          apiKey: "SECONDARY_KEY",
-          apiSecret: "SECONDARY_SECRET",
-        },
-      }),
-    ],
-    selections,
-    adapterFactories: {
-      binance: ({ config }) => {
-        receivedConfigs.push(config)
-        return createBroker()
-      },
-    },
-    env: {
-      PRIMARY_KEY: "primary-key",
-      PRIMARY_SECRET: "primary-secret",
-      SECONDARY_KEY: "secondary-key",
-      SECONDARY_SECRET: "secondary-secret",
-    },
-  })
-  assert.deepEqual(receivedConfigs.map((config) => [config.apiKey, config.apiSecret]), [
-    ["primary-key", "primary-secret"],
-    ["secondary-key", "secondary-secret"],
-  ])
-  assert.equal(JSON.stringify(registry.descriptors).includes("primary-secret"), false)
 })
 
 test("connects and disconnects each instance once", async () => {

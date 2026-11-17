@@ -75,8 +75,8 @@ function assertDescriptor({ descriptor, index }) {
     accountId,
     index,
   })
-  if (provider === "binance" && !["testnet", "live"].includes(tradingMode)) {
-    throw new TypeError(`Binance instance "${id}" requires explicit testnet or live mode`)
+  if (tradingMode !== undefined && !["testnet", "live"].includes(tradingMode)) {
+    throw new TypeError(`Provider instance "${id}" has an unsupported trading environment`)
   }
   assertCredentialEnvironment({
     credentialEnv,
@@ -185,37 +185,6 @@ function assertCapabilities({ descriptor, broker }) {
 }
 
 
-function resolveProviderConfig({ descriptor, env }) {
-  if (descriptor.provider !== "binance") {
-    throw new TypeError(`Provider type "${descriptor.provider}" is not registered in Harvester`)
-  }
-  const apiKeyName = descriptor.credentialEnv?.apiKey ?? "BINANCE_API_KEY"
-  const apiSecretName = descriptor.credentialEnv?.apiSecret ?? "BINANCE_API_SECRET_KEY"
-  const apiKey = env[apiKeyName]
-  const apiSecret = env[apiSecretName]
-  if (typeof apiKey !== "string" || !apiKey.trim()) {
-    throw new TypeError(`Provider instance "${descriptor.id}" requires the configured API key environment variable`)
-  }
-  if (typeof apiSecret !== "string" || !apiSecret.trim()) {
-    throw new TypeError(`Provider instance "${descriptor.id}" requires the configured API secret environment variable`)
-  }
-  return {
-    apiKey,
-    apiSecret,
-    tradingMode: descriptor.tradingMode,
-  }
-}
-
-function logProviderLifecycle({ logger, level, message, descriptor, error }) {
-  const logMethod = typeof logger?.[level] === "function" ? logger[level] : logger?.info
-  logMethod?.call(logger, {
-    message,
-    provider: descriptor.provider,
-    providerInstanceId: descriptor.id,
-    accountId: descriptor.accountId,
-    ...(error ? { errorName: error.name ?? "Error" } : {}),
-  })
-}
 
 function publishConnected({ eventPublisher, descriptor, logger }) {
   logProviderLifecycle({
@@ -295,12 +264,9 @@ async function constructProviderEntries({ descriptors, adapterFactories, env, lo
       if (typeof factory !== "function") {
         throw new TypeError(`Provider type "${descriptor.provider}" is not registered in Harvester`)
       }
-      const config = resolveProviderConfig({
+      const adapter = factory({
         descriptor,
         env,
-      })
-      const adapter = factory({
-        config,
         logger,
       })
       entries.push({
