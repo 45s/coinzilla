@@ -59,7 +59,7 @@ Key Spot source:
 - GetOrderBookAsync(symbol) omits the official required precision parameter. The MCP and StockSharp references pass a precision value, but its correct selection semantics remain unresolved.
 - The PlaceOrder.txt fixture contains only data: { placeStatus: 1 }; it does not exercise the official documented orderId, symbol, side, type, volume and price fields. The model has those fields, but the fixture does not prove their presence.
 - The order-history fixture contains data: {} rather than a representative page. It does not prove pagination, row completeness, ordering or page-size limits.
-- Spot GetUserTradesAsync models id, price, volume, time, fee, feeCoin and role, but the model itself does not prove quantity denomination, all-partial-fill completeness or ID uniqueness.
+- No Spot GetUserTrades fixture or endpoint-level test was found in the inspected test tree. Spot GetUserTradesAsync models id, price, volume, time, fee, feeCoin and role, but the model itself does not prove quantity denomination, all-partial-fill completeness or ID uniqueness.
 - Spot order placement has no client order ID or time-in-force parameter in the inspected interface.
 - Spot socket methods are PlaceOrderAsync, CancelOrderAsync and CancelOrdersAsync implemented with QueryAsync; they are not subscriptions.
 
@@ -79,7 +79,7 @@ Key source:
 - spot_get_order_history makes symbol optional and locally caps page size at 100. Neither optional symbol nor that local cap is an official exchange guarantee.
 - Its spot_place_order description says LIMIT volume is base quantity and MARKET BUY volume is quote quantity. This is not a safe resolution: the official single-order REST page says LIMIT quote / MARKET base, while the official batch endpoint says the inverse.
 - It has no Spot WebSocket subscription implementation and no fill-history tool.
-- It is an MCP tool wrapper, not a complete broker SDK. Its user-confirmation/trading-enable guard is useful safety design, not proof of exchange-side idempotency.
+- It is an MCP tool wrapper, not a complete broker SDK. Its repository has CI/smoke coverage for tool registration and the trading-enable gate, but no endpoint-level Spot response fixtures were found in the inspected search. Its user-confirmation/trading-enable guard is useful safety design, not proof of exchange-side idempotency.
 
 **Use:** best independent JavaScript reference for REST construction, schema validation, auth boundary and response handling. Do not adopt its optional symbol behavior, local pagination limits or disputed order-volume description.
 
@@ -88,10 +88,12 @@ Key source:
 Inspected source:
 - [Bitunix REST client](https://github.com/StockSharp/Connectors/blob/caa00fcc0e09554b1a3408781e8392d39eeb8302/Bitunix/Native/BitunixRestClient.cs)
 - [Bitunix DTOs](https://github.com/StockSharp/Connectors/blob/caa00fcc0e09554b1a3408781e8392d39eeb8302/Bitunix/Native/Model/BitunixDtos.cs)
+- [Spot transaction/order adapter](https://github.com/StockSharp/Connectors/blob/caa00fcc0e09554b1a3408781e8392d39eeb8302/Bitunix/BitunixMessageAdapter_Transaction.cs)
+- [Spot transaction/order adapter](https://github.com/StockSharp/Connectors/blob/caa00fcc0e09554b1a3408781e8392d39eeb8302/Bitunix/BitunixMessageAdapter_Transaction.cs)
 
-**Useful coverage:** Spot pairs, last price, depth with explicit precision, current/history candles, balances, place/cancel, pending orders, order history and a matching-order lookup. The matching-order method uses POST /api/spot/v1/order/deal/list and models one BitunixSpotFill.
+**Useful coverage:** Spot pairs, last price, depth with explicit precision, current/history candles, balances, place/cancel, pending orders, order history and a matching-order lookup. The matching-order method uses POST /api/spot/v1/order/deal/list and returns one BitunixSpotFill object. The transaction adapter queries it only when the order reports positive FilledVolume; it does not demonstrate exhaustive retrieval of every partial execution.
 
-**Limits:** the inspected source provides a second implementation of the intended deal endpoint, but a single-object DTO is not proof of complete multi-execution history. The request/DTO code is useful cross-check material; no Bitunix-specific endpoint fixture suite was established in this audit. Its presence does not resolve order-volume semantics or mutation safety.
+**Important limits:** the Spot placement DTO sends symbol, side, type, volume and price but no client order ID. The adapter checks that an order ID is returned, but it does not establish idempotent retry or unknown-outcome reconciliation. Spot cancel-all logic enumerates only symbols remembered by that process, not an authoritative account-wide symbol set. The Spot candle DTO includes a volume field although the official Spot K-line schema omits volume; no endpoint fixture was found to prove that the field is populated. The request/DTO code is useful cross-check material; no Bitunix-specific endpoint fixture suite was established in this audit. Its presence does not resolve order-volume semantics or mutation safety.
 
 **Use:** useful independent C# confirmation of endpoint paths and required depth precision. Inspect its DTOs and adapter mapping before porting.
 
@@ -105,7 +107,7 @@ Inspected [client.py](https://github.com/0xCherryBlueZu/bitunix/blob/28cefd924b6
 - _get_authenticated() converts query parameters to a string, then passes that string to sign_request(), whose implementation expects a mapping and calls .items(). Authenticated GET requests with query parameters therefore appear defective.
 - _post_authenticated() prints request headers (including the API key), request body and response. This is unsafe logging for account/trading code.
 - The response handler checks HTTP status but does not validate the Bitunix business code envelope.
-- The order method forwards a generic volume and does not resolve the official quantity contradiction.
+- No endpoint-level test suite was found in the repository search. The order method forwards a generic volume and does not resolve the official quantity contradiction.
 
 **Use:** useful endpoint discovery and independent evidence for rate/list, coin_network/list and order/deal/list; not a safe implementation template.
 
@@ -166,7 +168,9 @@ The inspected README lists order, cancel, pending/history orders, trade history,
 | Spot WebSocket | Official Spot WebSocket docs describe one-shot RPC; Futures docs describe push channels. | Do not implement Spot subscriptions or call polling a stream. |
 | Place-order acknowledgement fixture | JKorf fixture omits orderId despite the official documented response schema listing it. | Fixture does not prove a complete canonical acknowledgement. |
 | Order-history fixture | JKorf fixture is only data: {}. | No proof of page ordering, completion or pagination semantics. |
-| Python signing/logging | 0xCherry authenticated GET signing appears to pass a string where a mapping is expected; POST helper prints headers and payload. | Do not copy signing or logging code. |
+| Python signing/logging | 0xCherry authenticated GET signing passes a string where sign_request expects a mapping and calls .items(); POST helper prints headers and payload. | Do not copy signing or logging code. |
+| StockSharp Spot cancel-all | Tracks symbols used by that process and fans out over those symbols. | Not proof of complete account-wide pending-order coverage. |
+| Third-party Spot candle volume | StockSharp's DTO declares volume, while the official Spot K-line schema omits it and no fixture proves the field. | DTO presence alone is not evidence; do not synthesize canonical volume. |
 | Precision shortcuts | Lui MCP conversion uses float and fixed 2-decimal sizing. | Never copy into exact-decimal broker code. |
 
 ## 4. Coinzilla Binance parity inventory
