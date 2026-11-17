@@ -768,6 +768,12 @@ function createLifecycleResult({ stopState, previousDecision, decision, action, 
   })
 }
 
+function assertStopStateProvided({ stopState }) {
+  if (!stopState) {
+    throw new TypeError("Recovery Seller BUY policy requires a valid STOP state")
+  }
+}
+
 function createBuyFailureResult({ stopState, activeOrders, marketPrice, error }) {
   const explanation = error instanceof Error && error.message
     ? `Recovery Seller BUY policy failed closed: ${error.message}`
@@ -1032,9 +1038,9 @@ export function evaluateRecoverySellerBuyDecision({
   reconciliationComplete,
   lastBuyPrice,
 } = {}) {
-  if (!stopState) {
-    throw new TypeError("Recovery Seller BUY policy requires a valid STOP state")
-  }
+  assertStopStateProvided({
+    stopState,
+  })
   try {
     const existingOrderResult = getExistingOrderResult({
       stopState,
