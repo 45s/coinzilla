@@ -1,4 +1,4 @@
-# Binance WebSocket broker operations
+# Broker provider operations
 
 For mandatory Bitunix reference-project audits before implementing any Spot capability, read [Brokers agent instructions — Bitunix Spot development](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit). The reference projects are [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net) (primary C# implementation and tests) and [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp) (secondary TypeScript REST/signing example); official Bitunix documentation remains authoritative.
 
@@ -29,10 +29,18 @@ The `@coinzilla/brokers` entry point exports:
 
 - `BinanceWebSocketBroker` — the concrete Binance WebSocket API/Streams broker.
 - `BinanceWebSocketConfig` — validated Binance broker configuration.
+- `BitunixSpotBroker` and `BitunixSpotConfig` — the current read-only Bitunix Spot implementation and its validated configuration.
 - `CoreBroker` — the existing compatibility base class; it is not a formal application-owned broker port.
 - `normalizeBinanceId` — exact non-negative Binance identifier normalization, also used by the Harvester infrastructure adapter.
 
-Keep exchange-specific operations behind the Binance adapter. Consumers should depend on their own narrow application port rather than treating `CoreBroker` as a complete cross-exchange contract.
+### Provider instances and routing ownership
+
+The package exposes exchange-specific broker implementations; it does not select which exchange a strategy or market should use. A consuming application owns its application port and composition root, constructs the named provider instances it needs, and owns any strategy/market execution routing and independent market-data routing.
+
+Multiple instances of one provider type may represent different accounts or supported environments. Keep provider-specific options and endpoint selection inside the matching implementation. Binance requires explicit `TRADING_MODE=testnet|live`; this rule does not define another exchange's environment support.
+
+Harvester's accepted target is described in [ADR-0003: Multi-provider routing](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and tracked by [issue #1339](https://github.com/45s/coinzilla/issues/1339). That target is not yet implemented. Current Harvester runtime composition remains Binance-only. The Bitunix Spot class is read-only and is not a Harvester execution provider; do not infer order capability from the public class or `CoreBroker` methods.
+Keep exchange-specific operations behind their provider adapters. Consumers should depend on their own narrow application port rather than treating `CoreBroker` as a complete cross-exchange contract.
 
 ## Bitunix Spot integration
 
