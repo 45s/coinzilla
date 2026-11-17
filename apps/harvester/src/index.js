@@ -105,7 +105,10 @@ async function closeJournalService({ journalService } = {}) {
     errors.push(new Error("Journal close capability is unavailable; trading process lock will be retained"))
   }
 
-  return { journalClosed, errors }
+  return {
+    journalClosed,
+    errors,
+  }
 }
 
 async function closeEventBus({ eventBus } = {}) {
@@ -186,7 +189,10 @@ async function closeObservability({ journalService, eventBus, processLock, allow
     ...processLockErrors,
   ]
 
-  reportObservabilityCleanupErrors({ errors, logger })
+  reportObservabilityCleanupErrors({
+    errors,
+    logger,
+  })
   return errors
 }
 
