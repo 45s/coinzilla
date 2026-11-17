@@ -469,8 +469,7 @@ marketMetadata })
 })
 
 
-test("preserves every stable submission-gate reason and its details without broker I/O", async () => {
-  const deferrals = [
+const SUBMISSION_GATE_DEFERRALS = [
     { reason: "MARKET_PAUSED",
 details: { symbol: "DOGEUSDT" } },
     { reason: "OPERATOR_MARKET_PAUSED",
@@ -498,9 +497,10 @@ bookTimestamp: 20 } },
     { reason: "POST_ONLY_WOULD_CROSS",
 details: { symbol: "DOGEUSDT",
 bestAskPrice: "0.101" } },
-  ]
+]
 
-  for (const deferral of deferrals) {
+test("preserves every stable submission-gate reason and its details without broker I/O", async () => {
+  for (const deferral of SUBMISSION_GATE_DEFERRALS) {
     let pendingRegistrations = 0
     let brokerCalls = 0
     let deferredContext
