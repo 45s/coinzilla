@@ -838,6 +838,21 @@ function getExistingOrderResult({
   })
 }
 
+function getPendingBuyCommitmentResult({ stopState, pendingBuyCommitment } = {}) {
+  if (compareDecimal({
+    left: pendingBuyCommitment,
+    right: "0",
+  }) <= 0) {
+    return undefined
+  }
+  return {
+    result: createStopResult({
+      stopState,
+      explanation: "Recovery Seller has an unresolved BUY commitment without an identifiable active order",
+    }),
+  }
+}
+
 function evaluateBuyReadiness({
   stopState,
   previousDecision,
@@ -866,16 +881,12 @@ function evaluateBuyReadiness({
     marketPaused,
     reconciliationComplete,
   })
-  if (compareDecimal({
-    left: pendingBuyCommitment,
-    right: "0",
-  }) > 0) {
-    return {
-      result: createStopResult({
-        stopState,
-        explanation: "Recovery Seller has an unresolved BUY commitment without an identifiable active order",
-      }),
-    }
+  const pendingCommitmentResult = getPendingBuyCommitmentResult({
+    stopState,
+    pendingBuyCommitment,
+  })
+  if (pendingCommitmentResult) {
+    return pendingCommitmentResult
   }
   const readinessBlock = getReadinessBlock({
     strategyStopped,
@@ -901,6 +912,62 @@ function evaluateBuyReadiness({
   }
 }
 
+function getBuyExchangeFilterResult({ stopState, previousDecision, filterReason, plan, rules, pairConfig } = {}) {
+  if (!filterReason) {
+    return undefined
+  }
+  const decision = createRecoverySellerLifecycleDecision({
+    outcome: RECOVERY_SELLER_LIFECYCLE_OUTCOMES.BLOCK,
+    reasonCode: "BUY_EXCHANGE_FILTER_REJECTED",
+    explanation: `Recovery Seller BUY is outside the current exchange filters: ${filterReason}`,
+  })
+  return {
+    result: createLifecycleResult({
+      stopState,
+      previousDecision,
+      decision,
+      buyDisposition: createBuyDisposition({
+        reason: filterReason,
+        plan,
+        rules,
+        pairConfig,
+      }),
+    }),
+  }
+}
+
+function getBuyInvestmentLimitResult({
+  stopState,
+  previousDecision,
+  pairConfig,
+  recoverySpent,
+  cumulativeNetSellProceeds,
+  pendingBuyCommitment,
+  buyNotional,
+} = {}) {
+  if (!isInvestmentLimitExceeded({
+    investment: pairConfig.investment,
+    recoverySpent,
+    cumulativeNetSellProceeds,
+    pendingBuyCommitment,
+    buyNotional,
+  })) {
+    return undefined
+  }
+  const decision = createRecoverySellerLifecycleDecision({
+    outcome: RECOVERY_SELLER_LIFECYCLE_OUTCOMES.BLOCK,
+    reasonCode: "INVESTMENT_LIMIT_REACHED",
+    explanation: "Recovery Seller's own per-pair investment limit blocks another BUY tranche",
+  })
+  return {
+    result: createLifecycleResult({
+      stopState,
+      previousDecision,
+      decision,
+    }),
+  }
+}
+
 function evaluateBuyCandidate({
   stopState,
   previousDecision,
@@ -922,46 +989,28 @@ function evaluateBuyCandidate({
     plan,
     rules,
   })
-  if (filterReason) {
-    const decision = createRecoverySellerLifecycleDecision({
-      outcome: RECOVERY_SELLER_LIFECYCLE_OUTCOMES.BLOCK,
-      reasonCode: "BUY_EXCHANGE_FILTER_REJECTED",
-      explanation: `Recovery Seller BUY is outside the current exchange filters: ${filterReason}`,
-    })
-    return {
-      result: createLifecycleResult({
-        stopState,
-        previousDecision,
-        decision,
-        buyDisposition: createBuyDisposition({
-          reason: filterReason,
-          plan,
-          rules,
-          pairConfig,
-        }),
-      }),
-    }
+  const filterResult = getBuyExchangeFilterResult({
+    stopState,
+    previousDecision,
+    filterReason,
+    plan,
+    rules,
+    pairConfig,
+  })
+  if (filterResult) {
+    return filterResult
   }
-  const investmentLimitExceeded = isInvestmentLimitExceeded({
-    investment: pairConfig.investment,
+  const investmentLimitResult = getBuyInvestmentLimitResult({
+    stopState,
+    previousDecision,
+    pairConfig,
     recoverySpent: rules.recoverySpent,
     cumulativeNetSellProceeds,
     pendingBuyCommitment,
     buyNotional: plan.buyNotional,
   })
-  if (investmentLimitExceeded) {
-    const decision = createRecoverySellerLifecycleDecision({
-      outcome: RECOVERY_SELLER_LIFECYCLE_OUTCOMES.BLOCK,
-      reasonCode: "INVESTMENT_LIMIT_REACHED",
-      explanation: "Recovery Seller's own per-pair investment limit blocks another BUY tranche",
-    })
-    return {
-      result: createLifecycleResult({
-        stopState,
-        previousDecision,
-        decision,
-      }),
-    }
+  if (investmentLimitResult) {
+    return investmentLimitResult
   }
   return {
     plan,
@@ -1010,6 +1059,62 @@ function createBuySubmitResult({
  * @param {object} input Pure market, pair, recovery accounting, order and STOP snapshots.
  * @returns {object} Immutable lifecycle decision and optional BUY intent.
  */
+function evaluateReadyRecoverySellerBuyDecision({
+  stopState,
+  previousDecision,
+  marketPrice,
+  pairConfig,
+  marketMetadata,
+  recoveryPosition,
+  cycleState,
+  cumulativeNetSellProceeds,
+  pendingBuyCommitment,
+  activeOrders,
+  strategyStopped,
+  marketPaused,
+  reconciliationComplete,
+  lastBuyPrice,
+} = {}) {
+  const readiness = evaluateBuyReadiness({
+    stopState,
+    previousDecision,
+    marketPrice,
+    pairConfig,
+    marketMetadata,
+    recoveryPosition,
+    cycleState,
+    cumulativeNetSellProceeds,
+    pendingBuyCommitment,
+    activeOrders,
+    strategyStopped,
+    marketPaused,
+    reconciliationComplete,
+  })
+  if (readiness.result) {
+    return readiness.result
+  }
+  const candidate = evaluateBuyCandidate({
+    stopState,
+    previousDecision,
+    marketPrice,
+    pairConfig,
+    rules: readiness.rules,
+    cumulativeNetSellProceeds,
+    pendingBuyCommitment,
+    lastBuyPrice,
+  })
+  if (candidate.result) {
+    return candidate.result
+  }
+  return createBuySubmitResult({
+    stopState,
+    previousDecision,
+    marketMetadata,
+    cycleState,
+    plan: candidate.plan,
+  })
+}
+
 export function evaluateRecoverySellerBuyDecision({
   stopState,
   previousDecision,
@@ -1040,7 +1145,7 @@ export function evaluateRecoverySellerBuyDecision({
     if (existingOrderResult) {
       return existingOrderResult
     }
-    const readiness = evaluateBuyReadiness({
+    return evaluateReadyRecoverySellerBuyDecision({
       stopState,
       previousDecision,
       marketPrice,
@@ -1054,29 +1159,7 @@ export function evaluateRecoverySellerBuyDecision({
       strategyStopped,
       marketPaused,
       reconciliationComplete,
-    })
-    if (readiness.result) {
-      return readiness.result
-    }
-    const candidate = evaluateBuyCandidate({
-      stopState,
-      previousDecision,
-      marketPrice,
-      pairConfig,
-      rules: readiness.rules,
-      cumulativeNetSellProceeds,
-      pendingBuyCommitment,
       lastBuyPrice,
-    })
-    if (candidate.result) {
-      return candidate.result
-    }
-    return createBuySubmitResult({
-      stopState,
-      previousDecision,
-      marketMetadata,
-      cycleState,
-      plan: candidate.plan,
     })
   } catch (error) {
     return createBuyFailureResult({
