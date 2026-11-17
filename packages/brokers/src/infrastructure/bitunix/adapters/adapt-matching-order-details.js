@@ -26,17 +26,17 @@ function adaptMatchingOrder({ record }) {
     value: record.id,
     field: "id",
   })
-  const volume = record.volume
+  const { volume } = record
   assertDecimalString({
     value: volume,
     field: "Bitunix Spot matching-order volume",
   })
-  const price = record.price
+  const { price } = record
   assertDecimalString({
     value: price,
     field: "Bitunix Spot matching-order price",
   })
-  const fee = record.fee
+  const { fee } = record
   assertDecimalString({
     value: fee,
     field: "Bitunix Spot matching-order fee",
