@@ -53,7 +53,10 @@ function makeCompletedFact({ inventoryDisposition = null, ...overrides } = {}) {
   return {
     factType: "RECOVERY_CYCLE_COMPLETED",
     factId: `recovery-cycle-completed:${MARKET_ID}:${cycleId}`,
-    canonicalData: { cycleId, ...canonicalData },
+    canonicalData: {
+      cycleId,
+      ...canonicalData,
+    },
   }
 }
 
@@ -77,7 +80,10 @@ function makeNotCompletedFact({
     sellOrderBrokerOrderId: "sell-broker-1",
     buyCost: "10",
     spent: "10",
-    netSellProceeds: addDecimal({ left: "10", right: realizedNetProfit }),
+    netSellProceeds: addDecimal({
+      left: "10",
+      right: realizedNetProfit,
+    }),
     realizedNetProfit,
     minProfit,
     activeQuantity,
@@ -105,7 +111,10 @@ function makeNotCompletedFact({
   return {
     factType: "RECOVERY_CYCLE_NOT_COMPLETED",
     factId: `recovery-cycle-not-completed:${MARKET_ID}:${evaluationId}`,
-    canonicalData: { evaluationId, ...canonicalData },
+    canonicalData: {
+      evaluationId,
+      ...canonicalData,
+    },
   }
 }
 
@@ -161,7 +170,10 @@ test("rejects completed recovery identity, field allowlist, and applied-fill vio
   assert.throws(
     () => validateCompleted({
       ...valid,
-      canonicalData: { ...valid.canonicalData, unsupported: true },
+      canonicalData: {
+        ...valid.canonicalData,
+        unsupported: true,
+      },
     }),
     /unsupported fields/,
     "A completed-cycle payload must reject fields outside its durable schema.",
@@ -177,7 +189,10 @@ test("rejects completed recovery identity, field allowlist, and applied-fill vio
   assert.throws(
     () => validateCompleted({
       ...valid,
-      canonicalData: { ...valid.canonicalData, appliedFillIds: ["fill-1", "fill-1"] },
+      canonicalData: {
+        ...valid.canonicalData,
+        appliedFillIds: ["fill-1", "fill-1"],
+      },
     }),
     /unique applied fill identities/,
     "A completed cycle must not count the same applied fill twice.",
@@ -185,7 +200,10 @@ test("rejects completed recovery identity, field allowlist, and applied-fill vio
   assert.throws(
     () => validateCompleted({
       ...valid,
-      canonicalData: { ...valid.canonicalData, cycleId: "not-a-sha256-digest" },
+      canonicalData: {
+        ...valid.canonicalData,
+        cycleId: "not-a-sha256-digest",
+      },
     }),
     /identity is not canonical/,
     "A malformed cycle identity must be rejected before it can be persisted.",
@@ -197,8 +215,14 @@ test("rejects completed recovery accounting that is inexact or internally incons
   const invalidCases = [
     ["buy cost differs from spent", { buyCost: "9" }],
     ["realized profit does not reconcile to proceeds less spent", { realizedNetProfit: "4" }],
-    ["profit is below the configured minimum", { realizedNetProfit: "4", minProfit: "5" }],
-    ["active inventory is below retained inventory", { activeQuantity: "0.5", keepQuantity: "1", freeQuantity: "0.5" }],
+    [
+      "profit is below the configured minimum",
+      { realizedNetProfit: "4", netSellProceeds: "14", minProfit: "5" },
+    ],
+    [
+      "active inventory is below retained inventory",
+      { activeQuantity: "0.5", keepQuantity: "1", freeQuantity: "0.5" },
+    ],
     ["free inventory differs from active inventory", { freeQuantity: "0.9" }],
     ["minimum profit is below the supported floor", { minProfit: "0.001" }],
     ["amounts are not canonical decimals", { netSellProceeds: "1e2" }],
@@ -208,7 +232,10 @@ test("rejects completed recovery accounting that is inexact or internally incons
     assert.throws(
       () => validateCompleted({
         ...valid,
-        canonicalData: { ...valid.canonicalData, ...changes },
+        canonicalData: {
+          ...valid.canonicalData,
+          ...changes,
+        },
       }),
       /accounting values|profit and inventory allocation/,
       `A completed recovery fact must reject when ${description}.`,
@@ -228,11 +255,41 @@ test("rejects invalid exchange dust metadata, missing evidence, and unreconciled
   })
 
   const invalidDispositions = [
-    [{ ...valid.canonicalData.inventoryDisposition, status: "UNKNOWN" }, /validated exchange-constrained dust/],
-    [{ ...valid.canonicalData.inventoryDisposition, reason: "UNKNOWN" }, /validated exchange-constrained dust/],
-    [{ ...valid.canonicalData.inventoryDisposition, quantity: "0" }, /validated exchange-constrained dust/],
-    [{ ...valid.canonicalData.inventoryDisposition, minimumQuantity: "01" }, /exact decimal string/],
-    [{ ...valid.canonicalData.inventoryDisposition, evaluatedQuantity: undefined }, /MIN_QUANTITY dust requires/],
+    [
+      {
+        ...valid.canonicalData.inventoryDisposition,
+        status: "UNKNOWN",
+      },
+      /validated exchange-constrained dust/,
+    ],
+    [
+      {
+        ...valid.canonicalData.inventoryDisposition,
+        reason: "UNKNOWN",
+      },
+      /validated exchange-constrained dust/,
+    ],
+    [
+      {
+        ...valid.canonicalData.inventoryDisposition,
+        quantity: "0",
+      },
+      /validated exchange-constrained dust/,
+    ],
+    [
+      {
+        ...valid.canonicalData.inventoryDisposition,
+        minimumQuantity: "01",
+      },
+      /exact decimal string/,
+    ],
+    [
+      {
+        ...valid.canonicalData.inventoryDisposition,
+        evaluatedQuantity: undefined,
+      },
+      /MIN_QUANTITY dust requires/,
+    ],
   ]
 
   for (const [inventoryDisposition, expectedError] of invalidDispositions) {
@@ -297,7 +354,10 @@ test("rejects recovery non-completion identity, accounting, and outcome contradi
   assert.throws(
     () => validateNotCompleted({
       ...valid,
-      canonicalData: { ...valid.canonicalData, unsupported: true },
+      canonicalData: {
+        ...valid.canonicalData,
+        unsupported: true,
+      },
     }),
     /unsupported fields/,
     "A non-completion payload must reject fields outside its durable schema.",
