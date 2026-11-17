@@ -154,7 +154,10 @@ function createTransition({
 
 export function createTradingSessionRepository({ database } = {}) {
   const callbackMode = requireDatabase({ database })
-  const transition = createTransition({ database, callbackMode })
+  const transition = createTransition({
+    database,
+    callbackMode,
+  })
   return Object.freeze({
     create: (record) => createSession({
       database,
