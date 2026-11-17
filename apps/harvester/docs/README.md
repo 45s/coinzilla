@@ -19,6 +19,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 - [Application architecture](architecture.md) and [architecture index](architecture/README.md)
 - [ADR-0003: Multi-provider execution and market-data routing](../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) — accepted target architecture; implementation is tracked by [#1339](https://github.com/45s/coinzilla/issues/1339).
+- [Multi-provider migration audit and implementation plan](../../../docs/architecture/multi-provider-migration-plan.md) — source-verified Harvester composition, order provenance, account isolation, recovery prerequisites and phased implementation plan.
 - [Operator control](operator-control/README.md) — Telegram Command Center commands, authorized read-only queries, confirmed controls and process-lifetime pause boundary
 - [Telegram Command Center runbook](operations/telegram-command-center.md) — safe menu navigation, refresh, confirmations, authorization and troubleshooting
 - [Volatility Protection](volatility-protection.md) — per-market protection, required explicit pair-level policy and order gate; provisional thresholds still require offline historical calibration

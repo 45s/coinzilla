@@ -155,7 +155,7 @@ The Brokers package owns exchange-specific configuration, clients, transport, no
 
 A provider factory/constructor must validate its own exchange-specific options. Binance instances retain the explicit `TRADING_MODE=testnet|live` contract from ADR-0002. Do not impose Binance's environment model on other exchanges. A provider's presence in the package or registry is not evidence that it supports order placement, cancellation, fills, private streams, or recovery; capability declarations must reflect verified behavior for that provider and environment.
 
-The consumer composes providers and resolves its own routes. For Harvester's accepted target, see [ADR-0003](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and [issue #1339](https://github.com/45s/coinzilla/issues/1339). The issue defines the phased factory/capability work and preserves current consumer contracts.
+The consumer composes providers and resolves its own routes. For Harvester's accepted target, see [ADR-0003](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md), the source-verified [multi-provider migration audit and implementation plan](../../docs/architecture/multi-provider-migration-plan.md), and [issue #1339](https://github.com/45s/coinzilla/issues/1339). The issue defines the phased factory/capability work and preserves current consumer contracts.
 
 Keep the current public broker API stable during this internal migration. Any proposed public API change requires a separate compatibility analysis and consumer migration plan.
 
