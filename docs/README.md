@@ -20,6 +20,7 @@ This index is the entry point for maintained repository documentation. The repos
 - [Architecture and decisions](architecture/README.md)
 - [ADR-0002: Explicit Binance trading environment](architecture/decisions/ADR-0002-explicit-binance-trading-environment.md)
 - [ADR-0003: Explicit multi-provider execution and market-data routing](architecture/decisions/ADR-0003-multi-provider-routing.md)
+- [Multi-provider migration audit and implementation plan](architecture/multi-provider-migration-plan.md) — source-verified audit, capability matrix, persistence assessment and implementation phases for #1339.
 - [Domain ownership](engineering/DOMAIN_OWNERSHIP.md)
 - [Task workflows](engineering/TASK_WORKFLOWS.md)
 - [AI refactoring and code audit standard](engineering/AI_REFACTORING_AUDIT_STANDARD.md)
