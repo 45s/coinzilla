@@ -45,8 +45,6 @@ Concurrent operation is a product requirement, not an optional future optimizati
 
 The shared Portfolio is actual-accounting truth. Strategy-owned Positions are independent accounting allocations inside that one Portfolio, not separate wallets or duplicated exchange custody. Their aggregate remains bounded by authoritative exchange balances and centrally aggregated reservations. Each strategy's investment budget is independent; the shared allocator protects the common physical balances. RS-2a/2b now implement stable Position identity, immutable order ownership, verified external legacy Spot allocation, canonical mixed-fill attribution, exact-once terminal reconciliation, atomic recovery/legacy accounting, snapshot-relative base/quote flow and independent profitability calculation. RS policy and runtime integration remain separate phases.
 
-
-
 ## RS-1 — Conservative source audit and reuse map
 
 **Status: COMPLETE — audit only; no source code changed.**
@@ -106,15 +104,11 @@ Relevant tests located include `strategy.test.js`, `recovery-sell-plan.test.js`,
 
 **RS-2b — COMPLETE (merged PR #1276):** the shared Portfolio, verified legacy Spot source, immutable order ownership, canonical mixed SELL allocations, partial-fill staging, terminal reconciliation, atomic recovery/legacy projections and snapshot-relative external base/quote-flow accounting are merged in PRs #1118, #1131, #1137, #1144, #1152, #1153, #1203 and #1212. PR #1213 adds the pure independent profitability calculation; PR #1262 supplies the shared structured-error base. PR #1276 completes the application boundary: it stages terminal OrderRegistry updates, reconciles complete canonical fill history, commits both projections, calculates independent profitability and publishes the registry only after success. Failed reconciliation/commit retains the old state and SELL reservation; duplicate terminal replay is a no-op. Confirmed fills are committed even when profitability is false. The verified Spot and quote-cash-flow providers remain injectable with empty defaults. PR #1276 merged as `9276b6c01bec62b743727548786c5af4a04b7908` from exact head `19448d63d117f563c31d8ab9422ac73623974782`; 1,847/1,847 Harvester tests and all required checks passed. No TESTNET/LIVE operation was performed. Bootstrap, runtime configuration, policy registration and order submission remain excluded; RS is non-executable.
 
-
-
 **Deliverable:** independent deterministic RS domain model and pure calculations, tests first.
 
 **First RS-2b logical-accounting slice implemented in merged PR #1131:** `src/domain/strategies/recovery-seller/legacy-position.js` now creates the operator-declared logical legacy position, calculates its original average cost once (36 decimal places, rounded away from zero), caps each cycle's configured legacy slice at the remaining quantity, and records the actual legacy quantity sold while preserving the original invested amount and average cost. Focused tests cover the initial basis, fixed basis after disposal, smaller final remainder, exhausted legacy quantity, and invalid inputs.
 
 That PR's original scope was pure logical accounting. Subsequent merged RS-2b slices completed the verified custody, canonical allocation, terminal reconciliation and application commit boundaries described above. The resulting workflow still does not register RS or submit orders; RS remains non-executable.
-
-
 
 Before implementing each rule, add a focused test that expresses the agreed business invariant and observe it fail. The mixed SELL allocation, partial-fill reconciliation, atomic cross-projection accounting, account-snapshot baseline and shared quote-allocation regression suites are registered in `apps/harvester/package.json` `targetedTestFiles` so focused Harvester CI exercises these boundaries directly. Reuse existing domain capabilities directly where their contracts fit. If a required CG function is a genuine strategy-neutral capability, characterize it, extract it in the same focused change, add direct shared tests, and prove CG behavior is unchanged. Do not perform a separate speculative extraction pass.
 
