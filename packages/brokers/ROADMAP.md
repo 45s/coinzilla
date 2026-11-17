@@ -10,7 +10,7 @@ owner: brokers
 
 ### Phase 1 — immutable Binance capability declarations
 
-**Status: implementation and offline tests are in PR [#1366](https://github.com/45s/coinzilla/pull/1366); merge and exact-head CI gates remain.** This declaration-only slice starts with `BinanceWebSocketBroker`. It does not change constructors, methods, package exports, exchange behavior, Harvester composition, provider routing, or Bitunix.
+**Status: implemented by [PR #1366](https://github.com/45s/coinzilla/pull/1366) as a declaration-only Phase 1 slice.** This declaration-only slice starts with `BinanceWebSocketBroker`. It does not change constructors, methods, package exports, exchange behavior, Harvester composition, provider routing, or Bitunix.
 
 The instance exposes a non-writable, non-configurable `capabilities` property. The versioned declaration uses the following leaf shape:
 
@@ -36,7 +36,7 @@ All nested objects and arrays are recursively frozen. State meanings:
 
 | Area | Capability | State | Source evidence and precise boundary |
 |---|---|---|---|
-| Environment | Endpoint selection | environment-dependent | `BinanceWebSocketConfig` requires `tradingMode: "testnet" | "live"` and selects the corresponding Spot WebSocket API and Streams endpoint pair. `NODE_ENV` is not consulted. Offline config tests do not prove endpoint connectivity or account permissions. |
+| Environment | Endpoint selection | environment-dependent | `BinanceWebSocketConfig` requires `tradingMode` to be exactly `testnet` or `live` and selects the corresponding Spot WebSocket API and Streams endpoint pair. `NODE_ENV` is not consulted. Offline config tests do not prove endpoint connectivity or account permissions. |
 | Market data | One-shot price | supported | `BinanceWebSocketBroker.getPrices()` uses `ticker.price`; tests: `get-prices-response.test.js`. A single response is not a stream. |
 | Market data | Aggregate-trade price stream | supported | `subscribeForPrices()` uses `aggTrade` plus the rolling-window ticker liveness monitor; tests: `subscribe-for-prices.test.js`, `subscribe-for-prices-liveness.test.js`. Reconnect/resubscribe is implemented; missed events are not replayed and consumers still own freshness/reconciliation. |
 | Market data | Best bid/ask stream | supported | `subscribeForBookTicker()` uses the public `bookTicker` stream; test: `subscribe-for-book-ticker.test.js`. |
