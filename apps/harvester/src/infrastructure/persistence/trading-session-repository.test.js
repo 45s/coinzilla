@@ -43,7 +43,7 @@ function createSessionRecord(overrides = {}) {
     endedAt: null,
     status: "STARTING",
     metadata: {
-      sessionKind: "trading-process",
+      recordKind: "ordinary-trading-history",
     },
     ...overrides,
   }
@@ -184,7 +184,7 @@ test("recovers the exact historical session after closing and reopening the SQLi
   assert.deepEqual(recoveredSession, originalSession, "Reopening the provider-neutral database must recover the exact historical trading-session record.")
 })
 
-test("propagates transaction rollback, closed lifecycle and provider failures", async (t) => {
+test("rolls back a failed provider-neutral transaction", async (t) => {
   const { database, repository } = await createDatabaseFixture(t)
   const originalSession = createSessionRecord()
   const rollbackError = new Error("intentional session transaction rollback")
@@ -192,7 +192,7 @@ test("propagates transaction rollback, closed lifecycle and provider failures", 
   await assert.rejects(
     database.transaction((transaction) => {
       transaction.create({
-        collection: "trading_sessions",
+        collection: "harvester_trading_sessions",
         record: originalSession,
       })
       throw rollbackError
@@ -205,19 +205,30 @@ test("propagates transaction rollback, closed lifecycle and provider failures", 
     null,
     "A failed database transaction must roll back the complete session record rather than leave a partial write.",
   )
+})
 
+test("rejects repository reads after the database lifecycle is closed", async (t) => {
+  const { database, repository } = await createDatabaseFixture(t)
+  const originalSession = createSessionRecord()
+  await repository.create(originalSession)
   await database.close()
+
   assert.throws(
     () => repository.findById(originalSession.id),
     /Database must be connected to start a transaction/,
     "A closed database lifecycle must reject repository reads instead of pretending that history is empty.",
   )
+})
 
+test("propagates provider failures unchanged through create, read and transition", async (t) => {
+  const { database } = await createDatabaseFixture(t)
+  const originalSession = createSessionRecord()
   const providerError = new DatabaseProviderError({
     operation: "readOne",
     collection: "harvester_trading_sessions",
     cause: new Error("simulated SQLite I/O failure"),
   })
+
   const failingCreateRepository = createTradingSessionRepository({
     database: {
       capabilities: database.capabilities,
