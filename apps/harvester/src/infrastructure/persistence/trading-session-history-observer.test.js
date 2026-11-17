@@ -135,6 +135,7 @@ test("records startup failure and does not mark an unsuccessful shutdown as stop
   const failed = await repository.findById(PROCESS_IDENTITY.runtimeSessionId)
   assert.equal(failed.status, "STARTUP_FAILED", "A startup-failed lifecycle event must terminate a session that never reached RUNNING.")
   assert.equal(typeof failed.endedAt, "string", "A failed startup must preserve its event timestamp as the session end time.")
+  await observer.close()
 
   const secondIdentity = {
     ...PROCESS_IDENTITY,
