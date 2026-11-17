@@ -330,11 +330,10 @@ expectation: "testnet, live, or both" })
   return selectedPairs
 }
 
-/** Resolve the fixed Binance broker and mandatory exchange mode from the process environment. */
+/** Resolve the mandatory exchange environment without selecting a provider. */
 export function resolveRuntimeConfig({ tradingMode, environment } = {}) {
   if (tradingMode !== TRADING_ENVIRONMENTS.TESTNET && tradingMode !== TRADING_ENVIRONMENTS.LIVE) {throw new Error('TRADING_MODE must be set to "testnet" or "live"')}
   return Object.freeze({ environment: environment ?? "unspecified",
-brokerName: "binance",
 tradingMode,
 tradingEnabled: true })
 }

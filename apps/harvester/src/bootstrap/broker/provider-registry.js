@@ -31,12 +31,43 @@ function assertDescriptor({ descriptor, index }) {
   return Object.freeze({ id, provider, accountId, ...(tradingMode ? { tradingMode } : {}) })
 }
 
+function validateRegistryInput({ providerInstances, selections, adapterFactories }) {
+  if (!Array.isArray(providerInstances) || providerInstances.length === 0) {
+    throw new TypeError("Harvester requires at least one named provider instance")
+  }
+  const descriptors = providerInstances.map((descriptor, index) => assertDescriptor({ descriptor, index }))
+  const ids = new Set()
+  const accountIds = new Set()
+  for (const descriptor of descriptors) {
+    if (ids.has(descriptor.id)) {
+      throw new TypeError(`Duplicate provider instance ID "${descriptor.id}"`)
+    }
+    if (accountIds.has(descriptor.accountId)) {
+      throw new TypeError(`Duplicate provider account ID "${descriptor.accountId}"`)
+    }
+    ids.add(descriptor.id)
+    accountIds.add(descriptor.accountId)
+  }
+  const selectedIds = [selections?.execution, selections?.account, selections?.marketData]
+  if (selectedIds.some((id) => typeof id !== "string" || !ids.has(id))) {
+    throw new TypeError("Every provider role must explicitly select a configured instance ID")
+  }
+  if (new Set(selectedIds).size !== 1) {
+    throw new TypeError("Execution, account, and market data must use the same instance until isolation is implemented")
+  }
+  if (!adapterFactories || typeof adapterFactories !== "object") {
+    throw new TypeError("Harvester provider adapter factories must be registered")
+  }
+  return descriptors
+}
+
 function assertCapabilities({ descriptor, broker }) {
   const declaration = broker.capabilities
   if (!declaration || declaration.contractVersion !== 1 || declaration.provider !== descriptor.provider) {
     throw new TypeError(`Provider instance "${descriptor.id}" has no compatible verified capability declaration`)
   }
-  if (descriptor.tradingMode && declaration.environment?.selectedMode !== descriptor.tradingMode) {
+  const selectedMode = declaration.environment?.selectedMode
+  if (descriptor.tradingMode && selectedMode !== undefined && selectedMode !== descriptor.tradingMode) {
     throw new TypeError(`Provider instance "${descriptor.id}" capability environment does not match configured mode`)
   }
   for (const path of REQUIRED_CAPABILITIES) {
@@ -80,7 +111,8 @@ function publishConnectionFailure({ eventPublisher, descriptor, error }) {
 
 async function disconnectEntries({ entries, eventPublisher }) {
   const reversed = entries.slice().reverse()
-  const results = await Promise.allSettled(reversed.map((entry) => entry.broker.disconnect()))
+  const results = await Promise.allSettled(reversed.map((entry) =>
+    Promise.resolve().then(() => entry.broker.disconnect())))
   const errors = []
   for (const [index, result] of results.entries()) {
     const entry = reversed[index]
@@ -97,6 +129,31 @@ async function disconnectEntries({ entries, eventPublisher }) {
     }
   }
   return errors
+}
+
+async function constructProviderEntries({ descriptors, adapterFactories, env, logger, eventPublisher }) {
+  const entries = []
+  try {
+    for (const descriptor of descriptors) {
+      const factory = adapterFactories[descriptor.provider]
+      if (typeof factory !== "function") {
+        throw new TypeError(`Provider type "${descriptor.provider}" is not registered in Harvester`)
+      }
+      const config = resolveProviderConfig({ descriptor, env })
+      const adapter = factory({ config, logger })
+      entries.push({ descriptor, broker: adapter })
+      const broker = assertBrokerPort({ broker: adapter })
+      assertCapabilities({ descriptor, broker })
+      entries[entries.length - 1].broker = broker
+    }
+  } catch (error) {
+    const cleanupErrors = await disconnectEntries({ entries, eventPublisher })
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError([error, ...cleanupErrors], "Provider construction failed and cleanup also failed", { cause: error })
+    }
+    throw error
+  }
+  return entries
 }
 
 function createPortFacade({ entry, connectAll, disconnectAll }) {
@@ -118,52 +175,7 @@ function createPortFacade({ entry, connectAll, disconnectAll }) {
   return Object.freeze(assertBrokerPort({ broker }))
 }
 
-/** Construct configured adapters and own their connection and cleanup lifecycle. */
-export async function createProviderRegistry({
-  providerInstances, selections, adapterFactories, env = process.env, logger, eventPublisher,
-} = {}) {
-  if (!Array.isArray(providerInstances) || providerInstances.length === 0) {
-    throw new TypeError("Harvester requires at least one named provider instance")
-  }
-  const descriptors = providerInstances.map((descriptor, index) => assertDescriptor({ descriptor, index }))
-  const ids = new Set()
-  for (const descriptor of descriptors) {
-    if (ids.has(descriptor.id)) {
-      throw new TypeError(`Duplicate provider instance ID "${descriptor.id}"`)
-    }
-    ids.add(descriptor.id)
-  }
-  const selectedIds = [selections?.execution, selections?.account, selections?.marketData]
-  if (selectedIds.some((id) => typeof id !== "string" || !ids.has(id))) {
-    throw new TypeError("Every provider role must explicitly select a configured instance ID")
-  }
-  if (new Set(selectedIds).size !== 1) {
-    throw new TypeError("Execution, account, and market data must use the same instance until isolation is implemented")
-  }
-  if (!adapterFactories || typeof adapterFactories !== "object") {
-    throw new TypeError("Harvester provider adapter factories must be registered")
-  }
-
-  const entries = []
-  try {
-    for (const descriptor of descriptors) {
-      const factory = adapterFactories[descriptor.provider]
-      if (typeof factory !== "function") {
-        throw new TypeError(`Provider type "${descriptor.provider}" is not registered in Harvester`)
-      }
-      const config = resolveProviderConfig({ descriptor, env })
-      const broker = assertBrokerPort({ broker: factory({ config, logger }) })
-      entries.push({ descriptor, broker })
-      assertCapabilities({ descriptor, broker })
-    }
-  } catch (error) {
-    const cleanupErrors = await disconnectEntries({ entries, eventPublisher })
-    if (cleanupErrors.length > 0) {
-      throw new AggregateError([error, ...cleanupErrors], "Provider construction failed and cleanup also failed", { cause: error })
-    }
-    throw error
-  }
-
+function createRegistryLifecycle({ entries, eventPublisher }) {
   const entriesById = new Map(entries.map((entry) => [entry.descriptor.id, entry]))
   let connectPromise
   let disconnectPromise
@@ -211,6 +223,15 @@ export async function createProviderRegistry({
     connectAll, disconnectAll,
     getBrokerPort: ({ instanceId } = {}) => createPortFacade({ entry: getEntry({ instanceId }), connectAll, disconnectAll }),
     getDescriptor: ({ instanceId } = {}) => getEntry({ instanceId }).descriptor,
-    descriptors: Object.freeze(descriptors.slice()),
+    descriptors: Object.freeze(entries.map((entry) => entry.descriptor)),
   })
+}
+
+/** Construct configured adapters and own their connection and cleanup lifecycle. */
+export async function createProviderRegistry({
+  providerInstances, selections, adapterFactories, env = process.env, logger, eventPublisher,
+} = {}) {
+  const descriptors = validateRegistryInput({ providerInstances, selections, adapterFactories })
+  const entries = await constructProviderEntries({ descriptors, adapterFactories, env, logger, eventPublisher })
+  return createRegistryLifecycle({ entries, eventPublisher })
 }

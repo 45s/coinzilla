@@ -171,20 +171,18 @@ test("accepts independent minimum-profit thresholds for each market", () => {
   assert.equal(strategyConfig.pairs.LINKUSDT.minProfit, 0.1)
 })
 
-test("selects Binance TESTNET from TRADING_MODE even when NODE_ENV says production", () => {
+test("selects TESTNET independently of provider selection even when NODE_ENV says production", () => {
   const runtime = resolveRuntimeConfig({ config: createAppConfig(),
 tradingMode: TRADING_ENVIRONMENTS.TESTNET,
 environment: "production" })
-  assert.equal(runtime.brokerName, "binance", "Binance must remain the fixed broker for TESTNET.")
   assert.equal(runtime.tradingMode, TRADING_ENVIRONMENTS.TESTNET, "TRADING_MODE must select TESTNET independently of NODE_ENV.")
   assert.equal(runtime.tradingEnabled, true, "Trading must be enabled when TESTNET is explicitly selected.")
 })
 
-test("selects Binance LIVE from TRADING_MODE even when NODE_ENV says development", () => {
+test("selects LIVE independently of provider selection even when NODE_ENV says development", () => {
   const runtime = resolveRuntimeConfig({ config: createAppConfig(),
 tradingMode: TRADING_ENVIRONMENTS.LIVE,
 environment: "development" })
-  assert.equal(runtime.brokerName, "binance", "Binance must remain the fixed broker for LIVE.")
   assert.equal(runtime.tradingMode, TRADING_ENVIRONMENTS.LIVE, "TRADING_MODE must select LIVE independently of NODE_ENV.")
   assert.equal(runtime.tradingEnabled, true, "Selecting LIVE must enable real order execution.")
 })
@@ -398,4 +396,37 @@ test("composes enabled Telegram operator control independently from outbound not
     process.env.TELEGRAM_USER_ID ? [process.env.TELEGRAM_USER_ID] : [],
     "The operator allowlist must be seeded from TELEGRAM_USER_ID without adding an undefined entry.",
   )
+})
+
+
+test("validates explicit non-secret provider instances and role selections", () => {
+  const config = createAppConfig()
+  config.brokers = {
+    instances: { binancePrimary: { provider: "binance", accountId: "primary" } },
+    selection: { execution: "binancePrimary", account: "binancePrimary", marketData: "binancePrimary" },
+  }
+  assert.equal(validateAppConfig(config), config)
+  config.brokers.instances.binancePrimary.apiSecret = "must-not-be-stored"
+  assert.throws(() => validateAppConfig(config), (error) =>
+    error instanceof ConfigValidationError && error.path.endsWith(".apiSecret"))
+})
+
+test("rejects missing or split provider role selections", () => {
+  const missing = createAppConfig()
+  missing.brokers = {
+    instances: { binancePrimary: { provider: "binance", accountId: "primary" } },
+    selection: { execution: "missing", account: "binancePrimary", marketData: "binancePrimary" },
+  }
+  assert.throws(() => validateAppConfig(missing), (error) =>
+    error instanceof ConfigValidationError && error.path === "brokers.selection.execution")
+  const split = createAppConfig()
+  split.brokers = {
+    instances: {
+      binancePrimary: { provider: "binance", accountId: "primary" },
+      binanceSecondary: { provider: "binance", accountId: "secondary" },
+    },
+    selection: { execution: "binancePrimary", account: "binanceSecondary", marketData: "binancePrimary" },
+  }
+  assert.throws(() => validateAppConfig(split), (error) =>
+    error instanceof ConfigValidationError && error.path === "brokers.selection")
 })

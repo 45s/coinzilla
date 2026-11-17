@@ -72,6 +72,13 @@ test("rejects a missing capability declaration", async () => {
   await assert.rejects(createRegistry({ brokers: [broker] }), /capability declaration/)
 })
 
+test("rejects missing credentials without exposing credential values", async () => {
+  await assert.rejects(createProviderRegistry({
+    providerInstances: [descriptor()], selections,
+    adapterFactories: { binance: () => createBroker([]) }, env: { BINANCE_API_KEY: "secret-value" },
+  }), (error) => error.message.includes("API secret") && !error.message.includes("secret-value"))
+})
+
 test("connects and disconnects each instance once", async () => {
   const { registry, calls } = await createRegistry()
   const broker = registry.getBrokerPort({ instanceId: "binancePrimary" })
