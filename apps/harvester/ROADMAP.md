@@ -83,6 +83,10 @@ Remaining safety and observability follow-ups #1103 and #1105 remain open; #1104
 
 The inbound Telegram Command Center is complete. It is a thin authorized adapter over Harvester application queries and commands; it does not own trading policy, persistence, startup policy or recovery. Delivered: commands/read-only queries (PRs #1079, #1081, #1086), inline navigation and confirmation (PR #1088), persistent keyboard (PR #1194), emergency BUY commands (PR #1267), and correlated interaction diagnostics/callback acknowledgement handling (PR #1215). Tracking issues #1201 and #1214 are closed as completed. Outbound Telegram notifications are separate from CC. See [operator-control documentation](./docs/operator-control/README.md) and [Telegram runbook](./docs/operations/telegram-command-center.md).
 
+## P2 — Telegram operator adapter modularity (#1306)
+
+- [~] **Decompose the Telegram operator adapter without behavior changes** — in progress under [issue #1306](https://github.com/45s/coinzilla/issues/1306), parent quality initiative [#1264](https://github.com/45s/coinzilla/issues/1264). Preserve the completed Command Center contract while replacing the 520-line function exception with cohesive infrastructure modules. No command, callback, authorization, confirmation, trading, application/domain or global ESLint policy changes.
+
 ## P1 — Outbound Telegram notification icons
 
 **Status: [~] IMPLEMENTATION IN PROGRESS in [PR #1099](https://github.com/45s/coinzilla/pull/1099).** Apply the user's reviewed emoji choices to every producer-backed Harvester Telegram notification. The formatter must select order-failure icons from the mapped operation and side, and account-safety icons from the mapped category. Exact selected and retained icons are documented in [Architecture — operational notifications](./docs/architecture.md#operational-notifications).
