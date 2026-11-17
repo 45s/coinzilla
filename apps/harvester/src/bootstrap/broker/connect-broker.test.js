@@ -107,7 +107,10 @@ test("disconnects after connection failure and publishes failure evidence", asyn
   })
 
   await assert.rejects(
-    connectBroker(createConnectInput({ fixture, logger: { error: () => {} } })),
+    connectBroker(createConnectInput({
+      fixture,
+      logger: { error: () => {} },
+    })),
     /connect failed/,
     "The original connection error must remain the rejection when cleanup succeeds.",
   )
