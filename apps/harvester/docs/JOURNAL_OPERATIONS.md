@@ -25,10 +25,7 @@ loads `.env`; set `TRADING_MODE=live` there for production LIVE execution.
 `TRADING_MODE` must be exactly `testnet` or `live`; missing or invalid values
 fail startup. `NODE_ENV` may describe the Node.js runtime but never selects the
 exchange. No launcher or preload script forces either value.
-Environment files and externally injected environment values may provide
-`TRADING_MODE`, Binance API credentials, standard process settings, and
-optional notifier secrets; they do not provide a broker selector,
-trading-enable flag, runtime profile, or Journal configuration.
+The current deployment remains Binance-only. Environment files and externally injected environment values provide the explicit Binance `TRADING_MODE`, Binance API credentials, standard process settings, and optional notifier secrets; `NODE_ENV` never selects the exchange. The accepted target in [ADR-0003](../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) adds named provider-instance configuration and explicit execution/market-data routes, tracked by [issue #1339](https://github.com/45s/coinzilla). That target is not yet implemented: do not add provider selectors or route overrides to deployment files until the validated schema and migration are delivered. Secrets remain environment/secret-manager inputs and must not appear in Journal records, logs, configuration fingerprints, or provider provenance. Trading-enable and Journal settings remain unchanged.
 
 The Journal and diagnostic logs share the same process session directory,
 but retain independent formats and lifecycles. Legacy flat JSONL files remain
@@ -303,10 +300,14 @@ See [AUDIT.md](audits/reports/AUDIT.md), [AUDIT_FINDINGS.md](audits/reports/AUDI
 
 ## Trading process ownership locks
 
-Trading-enabled startup acquires two exclusive locks before the Journal writer starts or the broker connects:
+Trading-enabled startup acquires two exclusive locks before the Journal writer starts or the broker connects. Both are stored under the host-shared `~/.coinzilla/harvester/process-locks/` directory, outside every Git worktree:
 
-1. **Broker-wide host lock:** a file named `.<broker>-harvester-trading.lock` (for Binance, `.binance-harvester-trading.lock`) under `~/.coinzilla/harvester/process-locks/`. It prevents another Harvester process running under the same OS user from trading through the same broker.
-2. **Harvester application lock:** `.harvester-trading.lock` in the same dedicated `~/.coinzilla/harvester/process-locks/` directory. It is no longer mixed into the logs or per-session Journal directories.
+1. **Broker/account host lock:** `.<broker>-harvester-trading-<scope-sha256>.lock`.
+2. **Harvester application lock:** `.harvester-trading-<scope-sha256>.lock`.
+
+The scope fingerprint is SHA-256 over the canonical provider and validated `TRADING_MODE` (`testnet` or `live`). It excludes API keys, API secrets, account identifiers, worktree paths, branch names and process identity. Testnet and LIVE produce different fingerprints. Missing, malformed or unsupported scope values fail closed before broker connection.
+
+The host lock is acquired first, then the application lock. If application-lock acquisition fails, startup attempts to release the host lock; an uncertain host-lock release is surfaced rather than ignored. During shutdown, the application lock is released first and the host lock only after application-lock release is confirmed. If application-lock release is uncertain, the host lock is deliberately retained. Both locks remain held unless runtime shutdown and Journal close are confirmed. If runtime startup was attempted and then failed before a runtime handle was returned, the locks are retained because broker resources may have been partially activated.
 
 The host lock is acquired first, then the application lock. If application-lock acquisition fails, startup attempts to release the host lock; an uncertain host-lock release is surfaced rather than ignored. During shutdown, the application lock is released first and the host lock only after application-lock release is confirmed. If application-lock release is uncertain, the host lock is deliberately retained. Both locks remain held unless runtime shutdown and Journal close are confirmed. If runtime startup was attempted and then failed before a runtime handle was returned, the locks are retained because broker resources may have been partially activated.
 

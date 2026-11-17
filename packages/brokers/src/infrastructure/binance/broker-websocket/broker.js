@@ -452,7 +452,7 @@ error })
     }
   }
 
-  /** @returns {Promise<BrokerResult<{balances: import("@coinzilla/entities").Balance[], sourceTime: number}>>} Balances and Binance source update time. */
+  /** @returns {Promise<BrokerResult<{balances: import("@coinzilla/entities").Balance[], sourceTime: number}>>} Balances and source update time. */
   async getAccountSnapshot() {
     try {
       const response = await this.tradingConnection.request(
