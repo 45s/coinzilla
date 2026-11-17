@@ -56,7 +56,7 @@ Do not mirror every `CoreBroker` method automatically. Add a capability only whe
 | Read open orders | `getOpenOrders({ symbol? } = {})`; omit `symbol` for an account-wide snapshot |
 | Read fills | `getFills(input)` |
 | Read canonical order history | `getCanonicalOrderHistory({ symbol, orderId })` |
-| Account snapshot and canonical account UID | `getAccountSnapshot()` |
+| Account snapshot | `getAccountSnapshot()` |
 | Symbol filters | `getSymbolFilters({ symbol })` |
 | Price subscription | `subscribeForPrices({ symbol, onPrice })` |
 | Historical candles | `getCandles({ symbol, interval, limit, startTime?, endTime? })` |
