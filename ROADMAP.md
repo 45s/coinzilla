@@ -5,7 +5,7 @@
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
 **Last reviewed:** 2026-11-17
-**Last source-verified develop checkpoint:** `7c717e82b60e0cc6b951e96ec08ad6087aba06e0` (2026-11-17; ESLint rule hardening #1310 merged).
+**Last source-verified develop checkpoint:** `0b90c96863374a1961d78c768f20e9b9b318a35a` (2026-11-17; current synchronized ESLint audit baseline).
 
 ## Repository-wide agent workflow continuity
 
@@ -109,9 +109,12 @@
    - **Canonical guidance:** [Structured Error Handling Standard](docs/engineering/structured-error-handling.md).
    - **Owner:** [Utils roadmap](packages/utils/ROADMAP.md) for the shared base; each consuming domain owns its subclasses and gradual migrations.
 
-11. **Workspace JavaScript linting — strict zero-baseline enforcement and evidence-based rule hardening DONE ([PR #1288](https://github.com/45s/coinzilla/pull/1288), [PR #1311](https://github.com/45s/coinzilla/pull/1311), merged as `7c717e82b60e0cc6b951e96ec08ad6087aba06e0`).**
+11. **Workspace JavaScript linting — strict zero-baseline enforcement and evidence-based rule hardening DONE ([PR #1288](https://github.com/45s/coinzilla/pull/1288), [PR #1311](https://github.com/45s/coinzilla/pull/1311), merged as `7c717e82b60e0cc6b951e96ec08ad6087aba06e0`). Current synchronized function-quality follow-up: [PR #1322](https://github.com/45s/coinzilla/pull/1322).**
    - The original ESLint 10 flat configuration and named-export-only ESM enforcement were delivered in [PR #1058](https://github.com/45s/coinzilla/pull/1058). Strict full-workspace `pnpm lint` enforcement was delivered in [PR #1288](https://github.com/45s/coinzilla/pull/1288); it remains `eslint . --max-warnings 0` inside the existing required `Check JavaScript syntax` context.
-   - PR #1311 promotes `no-console` and `no-implicit-coercion` to errors with policy regression tests. It retains `complexity.max: 20`: evaluating 15 found 247 violations across 89 files (68 in Harvester). It defers `require-atomic-updates`: the audit found 47 candidates across 21 files, with targeted concurrency classification tracked in [issue #1313](https://github.com/45s/coinzilla/issues/1313).
+   - PR #1311 promotes `no-console` and `no-implicit-coercion` to errors with policy regression tests. The `complexity.max: 20` decision remains unchanged. A fresh audit on synchronized `develop` HEAD `0b90c96863374a1961d78c768f20e9b9b318a35a` found 146 functions across 91 files at complexity 15; the earlier PR #1311 audit recorded 247 across 89 files. Lowering to 15 remains disproportionate.
+   - PR #1322 adds `max-depth: ["error", 4]` with regression tests for actual ESLint behavior. The audit inspected 761 JavaScript files (760 measured; only the audit harness was excluded from its own candidate counts): depth 3 would flag 17 functions across 11 files, while depth 4 has zero existing violations. It retains `max-lines-per-function: 80` (60 affects 337 functions/164 files; 50 affects 641/238) and `max-statements: 50` (30 affects 34/27; 25 affects 87/63; 20 affects 224/123; 15 affects 588/223). The latest develop refactor removed the former Telegram adapter 520-line override; no file-specific function-length exception remains.
+   - `default-param-last` is redundant with `max-params: 1`; deprecated `no-return-await` and formatting-only `max-len` are not adopted. The canonical zero-warning lint command and all existing required CI contexts remain unchanged.
+   - PR #1311 defers `require-atomic-updates`: the earlier audit found 47 candidates across 21 files, with targeted concurrency classification tracked in [issue #1313](https://github.com/45s/coinzilla/issues/1313).
    - Both active branch rulesets already require `Check JavaScript syntax`; no new required context is needed for the strict lint step to block merges.
    - **Owner:** shared infrastructure.
 
