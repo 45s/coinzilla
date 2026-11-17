@@ -8,7 +8,8 @@ Owned path: `packages/db/**`.
 
 This package owns provider-neutral database lifecycle, record CRUD/query contracts, transaction boundaries, concrete provider adapters, and the SQLite schema migration runner.
 
-Roadmap: [`ROADMAP.md`](./ROADMAP.md).  
+Roadmap: [`ROADMAP.md`](./ROADMAP.md).
+
 Architecture decisions: [`docs/README.md`](./docs/README.md).
 
 The package domain may model only generic database infrastructure concepts: record identity/shape, query semantics, provider capabilities, error classification, lifecycle, transactions, and immutable migration identity/history. Business bounded contexts own their business domain models, aggregate invariants, schemas, and repository interfaces. Never place application-specific business entities, repositories, or schemas in this package.
