@@ -120,3 +120,26 @@ test("rejects missing or split provider selections", () => {
     /requires execution, account, and market data/,
   )
 })
+
+test("rejects account identifiers that could contain credentials", () => {
+  const brokers = {
+    instances: {
+      binancePrimary: {
+        provider: "binance",
+        accountId: "BINANCE_API_KEY",
+      },
+    },
+    selection: {
+      execution: "binancePrimary",
+      account: "binancePrimary",
+      marketData: "binancePrimary",
+    },
+  }
+  assert.throws(
+    () => resolveProviderConfiguration({
+      brokers,
+      tradingMode: "testnet",
+    }),
+    /stable non-secret account ID/,
+  )
+})

@@ -21,7 +21,7 @@ function assertRecord({ value, path }) {
 }
 
 function assertProviderInstanceId({ id }) {
-  if (typeof id !== "string" || !/^[A-Za-z][A-Za-z0-9_-]*$/.test(id)) {
+  if (typeof id !== "string" || !/^[a-z][A-Za-z0-9_-]{0,63}$/.test(id)) {
     throw new TypeError("Harvester provider instance IDs must be stable identifiers")
   }
 }
@@ -65,7 +65,7 @@ function resolveProviderInstance({ id, definition, tradingMode }) {
   if (typeof definition.provider !== "string" || !definition.provider.trim()) {
     throw new TypeError(`Provider instance "${id}" requires a provider type`)
   }
-  if (typeof definition.accountId !== "string" || !definition.accountId.trim()) {
+  if (typeof definition.accountId !== "string" || !/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(definition.accountId) || definition.accountId.length > 64) {
     throw new TypeError(`Provider instance "${id}" requires a stable non-secret account ID`)
   }
   assertCredentialEnvironment({
