@@ -188,7 +188,7 @@ function createStopAndReconcileIfOrderExists({
         stopState,
         orderIdentity: {
           clientOrderId: existingOrder.clientOrderId,
-          ...(existingOrder.brokerOrderId
+          ...(typeof existingOrder.brokerOrderId === "string" && existingOrder.brokerOrderId.trim()
             ? { brokerOrderId: existingOrder.brokerOrderId }
             : {}),
         },
