@@ -17,7 +17,7 @@ async function withConnectedDatabase({ database, callback }) {
   }
 }
 
-async function withStorageKey({ callback }) {
+async function withStorageKey({ callback, cleanupStorage, storageMode }) {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-contract-"))
   const storageKey = join(directory, `${randomUUID()}.sqlite`)
 
@@ -26,14 +26,26 @@ async function withStorageKey({ callback }) {
       storageKey,
     })
   } finally {
-    await rm(directory, {
-      recursive: true,
-      force: true,
-    })
+    try {
+      await cleanupStorage?.({
+        storageKey,
+        storageMode,
+      })
+    } finally {
+      await rm(directory, {
+        recursive: true,
+        force: true,
+      })
+    }
   }
 }
 
-async function withDatabase({ createDatabase, callback, storageMode }) {
+async function withDatabase({
+  createDatabase,
+  callback,
+  storageMode,
+  cleanupStorage,
+}) {
   await withStorageKey({
     callback: async ({ storageKey }) => {
       const database = createDatabase({
@@ -45,6 +57,8 @@ async function withDatabase({ createDatabase, callback, storageMode }) {
         callback,
       })
     },
+    cleanupStorage,
+    storageMode,
   })
 }
 
@@ -54,12 +68,14 @@ function registerStandardTest({
   createDatabase,
   verify,
   storageMode,
+  cleanupStorage,
 }) {
   test(`${name} (${storageMode}): ${description}`, async () => {
     await withDatabase({
       createDatabase,
       callback: verify,
       storageMode,
+      cleanupStorage,
     })
   })
 }
@@ -72,6 +88,7 @@ function registerQueryCapabilityTest({
   capabilities,
   storageMode,
   verify,
+  cleanupStorage,
 }) {
   test(`${name} (${storageMode}): ${description}`, async (context) => {
     if (!capabilities.queries[capability]) {
@@ -83,6 +100,7 @@ function registerQueryCapabilityTest({
       createDatabase,
       callback: verify,
       storageMode,
+      cleanupStorage,
     })
   })
 }
@@ -677,7 +695,7 @@ async function verifyCloseWaitsForActiveTransaction(database) {
   assert.equal(database.state, "closed")
 }
 
-async function verifyLifecycle({ createDatabase, storageMode }) {
+async function verifyLifecycle({ createDatabase, storageMode, cleanupStorage }) {
   await withStorageKey({
     callback: async ({ storageKey }) => {
       const database = createDatabase({
@@ -705,6 +723,8 @@ async function verifyLifecycle({ createDatabase, storageMode }) {
         "A closed database resource must not be reopened through the same lifecycle facade",
       )
     },
+    cleanupStorage,
+    storageMode,
   })
 }
 
@@ -721,7 +741,7 @@ async function verifyCapabilities(database) {
   )
 }
 
-async function verifyPersistence({ createDatabase, storageMode }) {
+async function verifyPersistence({ createDatabase, storageMode, cleanupStorage }) {
   await withStorageKey({
     callback: async ({ storageKey }) => {
       await withConnectedDatabase({
@@ -761,10 +781,12 @@ async function verifyPersistence({ createDatabase, storageMode }) {
         },
       })
     },
+    cleanupStorage,
+    storageMode,
   })
 }
 
-function registerPersistenceTest({ name, createDatabase, storageMode }) {
+function registerPersistenceTest({ name, createDatabase, storageMode, cleanupStorage }) {
   test(`${name} (${storageMode}): persistent records survive a new database connection`, async (context) => {
     if (storageMode === "memory") {
       context.skip("Provider declares ephemeral in-memory storage")
@@ -774,6 +796,7 @@ function registerPersistenceTest({ name, createDatabase, storageMode }) {
     await verifyPersistence({
       createDatabase,
       storageMode,
+      cleanupStorage,
     })
   })
 }
@@ -783,6 +806,7 @@ function registerCrudAndQueryTests({
   createDatabase,
   capabilities,
   storageMode,
+  cleanupStorage,
 }) {
   registerStandardTest({
     name,
@@ -790,6 +814,7 @@ function registerCrudAndQueryTests({
     createDatabase,
     verify: verifyCrud,
     storageMode,
+    cleanupStorage,
   })
   registerStandardTest({
     name,
@@ -797,6 +822,7 @@ function registerCrudAndQueryTests({
     createDatabase,
     verify: verifyDuplicate,
     storageMode,
+    cleanupStorage,
   })
   registerQueryCapabilityTest({
     name,
@@ -806,6 +832,7 @@ function registerCrudAndQueryTests({
     capabilities,
     verify: verifyFilters,
     storageMode,
+    cleanupStorage,
   })
   registerQueryCapabilityTest({
     name,
@@ -815,6 +842,7 @@ function registerCrudAndQueryTests({
     capabilities,
     verify: verifySorting,
     storageMode,
+    cleanupStorage,
   })
   registerQueryCapabilityTest({
     name,
@@ -824,16 +852,18 @@ function registerCrudAndQueryTests({
     capabilities,
     verify: verifyPagination,
     storageMode,
+    cleanupStorage,
   })
 }
 
-function registerTransactionTests({ name, createDatabase, storageMode }) {
+function registerTransactionTests({ name, createDatabase, storageMode, cleanupStorage }) {
   registerStandardTest({
     name,
     description: "missing updates and deletes use non-exception results",
     createDatabase,
     verify: verifyMissingRecords,
     storageMode,
+    cleanupStorage,
   })
   registerStandardTest({
     name,
@@ -841,6 +871,7 @@ function registerTransactionTests({ name, createDatabase, storageMode }) {
     createDatabase,
     verify: verifyRollback,
     storageMode,
+    cleanupStorage,
   })
   registerStandardTest({
     name,
@@ -848,6 +879,7 @@ function registerTransactionTests({ name, createDatabase, storageMode }) {
     createDatabase,
     verify: verifyCommit,
     storageMode,
+    cleanupStorage,
   })
   registerStandardTest({
     name,
@@ -855,6 +887,7 @@ function registerTransactionTests({ name, createDatabase, storageMode }) {
     createDatabase,
     verify: verifyTransactionCallbackMode,
     storageMode,
+    cleanupStorage,
   })
   registerStandardTest({
     name,
@@ -862,6 +895,7 @@ function registerTransactionTests({ name, createDatabase, storageMode }) {
     createDatabase,
     verify: verifyNestedTransactions,
     storageMode,
+    cleanupStorage,
   })
   registerStandardTest({
     name,
@@ -869,14 +903,22 @@ function registerTransactionTests({ name, createDatabase, storageMode }) {
     createDatabase,
     verify: verifyCapabilities,
     storageMode,
+    cleanupStorage,
   })
 }
 
-function registerLifecycleTests({ name, createDatabase, capabilities, storageMode }) {
+function registerLifecycleTests({
+  name,
+  createDatabase,
+  capabilities,
+  storageMode,
+  cleanupStorage,
+}) {
   test(`${name} (${storageMode}): closing the database prevents new work`, async () => {
     await verifyLifecycle({
       createDatabase,
       storageMode,
+      cleanupStorage,
     })
   })
   test(`${name} (${storageMode}): close waits for active asynchronous transactions`, async (context) => {
@@ -888,12 +930,14 @@ function registerLifecycleTests({ name, createDatabase, capabilities, storageMod
       createDatabase,
       callback: verifyCloseWaitsForActiveTransaction,
       storageMode,
+      cleanupStorage,
     })
   })
   registerPersistenceTest({
     name,
     createDatabase,
     storageMode,
+    cleanupStorage,
   })
 }
 
@@ -905,26 +949,3 @@ function registerLifecycleTests({ name, createDatabase, capabilities, storageMod
  *
  * @param {{name: string, createDatabase: (options: {storageKey: string, storageMode?: string}) => object}} options
  */
-export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
-  const capabilityProbe = createDatabase({
-    storageKey: `conformance-probe-${randomUUID()}`,
-  })
-  const { capabilities } = capabilityProbe
-  const probeClose = capabilityProbe.close()
-
-  test(`${name}: capability discovery closes its unconnected provider probe`, async () => {
-    await probeClose
-  })
-
-  for (const storageMode of capabilities.storage.modes) {
-    const options = {
-      name,
-      createDatabase,
-      capabilities,
-      storageMode,
-    }
-    registerCrudAndQueryTests(options)
-    registerTransactionTests(options)
-    registerLifecycleTests(options)
-  }
-}
