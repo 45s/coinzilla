@@ -504,6 +504,35 @@ function createCommittedOperationalStateAppendResult({ verified }) {
   })
 }
 
+function findDuplicateOperationalStateAppend({ state, input }) {
+  const existing = state.records.find((record) => record.factId === input.factId)
+  if (!existing) {
+    return null
+  }
+  assertDuplicateOperationalStateFactMatches({ existing, input })
+  return createDuplicateOperationalStateAppendResult({ existing })
+}
+
+async function persistOperationalStateAppend({
+  store,
+  state,
+  input,
+  recordedAt,
+  writeState,
+  verifyState,
+}) {
+  const { record, line } = createOperationalStateAppendRecord({
+    store,
+    state,
+    input,
+    recordedAt,
+  })
+  await writeOperationalStateFactRecord({ store, line, writeState })
+  await writeOperationalStateManifestCheckpoint({ store, state, record, writeState })
+  const verified = await verifyState()
+  return createCommittedOperationalStateAppendResult({ verified })
+}
+
 async function appendOperationalStateFact({ store, assertNoUncertainWrite, syncStreams, verifyState, fact }) {
   const writeState = {
     factWriteStarted: false,
@@ -513,43 +542,28 @@ async function appendOperationalStateFact({ store, assertNoUncertainWrite, syncS
   }
   try {
     assertNoUncertainWrite()
-    await synchronizeOperationalStateBeforeAppend({ syncStreams,
-      writeState })
-    const state = await verifyOperationalStateBeforeAppend({ verifyState,
-      writeState })
+    await synchronizeOperationalStateBeforeAppend({ syncStreams, writeState })
+    const state = await verifyOperationalStateBeforeAppend({ verifyState, writeState })
     const input = validateFactInput({
       fact,
       runtimeSessionId: store.runtimeSessionId,
     })
-    const existing = state.records.find((record) => record.factId === input.factId)
-    if (existing) {
-      assertDuplicateOperationalStateFactMatches({ existing,
-        input })
-      return createDuplicateOperationalStateAppendResult({ existing })
+    const duplicate = findDuplicateOperationalStateAppend({ state, input })
+    if (duplicate) {
+      return duplicate
     }
     const recordedAt = normalizeOperationalStateRecordedAt(store.now())
-    validateMarketHistoryCoverageProgress({ state,
-      input,
-      recordedAt })
-    const { record, line } = createOperationalStateAppendRecord({
+    validateMarketHistoryCoverageProgress({ state, input, recordedAt })
+    return await persistOperationalStateAppend({
       store,
       state,
       input,
       recordedAt,
-    })
-    await writeOperationalStateFactRecord({ store,
-      line,
-      writeState })
-    await writeOperationalStateManifestCheckpoint({ store,
-      state,
-      record,
-      writeState })
-    const verified = await verifyState()
-    return createCommittedOperationalStateAppendResult({ verified })
-  } catch (error) {
-    return handleOperationalStateAppendFailure({ store,
       writeState,
-      error })
+      verifyState,
+    })
+  } catch (error) {
+    return handleOperationalStateAppendFailure({ store, writeState, error })
   }
 }
 
