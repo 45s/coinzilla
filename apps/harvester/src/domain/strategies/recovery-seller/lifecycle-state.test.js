@@ -4,11 +4,11 @@ import {
   createRecoverySellerCycleState,
   recordRecoverySellerCycleSellSubmission,
 } from "./cycle-state.js"
+import { createRecoverySellerLifecycleDecision } from "./lifecycle-decision.js"
 import {
   applyRecoverySellerStopGate,
-  createRecoverySellerLifecycleDecision,
-} from "./lifecycle-decision.js"
-import { createRecoverySellerStopState } from "./stop-decision.js"
+  createRecoverySellerStopState,
+} from "./stop-decision.js"
 import {
   reconcileRecoverySellerCycleSellWithStop,
   recordRecoverySellerCycleSellUnknown,
