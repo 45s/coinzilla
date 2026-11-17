@@ -116,6 +116,8 @@ test("plans the initial BUY using Conservative cadence, tranche size and downwar
     "An eligible initial RS tranche must produce a pure SUBMIT decision.")
   assert.deepEqual(result.action, {
     side: "BUY",
+    purpose: "RECOVERY_BUY",
+    cycleId: "rs-cycle-1",
     type: "LIMIT_MAKER",
     price: "1.999",
     quantity: "5",
