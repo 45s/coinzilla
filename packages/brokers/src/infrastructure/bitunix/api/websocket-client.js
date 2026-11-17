@@ -104,7 +104,8 @@ function normalizeMessageText({ message }) {
 function parseResponseText({ text }) {
   const losslessText = text.replace(
     /("(balance|balanceLocked|uid)"\s*:\s*)(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)(?=\s*[,}])/g,
-    (match, prefix, field, value) => {
+    (...matches) => {
+      const [, prefix, field, value] = matches
       if (field === "uid" && Number.isSafeInteger(Number(value))) {
         return prefix + value
       }
@@ -122,6 +123,54 @@ function normalizeResponseCode({ code }) {
     return code
   }
   return null
+}
+
+function validateClientUrl({ url }) {
+  let parsedUrl
+  try {
+    parsedUrl = new URL(url)
+  } catch {
+    throw new TypeError("Bitunix Spot WebSocket URL must be the official Bitunix Spot endpoint")
+  }
+  if (parsedUrl.protocol !== "wss:" ||
+      parsedUrl.hostname !== "openapi.bitunix.com" ||
+      parsedUrl.port !== "" ||
+      parsedUrl.pathname !== "/ws-api/v1" ||
+      parsedUrl.username ||
+      parsedUrl.password ||
+      parsedUrl.search ||
+      parsedUrl.hash) {
+    throw new TypeError("Bitunix Spot WebSocket URL must be the official Bitunix Spot endpoint")
+  }
+}
+
+function validateClientConfiguration({
+  apiKey,
+  apiSecret,
+  url,
+  requestTimeout,
+  transportFactory,
+  now,
+  nonceFactory,
+  idFactory,
+  setTimeoutFn,
+  clearTimeoutFn,
+}) {
+  if (typeof apiKey !== "string" || !apiKey.trim() ||
+      typeof apiSecret !== "string" || !apiSecret.trim()) {
+    throw new TypeError("Bitunix Spot WebSocket API credentials are required")
+  }
+  validateClientUrl({ url })
+  if (!Number.isInteger(requestTimeout) || requestTimeout < 1) {
+    throw new RangeError("Bitunix Spot WebSocket requestTimeout must be a positive integer")
+  }
+  if (typeof transportFactory !== "function" || typeof now !== "function" ||
+      typeof nonceFactory !== "function" || typeof idFactory !== "function") {
+    throw new TypeError("Bitunix Spot WebSocket dependencies must be functions")
+  }
+  if (typeof setTimeoutFn !== "function" || typeof clearTimeoutFn !== "function") {
+    throw new TypeError("Bitunix Spot WebSocket timer dependencies must be functions")
+  }
 }
 
 function validateTransport({ transport }) {
@@ -172,36 +221,18 @@ export class BitunixSpotWebSocketClient {
       setTimeoutFn = setTimeout,
       clearTimeoutFn = clearTimeout,
     } = options
-    if (typeof apiKey !== "string" || !apiKey.trim() ||
-        typeof apiSecret !== "string" || !apiSecret.trim()) {
-      throw new TypeError("Bitunix Spot WebSocket API credentials are required")
-    }
-    let parsedUrl
-    try {
-      parsedUrl = new URL(url)
-    } catch {
-      throw new TypeError("Bitunix Spot WebSocket URL must be the official Bitunix Spot endpoint")
-    }
-    if (parsedUrl.protocol !== "wss:" ||
-        parsedUrl.hostname !== "openapi.bitunix.com" ||
-        parsedUrl.port !== "" ||
-        parsedUrl.pathname !== "/ws-api/v1" ||
-        parsedUrl.username ||
-        parsedUrl.password ||
-        parsedUrl.search ||
-        parsedUrl.hash) {
-      throw new TypeError("Bitunix Spot WebSocket URL must be the official Bitunix Spot endpoint")
-    }
-    if (!Number.isInteger(requestTimeout) || requestTimeout < 1) {
-      throw new RangeError("Bitunix Spot WebSocket requestTimeout must be a positive integer")
-    }
-    if (typeof transportFactory !== "function" || typeof now !== "function" ||
-        typeof nonceFactory !== "function" || typeof idFactory !== "function") {
-      throw new TypeError("Bitunix Spot WebSocket dependencies must be functions")
-    }
-    if (typeof setTimeoutFn !== "function" || typeof clearTimeoutFn !== "function") {
-      throw new TypeError("Bitunix Spot WebSocket timer dependencies must be functions")
-    }
+    validateClientConfiguration({
+      apiKey,
+      apiSecret,
+      url,
+      requestTimeout,
+      transportFactory,
+      now,
+      nonceFactory,
+      idFactory,
+      setTimeoutFn,
+      clearTimeoutFn,
+    })
 
     this.url = url
     this.requestTimeout = requestTimeout
@@ -437,7 +468,8 @@ export class BitunixSpotWebSocketClient {
 
   #sendRequest({ id, method, params }) {
     const key = String(id)
-    return new Promise((resolve, reject) => {
+    return new Promise((...callbacks) => {
+      const [resolve, reject] = callbacks
       const timer = this.#setTimeout(() => {
         const pending = this.#pending.get(key)
         if (!pending) {
