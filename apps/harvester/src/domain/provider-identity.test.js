@@ -59,10 +59,13 @@ testCase("rejects malformed provider-instance and account identity labels withou
       ["BINANCE_ACCOUNT_ID", { accountId: invalidIdentity }],
     ]) {
       assert.throws(
-        () => resolveBinanceProviderIdentity({ tradingMode: "testnet", ...input }),
+        () => resolveBinanceProviderIdentity({
+          tradingMode: "testnet",
+          ...input,
+        }),
         (error) => error instanceof ProviderIdentityConfigError &&
           error.context.field === field &&
-          !error.message.includes(invalidIdentity),
+          error.message.startsWith("Invalid Binance provider identity configuration:"),
         "Malformed non-secret identity labels must fail without echoing potentially sensitive input.",
       )
     }
