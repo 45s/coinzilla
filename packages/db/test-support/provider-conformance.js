@@ -59,17 +59,11 @@ function registerQueryCapabilityTest({
   })
 }
 
-async function verifyCrud(database) {
-  const record = {
-    id: "record-1",
-    name: "First",
-    status: "active",
-  }
+async function verifyCreateAndRead({ database, record }) {
   const created = await database.create({
     collection: "people",
     record,
   })
-
   assert.deepEqual(
     created,
     record,
@@ -78,17 +72,19 @@ async function verifyCrud(database) {
 
   const read = await database.readOne({
     collection: "people",
-    id: "record-1",
+    id: record.id,
   })
   assert.deepEqual(
     read,
     record,
     "READ ONE must retrieve the record from its collection and identifier",
   )
+}
 
+async function verifyUpdateAndDelete({ database, record }) {
   const updated = await database.update({
     collection: "people",
-    id: "record-1",
+    id: record.id,
     changes: {
       name: "Updated",
     },
@@ -102,23 +98,10 @@ async function verifyCrud(database) {
     "UPDATE must merge changed fields and preserve every untouched record field",
   )
 
-  const otherCollectionRecord = await database.create({
-    collection: "teams",
-    record: {
-      id: "record-1",
-      name: "Separate collection",
-    },
-  })
-  assert.equal(
-    otherCollectionRecord.id,
-    "record-1",
-    "The same identifier must be allowed in a different collection",
-  )
-
   assert.equal(
     await database.delete({
       collection: "people",
-      id: "record-1",
+      id: record.id,
     }),
     true,
     "DELETE must return true when the requested collection record exists",
@@ -126,21 +109,60 @@ async function verifyCrud(database) {
   assert.equal(
     await database.readOne({
       collection: "people",
-      id: "record-1",
+      id: record.id,
     }),
     null,
     "READ ONE must return null after the record has been deleted",
   )
+}
+
+async function verifyCollectionIsolation(database) {
+  await database.create({
+    collection: "people",
+    record: {
+      id: "shared-id",
+      name: "Person",
+    },
+  })
+  const team = await database.create({
+    collection: "teams",
+    record: {
+      id: "shared-id",
+      name: "Team",
+    },
+  })
+
+  assert.equal(
+    team.id,
+    "shared-id",
+    "The same identifier must be allowed in a different collection",
+  )
   assert.notEqual(
     await database.readOne({
       collection: "teams",
-      id: "record-1",
+      id: "shared-id",
     }),
     null,
     "Deleting a record must not affect another collection with the same identifier",
   )
 }
 
+async function verifyCrud(database) {
+  const record = {
+    id: "record-1",
+    name: "First",
+    status: "active",
+  }
+  await verifyCreateAndRead({
+    database,
+    record,
+  })
+  await verifyUpdateAndDelete({
+    database,
+    record,
+  })
+  await verifyCollectionIsolation(database)
+}
 async function verifyDuplicate(database) {
   await database.create({
     collection: "people",
