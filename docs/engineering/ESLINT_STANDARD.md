@@ -73,3 +73,14 @@ A PR that bypasses or weakens lint enforcement MUST NOT be marked ready or merge
 The root eslint.config.js is authoritative for the repository-wide JavaScript rule set. Package-specific configuration may add stricter rules only; it must not weaken root requirements. The root package.json defines the canonical commands: `pnpm lint` for strict full-workspace verification and `pnpm lint:fix` for supported autofixes.
 
 When this standard and a task prompt conflict, this standard prevails unless a human explicitly authorizes a standards change.
+
+## 7. Evidence-based repository rule decisions
+
+The following decisions were reviewed against the full workspace on 2026-11-17. The root configuration and `scripts/eslint-policy.test.js` are authoritative for enforcement.
+
+- **`no-console` is an error.** Use the owning package's shared logger for application diagnostics. Explicit `process.stdout.write()` and `process.stderr.write()` remain available at intentional CLI boundaries; this is not permission to use direct `console.*` calls.
+- **`no-implicit-coercion` is an error.** Make conversions explicit at input/API boundaries. Explicit conversion does not make binary floating-point safe for financial values: preserve exact decimal strings and use the repository's decimal utilities for trading/accounting amounts.
+- **`complexity` remains an error with `max: 20`.** A full-workspace evaluation of `max: 15` produced 247 findings across 89 files (68 in Harvester). Lowering the threshold now would create broad refactoring pressure across lifecycle and domain code. Re-evaluate after meaningful baseline reduction; do not mechanically extract helpers to satisfy an arbitrary number.
+- **`require-atomic-updates` is deliberately not enabled.** The full-workspace evaluation produced 47 candidates across 21 files. Several are protected by explicit serial queues or shared in-flight lifecycle promises that the rule cannot understand; other state transitions need targeted concurrency review. Follow-up issue [#1313](https://github.com/45s/coinzilla/issues/1313) tracks classification and fixes for confirmed races. Do not enable the rule with blanket property exemptions or suppressions as a shortcut.
+
+The canonical strict command remains `pnpm lint` (`eslint . --max-warnings 0`). These decisions do not add ignores, inline disables, or exceptions.
