@@ -47,7 +47,7 @@ function validateIdentifier({ value, field }) {
 }
 
 function validateCapabilityDeclaration({ broker, providerType, environment }) {
-  const capabilities = broker.capabilities
+  const { capabilities } = broker
   const { selectedMode } = capabilities?.environment ?? {}
   const valid = capabilities !== null &&
     typeof capabilities === "object" &&
@@ -85,7 +85,10 @@ function validateProviderBroker({ broker, providerType, environment }) {
     providerType,
     environment,
   })
-  return { broker: brokerPort, capabilities }
+  return {
+    broker: brokerPort,
+    capabilities,
+  }
 }
 
 function validateProviderDescriptor({ provider } = {}) {
@@ -237,10 +240,16 @@ function createProviderDisconnect({ broker, lifecycle }) {
         if (lifecycle.status === "disconnecting") {
           return lifecycle.disconnectPromise
         }
-        return startProviderDisconnect({ broker, lifecycle })
+        return startProviderDisconnect({
+          broker,
+          lifecycle,
+        })
       })
     }
-    return startProviderDisconnect({ broker, lifecycle })
+    return startProviderDisconnect({
+      broker,
+      lifecycle,
+    })
   }
 }
 
@@ -387,10 +396,19 @@ export function createProviderRegistry({ providers } = {}) {
 
   const entries = createProviderEntries({ providers })
   return Object.freeze({
-    get: (providerInstanceId) => getProvider({ entries, providerInstanceId }),
+    get: (providerInstanceId) => getProvider({
+      entries,
+      providerInstanceId,
+    }),
     list: () => listProviderMetadata({ entries }),
-    connect: (providerInstanceId) => getProvider({ entries, providerInstanceId }).connect(),
-    disconnect: (providerInstanceId) => getProvider({ entries, providerInstanceId }).disconnect(),
+    connect: (providerInstanceId) => getProvider({
+      entries,
+      providerInstanceId,
+    }).connect(),
+    disconnect: (providerInstanceId) => getProvider({
+      entries,
+      providerInstanceId,
+    }).disconnect(),
     connectAll: () => connectAllProviders({ entries }),
     disconnectAll: () => disconnectAllProviders({ entries }),
   })
