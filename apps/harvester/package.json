@@ -40,6 +40,7 @@
   },
   "config": {
     "targetedTestFiles": [
+      "src/domain/trading-session/trading-session.test.js",
       "src/infrastructure/persistence/trading-session-repository.test.js",
       "src/infrastructure/persistence/trading-session-database-isolation.test.js",
       "src/infrastructure/persistence/trading-session-history-observer.test.js",
