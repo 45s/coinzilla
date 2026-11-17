@@ -222,7 +222,10 @@ function countFindingsAboveThreshold({ findings, threshold }) {
 }
 
 function summarizeThresholdImpact({ findings, threshold }) {
-  const affected = countFindingsAboveThreshold({ findings, threshold });
+  const affected = countFindingsAboveThreshold({
+    findings,
+    threshold,
+  });
   return {
     functions: affected.length,
     files: new Set(affected.map((finding) => finding.filePath)).size,
