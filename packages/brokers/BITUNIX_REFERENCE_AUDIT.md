@@ -219,9 +219,9 @@ The following is the current method-by-method status from the Binance broker sur
 
 It validates symbol, interval, decimals, OHLC invariants and timezone-qualified timestamps. It preserves caller-supplied depth precision and rejects undocumented `startTime`/cursor pagination. Canonical `getCandles()` remains unsupported because Spot K-lines omit volume. The merge and offline checks do not constitute live API acceptance; no live exchange call was performed.
 
-### PR #1370 — Bitunix-only exchange-rate extension (in progress)
+### PR #1370 — Bitunix-only exchange-rate extension (merged 2026-11-17)
 
-[Issue #1331](https://github.com/45s/coinzilla/issues/1331) tracks the public Spot exchange-rate read. The replacement test-first implementation is in [draft PR #1370](https://github.com/45s/coinzilla/pull/1370), based on current `develop`; the original [PR #1332](https://github.com/45s/coinzilla/pull/1332) is stale and is not the integration branch.
+[Issue #1331](https://github.com/45s/coinzilla/issues/1331) tracked the public Spot exchange-rate read. The replacement test-first implementation merged into `develop` through [PR #1370](https://github.com/45s/coinzilla/pull/1370) as `55694b837c869878d22346dfd6b0f12c9b0f3269`; all six required `develop-core` checks passed on exact PR head `0f7fbaa332eea5b45a176a25eae4ba529495893a`. The original [PR #1332](https://github.com/45s/coinzilla/pull/1332) was closed as superseded; its branch was retained as historical evidence.
 
 - **Official contract:** [Spot Query rate data](https://www.bitunix.com/api-docs/spots/en_us/public/#6-query-rate-data) documents `GET /api/spot/v1/common/rate/list`, no request parameters, and `data` as an optional array whose `baseSymbol`, `quoteSymbol`, and `rate` fields are individually optional. The [Open API introduction](https://www.bitunix.com/api-docs/) says public REST requests do not require authentication.
 - **Primary .NET reference:** at JKorf/Bitunix.Net commit `57e1fce668b98804a441dea1c8df803da0437c4f`, `BitunixRestClientSpotApiExchangeData.GetExchangeRatesAsync()` requests the same path with its public/unauthenticated request definition. The matching `BitunixExchangeRate` model maps `baseSymbol`, `quoteSymbol`, and `rate`; its decimal model is not copied because Coinzilla must preserve the exchange's decimal text exactly.
@@ -237,7 +237,7 @@ It validates symbol, interval, decimals, OHLC invariants and timezone-qualified 
 
 **Priority 1 — remaining Bitunix-specific public metadata extension (not Binance parity):**
 
-- `getExchangeRates()` is in progress in [PR #1370](https://github.com/45s/coinzilla/pull/1370) for [issue #1331](https://github.com/45s/coinzilla/issues/1331); its source audit and stricter Coinzilla response contract are recorded above.
+- `getExchangeRates()` is implemented and merged in [PR #1370](https://github.com/45s/coinzilla/pull/1370); its source audit and stricter Coinzilla response contract are recorded above. Do not duplicate this capability.
 - `getTokenMetadata()` (or a domain-appropriate name) remains a separate candidate for `GET /api/spot/v1/common/coin/coin_network/list`, returning token and network metadata such as deposit/withdraw availability, memo requirement, network name, minimums and address validation pattern. Define a real consumer contract before implementation.
 
 These are Bitunix-only public extensions, not Binance parity methods. Keep exact decimal fields as strings; do not treat descriptive precision fields as tick/step filters. Token/network metadata is not authorization to implement transfers or withdrawals.
