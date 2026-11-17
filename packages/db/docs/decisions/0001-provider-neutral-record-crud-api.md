@@ -46,6 +46,9 @@ This is a plain data object, not a chainable query builder. New operators or nes
 - The application composition root selects and configures a provider.
 - `createDatabase({ provider })` exposes provider-neutral CRUD, transaction, lifecycle and immutable capability information.
 - A provider transaction callback receives only generic CRUD operations.
+- Provider-neutral providers implement separate `withTransaction(work)` and `withReadTransaction(work)` operations. Explicit transactions and mutations use the write path; `readOne` and `readMany` use the read path. Legacy adapters may omit the read path and retain the original lifecycle/SQL behavior.
+- SQLite uses `BEGIN IMMEDIATE` for writes and `BEGIN DEFERRED` for reads. This preserves write reservation before read-modify-write operations while allowing WAL readers during a competing writer reservation.
+- A synchronous callback provider cannot declare nested transactions because the facade's nested transaction call is asynchronous; capability validation rejects that incompatible declaration.
 - Provider-native connections, SQL, statements, result objects and driver errors stay inside infrastructure.
 - Provider capabilities must state the actual query, transaction and storage guarantees. Unsupported guarantees must not be silently emulated.
 - The standard capability declaration describes transaction callback mode/nesting, equality filtering/sorting/pagination, and supported storage modes (`file`, `memory`, `server`). The reusable conformance suite executes every declared storage mode with isolated keys; file/server modes must prove persistence across a new connection.
@@ -97,6 +100,7 @@ Rejected because repository and schema ownership follows the business bounded co
 ## Verification and implementation evidence
 
 - Provider-neutral CRUD contract test and expected RED are recorded in PR #1353.
-- SQLite provider conformance tests cover CRUD, collection isolation, duplicate handling, filtering, sorting, pagination, missing records, transaction rollback, capability immutability, both declared storage modes (memory and file), and persistence across a new file-backed connection. The reusable suite gives each test an isolated storage key and reuses it only for reconnect-persistence verification.
+- SQLite provider conformance tests cover CRUD, collection isolation, duplicate handling, filtering, sorting, pagination, missing records, transaction rollback, declared nested-transaction rejection, capability immutability, both declared storage modes (memory and file), and persistence across a new file-backed connection. The reusable suite gives each test an isolated storage key and reuses it only for reconnect-persistence verification.
+- A provider-specific concurrency regression proves read operations remain available while another connection holds an uncommitted write reservation; write operations still acquire an immediate write transaction and report lock failures through the shared provider error.
 - SQLite connection/lock error normalization has separate test-first RED evidence in [closed evidence PR #1347](https://github.com/45s/coinzilla/pull/1347) and its [Actions run](https://github.com/45s/coinzilla/actions/runs/44050359180).
 - Final acceptance depends on required CI passing on the exact final head and the implementation PR being merged into `develop`.
