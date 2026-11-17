@@ -155,11 +155,11 @@ function createHistoryRequest({ input }) {
     symbol,
     operation: "getOrderHistory()",
   })
-  if (!Number.isInteger(page) || page < 1) {
-    throw new RangeError("Bitunix Spot order history page must be a positive integer")
+  if (!Number.isSafeInteger(page) || page < 1) {
+    throw new RangeError("Bitunix Spot order history page must be a positive safe integer")
   }
-  if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
-    throw new RangeError("Bitunix Spot order history limit must be a positive integer")
+  if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1)) {
+    throw new RangeError("Bitunix Spot order history limit must be a positive safe integer")
   }
   if (orderId !== undefined && orderId !== null) {
     throw new TypeError("Bitunix Spot order history does not support exact orderId filtering")
