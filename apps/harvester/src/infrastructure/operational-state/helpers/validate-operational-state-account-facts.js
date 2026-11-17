@@ -192,7 +192,8 @@ function validateAccountOpenOrderIdentity({ order, index }) {
       maxLength: MAX_FACT_ID_LENGTH,
     })
   }
-  return { brokerOrderId, symbol }
+  return { brokerOrderId,
+    symbol }
 }
 
 function validateAccountOpenOrderAmounts({ order }) {
@@ -208,7 +209,8 @@ function validateAccountOpenOrderAmounts({ order }) {
   ) {
     throw new TypeError("Account open-order quantities must be exact canonical decimal strings")
   }
-  if (compareDecimal({ left: order.executedQuantity, right: order.quantity }) > 0) {
+  if (compareDecimal({ left: order.executedQuantity,
+    right: order.quantity }) > 0) {
     throw new TypeError("Account open-order executed quantity cannot exceed original quantity")
   }
 }
@@ -217,17 +219,22 @@ function validateAccountOpenOrderState({ order, index }) {
   if (order.side !== "BUY" && order.side !== "SELL") {
     throw new TypeError("Account open-order side must be BUY or SELL")
   }
-  requireNonEmptyString({ value: order.type, field: `orders[${index}].type`, maxLength: 32 })
+  requireNonEmptyString({ value: order.type,
+    field: `orders[${index}].type`,
+    maxLength: 32 })
   if (!["NEW", "OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
     throw new TypeError("Account open-order status must be OPEN or PARTIALLY_FILLED")
   }
 }
 
 function validateAccountOpenOrder({ order, index }) {
-  validateAccountOpenOrderShape({ order, index })
-  const { brokerOrderId, symbol } = validateAccountOpenOrderIdentity({ order, index })
+  validateAccountOpenOrderShape({ order,
+    index })
+  const { brokerOrderId, symbol } = validateAccountOpenOrderIdentity({ order,
+    index })
   validateAccountOpenOrderAmounts({ order })
-  validateAccountOpenOrderState({ order, index })
+  validateAccountOpenOrderState({ order,
+    index })
   return `${symbol}:${brokerOrderId}`
 }
 
