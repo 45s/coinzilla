@@ -6,26 +6,36 @@ This directory is owned by the **Database Infrastructure domain**. Read the repo
 
 Owned path: `packages/db/**`.
 
-This package owns the built-in SQLite infrastructure, database lifecycle, SQL transaction boundary, and schema migration runner. The generic adapter lifecycle remains available for future database providers.
+This package owns provider-neutral database lifecycle, record CRUD/query contracts, transaction boundaries, concrete provider adapters, and the SQLite schema migration runner.
 
 Roadmap: [`ROADMAP.md`](./ROADMAP.md).
 
-This package's domain model owns only database-infrastructure concepts: database lifecycle and immutable migration identity/history. Business bounded contexts own their business domain models, aggregate invariants, and repository interfaces. Do not move business repository contracts into this package merely to centralize persistence. Do not let domain/application policy import SQLite drivers, SQL, database connections, statement objects, or provider sessions.
+Architecture decisions: [`docs/README.md`](./docs/README.md).
+
+The package domain may model only generic database infrastructure concepts: record identity/shape, query semantics, provider capabilities, error classification, lifecycle, transactions, and immutable migration identity/history. Business bounded contexts own their business domain models, aggregate invariants, schemas, and repository interfaces. Never place application-specific business entities, repositories, or schemas in this package.
 
 ## Architecture rules
 
 - Keep the public entry point thin and export only intentional contracts.
-- Keep the dependency direction infrastructure → application → domain (dependencies point inward); do not add folders or wrappers that do not own meaningful policy.
-- Model lifecycle invariants in the factory-created Database entity (`createDatabaseEntity`) and immutable schema-change identity in the factory-created Migration definition (`createMigration`); keep migration-history decisions in the pure `findPendingMigrations` domain service.
-- Define provider capabilities at the application port; keep `node:sqlite` and SQL under `src/infrastructure/sqlite/`.
-- Use Node.js built-in `node:sqlite`; do not add a third-party driver or ORM for SQLite.
-- Keep SQL and SQLite-specific APIs in infrastructure adapters/repositories, not in domain policy.
-- Use prepared statements and bound parameters for values.
+- Keep dependency direction infrastructure → application → domain (dependencies point inward); do not add folders or wrappers that do not own meaningful policy.
+- Domain owns provider-independent record/query contracts, database error classification, lifecycle invariants, migration identity, and pure query/record validation.
+- Application owns provider-neutral CRUD orchestration and provider composition.
+- Infrastructure owns concrete provider adapters. Keep `node:sqlite`, SQL, prepared statements, driver objects, and provider-native errors under `src/infrastructure/sqlite/`.
+- Use Node.js built-in `node:sqlite`; do not add a third-party SQLite driver or ORM.
+- Generic CRUD is an approved package responsibility. Define behavior once in provider-neutral contracts and require every provider to satisfy the same applicable conformance tests.
+- Keep the public record API simple. Do not create an ORM, chainable query builder, schema generator, or application-specific repository abstraction.
+- The initial record model is a JSON object with a non-empty string `id`, stored in a named collection. Query filters are exact equality on top-level scalar fields; sorting and pagination use the documented portable contract.
+- Every public CRUD operation accepts one named input object; keep that shape consistent in the application facade, provider port, transaction context, tests and examples.
+- Provider-specific configuration belongs at the outer composition boundary. Consumers of the composed database must not branch on provider identity.
+- Declare provider capabilities explicitly. Do not silently emulate unsupported query, transaction, concurrency, or durability guarantees.
+- Implement both provider-neutral transaction entry points: `withTransaction(work)` for writes/explicit transactions and `withReadTransaction(work)` for `readOne`/`readMany`. Preserve the same contract while selecting appropriate provider locking behavior.
+- For server-backed conformance tests, implement `cleanupStorage({ storageKey, storageMode })` to remove the isolated test database/namespace after connections close; keep connection close separate from store deletion so reconnect-persistence tests remain meaningful.
+- Keep SQL and SQLite-specific APIs out of domain and application policy.
+- Use prepared statements and bound parameters for all SQL values.
 - Enable foreign-key enforcement; keep file-backed journal mode and lock timeout behavior covered by tests.
 - SQLite operations are synchronous. Transaction callbacks and migration functions must be synchronous; reject async callbacks rather than silently committing before awaited work.
 - Keep each migration immutable after application. Add a new version instead of editing migration history.
 - Fail explicitly on migration-history mismatch and transaction rollback failure.
-- Do not build generic CRUD, ORM, schema-generation, or universal query abstractions without demonstrated consumers.
 - Keep tests deterministic and offline. Use real in-memory SQLite and isolated temporary file databases; no network or credentials.
 - Apply strict RED → GREEN → REFACTOR to every behavior change.
 
@@ -37,4 +47,6 @@ Required checks:
 
 - `pnpm --filter @coinzilla/db test`
 - `pnpm --filter @coinzilla/db test:coverage`
+- `pnpm lint`
+- `pnpm run check:agent-policy`
 - Applicable workspace tests and repository checks.
