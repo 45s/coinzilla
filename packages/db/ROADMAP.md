@@ -130,6 +130,7 @@ The low-level public API remains available:
 - `connect()` / `close()`
 - `exec(sql)` / `prepare(sql)`
 - `transaction(work)`
+- `readTransaction(work)` for deferred-lock read workloads
 - `migrate(migrations)`
 - `state`
 - Legacy `createDatabase({ adapter })` lifecycle composition
