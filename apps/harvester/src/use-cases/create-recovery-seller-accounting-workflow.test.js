@@ -678,7 +678,10 @@ test("exposes RS submission callbacks that preserve ownership across acknowledge
   const callbacks = workflow.getExecutionCallbacks()
   const pendingOrder = makePendingRecoveryBuyOrder()
 
-  callbacks.onPendingOrder({ order: pendingOrder, ownership })
+  callbacks.onPendingOrder({
+    order: pendingOrder,
+    ownership,
+  })
   assert.deepEqual(workflow.getOrderRegistry().getOwnership({ clientOrderId: pendingOrder.clientOrderId }), {
     clientOrderId: pendingOrder.clientOrderId,
     ...ownership,
@@ -698,15 +701,29 @@ test("exposes RS submission callbacks that preserve ownership across acknowledge
   const rejectedWorkflow = createRecoverySellerAccountingWorkflow()
   const rejectedCallbacks = rejectedWorkflow.getExecutionCallbacks()
   const rejectedOrder = makePendingRecoveryBuyOrder({ clientOrderId: "rs-buy-rejected" })
-  rejectedCallbacks.onPendingOrder({ order: rejectedOrder, ownership })
-  rejectedCallbacks.onSubmissionFailure({ order: rejectedOrder, outcome: "REJECTED", ownership })
+  rejectedCallbacks.onPendingOrder({
+    order: rejectedOrder,
+    ownership,
+  })
+  rejectedCallbacks.onSubmissionFailure({
+    order: rejectedOrder,
+    outcome: "REJECTED",
+    ownership,
+  })
   assert.equal(rejectedWorkflow.getOrderRegistry().getOrder({ clientOrderId: rejectedOrder.clientOrderId }), undefined)
   assert.equal(rejectedWorkflow.getOrderRegistry().getOwnership({ clientOrderId: rejectedOrder.clientOrderId }), undefined)
 
   const deferredWorkflow = createRecoverySellerAccountingWorkflow()
   const deferredCallbacks = deferredWorkflow.getExecutionCallbacks()
   const deferredOrder = makePendingRecoveryBuyOrder({ clientOrderId: "rs-buy-deferred" })
-  deferredCallbacks.onPendingOrder({ order: deferredOrder, ownership })
-  deferredCallbacks.onSubmissionDeferred({ order: deferredOrder, registered: true, ownership })
+  deferredCallbacks.onPendingOrder({
+    order: deferredOrder,
+    ownership,
+  })
+  deferredCallbacks.onSubmissionDeferred({
+    order: deferredOrder,
+    registered: true,
+    ownership,
+  })
   assert.equal(deferredWorkflow.getOrderRegistry().getOrder({ clientOrderId: deferredOrder.clientOrderId }), undefined)
 })
