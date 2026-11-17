@@ -595,14 +595,3 @@ test("rejects malformed JSON text in the JSONL stream", () => {
     "Malformed JSON text must be rejected instead of being partially parsed.",
   )
 })
-
-test("rejects malformed JSON text in the JSONL stream", () => {
-  assert.throws(
-    () => parseJsonLines({
-      source: '{"alpha":}\n',
-      label: "test ledger",
-    }),
-    SyntaxError,
-    "Malformed JSON text must be rejected instead of being partially parsed.",
-  )
-})
