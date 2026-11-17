@@ -19,7 +19,16 @@ function factIdForRecoveryCycle(...parameters) {
 }
 
 function validateRecoveryCycleAssetIds({ canonicalData }) {
-  validateRecoveryCycleAssetIds({ canonicalData })
+  requireNonEmptyString({
+    value: canonicalData.baseAssetId,
+    field: "data.baseAssetId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  requireNonEmptyString({
+    value: canonicalData.quoteAssetId,
+    field: "data.quoteAssetId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
 }
 
 function validateRecoveryCycleCompletedIdentity({ canonicalData, factId }) {
