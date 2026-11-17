@@ -179,6 +179,18 @@ const createOpenOrderSnapshot = ({ order }) => {
   return openOrder
 }
 
+const createBinanceCapabilities = ({ tradingMode = "testnet" } = {}) => Object.freeze({
+  contractVersion: 1,
+  provider: "binance",
+  product: "spot",
+  environment: Object.freeze({
+    selector: "tradingMode",
+    supportedModes: Object.freeze(["testnet", "live"]),
+    selectedMode: tradingMode,
+    nodeEnvSelectsEndpoint: false,
+  }),
+})
+
 function createBrokerTestState({ externalOpenOrders }) {
   return {
     subscriptions: new Map(),
@@ -396,11 +408,13 @@ const createBroker = (...args) => {
     subscribeResult,
     subscribeResultBySymbol = {},
     externalOpenOrders = [],
+    tradingMode = "testnet",
   } = options
   const state = createBrokerTestState({
     externalOpenOrders,
   })
   return {
+    capabilities: createBinanceCapabilities({ tradingMode }),
     connect: async () => calls.push("connect"),
     disconnect: async () => calls.push("disconnect"),
     ...createBrokerOrderPorts({
@@ -496,7 +510,8 @@ const startHarvesterForTest = (input = {}) => {
       ...binanceEnv,
       ...input.env
     },
-    brokerAdapterFactory: input.brokerAdapterFactory ?? (() => createBroker()),
+    brokerAdapterFactory: input.brokerAdapterFactory ?? (({ config: brokerConfig } = {}) =>
+      createBroker([], { tradingMode: brokerConfig.tradingMode })),
     eventPublisher,
   })
 }
@@ -1275,7 +1290,7 @@ test("passes live TRADING_MODE to the Binance broker factory during startup", as
     },
     brokerAdapterFactory: ({ config }) => {
       brokerConfig = config
-      return createBroker()
+      return createBroker([], { tradingMode: config.tradingMode })
     },
     logger: {
       info() {},
