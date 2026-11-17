@@ -14,7 +14,7 @@ Provide one Harvester-owned application capability that authorized operators can
 - The Conservative engine exposes a serialized operator-pause boundary separate from safety pause state; the implementation and regression tests are in [PR #1045](https://github.com/45s/coinzilla/pull/1045).
 - `src/application/operator/create-harvester-operator.js` composes explicit pause/resume use cases with actor-role authorization and an optional Operational State Store append port (ADR-0001 record contract).
 - When the store is supplied, use cases pass its append callback into the engine transition; the engine changes in-memory state only after a confirmed durable commit. Without a store, the engine applies its process-local operator pause directly.
-- The Telegram infrastructure adapter is composed from focused transport, command/interaction parsing, callback/message routing, operator query/control, update-polling and lifecycle modules. `telegram-operator-adapter.js` remains the public factory and lifecycle composition entry point; `createTelegramOperatorHandlers` wires the injected application facade and transport dependencies. These modules remain infrastructure-owned and do not introduce Telegram dependencies into application/domain layers. PR #1067 wires the adapter lifecycle into Harvester bootstrap; the current default is enabled.
+- The Telegram infrastructure adapter is composed from focused transport, command/interaction parsing, callback/message routing, operator query/control, update-polling and lifecycle modules. `telegram-operator-adapter.js` remains the public factory and composition entry point; `telegram-operator-lifecycle.js` owns startup, command-menu registration and shutdown/cancellation, while `createTelegramOperatorHandlers` wires the injected application facade and transport dependencies. These modules remain infrastructure-owned and do not introduce Telegram dependencies into application/domain layers. PR #1067 wires the adapter lifecycle into Harvester bootstrap; the current default is enabled.
 - The Operational State Store adapter and integrity checks are composed for restart recovery when configured. Telegram-only control does not create or require the store; never create a second writer for an explicitly supplied store. **Restart restoration is out of scope:** the initial operator pause lasts only for the current process and is not replayed after restart. A prior process session is handled by the recovery workflow only when restart recovery is enabled.
 
 ## DDD ownership and source layout
@@ -38,8 +38,10 @@ apps/harvester/src/
       operator-buy-cancellation-incomplete-error.js
   infrastructure/
     telegram/
-      telegram-operator-adapter.js       # public adapter factory and lifecycle composition
+      telegram-operator-adapter.js       # public adapter factory and dependency composition
+      telegram-operator-lifecycle.js     # startup, command registration, stop and cancellation
       telegram-operator-handlers.js      # injected handler composition and correlated logging
+      telegram-operator-routing.js      # authorized message/callback dispatch
       telegram-operator-commands.js      # command vocabulary and pure command parsing
       telegram-operator-interaction.js   # identity normalization, authorization and interaction mapping
       telegram-operator-callbacks.js     # confirmation, cancellation and navigation callbacks
