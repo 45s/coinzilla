@@ -33,11 +33,16 @@ function cloneJsonArray({ value, ancestors, label }) {
       throw new TypeError(`${label} arrays must not contain custom properties`)
     }
 
+    const index = Number(key)
+    if (!Number.isSafeInteger(index) || index >= length) {
+      throw new TypeError(`${label} arrays must not contain custom properties`)
+    }
+
     const descriptor = descriptors[key]
     if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
       throw new TypeError(`${label} arrays must contain data elements only`)
     }
-    clone[Number(key)] = cloneJsonValue({
+    clone[index] = cloneJsonValue({
       value: descriptor.value,
       ancestors,
       label,
