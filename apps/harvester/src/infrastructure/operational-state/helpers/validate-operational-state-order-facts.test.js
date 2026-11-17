@@ -86,7 +86,12 @@ function makeCancellationOutcome(overrides = {}) {
     canonicalData: {
       clientOrderId,
       brokerOrderId: "broker-order-1",
-      ...COMMON_ORDER_FIELDS,
+      marketId: MARKET_ID,
+      venue: "binance",
+      symbol: "BTCUSDT",
+      baseAssetId: "binance:BTC",
+      quoteAssetId: "binance:USDT",
+      side: "BUY",
       reason,
       outcome,
       status: outcome,
@@ -172,7 +177,7 @@ test("rejects order-submission outcomes with inconsistent identity, amounts, or 
   const valid = makeSubmissionOutcome()
   const invalidCases = [
     ["unsupported field", { unsupported: true }, /unsupported fields/],
-    ["invalid symbol", { symbol: "btc-usdt" }, /symbol must be canonical/],
+    ["invalid symbol", { symbol: "btc-usdt", marketId: "binance:btc-usdt" }, /symbol must be canonical/],
     ["invalid side", { side: "HOLD" }, /side must be BUY or SELL/],
     ["invalid type", { type: "MARKET" }, /type must be LIMIT/],
     ["invalid amount", { price: "0" }, /amounts must be canonical/],
@@ -184,7 +189,7 @@ test("rejects order-submission outcomes with inconsistent identity, amounts, or 
     ["acknowledged order without broker identity", {
       outcome: "ACKNOWLEDGED",
       status: "NEW",
-    }, /must be a non-empty string/],
+    }, /canonical non-empty string/],
     ["acknowledged order still pending", {
       outcome: "ACKNOWLEDGED",
       brokerOrderId: "broker-order-1",
