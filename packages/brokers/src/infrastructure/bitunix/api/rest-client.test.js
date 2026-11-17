@@ -264,3 +264,31 @@ test("Bitunix REST client rejects success envelopes missing the documented messa
     return true
   })
 })
+
+
+test("Bitunix REST client rejects malformed HTTP status metadata without misclassifying it as an HTTP failure", async () => {
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => ({
+      ok: false,
+      status: "502",
+      async text() {
+        return "upstream unavailable"
+      },
+    }),
+  })
+
+  await assert.rejects(client.request({
+    method: "GET",
+    path: "/api/spot/v1/market/last_price",
+  }), (error) => {
+    assert.ok(error instanceof BitunixRestError, "malformed HTTP metadata must use the Bitunix REST error contract")
+    assert.ok(error instanceof SystemCustomError, "malformed HTTP metadata must use the shared structured-error base")
+    assert.equal(error.kind, "response", "invalid status metadata must not be classified as a valid HTTP status failure")
+    assert.equal(error.code, "BITUNIX_REST_RESPONSE_INVALID", "invalid status metadata must expose the response-validation code")
+    assert.equal(error.status, null, "an invalid HTTP status must not be preserved as a numeric status")
+    assert.ok(error.cause instanceof SyntaxError, "the attempted body parse failure must remain available as the cause")
+    return true
+  })
+})
