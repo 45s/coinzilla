@@ -6,13 +6,13 @@ This directory is owned by the **Database Infrastructure domain**. Read the repo
 
 Owned path: `packages/db/**`.
 
-This package owns provider-neutral database lifecycle, record CRUD/query contracts, transaction boundaries, concrete provider adapters, and the SQLite schema migration runner.
+This package owns provider-neutral database lifecycle, record CRUD/query contracts, transaction boundaries, concrete provider adapters, the SQLite schema migration runner, and generic SQLite backup/restore primitives.
 
 Roadmap: [`ROADMAP.md`](./ROADMAP.md).
 
 Architecture decisions: [`docs/README.md`](./docs/README.md).
 
-The package domain may model only generic database infrastructure concepts: record identity/shape, query semantics, provider capabilities, error classification, lifecycle, transactions, and immutable migration identity/history. Business bounded contexts own their business domain models, aggregate invariants, schemas, and repository interfaces. Never place application-specific business entities, repositories, or schemas in this package.
+The package domain may model only generic database infrastructure concepts: record identity/shape, query semantics, provider capabilities, error classification, lifecycle, transactions, immutable migration identity/history, and generic backup/restore operations. Business bounded contexts own their business domain models, aggregate invariants, schemas, and repository interfaces. Never place application-specific business entities, repositories, or schemas in this package.
 
 ## Architecture rules
 
@@ -20,7 +20,8 @@ The package domain may model only generic database infrastructure concepts: reco
 - Keep dependency direction infrastructure → application → domain (dependencies point inward); do not add folders or wrappers that do not own meaningful policy.
 - Domain owns provider-independent record/query contracts, database error classification, lifecycle invariants, migration identity, and pure query/record validation.
 - Application owns provider-neutral CRUD orchestration and provider composition.
-- Infrastructure owns concrete provider adapters. Keep `node:sqlite`, SQL, prepared statements, driver objects, and provider-native errors under `src/infrastructure/sqlite/`.
+- Infrastructure owns concrete provider adapters and provider-specific maintenance primitives. Keep `node:sqlite`, SQL, prepared statements, driver objects, provider-native errors, and SQLite backup/restore implementation under `src/infrastructure/sqlite/`.
+- Keep SQLite backup/restore APIs provider-specific; do not add them to the common CRUD facade without a concrete cross-provider capability contract. Backup schedules, retention, encryption, remote storage, deployment paths, and operational runbooks remain application-owned.
 - Use Node.js built-in `node:sqlite`; do not add a third-party SQLite driver or ORM.
 - Generic CRUD is an approved package responsibility. Define behavior once in provider-neutral contracts and require every provider to satisfy the same applicable conformance tests.
 - Keep the public record API simple. Do not create an ORM, chainable query builder, schema generator, or application-specific repository abstraction.

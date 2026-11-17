@@ -305,6 +305,67 @@ SQLite uses prepared statements and bound parameters. Never interpolate untruste
 - Parent directories are created for file-backed databases.
 - SQLite is appropriate for embedded/local persistence. Workloads requiring many concurrent writers or multi-host access may justify a server provider later.
 
+### SQLite backup and restore
+
+Backup and restore are SQLite-specific infrastructure operations on the low-level facade. They are intentionally not methods on the provider-neutral `createDatabase({ provider })` CRUD API because backup guarantees and mechanisms differ between providers.
+
+**Create a backup from an open SQLite database:**
+
+```js
+import { createSqliteDatabase } from "@coinzilla/db"
+
+const database = createSqliteDatabase({
+  filename: "./data/app.sqlite",
+})
+
+await database.connect()
+
+try {
+  const copiedPages = await database.backup({
+    destination: "./backups/app.sqlite",
+    rate: 100,
+    progress({ remainingPages, totalPages }) {
+      // Optional progress reporting.
+    },
+  })
+
+  console.log(`Backed up ${copiedPages} SQLite pages`)
+} finally {
+  await database.close()
+}
+```
+
+- `backup({ destination, rate?, progress? })` is asynchronous and returns the number of pages copied. `rate` is a positive safe integer and defaults to 100 pages per step.
+- The backup uses Node.js' native SQLite online-backup API. It includes committed data held in WAL; do not copy a live SQLite main file directly.
+- The destination parent directory is created when needed. The backup is written to a temporary file in that directory, checked with `PRAGMA integrity_check` and `PRAGMA foreign_key_check`, then atomically renamed into place. A previous destination backup is preserved if backup creation or validation fails.
+- The source and destination must resolve to different files. The source must be connected and outside an active transaction.
+- The optional progress callback receives a frozen `{ remainingPages, totalPages }` snapshot. If the callback throws, the backup rejects with that callback error and the previous destination remains untouched.
+- `close()` waits for an active backup to finish. Once closing begins, new backup requests and new SQL/transaction operations are rejected.
+
+**Restore a validated backup into a new database file:**
+
+```js
+import { restoreSqliteDatabase } from "@coinzilla/db"
+
+const restoredFilename = await restoreSqliteDatabase({
+  backupFilename: "./backups/app.sqlite",
+  filename: "./data/restored-app.sqlite",
+  timeout: 5_000,
+  rate: 100,
+})
+
+// Open a new connection using restoredFilename after the restore completes.
+```
+
+- `restoreSqliteDatabase({ backupFilename, filename, timeout?, rate? })` returns the absolute path of the restored database.
+- The source backup is opened read-only and checked for SQLite integrity and foreign-key violations before it is copied and validated again.
+- Restore never overwrites an existing destination. It stages the restored database in the destination directory and publishes it with an atomic no-overwrite hard link. The destination filesystem must support hard links; failures are reported without replacing an existing file.
+- The caller must stop every process that could be using the destination path before restoring. The operation creates a new file; it does not replace or switch an already-open database connection.
+- Restore does not run application migrations or check application-version compatibility. The caller owns those decisions and must validate compatibility before using the restored database.
+- Invalid arguments and invalid backup integrity raise `TypeError`; SQLite/filesystem provider failures raise `DatabaseProviderError` with the original cause.
+
+These APIs provide database primitives only. Scheduling, backup rotation/retention, encryption, remote/off-site copies, storage permissions, deployment-specific paths, restore drills, and operational runbooks belong to the application that owns the database.
+
 See the [Node.js SQLite API documentation](https://nodejs.org/api/sqlite.html) for runtime details and stability status.
 
 ## Schema migrations
