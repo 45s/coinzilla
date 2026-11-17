@@ -337,7 +337,7 @@ async function verifySorting(database) {
   )
 }
 
-async function verifyScalarSortOrdering(database) {
+async function createScalarSortRecords(database) {
   const records = [
     {
       id: "missing",
@@ -378,7 +378,9 @@ async function verifyScalarSortOrdering(database) {
       record,
     })
   }
+}
 
+async function verifyScalarSortAscending(database) {
   const ascending = await database.readMany({
     collection: "sort-types",
     query: {
@@ -395,7 +397,9 @@ async function verifyScalarSortOrdering(database) {
     ["missing", "null", "false", "true", "number-2", "number-10", "string-10", "string-2"],
     "Ascending scalar sorting must order null/missing, booleans, numbers, and strings consistently",
   )
+}
 
+async function verifyScalarSortDescending(database) {
   const descending = await database.readMany({
     collection: "sort-types",
     query: {
@@ -412,6 +416,12 @@ async function verifyScalarSortOrdering(database) {
     ["string-2", "string-10", "number-10", "number-2", "true", "false", "missing", "null"],
     "Descending scalar sorting must reverse value/type order while keeping the identifier tie-breaker ascending",
   )
+}
+
+async function verifyScalarSortOrdering(database) {
+  await createScalarSortRecords(database)
+  await verifyScalarSortAscending(database)
+  await verifyScalarSortDescending(database)
 }
 
 async function verifyPagination(database) {
