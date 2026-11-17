@@ -852,7 +852,10 @@ test("propagates ownership when the post-registration submission gate throws", a
     broker: {
       placeOrder: async () => {
         brokerCalls += 1
-        return { ok: true, data: makeAcknowledgement(decision.actions[0]) }
+        return {
+          ok: true,
+          data: makeAcknowledgement(decision.actions[0]),
+        }
       },
     },
     canSubmit: () => {
