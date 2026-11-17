@@ -78,7 +78,10 @@ test("adaptOrder rejects missing or malformed required exchange timestamps", () 
     ["utime", ""],
   ]) {
     assert.throws(
-      () => adaptOrder({ ...validOrder, [field]: invalidValue }),
+      () => adaptOrder({
+        ...validOrder,
+        [field]: invalidValue,
+      }),
       /ctime.*non-empty string|utime.*non-empty string/i,
       `Bitunix order ${field} must be rejected when its documented timestamp field is missing or malformed.`,
     )
