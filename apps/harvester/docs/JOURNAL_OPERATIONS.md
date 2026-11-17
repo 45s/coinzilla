@@ -229,7 +229,7 @@ Separately, the Journal package owns a hidden `.coinzilla-journal.lock` in the a
 
 An EventBus close timeout (bounded at five seconds) causes a non-zero process exit, but does not by itself retain the trading lock when runtime shutdown and Journal close were both confirmed. Telegram/log-transport cleanup failures are reported separately from runtime-stop and Journal-close lock-release gates; an ancillary delivery failure must not be described as unresolved trading state.
 
-The deterministic regression suite covers gate-before-cleanup ordering, per-market and per-strategy barriers, BUY submission races, recovery-only price evaluation, cancellation-racing fills, late evidence invalidation, recovery SELL coverage, incomplete shutdown and process-lock retention. A process kill, machine crash, power loss or failed filesystem sync can still lose recent records; the Journal is not an unconditional durability guarantee.
+The deterministic regression suite covers gate-before-cleanup ordering, per-market and per-strategy barriers, BUY submission races, recovery-only price evaluation, cancellation-racing fills, late evidence invalidation, recovery SELL coverage, incomplete shutdown and process-lock retention. A real `startHarvester` bootstrap regression also proves that a market callback's fulfilled `{ ok: false }` result keeps market/user-data intake and broker connectivity alive. A process kill, machine crash, power loss or failed filesystem sync can still lose recent records; the Journal is not an unconditional durability guarantee.
 
 ## Diagnosing a missing or incomplete session
 

@@ -6049,3 +6049,37 @@ test("starts Telegram operator control without running process-restart recovery 
     })
   }
 })
+
+test("keeps shared services connected when a real market callback returns a failed result", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  makeVolatilityReadyBroker(broker, ["BTCUSDT"])
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    brokerAdapterFactory: () => broker,
+    logger: {
+      info() {},
+      debug() {},
+      error() {},
+    },
+  })
+
+  const marketResult = await broker.emitPrice("BTCUSDT", {
+    symbol: "BTCUSDT",
+    price: "65000",
+    timestamp: -1,
+  })
+  assert.equal(marketResult.ok, false, "The real market callback must preserve its unsuccessful processing result.")
+
+  await assert.rejects(runtime.stop(), (error) => {
+    assert.ok(error instanceof AggregateError, "The application shutdown must fail closed when accepted market processing failed.")
+    assert.ok(
+      error.errors.some((failure) => failure instanceof TypeError),
+      "The application shutdown must preserve the original market-event validation failure.",
+    )
+    return true
+  })
+  assert.equal(calls.includes("unsubscribe:BTCUSDT"), false, "Market-price intake must remain connected after a failed accepted task.")
+  assert.equal(calls.includes("unsubscribe:user-data"), false, "User-data intake must remain connected after a failed accepted task.")
+  assert.equal(calls.includes("disconnect"), false, "The broker must remain connected after a failed accepted task.")
+})
