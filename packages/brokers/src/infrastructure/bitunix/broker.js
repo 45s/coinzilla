@@ -380,8 +380,10 @@ export class BitunixSpotBroker extends CoreBroker {
         symbol,
         operation: "getOrder()",
       })
-      if ((typeof orderId !== "string" && typeof orderId !== "number") || !String(orderId).trim()) {
-        throw new TypeError("Bitunix Spot getOrder() requires a broker orderId")
+      if ((typeof orderId !== "string" && typeof orderId !== "number") ||
+          (typeof orderId === "string" && !orderId.trim()) ||
+          (typeof orderId === "number" && !Number.isSafeInteger(orderId))) {
+        throw new TypeError("Bitunix Spot getOrder() requires a non-empty string or safe integer orderId")
       }
       const response = await this.restClient.request({
         method: "GET",
