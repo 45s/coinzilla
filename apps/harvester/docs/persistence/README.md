@@ -205,6 +205,7 @@ Optional configuration:
 
 ```bash
 # Absolute base directory; Harvester creates separate production/ and testnet/ children.
+# Keep custom paths outside the repository; the default data/ directory is Git-ignored.
 HARVESTER_DATABASE_DIRECTORY=/absolute/path/to/harvester-data
 ```
 
