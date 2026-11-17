@@ -88,7 +88,7 @@ A state-changing timeout remains an unknown outcome. Never retry it on another p
 
 Bitunix Spot remains read-only and is not a valid Harvester execution provider today. Its existing metadata helper is not a full broker adapter. Do not enable Bitunix order placement, cancellation or runtime integration until [issue #1185](https://github.com/45s/coinzilla/issues/1185) and the capability gates in [issue #1339](https://github.com/45s/coinzilla/issues/1339) are resolved. RS is also not executable merely because a future route can name its strategy ID.
 
-The durable target contract is [ADR-0003](../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md); this file remains the Harvester-specific port/adapter guide.
+The durable target contract is [ADR-0003](../../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md); this file remains the Harvester-specific port/adapter guide.
 
 ## Why not depend on CoreBroker directly?
 
