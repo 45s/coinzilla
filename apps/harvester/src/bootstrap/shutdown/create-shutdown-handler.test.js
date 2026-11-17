@@ -210,6 +210,7 @@ test("a safe strategy cannot release shared services while another strategy is u
   assert.equal(calls.includes("market-intake-stop"), false)
   assert.equal(calls.includes("broker-disconnect"), false)
   assert.equal(calls.includes("operator-control-stop"), false)
+  assert.equal(fixture.state.marketIntakeStopped, false, "Market callback processing must resume when the CLOSING barrier fails before unsubscription.")
   assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE")
 })
 
@@ -414,10 +415,15 @@ test("keeps user-data and broker services alive when post-market-drain safety ca
     marketPriceIntake,
   })
 
-  await assert.rejects(fixture.stop(), (error) => error === failure, "A failed final safety proof must reject shutdown with its original blocker.")
+  await assert.rejects(fixture.stop(), (error) => {
+    assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN", "An unproven final strategy state must retain the coordinator's safety failure classification.")
+    assert.ok(error.errors.includes(failure), "The original market-recovery blocker must remain available to the caller.")
+    return true
+  }, "A failed final safety proof must reject shutdown with its original blocker.")
 
   assert.equal(safetyChecks, 2, "Shutdown must repeat the strategy proof after quiescing and draining accepted market work.")
   assert.equal(calls.includes("market-intake-stop"), false, "Market subscriptions must remain connected when the post-drain safety proof fails.")
+  assert.equal(fixture.state.marketIntakeStopped, false, "Market callback processing must resume when the pre-unsubscribe safety proof fails.")
   assert.equal(calls.includes("user-data-stop"), false, "User-data intake must remain connected when the final market-drain safety proof fails.")
   assert.equal(calls.includes("operator-control-stop"), false, "Operator control must remain available when recovery safety is unproven.")
   assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected when recovery safety is unproven.")
@@ -478,6 +484,7 @@ test("keeps user-data and broker services alive when accepted market work fails 
   assert.equal(calls.includes("user-data-stop"), false, "User-data intake must remain available when accepted market work fails.")
   assert.equal(calls.includes("operator-control-stop"), false, "Operator control must remain available when accepted market work fails.")
   assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected when accepted market work fails.")
+  assert.equal(fixture.state.marketIntakeStopped, false, "Market callback processing must resume when accepted market work cannot be drained before unsubscription.")
   assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE", "A failed market-work drain must never be reported as STOPPED.")
 })
 
