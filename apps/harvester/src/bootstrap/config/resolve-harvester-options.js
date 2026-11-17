@@ -79,8 +79,6 @@ pairs },
   const log = { message: "App configuration validated",
 environment,
 broker: brokerName,
-providerInstanceId: runtime.providerInstanceId,
-accountId: runtime.accountId,
 tradingMode,
 enabledSymbols,
 strategyMode: `conservative-${tradingMode}` }
