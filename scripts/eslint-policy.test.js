@@ -158,22 +158,22 @@ function collectFunctionQualityFindings({ results }) {
     {
       ruleId: "complexity",
       key: "complexity",
-      pattern: /complexity of (\\d+)/i,
+      pattern: /complexity of (\d+)/i,
     },
     {
       ruleId: "max-lines-per-function",
       key: "maxLines",
-      pattern: /too many lines \\((\\d+)\\)/i,
+      pattern: /too many lines \((\d+)\)/i,
     },
     {
       ruleId: "max-statements",
       key: "maxStatements",
-      pattern: /too many statements \\((\\d+)\\)/i,
+      pattern: /too many statements \((\d+)\)/i,
     },
     {
       ruleId: "max-depth",
       key: "maxDepth",
-      pattern: /nested too deeply \\((\\d+)\\)/i,
+      pattern: /nested too deeply \((\d+)\)/i,
     },
     {
       ruleId: "default-param-last",
@@ -198,7 +198,7 @@ function collectFunctionQualityFindings({ results }) {
 
       assert.ok(
         !measurement.pattern || Number.isFinite(measuredValue),
-        `The ${message.ruleId} audit must extract the measured value from each ESLint diagnostic.`,
+        `The ${message.ruleId} audit must extract the measured value from this ESLint diagnostic: ${message.message}`,
       );
       metrics[measurement.key].push({
         filePath: result.filePath,
