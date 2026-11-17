@@ -216,7 +216,10 @@ async function discoverRootSessionDirectories({
   }
 
   const rootJournalEntries = rootEntries.filter((entry) => entry.name.endsWith(".jsonl"))
-  validateRootJournalEntries({ rootDirectory, rootJournalEntries })
+  validateRootJournalEntries({
+    rootDirectory,
+    rootJournalEntries,
+  })
   if (rootJournalEntries.length > 0) {
     sessionDirectories.push({
       directory: rootDirectory,
