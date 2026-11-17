@@ -186,7 +186,7 @@ test("starts a new recovery cycle only from a closed, profitable and reconciled 
       }),
       nextCycleId: "rs-cycle-2",
     }),
-    /only a closed profitable and reconciled cycle/,
+    /only from a closed profitable and reconciled cycle/,
     "A canceled/partial SELL must not be reset into a new cycle.",
   )
 })
