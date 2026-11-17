@@ -226,6 +226,87 @@ export function runDatabaseProviderConformanceTests({ name, createDatabase }) {
     })
   })
 
+  test(`${name}: successful transactions commit all record changes`, async () => {
+    await withDatabase({
+      createDatabase,
+      callback: async (database) => {
+        const result = await database.transaction((transaction) => {
+          transaction.create("people", {
+            id: "committed-1",
+            name: "Committed",
+          })
+          return "committed"
+        })
+
+        assert.equal(
+          result,
+          "committed",
+          "A successful transaction must return the callback result after commit",
+        )
+        assert.deepEqual(
+          await database.readOne("people", "committed-1"),
+          {
+            id: "committed-1",
+            name: "Committed",
+          },
+          "A successful transaction must make every callback write visible after commit",
+        )
+      },
+    })
+  })
+
+  test(`${name}: missing fields do not match explicit null filters`, async () => {
+    await withDatabase({
+      createDatabase,
+      callback: async (database) => {
+        await database.create("people", {
+          id: "explicit-null-1",
+          nickname: null,
+        })
+        await database.create("people", {
+          id: "missing-nickname-1",
+          name: "No nickname",
+        })
+
+        const records = await database.readMany("people", {
+          filter: {
+            nickname: null,
+          },
+        })
+
+        assert.deepEqual(
+          records.map((record) => record.id),
+          ["explicit-null-1"],
+          "An explicit null filter must not match records where the field is absent",
+        )
+      },
+    })
+  })
+
+  test(`${name}: closing the database prevents new work and releases the provider`, async () => {
+    const database = createDatabase({
+      filename: ":memory:",
+    })
+    await database.connect()
+    await database.close()
+
+    assert.equal(
+      database.state,
+      "closed",
+      "Closing the composed database must expose the terminal closed lifecycle state",
+    )
+    assert.throws(
+      () => database.readMany("people"),
+      /Database must be connected/,
+      "A closed database must reject new CRUD operations before calling the provider",
+    )
+    await assert.rejects(
+      database.connect(),
+      /Cannot connect database while it is closed/,
+      "A closed database resource must not be reopened through the same lifecycle facade",
+    )
+  })
+
   test(`${name}: provider capabilities are exposed as an immutable snapshot`, async () => {
     await withDatabase({
       createDatabase,
