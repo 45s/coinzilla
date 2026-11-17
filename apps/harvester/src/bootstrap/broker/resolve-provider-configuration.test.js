@@ -143,3 +143,33 @@ test("rejects account identifiers that could contain credentials", () => {
     /stable non-secret account ID/,
   )
 })
+
+test("allows provider-specific credential references without storing secret values", () => {
+  const brokers = {
+    instances: {
+      bitunixPrimary: {
+        provider: "bitunix",
+        accountId: "bitunix-primary",
+        credentialEnv: {
+          apiKey: "BITUNIX_API_KEY",
+          apiSecret: "BITUNIX_API_SECRET",
+          apiPassphrase: "BITUNIX_API_PASSPHRASE",
+        },
+      },
+    },
+    selection: {
+      execution: "bitunixPrimary",
+      account: "bitunixPrimary",
+      marketData: "bitunixPrimary",
+    },
+  }
+  const configuration = resolveProviderConfiguration({
+    brokers,
+    tradingMode: "testnet",
+  })
+  assert.deepEqual(configuration.instances[0].credentialEnv, {
+    apiKey: "BITUNIX_API_KEY",
+    apiSecret: "BITUNIX_API_SECRET",
+    apiPassphrase: "BITUNIX_API_PASSPHRASE",
+  })
+})

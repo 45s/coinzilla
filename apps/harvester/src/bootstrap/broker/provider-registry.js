@@ -264,7 +264,7 @@ async function constructProviderEntries({ descriptors, adapterFactories, env, lo
       if (typeof factory !== "function") {
         throw new TypeError(`Provider type "${descriptor.provider}" is not registered in Harvester`)
       }
-      const adapter = factory({
+      const adapter = await factory({
         descriptor,
         env,
         logger,
