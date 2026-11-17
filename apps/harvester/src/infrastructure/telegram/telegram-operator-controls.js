@@ -146,6 +146,15 @@ export function buildControlReply(options) {
 }
 
 
+const OPERATOR_CONTROL_METHODS = Object.freeze({
+  PAUSE: "pauseMarket",
+  RESUME: "resumeMarket",
+  PAUSE_BUYS: "pauseBuys",
+  RESUME_BUYS: "resumeBuys",
+  PAUSE_ALL_BUYS: "pauseAllBuys",
+  RESUME_ALL_BUYS: "resumeAllBuys",
+})
+
 async function invokeOperatorControl({
   action,
   symbol,
@@ -156,14 +165,7 @@ async function invokeOperatorControl({
   diagnostics,
   logStage,
 }) {
-  const method = ({
-    PAUSE: "pauseMarket",
-    RESUME: "resumeMarket",
-    PAUSE_BUYS: "pauseBuys",
-    RESUME_BUYS: "resumeBuys",
-    PAUSE_ALL_BUYS: "pauseAllBuys",
-    RESUME_ALL_BUYS: "resumeAllBuys",
-  })[action]
+  const method = OPERATOR_CONTROL_METHODS[action]
   interaction.action = action
   interaction.symbol = symbol
   interaction.operation = method
