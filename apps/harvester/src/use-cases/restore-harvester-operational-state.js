@@ -12,6 +12,36 @@ import { restoreHarvesterJournalState } from "./restore-harvester-journal-state.
  * @param {Function} options.projectOperationalState Injected durable-fact projector.
  * @returns {Promise<object>} Candidate Portfolio, RecoveryLedger map, and OrderRegistry.
  */
+function getOperationalStateReadFailure({ read }) {
+  if (read?.ok === true && read.data?.durableWriteSupported === true && Array.isArray(read.data.records)) {
+    return null
+  }
+  return toResult({
+    errors: read?.errors?.length
+      ? read.errors
+      : [new Error("Durable-fact stream is not verified and durably readable")],
+  })
+}
+
+function createOfflineOperationalStateCandidate({ restored, projection, read }) {
+  return toResult({
+    data: Object.freeze({
+      ...restored.data,
+      recoveryCycles: projection.data.recoveryCycles,
+      recoveryCycleEvaluations: projection.data.recoveryCycleEvaluations,
+      orderSubmissionOutcomes: projection.data.orderSubmissionOutcomes,
+      orderCancellationOutcomes: projection.data.orderCancellationOutcomes,
+      source: "DURABLE_FACTS",
+      candidateOnly: true,
+      restorationEnabled: false,
+      requiresExchangeReconciliation: true,
+      historyCoverageComplete: false,
+      lastCommittedSequence: read.data.lastCommittedSequence,
+      lastCommittedDigest: read.data.lastCommittedDigest,
+    }),
+  })
+}
+
 export async function restoreHarvesterOperationalState({
   operationalStateStore,
   marketMetadata,
@@ -25,34 +55,19 @@ export async function restoreHarvesterOperationalState({
       throw new TypeError("restoreHarvesterOperationalState requires an injected Operational State projector")
     }
     const read = await operationalStateStore.readAll()
-    if (read?.ok !== true || read.data?.durableWriteSupported !== true || !Array.isArray(read.data.records)) {
-      return toResult({
-        errors: read?.errors?.length
-          ? read.errors
-          : [new Error("Durable-fact stream is not verified and durably readable")],
-      })
+    const readFailure = getOperationalStateReadFailure({ read })
+    if (readFailure) {
+      return readFailure
     }
     const projection = projectOperationalState({ records: read.data.records })
-    if (projection?.ok !== true) { return projection }
-    const restored = restoreHarvesterJournalState({ projection,
-marketMetadata })
-    if (restored?.ok !== true) { return restored }
-    return toResult({
-      data: Object.freeze({
-        ...restored.data,
-        recoveryCycles: projection.data.recoveryCycles,
-        recoveryCycleEvaluations: projection.data.recoveryCycleEvaluations,
-        orderSubmissionOutcomes: projection.data.orderSubmissionOutcomes,
-        orderCancellationOutcomes: projection.data.orderCancellationOutcomes,
-        source: "DURABLE_FACTS",
-        candidateOnly: true,
-        restorationEnabled: false,
-        requiresExchangeReconciliation: true,
-        historyCoverageComplete: false,
-        lastCommittedSequence: read.data.lastCommittedSequence,
-        lastCommittedDigest: read.data.lastCommittedDigest,
-      }),
-    })
+    if (projection?.ok !== true) {
+      return projection
+    }
+    const restored = restoreHarvesterJournalState({ projection, marketMetadata })
+    if (restored?.ok !== true) {
+      return restored
+    }
+    return createOfflineOperationalStateCandidate({ restored, projection, read })
   } catch (error) {
     return toResult({ error })
   }
