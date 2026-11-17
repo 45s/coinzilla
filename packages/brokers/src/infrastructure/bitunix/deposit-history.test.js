@@ -22,7 +22,10 @@ function createBroker({ response = [] } = {}) {
       }),
     },
   })
-  return { broker, calls }
+  return {
+    broker,
+    calls,
+  }
 }
 
 function createDepositRecord(overrides = {}) {
@@ -78,7 +81,10 @@ test("Bitunix Spot broker rejects invalid deposit filters before making a reques
     { type: "withdraw" },
     { transactionHash: "" },
     { startTime: Number.MAX_SAFE_INTEGER + 1 },
-    { startTime: 20, endTime: 10 },
+    {
+      startTime: 20,
+      endTime: 10,
+    },
     { limit: 0 },
     { limit: 101 },
   ]
