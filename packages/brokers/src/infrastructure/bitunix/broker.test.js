@@ -677,3 +677,29 @@ test("Bitunix Spot last price rejects non-positive values and preserves positive
   assert.equal(result.ok, true)
   assert.equal(result.data.price, "0.0000000100")
 })
+
+test("Bitunix Spot pending orders reject missing or null response data", async () => {
+  const cases = [
+    {
+      name: "missing data",
+      responses: {},
+    },
+    {
+      name: "null data",
+      responses: {
+        "/api/spot/v1/order/pending/list": null,
+      },
+    },
+  ]
+
+  for (const entry of cases) {
+    const { broker, calls } = createBroker({
+      responses: entry.responses,
+    })
+    const result = await broker.getOpenOrders({ symbol: "BTCUSDT" })
+
+    assert.equal(result.ok, false, `pending orders with ${entry.name} must fail closed`)
+    assert.match(result.errors[0].message, /pending orders response/i)
+    assert.equal(calls.length, 1)
+  }
+})

@@ -960,7 +960,7 @@ This work is in an open task PR targeting `develop`; do not mark it complete unt
 | `getAssets()` | Implemented, read-only compatibility | Uses the same account response; combines free and locked amounts exactly before converting to legacy `Coin.value` Numbers and omits exact zero balances. Use `getBalances()` for exact financial values. |
 | `getExchangeMarkets()` | Implemented, read-only | `GET /api/spot/v1/common/coin_pair/list`; only explicitly open pairs are returned; symbol is derived from base + quote. |
 | `getSymbolFilters({ symbol })` | Partial | Returns raw Bitunix pair metadata. The pure Harvester mapping in [PR #1209](https://github.com/45s/coinzilla/pull/1209) maps documented `minPrice`/`minVolume` to canonical `MIN_NOTIONAL`/`MIN_QUANTITY`; precision increments, depth precision, and undocumented maximum fields remain unresolved. |
-| `getOpenOrders({ symbol })` | Implemented, read-only | `POST /api/spot/v1/order/pending/list`; symbol is mandatory. The official API does not document an account-wide request or complete cross-symbol enumeration. |
+| `getOpenOrders({ symbol })` | Implemented, read-only | `POST /api/spot/v1/order/pending/list`; symbol is mandatory. Accepts documented object/array rows and explicit empty arrays; missing or `null` data is rejected. No account-wide request or complete cross-symbol enumeration is documented. |
 | `getOrderHistory({ symbol, ...filters })` | Implemented, read-only | `POST /api/spot/v1/order/history/page`; canonical status/side/type filters mapped to Bitunix codes; symbol mandatory; no exact order-ID filter. |
 | `getOrder({ symbol, orderId })` | Implemented, read-only | `GET /api/spot/v1/order/detail`; validates returned order ID and symbol. No client-order-ID lookup. |
 | `getPrices({ symbol })` / `getPrice()` | Implemented, read-only | `GET /api/spot/v1/market/last_price`; requires a strictly positive decimal string and preserves it exactly; one-shot lookup with no source timestamp. |
@@ -1074,6 +1074,7 @@ The following comparison resolves what the references actually implement; it doe
 - [x] Reject ambiguous duplicate market metadata in `getSymbolFilters()` instead of silently selecting the first matching catalog row; exactly one matching canonical symbol is required — [PR #1271](https://github.com/45s/coinzilla/pull/1271).
 - [x] Implement Binance-compatible legacy `getAssets()` from the existing Spot account endpoint: add free + locked balances exactly, omit exact zero assets, and return the legacy Number-based `Coin.value` shape while retaining `getBalances()` as the exact-decimal API — [PR #1274](https://github.com/45s/coinzilla/pull/1274).
 - [x] Validate Spot latest-price values as strictly positive after exact decimal parsing; preserve the original decimal string without Number conversion — [PR #1279](https://github.com/45s/coinzilla/pull/1279).
+- [x] Reject missing or `null` symbol-scoped pending-order response data instead of reporting an unsupported empty result; preserve explicit empty arrays and documented object/array row forms — [PR #1280](https://github.com/45s/coinzilla/pull/1280).
 - [ ] Resolve per-order fill completeness, execution-ID guarantees, and the unit of deal `volume`; only add fail-closed checks where the exchange contract makes the inconsistency unambiguous.
 
 ### Recommended implementation order

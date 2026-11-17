@@ -54,10 +54,7 @@ function normalizeOrderRows({ value }) {
   if (Array.isArray(value)) {
     return value
   }
-  if (value === null || value === undefined) {
-    return []
-  }
-  if (typeof value === "object" && !Array.isArray(value) && value.orderId !== undefined) {
+  if (value !== null && typeof value === "object" && !Array.isArray(value) && value.orderId !== undefined) {
     return [value]
   }
   throw new TypeError("Bitunix Spot pending orders response must contain order rows")
