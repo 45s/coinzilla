@@ -208,7 +208,7 @@ function createSqliteTransactionContext({ transaction }) {
  * @returns {import("../../application/ports/database-provider.js").DatabaseProvider}
  */
 export function createSqliteProvider({ filename, timeout } = {}) {
-  const database = createSqliteDatabase({
+  let database = createSqliteDatabase({
     filename,
     timeout,
   })
@@ -217,21 +217,30 @@ export function createSqliteProvider({ filename, timeout } = {}) {
     capabilities: SQLITE_CAPABILITIES,
 
     async connect() {
+      if (database.state === "closed") {
+        database = createSqliteDatabase({
+          filename,
+          timeout,
+        })
+      }
+
       try {
         await database.connect()
         database.exec(CREATE_RECORDS_TABLE)
       } catch (error) {
         let connectionError = error
-        try {
-          await database.close()
-        } catch (closeError) {
-          connectionError = new AggregateError(
-            [error, closeError],
-            "SQLite provider connection failed and cleanup also failed",
-            {
-              cause: error,
-            },
-          )
+        if (database.state === "connected") {
+          try {
+            await database.close()
+          } catch (closeError) {
+            connectionError = new AggregateError(
+              [error, closeError],
+              "SQLite provider connection failed and cleanup also failed",
+              {
+                cause: error,
+              },
+            )
+          }
         }
 
         throw new DatabaseProviderError({
