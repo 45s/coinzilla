@@ -308,7 +308,10 @@ async function drainAcceptedMarketWork({
   userDataPhase,
 } = {}) {
   const pendingMarketTasks = [...context.marketPriceIntake.values()]
-    .map(({ latestWebSocketPriceTask }) => latestWebSocketPriceTask)
+    .flatMap(({ latestWebSocketPriceTask, latestWebSocketBookTask }) => [
+      latestWebSocketPriceTask,
+      latestWebSocketBookTask,
+    ])
     .filter(Boolean)
   const marketWorkResult = await context.failureRecorder.runPhaseSafely({
     phase: marketPhase,
