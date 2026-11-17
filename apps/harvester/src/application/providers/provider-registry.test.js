@@ -242,3 +242,89 @@ testCase("waits for an in-flight connection before performing one concurrent dis
   assert.equal(registry.get("binanceTestnet").status, "disconnected",
     "The provider must reach a stable disconnected state after cleanup races with connection.")
 })
+
+
+testCase("rolls back every constructed provider in reverse order after a later connection fails", async () => {
+  const calls = []
+  const connectionError = new Error("second Binance instance failed to connect")
+  const createTrackedProvider = ({ suffix, failConnect = false } = {}) => {
+    const { broker } = createBroker({
+      onConnect: async () => {
+        calls.push(`connect:${suffix}`)
+        if (failConnect) {
+          throw connectionError
+        }
+      },
+      onDisconnect: async () => calls.push(`disconnect:${suffix}`),
+    })
+    return createProvider({
+      providerInstanceId: `binance${suffix}`,
+      accountId: `account-${suffix}`,
+      broker,
+    })
+  }
+  const registry = createProviderRegistry({
+    providers: [
+      createTrackedProvider({ suffix: "First" }),
+      createTrackedProvider({ suffix: "Second", failConnect: true }),
+      createTrackedProvider({ suffix: "Third" }),
+    ],
+  })
+
+  await assert.rejects(
+    registry.connectAll(),
+    (error) => error === connectionError,
+    "The first provider connection error must remain primary when rollback succeeds.")
+  assert.deepEqual(calls, [
+    "connect:First",
+    "connect:Second",
+    "disconnect:Third",
+    "disconnect:Second",
+    "disconnect:First",
+  ], "Partial connection failure must clean every constructed provider exactly once in reverse construction order.")
+  assert.deepEqual(registry.list().map(({ status }) => status), [
+    "disconnected",
+    "disconnected",
+    "disconnected",
+  ], "All provider instances must be disconnected before registry startup rejects.")
+})
+
+testCase("disconnects all providers in reverse order and aggregates cleanup failures", async () => {
+  const calls = []
+  const cleanupError = new Error("first Binance instance cleanup failed")
+  const createTrackedProvider = ({ suffix, failDisconnect = false } = {}) => {
+    const { broker } = createBroker({
+      onConnect: async () => calls.push(`connect:${suffix}`),
+      onDisconnect: async () => {
+        calls.push(`disconnect:${suffix}`)
+        if (failDisconnect) {
+          throw cleanupError
+        }
+      },
+    })
+    return createProvider({
+      providerInstanceId: `binance${suffix}`,
+      accountId: `account-${suffix}`,
+      broker,
+    })
+  }
+  const registry = createProviderRegistry({
+    providers: [
+      createTrackedProvider({ suffix: "First", failDisconnect: true }),
+      createTrackedProvider({ suffix: "Second" }),
+    ],
+  })
+  await registry.connectAll()
+
+  await assert.rejects(
+    registry.disconnectAll(),
+    (error) => error instanceof AggregateError &&
+      error.errors.length === 1 && error.errors[0] === cleanupError,
+    "Cleanup must continue for every provider and preserve each failure.")
+  assert.deepEqual(calls, [
+    "connect:First",
+    "connect:Second",
+    "disconnect:Second",
+    "disconnect:First",
+  ], "Registry shutdown must disconnect providers in reverse construction order.")
+})
