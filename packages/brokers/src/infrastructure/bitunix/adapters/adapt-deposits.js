@@ -101,8 +101,13 @@ function adaptDepositRecord({ record }) {
  * @returns {ReadonlyArray<{id: string, transactionHash?: string|null, coin: string, network?: string|null, type: string, fromAddress: string, toAddress: string, amount: string, status: string, ctime: number|string}>}
  */
 export function adaptDeposits({ value }) {
-  if (!Array.isArray(value)) {
-    throw new TypeError("Bitunix Spot deposits response must be an array")
+  const records = Array.isArray(value)
+    ? value
+    : value !== null && typeof value === "object"
+      ? [value]
+      : null
+  if (records === null) {
+    throw new TypeError("Bitunix Spot deposits response must be an object or array")
   }
-  return Object.freeze(value.map((record) => adaptDepositRecord({ record })))
+  return Object.freeze(records.map((record) => adaptDepositRecord({ record })))
 }
