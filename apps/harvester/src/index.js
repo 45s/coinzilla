@@ -384,6 +384,25 @@ async function acquireEnvironmentProcessLock({ runtimeConfig, acquireProcessLock
   return lockResult
 }
 
+function resolveRuntimeProviderConfiguration({ appConfig, env }) {
+  const exchangeRuntimeConfig = resolveRuntimeConfig({
+    tradingMode: env.TRADING_MODE,
+    environment: env.NODE_ENV,
+  })
+  const providerConfiguration = resolveProviderConfiguration({
+    brokers: appConfig.brokers,
+    tradingMode: exchangeRuntimeConfig.tradingMode,
+  })
+  const selectedProvider = providerConfiguration.instances.find(
+    (instance) => instance.id === providerConfiguration.selections.execution,
+  )
+  return Object.freeze({
+    ...exchangeRuntimeConfig,
+    brokerName: selectedProvider.provider,
+    providerInstanceId: selectedProvider.id,
+  })
+}
+
 async function acquireProcessStartupResources({ options, resources, processStartedDataResult } = {}) {
   const {
     createEventBus,
@@ -399,21 +418,9 @@ async function acquireProcessStartupResources({ options, resources, processStart
   } = options
   resources.eventBus = createEventBus({ logger })
   resources.appConfig = await loadConfig(configSource)
-  const exchangeRuntimeConfig = resolveRuntimeConfig({
-    tradingMode: env.TRADING_MODE,
-    environment: env.NODE_ENV,
-  })
-  const providerConfiguration = resolveProviderConfiguration({
-    brokers: resources.appConfig.brokers,
-    tradingMode: exchangeRuntimeConfig.tradingMode,
-  })
-  const selectedProvider = providerConfiguration.instances.find(
-    (instance) => instance.id === providerConfiguration.selections.execution,
-  )
-  resources.runtimeConfig = Object.freeze({
-    ...exchangeRuntimeConfig,
-    brokerName: selectedProvider.provider,
-    providerInstanceId: selectedProvider.id,
+  resources.runtimeConfig = resolveRuntimeProviderConfiguration({
+    appConfig: resources.appConfig,
+    env,
   })
   resources.processLock = await acquireEnvironmentProcessLock({
     runtimeConfig: resources.runtimeConfig,

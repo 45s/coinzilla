@@ -4,31 +4,54 @@ import { validateCancellationEligibility } from "../../domain/orders/validate-ca
 import { assertBrokerPort } from "../../application/ports/broker.port.js"
 import { createBinanceMarketMetadata } from "./binance-market-metadata.js"
 
-const normalizePlaceOrderResult = ({ result, order } = {}) => {
-  if (result?.ok !== false || !Array.isArray(result.errors) || result.errors.length !== 1) {return result}
-  const [error] = result.errors
-  // Binance Spot's exact -2010 matching-engine response is a definite LIMIT_MAKER rejection.
-  if (error?.outcomeUnknown === true) {return result}
+function isSingleDefiniteOrderError({ result }) {
+  return result?.ok === false &&
+    Array.isArray(result.errors) &&
+    result.errors.length === 1
+}
 
-  if (order?.type === "LIMIT_MAKER" &&
-      error?.code === -2010 &&
-      error.message === "Order would immediately match and take.") {
-    const normalizedError = new Error(error.message, { cause: error })
+function normalizeDefinitePlaceOrderError({ error, order }) {
+  if (error?.outcomeUnknown === true) {
+    return undefined
+  }
+  const postOnlyRejected = order?.type === "LIMIT_MAKER" &&
+    error?.code === -2010 &&
+    error.message === "Order would immediately match and take."
+  if (postOnlyRejected) {
+    const normalizedError = new Error(error.message, {
+      cause: error,
+    })
     normalizedError.code = "POST_ONLY_WOULD_TAKE"
-    return { ...result,
-errors: [normalizedError] }
+    return normalizedError
   }
-
-  if (error?.code === -1013 &&
-      typeof error.message === "string" &&
-      error.message.startsWith("Filter failure:")) {
-    const normalizedError = new Error(error.message, { cause: error })
+  const filterRejected = error?.code === -1013 &&
+    typeof error.message === "string" &&
+    error.message.startsWith("Filter failure:")
+  if (filterRejected) {
+    const normalizedError = new Error(error.message, {
+      cause: error,
+    })
     normalizedError.code = "DEFINITE_EXCHANGE_FILTER_REJECTED"
-    return { ...result,
-errors: [normalizedError] }
+    return normalizedError
   }
+  return undefined
+}
 
-  return result
+function normalizePlaceOrderResult({ result, order }) {
+  if (!isSingleDefiniteOrderError({ result })) {
+    return result
+  }
+  const [error] = result.errors
+  const normalizedError = normalizeDefinitePlaceOrderError({
+    error,
+    order,
+  })
+  return normalizedError
+    ? {
+      ...result,
+      errors: [normalizedError],
+    }
+    : result
 }
 
 const createBroker = ({ config, logger }) =>
@@ -40,17 +63,19 @@ const createBroker = ({ config, logger }) =>
   })
 
 async function getCanonicalMarketMetadata({ client, symbol }) {
-    const result = await client.getSymbolFilters({ symbol })
-    if (!result?.ok || !result.data) {
-      const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-      throw new Error(
-        `Unable to load Binance market metadata for ${  symbol  }${details ? `: ${  details}` : ""}`,
-      )
-    }
-    if (result.data.symbol !== symbol) {
-      throw new TypeError(`Binance market metadata symbol does not match ${  symbol}`)
-    }
-    return createBinanceMarketMetadata({ symbolFilters: result.data })
+  const result = await client.getSymbolFilters({ symbol })
+  if (!result?.ok || !result.data) {
+    const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+    throw new Error(
+      `Unable to load Binance market metadata for ${symbol}${details ? `: ${details}` : ""}`,
+    )
+  }
+  if (result.data.symbol !== symbol) {
+    throw new TypeError(`Binance market metadata symbol does not match ${symbol}`)
+  }
+  return createBinanceMarketMetadata({
+    symbolFilters: result.data,
+  })
 }
 
 function assertRequiredBrokerMethods({ client }) {
@@ -81,57 +106,96 @@ function assertRequiredBrokerMethods({ client }) {
   }
 }
 
-function createCancelOrderHandler({ client }) {
-  return async function cancelOrder({ order, symbol, orderId } = {}) {
-    const targetSymbol = order?.market?.symbol ?? symbol
-    if (order) {
-      const eligibility = validateCancellationEligibility({ order })
-      if (!eligibility.ok) {return eligibility}
+function resolveCancellationTarget({ order, symbol }) {
+  const targetSymbol = order?.market?.symbol ?? symbol
+  if (!order) {
+    return {
+      targetSymbol,
     }
-    let targetOrderId
-    try {
-      targetOrderId = normalizeBinanceId(order?.brokerOrderId ?? orderId, "orderId")
-    } catch (error) {
-      return toResult({ error })
+  }
+  const eligibility = validateCancellationEligibility({
+    order,
+  })
+  return eligibility.ok
+    ? {
+      targetSymbol,
     }
-    const cancelResult = await client.cancelOrder({
-      symbol: targetSymbol,
-      orderId: targetOrderId,
-    })
-    if (!order) {return cancelResult}
-    if (!cancelResult?.ok) {return cancelResult}
-    if (typeof client.getCanonicalOrderHistory !== "function") {
-      return toResult({ error: new Error("Canonical order history is required to confirm a cancellation") })
+    : {
+      result: eligibility,
     }
-    const historyResult = await client.getCanonicalOrderHistory({
-      symbol: targetSymbol,
-      orderId: targetOrderId,
-    })
-    if (!historyResult?.ok || !Array.isArray(historyResult.data)) {
-      return toResult({
-        errors: historyResult?.errors ?? [new Error("Unable to verify canceled order status")],
-      })
+}
+
+function resolveCancellationOrderId({ order, orderId }) {
+  try {
+    return {
+      targetOrderId: normalizeBinanceId(order?.brokerOrderId ?? orderId, "orderId"),
     }
-    const canonicalOrder = historyResult.data.find((item) =>
-      item.clientOrderId === order.clientOrderId &&
-      item.brokerOrderId === order.brokerOrderId
-    )
-    if (!canonicalOrder) {
-      return toResult({ error: new Error("Canceled order was not found in canonical order history") })
+  } catch (error) {
+    return {
+      result: toResult({
+        error,
+      }),
     }
-    return toResult({ data: canonicalOrder })
   }
 }
 
-/**
- * Adapt the shared Binance broker API to Harvester's application-owned port.
- * Exchange-specific method names and request shapes stay inside this module.
- */
-export function createBinanceBrokerAdapter({
-  config,
-  logger,
-  brokerFactory = createBroker,
-} = {}) {
+async function cancelAndConfirmOrder({ client, order, targetSymbol, targetOrderId }) {
+  const cancelResult = await client.cancelOrder({
+    symbol: targetSymbol,
+    orderId: targetOrderId,
+  })
+  if (!order || !cancelResult?.ok) {
+    return cancelResult
+  }
+  const historyResult = await client.getCanonicalOrderHistory({
+    symbol: targetSymbol,
+    orderId: targetOrderId,
+  })
+  if (!historyResult?.ok || !Array.isArray(historyResult.data)) {
+    return toResult({
+      errors: historyResult?.errors ?? [
+        new Error("Unable to verify canceled order status"),
+      ],
+    })
+  }
+  const canonicalOrder = historyResult.data.find((item) =>
+    item.clientOrderId === order.clientOrderId &&
+    item.brokerOrderId === order.brokerOrderId)
+  return canonicalOrder
+    ? toResult({
+      data: canonicalOrder,
+    })
+    : toResult({
+      error: new Error("Canceled order was not found in canonical order history"),
+    })
+}
+
+function createCancelOrderHandler({ client }) {
+  return async function cancelOrder({ order, symbol, orderId } = {}) {
+    const target = resolveCancellationTarget({
+      order,
+      symbol,
+    })
+    if (target.result) {
+      return target.result
+    }
+    const resolvedOrderId = resolveCancellationOrderId({
+      order,
+      orderId,
+    })
+    if (resolvedOrderId.result) {
+      return resolvedOrderId.result
+    }
+    return cancelAndConfirmOrder({
+      client,
+      order,
+      targetSymbol: target.targetSymbol,
+      targetOrderId: resolvedOrderId.targetOrderId,
+    })
+  }
+}
+
+function validateAdapterConfiguration({ config, brokerFactory }) {
   if (config === null || typeof config !== "object") {
     throw new TypeError("Binance adapter config must be an object")
   }
@@ -147,16 +211,10 @@ export function createBinanceBrokerAdapter({
   if (typeof brokerFactory !== "function") {
     throw new TypeError("brokerFactory must be a function")
   }
+}
 
-  const client = brokerFactory({ config,
-logger })
-
-
-
-
-  assertRequiredBrokerMethods({ client })
-
-  const broker = Object.freeze({
+function createBrokerPort({ client }) {
+  return Object.freeze({
     capabilities: client.capabilities,
     connect: () => client.connect(),
     disconnect: () => client.disconnect(),
@@ -164,10 +222,14 @@ logger })
       const result = typeof client.createCanonicalOrder === "function"
         ? await client.createCanonicalOrder(order)
         : await client.createOrder(order)
-      return normalizePlaceOrderResult({ result,
-order })
+      return normalizePlaceOrderResult({
+        result,
+        order,
+      })
     },
-    cancelOrder: createCancelOrderHandler({ client }),
+    cancelOrder: createCancelOrderHandler({
+      client,
+    }),
     getOpenOrders: (options = {}) => client.getOpenOrders(options),
     getFills: (input) => client.getFills(input),
     getCanonicalOrderHistory: (input) => client.getCanonicalOrderHistory(input),
@@ -177,27 +239,63 @@ order })
     getSymbolFilters: async ({ symbol }) => {
       try {
         return toResult({
-          data: await getCanonicalMarketMetadata({ client,
-symbol }),
+          data: await getCanonicalMarketMetadata({
+            client,
+            symbol,
+          }),
         })
       } catch (error) {
-        return toResult({ error })
+        return toResult({
+          error,
+        })
       }
     },
     getPrices: ({ symbol }) => client.getPrices({ symbol }),
     getCandles: (input) => client.getCandles(input),
     subscribeForPrices: ({ symbol, onPrice }) =>
-      client.subscribeForPrices({ symbol,
-onPrice }),
+      client.subscribeForPrices({
+        symbol,
+        onPrice,
+      }),
     subscribeForCandles: (input) => client.subscribeForCandles(input),
     subscribeForBookTicker: ({ symbol, onBookTicker }) =>
-      client.subscribeForBookTicker({ symbol,
-onBookTicker }),
+      client.subscribeForBookTicker({
+        symbol,
+        onBookTicker,
+      }),
     subscribeForUserData: ({ onEvent, onStatus }) =>
-      client.subscribeForUserData({ onEvent,
-onStatus }),
+      client.subscribeForUserData({
+        onEvent,
+        onStatus,
+      }),
   })
+}
 
-  assertBrokerPort({ broker })
+/**
+ * Adapt the shared Binance broker API to Harvester's application-owned port.
+ * Exchange-specific method names and request shapes stay inside this module.
+ */
+export function createBinanceBrokerAdapter({
+  config,
+  logger,
+  brokerFactory = createBroker,
+} = {}) {
+  validateAdapterConfiguration({
+    config,
+    brokerFactory,
+  })
+  const client = brokerFactory({
+    config,
+    logger,
+  })
+  assertRequiredBrokerMethods({
+    client,
+  })
+  const broker = createBrokerPort({
+    client,
+  })
+  assertBrokerPort({
+    broker,
+  })
   return broker
 }

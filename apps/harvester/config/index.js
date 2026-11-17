@@ -8,7 +8,10 @@ export const appConfig = {
       binancePrimary: {
         provider: "binance",
         accountId: "binance-primary",
-        credentialEnv: { apiKey: "BINANCE_API_KEY", apiSecret: "BINANCE_API_SECRET_KEY" },
+        credentialEnv: {
+          apiKey: "BINANCE_API_KEY",
+          apiSecret: "BINANCE_API_SECRET_KEY",
+        },
       },
     },
     selection: {

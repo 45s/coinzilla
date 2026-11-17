@@ -134,6 +134,11 @@ function resolveProviderSelections({ selection, instances }) {
  */
 export function resolveProviderConfiguration({ brokers, tradingMode } = {}) {
   const configuration = brokers ?? LEGACY_CONFIGURATION
+  for (const key of Object.keys(configuration)) {
+    if (key !== "instances" && key !== "selection") {
+      throw new TypeError(`Harvester provider configuration field "${key}" is unsupported`)
+    }
+  }
   assertRecord({
     value: configuration,
     path: "brokers",
