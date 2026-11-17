@@ -186,3 +186,31 @@ test("SQLite operations require an open connection", async () => {
   assert.throws(() => database.exec("SELECT 1"), /connected/)
   assert.throws(() => database.prepare("SELECT 1"), /connected/)
 })
+
+test("SQLite invalidates transaction statements before a rejected promise callback can continue", async () => {
+  const database = createSqliteDatabase({ filename: ":memory:" })
+  await database.connect()
+
+  try {
+    database.exec("CREATE TABLE entries (id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
+    let statement
+
+    await assert.rejects(
+      database.transaction((transaction) => {
+        statement = transaction.prepare("INSERT INTO entries (value) VALUES (?)")
+        return Promise.resolve().then(() => statement.run("late"))
+      }),
+      /must be synchronous/,
+    )
+
+    await new Promise((resolve) => setImmediate(resolve))
+
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS count FROM entries").get().count,
+      0,
+      "A prepared statement captured by a rejected transaction must not write after rollback",
+    )
+  } finally {
+    await database.close()
+  }
+})
