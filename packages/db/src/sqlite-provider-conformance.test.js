@@ -3,9 +3,9 @@ import { runDatabaseProviderConformanceTests } from "../test-support/provider-co
 
 runDatabaseProviderConformanceTests({
   name: "SQLite provider",
-  createDatabase: ({ filename }) => createDatabase({
+  createDatabase: ({ storageKey }) => createDatabase({
     provider: createSqliteProvider({
-      filename,
+      filename: storageKey,
     }),
   }),
 })
