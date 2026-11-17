@@ -372,7 +372,7 @@ test("accepts a loss-making legacy allocation when the combined cycle meets minP
   assert.equal(workflow.getLegacyPosition({ marketId: market.id }).remainingQuantity, "49.99",
     "Actual legacy base debit must still be recorded after a loss-making execution.")
   assert.equal(workflow.getActiveOrders().length, 0,
-    "A fully reconciled terminal order releases its reservation even when realized profitability is below its gate.")
+    "A fully reconciled terminal order releases its reservation after the combined accounting transition.")
 })
 
 

@@ -33,7 +33,7 @@ test("grosses up quote commission before rounding SELL price upward", () => {
   })
 
   assert.equal(plan.requiredNetQuoteProceeds, "10.01")
-  assert.equal(plan.grossQuoteProceeds, "10.111111111111111111111111111111111111")
+  assert.equal(plan.grossQuoteProceeds, "10.111111111111111111111111111111111112")
   assert.equal(plan.price, "10.12")
 })
 
@@ -73,6 +73,17 @@ test("rounds the minimum price upward to the exchange price tick", () => {
 
   assert.equal(plan.requiredNetQuoteProceeds, "10.21")
   assert.equal(plan.price, "10.2")
+})
+
+test("fails closed when the quantity step cannot include the full base-fee-adjusted inventory", () => {
+  assert.throws(
+    () => calculateRecoverySellerSellPlan({
+      ...validInput,
+      baseFeeRate: "0.01",
+      quantityStepSize: "0.1",
+    }),
+    /cannot include the full recovery and authorized legacy quantities/,
+  )
 })
 
 test("rejects invalid fee rates and missing third-asset quote valuation input", () => {
