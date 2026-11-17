@@ -958,8 +958,8 @@ test("subscribes only enabled pairs for Binance trading", async () => {
   await result.stop()
   assert.deepEqual(calls, [
     "connect", "filters:BTCUSDT", "filters:ETHUSDT", "subscribe:user-data", "account:snapshot",
-    "subscribe:book:BTCUSDT", "subscribe:BTCUSDT", "account:snapshot", "unsubscribe:user-data",
-    "unsubscribe:book:BTCUSDT", "unsubscribe:BTCUSDT", "disconnect",
+    "subscribe:book:BTCUSDT", "subscribe:BTCUSDT", "account:snapshot",
+    "unsubscribe:book:BTCUSDT", "unsubscribe:BTCUSDT", "unsubscribe:user-data", "disconnect",
   ], "Expected calls to match the expected structure in \"subscribes only enabled pairs for Binance trading\".")
 })
 

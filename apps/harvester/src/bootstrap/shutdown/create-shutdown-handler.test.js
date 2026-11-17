@@ -172,8 +172,8 @@ test("activates every strategy gate before any shared service can stop", async (
     assert.ok(calls.indexOf(`wait:${strategyId}`) < calls.indexOf("broker-disconnect"))
   }
   assert.ok(calls.indexOf("closing-audit:COMPLETE") < calls.indexOf("user-data-stop"))
+  assert.ok(calls.indexOf("market-intake-stop") < calls.indexOf("user-data-stop"))
   assert.ok(calls.indexOf("user-data-stop") < calls.indexOf("operator-control-stop"))
-  assert.ok(calls.indexOf("operator-control-stop") < calls.indexOf("market-intake-stop"))
   assert.equal(fixture.state.status, "STOPPED")
 })
 
@@ -234,6 +234,7 @@ test("keeps every shared connection alive when the CLOSING Journal barrier fails
   assert.equal(calls.includes("market-intake-stop"), false)
   assert.equal(calls.includes("broker-disconnect"), false)
   assert.equal(calls.includes("operator-control-stop"), false)
+  assert.equal(fixture.state.marketIntakeStopped, false, "Market callback processing must resume when the CLOSING barrier fails before unsubscription.")
   assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE")
 })
 
@@ -267,8 +268,8 @@ test("keeps market and user-data intake alive while accepted user-data work bloc
 
   releaseQueue()
   await stopping
-  assert.ok(calls.indexOf("wait-user-data-queue") < calls.indexOf("user-data-stop"))
-  assert.ok(calls.indexOf("user-data-stop") < calls.indexOf("market-intake-stop"))
+  assert.ok(calls.indexOf("wait-user-data-queue") < calls.indexOf("market-intake-stop"))
+  assert.ok(calls.indexOf("market-intake-stop") < calls.indexOf("user-data-stop"))
 })
 
 test("drains market work after safety is proven and before Binance disconnects", async () => {
@@ -278,32 +279,226 @@ test("drains market work after safety is proven and before Binance disconnects",
     strategyId: "CONSERVATIVE",
     calls,
   })
-  let releaseMarketTask
-  const marketTask = new Promise((resolve) => {
-    releaseMarketTask = () => {
-      calls.push("market-task-drained")
+  let marketTaskDrained = false
+  let bookTaskDrained = false
+  const marketTask = {
+    then(resolve) {
+      if (!marketTaskDrained) {
+        marketTaskDrained = true
+        calls.push("market-task-drained")
+      }
       resolve()
-    }
-  })
+    },
+  }
+  const bookTask = {
+    then(resolve) {
+      if (!bookTaskDrained) {
+        bookTaskDrained = true
+        calls.push("book-task-drained")
+      }
+      resolve()
+    },
+  }
   marketPriceIntake.set("BTCUSDT", {
     latestWebSocketPriceTask: marketTask,
+    latestWebSocketBookTask: bookTask,
   })
   const fixture = createShutdown({
     participants: [participant],
     calls,
     marketPriceIntake,
-    stopMarketIntake: async () => {
-      releaseMarketTask()
-      return []
-    },
+    stopMarketIntake: async () => [],
     subscriptions: [{ unsubscribe: async () => calls.push("price-unsubscribe") }],
     bookSubscriptions: [{ unsubscribe: async () => calls.push("book-unsubscribe") }],
   })
 
   await fixture.stop()
   assert.ok(calls.indexOf("wait:CONSERVATIVE") < calls.indexOf("market-intake-stop"))
-  assert.ok(calls.indexOf("market-intake-stop") < calls.indexOf("market-task-drained"))
-  assert.ok(calls.indexOf("market-task-drained") < calls.indexOf("broker-disconnect"))
+  assert.ok(calls.indexOf("market-task-drained") < calls.indexOf("closing-audit:COMPLETE"))
+  assert.ok(calls.indexOf("book-task-drained") < calls.indexOf("closing-audit:COMPLETE"))
+  assert.ok(calls.indexOf("closing-audit:COMPLETE") < calls.indexOf("market-intake-stop"))
+  assert.ok(calls.indexOf("market-intake-stop") < calls.indexOf("user-data-stop"))
+  assert.ok(calls.indexOf("user-data-stop") < calls.indexOf("broker-disconnect"))
+})
+
+
+test("drains accepted market work and re-proves safety before stopping user-data intake", async () => {
+  const calls = []
+  const marketPriceIntake = new Map()
+  let safe = false
+  let safetyChecks = 0
+  let marketTaskDrained = false
+  const marketTask = {
+    then(resolve) {
+      if (!marketTaskDrained) {
+        marketTaskDrained = true
+        safe = false
+        calls.push("market-task-drained")
+      }
+      resolve()
+    },
+  }
+  marketPriceIntake.set("DOGEUSDT", {
+    latestWebSocketPriceTask: marketTask,
+  })
+  const participant = {
+    strategyId: "CONSERVATIVE",
+    beginShutdown: () => calls.push("gate:CONSERVATIVE"),
+    waitUntilSafe: async () => {
+      safetyChecks += 1
+      calls.push(`wait:${safetyChecks}`)
+      safe = true
+      return { ok: true }
+    },
+    isSafeToShutdown: () => safe,
+    getSafetySnapshot: () => ({
+      status: safe ? "SAFE_TO_SHUTDOWN" : "UNSAFE",
+      blockers: safe ? [] : ["LATE_MARKET_PRICE_EVIDENCE"],
+    }),
+  }
+  const fixture = createShutdown({
+    participants: [participant],
+    calls,
+    marketPriceIntake,
+    stopMarketIntake: async () => [],
+  })
+
+  await fixture.stop({
+    beforeSharedServicesStop: async () => {
+      calls.push("operator-control-stop")
+      return []
+    },
+  })
+
+  assert.equal(safetyChecks, 2, "Shutdown must re-prove strategy safety after accepted market work has drained.")
+  assert.ok(calls.indexOf("market-task-drained") < calls.indexOf("wait:2"), "The final strategy proof must observe every accepted market task.")
+  assert.ok(calls.indexOf("wait:2") < calls.indexOf("closing-audit:COMPLETE"), "The CLOSING audit must follow the safety proof for drained market work.")
+  assert.ok(calls.indexOf("closing-audit:COMPLETE") < calls.indexOf("market-intake-stop"), "Market subscriptions must remain connected until the CLOSING barrier succeeds.")
+  assert.ok(calls.indexOf("market-intake-stop") < calls.indexOf("user-data-stop"), "Market subscriptions must stop before user-data intake.")
+  assert.ok(calls.indexOf("user-data-stop") < calls.indexOf("operator-control-stop"), "Operator control must remain available until user-data work is drained.")
+  assert.ok(calls.indexOf("operator-control-stop") < calls.indexOf("broker-disconnect"), "The broker must remain connected until all strategy and operator safety work is complete.")
+  assert.equal(fixture.state.status, "STOPPED", "Shutdown may reach STOPPED only after the post-market-drain safety proof succeeds.")
+})
+
+test("keeps user-data and broker services alive when post-market-drain safety cannot be proven", async () => {
+  const calls = []
+  let safe = false
+  let safetyChecks = 0
+  const failure = new Error("Recovery SELL changed during accepted market work")
+  const participant = {
+    strategyId: "CONSERVATIVE",
+    beginShutdown: () => calls.push("gate:CONSERVATIVE"),
+    waitUntilSafe: async () => {
+      safetyChecks += 1
+      calls.push(`wait:${safetyChecks}`)
+      if (safetyChecks === 1) {
+        safe = true
+        return { ok: true }
+      }
+      safe = false
+      return {
+        ok: false,
+        errors: [failure],
+      }
+    },
+    isSafeToShutdown: () => safe,
+    getSafetySnapshot: () => ({
+      status: safe ? "SAFE_TO_SHUTDOWN" : "UNSAFE",
+      blockers: safe ? [] : ["RECOVERY_SELL_COVERAGE_UNVERIFIED"],
+    }),
+  }
+  let marketTaskDrained = false
+  const marketPriceIntake = new Map([
+    ["DOGEUSDT", {
+      latestWebSocketPriceTask: {
+        then(resolve) {
+          if (!marketTaskDrained) {
+            marketTaskDrained = true
+            safe = false
+          }
+          resolve()
+        },
+      },
+    }],
+  ])
+  const fixture = createShutdown({
+    participants: [participant],
+    calls,
+    marketPriceIntake,
+  })
+
+  await assert.rejects(fixture.stop(), (error) => {
+    assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN", "An unproven final strategy state must retain the coordinator's safety failure classification.")
+    assert.ok(error.errors.includes(failure), "The original market-recovery blocker must remain available to the caller.")
+    return true
+  }, "A failed final safety proof must reject shutdown with its original blocker.")
+
+  assert.equal(safetyChecks, 2, "Shutdown must repeat the strategy proof after quiescing and draining accepted market work.")
+  assert.equal(calls.includes("market-intake-stop"), false, "Market subscriptions must remain connected when the post-drain safety proof fails.")
+  assert.equal(fixture.state.marketIntakeStopped, false, "Market callback processing must resume when the pre-unsubscribe safety proof fails.")
+  assert.equal(calls.includes("user-data-stop"), false, "User-data intake must remain connected when the final market-drain safety proof fails.")
+  assert.equal(calls.includes("operator-control-stop"), false, "Operator control must remain available when recovery safety is unproven.")
+  assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected when recovery safety is unproven.")
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE", "An unproven post-drain state must never be reported as STOPPED.")
+})
+
+
+test("keeps user-data and broker services alive when market subscriptions cannot be stopped", async () => {
+  const calls = []
+  const failure = new Error("Market unsubscribe failed")
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+  })
+  const fixture = createShutdown({
+    participants: [participant],
+    calls,
+    stopMarketIntake: async () => [failure],
+  })
+
+  await assert.rejects(fixture.stop(), (error) => {
+    assert.ok(error instanceof AggregateError, "A market-intake failure must be reported as an aggregate shutdown blocker.")
+    assert.ok(error.errors.includes(failure), "The original market unsubscribe failure must remain available to the caller.")
+    return true
+  })
+
+  assert.equal(calls.includes("user-data-stop"), false, "User-data intake must remain available when market intake cannot be stopped.")
+  assert.equal(calls.includes("operator-control-stop"), false, "Operator control must remain available when market intake cannot be stopped.")
+  assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected when market intake cannot be stopped.")
+  assert.equal(fixture.state.marketIntakeStopped, false, "Callbacks for any subscriptions that remain active must resume after an unsubscribe failure.")
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE", "A failed market-intake stop must never be reported as STOPPED.")
+})
+
+test("keeps user-data and broker services alive when accepted market work fails to drain", async () => {
+  const calls = []
+  const failure = new Error("Accepted market task failed")
+  const marketTask = Promise.reject(failure)
+  marketTask.catch(() => {})
+  const marketPriceIntake = new Map([
+    ["DOGEUSDT", { latestWebSocketPriceTask: marketTask }],
+  ])
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+  })
+  const fixture = createShutdown({
+    participants: [participant],
+    calls,
+    marketPriceIntake,
+    stopMarketIntake: async () => [],
+  })
+
+  await assert.rejects(fixture.stop(), (error) => {
+    assert.ok(error instanceof AggregateError, "A market-work drain failure must be reported as an aggregate shutdown blocker.")
+    assert.ok(error.errors.includes(failure), "The original accepted market task failure must remain available to the caller.")
+    return true
+  })
+
+  assert.equal(calls.includes("user-data-stop"), false, "User-data intake must remain available when accepted market work fails.")
+  assert.equal(calls.includes("operator-control-stop"), false, "Operator control must remain available when accepted market work fails.")
+  assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected when accepted market work fails.")
+  assert.equal(fixture.state.marketIntakeStopped, false, "Market callback processing must resume when accepted market work cannot be drained before unsubscription.")
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE", "A failed market-work drain must never be reported as STOPPED.")
 })
 
 test("shares one in-flight shutdown promise between concurrent callers", async () => {
