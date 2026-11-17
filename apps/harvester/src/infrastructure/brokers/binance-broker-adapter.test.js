@@ -402,7 +402,10 @@ test("rejects a Binance capability declaration that does not match the configure
 
   assert.throws(
     () => createBinanceBrokerAdapter({
-      config: { ...config, tradingMode: "live" },
+      config: {
+        ...config,
+        tradingMode: "live",
+      },
       brokerFactory: () => client,
     }),
     /capability.*tradingMode/i,
