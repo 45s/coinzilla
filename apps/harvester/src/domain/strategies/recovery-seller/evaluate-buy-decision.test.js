@@ -2,6 +2,13 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { evaluateRecoverySellerBuyDecision } from "./evaluate-buy-decision.js"
 import {
+  createRecoverySellerCycleState,
+  markRecoverySellerCycleSellUnknown,
+  reconcileRecoverySellerCycleSell,
+  recordRecoverySellerCycleSellSubmission,
+  startNextRecoverySellerCycle,
+} from "./cycle-state.js"
+import {
   createRecoverySellerStopDecision,
   createRecoverySellerStopState,
   latchRecoverySellerStop,
@@ -45,6 +52,7 @@ function evaluate(overrides = {}) {
     pairConfig,
     marketMetadata,
     activeOrders: [],
+    cycleState: createRecoverySellerCycleState({ cycleId: "rs-cycle-1" }),
     strategyStopped: false,
     marketPaused: false,
     reconciliationComplete: true,
@@ -285,4 +293,118 @@ test("fails closed when an explicit readiness flag is missing", () => {
     "Missing readiness evidence is an unmodeled condition and must latch global STOP.")
   assert.equal(result.action, undefined,
     "Missing readiness evidence must never produce a BUY intent.")
+})
+
+
+test("blocks another BUY after a terminal partial or canceled SELL leaves the cycle unresolved", () => {
+  const submitted = recordRecoverySellerCycleSellSubmission({
+    state: createRecoverySellerCycleState({ cycleId: "rs-cycle-1" }),
+    orderIdentity: { clientOrderId: "rs-sell-1" },
+  })
+  const unresolved = reconcileRecoverySellerCycleSell({
+    state: submitted,
+    orderIdentity: { clientOrderId: "rs-sell-1" },
+    terminalOrderStatus: "CANCELED",
+    reconciliationComplete: true,
+    profitabilityEligible: false,
+  })
+  const result = evaluate({
+    cycleState: unresolved,
+  })
+
+  assert.equal(result.decision.outcome, "BLOCK",
+    "A terminal partial/canceled SELL must not authorize another BUY tranche or a new cycle.")
+  assert.equal(result.decision.reasonCode, "CYCLE_UNRESOLVED",
+    "The unresolved one-SELL cycle must retain an explicit lifecycle block.")
+  assert.equal(result.stopState.status, "CLEAR",
+    "A known unresolved terminal cycle is a policy BLOCK; it must not invent a global STOP reason.")
+  assert.equal(result.action, undefined,
+    "No new BUY may be emitted from an unresolved cycle.")
+})
+
+test("latches STOP and reconciles the recorded sole SELL when its active-order evidence is missing", () => {
+  const cycleState = recordRecoverySellerCycleSellSubmission({
+    state: createRecoverySellerCycleState({ cycleId: "rs-cycle-1" }),
+    orderIdentity: {
+      clientOrderId: "rs-sell-1",
+      brokerOrderId: "exchange-sell-1",
+    },
+  })
+  const result = evaluate({
+    cycleState,
+    activeOrders: [],
+  })
+
+  assert.equal(result.stopState.status, "STOPPED",
+    "A recorded submitted SELL without an authoritative active/terminal order snapshot is an unmodeled lifecycle gap.")
+  assert.equal(result.decision.outcome, "RECONCILE",
+    "The recorded SELL must remain eligible for non-trading reconciliation.")
+  assert.deepEqual(result.decision.orderIdentity, {
+    clientOrderId: "rs-sell-1",
+    brokerOrderId: "exchange-sell-1",
+  }, "Reconciliation must preserve the exact original SELL identity.")
+  assert.equal(result.action, undefined,
+    "No BUY may be submitted while the sole cycle SELL is unresolved.")
+})
+
+test("waits on the cycle's existing SELL without canceling or replacing it", () => {
+  const cycleState = recordRecoverySellerCycleSellSubmission({
+    state: createRecoverySellerCycleState({ cycleId: "rs-cycle-1" }),
+    orderIdentity: {
+      clientOrderId: "rs-sell-1",
+    },
+  })
+  const result = evaluate({
+    cycleState,
+    activeOrders: [{
+      market: { symbol: "ZROUSDT" },
+      side: "SELL",
+      status: "PARTIALLY_FILLED",
+      clientOrderId: "rs-sell-1",
+      brokerOrderId: "exchange-sell-1",
+    }],
+    strategyStopped: true,
+    marketPaused: true,
+    reconciliationComplete: false,
+  })
+
+  assert.equal(result.decision.outcome, "WAIT",
+    "An existing acknowledged SELL must remain live and be reconciled even when new BUYs are stopped or readiness is incomplete.")
+  assert.equal(result.decision.orderIdentity.clientOrderId, "rs-sell-1",
+    "The WAIT decision must retain the original SELL identity.")
+  assert.equal(result.action, undefined,
+    "The active SELL must not be replaced by a new BUY.")
+  assert.equal(result.stopState.status, "CLEAR",
+    "A known active SELL is not itself an unexpected STOP condition.")
+})
+
+test("allows the next BUY only after the previous cycle is closed and a new cycle state is created", () => {
+  const submitted = recordRecoverySellerCycleSellSubmission({
+    state: createRecoverySellerCycleState({ cycleId: "rs-cycle-1" }),
+    orderIdentity: { clientOrderId: "rs-sell-1" },
+  })
+  const closed = reconcileRecoverySellerCycleSell({
+    state: submitted,
+    orderIdentity: { clientOrderId: "rs-sell-1" },
+    terminalOrderStatus: "FILLED",
+    reconciliationComplete: true,
+    profitabilityEligible: true,
+  })
+  const closedResult = evaluate({
+    cycleState: closed,
+  })
+  const nextCycle = startNextRecoverySellerCycle({
+    previousState: closed,
+    nextCycleId: "rs-cycle-2",
+  })
+  const nextCycleResult = evaluate({
+    cycleState: nextCycle,
+  })
+
+  assert.equal(closedResult.decision.reasonCode, "CYCLE_CLOSED",
+    "A closed cycle cannot be reused for another BUY.")
+  assert.equal(closedResult.action, undefined,
+    "The next BUY requires an explicitly created next-cycle state.")
+  assert.equal(nextCycleResult.decision.outcome, "SUBMIT",
+    "A new BUY cycle may begin only after the prior SELL is filled, reconciled and profitable.")
 })
