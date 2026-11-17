@@ -2,7 +2,6 @@ import {
   link,
   mkdir,
   realpath,
-  unlink,
 } from "node:fs/promises"
 import { basename, dirname } from "node:path"
 import { backup as sqliteBackup, DatabaseSync } from "node:sqlite"
@@ -71,7 +70,6 @@ async function publishRestoredDatabase({ temporaryFilename, destinationFilename 
     throw error
   }
 
-  await unlink(temporaryFilename)
 }
 
 async function createRestoreArtifact({ sourceFilename, destinationFilename, timeout, rate }) {

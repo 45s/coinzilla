@@ -24,8 +24,8 @@ async function readDatabaseValue({ filename, query, parameters = [] }) {
 test("file-backed SQLite backup includes committed WAL data and restores into a new database", async () => {
   const directory = await createTemporaryDirectory()
   const sourceFilename = join(directory, "source.sqlite")
-  const backupFilename = join(directory, "backup.sqlite")
-  const restoredFilename = join(directory, "restored.sqlite")
+  const backupFilename = join(directory, "backups", "backup.sqlite")
+  const restoredFilename = join(directory, "restores", "restored.sqlite")
   const source = createSqliteDatabase({ filename: sourceFilename })
   await source.connect()
 
@@ -49,10 +49,15 @@ test("file-backed SQLite backup includes committed WAL data and restores into a 
 
   try {
     const { restoreSqliteDatabase } = await import("../src/index.js")
-    await restoreSqliteDatabase({
+    const restoredPath = await restoreSqliteDatabase({
       backupFilename,
       filename: restoredFilename,
     })
+    assert.equal(
+      restoredPath,
+      restoredFilename,
+      "Restore must return the absolute destination path it created",
+    )
 
     const restoredSetting = await readDatabaseValue({
       filename: restoredFilename,
@@ -114,6 +119,36 @@ test("in-memory SQLite databases can be backed up to a restorable file", async (
       "A backup created from an in-memory database must restore the original rows",
     )
   } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+test("SQLite backup requires an open database and rejects an active transaction", async () => {
+  const directory = await createTemporaryDirectory()
+  const filename = join(directory, "source.sqlite")
+  const destination = join(directory, "backup.sqlite")
+  const database = createSqliteDatabase({ filename })
+
+  try {
+    await assert.rejects(
+      database.backup({ destination }),
+      /connected/i,
+      "Backup must reject a database that has not been connected",
+    )
+
+    await database.connect()
+    database.exec("BEGIN IMMEDIATE")
+    await assert.rejects(
+      database.backup({ destination }),
+      /active transaction/i,
+      "Backup must reject a source connection while a transaction is active",
+    )
+    database.exec("ROLLBACK")
+  } finally {
+    await database.close()
     await rm(directory, {
       recursive: true,
       force: true,
@@ -293,6 +328,88 @@ test("SQLite restore rejects corrupt backup files and does not publish a destina
       stat(destinationFilename),
       (error) => error.code === "ENOENT",
       "A rejected restore must not publish any destination file",
+    )
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+test("SQLite restore rejects a backup with foreign-key violations", async () => {
+  const directory = await createTemporaryDirectory()
+  const backupFilename = join(directory, "invalid-foreign-keys.sqlite")
+  const destinationFilename = join(directory, "restored.sqlite")
+  const database = createSqliteDatabase({ filename: backupFilename })
+  await database.connect()
+
+  try {
+    database.exec("PRAGMA foreign_keys = OFF")
+    database.exec("CREATE TABLE parents (id INTEGER PRIMARY KEY)")
+    database.exec("CREATE TABLE children (parent_id INTEGER REFERENCES parents(id))")
+    database.exec("INSERT INTO children (parent_id) VALUES (999)")
+  } finally {
+    await database.close()
+  }
+
+  try {
+    const { restoreSqliteDatabase } = await import("../src/index.js")
+    await assert.rejects(
+      restoreSqliteDatabase({
+        backupFilename,
+        filename: destinationFilename,
+      }),
+      /foreign-key violations/i,
+      "Restore must reject a database that contains invalid foreign-key references",
+    )
+    await assert.rejects(
+      stat(destinationFilename),
+      (error) => error.code === "ENOENT",
+      "A foreign-key-invalid backup must not publish a restored database file",
+    )
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+test("SQLite restore validates its timeout, rate, and destination options", async () => {
+  const directory = await createTemporaryDirectory()
+  const backupFilename = join(directory, "backup.sqlite")
+  const database = createSqliteDatabase({ filename: backupFilename })
+  await database.connect()
+  await database.close()
+
+  try {
+    const { restoreSqliteDatabase } = await import("../src/index.js")
+    await assert.rejects(
+      restoreSqliteDatabase({
+        backupFilename,
+        filename: "",
+      }),
+      /destination/i,
+      "Restore must reject an empty destination path",
+    )
+    await assert.rejects(
+      restoreSqliteDatabase({
+        backupFilename,
+        filename: join(directory, "invalid-timeout.sqlite"),
+        timeout: -1,
+      }),
+      /timeout/i,
+      "Restore must reject a negative SQLite timeout",
+    )
+    await assert.rejects(
+      restoreSqliteDatabase({
+        backupFilename,
+        filename: join(directory, "invalid-rate.sqlite"),
+        rate: 0,
+      }),
+      /rate/i,
+      "Restore must reject a non-positive backup page rate",
     )
   } finally {
     await rm(directory, {
