@@ -45,6 +45,9 @@ function evaluate(overrides = {}) {
     pairConfig,
     marketMetadata,
     activeOrders: [],
+    strategyStopped: false,
+    marketPaused: false,
+    reconciliationComplete: true,
     cumulativeNetSellProceeds: "0",
     pendingBuyCommitment: "0",
     ...overrides,
@@ -245,4 +248,41 @@ test("latches STOP for malformed or unmodeled active-order snapshots", () => {
     "An unmodeled order status must latch global STOP rather than being ignored.")
   assert.equal(unsupported.action, undefined,
     "An unmodeled order status must never allow a replacement BUY.")
+})
+
+
+test("blocks new BUYs when RS is operator-stopped, the market is paused, or reconciliation is incomplete", () => {
+  const operatorStopped = evaluate({
+    strategyStopped: true,
+  })
+  const marketPaused = evaluate({
+    marketPaused: true,
+  })
+  const reconciliationIncomplete = evaluate({
+    reconciliationComplete: false,
+  })
+
+  assert.equal(operatorStopped.decision.reasonCode, "STRATEGY_STOPPED",
+    "An operator stop must prevent a new BUY without canceling or replacing existing orders.")
+  assert.equal(marketPaused.decision.reasonCode, "MARKET_PAUSED",
+    "A paused market must prevent new BUY submission.")
+  assert.equal(reconciliationIncomplete.decision.reasonCode, "RECONCILIATION_INCOMPLETE",
+    "Unresolved order/fill/inventory/reservation facts must prevent a new BUY.")
+  assert.equal(operatorStopped.stopState.status, "CLEAR",
+    "A known operator stop is a normal policy BLOCK, not an unexpected global STOP.")
+  assert.equal(marketPaused.stopState.status, "CLEAR",
+    "A known market pause is a normal policy BLOCK, not an unexpected global STOP.")
+  assert.equal(reconciliationIncomplete.stopState.status, "CLEAR",
+    "A known incomplete reconciliation state blocks new actions while preserving the normal reconciliation path.")
+})
+
+test("fails closed when an explicit readiness flag is missing", () => {
+  const result = evaluate({
+    reconciliationComplete: undefined,
+  })
+
+  assert.equal(result.stopState.status, "STOPPED",
+    "Missing readiness evidence is an unmodeled condition and must latch global STOP.")
+  assert.equal(result.action, undefined,
+    "Missing readiness evidence must never produce a BUY intent.")
 })
