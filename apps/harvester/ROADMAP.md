@@ -178,18 +178,18 @@ Remaining safety and observability follow-up #1105 remains open; #1103 is comple
 
 The inbound Telegram Command Center is complete. It is a thin authorized adapter over Harvester application queries and commands; it does not own trading policy, persistence, startup policy or recovery. Delivered: commands/read-only queries (PRs #1079, #1081, #1086), inline navigation and confirmation (PR #1088), persistent keyboard (PR #1194), emergency BUY commands (PR #1267), and correlated interaction diagnostics/callback acknowledgement handling (PR #1215). Tracking issues #1201 and #1214 are closed as completed. Outbound Telegram notifications are separate from CC. See [operator-control documentation](./docs/operator-control/README.md) and [Telegram runbook](./docs/operations/telegram-command-center.md).
 
-## P2 — Telegram operator adapter modularity (#1306)
+## P2 — Telegram operator adapter modularity (#1306) — COMPLETE
 
-- [~] **Decompose the Telegram operator adapter without behavior changes** — in progress under [issue #1306](https://github.com/45s/coinzilla/issues/1306), parent quality initiative [#1264](https://github.com/45s/coinzilla/issues/1264). Preserve the completed Command Center contract while replacing the 520-line function exception with cohesive infrastructure modules. No command, callback, authorization, confirmation, trading, application/domain or global ESLint policy changes.
+- [x] **Decompose the Telegram operator adapter without behavior changes** — completed in merged [PR #1308](https://github.com/45s/coinzilla/pull/1308), closing [issue #1306](https://github.com/45s/coinzilla/issues/1306). The 1,854-line adapter is now a cohesive feature module under `src/infrastructure/telegram/operator/`; the compatibility facade preserves existing bootstrap imports and public APIs. The dedicated 520-line ESLint exception was removed without changing global lint policy. The exact final PR head passed 1,878 Harvester tests, full workspace tests/coverage, strict workspace and changed-file ESLint, syntax/policy checks, documentation links, dependency audit and required CI. No live Telegram or exchange operations were performed.
 
 ## P1 — Outbound Telegram notification icons
 
-**Status: [~] IMPLEMENTATION IN PROGRESS in [PR #1099](https://github.com/45s/coinzilla/pull/1099).** Apply the user's reviewed emoji choices to every producer-backed Harvester Telegram notification. The formatter must select order-failure icons from the mapped operation and side, and account-safety icons from the mapped category. Exact selected and retained icons are documented in [Architecture — operational notifications](./docs/architecture.md#operational-notifications).
+**Status: [x] COMPLETE — merged in [PR #1099](https://github.com/45s/coinzilla/pull/1099) on 2026-11-13.** Apply the user's reviewed emoji choices to every producer-backed Harvester Telegram notification. The formatter must select order-failure icons from the mapped operation and side, and account-safety icons from the mapped category. Exact selected and retained icons are documented in [Architecture — operational notifications](./docs/architecture.md#operational-notifications).
 
 - Keep the five notifications without a replacement selection on their existing icons; do not invent choices.
 - Exclude formatter-only successful submission/cancellation, broker-connected, and `order.filled` vocabulary because the current bridge has no producer mapping for them.
 - Preserve the current event producers, policy, optional delivery isolation, and all trading behavior.
-- [ ] Complete exact formatter and end-to-end Telegram assertions, documentation updates, and required exact-head CI; mark complete only after merge into `develop`.
+- [x] Exact formatter and end-to-end Telegram assertions, documentation updates, and required exact-head CI completed before merge.
 
 ---
 
@@ -207,7 +207,7 @@ The inbound Telegram Command Center is complete. It is a thin authorized adapter
 
 ## Harvester source, domain correctness and documentation audit — issue #1093
 
-**Status: IMPLEMENTATION COMPLETE; ready for review in [PR #1094](https://github.com/45s/coinzilla/pull/1094); merge pending.** The audit starts from current `develop` baseline `9989fea9f77f9ce4b506d4658f2ff1ddef516d83` (309 Harvester JavaScript files: 162 production and 147 test files). The PR head inventory is 312 files (164 production and 148 test files), including two independently tested pure domain guards. The domain-only inventory is 35 production files and 30 test files. Scope is `apps/harvester/**` and Harvester/project documentation only; no shared package, other application, trading economics, or runtime trading configuration changed.
+**Status: IMPLEMENTATION COMPLETE — merged in [PR #1094](https://github.com/45s/coinzilla/pull/1094) on 2026-11-13; issue #1093 is closed.** The audit starts from current `develop` baseline `9989fea9f77f9ce4b506d4658f2ff1ddef516d83` (309 Harvester JavaScript files: 162 production and 147 test files). The PR head inventory is 312 files (164 production and 148 test files), including two independently tested pure domain guards. The domain-only inventory is 35 production files and 30 test files. Scope is `apps/harvester/**` and Harvester/project documentation only; no shared package, other application, trading economics, or runtime trading configuration changed.
 
 ### Confirmed defects corrected test-first
 
