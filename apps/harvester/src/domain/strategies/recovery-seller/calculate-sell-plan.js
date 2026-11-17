@@ -1,4 +1,5 @@
 import {
+  DECIMAL_ROUNDING_MODES,
   DEFAULT_DECIMAL_DIVISION_SCALE,
   addDecimal,
   assertDecimalString,
@@ -214,8 +215,8 @@ function calculateQuoteTarget({
       left: "1",
       right: quoteFeeRate,
     }),
-    scale: 36,
-    rounding: "away-from-zero",
+    scale: DEFAULT_DECIMAL_DIVISION_SCALE,
+    rounding: DECIMAL_ROUNDING_MODES.AWAY_FROM_ZERO,
   })
   return Object.freeze({
     requiredNetQuoteProceeds,
@@ -236,7 +237,7 @@ function calculateOrderQuantities({
       right: baseFeeRate,
     }),
     scale: DEFAULT_DECIMAL_DIVISION_SCALE,
-    rounding: "toward-zero",
+    rounding: DECIMAL_ROUNDING_MODES.TOWARD_ZERO,
   })
   const quantity = roundDecimalToIncrement({
     value: quantityBeforeStep,
@@ -267,7 +268,7 @@ function calculateOrderQuantities({
     }),
     right: availableBaseQuantity,
     scale: DEFAULT_DECIMAL_DIVISION_SCALE,
-    rounding: "toward-zero",
+    rounding: DECIMAL_ROUNDING_MODES.TOWARD_ZERO,
   })
   const legacySellQuantity = subtractDecimal({
     left: quantity,
@@ -280,7 +281,7 @@ function calculateOrderQuantities({
     }),
     right: quantity,
     scale: DEFAULT_DECIMAL_DIVISION_SCALE,
-    rounding: "toward-zero",
+    rounding: DECIMAL_ROUNDING_MODES.TOWARD_ZERO,
   })
   const legacyBaseFeeQuantity = subtractDecimal({
     left: baseFeeQuantity,
@@ -308,8 +309,8 @@ function calculateMinimumPrice({ grossQuoteProceeds, quantity, priceTickSize }) 
   const minimumPrice = divideDecimal({
     left: grossQuoteProceeds,
     right: quantity,
-    scale: 36,
-    rounding: "away-from-zero",
+    scale: DEFAULT_DECIMAL_DIVISION_SCALE,
+    rounding: DECIMAL_ROUNDING_MODES.AWAY_FROM_ZERO,
   })
   return roundDecimalToIncrement({
     value: minimumPrice,
