@@ -6,10 +6,31 @@ import test from "node:test"
 import { closeTradingSessionPersistence } from "./close-trading-session-persistence.js"
 import { prepareTradingSessionPersistence } from "./prepare-trading-session-persistence.js"
 
-test("prepares a real provider-neutral SQLite session database and closes it", async (t) => {
+test("prepares a real provider-neutral SQLite session database and closes it", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-session-persistence-"))
-  let database
-  t.after(async () => {
+  const result = await prepareTradingSessionPersistence({
+    tradingMode: "testnet",
+    env: {
+      HARVESTER_DATABASE_DIRECTORY: directory,
+    },
+  })
+  const { database } = result ?? {}
+
+  try {
+    assert.ok(result, "A valid isolated database directory must compose the real SQLite provider and session repository.")
+    assert.equal(database.state, "connected", "The provider-neutral database must be connected before the repository is exposed.")
+    assert.equal(
+      await result.repository.findById("missing-session"),
+      null,
+      "The prepared repository must support a provider-neutral read against the connected SQLite database.",
+    )
+
+    const errors = await closeTradingSessionPersistence({
+      database,
+    })
+    assert.deepEqual(errors, [], "A clean history database close must return no cleanup errors.")
+    assert.equal(database.state, "closed", "The lifecycle helper must close the provider after repository use.")
+  } finally {
     if (database?.state !== "closed") {
       await database?.close()
     }
@@ -17,28 +38,7 @@ test("prepares a real provider-neutral SQLite session database and closes it", a
       recursive: true,
       force: true,
     })
-  })
-
-  const result = await prepareTradingSessionPersistence({
-    tradingMode: "testnet",
-    env: {
-      HARVESTER_DATABASE_DIRECTORY: directory,
-    },
-  })
-  assert.ok(result, "A valid isolated database directory must compose the real SQLite provider and session repository.")
-  database = result.database
-  assert.equal(database.state, "connected", "The provider-neutral database must be connected before the repository is exposed.")
-  assert.equal(
-    await result.repository.findById("missing-session"),
-    null,
-    "The prepared repository must support a provider-neutral read against the connected SQLite database.",
-  )
-
-  const errors = await closeTradingSessionPersistence({
-    database,
-  })
-  assert.deepEqual(errors, [], "A clean history database close must return no cleanup errors.")
-  assert.equal(database.state, "closed", "The lifecycle helper must close the provider after repository use.")
+  }
 })
 
 test("reports invalid optional history configuration without blocking startup", async () => {
