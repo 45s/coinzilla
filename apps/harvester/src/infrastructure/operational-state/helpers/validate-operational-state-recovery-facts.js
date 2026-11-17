@@ -34,7 +34,8 @@ function validateRecoveryCycleAssetIds({ canonicalData }) {
 function validateRecoveryCycleCompletedIdentity({
   canonicalData,
   factId
-,}) {
+,
+}) {
   const cycleId = requireNonEmptyString({
     value: canonicalData.cycleId,
     field: "data.cycleId",
@@ -49,7 +50,8 @@ function validateRecoveryCycleCompletedIdentity({
     value: canonicalData.venue,
 field: "data.venue",
 maxLength: 32
-  ,})
+  ,
+  })
   const sellOrderClientId = requireNonEmptyString({
     value: canonicalData.sellOrderClientId,
     field: "data.sellOrderClientId",
@@ -88,7 +90,8 @@ maxLength: 32
     marketId,
     sellOrderClientId,
     sellOrderBrokerOrderId
-  ,}
+  ,
+  }
 }
 
 function validateRecoveryCycleCompletedAmounts({ canonicalData }) {
@@ -97,7 +100,8 @@ function validateRecoveryCycleCompletedAmounts({ canonicalData }) {
     compareDecimal({
       left: canonicalData.buyCost,
 right: canonicalData.spent
-    ,}) !== 0 ||
+    ,
+    }) !== 0 ||
     !isCanonicalDecimalString({ value: canonicalData.netSellProceeds }) ||
     !isPositiveCanonicalDecimalString({ value: canonicalData.realizedNetProfit }) ||
     !isPositiveCanonicalDecimalString({ value: canonicalData.minProfit }) ||
@@ -118,19 +122,23 @@ right: canonicalData.spent
     compareDecimal({
       left: canonicalData.realizedNetProfit,
 right: canonicalData.minProfit
-    ,}) < 0 ||
+    ,
+    }) < 0 ||
     compareDecimal({
       left: canonicalData.activeQuantity,
 right: canonicalData.keepQuantity
-    ,}) < 0 ||
+    ,
+    }) < 0 ||
     compareDecimal({
       left: canonicalData.activeQuantity,
 right: canonicalData.freeQuantity
-    ,}) !== 0 ||
+    ,
+    }) !== 0 ||
     compareDecimal({
       left: canonicalData.minProfit,
 right: "0.01"
-    ,}) < 0
+    ,
+    }) < 0
   ) {
     throw new TypeError("Recovery-cycle completion profit and inventory allocation must reconcile exactly")
   }
@@ -197,7 +205,8 @@ function validateRecoveryCycleDustReasonEvidence({ dust }) {
 function validateRecoveryCycleDustQuantity({
   canonicalData,
   dust
-,}) {
+,
+}) {
   if (
     compareDecimal({
       left: canonicalData.activeQuantity,
@@ -216,7 +225,8 @@ function validateRecoveryCycleInventoryDisposition({ canonicalData }) {
     if (compareDecimal({
       left: canonicalData.freeQuantity,
 right: canonicalData.keepQuantity
-    ,}) !== 0) {
+    ,
+    }) !== 0) {
       throw new TypeError("Recovery-cycle free quantity must equal keepQuantity when no dust is recorded")
     }
     return
@@ -228,13 +238,15 @@ right: canonicalData.keepQuantity
   validateRecoveryCycleDustQuantity({
     canonicalData,
 dust
-  ,})
+  ,
+  })
 }
 
 function validateRecoveryCycleCompletedIdentityDigest({
   canonicalData,
   identity
-,}) {
+,
+}) {
   const cycleIdentity = JSON.stringify([
     identity.marketId,
     identity.sellOrderClientId,
@@ -259,7 +271,8 @@ export function validateRecoveryCycleCompletedFact({
   factType,
   canonicalData,
   factId
-,}) {
+,
+}) {
   if (factType !== "RECOVERY_CYCLE_COMPLETED") {
     return
   }
@@ -289,19 +302,22 @@ export function validateRecoveryCycleCompletedFact({
   const identity = validateRecoveryCycleCompletedIdentity({
     canonicalData,
 factId
-  ,})
+  ,
+  })
   validateRecoveryCycleCompletedAmounts({ canonicalData })
   validateRecoveryCycleInventoryDisposition({ canonicalData })
   validateRecoveryCycleCompletedIdentityDigest({
     canonicalData,
 identity
-  ,})
+  ,
+  })
 }
 
 function validateRecoveryCycleNotCompletedIdentity({
   canonicalData,
   factId
-,}) {
+,
+}) {
   const evaluationId = requireNonEmptyString({
     value: canonicalData.evaluationId,
     field: "data.evaluationId",
@@ -316,7 +332,8 @@ function validateRecoveryCycleNotCompletedIdentity({
     value: canonicalData.venue,
 field: "data.venue",
 maxLength: 32
-  ,})
+  ,
+  })
   const sellOrderClientId = requireNonEmptyString({
     value: canonicalData.sellOrderClientId,
     field: "data.sellOrderClientId",
@@ -332,7 +349,8 @@ maxLength: 32
     value: canonicalData.reason,
 field: "data.reason",
 maxLength: 64
-  ,})
+  ,
+  })
   if (
     !SHA256_PATTERN.test(evaluationId) ||
     venue !== venue.toLowerCase() ||
@@ -362,7 +380,8 @@ marketId,
 sellOrderClientId,
 sellOrderBrokerOrderId,
 reason
-  ,}
+  ,
+  }
 }
 
 function validateRecoveryCycleNotCompletedAmounts({ canonicalData }) {
@@ -371,7 +390,8 @@ function validateRecoveryCycleNotCompletedAmounts({ canonicalData }) {
     compareDecimal({
       left: canonicalData.buyCost,
 right: canonicalData.spent
-    ,}) !== 0 ||
+    ,
+    }) !== 0 ||
     !isCanonicalDecimalString({ value: canonicalData.netSellProceeds }) ||
     !isSignedCanonicalDecimalString({ value: canonicalData.realizedNetProfit }) ||
     !isPositiveCanonicalDecimalString({ value: canonicalData.minProfit }) ||
@@ -387,7 +407,8 @@ right: canonicalData.spent
     compareDecimal({
       left: canonicalData.minProfit,
 right: "0.01"
-    ,}) < 0
+    ,
+    }) < 0
   ) {
     throw new TypeError("Recovery-cycle non-completion accounting values must be exact and internally consistent")
   }
@@ -396,7 +417,8 @@ right: "0.01"
 function validateRecoveryCycleNotCompletedOutcome({
   canonicalData,
   reason
-,}) {
+,
+}) {
   const continueReasons = new Set([
     "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
     "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
@@ -407,7 +429,8 @@ function validateRecoveryCycleNotCompletedOutcome({
       compareDecimal({
         left: canonicalData.activeQuantity,
 right: canonicalData.keepQuantity
-      ,}) <= 0
+      ,
+      }) <= 0
     ) {
       throw new TypeError("CONTINUE_SELL_THROUGH requires an approved continuation reason and residual active inventory")
     }
@@ -416,7 +439,8 @@ right: canonicalData.keepQuantity
       compareDecimal({
         left: canonicalData.realizedNetProfit,
 right: canonicalData.minProfit
-      ,}) < 0
+      ,
+      }) < 0
     ) {
       throw new TypeError("Residual sell-through requires the minimum profit target to be met")
     }
@@ -425,7 +449,8 @@ right: canonicalData.minProfit
       compareDecimal({
         left: canonicalData.realizedNetProfit,
 right: canonicalData.minProfit
-      ,}) >= 0
+      ,
+      }) >= 0
     ) {
       throw new TypeError("Profit-target continuation requires realized profit below minProfit")
     }
@@ -440,7 +465,8 @@ right: canonicalData.minProfit
       compareDecimal({
         left: canonicalData.realizedNetProfit,
 right: canonicalData.minProfit
-      ,}) >= 0
+      ,
+      }) >= 0
     ) {
       throw new TypeError("A minimum-profit blocker requires realized profit below minProfit")
     }
@@ -452,7 +478,8 @@ right: canonicalData.minProfit
 function validateRecoveryCycleNotCompletedIdentityDigest({
   canonicalData,
   identity
-,}) {
+,
+}) {
   const evaluationIdentity = JSON.stringify([
     identity.marketId,
     identity.sellOrderClientId,
@@ -477,7 +504,8 @@ export function validateRecoveryCycleNotCompletedFact({
   factType,
   canonicalData,
   factId
-,}) {
+,
+}) {
   if (factType !== "RECOVERY_CYCLE_NOT_COMPLETED") {
     return
   }
@@ -507,14 +535,17 @@ export function validateRecoveryCycleNotCompletedFact({
   const identity = validateRecoveryCycleNotCompletedIdentity({
     canonicalData,
 factId
-  ,})
+  ,
+  })
   validateRecoveryCycleNotCompletedAmounts({ canonicalData })
   validateRecoveryCycleNotCompletedOutcome({
     canonicalData,
 reason: identity.reason
-  ,})
+  ,
+  })
   validateRecoveryCycleNotCompletedIdentityDigest({
     canonicalData,
 identity
-  ,})
+  ,
+  })
 }
