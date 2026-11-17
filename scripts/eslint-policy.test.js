@@ -30,9 +30,22 @@ test("the required JavaScript quality gate runs strict workspace lint", () => {
   );
 });
 
-test("the root package exposes no baseline-tolerant lint commands", () => {
-  assert.equal(Object.hasOwn(packageJson.scripts, "lint:changed"), false);
-  assert.equal(Object.hasOwn(packageJson.scripts, "lint:report"), false);
+test("the root package preserves workspace lint and exposes strict changed-file lint", () => {
+  assert.equal(
+    packageJson.scripts.lint,
+    "eslint . --max-warnings 0",
+    "The existing full-workspace lint command must remain unchanged.",
+  );
+  assert.equal(
+    packageJson.scripts["lint:changed"],
+    "node scripts/lint-changed.js",
+    "The separate strict changed-file command must invoke the progressive runner.",
+  );
+  assert.equal(
+    Object.hasOwn(packageJson.scripts, "lint:report"),
+    false,
+    "A baseline-tolerant reporting command must not replace either enforcement gate.",
+  );
 });
 
 test("the workspace complexity policy retains its evidence-based threshold", async () => {
@@ -43,6 +56,19 @@ test("the workspace complexity policy retains its evidence-based threshold", asy
     config.rules.complexity,
     [2, { max: 20 }],
     "Do not lower complexity to 15 while the workspace has a broad existing cleanup burden.",
+  );
+});
+
+test("the required JavaScript quality context aggregates both independent lint jobs", () => {
+  assert.match(
+    qualityWorkflow,
+    /strict-changed:\\s+name: Check strict ESLint for changed files/,
+    "The workflow must expose a separate changed-file strict ESLint job.",
+  );
+  assert.match(
+    qualityWorkflow,
+    /required-javascript-quality:\\s+name: Check JavaScript syntax[\\s\\S]*?needs:[\\s\\S]*?- workspace-quality[\\s\\S]*?- strict-changed/,
+    "The existing required JavaScript status context must fail unless both independent jobs pass.",
   );
 });
 
