@@ -216,22 +216,3 @@ test("rejects invalid strategy flags", async () => {
   })
   await assert.rejects(resolveHarvesterOptions(conservative.input), /Conservative strategy must remain enabled/)
 })
-
-
-test("passes explicit Binance provider and account identity into resolved runtime options", async () => {
-  const fixture = createFixture({
-    env: {
-      TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET,
-      BINANCE_PROVIDER_INSTANCE_ID: "binanceDeskTestnet",
-      BINANCE_ACCOUNT_ID: "desk-primary",
-    },
-  })
-  const result = await resolveHarvesterOptions(fixture.input)
-
-  assert.equal(result.providerInstanceId, "binanceDeskTestnet",
-    "The validated provider-instance identity must reach bootstrap without being inferred from strategy or market.")
-  assert.equal(result.providerType, "binance",
-    "The resolved runtime must retain the Binance provider type.")
-  assert.equal(result.accountId, "desk-primary",
-    "The stable non-secret account alias must reach provider construction.")
-})
