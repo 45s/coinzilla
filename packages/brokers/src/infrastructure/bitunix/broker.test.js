@@ -60,7 +60,7 @@ test("Bitunix Spot exchange rates preserve exact documented decimal strings", as
   assert.deepEqual(calls[0], {
     method: "GET",
     path: EXCHANGE_RATE_PATH,
-    options: {},
+    options: { authenticated: false },
   })
 })
 

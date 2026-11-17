@@ -42,6 +42,75 @@ test("Bitunix REST client signs authenticated requests and unwraps successful da
   assert.equal(result.data, "10000.00")
 })
 
+
+test("Bitunix REST client sends explicitly public GET requests without authentication headers or signing", async () => {
+  let captured
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    now: () => {
+      throw new Error("public requests must not read the signing clock")
+    },
+    nonceFactory: () => {
+      throw new Error("public requests must not create a nonce")
+    },
+    fetchFn: async (url, options) => {
+      captured = { url, options }
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            code: "0",
+            msg: "success",
+            data: [],
+          }
+        },
+      }
+    },
+  })
+
+  const result = await client.request({
+    method: "GET",
+    path: "/api/spot/v1/common/rate/list",
+    authenticated: false,
+  })
+
+  assert.equal(captured.url, "https://openapi.bitunix.com/api/spot/v1/common/rate/list")
+  assert.equal(captured.options.method, "GET")
+  assert.equal(captured.options.headers, undefined)
+  assert.ok(captured.options.signal instanceof AbortSignal)
+  assert.deepEqual(result.data, [])
+})
+
+test("Bitunix REST client rejects unauthenticated mutations before network I/O", async () => {
+  let callCount = 0
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => {
+      callCount += 1
+      throw new Error("must not send")
+    },
+  })
+
+  await assert.rejects(client.request({
+    method: "POST",
+    path: "/api/spot/v1/order/place_order",
+    authenticated: false,
+    body: { symbol: "BTCUSDT" },
+  }), /unauthenticated Bitunix requests must be read-only GET requests/i)
+
+  await assert.rejects(client.request({
+    method: "GET",
+    path: "/api/spot/v1/market/last_price",
+    authenticated: false,
+    stateChanging: true,
+  }), /unauthenticated Bitunix requests must be read-only GET requests/i)
+
+  assert.equal(callCount, 0)
+})
+
 test("Bitunix REST client preserves balance precision from JSON number tokens", async () => {
   const client = new BitunixRestClient({
     apiKey: "api-key",
