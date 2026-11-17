@@ -75,13 +75,15 @@ function createTransport(options = {}) {
 }
 
 test("Bitunix WebSocket transport connects once, sends text, forwards messages and closes cleanly", async () => {
-  const { transport, socket } = createTransport()
+  const setup = createTransport()
+  const { transport } = setup
   const messages = []
   const closes = []
   transport.onMessage((message) => messages.push(message))
   transport.onClose((event) => closes.push(event))
 
   const connecting = transport.connect()
+  const socket = setup.socket
   assert.equal(transport.connect(), connecting, "concurrent connect calls must share the in-flight handshake")
   assert.equal(socket.url, "wss://openapi.bitunix.com:443/ws-api/v1", "transport must use the configured secure endpoint")
   socket.open()
@@ -136,11 +138,13 @@ test("Bitunix WebSocket transport rejects insecure URLs and invalid timeouts", (
 })
 
 test("Bitunix WebSocket transport reports handshake failures and rejects the connect promise", async () => {
-  const { transport, socket } = createTransport()
+  const setup = createTransport()
+  const { transport } = setup
   const errors = []
   transport.onError((error) => errors.push(error))
 
   const connecting = transport.connect()
+  const socket = setup.socket
   socket.emit("error", {
     message: "handshake rejected",
     error: new Error("upstream handshake failure"),
@@ -155,24 +159,27 @@ test("Bitunix WebSocket transport reports handshake failures and rejects the con
 })
 
 test("Bitunix WebSocket transport enforces connection timeout and closes the socket", async () => {
-  const { transport, socket } = createTransport({
+  const setup = createTransport({
     connectTimeout: 1,
   })
+  const { transport } = setup
 
   await assert.rejects(
     transport.connect(),
     /timed out/i,
     "a WebSocket that never opens must reject after the configured connect timeout",
   )
-  assert.equal(socket.readyState, 3, "connection timeout must close the underlying socket")
+  assert.equal(setup.socket.readyState, 3, "connection timeout must close the underlying socket")
   assert.equal(transport.state, "closed", "connection timeout must finalize transport cleanup")
 })
 
 test("Bitunix WebSocket transport resolves close after bounded close timeout", async () => {
-  const { transport, socket } = createTransport({
+  const setup = createTransport({
     closeTimeout: 1,
   })
+  const { transport } = setup
   const connecting = transport.connect()
+  const socket = setup.socket
   socket.open()
   await connecting
   socket.autoClose = false
@@ -199,13 +206,15 @@ test("Bitunix WebSocket transport closes safely while idle or connecting", async
 })
 
 test("Bitunix WebSocket transport rejects sends unless the native socket is open", async () => {
-  const { transport, socket } = createTransport()
+  const setup = createTransport()
+  const { transport } = setup
   assert.throws(
     () => transport.send("payload"),
     /not open/i,
     "transport must not send before connection is established",
   )
   const connecting = transport.connect()
+  const socket = setup.socket
   socket.open()
   await connecting
   await transport.close()
