@@ -342,3 +342,59 @@ test("audits candidate function-quality thresholds across the complete workspace
     "The function-quality audit must inspect the complete ESLint workspace.",
   );
 });
+
+test("max-depth rejects control flow nested beyond four blocks", async () => {
+  const eslint = new ESLint();
+  const config = await eslint.calculateConfigForFile("apps/harvester/src/index.js");
+
+  assert.deepEqual(
+    config.rules["max-depth"],
+    [2, 4],
+    "The workspace must reject control-flow nesting deeper than four blocks.",
+  );
+
+  const [tooDeep] = await eslint.lintText(
+    `function evaluate({ first, second, third, fourth, fifth }) {
+      if (first) {
+        if (second) {
+          if (third) {
+            if (fourth) {
+              if (fifth) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+      return false;
+    }`,
+    { filePath: "scripts/eslint-depth-fixture.js" },
+  );
+  const [withinLimit] = await eslint.lintText(
+    `function evaluate({ first, second, third, fourth }) {
+      if (first) {
+        if (second) {
+          if (third) {
+            if (fourth) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    }`,
+    { filePath: "scripts/eslint-depth-fixture.js" },
+  );
+
+  assert.ok(
+    tooDeep.messages.some((message) => (
+      message.ruleId === "max-depth" && message.severity === 2
+    )),
+    "A function with five nested control-flow blocks must fail the depth policy.",
+  );
+  assert.equal(
+    withinLimit.messages.filter((message) => message.ruleId === "max-depth").length,
+    0,
+    "A function with exactly four nested control-flow blocks must remain valid.",
+  );
+});
