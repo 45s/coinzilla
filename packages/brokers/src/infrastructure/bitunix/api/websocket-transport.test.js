@@ -83,7 +83,7 @@ test("Bitunix WebSocket transport connects once, sends text, forwards messages a
   transport.onClose((event) => closes.push(event))
 
   const connecting = transport.connect()
-  const socket = setup.socket
+  const { socket } = setup
   assert.equal(transport.connect(), connecting, "concurrent connect calls must share the in-flight handshake")
   assert.equal(socket.url, "wss://openapi.bitunix.com:443/ws-api/v1", "transport must use the configured secure endpoint")
   socket.open()
@@ -144,7 +144,7 @@ test("Bitunix WebSocket transport reports handshake failures and rejects the con
   transport.onError((error) => errors.push(error))
 
   const connecting = transport.connect()
-  const socket = setup.socket
+  const { socket } = setup
   socket.emit("error", {
     message: "handshake rejected",
     error: new Error("upstream handshake failure"),
@@ -179,7 +179,7 @@ test("Bitunix WebSocket transport resolves close after bounded close timeout", a
   })
   const { transport } = setup
   const connecting = transport.connect()
-  const socket = setup.socket
+  const { socket } = setup
   socket.open()
   await connecting
   socket.autoClose = false
@@ -214,7 +214,7 @@ test("Bitunix WebSocket transport rejects sends unless the native socket is open
     "transport must not send before connection is established",
   )
   const connecting = transport.connect()
-  const socket = setup.socket
+  const { socket } = setup
   socket.open()
   await connecting
   await transport.close()
