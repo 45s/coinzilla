@@ -8,10 +8,10 @@ import {
 const OUTCOME_VALUES = Object.freeze(Object.values(RECOVERY_SELLER_LIFECYCLE_OUTCOMES))
 
 /**
- * Allowed transitions within one recovery cycle. A new SUBMIT is possible
- * only when the caller starts a fresh cycle after its prior cycle has reached
- * the separately approved terminal state; it is never a continuation from an
- * existing decision.
+ * Allowed transitions within one order lifecycle. A new order intent starts
+ * a fresh order lifecycle only after the caller has authoritatively reconciled
+ * the prior order. The separate one-SELL-per-cycle invariant belongs to the
+ * cycle policy, not this per-order transition contract.
  */
 const ALLOWED_TRANSITIONS = Object.freeze({
   SUBMIT: Object.freeze(["WAIT", "RECONCILE", "BLOCK"]),
@@ -142,8 +142,10 @@ function createTransitionStop({ previousDecision, nextDecision }) {
  * RECONCILE decisions are returned; all new trading decisions remain BLOCKED.
  *
  * Passing no previousDecision means the caller has already established a new
- * recovery cycle after the previous cycle's approved terminal reconciliation.
- * This function does not decide whether that terminal condition is satisfied.
+ * order-intent lifecycle after authoritative terminal reconciliation of the
+ * prior order. This permits multiple sequential BUY tranches in one recovery
+ * cycle. The caller must separately enforce one terminal SELL per cycle and
+ * must prove prior order/fill reconciliation before starting another order.
  *
  * @param {object} input
  * @param {object} input.stopState Current immutable global STOP state.
