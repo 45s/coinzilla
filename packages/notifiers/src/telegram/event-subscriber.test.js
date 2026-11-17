@@ -219,6 +219,37 @@ test("reports delivery failures once and continues processing later events", asy
   await subscriber.close()
 })
 
+test("classifies timeout, HTTP, Telegram API, and unknown delivery failures safely", async () => {
+  const scenarios = [
+    [new Error("request timed out"), "TIMEOUT"],
+    [new Error("Telegram API HTTP request failed with status 503"), "HTTP"],
+    [new Error("Telegram API rejected the request"), "TELEGRAM_API"],
+    [new Error("unexpected provider failure"), "UNKNOWN"],
+  ]
+
+  for (const [failure, expectedCategory] of scenarios) {
+    const eventBus = createEventBus()
+    const errors = []
+    const subscriber = subscribeTelegramNotifications({
+      eventBus,
+      notifier: {
+        async sendMessage() {
+          throw failure
+        },
+      },
+      logger: { error(entry) { errors.push(entry) } },
+    })
+
+    await eventBus.handlers.get("bot.started")({ name: "bot.started", data: {} })
+    assert.equal(
+      errors[0].failureCategory,
+      expectedCategory,
+      `Delivery failure ${failure.message} must be represented by the safe ${expectedCategory} category.`,
+    )
+    await subscriber.close()
+  }
+})
+
 test("leaves failures observable to the event bus when no logger is configured", async () => {
   const eventBus = createEventBus()
   let calls = 0
