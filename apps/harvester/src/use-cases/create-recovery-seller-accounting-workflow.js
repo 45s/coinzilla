@@ -247,6 +247,49 @@ function createAdditionalTrackedBaseQuantity({ state, balances, portfolio }) {
   })
 }
 
+function resolveRecoverySellerBuyOrderOwnership({ registry, fill }) {
+  if (!(fill instanceof Fill) || fill.side !== "BUY") {
+    throw new TypeError("Recovery Seller BUY accounting requires a canonical BUY Fill")
+  }
+  const order = registry.getOrder({ clientOrderId: fill.clientOrderId })
+  if (!order ||
+      order.side !== "BUY" ||
+      order.market.id !== fill.market.id ||
+      order.brokerOrderId !== fill.brokerOrderId) {
+    throw new Error("Recovery Seller BUY Fill does not match a registered broker order identity")
+  }
+  const ownership = registry.getOwnership({
+    clientOrderId: fill.clientOrderId,
+    brokerOrderId: fill.brokerOrderId,
+  })
+  if (!ownership ||
+      ownership.strategyId !== StrategyId.RECOVERY_SELLER ||
+      ownership.purpose !== "RECOVERY_BUY" ||
+      typeof ownership.cycleId !== "string" ||
+      !ownership.cycleId.trim()) {
+    throw new Error("Recovery Seller BUY Fill requires registered RS Position and cycle ownership")
+  }
+  return { order, ownership }
+}
+
+function applyRecoverySellerBuyFillTransition({ state, fill }) {
+  const { order, ownership } = resolveRecoverySellerBuyOrderOwnership({
+    registry: state.orderRegistry,
+    fill,
+  })
+  const result = state.portfolio.applyFill({
+    fill,
+    positionId: ownership.positionId,
+    strategyId: ownership.strategyId,
+  })
+  state.portfolio = result.portfolio
+  return Object.freeze({
+    ...result,
+    order,
+    ownership,
+  })
+}
+
 function resolveRecoverySellerOrderOwnership({ registry, order }) {
   const ownership = registry.getOwnership({
     clientOrderId: order.clientOrderId,
@@ -380,6 +423,23 @@ export function createRecoverySellerAccountingWorkflow({
     updateQueue: Promise.resolve(),
   }
 
+  const applyBuyFill = (input = {}) => {
+    const task = state.updateQueue.then(() => {
+      try {
+        return toResult({
+          data: applyRecoverySellerBuyFillTransition({
+            state,
+            ...input,
+          }),
+        })
+      } catch (error) {
+        return toResult({ error })
+      }
+    })
+    state.updateQueue = task.then(() => undefined, () => undefined)
+    return task
+  }
+
   const reconcileTerminalMixedSell = (input = {}) => {
     const task = state.updateQueue.then(() => {
       try {
@@ -398,6 +458,7 @@ export function createRecoverySellerAccountingWorkflow({
   }
 
   return Object.freeze({
+    applyBuyFill,
     reconcileTerminalMixedSell,
     getPortfolio: () => state.portfolio,
     getOrderRegistry: () => state.orderRegistry,
