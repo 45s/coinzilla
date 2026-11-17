@@ -68,3 +68,27 @@ test("direct console usage is an error while explicit CLI output remains allowed
     "Explicit process stream output remains available for intentional CLI diagnostics.",
   );
 });
+
+test("implicit coercion is an error while explicit conversions remain available", async () => {
+  const eslint = new ESLint();
+  const [implicitCoercion] = await eslint.lintText(
+    'const value = "1";\nconst numeric = +value;\nconst enabled = !!value;\n',
+    { filePath: "apps/harvester/src/domain/implicit-coercion-fixture.js" },
+  );
+  const [explicitConversion] = await eslint.lintText(
+    'const value = "1";\nconst numeric = Number(value);\nconst enabled = Boolean(value);\n',
+    { filePath: "apps/harvester/src/domain/explicit-conversion-fixture.js" },
+  );
+
+  assert.ok(
+    implicitCoercion.messages.some((message) => (
+      message.ruleId === "no-implicit-coercion" && message.severity === 2
+    )),
+    "Implicit unary numeric and boolean coercions must be rejected as errors.",
+  );
+  assert.equal(
+    explicitConversion.messages.filter((message) => message.ruleId === "no-implicit-coercion").length,
+    0,
+    "Explicit conversion functions remain available at intentional boundaries.",
+  );
+});
