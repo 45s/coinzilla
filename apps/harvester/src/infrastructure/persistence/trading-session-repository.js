@@ -45,7 +45,10 @@ async function createSession({ database, record } = {}) {
     if (existing === null) {
       throw error
     }
-    if (!hasSameTradingSessionIdentity({ existing, candidate: record })) {
+    if (!hasSameTradingSessionIdentity({
+      existing,
+      candidate: record,
+    })) {
       throw createIdentityConflict({ cause: error })
     }
     return existing
@@ -133,18 +136,30 @@ function transitionAsynchronously({ database, input } = {}) {
   })
 }
 
-function createTransition({ database, callbackMode }) {
+function createTransition({
+    database,
+    callbackMode,
+  }) {
   if (callbackMode === "synchronous") {
-    return (input) => transitionSynchronously({ database, input })
+    return (input) => transitionSynchronously({
+      database,
+      input,
+    })
   }
-  return (input) => transitionAsynchronously({ database, input })
+  return (input) => transitionAsynchronously({
+    database,
+    input,
+  })
 }
 
 export function createTradingSessionRepository({ database } = {}) {
   const callbackMode = requireDatabase({ database })
   const transition = createTransition({ database, callbackMode })
   return Object.freeze({
-    create: (record) => createSession({ database, record }),
+    create: (record) => createSession({
+      database,
+      record,
+    }),
     findById: (id) => database.readOne({
       collection: COLLECTION,
       id,
