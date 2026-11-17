@@ -104,64 +104,40 @@ const withExternalOrdersPolicy = (...args) => {
   },
   }
 }
+function createMarketTradingRules({ market, baseAsset, quoteAsset }) {
+  const constraints = [
+    { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.01", asset: quoteAsset }) },
+    { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.001", asset: baseAsset }) },
+    { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "0.001", asset: baseAsset }) },
+    { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
+  ]
+  return new TradingRules({ market, constraints })
+}
+
+function createTelegramOperatorConfig() {
+  return {
+    ...appConfig,
+    operatorControl: {
+      telegram: {
+        enabled: true,
+        allowedUserIds: ["12345"],
+      },
+    },
+  }
+}
+
 const createMarketMetadata = (symbol) => {
   const quoteCode = ["USDT", "FDUSD"].find((code) => symbol.endsWith(code))
-  if (!quoteCode) {throw new Error(`Unsupported test market quote asset for ${  symbol}`)}
+  if (!quoteCode) {
+    throw new Error(`Unsupported test market quote asset for ${symbol}`)
+  }
   const baseCode = symbol.slice(0, -quoteCode.length)
-  const baseAsset = new Asset({
-    id: `asset:${  baseCode}`,
-    code: baseCode
-  })
-  const quoteAsset = new Asset({
-    id: `asset:${  quoteCode}`,
-    code: quoteCode
-  })
-  const market = new Market({
-    venue: "binance",
-    symbol,
-    baseAsset,
-    quoteAsset,
-  })
-  const tradingRules = new TradingRules({
-    market,
-    constraints: [
-      {
-        type: "PRICE_INCREMENT",
-        status: "SUPPORTED",
-        value: new Money({
-        amount: "0.01",
-        asset: quoteAsset
-      })
-      },
-      {
-        type: "QUANTITY_INCREMENT",
-        status: "SUPPORTED",
-        value: new Quantity({
-        amount: "0.001",
-        asset: baseAsset
-      })
-      },
-      {
-        type: "MIN_QUANTITY",
-        status: "SUPPORTED",
-        value: new Quantity({
-        amount: "0.001",
-        asset: baseAsset
-      })
-      },
-      {
-        type: "MIN_NOTIONAL",
-        status: "SUPPORTED",
-        value: new Money({
-        amount: "5",
-        asset: quoteAsset
-      })
-      },
-    ],
-  })
+  const baseAsset = new Asset({ id: `asset:${baseCode}`, code: baseCode })
+  const quoteAsset = new Asset({ id: `asset:${quoteCode}`, code: quoteCode })
+  const market = new Market({ venue: "binance", symbol, baseAsset, quoteAsset })
   return {
     market,
-    tradingRules,
+    tradingRules: createMarketTradingRules({ market, baseAsset, quoteAsset }),
     supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
     unvalidatedConstraints: [],
   }
@@ -611,16 +587,14 @@ error() {} },
 })
 
 test("retries Telegram adapter shutdown during startup rollback before giving up", async () => {
-  const config = {
-    ...appConfig,
-    operatorControl: { telegram: {
-    enabled: true,
-    allowedUserIds: ["12345"]
-  } }
-  }
+  const config = createTelegramOperatorConfig()
   const calls = []
   let stopAttempts = 0
   const broker = createBroker(calls)
+  const operationalStateStore = createOperatorControlOperationalStateStore({
+    calls,
+    appendedFacts: [],
+  })
   await assert.rejects(startHarvesterForTest({
     loadConfig: async () => config,
     env: {
@@ -629,35 +603,7 @@ test("retries Telegram adapter shutdown during startup rollback before giving up
       OPERATIONAL_STATE_DIRECTORY: process.cwd()
     },
     runtimeSessionId: "test-runtime-session",
-    createOperationalStateStore: () => ({
-      runtimeSessionId: "test-runtime-session",
-      verify: async () => ({
-        ok: true,
-        data: {
-        valid: true,
-        durableWriteSupported: true
-      }
-      }),
-      readAll: async () => ({
-        ok: true,
-        data: {
-          records: [{
-            sequence: "0",
-            factId: "durable-facts:genesis",
-            factType: "LEDGER_INITIALIZED",
-            runtimeSessionId: "test-runtime-session",
-            data: { schemaVersion: 1 }
-          }],
-          durableWriteSupported: true,
-          lastCommittedSequence: "0",
-          lastCommittedDigest: "a".repeat(64),
-        },
-      }),
-      append: async () => ({
-        ok: true,
-        data: { durable: true }
-      }),
-    }),
+    createOperationalStateStore: () => operationalStateStore,
     createTelegramOperatorAdapter: () => ({
       start: async () => { throw new Error("Telegram getMe unauthorized") },
       stop: async () => {
@@ -789,95 +735,85 @@ function createOperatorControlOperationalStateStore({ calls, appendedFacts }) {
   }
 }
 
+function createTelegramProcessLocalRuntimeFixture({ calls, appendedFacts, broker, onOperator }) {
+  const operationalStateStore = createOperatorControlOperationalStateStore({ calls, appendedFacts })
+  let operator
+  const runtime = startHarvesterForTest({
+    loadConfig: async () => createTelegramOperatorConfig(),
+    env: {
+      ...binanceEnv,
+      TELEGRAM_BOT_TOKEN: "test-telegram-token",
+      OPERATIONAL_STATE_DIRECTORY: process.cwd(),
+    },
+    runtimeSessionId: "test-runtime-session",
+    createOperationalStateStore: ({ directory, runtimeSessionId }) => {
+      calls.push("create-Operational State Store records-store")
+      assert.equal(directory, process.cwd())
+      assert.equal(runtimeSessionId, "test-runtime-session")
+      return operationalStateStore
+    },
+    createTelegramOperatorAdapter: ({ botToken, allowedUserIds, operator: suppliedOperator }) => {
+      calls.push("create-telegram-adapter")
+      assert.equal(botToken, "test-telegram-token")
+      assert.deepEqual(allowedUserIds, ["12345"])
+      operator = suppliedOperator
+      onOperator?.(operator)
+      return {
+        start: async () => calls.push("start-telegram-poller"),
+        stop: async () => calls.push("stop-telegram-poller"),
+      }
+    },
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  })
+  return { runtime, getOperator: () => operator }
+}
+
 test("starts/stops Telegram CC and applies process-local pause without recovery storage", async () => {
-  const config = {
-    ...appConfig,
-    operatorControl: { telegram: {
-    enabled: true,
-    allowedUserIds: ["12345"]
-  } }
-  }
   const calls = []
   const appendedFacts = []
-  let operator
   const broker = createBroker(calls)
   let placeOrderCalls = 0
   let cancelOrderCalls = 0
   broker.placeOrder = async () => { placeOrderCalls += 1; return { ok: true } }
   broker.cancelOrder = async () => { cancelOrderCalls += 1; return { ok: true } }
-  const operationalStateStore = createOperatorControlOperationalStateStore({
+  const fixture = createTelegramProcessLocalRuntimeFixture({
     calls,
     appendedFacts,
+    broker,
   })
-  const runtime = await startHarvesterForTest({
-    loadConfig: async () => config,
-    env: {
-      ...binanceEnv,
-      TELEGRAM_BOT_TOKEN: "test-telegram-token",
-      OPERATIONAL_STATE_DIRECTORY: process.cwd()
-    },
-    runtimeSessionId: "test-runtime-session",
-    createOperationalStateStore: ({
-      directory,
-      runtimeSessionId
-    }) => {
-      calls.push("create-Operational State Store records-store")
-      assert.equal(directory, process.cwd(), "The configured absolute store directory must be passed unchanged to the ADR-0001 adapter.")
-      assert.equal(runtimeSessionId, "test-runtime-session", "The current process identity must scope appended Operational State Store records.")
-      return operationalStateStore
-    },
-    createTelegramOperatorAdapter: ({
-      botToken,
-      allowedUserIds,
-      operator: suppliedOperator
-    }) => {
-      calls.push("create-telegram-adapter")
-      assert.equal(botToken, "test-telegram-token", "The Telegram bot token must come from the environment and never app config.")
-      assert.deepEqual(allowedUserIds, ["12345"], "Only configured trusted Telegram user IDs may reach the adapter.")
-      operator = suppliedOperator
-      return {
-        start: async () => calls.push("start-telegram-poller"),
-        stop: async () => calls.push("stop-telegram-poller")
-      }
-    },
-    brokerAdapterFactory: () => broker,
-    logger: {
-      info() {},
-      error() {}
-    },
-  })
+  const runtime = await fixture.runtime
+  const operator = fixture.getOperator()
   try {
-    assert.equal(calls.includes("create-Operational State Store records-store"), false, "Telegram CC must not construct the recovery store.")
-    assert.equal(calls.includes("verify-Operational State Store records"), false, "Telegram CC startup must not verify the recovery store.")
-    assert.ok(calls.indexOf("start-telegram-poller") < calls.indexOf("subscribe:user-data"), "The operator poller must be ready before the runtime begins accepting trading events.")
+    assert.equal(calls.includes("create-Operational State Store records-store"), false)
+    assert.equal(calls.includes("verify-Operational State Store records"), false)
+    assert.ok(calls.indexOf("start-telegram-poller") < calls.indexOf("subscribe:user-data"))
     const pauseResult = await operator.pauseMarket({
-      actor: {
-      id: "telegram-user:12345",
-      roles: ["trading-operator"]
-    },
+      actor: { id: "telegram-user:12345", roles: ["trading-operator"] },
       requestId: "telegram:9001",
-      symbol: "BTCUSDT"
+      symbol: "BTCUSDT",
     })
-    assert.equal(pauseResult.ok, true, "An authorized market pause must complete through the existing application use case.")
-    assert.equal(pauseResult.data.durable, false, "A CC pause without recovery storage must be explicitly process-local.")
-    assert.equal(appendedFacts.some(({ factType }) => factType === "OPERATOR_MARKET_PAUSED" || factType === "OPERATOR_MARKET_RESUMED"), false, "Process-local CC commands must not write recovery facts.")
-    assert.equal(calls.includes("append-operator-fact"), false, "A process-local CC pause must not access durable recovery storage.")
-    assert.equal(placeOrderCalls, 0, "An operator pause must not submit any exchange order.")
-    assert.equal(cancelOrderCalls, 0, "An operator pause must not cancel any exchange order.")
-  } finally { await runtime.stop() }
-  assert.ok(calls.indexOf("stop-telegram-poller") < calls.indexOf("disconnect"), "Inbound commands must stop before broker shutdown begins.")
+    assert.equal(pauseResult.ok, true)
+    assert.equal(pauseResult.data.durable, false)
+    assert.equal(appendedFacts.some(({ factType }) =>
+      factType === "OPERATOR_MARKET_PAUSED" || factType === "OPERATOR_MARKET_RESUMED"), false)
+    assert.equal(calls.includes("append-operator-fact"), false)
+    assert.equal(placeOrderCalls, 0)
+    assert.equal(cancelOrderCalls, 0)
+  } finally {
+    await runtime.stop()
+  }
+  assert.ok(calls.indexOf("stop-telegram-poller") < calls.indexOf("disconnect"))
 })
 
 test("stops Telegram and broker when Telegram identity verification fails during startup", async () => {
-  const config = {
-    ...appConfig,
-    operatorControl: { telegram: {
-    enabled: true,
-    allowedUserIds: ["12345"]
-  } }
-  }
+  const config = createTelegramOperatorConfig()
   const calls = []
   const broker = createBroker(calls)
+  const operationalStateStore = createOperatorControlOperationalStateStore({
+    calls,
+    appendedFacts: [],
+  })
   await assert.rejects(startHarvesterForTest({
     loadConfig: async () => config,
     env: {
@@ -886,35 +822,7 @@ test("stops Telegram and broker when Telegram identity verification fails during
       OPERATIONAL_STATE_DIRECTORY: process.cwd()
     },
     runtimeSessionId: "test-runtime-session",
-    createOperationalStateStore: () => ({
-      runtimeSessionId: "test-runtime-session",
-      verify: async () => ({
-        ok: true,
-        data: {
-        valid: true,
-        durableWriteSupported: true
-      }
-      }),
-      readAll: async () => ({
-        ok: true,
-        data: {
-          records: [{
-            sequence: "0",
-            factId: "durable-facts:genesis",
-            factType: "LEDGER_INITIALIZED",
-            runtimeSessionId: "test-runtime-session",
-            data: { schemaVersion: 1 }
-          }],
-          durableWriteSupported: true,
-          lastCommittedSequence: "0",
-          lastCommittedDigest: "a".repeat(64),
-        },
-      }),
-      append: async () => ({
-        ok: true,
-        data: { durable: true }
-      }),
-    }),
+    createOperationalStateStore: () => operationalStateStore,
     createTelegramOperatorAdapter: () => ({
       start: async () => { calls.push("start-telegram-poller"); throw new Error("Telegram getMe unauthorized") },
       stop: async () => calls.push("stop-telegram-poller")
