@@ -207,8 +207,8 @@ test("propagates transaction rollback, closed lifecycle and provider failures", 
   )
 
   await database.close()
-  await assert.rejects(
-    repository.findById(originalSession.id),
+  assert.throws(
+    () => repository.findById(originalSession.id),
     /Database must be connected to start a transaction/,
     "A closed database lifecycle must reject repository reads instead of pretending that history is empty.",
   )
