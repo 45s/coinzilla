@@ -92,3 +92,29 @@ test("implicit coercion is an error while explicit conversions remain available"
     "Explicit conversion functions remain available at intentional boundaries.",
   );
 });
+
+test("the full workspace has no require-atomic-updates findings", async () => {
+  const eslint = new ESLint({
+    overrideConfig: [
+      {
+        rules: {
+          "require-atomic-updates": "error",
+        },
+      },
+    ],
+  });
+  const results = await eslint.lintFiles(["."]);
+  const findings = results.flatMap((result) => result.messages
+    .filter((message) => message.ruleId === "require-atomic-updates")
+    .map((message) => ({
+      filePath: result.filePath,
+      line: message.line,
+      message: message.message,
+    })));
+
+  assert.deepEqual(
+    findings,
+    [],
+    "Async read-modify-write operations must not use stale values after await.",
+  );
+});
