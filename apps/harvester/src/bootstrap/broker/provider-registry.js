@@ -34,7 +34,7 @@ function assertProviderIdentity({ id, provider, accountId, index }) {
   if (typeof id !== "string" || !/^[a-z][A-Za-z0-9_-]{0,63}$/.test(id)) {
     throw new TypeError(`Provider descriptor at index ${index} has an invalid instance ID`)
   }
-  if (typeof provider !== "string" || !provider.trim()) {
+  if (typeof provider !== "string" || !/^[a-z][a-z0-9-]*$/.test(provider)) {
     throw new TypeError(`Provider instance "${id}" must declare a provider type`)
   }
   if (typeof accountId !== "string" || !/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(accountId) || accountId.length > 64) {

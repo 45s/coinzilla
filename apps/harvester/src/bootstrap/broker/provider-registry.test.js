@@ -315,3 +315,35 @@ test("an instance connection failure does not disconnect a sibling instance", as
   assert.deepEqual(primaryCalls, ["connect", "disconnect"])
   assert.deepEqual(secondaryCalls, [])
 })
+
+test("constructs a registered non-Binance provider without provider-specific registry logic", async () => {
+  const broker = createBroker()
+  broker.capabilities = Object.freeze({
+    ...capabilities,
+    provider: "bitunix",
+  })
+  const registry = await createProviderRegistry({
+    providerInstances: [
+      createDescriptor({
+        id: "bitunixPrimary",
+        provider: "bitunix",
+        accountId: "bitunix-primary",
+      }),
+    ],
+    selections: {
+      execution: "bitunixPrimary",
+      account: "bitunixPrimary",
+      marketData: "bitunixPrimary",
+    },
+    adapterFactories: {
+      bitunix: () => broker,
+    },
+    env: {},
+  })
+  assert.equal(registry.getDescriptor({
+    instanceId: "bitunixPrimary",
+  }).provider, "bitunix")
+  assert.equal(registry.getBrokerPort({
+    instanceId: "bitunixPrimary",
+  }).providerInstanceId, "bitunixPrimary")
+})

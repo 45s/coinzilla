@@ -55,7 +55,7 @@ function resolveProviderInstance({ id, definition, tradingMode }) {
       throw new TypeError(`Provider instance "${id}" contains unsupported configuration field "${key}"`)
     }
   }
-  if (typeof definition.provider !== "string" || !definition.provider.trim()) {
+  if (typeof definition.provider !== "string" || !/^[a-z][a-z0-9-]*$/.test(definition.provider)) {
     throw new TypeError(`Provider instance "${id}" requires a provider type`)
   }
   if (typeof definition.accountId !== "string" || !/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(definition.accountId) || definition.accountId.length > 64) {

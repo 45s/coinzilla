@@ -7,8 +7,17 @@ export function resolveBinanceProviderConfig({ descriptor, env = process.env } =
   if (descriptor.tradingMode !== "testnet" && descriptor.tradingMode !== "live") {
     throw new TypeError(`Binance instance "${descriptor.id}" requires explicit testnet or live mode`)
   }
-  const apiKeyName = descriptor.credentialEnv?.apiKey ?? "BINANCE_API_KEY"
-  const apiSecretName = descriptor.credentialEnv?.apiSecret ?? "BINANCE_API_SECRET_KEY"
+  const credentialEnv = descriptor.credentialEnv
+  if (credentialEnv !== undefined) {
+    const allowedKeys = ["apiKey", "apiSecret"]
+    if (Object.keys(credentialEnv).some((key) => !allowedKeys.includes(key)) ||
+        typeof credentialEnv.apiKey !== "string" ||
+        typeof credentialEnv.apiSecret !== "string") {
+      throw new TypeError(`Binance instance "${descriptor.id}" requires apiKey and apiSecret environment references only`)
+    }
+  }
+  const apiKeyName = credentialEnv?.apiKey ?? "BINANCE_API_KEY"
+  const apiSecretName = credentialEnv?.apiSecret ?? "BINANCE_API_SECRET_KEY"
   const apiKey = env[apiKeyName]
   const apiSecret = env[apiSecretName]
   if (typeof apiKey !== "string" || !apiKey.trim()) {
