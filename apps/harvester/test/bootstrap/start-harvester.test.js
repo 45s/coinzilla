@@ -33,6 +33,18 @@ const createOpenOrderSnapshot = ({ order }) => {
   return openOrder;
 };
 
+const createBinanceCapabilities = ({ tradingMode = "testnet" } = {}) => Object.freeze({
+  contractVersion: 1,
+  provider: "binance",
+  product: "spot",
+  environment: Object.freeze({
+    selector: "tradingMode",
+    supportedModes: Object.freeze(["testnet", "live"]),
+    selectedMode: tradingMode,
+    nodeEnvSelectsEndpoint: false,
+  }),
+})
+
 const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
   flush: async () => ({
@@ -374,6 +386,7 @@ function createOrdinaryTradeUserDataPort({ state } = {}) {
 
 function createOrdinaryTradeBroker({ market, baseAsset, quoteAsset, marketMetadata, balances, state } = {}) {
   return {
+    capabilities: createBinanceCapabilities(),
     connect: async () => {},
     disconnect: async () => {},
     ...createOrdinaryTradeOrderPorts({ market,
@@ -958,6 +971,7 @@ test("subscribes every enabled market and fail-closes BUYs until its volatility 
   const state = createVolatilityTestState()
   const appConfig = createVolatilityTestConfig()
   const broker = {
+    capabilities: createBinanceCapabilities(),
     ...createVolatilityOrderLifecycleBroker({
       metadataBySymbol: marketData.metadataBySymbol,
       state,
