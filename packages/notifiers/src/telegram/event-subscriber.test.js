@@ -243,7 +243,10 @@ test("classifies timeout, HTTP, Telegram API, and unknown delivery failures safe
       logger: { error(entry) { errors.push(entry) } },
     })
 
-    await eventBus.handlers.get("bot.started")({ name: "bot.started", data: {} })
+    await eventBus.handlers.get("bot.started")({
+      name: "bot.started",
+      data: {},
+    })
     assert.equal(
       errors[0].failureCategory,
       expectedCategory,
