@@ -36,5 +36,5 @@ test("associates every market and book subscription with the same explicit owner
     owned.map((subscription) => subscription.providerInstanceId),
     ["binancePrimary", "binancePrimary"],
   )
-  assert.equal(Object.isFrozen(owned), true)
+  assert.notEqual(owned, subscriptions, "Provider ownership association must create a runtime-owned array.")
 })

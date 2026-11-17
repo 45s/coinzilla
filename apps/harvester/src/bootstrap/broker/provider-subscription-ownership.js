@@ -10,22 +10,30 @@ export function associateProviderInstance({ subscription, providerInstanceId } =
   if (typeof providerInstanceId !== "string" || !providerInstanceId.trim()) {
     throw new TypeError("Provider-owned subscription requires a stable provider instance ID")
   }
+  if (subscription.providerInstanceId !== undefined) {
+    if (subscription.providerInstanceId === providerInstanceId) {
+      return subscription
+    }
+    throw new TypeError("A subscription cannot be reassigned to another provider instance")
+  }
   const ownedSubscription = Object.create(Object.getPrototypeOf(subscription))
-  Object.defineProperties(ownedSubscription, Object.getOwnPropertyDescriptors(subscription))
+  const descriptors = Object.getOwnPropertyDescriptors(subscription)
+  delete descriptors.providerInstanceId
+  Object.defineProperties(ownedSubscription, descriptors)
   Object.defineProperty(ownedSubscription, "providerInstanceId", {
     configurable: false,
     enumerable: true,
     value: providerInstanceId,
     writable: false,
   })
-  return Object.freeze(ownedSubscription)
+  return ownedSubscription
 }
 
 export function associateProviderInstances({ subscriptions, providerInstanceId } = {}) {
   if (!Array.isArray(subscriptions)) {
     throw new TypeError("Provider-owned subscriptions must be an array")
   }
-  return Object.freeze(subscriptions.map((subscription) =>
+  return subscriptions.map((subscription) =>
     associateProviderInstance({
       subscription,
       providerInstanceId,
