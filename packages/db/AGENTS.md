@@ -29,6 +29,7 @@ The package domain may model only generic database infrastructure concepts: reco
 - Provider-specific configuration belongs at the outer composition boundary. Consumers of the composed database must not branch on provider identity.
 - Declare provider capabilities explicitly. Do not silently emulate unsupported query, transaction, concurrency, or durability guarantees.
 - Implement both provider-neutral transaction entry points: `withTransaction(work)` for writes/explicit transactions and `withReadTransaction(work)` for `readOne`/`readMany`. Preserve the same contract while selecting appropriate provider locking behavior.
+- For server-backed conformance tests, implement `cleanupStorage({ storageKey, storageMode })` to remove the isolated test database/namespace after connections close; keep connection close separate from store deletion so reconnect-persistence tests remain meaningful.
 - Keep SQL and SQLite-specific APIs out of domain and application policy.
 - Use prepared statements and bound parameters for all SQL values.
 - Enable foreign-key enforcement; keep file-backed journal mode and lock timeout behavior covered by tests.
