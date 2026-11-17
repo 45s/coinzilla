@@ -452,7 +452,7 @@ error })
     }
   }
 
-  /** @returns {Promise<BrokerResult<{accountId: string, balances: import("@coinzilla/entities").Balance[], sourceTime: number}>>} Verified Binance account UID, balances and source update time. */
+  /** @returns {Promise<BrokerResult<{balances: import("@coinzilla/entities").Balance[], sourceTime: number}>>} Balances and source update time. */
   async getAccountSnapshot() {
     try {
       const response = await this.tradingConnection.request(
@@ -464,14 +464,9 @@ error })
       if (!Number.isSafeInteger(sourceTime) || sourceTime < 0) {
         throw new TypeError("Binance account snapshot is missing a valid source updateTime")
       }
-      const accountUid = response.data?.uid
-      if (!Number.isSafeInteger(accountUid) || accountUid < 1) {
-        throw new TypeError("Binance account snapshot is missing a valid safe-integer account UID")
-      }
 
       return toResult({
         data: {
-          accountId: String(accountUid),
           balances: adaptSpotBalance(response.data?.balances),
           sourceTime,
         },
