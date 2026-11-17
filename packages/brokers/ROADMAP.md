@@ -1103,7 +1103,7 @@ The detailed, mandatory procedure and direct source/test links live in [packages
 
 The purpose is to translate an already implemented and tested Spot behavior into Coinzilla's JavaScript architecture rather than inventing protocol behavior. The .NET implementation is a reference, not infallible authority: inspect source and fixtures, audit endpoint/parameter/response behavior, compare with official docs, and do not copy defects or Futures-only capabilities. Keep all unresolved guarantees in [issue #1185](https://github.com/45s/coinzilla/issues/1185); reference-project coverage does not itself resolve an exchange-contract blocker or authorize order mutations.
 
-### 2026-11-17 — Bitunix Spot exchange-rate extension
+## 2026-11-17 — Bitunix Spot exchange-rate extension
 
 - [ ] **In progress — #1331 / PR #1332:** add the Bitunix-only `getExchangeRates()` read using public `GET /api/spot/v1/common/rate/list`. The documented response has no request parameters and contains `baseSymbol`, `quoteSymbol`, and string `rate` fields. The adapter preserves exact rate text and rejects malformed rows and non-positive decimal values; an explicit empty array is a valid empty result.
 - This is a Bitunix-specific extension, not Binance parity. It does not alter the read-only lifecycle boundary or unblock order placement, cancellation, fills, account snapshots, or subscriptions.
