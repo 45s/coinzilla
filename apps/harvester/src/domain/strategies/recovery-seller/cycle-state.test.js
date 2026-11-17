@@ -234,3 +234,25 @@ test("requires a stable Position identity for every recovery cycle", () => {
     "A cycle without a stable Position identity must not be created.",
   )
 })
+
+
+test("allows an explicitly preallocated new Position identity for a later recovery cycle", () => {
+  const closed = reconcileRecoverySellerCycleSell({
+    state: submittedCycle(),
+    orderIdentity: {
+      clientOrderId: "rs-sell-1",
+    },
+    terminalOrderStatus: "FILLED",
+    reconciliationComplete: true,
+    profitabilityEligible: true,
+  })
+  const next = startNextRecoverySellerCycle({
+    previousState: closed,
+    nextCycleId: "rs-cycle-2",
+    nextPositionId: "rs-position-2",
+  })
+
+  assert.equal(next.cycleId, "rs-cycle-2")
+  assert.equal(next.positionId, "rs-position-2",
+    "A new cycle may use a distinct preallocated Portfolio Position when the caller creates one.")
+})
