@@ -104,64 +104,60 @@ const withExternalOrdersPolicy = (...args) => {
   },
   }
 }
+function createMarketTradingRules({ market, baseAsset, quoteAsset }) {
+  const constraints = [
+    { type: "PRICE_INCREMENT",
+      status: "SUPPORTED",
+      value: new Money({ amount: "0.01",
+        asset: quoteAsset }) },
+    { type: "QUANTITY_INCREMENT",
+      status: "SUPPORTED",
+      value: new Quantity({ amount: "0.001",
+        asset: baseAsset }) },
+    { type: "MIN_QUANTITY",
+      status: "SUPPORTED",
+      value: new Quantity({ amount: "0.001",
+        asset: baseAsset }) },
+    { type: "MIN_NOTIONAL",
+      status: "SUPPORTED",
+      value: new Money({ amount: "5",
+        asset: quoteAsset }) },
+  ]
+  return new TradingRules({ market,
+    constraints })
+}
+
+function createTelegramOperatorConfig() {
+  return {
+    ...appConfig,
+    operatorControl: {
+      telegram: {
+        enabled: true,
+        allowedUserIds: ["12345"],
+      },
+    },
+  }
+}
+
 const createMarketMetadata = (symbol) => {
   const quoteCode = ["USDT", "FDUSD"].find((code) => symbol.endsWith(code))
-  if (!quoteCode) {throw new Error(`Unsupported test market quote asset for ${  symbol}`)}
+  if (!quoteCode) {
+    throw new Error(`Unsupported test market quote asset for ${symbol}`)
+  }
   const baseCode = symbol.slice(0, -quoteCode.length)
-  const baseAsset = new Asset({
-    id: `asset:${  baseCode}`,
-    code: baseCode
-  })
-  const quoteAsset = new Asset({
-    id: `asset:${  quoteCode}`,
-    code: quoteCode
-  })
-  const market = new Market({
-    venue: "binance",
+  const baseAsset = new Asset({ id: `asset:${baseCode}`,
+    code: baseCode })
+  const quoteAsset = new Asset({ id: `asset:${quoteCode}`,
+    code: quoteCode })
+  const market = new Market({ venue: "binance",
     symbol,
     baseAsset,
-    quoteAsset,
-  })
-  const tradingRules = new TradingRules({
-    market,
-    constraints: [
-      {
-        type: "PRICE_INCREMENT",
-        status: "SUPPORTED",
-        value: new Money({
-        amount: "0.01",
-        asset: quoteAsset
-      })
-      },
-      {
-        type: "QUANTITY_INCREMENT",
-        status: "SUPPORTED",
-        value: new Quantity({
-        amount: "0.001",
-        asset: baseAsset
-      })
-      },
-      {
-        type: "MIN_QUANTITY",
-        status: "SUPPORTED",
-        value: new Quantity({
-        amount: "0.001",
-        asset: baseAsset
-      })
-      },
-      {
-        type: "MIN_NOTIONAL",
-        status: "SUPPORTED",
-        value: new Money({
-        amount: "5",
-        asset: quoteAsset
-      })
-      },
-    ],
-  })
+    quoteAsset })
   return {
     market,
-    tradingRules,
+    tradingRules: createMarketTradingRules({ market,
+      baseAsset,
+      quoteAsset }),
     supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
     unvalidatedConstraints: [],
   }
@@ -611,16 +607,14 @@ error() {} },
 })
 
 test("retries Telegram adapter shutdown during startup rollback before giving up", async () => {
-  const config = {
-    ...appConfig,
-    operatorControl: { telegram: {
-    enabled: true,
-    allowedUserIds: ["12345"]
-  } }
-  }
+  const config = createTelegramOperatorConfig()
   const calls = []
   let stopAttempts = 0
   const broker = createBroker(calls)
+  const operationalStateStore = createOperatorControlOperationalStateStore({
+    calls,
+    appendedFacts: [],
+  })
   await assert.rejects(startHarvesterForTest({
     loadConfig: async () => config,
     env: {
@@ -629,35 +623,7 @@ test("retries Telegram adapter shutdown during startup rollback before giving up
       OPERATIONAL_STATE_DIRECTORY: process.cwd()
     },
     runtimeSessionId: "test-runtime-session",
-    createOperationalStateStore: () => ({
-      runtimeSessionId: "test-runtime-session",
-      verify: async () => ({
-        ok: true,
-        data: {
-        valid: true,
-        durableWriteSupported: true
-      }
-      }),
-      readAll: async () => ({
-        ok: true,
-        data: {
-          records: [{
-            sequence: "0",
-            factId: "durable-facts:genesis",
-            factType: "LEDGER_INITIALIZED",
-            runtimeSessionId: "test-runtime-session",
-            data: { schemaVersion: 1 }
-          }],
-          durableWriteSupported: true,
-          lastCommittedSequence: "0",
-          lastCommittedDigest: "a".repeat(64),
-        },
-      }),
-      append: async () => ({
-        ok: true,
-        data: { durable: true }
-      }),
-    }),
+    createOperationalStateStore: () => operationalStateStore,
     createTelegramOperatorAdapter: () => ({
       start: async () => { throw new Error("Telegram getMe unauthorized") },
       stop: async () => {
@@ -789,95 +755,89 @@ function createOperatorControlOperationalStateStore({ calls, appendedFacts }) {
   }
 }
 
+function createTelegramProcessLocalRuntimeFixture({ calls, appendedFacts, broker, onOperator }) {
+  const operationalStateStore = createOperatorControlOperationalStateStore({ calls,
+    appendedFacts })
+  let operator
+  const runtime = startHarvesterForTest({
+    loadConfig: async () => createTelegramOperatorConfig(),
+    env: {
+      ...binanceEnv,
+      TELEGRAM_BOT_TOKEN: "test-telegram-token",
+      OPERATIONAL_STATE_DIRECTORY: process.cwd(),
+    },
+    runtimeSessionId: "test-runtime-session",
+    createOperationalStateStore: ({ directory, runtimeSessionId }) => {
+      calls.push("create-Operational State Store records-store")
+      assert.equal(directory, process.cwd())
+      assert.equal(runtimeSessionId, "test-runtime-session")
+      return operationalStateStore
+    },
+    createTelegramOperatorAdapter: ({ botToken, allowedUserIds, operator: suppliedOperator }) => {
+      calls.push("create-telegram-adapter")
+      assert.equal(botToken, "test-telegram-token")
+      assert.deepEqual(allowedUserIds, ["12345"])
+      operator = suppliedOperator
+      onOperator?.(operator)
+      return {
+        start: async () => calls.push("start-telegram-poller"),
+        stop: async () => calls.push("stop-telegram-poller"),
+      }
+    },
+    brokerAdapterFactory: () => broker,
+    logger: { info() {},
+      error() {} },
+  })
+  return { runtime,
+    getOperator: () => operator }
+}
+
 test("starts/stops Telegram CC and applies process-local pause without recovery storage", async () => {
-  const config = {
-    ...appConfig,
-    operatorControl: { telegram: {
-    enabled: true,
-    allowedUserIds: ["12345"]
-  } }
-  }
   const calls = []
   const appendedFacts = []
-  let operator
   const broker = createBroker(calls)
   let placeOrderCalls = 0
   let cancelOrderCalls = 0
   broker.placeOrder = async () => { placeOrderCalls += 1; return { ok: true } }
   broker.cancelOrder = async () => { cancelOrderCalls += 1; return { ok: true } }
-  const operationalStateStore = createOperatorControlOperationalStateStore({
+  const fixture = createTelegramProcessLocalRuntimeFixture({
     calls,
     appendedFacts,
+    broker,
   })
-  const runtime = await startHarvesterForTest({
-    loadConfig: async () => config,
-    env: {
-      ...binanceEnv,
-      TELEGRAM_BOT_TOKEN: "test-telegram-token",
-      OPERATIONAL_STATE_DIRECTORY: process.cwd()
-    },
-    runtimeSessionId: "test-runtime-session",
-    createOperationalStateStore: ({
-      directory,
-      runtimeSessionId
-    }) => {
-      calls.push("create-Operational State Store records-store")
-      assert.equal(directory, process.cwd(), "The configured absolute store directory must be passed unchanged to the ADR-0001 adapter.")
-      assert.equal(runtimeSessionId, "test-runtime-session", "The current process identity must scope appended Operational State Store records.")
-      return operationalStateStore
-    },
-    createTelegramOperatorAdapter: ({
-      botToken,
-      allowedUserIds,
-      operator: suppliedOperator
-    }) => {
-      calls.push("create-telegram-adapter")
-      assert.equal(botToken, "test-telegram-token", "The Telegram bot token must come from the environment and never app config.")
-      assert.deepEqual(allowedUserIds, ["12345"], "Only configured trusted Telegram user IDs may reach the adapter.")
-      operator = suppliedOperator
-      return {
-        start: async () => calls.push("start-telegram-poller"),
-        stop: async () => calls.push("stop-telegram-poller")
-      }
-    },
-    brokerAdapterFactory: () => broker,
-    logger: {
-      info() {},
-      error() {}
-    },
-  })
+  const runtime = await fixture.runtime
+  const operator = fixture.getOperator()
   try {
-    assert.equal(calls.includes("create-Operational State Store records-store"), false, "Telegram CC must not construct the recovery store.")
-    assert.equal(calls.includes("verify-Operational State Store records"), false, "Telegram CC startup must not verify the recovery store.")
-    assert.ok(calls.indexOf("start-telegram-poller") < calls.indexOf("subscribe:user-data"), "The operator poller must be ready before the runtime begins accepting trading events.")
+    assert.equal(calls.includes("create-Operational State Store records-store"), false)
+    assert.equal(calls.includes("verify-Operational State Store records"), false)
+    assert.ok(calls.indexOf("start-telegram-poller") < calls.indexOf("subscribe:user-data"))
     const pauseResult = await operator.pauseMarket({
-      actor: {
-      id: "telegram-user:12345",
-      roles: ["trading-operator"]
-    },
+      actor: { id: "telegram-user:12345",
+        roles: ["trading-operator"] },
       requestId: "telegram:9001",
-      symbol: "BTCUSDT"
+      symbol: "BTCUSDT",
     })
-    assert.equal(pauseResult.ok, true, "An authorized market pause must complete through the existing application use case.")
-    assert.equal(pauseResult.data.durable, false, "A CC pause without recovery storage must be explicitly process-local.")
-    assert.equal(appendedFacts.some(({ factType }) => factType === "OPERATOR_MARKET_PAUSED" || factType === "OPERATOR_MARKET_RESUMED"), false, "Process-local CC commands must not write recovery facts.")
-    assert.equal(calls.includes("append-operator-fact"), false, "A process-local CC pause must not access durable recovery storage.")
-    assert.equal(placeOrderCalls, 0, "An operator pause must not submit any exchange order.")
-    assert.equal(cancelOrderCalls, 0, "An operator pause must not cancel any exchange order.")
-  } finally { await runtime.stop() }
-  assert.ok(calls.indexOf("stop-telegram-poller") < calls.indexOf("disconnect"), "Inbound commands must stop before broker shutdown begins.")
+    assert.equal(pauseResult.ok, true)
+    assert.equal(pauseResult.data.durable, false)
+    assert.equal(appendedFacts.some(({ factType }) =>
+      factType === "OPERATOR_MARKET_PAUSED" || factType === "OPERATOR_MARKET_RESUMED"), false)
+    assert.equal(calls.includes("append-operator-fact"), false)
+    assert.equal(placeOrderCalls, 0)
+    assert.equal(cancelOrderCalls, 0)
+  } finally {
+    await runtime.stop()
+  }
+  assert.ok(calls.indexOf("stop-telegram-poller") < calls.indexOf("disconnect"))
 })
 
 test("stops Telegram and broker when Telegram identity verification fails during startup", async () => {
-  const config = {
-    ...appConfig,
-    operatorControl: { telegram: {
-    enabled: true,
-    allowedUserIds: ["12345"]
-  } }
-  }
+  const config = createTelegramOperatorConfig()
   const calls = []
   const broker = createBroker(calls)
+  const operationalStateStore = createOperatorControlOperationalStateStore({
+    calls,
+    appendedFacts: [],
+  })
   await assert.rejects(startHarvesterForTest({
     loadConfig: async () => config,
     env: {
@@ -886,35 +846,7 @@ test("stops Telegram and broker when Telegram identity verification fails during
       OPERATIONAL_STATE_DIRECTORY: process.cwd()
     },
     runtimeSessionId: "test-runtime-session",
-    createOperationalStateStore: () => ({
-      runtimeSessionId: "test-runtime-session",
-      verify: async () => ({
-        ok: true,
-        data: {
-        valid: true,
-        durableWriteSupported: true
-      }
-      }),
-      readAll: async () => ({
-        ok: true,
-        data: {
-          records: [{
-            sequence: "0",
-            factId: "durable-facts:genesis",
-            factType: "LEDGER_INITIALIZED",
-            runtimeSessionId: "test-runtime-session",
-            data: { schemaVersion: 1 }
-          }],
-          durableWriteSupported: true,
-          lastCommittedSequence: "0",
-          lastCommittedDigest: "a".repeat(64),
-        },
-      }),
-      append: async () => ({
-        ok: true,
-        data: { durable: true }
-      }),
-    }),
+    createOperationalStateStore: () => operationalStateStore,
     createTelegramOperatorAdapter: () => ({
       start: async () => { calls.push("start-telegram-poller"); throw new Error("Telegram getMe unauthorized") },
       stop: async () => calls.push("stop-telegram-poller")
@@ -958,8 +890,8 @@ test("subscribes only enabled pairs for Binance trading", async () => {
   await result.stop()
   assert.deepEqual(calls, [
     "connect", "filters:BTCUSDT", "filters:ETHUSDT", "subscribe:user-data", "account:snapshot",
-    "subscribe:book:BTCUSDT", "subscribe:BTCUSDT", "account:snapshot", "unsubscribe:user-data",
-    "unsubscribe:book:BTCUSDT", "unsubscribe:BTCUSDT", "disconnect",
+    "subscribe:book:BTCUSDT", "subscribe:BTCUSDT", "account:snapshot",
+    "unsubscribe:book:BTCUSDT", "unsubscribe:BTCUSDT", "unsubscribe:user-data", "disconnect",
   ], "Expected calls to match the expected structure in \"subscribes only enabled pairs for Binance trading\".")
 })
 
@@ -1009,24 +941,30 @@ test("keeps external open orders audit-blocked but does not block startup or can
   })
 
   try {
-    assert.equal(runtime.userDataReady, true, "An external order must not block the user-data readiness gate.")
-    assert.equal(runtime.userDataStatus, "READY")
-    assert.equal(runtime.recoveredState.orderRegistry.orders.length, 0, "The external order must not be adopted into Harvester ownership.")
-    const audit = logs.find((entry) =>
-      entry.message === "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched")
-    assert.ok(audit, "The audit log must explicitly identify external orders as unowned and untouched.")
-    assert.equal(audit.readiness, "BLOCKED", "BLOCKED is the account-audit status, not trading-engine readiness.")
-    assert.ok(logs.some((entry) =>
-      entry.message === "Conservative TESTNET startup checks passed; current account audit is complete"))
-    assert.ok(logs.some((entry) =>
-      entry.message === "Conservative TESTNET trading engine activated"))
-    assert.equal(externalOpenOrder.clientOrderId, "manual-client-order")
+    assertExternalOrderRemainsUnowned({ runtime,
+      logs,
+      externalOpenOrder })
   } finally {
     await runtime.stop()
   }
   assert.deepEqual(cancellationRequests, [], "Startup and shutdown must never cancel a manually placed external order.")
 })
 
+
+function assertExternalOrderRemainsUnowned({ runtime, logs, externalOpenOrder }) {
+  assert.equal(runtime.userDataReady, true, "An external order must not block the user-data readiness gate.")
+  assert.equal(runtime.userDataStatus, "READY")
+  assert.equal(runtime.recoveredState.orderRegistry.orders.length, 0, "The external order must not be adopted into Harvester ownership.")
+  const audit = logs.find((entry) =>
+    entry.message === "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched")
+  assert.ok(audit, "The audit log must explicitly identify external orders as unowned and untouched.")
+  assert.equal(audit.readiness, "BLOCKED", "BLOCKED is the account-audit status, not trading-engine readiness.")
+  assert.ok(logs.some((entry) =>
+    entry.message === "Conservative TESTNET startup checks passed; current account audit is complete"))
+  assert.ok(logs.some((entry) =>
+    entry.message === "Conservative TESTNET trading engine activated"))
+  assert.equal(externalOpenOrder.clientOrderId, "manual-client-order")
+}
 
 function createTwoMarketStartupConfig() {
   const strategy = appConfig.strategies.CG_coinGrabber
@@ -1048,6 +986,64 @@ function createTwoMarketStartupConfig() {
   }
 }
 
+function configureDelayedTickerPricePort({ broker, calls, firstTicker, resolveFirstTickerRequested }) {
+  broker.getPrices = async ({ symbol }) => {
+    calls.push(`prices:${symbol}`)
+    if (symbol === "BTCUSDT") {
+      resolveFirstTickerRequested()
+      return firstTicker
+    }
+    return { ok: true,
+      data: { symbol,
+        price: "65000" } }
+  }
+}
+
+function configureDelayedTickerAccountSnapshot(broker) {
+  let accountSnapshotTime = 0
+  broker.getAccountSnapshot = async () => {
+    accountSnapshotTime += 1
+    const balances = ["BTC", "ETH", "USDT"].map((code) => {
+      const asset = new Asset({ id: `asset:${code}`,
+        code })
+      return new Balance({
+        free: new Quantity({ amount: "0",
+          asset }),
+        locked: new Quantity({ amount: "0",
+          asset }),
+      })
+    })
+    return { ok: true,
+      data: { balances,
+        sourceTime: accountSnapshotTime } }
+  }
+}
+
+function configureDelayedTickerOrderPort(broker) {
+  let placeOrderCalls = 0
+  broker.placeOrder = async () => {
+    placeOrderCalls += 1
+    return { ok: true }
+  }
+  return () => placeOrderCalls
+}
+
+function configureDelayedTickerSubscriptionPort(broker) {
+  let resolveSecondSubscription
+  const secondSubscription = new Promise((resolve) => {
+    resolveSecondSubscription = resolve
+  })
+  const { subscribeForPrices } = broker
+  broker.subscribeForPrices = async (input) => {
+    const result = await subscribeForPrices(input)
+    if (input.symbol === "ETHUSDT") {
+      resolveSecondSubscription()
+    }
+    return result
+  }
+  return secondSubscription
+}
+
 function createDelayedFirstTickerBroker({ broker, calls }) {
   let resolveFirstTicker
   let resolveFirstTickerRequested
@@ -1057,72 +1053,17 @@ function createDelayedFirstTickerBroker({ broker, calls }) {
   const firstTickerRequested = new Promise((resolve) => {
     resolveFirstTickerRequested = resolve
   })
-  broker.getPrices = async ({ symbol }) => {
-    calls.push(`prices:${  symbol}`)
-    if (symbol === "BTCUSDT") {
-      resolveFirstTickerRequested()
-      return firstTicker
-    }
-    return {
-      ok: true,
-      data: {
-        symbol,
-        price: "65000",
-      },
-    }
-  }
-  let accountSnapshotTime = 0
-  broker.getAccountSnapshot = async () => {
-    accountSnapshotTime += 1
-    const balances = ["BTC", "ETH", "USDT"].map((code) => {
-      const asset = new Asset({
-        id: `asset:${  code}`,
-        code,
-      })
-      return new Balance({
-        free: new Quantity({
-          amount: "0",
-          asset,
-        }),
-        locked: new Quantity({
-          amount: "0",
-          asset,
-        }),
-      })
-    })
-    return {
-      ok: true,
-      data: {
-        balances,
-        sourceTime: accountSnapshotTime,
-      },
-    }
-  }
-  let placeOrderCalls = 0
-  broker.placeOrder = async () => {
-    placeOrderCalls += 1
-    return {
-      ok: true,
-    }
-  }
-  let resolveSecondSubscription
-  const secondSubscription = new Promise((resolve) => {
-    resolveSecondSubscription = resolve
-  })
-  const {subscribeForPrices} = broker
-  broker.subscribeForPrices = async (input) => {
-    const result = await subscribeForPrices(input)
-    if (input.symbol === "ETHUSDT") {
-      resolveSecondSubscription()
-    }
-    return result
-  }
-  return {
-    secondSubscription,
+  configureDelayedTickerPricePort({ broker,
+    calls,
+    firstTicker,
+    resolveFirstTickerRequested })
+  configureDelayedTickerAccountSnapshot(broker)
+  const getPlaceOrderCalls = configureDelayedTickerOrderPort(broker)
+  const secondSubscription = configureDelayedTickerSubscriptionPort(broker)
+  return { secondSubscription,
     firstTickerRequested,
     resolveFirstTicker,
-    getPlaceOrderCalls: () => placeOrderCalls,
-  }
+    getPlaceOrderCalls }
 }
 
 async function assertSecondMarketSubscribedBeforeTicker({
@@ -1581,27 +1522,24 @@ test("starts application reconciliation on transport recovery and acknowledges o
   await result.stop()
 })
 
-test("repeats recovery snapshots when a user-data event arrives during REST audit reads", async () => {
-  const broker = createBroker()
-  const {getAccountSnapshot} = broker
-  let accountReads = 0
-  let openOrderReads = 0
-  const {getOpenOrders} = broker
+function configureRecoverySnapshotReplay(broker) {
+  const { getAccountSnapshot, getOpenOrders, subscribeForUserData } = broker
+  const counters = { accountReads: 0,
+    openOrderReads: 0,
+    acknowledgements: 0 }
+  let resolveAcknowledgement
+  const acknowledged = new Promise((resolve) => { resolveAcknowledgement = resolve })
   broker.getOpenOrders = async (input) => {
-    openOrderReads += 1
+    counters.openOrderReads += 1
     return getOpenOrders(input)
   }
   broker.getAccountSnapshot = async () => {
-    accountReads += 1
-    if (accountReads === 2) {
+    counters.accountReads += 1
+    if (counters.accountReads === 2) {
       broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
     }
     return getAccountSnapshot()
   }
-  let acknowledgementCount = 0
-  let resolveAcknowledgement
-  const acknowledged = new Promise((resolve) => { resolveAcknowledgement = resolve })
-  const {subscribeForUserData} = broker
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
     return {
@@ -1609,7 +1547,7 @@ test("repeats recovery snapshots when a user-data event arrives during REST audi
       data: {
         ...result.data,
         acknowledgeRecovery: () => {
-          acknowledgementCount += 1
+          counters.acknowledgements += 1
           handlers.onStatus({
             type: "reconciled",
             recoveryRequired: false,
@@ -1621,37 +1559,47 @@ test("repeats recovery snapshots when a user-data event arrives during REST audi
       },
     }
   }
+  return {
+    acknowledged,
+    getAccountReads: () => counters.accountReads,
+    getOpenOrderReads: () => counters.openOrderReads,
+    getAcknowledgements: () => counters.acknowledgements,
+  }
+}
+
+test("repeats recovery snapshots when a user-data event arrives during REST audit reads", async () => {
+  const broker = createBroker()
+  const recovery = configureRecoverySnapshotReplay(broker)
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: {
       ...binanceEnv,
-      NODE_ENV: "development"
+      NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
     logger: {
       info() {},
-      error() {}
+      error() {},
     },
   })
-
   broker.emitUserDataStatus({
     type: "recovered",
     subscriptionId: 17,
     recoveryRequired: true,
     reconciliationRequired: true,
   })
-  await waitForTestSignal(acknowledged, "recovery after user-data audit event", () => ({
-    accountReads,
-    openOrderReads,
-    acknowledgementCount,
+  await waitForTestSignal(recovery.acknowledged, "recovery after user-data audit event", () => ({
+    accountReads: recovery.getAccountReads(),
+    openOrderReads: recovery.getOpenOrderReads(),
+    acknowledgementCount: recovery.getAcknowledgements(),
   }), 2_000)
-
-  assert.equal(accountReads, 3)
-  assert.equal(openOrderReads, 3)
-  assert.equal(acknowledgementCount, 1)
+  assert.equal(recovery.getAccountReads(), 3)
+  assert.equal(recovery.getOpenOrderReads(), 3)
+  assert.equal(recovery.getAcknowledgements(), 1)
   assert.equal(result.userDataReady, true)
   await result.stop()
 })
+
 
 test("logs stack and cause details when a user-data RPC error has an empty message", async () => {
   const broker = createBroker()
@@ -1748,42 +1696,50 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
   await assert.rejects(result.stop(), /Harvester shutdown was incomplete/, "shutdown must reject when startup recovery leaves user-data reconciliation incomplete")
 })
 
-test("does not acknowledge a stale recovery after a newer disconnect", async () => {
-  const broker = createBroker()
-  const {getAccountSnapshot} = broker
-  let accountReads = 0
-  let releaseRecoverySnapshot
-  let resolveRecoverySnapshotStarted
-  const recoverySnapshotStarted = new Promise((resolve) => { resolveRecoverySnapshotStarted = resolve })
-  const recoverySnapshotGate = new Promise((resolve) => { releaseRecoverySnapshot = resolve })
+function configureStaleRecoveryRace(broker) {
+  const { getAccountSnapshot, subscribeForUserData } = broker
+  const signals = {}
+  const counters = { accountReads: 0,
+    acknowledgements: 0 }
+  signals.recoverySnapshotStarted = new Promise((resolve) => { signals.resolveSnapshotStarted = resolve })
+  signals.recoverySnapshotGate = new Promise((resolve) => { signals.releaseSnapshot = resolve })
+  signals.staleFailure = new Promise((resolve) => { signals.resolveStaleFailure = resolve })
   broker.getAccountSnapshot = async () => {
-    accountReads += 1
-    if (accountReads === 2) {
-      resolveRecoverySnapshotStarted()
-      await recoverySnapshotGate
+    counters.accountReads += 1
+    if (counters.accountReads === 2) {
+      signals.resolveSnapshotStarted()
+      await signals.recoverySnapshotGate
     }
     return getAccountSnapshot()
   }
-  let acknowledgementCount = 0
-  let resolveStaleFailure
-  const staleFailure = new Promise((resolve) => { resolveStaleFailure = resolve })
-  const {subscribeForUserData} = broker
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
     return {
       ...result,
       data: {
         ...result.data,
-        acknowledgeRecovery: () => { acknowledgementCount += 1; return true },
+        acknowledgeRecovery: () => {
+          counters.acknowledgements += 1
+          return true
+        },
       },
     }
   }
+  return {
+    ...signals,
+    getAccountReads: () => counters.accountReads,
+    getAcknowledgements: () => counters.acknowledgements,
+  }
+}
 
+test("does not acknowledge a stale recovery after a newer disconnect", async () => {
+  const broker = createBroker()
+  const race = configureStaleRecoveryRace(broker)
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: {
       ...binanceEnv,
-      NODE_ENV: "development"
+      NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
@@ -1791,34 +1747,35 @@ test("does not acknowledge a stale recovery after a newer disconnect", async () 
       info() {},
       error: (entry) => {
         if (entry?.message === "application recovery failed; trading remains blocked") {
-          resolveStaleFailure(entry)
+          race.resolveStaleFailure(entry)
         }
       },
     },
   })
-
   broker.emitUserDataStatus({
     type: "recovered",
     subscriptionId: 17,
     recoveryRequired: true,
     reconciliationRequired: true,
   })
-  await waitForTestSignal(recoverySnapshotStarted, "recovery account snapshot", () => ({ accountReads }), 2_000)
+  await waitForTestSignal(race.recoverySnapshotStarted, "recovery account snapshot", () => ({
+    accountReads: race.getAccountReads(),
+  }), 2_000)
   broker.emitUserDataStatus({
     type: "connectionClosed",
     code: 1006,
-    recoveryRequired: true
+    recoveryRequired: true,
   })
-  releaseRecoverySnapshot()
-  await waitForTestSignal(staleFailure, "stale recovery rejection", () => ({
-    accountReads,
-    acknowledgementCount
+  race.releaseSnapshot()
+  await waitForTestSignal(race.staleFailure, "stale recovery rejection", () => ({
+    accountReads: race.getAccountReads(),
+    acknowledgementCount: race.getAcknowledgements(),
   }), 2_000)
-
-  assert.equal(acknowledgementCount, 0)
+  assert.equal(race.getAcknowledgements(), 0)
   assert.equal(result.userDataReady, false)
-  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/, "shutdown must reject when a newer disconnect prevents authoritative user-data recovery")
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
 })
+
 
 test("fails startup when user-data recovery is required during subscription setup", async () => {
   const broker = createBroker()
@@ -2418,67 +2375,57 @@ class TestnetTradingRecoveryScenario {
     }
   }
 
-  async runStep1() {
-    this.calls = []
-  
-    this.buyCancellationCount = { value: 0 }
-  
-    this.subscriptions = new Map()
-  
-    this.bookSubscriptions = new Map()
-  
-    this.userDataHandlers = undefined
-    this.snapshotTime = 0
-  
-    this.baseBalance = "0"
-  
-    this.signalRecoveryCompleted = undefined
-    this.recoveryCompleted = new Promise((resolve) => { this.signalRecoveryCompleted = resolve })
-  
-    this.submittedOrders = []
-  
-    this.canonicalOrdersByBrokerId = new Map()
-  
-    this.fillHistoryByOrder = new Map()
-  
-    this.runtimeErrors = []
-  
-    this.runtimeDebug = []
-  
-    this.runtimeInfo = []
-  
-    this.publishedEvents = []
-  
-    this.durableFlushes = []
-  
-    this.recoveryFillTradeId = "testnet-buy-fill"
-  
-    this.recoveryPending = false
-  
-    this.recoveryCanonicalHistoryReads = 0
-  
-    this.recoveryFillHistoryReads = 0
-  
-    this.recoveryAccountWideOpenOrderReads = 0
-  
-    this.recoveryOwnedOpenOrderReads = 0
-  
-    this.recoveryAccountSnapshotReads = 0
-  
-    this.recoveryAcknowledgementCount = 0
-  
-    this.recoveryQueuedFillProcessedCount = 0
-  
-    this.recoveryQueuedFillMode = undefined
-    this.recoveryAcknowledgementObservation = undefined
-    this.resolveRecoveryHistoryStarted = undefined
-    this.releaseRecoveryHistory = undefined
-    this.resolveRecoveryQueuedFillProcessed = undefined
-    this.resolveRecoveryAcknowledged = undefined
+  resetStep1ProcessState() {
+        this.calls = []
+        this.buyCancellationCount = { value: 0 }
+        this.subscriptions = new Map()
+        this.bookSubscriptions = new Map()
+        this.userDataHandlers = undefined
+        this.snapshotTime = 0
+        this.baseBalance = "0"
+        this.signalRecoveryCompleted = undefined
+        this.recoveryCompleted = new Promise((resolve) => { this.signalRecoveryCompleted = resolve })
+        this.submittedOrders = []
+        this.canonicalOrdersByBrokerId = new Map()
+        this.fillHistoryByOrder = new Map()
+        this.runtimeErrors = []
+        this.runtimeDebug = []
+        this.runtimeInfo = []
+        this.publishedEvents = []
+        this.durableFlushes = []
+  }
+
+  resetStep1RecoveryState() {
+        this.recoveryFillTradeId = "testnet-buy-fill"
+        this.recoveryPending = false
+        this.recoveryCanonicalHistoryReads = 0
+        this.recoveryFillHistoryReads = 0
+        this.recoveryAccountWideOpenOrderReads = 0
+        this.recoveryOwnedOpenOrderReads = 0
+        this.recoveryAccountSnapshotReads = 0
+        this.recoveryAcknowledgementCount = 0
+        this.recoveryQueuedFillProcessedCount = 0
+        this.recoveryQueuedFillMode = undefined
+        this.recoveryAcknowledgementObservation = undefined
+        this.resolveRecoveryHistoryStarted = undefined
+        this.releaseRecoveryHistory = undefined
+        this.resolveRecoveryQueuedFillProcessed = undefined
+        this.resolveRecoveryAcknowledged = undefined
+  }
+
+  resetStep1State() {
+    this.resetStep1ProcessState()
+    this.resetStep1RecoveryState()
+  }
+  initializeStep1RecoveryHistoryGate() {
     this.recoveryHistoryStarted = new Promise((resolve) => {
       this.resolveRecoveryHistoryStarted = resolve
     })
-  
+  }
+
+  async runStep1() {
+    this.resetStep1State()
+    this.initializeStep1RecoveryHistoryGate()
   }
 
   async runStep2() {
@@ -3777,11 +3724,11 @@ test("does not publish CLOSING or disconnect when owned-order REST reconciliatio
   })
 })
 
-test("journals PREFLIGHT balances and open orders before trading and CLOSING balances before broker disconnect", async () => {
+async function createPreflightJournalRuntime() {
   const calls = []
   const broker = createBroker(calls)
   let openOrderReads = 0
-  const {getOpenOrders} = broker
+  const { getOpenOrders } = broker
   broker.getOpenOrders = async (input) => {
     openOrderReads += 1
     assert.deepEqual(input, {})
@@ -3791,62 +3738,70 @@ test("journals PREFLIGHT balances and open orders before trading and CLOSING bal
   const eventPublisher = {
     publish: (event) => {
       events.push(event)
-      calls.push(`publish:${  event.name}`)
+      calls.push(`publish:${event.name}`)
       return { ok: true }
     },
     flush: async () => {
       calls.push("journal:flush")
-      return {
-        ok: true,
-        durable: true
-      }
+      return { ok: true,
+        durable: true }
     },
   }
   const runtime = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: {
       ...binanceEnv,
-      NODE_ENV: "development"
+      NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
     eventPublisher,
     logger: {
       info() {},
       error() {},
-      debug() {}
+      debug() {},
     },
   })
+  return { calls,
+    events,
+    runtime,
+    getOpenOrderReads: () => openOrderReads }
+}
 
+function assertPreflightJournalAudit({ calls, events, openOrderReads }) {
   const openingEvent = events.find((event) => event.name === "account.snapshot_captured")
+  const openOrdersEvent = events.find((event) => event.name === "account.open_orders_captured")
   assert.equal(calls.filter((call) => call === "account:snapshot").length, 1)
   assert.equal(openOrderReads, 1)
   assert.equal(events.filter((event) => event.name === "account.snapshot_captured" && event.data.phase === "PREFLIGHT").length, 1)
   assert.equal(events.filter((event) => event.name === "account.open_orders_captured" && event.data.phase === "PREFLIGHT").length, 1)
   assert.equal(openingEvent.data.phase, "PREFLIGHT")
-  const openOrdersEvent = events.find((event) => event.name === "account.open_orders_captured")
   assert.equal(openOrdersEvent.data.readiness, "READY")
   assert.equal(openOrdersEvent.data.orderCount, 0)
   assert.deepEqual(openOrdersEvent.data.orders, [])
   assert.equal(openingEvent.data.auditStatus, "COMPLETE")
   assert.ok(openingEvent.data.balances.some((balance) => balance.asset === "BTC"))
   assert.ok(openingEvent.data.balances.some((balance) => balance.asset === "USDT"))
-  const openingPublishIndex = calls.indexOf("publish:account.snapshot_captured")
-  const openingFlushIndex = calls.indexOf("journal:flush")
-  const firstMarketSubscriptionIndex = calls.findIndex((call) => call.startsWith("subscribe:book:"))
-  assert.ok(openingPublishIndex >= 0)
-  assert.ok(openingFlushIndex > openingPublishIndex)
-  assert.ok(firstMarketSubscriptionIndex > calls.lastIndexOf("journal:flush"))
+  assert.ok(calls.indexOf("journal:flush") > calls.indexOf("publish:account.snapshot_captured"))
+  assert.ok(calls.findIndex((call) => call.startsWith("subscribe:book:")) > calls.lastIndexOf("journal:flush"))
+}
 
-  await runtime.stop()
+function assertClosingJournalAudit({ calls, events }) {
+  const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
+  assert.equal(snapshots.length, 2)
+  assert.equal(snapshots[1].data.phase, "CLOSING")
+  assert.equal(snapshots[1].data.auditStatus, "COMPLETE")
+  assert.ok(calls.indexOf("disconnect") > calls.lastIndexOf("journal:flush"))
+}
 
-  const snapshotEvents = events.filter((event) => event.name === "account.snapshot_captured")
-  assert.equal(snapshotEvents.length, 2)
-  assert.equal(snapshotEvents[1].data.phase, "CLOSING")
-  assert.equal(snapshotEvents[1].data.auditStatus, "COMPLETE")
-  const closingFlushIndex = calls.lastIndexOf("journal:flush")
-  const disconnectIndex = calls.indexOf("disconnect")
-  assert.ok(closingFlushIndex >= 0)
-  assert.ok(disconnectIndex > closingFlushIndex)
+test("journals PREFLIGHT balances and open orders before trading and CLOSING balances before broker disconnect", async () => {
+  const fixture = await createPreflightJournalRuntime()
+  assertPreflightJournalAudit({
+    calls: fixture.calls,
+    events: fixture.events,
+    openOrderReads: fixture.getOpenOrderReads(),
+  })
+  await fixture.runtime.stop()
+  assertClosingJournalAudit(fixture)
 })
 
 
@@ -3902,63 +3857,78 @@ function createPriorProcessOrderBroker({ calls, canceledClientOrderIds } = {}) {
 startupClientOrderId }
 }
 
-test("treats a prior-process Harvester order as external under IGNORE and evaluates a real market-price event", async () => {
-  const calls = []
-  const canceledClientOrderIds = []
-  const { broker, startupClientOrderId } = createPriorProcessOrderBroker({
-    calls,
-    canceledClientOrderIds,
-  })
-  const events = []
-  const eventPublisher = {
-    publish: (event) => { events.push(event); return { ok: true } },
-    flush: async () => ({
-      ok: true,
-      durable: true
-    }),
-  }
-  const runtime = await startHarvesterForTest({
-    loadConfig: async () => ({
-      ...appConfig,
-      strategies: {
-        ...appConfig.strategies,
-        CG_coinGrabber: {
-          ...appConfig.strategies.CG_coinGrabber,
-          pairs: {
-            ...appConfig.strategies.CG_coinGrabber.pairs,
-            BTCUSDT: {
-              ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
-              enabled: true,
-              enableVolatilityProtection: false,
-              makerPercent: 0.1,
-              takerPercent: 0.1,
-            },
+function createPriorProcessOrderConfig() {
+  return {
+    ...appConfig,
+    strategies: {
+      ...appConfig.strategies,
+      CG_coinGrabber: {
+        ...appConfig.strategies.CG_coinGrabber,
+        pairs: {
+          ...appConfig.strategies.CG_coinGrabber.pairs,
+          BTCUSDT: {
+            ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+            enabled: true,
+            enableVolatilityProtection: false,
+            makerPercent: 0.1,
+            takerPercent: 0.1,
           },
         },
       },
-    }),
+    },
+  }
+}
+
+async function startPriorProcessOrderRuntime({ broker, events }) {
+  const eventPublisher = {
+    publish: (event) => {
+      events.push(event)
+      return { ok: true }
+    },
+    flush: async () => ({ ok: true,
+      durable: true }),
+  }
+  return startHarvesterForTest({
+    loadConfig: async () => createPriorProcessOrderConfig(),
     env: {
       ...binanceEnv,
-      NODE_ENV: "development"
+      NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
     eventPublisher,
     logger: {
       info() {},
       error() {},
-      debug() {}
+      debug() {},
     },
   })
+}
 
+function assertPriorProcessOrderIsIgnored({ runtime, calls, events, startupClientOrderId, canceledClientOrderIds }) {
   const openOrders = events.find((event) => event.name === "account.open_orders_captured")
-  assert.equal(openOrders.data.readiness, "BLOCKED", "the audit must preserve its unowned-order classification independently of trading readiness")
-  assert.deepEqual(openOrders.data.blockReasons, ["UNOWNED_OPEN_ORDERS:1"], "the Journal must preserve why the startup order is not owned by this process")
-  assert.equal(openOrders.data.orderCount, 1, "the account-wide audit must record the pre-existing order")
-  assert.equal(openOrders.data.orders[0].brokerOrderId, "699694", "the audit must preserve the exact external broker order ID")
-  assert.equal(openOrders.data.orders[0].clientOrderId, startupClientOrderId, "the audit must preserve the prior-process client-order identity")
-  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), true, "an unowned startup order must not prevent market-price subscriptions")
-  assert.equal(runtime.recoveredState.orderRegistry.getActiveOrders().length, 0, "the startup order must remain absent from the current-process OrderRegistry")
+  assert.equal(openOrders.data.readiness, "BLOCKED")
+  assert.deepEqual(openOrders.data.blockReasons, ["UNOWNED_OPEN_ORDERS:1"])
+  assert.equal(openOrders.data.orderCount, 1)
+  assert.equal(openOrders.data.orders[0].brokerOrderId, "699694")
+  assert.equal(openOrders.data.orders[0].clientOrderId, startupClientOrderId)
+  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), true)
+  assert.equal(runtime.recoveredState.orderRegistry.getActiveOrders().length, 0)
+  assert.equal(canceledClientOrderIds.includes(startupClientOrderId), false)
+}
 
+test("treats a prior-process Harvester order as external under IGNORE and evaluates a real market-price event", async () => {
+  const calls = []
+  const canceledClientOrderIds = []
+  const { broker, startupClientOrderId } = createPriorProcessOrderBroker({ calls,
+    canceledClientOrderIds })
+  const events = []
+  const runtime = await startPriorProcessOrderRuntime({ broker,
+    events })
+  assertPriorProcessOrderIsIgnored({ runtime,
+    calls,
+    events,
+    startupClientOrderId,
+    canceledClientOrderIds })
   const evaluation = await runtime.processMarketPrice({
     symbol: "BTCUSDT",
     priceEvent: {
@@ -3967,16 +3937,15 @@ test("treats a prior-process Harvester order as external under IGNORE and evalua
       timestamp: Date.now(),
     },
   })
-  assert.equal(evaluation.ok, true, "A valid market-price event must reach the strategy engine.")
-  assert.notEqual(evaluation.data?.reason, "UNOWNED_OPEN_ORDER", "The default IGNORE policy must not defer evaluation because a startup order uses the reserved Harvester prefix.")
-  assert.notEqual(evaluation.data?.skipped, true, "The startup order must not create an unconditional strategy deferral.")
-  assert.equal(runtime.recoveredState.orderRegistry.getActiveOrders().length, 0, "The prior-process order must remain outside the current-process registry.")
-  assert.equal(canceledClientOrderIds.includes(startupClientOrderId), false, "The current process must never cancel the startup-snapshot order.")
-
+  assert.equal(evaluation.ok, true)
+  assert.notEqual(evaluation.data?.reason, "UNOWNED_OPEN_ORDER")
+  assert.notEqual(evaluation.data?.skipped, true)
+  assert.equal(runtime.recoveredState.orderRegistry.getActiveOrders().length, 0)
   await runtime.stop()
-  assert.equal(canceledClientOrderIds.includes(startupClientOrderId), false, "shutdown must not cancel the prior-process order")
-  assert.ok(calls.includes("disconnect"), "the test must close the broker connection after verifying startup")
+  assert.equal(canceledClientOrderIds.includes(startupClientOrderId), false)
+  assert.ok(calls.includes("disconnect"))
 })
+
 
 test("fails closed before market subscriptions when the account-wide open-order query fails", async () => {
   const calls = []
@@ -4015,30 +3984,21 @@ test("fails closed before market subscriptions when the account-wide open-order 
 
  
 
-function createDurableStartupAuditFixture({ calls }) {
-  const broker = createBroker(calls)
-  let accountReads = 0
-  let openOrderReads = 0
+function configureDurableStartupAuditBroker({ broker, calls, counters }) {
   broker.getAccountSnapshot = async () => {
-    accountReads += 1
+    counters.accountReads += 1
     calls.push("account:snapshot")
     return {
       ok: true,
       data: {
         balances: ["BTC", "ETH", "USDT"].map((code) => {
-          const asset = new Asset({
-            id: `asset:${  code}`,
-            code,
-          })
+          const asset = new Asset({ id: `asset:${code}`,
+            code })
           return new Balance({
-            free: new Quantity({
-              amount: "12.5",
-              asset,
-            }),
-            locked: new Quantity({
-              amount: "0.5",
-              asset,
-            }),
+            free: new Quantity({ amount: "12.5",
+              asset }),
+            locked: new Quantity({ amount: "0.5",
+              asset }),
           })
         }),
         sourceTime: 123,
@@ -4046,40 +4006,49 @@ function createDurableStartupAuditFixture({ calls }) {
     }
   }
   broker.getOpenOrders = async (input) => {
-    openOrderReads += 1
+    counters.openOrderReads += 1
     calls.push("account:open-orders")
     assert.deepEqual(input, {})
-    return {
-      ok: true,
-      data: [],
-    }
+    return { ok: true,
+      data: [] }
   }
-  const events = []
-  let flushCount = 0
-  const eventPublisher = {
+}
+
+function createDurableStartupAuditPublisher({ calls, events, counters }) {
+  return {
     publish: (event) => {
       events.push(event)
-      calls.push(`publish:${  event.name}`)
-      return {
-        ok: true,
-      }
+      calls.push(`publish:${event.name}`)
+      return { ok: true }
     },
     flush: async () => {
-      flushCount += 1
-      calls.push(`journal:flush:${  flushCount}`)
-      return {
-        ok: true,
-        durable: true,
-      }
+      counters.flushCount += 1
+      calls.push(`journal:flush:${counters.flushCount}`)
+      return { ok: true,
+        durable: true }
     },
   }
+}
+
+function createDurableStartupAuditFixture({ calls }) {
+  const broker = createBroker(calls)
+  const counters = { accountReads: 0,
+    openOrderReads: 0,
+    flushCount: 0 }
+  configureDurableStartupAuditBroker({ broker,
+    calls,
+    counters })
+  const events = []
+  const eventPublisher = createDurableStartupAuditPublisher({ calls,
+    events,
+    counters })
   return {
     broker,
     events,
     eventPublisher,
-    getAccountReads: () => accountReads,
-    getOpenOrderReads: () => openOrderReads,
-    getFlushCount: () => flushCount,
+    getAccountReads: () => counters.accountReads,
+    getOpenOrderReads: () => counters.openOrderReads,
+    getFlushCount: () => counters.flushCount,
   }
 }
 
@@ -4307,39 +4276,35 @@ test("blocks trading startup when either PREFLIGHT audit event publication fails
 })
 
 
-test("starts from fresh in-memory state without replaying historical Journal records", async () => {
-  const calls = []
-  const broker = createBroker(calls)
+function configureNoReplayHistoryBroker(broker) {
   const historicalReads = []
   broker.getCanonicalOrder = async () => {
     historicalReads.push("getCanonicalOrder")
-    return {
-      ok: false,
-      errors: [new Error("not found")]
-    }
+    return { ok: false,
+      errors: [new Error("not found")] }
   }
   broker.getCanonicalOrderHistory = async () => {
     historicalReads.push("getCanonicalOrderHistory")
-    return {
-      ok: true,
-      data: []
-    }
+    return { ok: true,
+      data: [] }
   }
   broker.getFills = async () => {
     historicalReads.push("getFills")
-    return {
-      ok: true,
-      data: []
-    }
+    return { ok: true,
+      data: [] }
   }
   broker.getExchangeMarkets = async () => {
     historicalReads.push("getExchangeMarkets")
-    return {
-      ok: true,
-      data: []
-    }
+    return { ok: true,
+      data: [] }
   }
+  return historicalReads
+}
 
+test("starts from fresh in-memory state without replaying historical Journal records", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const historicalReads = configureNoReplayHistoryBroker(broker)
   const runtime = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: {
@@ -4347,7 +4312,6 @@ test("starts from fresh in-memory state without replaying historical Journal rec
       NODE_ENV: "development",
     },
     brokerAdapterFactory: () => broker,
-    // Historical records are deliberately ignored; restart recovery is disabled.
     journalRecoveryRecords: [{
       id: "malformed-historical-record",
       payload: {
@@ -4357,15 +4321,14 @@ test("starts from fresh in-memory state without replaying historical Journal rec
       },
       position: {
         fileName: "session.jsonl",
-        lineNumber: 1
+        lineNumber: 1,
       },
     }],
     logger: {
       info() {},
-      error() {}
+      error() {},
     },
   })
-
   assert.equal(runtime.tradingEnabled, true)
   assert.equal(runtime.userDataReady, true)
   assert.deepEqual(runtime.subscriptions, ["BTCUSDT"])
@@ -4374,9 +4337,9 @@ test("starts from fresh in-memory state without replaying historical Journal rec
   assert.equal(calls.includes("subscribe:user-data"), true)
   assert.equal(calls.includes("subscribe:book:BTCUSDT"), true)
   assert.equal(calls.includes("subscribe:BTCUSDT"), true)
-
   await runtime.stop()
 })
+
 
 
 function createShutdownBuyCancellationGates() {
@@ -4399,17 +4362,53 @@ function createShutdownBuyCancellationGates() {
   }
 }
 
+function createShutdownBuyOrder({ order, market }) {
+  return new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: `broker-${order.clientOrderId}`,
+    market,
+    side: order.side,
+    type: order.type,
+    limitPrice: new Money({ amount: order.price,
+      asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: order.quantity,
+      asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+      asset: market.baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+}
+
+function createCanceledShutdownBuyOrder({ order, market }) {
+  return new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    market,
+    side: order.side,
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: order.executedQuantity,
+    status: "CANCELED",
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
+    updatedAt: 2,
+    completedAt: 2,
+  })
+}
+
 function createShutdownBuyCancellationBroker({ calls, gates }) {
   const broker = createBroker(calls)
-  const {market} = createMarketMetadata("BTCUSDT")
+  const { market } = createMarketMetadata("BTCUSDT")
   let submittedOrder
   let canceledOrder
   broker.getOpenOrders = async () => ({
     ok: true,
     data: submittedOrder && !canceledOrder
-      ? [createOpenOrderSnapshot({
-        order: submittedOrder,
-      })]
+      ? [createOpenOrderSnapshot({ order: submittedOrder })]
       : [],
   })
   broker.getCanonicalOrderHistory = async ({ orderId }) => ({
@@ -4418,58 +4417,20 @@ function createShutdownBuyCancellationBroker({ calls, gates }) {
       order?.brokerOrderId === orderId),
   })
   broker.placeOrder = async ({ order }) => {
-    calls.push(`placeOrder:${  order.side}`)
-    submittedOrder = new CanonicalOrder({
-      clientOrderId: order.clientOrderId,
-      brokerOrderId: `broker-${  order.clientOrderId}`,
-      market,
-      side: order.side,
-      type: order.type,
-      limitPrice: new Money({
-        amount: order.price,
-        asset: market.quoteAsset,
-      }),
-      originalQuantity: new Quantity({
-        amount: order.quantity,
-        asset: market.baseAsset,
-      }),
-      executedQuantity: new Quantity({
-        amount: "0",
-        asset: market.baseAsset,
-      }),
-      status: "OPEN",
-      createdAt: 1,
-      acknowledgedAt: 1,
-      updatedAt: 1,
-    })
-    return {
-      ok: true,
-      data: submittedOrder,
-    }
+    calls.push(`placeOrder:${order.side}`)
+    submittedOrder = createShutdownBuyOrder({ order,
+      market })
+    return { ok: true,
+      data: submittedOrder }
   }
   broker.cancelOrder = async ({ order }) => {
-    calls.push(`cancelOrder:${  order.side}`)
+    calls.push(`cancelOrder:${order.side}`)
     gates.signalCancelStarted()
     await gates.cancelGate
-    canceledOrder = new CanonicalOrder({
-      clientOrderId: order.clientOrderId,
-      brokerOrderId: order.brokerOrderId,
-      market,
-      side: order.side,
-      type: order.type,
-      limitPrice: order.limitPrice,
-      originalQuantity: order.originalQuantity,
-      executedQuantity: order.executedQuantity,
-      status: "CANCELED",
-      createdAt: order.createdAt,
-      acknowledgedAt: order.acknowledgedAt,
-      updatedAt: 2,
-      completedAt: 2,
-    })
-    return {
-      ok: true,
-      data: canceledOrder,
-    }
+    canceledOrder = createCanceledShutdownBuyOrder({ order,
+      market })
+    return { ok: true,
+      data: canceledOrder }
   }
   makeVolatilityReadyBroker(broker, ["BTCUSDT"])
   return broker
@@ -4532,19 +4493,7 @@ function assertUserDataRemainsActiveDuringShutdown({ calls, observedEvents }) {
 }
 
 
-test("keeps user-data intake active until shutdown BUY cancellation and fill reconciliation finish", async () => {
-  const calls = []
-  const gates = createShutdownBuyCancellationGates()
-  const broker = createShutdownBuyCancellationBroker({
-    calls,
-    gates,
-  })
-  const observedEvents = []
-  const runtime = await startShutdownBuyCancellationRuntime({
-    broker,
-    observedEvents,
-    gates,
-  })
+async function prepareShutdownBuyMarketActivity({ broker, calls }) {
   await broker.emitBookTicker("BTCUSDT", {
     symbol: "BTCUSDT",
     bestBidPrice: "64900",
@@ -4559,22 +4508,40 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
     timestamp: 1000,
   })
   assert.ok(calls.includes("placeOrder:BUY"))
+}
+
+function assertShutdownBuyCancellationOrdering(calls) {
+  assert.ok(
+    calls.indexOf("cancelOrder:BUY") < calls.indexOf("unsubscribe:BTCUSDT"),
+    "Owned BUY cancellation must start before market-price intake is stopped.",
+  )
+  assert.ok(calls.indexOf("cancelOrder:BUY") < calls.indexOf("unsubscribe:user-data"))
+  assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"))
+}
+
+test("keeps user-data intake active until shutdown BUY cancellation and fill reconciliation finish", async () => {
+  const calls = []
+  const gates = createShutdownBuyCancellationGates()
+  const broker = createShutdownBuyCancellationBroker({ calls,
+    gates })
+  const observedEvents = []
+  const runtime = await startShutdownBuyCancellationRuntime({ broker,
+    observedEvents,
+    gates })
+  await prepareShutdownBuyMarketActivity({ broker,
+    calls })
 
   const stopPromise = runtime.stop()
   let testError
   try {
     await waitForTestSignal(gates.cancelStarted, "shutdown BUY cancellation", () => ({ calls }))
-    broker.emitUserDataEvent({
-      eventType: "outboundAccountPosition",
-    })
+    broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
     await waitForTestSignal(gates.userDataObserved, "user-data event during shutdown", () => ({
       observedEvents: observedEvents.length,
       calls,
     }))
-    assertUserDataRemainsActiveDuringShutdown({
-      calls,
-      observedEvents,
-    })
+    assertUserDataRemainsActiveDuringShutdown({ calls,
+      observedEvents })
   } catch (error) {
     testError = error
   } finally {
@@ -4593,13 +4560,9 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
   if (stopError) {
     throw stopError
   }
-  assert.ok(
-    calls.indexOf("cancelOrder:BUY") < calls.indexOf("unsubscribe:BTCUSDT"),
-    "Owned BUY cancellation must start before market-price intake is stopped.",
-  )
-  assert.ok(calls.indexOf("cancelOrder:BUY") < calls.indexOf("unsubscribe:user-data"))
-  assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"))
+  assertShutdownBuyCancellationOrdering(calls)
 })
+
 
 
 function createOwnedBuySafetyCancellationGates() {
@@ -4786,22 +4749,7 @@ async function startOwnedBuySafetyCancellationRuntime({ broker, gates, journalEv
   })
 }
 
-test("keeps shared user-data readiness open when an external execution is isolated by its market policy", async () => {
-  const calls = []
-  const cancelledBrokerOrderIds = []
-  const gates = createOwnedBuySafetyCancellationGates()
-  const broker = createOwnedBuySafetyCancellationBroker({
-    calls,
-    cancelledBrokerOrderIds,
-    gates,
-  })
-  const journalEvents = []
-  const result = await startOwnedBuySafetyCancellationRuntime({
-    broker,
-    gates,
-    journalEvents,
-  })
-
+async function assertExternalExecutionIsolation({ broker, result, journalEvents, cancelledBrokerOrderIds, gates }) {
   await broker.emitPrice("BTCUSDT", {
     symbol: "BTCUSDT",
     price: "65000",
@@ -4810,18 +4758,14 @@ test("keeps shared user-data readiness open when an external execution is isolat
   await waitForTestSignal(
     gates.acknowledged,
     "acknowledged Harvester BUY before the external execution",
-    () => ({
-      calls,
-      userDataStatus: result.userDataStatus,
-    }),
+    () => ({ userDataStatus: result.userDataStatus }),
     2_000,
   )
   assert.deepEqual(
     (await broker.getOpenOrders({})).data.map((order) => order.id),
     ["owned-buy-1"],
-    "the regression scenario must have one acknowledged Harvester-owned BUY resting before the external execution arrives",
+    "the scenario must begin with one acknowledged Harvester-owned BUY",
   )
-
   const external = createExternalExecutionFixture()
   broker.emitUserDataEvent({
     eventType: "executionReport",
@@ -4830,36 +4774,41 @@ test("keeps shared user-data readiness open when an external execution is isolat
     executedOrder: external.order,
     fill: external.fill,
   })
-  for (let attempt = 0; attempt < 100 &&
-      !journalEvents.some((event) => event.name === "account.open_orders_captured" &&
-        event.data.phase === "RECOVERY"); attempt += 1) {
+  for (let attempt = 0; attempt < 100 && !journalEvents.some((event) =>
+    event.name === "account.open_orders_captured" && event.data.phase === "RECOVERY"); attempt += 1) {
     await new Promise((resolve) => setImmediate(resolve))
   }
+  assert.ok(journalEvents.some((event) => event.name === "execution.unowned_order"))
+  assert.ok(journalEvents.some((event) =>
+    event.name === "account.open_orders_captured" && event.data.phase === "RECOVERY"))
+  assert.equal(journalEvents.some((event) =>
+    event.name === "execution.fill_applied" && event.data.tradeId === "external-trade-1"), false)
+  assert.deepEqual(cancelledBrokerOrderIds, [])
+  assert.equal(result.userDataReady, true)
+  assert.equal(result.userDataStatus, "READY")
+  assert.deepEqual((await broker.getOpenOrders({})).data.map((order) => order.id), ["owned-buy-1"])
+}
 
-  assert.ok(journalEvents.some((event) => event.name === "execution.unowned_order"),
-    "the manual execution must remain visible as unowned diagnostic evidence.")
-  assert.ok(journalEvents.some((event) => event.name === "account.open_orders_captured" &&
-    event.data.phase === "RECOVERY"),
-    "the newly observed manual execution must trigger an authoritative account-wide open-order audit.")
-  assert.equal(journalEvents.some((event) => event.name === "execution.fill_applied" &&
-    event.data.tradeId === "external-trade-1"), false,
-    "the external SELL fill must never be applied to Harvester accounting.")
-  assert.deepEqual(cancelledBrokerOrderIds, [],
-    "an external execution on ETH must not trigger safety cancellation of an unrelated owned BTC BUY.")
-  assert.equal(result.userDataReady, true,
-    "a known manual external order must not close global user-data readiness.")
-  assert.equal(result.userDataStatus, "READY",
-    "the shared user-data stream must remain ready after symbol-scoped external-order reconciliation.")
-  assert.deepEqual(
-    (await broker.getOpenOrders({})).data.map((order) => order.id),
-    ["owned-buy-1"],
-    "the unrelated owned BUY must remain open until the ordinary shutdown sequence.",
-  )
-
+test("keeps shared user-data readiness open when an external execution is isolated by its market policy", async () => {
+  const calls = []
+  const cancelledBrokerOrderIds = []
+  const gates = createOwnedBuySafetyCancellationGates()
+  const broker = createOwnedBuySafetyCancellationBroker({ calls,
+    cancelledBrokerOrderIds,
+    gates })
+  const journalEvents = []
+  const result = await startOwnedBuySafetyCancellationRuntime({ broker,
+    gates,
+    journalEvents })
+  await assertExternalExecutionIsolation({ broker,
+    result,
+    journalEvents,
+    cancelledBrokerOrderIds,
+    gates })
   await result.stop()
-  assert.deepEqual(cancelledBrokerOrderIds, ["owned-buy-1"],
-    "the ordinary shutdown sequence must still cancel the Harvester-owned BUY.")
+  assert.deepEqual(cancelledBrokerOrderIds, ["owned-buy-1"])
 })
+
 
 
 function createConfiguredAssetSnapshotConfig() {
@@ -5399,12 +5348,12 @@ test("starts in observation-only mode after an unclean prior process when restar
 })
 
 
-async function createSharedOperatorRuntimeFixture({ broker, operationalStateStore, runtimeSessionId }) {
+function attachSharedOperatorRecoveryAcknowledgement(broker) {
   let resolveRecoveryAcknowledgement
   const recoveryAcknowledged = new Promise((resolve) => {
     resolveRecoveryAcknowledgement = resolve
   })
-  const {subscribeForUserData} = broker
+  const { subscribeForUserData } = broker
   broker.subscribeForUserData = async (handlers) => {
     const result = await subscribeForUserData(handlers)
     return {
@@ -5424,9 +5373,11 @@ async function createSharedOperatorRuntimeFixture({ broker, operationalStateStor
       },
     }
   }
-  let operator
-  let secondaryStoreFactoryCalls = 0
-  const config = {
+  return recoveryAcknowledged
+}
+
+function createSharedOperatorRuntimeConfig() {
+  return {
     ...appConfig,
     operatorControl: {
       telegram: {
@@ -5435,6 +5386,11 @@ async function createSharedOperatorRuntimeFixture({ broker, operationalStateStor
       },
     },
   }
+}
+
+async function startSharedOperatorRuntime({ broker, operationalStateStore, runtimeSessionId, config }) {
+  let operator
+  let secondaryStoreFactoryCalls = 0
   const runtime = await startHarvesterForTest({
     appConfig: config,
     operationalStateStore,
@@ -5451,12 +5407,8 @@ async function createSharedOperatorRuntimeFixture({ broker, operationalStateStor
     createTelegramOperatorAdapter: ({ operator: suppliedOperator }) => {
       operator = suppliedOperator
       return {
-        start: async () => ({
-          started: true,
-        }),
-        stop: async () => ({
-          stopped: true,
-        }),
+        start: async () => ({ started: true }),
+        stop: async () => ({ stopped: true }),
       }
     },
     logger: {
@@ -5467,8 +5419,22 @@ async function createSharedOperatorRuntimeFixture({ broker, operationalStateStor
   return {
     runtime,
     operator,
-    recoveryAcknowledged,
     getSecondaryStoreFactoryCalls: () => secondaryStoreFactoryCalls,
+  }
+}
+
+async function createSharedOperatorRuntimeFixture({ broker, operationalStateStore, runtimeSessionId }) {
+  const recoveryAcknowledged = attachSharedOperatorRecoveryAcknowledgement(broker)
+  const config = createSharedOperatorRuntimeConfig()
+  const runtimeFixture = await startSharedOperatorRuntime({
+    broker,
+    operationalStateStore,
+    runtimeSessionId,
+    config,
+  })
+  return {
+    ...runtimeFixture,
+    recoveryAcknowledged,
   }
 }
 
@@ -5634,7 +5600,7 @@ function assertStrategyScopedMarketSubscriptions({ runtime, calls, candleSubscri
 }
 
 
-test("does not subscribe to a market blocked by this strategy's external-order policy", async () => {
+async function createStrategyScopedMarketRuntimeFixture() {
   const { market } = createMarketMetadata("BTCUSDT")
   const externalCanonicalOrder = createExternalBuyOrder({
     market,
@@ -5660,12 +5626,8 @@ test("does not subscribe to a market blocked by this strategy's external-order p
   const calls = []
   const broker = createBroker(calls, {
     externalOpenOrders: [
-      createOpenOrderSnapshot({
-        order: externalCanonicalOrder,
-      }),
-      createOpenOrderSnapshot({
-        order: ignoredExternalOrder,
-      }),
+      createOpenOrderSnapshot({ order: externalCanonicalOrder }),
+      createOpenOrderSnapshot({ order: ignoredExternalOrder }),
     ],
   })
   const candleSubscriptions = []
@@ -5679,26 +5641,27 @@ test("does not subscribe to a market blocked by this strategy's external-order p
     loadConfig: async () => config,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
-    evaluateStrategy: () => ({
-      action: "NO_ACTION",
-    }),
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {
       info: (entry) => logs.push(entry),
       error: (entry) => logs.push(entry),
     },
   })
+  return { runtime,
+    calls,
+    candleSubscriptions,
+    logs }
+}
 
+test("does not subscribe to a market blocked by this strategy's external-order policy", async () => {
+  const fixture = await createStrategyScopedMarketRuntimeFixture()
   try {
-    assertStrategyScopedMarketSubscriptions({
-      runtime,
-      calls,
-      candleSubscriptions,
-      logs,
-    })
+    assertStrategyScopedMarketSubscriptions(fixture)
   } finally {
-    await runtime.stop()
+    await fixture.runtime.stop()
   }
 })
+
 
 // Restored integration regressions retained across the bootstrap decomposition.
 
@@ -5820,6 +5783,33 @@ test("stops broker intake before draining queued user-data and disconnects after
   assert.ok(calls.indexOf("queue:done") < calls.indexOf("unsubscribe:user-data"), "user-data intake may stop only after accepted callbacks have drained")
   assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"), "the user-data subscription must be disconnected before the broker itself")
 })
+function createExternalCorrelationOrder(market) {
+  return new CanonicalOrder({
+    clientOrderId: "external-client-id",
+    brokerOrderId: "987654",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "65000",
+      asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.01",
+      asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+      asset: market.baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+}
+
+async function waitForExternalOrderRecoveryAudit(journalEvents) {
+  for (let attempt = 0; attempt < 100 && !journalEvents.some((event) =>
+    event.name === "account.open_orders_captured" && event.data.phase === "RECOVERY"); attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve))
+  }
+}
+
 test("logs safe correlation details for an external execution without closing global readiness", async () => {
   const broker = createBroker()
   const errors = []
@@ -5834,14 +5824,10 @@ test("logs safe correlation details for an external execution without closing gl
     eventPublisher: {
       publish: (event) => {
         journalEvents.push(event)
-        return {
-          ok: true,
-        }
+        return { ok: true }
       },
-      flush: async () => ({
-        ok: true,
-        durable: true,
-      }),
+      flush: async () => ({ ok: true,
+        durable: true }),
     },
     logger: {
       info() {},
@@ -5850,55 +5836,22 @@ test("logs safe correlation details for an external execution without closing gl
     },
   })
   const metadata = createMarketMetadata("BTCUSDT")
-  const externalOrder = new CanonicalOrder({
-    clientOrderId: "external-client-id",
-    brokerOrderId: "987654",
-    market: metadata.market,
-    side: "BUY",
-    type: "LIMIT",
-    limitPrice: new Money({
-      amount: "65000",
-      asset: metadata.market.quoteAsset,
-    }),
-    originalQuantity: new Quantity({
-      amount: "0.01",
-      asset: metadata.market.baseAsset,
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: metadata.market.baseAsset,
-    }),
-    status: "OPEN",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 1,
-  })
-
   broker.emitUserDataEvent({
     eventType: "executionReport",
     executionType: "NEW",
     executionId: 123456,
-    executedOrder: externalOrder,
+    executedOrder: createExternalCorrelationOrder(metadata.market),
   })
-  for (let attempt = 0; attempt < 100 &&
-      !journalEvents.some((event) => event.name === "account.open_orders_captured" &&
-        event.data.phase === "RECOVERY"); attempt += 1) {
-    await new Promise((resolve) => setImmediate(resolve))
-  }
-
-  assert.ok(journalEvents.some((event) => event.name === "execution.unowned_order"),
-    "the unknown execution report must be retained as unowned diagnostic evidence.")
-  assert.ok(journalEvents.some((event) => event.name === "account.open_orders_captured" &&
-    event.data.phase === "RECOVERY"),
-    "the BLOCK policy must request a fresh authoritative account-wide open-order snapshot.")
-  assert.deepEqual(errors, [],
-    "a known external order under BLOCK must not be logged as an accounting/ownership failure.")
-  assert.equal(result.userDataReady, true,
-    "the external order's symbol guard must not close global user-data readiness.")
-  assert.equal(result.userDataStatus, "READY",
-    "the shared user-data stream must remain ready.")
+  await waitForExternalOrderRecoveryAudit(journalEvents)
+  assert.ok(journalEvents.some((event) => event.name === "execution.unowned_order"))
+  assert.ok(journalEvents.some((event) =>
+    event.name === "account.open_orders_captured" && event.data.phase === "RECOVERY"))
+  assert.deepEqual(errors, [])
+  assert.equal(result.userDataReady, true)
+  assert.equal(result.userDataStatus, "READY")
   await result.stop()
 })
+
 
 test("reconciles the in-memory order registry before reopening trading after stream recovery", async () => {
   const broker = createBroker()
@@ -5969,9 +5922,8 @@ test("requires an explicit TRADING_MODE before connecting to Binance", async () 
   assert.equal(brokerFactoryCalled, false)
 })
 
-test("starts Telegram operator control without running process-restart recovery when recovery is disabled", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-operator-control-no-replay-"))
-  const config = {
+function createTelegramNoReplayConfig() {
+  return {
     ...appConfig,
     operatorControl: {
       telegram: {
@@ -5985,24 +5937,26 @@ test("starts Telegram operator control without running process-restart recovery 
         ...appConfig.strategies.CG_coinGrabber,
         settings: {
           ...appConfig.strategies.CG_coinGrabber.settings,
-          recovery: {
-            enabled: false,
-          },
+          recovery: { enabled: false },
         },
       },
     },
   }
+}
+
+
+test("starts Telegram operator control without running process-restart recovery when recovery is disabled", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-operator-control-no-replay-"))
+  const config = createTelegramNoReplayConfig()
   let operatorAdapterStarted = false
   let operator
   let runtime
-
   try {
     await createPriorProcessHistory({
       directory,
       runtimeSessionId: "previous-process-session",
       priorAppConfig: config,
     })
-
     const currentStore = createFileOperationalStateStore({
       directory,
       runtimeSessionId: "current-process-session",
@@ -6033,10 +5987,9 @@ test("starts Telegram operator control without running process-restart recovery 
         }
       },
     })
-
-    assert.equal(operatorAdapterStarted, true, "Telegram polling must start even when the shared ledger contains an earlier process session and restart recovery is disabled")
-    assert.equal(runtime.connected, true, "disabling process-restart restoration must not bypass normal broker/runtime startup")
-    assert.equal(runtime.tradingEnabled, false, "trading must remain disabled because the prior in-memory trading state was not restored")
+    assert.equal(operatorAdapterStarted, true)
+    assert.equal(runtime.connected, true)
+    assert.equal(runtime.tradingEnabled, false)
     await assertTelegramPauseCommandIsDurable({
       operator,
       operationalStateStore: currentStore,
@@ -6048,4 +6001,42 @@ test("starts Telegram operator control without running process-restart recovery 
       force: true,
     })
   }
+})
+
+test("keeps shared services connected when a real market callback returns a failed result", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  makeVolatilityReadyBroker(broker, ["BTCUSDT"])
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    brokerAdapterFactory: () => broker,
+    logger: {
+      info() {},
+      debug() {},
+      error() {},
+    },
+  })
+
+  const marketResult = await broker.emitPrice("BTCUSDT", {
+    symbol: "BTCUSDT",
+    price: "65000",
+    timestamp: -1,
+  })
+  assert.equal(marketResult.ok, false, "The real market callback must preserve its unsuccessful processing result.")
+
+  let shutdownError
+  try {
+    await runtime.stop()
+  } catch (error) {
+    shutdownError = error
+  }
+  assert.ok(shutdownError instanceof AggregateError, "The application shutdown must fail closed when accepted market processing failed.")
+  assert.ok(
+    shutdownError.errors.some((failure) => failure instanceof TypeError),
+    "The application shutdown must preserve the original market-event validation failure.",
+  )
+  assert.equal(calls.includes("unsubscribe:BTCUSDT"), false, "Market-price intake must remain connected after a failed accepted task.")
+  assert.equal(calls.includes("unsubscribe:book:BTCUSDT"), false, "Book-ticker intake must remain connected after a failed accepted task.")
+  assert.equal(calls.includes("unsubscribe:user-data"), false, "User-data intake must remain connected after a failed accepted task.")
+  assert.equal(calls.includes("disconnect"), false, "The broker must remain connected after a failed accepted task.")
 })
