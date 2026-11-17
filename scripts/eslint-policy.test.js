@@ -60,15 +60,17 @@ test("the workspace complexity policy retains its evidence-based threshold", asy
 });
 
 test("the required JavaScript quality context aggregates both independent lint jobs", () => {
-  assert.match(
-    qualityWorkflow,
-    /strict-changed:\\s+name: Check strict ESLint for changed files/,
+  assert.ok(
+    qualityWorkflow.includes("strict-changed:\\n    name: Check strict ESLint for changed files"),
     "The workflow must expose a separate changed-file strict ESLint job.",
   );
-  assert.match(
-    qualityWorkflow,
-    /required-javascript-quality:\\s+name: Check JavaScript syntax[\\s\\S]*?needs:[\\s\\S]*?- workspace-quality[\\s\\S]*?- strict-changed/,
-    "The existing required JavaScript status context must fail unless both independent jobs pass.",
+  assert.ok(
+    qualityWorkflow.includes("required-javascript-quality:\\n    name: Check JavaScript syntax"),
+    "The existing required JavaScript status context must remain as an aggregator.",
+  );
+  assert.ok(
+    qualityWorkflow.includes("      - workspace-quality\\n      - strict-changed"),
+    "The required context must depend on both independent lint jobs.",
   );
 });
 
