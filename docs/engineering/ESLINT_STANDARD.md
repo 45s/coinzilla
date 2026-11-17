@@ -12,7 +12,8 @@ Before creating or modifying any .js, .mjs, or .cjs file, contributors MUST:
 2. Identify the rules that apply to the files being changed, including inherited @eslint/js recommended rules, repository overrides, and each rule's severity/options.
 3. Understand the difference between errors and warnings. Both must be addressed for new or materially changed code; a warning is not permission to ignore a design issue.
 4. Inspect the relevant package scripts and CI workflow so the exact lint command and scope are known.
-5. For every added, modified, copied, or renamed JavaScript file, satisfy both the workspace policy and the stricter changed-file policy described below.\n6. Design the implementation to satisfy those rules from the outset.
+5. For every added, modified, copied, or renamed JavaScript file, satisfy both the workspace policy and the stricter changed-file policy described below.
+6. Design the implementation to satisfy those rules from the outset.
 
 Do not rely on memory, a previous task's lint output, or a CI run to discover the coding standard after implementation.
 
