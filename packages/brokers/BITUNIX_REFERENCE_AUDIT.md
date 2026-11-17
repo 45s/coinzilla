@@ -209,26 +209,39 @@ The following is the current method-by-method status from the Binance broker sur
 | subscribeForBookTicker() | Blocked | No continuous Spot book subscription; precision selection unresolved. |
 | subscribeForUserData() | Blocked | No continuous private Spot balance/order/execution event stream or recovery semantics. |
 
-### PR #1324 — pending read-only market-data slice
+### PR #1324 — merged read-only market-data slice (2026-11-17)
 
-[PR #1324](https://github.com/45s/coinzilla/pull/1324) currently adds:
+[PR #1324](https://github.com/45s/coinzilla/pull/1324) merged into `develop` as `5d707d17114d524ef3cd7c6d35387dde61338976`. It adds:
 
-- getOrderBook({ symbol, precision }) as a one-shot depth snapshot.
-- getKlines({ symbol, interval }) for current K-line rows.
-- getKlineHistory({ symbol, interval, endTime, limit }) for one history page.
+- `getOrderBook({ symbol, precision })` as a one-shot depth snapshot.
+- `getKlines({ symbol, interval })` for current K-line rows.
+- `getKlineHistory({ symbol, interval, endTime, limit })` for one history page.
 
-It validates symbol, interval, decimals, OHLC invariants and timezone-qualified timestamps. It preserves caller-supplied depth precision and rejects undocumented startTime/cursor pagination. The PR intentionally leaves canonical getCandles() unsupported because Spot K-lines omit volume. It remains draft pending local read-only API acceptance; do not duplicate these methods while it is open.
+It validates symbol, interval, decimals, OHLC invariants and timezone-qualified timestamps. It preserves caller-supplied depth precision and rejects undocumented `startTime`/cursor pagination. Canonical `getCandles()` remains unsupported because Spot K-lines omit volume. The merge and offline checks do not constitute live API acceptance; no live exchange call was performed.
+
+
+### PR #1370 — Bitunix-only exchange-rate extension (in progress)
+
+[Issue #1331](https://github.com/45s/coinzilla/issues/1331) tracks the public Spot exchange-rate read. The replacement test-first implementation is in [draft PR #1370](https://github.com/45s/coinzilla/pull/1370), based on current `develop`; the original [PR #1332](https://github.com/45s/coinzilla/pull/1332) is stale and is not the integration branch.
+
+- **Official contract:** [Spot Query rate data](https://www.bitunix.com/api-docs/spots/en_us/public/#6-query-rate-data) documents `GET /api/spot/v1/common/rate/list`, no request parameters, and `data` as an optional array whose `baseSymbol`, `quoteSymbol`, and `rate` fields are individually optional. The [Open API introduction](https://www.bitunix.com/api-docs/) says public REST requests do not require authentication.
+- **Primary .NET reference:** at JKorf/Bitunix.Net commit `57e1fce668b98804a441dea1c8df803da0437c4f`, `BitunixRestClientSpotApiExchangeData.GetExchangeRatesAsync()` requests the same path with its public/unauthenticated request definition. The matching `BitunixExchangeRate` model maps `baseSymbol`, `quoteSymbol`, and `rate`; its decimal model is not copied because Coinzilla must preserve the exchange's decimal text exactly.
+- **Fixture evidence:** `Bitunix.Net.UnitTests/Endpoints/Spot/ExchangeData/GetExchangeRates.txt` records GET, the exact path, no URI parameters, an unauthenticated request flag, and a rate string such as `1.4452976228500000`. `RestRequestTests.ValidateSpotExchangeDataCalls` includes `GetExchangeRatesAsync()`.
+- **Independent Python reference:** at commit `28cefd924b6580a0ef46618ad0b7c387488526bb`, `bitunix/client.py:get_rate_data()` calls the same path through the public `_get()` helper without authentication headers. No endpoint-specific test/fixture was found in that client.
+- **TypeScript MCP:** at commit `6bf5d9f915bdf865394ac02f97c50b689ab9e8e7`, `src/tools/spot.ts` does not expose a rate-list tool. This is absence of coverage, not contrary protocol evidence.
+- **Coinzilla decision:** expose only `BitunixSpotBroker.getExchangeRates()`; do not add it to `CoreBroker` or Binance. Require an array, non-empty string symbols, and a strictly positive decimal-string rate; preserve exact rate text and freeze the array/records. An explicit `data: []` is accepted, but missing `data` or incomplete rows fail closed. This is deliberately stricter than the optional-field documentation and must not be misrepresented as a guarantee that the exchange always returns complete rows.
+- **Safety:** the REST client signs requests by default. Unsigned mode is explicit and limited to GET requests without a body or state-changing flag; it omits API authentication headers. Unauthenticated mutations are rejected before network I/O. No live API call or order/account mutation was performed.
 
 ## 5. What we should use, pick and implement
 
 ### Recommended next safe work
 
-**Priority 1 — Bitunix-specific public metadata extension (not Binance parity):**
+**Priority 1 — remaining Bitunix-specific public metadata extension (not Binance parity):**
 
-- getExchangeRates() — GET /api/spot/v1/common/rate/list, returning baseSymbol, quoteSymbol, rate.
-- getTokenMetadata() (or a domain-appropriate name) — GET /api/spot/v1/common/coin/coin_network/list, returning token and network metadata such as deposit/withdraw availability, memo requirement, network name, minimums and address validation pattern.
+- `getExchangeRates()` is in progress in [PR #1370](https://github.com/45s/coinzilla/pull/1370) for [issue #1331](https://github.com/45s/coinzilla/issues/1331); its source audit and stricter Coinzilla response contract are recorded above.
+- `getTokenMetadata()` (or a domain-appropriate name) remains a separate candidate for `GET /api/spot/v1/common/coin/coin_network/list`, returning token and network metadata such as deposit/withdraw availability, memo requirement, network name, minimums and address validation pattern. Define a real consumer contract before implementation.
 
-These are public read-only endpoints documented by Bitunix and independently present in JKorf; rate/token endpoints are also present in the Python client, and token metadata is cross-checked by the Ruby client. They are not Binance methods, so first make the extension scope explicit in the broker contract and consumer use case. Keep exact decimal fields as strings; do not treat descriptive precision fields as tick/step filters. Token/network metadata is not authorization to implement transfers or withdrawals.
+These are Bitunix-only public extensions, not Binance parity methods. Keep exact decimal fields as strings; do not treat descriptive precision fields as tick/step filters. Token/network metadata is not authorization to implement transfers or withdrawals.
 
 ### Later, only after a separate contract review
 
