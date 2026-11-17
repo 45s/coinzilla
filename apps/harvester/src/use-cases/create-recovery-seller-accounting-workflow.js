@@ -435,14 +435,7 @@ function resolveRecoverySellerOrderOwnership({ registry, order }) {
   return ownership
 }
 
-function reconcileTerminalMixedSellTransition({
-  state,
-  reconciliation,
-  terminalOrder,
-  canonicalFills,
-  canonicalFillAllocations,
-  minProfit,
-}) {
+function resolveTerminalMixedSellOrder({ state, terminalOrder } = {}) {
   if (!(terminalOrder instanceof CanonicalOrder) ||
       !TERMINAL_ORDER_STATUSES.has(terminalOrder.status)) {
     throw new TypeError("Recovery Seller mixed SELL commit requires an authoritative terminal CanonicalOrder")
@@ -461,7 +454,21 @@ function reconcileTerminalMixedSellTransition({
       terminalRegisteredOrder.executedQuantity.amount !== terminalOrder.executedQuantity.amount) {
     throw new Error("Recovery Seller terminal order did not become the canonical registered order state")
   }
+  return {
+    registryUpdate,
+    terminalRegisteredOrder,
+  }
+}
 
+function calculateTerminalMixedSellAccounting({
+  state,
+  registryUpdate,
+  terminalRegisteredOrder,
+  reconciliation,
+  canonicalFills,
+  canonicalFillAllocations,
+  minProfit,
+} = {}) {
   const ownership = resolveRecoverySellerOrderOwnership({
     registry: registryUpdate.registry,
     order: terminalRegisteredOrder,
@@ -477,7 +484,6 @@ function reconcileTerminalMixedSellTransition({
   if (!recoveryPosition) {
     throw new TypeError("Recovery Seller terminal mixed SELL requires its owned Portfolio Position")
   }
-
   const accounting = applyReconciledMixedSellOrder({
     portfolio: state.portfolio,
     legacyPosition: legacyRecord.position,
@@ -488,7 +494,6 @@ function reconcileTerminalMixedSellTransition({
     canonicalFills,
     canonicalFillAllocations,
   })
-
   const profitability = accounting.applied
     ? calculateOrderProfitability({
         portfolio: state.portfolio,
@@ -499,7 +504,6 @@ function reconcileTerminalMixedSellTransition({
         minProfit,
       })
     : undefined
-
   const nextLegacyRecord = Object.freeze({
     ...legacyRecord,
     position: accounting.legacyPosition,
@@ -507,17 +511,42 @@ function reconcileTerminalMixedSellTransition({
   })
   const nextLegacyPositions = new Map(state.legacyPositions)
   nextLegacyPositions.set(terminalRegisteredOrder.market.id, nextLegacyRecord)
-
-  // The terminal OrderRegistry and both accounting projections are published
-  // together. Until this point the old registry continues reserving the SELL.
-  state.portfolio = accounting.portfolio
-  state.legacyPositions = nextLegacyPositions
-  state.orderRegistry = registryUpdate.registry
-
-  return Object.freeze({
-    ...accounting,
-    orderRegistry: state.orderRegistry,
+  return {
+    accounting,
     profitability,
+    nextLegacyPositions,
+  }
+}
+
+function reconcileTerminalMixedSellTransition({
+  state,
+  reconciliation,
+  terminalOrder,
+  canonicalFills,
+  canonicalFillAllocations,
+  minProfit,
+}) {
+  const { registryUpdate, terminalRegisteredOrder } = resolveTerminalMixedSellOrder({
+    state,
+    terminalOrder,
+  })
+  const result = calculateTerminalMixedSellAccounting({
+    state,
+    registryUpdate,
+    terminalRegisteredOrder,
+    reconciliation,
+    canonicalFills,
+    canonicalFillAllocations,
+    minProfit,
+  })
+  // Publish terminal order and both accounting projections as one transition.
+  state.portfolio = result.accounting.portfolio
+  state.legacyPositions = result.nextLegacyPositions
+  state.orderRegistry = registryUpdate.registry
+  return Object.freeze({
+    ...result.accounting,
+    orderRegistry: state.orderRegistry,
+    profitability: result.profitability,
   })
 }
 
