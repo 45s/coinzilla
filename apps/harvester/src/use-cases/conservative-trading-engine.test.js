@@ -11373,6 +11373,65 @@ test("maintains recovery SELL coverage when a late owned SELL fill leaves sellab
   assert.equal(recheckedSafety.data.markets[0].status, "SAFE_TO_SHUTDOWN")
 })
 
+
+test("invalidates a safe shutdown marker when a later accepted market price changes recovery inputs", async () => {
+  const seeded = makeSeededRecoveryState()
+  let shutdownStarted = false
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    isStopping: () => shutdownStarted,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  harness.engine.beginShutdown()
+  shutdownStarted = true
+  const cancellation = await harness.engine.cancelOwnedBuyOrdersForShutdown()
+  assert.equal(cancellation.ok, true, "The setup must reconcile owned BUY cancellation before the market is marked safe.")
+  const coverage = await harness.engine.auditShutdownRecoverySellCoverage()
+  const initialSafety = await harness.engine.auditShutdownSafety({
+    reconciliationComplete: true,
+    journalDurable: true,
+    coverageResult: coverage,
+  })
+  assert.equal(initialSafety.data.markets[0].status, "SAFE_TO_SHUTDOWN", "The setup must establish a genuinely safe market before injecting late market evidence.")
+
+  const buyOrderCountBeforeLatePrice = harness.orders.filter(({ side }) => side === "BUY").length
+  const latePrice = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "101",
+      timestamp: 2,
+    },
+  })
+
+  assert.equal(latePrice.ok, true, "A fresh market price must remain processable through the recovery-only shutdown path.")
+  const invalidatedMarket = harness.engine.getShutdownSafetySnapshot().markets[0]
+  assert.equal(
+    invalidatedMarket.status,
+    "UNSAFE",
+    "A market-price update accepted after SAFE_TO_SHUTDOWN must invalidate the previous proof before the final shutdown barrier.",
+  )
+  assert.ok(
+    invalidatedMarket.blockers.includes("LATE_MARKET_PRICE_EVIDENCE"),
+    "The invalidated market marker must identify the late market-price evidence that requires a fresh recovery proof.",
+  )
+  assert.equal(
+    harness.orders.filter(({ side }) => side === "BUY").length,
+    buyOrderCountBeforeLatePrice,
+    "Invalidating shutdown safety for a late price must never reopen Conservative BUY submission.",
+  )
+})
+
 test("does not treat a stale recovery SELL cancellation response as terminal", async () => {
   const { harness } = await prepareLateSellShutdownScenario({
     fillFraction: "0.5",
