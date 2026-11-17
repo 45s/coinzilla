@@ -358,6 +358,22 @@ async function prepareTradingSessionHistoryResources({
   }
 }
 
+async function acquireEnvironmentProcessLock({ runtimeConfig, acquireProcessLock, logger }) {
+  const processLockDirectory = resolveHostProcessLockDirectory()
+  const lockResult = await acquireProcessLock({
+    journalDirectory: processLockDirectory,
+    globalDirectory: processLockDirectory,
+    broker: runtimeConfig.brokerName,
+    tradingMode: runtimeConfig.tradingMode,
+    logger,
+  })
+  if (lockResult?.ok !== true || typeof lockResult.release !== "function") {
+    const details = lockResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+    throw new Error(`Harvester cannot start without the Binance ${runtimeConfig.tradingMode} environment-scoped single-writer process lock${details ? `: ${details}` : ""}`)
+  }
+  return lockResult
+}
+
 async function acquireProcessStartupResources({ options, resources, processStartedDataResult } = {}) {
   const {
     createEventBus,
@@ -377,19 +393,11 @@ async function acquireProcessStartupResources({ options, resources, processStart
     tradingMode: env.TRADING_MODE,
     environment: env.NODE_ENV,
   })
-  const processLockDirectory = resolveHostProcessLockDirectory()
-  const lockResult = await acquireProcessLock({
-    journalDirectory: processLockDirectory,
-    globalDirectory: processLockDirectory,
-    broker: resources.runtimeConfig.brokerName,
-    tradingMode: resources.runtimeConfig.tradingMode,
+  resources.processLock = await acquireEnvironmentProcessLock({
+    runtimeConfig: resources.runtimeConfig,
+    acquireProcessLock,
     logger,
   })
-  if (lockResult?.ok !== true || typeof lockResult.release !== "function") {
-    const details = lockResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-    throw new Error(`Harvester cannot start without the Binance ${resources.runtimeConfig.tradingMode} environment-scoped single-writer process lock${details ? `: ${details}` : ""}`)
-  }
-  resources.processLock = lockResult
   resources.operationalStateStore = await prepareProcessOperationalStateStore({
     appConfig: resources.appConfig,
     env,
