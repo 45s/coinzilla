@@ -44,6 +44,23 @@ No independent fixed 1% market-rise wait is required merely to release the confi
 - Actual holdings change only from confirmed canonical fills. A price, order intent, acknowledgement, cancellation request, or operator authorization is not an execution.
 - RS is independent of CG_coinGrabber. It must not change Conservative behavior or its canonical specification.
 
+
+### 2.1 Global fail-closed rule — owner-approved
+
+**STOP whenever actual conditions do not match an explicitly covered and approved RS scenario.** This is a global RS invariant, not a SELL-only profitability rule.
+
+If any input, state transition, exchange response, order outcome, fill, commission, balance, reservation, accounting result, or other observed condition is missing, contradictory, unexpected, or not covered by the approved domain contract, RS must:
+
+1. **Stop all new trading actions immediately.** Do not submit a new BUY, SELL, replacement, retry, or other trading instruction; do not guess, improvise, or choose an unapproved recovery path.
+2. **Preserve facts and commitments.** Do not erase or reverse confirmed fills, actual commissions, accounting, order ownership, inventory, or reservations. Apply every confirmed canonical fill exactly once using actual exchange facts.
+3. **Reconcile what already exists.** Continue only the non-trading safety work needed to establish authoritative status of already-submitted orders and account for subsequent confirmed fills. Unknown order outcomes retain their original identity and reservations; never blindly resubmit.
+4. **Make the stop visible.** Return a deterministic BLOCK decision with a stable reason code and enough context for operator review. The condition remains blocked until an explicitly approved and evidenced path resolves it.
+5. **Do not self-resume.** A later observation that appears normal does not silently clear the stop. Resume/new trading requires the condition to be understood, reconciled, and covered by an approved domain rule or explicit operator decision.
+
+This rule does **not** mean abandoning, cancelling, replacing, or ignoring an already-submitted order. Existing orders remain owned and must be reconciled; actual fills and fees continue to be accounted. It means RS initiates no further trading action while the unexpected condition is unresolved.
+
+Examples include: a SELL realizes less profit than planned; an order response has an unknown status; actual fees cannot be valued; available Spot quantity disagrees with the verified allocation; a fill cannot be attributed unambiguously; a reservation or accounting projection conflicts; or a state transition occurs that the approved lifecycle does not define. In every case the response is STOP, not an invented workaround.
+
 ## 3. Legacy inventory and authorization
 
 Legacy inventory is a specifically identified quantity of a market's base asset that existed before RS was authorized to manage it. It must not be inferred from an exchange free balance, Portfolio total/free quantity, manual/external order, prior process state, or unowned execution.
@@ -333,6 +350,7 @@ The first-implementation product decisions below are recorded. Items marked as i
 RS-2b now has deterministic domain and application regression coverage for legacy basis, verified Spot allocation, canonical mixed-fill attribution, partial/terminal reconciliation, atomic Portfolio/legacy commits, reservation retention/release, and combined cycle-level profitability. RS remains non-executable because RS-3 policy and RS-4 runtime integration are not implemented. The remaining policy and lifecycle work must add deterministic offline tests for:
 
 - missing/invalid startup legacy configuration and insufficient verified Spot availability; runtime authorization revocation/expiry is deferred under FITDIB;
+- any missing, contradictory, unexpected, or unmodeled condition at every lifecycle boundary produces a sticky STOP/BLOCK, prevents all new trading actions, preserves exact-once accounting and reservations, continues required reconciliation of already-submitted orders, and cannot self-resume without an approved resolution;
 - configured legacy invested quote / original quantity average-cost calculation, including invalid zero/negative/missing inputs;
 - Spot-available versus EARN/off-Spot custody separation, transfer/redeem changes, and insufficient Spot reserve for the next legacy slice;
 - mixed-cycle cases where legacy allocation proceeds alone are below its historical cost but the combined SELL still passes or fails the total cost-recovery-plus-`minProfit` gate;
