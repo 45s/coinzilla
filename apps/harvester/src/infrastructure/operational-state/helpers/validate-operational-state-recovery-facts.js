@@ -31,6 +31,28 @@ function validateRecoveryCycleAssetIds({ canonicalData }) {
   })
 }
 
+function validateRecoveryCycleSymbolAndAssets({ canonicalData }) {
+  if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
+    throw new TypeError("Recovery-cycle symbol must be canonical uppercase alphanumeric")
+  }
+  if (canonicalData.baseAssetId === canonicalData.quoteAssetId) {
+    throw new TypeError("Recovery-cycle base and quote assets must differ")
+  }
+}
+
+function validateRecoveryCycleAppliedFillIds({ canonicalData, completed }) {
+  if (
+    !Array.isArray(canonicalData.appliedFillIds) ||
+    canonicalData.appliedFillIds.length === 0 ||
+    canonicalData.appliedFillIds.some((id) => typeof id !== "string" || !id.trim()) ||
+    new Set(canonicalData.appliedFillIds).size !== canonicalData.appliedFillIds.length
+  ) {
+    throw new TypeError(completed
+      ? "Recovery-cycle completion requires unique applied fill identities"
+      : "Recovery-cycle non-completion requires unique applied fill identities")
+  }
+}
+
 function validateRecoveryCycleCompletedIdentity({ canonicalData, factId }) {
   const cycleId = requireNonEmptyString({
     value: canonicalData.cycleId,
@@ -42,9 +64,11 @@ function validateRecoveryCycleCompletedIdentity({ canonicalData, factId }) {
     field: "data.marketId",
     maxLength: MAX_FACT_ID_LENGTH,
   })
-  const venue = requireNonEmptyString({ value: canonicalData.venue,
-field: "data.venue",
-maxLength: 32 })
+  const venue = requireNonEmptyString({
+    value: canonicalData.venue,
+    field: "data.venue",
+    maxLength: 32,
+  })
   const sellOrderClientId = requireNonEmptyString({
     value: canonicalData.sellOrderClientId,
     field: "data.sellOrderClientId",
@@ -64,24 +88,9 @@ maxLength: 32 })
   ) {
     throw new TypeError("Recovery-cycle completion identity is not canonical")
   }
-  if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
-    throw new TypeError("Recovery-cycle symbol must be canonical uppercase alphanumeric")
-  }
-  if (canonicalData.baseAssetId === canonicalData.quoteAssetId) {
-    throw new TypeError("Recovery-cycle base and quote assets must differ")
-  }
-  if (
-    !Array.isArray(canonicalData.appliedFillIds) ||
-    canonicalData.appliedFillIds.length === 0 ||
-    canonicalData.appliedFillIds.some((id) => typeof id !== "string" || !id.trim()) ||
-    new Set(canonicalData.appliedFillIds).size !== canonicalData.appliedFillIds.length
-  ) {
-    throw new TypeError("Recovery-cycle completion requires unique applied fill identities")
-  }
-  return { cycleId,
-    marketId,
-    sellOrderClientId,
-    sellOrderBrokerOrderId }
+  validateRecoveryCycleSymbolAndAssets({ canonicalData })
+  validateRecoveryCycleAppliedFillIds({ canonicalData, completed: true })
+  return { cycleId, marketId, sellOrderClientId, sellOrderBrokerOrderId }
 }
 
 function validateRecoveryCycleCompletedAmounts({ canonicalData }) {
@@ -274,9 +283,11 @@ function validateRecoveryCycleNotCompletedIdentity({ canonicalData, factId }) {
     field: "data.marketId",
     maxLength: MAX_FACT_ID_LENGTH,
   })
-  const venue = requireNonEmptyString({ value: canonicalData.venue,
-field: "data.venue",
-maxLength: 32 })
+  const venue = requireNonEmptyString({
+    value: canonicalData.venue,
+    field: "data.venue",
+    maxLength: 32,
+  })
   const sellOrderClientId = requireNonEmptyString({
     value: canonicalData.sellOrderClientId,
     field: "data.sellOrderClientId",
@@ -288,9 +299,11 @@ maxLength: 32 })
     maxLength: MAX_FACT_ID_LENGTH,
   })
   validateRecoveryCycleAssetIds({ canonicalData })
-  const reason = requireNonEmptyString({ value: canonicalData.reason,
-field: "data.reason",
-maxLength: 64 })
+  const reason = requireNonEmptyString({
+    value: canonicalData.reason,
+    field: "data.reason",
+    maxLength: 64,
+  })
   if (
     !SHA256_PATTERN.test(evaluationId) ||
     venue !== venue.toLowerCase() ||
@@ -300,25 +313,9 @@ maxLength: 64 })
   ) {
     throw new TypeError("Recovery-cycle non-completion identity or reason is not canonical")
   }
-  if (typeof canonicalData.symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(canonicalData.symbol)) {
-    throw new TypeError("Recovery-cycle symbol must be canonical uppercase alphanumeric")
-  }
-  if (canonicalData.baseAssetId === canonicalData.quoteAssetId) {
-    throw new TypeError("Recovery-cycle base and quote assets must differ")
-  }
-  if (
-    !Array.isArray(canonicalData.appliedFillIds) ||
-    canonicalData.appliedFillIds.length === 0 ||
-    canonicalData.appliedFillIds.some((id) => typeof id !== "string" || !id.trim()) ||
-    new Set(canonicalData.appliedFillIds).size !== canonicalData.appliedFillIds.length
-  ) {
-    throw new TypeError("Recovery-cycle non-completion requires unique applied fill identities")
-  }
-  return { evaluationId,
-marketId,
-sellOrderClientId,
-sellOrderBrokerOrderId,
-reason }
+  validateRecoveryCycleSymbolAndAssets({ canonicalData })
+  validateRecoveryCycleAppliedFillIds({ canonicalData, completed: false })
+  return { evaluationId, marketId, sellOrderClientId, sellOrderBrokerOrderId, reason }
 }
 
 function validateRecoveryCycleNotCompletedAmounts({ canonicalData }) {
