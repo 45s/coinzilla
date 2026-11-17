@@ -4,13 +4,7 @@ function hasExplicitConfirmation({ args }) {
   return Array.isArray(args) && args.length === 1 && args[0] === "--confirm-initialize"
 }
 
-function validateInitializationRequest({
-  args,
-  initialize,
-  resolveDirectory,
-  logger
-,
-}) {
+function validateInitializationRequest({ args, initialize, resolveDirectory, logger }) {
   if (!hasExplicitConfirmation({ args })) {
     logger.error?.({
       message: "Operational State Store initialization requires exactly --confirm-initialize; unknown arguments are not accepted.",
@@ -38,29 +32,16 @@ function validateInitializationRequest({
  * @param {object} [options.logger]
  * @returns {Promise<number>} Process exit code.
  */
-function resolveInitializationDirectory({
-  env,
-  resolveDirectory,
-  logger
-,
-}) {
+function resolveInitializationDirectory({ env, resolveDirectory, logger }) {
   try {
-    return {
-      ok: true,
-      directory: resolveDirectory({ env })
-    ,
-    }
+    return { ok: true, directory: resolveDirectory({ env }) }
   } catch (error) {
     logger.error?.({ message: error.message })
     return { ok: false }
   }
 }
 
-async function invokeOperationalStateInitializer({
-  initialize,
-  directory
-,
-}) {
+async function invokeOperationalStateInitializer({ initialize, directory }) {
   try {
     return await initialize({
       confirmed: true,
@@ -74,11 +55,7 @@ async function invokeOperationalStateInitializer({
   }
 }
 
-function reportOperationalStateInitialization({
-  result,
-  logger
-,
-}) {
+function reportOperationalStateInitialization({ result, logger }) {
   if (result?.ok === true && result.data?.durable === true) {
     logger.system?.(
       `Harvester Operational State Store initialized at ${  result.data.directory
@@ -100,21 +77,10 @@ export async function runInitializeOperationalState({
   resolveDirectory,
   logger = defaultLogger,
 } = {}) {
-  if (!validateInitializationRequest({
-    args,
-    initialize,
-    resolveDirectory,
-    logger
-  ,
-  })) {
+  if (!validateInitializationRequest({ args, initialize, resolveDirectory, logger })) {
     return 1
   }
-  const resolved = resolveInitializationDirectory({
-    env,
-    resolveDirectory,
-    logger
-  ,
-  })
+  const resolved = resolveInitializationDirectory({ env, resolveDirectory, logger })
   if (!resolved.ok) {
     return 1
   }
@@ -122,9 +88,5 @@ export async function runInitializeOperationalState({
     initialize,
     directory: resolved.directory,
   })
-  return reportOperationalStateInitialization({
-    result,
-    logger
-  ,
-  })
+  return reportOperationalStateInitialization({ result, logger })
 }
