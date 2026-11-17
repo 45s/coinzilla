@@ -14,21 +14,34 @@ function logSystem({ logger, ...data }) {
   logger?.info?.(data)
 }
 
-function summarizeUnresolvedOrder(order) {
-  const symbol = order?.market?.symbol ?? order?.symbol
-  return {
-    ...(typeof symbol === "string" ? { symbol } : {}),
-    ...(typeof order?.side === "string" ? { side: order.side } : {}),
-    ...(typeof order?.clientOrderId === "string" ? { clientOrderId: order.clientOrderId } : {}),
-    ...(typeof order?.brokerOrderId === "string" ? { brokerOrderId: order.brokerOrderId } : {}),
-    ...(typeof order?.status === "string" ? { status: order.status } : {}),
-    ...(order?.executedQuantity?.amount !== undefined
-      ? { executedQuantity: order.executedQuantity.amount }
-      : {}),
-    ...(order?.originalQuantity?.amount !== undefined
-      ? { originalQuantity: order.originalQuantity.amount }
-      : {}),
+function addStringOrderField({ summary, order, field, value = order?.[field] }) {
+  if (typeof value === "string") {
+    summary[field] = value
   }
+}
+
+function addQuantityOrderField({ summary, order, field }) {
+  const amount = order?.[field]?.amount
+  if (amount !== undefined) {
+    summary[field] = amount
+  }
+}
+
+function summarizeUnresolvedOrder(order) {
+  const summary = {}
+  addStringOrderField({
+    summary,
+    order,
+    field: "symbol",
+    value: order?.market?.symbol ?? order?.symbol,
+  })
+  for (const field of ["side", "clientOrderId", "brokerOrderId", "status"]) {
+    addStringOrderField({ summary, order, field })
+  }
+  for (const field of ["executedQuantity", "originalQuantity"]) {
+    addQuantityOrderField({ summary, order, field })
+  }
+  return summary
 }
 
 function getSafeFailureReason(error) {
@@ -53,14 +66,15 @@ function createPhaseRunner({ logger, now, shutdownRequestedAt, shutdownCorrelati
   const isPhaseFailure = (result) =>
     result?.ok === false || (Array.isArray(result) && result.length > 0)
   const getPhaseFailureReason = (result) => {
-    const firstFinding = result?.data?.findings?.[0]
     const firstError = result?.errors?.[0]
-    const recoveryStage = firstError?.recoveryFailure?.stage
-    return result?.failure?.stage ??
-      firstFinding?.reason ??
-      recoveryStage ??
-      firstError?.code ??
-      firstError?.name ??
+    const candidates = [
+      result?.failure?.stage,
+      result?.data?.findings?.[0]?.reason,
+      firstError?.recoveryFailure?.stage,
+      firstError?.code,
+      firstError?.name,
+    ]
+    return candidates.find((candidate) => typeof candidate === "string" && candidate.length > 0) ??
       "PHASE_RESULT_FAILED"
   }
 
@@ -160,85 +174,95 @@ const SHUTDOWN_ERROR_MESSAGE_LIMIT = 2048
 const SHUTDOWN_ERROR_STACK_LIMIT = 8192
 const SHUTDOWN_ERROR_CAUSE_DEPTH_LIMIT = 3
 
-function summarizeShutdownError({ error, depth = 0 } = {}) {
-  const { message: errorMessage } = error ?? {}
-  let message
-  if (typeof errorMessage === "string") {
-    message = errorMessage
-  } else if (typeof error === "string") {
-    message = error
+function getShutdownErrorMessage(error) {
+  if (typeof error?.message === "string") {
+    return error.message
   }
+  return typeof error === "string" ? error : undefined
+}
+
+function summarizeShutdownErrorCause({ error, depth }) {
+  if (depth >= SHUTDOWN_ERROR_CAUSE_DEPTH_LIMIT || error?.cause === undefined) {
+    return undefined
+  }
+  return summarizeShutdownError({
+    error: error.cause,
+    depth: depth + 1,
+  })
+}
+
+function summarizeShutdownError({ error, depth = 0 } = {}) {
+  const message = getShutdownErrorMessage(error)
   const summary = {
     name: typeof error?.name === "string" ? error.name : "Error",
     code: typeof error?.code === "string" ? error.code : null,
     failureStage: typeof error?.recoveryFailure?.stage === "string"
       ? error.recoveryFailure.stage
       : null,
-    ...(message === undefined
-      ? {}
-      : {
-        message: message.slice(0, SHUTDOWN_ERROR_MESSAGE_LIMIT),
-      }),
+    ...(message === undefined ? {} : { message: message.slice(0, SHUTDOWN_ERROR_MESSAGE_LIMIT) }),
     ...(typeof error?.stack === "string"
-      ? {
-        stack: error.stack.slice(0, SHUTDOWN_ERROR_STACK_LIMIT),
-      }
+      ? { stack: error.stack.slice(0, SHUTDOWN_ERROR_STACK_LIMIT) }
       : {}),
   }
-  if (depth < SHUTDOWN_ERROR_CAUSE_DEPTH_LIMIT && error?.cause !== undefined) {
-    summary.cause = summarizeShutdownError({
-      error: error.cause,
-      depth: depth + 1,
-    })
+  const cause = summarizeShutdownErrorCause({ error, depth })
+  if (cause !== undefined) {
+    summary.cause = cause
   }
   return summary
 }
 
-function createFailureRecorder({ context, phaseRunner }) {
-  const logShutdownFailure = ({ message, stage, result, error } = {}) => {
-    let errors
-    if (error) {
-      errors = [error]
-    } else if (result?.errors?.length) {
-      const { errors: resultErrors } = result
-      errors = resultErrors
-    } else {
-      errors = [new Error(message)]
-    }
-    const failure = result?.failure ?? error?.recoveryFailure ??
-      errors.find((entry) => entry?.recoveryFailure)?.recoveryFailure
-    const failureMetadata = failure
-      ? {
-        category: failure.category ?? null,
-        stage: failure.stage ?? null,
-        retryable: typeof failure.retryable === "boolean" ? failure.retryable : null,
-      }
-      : null
-    const errorDetails = errors.map((entry) => summarizeShutdownError({ error: entry }))
-    context.stageFailures.push({
-      stage: stage ?? "UNKNOWN",
-      failure: failureMetadata,
-      errors: errorDetails,
-    })
-    context.logger.error?.({
-      message,
-      stage,
-      failure: failureMetadata,
-      errors: errorDetails,
-      originalErrors: errors,
-      shutdownCorrelationId: context.shutdownCorrelationId,
-    })
+function getShutdownFailureErrors({ message, result, error }) {
+  if (error) {
+    return [error]
   }
+  return result?.errors?.length ? result.errors : [new Error(message)]
+}
 
+function getShutdownFailureMetadata({ result, error, errors }) {
+  const failure = result?.failure ?? error?.recoveryFailure ??
+    errors.find((entry) => entry?.recoveryFailure)?.recoveryFailure
+  if (!failure) {
+    return null
+  }
+  return {
+    category: failure.category ?? null,
+    stage: failure.stage ?? null,
+    retryable: typeof failure.retryable === "boolean" ? failure.retryable : null,
+  }
+}
+
+function logShutdownFailure({ context, message, stage, result, error }) {
+  const errors = getShutdownFailureErrors({ message, result, error })
+  const failure = getShutdownFailureMetadata({ result, error, errors })
+  const errorDetails = errors.map((entry) => summarizeShutdownError({ error: entry }))
+  context.stageFailures.push({
+    stage: stage ?? "UNKNOWN",
+    failure,
+    errors: errorDetails,
+  })
+  context.logger.error?.({
+    message,
+    stage,
+    failure,
+    errors: errorDetails,
+    originalErrors: errors,
+    shutdownCorrelationId: context.shutdownCorrelationId,
+  })
+}
+
+function createFailureRecorder({ context, phaseRunner }) {
+  const recordFailure = (options = {}) => logShutdownFailure({
+    context,
+    ...options,
+  })
   const runPhaseSafely = (options = {}) => runShutdownPhaseSafely({
     context,
     phaseRunner,
-    logShutdownFailure,
+    logShutdownFailure: recordFailure,
     options,
   })
-
   return {
-    logShutdownFailure,
+    logShutdownFailure: recordFailure,
     runPhaseSafely,
   }
 }
@@ -762,6 +786,28 @@ async function runShutdownLifecycle(context) {
  * reconciliation and recovery SELL coverage; other strategies keep separate
  * shutdown policies.
  */
+function establishShutdownState({
+  state,
+  phaseRunner,
+  shutdownRequestedAt,
+  stopStateEstablishedLogged,
+  now,
+}) {
+  const shutdownStartedFromStatus = state.status
+  const stateEstablishedAt = now()
+  state.stopped = true
+  state.ready = false
+  state.status = "STOPPING"
+  if (!stopStateEstablishedLogged) {
+    phaseRunner.logPhase({
+      phase: "STOP_STATE_ESTABLISHED",
+      status: "COMPLETED",
+      durationMs: Math.max(0, stateEstablishedAt - shutdownRequestedAt),
+    })
+  }
+  return shutdownStartedFromStatus
+}
+
 function createShutdownRequestContext({
   options,
   state,
@@ -793,18 +839,13 @@ function createShutdownRequestContext({
     })
   }
 
-  const shutdownStartedFromStatus = state.status
-  const stateEstablishedAt = now()
-  state.stopped = true
-  state.ready = false
-  state.status = "STOPPING"
-  if (!stopStateEstablishedLogged) {
-    phaseRunner.logPhase({
-      phase: "STOP_STATE_ESTABLISHED",
-      status: "COMPLETED",
-      durationMs: Math.max(0, stateEstablishedAt - shutdownRequestedAt),
-    })
-  }
+  const shutdownStartedFromStatus = establishShutdownState({
+    state,
+    phaseRunner,
+    shutdownRequestedAt,
+    stopStateEstablishedLogged,
+    now,
+  })
 
   const context = createShutdownContext({
     options: {
