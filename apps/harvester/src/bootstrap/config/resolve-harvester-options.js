@@ -121,6 +121,35 @@ function publishValidatedConfiguration({
   }
 }
 
+function createResolvedHarvesterOptions({
+  appConfig,
+  settings,
+  pairs,
+  enabledSymbols,
+  effectiveConfiguration,
+  environment,
+  brokerName,
+  providerConfiguration,
+  providerInstanceId,
+  tradingMode,
+  tradingEnabled,
+}) {
+  return Object.freeze({
+    appConfig,
+    settings,
+    pairs,
+    enabledSymbols: Object.freeze(enabledSymbols),
+    configurationFingerprint: effectiveConfiguration.fingerprint,
+    environment,
+    brokerName,
+    providerInstanceId,
+    providerInstances: providerConfiguration.instances,
+    providerSelections: providerConfiguration.selections,
+    tradingMode,
+    tradingEnabled,
+  })
+}
+
 export async function resolveHarvesterOptions({
   configSource,
   appConfig: suppliedAppConfig,
@@ -168,17 +197,16 @@ export async function resolveHarvesterOptions({
     tradingMode,
     tradingEnabled,
   })
-  return Object.freeze({
+  return createResolvedHarvesterOptions({
     appConfig,
     settings,
     pairs,
-    enabledSymbols: Object.freeze(enabledSymbols),
-    configurationFingerprint: effectiveConfiguration.fingerprint,
+    enabledSymbols,
+    effectiveConfiguration,
     environment,
     brokerName,
+    providerConfiguration,
     providerInstanceId: selectedProvider.id,
-    providerInstances: providerConfiguration.instances,
-    providerSelections: providerConfiguration.selections,
     tradingMode,
     tradingEnabled,
   })

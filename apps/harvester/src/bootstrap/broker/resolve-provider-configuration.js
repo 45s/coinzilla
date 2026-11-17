@@ -84,12 +84,14 @@ function resolveProviderInstance({ id, definition, tradingMode }) {
 }
 
 function resolveProviderInstances({ instances, tradingMode }) {
-  const resolved = Object.entries(instances).map(([id, definition]) =>
-    resolveProviderInstance({
+  const resolved = []
+  for (const [id, definition] of Object.entries(instances)) {
+    resolved.push(resolveProviderInstance({
       id,
       definition,
       tradingMode,
     }))
+  }
   if (resolved.length === 0) {
     throw new TypeError("Harvester provider configuration must contain at least one instance")
   }
