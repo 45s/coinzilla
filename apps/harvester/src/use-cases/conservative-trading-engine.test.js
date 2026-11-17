@@ -11415,7 +11415,7 @@ test("invalidates a safe shutdown marker when a later accepted market price chan
   })
 
   assert.equal(latePrice.ok, true, "A fresh market price must remain processable through the recovery-only shutdown path.")
-  const invalidatedMarket = harness.engine.getShutdownSafetySnapshot().markets[0]
+  const [invalidatedMarket] = harness.engine.getShutdownSafetySnapshot().markets
   assert.equal(
     invalidatedMarket.status,
     "UNSAFE",
