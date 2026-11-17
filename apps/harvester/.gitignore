@@ -1,2 +1,4 @@
 /logs/
 /data/
+**/harvester.db
+**/harvester.db-*
