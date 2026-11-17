@@ -37,6 +37,7 @@ function resolveProviderRuntime({ configuredAppConfig, env }) {
     runtime,
     providerConfiguration,
     selectedProvider,
+    brokerName: selectedProvider.provider,
   }
 }
 
@@ -169,9 +170,8 @@ export async function resolveHarvesterOptions({
     configuredAppConfig,
     env,
   })
-  const { runtime, providerConfiguration, selectedProvider } = providerRuntime
+  const { runtime, providerConfiguration, selectedProvider, brokerName } = providerRuntime
   const { environment, tradingMode, tradingEnabled } = runtime
-  const brokerName = selectedProvider.provider
   const pairs = resolveStrategyPairs({
     strategyConfig,
     tradingMode,
