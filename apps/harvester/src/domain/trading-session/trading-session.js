@@ -19,7 +19,10 @@ const IDENTITY_FIELDS = Object.freeze([
 
 export class TradingSessionIntegrityError extends Error {
   constructor({ message, cause } = {}) {
-    super(message ?? "Trading-session identity conflicts with existing historical facts", { cause })
+    super(
+      message ?? "Trading-session identity conflicts with existing historical facts",
+      { cause },
+    )
     this.name = "TradingSessionIntegrityError"
     this.code = "HARVESTER_TRADING_SESSION_IDENTITY_CONFLICT"
   }
@@ -52,11 +55,19 @@ function requireNullableText({ value, field, maxLength }) {
   if (value === null) {
     return null
   }
-  return requireText({ value, field, maxLength })
+  return requireText({
+    value,
+    field,
+    maxLength,
+  })
 }
 
 function requireTimestamp({ value, field }) {
-  const timestamp = requireText({ value, field, maxLength: 40 })
+  const timestamp = requireText({
+    value,
+    field,
+    maxLength: 40,
+  })
   const parsed = new Date(timestamp)
   if (Number.isNaN(parsed.getTime()) || parsed.toISOString() !== timestamp) {
     throw new TypeError(`${field} must be a canonical UTC ISO-8601 timestamp with milliseconds`)
@@ -64,10 +75,7 @@ function requireTimestamp({ value, field }) {
   return timestamp
 }
 
-function mapBuildSource({ value }) {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    throw new TypeError("buildProvenance.source must be an object")
-  }
+function mapCommitIdentity({ value }) {
   const commit = requireNullableText({
     value: value.commit,
     field: "buildProvenance.source.commit",
@@ -81,27 +89,56 @@ function mapBuildSource({ value }) {
     field: "buildProvenance.source.shortCommit",
     maxLength: 8,
   })
-  if (shortCommit !== null && (commit === null || shortCommit.toLowerCase() !== commit.slice(0, 8).toLowerCase())) {
+  if (
+    shortCommit !== null &&
+    (commit === null || shortCommit.toLowerCase() !== commit.slice(0, 8).toLowerCase())
+  ) {
     throw new TypeError("buildProvenance.source.shortCommit must match the full Git SHA or be null")
   }
+  return {
+    commit: commit?.toLowerCase() ?? null,
+    shortCommit: shortCommit?.toLowerCase() ?? null,
+  }
+}
+
+function mapCommitDate({ value }) {
   const commitDate = requireNullableText({
     value: value.commitDate,
     field: "buildProvenance.source.commitDate",
     maxLength: 40,
   })
   if (commitDate !== null) {
-    requireTimestamp({ value: commitDate, field: "buildProvenance.source.commitDate" })
+    requireTimestamp({
+      value: commitDate,
+      field: "buildProvenance.source.commitDate",
+    })
   }
+  return commitDate
+}
+
+function assertBuildSourceMetadata({ value }) {
   if (!WORKING_TREE_STATES.has(value.workingTree)) {
     throw new TypeError("buildProvenance.source.workingTree must be clean, dirty, or unknown")
   }
   if (!BUILD_METADATA_SOURCES.has(value.metadataSource)) {
     throw new TypeError("buildProvenance.source.metadataSource must be git, environment, or unavailable")
   }
+}
+
+function mapBuildSource({ value }) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("buildProvenance.source must be an object")
+  }
+  const commitIdentity = mapCommitIdentity({ value })
+  const commitDate = mapCommitDate({ value })
+  assertBuildSourceMetadata({ value })
   return {
-    branch: requireNullableText({ value: value.branch, field: "buildProvenance.source.branch", maxLength: 160 }),
-    commit: commit?.toLowerCase() ?? null,
-    shortCommit: shortCommit?.toLowerCase() ?? null,
+    branch: requireNullableText({
+      value: value.branch,
+      field: "buildProvenance.source.branch",
+      maxLength: 160,
+    }),
+    ...commitIdentity,
     commitMessage: requireNullableText({
       value: value.commitMessage,
       field: "buildProvenance.source.commitMessage",
@@ -121,10 +158,20 @@ function mapBuildProvenance({ value }) {
     throw new TypeError("buildProvenance.processId must be a positive safe integer")
   }
   return {
-    application: requireText({ value: value.application, field: "buildProvenance.application", maxLength: 40 }),
-    version: requireText({ value: value.version, field: "buildProvenance.version", maxLength: 40 }),
+    application: requireText({
+      value: value.application,
+      field: "buildProvenance.application",
+      maxLength: 40,
+    }),
+    version: requireText({
+      value: value.version,
+      field: "buildProvenance.version",
+      maxLength: 40,
+    }),
     processId: value.processId,
-    source: mapBuildSource({ value: value.source }),
+    source: mapBuildSource({
+      value: value.source,
+    }),
   }
 }
 
@@ -132,12 +179,15 @@ function mapEnabledMarkets({ value }) {
   if (!Array.isArray(value) || value.length === 0 || value.length > 128) {
     throw new TypeError("enabledMarkets must contain between 1 and 128 market symbols")
   }
-  const markets = value.map((symbol, index) => requireText({
+  const markets = value.map((symbol) => requireText({
     value: symbol,
-    field: `enabledMarkets[${index}]`,
+    field: "enabledMarkets item",
     maxLength: 32,
   })).sort()
-  if (new Set(markets).size !== markets.length || markets.some((symbol) => !/^[A-Z0-9][A-Z0-9_-]*$/.test(symbol))) {
+  if (
+    new Set(markets).size !== markets.length ||
+    markets.some((symbol) => !/^[A-Z0-9][A-Z0-9_-]*$/.test(symbol))
+  ) {
     throw new TypeError("enabledMarkets must contain unique canonical market symbols")
   }
   return markets
@@ -154,7 +204,11 @@ export function createTradingSessionRecord({
   buildProvenance,
   startedAt,
 } = {}) {
-  const id = requireText({ value: runtimeSessionId, field: "runtimeSessionId", maxLength: 128 })
+  const id = requireText({
+    value: runtimeSessionId,
+    field: "runtimeSessionId",
+    maxLength: 128,
+  })
   if (!ENVIRONMENTS.has(environment)) {
     throw new TypeError("environment must be testnet or live")
   }
@@ -167,7 +221,10 @@ export function createTradingSessionRecord({
   if (!STRATEGY_MODES.has(strategyMode)) {
     throw new TypeError("strategyMode must be read-only, conservative, or aggressive")
   }
-  if (typeof configurationFingerprint !== "string" || !/^[a-f0-9]{64}$/.test(configurationFingerprint)) {
+  if (
+    typeof configurationFingerprint !== "string" ||
+    !/^[a-f0-9]{64}$/.test(configurationFingerprint)
+  ) {
     throw new TypeError("configurationFingerprint must be a lowercase SHA-256 digest")
   }
   return {
@@ -179,9 +236,16 @@ export function createTradingSessionRecord({
     strategyId,
     strategyMode,
     configurationFingerprint,
-    enabledMarkets: mapEnabledMarkets({ value: enabledMarkets }),
-    buildProvenance: mapBuildProvenance({ value: buildProvenance }),
-    startedAt: requireTimestamp({ value: startedAt, field: "startedAt" }),
+    enabledMarkets: mapEnabledMarkets({
+      value: enabledMarkets,
+    }),
+    buildProvenance: mapBuildProvenance({
+      value: buildProvenance,
+    }),
+    startedAt: requireTimestamp({
+      value: startedAt,
+      field: "startedAt",
+    }),
     endedAt: null,
     status: "STARTING",
     metadata: {
@@ -215,9 +279,16 @@ export function createTradingSessionTransition({ current, status, endedAt } = {}
     if (endedAt !== undefined) {
       throw new TypeError("RUNNING transitions must not include endedAt")
     }
-    return { status, endedAt: null, duplicate: false }
+    return {
+      status,
+      endedAt: null,
+      duplicate: false,
+    }
   }
-  const normalizedEndedAt = requireTimestamp({ value: endedAt, field: "endedAt" })
+  const normalizedEndedAt = requireTimestamp({
+    value: endedAt,
+    field: "endedAt",
+  })
   if (Date.parse(normalizedEndedAt) < Date.parse(current.startedAt)) {
     throw new TypeError("endedAt must not precede startedAt")
   }
@@ -229,7 +300,12 @@ export function createTradingSessionTransition({ current, status, endedAt } = {}
 }
 
 export function hasSameTradingSessionIdentity({ existing, candidate } = {}) {
-  if (existing === null || typeof existing !== "object" || candidate === null || typeof candidate !== "object") {
+  if (
+    existing === null ||
+    typeof existing !== "object" ||
+    candidate === null ||
+    typeof candidate !== "object"
+  ) {
     return false
   }
   return IDENTITY_FIELDS.every((field) =>
