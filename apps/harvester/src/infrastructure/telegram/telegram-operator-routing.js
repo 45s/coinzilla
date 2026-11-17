@@ -36,7 +36,11 @@ async function authorizeTelegramCallback({
     })
     return undefined
   }
-  const rejectionReason = callbackAuthorizationFailure({ callback, chat, userId, chatId, allowedUsers })
+  const rejectionReason = callbackAuthorizationFailure({ callback,
+ chat,
+ userId,
+ chatId,
+ allowedUsers })
   if (rejectionReason) {
     logStage({
       interaction,
@@ -45,10 +49,15 @@ async function authorizeTelegramCallback({
       level: "warn",
       fields: { reason: rejectionReason },
     })
-    await answerCallback({ callbackId: callback.id, text: "Not authorized.", signal, interaction })
+    await answerCallback({ callbackId: callback.id,
+ text: "Not authorized.",
+ signal,
+ interaction })
     return undefined
   }
-  logStage({ interaction, message: "Telegram interaction AUTHORIZED", stage: "AUTHORIZED" })
+  logStage({ interaction,
+ message: "Telegram interaction AUTHORIZED",
+ stage: "AUTHORIZED" })
   const messageId = callback.message?.message_id
   if (!Number.isSafeInteger(messageId) || messageId <= 0 || typeof callback.data !== "string") {
     logStage({
@@ -58,31 +67,41 @@ async function authorizeTelegramCallback({
       level: "warn",
       fields: { reason: "INVALID_OR_EXPIRED_CALLBACK" },
     })
-    await answerCallback({ callbackId: callback.id, text: "Invalid or expired control.", signal, interaction })
+    await answerCallback({ callbackId: callback.id,
+ text: "Invalid or expired control.",
+ signal,
+ interaction })
     return undefined
   }
   return { messageId }
 }
 
-async function routeTelegramCallbackData({ callback, update, common }) {
+async function routeTelegramCallbackData({ callback,
+ update,
+ common }) {
   const navigation = /^cc:(nav|refresh):(home|status|markets|pause|resume|positions|orders|balances)$/.exec(callback.data)
   if (navigation) {
-    await handleNavigationCallback({ ...common, navigation })
+    await handleNavigationCallback({ ...common,
+ navigation })
     return
   }
   const ask = /^cc:ask:(PAUSE|RESUME):([A-Z0-9]{2,30})$/.exec(callback.data)
   if (ask) {
-    await handleMarketSelectionCallback({ ...common, ask, update })
+    await handleMarketSelectionCallback({ ...common,
+ ask,
+ update })
     return
   }
   const confirm = /^cc:confirm:(PAUSE|RESUME):([A-Z0-9]{2,30}):(\d+)$/.exec(callback.data)
   if (confirm) {
-    await handleConfirmationCallback({ ...common, confirm })
+    await handleConfirmationCallback({ ...common,
+ confirm })
     return
   }
   const cancel = /^cc:cancel:(\d+)$/.exec(callback.data)
   if (cancel) {
-    await handleCancelCallback({ ...common, cancel })
+    await handleCancelCallback({ ...common,
+ cancel })
     return
   }
   common.logStage({
@@ -100,7 +119,10 @@ async function routeTelegramCallbackData({ callback, update, common }) {
   })
 }
 
-export async function respondToTelegramCallback({ update, signal, interaction, context }) {
+export async function respondToTelegramCallback({ update,
+ signal,
+ interaction,
+ context }) {
   const callback = update.callback_query
   const callbackAction = resolveCallbackAction(callback?.data)
   interaction.action = callbackAction.action
@@ -131,12 +153,21 @@ export async function respondToTelegramCallback({ update, signal, interaction, c
     interaction,
     ...context,
   }
-  await routeTelegramCallbackData({ callback, update, common })
+  await routeTelegramCallbackData({ callback,
+ update,
+ common })
 }
 
-async function respondToMenuCommand({ parsed, message, userId, signal, interaction, context }) {
+async function respondToMenuCommand({ parsed,
+ message,
+ userId,
+ signal,
+ interaction,
+ context }) {
   if (parsed.type === "START" || parsed.type === "MENU" || parsed.type === "HELP") {
-    context.logStage({ interaction, message: "Telegram command STARTED", stage: "COMMAND_STARTED" })
+    context.logStage({ interaction,
+ message: "Telegram command STARTED",
+ stage: "COMMAND_STARTED" })
     const replyMarkup = parsed.type === "HELP" ? context.buildNavigationKeyboard() : mainMenuKeyboard()
     await context.sendMessage({
       chatId: message.chat.id,
@@ -152,8 +183,12 @@ async function respondToMenuCommand({ parsed, message, userId, signal, interacti
   }
   const page = parsed.type === "PAUSE_MENU" ? "pause" : "resume"
   interaction.action = page.toUpperCase()
-  context.logStage({ interaction, message: "Telegram command STARTED", stage: "COMMAND_STARTED" })
-  const rendered = await context.readPage({ page, userId, interaction })
+  context.logStage({ interaction,
+ message: "Telegram command STARTED",
+ stage: "COMMAND_STARTED" })
+  const rendered = await context.readPage({ page,
+ userId,
+ interaction })
   await context.sendMessage({
     chatId: message.chat.id,
     text: rendered.text,
@@ -164,14 +199,23 @@ async function respondToMenuCommand({ parsed, message, userId, signal, interacti
   return true
 }
 
-async function respondToReadCommand({ parsed, message, userId, signal, interaction, context }) {
+async function respondToReadCommand({ parsed,
+ message,
+ userId,
+ signal,
+ interaction,
+ context }) {
   const page = parsed.type.toLowerCase()
   if (!PAGE_METHODS[page]) {
     return false
   }
   interaction.action = parsed.type
-  context.logStage({ interaction, message: "Telegram command STARTED", stage: "COMMAND_STARTED" })
-  const rendered = await context.readPage({ page, userId, interaction })
+  context.logStage({ interaction,
+ message: "Telegram command STARTED",
+ stage: "COMMAND_STARTED" })
+  const rendered = await context.readPage({ page,
+ userId,
+ interaction })
   await context.sendMessage({
     chatId: message.chat.id,
     text: rendered.text,
@@ -182,7 +226,10 @@ async function respondToReadCommand({ parsed, message, userId, signal, interacti
   return true
 }
 
-async function respondToTelegramMessage({ update, signal, interaction, context }) {
+async function respondToTelegramMessage({ update,
+ signal,
+ interaction,
+ context }) {
   const { message } = update
   if (!message) {
     context.logStage({
@@ -195,7 +242,9 @@ async function respondToTelegramMessage({ update, signal, interaction, context }
   }
   const userId = normalizeTelegramUserId(message.from?.id)
   const chatId = normalizeTelegramUserId(message.chat?.id)
-  const authorizationFailure = messageAuthorizationFailure({ message, userId, chatId })
+  const authorizationFailure = messageAuthorizationFailure({ message,
+ userId,
+ chatId })
   if (authorizationFailure) {
     context.logStage({
       interaction,
@@ -226,10 +275,15 @@ async function respondToTelegramMessage({ update, signal, interaction, context }
       level: "warn",
       fields: { reason: "USER_NOT_ALLOWLISTED" },
     })
-    await context.sendMessage({ chatId: message.chat.id, text: "Not authorized.", signal, interaction })
+    await context.sendMessage({ chatId: message.chat.id,
+ text: "Not authorized.",
+ signal,
+ interaction })
     return
   }
-  context.logStage({ interaction, message: "Telegram interaction AUTHORIZED", stage: "AUTHORIZED" })
+  context.logStage({ interaction,
+ message: "Telegram interaction AUTHORIZED",
+ stage: "AUTHORIZED" })
   await respondToAuthorizedMessage({
     parsed,
     update,
@@ -238,18 +292,29 @@ async function respondToTelegramMessage({ update, signal, interaction, context }
     signal,
     interaction,
     logStage: context.logStage,
-    respondToMenuCommand: (options) => respondToMenuCommand({ ...options, context }),
-    respondToReadCommand: (options) => respondToReadCommand({ ...options, context }),
+    respondToMenuCommand: (options) => respondToMenuCommand({ ...options,
+ context }),
+    respondToReadCommand: (options) => respondToReadCommand({ ...options,
+ context }),
     executeControl: context.executeControl,
     sendMessage: context.sendMessage,
     buildNavigationKeyboard: context.buildNavigationKeyboard,
   })
 }
 
-export async function respondToTelegramUpdate({ update, signal, interaction, context }) {
+export async function respondToTelegramUpdate({ update,
+ signal,
+ interaction,
+ context }) {
   if (update.callback_query) {
-    await respondToTelegramCallback({ update, signal, interaction, context })
+    await respondToTelegramCallback({ update,
+ signal,
+ interaction,
+ context })
     return
   }
-  await respondToTelegramMessage({ update, signal, interaction, context })
+  await respondToTelegramMessage({ update,
+ signal,
+ interaction,
+ context })
 }

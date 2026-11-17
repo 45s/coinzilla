@@ -15,12 +15,22 @@ export function createTelegramOperatorHandlers({
 }) {
   const pendingConfirmations = new Map()
   const confirmationTtlMs = 5 * 60 * 1000
-  const diagnostics = createTelegramOperatorDiagnostics({ logger, botToken })
-  const logStage = ({ interaction, message, stage, level = "info", fields = {} }) => {
+  const diagnostics = createTelegramOperatorDiagnostics({ logger,
+ botToken })
+  const logStage = ({ interaction,
+ message,
+ stage,
+ level = "info",
+ fields = {} }) => {
     interaction.stage = stage
-    diagnostics.log({ interaction, message, level, fields: { stage, ...fields } })
+    diagnostics.log({ interaction,
+ message,
+ level,
+ fields: { stage,
+ ...fields } })
   }
-  const messageApi = createTelegramMessageApi({ callApi, logStage })
+  const messageApi = createTelegramMessageApi({ callApi,
+ logStage })
   const buildNavigationKeyboard = createNavigationKeyboard
   const readPage = (options) => readTelegramOperatorPage({
     ...options,
@@ -29,8 +39,15 @@ export function createTelegramOperatorHandlers({
     logStage,
     buildNavigationKeyboard,
   })
-  const editPage = async ({ page, chatId, messageId, userId, signal, interaction }) => {
-    const rendered = await readPage({ page, userId, interaction })
+  const editPage = async ({ page,
+ chatId,
+ messageId,
+ userId,
+ signal,
+ interaction }) => {
+    const rendered = await readPage({ page,
+ userId,
+ interaction })
     await messageApi.editMessage({
       chatId,
       messageId,
@@ -61,6 +78,10 @@ export function createTelegramOperatorHandlers({
     pendingConfirmations,
     confirmationTtlMs,
   }
-  const respondToUpdate = (request) => respondToTelegramUpdate({ ...request, context })
-  return { respondToUpdate, logStage, pendingConfirmations, diagnostics }
+  const respondToUpdate = (request) => respondToTelegramUpdate({ ...request,
+ context })
+  return { respondToUpdate,
+ logStage,
+ pendingConfirmations,
+ diagnostics }
 }

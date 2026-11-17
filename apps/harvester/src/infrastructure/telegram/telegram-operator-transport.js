@@ -1,5 +1,8 @@
-export function createTelegramCallApi({ botToken, fetchImpl }) {
-  return async ({ method, payload, signal }) => {
+export function createTelegramCallApi({ botToken,
+ fetchImpl }) {
+  return async ({ method,
+ payload,
+ signal }) => {
     let response
     try {
       response = await fetchImpl(`https://api.telegram.org/bot${botToken}/${method}`, {
@@ -31,12 +34,20 @@ export function createTelegramCallApi({ botToken, fetchImpl }) {
   }
 }
 
-async function sendTelegramMessage({ callApi, logStage, chatId, text, replyMarkup, signal, interaction }) {
+async function sendTelegramMessage({ callApi,
+ logStage,
+ chatId,
+ text,
+ replyMarkup,
+ signal,
+ interaction }) {
   if (interaction) { interaction.stage = "RESPONSE_DELIVERY" }
   const startedAt = Date.now()
   const result = await callApi({
     method: "sendMessage",
-    payload: { chat_id: chatId, text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) },
+    payload: { chat_id: chatId,
+ text,
+ ...(replyMarkup ? { reply_markup: replyMarkup } : {}) },
     signal,
   })
   if (interaction) {
@@ -44,19 +55,30 @@ async function sendTelegramMessage({ callApi, logStage, chatId, text, replyMarku
       interaction,
       message: "Telegram response SENT",
       stage: "RESPONSE_DELIVERED",
-      fields: { delivery: "SEND_MESSAGE", durationMs: Date.now() - startedAt },
+      fields: { delivery: "SEND_MESSAGE",
+ durationMs: Date.now() - startedAt },
     })
   }
   return result
 }
 
-async function editTelegramMessage({ callApi, logStage, chatId, messageId, text, replyMarkup, signal, interaction }) {
+async function editTelegramMessage({ callApi,
+ logStage,
+ chatId,
+ messageId,
+ text,
+ replyMarkup,
+ signal,
+ interaction }) {
   if (interaction) { interaction.stage = "RESPONSE_DELIVERY" }
   const startedAt = Date.now()
   try {
     const result = await callApi({
       method: "editMessageText",
-      payload: { chat_id: chatId, message_id: messageId, text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) },
+      payload: { chat_id: chatId,
+ message_id: messageId,
+ text,
+ ...(replyMarkup ? { reply_markup: replyMarkup } : {}) },
       signal,
     })
     if (interaction) {
@@ -64,7 +86,8 @@ async function editTelegramMessage({ callApi, logStage, chatId, messageId, text,
         interaction,
         message: "Telegram response SENT",
         stage: "RESPONSE_DELIVERED",
-        fields: { delivery: "EDIT_MESSAGE", durationMs: Date.now() - startedAt },
+        fields: { delivery: "EDIT_MESSAGE",
+ durationMs: Date.now() - startedAt },
       })
     }
     return result
@@ -77,20 +100,27 @@ async function editTelegramMessage({ callApi, logStage, chatId, messageId, text,
         interaction,
         message: "Telegram response SENT",
         stage: "RESPONSE_DELIVERED",
-        fields: { delivery: "ALREADY_CURRENT", durationMs: Date.now() - startedAt },
+        fields: { delivery: "ALREADY_CURRENT",
+ durationMs: Date.now() - startedAt },
       })
     }
     return undefined
   }
 }
 
-async function answerTelegramCallback({ callApi, logStage, callbackId, text, signal, interaction }) {
+async function answerTelegramCallback({ callApi,
+ logStage,
+ callbackId,
+ text,
+ signal,
+ interaction }) {
   if (interaction) { interaction.stage = "CALLBACK_ACKNOWLEDGEMENT" }
   const startedAt = Date.now()
   try {
     const result = await callApi({
       method: "answerCallbackQuery",
-      payload: { callback_query_id: callbackId, ...(text ? { text } : {}) },
+      payload: { callback_query_id: callbackId,
+ ...(text ? { text } : {}) },
       signal,
     })
     if (interaction) {
@@ -118,10 +148,17 @@ async function answerTelegramCallback({ callApi, logStage, callbackId, text, sig
   }
 }
 
-export function createTelegramMessageApi({ callApi, logStage }) {
+export function createTelegramMessageApi({ callApi,
+ logStage }) {
   return {
-    sendMessage: (request) => sendTelegramMessage({ ...request, callApi, logStage }),
-    editMessage: (request) => editTelegramMessage({ ...request, callApi, logStage }),
-    answerCallback: (request) => answerTelegramCallback({ ...request, callApi, logStage }),
+    sendMessage: (request) => sendTelegramMessage({ ...request,
+ callApi,
+ logStage }),
+    editMessage: (request) => editTelegramMessage({ ...request,
+ callApi,
+ logStage }),
+    answerCallback: (request) => answerTelegramCallback({ ...request,
+ callApi,
+ logStage }),
   }
 }

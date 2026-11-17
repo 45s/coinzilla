@@ -30,7 +30,8 @@ export async function handleNavigationCallback({
   })
 }
 
-function prunePendingConfirmations({ pendingConfirmations, now }) {
+function prunePendingConfirmations({ pendingConfirmations,
+ now }) {
   for (const [token, pending] of pendingConfirmations) {
     if (pending.expiresAt < now) {
       pendingConfirmations.delete(token)
@@ -66,7 +67,8 @@ export async function handleMarketSelectionCallback({
   })
   const token = String(update.update_id)
   const now = Date.now()
-  prunePendingConfirmations({ pendingConfirmations, now })
+  prunePendingConfirmations({ pendingConfirmations,
+ now })
   pendingConfirmations.set(token, {
     action,
     symbol,
@@ -98,9 +100,11 @@ export async function handleMarketSelectionCallback({
             text: `Confirm ${action.toLowerCase()}`,
             callback_data: `cc:confirm:${action}:${symbol}:${token}`,
           },
-          { text: "Cancel", callback_data: `cc:cancel:${token}` },
+          { text: "Cancel",
+ callback_data: `cc:cancel:${token}` },
         ],
-        [{ text: "Main menu", callback_data: "cc:nav:home" }],
+        [{ text: "Main menu",
+ callback_data: "cc:nav:home" }],
       ],
     },
     signal,

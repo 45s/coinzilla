@@ -17,7 +17,8 @@ export function resolveMarketAction(page) {
   return undefined
 }
 
-export function selectMarketsForAction({ markets, action }) {
+export function selectMarketsForAction({ markets,
+ action }) {
   if (action === "PAUSE") {
     return markets.filter((market) => market?.enabled === true && market.operatorPaused !== true)
   }
@@ -27,7 +28,9 @@ export function selectMarketsForAction({ markets, action }) {
   return []
 }
 
-export function formatMarketActionPrompt({ action, eligibleMarkets, text }) {
+export function formatMarketActionPrompt({ action,
+ eligibleMarkets,
+ text }) {
   const prompt = action === "PAUSE"
     ? "Choose an enabled market to pause."
     : "Choose an enabled market to resume."
@@ -39,7 +42,11 @@ export function formatMarketActionPrompt({ action, eligibleMarkets, text }) {
 }
 
 
-function createUnavailablePage({ queryPage, method, diagnostics, interaction, buildNavigationKeyboard }) {
+function createUnavailablePage({ queryPage,
+ method,
+ diagnostics,
+ interaction,
+ buildNavigationKeyboard }) {
   diagnostics.report({
     interaction,
     stage: "QUERY_CONFIGURATION",
@@ -66,7 +73,11 @@ async function readOperatorQuery({
   if (!method || typeof operator[method] !== "function") {
     return {
       ok: false,
-      page: createUnavailablePage({ queryPage, method, diagnostics, interaction, buildNavigationKeyboard }),
+      page: createUnavailablePage({ queryPage,
+ method,
+ diagnostics,
+ interaction,
+ buildNavigationKeyboard }),
     }
   }
   interaction.operation = method
@@ -80,15 +91,26 @@ async function readOperatorQuery({
   let result
   try {
     result = await operator[method]({
-      actor: { id: `telegram-user:${userId}`, roles: ["trading-operator"] },
+      actor: { id: `telegram-user:${userId}`,
+ roles: ["trading-operator"] },
     })
   } catch (error) {
-    diagnostics.fail({ interaction, error, stage: "QUERY_EXECUTION", operation: method })
-    return { ok: false, page: createQueryFailurePage({ queryPage, buildNavigationKeyboard }) }
+    diagnostics.fail({ interaction,
+ error,
+ stage: "QUERY_EXECUTION",
+ operation: method })
+    return { ok: false,
+ page: createQueryFailurePage({ queryPage,
+ buildNavigationKeyboard }) }
   }
   if (result?.ok !== true) {
-    reportQueryResultFailure({ result, method, diagnostics, interaction })
-    return { ok: false, page: createQueryFailurePage({ queryPage, buildNavigationKeyboard }) }
+    reportQueryResultFailure({ result,
+ method,
+ diagnostics,
+ interaction })
+    return { ok: false,
+ page: createQueryFailurePage({ queryPage,
+ buildNavigationKeyboard }) }
   }
   logStage({
     interaction,
@@ -96,20 +118,28 @@ async function readOperatorQuery({
     stage: "QUERY_COMPLETED",
     fields: { durationMs: Date.now() - startedAt },
   })
-  return { ok: true, result }
+  return { ok: true,
+ result }
 }
 
-function createQueryFailurePage({ queryPage, buildNavigationKeyboard }) {
+function createQueryFailurePage({ queryPage,
+ buildNavigationKeyboard }) {
   return {
     text: `Unable to read the Harvester ${PAGE_TITLES[queryPage]}. No trading state was changed; check Harvester diagnostics.`,
     keyboard: buildNavigationKeyboard({ page: queryPage }),
   }
 }
 
-function reportQueryResultFailure({ result, method, diagnostics, interaction }) {
+function reportQueryResultFailure({ result,
+ method,
+ diagnostics,
+ interaction }) {
   const queryError = result?.errors?.[0] ?? result?.error
   if (queryError !== undefined) {
-    diagnostics.fail({ interaction, error: queryError, stage: "QUERY_RESULT", operation: method })
+    diagnostics.fail({ interaction,
+ error: queryError,
+ stage: "QUERY_RESULT",
+ operation: method })
     return
   }
   diagnostics.report({
@@ -121,7 +151,12 @@ function reportQueryResultFailure({ result, method, diagnostics, interaction }) 
   })
 }
 
-function formatOperatorPage({ queryPage, result, marketAction, interaction, logStage, buildNavigationKeyboard }) {
+function formatOperatorPage({ queryPage,
+ result,
+ marketAction,
+ interaction,
+ logStage,
+ buildNavigationKeyboard }) {
   interaction.stage = "QUERY_FORMATTING"
   const formatters = {
     status: () => formatTelegramOperatorStatus({ status: result.data }),
@@ -132,11 +167,15 @@ function formatOperatorPage({ queryPage, result, marketAction, interaction, logS
   }
   const text = formatters[queryPage]()
   const markets = queryPage === "markets" ? result.data.markets : []
-  const keyboard = buildNavigationKeyboard({ page: queryPage, markets, marketAction })
+  const keyboard = buildNavigationKeyboard({ page: queryPage,
+ markets,
+ marketAction })
   if (!marketAction) {
-    return { text, keyboard }
+    return { text,
+ keyboard }
   }
-  const eligibleMarkets = selectMarketsForAction({ markets, action: marketAction })
+  const eligibleMarkets = selectMarketsForAction({ markets,
+ action: marketAction })
   logStage({
     interaction,
     message: "Telegram market selection READY",
@@ -144,7 +183,9 @@ function formatOperatorPage({ queryPage, result, marketAction, interaction, logS
     fields: { eligibleMarketCount: eligibleMarkets.length },
   })
   return {
-    text: formatMarketActionPrompt({ action: marketAction, eligibleMarkets, text }),
+    text: formatMarketActionPrompt({ action: marketAction,
+ eligibleMarkets,
+ text }),
     keyboard,
   }
 }
@@ -152,7 +193,8 @@ function formatOperatorPage({ queryPage, result, marketAction, interaction, logS
 export async function readTelegramOperatorPage(options) {
   const { page, userId, interaction, operator, diagnostics, logStage, buildNavigationKeyboard } = options
   if (page === "home") {
-    return { text: helpText(), keyboard: buildNavigationKeyboard() }
+    return { text: helpText(),
+ keyboard: buildNavigationKeyboard() }
   }
   const marketAction = resolveMarketAction(page)
   const queryPage = marketAction ? "markets" : page

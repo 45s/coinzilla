@@ -1,4 +1,9 @@
-export function buildControlFailureReply({ action, symbol, result, method, interaction, diagnostics }) {
+export function buildControlFailureReply({ action,
+ symbol,
+ result,
+ method,
+ interaction,
+ diagnostics }) {
   if (!interaction.failed) {
     const controlError = result?.errors?.[0] ?? result?.error
     if (controlError !== undefined) {
@@ -39,7 +44,9 @@ export function buildControlFailureReply({ action, symbol, result, method, inter
   return `${action.startsWith("RESUME") ? "Resume" : "Pause"} was not acknowledged; check Harvester logs and retry.`
 }
 
-export function buildPauseBuySuccessReply({ buyScope, result, interaction }) {
+export function buildPauseBuySuccessReply({ buyScope,
+ result,
+ interaction }) {
   if (result.data?.paused !== true) {
     return undefined
   }
@@ -49,7 +56,9 @@ export function buildPauseBuySuccessReply({ buyScope, result, interaction }) {
   return `${prefix} ${buyScope}. Cancelled ${result.data.canceled ?? 0} Harvester-owned BUY order(s); reconciled ${result.data.reconciled ?? 0} fill(s). Recovery SELLs and accounting continue. External/manual and prior-process orders are untouched; check /orders. This pause is process-local and is not restored after restart.`
 }
 
-export function buildResumeBuySuccessReply({ buyScope, result, interaction }) {
+export function buildResumeBuySuccessReply({ buyScope,
+ result,
+ interaction }) {
   if (result.data?.resumed === true) {
     interaction.applicationOperationCompleted = true
     interaction.stateChanged = true
@@ -69,7 +78,10 @@ export function buildResumeBuySuccessReply({ buyScope, result, interaction }) {
   return undefined
 }
 
-export function buildBuyControlSuccessReply({ action, symbol, result, interaction } = {}) {
+export function buildBuyControlSuccessReply({ action,
+ symbol,
+ result,
+ interaction } = {}) {
   const buyScope = symbol ? `for ${symbol}` : "across all markets"
   if (action === "PAUSE_BUYS" || action === "PAUSE_ALL_BUYS") {
     return buildPauseBuySuccessReply({
@@ -88,7 +100,12 @@ export function buildBuyControlSuccessReply({ action, symbol, result, interactio
   return undefined
 }
 
-export function buildLegacyControlSuccessReply({ action, symbol, result, method, interaction, diagnostics }) {
+export function buildLegacyControlSuccessReply({ action,
+ symbol,
+ result,
+ method,
+ interaction,
+ diagnostics }) {
   if (action === "RESUME" && result.data?.resumed === true) {
     interaction.applicationOperationCompleted = true
     interaction.stateChanged = true
@@ -160,7 +177,8 @@ async function invokeOperatorControl({
       classification: "OPERATOR_CONTROL_UNAVAILABLE",
       message: `Operator control use case is unavailable: ${method}`,
     })
-    return { method, reply: `${verb} is not available in this operator adapter configuration.` }
+    return { method,
+ reply: `${verb} is not available in this operator adapter configuration.` }
   }
   const startedAt = Date.now()
   interaction.applicationOperationInvoked = true
@@ -172,7 +190,8 @@ async function invokeOperatorControl({
   let result
   try {
     result = await operator[method]({
-      actor: { id: `telegram-user:${userId}`, roles: ["trading-operator"] },
+      actor: { id: `telegram-user:${userId}`,
+ roles: ["trading-operator"] },
       requestId,
       symbol,
     })
@@ -205,7 +224,8 @@ async function invokeOperatorControl({
       },
     })
   }
-  return { method, reply }
+  return { method,
+ reply }
 }
 
 export async function executeTelegramOperatorControl({
@@ -242,7 +262,8 @@ export async function executeTelegramOperatorControl({
     interaction,
   }
   if (messageId !== undefined) {
-    await editMessage({ ...response, messageId })
+    await editMessage({ ...response,
+ messageId })
     return
   }
   await sendMessage(response)
