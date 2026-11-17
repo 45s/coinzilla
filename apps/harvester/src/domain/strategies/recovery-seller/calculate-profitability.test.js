@@ -28,13 +28,13 @@ test("one combined gate accepts recovery profit covering a small legacy loss", (
 test("one combined gate rejects the SELL when total profit misses minProfit", () => {
   const result = calculateRecoverySellerProfitability({
     ...validInput,
-    recoveryNetQuoteProceeds: "10.02",
+    recoveryNetQuoteProceeds: "10.019",
     legacyNetQuoteProceeds: "0.19",
   })
 
-  assert.equal(result.recovery.netProfit, "0.02")
+  assert.equal(result.recovery.netProfit, "0.019")
   assert.equal(result.legacy.netProfit, "-0.01")
-  assert.equal(result.cycle.netProfit, "0")
+  assert.equal(result.cycle.netProfit, "0.009")
   assert.equal(result.cycle.eligible, false)
   assert.equal(result.eligible, false)
 })

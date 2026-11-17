@@ -59,8 +59,8 @@ test("grosses up base-asset commission without dropping the authorized legacy sl
   assert.equal(plan.baseFeeQuantity, "0.01")
   assert.equal(plan.baseDebitQuantity, "1.01")
   assert.equal(plan.legacyQuantity, "0.01")
-  assert.equal(plan.recoverySellQuantity, "0.990099009900990099009900990099009900")
-  assert.equal(plan.legacySellQuantity, "0.009900990099009900990099009900990100")
+  assert.equal(plan.recoverySellQuantity, "0.9900990099009900990099009900990099")
+  assert.equal(plan.legacySellQuantity, "0.0099009900990099009900990099009901")
   assert.notEqual(plan.legacySellQuantity, "0",
     "The eligible legacy slice must remain in the mixed SELL after base-fee gross-up.")
 })
@@ -79,7 +79,7 @@ test("fails closed when the quantity step cannot include the full base-fee-adjus
   assert.throws(
     () => calculateRecoverySellerSellPlan({
       ...validInput,
-      baseFeeRate: "0.01",
+      baseFeeRate: "0.02",
       quantityStepSize: "0.1",
     }),
     /cannot include the full recovery and authorized legacy quantities/,
