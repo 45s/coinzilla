@@ -32,6 +32,52 @@ function createTransactionFacade(transaction) {
   })
 }
 
+function validateCapabilities(capabilities) {
+  const transactions = capabilities?.transactions
+  const queries = capabilities?.queries
+  const storage = capabilities?.storage
+
+  if (
+    !transactions
+    || typeof transactions !== "object"
+    || !["synchronous", "asynchronous"].includes(transactions.callbackMode)
+    || typeof transactions.nestedTransactions !== "boolean"
+  ) {
+    throw new TypeError("Provider transaction capabilities must declare callbackMode and nestedTransactions")
+  }
+
+  const queryFeatures = ["equalityFilters", "sorting", "pagination"]
+  if (
+    !queries
+    || typeof queries !== "object"
+    || queryFeatures.some((feature) => typeof queries[feature] !== "boolean")
+  ) {
+    throw new TypeError("Provider query capabilities must declare equalityFilters, sorting and pagination")
+  }
+
+  const storageModes = ["file", "memory", "server"]
+  if (
+    !storage
+    || typeof storage !== "object"
+    || !Array.isArray(storage.modes)
+    || storage.modes.length === 0
+    || storage.modes.some((mode) => !storageModes.includes(mode))
+    || new Set(storage.modes).size !== storage.modes.length
+  ) {
+    throw new TypeError("Provider storage capabilities must declare unique file, memory or server modes")
+  }
+}
+
+function freezeRecursively(value) {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const nestedValue of Object.values(value)) {
+      freezeRecursively(nestedValue)
+    }
+    Object.freeze(value)
+  }
+  return value
+}
+
 function createCapabilitiesSnapshot(capabilities) {
   if (!capabilities || typeof capabilities !== "object" || Array.isArray(capabilities)) {
     throw new TypeError("A provider must declare its database capabilities")
@@ -46,16 +92,7 @@ function createCapabilitiesSnapshot(capabilities) {
     })
   }
 
-  function freezeRecursively(value) {
-    if (value && typeof value === "object" && !Object.isFrozen(value)) {
-      for (const nestedValue of Object.values(value)) {
-        freezeRecursively(nestedValue)
-      }
-      Object.freeze(value)
-    }
-    return value
-  }
-
+  validateCapabilities(snapshot)
   return freezeRecursively(snapshot)
 }
 
