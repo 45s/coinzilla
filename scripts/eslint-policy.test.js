@@ -323,10 +323,14 @@ function createFunctionQualityAuditReport({ metrics }) {
 async function auditFunctionQualityThresholds() {
   const eslint = createFunctionQualityAuditEslint();
   const results = await eslint.lintFiles(["."]);
-  const metrics = collectFunctionQualityFindings({ results });
+  const measuredResults = results.filter((result) => (
+    result.filePath !== fileURLToPath(import.meta.url)
+  ));
+  const metrics = collectFunctionQualityFindings({ results: measuredResults });
 
   return {
     inspectedFiles: results.length,
+    measuredFiles: measuredResults.length,
     report: createFunctionQualityAuditReport({ metrics }),
   };
 }
@@ -338,8 +342,8 @@ test("audits candidate function-quality thresholds across the complete workspace
     `\\nESLint function-quality candidate audit:\\n${JSON.stringify(audit, null, 2)}\\n`,
   );
   assert.ok(
-    audit.inspectedFiles > 0,
-    "The function-quality audit must inspect the complete ESLint workspace.",
+    audit.inspectedFiles > 0 && audit.measuredFiles === audit.inspectedFiles - 1,
+    "The audit must inspect the full workspace while excluding only its own harness from candidate counts.",
   );
 });
 
