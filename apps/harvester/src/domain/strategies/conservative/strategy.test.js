@@ -1138,3 +1138,119 @@ status: "OPEN" }],
   assert.equal(decision.inventoryDisposition.evaluatedQuantity, "0.03", "The ZRO quantity evaluated for the exchange filter must remain independently exact.")
   assert.equal(decision.inventoryDisposition.evaluatedNotional, "0.04818", "The ZRO evaluated notional must match the exact residual quantity and current price.")
 })
+
+function createAdaResidualState({ adaMarket, adaBaseAsset }) {
+  let state = {
+    portfolio: new Portfolio(),
+    recoveryLedger: RecoveryLedger.empty({ market: adaMarket }),
+  }
+  const fills = [
+    {
+      side: "BUY",
+      tradeId: "ada-buy-738419",
+      brokerOrderId: "738419",
+      price: "0.1524",
+      quantity: "50",
+      quoteQuantity: "7.62",
+      commissionAmount: "0.05",
+      commissionAsset: adaBaseAsset,
+    },
+    {
+      side: "BUY",
+      tradeId: "ada-buy-738559",
+      brokerOrderId: "738559",
+      price: "0.1519",
+      quantity: "50",
+      quoteQuantity: "7.595",
+      commissionAmount: "0.05",
+      commissionAsset: adaBaseAsset,
+    },
+    {
+      side: "SELL",
+      tradeId: "ada-sell-738736",
+      brokerOrderId: "738736",
+      price: "0.1531",
+      quantity: "99.8",
+      quoteQuantity: "15.27938",
+      commissionAmount: "0.01527938",
+      commissionAsset: quoteAsset,
+    },
+  ]
+  for (const fill of fills) {
+    state = applyDustFill({
+      state,
+      market: adaMarket,
+      baseAsset: adaBaseAsset,
+      ...fill,
+    })
+  }
+  return state
+}
+
+function evaluateAdaResidualState({ state, metadata }) {
+  return evaluateConservativeStrategy({
+    marketPrice: {
+      symbol: "ADAUSDT",
+      price: "0.1531",
+      timestamp: 100,
+    },
+    pairConfig: {
+      priceStepPercent: 0.3,
+      orderQuantity: 50,
+      keepQuantity: 0,
+      minProfit: 0.05,
+      makerPercent: 0.075,
+      takerPercent: 0.075,
+    },
+    settings: {},
+    portfolio: state.portfolio,
+    recoveryLedger: state.recoveryLedger,
+    marketMetadata: metadata,
+    lastBuyPrice: "0.1519",
+  })
+}
+
+test("classifies the ADA 0.1 residual as MIN_NOTIONAL when one fee-reserved step cannot be sold", () => {
+  const adaBaseAsset = new Asset({
+    id: "asset:ADA",
+    code: "ADA",
+  })
+  const adaMarket = new Market({
+    venue: "binance",
+    symbol: "ADAUSDT",
+    baseAsset: adaBaseAsset,
+    quoteAsset,
+  })
+  const metadata = createDustMarketMetadata({
+    market: adaMarket,
+    priceIncrement: "0.0001",
+    quantityIncrement: "0.1",
+    minQuantity: "0.1",
+    minNotional: "5",
+  })
+  const state = createAdaResidualState({
+    adaMarket,
+    adaBaseAsset,
+  })
+  const position = state.portfolio.getPosition({
+    symbol: "ADAUSDT",
+  })
+  const decision = evaluateAdaResidualState({
+    state,
+    metadata,
+  })
+
+  assert.equal(position.quantity.amount, "0.1")
+  assert.equal(position.spent.amount, "15.215")
+  assert.equal(state.recoveryLedger.netSellProceeds, "15.26410062")
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
+  assert.deepEqual(decision.inventoryDisposition, {
+    status: "EXCHANGE_CONSTRAINED_DUST",
+    quantity: "0.1",
+    reason: "MIN_NOTIONAL",
+    minimumQuantity: "0.1",
+    minimumNotional: "5",
+    evaluatedQuantity: "0.1",
+    evaluatedNotional: "0.01531",
+  })
+})
