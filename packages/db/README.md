@@ -161,9 +161,9 @@ Consumers should branch on the public error class or stable code, not provider e
 
 Read `database.capabilities` to inspect the provider-neutral capability declaration. The declaration is a frozen snapshot. The SQLite provider currently reports:
 
-- Transaction callbacks are synchronous.
+- Transaction callbacks are synchronous; nested transactions are not supported.
 - Exact equality filters, sorting and pagination are supported.
-- Both file-backed and in-memory storage are supported.
+- Storage modes are file-backed and in-memory.
 
 A future provider must declare its own actual guarantees. The package will not silently emulate unsupported transaction, query, or durability guarantees.
 
@@ -188,7 +188,7 @@ runDatabaseProviderConformanceTests({
 
 The example is illustrative; no PostgreSQL provider is included. The factory must create an isolated test database for each test and honor the supplied file path for persistence tests where the provider supports file-backed storage. Providers that cannot support a particular test must declare the capability difference explicitly and provide a documented, tested reason; do not skip a contract silently.
 
-The suite verifies CRUD and collection isolation, duplicate handling, query behavior, missing-record results, transaction rollback, immutable capability snapshots, and persistence across a new connection. Add provider-specific lifecycle, lock/concurrency and cleanup tests where the generic contract cannot express the provider's operational guarantees.
+The suite verifies CRUD and collection isolation, duplicate handling, each declared query capability, missing-record results, transaction commit/rollback, immutable capability snapshots, and persistence across a new connection. Query and persistence cases are explicitly skipped with a reason only when the provider declares the corresponding capability unavailable. Add provider-specific lifecycle, lock/concurrency and cleanup tests where the generic contract cannot express the provider's operational guarantees.
 
 ## Provider composition
 
