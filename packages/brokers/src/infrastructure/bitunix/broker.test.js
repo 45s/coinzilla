@@ -31,6 +31,94 @@ function createBroker({ responses = {} } = {}) {
     calls }
 }
 
+
+const EXCHANGE_RATE_PATH = "/api/spot/v1/common/rate/list"
+
+test("Bitunix Spot exchange rates preserve exact documented decimal strings", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      [EXCHANGE_RATE_PATH]: [
+        {
+          baseSymbol: "USDT",
+          quoteSymbol: "AUD",
+          rate: "1.4452976228500000",
+        },
+      ],
+    },
+  })
+
+  const result = await broker.getExchangeRates()
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data, [
+    {
+      baseSymbol: "USDT",
+      quoteSymbol: "AUD",
+      rate: "1.4452976228500000",
+    },
+  ])
+  assert.deepEqual(calls[0], {
+    method: "GET",
+    path: EXCHANGE_RATE_PATH,
+    options: {},
+  })
+})
+
+test("Bitunix Spot exchange rates accept an explicitly empty list", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      [EXCHANGE_RATE_PATH]: [],
+    },
+  })
+
+  const result = await broker.getExchangeRates()
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data, [])
+  assert.equal(calls.length, 1)
+})
+
+test("Bitunix Spot exchange rates reject missing, malformed, and invalid rate records", async () => {
+  const invalidResponses = [
+    undefined,
+    {},
+    [null],
+    [{ baseSymbol: "USDT", quoteSymbol: "AUD", rate: 1.5 }],
+    [{ baseSymbol: "", quoteSymbol: "AUD", rate: "1.5" }],
+    [{ baseSymbol: "USDT", quoteSymbol: "", rate: "1.5" }],
+    [{ baseSymbol: "USDT", quoteSymbol: "AUD", rate: "0" }],
+    [{ baseSymbol: "USDT", quoteSymbol: "AUD", rate: "-1" }],
+    [{ baseSymbol: "USDT", quoteSymbol: "AUD", rate: "not-a-rate" }],
+  ]
+
+  for (const response of invalidResponses) {
+    const { broker } = createBroker({
+      responses: {
+        [EXCHANGE_RATE_PATH]: response,
+      },
+    })
+
+    const result = await broker.getExchangeRates()
+
+    assert.equal(result.ok, false, `invalid exchange-rate response must fail: ${JSON.stringify(response)}`)
+    assert.ok(result.errors.length > 0)
+  }
+})
+
+test("Bitunix Spot exchange rates return REST failures without fabricating an empty list", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      [EXCHANGE_RATE_PATH]: new Error("exchange unavailable"),
+    },
+  })
+
+  const result = await broker.getExchangeRates()
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /exchange unavailable/)
+  assert.equal(calls.length, 1)
+})
+
 test("Bitunix Spot broker loads canonical Spot markets", async () => {
   const { broker, calls } = createBroker({
     responses: {
