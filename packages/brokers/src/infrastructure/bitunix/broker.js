@@ -126,8 +126,8 @@ function createDepositRequest({ input }) {
     if (input.type !== "deposit" && input.type !== "inside_transfer_in") {
       throw new TypeError("Bitunix Spot deposit type filter is unsupported")
     }
-    if (input.type === "inside_transfer_in" && input.transactionHash !== undefined) {
-      throw new TypeError("Bitunix Spot transactionHash filter applies only to on-chain deposits")
+    if (input.transactionHash !== undefined && input.type !== "deposit") {
+      throw new TypeError("Bitunix Spot transactionHash filter requires type=deposit")
     }
     body.type = input.type
   }
