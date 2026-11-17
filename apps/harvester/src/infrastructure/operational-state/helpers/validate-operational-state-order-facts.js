@@ -185,7 +185,7 @@ clientOrderId })
   validateOrderSubmissionOutcomeState({ canonicalData })
 }
 
-function validateCancellationIdentity({ canonicalData, factId, clientOrderId, reason, expectedFactId, outcome }) {
+function validateCancellationIdentity({ canonicalData, factId, reason, expectedFactId, outcome }) {
   const isValidReason = /^[A-Z][A-Z0-9_]{1,63}$/.test(reason)
   const isValidOutcome = outcome === undefined ||
     ["CANCELED", "FILLED", "REJECTED", "EXPIRED", "NOT_CANCELED", "NOT_SENT", "OUTCOME_UNKNOWN", "UNCONFIRMED", "UNKNOWN"].includes(outcome)
@@ -264,7 +264,6 @@ export function validateOrderCancellationIntentFact({ factType, canonicalData, f
   validateCancellationIdentity({
     canonicalData: { ...canonicalData, marketId, venue },
     factId,
-    clientOrderId,
     reason,
     expectedFactId: factIdForCancellationIntent(clientOrderId, reason, canonicalData.status, canonicalData.executedQuantity),
   })
