@@ -118,7 +118,7 @@ const createAccountSnapshot = ({
 }) => ({
   ok: true,
   data: {
-undefined    sourceTime,
+    sourceTime,
     balances: [
       new Balance({
         free: new Quantity({
