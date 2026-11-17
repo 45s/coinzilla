@@ -779,6 +779,8 @@ function createLifecycleResult({ stopState, previousDecision, decision, action, 
  * aggregate reservations remain the Trading Engine allocator's responsibility.
  *
  * @param {object} input Pure market, pair, recovery accounting, order and STOP snapshots.
+ * @param {string} input.positionId Stable Portfolio Position identity owned by this recovery cycle.
+ * @param {{positionId: string, quantity: string, spent: string}} [input.recoveryPosition] Reconciled recovery Position snapshot.
  * @returns {object} Immutable lifecycle decision and optional BUY intent.
  */
 function getExistingOrderResult({
