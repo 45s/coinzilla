@@ -399,3 +399,64 @@ test("composes enabled Telegram operator control independently from outbound not
     "The operator allowlist must be seeded from TELEGRAM_USER_ID without adding an undefined entry.",
   )
 })
+
+
+test("resolves stable Binance provider identity from the explicit trading environment", () => {
+  const testnetRuntime = resolveRuntimeConfig({
+    tradingMode: TRADING_ENVIRONMENTS.TESTNET,
+    environment: "production",
+  })
+  const liveRuntime = resolveRuntimeConfig({
+    tradingMode: TRADING_ENVIRONMENTS.LIVE,
+    environment: "development",
+  })
+
+  assert.equal(testnetRuntime.providerInstanceId, "binanceTestnet",
+    "The TESTNET runtime must receive its stable named Binance provider-instance identity.")
+  assert.equal(liveRuntime.providerInstanceId, "binanceLive",
+    "The LIVE runtime must use a distinct stable provider-instance identity.")
+  assert.equal(testnetRuntime.providerType, "binance",
+    "Provider type must identify the Binance implementation independently of its instance ID.")
+  assert.equal(testnetRuntime.accountId, "binance-primary",
+    "The legacy single-account configuration must map to a stable non-secret account identity.")
+  assert.equal(liveRuntime.accountId, "binance-primary",
+    "The account alias must remain stable when the explicit Binance environment changes.")
+})
+
+test("accepts configured non-secret Binance provider and account identity labels", () => {
+  const runtime = resolveRuntimeConfig({
+    tradingMode: TRADING_ENVIRONMENTS.TESTNET,
+    providerInstanceId: "binanceDeskTestnet",
+    accountId: "desk-primary",
+  })
+
+  assert.equal(runtime.providerInstanceId, "binanceDeskTestnet",
+    "An operator-supplied provider-instance label must override only the identity label.")
+  assert.equal(runtime.accountId, "desk-primary",
+    "An operator-supplied account alias must be retained without becoming a credential.")
+  assert.equal(runtime.providerType, "binance",
+    "Identity overrides must not change the only supported provider type.")
+})
+
+test("rejects malformed Binance provider-instance and account identity labels", () => {
+  for (const invalidIdentity of ["", " ", " binancePrimary", "account id", "api-key=value"]) {
+    assert.throws(
+      () => resolveRuntimeConfig({
+        tradingMode: TRADING_ENVIRONMENTS.TESTNET,
+        providerInstanceId: invalidIdentity,
+      }),
+      (error) => error instanceof ConfigValidationError &&
+        error.path === "BINANCE_PROVIDER_INSTANCE_ID",
+      "Malformed provider-instance identity must fail before any broker is constructed.",
+    )
+    assert.throws(
+      () => resolveRuntimeConfig({
+        tradingMode: TRADING_ENVIRONMENTS.TESTNET,
+        accountId: invalidIdentity,
+      }),
+      (error) => error instanceof ConfigValidationError &&
+        error.path === "BINANCE_ACCOUNT_ID",
+      "Malformed account identity must fail before any broker is constructed.",
+    )
+  }
+})
