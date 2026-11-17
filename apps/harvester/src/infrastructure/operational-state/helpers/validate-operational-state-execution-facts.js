@@ -101,10 +101,7 @@ quoteAssetId })
   }
 }
 
-export function validateExecutionFillAppliedFact({ factType, canonicalData, factId }) {
-  if (factType !== "EXECUTION_FILL_APPLIED") {
-    return
-  }
+function validateExecutionFillFactFields({ canonicalData }) {
   const allowedFields = new Set([
     "fillId",
     "tradeId",
@@ -127,15 +124,12 @@ export function validateExecutionFillAppliedFact({ factType, canonicalData, fact
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Execution-fill fact contains unsupported fields")
   }
-  const fillId = requireNonEmptyString({ value: canonicalData.fillId,
-field: "data.fillId",
-maxLength: MAX_FACT_ID_LENGTH })
-  const tradeId = requireNonEmptyString({ value: canonicalData.tradeId,
-field: "data.tradeId",
-maxLength: MAX_FACT_ID_LENGTH })
-  requireNonEmptyString({ value: canonicalData.brokerOrderId,
-field: "data.brokerOrderId",
-maxLength: MAX_FACT_ID_LENGTH })
+}
+
+function validateExecutionFillIdentityFields({ canonicalData }) {
+  const fillId = requireNonEmptyString({ value: canonicalData.fillId, field: "data.fillId", maxLength: MAX_FACT_ID_LENGTH })
+  const tradeId = requireNonEmptyString({ value: canonicalData.tradeId, field: "data.tradeId", maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: canonicalData.brokerOrderId, field: "data.brokerOrderId", maxLength: MAX_FACT_ID_LENGTH })
   if (canonicalData.clientOrderId !== null) {
     requireNonEmptyString({
       value: canonicalData.clientOrderId,
@@ -143,32 +137,32 @@ maxLength: MAX_FACT_ID_LENGTH })
       maxLength: MAX_FACT_ID_LENGTH,
     })
   }
-  const marketId = requireNonEmptyString({ value: canonicalData.marketId,
-field: "data.marketId",
-maxLength: MAX_FACT_ID_LENGTH })
-  const venue = requireNonEmptyString({ value: canonicalData.venue,
-field: "data.venue",
-maxLength: 32 })
-  requireNonEmptyString({ value: canonicalData.baseAssetId,
-field: "data.baseAssetId",
-maxLength: MAX_FACT_ID_LENGTH })
-  requireNonEmptyString({ value: canonicalData.quoteAssetId,
-field: "data.quoteAssetId",
-maxLength: MAX_FACT_ID_LENGTH })
-  validateExecutionFillIdentity({ canonicalData,
-factId,
-fillId,
-tradeId,
-marketId,
-venue })
-  validateExecutionFillSideAndLiquidity({ canonicalData })
-  validateExecutionFillAmounts({ canonicalData })
+  const marketId = requireNonEmptyString({ value: canonicalData.marketId, field: "data.marketId", maxLength: MAX_FACT_ID_LENGTH })
+  const venue = requireNonEmptyString({ value: canonicalData.venue, field: "data.venue", maxLength: 32 })
+  requireNonEmptyString({ value: canonicalData.baseAssetId, field: "data.baseAssetId", maxLength: MAX_FACT_ID_LENGTH })
+  requireNonEmptyString({ value: canonicalData.quoteAssetId, field: "data.quoteAssetId", maxLength: MAX_FACT_ID_LENGTH })
+  return { fillId, tradeId, marketId, venue }
+}
+
+function validateExecutionFillTimestamp({ canonicalData }) {
   if (
     canonicalData.executedAt !== null &&
     (!Number.isSafeInteger(canonicalData.executedAt) || canonicalData.executedAt < 0)
   ) {
     throw new TypeError("Execution-fill executedAt must be a non-negative safe integer or null")
   }
+}
+
+export function validateExecutionFillAppliedFact({ factType, canonicalData, factId }) {
+  if (factType !== "EXECUTION_FILL_APPLIED") {
+    return
+  }
+  validateExecutionFillFactFields({ canonicalData })
+  const { fillId, tradeId, marketId, venue } = validateExecutionFillIdentityFields({ canonicalData })
+  validateExecutionFillIdentity({ canonicalData, factId, fillId, tradeId, marketId, venue })
+  validateExecutionFillSideAndLiquidity({ canonicalData })
+  validateExecutionFillAmounts({ canonicalData })
+  validateExecutionFillTimestamp({ canonicalData })
   validateExecutionFillCommissionStatus({ canonicalData })
   validateExecutionFillCommissions({
     commissions: canonicalData.commissions,
