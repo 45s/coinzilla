@@ -338,6 +338,8 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 
 ### Phase 2 — Harvester named provider construction and registry
 
+**Status: implementation in progress in PR targeting `develop` (2026-11-17).** The initial slice adds validated non-secret provider-instance descriptors, explicit role selections, a bootstrap-owned registry, verified capability declarations, and registry-owned connection/cleanup. Execution, account and market-data roles are constrained to the same selected instance until later account-isolation and routing phases.
+
 **Owner:** Harvester, with Brokers contract from Phase 1.
 **Objective:** allow composition of named provider instances while preserving the legacy single-Binance runtime as the default migration path.
 

@@ -27,7 +27,7 @@ The port belongs to Harvester because it describes the capabilities this applica
 
 ## Multi-provider target architecture — issue #1339
 
-The current implementation below is still a single Binance adapter. The accepted target permits multiple named provider instances in one Harvester process. Harvester bootstrap constructs each configured instance and assembles an application-owned registry/router; the Brokers package supplies exchange clients and verified capabilities but does not own strategy/market routing. The source-verified current-state assessment, provenance gaps and ordered implementation prerequisites are maintained in the [multi-provider migration audit and implementation plan](../../../../docs/architecture/multi-provider-migration-plan.md).
+The runtime now constructs a named provider instance through a Harvester-owned bootstrap registry. This Phase 2 foundation still selects one Binance instance for execution, account state, and market data; it does not yet enable independent routes or multi-provider execution. The accepted target permits multiple named provider instances in one Harvester process. Harvester bootstrap constructs each configured instance and assembles an application-owned registry/router; the Brokers package supplies exchange clients and verified capabilities but does not own strategy/market routing. The source-verified current-state assessment, provenance gaps and ordered implementation prerequisites are maintained in the [multi-provider migration audit and implementation plan](../../../../docs/architecture/multi-provider-migration-plan.md).
 
 Execution and market-data resolution are separate:
 
@@ -70,7 +70,7 @@ const marketDataRoutes = [
 
 The route table is exact: no implicit default, wildcard, priority list, or failover. Every enabled executable strategy/market pair resolves to exactly one provider. The market-data source is configured independently and is never inferred from the execution route. Duplicate or missing routes and unsupported provider capabilities fail closed.
 
-The router is an application capability injected by bootstrap. Strategy/domain policies receive normalized prices and make strategy decisions; they do not receive provider IDs or concrete broker clients. Provider construction is a composition responsibility, while route resolution is a Harvester application concern.
+Provider construction and lifecycle are owned by the bootstrap registry. The registry exposes lookup by stable instance ID and a BrokerPort facade; the current runtime explicitly selects the same instance for execution, account state, and market data. Independent route resolution remains deferred until provider/account isolation and durable order provenance are implemented. Strategy/domain policies never receive provider IDs or concrete broker clients.
 
 ### Immutable order provenance
 

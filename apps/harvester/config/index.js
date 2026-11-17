@@ -3,6 +3,16 @@ import { OPERATOR_CONTROL_CONFIG } from "./operator-control.js";
 import { CG_COIN_GRABBER_CONFIG } from "./strategies/cg-coin-grabber.js";
 
 export const appConfig = {
+  brokers: {
+    instances: {
+      binancePrimary: { provider: "binance", accountId: "binance-primary" },
+    },
+    selection: {
+      execution: "binancePrimary",
+      account: "binancePrimary",
+      marketData: "binancePrimary",
+    },
+  },
   notifications: {
     telegram: {
       enabled: true,

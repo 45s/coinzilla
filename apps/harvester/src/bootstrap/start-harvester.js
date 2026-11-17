@@ -22,7 +22,7 @@ import { createUserDataRecoveryHandler } from "./user-data/create-user-data-reco
 import { createShutdownHandler } from "./shutdown/create-shutdown-handler.js"
 import { createConservativeShutdownParticipant } from "./shutdown/create-conservative-shutdown-participant.js"
 import { subscribeToMarketData } from "./subscriptions/subscribe-to-market-data.js"
-import { connectBroker } from "./broker/connect-broker.js"
+import { createProviderRegistry } from "./broker/provider-registry.js"
 import { subscribeToUserData } from "./user-data/subscribe-to-user-data.js"
 import { recordOrderSubmissionIntent } from "../use-cases/record-order-submission-intent.js"
 import { recordOrderSubmissionOutcome } from "../use-cases/record-order-submission-outcome.js"
@@ -253,6 +253,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     loadConfig = loadAppConfig,
     env = process.env,
     brokerAdapterFactory = createBinanceBrokerAdapter,
+    providerAdapterFactories,
     evaluateStrategy = conservativeStrategyPolicy.evaluate,
     logger = defaultLogger,
     eventPublisher,
@@ -306,6 +307,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     ...startupOptions,
     env,
     brokerAdapterFactory,
+    providerAdapterFactories: providerAdapterFactories ?? { binance: brokerAdapterFactory },
     evaluateStrategy,
     logger,
     eventPublisher,
@@ -369,16 +371,24 @@ reason: "TRADING_ENGINE_NOT_READY" } })
 }
 
 async function createHarvesterRuntimeResources({ startup } = {}) {
-  const broker = await connectBroker({
-    brokerAdapterFactory: startup.brokerAdapterFactory,
+  const providerRegistry = await createProviderRegistry({
+    providerInstances: startup.providerInstances,
+    selections: startup.providerSelections,
+    adapterFactories: startup.providerAdapterFactories,
     env: startup.env,
-    brokerName: startup.brokerName,
-    tradingMode: startup.tradingMode,
-    eventPublisher: startup.eventPublisher,
     logger: startup.logger,
+    eventPublisher: startup.eventPublisher,
+  })
+  await providerRegistry.connectAll()
+  const broker = providerRegistry.getBrokerPort({
+    instanceId: startup.providerSelections.execution,
   })
   const resources = {
     broker,
+    providerRegistry,
+    providerDescriptor: providerRegistry.getDescriptor({
+      instanceId: startup.providerSelections.execution,
+    }),
     subscriptions: [],
     marketPriceIntake: new Map(),
     bookSubscriptions: [],
@@ -770,6 +780,8 @@ function createHarvesterRuntimeResult({ startup, portfolio, resources, stop } = 
     eventPublisher: startup.eventPublisher,
     environment: startup.environment,
     brokerName: startup.brokerName,
+    providerInstanceId: startup.providerInstanceId,
+    providerAccountId: resources.providerDescriptor.accountId,
     tradingMode: startup.tradingMode,
     tradingEnabled: startup.tradingEnabled,
     strategyMode: "conservative",

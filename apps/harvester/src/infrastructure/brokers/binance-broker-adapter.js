@@ -157,6 +157,7 @@ logger })
   assertRequiredBrokerMethods({ client })
 
   const broker = Object.freeze({
+    capabilities: client.capabilities,
     connect: () => client.connect(),
     disconnect: () => client.disconnect(),
     placeOrder: async ({ order }) => {

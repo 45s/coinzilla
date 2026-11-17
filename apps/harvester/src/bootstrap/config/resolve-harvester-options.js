@@ -7,6 +7,7 @@ import {
   EffectiveConfigurationError,
 } from "../../domain/configuration/create-effective-strategy-configuration-fingerprint.js"
 import { resolveTelegramOperatorConfig } from "../operator-control/resolve-telegram-operator-config.js"
+import { resolveProviderConfiguration } from "../broker/resolve-provider-configuration.js"
 
 function assertSupportedStrategyConfig(strategyConfig) {
   if (strategyConfig?.enabled !== true) {
@@ -27,7 +28,15 @@ env })
   assertSupportedStrategyConfig(strategyConfig)
   const runtime = resolveRuntimeConfig({ tradingMode: env.TRADING_MODE,
 environment: env.NODE_ENV })
-  const { environment, brokerName, tradingMode, tradingEnabled } = runtime
+  const { environment, tradingMode, tradingEnabled } = runtime
+  const providerConfiguration = resolveProviderConfiguration({
+    brokers: configuredAppConfig.brokers,
+    tradingMode,
+  })
+  const selectedProvider = providerConfiguration.instances.find(
+    (instance) => instance.id === providerConfiguration.selections.execution,
+  )
+  const brokerName = selectedProvider.provider
   if (Object.keys(strategyConfig.pairs ?? {}).length === 0) {
     throw new Error("Conservative trading requires at least one enabled pair")
   }
@@ -87,6 +96,9 @@ strategyMode: `conservative-${tradingMode}` }
     configurationFingerprint: effectiveConfiguration.fingerprint,
     environment,
     brokerName,
+    providerInstanceId: selectedProvider.id,
+    providerInstances: providerConfiguration.instances,
+    providerSelections: providerConfiguration.selections,
     tradingMode,
     tradingEnabled,
   })

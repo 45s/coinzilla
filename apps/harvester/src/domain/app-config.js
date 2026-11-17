@@ -127,6 +127,57 @@ expectation: "unique positive decimal Telegram user IDs" })
   }
 }
 
+function validateBrokerConfiguration(config) {
+  if (config.brokers === undefined) {
+    return
+  }
+  requireRecord({ value: config.brokers, path: "brokers" })
+  for (const key of Object.keys(config.brokers)) {
+    if (key !== "instances" && key !== "selection") {
+      fail({ path: `brokers.${key}`, expectation: "instances or selection" })
+    }
+  }
+  requireRecord({ value: config.brokers.instances, path: "brokers.instances" })
+  const entries = Object.entries(config.brokers.instances)
+  if (entries.length === 0) {
+    fail({ path: "brokers.instances", expectation: "at least one provider instance" })
+  }
+  const ids = new Set()
+  for (const [id, definition] of entries) {
+    if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(id)) {
+      fail({ path: "brokers.instances", expectation: "stable provider instance IDs" })
+    }
+    requireRecord({ value: definition, path: `brokers.instances.${id}` })
+    for (const key of Object.keys(definition)) {
+      if (key !== "provider" && key !== "accountId") {
+        fail({ path: `brokers.instances.${id}.${key}`, expectation: "provider and non-secret accountId only" })
+      }
+    }
+    if (typeof definition.provider !== "string" || !definition.provider.trim()) {
+      fail({ path: `brokers.instances.${id}.provider`, expectation: "a non-empty provider type" })
+    }
+    if (typeof definition.accountId !== "string" || !definition.accountId.trim()) {
+      fail({ path: `brokers.instances.${id}.accountId`, expectation: "a stable non-secret account ID" })
+    }
+    ids.add(id)
+  }
+  requireRecord({ value: config.brokers.selection, path: "brokers.selection" })
+  const selection = config.brokers.selection
+  for (const key of Object.keys(selection)) {
+    if (!["execution", "account", "marketData"].includes(key)) {
+      fail({ path: `brokers.selection.${key}`, expectation: "execution, account, or marketData" })
+    }
+  }
+  for (const role of ["execution", "account", "marketData"]) {
+    if (typeof selection[role] !== "string" || !ids.has(selection[role])) {
+      fail({ path: `brokers.selection.${role}`, expectation: "an existing provider instance ID" })
+    }
+  }
+  if (new Set([selection.execution, selection.account, selection.marketData]).size !== 1) {
+    fail({ path: "brokers.selection", expectation: "one shared instance until account and execution isolation are implemented" })
+  }
+}
+
 /** Validate CG coin-grabber strategy settings. */
 function validateStrategySettings(strategy) {
   requireRecord({ value: strategy.settings,
@@ -227,6 +278,7 @@ path: "root" })
 
   validateTelegramNotificationConfig(config)
   validateTelegramOperatorControlConfig(config)
+  validateBrokerConfiguration(config)
   if (config.runtime !== undefined) {fail({ path: "runtime",
 expectation: "must not be present; exchange mode is selected by TRADING_MODE" })}
   requireRecord({ value: config.strategies,

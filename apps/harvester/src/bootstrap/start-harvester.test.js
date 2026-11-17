@@ -390,6 +390,29 @@ function createBrokerUserDataPorts({ calls, state }) {
   }
 }
 
+const TEST_BINANCE_CAPABILITIES = Object.freeze({
+  contractVersion: 1,
+  provider: "binance",
+  marketData: {
+    priceStream: { status: "supported" },
+    bookTickerStream: { status: "supported" },
+    candleHistory: { status: "supported" },
+    candleStream: { status: "supported" },
+  },
+  account: { snapshot: { status: "supported" } },
+  orders: {
+    openOrders: { status: "supported" },
+    placement: { status: "environment-dependent" },
+    cancellation: { status: "environment-dependent" },
+  },
+  fills: {
+    canonicalHistory: { status: "supported" },
+    executionUpdates: { status: "supported" },
+  },
+  userData: { stream: { status: "supported" } },
+  recovery: { sameProcess: { status: "supported" } },
+})
+
 const createBroker = (...args) => {
   const [calls = [], options = {}] = args
   const {
@@ -401,6 +424,7 @@ const createBroker = (...args) => {
     externalOpenOrders,
   })
   return {
+    capabilities: TEST_BINANCE_CAPABILITIES,
     connect: async () => calls.push("connect"),
     disconnect: async () => calls.push("disconnect"),
     ...createBrokerOrderPorts({
