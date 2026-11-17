@@ -33,13 +33,30 @@ The `@coinzilla/brokers` entry point exports:
 - `CoreBroker` — the existing compatibility base class; it is not a formal application-owned broker port.
 - `normalizeBinanceId` — exact non-negative Binance identifier normalization, also used by the Harvester infrastructure adapter.
 
+## Broker capability declarations
+
+`BinanceWebSocketBroker` exposes an additive, read-only `capabilities` instance property. It is a versioned declaration of broker guarantees, not a list of method names and not a routing or authorization mechanism. It does not change constructor arguments, existing methods, results, errors, or package exports.
+
+Each capability declaration has a `status` and may include `method`, `guarantee`, `limitation`, `reason`, and `conditions`:
+
+- `supported` — the implementation and stated guarantee are backed by source inspection and deterministic offline tests, subject to any listed conditions.
+- `unsupported` — the broker explicitly does not provide the capability; inherited methods that throw are not treated as support.
+- `unknown` — available evidence does not establish the guarantee. Consumers must not assume it is supported.
+- `environment-dependent` — implementation exists, but availability depends on explicit environment or account conditions stated in the declaration.
+
+The declaration and all nested objects and arrays are frozen. The `capabilities` property itself is non-writable and non-configurable. Its `environment.selectedMode` reports the instance's validated Binance `tradingMode`; `NODE_ENV` never selects exchange endpoints. These declarations describe the broker implementation and its verified boundaries, not live exchange connectivity or account permissions.
+
+Only Binance is declared in this phase. Bitunix remains unchanged and read-only; no Bitunix capability declaration is added.
+
+For the source-mapped Binance capability matrix, limitations, and remaining multi-provider phases, see [the Brokers roadmap](./ROADMAP.md#multi-provider-construction-and-capability-contracts--1339).
+
 ### Provider instances and routing ownership
 
 The package exposes exchange-specific broker implementations; it does not select which exchange a strategy or market should use. A consuming application owns its application port and composition root, constructs the named provider instances it needs, and owns any strategy/market execution routing and independent market-data routing.
 
 Multiple instances of one provider type may represent different accounts or supported environments. Keep provider-specific options and endpoint selection inside the matching implementation. Binance requires explicit `TRADING_MODE=testnet|live`; this rule does not define another exchange's environment support.
 
-Harvester's accepted target is described in [ADR-0003: Multi-provider routing](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and tracked by [issue #1339](https://github.com/45s/coinzilla/issues/1339). The source-verified [multi-provider migration audit and implementation plan](../../docs/architecture/multi-provider-migration-plan.md) records the current capability matrix and recommends an additive Brokers capability-contract PR as the first implementation slice. That target is not yet implemented. Current Harvester runtime composition remains Binance-only. The Bitunix Spot class is read-only and is not a Harvester execution provider; do not infer order capability from the public class or `CoreBroker` methods.
+Harvester's accepted target is described in [ADR-0003: Multi-provider routing](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and tracked by [issue #1339](https://github.com/45s/coinzilla/issues/1339). The source-verified [multi-provider migration audit and implementation plan](../../docs/architecture/multi-provider-migration-plan.md) records the broader target. The Binance-only capability-declaration slice is delivered by [PR #1366](https://github.com/45s/coinzilla/pull/1366); provider-instance construction, registry, and routing remain unimplemented. Current Harvester runtime composition remains Binance-only. The Bitunix Spot class is read-only and is not a Harvester execution provider; do not infer order capability from the public class or `CoreBroker` methods.
 Keep exchange-specific operations behind their provider adapters. Consumers should depend on their own narrow application port rather than treating `CoreBroker` as a complete cross-exchange contract.
 
 ## Bitunix Spot integration
