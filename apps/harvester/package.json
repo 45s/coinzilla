@@ -78,7 +78,8 @@
       "src/infrastructure/operational-state/helpers/validate-operational-state-execution-facts.test.js",
       "src/infrastructure/journal/helpers/resolve-session-chronology.test.js",
       "src/infrastructure/journal/discover-harvester-journal-sessions.test.js",
-      "src/infrastructure/telegram/format-telegram-operator-response.test.js"
+      "src/infrastructure/telegram/format-telegram-operator-response.test.js",
+      "src/infrastructure/persistence/trading-session-persistence-lifecycle.test.js"
     ]
   }
 }
