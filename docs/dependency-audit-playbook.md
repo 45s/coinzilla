@@ -2,6 +2,28 @@
 
 The **Dependency Audit** workflow runs `pnpm audit --prod --audit-level high` on pushes, pull requests, manual dispatch, and its weekly schedule. It checks production dependency advisories; it is not a substitute for reviewing dependency changes or keeping the lockfile reproducible.
 
+## Dependabot update policy
+
+The canonical update configuration is [`.github/dependabot.yml`](../.github/dependabot.yml):
+
+- npm and GitHub Actions version updates are checked weekly on Monday.
+- Each ecosystem has a maximum of five open version-update pull requests.
+- Patch and minor updates are grouped; major updates remain separate so they can receive deliberate compatibility review.
+- Version-update pull requests target `develop`. Dependabot reads this configuration from the repository's default branch (`main`), so the new target takes effect only after the configuration reaches `main` through the approved `develop` → `main` release PR. Do not update `main` directly to accelerate activation.
+- **Security-update exception:** GitHub always raises Dependabot security-update PRs against the default branch; `target-branch` affects version updates only. Treat a security PR/alert as an urgent remediation signal, assess the advisory promptly, and implement the compatible fix through a normal task PR into `develop`. Do not merge a task or security-update PR directly into `main`; release the validated `develop` change through the approved release process.
+
+### Review and merge rules
+
+1. **Security fixes:** triage promptly. Confirm the advisory, severity, affected dependency path, vulnerable range, and patched version. Prefer the smallest compatible fix, then run the affected tests and production dependency audit.
+2. **Patch updates:** inspect the release notes and dependency path; accept only after relevant tests, the production audit, and all required CI checks pass.
+3. **Minor updates:** review release notes for behavior/API changes and runtime requirements; test affected consumers before merging.
+4. **Major updates:** require explicit manual compatibility review. Check breaking changes, supported Node/toolchain versions, action inputs/outputs, permissions, runtime migrations, and every affected workflow/package. Green CI is necessary but does not replace this review.
+5. **GitHub Actions updates:** retain full commit-SHA pinning. Verify that the SHA belongs to the stated upstream release, review the release notes and action metadata, and confirm that the action's runtime and inputs remain compatible with the workflow.
+6. **Lockfile updates:** review the complete importer and package-graph diff. Every addition, removal, or importer change must be explained by the intended manifest update; do not accept unrelated dependency removals or unexplained lockfile churn. Use pnpm to regenerate the lockfile, and verify reproducibility with `pnpm install --frozen-lockfile`.
+7. **Merge gate:** never merge solely because a PR is mergeable or its first CI run is green. Confirm the complete diff, latest `develop` ancestry, and every required check on the exact current PR head. Do not enable automatic merging or bypass branch protection.
+
+For this repository, routine dependency maintenance follows the same branch contract as all other maintenance: task PRs target `develop`; only the final release PR from `develop` targets `main`.
+
 ## When the audit fails
 
 1. Open the failing **Dependency Audit** run in GitHub Actions and read the complete `pnpm audit` output.
