@@ -99,9 +99,8 @@
    - **Remaining:** close the scoped coverage and negative architecture/contract gaps recorded by the package owner.
    - **Owner:** [Entities roadmap](packages/entities/ROADMAP.md).
 
-9. **Provider-neutral database CRUD infrastructure — IN PROGRESS ([#1340](https://github.com/45s/coinzilla/issues/1340), [PR #1353](https://github.com/45s/coinzilla/pull/1353), [hardening PRs #1364](https://github.com/45s/coinzilla/pull/1364) and [#1365](https://github.com/45s/coinzilla/pull/1365)).**
+9. **Provider-neutral database CRUD infrastructure — IN PROGRESS ([#1340](https://github.com/45s/coinzilla/issues/1340), [PR #1353](https://github.com/45s/coinzilla/pull/1353)).**
    - **Database infrastructure:** `packages/db` owns generic provider-neutral CRUD/query, lifecycle and transaction contracts plus concrete adapters; Node.js built-in SQLite is the first provider. Keep application-specific schemas, repositories and workflows out of the package.
-   - **Post-merge hardening:** the initial CRUD implementation is merged in PR #1353. PR #1364 closes a CREATE snapshot/Proxy re-read gap; PR #1365 closes async transaction-continuation and post-rollback statement-use gaps. Keep this item in progress until both focused follow-ups are reviewed and merged.
    - **Consumer integration remains separate:** Harvester persistence integration remains owned by Harvester and tracked independently under [issue #1327](https://github.com/45s/coinzilla/issues/1327) and the [Harvester persistence roadmap](apps/harvester/ROADMAP.md#persistence--provider-agnostic-database-integration-1327). This CRUD task does not implement or modify Harvester.
    - **Owner/status:** [Database roadmap](packages/db/ROADMAP.md); tracking [issue #1340](https://github.com/45s/coinzilla/issues/1340).
 
