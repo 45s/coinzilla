@@ -37,6 +37,7 @@ function validateOrderIdentity(orderIdentity) {
 function assertBaseCycleState(state) {
   if (!state || typeof state !== "object" || Array.isArray(state) ||
       !isNonEmptyString(state.cycleId) ||
+      !isNonEmptyString(state.positionId) ||
       !CYCLE_STATUSES.has(state.status)) {
     throw new TypeError("Recovery Seller requires a valid cycle state")
   }
@@ -126,14 +127,19 @@ function mergeTerminalOrderIdentity({ terminalIdentity, previousIdentity }) {
  *
  * @param {object} input
  * @param {string} input.cycleId Stable caller-assigned cycle identity.
+ * @param {string} input.positionId Stable Portfolio Position identity owned by the cycle.
  * @returns {object} Immutable cycle state.
  */
-export function createRecoverySellerCycleState({ cycleId } = {}) {
+export function createRecoverySellerCycleState({ cycleId, positionId } = {}) {
   if (!isNonEmptyString(cycleId)) {
     throw new TypeError("Recovery Seller cycleId must be a non-empty string")
   }
+  if (!isNonEmptyString(positionId)) {
+    throw new TypeError("Recovery Seller positionId must be a non-empty string")
+  }
   return Object.freeze({
     cycleId,
+    positionId,
     status: "ACCUMULATING",
     sellOrderIdentity: null,
     terminalOrderStatus: null,
@@ -261,9 +267,10 @@ export function reconcileRecoverySellerCycleSell({
  * @param {object} input
  * @param {object} input.previousState Prior cycle state.
  * @param {string} input.nextCycleId New stable cycle identity.
+ * @param {string} [input.nextPositionId] New Position identity, or the prior Position when omitted.
  * @returns {object} New immutable accumulation state.
  */
-export function startNextRecoverySellerCycle({ previousState, nextCycleId } = {}) {
+export function startNextRecoverySellerCycle({ previousState, nextCycleId, nextPositionId } = {}) {
   assertCycleState(previousState)
   if (previousState.status !== "CLOSED") {
     throw new Error("Recovery Seller can start a new cycle only from a closed profitable and reconciled cycle")
@@ -273,6 +280,7 @@ export function startNextRecoverySellerCycle({ previousState, nextCycleId } = {}
   }
   return createRecoverySellerCycleState({
     cycleId: nextCycleId,
+    positionId: nextPositionId ?? previousState.positionId,
   })
 }
 
