@@ -97,9 +97,11 @@ test("Bitunix Spot broker retrieves one filtered withdrawal-history page", async
 
 test("Bitunix Spot broker supports the schema's object response and preserves internal-transfer recipient data", async () => {
   const transfer = createWithdrawalRecord({
-    id: "1909921053381820417",
+    id: 681979174,
     type: "inside_transfer_out",
+    ctime: "1744185294000",
     network: null,
+    toAddress: "recipient-account:681979174",
     toType: "email",
     toUid: "681979174",
     toPhoneCountryCode: null,
@@ -110,7 +112,6 @@ test("Bitunix Spot broker supports the schema's object response and preserves in
   })
   delete transfer.address
   delete transfer.transactionHash
-  delete transfer.toAddress
   const { broker } = createBroker({ response: transfer })
 
   const result = await broker.getWithdrawalHistory({
@@ -119,6 +120,9 @@ test("Bitunix Spot broker supports the schema's object response and preserves in
 
   assert.equal(result.ok, true, "the official single-object data shape must be supported")
   assert.equal(result.data.length, 1, "a single withdrawal record must normalize to one immutable array item")
+  assert.equal(result.data[0].id, "681979174", "safe numeric withdrawal IDs must be returned as strings")
+  assert.equal(result.data[0].ctime, "1744185294000", "integer-string withdrawal timestamps must remain unchanged")
+  assert.equal(result.data[0].toAddress, "recipient-account:681979174", "the schema's toAddress field must remain unchanged")
   assert.equal(result.data[0].toUid, "681979174", "internal-transfer recipient UIDs must remain exact strings")
   assert.equal(result.data[0].toEmail, "recipient@example.test", "recipient email must remain an opaque caller-visible value")
   assert.equal(result.data[0].remark, "internal treasury transfer", "internal-transfer remarks must remain unchanged")
