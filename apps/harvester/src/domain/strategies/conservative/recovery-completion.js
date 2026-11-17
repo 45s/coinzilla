@@ -216,30 +216,14 @@ function createRecoveryCompletionResult({
   })
 }
 
-function resolveRecoveryCompletionOutcome({
-  sellOrderFullyFilled,
+function resolveResidualInventoryOutcome({
   activeQuantity,
   keepQuantity,
   minProfit,
   realizedNetProfit,
   dust,
-  invalidDust,
   result,
 }) {
-  if (!sellOrderFullyFilled) {
-    return result({
-      eligible: false,
-      pause: false,
-      reason: "RECOVERY_SELL_NOT_FULLY_FILLED",
-    })
-  }
-  if (invalidDust) {
-    return result({
-      eligible: false,
-      pause: true,
-      reason: "INVALID_EXCHANGE_CONSTRAINED_DUST_EVIDENCE",
-    })
-  }
   if (compareDecimal({
     left: activeQuantity,
     right: keepQuantity,
@@ -266,6 +250,44 @@ function resolveRecoveryCompletionOutcome({
       reason,
     })
   }
+  return undefined
+}
+
+function resolveRecoveryCompletionOutcome({
+  sellOrderFullyFilled,
+  activeQuantity,
+  keepQuantity,
+  minProfit,
+  realizedNetProfit,
+  dust,
+  invalidDust,
+  result,
+}) {
+  if (!sellOrderFullyFilled) {
+    return result({
+      eligible: false,
+      pause: false,
+      reason: "RECOVERY_SELL_NOT_FULLY_FILLED",
+    })
+  }
+  if (invalidDust) {
+    return result({
+      eligible: false,
+      pause: true,
+      reason: "INVALID_EXCHANGE_CONSTRAINED_DUST_EVIDENCE",
+    })
+  }
+  const residualOutcome = resolveResidualInventoryOutcome({
+    activeQuantity,
+    keepQuantity,
+    minProfit,
+    realizedNetProfit,
+    dust,
+    result,
+  })
+  if (residualOutcome) {
+    return residualOutcome
+  }
   if (compareDecimal({
     left: realizedNetProfit,
     right: minProfit,
@@ -288,7 +310,6 @@ function resolveRecoveryCompletionOutcome({
       : keepQuantity,
   })
 }
-
 /**
  * Complete only after a reconciled recovery SELL, sufficient net profit, and
  * exact classification of residual dust.

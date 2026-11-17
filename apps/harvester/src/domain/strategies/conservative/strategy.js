@@ -556,58 +556,6 @@ function createRecoverySellDecisionFromPlan({
   }
 }
 
-function createRecoverySellDecisionFromPlan({
-  context,
-  accounting,
-  sellPlan,
-}) {
-  const residualPrice = calculateResidualSellPrice({
-    sellPlan,
-    marketPrice: context.marketPrice,
-    priceTickSize: context.priceTickSize,
-    minPrice: context.minPrice,
-  })
-  if (context.maxPrice && compareDecimal({
-    left: residualPrice,
-    right: context.maxPrice,
-  }) > 0) {
-    return {
-      inventoryDisposition: createPriceFilterBlockedDisposition({
-        context,
-        accounting,
-        residualPrice,
-      }),
-    }
-  }
-  const quantityLimits = evaluateSellQuantityLimits({
-    sellPlan,
-    residualPrice,
-    quantityStepSize: context.quantityStepSize,
-    minQuantity: context.minQuantity,
-    minNotional: context.minNotional,
-    maxQuantity: context.maxQuantity,
-    maxNotional: context.maxNotional,
-  })
-  if (quantityLimits.quantityMeetsMinimum && quantityLimits.notionalMeetsMinimum) {
-    return {
-      action: createRecoverySellAction({
-        context,
-        accounting,
-        sellPlan,
-        residualPrice,
-        sellQuantity: quantityLimits.sellQuantity,
-      }),
-    }
-  }
-  return {
-    inventoryDisposition: createSellDustDisposition({
-      context,
-      accounting,
-      quantityLimits,
-    }),
-  }
-}
-
 function createRecoverySellDecision({
   context,
   accounting,
