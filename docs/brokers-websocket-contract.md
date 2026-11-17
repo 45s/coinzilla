@@ -112,6 +112,8 @@ The package also exports `BitunixSpotBroker` and `BitunixSpotConfig`. The curren
 | `getPrices({ symbol })` | `GET /api/spot/v1/market/last_price` | Request/response lookup only; requires a strictly positive decimal string and preserves it exactly in `{ symbol, price }`. No source timestamp is provided. |
 | `getFills({ symbol, orderId })` | Blocked; no request is sent | The documented matching-order response does not define quantity denomination, complete partial-execution coverage, or stable/unique execution identity. No canonical `Fill` is emitted until Bitunix clarifies these semantics. |
 
+Bitunix documents broker order IDs as strings. For compatibility, Coinzilla accepts string IDs and safely representable integer numbers; fractional, non-finite, and unsafe numeric IDs are rejected before a lookup request or order adaptation. This cannot recover precision already lost by a caller before passing a numeric value, so string IDs remain the authoritative form.
+
 Mutations and lifecycle-dependent methods are deliberately unavailable:
 
 - Fill history is blocked: the matching-order response does not define base/quote quantity denomination, complete partial-execution coverage, or stable/unique execution identity; `getFills()` returns unsupported without a request.
