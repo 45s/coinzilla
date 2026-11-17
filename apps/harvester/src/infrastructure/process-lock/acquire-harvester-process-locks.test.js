@@ -19,7 +19,6 @@ test("rejects a second trading process using a different Journal directory on th
       journalDirectory: firstJournalDirectory,
       broker: "binance",
       tradingMode: "testnet",
-      accountId: "123456789",
     })
     assert.equal(first.ok, true)
 
@@ -28,7 +27,6 @@ test("rejects a second trading process using a different Journal directory on th
       journalDirectory: secondJournalDirectory,
       broker: "binance",
       tradingMode: "testnet",
-      accountId: "123456789",
     })
     assert.equal(second.ok, false)
     assert.equal(second.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
@@ -40,7 +38,6 @@ test("rejects a second trading process using a different Journal directory on th
       journalDirectory: secondJournalDirectory,
       broker: "binance",
       tradingMode: "testnet",
-      accountId: "123456789",
     })
     assert.equal(afterRelease.ok, true)
     assert.notEqual(afterRelease.lockPath, first.lockPath)
@@ -74,7 +71,6 @@ test("releases the host lock when Journal-lock acquisition fails", async () => {
       journalDirectory,
       broker: "binance",
       tradingMode: "testnet",
-      accountId: "123456789",
       acquireLock,
     })
     assert.equal(failed.ok, false)
@@ -119,7 +115,6 @@ test("retains the host lock when Journal-lock release is uncertain and retries i
       journalDirectory,
       broker: "binance",
       tradingMode: "testnet",
-      accountId: "123456789",
       acquireLock,
     })
     assert.equal(first.ok, true)
@@ -133,7 +128,6 @@ test("retains the host lock when Journal-lock release is uncertain and retries i
       journalDirectory: path.join(root, "journal-two"),
       broker: "binance",
       tradingMode: "testnet",
-      accountId: "123456789",
     })
     assert.equal(blocked.ok, false)
     assert.equal(blocked.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
@@ -146,7 +140,6 @@ test("retains the host lock when Journal-lock release is uncertain and retries i
       journalDirectory: path.join(root, "journal-two"),
       broker: "binance",
       tradingMode: "testnet",
-      accountId: "123456789",
     })
     assert.equal(afterRelease.ok, true)
     assert.equal((await afterRelease.release({})).ok, true)
