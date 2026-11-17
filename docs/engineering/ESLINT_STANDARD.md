@@ -49,8 +49,8 @@ Lint is a development feedback loop, not a CI-only gate.
 
 - Before editing, inspect the effective rules and applicable commands.
 - While implementing, run the narrowest relevant ESLint command against each changed JavaScript file.
-- After the change, run the repository's changed-file lint command when applicable, then the full pnpm lint check for broad changes or when required by the task/CI.
-- Fix every new or materially affected lint error and warning before committing.
+- After the change, run the full-workspace `pnpm lint` command. It is mandatory for every JavaScript change and fails on every error and warning.
+- Fix every lint error and warning before committing; unchanged legacy findings are not exempt.
 - Do not wait for CI to identify predictable lint failures. CI is the independent final gate, not the first time code is linted.
 - Never claim lint passed unless the command or GitHub Actions actually reports success for the exact code being described.
 
@@ -70,6 +70,6 @@ A PR that bypasses or weakens lint enforcement MUST NOT be marked ready or merge
 
 ## 6. Canonical configuration
 
-The root eslint.config.js is authoritative for the repository-wide JavaScript rule set. Package-specific configuration may add stricter rules only; it must not weaken root requirements. The root package.json defines the canonical commands, including lint and lint:changed.
+The root eslint.config.js is authoritative for the repository-wide JavaScript rule set. Package-specific configuration may add stricter rules only; it must not weaken root requirements. The root package.json defines the canonical commands: `pnpm lint` for strict full-workspace verification and `pnpm lint:fix` for supported autofixes.
 
 When this standard and a task prompt conflict, this standard prevails unless a human explicitly authorizes a standards change.
