@@ -257,6 +257,8 @@ try {
 }
 ```
 
+The low-level facade also exposes `transaction(work)` for write-capable atomic work and `readTransaction(work)` for deferred-lock read workloads. Use `readTransaction` for reads only; it is a transaction scheduling path, not a SQL-level read-only security boundary.
+
 SQLite uses prepared statements and bound parameters. Never interpolate untrusted values into SQL.
 
 ### SQLite runtime behavior
