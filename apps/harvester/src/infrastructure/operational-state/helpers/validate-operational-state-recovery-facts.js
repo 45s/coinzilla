@@ -18,6 +18,10 @@ function factIdForRecoveryCycle(...parameters) {
   return `recovery-cycle-completed:${  marketId  }:${  cycleId}`
 }
 
+function validateRecoveryCycleAssetIds({ canonicalData }) {
+  validateRecoveryCycleAssetIds({ canonicalData })
+}
+
 function validateRecoveryCycleCompletedIdentity({ canonicalData, factId }) {
   const cycleId = requireNonEmptyString({
     value: canonicalData.cycleId,
@@ -42,16 +46,7 @@ maxLength: 32 })
     field: "data.sellOrderBrokerOrderId",
     maxLength: MAX_FACT_ID_LENGTH,
   })
-  requireNonEmptyString({
-    value: canonicalData.baseAssetId,
-    field: "data.baseAssetId",
-    maxLength: MAX_FACT_ID_LENGTH,
-  })
-  requireNonEmptyString({
-    value: canonicalData.quoteAssetId,
-    field: "data.quoteAssetId",
-    maxLength: MAX_FACT_ID_LENGTH,
-  })
+  validateRecoveryCycleAssetIds({ canonicalData })
   if (
     !SHA256_PATTERN.test(cycleId) ||
     venue !== venue.toLowerCase() ||
@@ -74,10 +69,7 @@ maxLength: 32 })
   ) {
     throw new TypeError("Recovery-cycle completion requires unique applied fill identities")
   }
-  return { cycleId,
-marketId,
-sellOrderClientId,
-sellOrderBrokerOrderId }
+  return { cycleId, marketId, sellOrderClientId, sellOrderBrokerOrderId }
 }
 
 function validateRecoveryCycleCompletedAmounts({ canonicalData }) {
@@ -283,16 +275,7 @@ maxLength: 32 })
     field: "data.sellOrderBrokerOrderId",
     maxLength: MAX_FACT_ID_LENGTH,
   })
-  requireNonEmptyString({
-    value: canonicalData.baseAssetId,
-    field: "data.baseAssetId",
-    maxLength: MAX_FACT_ID_LENGTH,
-  })
-  requireNonEmptyString({
-    value: canonicalData.quoteAssetId,
-    field: "data.quoteAssetId",
-    maxLength: MAX_FACT_ID_LENGTH,
-  })
+  validateRecoveryCycleAssetIds({ canonicalData })
   const reason = requireNonEmptyString({ value: canonicalData.reason,
 field: "data.reason",
 maxLength: 64 })
