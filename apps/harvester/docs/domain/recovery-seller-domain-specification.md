@@ -206,17 +206,23 @@ Hard invariants:
 
 ## 7. Risk limits
 
-RS must fail closed when a required risk limit is absent, invalid, exceeded, or cannot be calculated from authoritative facts. The eventual contract must define:
+**Owner-approved risk model:** reuse the existing Conservative per-pair investment-limit model and its configuration source. Source review confirms that the field is `pairConfig.investment`; it is optional in the current Conservative policy and must not be replaced with a new RS-only setting.
 
-- per-tranche quote investment cap;
-- maximum cumulative recovery investment per market;
-- maximum total RS exposure, including unfilled BUY commitments;
-- maximum concurrent/pending BUY and SELL orders;
-- maximum drawdown or adverse price movement;
-- maximum authorized legacy inventory and legacy quantity released per cycle;
-- account-wide quote/base commitment boundary shared with other markets.
+The Conservative policy computes outstanding recovery exposure as:
 
-**Agreed risk policy:** reuse the existing Conservative strategy's configured investment-limit model and its configuration source; do not introduce a second RS-only investment-limit setting or invent new limits. When the configured investment limit is reached, RS must stop placing new BUY orders. Any already-open recovery SELL remains live and untouched—do not cancel, replace, or reprice it merely because the BUY limit was reached. Continue canonical fill/order reconciliation and wait for that SELL to reach its terminal filled state before considering another cycle. The exact Conservative configuration field and accounting boundary must be confirmed from source during implementation; no example value is an approved default.
+\[
+\text{outstandingRecovery} = \max(0, \text{Position.spent} - \text{cumulative net SELL proceeds})
+\]
+
+A proposed BUY is within the configured strategy limit only when outstanding recovery exposure plus the proposed BUY quote notional does not exceed `pairConfig.investment`. RS must calculate this from its own recovery Position/cycle accounting; the operator-declared legacy historical investment is not recovery exposure and must not consume the RS recovery budget. If `pairConfig.investment` is absent, follow the existing Conservative optional-limit behavior rather than inventing a mandatory RS-only value.
+
+The current RS accounting workflow calculates profitability from the current terminal SELL order's allocations only. If multiple terminal SELL orders are allowed within one recovery cycle, a cycle-scoped cumulative proceeds ledger is required before this investment-limit calculation can safely use cycle-level outstanding exposure. This is tracked in the RS-3 policy gate.
+
+**Shared account limits remain separate:** every BUY/SELL intent must also pass the shared account's authoritative free quote/base balance and aggregate reservation checks across CG and RS, current exchange quantity/price/notional filters, and the inherited pending/unknown-order safeguards. Strategy budgets are not separate wallets; one strategy cannot borrow the other's unused budget or reserve the same physical balance twice.
+
+**At the RS investment limit:** stop placing new RS BUYs. Any already-open recovery SELL remains live and untouched—do not cancel, replace, or reprice it merely because the BUY limit was reached. Continue canonical fill/order reconciliation and wait for that SELL to reach terminal filled state before considering another cycle.
+
+No separate RS-only per-tranche cap, maximum-drawdown rule, adverse-price limit, total-exposure field, or order-count setting is approved for the first implementation. Do not add such configuration or behavior without an explicit owner decision.
 
 ## 8. sellQuantity, residuals, and exchange constraints
 
