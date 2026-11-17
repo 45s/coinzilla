@@ -86,7 +86,7 @@ These rules are mandatory for every AI agent working on the existing broker pack
 
 ### Required reference projects
 
-1. **Primary behavioral reference — [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net).** A substantial C# Bitunix client built on CryptoExchange.Net with separate Spot and Futures REST/Socket surfaces. Study its relevant Spot interfaces, implementation, request definitions, models, endpoint fixtures, and unit tests. Especially useful locations:
+1. **Primary behavioral reference.** [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net) is a substantial C# Bitunix client built on CryptoExchange.Net with separate Spot and Futures REST/Socket surfaces. Study its relevant Spot interfaces, implementation, request definitions, models, endpoint fixtures, and unit tests. Especially useful locations:
    - [Spot REST trading implementation](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Clients/SpotApi/Rest/BitunixRestClientSpotApiTrading.cs)
    - [Spot REST trading contract/interface](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Interfaces/Clients/SpotApi/IBitunixRestClientSpotApiTrading.cs)
    - [Spot account implementation](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Clients/SpotApi/Rest/BitunixRestClientSpotApiAccount.cs)
@@ -96,7 +96,7 @@ These rules are mandatory for every AI agent working on the existing broker pack
 
    Treat this project as the first implementation to study and the primary behavioral reference when translating an existing Spot capability into JavaScript. Inspect the actual implementation and tests/fixtures, not only XML comments or generated documentation.
 
-2. **Secondary JavaScript/TypeScript reference — [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp).** An unofficial TypeScript MCP server covering Bitunix Spot and Futures REST. Use it to cross-check JavaScript/TypeScript request construction, authentication/signing, validation, response handling, and available Spot endpoint examples:
+2. **Secondary JavaScript/TypeScript reference.** [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp) is an unofficial TypeScript MCP server covering Bitunix Spot and Futures REST. Use it to cross-check JavaScript/TypeScript request construction, authentication/signing, validation, response handling, and available Spot endpoint examples:
    - [Spot tools](https://github.com/samanzamani/bitunix-mcp/blob/main/src/tools/spot.ts)
    - [REST client and signing implementation](https://github.com/samanzamani/bitunix-mcp/tree/main/src)
    - [Tests](https://github.com/samanzamani/bitunix-mcp/tree/main/src)
@@ -105,6 +105,21 @@ These rules are mandatory for every AI agent working on the existing broker pack
    This is an MCP integration, not a broker SDK. Do not assume it implements a complete broker lifecycle or continuous Spot private WebSocket subscriptions.
 
 3. **Protocol authority — [Bitunix official Open API repository](https://github.com/BitunixOfficial/open-api) and [official Spot API documentation](https://www.bitunix.com/api-docs/spots/en_us/).** Third-party implementations are evidence and implementation examples, not the final authority for current wire contracts. Verify endpoint paths, authentication, parameters, quantity units, response shapes, error codes, pagination, timestamps, and WebSocket message semantics against official documentation and current official examples wherever available.
+
+### Additional reference discovery when primary sources are incomplete
+
+The primary pair above is not an exclusive search boundary. When JKorf or the TypeScript MCP does not cover the requested method, or when their source/tests conflict with each other or official docs, search GitHub for the exact endpoint path, method name, and Bitunix Spot capability. Inspect additional language clients and connector packages before concluding that no reference exists.
+
+Known supplementary references from the maintained [Bitunix external implementation audit](./BITUNIX_REFERENCE_AUDIT.md) include:
+
+- [StockSharp/Connectors](https://github.com/StockSharp/Connectors/tree/master/Bitunix) — independent C# Spot connector and DTOs.
+- [0xCherryBlueZu/bitunix](https://github.com/0xCherryBlueZu/bitunix) — Python Spot REST client; inspect signing/logging defects before reuse.
+- [LuiInventions/Bitunix-MCP](https://github.com/LuiInventions/Bitunix-MCP) — Python MCP/application workflows; not a precision-safe broker reference.
+- [Steven-Chang/bitunix-api](https://github.com/Steven-Chang/bitunix-api) — Ruby Spot public metadata methods.
+- [mydcc/cachy-app](https://github.com/mydcc/cachy-app/tree/main/docs/bitunix-api) — detailed Futures documentation audit only; it explicitly does not mirror Spot.
+- [BitunixOfficial/open-api](https://github.com/BitunixOfficial/open-api) and [vgeyer/bitunix-client](https://github.com/vgeyer/bitunix-client) — inspect product scope carefully; the inspected demos/examples are Futures-oriented, not Spot proof.
+
+For each additional repository, record the exact inspected commit/path and whether endpoint-level tests or fixtures exist. Label source evidence, fixtures, observed live behavior and official documentation separately. A package README or exposed method list is only discovery evidence. If a reference is Futures-only, unrelated, untested or defective, record that limitation and continue searching where the gap matters. Never add any of these packages as a Coinzilla runtime dependency.
 
 ### Required workflow for each Bitunix feature
 
