@@ -96,7 +96,7 @@ Rejected because repository and schema ownership follows the business bounded co
 
 ## Verification and implementation evidence
 
-- Provider-neutral CRUD contract test and expected RED are recorded in PR #1342.
+- Provider-neutral CRUD contract test and expected RED are recorded in PR #1353.
 - SQLite provider conformance tests cover CRUD, collection isolation, duplicate handling, filtering, sorting, pagination, missing records, transaction rollback, capability immutability and persistence across a new connection.
 - SQLite connection/lock error normalization has separate test-first RED evidence in [closed evidence PR #1347](https://github.com/45s/coinzilla/pull/1347) and its [Actions run](https://github.com/45s/coinzilla/actions/runs/44050359180).
 - Final acceptance depends on required CI passing on the exact final head and the implementation PR being merged into `develop`.
