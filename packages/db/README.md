@@ -188,7 +188,7 @@ runDatabaseProviderConformanceTests({
 
 The example is illustrative; no PostgreSQL provider is included. The factory receives an opaque `storageKey`. It must create an isolated store for each in-memory test and reuse the supplied key for persistence tests. A server provider can map the key to a temporary database or namespace; SQLite maps it to a temporary file. Providers that cannot support a particular test must declare the capability difference explicitly and the suite will mark that test skipped with a reason; do not silently skip a contract.
 
-The suite verifies CRUD and collection isolation, duplicate handling, each declared query capability, missing-record results, transaction commit/rollback, immutable capability snapshots, and persistence across a new connection. Query and persistence cases are explicitly skipped with a reason only when the provider declares the corresponding capability unavailable. Add provider-specific lifecycle, lock/concurrency and cleanup tests where the generic contract cannot express the provider's operational guarantees.
+The suite verifies CRUD and collection isolation, duplicate handling, each declared query capability, missing-record results, transaction commit/rollback, the declared synchronous/asynchronous callback mode, immutable capability snapshots, and persistence across a new connection. Query and persistence cases are explicitly skipped with a reason only when the provider declares the corresponding capability unavailable. Add provider-specific lifecycle, lock/concurrency and cleanup tests where the generic contract cannot express the provider's operational guarantees.
 
 ## Provider composition
 
