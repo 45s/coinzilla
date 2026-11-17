@@ -1095,6 +1095,7 @@ function createDelayedFirstTickerBroker({ broker, calls }) {
     return {
       ok: true,
       data: {
+        accountId: "123456789",
         balances,
         sourceTime: accountSnapshotTime,
       },
