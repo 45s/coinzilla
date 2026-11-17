@@ -2471,7 +2471,7 @@ class TestnetTradingRecoveryScenario {
     this.marketMetadata = createMarketMetadata("BTCUSDT")
   
     this.broker = Object.assign(
-      {},
+      { capabilities: createBinanceCapabilities() },
       this.createBrokerPart1(),
       this.createBrokerPart2(),
       this.createBrokerPart3(),
@@ -3320,6 +3320,7 @@ test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG"
 
 function createPostOnlyAdapterClient() {
   return {
+    capabilities: createBinanceCapabilities(),
     connect: async () => {},
     disconnect: async () => {},
     createOrder: async () => ({
