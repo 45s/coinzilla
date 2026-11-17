@@ -179,6 +179,17 @@ function assertCapabilities({ descriptor, broker }) {
 
 
 
+function logProviderLifecycle({ logger, level, message, descriptor, error }) {
+  const logMethod = typeof logger?.[level] === "function" ? logger[level] : logger?.info
+  logMethod?.call(logger, {
+    message,
+    provider: descriptor.provider,
+    providerInstanceId: descriptor.id,
+    accountId: descriptor.accountId,
+    ...(error ? { errorName: error.name ?? "Error" } : {}),
+  })
+}
+
 function publishConnected({ eventPublisher, descriptor, logger }) {
   logProviderLifecycle({
     logger,
