@@ -334,3 +334,34 @@ testCase("disconnects all providers in reverse order and aggregates cleanup fail
     "disconnect:First",
   ], "Registry shutdown must disconnect providers in reverse construction order.")
 })
+
+
+testCase("rejects a provider instance without a versioned immutable capability declaration", () => {
+  const { broker } = createBroker()
+  delete broker.capabilities
+
+  assert.throws(
+    () => createProviderRegistry({ providers: [createProvider({ broker })] }),
+    (error) => error.code === "HARVESTER_PROVIDER_REGISTRY_INVALID",
+    "A broker without the existing capability contract must not be registered by method-presence inference.",
+  )
+})
+
+testCase("rejects a capability snapshot for a different provider environment", () => {
+  const { broker } = createBroker({
+    capabilities: createCapabilities({
+      provider: "binance",
+      selectedMode: "live",
+    }),
+  })
+  const provider = createProvider({
+    environment: "testnet",
+    broker,
+  })
+
+  assert.throws(
+    () => createProviderRegistry({ providers: [provider] }),
+    (error) => error.code === "HARVESTER_PROVIDER_REGISTRY_INVALID",
+    "The registered provider environment must agree with the capability snapshot's selected environment.",
+  )
+})
