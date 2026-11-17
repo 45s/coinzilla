@@ -1,126 +1,135 @@
 const FIELD_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
 
-function assertPlainRecord({ value, label }) {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    throw new TypeError(`${label} must be a plain object`)
-  }
-
-  let prototype
-  let descriptors
+function readOwnDescriptors({ value, label }) {
   try {
-    prototype = Object.getPrototypeOf(value)
-    descriptors = Object.getOwnPropertyDescriptors(value)
-  } catch {
-    throw new TypeError(`${label} must be a readable plain object`)
-  }
-
-  if (prototype !== Object.prototype && prototype !== null) {
-    throw new TypeError(`${label} must be a plain object`)
-  }
-
-  for (const key of Reflect.ownKeys(descriptors)) {
-    const descriptor = descriptors[key]
-    if (
-      typeof key !== "string"
-      || !descriptor.enumerable
-      || !Object.hasOwn(descriptor, "value")
-    ) {
-      throw new TypeError(`${label} must contain enumerable string data properties only`)
+    return {
+      prototype: Object.getPrototypeOf(value),
+      descriptors: Object.getOwnPropertyDescriptors(value),
     }
+  } catch (error) {
+    throw new TypeError(\`\${label} must be a readable plain object\`, {
+      cause: error,
+    })
   }
-
-  return value
 }
 
-function assertJsonArray({ value, ancestors, label }) {
-  if (Object.getPrototypeOf(value) !== Array.prototype) {
-    throw new TypeError(`${label} must contain plain arrays`)
+function cloneJsonArray({ value, ancestors, label }) {
+  const { prototype, descriptors } = readOwnDescriptors({
+    value,
+    label,
+  })
+  if (prototype !== Array.prototype) {
+    throw new TypeError(\`\${label} must contain plain arrays\`)
   }
 
-  for (const key of Reflect.ownKeys(value)) {
+  const length = descriptors.length.value
+  const clone = new Array(length)
+
+  for (const key of Reflect.ownKeys(descriptors)) {
     if (key === "length") {
       continue
     }
     if (typeof key !== "string" || !/^(0|[1-9][0-9]*)$/.test(key)) {
-      throw new TypeError(`${label} arrays must not contain custom properties`)
+      throw new TypeError(\`\${label} arrays must not contain custom properties\`)
     }
 
-    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    const descriptor = descriptors[key]
     if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
-      throw new TypeError(`${label} arrays must contain data elements only`)
+      throw new TypeError(\`\${label} arrays must contain data elements only\`)
     }
-  }
-
-  for (let index = 0; index < value.length; index += 1) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, String(index))
-    if (!descriptor) {
-      throw new TypeError(`${label} must not contain sparse arrays`)
-    }
-    assertJsonValue({
+    clone[Number(key)] = cloneJsonValue({
       value: descriptor.value,
       ancestors,
       label,
     })
   }
+
+  for (let index = 0; index < length; index += 1) {
+    if (!Object.hasOwn(descriptors, String(index))) {
+      throw new TypeError(\`\${label} must not contain sparse arrays\`)
+    }
+  }
+
+  return clone
 }
 
-function assertJsonObject({ value, ancestors, label }) {
-  const prototype = Object.getPrototypeOf(value)
+function cloneJsonObject({ value, ancestors, label }) {
+  const { prototype, descriptors } = readOwnDescriptors({
+    value,
+    label,
+  })
   if (prototype !== Object.prototype && prototype !== null) {
-    throw new TypeError(`${label} must contain only plain objects`)
+    throw new TypeError(\`\${label} must contain only plain objects\`)
   }
 
-  for (const key of Reflect.ownKeys(value)) {
+  const clone = {}
+  for (const key of Reflect.ownKeys(descriptors)) {
     if (typeof key !== "string") {
-      throw new TypeError(`${label} must not contain symbol keys`)
+      throw new TypeError(\`\${label} must not contain symbol keys\`)
     }
 
-    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    const descriptor = descriptors[key]
     if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
-      throw new TypeError(`${label} must contain enumerable data properties only`)
+      throw new TypeError(\`\${label} must contain enumerable data properties only\`)
     }
 
-    assertJsonValue({
-      value: descriptor.value,
-      ancestors,
-      label,
+    Object.defineProperty(clone, key, {
+      value: cloneJsonValue({
+        value: descriptor.value,
+        ancestors,
+        label,
+      }),
+      enumerable: true,
+      configurable: true,
+      writable: true,
     })
   }
+
+  return clone
 }
 
-function assertJsonValue({ value, ancestors, label }) {
+function cloneJsonValue({ value, ancestors, label }) {
   if (value === null || typeof value === "string" || typeof value === "boolean") {
-    return
+    return value
   }
-
   if (typeof value === "number" && Number.isFinite(value)) {
-    return
+    return value
   }
-
   if (typeof value !== "object") {
-    throw new TypeError(`${label} must contain only JSON-safe values`)
+    throw new TypeError(\`\${label} must contain only JSON-safe values\`)
   }
-
   if (ancestors.has(value)) {
-    throw new TypeError(`${label} must not contain circular references`)
+    throw new TypeError(\`\${label} must not contain circular references\`)
   }
 
   ancestors.add(value)
-  if (Array.isArray(value)) {
-    assertJsonArray({
+  const clone = Array.isArray(value)
+    ? cloneJsonArray({
       value,
       ancestors,
       label,
     })
-  } else {
-    assertJsonObject({
+    : cloneJsonObject({
       value,
       ancestors,
       label,
     })
-  }
   ancestors.delete(value)
+  return clone
 }
+
+function assertPlainRecord({ value, label }) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError(\`\${label} must be a plain object\`)
+  }
+
+  return cloneJsonObject({
+    value,
+    ancestors: new Set([value]),
+    label,
+  })
+}
+
 export function validateCollectionName(collection) {
   if (typeof collection !== "string" || collection.trim() === "" || collection !== collection.trim()) {
     throw new TypeError("Collection name must be a non-empty string without surrounding whitespace")
@@ -138,41 +147,31 @@ export function validateRecordIdentifier(identifier) {
 }
 
 export function serializeRecord(record) {
-  assertPlainRecord({
+  const snapshot = assertPlainRecord({
     value: record,
-    label: "Record",
-  })
-  assertJsonValue({
-    value: record,
-    ancestors: new Set(),
     label: "Record",
   })
 
-  if (!Object.hasOwn(record, "id")) {
+  if (!Object.hasOwn(snapshot, "id")) {
     throw new TypeError("Record must contain its own string id property")
   }
 
-  validateRecordIdentifier(record.id)
+  validateRecordIdentifier(snapshot.id)
 
-  return JSON.stringify(record)
+  return JSON.stringify(snapshot)
 }
 
 export function serializeChanges(changes) {
-  assertPlainRecord({
+  const snapshot = assertPlainRecord({
     value: changes,
-    label: "Record changes",
-  })
-  assertJsonValue({
-    value: changes,
-    ancestors: new Set(),
     label: "Record changes",
   })
 
-  if (Object.hasOwn(changes, "id")) {
+  if (Object.hasOwn(snapshot, "id")) {
     throw new TypeError("Record changes cannot modify the record identifier")
   }
 
-  return JSON.stringify(changes)
+  return JSON.stringify(snapshot)
 }
 
 function validateFilter(filter) {
@@ -232,13 +231,13 @@ function validateSort(sort) {
 }
 
 export function normalizeReadQuery(query = {}) {
-  assertPlainRecord({
+  const snapshot = assertPlainRecord({
     value: query,
     label: "Read query",
   })
 
   const supportedKeys = new Set(["filter", "sort", "limit", "offset"])
-  for (const key of Object.keys(query)) {
+  for (const key of Object.keys(snapshot)) {
     if (!supportedKeys.has(key)) {
       throw new TypeError(`Read query contains unsupported option "${key}"`)
     }
@@ -249,7 +248,7 @@ export function normalizeReadQuery(query = {}) {
     sort: rawSort = [],
     limit,
     offset = 0,
-  } = query
+  } = snapshot
   const filter = validateFilter(rawFilter)
   const sort = validateSort(rawSort)
 
