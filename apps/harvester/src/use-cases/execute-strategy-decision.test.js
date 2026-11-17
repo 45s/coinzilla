@@ -2,6 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, CanonicalOrder, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 
 const baseAsset = new Asset({ id: "doge",
 code: "DOGE" })
@@ -743,4 +744,74 @@ marketMetadata })
   assert.equal(result.ok, false, "A definite post-only rejection must remain a failed submission.")
   assert.deepEqual(durableOutcomes, ["REJECTED"], "The durable outcome must preserve a broker-confirmed definite rejection.")
   assert.deepEqual(failureOutcomes, ["REJECTED"], "The existing safety handler must receive the same definite rejection classification.")
+})
+
+
+test("propagates RS OrderOwnership metadata through shared execution callbacks without leaking it to the broker", async () => {
+  const ownership = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-1",
+    purpose: "RECOVERY_BUY",
+    cycleId: "rs-cycle-1",
+  }
+  const observed = []
+  let brokerOrder
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async ({ order }) => {
+        brokerOrder = order
+        return {
+          ok: true,
+          data: makeAcknowledgement(order),
+        }
+      },
+    },
+    canSubmit: ({ ownership: observedOwnership }) => {
+      observed.push({ callback: "canSubmit", ownership: observedOwnership })
+      return true
+    },
+    onPendingOrder: async ({ ownership: observedOwnership }) => {
+      observed.push({ callback: "onPendingOrder", ownership: observedOwnership })
+    },
+    onAcknowledgedOrder: async ({ ownership: observedOwnership }) => {
+      observed.push({ callback: "onAcknowledgedOrder", ownership: observedOwnership })
+    },
+    onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
+    onDurableSubmissionIntent: async ({ ownership: observedOwnership }) => {
+      observed.push({ callback: "onDurableSubmissionIntent", ownership: observedOwnership })
+      return { ok: true, data: { durable: true } }
+    },
+    onDurableSubmissionOutcome: async ({ ownership: observedOwnership }) => {
+      observed.push({ callback: "onDurableSubmissionOutcome", ownership: observedOwnership })
+      return { ok: true, data: { durable: true } }
+    },
+  })
+  const rsDecision = {
+    actions: [{
+      ...decision.actions[0],
+      strategyId: ownership.strategyId,
+      positionId: ownership.positionId,
+      purpose: ownership.purpose,
+      cycleId: ownership.cycleId,
+    }],
+  }
+
+  const validation = await execute.validate({
+    decision: rsDecision,
+    marketMetadata,
+  })
+  const result = await execute({
+    decision: rsDecision,
+    marketMetadata,
+  })
+
+  assert.equal(validation.ok, true)
+  assert.equal(result.ok, true)
+  assert.ok(observed.length >= 6)
+  for (const callback of observed) {
+    assert.deepEqual(callback.ownership, ownership,
+      `${callback.callback} must receive the exact strategy, Position, purpose and cycle attribution.`)
+  }
+  assert.equal(Object.hasOwn(brokerOrder, "ownership"), false,
+    "Application-only ownership metadata must not leak into the broker order request.")
 })
