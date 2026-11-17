@@ -142,3 +142,13 @@ test("Bitunix Spot broker preserves on-chain deposit fields and unfamiliar statu
   assert.equal(result.data[0].network, "Tron (TRC-20)", "on-chain network names must remain unchanged")
   assert.equal(result.data[0].status, "future_status", "unfamiliar deposit statuses must remain visible without guessed normalization")
 })
+
+test("Bitunix Spot broker normalizes the single-object deposit response documented by the schema", async () => {
+  const depositRecord = createDepositRecord()
+  const { broker } = createBroker({ response: depositRecord })
+
+  const result = await broker.getDeposits()
+
+  assert.equal(result.ok, true, "the documented single-object deposit data shape must be supported")
+  assert.deepEqual(result.data, [depositRecord], "a single deposit record must be returned as a one-record immutable collection")
+})
