@@ -8,10 +8,7 @@ import {
   createDatabase,
   createSqliteProvider,
 } from "@coinzilla/db"
-import {
-  assertTradingSessionDatabaseIsolation,
-  resolveTradingSessionDatabaseFilename,
-} from "./resolve-trading-session-database-filename.js"
+import { resolveTradingSessionDatabaseFilename } from "./resolve-trading-session-database-filename.js"
 
 const CHILD_SCRIPT = `
 import { createDatabase, createSqliteProvider } from "@coinzilla/db"
@@ -22,7 +19,10 @@ const filename = await assertTradingSessionDatabaseIsolation({
   env: process.env,
 })
 const database = createDatabase({
-  provider: createSqliteProvider({ filename, timeout: 5000 }),
+  provider: createSqliteProvider({
+    filename,
+    timeout: 5000,
+  }),
 })
 await database.connect()
 try {
@@ -41,7 +41,8 @@ try {
 `
 
 function runDatabaseProcess({ tradingMode, nodeEnvironment, directory }) {
-  return new Promise((resolve, reject) => {
+  return new Promise((...callbacks) => {
+    const [resolve, reject] = callbacks
     const child = spawn(process.execPath, ["--input-type=module", "-e", CHILD_SCRIPT], {
       cwd: process.cwd(),
       env: {
@@ -67,7 +68,10 @@ function runDatabaseProcess({ tradingMode, nodeEnvironment, directory }) {
       try {
         resolve(JSON.parse(stdout))
       } catch (error) {
-        reject(new Error("Harvester database child process returned invalid JSON output", { cause: error }))
+        reject(new Error(
+          "Harvester database child process returned invalid JSON output",
+          { cause: error },
+        ))
       }
     })
   })
@@ -75,7 +79,10 @@ function runDatabaseProcess({ tradingMode, nodeEnvironment, directory }) {
 
 async function readProcessRecord({ filename }) {
   const database = createDatabase({
-    provider: createSqliteProvider({ filename, timeout: 5_000 }),
+    provider: createSqliteProvider({
+      filename,
+      timeout: 5_000,
+    }),
   })
   await database.connect()
   try {
@@ -112,14 +119,19 @@ test("resolves database files from explicit TRADING_MODE, never NODE_ENV", () =>
 
 test("rejects invalid trading modes and unsafe configured database paths", () => {
   assert.throws(
-    () => resolveTradingSessionDatabaseFilename({ tradingMode: "development", env: {} }),
+    () => resolveTradingSessionDatabaseFilename({
+      tradingMode: "development",
+      env: {},
+    }),
     /TRADING_MODE must be exactly testnet or live/,
     "An unrecognized trading mode must never select a database environment.",
   )
   assert.throws(
     () => resolveTradingSessionDatabaseFilename({
       tradingMode: "live",
-      env: { HARVESTER_DATABASE_DIRECTORY: "relative/database/path" },
+      env: {
+        HARVESTER_DATABASE_DIRECTORY: "relative/database/path",
+      },
     }),
     /HARVESTER_DATABASE_DIRECTORY must be an absolute path/,
     "A relative database directory must be rejected instead of depending on the shell working directory.",
@@ -127,7 +139,9 @@ test("rejects invalid trading modes and unsafe configured database paths", () =>
   assert.throws(
     () => resolveTradingSessionDatabaseFilename({
       tradingMode: "testnet",
-      env: { HARVESTER_DATABASE_DIRECTORY: path.parse(process.cwd()).root },
+      env: {
+        HARVESTER_DATABASE_DIRECTORY: path.parse(process.cwd()).root,
+      },
     }),
     /HARVESTER_DATABASE_DIRECTORY must not be a filesystem root/,
     "A filesystem root must not be accepted as the Harvester database directory.",
@@ -136,7 +150,10 @@ test("rejects invalid trading modes and unsafe configured database paths", () =>
 
 test("isolates production and Testnet databases across two real Node.js processes", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-db-process-isolation-"))
-  t.after(async () => rm(directory, { recursive: true, force: true }))
+  t.after(async () => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
 
   const [liveProcess, testnetProcess] = await Promise.all([
     runDatabaseProcess({
@@ -156,8 +173,12 @@ test("isolates production and Testnet databases across two real Node.js processe
   assert.equal(path.basename(path.dirname(testnetProcess.filename)), "testnet", "The Testnet process must write only to the Testnet database directory.")
 
   const [liveRecord, testnetRecord] = await Promise.all([
-    readProcessRecord({ filename: liveProcess.filename }),
-    readProcessRecord({ filename: testnetProcess.filename }),
+    readProcessRecord({
+      filename: liveProcess.filename,
+    }),
+    readProcessRecord({
+      filename: testnetProcess.filename,
+    }),
   ])
   assert.equal(liveRecord.environment, "live", "The production database must contain only the live process's session marker.")
   assert.equal(testnetRecord.environment, "testnet", "The Testnet database must contain only the Testnet process's session marker.")
