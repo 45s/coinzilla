@@ -254,23 +254,28 @@ test("rejects completed recovery accounting that is inexact or internally incons
 function createInvalidDustDispositions({ valid }) {
   return [
     [
-      { ...valid.canonicalData.inventoryDisposition, status: "UNKNOWN" },
+      { ...valid.canonicalData.inventoryDisposition,
+        status: "UNKNOWN" },
       /validated exchange-constrained dust/,
     ],
     [
-      { ...valid.canonicalData.inventoryDisposition, reason: "UNKNOWN" },
+      { ...valid.canonicalData.inventoryDisposition,
+        reason: "UNKNOWN" },
       /validated exchange-constrained dust/,
     ],
     [
-      { ...valid.canonicalData.inventoryDisposition, quantity: "0" },
+      { ...valid.canonicalData.inventoryDisposition,
+        quantity: "0" },
       /validated exchange-constrained dust/,
     ],
     [
-      { ...valid.canonicalData.inventoryDisposition, minimumQuantity: "01" },
+      { ...valid.canonicalData.inventoryDisposition,
+        minimumQuantity: "01" },
       /exact decimal string/,
     ],
     [
-      { ...valid.canonicalData.inventoryDisposition, evaluatedQuantity: undefined },
+      { ...valid.canonicalData.inventoryDisposition,
+        evaluatedQuantity: undefined },
       /MIN_QUANTITY dust requires/,
     ],
   ]
@@ -393,7 +398,8 @@ function assertInvalidRecoveryNonCompletionIdentityRejected({ valid }) {
   assert.throws(
     () => validateNotCompleted({
       ...valid,
-      canonicalData: { ...valid.canonicalData, unsupported: true },
+      canonicalData: { ...valid.canonicalData,
+        unsupported: true },
     }),
     /unsupported fields/,
     "A non-completion payload must reject fields outside its durable schema.",
