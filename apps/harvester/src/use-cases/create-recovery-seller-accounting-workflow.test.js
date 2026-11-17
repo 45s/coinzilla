@@ -495,3 +495,123 @@ test("rejects inconsistent restored legacy basis before exposing custody provide
     "Restored legacy state must preserve the original operator-declared average cost.",
   )
 })
+
+
+function makeRecoveryBuyOrder() {
+  return new CanonicalOrder({
+    clientOrderId: "rs-buy-1",
+    brokerOrderId: "broker-buy-1",
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    status: "OPEN",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 101,
+  })
+}
+
+function makeRecoveryBuyFill({ tradeId, brokerOrderId = "broker-buy-1", quantity, quoteQuantity } = {}) {
+  return new Fill({
+    tradeId,
+    brokerOrderId,
+    clientOrderId: "rs-buy-1",
+    market,
+    side: "BUY",
+    price: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: quantity,
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: quoteQuantity,
+      asset: quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+}
+
+function makeRecoveryBuyRegistry(order) {
+  const ownership = createOrderOwnership({
+    ownership: {
+      strategyId,
+      positionId,
+      purpose: "RECOVERY_BUY",
+      cycleId: "rs-cycle-1",
+    },
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+  })
+  return new OrderRegistry({
+    orders: [order],
+    ownerships: [ownership],
+  })
+}
+
+test("applies RS BUY fills to the registered Position exactly once and rejects mismatched order identity", async () => {
+  const order = makeRecoveryBuyOrder()
+  const workflow = createRecoverySellerAccountingWorkflow({
+    initialPortfolio: new Portfolio(),
+    initialOrderRegistry: makeRecoveryBuyRegistry(order),
+  })
+  const firstFill = makeRecoveryBuyFill({
+    tradeId: "rs-buy-fill-1",
+    quantity: "2.5",
+    quoteQuantity: "5",
+  })
+  const secondFill = makeRecoveryBuyFill({
+    tradeId: "rs-buy-fill-2",
+    quantity: "2.51",
+    quoteQuantity: "5.02",
+  })
+
+  const first = await workflow.applyBuyFill({ fill: firstFill })
+  const second = await workflow.applyBuyFill({ fill: secondFill })
+  const portfolioAfterFills = workflow.getPortfolio()
+  const duplicate = await workflow.applyBuyFill({ fill: firstFill })
+  const mismatched = await workflow.applyBuyFill({
+    fill: makeRecoveryBuyFill({
+      tradeId: "rs-buy-fill-wrong-broker",
+      brokerOrderId: "unowned-broker-order",
+      quantity: "1",
+      quoteQuantity: "2",
+    }),
+  })
+  const position = workflow.getPortfolio().getPosition({ positionId })
+
+  assert.equal(first.ok, true, first.errors?.[0]?.message)
+  assert.equal(first.data.applied, true)
+  assert.equal(second.ok, true, second.errors?.[0]?.message)
+  assert.equal(second.data.applied, true)
+  assert.equal(duplicate.ok, true, duplicate.errors?.[0]?.message)
+  assert.equal(duplicate.data.applied, false)
+  assert.equal(duplicate.data.duplicate, true)
+  assert.equal(duplicate.data.portfolio, portfolioAfterFills,
+    "Replaying an identical canonical BUY Fill must preserve the exact Portfolio snapshot.")
+  assert.equal(position.strategyId, strategyId)
+  assert.equal(position.baseQuantity.amount, "5.01")
+  assert.equal(position.spent.amount, "10.02",
+    "Accumulated RS BUY basis must use the actual quote quantities of both canonical fills.")
+  assert.equal(workflow.getPortfolio().appliedFillIds.length, 2)
+  assert.equal(first.data.ownership.cycleId, "rs-cycle-1")
+  assert.equal(mismatched.ok, false,
+    "A Fill attributed to a different broker order must fail closed.")
+  assert.equal(workflow.getPortfolio(), portfolioAfterFills,
+    "A rejected Fill must not mutate the RS Portfolio.")
+})
