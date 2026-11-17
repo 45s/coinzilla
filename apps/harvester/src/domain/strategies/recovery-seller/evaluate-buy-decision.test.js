@@ -297,6 +297,7 @@ test("returns an ordinary BLOCK for an exchange-filter-constrained BUY", () => {
 test("fails closed with global STOP when an active recovery Position lacks its reconciled BUY VWAP", () => {
   const result = evaluate({
     recoveryPosition: {
+      positionId: "rs-position-1",
       spent: "20",
     },
   })
@@ -540,6 +541,7 @@ test("fails closed when recovery Position quantity and spent basis are inconsist
   })
   const missingSpent = evaluate({
     recoveryPosition: {
+      positionId: "rs-position-1",
       quantity: "10",
       spent: "0",
     },
