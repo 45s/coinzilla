@@ -757,7 +757,7 @@ function createOwnedDecision({ ownership } = {}) {
 }
 
 function createOwnershipRecordingExecutor({ observed, setBrokerOrder } = {}) {
-  const record = (callback, result) => async ({ ownership }) => {
+  const record = (callback, result) => async ({ ownership } = {}) => {
     observed.push({ callback, ownership })
     return result
   }
