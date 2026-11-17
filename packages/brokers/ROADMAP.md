@@ -990,6 +990,20 @@ The Binance `getSymbolFilters` path now retrieves authenticated `myFilters` alon
 
 This work is in an open task PR targeting `develop`; do not mark it complete until exact-head broker tests, workspace CI and the linked Harvester readiness regressions pass. See [Harvester exchange trading constraints](../../apps/harvester/docs/exchange-trading-constraints.md) for the cross-domain contract.
 
+## 2026-11-17 — Bitunix Spot WebSocket RPC
+
+**Status: Implemented in test-first PR [#1374](https://github.com/45s/coinzilla/pull/1374); exact-head CI verification pending.**
+
+- Added a separately managed `BitunixSpotWebSocketClient` and native WHATWG WebSocket transport at the official Spot endpoint. It does not change the REST-backed `BitunixSpotBroker` lifecycle or silently switch existing methods to another transport.
+- Implemented documented read-only RPCs: latest price, depth, current K-line, trading-pair catalog, exchange rates, token/network metadata, account balances, and user identity. All requests are authenticated as required by the official Spot WS documentation.
+- Implemented the Spot-specific double-SHA256 signature separately from REST signing, echoed-ID correlation for concurrent RPCs, strict response-envelope handling, bounded request timeouts, and pending-request cleanup on transport errors/close. Requests are never automatically replayed.
+- Added no generic arbitrary-method request, order placement/cancellation, public push subscription, private user-data subscription, or automatic reconnect. A terminal connection must be replaced by constructing a new client; Bitunix documents a 24-hour connection lifetime.
+- Test-first RED was reproduced in GitHub Actions on the test-only checkpoint because the package did not export `BitunixSpotWebSocketClient`. Offline coverage now includes the public export, signature vector, all documented read method names, request correlation, exchange/protocol errors, timeout, disconnect and transport lifecycle.
+- The official docs and JKorf Spot socket/authentication implementation agree on the RPC envelope and per-request authentication fields. JKorf's Spot socket methods themselves cover order mutations only; no continuous Spot subscriptions are copied from Futures.
+- Issue [#1185](https://github.com/45s/coinzilla/issues/1185) remains unchanged: this RPC client does not establish source-timestamped account snapshots, fill completeness, order identity, safe mutation semantics, a TESTNET, or continuous push streams. Bitunix remains read-only and not Harvester-ready.
+
+See the [Bitunix WebSocket RPC contract](../../docs/brokers-websocket-contract.md#bitunix-spot-websocket-rpc-client) and [package usage guide](./README.md#bitunix-spot-websocket-rpc).
+
 ## 2026-11-16 — Bitunix Spot broker foundation
 
 **Status: In progress — read-only adapter foundation; not Harvester-ready.**
