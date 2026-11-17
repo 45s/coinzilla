@@ -290,6 +290,35 @@ function publishProcessStartedEvidence({ processStartedDataResult, resources, lo
     })
 }
 
+function createEmptyTradingSessionHistoryResources() {
+  return {
+    persistence: null,
+    observer: null,
+  }
+}
+
+async function closeUnusedTradingSessionPersistence({ persistence, logger }) {
+  const errors = await closeTradingSessionPersistence({
+    database: persistence.database,
+  })
+  reportObservabilityCleanupErrors({
+    errors,
+    logger,
+  })
+}
+
+function reportSessionObserverSetupFailure({ logger, error }) {
+  try {
+    logger?.error?.({
+      message: "Ordinary trading-session history observer could not be attached; Harvester continues without this non-authoritative history store.",
+      errorName: error?.name ?? "Error",
+      errorCode: typeof error?.code === "string" ? error.code : "UNKNOWN",
+    })
+  } catch {
+    // Optional historical reporting diagnostics must not affect startup.
+  }
+}
+
 async function prepareTradingSessionHistoryResources({
   eventBus,
   processStartedDataResult,
@@ -304,23 +333,14 @@ async function prepareTradingSessionHistoryResources({
     logger,
   })
   if (!persistence) {
-    return {
-      persistence: null,
-      observer: null,
-    }
+    return createEmptyTradingSessionHistoryResources()
   }
   if (!processStartedDataResult.ok) {
-    const errors = await closeTradingSessionPersistence({
-      database: persistence.database,
-    })
-    reportObservabilityCleanupErrors({
-      errors,
+    await closeUnusedTradingSessionPersistence({
+      persistence,
       logger,
     })
-    return {
-      persistence: null,
-      observer: null,
-    }
+    return createEmptyTradingSessionHistoryResources()
   }
   try {
     const observer = createTradingSessionHistoryObserver({
@@ -335,26 +355,15 @@ async function prepareTradingSessionHistoryResources({
       observer,
     }
   } catch (error) {
-    try {
-      logger?.error?.({
-        message: "Ordinary trading-session history observer could not be attached; Harvester continues without this non-authoritative history store.",
-        errorName: error?.name ?? "Error",
-        errorCode: typeof error?.code === "string" ? error.code : "UNKNOWN",
-      })
-    } catch {
-      // Optional historical reporting diagnostics must not affect startup.
-    }
-    const errors = await closeTradingSessionPersistence({
-      database: persistence.database,
+    reportSessionObserverSetupFailure({
+      logger,
+      error,
     })
-    reportObservabilityCleanupErrors({
-      errors,
+    await closeUnusedTradingSessionPersistence({
+      persistence,
       logger,
     })
-    return {
-      persistence: null,
-      observer: null,
-    }
+    return createEmptyTradingSessionHistoryResources()
   }
 }
 
