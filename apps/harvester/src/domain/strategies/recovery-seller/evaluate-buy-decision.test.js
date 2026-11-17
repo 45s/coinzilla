@@ -566,3 +566,22 @@ test("fails closed when an accumulating cycle already has SELL proceeds", () => 
   assert.equal(result.action, undefined,
     "A contradictory cycle accounting snapshot must not create another BUY.")
 })
+
+
+test("fails closed and reconciles an RS order owned by a different recovery cycle", () => {
+  const result = evaluate({
+    activeOrders: [ownedOrder({
+      side: "BUY",
+      status: "UNKNOWN",
+      clientOrderId: "rs-buy-other-cycle",
+      cycleId: "rs-cycle-previous",
+    })],
+  })
+
+  assert.equal(result.stopState.status, "STOPPED",
+    "An order owned by another cycle must not be adopted by the current cycle.")
+  assert.equal(result.decision.outcome, "RECONCILE",
+    "The previous cycle's original order must remain available for reconciliation.")
+  assert.equal(result.decision.orderIdentity.clientOrderId, "rs-buy-other-cycle")
+  assert.equal(result.action, undefined)
+})
