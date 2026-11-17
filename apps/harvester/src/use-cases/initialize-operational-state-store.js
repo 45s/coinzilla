@@ -21,11 +21,12 @@ function validateInitializationOptions({ confirmed, directory, processLockDirect
   return undefined
 }
 
-async function acquireInitializationLock({ acquireProcessLock, processLockDirectory }) {
+async function acquireInitializationLock({ acquireProcessLock, processLockDirectory, tradingMode }) {
   const lock = await acquireProcessLock({
     journalDirectory: processLockDirectory,
     globalDirectory: processLockDirectory,
     broker: "binance",
+    tradingMode,
   })
   if (lock?.ok !== true || typeof lock.release !== "function") {
     return toResult({
@@ -101,6 +102,7 @@ export async function initializeHarvesterOperationalStateStore({
   directory = DEFAULT_OPERATIONAL_STATE_DIRECTORY,
   processLockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
   runtimeSessionId = generateUUID(),
+  tradingMode = process.env.TRADING_MODE,
   acquireProcessLock = acquireHarvesterProcessLocks,
   createStore = createFileOperationalStateStore,
 } = {}) {
@@ -120,6 +122,7 @@ export async function initializeHarvesterOperationalStateStore({
     const lockResult = await acquireInitializationLock({
       acquireProcessLock,
       processLockDirectory,
+      tradingMode,
     })
     if (lockResult?.ok !== true) {
       return lockResult

@@ -110,3 +110,4 @@ logger: { error: () => {} } }),
   )
   assert.deepEqual(fixture.calls, ["factory", "connect", "disconnect"], "Disconnect must still be attempted after connect fails.")
 })
+

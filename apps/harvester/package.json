@@ -21,7 +21,8 @@
     "test:targeted": "node scripts/run-targeted-tests.js",
     "config:symbol": "node scripts/config-symbol.js",
     "volatility:calibrate": "node scripts/calibrate-volatility-thresholds.js",
-    "operational-state:init": "node scripts/initialize-operational-state.js"
+    "operational-state:init": "node --env-file=.env scripts/initialize-operational-state.js",
+    "operational-state:init:dev": "node --env-file=.env.development scripts/initialize-operational-state.js"
   },
   "engines": {
     "node": ">=24"

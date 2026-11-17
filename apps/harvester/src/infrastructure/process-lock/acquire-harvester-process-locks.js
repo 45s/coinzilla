@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { toResult } from "@coinzilla/utils"
 import { acquireHarvesterProcessLock } from "./acquire-harvester-process-lock.js"
 
@@ -101,6 +102,7 @@ function validateProcessLockOptions({
   journalDirectory,
   globalDirectory,
   broker,
+  tradingMode,
   acquireLock,
 }) {
   if (typeof journalDirectory !== "string" || !journalDirectory.trim()) {
@@ -112,30 +114,48 @@ function validateProcessLockOptions({
   if (typeof broker !== "string" || !/^[a-z0-9-]+$/i.test(broker)) {
     throw new TypeError("Harvester trading lock broker must be a simple broker identifier")
   }
+  if (tradingMode !== "testnet" && tradingMode !== "live") {
+    throw new TypeError('Harvester Binance process lock tradingMode must be "testnet" or "live"')
+  }
   if (typeof acquireLock !== "function") {
     throw new TypeError("Harvester trading lock acquireLock must be a function")
   }
 }
 
 /**
- * Acquire the broker-wide host lock before the configured Journal lock.
- * The host lock remains held whenever Journal-lock release is uncertain.
+ * Derive a stable fingerprint from the broker and explicit trading environment.
+ */
+function createLockScopeFingerprint({ broker, tradingMode }) {
+  return createHash("sha256")
+    .update(JSON.stringify([broker.toLowerCase(), tradingMode]))
+    .digest("hex")
+}
+
+/**
+ * Acquire the environment-scoped host lock before the application lock.
+ * Both locks remain held whenever release is uncertain.
  */
 export async function acquireHarvesterProcessLocks({
   journalDirectory,
   globalDirectory,
   broker = "binance",
+  tradingMode,
   acquireLock = acquireHarvesterProcessLock,
 } = {}) {
   try {
     validateProcessLockOptions({ journalDirectory,
 globalDirectory,
 broker,
+tradingMode,
 acquireLock })
 
+    const environmentFingerprint = createLockScopeFingerprint({
+      broker,
+      tradingMode,
+    })
     const hostLock = await acquireLock({
       directory: globalDirectory,
-      lockFileName: `.${broker.toLowerCase()}-harvester-trading.lock`,
+      lockFileName: `.${broker.toLowerCase()}-harvester-trading-${environmentFingerprint}.lock`,
     })
     if (hostLock?.ok !== true || typeof hostLock.release !== "function") {
       return toResult({
@@ -143,7 +163,10 @@ acquireLock })
       })
     }
 
-    const journalLock = await acquireLock({ directory: journalDirectory })
+    const journalLock = await acquireLock({
+      directory: journalDirectory,
+      lockFileName: `.harvester-trading-${environmentFingerprint}.lock`,
+    })
     if (journalLock?.ok !== true || typeof journalLock.release !== "function") {
       return handleJournalLockFailure({ journalLock,
 hostLock })
@@ -153,6 +176,11 @@ hostLock })
       lockPath: journalLock.lockPath,
       hostLockPath: hostLock.lockPath,
       owner: hostLock.owner,
+      lockScope: Object.freeze({
+        broker: broker.toLowerCase(),
+        tradingMode,
+        environmentFingerprint,
+      }),
       release: createLockRelease({ journalLock,
 hostLock }),
     })

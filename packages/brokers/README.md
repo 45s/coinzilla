@@ -146,7 +146,7 @@ For user data:
 
 The recommended reconciliation inputs are:
 
-- `getAccountSnapshot()` for current balances and the account snapshot's source timestamp.
+- `getAccountSnapshot()` for current balances and the account snapshot source timestamp.
 - `getOpenOrders()` for the current open-order set.
 - `getExchangeMarkets()` for the complete symbol catalog returned by Binance `exchangeInfo`; this read-only method returns canonical `Market` values and primes the broker's canonical market cache. It includes the symbols in the current exchange catalog, not delisted symbols.
 
