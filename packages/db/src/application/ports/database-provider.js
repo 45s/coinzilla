@@ -5,16 +5,16 @@
  * connections, statements, SQL and driver-native records remain private.
  *
  * @typedef {object} DatabaseTransaction
- * @property {(collection: string, record: object) => object} create
- * @property {(collection: string, identifier: string) => object|null} readOne
- * @property {(collection: string, query?: object) => object[]} readMany
- * @property {(collection: string, identifier: string, changes: object) => object|null} update
- * @property {(collection: string, identifier: string) => boolean} delete
+ * @property {(input: {collection: string, record: object}) => object} create
+ * @property {(input: {collection: string, id: string}) => object|null} readOne
+ * @property {(input: {collection: string, query?: object}) => object[]} readMany
+ * @property {(input: {collection: string, id: string, changes: object}) => object|null} update
+ * @property {(input: {collection: string, id: string}) => boolean} delete
  *
  * @typedef {object} DatabaseCapabilities
- * @property {object} transactions - Declares transaction callback behavior.
- * @property {object} queries - Declares supported filtering, sorting and pagination.
- * @property {object} storage - Declares supported storage modes.
+ * @property {{callbackMode: "synchronous"|"asynchronous", nestedTransactions: boolean}} transactions
+ * @property {{equalityFilters: boolean, sorting: boolean, pagination: boolean}} queries
+ * @property {{modes: Array<"file"|"memory"|"server">}} storage
  *
  * @typedef {object} DatabaseProvider
  * @property {DatabaseCapabilities} capabilities
