@@ -279,7 +279,12 @@ async function createRecoveryCycleOrdersAndFills({
     quoteQuantity: sellQuoteQuantity,
     price: sellPrice,
   })
-  return { buyOrder, sellOrder, buyFill, sellFill }
+  return {
+    buyOrder,
+    sellOrder,
+    buyFill,
+    sellFill,
+  }
 }
 
 async function createRecoveryCycleAccountingProjection({ buyFill, sellFill }) {
@@ -302,7 +307,10 @@ async function createRecoveryCycleAccountingProjection({ buyFill, sellFill }) {
       strategyId: StrategyId.COIN_GRABBER,
     }).ledger
   const position = portfolio.getPosition({ marketId: market.id })
-  return { recoveryLedger, position }
+  return {
+    recoveryLedger,
+    position,
+  }
 }
 
 async function createRecoveryCycleAccountingEvidence({
@@ -331,7 +339,10 @@ async function createRecoveryCycleAccountingEvidence({
     buyFill: ordersAndFills.buyFill,
     sellFill: ordersAndFills.sellFill,
   })
-  return { ...ordersAndFills, ...projection }
+  return {
+    ...ordersAndFills,
+    ...projection,
+  }
 }
 
 async function recordNotCompletedRecoveryCycle({ store } = {}) {
