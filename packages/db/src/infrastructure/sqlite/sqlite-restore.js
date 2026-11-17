@@ -3,7 +3,7 @@ import {
   mkdir,
   realpath,
 } from "node:fs/promises"
-import { basename, dirname } from "node:path"
+import { basename, dirname, join } from "node:path"
 import { backup as sqliteBackup, DatabaseSync } from "node:sqlite"
 
 import { DatabaseProviderError } from "../../domain/errors/database-errors.js"

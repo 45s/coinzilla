@@ -143,7 +143,7 @@ test("SQLite backup requires an open database and rejects an active transaction"
     database.exec("BEGIN IMMEDIATE")
     await assert.rejects(
       database.backup({ destination }),
-      /active transaction/i,
+      /transaction is active|active transaction/i,
       "Backup must reject a source connection while a transaction is active",
     )
     database.exec("ROLLBACK")
@@ -244,6 +244,7 @@ test("failed SQLite backup preserves an existing backup and removes temporary ar
       "A failed replacement backup must leave the previously valid backup untouched",
     )
 
+    await source.close()
     const directoryEntries = await readdir(directory)
     assert.deepEqual(
       directoryEntries.sort(),

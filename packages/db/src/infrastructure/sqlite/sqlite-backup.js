@@ -52,7 +52,7 @@ function createProgressReporter({ progress, onFailure }) {
   }
 }
 
-async function runBackup({ sourceConnection, destinationFilename, rate, progress, timeout }) {
+async function runBackup({ sourceConnection, destinationFilename, rate, progress, timeout, onProgressFailure }) {
   let progressError = null
   let temporaryDirectory
   let operationError = null
@@ -73,6 +73,7 @@ async function runBackup({ sourceConnection, destinationFilename, rate, progress
           progress,
           onFailure: (error) => {
             progressError = error
+            onProgressFailure(error)
           },
         }),
       },
@@ -159,6 +160,8 @@ export async function backupSqliteDatabase({
     throw new TypeError("SQLite backup timeout must be a non-negative safe integer")
   }
 
+  let progressError = null
+
   try {
     await mkdir(dirname(destinationFilename), {
       recursive: true,
@@ -177,8 +180,15 @@ export async function backupSqliteDatabase({
       rate,
       progress,
       timeout,
+      onProgressFailure: (error) => {
+        progressError = error
+      },
     })
   } catch (error) {
+    if (progressError && !(error instanceof AggregateError)) {
+      throw progressError
+    }
+
     if (error instanceof TypeError || error instanceof DatabaseProviderError) {
       throw error
     }
