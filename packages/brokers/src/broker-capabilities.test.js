@@ -239,9 +239,11 @@ test("Binance capability metadata preserves CoreBroker compatibility and public 
       "BinanceWebSocketConfig",
       "BitunixSpotBroker",
       "BitunixSpotConfig",
+      "BitunixSpotWebSocketClient",
+      "BitunixWebSocketError",
       "CoreBroker",
       "normalizeBinanceId",
     ],
-    "capability metadata must not change the package's existing export surface",
+    "the additive Bitunix RPC client exports must preserve all existing public contracts",
   )
 })
