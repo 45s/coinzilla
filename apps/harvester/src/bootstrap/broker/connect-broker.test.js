@@ -5,10 +5,23 @@ import { connectBroker } from "./connect-broker.js"
 
 const test = (...args) => nodeTest(`[connect-broker.test.js] ${args[0]}`, ...args.slice(1))
 
+const createCapabilities = () => Object.freeze({
+  contractVersion: 1,
+  provider: "binance",
+  product: "spot",
+  environment: Object.freeze({
+    selector: "tradingMode",
+    supportedModes: Object.freeze(["testnet", "live"]),
+    selectedMode: "testnet",
+    nodeEnvSelectsEndpoint: false,
+  }),
+})
+
 const createFixture = ({ connect, disconnect } = {}) => {
   const calls = []
   const events = []
   const broker = {
+    capabilities: createCapabilities(),
     placeOrder: async () => ({ ok: true }),
     cancelOrder: async () => ({ ok: true }),
     getFills: async () => ({ ok: true,
@@ -69,12 +82,22 @@ BINANCE_API_SECRET_KEY: "test-secret" },
 
 test("connects a validated broker and publishes the connected lifecycle event", async () => {
   const fixture = createFixture()
-  const broker = await connectBroker({ ...fixture,
-brokerName: "binance",
-tradingMode: "testnet",
-logger: {} })
+  const connection = await connectBroker({
+    ...fixture,
+    brokerName: "binance",
+    providerType: "binance",
+    providerInstanceId: "binanceTestnet",
+    accountId: "binance-primary",
+    tradingMode: "testnet",
+    logger: {},
+  })
 
-  assert.equal(broker, fixture.broker, "The connected broker port must be returned to bootstrap.")
+  assert.equal(connection.provider.broker.capabilities, fixture.broker.capabilities,
+    "Bootstrap must receive the registered Binance BrokerPort with its immutable capability declaration.")
+  assert.equal(connection.provider.providerInstanceId, "binanceTestnet",
+    "The provider registry must retain the explicit Binance instance identity.")
+  assert.equal(connection.providerRegistry.get("binanceTestnet"), connection.provider,
+    "The connected provider must be retrievable from the registry by its exact identity.")
   assert.deepEqual(fixture.calls, ["factory", "connect"], "Broker construction must precede the connection attempt.")
   assert.equal(fixture.events[0].name, HARVESTER_EVENT_NAMES.BROKER_CONNECTED, "Successful connection must publish the stable lifecycle event.")
 })
@@ -83,10 +106,15 @@ test("disconnects after connection failure and publishes failure evidence", asyn
   const fixture = createFixture({ connect: async () => { throw new Error("connect failed") } })
 
   await assert.rejects(
-    connectBroker({ ...fixture,
-brokerName: "binance",
-tradingMode: "testnet",
-logger: { error: () => {} } }),
+    connectBroker({
+      ...fixture,
+      brokerName: "binance",
+      providerType: "binance",
+      providerInstanceId: "binanceTestnet",
+      accountId: "binance-primary",
+      tradingMode: "testnet",
+      logger: { error: () => {} },
+    }),
     /connect failed/,
     "The original connection error must remain the rejection when cleanup succeeds.",
   )
