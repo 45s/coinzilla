@@ -92,7 +92,7 @@ const marketMetadata = {
   },
 }
 
-function ownedOrder({ side, status, clientOrderId, brokerOrderId, cycleId = "rs-cycle-1" }) {
+function ownedOrder({ side, status, clientOrderId, brokerOrderId, cycleId = "rs-cycle-1", positionId = "rs-position-1" }) {
   return {
     market: {
       symbol: "ZROUSDT",
@@ -104,7 +104,7 @@ function ownedOrder({ side, status, clientOrderId, brokerOrderId, cycleId = "rs-
     ownership: {
       strategyId: "RECOVERY_SELLER",
       purpose: side === "BUY" ? "RECOVERY_BUY" : "RECOVERY_SELL",
-      positionId: "rs-position-1",
+      positionId,
       cycleId,
     },
   }
@@ -136,6 +136,7 @@ test("plans the initial BUY using Conservative cadence, tranche size and downwar
     side: "BUY",
     purpose: "RECOVERY_BUY",
     cycleId: "rs-cycle-1",
+    positionId: "rs-position-1",
     type: "LIMIT_MAKER",
     price: "1.999",
     quantity: "5",
@@ -153,6 +154,7 @@ test("prices the next tranche from the reconciled completed-BUY VWAP, not the cu
       price: "2.5",
     },
     recoveryPosition: {
+      positionId: "rs-position-1",
       quantity: "10",
       spent: "20",
     },
@@ -172,6 +174,7 @@ test("blocks the next BUY when the RS per-pair investment limit would be exceede
       investment: "15",
     },
     recoveryPosition: {
+      positionId: "rs-position-1",
       quantity: "5",
       spent: "10",
     },
@@ -583,5 +586,45 @@ test("fails closed and reconciles an RS order owned by a different recovery cycl
   assert.equal(result.decision.outcome, "RECONCILE",
     "The previous cycle's original order must remain available for reconciliation.")
   assert.equal(result.decision.orderIdentity.clientOrderId, "rs-buy-other-cycle")
+  assert.equal(result.action, undefined)
+})
+
+
+test("requires the stable Recovery Position identity for every BUY intent", () => {
+  const missingPositionId = evaluate({
+    positionId: undefined,
+  })
+  const mismatchedPosition = evaluate({
+    recoveryPosition: {
+      positionId: "rs-position-previous",
+      quantity: "10",
+      spent: "20",
+    },
+    lastBuyPrice: "2.1",
+  })
+
+  assert.equal(missingPositionId.stopState.status, "STOPPED",
+    "A BUY intent without a stable Position identity must fail closed.")
+  assert.equal(mismatchedPosition.stopState.status, "STOPPED",
+    "A recovery Position from another identity must not be adopted by the current cycle.")
+  assert.equal(missingPositionId.action, undefined)
+  assert.equal(mismatchedPosition.action, undefined)
+})
+
+test("reconciles an active RS order whose Position ownership does not match the current policy context", () => {
+  const result = evaluate({
+    activeOrders: [ownedOrder({
+      side: "BUY",
+      status: "UNKNOWN",
+      clientOrderId: "rs-buy-other-position",
+      positionId: "rs-position-previous",
+    })],
+  })
+
+  assert.equal(result.stopState.status, "STOPPED",
+    "A same-cycle order owned by a different Position must not be adopted.")
+  assert.equal(result.decision.outcome, "RECONCILE",
+    "The mismatched RS order must remain available for reconciliation by its original identity.")
+  assert.equal(result.decision.orderIdentity.clientOrderId, "rs-buy-other-position")
   assert.equal(result.action, undefined)
 })
