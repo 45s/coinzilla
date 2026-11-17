@@ -36,7 +36,11 @@ function createRepository() {
   git(local, ['push', '-u', 'origin', 'HEAD:main']);
   git(local, ['branch', '-m', 'main-work']);
 
-  return { root, remote, local };
+  return {
+    root,
+    remote,
+    local,
+  };
 }
 
 function advanceRemote({ root, remote }) {
@@ -76,7 +80,10 @@ function assertSyncFails(...args) {
 }
 
 function cleanup(root) {
-  rmSync(root, { recursive: true, force: true });
+  rmSync(root, {
+    recursive: true,
+    force: true,
+  });
 }
 
 test('fast-forwards the clean main-work branch to the fetched origin/main', () => {
