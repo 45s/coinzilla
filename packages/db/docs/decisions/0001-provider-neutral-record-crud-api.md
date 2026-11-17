@@ -48,6 +48,7 @@ This is a plain data object, not a chainable query builder. New operators or nes
 - A provider transaction callback receives only generic CRUD operations.
 - Provider-native connections, SQL, statements, result objects and driver errors stay inside infrastructure.
 - Provider capabilities must state the actual query, transaction and storage guarantees. Unsupported guarantees must not be silently emulated.
+- The standard capability declaration describes transaction callback mode/nesting, equality filtering/sorting/pagination, and supported storage modes (`file`, `memory`, `server`).
 
 The original `createDatabase({ adapter })` lifecycle facade and `createSqliteDatabase(...)` low-level SQL/migration API remain available for compatibility and infrastructure use.
 
