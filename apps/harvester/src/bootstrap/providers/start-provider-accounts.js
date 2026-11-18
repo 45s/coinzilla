@@ -604,7 +604,6 @@ function resolveProviderAccountRouting({ appConfig, providers }) {
 async function startDeferredProviderMarketData({
   startedAccounts,
   failedAccounts,
-  failedErrors,
   releaseProviderLock,
 }) {
   for (const entry of startedAccounts) {
@@ -641,7 +640,6 @@ async function startDeferredProviderMarketData({
         lockReleasePending: false,
         executionSymbols: entry.runtime.executionSymbols,
       }))
-      failedErrors.push(error, ...cleanupErrors)
     }
   }
 }
@@ -794,7 +792,6 @@ async function finalizeProviderAccountStartup({
     await startDeferredProviderMarketData({
       startedAccounts: startup.startedAccounts,
       failedAccounts: startup.failedAccounts,
-      failedErrors: startup.failedErrors,
       releaseProviderLock,
     })
   }
