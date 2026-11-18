@@ -204,7 +204,6 @@ content: historicalNoHeading },
   }
 })
 
-
 test("excludes indented code blocks from prose, list, and table style metrics", () => {
   const content = [
     "# Architecture",
@@ -223,6 +222,7 @@ test("excludes indented code blocks from prose, list, and table style metrics", 
     "After the diagram.",
     "",
     "10. Ordered parent",
+    "",
     "    - nested list item",
     "",
   ].join("\n")
