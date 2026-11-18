@@ -2248,8 +2248,12 @@ test("starts configured provider accounts and acquires one process lock per acco
           },
         }
       },
-      registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
-      logger: { info() {}, system() {}, error() {} },
+      registerSignalHandler: (...args) => signalHandlers.set(...args),
+      logger: {
+        info() {},
+        system() {},
+        error() {},
+      },
     })
 
     assert.ok(result)
