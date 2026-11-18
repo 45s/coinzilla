@@ -366,7 +366,55 @@ The published snapshot DTO is explicitly mapped and allowlisted. Its balance eve
 
 Important limitation: current account audits intentionally include configured market base/quote assets and known commission assets, not every unrelated wallet asset. Label them as filtered strategy/account evidence; never report them as a complete wallet inventory.
 
-### 5.6 Validation, errors and transactions
+### 5.6 Application-service usage and transaction example
+
+Application services depend on the Harvester ports, not the DB facade or provider:
+
+```js
+export function createTradingHistoryService({
+  orderHistoryRepository,
+  orderEventHistoryRepository,
+  executionHistoryRepository,
+  accountSnapshotHistoryRepository,
+}) {
+  return {
+    listOrders(query) {
+      return orderHistoryRepository.list(query)
+    },
+    listOrderEvents(query) {
+      if (!orderEventHistoryRepository) {
+        throw new Error('Order-event history projection is not configured')
+      }
+
+      return orderEventHistoryRepository.listForOrder(query)
+    },
+    listFills(query) {
+      return executionHistoryRepository.list(query)
+    },
+    listAccountSnapshots(query) {
+      return accountSnapshotHistoryRepository.list(query)
+    },
+  }
+}
+```
+
+This is a proposed read/reporting service, not an existing Harvester service. It does not participate in broker execution or trading readiness. The order-event port is optional because Journal already owns the ordered event evidence.
+
+For writes, an infrastructure-owned projection observer subscribes to already-published events and enqueues bounded persistence work. The EventBus callback returns without awaiting SQLite; the observer exposes queue depth, failure/gap state, and drain/close behavior. Do not place repository writes in order-submission or fill-accounting use cases.
+
+When one projection transition must update an order row and append its event atomically, the repository adapter uses the existing facade transaction pattern:
+
+```js
+database.transaction(() => {
+  // Read the current projection and validate the next transition.
+  // Update the order projection and append the corresponding event.
+  // All DB calls are synchronous for the SQLite provider.
+})
+```
+
+The transaction callback must remain synchronous for SQLite. Do not perform exchange I/O, Journal writes, Operational State Store appends, or asynchronous validation inside it. The current trading-session adapter is the concrete implementation reference for the facade's transaction shape.
+
+### 5.7 Validation, errors and transactions
 
 - Harvester domain owns validation, canonical decimal rules, immutable identity, lifecycle transitions, and record schema versions.
 - Repository adapters validate JSON-safe records before calling the generic API; @coinzilla/db validates generic record/query contracts, not Harvester business schemas.
