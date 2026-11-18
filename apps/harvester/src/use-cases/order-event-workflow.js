@@ -94,6 +94,7 @@ function createProcessExecutionFillTransition({
   recordBuyExecutionFill,
   recordSellExecutionFill,
   pause,
+  requireProviderProvenance,
 }) {
   const dependencies = {
     state,
@@ -102,6 +103,7 @@ function createProcessExecutionFillTransition({
     recordBuyExecutionFill,
     recordSellExecutionFill,
     pause,
+    requireProviderProvenance,
   }
   return (options = {}) => processExecutionFill({
     dependencies,
@@ -129,6 +131,7 @@ export function makeOrderEventWorkflow({
   logger,
   onUnownedExternalOrderObserved,
 } = {}) {
+  const requireProviderProvenance = updateTradingAccounting?.requiresProviderProvenance === true
   const processExecutionFillTransition = createProcessExecutionFillTransition({
     state,
     eventPublisher,
@@ -136,6 +139,7 @@ export function makeOrderEventWorkflow({
     recordBuyExecutionFill,
     recordSellExecutionFill,
     pause,
+    requireProviderProvenance,
   })
   const reconcileTerminalOrderFills = createReconcileTerminalOrderFillsTransition({
     broker,
@@ -227,7 +231,7 @@ function validateMissingExecutionFill({
   }
 }
 
-function validateExecutionFill({ order, fill, eventPublisher }) {
+function validateExecutionFill({ order, fill, eventPublisher, requireProviderProvenance }) {
   const missingFill = validateMissingExecutionFill({ order, fill, eventPublisher })
   if (missingFill) {
     return missingFill
@@ -243,10 +247,13 @@ function validateExecutionFill({ order, fill, eventPublisher }) {
       }),
     }
   }
-  const providerFailure = getProviderAttributionFailure({
-    order,
-    fill,
-  })
+  const fillHasProviderIdentity = hasProviderIdentity({ value: fill }) ||
+    ["providerInstanceId", "providerType", "accountId"].some((field) => fill[field] !== undefined)
+  const providerFailure = requireProviderProvenance ||
+    hasProviderIdentity({ value: order }) ||
+    fillHasProviderIdentity
+    ? getProviderAttributionFailure({ order, fill })
+    : null
   const identityMatches = fill.market.id === order.market.id &&
     fill.side === order.side &&
     fill.brokerOrderId === order.brokerOrderId &&
@@ -444,6 +451,7 @@ async function processExecutionFill({ dependencies, order, fill }) {
       order: registeredOrder,
       fill: attributedFill,
       eventPublisher,
+      requireProviderProvenance: dependencies.requireProviderProvenance,
     })
     if (!validation.ok) {
       await pauseForInvalidExecutionFill({
