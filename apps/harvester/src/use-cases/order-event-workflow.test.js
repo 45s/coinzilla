@@ -626,7 +626,12 @@ test("enriches a provider-less exchange fill from its already registered canonic
   const rawFill = makeFill({ includeProviderProvenance: false })
   const { workflow, calls } = makeWorkflow()
   const result = await workflow.processUserDataEventTransition({
-    event: { eventType: "executionReport", executionType: "TRADE", executedOrder: order, fill: rawFill },
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: order,
+      fill: rawFill,
+    },
   })
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
   assert.equal(calls.accounting.length, 1)
@@ -643,7 +648,12 @@ test("fails closed and pauses when a legacy order has no recorded provider prove
   const fill = makeFill({ includeProviderProvenance: false })
   const { workflow, calls } = makeWorkflow()
   const result = await workflow.processUserDataEventTransition({
-    event: { eventType: "executionReport", executionType: "TRADE", executedOrder: order, fill },
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: order,
+      fill,
+    },
   })
   assert.equal(result.ok, false)
   assert.deepEqual(calls.accounting, [], "Unattributed legacy fills must not reach accounting.")
