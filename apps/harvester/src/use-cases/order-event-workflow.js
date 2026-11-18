@@ -45,7 +45,6 @@ export function makeOrderEventWorkflow({
     },
     ...options,
   })
-
   const reconcileTerminalOrderFills = makeReconcileTerminalOrderFills({
     broker,
     processedFillsByOrder: state.processedFillsByOrder,
