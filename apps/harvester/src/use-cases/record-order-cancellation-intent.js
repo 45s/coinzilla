@@ -4,7 +4,11 @@ import { requireProviderIdentity } from "../domain/orders/provider-provenance.js
 
 const isReason = (reason) => typeof reason === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(reason)
 
-function validateCancellationIntent({ operationalStateStore, order, reason }) {
+function validateCancellationIntent({
+      operationalStateStore,
+      order,
+      reason,
+    }) {
   if (typeof operationalStateStore?.append !== "function") {
     throw new TypeError("recordOrderCancellationIntent requires a Operational State Store append capability")
   }
@@ -17,7 +21,10 @@ function validateCancellationIntent({ operationalStateStore, order, reason }) {
   if (!isReason(reason)) {
     throw new TypeError("Cancellation reason must be a canonical uppercase identifier")
   }
-  requireProviderIdentity({ value: order, context: "Cancellation intent" })
+  requireProviderIdentity({
+    value: order,
+    context: "Cancellation intent",
+  })
   if (!["BUY", "SELL"].includes(order.side) || !["LIMIT", "LIMIT_MAKER"].includes(order.type)) {
     throw new TypeError("Cancellation intent order side or type is unsupported")
   }
