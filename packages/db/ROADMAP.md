@@ -14,9 +14,20 @@ The accepted architecture is recorded in [ADR-0001](./docs/decisions/0001-provid
 
 ## SQLite infrastructure audit and hardening — #1395
 
-**Status: Implementation in progress in [PR #1396](https://github.com/45s/coinzilla/pull/1396), targeting `develop`.** Audit the existing SQLite connection/lifecycle, transactions, CRUD/query safety, migrations, WAL/locking, backup/restore and error paths, then harden only confirmed defects with deterministic real-SQLite RED → GREEN → REFACTOR tests. Keep all implementation inside `packages/db/**`; preserve the provider-neutral public API and existing compatibility unless a reproduced defect requires a documented change. Treat merged backup/restore PR #1382 as existing functionality to audit, not a feature to duplicate. Follow the exact coverage and CI gates in [issue #1395](https://github.com/45s/coinzilla/issues/1395); do not lower current thresholds or claim acceptance before exact-head verification.
+**Status: Done.** [PR #1396](https://github.com/45s/coinzilla/pull/1396) merged into `develop` on 2026-11-18 as `81669ce2be6794b9bd03067f89b57f8fdb55f957`. The audit hardened SQLite connection lifecycle and cleanup, concurrent WAL initialization, transaction-handle lifetime, backup/restore failure preservation, and filesystem error classification. All implementation remains within this package's infrastructure boundary.
 
-**Confirmed defects reproduced and fixed in the audit branch:** transaction contexts remained usable after successful COMMIT; failed SQLite initialization could have its original error masked by a close failure and lose the partially opened handle; concurrent file-backed connections could race while enabling WAL; backup progress/cleanup aggregation duplicated the original progress error; and restore destination lookup could misclassify a filesystem `TypeError` as an existing destination. Integrity validation could also have its primary failure masked when closing the temporary verification connection failed; both failures are now retained. Regression tests cover each defect. The latest completed validation checkpoint recorded 198 package tests (185 passed, 13 capability-specific skips), with production-source coverage at 100% lines / 99.64% branches / 100% functions. Every production module has 100% line and function coverage; remaining branch gaps are limited to `sqlite-database.js` (99.18%) and `sqlite-provider.js` (98.39%). The package coverage thresholds (98% lines / 95% branches / 100% functions) passed on the current code. Exact-head workspace CI remains the acceptance gate. The roadmap item remains in progress until the PR is reviewed and merged.
+**Verification on exact PR validation head `75df31e7fcb8e123f86996dbf1876c4fc6073b6e`:**
+
+- `@coinzilla/db`: 198 tests — 185 passed, 13 capability-specific skips, 0 failures.
+- Production-source coverage: 100% lines / 99.64% branches / 100% functions; package thresholds (98% / 95% / 100%) passed.
+- Required PR workflows passed: workspace unit tests and coverage, JavaScript syntax (including full-workspace and changed-file ESLint, agent-policy and actionlint), dependency audit, Utils tests, Harvester targeted tests, and external documentation links.
+- Read-only Binance TESTNET integration was skipped by workflow policy and is outside this database-only task.
+
+The merged commit retains the validated source tree. Detailed defect evidence and exact workflow history remain in [issue #1395](https://github.com/45s/coinzilla/issues/1395) and [PR #1396](https://github.com/45s/coinzilla/pull/1396), rather than being duplicated as a roadmap log.
+
+**Operational limits remain:** SQLite serializes writers; WAL is same-host only (not NFS/SMB); synchronous `DatabaseSync` calls block the Node.js event loop; restore publication requires hard-link support. Disk-full, power-loss and hardware I/O behavior cannot be fully reproduced in shared CI. Backup schedules, retention, encryption, off-site storage, deployment paths, restore drills and runbooks remain application-owned.
+
+**Next work is evidence-driven, not another speculative DB feature.** Consumer repository/schema integration belongs to the consumer domain and remains tracked by [umbrella issue #1327](https://github.com/45s/coinzilla/issues/1327). Add generic DB capabilities only when a concrete consumer requirement demonstrates a provider-neutral contract gap.
 
 ## Provider-neutral CRUD API — core implementation and hardening merged
 
