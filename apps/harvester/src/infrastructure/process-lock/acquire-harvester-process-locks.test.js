@@ -43,8 +43,10 @@ test("rejects a second trading process using a different Journal directory on th
     assert.notEqual(afterRelease.lockPath, first.lockPath)
     assert.equal((await afterRelease.release({})).ok, true)
   } finally {
-    await rm(root, { recursive: true,
-force: true })
+    await rm(root, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -144,8 +146,10 @@ test("retains the host lock when Journal-lock release is uncertain and retries i
     assert.equal(afterRelease.ok, true)
     assert.equal((await afterRelease.release({})).ok, true)
   } finally {
-    await rm(root, { recursive: true,
-force: true })
+    await rm(root, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -165,21 +169,9 @@ test("allows different provider accounts to hold independent process locks", asy
       accountId: "account-one",
       tradingMode: "testnet",
     })
-    assert.equal(
-      firstAccountLock.ok,
-      true,
-      "The first account must acquire its own provider/account/environment lock.",
-    )
-    assert.equal(
-      firstAccountLock.lockScope.accountId,
-      "account-one",
-      "The lock diagnostics must expose the stable non-secret account alias.",
-    )
-    assert.equal(
-      firstAccountLock.lockScope.providerInstanceId,
-      "binance-testnet-one",
-      "The lock diagnostics must expose the provider instance that requested the account lock.",
-    )
+    assert.equal(firstAccountLock.ok, true, "The first account must acquire its own provider/account/environment lock.")
+    assert.equal(firstAccountLock.lockScope.accountId, "account-one", "The lock diagnostics must expose the stable non-secret account alias.")
+    assert.equal(firstAccountLock.lockScope.providerInstanceId, "binance-testnet-one", "The lock diagnostics must expose the provider instance that requested the account lock.")
 
     const secondAccountLock = await acquireHarvesterProcessLocks({
       globalDirectory,
@@ -189,27 +181,11 @@ test("allows different provider accounts to hold independent process locks", asy
       accountId: "account-two",
       tradingMode: "testnet",
     })
-    assert.equal(
-      secondAccountLock.ok,
-      true,
-      "A different Binance account must not be blocked by the first account's process lock.",
-    )
-    assert.notEqual(
-      firstAccountLock.lockPath,
-      secondAccountLock.lockPath,
-      "Different account identities must resolve to different application lock files.",
-    )
+    assert.equal(secondAccountLock.ok, true, "A different Binance account must not be blocked by the first account's process lock.")
+    assert.notEqual(firstAccountLock.lockPath, secondAccountLock.lockPath, "Different account identities must resolve to different application lock files.")
 
-    assert.equal(
-      (await secondAccountLock.release()).ok,
-      true,
-      "The second account must release only its own process lock.",
-    )
-    assert.equal(
-      (await firstAccountLock.release()).ok,
-      true,
-      "The first account must release only its own process lock.",
-    )
+    assert.equal((await secondAccountLock.release()).ok, true, "The second account must release only its own process lock.")
+    assert.equal((await firstAccountLock.release()).ok, true, "The first account must release only its own process lock.")
   } finally {
     await rm(root, {
       recursive: true,
