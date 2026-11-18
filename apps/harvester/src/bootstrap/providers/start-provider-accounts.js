@@ -432,10 +432,12 @@ function createMarketDataProviderMetadata({
       environment: sourceProvider.environment,
     })
   }
+  const sourceProviderIds = [...new Set(Object.values(marketDataSources).filter(Boolean))]
   return Object.freeze({
     marketDataSources: Object.freeze(marketDataSources),
     marketDataProviderTypes: Object.freeze(marketDataProviderTypes),
     marketDataProviderIdentities: Object.freeze(marketDataProviderIdentities),
+    marketDataProviderInstanceId: sourceProviderIds.length === 1 ? sourceProviderIds[0] : null,
   })
 }
 
