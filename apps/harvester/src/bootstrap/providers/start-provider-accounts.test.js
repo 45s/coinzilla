@@ -8,12 +8,14 @@ function createProvider({
   accountId,
   environment = "testnet",
   credentialEnvironmentNames = {},
+  required = true,
 }) {
   return {
     providerInstanceId,
     providerType,
     accountId,
     environment,
+    required,
     credentialEnvironmentNames,
     identity: {
       providerInstanceId,
@@ -26,10 +28,18 @@ function createProvider({
 
 const appConfig = {
   marketDataRouting: {
-    routes: [{
-      symbol: "BTCUSDT",
-      providerInstanceId: "first",
-    }],
+    routes: [
+      { symbol: "BTCUSDT", providerInstanceId: "first" },
+      { symbol: "ETHUSDT", providerInstanceId: "second" },
+      { symbol: "SOLUSDT", providerInstanceId: "third" },
+    ],
+  },
+  executionRouting: {
+    routes: [
+      { strategyId: "CG_coinGrabber", symbol: "BTCUSDT", providerInstanceId: "first" },
+      { strategyId: "CG_coinGrabber", symbol: "ETHUSDT", providerInstanceId: "second" },
+      { strategyId: "CG_coinGrabber", symbol: "SOLUSDT", providerInstanceId: "third" },
+    ],
   },
   operatorControl: {
     telegram: {
@@ -40,9 +50,9 @@ const appConfig = {
   strategies: {
     CG_coinGrabber: {
       pairs: {
-        BTCUSDT: {
-          enabled: true,
-        },
+        BTCUSDT: { enabled: true },
+        ETHUSDT: { enabled: true },
+        SOLUSDT: { enabled: true },
       },
     },
   },
@@ -52,10 +62,51 @@ function appConfigForMarketDataProvider(providerInstanceId) {
   return {
     ...appConfig,
     marketDataRouting: {
-      routes: [{
-        symbol: "BTCUSDT",
+      routes: [
+        { symbol: "BTCUSDT", providerInstanceId },
+        { symbol: "ETHUSDT", providerInstanceId: "binance-two" },
+        { symbol: "SOLUSDT", providerInstanceId: "other-live" },
+      ],
+    },
+    executionRouting: {
+      routes: [
+        { strategyId: "CG_coinGrabber", symbol: "BTCUSDT", providerInstanceId: "binance-one" },
+        { strategyId: "CG_coinGrabber", symbol: "ETHUSDT", providerInstanceId: "binance-two" },
+        { strategyId: "CG_coinGrabber", symbol: "SOLUSDT", providerInstanceId: "other-live" },
+      ],
+    },
+  }
+}
+
+function appConfigForProviderSubset(providers) {
+  const symbolsByProvider = {
+    first: "BTCUSDT",
+    second: "ETHUSDT",
+    third: "SOLUSDT",
+  }
+  const routes = providers.map((provider) => ({
+    strategyId: "CG_coinGrabber",
+    symbol: symbolsByProvider[provider.providerInstanceId],
+    providerInstanceId: provider.providerInstanceId,
+  }))
+  const pairs = Object.fromEntries(routes.map(({ symbol }) => [symbol, { enabled: true }]))
+  return {
+    ...appConfig,
+    marketDataRouting: {
+      routes: routes.map(({ symbol, providerInstanceId }) => ({
+        symbol,
         providerInstanceId,
-      }],
+      })),
+    },
+    executionRouting: {
+      routes,
+    },
+    strategies: {
+      ...appConfig.strategies,
+      CG_coinGrabber: {
+        ...appConfig.strategies.CG_coinGrabber,
+        pairs,
+      },
     },
   }
 }
@@ -103,7 +154,7 @@ function createAccountRuntimeFixtures({
     connected: true,
     tradingEnabled: true,
     strategyMode: "conservative",
-    subscriptions: ["BTCUSDT"],
+    subscriptions: [],
     stop: async () => {
       starts.push(`stop:${provider.providerInstanceId}`)
       return {
@@ -124,8 +175,11 @@ function createAccountRuntimeStarter({
       tradingMode: input.env.TRADING_MODE,
       operatorControlEnabled: input.appConfig.operatorControl.telegram.enabled,
       hasOperationalStateStore: input.operationalStateStore !== undefined,
-      marketDataProviderInstanceId: input.marketDataProviderInstanceId,
+      executionSymbols: input.executionSymbols,
       marketDataSymbols: input.marketDataSymbols,
+      marketDataSources: input.marketDataSources,
+      marketDataProviderTypes: input.marketDataProviderTypes,
+      providerRequired: input.providerRequired,
       credentialValues: [
         input.env.PRIMARY_KEY,
         input.env.SECONDARY_KEY,
@@ -134,7 +188,14 @@ function createAccountRuntimeStarter({
     })
     const runtime = runtimes[runtimeIndex]
     runtimeIndex += 1
-    return runtime
+    return {
+      ...runtime,
+      executionSymbols: [...input.executionSymbols],
+      marketDataSources: input.marketDataSources,
+      marketDataProviderTypes: input.marketDataProviderTypes,
+      subscriptions: [...input.executionSymbols],
+      tradingEnabled: input.executionSymbols.length > 0,
+    }
   }
 }
 
@@ -157,16 +218,27 @@ function assertAccountStartupInputs({
     false,
     false,
   ])
-  assert.deepEqual(inputs.map((entry) => entry.marketDataProviderInstanceId), [
-    "binance-one",
-    "binance-two",
-    "other-live",
+  assert.deepEqual(inputs.map((entry) => entry.executionSymbols), [
+    ["BTCUSDT"],
+    ["ETHUSDT"],
+    ["SOLUSDT"],
   ])
   assert.deepEqual(inputs.map((entry) => entry.marketDataSymbols), [
     ["BTCUSDT"],
-    [],
-    [],
-  ], "only the selected source provider may subscribe to this market")
+    ["ETHUSDT"],
+    ["SOLUSDT"],
+  ])
+  assert.deepEqual(inputs.map((entry) => entry.marketDataSources), [
+    { BTCUSDT: "binance-one" },
+    { ETHUSDT: "binance-two" },
+    { SOLUSDT: "other-live" },
+  ])
+  assert.deepEqual(inputs.map((entry) => entry.marketDataProviderTypes), [
+    { BTCUSDT: "binance" },
+    { ETHUSDT: "binance" },
+    { SOLUSDT: "other" },
+  ])
+  assert.deepEqual(inputs.map((entry) => entry.providerRequired), [true, true, true])
   assert.deepEqual(inputs.map((entry) => entry.credentialValues), [
     ["primary-key", undefined, undefined],
     [undefined, "secondary-key", undefined],
@@ -209,7 +281,7 @@ test("starts one independent runtime per configured provider account", async () 
     starts,
   })
   assert.equal(runtime.providerAccounts.length, 3)
-  assert.deepEqual(runtime.subscriptions, ["BTCUSDT"])
+  assert.deepEqual(runtime.subscriptions, ["BTCUSDT", "ETHUSDT", "SOLUSDT"])
   assert.equal(runtime.connected, true)
   assert.equal((await runtime.stop()).ok, true)
   assert.deepEqual(starts.slice(-3), [
@@ -230,6 +302,7 @@ function createThreeAccountProviders() {
       providerInstanceId: "second",
       providerType: "binance",
       accountId: "account-two",
+      required: false,
     }),
     createProvider({
       providerInstanceId: "third",
@@ -243,7 +316,7 @@ function createSecondAccountFailureStarter({
   stopCalls,
 }) {
   let startCount = 0
-  return async () => {
+  return async (input) => {
     startCount += 1
     if (startCount === 2) {
       const error = new Error("second account connection failed")
@@ -252,6 +325,11 @@ function createSecondAccountFailureStarter({
     }
     const account = startCount === 1 ? "first" : "third"
     return {
+      executionSymbols: [...input.executionSymbols],
+      marketDataSources: input.marketDataSources,
+      marketDataProviderTypes: input.marketDataProviderTypes,
+      subscriptions: [...input.executionSymbols],
+      tradingEnabled: input.executionSymbols.length > 0,
       stop: async () => {
         stopCalls.push(account)
         return {
@@ -321,6 +399,7 @@ test("reports failed-account lock cleanup errors without stopping healthy accoun
         providerInstanceId: "second",
         providerType: "binance",
         accountId: "account-two",
+        required: false,
       }),
       createProvider({
         providerInstanceId: "third",
@@ -380,6 +459,7 @@ test("retains a failed account lock when startup cleanup is not confirmed", asyn
         providerInstanceId: "second",
         providerType: "binance",
         accountId: "account-two",
+        required: false,
       }),
     ],
     start: async (input) => {
@@ -403,7 +483,10 @@ test("retains a failed account lock when startup cleanup is not confirmed", asyn
     releaseProviderLock: createSuccessfulLockReleaser({
       releasedLocks,
     }),
-    appConfig,
+    appConfig: appConfigForProviderSubset([
+      createProvider({ providerInstanceId: "first", providerType: "binance", accountId: "account-one" }),
+      createProvider({ providerInstanceId: "second", providerType: "binance", accountId: "account-two", required: false }),
+    ]),
     env: {
       TRADING_MODE: "testnet",
     },
@@ -432,7 +515,9 @@ test("fails startup when no configured account can start", async () => {
       releaseProviderLock: async () => ({
         ok: true,
       }),
-      appConfig,
+      appConfig: appConfigForProviderSubset([
+        createProvider({ providerInstanceId: "first", providerType: "binance", accountId: "account-one" }),
+      ]),
       env: {
         TRADING_MODE: "testnet",
       },
@@ -457,6 +542,7 @@ test("releases only accounts whose runtime shutdown is confirmed", async () => {
         providerInstanceId: "second",
         providerType: "binance",
         accountId: "account-two",
+        required: false,
       }),
     ],
     start: async (input) => ({
@@ -483,7 +569,10 @@ test("releases only accounts whose runtime shutdown is confirmed", async () => {
         ok: true,
       }
     },
-    appConfig,
+    appConfig: appConfigForProviderSubset([
+      createProvider({ providerInstanceId: "first", providerType: "binance", accountId: "account-one" }),
+      createProvider({ providerInstanceId: "second", providerType: "binance", accountId: "account-two" }),
+    ]),
     env: {
       TRADING_MODE: "testnet",
     },
