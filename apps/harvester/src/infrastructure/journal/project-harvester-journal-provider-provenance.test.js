@@ -60,8 +60,12 @@ const fill = (identity = provider) => record({
     quantity: "0.4",
     quoteQuantity: "40",
     liquidityRole: "MAKER",
-    commissions: [],
-    commissionStatus: "UNKNOWN",
+    commissions: [{
+      amount: "0.0004",
+      assetId: "binance:BTC",
+      asset: "BTC",
+    }],
+    commissionStatus: "COMPLETE",
   },
 })
 
