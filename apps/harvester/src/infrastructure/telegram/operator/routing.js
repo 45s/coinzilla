@@ -267,7 +267,12 @@ function resolveTelegramMessageContext({ message, interaction, context }) {
   return { userId, parsed }
 }
 
-async function respondToTelegramMessage({ update, signal, interaction, context }) {
+async function respondToTelegramMessage({
+  update,
+  signal,
+  interaction,
+  context,
+}) {
   const { message } = update
   if (!message) {
     context.logStage({
