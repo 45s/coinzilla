@@ -10,6 +10,14 @@ function createDeferredStatementRun(statement) {
   return () => statement.run("late")
 }
 
+function assertSqliteTransactionRequiresConnection(database) {
+  assert.throws(() => database.transaction(() => {}), /connected/)
+}
+
+function assertSqliteReadTransactionRequiresConnection(database) {
+  assert.throws(() => database.readTransaction(() => {}), /connected/)
+}
+
 test("SQLite connects and executes parameterized SQL", async () => {
   const database = createSqliteDatabase({ filename: ":memory:" })
   await database.connect()
@@ -190,8 +198,8 @@ test("SQLite operations require an open connection", async () => {
 
   assert.throws(() => database.exec("SELECT 1"), /connected/)
   assert.throws(() => database.prepare("SELECT 1"), /connected/)
-  assert.throws(() => database.transaction(() => {}), /connected/)
-  assert.throws(() => database.readTransaction(() => {}), /connected/)
+  assertSqliteTransactionRequiresConnection(database)
+  assertSqliteReadTransactionRequiresConnection(database)
 })
 
 test("SQLite invalidates transaction statements before a rejected promise callback can continue", async () => {
