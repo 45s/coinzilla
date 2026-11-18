@@ -11,6 +11,8 @@ const actor = Object.freeze({
 
 function createHarnessEngine({ calls }) {
   return {
+    pauseMarket: async () => { calls.push({ type: "legacy-pause" }) },
+    resumeMarket: async () => { calls.push({ type: "legacy-resume" }) },
     pauseBuys: async ({ symbol, beforeApply }) => {
       calls.push({ type: "pause-buys-start", symbol })
       const committed = typeof beforeApply === "function"
