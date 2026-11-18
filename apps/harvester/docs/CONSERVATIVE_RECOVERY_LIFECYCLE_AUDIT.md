@@ -74,7 +74,7 @@ This is the explicit static configuration correction requested by the operator. 
 
 ## Verification and handoff
 
-- [ ] PR #1411 merged to `develop`.
+- [x] PR #1411 merged to `develop` as `88b89995a4f9e62a6fe4b0451ea675ce0495b539`; final PR head `c676e0254269b70b21bfaddbc43eb14d24ad7014` passed all six required CI contexts and the advisory External Documentation Links workflow (the TESTNET integration job was skipped).
 - [x] Exact-head Harvester unit tests pass.
 - [x] Exact-head configured Harvester targeted tests pass.
 - [x] Exact-head Harvester coverage and workspace coverage pass.
@@ -82,7 +82,7 @@ This is the explicit static configuration correction requested by the operator. 
 - [x] Offline ADA replay passes without exchange access.
 - [ ] Human review of the final PR diff and acceptance map.
 
-Latest verified PR head at the time of this audit update: `b87f5b4bc5de351a20a303093aa9d3d9e8ba9385`. CI status is tied to that exact commit; any later commit requires fresh exact-head verification.
+Latest verified PR head at the time of this audit update: `c676e0254269b70b21bfaddbc43eb14d24ad7014`, merged to `develop` as `88b89995a4f9e62a6fe4b0451ea675ce0495b539`. CI status is tied to that exact commit; any later commit requires fresh exact-head verification.
 
 ## Handoff notes
 
