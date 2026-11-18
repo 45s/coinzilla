@@ -11,7 +11,10 @@ test("Bitunix REST client signs the deposit-address POST and unwraps all returne
     nonceFactory: () => "nonce",
     fetchFn: async (...args) => {
       const [url, options] = args
-      captured = { url, options }
+      captured = {
+        url,
+        options,
+      }
       return {
         ok: true,
         status: 200,
