@@ -14,7 +14,9 @@ The accepted architecture is recorded in [ADR-0001](./docs/decisions/0001-provid
 
 ## SQLite infrastructure audit and hardening — #1395
 
-**Status: In progress; task contract opened, implementation PR not yet linked.** Audit the existing SQLite connection/lifecycle, transactions, CRUD/query safety, migrations, WAL/locking, backup/restore and error paths, then harden only confirmed defects with deterministic real-SQLite RED → GREEN → REFACTOR tests. Keep all implementation inside `packages/db/**`; preserve the provider-neutral public API and existing compatibility unless a reproduced defect requires a documented change. Treat merged backup/restore PR #1382 as existing functionality to audit, not a feature to duplicate. Follow the exact coverage and CI gates in [issue #1395](https://github.com/45s/coinzilla/issues/1395); do not lower current thresholds or claim acceptance before exact-head verification.
+**Status: Implementation in progress in [PR #1396](https://github.com/45s/coinzilla/pull/1396), targeting `develop`.** Audit the existing SQLite connection/lifecycle, transactions, CRUD/query safety, migrations, WAL/locking, backup/restore and error paths, then harden only confirmed defects with deterministic real-SQLite RED → GREEN → REFACTOR tests. Keep all implementation inside `packages/db/**`; preserve the provider-neutral public API and existing compatibility unless a reproduced defect requires a documented change. Treat merged backup/restore PR #1382 as existing functionality to audit, not a feature to duplicate. Follow the exact coverage and CI gates in [issue #1395](https://github.com/45s/coinzilla/issues/1395); do not lower current thresholds or claim acceptance before exact-head verification.
+
+**Confirmed defects reproduced and fixed in the audit branch:** transaction contexts remained usable after successful COMMIT; failed SQLite initialization could have its original error masked by a close failure and lose the partially opened handle; concurrent file-backed connections could race while enabling WAL; backup progress/cleanup aggregation duplicated the original progress error; and restore destination lookup could misclassify a filesystem `TypeError` as an existing destination. Integrity validation could also have its primary failure masked when closing the temporary verification connection failed; both failures are now retained. Regression tests cover each defect. The latest completed validation checkpoint recorded 198 package tests (185 passed, 13 capability-specific skips), with production-source coverage at 100% lines / 99.64% branches / 100% functions. Every production module has 100% line and function coverage; remaining branch gaps are limited to `sqlite-database.js` (99.18%) and `sqlite-provider.js` (98.39%). The package coverage thresholds (98% lines / 95% branches / 100% functions) passed on the current code. Exact-head workspace CI remains the acceptance gate. The roadmap item remains in progress until the PR is reviewed and merged.
 
 ## Provider-neutral CRUD API — core implementation and hardening merged
 
@@ -122,6 +124,12 @@ await database.close()
 
 See the [README](./README.md) for the current detailed contract, examples and SQLite runtime constraints. Implementation status remains in the issue/PR; do not mark roadmap steps complete until the PR is merged and required checks pass.
 
+## Generic SQLite backup and restore primitives — merged
+
+**Implementation:** [PR #1382](https://github.com/45s/coinzilla/pull/1382) merged into `develop`; tracking issue [#1381](https://github.com/45s/coinzilla/issues/1381). The package provides native online backup, integrity/foreign-key validation, temporary-file staging, atomic backup publication, and no-overwrite restore publication. These are SQLite infrastructure primitives only; retention, encryption, off-site storage, scheduling, compatibility policy and restore runbooks remain application-owned.
+
+**Follow-up reliability audit:** [Issue #1395](https://github.com/45s/coinzilla/issues/1395) and [PR #1396](https://github.com/45s/coinzilla/pull/1396) audit the complete SQLite implementation, including the merged backup/restore primitives. Do not mark this follow-up complete until its exact-head CI passes and the final PR is reviewed.
+
 ## Existing SQLite functionality — preserved
 
 The package already provides and must retain:
@@ -130,8 +138,9 @@ The package already provides and must retain:
 - File-backed and explicit `:memory:` databases.
 - Foreign-key enforcement, WAL for file-backed databases and configurable lock timeout.
 - Explicit connection lifecycle and close-time transaction draining.
-- Synchronous SQLite transactions with commit/rollback and nested/async callback rejection.
+- Synchronous SQLite transactions with commit/rollback and nested/async callback rejection; transaction handles and prepared statements are invalidated after commit or rollback.
 - Ordered, atomic, versioned schema migrations and migration-history validation.
+- WAL-aware native online backups, integrity and foreign-key validation, atomic backup publication, and atomic no-overwrite restore.
 - Deterministic tests using real in-memory and temporary file-backed SQLite databases.
 
 The low-level public API remains available:
@@ -157,7 +166,7 @@ Application domains own their business entities, schemas, repository interfaces,
    - Verify restart persistence, transaction behavior, concurrency, migration compatibility and deterministic cleanup in the owning consumer's tests.
 
 2. **Application-owned backup and restore policy**
-   - **Generic primitive implementation is in progress** in [PR #1382](https://github.com/45s/coinzilla/pull/1382), tracked by [#1381](https://github.com/45s/coinzilla/issues/1381). The package item is complete only after that PR is merged and its exact-head checks pass.
+   - Generic SQLite backup/restore primitives were implemented by merged PR #1382.
    - Applications decide schedules, retention/rotation, encryption, off-site storage, deployment paths, version compatibility, permissions, restore drills, and operational runbooks. Do not move those policies into this package.
 
 3. **Additional providers**

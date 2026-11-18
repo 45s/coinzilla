@@ -14,7 +14,7 @@ import {
   validateDatabasePath,
   validateIntegrity,
   verifyDatabaseFile,
-} from "./sqlite-file-operations.js"
+} from "./file-operations.js"
 
 const DEFAULT_BACKUP_RATE = 100
 const DEFAULT_TIMEOUT_MS = 5_000
@@ -43,23 +43,30 @@ function validateRestoreOptions({ backupFilename, filename, timeout, rate }) {
   }
 }
 
-async function assertRestoreDestinationIsNew({ filename }) {
+export async function assertRestoreDestinationIsNew({
+  filename,
+  realpathOperation = realpath,
+}) {
   try {
-    await realpath(filename)
-    throw new TypeError("SQLite restore destination already exists")
+    await realpathOperation(filename)
   } catch (error) {
-    if (error instanceof TypeError) {
-      throw error
+    if (error.code === "ENOENT") {
+      return
     }
-    if (error.code !== "ENOENT") {
-      throw error
-    }
+
+    throw error
   }
+
+  throw new TypeError("SQLite restore destination already exists")
 }
 
-async function publishRestoredDatabase({ temporaryFilename, destinationFilename }) {
+export async function publishRestoredDatabase({
+  temporaryFilename,
+  destinationFilename,
+  linkOperation = link,
+}) {
   try {
-    await link(temporaryFilename, destinationFilename)
+    await linkOperation(temporaryFilename, destinationFilename)
   } catch (error) {
     if (error.code === "EEXIST") {
       throw new TypeError("SQLite restore destination already exists", {
@@ -72,7 +79,7 @@ async function publishRestoredDatabase({ temporaryFilename, destinationFilename 
 
 }
 
-async function createRestoreArtifact({ sourceFilename, destinationFilename, timeout, rate }) {
+async function createRestoreArtifact({ sourceFilename, destinationFilename, timeout, rate, cleanupTemporaryDirectory = removeTemporaryDirectory }) {
   const sourceDatabase = new DatabaseSync(sourceFilename, {
     readOnly: true,
     timeout,
@@ -112,7 +119,7 @@ async function createRestoreArtifact({ sourceFilename, destinationFilename, time
 
   if (operationError) {
     if (temporaryDirectory) {
-      await removeTemporaryDirectory({
+      await cleanupTemporaryDirectory({
         directory: temporaryDirectory,
         operationError,
       })
@@ -127,7 +134,7 @@ async function createRestoreArtifact({ sourceFilename, destinationFilename, time
   }
 }
 
-async function publishRestoreArtifact({ artifact, destinationFilename }) {
+export async function publishRestoreArtifact({ artifact, destinationFilename, cleanupTemporaryDirectory = removeTemporaryDirectory }) {
   let operationError = null
 
   try {
@@ -140,7 +147,7 @@ async function publishRestoreArtifact({ artifact, destinationFilename }) {
   }
 
   try {
-    await removeTemporaryDirectory({
+    await cleanupTemporaryDirectory({
       directory: artifact.directory,
       operationError,
     })

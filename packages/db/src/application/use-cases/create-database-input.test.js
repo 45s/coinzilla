@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createDatabase, createSqliteProvider } from "./index.js"
+import { createDatabase, createSqliteProvider } from "../../index.js"
 
 const INITIAL_RECORD = Object.freeze({
   id: "object-input-1",

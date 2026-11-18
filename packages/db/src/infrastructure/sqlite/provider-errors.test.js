@@ -9,7 +9,7 @@ import {
   createDatabase,
   createSqliteProvider,
   DatabaseProviderError,
-} from "./index.js"
+} from "../../index.js"
 
 test("SQLite connection failures use the provider-neutral error contract", async () => {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-open-error-"))

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createDatabase, createSqliteProvider } from "./index.js"
+import { createDatabase, createSqliteProvider } from "../../index.js"
 
 function createConnectedDatabase() {
   return createDatabase({
@@ -65,6 +65,22 @@ test("provider-neutral SQLite transactions block deferred CRUD after rejecting a
       }),
       null,
       "A promise continuation must not write after the synchronous SQLite transaction has rolled back",
+    )
+  } finally {
+    await database.close()
+  }
+})
+
+
+test("provider-neutral transactions reject missing callbacks before entering the provider", async () => {
+  const database = createConnectedDatabase()
+  await database.connect()
+
+  try {
+    assert.throws(
+      () => database.transaction(null),
+      /callback is required/,
+      "The provider-neutral facade must reject a missing transaction callback before provider execution",
     )
   } finally {
     await database.close()

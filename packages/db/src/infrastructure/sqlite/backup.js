@@ -8,11 +8,11 @@ import { backup as sqliteBackup } from "node:sqlite"
 import { DatabaseProviderError } from "../../domain/errors/database-errors.js"
 import {
   assertDifferentFiles,
-  createTemporaryDirectory,
+  createTemporaryDirectory as createTemporaryDirectoryInFilesystem,
   removeTemporaryDirectory,
   validateDatabasePath,
   verifyDatabaseFile,
-} from "./sqlite-file-operations.js"
+} from "./file-operations.js"
 
 const DEFAULT_BACKUP_RATE = 100
 const DEFAULT_TIMEOUT_MS = 5_000
@@ -52,7 +52,41 @@ function createProgressReporter({ progress, onFailure }) {
   }
 }
 
-async function runBackup({ sourceConnection, destinationFilename, rate, progress, timeout, onProgressFailure }) {
+async function cleanupBackupTemporaryDirectory({
+  temporaryDirectory,
+  operationError,
+  cleanupTemporaryDirectory,
+}) {
+  if (!temporaryDirectory) {
+    return operationError
+  }
+
+  try {
+    await cleanupTemporaryDirectory({
+      directory: temporaryDirectory,
+      operationError,
+    })
+    return operationError
+  } catch (error) {
+    return error
+  }
+}
+
+function validateBackupSource({ sourceConnection, timeout }) {
+  if (!sourceConnection?.isOpen) {
+    throw new TypeError("SQLite backup requires an open source connection")
+  }
+
+  if (sourceConnection.isTransaction) {
+    throw new TypeError("SQLite backup cannot start while a transaction is active")
+  }
+
+  if (!Number.isSafeInteger(timeout) || timeout < 0) {
+    throw new TypeError("SQLite backup timeout must be a non-negative safe integer")
+  }
+}
+
+async function runBackup({ sourceConnection, destinationFilename, rate, progress, timeout, onProgressFailure, cleanupTemporaryDirectory, createTemporaryDirectory }) {
   let progressError = null
   let temporaryDirectory
   let operationError = null
@@ -87,22 +121,20 @@ async function runBackup({ sourceConnection, destinationFilename, rate, progress
     operationError = error
   }
 
-  if (temporaryDirectory) {
-    try {
-      await removeTemporaryDirectory({
-        directory: temporaryDirectory,
-        operationError,
-      })
-    } catch (error) {
-      operationError = error
-    }
-  }
+  operationError = await cleanupBackupTemporaryDirectory({
+    temporaryDirectory,
+    operationError,
+    cleanupTemporaryDirectory,
+  })
 
   if (operationError) {
     if (progressError) {
       if (operationError instanceof AggregateError) {
+        const cleanupErrors = operationError.errors.filter(
+          (error) => error !== progressError,
+        )
         throw new AggregateError(
-          [progressError, ...operationError.errors],
+          [progressError, ...cleanupErrors],
           "SQLite backup progress callback failed and cleanup also failed",
         )
       }
@@ -141,6 +173,8 @@ export async function backupSqliteDatabase({
   rate = DEFAULT_BACKUP_RATE,
   progress,
   timeout = DEFAULT_TIMEOUT_MS,
+  cleanupTemporaryDirectory = removeTemporaryDirectory,
+  createTemporaryDirectory = createTemporaryDirectoryInFilesystem,
 } = {}) {
   const destinationFilename = validateBackupOptions({
     destination,
@@ -148,17 +182,10 @@ export async function backupSqliteDatabase({
     progress,
   })
 
-  if (!sourceConnection?.isOpen) {
-    throw new TypeError("SQLite backup requires an open source connection")
-  }
-
-  if (sourceConnection.isTransaction) {
-    throw new TypeError("SQLite backup cannot start while a transaction is active")
-  }
-
-  if (!Number.isSafeInteger(timeout) || timeout < 0) {
-    throw new TypeError("SQLite backup timeout must be a non-negative safe integer")
-  }
+  validateBackupSource({
+    sourceConnection,
+    timeout,
+  })
 
   let progressError = null
 
@@ -180,6 +207,8 @@ export async function backupSqliteDatabase({
       rate,
       progress,
       timeout,
+      cleanupTemporaryDirectory,
+      createTemporaryDirectory,
       onProgressFailure: (error) => {
         progressError = error
       },

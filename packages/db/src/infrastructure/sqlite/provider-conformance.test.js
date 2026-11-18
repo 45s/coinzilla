@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createDatabase, createSqliteProvider } from "./index.js"
-import { runDatabaseProviderConformanceTests } from "../test-support/provider-conformance.js"
+import { createDatabase, createSqliteProvider } from "../../index.js"
+import { runDatabaseProviderConformanceTests } from "../../../test-support/provider-conformance.js"
 
 const exercisedStorageModes = new Set()
 const cleanedStorageModes = new Set()
