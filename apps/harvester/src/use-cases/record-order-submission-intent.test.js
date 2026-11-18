@@ -149,6 +149,16 @@ data: {} },
         apiKey: "must-not-persist",
       },
     },
+    {
+      factId: "order-submission-intent:partial-provider",
+      factType: "ORDER_SUBMISSION_INTENT",
+      data: {
+        clientOrderId: "partial-provider", providerInstanceId: "binanceTestnet",
+        marketId: "market-1", venue: "binance", symbol: "DOGEUSDT",
+        baseAssetId: "binance:DOGE", quoteAssetId: "binance:USDT",
+        side: "BUY", type: "LIMIT_MAKER", price: "0.099", quantity: "100", purpose: null,
+      },
+    },
   ]
 
   for (const fact of malformedFacts) {
