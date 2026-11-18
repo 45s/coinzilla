@@ -122,3 +122,31 @@ test("SQLite restore publication propagates non-conflict filesystem failures", a
     "A non-conflict filesystem publication failure must be propagated without being mislabeled as a destination conflict",
   )
 })
+
+
+test("SQLite restore classifies a missing backup source and publishes no destination", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-restore-missing-"))
+  const backupFilename = join(directory, "missing.sqlite")
+  const destinationFilename = join(directory, "restored.sqlite")
+
+  try {
+    await assert.rejects(
+      restoreSqliteDatabase({
+        backupFilename,
+        filename: destinationFilename,
+      }),
+      (error) => error instanceof DatabaseProviderError && error.cause.code === "ENOENT",
+      "A missing backup source must be reported as a provider failure with the filesystem cause",
+    )
+    await assert.rejects(
+      stat(destinationFilename),
+      (error) => error.code === "ENOENT",
+      "A restore with a missing source must not create or publish a destination",
+    )
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
