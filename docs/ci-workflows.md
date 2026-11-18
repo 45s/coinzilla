@@ -6,7 +6,7 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 
 | Workflow file | Triggers | Purpose and principal checks | Ruleset requirement (`main` + `develop`) |
 | --- | --- | --- | --- |
-| `quality-gate.yml` (**JavaScript Syntax**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs `actionlint`; an independent workspace-quality job with JavaScript syntax and strict full-workspace ESLint (`pnpm lint`, zero errors and warnings); and, for PRs targeting `develop`, an independent `Check strict ESLint for changed files` job. The required `Check JavaScript syntax` aggregator fails unless the workspace job and every applicable changed-file check succeed. The workflow also runs agent-policy/domain-ownership checks, the report-only Markdown formatting baseline, changed-file Markdown style enforcement, and mocked external-link checker unit tests. The agent-policy command also prints the report-only heading-anchor baseline. | `actionlint` and `Check JavaScript syntax` are separate required contexts in both active rulesets. |
+| `quality-gate.yml` (**JavaScript Syntax**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs `actionlint`; an independent workspace-quality job with JavaScript syntax and strict full-workspace ESLint (`pnpm lint`, zero errors and warnings); and, for PRs targeting `develop`, an independent `Check strict ESLint for changed files` job. The required `Check JavaScript syntax` aggregator fails unless the workspace job and every applicable changed-file check succeed. The workflow also runs agent-policy/domain-ownership checks, the report-only full-tree baseline, the blocking full-tree maintained Markdown style gate, the blocking maintained-source local-anchor gate, changed-file Markdown style enforcement, and mocked external-link checker unit tests. | `actionlint` and `Check JavaScript syntax` are separate required contexts in both active rulesets. |
 | `unit-tests.yml` (**Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the workspace package-test matrix offline. Manual `develop` dispatch can explicitly opt into read-only Binance TESTNET integration. | `Run package tests` in both active rulesets. |
 | `test-coverage.yml` (**Test Coverage**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the Node.js test-coverage matrix for all workspace packages and enforces package-specific thresholds where a `test:coverage` script exists (Entities has no separate threshold script). | `Workspace test coverage` in both active rulesets. |
 | `utils-unit-tests.yml` (**Utils Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the focused Utils package test command (`node --test packages/utils/src/*.test.js`). | `packages/utils tests` in both active rulesets. |
@@ -38,9 +38,9 @@ The Unit Tests and Test Coverage package matrices explicitly list workspace pack
 
 The workspace-quality job in the required JavaScript Syntax workflow runs these documentation checks:
 
-- `check-agent-policy.js` enforces ownership maps, required roadmaps and entry points, balanced Markdown fences, and relative local-path existence for inline links and reference definitions. Code examples and HTML comments are excluded; malformed percent-encoded paths are reported as controlled findings. It also prints unresolved local heading-anchor findings using GitHub-style slugs for inline links and reference definitions; **heading-anchor findings are report-only and do not fail the check**.
-- `markdown-style-baseline.js` reports full-tree formatting/heading/fence metrics without failing on existing findings or rewriting files. The shared scanner also powers the changed-file checker; both paths exclude fenced and four-space-indented code blocks from prose/list/table metrics while continuing to analyze valid nested lists.
-- On pull requests, `check-markdown-style.js` enforces the changed-line/file-level Markdown style rules against the exact PR base SHA. This is a blocking check within `Check JavaScript syntax`, not a separate status context.
+- `check-agent-policy.js` enforces ownership maps, required roadmaps and entry points, balanced Markdown fences, and relative local-path existence for inline links and reference definitions. Code examples and HTML comments are excluded; malformed percent-encoded paths are reported as controlled findings. It also prints the full-tree local heading-anchor baseline as report-only. The separate `check-maintained-markdown-anchors.js` step blocks unresolved anchors from maintained source documents and leaves historical-source findings report-only; its tests cover GitHub-compatible slugs, URL-encoded paths/fragments, maintained indexes, templates and historical snapshots.
+- `markdown-style-baseline.js` reports full-tree formatting/heading/fence metrics without failing on existing findings or rewriting files. `check-markdown-style.js --all-maintained` blocks all 14 style metrics across maintained Markdown/MDX paths (132 files at the 160-file checkpoint); 28 historical paths are excluded. GitHub templates are exempt only from H1 and heading-hierarchy findings. The shared scanner excludes fenced and four-space-indented code blocks from prose/list/table metrics while continuing to analyze valid nested lists.
+- On pull requests, `check-markdown-style.js` also enforces changed-line/file-level Markdown style rules against the exact PR base SHA. This is a blocking step within `Check JavaScript syntax`, not a separate status context.
 - `check-external-links.test.js` exercises the external URL checker with mocked fetch responses. These tests run in required CI but make no network requests.
 
 The networked **External Documentation Links** workflow is an advisory check for changed maintained Markdown/MDX on pull requests to `develop`; weekly and manual runs report on the full `develop` tree. It resolves and validates every A/AAAA answer, pins each HTTP(S) connection to vetted addresses, and revalidates redirects. It sends no credentials and is not one of the six required contexts. The CLI and workflow follow the [documented reliability policy](MARKDOWN_STYLE.md); required CI remains network-free.
@@ -85,15 +85,23 @@ pnpm lint
 pnpm lint:fix
 
 # Local aggregate: workspace tests, strict full-workspace ESLint, syntax, agent-policy, and mocked external-link tests
-# (does not run the report-only Markdown baseline, changed-file Markdown style gate, or live URL checks)
+# (does not run the report-only Markdown baseline, maintained Markdown gates, changed-file style gate, or live URL checks)
 pnpm run quality
 
 # Report-only full-tree Markdown formatting baseline
 node --test scripts/markdown-style-baseline.test.js
 node scripts/markdown-style-baseline.js
 
-# Agent policy (includes the report-only heading-anchor scan)
+# Agent policy (includes the report-only full-tree heading-anchor scan)
 pnpm run check:agent-policy
+
+# Full-tree maintained Markdown style gate (all 14 style metrics)
+node --test scripts/markdown-path-policy.test.js scripts/check-markdown-style.test.js
+node scripts/check-markdown-style.js --all-maintained
+
+# Maintained-source local heading-anchor gate (historical sources report-only)
+node --test scripts/check-maintained-markdown-anchors.test.js
+node scripts/check-maintained-markdown-anchors.js
 
 # Offline external-link checker unit tests (mocked responses; no network)
 pnpm run test:external-links
