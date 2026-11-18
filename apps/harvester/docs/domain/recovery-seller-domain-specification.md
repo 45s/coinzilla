@@ -416,9 +416,9 @@ The first-implementation product decisions below are recorded. Items marked as i
 | Terminal partial/canceled SELL | **One SELL lifecycle per cycle is settled.** The cycle remains unresolved after terminal underfill/cancel; no second SELL and no next BUY until a separate resolution rule is approved. | Prevents silently replacing or abandoning a partially executed cycle; reservations and original order ownership remain reconciled. |
 | Third-asset fee valuation | **UNRESOLVED SOURCE:** use a reliable quote conversion at execution time or an authoritative broker-supplied quote value; missing/ambiguous asset, rate or timestamp fails closed. | Never treat third-asset commission as zero or use an unverified current market price; no profitability decision is valid without reliable quote valuation.
 
-## 13. Required test contract before implementation
+## 13. Remaining test contract before runtime integration
 
-RS-2b now has deterministic domain and application regression coverage for legacy basis, verified Spot allocation, canonical mixed-fill attribution, partial/terminal reconciliation, atomic Portfolio/legacy commits, reservation retention/release, and independent recovery, legacy and combined-cycle profitability. RS remains non-executable because RS-3 policy and RS-4 runtime integration are not implemented. The remaining policy and lifecycle work must add deterministic offline tests for:
+RS-2b accounting and RS-3 pure policy now have deterministic domain/application coverage for legacy basis, verified Spot allocation, canonical mixed-fill attribution, partial/terminal reconciliation, atomic Portfolio/legacy commits, reservation retention/release, independent profitability gates, mixed-SELL planning, order-type/fee-reserve selection and supported exchange-filter STOP outcomes. RS-3 is complete in merged PR #1127. RS remains non-executable because RS-4 runtime integration and RS-5 offline lifecycle acceptance are not complete. The following integration/lifecycle scenarios remain required before RS can be registered or enabled:
 
 - missing/invalid startup legacy configuration and insufficient verified Spot availability; runtime authorization revocation/expiry is deferred under FITDIB;
 - any missing, contradictory, unexpected, or unmodeled condition at every lifecycle boundary produces a sticky STOP/BLOCK, prevents all new trading actions, preserves exact-once accounting and reservations, continues required reconciliation of already-submitted orders, and cannot self-resume without an approved resolution;
@@ -466,7 +466,7 @@ The prose is authoritative. BUY cadence and tranche sizing follow the owner-appr
 
 ## 15. Implementation boundary
 
-Until RS-3 pure policy, RS-4 shared Trading Engine integration, and RS-5 offline lifecycle verification are implemented and reviewed (and this draft specification is formally accepted):
+Until RS-4 shared Trading Engine integration and RS-5 offline lifecycle verification are implemented and reviewed (and this draft specification is formally accepted):
 
 - Do not add RS runtime configuration, strategy registration, operator controls, or executable policy.
 - Do not place, cancel, replace, or manage RS orders.
