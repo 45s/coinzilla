@@ -320,7 +320,6 @@ function validateOrderCancellationFields({ canonicalData, outcome }) {
       : "Order-cancellation outcome fact contains unsupported fields")
   }
   validateProviderIdentity({ canonicalData })
-  validateProviderIdentity({ canonicalData })
   const clientOrderId = requireNonEmptyString({
     value: canonicalData.clientOrderId,
     field: "data.clientOrderId",
