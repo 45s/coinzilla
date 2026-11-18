@@ -9,6 +9,10 @@ async function createConnectedDatabase() {
   return database
 }
 
+function startNestedTransaction(database) {
+  return database.transaction(() => "must-not-run")
+}
+
 test("SQLite rejects nested transactions without damaging the outer connection", async () => {
   const database = await createConnectedDatabase()
   let nestedTransaction
