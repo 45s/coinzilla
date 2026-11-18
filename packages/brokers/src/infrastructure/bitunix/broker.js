@@ -690,14 +690,6 @@ export class BitunixSpotBroker extends CoreBroker {
   }
 
   /**
-   * Read one exchange-native matching-order detail for a known Spot order.
-   * This is not a canonical Fill: volume denomination, execution-ID uniqueness,
-   * and multi-execution completeness are not established by the API contract.
-   *
-   * @param {{orderId: string, symbol: string}} input
-   * @returns {Promise<import("@coinzilla/utils").Result>}
-   */
-  /**
    * Read all Bitunix deposit addresses for one explicitly selected coin/network.
    * The endpoint is read-only and rate-limited to 10 requests per second per IP;
    * callers must avoid polling above that exchange limit.
@@ -731,6 +723,14 @@ export class BitunixSpotBroker extends CoreBroker {
     }
   }
 
+  /**
+   * Read one exchange-native matching-order detail for a known Spot order.
+   * This is not a canonical Fill: volume denomination, execution-ID uniqueness,
+   * and multi-execution completeness are not established by the API contract.
+   *
+   * @param {{orderId: string, symbol: string}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
   async getMatchingOrderDetails(input = {}) {
     try {
       const { body } = createMatchingOrderDetailsRequest({ input })
