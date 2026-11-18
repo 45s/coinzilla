@@ -1,6 +1,6 @@
 # Repository documentation
 
-This index is the entry point for maintained repository documentation. The repository-wide migration/adoption work is tracked in [#795](https://github.com/45s/coinzilla/issues/795). The canonical placement, ownership, lifecycle, naming, AI-agent requirements and enforcement rules are defined in [Documentation Governance](DOCUMENTATION_GOVERNANCE.md).
+This index is the entry point for maintained repository documentation. The governance foundation and umbrella tracking live in [#795](https://github.com/45s/coinzilla/issues/795); remaining work is split into the maintained-content audit [#1401](https://github.com/45s/coinzilla/issues/1401), full-tree Markdown enforcement [#1402](https://github.com/45s/coinzilla/issues/1402), and reference/consolidation audit [#1403](https://github.com/45s/coinzilla/issues/1403). The canonical placement, ownership, lifecycle, naming, AI-agent requirements and enforcement rules are defined in [Documentation Governance](DOCUMENTATION_GOVERNANCE.md).
 
 ## Start here
 
@@ -12,7 +12,7 @@ This index is the entry point for maintained repository documentation. The repos
 - [Repository roadmap](../ROADMAP.md) — cross-workspace engineering and release work
 - [Documentation Governance](DOCUMENTATION_GOVERNANCE.md) — the documentation vision and maintenance contract
 - [Markdown style standard](MARKDOWN_STYLE.md) — consistent formatting and authoring conventions
-- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (156 tracked Markdown/MDX files on `develop` at `37aa07e`; 85 under Harvester and 71 elsewhere)
+- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (156 tracked Markdown/MDX files on `develop` at `80f1fe6`; 85 under Harvester and 71 elsewhere)
 
 ## Repository-wide engineering
 
