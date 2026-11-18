@@ -9,7 +9,9 @@ import { TelegramNotifier } from "@coinzilla/notifiers"
 import { makeEventPublisher } from "./application/events/event-publisher.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { acquireHarvesterProcessLocks } from "./infrastructure/process-lock/acquire-harvester-process-locks.js"
-import { resolveBinanceProviderIdentity } from "./domain/provider-identity.js"
+import { createBinanceBrokerAdapter } from "./infrastructure/brokers/binance-broker-adapter.js"
+import { resolveProviderInstances } from "./bootstrap/providers/resolve-provider-instances.js"
+import { startProviderAccounts } from "./bootstrap/providers/start-provider-accounts.js"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { publishLifecycleEvent } from "./application/events/publish-lifecycle-event.js"
 import { mapHarvesterProcessStartedData, mapHarvesterStartedData, mapHarvesterStartupFailedData } from "./application/events/lifecycle-event-dtos.js"
@@ -304,27 +306,235 @@ async function prepareProcessIdDatabase({
   return persistence?.database ?? null
 }
 
-async function acquireEnvironmentProcessLock({ runtimeConfig, env, acquireProcessLock, logger }) {
+async function acquireEnvironmentProcessLock({ provider, acquireProcessLock, logger }) {
   const processLockDirectory = resolveHostProcessLockDirectory()
-  const providerIdentity = resolveBinanceProviderIdentity({
-    tradingMode: runtimeConfig.tradingMode,
-    providerInstanceId: env.BINANCE_PROVIDER_INSTANCE_ID,
-    accountId: env.BINANCE_ACCOUNT_ID,
-  })
   const lockResult = await acquireProcessLock({
     journalDirectory: processLockDirectory,
     globalDirectory: processLockDirectory,
-    broker: runtimeConfig.brokerName,
-    providerInstanceId: providerIdentity.providerInstanceId,
-    accountId: providerIdentity.accountId,
-    tradingMode: runtimeConfig.tradingMode,
+    broker: provider.providerType,
+    providerInstanceId: provider.providerInstanceId,
+    accountId: provider.accountId,
+    tradingMode: provider.environment,
     logger,
   })
   if (lockResult?.ok !== true || typeof lockResult.release !== "function") {
     const details = lockResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-    throw new Error(`Harvester cannot start without the Binance ${runtimeConfig.tradingMode} environment-scoped single-writer process lock${details ? `: ${details}` : ""}`)
+    throw new Error(`Harvester cannot start without the ${provider.providerType} ${provider.environment} environment-scoped single-writer process lock${details ? `: ${details}` : ""}`)
   }
   return lockResult
+}
+
+async function releaseProviderProcessLocks({ locks }) {
+  const errors = []
+  for (const lock of [...locks].reverse()) {
+    try {
+      const result = await lock.release()
+      if (result?.ok !== true) {
+        errors.push(...getCleanupErrors({
+          result,
+          fallbackError: new Error("Provider account process-lock release failed"),
+        }))
+      }
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  return errors
+}
+
+function createProviderProcessLockEntries({
+  providers,
+  locks,
+}) {
+  const entries = []
+  for (let index = 0; index < providers.length; index += 1) {
+    const provider = providers[index]
+    entries.push({
+      providerInstanceId: provider.providerInstanceId,
+      lock: locks[index],
+      released: false,
+      retained: false,
+    })
+  }
+  return entries
+}
+
+function retainProviderProcessLock({
+  entries,
+  providerInstanceId,
+}) {
+  const entry = entries.find((item) => item.providerInstanceId === providerInstanceId)
+  if (!entry || entry.released) {
+    return {
+      ok: false,
+      errors: [new Error(`Provider account process lock ${providerInstanceId} cannot be retained`)],
+    }
+  }
+  entry.retained = true
+  return {
+    ok: true,
+    retained: true,
+  }
+}
+
+async function releaseProviderProcessLock({
+  entries,
+  providerInstanceId,
+  force = false,
+}) {
+  const entry = entries.find((item) => item.providerInstanceId === providerInstanceId)
+  if (!entry) {
+    return {
+      ok: false,
+      errors: [new Error(`Provider account process lock ${providerInstanceId} is not registered`)],
+    }
+  }
+  if (entry.released) {
+    return {
+      ok: true,
+      alreadyReleased: true,
+    }
+  }
+  if (entry.retained && !force) {
+    return {
+      ok: false,
+      retained: true,
+      errors: [new Error(`Provider account process lock ${providerInstanceId} is retained until process shutdown cleanup`)],
+    }
+  }
+  try {
+    const result = await entry.lock.release()
+    if (result?.ok === true) {
+      entry.released = true
+      entry.retained = false
+    }
+    return result
+  } catch (error) {
+    return {
+      ok: false,
+      errors: [error],
+    }
+  }
+}
+
+async function releaseAllProviderProcessLocks({
+  entries,
+}) {
+  const errors = []
+  const previouslyRetainedProviderInstanceIds = entries
+    .filter((entry) => entry.retained && !entry.released)
+    .map(({ providerInstanceId }) => providerInstanceId)
+  for (const entry of [...entries].reverse()) {
+    if (entry.released) {
+      continue
+    }
+    const result = await releaseProviderProcessLock({
+      entries,
+      providerInstanceId: entry.providerInstanceId,
+      force: true,
+    })
+    if (result?.ok !== true) {
+      errors.push(...getCleanupErrors({
+        result,
+        fallbackError: new Error(`Provider account ${entry.providerInstanceId} process-lock release failed`),
+      }))
+    }
+  }
+  if (errors.length > 0) {
+    return {
+      ok: false,
+      errors,
+      previouslyRetainedProviderInstanceIds,
+    }
+  }
+  return {
+    ok: true,
+    released: true,
+    previouslyRetainedProviderInstanceIds,
+  }
+}
+
+
+function createProviderProcessLockGroup({
+  providers,
+  locks,
+}) {
+  const entries = createProviderProcessLockEntries({
+    providers,
+    locks,
+  })
+  const retainProvider = (providerInstanceId) => retainProviderProcessLock({
+    entries,
+    providerInstanceId,
+  })
+  const releaseProvider = (providerInstanceId) => releaseProviderProcessLock({
+    entries,
+    providerInstanceId,
+  })
+  const release = () => releaseAllProviderProcessLocks({
+    entries,
+  })
+  const lockMetadata = locks.length === 1
+    ? locks[0]
+    : {
+      lockScopes: locks.map(({ lockScope }) => lockScope),
+    }
+  return {
+    ...lockMetadata,
+    retainProvider,
+    releaseProvider,
+    release,
+  }
+}
+
+async function acquireEnvironmentProcessLocks({ providers, acquireProcessLock, logger }) {
+  const locks = []
+  try {
+    for (const provider of providers) {
+      locks.push(await acquireEnvironmentProcessLock({
+        provider,
+        acquireProcessLock,
+        logger,
+      }))
+    }
+  } catch (error) {
+    const cleanupErrors = await releaseProviderProcessLocks({ locks })
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(
+        [error, ...cleanupErrors],
+        "Harvester provider-account process-lock acquisition failed and rollback cleanup was incomplete",
+        { cause: error },
+      )
+    }
+    throw error
+  }
+  return createProviderProcessLockGroup({
+    providers,
+    locks,
+  })
+}
+
+async function resolveConfiguredProviderResources({
+  resources,
+  env,
+  providerAdapterFactories,
+  acquireProcessLock,
+  logger,
+}) {
+  resources.providerInstances = resolveProviderInstances({
+    appConfig: resources.appConfig,
+    env,
+    adapterFactories: providerAdapterFactories,
+  })
+  resources.runtimeConfig = resolveRuntimeConfig({
+    tradingMode: resources.providerInstances[0].environment,
+    environment: env.NODE_ENV,
+  })
+  resources.processLock = await acquireEnvironmentProcessLocks({
+    providers: resources.providerInstances,
+    acquireProcessLock,
+    logger,
+  })
 }
 
 async function acquireProcessStartupResources({ options, resources, processStartedDataResult } = {}) {
@@ -339,16 +549,14 @@ async function acquireProcessStartupResources({ options, resources, processStart
     createOperationalStateStore,
     createJournalService,
     prepareTradingSessionPersistence,
+    providerAdapterFactories,
   } = options
   resources.eventBus = createEventBus({ logger })
   resources.appConfig = await loadConfig(configSource)
-  resources.runtimeConfig = resolveRuntimeConfig({
-    tradingMode: env.TRADING_MODE,
-    environment: env.NODE_ENV,
-  })
-  resources.processLock = await acquireEnvironmentProcessLock({
-    runtimeConfig: resources.runtimeConfig,
+  await resolveConfiguredProviderResources({
+    resources,
     env,
+    providerAdapterFactories,
     acquireProcessLock,
     logger,
   })
@@ -470,8 +678,80 @@ async function ensureProcessJournalReady({ journalService } = {}) {
   }
 }
 
-function publishRuntimeStarted({ runtime, runtimeConfig, eventPublisher, logger } = {}) {
-  const configuredPairs = runtime.appConfig?.strategies?.CG_coinGrabber?.pairs
+function logDisconnectedRuntime({ logger }) {
+  logSystem({
+    logger,
+    message: "Provider connection was not established.",
+  })
+}
+
+function logMultipleAccountRuntime({
+  runtime,
+  logger,
+}) {
+  const failedCount = runtime.failedAccounts?.length ?? 0
+  const retainedCount = runtime.failedAccounts?.filter(({ lockRetained }) => lockRetained).length ?? 0
+  logSystem({
+    logger,
+    message: `Connected ${runtime.providerAccounts.length} independent provider account(s); ${failedCount} account(s) failed to start; ${retainedCount} account lock(s) retained pending cleanup; subscribed to ${runtime.subscriptions.length} distinct market(s).`,
+  })
+}
+
+function logSingleAccountRuntime({
+  runtime,
+  runtimeConfig,
+  logger,
+}) {
+  const providerName = runtime.brokerName ?? runtimeConfig.brokerName ?? "provider"
+  if (runtime.tradingEnabled && runtime.strategyMode === "conservative") {
+    logSystem({
+      logger,
+      message: `Connected; subscribed to ${runtime.subscriptions.length} enabled market(s). Conservative ${runtimeConfig.tradingMode.toUpperCase()} trading is enabled; waiting for validated market prices and user-data readiness.`,
+    })
+    return
+  }
+  logSystem({
+    logger,
+    message: `Connected; ${providerName} trading mode is ${runtimeConfig.tradingMode.toUpperCase()}.`,
+  })
+}
+
+function logRuntimeStartedStatus({
+  runtime,
+  runtimeConfig,
+  logger,
+}) {
+  if (!runtime.connected) {
+    logDisconnectedRuntime({
+      logger,
+    })
+    return
+  }
+  if (runtime.providerAccounts?.length > 1 || runtime.failedAccounts?.length > 0) {
+    logMultipleAccountRuntime({
+      runtime,
+      logger,
+    })
+    return
+  }
+  logSingleAccountRuntime({
+    runtime,
+    runtimeConfig,
+    logger,
+  })
+}
+
+function publishRuntimeStarted({
+  runtime,
+  runtimeConfig,
+  eventPublisher,
+  logger,
+} = {}) {
+  const hasMultipleAccountRuntime = runtime.providerAccounts?.length > 1
+    || runtime.failedAccounts?.length > 0
+  const configuredPairs = hasMultipleAccountRuntime
+    ? undefined
+    : runtime.appConfig?.strategies?.CG_coinGrabber?.pairs
   const enabledMarkets = configuredPairs
     ? Object.entries(configuredPairs)
       .filter(([, pairConfig]) => pairConfig.enabled)
@@ -487,29 +767,26 @@ function publishRuntimeStarted({ runtime, runtimeConfig, eventPublisher, logger 
       tradingEnabled: runtime.tradingEnabled === true,
     }),
   })
-  if (!runtime.connected) {
-    logSystem({ logger,
-      message: "Binance connection was not established." })
-  } else if (runtime.tradingEnabled && runtime.strategyMode === "conservative") {
-    logSystem({
-      logger,
-      message: `Connected; subscribed to ${runtime.subscriptions.length} enabled market(s). Conservative ${runtimeConfig.tradingMode.toUpperCase()} trading is enabled; waiting for validated market prices and user-data readiness.`,
-    })
-  } else {
-    logSystem({
-      logger,
-      message: `Connected; Binance trading mode is ${runtimeConfig.tradingMode.toUpperCase()}.`,
-    })
-  }
+  logRuntimeStartedStatus({
+    runtime,
+    runtimeConfig,
+    logger,
+  })
 }
 
 async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } = {}) {
-  const runtime = await options.start({
-    eventPublisher: resources.eventPublisher,
+  const runtime = await startProviderAccounts({
+    providers: resources.providerInstances,
+    start: options.start,
     appConfig: resources.appConfig,
     env: options.env,
+    eventPublisher: resources.eventPublisher,
     runtimeSessionId: options.processIdentity.runtimeSessionId,
     operationalStateStore: resources.operationalStateStore,
+    retainProviderLock: (providerInstanceId) =>
+      resources.processLock.retainProvider(providerInstanceId),
+    releaseProviderLock: (providerInstanceId) =>
+      resources.processLock.releaseProvider(providerInstanceId),
   })
   publishRuntimeStarted({
     runtime,
@@ -692,6 +969,10 @@ function createMainDependencies({ options }) {
       override: prepareOverride,
       logger,
     }),
+    providerAdapterFactories: {
+      binance: createBinanceBrokerAdapter,
+      ...(options.providerAdapterFactories ?? {}),
+    },
     processIdentity,
   }
 }

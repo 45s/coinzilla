@@ -304,6 +304,7 @@ function resolveHarvesterStartupDependencies({ options = {} } = {}) {
     createTelegramOperatorAdapter: createTelegramOperatorAdapterFactory,
     telegramOperatorFetchImpl,
     strategyShutdownParticipants = [],
+    providerIdentity,
   } = options
   return {
     configSource,
@@ -325,6 +326,7 @@ function resolveHarvesterStartupDependencies({ options = {} } = {}) {
     createTelegramOperatorAdapterFactory,
     telegramOperatorFetchImpl,
     strategyShutdownParticipants,
+    providerIdentity,
   }
 }
 
@@ -397,6 +399,12 @@ async function createHarvesterStartupContext({ options } = {}) {
     eventPublisher: dependencies.eventPublisher,
     logger: dependencies.logger,
   })
+  const providerResolved = dependencies.providerIdentity === undefined
+    ? resolved
+    : Object.freeze({
+      ...resolved,
+      brokerName: dependencies.providerIdentity.providerType,
+    })
   const bitunixReadOnly = await createBitunixReadOnlyObserver({
     env: dependencies.env,
     adapterFactory: dependencies.bitunixReadOnlyAdapterFactory,
@@ -404,7 +412,7 @@ async function createHarvesterStartupContext({ options } = {}) {
   })
   const startupState = await prepareHarvesterStartupState({
     dependencies,
-    resolved,
+    resolved: providerResolved,
   })
   const operationalStateCallbacks = createHarvesterOperationalStateCallbacks({
     operationalStateStore: startupState.operationalStateStore,
@@ -415,6 +423,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     ...startupState.startupOptions,
     env: dependencies.env,
     brokerAdapterFactory: dependencies.brokerAdapterFactory,
+    providerIdentity: dependencies.providerIdentity,
     bitunixReadOnly,
     evaluateStrategy: dependencies.evaluateStrategy,
     logger: dependencies.logger,
@@ -435,7 +444,7 @@ async function createHarvesterStartupContext({ options } = {}) {
 }
 
 function createHarvesterPortfolioContext({ startup } = {}) {
-  const providerIdentity = resolveBinanceProviderIdentity({
+  const providerIdentity = startup.providerIdentity ?? resolveBinanceProviderIdentity({
     tradingMode: startup.tradingMode,
     providerInstanceId: startup.env.BINANCE_PROVIDER_INSTANCE_ID,
     accountId: startup.env.BINANCE_ACCOUNT_ID,
@@ -481,6 +490,7 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
   const broker = await connectBroker({
     brokerAdapterFactory: startup.brokerAdapterFactory,
     env: startup.env,
+    providerIdentity: startup.providerIdentity,
     brokerName: startup.brokerName,
     tradingMode: startup.tradingMode,
     eventPublisher: startup.eventPublisher,
@@ -787,6 +797,16 @@ async function cleanupFailedHarvesterStartup({ error, startup, resources } = {})
   const cleanupErrors = [...operatorCleanupErrors, ...brokerCleanupErrors]
   throwIfStartupCleanupFailed({ error,
 cleanupErrors })
+  if (error !== null && typeof error === "object") {
+    try {
+      Object.defineProperty(error, "startupCleanupConfirmed", {
+        value: true,
+        configurable: true,
+      })
+    } catch {
+      // Preserve the original startup error if it cannot carry cleanup metadata.
+    }
+  }
   throw error
 }
 

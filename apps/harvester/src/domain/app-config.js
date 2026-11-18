@@ -41,48 +41,93 @@ export const TELEGRAM_NOTIFICATION_EVENT_KEYS = Object.freeze([
   "brokerConnected", "brokerDisconnected", "accountSafetyAlert",
 ])
 
-function validateTelegramNotificationConfig(config) {
-  if (config.notifications === undefined) {return}
-  requireRecord({ value: config.notifications,
-path: "notifications" })
-  const {telegram} = config.notifications
-  if (telegram === undefined) {return}
-  requireRecord({ value: telegram,
-path: "notifications.telegram" })
-  const path = "notifications.telegram"
+function validateTelegramNotificationMarkets({ markets, path }) {
+  if (markets === undefined) {
+    return
+  }
+  if (!Array.isArray(markets)) {
+    fail({
+      path: `${path}.markets`,
+      expectation: "an array of unique non-empty market symbols",
+    })
+  }
+  const seenMarkets = new Set()
+  for (const [index, symbol] of markets.entries()) {
+    if (typeof symbol !== "string" || !symbol.trim() || symbol !== symbol.trim()) {
+      fail({
+        path: `${path}.markets[${index}]`,
+        expectation: "a non-empty trimmed market symbol",
+      })
+    }
+    if (seenMarkets.has(symbol)) {
+      fail({
+        path: `${path}.markets`,
+        expectation: "unique market symbols",
+      })
+    }
+    seenMarkets.add(symbol)
+  }
+}
 
-  if (telegram.enabled !== undefined) {requireBoolean({ value: telegram.enabled,
-path: `${path}.enabled` })}
+function validateTelegramNotificationEvents({ events, path }) {
+  if (events === undefined) {
+    return
+  }
+  requireRecord({
+    value: events,
+    path: `${path}.events`,
+  })
+  for (const [eventKey, enabled] of Object.entries(events)) {
+    if (!TELEGRAM_NOTIFICATION_EVENT_KEYS.includes(eventKey)) {
+      fail({
+        path: `${path}.events.${eventKey}`,
+        expectation: "a supported Telegram notification event key",
+      })
+    }
+    requireBoolean({
+      value: enabled,
+      path: `${path}.events.${eventKey}`,
+    })
+  }
+}
+
+function validateTelegramNotificationConfig(config) {
+  if (config.notifications === undefined) {
+    return
+  }
+  requireRecord({
+    value: config.notifications,
+    path: "notifications",
+  })
+  const { telegram } = config.notifications
+  if (telegram === undefined) {
+    return
+  }
+  requireRecord({
+    value: telegram,
+    path: "notifications.telegram",
+  })
+  const path = "notifications.telegram"
+  if (telegram.enabled !== undefined) {
+    requireBoolean({
+      value: telegram.enabled,
+      path: `${path}.enabled`,
+    })
+  }
   if (telegram.profile !== undefined && !TELEGRAM_NOTIFICATION_PROFILES.includes(telegram.profile)) {
-    fail({ path: `${path}.profile`,
-expectation: "one of minimal, trader, verbose, or custom" })
+    fail({
+      path: `${path}.profile`,
+      expectation: "one of minimal, trader, verbose, or custom",
+    })
   }
-  if (telegram.markets !== undefined) {
-    if (!Array.isArray(telegram.markets)) {fail({ path: `${path}.markets`,
-expectation: "an array of unique non-empty market symbols" })}
-    const seenMarkets = new Set()
-    for (const [index, symbol] of telegram.markets.entries()) {
-      if (typeof symbol !== "string" || !symbol.trim() || symbol !== symbol.trim()) {
-        fail({ path: `${path}.markets[${index}]`,
-expectation: "a non-empty trimmed market symbol" })
-      }
-      if (seenMarkets.has(symbol)) {fail({ path: `${path}.markets`,
-expectation: "unique market symbols" })}
-      seenMarkets.add(symbol)
-    }
-  }
-  if (telegram.events !== undefined) {
-    requireRecord({ value: telegram.events,
-path: `${path}.events` })
-    for (const [eventKey, enabled] of Object.entries(telegram.events)) {
-      if (!TELEGRAM_NOTIFICATION_EVENT_KEYS.includes(eventKey)) {
-        fail({ path: `${path}.events.${eventKey}`,
-expectation: "a supported Telegram notification event key" })
-      }
-      requireBoolean({ value: enabled,
-path: `${path}.events.${eventKey}` })
-    }
-  }
+  validateTelegramNotificationMarkets({
+    markets: telegram.markets,
+    path,
+  })
+  validateTelegramNotificationEvents({
+    events: telegram.events,
+    path,
+  })
 }
 
 function validateTelegramOperatorControlConfig(appConfig) {
@@ -220,6 +265,178 @@ max: 100,
 exclusiveMax: true } })
   }
 }
+const PROVIDER_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
+const PROVIDER_TYPE_PATTERN = /^[a-z0-9-]+$/i
+const CREDENTIAL_ENVIRONMENT_PATTERN = /^[A-Z][A-Z0-9_]*$/
+
+function validateProviderIdentityFields({ provider, path }) {
+  const supportedKeys = new Set([
+    "providerInstanceId",
+    "providerType",
+    "accountId",
+    "environment",
+    "credentials",
+  ])
+  for (const key of Object.keys(provider)) {
+    if (!supportedKeys.has(key)) {
+      fail({
+        path: `${path}.${key}`,
+        expectation: "a supported provider-instance configuration field",
+      })
+    }
+  }
+  for (const field of ["providerInstanceId", "accountId"]) {
+    if (typeof provider[field] !== "string" || !PROVIDER_IDENTIFIER_PATTERN.test(provider[field])) {
+      fail({
+        path: `${path}.${field}`,
+        expectation: "a stable non-secret identifier",
+      })
+    }
+  }
+  if (typeof provider.providerType !== "string" || !PROVIDER_TYPE_PATTERN.test(provider.providerType)) {
+    fail({
+      path: `${path}.providerType`,
+      expectation: "a simple provider identifier such as binance",
+    })
+  }
+  if (provider.environment !== TRADING_ENVIRONMENTS.TESTNET && provider.environment !== TRADING_ENVIRONMENTS.LIVE) {
+    fail({
+      path: `${path}.environment`,
+      expectation: "testnet or live",
+    })
+  }
+}
+
+function validateProviderIdentityUniqueness({ provider, instanceIds, accountScopes }) {
+  if (instanceIds.has(provider.providerInstanceId)) {
+    fail({
+      path: "brokers.instances",
+      expectation: "unique providerInstanceId values",
+    })
+  }
+  instanceIds.add(provider.providerInstanceId)
+  const accountScope = JSON.stringify([
+    provider.providerType,
+    provider.accountId,
+    provider.environment,
+  ])
+  if (accountScopes.has(accountScope)) {
+    fail({
+      path: "brokers.instances",
+      expectation: "unique providerType/accountId/environment identities",
+    })
+  }
+  accountScopes.add(accountScope)
+}
+
+function validateProviderCredentials({
+  credentials,
+  path,
+  credentialNames,
+}) {
+  const credentialsPath = `${path}.credentials`
+  requireRecord({
+    value: credentials,
+    path: credentialsPath,
+  })
+  for (const key of Object.keys(credentials)) {
+    if (key !== "apiKeyEnv" && key !== "apiSecretEnv") {
+      fail({
+        path: `${credentialsPath}.${key}`,
+        expectation: "apiKeyEnv or apiSecretEnv; secret values must stay in the process environment",
+      })
+    }
+  }
+  for (const field of ["apiKeyEnv", "apiSecretEnv"]) {
+    const value = credentials[field]
+    if (typeof value !== "string" || !CREDENTIAL_ENVIRONMENT_PATTERN.test(value)) {
+      fail({
+        path: `${credentialsPath}.${field}`,
+        expectation: "an uppercase environment-variable name",
+      })
+    }
+  }
+  if (credentials.apiKeyEnv === credentials.apiSecretEnv) {
+    fail({
+      path: credentialsPath,
+      expectation: "different API key and API secret environment-variable names",
+    })
+  }
+  for (const name of [credentials.apiKeyEnv, credentials.apiSecretEnv]) {
+    if (credentialNames.has(name)) {
+      fail({
+        path: credentialsPath,
+        expectation: "credential environment-variable names unique to each provider account",
+      })
+    }
+    credentialNames.add(name)
+  }
+}
+
+function validateProviderInstanceConfig({
+  provider,
+  index,
+  instanceIds,
+  accountScopes,
+  credentialNames,
+}) {
+  const path = `brokers.instances[${index}]`
+  requireRecord({
+    value: provider,
+    path,
+  })
+  validateProviderIdentityFields({
+    provider,
+    path,
+  })
+  validateProviderIdentityUniqueness({
+    provider,
+    instanceIds,
+    accountScopes,
+  })
+  validateProviderCredentials({
+    credentials: provider.credentials,
+    path,
+    credentialNames,
+  })
+}
+
+function validateBrokerProviderInstances(config) {
+  if (config.brokers === undefined) {
+    return
+  }
+  requireRecord({
+    value: config.brokers,
+    path: "brokers",
+  })
+  for (const key of Object.keys(config.brokers)) {
+    if (key !== "instances") {
+      fail({
+        path: `brokers.${key}`,
+        expectation: "the supported instances configuration field",
+      })
+    }
+  }
+  if (!Array.isArray(config.brokers.instances) || config.brokers.instances.length === 0) {
+    fail({
+      path: "brokers.instances",
+      expectation: "a non-empty array of provider instances",
+    })
+  }
+  const instanceIds = new Set()
+  const accountScopes = new Set()
+  const credentialNames = new Set()
+  for (const [index, provider] of config.brokers.instances.entries()) {
+    validateProviderInstanceConfig({
+      provider,
+      index,
+      instanceIds,
+      accountScopes,
+      credentialNames,
+    })
+  }
+}
+
 /** Validate Harvester's application-wide configuration, including strategy and notification settings. */
 export function validateAppConfig(config) {
   requireRecord({ value: config,
@@ -227,6 +444,7 @@ path: "root" })
 
   validateTelegramNotificationConfig(config)
   validateTelegramOperatorControlConfig(config)
+  validateBrokerProviderInstances(config)
   if (config.runtime !== undefined) {fail({ path: "runtime",
 expectation: "must not be present; exchange mode is selected by TRADING_MODE" })}
   requireRecord({ value: config.strategies,
