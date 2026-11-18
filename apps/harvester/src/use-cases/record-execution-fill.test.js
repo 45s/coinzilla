@@ -45,6 +45,31 @@ asset: quoteAsset }),
   commissionStatus: "COMPLETE",
 })
 
+const createPartialProviderFact = () => ({
+  factId: "execution-fill-applied:partial-provider",
+  factType: "EXECUTION_FILL_APPLIED",
+  data: {
+    fillId: "binance:DOGEUSDT:trade-partial",
+    tradeId: "trade-partial",
+    brokerOrderId: "broker-partial",
+    clientOrderId: "client-partial",
+    providerInstanceId: "binanceTestnet",
+    marketId: "binance:DOGEUSDT",
+    venue: "binance",
+    symbol: "DOGEUSDT",
+    baseAssetId: "binance:DOGE",
+    quoteAssetId: "binance:USDT",
+    side: "BUY",
+    price: "0.1",
+    quantity: "1",
+    quoteQuantity: "0.1",
+    liquidityRole: "MAKER",
+    executedAt: null,
+    commissionStatus: "COMPLETE",
+    commissions: [],
+  },
+})
+
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-execution-fill-"))
   t.after(() => rm(directory, { recursive: true,
@@ -175,30 +200,7 @@ data: {} },
         apiSecret: "never persist",
       },
     },
-    {
-      factId: "execution-fill-applied:partial-provider",
-      factType: "EXECUTION_FILL_APPLIED",
-      data: {
-        fillId: "binance:DOGEUSDT:trade-partial",
-        tradeId: "trade-partial",
-        brokerOrderId: "broker-partial",
-        clientOrderId: "client-partial",
-        providerInstanceId: "binanceTestnet",
-        marketId: "binance:DOGEUSDT",
-        venue: "binance",
-        symbol: "DOGEUSDT",
-        baseAssetId: "binance:DOGE",
-        quoteAssetId: "binance:USDT",
-        side: "BUY",
-        price: "0.1",
-        quantity: "1",
-        quoteQuantity: "0.1",
-        liquidityRole: "MAKER",
-        executedAt: null,
-        commissionStatus: "COMPLETE",
-        commissions: [],
-      },
-    },
+    createPartialProviderFact(),
   ]
 
   for (const fact of malformedFacts) {
