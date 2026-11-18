@@ -209,12 +209,14 @@ function createMainMultiProviderAppConfig(providerInstances) {
   }
 }
 
-function assignSecondaryExecutionRoute(config, secondaryProvider) {
+function assignSecondaryExecutionRoute({ config, secondaryProvider }) {
   const secondaryRoute = Object.entries(config.strategies.CG_coinGrabber.pairs).find(
     ([, pair]) => pair.tradingEnvironment === secondaryProvider.environment ||
       pair.tradingEnvironment === "both"
   )
-  if (!secondaryRoute) return
+  if (!secondaryRoute) {
+    return
+  }
   const [secondarySymbol] = secondaryRoute
   config.executionRouting.routes = config.executionRouting.routes.map((route) =>
     route.symbol === secondarySymbol
@@ -241,7 +243,7 @@ function createMainMultiProviderFixture({
   const errors = []
   const config = createMainMultiProviderAppConfig(providerInstances)
   if (providerInstances.length > 1) {
-    assignSecondaryExecutionRoute(config, providerInstances[1])
+    assignSecondaryExecutionRoute({ config, secondaryProvider: providerInstances[1] })
   }
   const run = () => main({
     loadConfig: async () => config,
