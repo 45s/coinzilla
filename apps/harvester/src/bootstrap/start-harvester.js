@@ -556,8 +556,6 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
     marketDataSources: startup.marketDataSources,
     marketDataProviderTypes: startup.marketDataProviderTypes,
     marketDataProviderIdentities: startup.marketDataProviderIdentities,
-    providerIdentity: startup.providerIdentity,
-    tradingMode: startup.tradingMode,
   })
   return resources
 }
