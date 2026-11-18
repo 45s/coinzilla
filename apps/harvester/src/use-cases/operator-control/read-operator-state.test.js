@@ -35,6 +35,7 @@ function createHarness({
       priceTimestamp: 1400,
       priceFresh: false,
       operatorPaused: false,
+      operatorBuysPaused: true,
       safetyPaused: false,
       recoveryManagedPaused: false,
       replacementPending: false,
@@ -115,6 +116,7 @@ test("returns market snapshots with global readiness blockers without mutating e
 
   assert.equal(result.ok, true, "An authorized operator must receive a successful market snapshot.")
   assert.equal(result.data.markets[0].readiness, "BLOCKED", "An enabled market must be blocked while user-data readiness is closed.")
+  assert.equal(result.data.markets[0].operatorBuysPaused, true, "The market snapshot must preserve the emergency BUY pause state used by Command Center Pause/Resume selection.")
   assert.deepEqual(
     result.data.markets[0].blockers,
     ["MARKET_PRICE_STALE", "VOLATILITY_PROTECTION_ACTIVE", "USER_DATA_NOT_READY"],
