@@ -990,7 +990,7 @@ test("retains provider provenance across exchange updates and rejects provider i
 
 test("does not infer provider provenance for a legacy order from a later exchange update", () => {
   const legacy = makeOrder()
-  const registry = OrderRegistry.empty().registerPending({ order: legacy }).registry
+  const { registry } = OrderRegistry.empty().registerPending({ order: legacy })
   assert.throws(() => registry.applyUpdate({
     order: makeOrder({
       brokerOrderId: "legacy-broker-order",
