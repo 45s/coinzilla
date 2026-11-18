@@ -342,6 +342,61 @@ async function releaseProviderProcessLocks({ locks }) {
   return errors
 }
 
+function createProviderProcessLockGroup({ providers, locks }) {
+  const entries = providers.map((provider, index) => ({
+    providerInstanceId: provider.providerInstanceId,
+    lock: locks[index],
+    released: false,
+  }))
+  const releaseProvider = async (providerInstanceId) => {
+    const entry = entries.find((item) => item.providerInstanceId === providerInstanceId)
+    if (!entry) {
+      return {
+        ok: false,
+        errors: [new Error(`Provider account process lock ${providerInstanceId} is not registered`)],
+      }
+    }
+    if (entry.released) {
+      return { ok: true, alreadyReleased: true }
+    }
+    try {
+      const result = await entry.lock.release()
+      if (result?.ok === true) {
+        entry.released = true
+      }
+      return result
+    } catch (error) {
+      return { ok: false, errors: [error] }
+    }
+  }
+  const release = async () => {
+    const errors = []
+    for (const entry of [...entries].reverse()) {
+      if (entry.released) {
+        continue
+      }
+      const result = await releaseProvider(entry.providerInstanceId)
+      if (result?.ok !== true) {
+        errors.push(...getCleanupErrors({
+          result,
+          fallbackError: new Error(`Provider account ${entry.providerInstanceId} process-lock release failed`),
+        }))
+      }
+    }
+    return errors.length > 0
+      ? { ok: false, errors }
+      : { ok: true, released: true }
+  }
+  const lockMetadata = locks.length === 1
+    ? locks[0]
+    : { lockScopes: locks.map(({ lockScope }) => lockScope) }
+  return {
+    ...lockMetadata,
+    releaseProvider,
+    release,
+  }
+}
+
 async function acquireEnvironmentProcessLocks({ providers, acquireProcessLock, logger }) {
   const locks = []
   try {
@@ -363,18 +418,10 @@ async function acquireEnvironmentProcessLocks({ providers, acquireProcessLock, l
     }
     throw error
   }
-  if (locks.length === 1) {
-    return locks[0]
-  }
-  return {
-    lockScopes: locks.map(({ lockScope }) => lockScope),
-    release: async () => {
-      const errors = await releaseProviderProcessLocks({ locks })
-      return errors.length > 0
-        ? { ok: false, errors }
-        : { ok: true, released: true }
-    },
-  }
+  return createProviderProcessLockGroup({
+    providers,
+    locks,
+  })
 }
 
 async function acquireProcessStartupResources({ options, resources, processStartedDataResult } = {}) {
@@ -572,6 +619,8 @@ async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } =
     eventPublisher: resources.eventPublisher,
     runtimeSessionId: options.processIdentity.runtimeSessionId,
     operationalStateStore: resources.operationalStateStore,
+    releaseProviderLock: (providerInstanceId) =>
+      resources.processLock.releaseProvider(providerInstanceId),
   })
   publishRuntimeStarted({
     runtime,
