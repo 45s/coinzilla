@@ -27,6 +27,30 @@ function resolvePlaceOrderFailure({
   return null
 }
 
+function createHarnessAcknowledgedOrder({ order, immediateFilledAcknowledgement, market, baseAsset, quoteAsset }) {
+  return new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: `broker-${order.clientOrderId}`,
+    providerInstanceId: order.providerInstanceId,
+    providerType: order.providerType,
+    accountId: order.accountId,
+    market,
+    side: order.side,
+    type: order.type,
+    limitPrice: new Money({ amount: order.price, asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: order.quantity, asset: baseAsset }),
+    executedQuantity: new Quantity({
+      amount: immediateFilledAcknowledgement ? order.quantity : "0",
+      asset: baseAsset,
+    }),
+    status: immediateFilledAcknowledgement ? "FILLED" : "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+    ...(immediateFilledAcknowledgement ? { completedAt: 2 } : {}),
+  })
+}
+
 function createPlaceOrderHandler(options = {}) {
   const {
     orders,
@@ -67,26 +91,12 @@ function createPlaceOrderHandler(options = {}) {
     if (failure) {
       return { ok: false, errors: [failure] }
     }
-    const acknowledgedOrder = new CanonicalOrder({
-      clientOrderId: order.clientOrderId,
-      brokerOrderId: `broker-${order.clientOrderId}`,
-      providerInstanceId: order.providerInstanceId,
-      providerType: order.providerType,
-      accountId: order.accountId,
+    const acknowledgedOrder = createHarnessAcknowledgedOrder({
+      order,
+      immediateFilledAcknowledgement,
       market,
-      side: order.side,
-      type: order.type,
-      limitPrice: new Money({ amount: order.price, asset: quoteAsset }),
-      originalQuantity: new Quantity({ amount: order.quantity, asset: baseAsset }),
-      executedQuantity: new Quantity({
-        amount: immediateFilledAcknowledgement ? order.quantity : "0",
-        asset: baseAsset,
-      }),
-      status: immediateFilledAcknowledgement ? "FILLED" : "OPEN",
-      createdAt: 1,
-      acknowledgedAt: 1,
-      updatedAt: 1,
-      ...(immediateFilledAcknowledgement ? { completedAt: 2 } : {}),
+      baseAsset,
+      quoteAsset,
     })
     if (immediateFilledAcknowledgement) {
       acknowledgedOrdersById.set(acknowledgedOrder.brokerOrderId, acknowledgedOrder)
@@ -126,6 +136,30 @@ function resolveCancelOrderFailure({
     return { ok: false, errors: [new Error("cancel denied")] }
   }
   return null
+}
+
+function createHarnessCanceledOrder({ order, executedQuantity, status, updatedAt, market, baseAsset }) {
+  return new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    providerInstanceId: order.providerInstanceId,
+    providerType: order.providerType,
+    accountId: order.accountId,
+    market,
+    side: order.side,
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: new Quantity({
+      amount: executedQuantity,
+      asset: baseAsset,
+    }),
+    status,
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
+    updatedAt,
+    completedAt: 2,
+  })
 }
 
 function createCancelOrderHandler({
@@ -170,23 +204,13 @@ function createCancelOrderHandler({
       : cancelUpdatedAt ?? Math.max(order.updatedAt ?? 0, 2) + 1
     return {
       ok: true,
-      data: new CanonicalOrder({
-        clientOrderId: order.clientOrderId,
-        brokerOrderId: order.brokerOrderId,
-        providerInstanceId: order.providerInstanceId,
-        providerType: order.providerType,
-        accountId: order.accountId,
-        market,
-        side: order.side,
-        type: order.type,
-        limitPrice: order.limitPrice,
-        originalQuantity: order.originalQuantity,
-        executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+      data: createHarnessCanceledOrder({
+        order,
+        executedQuantity,
         status: resolvedStatus,
-        createdAt: order.createdAt,
-        acknowledgedAt: order.acknowledgedAt,
         updatedAt: resolvedUpdatedAt,
-        completedAt: 2,
+        market,
+        baseAsset,
       }),
     }
   }
