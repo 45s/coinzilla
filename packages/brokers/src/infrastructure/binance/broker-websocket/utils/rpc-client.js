@@ -22,7 +22,7 @@ import { createSignedBinanceParams } from "./signature.js"
 export class BinanceRpcError extends Error {
   /**
    * @param {string} message
-   * @param {{code?: number|null, status?: number|null, requestId?: string|number|null, method?: string|null, details?: unknown, outcomeUnknown?: boolean}} [options]
+   * @param {{code?: number|null, status?: number|null, requestId?: string|number|null, method?: string|null, details?: unknown, outcomeUnknown?: boolean, cause?: unknown}} [options]
    */
   constructor(...args) {
     const [message, options = {}] = args
@@ -33,8 +33,9 @@ export class BinanceRpcError extends Error {
       method = null,
       details = null,
       outcomeUnknown = false,
+      cause,
     } = options
-    super(message)
+    super(message, cause === undefined ? undefined : { cause })
     this.name = "BinanceRpcError"
     this.code = code
     this.status = status
@@ -59,25 +60,30 @@ export class BinanceRpcTimeoutError extends BinanceRpcError {
 }
 
 export class BinanceRpcConnectionError extends BinanceRpcError {
-  /** @param {string} message @param {{requestId?: string|number, method?: string, stateChanging?: boolean}} [options] */
+  /** @param {string} message @param {{requestId?: string|number, method?: string, stateChanging?: boolean, outcomeUnknown?: boolean, cause?: unknown}} [options] */
   constructor(...args) {
-    const [message, { requestId, method, stateChanging } = {}] = args
+    const [message, options = {}] = args
     super(message, {
-      requestId,
-      method,
-      outcomeUnknown: Boolean(stateChanging),
+      requestId: options.requestId,
+      method: options.method,
+      outcomeUnknown: options.outcomeUnknown ?? Boolean(options.stateChanging),
+      cause: options.cause,
     })
     this.name = "BinanceRpcConnectionError"
+    this.stateChanging = Boolean(options.stateChanging)
   }
 }
 
 export class BinanceRpcProtocolError extends BinanceRpcError {
-  /** @param {string} message @param {{requestId?: string|number, method?: string, details?: unknown}} [options] */
+  /** @param {string} message @param {{requestId?: string|number, method?: string, details?: unknown, outcomeUnknown?: boolean}} [options] */
   constructor(...args) {
-    const [message, { requestId, method, details } = {}] = args
-    super(message, { requestId,
-method,
-details })
+    const [message, { requestId, method, details, outcomeUnknown = false } = {}] = args
+    super(message, {
+      requestId,
+      method,
+      details,
+      outcomeUnknown,
+    })
     this.name = "BinanceRpcProtocolError"
   }
 }
@@ -137,6 +143,84 @@ function createFinalParams({ requestParams, signed, apiKey, apiSecret, now, recv
   })
 }
 
+function markMutationNotSent({ error, stateChanging }) {
+  if (!stateChanging) {
+    return error
+  }
+  try {
+    Object.defineProperty(error, "outcomeUnknown", {
+      configurable: true,
+      value: false,
+    })
+    return error
+  } catch {
+    const wrapped = new Error(
+      error instanceof Error ? error.message : String(error),
+      { cause: error },
+    )
+    Object.defineProperty(wrapped, "outcomeUnknown", {
+      configurable: true,
+      value: false,
+    })
+    return wrapped
+  }
+}
+
+function serializeRequestEnvelope({ id, method, finalParams, stateChanging }) {
+  const envelope = {
+    id,
+    method,
+  }
+  if (Object.keys(finalParams).length > 0) {
+    envelope.params = finalParams
+  }
+  try {
+    return JSON.stringify(envelope)
+  } catch (error) {
+    throw markMutationNotSent({
+      error,
+      stateChanging,
+    })
+  }
+}
+
+function createRequestTimeoutHandler({
+  pendingRequests,
+  key,
+  id,
+  method,
+  timeout,
+  stateChanging,
+  clearTimeoutFn,
+}) {
+  return () => {
+    const pending = pendingRequests.get(key)
+    if (!pending) {return}
+    pendingRequests.delete(key)
+    clearTimeoutFn(pending.timer)
+    pending.reject(new BinanceRpcTimeoutError({
+      requestId: id,
+      method,
+      timeout,
+      stateChanging,
+    }))
+  }
+}
+
+function validateRpcClientOptions({ transport, requestTimeout, now, idFactory }) {
+  if (!transport || typeof transport.send !== "function" ||
+      typeof transport.onMessage !== "function" ||
+      typeof transport.onClose !== "function") {
+    throw new TypeError("A compatible native WebSocket transport is required")
+  }
+  if (!Number.isInteger(requestTimeout) || requestTimeout < 1) {
+    throw new RangeError("requestTimeout must be a positive integer")
+  }
+  if (typeof now !== "function" || typeof idFactory !== "function") {
+    throw new TypeError("now and idFactory must be functions")
+  }
+}
+
 /**
  * Correlate Binance WebSocket API RPC requests and push events on one transport.
  */
@@ -165,17 +249,12 @@ export class BinanceWebSocketApiClient {
     setTimeoutFn = setTimeout,
     clearTimeoutFn = clearTimeout,
   }) {
-    if (!transport || typeof transport.send !== "function" ||
-        typeof transport.onMessage !== "function" ||
-        typeof transport.onClose !== "function") {
-      throw new TypeError("A compatible native WebSocket transport is required")
-    }
-    if (!Number.isInteger(requestTimeout) || requestTimeout < 1) {
-      throw new RangeError("requestTimeout must be a positive integer")
-    }
-    if (typeof now !== "function" || typeof idFactory !== "function") {
-      throw new TypeError("now and idFactory must be functions")
-    }
+    validateRpcClientOptions({
+      transport,
+      requestTimeout,
+      now,
+      idFactory,
+    })
 
     this.transport = transport
     this.apiKey = apiKey
@@ -252,30 +331,38 @@ export class BinanceWebSocketApiClient {
       timeout = this.requestTimeout,
       stateChanging = false,
     } = options
-    validateMethod(method)
-    const requestParams = validateParams(params)
+    let requestParams
+    try {
+      validateMethod(method)
+      requestParams = validateParams(params)
+    } catch (error) {
+      throw markMutationNotSent({
+        error,
+        stateChanging,
+      })
+    }
 
     if (this.#state !== "open") {
       return Promise.reject(new BinanceRpcConnectionError(
         `Cannot send "${method}" while Binance WebSocket API is ${this.#state}`,
-        { method,
-          stateChanging },
+        {
+          method,
+          stateChanging,
+          outcomeUnknown: false,
+        },
       ))
-    }
-    if (!Number.isInteger(timeout) || timeout < 1) {
-      return Promise.reject(new RangeError("request timeout must be a positive integer"))
     }
 
     let identity
-    try {
-      identity = createRequestIdentity({ idFactory: this.idFactory,
-        pending: this.#pending })
-    } catch (error) {
-      return Promise.reject(error)
-    }
-
     let finalParams
     try {
+      if (!Number.isInteger(timeout) || timeout < 1) {
+        throw new RangeError("request timeout must be a positive integer")
+      }
+      identity = createRequestIdentity({
+        idFactory: this.idFactory,
+        pending: this.#pending,
+      })
       finalParams = createFinalParams({
         requestParams,
         signed,
@@ -285,7 +372,10 @@ export class BinanceWebSocketApiClient {
         recvWindow,
       })
     } catch (error) {
-      return Promise.reject(error)
+      return Promise.reject(markMutationNotSent({
+        error,
+        stateChanging,
+      }))
     }
 
     return this.#sendRequest({
@@ -298,24 +388,38 @@ export class BinanceWebSocketApiClient {
   }
 
   #sendRequest({ id, key, method, finalParams, timeout, stateChanging }) {
-    const envelope = { id,
-      method }
-    if (Object.keys(finalParams).length > 0) {envelope.params = finalParams}
+    let payload
+    try {
+      payload = serializeRequestEnvelope({
+        id,
+        method,
+        finalParams,
+        stateChanging,
+      })
+    } catch (error) {
+      return Promise.reject(error)
+    }
 
     return new Promise((...args) => {
       const [resolve, reject] = args
-      const timer = this.setTimeout(() => {
-        const pending = this.#pending.get(key)
-        if (!pending) {return}
-        this.#pending.delete(key)
-        this.clearTimeout(pending.timer)
-        reject(new BinanceRpcTimeoutError({
-          requestId: id,
+      let timer
+      try {
+        timer = this.setTimeout(createRequestTimeoutHandler({
+          pendingRequests: this.#pending,
+          key,
+          id,
           method,
           timeout,
           stateChanging,
+          clearTimeoutFn: this.clearTimeout,
+        }), timeout)
+      } catch (error) {
+        reject(markMutationNotSent({
+          error,
+          stateChanging,
         }))
-      }, timeout)
+        return
+      }
 
       this.#pending.set(key, { id,
         method,
@@ -324,7 +428,7 @@ export class BinanceWebSocketApiClient {
         timer,
         stateChanging })
       try {
-        this.transport.send(JSON.stringify(envelope))
+        this.transport.send(payload)
       } catch (error) {
         const pending = this.#pending.get(key)
         if (pending) {
@@ -333,9 +437,12 @@ export class BinanceWebSocketApiClient {
         }
         reject(new BinanceRpcConnectionError(
           `Failed to send Binance WebSocket API request "${method}": ${error.message}`,
-          { requestId: id,
+          {
+            requestId: id,
             method,
-            stateChanging },
+            stateChanging,
+            cause: error,
+          },
         ))
       }
     })
@@ -496,6 +603,7 @@ export class BinanceWebSocketApiClient {
         requestId: pending.id,
         method: pending.method,
         details,
+        outcomeUnknown: pending.stateChanging,
       })),
     })
   }

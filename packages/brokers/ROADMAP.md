@@ -12,7 +12,7 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 
 Tracking: [issue #1446](https://github.com/45s/coinzilla/issues/1446).
 
-**Status: planned; next Brokers-package priority.** Define one stable public Broker API and implement Binance and Bitunix against the same method surface and compatible argument/result contracts. The first implementation step is a source-backed contract and capability-model audit—not immediately adding another interface or moving files.
+**Status: in progress; Phase 0 capability ownership decision completed 2026-11-18.** PR #1449 is merged. The source-backed ownership decision, canonical three-state capability model, provider declarations, explicit unsupported error, structural method contract, and first shared offline conformance tests are being implemented in [PR #1451](https://github.com/45s/coinzilla/pull/1451). The full method matrix and result/error contract are documented in [BROKER_API.md](./BROKER_API.md).
 
 ### Ownership boundary
 
@@ -27,41 +27,41 @@ Tracking: [issue #1446](https://github.com/45s/coinzilla/issues/1446).
 - Binance and Bitunix expose the same agreed public operation surface. The method inventory must explicitly resolve overlapping names and compatibility aliases (for example, `getOrders` versus `getOpenOrders` and history methods).
 - A method remains present on each broker even when that provider cannot safely implement the operation.
 - Unsupported operations return one standardized, explicit unsupported-operation result/error. They must not return `undefined`, silently no-op, fabricate data, or return a success-shaped empty collection.
-- Method presence is not proof of support. Capability declarations truthfully distinguish **supported**, **unsupported**, **unknown**, and **environment-dependent** behavior.
+- Method presence is not proof of support. Capability declarations truthfully distinguish **SUPPORTED**, **UNSUPPORTED**, and **UNKNOWN**. Environment selection, account permissions, connectivity, and runtime readiness are represented separately as metadata and conditions.
 - Capability status is metadata about a provider's implementation/guarantees, not a substitute for checking account permissions, selected environment, market availability, runtime readiness, or current connectivity. Conditions and evidence must be represented without collapsing distinct concepts into one status.
 - Normalize shared operation arguments, result envelopes, error identity, and canonical data at the Brokers boundary while preserving provider-specific extensions where they are genuinely provider-specific.
 - Preserve exact decimal strings, source timestamps, stable identifiers, and unknown outcomes. Never weaken a provider's safety contract to make its method look supported.
 - Do not create a second capability model, duplicate capability vocabulary, or parallel status enum. There must be one canonical capability contract and one authoritative implementation of its validation/lookup semantics.
 
-### Capability-model ownership audit — mandatory first gate
+### Capability-model ownership decision — Phase 0 complete (2026-11-18)
 
-There are currently two competing declarations that must be reconciled before the common API is implemented:
+The audit is complete. The canonical provider capability model is owned by `@coinzilla/brokers`.
 
-1. `@coinzilla/entities` exports `BrokerCapabilities` from `packages/entities/src/broker-capabilities/broker-capabilities.js`. It models the capability types and three statuses: `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`; omitted entries resolve to `UNKNOWN`.
-2. Binance has a richer immutable provider capability declaration introduced by [PR #1366](https://github.com/45s/coinzilla/pull/1366). Its leaf records include four statuses—`supported`, `unsupported`, `unknown`, and `environment-dependent`—plus optional method, guarantee, limitation, reason, and conditions metadata.
+Source-backed evidence:
 
-The current duplication is a design question, not permission to keep both as independent sources of truth. Complete this audit before choosing a target:
+- Entities' `BrokerCapabilities` originated in PR #308 / FR-015 and is publicly exported, but repository-wide runtime-use tracing found no provider implementation consumer outside its own package implementation/tests/exports and documentation.
+- Binance's provider declaration originated in Brokers PR #1366 and carries broker-specific method/guarantee/limitation/reason/conditions evidence.
+- Harvester's provider registry consumes the Binance declaration directly. Its existing metadata boundary is preserved by the new model: `contractVersion`, `provider`, `environment.selectedMode`, and `environment.supportedModes`. No Harvester port/adapter/registry is imported into Brokers or moved.
+- The two previous declarations overlapped in purpose; retaining them as independent canonical models would create competing sources of truth.
 
-- Trace the Entities model's original purpose, public exports, package consumers, imports, tests, and actual runtime use. Establish whether it is a genuinely shared domain value used outside Brokers or a broker-specific contract placed in Entities without a continuing cross-domain need.
-- Trace the Binance declaration's exports, construction, consumers, tests, immutability guarantees, environment metadata, and provider-specific evidence. Identify which fields are common semantics and which are Binance-only diagnostics.
-- Inspect the Entities and Brokers ownership instructions, roadmaps, architecture docs, public API conventions, dependency graph, and relevant PR/issue history. Confirm the intended dependency direction and whether moving the contract would create a cycle or break consumers.
-- Compare the two models field by field: capability vocabulary, status semantics, omitted-entry behavior, validation, duplicate handling, immutability/deep-freezing, serialization, environment/account conditions, and evidence/guarantee metadata.
-- Decide which package owns the canonical capability contract based on actual domain ownership and consumers—not convenience or the current file location.
-- If capability truth is a Brokers-domain concept with no demonstrated need as a general Entity, make Brokers the single owner and migrate existing consumers deliberately; do not leave a shadow model in Entities.
-- If Entities demonstrably owns a reusable cross-domain capability value, retain one canonical model there and extend it only if the four-state semantics are valid for every consumer. Brokers may add provider-specific evidence through composition, but must not fork the shared status model or reimplement its validation.
-- If the audit shows the concepts are materially different, document the distinction and prove why they are not competing representations before retaining both. Similar names or overlapping capability lists are not sufficient justification.
-- Record the decision and migration/compatibility plan in the owning canonical architecture document or ADR where the choice has durable architectural consequences. Update both owner roadmaps and coordinate through the cross-domain process if Entities changes are required.
+Decision:
 
-**Decision gate:** the audit must produce exactly one canonical capability vocabulary, status model, validation/serialization contract, and package owner. No API implementation phase may introduce a second competing source of truth. Do not silently delete or change the public Entities export; preserve consumers through an explicit compatibility/deprecation/migration path if ownership moves.
+- `@coinzilla/brokers` owns the canonical `BrokerCapabilities` value, capability vocabulary, validation, lookup, immutability, and serialization.
+- The only statuses are `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`. Omitted entries are `UNKNOWN`; unknown means insufficient evidence, not unsupported.
+- `environment-dependent` is removed as a status. An implemented operation is `SUPPORTED` with explicit method, guarantee, limitation, and conditions. Selected environment, account permission, runtime readiness, and connectivity remain separate facts.
+- Supported entries require a method and guarantee; unsupported/unknown entries require a reason. Declarations are deeply immutable and expose detached `value`/`toJSON()` snapshots.
+- The Entities public export is not silently removed or changed. Its owner-coordinated compatibility/deprecation disposition is tracked in [Entities issue #1450](https://github.com/45s/coinzilla). Brokers does not import the legacy Entities capability class, and Entities must not depend on Brokers.
+
+The implementation and current provider matrix are specified in [BROKER_API.md](./BROKER_API.md).
 
 ### Delivery phases
 
-1. **Capability and ownership audit (blocking gate).**
-   - Inventory `BrokerCapabilities` in Entities and the Binance four-state declaration, including every export, consumer, test, and serialization path.
-   - Verify whether the Entities capability concept is genuinely cross-domain and whether the Binance declaration is a provider implementation, a richer domain contract, or a mixture of both.
-   - Reconcile the four states. In particular, establish when environment-dependent differs from supported-with-conditions, and whether unknown means insufficient evidence rather than an exchange limitation.
-   - Decide the one canonical owner and contract. Document the decision, compatibility strategy, and any required Entities coordination before coding the common API.
-   - **Exit:** a reviewed decision with no duplicate capability source of truth and no unresolved ownership ambiguity.
+1. **Capability and ownership audit (completed 2026-11-18).**
+   - [x] Trace Entities and Binance declarations, exports, runtime consumers, tests, serialization, validation, immutability, and dependency direction.
+   - [x] Select Brokers as the canonical owner; preserve the Harvester registry metadata boundary without importing Harvester.
+   - [x] Define three statuses and represent environment/account/runtime conditions separately.
+   - [x] Open the Entities owner-coordinated compatibility/deprecation request [#1450](https://github.com/45s/coinzilla/issues/1450); no Entities public export is silently removed.
+   - **Exit:** ownership and compatibility decision documented; implementation is underway in PR #1451.
 
 2. **Public API and compatibility inventory.**
    - Compare Binance and Bitunix public own methods, inherited `CoreBroker` methods, signatures, argument defaults, return shapes, callbacks/events, error behavior, and actual provider support.
@@ -71,9 +71,9 @@ The current duplication is a design question, not permission to keep both as ind
 
 3. **Specify the canonical Broker contract.**
    - Define exchange-neutral method names/signatures and normalized argument contracts.
-   - Define success, failure, incomplete, unsupported, and unknown-mutation-outcome semantics using existing canonical contracts where appropriate.
+   - Define the existing `toResult` success/failure envelope, standardized unsupported errors, and explicit mutation outcomes (`NOT_SENT`, `REJECTED`, `CONFIRMED`, `OUTCOME_UNKNOWN`) while preserving legacy result compatibility.
    - Define the standardized unsupported-operation error/result with stable identity/code, operation/provider context, and safe diagnostic metadata. It must not be confused with transport, validation, authorization, or exchange rejection.
-   - Define canonical capability declarations by reusing the single model selected in Phase 1. Specify four-state meanings, omitted-entry defaults, environment/account conditions, immutable metadata, and provider evidence requirements.
+   - Define canonical capability declarations using the Brokers-owned three-state model, omitted-entry `UNKNOWN`, immutable evidence metadata, and separate environment/account/runtime conditions.
    - Define exact decimal, identifier, timestamp/source-time, pagination, callback and lifecycle guarantees.
    - Specify how legacy methods and `CoreBroker` inheritance/state/defaults remain compatible during migration. Do not make `CoreBroker` the foundation of the new contract by default.
    - **Exit:** reviewed contract and compatibility plan, documented before provider implementations are changed.
@@ -101,31 +101,19 @@ The current duplication is a design question, not permission to keep both as ind
    - Verify all required checks on the exact final PR head and merge only into `develop`.
    - **Exit:** the common API, single capability source of truth, compatibility path, tests, documentation, and required CI are integrated and verified.
 
-### Existing capability declaration baseline
+### Canonical capability contract
 
-The immutable Binance capability declaration introduced by [PR #1366](https://github.com/45s/coinzilla/pull/1366) is a provider-side evidence baseline, not a decision that Binance owns the common contract or that a second model should be preserved. Its current leaf shape is:
+The current provider declaration is implemented in `src/broker/broker-capabilities.js` and exported from `@coinzilla/brokers`. It uses three statuses only: `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`; omitted capabilities resolve to `UNKNOWN`. Supported records require a method and guarantee. Unsupported/unknown records require a reason. Method, guarantee, limitation, reason, and conditions are immutable evidence metadata.
 
-```js
-{
-  status: "supported" | "unsupported" | "unknown" | "environment-dependent",
-  method?: string,
-  guarantee?: string,
-  limitation?: string,
-  reason?: string,
-  conditions?: string[],
-}
-```
+Environment selection is represented separately as `environment.selectedMode` and `environment.supportedModes`. It does not prove account permission, connectivity, or runtime readiness. The model preserves the Harvester registry's `contractVersion`/`provider`/environment metadata boundary. See [BROKER_API.md](./BROKER_API.md) for the canonical Binance/Bitunix matrix and exact contract.
 
-All nested objects and arrays are recursively frozen. The audit must verify this against current source and tests before treating it as a guaranteed contract. State meanings currently documented for the Binance declaration:
+The previous four-state Binance declaration is superseded. The table below is retained as historical source evidence only; its old `environment-dependent` status must not be used as the current vocabulary. The current model maps implemented conditional operations to `SUPPORTED` plus explicit conditions.
 
-- **supported:** implementation guarantees are backed by source inspection and deterministic offline tests, subject to listed conditions.
-- **unsupported:** the provider explicitly does not provide the capability; an inherited method that throws is not support.
-- **unknown:** available evidence does not establish the guarantee; consumers must not assume it.
-- **environment-dependent:** implementation exists, but actual availability depends on explicit environment/account conditions.
+#### Historical pre-#1446 Binance Spot capability matrix (superseded)
 
-#### Verified Binance Spot capability matrix
+> Historical pre-canonicalization evidence from the four-state declaration. Use [BROKER_API.md](./BROKER_API.md) for current status semantics and provider capability declarations.
 
-| Area | Capability | State | Source evidence and precise boundary |
+| Area | Capability | Historical state | Source evidence and precise boundary |
 |---|---|---|---|
 | Environment | Endpoint selection | environment-dependent | `BinanceWebSocketConfig` requires `tradingMode` to be exactly `testnet` or `live` and selects the corresponding Spot WebSocket API and Streams endpoint pair. `NODE_ENV` is not consulted. Offline config tests do not prove endpoint connectivity or account permissions. |
 | Market data | One-shot price | supported | `BinanceWebSocketBroker.getPrices()` uses `ticker.price`; tests: `get-prices-response.test.js`. A single response is not a stream. |
@@ -187,7 +175,7 @@ The common Broker API is complete only when all of the following are true:
 
 1. Binance and Bitunix expose the agreed common public method surface and compatible method signatures.
 2. Unsupported operations remain callable but return a standardized, explicit unsupported-operation result/error; they never fabricate success.
-3. Capability declarations accurately distinguish supported, unsupported, unknown, and environment-dependent behavior for each provider.
+3. Capability declarations use only `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`; conditional support is represented by explicit metadata and runtime guards.
 4. Shared operation results, errors, normalized entities, exact decimal values, timestamps, and unknown mutation outcomes follow the agreed package contract.
 5. Exchange-specific transport, signing, request/response DTOs, and protocol behavior remain inside each provider implementation.
 6. Shared deterministic offline contract tests run against both providers; provider-specific tests cover protocol differences and exchange edge cases.
@@ -202,7 +190,7 @@ The common Broker API is complete only when all of the following are true:
 
 ### Overall status
 
-- **Next package task:** [#1446](https://github.com/45s/coinzilla/issues/1446) defines the shared public Broker API for Binance and Bitunix. This is a Brokers-only contract and implementation task.
+- **Active package task:** [#1446](https://github.com/45s/coinzilla/issues/1446) defines the shared public Broker API for Binance and Bitunix. Phase 0 is complete; method inventory, common contract, provider implementation, and shared conformance tests are in progress in PR #1451.
 - **Binance:** the native WebSocket API/Streams implementation and its recovery lifecycle remain the mature reference implementation, subject to the separately documented live TESTNET acceptance gap.
 - **Bitunix:** Spot currently provides a read-only broker implementation with several provider-specific reads. Its unsupported methods must remain explicit; order mutations and canonical fills remain blocked by [#1185](https://github.com/45s/coinzilla/issues/1185).
 - **Consumer integration:** each consuming application owns its own ports/adapters, provider selection, routing, and runtime lifecycle. Those are not Brokers-package responsibilities.
@@ -431,7 +419,7 @@ Compatibility consumers may be inspected and their regression suites may run thr
 | `subscribeForBookTicker({ symbol, onBookTicker })` | Public `<symbol>@bookTicker` stream |
 | `subscribeForUserData({ onEvent, onStatus })` | Signed `userDataStream.subscribe.signature` on the WebSocket API connection |
 
-Verify exact current parameters, response envelopes, signing rules, rate limits, and error codes against official Binance documentation during implementation. This table is a current mapping, not permission to guess undocumented behavior. `CoreBroker.getPrice()` remains the inherited unsupported default unless a concrete broker overrides it.
+Verify exact current parameters, response envelopes, signing rules, rate limits, and error codes against official Binance documentation during implementation. This table is a current mapping, not permission to guess undocumented behavior. Both provider facades now expose `getPrice()` as a compatibility alias for the canonical `getPrices({ symbol })` operation; new consumers should prefer `getPrices()`.
 
 ### Current public stream surface
 
@@ -1295,3 +1283,15 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [x] Verify PR #1439's public-only fallback, private-check skip behavior, credential-free REST authentication boundary, public market endpoint coverage, read-only open-orders POST, documented ping RPC and controlled reconnect probe through offline tests and exact-head CI. Subscription restoration and 24-hour expiry simulation remain unsupported/not run.
 - [ ] Run the actual local LIVE diagnostics and inspect sanitized REST/WS responses with the operator's environment; this cannot be completed from the remote repository execution context.
 - [ ] Run the local command and inspect its sanitized report. Public-only mode needs no credentials; authenticated checks require both Bitunix credential variables and a dedicated read-only key. This LIVE API smoke test is operator-owned; CI must not receive exchange credentials.
+
+## 2026-11-18 — Issue #1446 capability ownership and API checkpoint
+
+- [x] Documentation PR [#1449](https://github.com/45s/coinzilla/pull/1449) merged into `develop` as `433a5300c884a39771939082c4a25d78ff6d5d9c`.
+- [x] Capability ownership audit completed: Brokers owns the canonical provider declaration; only three statuses remain; `environment-dependent` is represented as supported-with-conditions.
+- [x] Open Entities coordination issue [#1450](https://github.com/45s/coinzilla/issues/1450) for the legacy public export's compatibility/deprecation decision.
+- [x] Preserve Harvester registry metadata compatibility without importing or moving Harvester application code.
+- [x] Add the Brokers-owned capability value, typed unsupported error, structural method catalog, compatibility method catalog, mutation outcome classification, and initial shared conformance suite.
+- [x] Add the current method/capability matrix and result/error/decimal/timestamp/pagination/lifecycle contract in [BROKER_API.md](./BROKER_API.md).
+- [ ] Complete the same-contract Binance/Bitunix implementation and offline conformance suite; current work is in [PR #1451](https://github.com/45s/coinzilla/pull/1451).
+- [ ] Run focused Brokers tests/coverage, consumer compatibility, workspace verification, and required CI on the exact final PR head before merge.
+- **Safety:** Bitunix Spot order placement/cancellation/fill support remains blocked by [#1185](https://github.com/45s/coinzilla/issues/1185). No live mutations are authorized.

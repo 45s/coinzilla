@@ -94,7 +94,7 @@ The durable target contract is [ADR-0003](../../../../docs/architecture/decision
 
 `CoreBroker` is currently a base class whose methods throw when not implemented; it is not a formal, capability-checked application port. Depending on it couples Harvester to the broker package's class hierarchy instead of the small set of operations its use cases require.
 
-There is also a current naming mismatch: `CoreBroker` declares `getPrice()`, while `BinanceWebSocketBroker` implements `getPrices({ symbol })`. Keep such package-specific differences inside the adapter and resolve the shared contract mismatch when formalizing the cross-broker contract.
+The Brokers package now exposes `getPrice()` as a compatibility alias for `getPrices({ symbol })` on both Binance and Bitunix. New application ports should prefer `getPrices()` as the canonical one-shot market-price operation; the alias does not make `CoreBroker` a formal Harvester application port.
 
 Owning the port does not mean copying shared entities. Reuse canonical Order, Fill, Market, Quantity, Balance, BrokerResult, and utility contracts from `@coinzilla/entities` / `@coinzilla/utils` wherever they fit.
 

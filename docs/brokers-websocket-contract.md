@@ -89,7 +89,7 @@ The lifecycle implementation and its direct unit tests live together in `src/app
 
 The legacy REST broker, REST signing/query helpers, REST listen-key stream client, and historical-price REST script remain removed. The pure event adapters under `helpers/adapters/` are retained because the active WebSocket user-data session uses their data-mapping behavior; they do not restore the legacy transport or REST flow.
 
-The original Binance/CoreBroker export set consists of `BinanceWebSocketBroker`, `BinanceWebSocketConfig`, `CoreBroker`, and `normalizeBinanceId`. The current package root also exports `BitunixSpotBroker`, `BitunixSpotConfig`, `BitunixSpotWebSocketClient`, and `BitunixWebSocketError`; the exact eight-name public allow-list is pinned by `src/index.contract.test.js`. Current workspace consumers are:
+The original Binance/CoreBroker exports remain compatible. The package root additionally exports Bitunix provider classes, the structural Broker method catalog, the canonical `BrokerCapabilities` value/status vocabulary, `BrokerUnsupportedOperationError`, and mutation outcome helpers. The exact public export allow-list is pinned by `src/index.contract.test.js`; the full exchange-neutral contract is documented in [packages/brokers/BROKER_API.md](../packages/brokers/BROKER_API.md). Current workspace consumers are:
 
 - `apps/harvester`, which wraps `BinanceWebSocketBroker` in its own infrastructure adapter and implements Harvester's application-owned `BrokerPort`.
 - `packages/market-simulator`, whose `HistoricalMarketBroker` extends `CoreBroker` and whose `SimulatedExecutionBroker` extends the historical broker.
@@ -369,11 +369,20 @@ Existing normalized contract coverage remains in the focused broker operation su
 
 The first RED-stage architecture test commit intentionally lacked its scanner module; its Brokers test and coverage jobs failed, establishing the RED baseline. Verified source/test commit `be7e0a9ec3f5d09533cc6446cc5c4177e83b79d0` passed Brokers unit tests (411/411), package coverage (98.73% lines / 93.62% branches / 94.94% functions), workspace unit tests and coverage, Harvester targeted regressions, JavaScript syntax, actionlint, and production dependency audit. The documentation-only follow-up `43caec1a636b289e97e7ac1ee1b93b019af744fa` was included in final PR head `f611175838f99cf1861ab7a0a9b0e9fee849723c`; all required checks passed on that exact head and PR #704 was merged into `develop`. The TESTNET job was skipped and no exchange integration was run.
 
-## Cancellation outcome contract
+## Mutation outcome contract
 
-An unsuccessful `cancelOrder()` result carries an explicit `cancellationOutcome`:
+State-changing broker methods expose the common `mutationOutcome` classification:
 
-- `NOT_SENT`: the local user-data-availability guard rejected cancellation before invoking the state-changing `order.cancel` RPC. No exchange cancellation request was sent.
-- `OUTCOME_UNKNOWN`: the broker invoked `order.cancel` but could not return an authoritative canonical order result. The request may have reached Binance; callers must retain fail-closed reconciliation behavior.
+- `NOT_SENT`: local validation/readiness/unsupported guards rejected the operation before dispatch.
+- `REJECTED`: the provider returned a definitive rejection response.
+- `CONFIRMED`: the provider returned an authoritative success response. This remains true if later local normalization fails.
+- `OUTCOME_UNKNOWN`: the request may have reached the exchange but no authoritative result was received. This includes timeouts, disconnects after dispatch, malformed responses after dispatch, HTTP/RPC conflicts, and server failures.
 
-A successful result carries the broker order response in `data`; consumers that require a canonical cancellation must still verify canonical order history and actual fills. Missing classification is never proof that the request was not sent. The Harvester consumer accepts `NOT_SENT` only on an unsuccessful result (`ok: false`); contradictory success-shaped metadata remains unconfirmed. These classifications do not bypass the user-data readiness gate or authorize automatic retries.
+A caller must never blindly retry `OUTCOME_UNKNOWN`. A failed order placement/cancellation may still have changed exchange state; reconcile through authoritative order/fill/account reads before deciding what to do next.
+
+The legacy `cancelOrder()` field `cancellationOutcome` remains for compatibility:
+
+- `NOT_SENT`: the local user-data-availability guard rejected cancellation before invoking the state-changing `order.cancel` RPC.
+- `OUTCOME_UNKNOWN`: the broker invoked or may have dispatched `order.cancel` but could not return an authoritative canonical order result.
+
+A successful result carries the broker order response in `data`; consumers that require a canonical cancellation must still verify canonical order history and actual fills. The Harvester consumer accepts legacy `NOT_SENT` only on an unsuccessful result (`ok: false`); contradictory success-shaped metadata remains unconfirmed. These classifications do not bypass the user-data readiness gate or authorize automatic retries.

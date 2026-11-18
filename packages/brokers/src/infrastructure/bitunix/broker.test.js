@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { BitunixSpotBroker } from "./broker.js"
+import { BrokerUnsupportedOperationError } from "../../broker/errors/broker-unsupported-operation-error.js"
 
 function createBroker({ responses = {} } = {}) {
   const calls = []
@@ -262,9 +263,18 @@ test("Bitunix Spot broker keeps lifecycle and unsupported read capabilities expl
   for (const result of unsupportedResults) {
     assert.equal(result.ok, false)
   }
-  await assert.rejects(broker.subscribeForUserData(), /private Spot WebSocket/i)
-  await assert.rejects(broker.subscribeForBookTicker(), /order-book subscription/i)
-  await assert.rejects(broker.subscribeForPrices(), /continuous price subscription/i)
+  const unsupportedSubscriptions = await Promise.all([
+    broker.subscribeForUserData(),
+    broker.subscribeForBookTicker(),
+    broker.subscribeForCandles(),
+    broker.subscribeForPrices(),
+  ])
+  for (const result of unsupportedSubscriptions) {
+    assert.equal(result.ok, false)
+    assert.ok(result.errors[0] instanceof BrokerUnsupportedOperationError)
+    assert.equal(result.errors[0].code, "BROKER_OPERATION_UNSUPPORTED")
+    assert.equal(result.errors[0].retryable, false)
+  }
   assert.equal(calls.length, 0)
 })
 
@@ -1201,4 +1211,46 @@ test("Bitunix Spot symbol metadata propagates catalog transport failures without
   assert.equal(result.ok, false, "a catalog transport failure must never become successful metadata")
   assert.equal(result.errors[0], transportFailure, "the original transport failure must remain available to the caller")
   assert.equal(calls.length, 1, "a failed metadata read must not retry implicitly")
+})
+
+
+test("Bitunix Spot broker exposes immutable canonical capabilities", () => {
+  const { broker } = createBroker()
+
+  assert.equal(broker.capabilities.provider, "bitunix")
+  assert.equal(broker.capabilities.product, "spot")
+  assert.equal(broker.capabilities.getStatus({ type: "READ_BALANCES" }), "SUPPORTED")
+  assert.equal(broker.capabilities.getStatus({ type: "PLACE_LIMIT_ORDER" }), "UNSUPPORTED")
+  assert.equal(Object.isFrozen(broker.capabilities), true)
+})
+
+test("Bitunix Spot broker reports unsupported client-order-ID lookup explicitly", async () => {
+  const { broker, calls } = createBroker()
+  const result = await broker.getOrder({
+    symbol: "BTCUSDT",
+    clientOrderId: "client-123",
+  })
+
+  assert.equal(result.ok, false)
+  assert.ok(result.errors[0] instanceof BrokerUnsupportedOperationError)
+  assert.equal(result.errors[0].context.operation, "getOrder")
+  assert.equal(calls.length, 0)
+})
+
+test("Bitunix unsupported order mutations are explicit and guaranteed NOT_SENT", async () => {
+  const { broker, calls } = createBroker()
+  const results = await Promise.all([
+    broker.createOrder(),
+    broker.createCanonicalOrder(),
+    broker.cancelOrder(),
+    broker.cancelAllOpenOrders(),
+  ])
+
+  for (const result of results) {
+    assert.equal(result.ok, false)
+    assert.equal(result.mutationOutcome, "NOT_SENT")
+    assert.ok(result.errors[0] instanceof BrokerUnsupportedOperationError)
+  }
+  assert.equal(results[2].cancellationOutcome, "NOT_SENT")
+  assert.equal(calls.length, 0)
 })
