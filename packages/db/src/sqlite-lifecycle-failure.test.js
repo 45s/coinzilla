@@ -18,15 +18,17 @@ test("SQLite connection initialization preserves both setup and cleanup failures
   const cleanupFailure = new Error("partial connection cleanup failed")
   let failedConnection
   let closeAttempts = 0
+  let initializationAttempts = 0
 
   context.mock.method(DatabaseSync.prototype, "exec", function exec(sql) {
-    if (sql === "PRAGMA journal_mode = WAL") {
+    if (sql === "PRAGMA journal_mode = WAL" && initializationAttempts === 0) {
+      initializationAttempts += 1
       throw initializationFailure
     }
     return originalExec.call(this, sql)
   })
   context.mock.method(DatabaseSync.prototype, "close", function close(...args) {
-    failedConnection = this
+    failedConnection ??= this
     closeAttempts += 1
     if (closeAttempts === 1) {
       throw cleanupFailure
@@ -47,13 +49,16 @@ test("SQLite connection initialization preserves both setup and cleanup failures
       true,
       "The failed native close must leave the connection handle available for a cleanup retry",
     )
-    await database.close()
+    await database.connect()
     assert.equal(closeAttempts, 2)
     assert.equal(
       failedConnection.isOpen,
       false,
-      "Calling close after failed initialization must retry and release the retained native connection",
+      "Retrying connection must first release the retained partially initialized native handle",
     )
+    assert.equal(database.state, "connected")
+    await database.close()
+    assert.equal(closeAttempts, 3)
   } finally {
     context.mock.restoreAll()
     await database.close()
